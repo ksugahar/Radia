@@ -9,6 +9,8 @@ on:
       - 'validation_test/radia_gpu/**'
       - 'validation_test/ams_cuda/**'
       - 'validation_test/ngsolve_cuda_mex/**'
+      - 'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp'
+      - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
       - 'Build.ps1'
       - '.github/workflows/radia-gpu.yml'
   push:
@@ -19,6 +21,8 @@ on:
       - 'validation_test/radia_gpu/**'
       - 'validation_test/ams_cuda/**'
       - 'validation_test/ngsolve_cuda_mex/**'
+      - 'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp'
+      - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
       - 'Build.ps1'
       - '.github/workflows/radia-gpu.yml'
   workflow_dispatch:
@@ -65,6 +69,8 @@ jobs:
           python validation_test/ngsolve_cuda_mex/run_poisson.py --binary-dir build-cuda-mex --out "$env:RUNNER_TEMP/radia-gpu-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.24 --threads 1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python validation_test/ams_cuda/run.py --out "$env:RUNNER_TEMP/radia-ams-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.5 --threads 1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/setup_benchmark.py --out "$env:RUNNER_TEMP/radia-ams-setup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.08 --rounds 1 --setup-threads 4
           exit $LASTEXITCODE
       - name: Package and verify independent distribution
         shell: pwsh
@@ -95,7 +101,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          python packages/radia-gpu/prepare_ci_evidence.py --poisson "$env:RUNNER_TEMP/radia-gpu-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --ams "$env:RUNNER_TEMP/radia-ams-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --output "$env:RUNNER_TEMP/radia-gpu-public-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python packages/radia-gpu/prepare_ci_evidence.py --poisson "$env:RUNNER_TEMP/radia-gpu-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --ams "$env:RUNNER_TEMP/radia-ams-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --setup "$env:RUNNER_TEMP/radia-ams-setup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --output "$env:RUNNER_TEMP/radia-gpu-public-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           exit $LASTEXITCODE
       - uses: actions/upload-artifact@v4
         if: always()

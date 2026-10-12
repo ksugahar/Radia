@@ -2,9 +2,43 @@
 
 from pathlib import Path
 import tomllib
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize('foreign', [
+    'radia/matlab/entry.py', 'radia/simulink/entry.py', 'radia/ltspice/entry.py',
+    'radia_gpu/__init__.py', 'radia/ltspice.py', 'radia/matlab_bridge.py',
+    'radia/kernel.m', 'radia/model.slx', 'radia/kernel.mexw64',
+    'radia/kernel.mexw64.build.json', 'radia/kernel.cu',
+    'radia/panels/application_interface_manifest.json',
+    'Requires-Dist: radia-gpu>=0.1.0', 'Requires-Dist: matlabengine; extra == "matlab"',
+])
+def test_cpu_wheel_rejects_gpu_product_payloads(tmp_path, foreign):
+    import importlib.util
+    import zipfile
+
+    spec = importlib.util.spec_from_file_location('cpu_wheel_guard', ROOT/'tools/verify_cpu_wheel.py')
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    wheel = tmp_path/'radia-5.3.1-py3-none-any.whl'
+    metadata = 'Metadata-Version: 2.1\nName: radia\nVersion: 5.3.1\nRequires-Dist: ngsolve==6.2.2607\n'
+
+    def write(candidate=None):
+        with zipfile.ZipFile(wheel, 'w') as archive:
+            archive.writestr('radia/__init__.py', '# CPU package')
+            extra = candidate + '\n' if candidate and candidate.startswith('Requires-Dist:') else ''
+            archive.writestr('radia-5.3.1.dist-info/METADATA', metadata + extra)
+            if candidate and not extra:
+                archive.writestr(candidate, 'foreign payload')
+
+    write()
+    assert guard.verify(wheel)['gpu_integration_absent'] is True
+    write(foreign)
+    with pytest.raises(ValueError, match='radia-gpu integration payload'):
+        guard.verify(wheel)
 
 
 def test_coil_builder_dependency_is_available_without_extras():

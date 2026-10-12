@@ -1,0 +1,10 @@
+{
+  "schema": "radia.ih-release-source-verification.v1",
+  "source_commit": "6634e31917f494628b2d4b90ee45af1fdaea07fd",
+  "tracked_source_clean": true,
+  "source_hashes_match_executed_record": true,
+  "untracked_src_metadata": [
+    "src/radia/release_native_payloads.json"
+  ],
+  "note": "The validator source_dirty flag includes the untracked native-payload manifest; no tracked solver source differs from the tag."
+}

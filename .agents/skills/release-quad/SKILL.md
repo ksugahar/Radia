@@ -136,6 +136,16 @@ readable evidence, and dispatch the release workflow with the exact CI run,
 wheel SHA256, and acceptance commit. Promote the verified artifact without
 rebuilding. Changed bytes require new acceptance.
 
+For Radia 5.3.1 and later, retain raw acceptance records and one random
+32-byte batch key in private release storage. Run
+`tools/prepare_radia_acceptance.py` for each required target with the exact
+wheel, source SHA, CI run and shared private key. Commit only its public
+exports under the neutral `build` and `validation` role directories. The
+exporter verifies current-machine identity and all numeric gates before
+removing runtime metadata. Promotion checks the public-record digests,
+shared batch and distinct opaque machine tokens. This maintainer attestation
+is not remote hardware authentication; never commit the raw records or key.
+
 CPU `ci-verify` requires the exact-SHA native release check and successful
 shared/CPU checks. Independently owned GPU, MATLAB/LTspice, Optuna, MCP,
 Cubit and Eqnedit64 workflows do not block CPU publication. Workflow ownership

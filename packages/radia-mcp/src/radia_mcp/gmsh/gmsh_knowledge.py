@@ -2191,13 +2191,98 @@ without waiting for a wrapper.
 """
 
 
+GMSH_MAGNETIC_MOVIES = """
+# Magnetic field lines and transient movies (TEAM28 recipe)
+
+## Physical input contract
+Use checked Cubit -> .vol -> NGSolve results; Gmsh is post-processing only.
+Trace the signed instantaneous vector B(x,t), never |B| or the norm of a
+complex phasor. For exp(+i*omega*t), reconstruct Re(B_hat*exp(i*omega*t)).
+Field lines are instantaneous integral curves, not particle trajectories.
+Reversing B can leave the curve geometry unchanged: show direction arrows
+and a signed B probe alongside magnitude colours. Do not claim that moving
+geometry alone establishes a coupled electromagnetic/mechanical solution.
+
+## Choose the existing MCP tool
+- gmsh_streamlines traces a vector view using adaptive arc-length RK4,
+  bidirectional integration and loop handling. Select the intended view
+  and time step explicitly; do not rely on Plugin(StreamLines).
+- gmsh_flux_lines contours a scalar potential/flux function. In axisymmetry
+  use psi=r*A_theta; equal psi intervals encode flux, not equal pixel spacing.
+- gmsh_particle_trace is for charged-particle trajectories, not magnetic lines.
+- Inspect tool schemas before execution. Validate input MSH with
+  gmsh_validate_msh; use gmsh_render and gmsh_export_animation for existing
+  post-views. The TEAM28 renderer below additionally reconstructs moving
+  geometry and field lines at every saved solver step.
+
+## Seeding and three-dimensional coverage
+For an axisymmetric field, weight seed radii on a transverse plane by
+2*pi*r*abs(Bz), integrate the crossing flux, then take equal-flux quantiles.
+Repeat over the full azimuth, not just the XZ plane. TEAM28 uses 10 radii
+and 12 azimuths (120 seeds), midpoint RK2 along normalized signed B,
+0.8 mm steps and at most 400 steps in each direction. These are example
+display parameters, not universal convergence settings. Stop at domain
+boundaries and near nulls; check step refinement and field interpolation.
+Equal crossing flux does not give uniform screen density. Projection,
+occlusion and field strength affect density; a closed line can cross the
+seed plane twice, so 120 seeds need not mean 120 distinct flux tubes.
+For general 3D fields, distribute seeds over a surface and trace the full
+vector field. Revolve a meridian only when the physical solution is axisymmetric.
+
+## Time resolution and moving meshes
+Save and render every required physical step. At dt=0.2 ms there are 100
+samples per 50 Hz cycle and 50 per 100 Hz cycle. Slowing playback cannot
+recover omitted samples. Magnitude and force may vary at 100 Hz while signed
+B varies at 50 Hz. Synchronize current, force, signed B, geometry and lines
+with the same physical timestamp; rebuild lines for each frame.
+For ALE, distinguish reference mesh lookup coordinates from physical
+coordinates. Evaluate with the matching deformation, then map/resample
+onto the physical tracing grid. Check mapping monotonicity/Jacobians.
+Use fixed colour ranges, equal spatial scaling and visible coil geometry.
+Render the plate side/bottom at physical thickness; keep surface-field
+offsets separate from thickness. Record camera and any exaggerated scale.
+
+## Gmsh 5 rendering traps and acceptance
+Initialize FLTK after loading the first complete scene. Clear previous
+views explicitly: selecting one view's TimeStep does not synchronize
+separate line views. Use gmsh.fltk.wait(), not fltk.check(). Do not use
+`Delete View;` as a scene reset. Use plain native .pos files unless gzip
+loading has been verified. Preserve entity colours in the launch .geo or
+reapply them through the API; MSH alone does not preserve the display setup.
+View.IntervalsType=2 is continuous; vector arrow sizes are pixels.
+Use numeric frame order (e.g. frame-%05d), no implicit interpolation or
+periodic reset. Check unique element tags, complete/finite field data,
+physical geometry, all source steps exactly once, and decoded movie frame
+counts. Keep JSON evidence with solver identity, versions, units, dt,
+camera, seeding, source hashes and rendering limitations. Native replay
+keys may be sparse: report their stride separately from the full movie.
+
+## Executable reference in the TEAM28 development checkout
+The independently committed TEAM28 development work (commit bd256fbb1)
+contains validation_test/maglev/team28_fixed/README.md and the scripts below.
+This knowledge change does not integrate those numerical samples into main.
+Check that the files exist in the selected checkout before offering execution;
+if absent, use the existing MCP tools above or obtain that reviewed source.
+Run the scripts with --help first, then follow that README in order:
+transient.py -> moving_movie.py -> verify_movie.py -> encode_motion.py.
+The renderer supports disjoint --start-frame/--end-frame chunks and
+--merge-chunks; verify complete coverage before encoding. encode_motion.py
+creates the full slow movie and a three-cycle 50/100 Hz waveform zoom.
+These validation scripts are checkout resources, not installed-wheel tools.
+The packaged knowledge is available without NGSolve/Gmsh; execution needs
+the documented solver inputs and optional runtimes. Render on a 100/102
+desktop, preserve caller-owned sessions, and close only operation-owned
+windows. This recipe does not certify an experimental TEAM28 trajectory.
+"""
+
+
 def get_gmsh_documentation(topic: str = "all") -> str:
     """Return GMSH usage documentation by topic.
 
     Args:
         topic: One of: all, policy, overview, cli, shortcuts, options, opt_file,
                msh_format, geo, high_order, workflow, onelab, pitfalls,
-               animation, paraview
+               animation, magnetic_movies, paraview
 
     Returns:
         Documentation string for the requested topic.
@@ -2216,6 +2301,7 @@ def get_gmsh_documentation(topic: str = "all") -> str:
         "onelab": GMSH_ONELAB,
         "pitfalls": GMSH_PITFALLS,
         "animation": GMSH_ANIMATION,
+        "magnetic_movies": GMSH_MAGNETIC_MOVIES,
         "paraview": GMSH_PARAVIEW_PARITY,
     }
 
