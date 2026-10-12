@@ -2,6 +2,7 @@
 #include "mex.h"
 #include "hmatrix_hacapk_pack.cuh"
 #include "hmatrix_entry_oracle.cuh"
+#include "hmatrix_aca_callback.cuh"
 #include <map>
 #include <memory>
 #include <chrono>
@@ -79,6 +80,30 @@ Plan read(const mxArray* cfg){
 void mexFunction(int nl,mxArray* out[],int nr,const mxArray* in[]){
 try{
     if(!nr)throw std::invalid_argument("Command required");auto command=text(in[0]);
+    if(command=="analytic_aca_vector"){
+        arity(nr,7,nl,1);std::size_t payloadBytes=0;
+        for(int i=1;i<7;++i)checkPayload(in[i],payloadBytes);
+        auto block=analyticSources(numbers(in[1]),numbers(in[2]),2147483647u);
+        const auto n=block.sources.size(),pivot=integer(in[4],true),direction=integer(in[6]);
+        const auto permutation=numbers(in[3]),maskValues=numbers(in[5]);
+        if(permutation.size()!=n||maskValues.size()!=n||pivot>n||direction>1)
+            throw std::invalid_argument("Invalid ACA vector shape/pivot/direction");
+        std::vector<int> lod(n+1),mask(n);std::vector<bool> seen(n,false);
+        for(std::size_t i=0;i<n;++i){
+            const auto value=permutation[i];
+            if(value<1||value>n||std::floor(value)!=value||seen[std::size_t(value)-1])
+                throw std::invalid_argument("Invalid ACA permutation");
+            seen[std::size_t(value)-1]=true;lod[i+1]=int(value);
+            if(maskValues[i]!=0&&maskValues[i]!=1)throw std::invalid_argument("Invalid ACA mask");
+            mask[i]=int(maskValues[i]);
+        }
+        AnalyticEntryOracle oracle(block,256);EntryCallbackScope binding(oracle,nullptr);
+        std::vector<double> values(n,0.);
+        // HACApK ip is zero-based relative to its one-based block start.
+        cHACApK_active_entry_vector(int(n),int(pivot-1),1,1,lod.data(),0,mask.data(),int(direction),values.data());
+        binding.rethrow();out[0]=mxCreateDoubleMatrix(n,1,mxREAL);
+        std::copy(values.begin(),values.end(),mxGetDoubles(out[0]));return;
+    }
     if(command=="analytic_entry_batch"){
         // Native assembly diagnostic boundary; the full ACA adapter owns its
         // oracle across callbacks instead of uploading geometry on every row.

@@ -40,6 +40,18 @@ try
     entryError=norm(entries-probe.expected)/max(norm(probe.expected),realmin);
     assert(entryError<=1e-12,'Indexed analytic entry parity failed');
     result.indexed_entries=struct('count',numel(entries),'relative_error',entryError,'workspace_capacity',256);
+    permutation=[4;2;1;3];mask=[0;1;0;0];acaError=0;
+    for direction=0:1
+        for pivot=1:4
+            actual=radia_cuda_hmatrix('analytic_aca_vector',probe.cells,probe.faces,permutation,pivot,mask,direction);
+            if direction==0,expected=probe.aca_matrix(permutation(pivot),permutation).';
+            else,expected=probe.aca_matrix(permutation,permutation(pivot));end
+            expected(mask~=0)=0;
+            acaError=max(acaError,norm(actual-expected)/max(norm(expected),realmin));
+        end
+    end
+    assert(acaError<=1e-12,'ACA C dispatch to CUDA parity failed');
+    result.aca_cuda_vector=struct('cases',8,'relative_error',acaError,'scope','Active vector C dispatch only, not compressed ACA matrix');
     assert(radia_cuda_hmatrix('live_count')==0);
     stale=h;
     clear radia_cuda_hmatrix

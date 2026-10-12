@@ -85,7 +85,8 @@ def main():
         with ng.TaskManager():
             entry_rows=np.tile(np.arange(4),150);entry_columns=np.tile(np.array([3,2,1,0]),150)
             entry_expected=np.array([mixedgram.entry(int(i),int(j)) for i,j in zip(entry_rows,entry_columns)])
-        entry_probe=dict(cells=cells[:,None],faces=triangles[:,None],rows=(entry_rows+1.).reshape(-1,1),columns=(entry_columns+1.).reshape(-1,1),expected=entry_expected[:,None])
+            aca_matrix=np.array([[mixedgram.entry(i,j) for j in range(4)] for i in range(4)])
+        entry_probe=dict(cells=cells[:,None],faces=triangles[:,None],rows=(entry_rows+1.).reshape(-1,1),columns=(entry_columns+1.).reshape(-1,1),expected=entry_expected[:,None],aca_matrix=aca_matrix)
         inputfile=a.out/'inputs.mat';savemat(inputfile,dict(cases=structs(cases),entry_probe=entry_probe));record['input_sha256']=sha(inputfile)
         import matlab.engine
         eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');pid=int(eng.feature('getpid'));subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)
