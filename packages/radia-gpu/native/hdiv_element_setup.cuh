@@ -96,9 +96,13 @@ inline mxArray* inspectElements(const std::string& path,int order,const std::arr
         ngfem::IntegrationRule rule(ngfem::ET_TET,2*fe.Order());ngbla::Matrix<> shape(fe.GetNDof(),3);
         for(const auto& ip:rule){ngfem::MappedIntegrationPoint<3,3> mip(ip,trafo);fe.CalcMappedShape(mip,shape);const double w=mip.GetWeight();
             if(!std::isfinite(w)||w<=0)throw std::runtime_error("Invalid mapped measure");
-            volumeTotal+=w;for(int i=0;i<dofs.Size();++i)for(int c=0;c<3;++c){rhs[dofs[i]]+=w*shape(i,c)*applied[c];mean[c*nd+dofs[i]]+=w*shape(i,c);}
+            for(int i=0;i<dofs.Size();++i)for(int c=0;c<3;++c){rhs[dofs[i]]+=w*shape(i,c)*applied[c];mean[c*nd+dofs[i]]+=w*shape(i,c);}
             for(int i=0;i<dofs.Size();++i)for(int j=0;j<dofs.Size();++j)for(int c=0;c<3;++c)mass[dofs[i]*nd+dofs[j]]+=w*shape(i,c)*shape(j,c);
         }
+        // Existing CPU mean magnetization divides by ng.Integrate(1,mesh),
+        // whose declared default order is 5, independently of the mass rule.
+        ngfem::IntegrationRule volumeRule(ngfem::ET_TET,5);
+        for(const auto& ip:volumeRule){ngfem::MappedIntegrationPoint<3,3> mip(ip,trafo);volumeTotal+=mip.GetWeight();}
     }
     const double triRefs[6][2]={{0,0},{1,0},{0,1},{.5,0},{.5,.5},{0,.5}};
     for(std::size_t f=0;f<mesh->GetNE(ngfem::BND);++f){ngstd::HeapReset reset(heap);ngfem::ElementId eid(ngfem::BND,int(f));
