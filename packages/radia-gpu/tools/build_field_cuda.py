@@ -6,6 +6,8 @@ import json
 import os
 import socket
 import subprocess
+import tempfile
+import ctypes
 
 
 def main():
@@ -27,8 +29,11 @@ def main():
                core/'rad_hdiv_field_kernel_api.inc',
                package/'native/radia_cuda_field.cu', package/'native/radia_field_exact.cuh', Path(__file__), root/'Build.ps1']
     hashes = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
-    out = root/'build-field-cuda'
-    out.mkdir(exist_ok=True)
+    base = root/'build-field-cuda'
+    base.mkdir(exist_ok=True)
+    out = Path(tempfile.mkdtemp(prefix='job-',dir=base))
+    print(str(out),flush=True)
+    ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
     vs = Path('C:/BuildTools/VS2022-CUDA')
     compiler_bin = vs/'VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64'
     os.environ['NVCC_CCBIN'] = str(compiler_bin)
@@ -36,6 +41,8 @@ def main():
     import matlab.engine
     eng = matlab.engine.start_matlab('-nodesktop -nosplash')
     try:
+        pid=int(eng.feature('getpid'))
+        subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)
         config = Path(eng.matlabroot())/'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml'
         if not config.is_file():
             raise RuntimeError('Supported MATLAB CUDA compiler configuration missing')
