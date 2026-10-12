@@ -346,3 +346,36 @@ by another numerical job was excluded and restarted with between-call idle
 checks. A100 was not used. Formal idle-mdx performance acceptance remains
 pending; these 100-host results are diagnostics. Full samples and provenance:
 [scaling JSON](results/scaling-0.1.1-20261012.json).
+
+
+## Nonlinear GPU-resident correctness study
+
+`nonlinear_resident.py --out C:/temp/ams-nonlinear-study --maxh .35`
+runs an independently authored SI unit-cube magnetostatic model with
+`H=(1+4*|B|^2)B`, positive unit gauge mass, homogeneous tangential Dirichlet
+conditions, and a reproducible manufactured discrete excitation. The explicit
+Netgen alternative generates a `.vol`, which is reloaded by NGSolve with a
+six-boundary contract. This is a nonlinear constitutive/solver test, not a
+measured steel curve, open-boundary device, or eddy-current model.
+
+NGSolve owns mapped HCurl shape functions and the independent CPU nonlinear
+assembly. MATLAB evaluates material state, energy, residual and consistent SPD
+tangent on GPU. The frozen AMS hierarchy and nonlinear state remain GPU arrays;
+only scalar convergence controls cross the boundary during reuse. Rebuilding
+AMS explicitly downloads tangent CSR values for the existing native host setup.
+The Python-generated FE maps are independent validation inputs; the production
+AMS API continues to accept numeric operators without a Python adapter.
+
+Three routes run in order 1,2,3,3,2,1: rebuild each Newton iteration, freeze AMS,
+and adaptive reuse. Adaptive reuse rebuilds on the next iteration if PCG exceeds
+`max(30, 2*iterations_at_last_rebuild)`. There is no backend fallback. Each linear
+solve checks a true residual at 1e-10, each nonlinear run at 1e-9, and independent
+CPU solution, B-field RMS and nonlinear residual parity must be <=1e-7.
+
+This first implementation uses dense quadrature maps and is limited to 2000
+DOFs. It does not certify scalable sparse GPU assembly or persistent MEX
+workspace: workspace is allocated per linear solve. Report GPU input bytes and
+sampled device memory separately from an actual peak measurement. Total solve
+times include constitutive/tangent updates, line search, AMS setup, PCG and final
+download; shared FE preparation, upload and MATLAB startup are separate. 100
+numbers are diagnostics, never formal timing acceptance or CPU speedup claims.

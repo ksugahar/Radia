@@ -5,7 +5,7 @@ NGSolve owns FE orientation and assembly. Dense quadrature maps intentionally
 limit this first correctness case; timings are diagnostic, not scalability claims.
 """
 from pathlib import Path
-import argparse, json, os, socket, subprocess, sys, time
+import argparse, hashlib, importlib.metadata as md, json, os, socket, statistics, subprocess, sys, time
 import numpy as np
 import ngsolve as ng
 from netgen.csg import unit_cube
@@ -14,7 +14,7 @@ from scipy.io import savemat, loadmat
 
 def csr(a):
     i,j,v=a.COO();m=coo_matrix((v,(i,j)),shape=(a.height,a.width)).tocsr();m.sort_indices()
-    return dict(rows=m.shape[0],cols=m.shape[1],rowptr=m.indptr.astype(np.int32),columns=m.indices.astype(np.int32),values=m.data),m
+    return dict(rows=float(m.shape[0]),cols=float(m.shape[1]),rowptr=m.indptr.astype(np.int32),columns=m.indices.astype(np.int32),values=m.data),m
 
 def main(args):
     root=Path(__file__).resolve().parents[2];out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
@@ -24,16 +24,21 @@ def main(args):
         python_role='independent FE oracle and validation input generation',a100_used=False,
         material='H=(nu0+gamma*|B|^2)B; nu0=1; gamma=4; positive unit gauge mass',
         gpu_residency='quadrature maps, material, residual, tangent, solution and frozen AMS hierarchy remain GPU arrays; rebuild route downloads tangent values for native host setup',
-        limitations=['dense quadrature prototype, not production scaling','AMS workspace currently allocated per linear solve','single cold sample; no speedup acceptance'])
+        limitations=['dense quadrature prototype, not production scaling','AMS workspace currently allocated per linear solve','first/cold and ordered warm samples; diagnostic only'])
     eng=None
+    preprocessing_start=time.perf_counter()
     try:
         import netgen
         net=Path(netgen.__file__).parent
         os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),str(net.parent/'ngsolve_openblas'),str(net.parent/'ngsolve.libs'),str(net.parent/'netgen_mesher.libs'),str(Path(sys.base_prefix)),os.environ['PATH']])
         sys.path.insert(0,str(root/'build-ams-cuda'));import _radia_ams_snapshot as bridge
         ng.SetNumThreads(1)
-        mesh=ng.Mesh(unit_cube.GenerateMesh(maxh=args.maxh));mesh.ngmesh.Save(str(out/'model.vol'))
+        mesh=ng.Mesh(unit_cube.GenerateMesh(maxh=args.maxh));mesh.ngmesh.Save(str(out/'model.vol'));mesh=ng.Mesh(str(out/'model.vol'))
+        if len(mesh.GetBoundaries())!=6 or any(not b for b in mesh.GetBoundaries()):raise RuntimeError('Unit-cube boundary contract failed')
+        record['mesh_sha256']=hashlib.sha256((out/'model.vol').read_bytes()).hexdigest()
+        record['mesh_route']='explicit Netgen unit cube -> saved .vol -> NGSolve reload'
         fes=ng.HCurl(mesh,order=1,nograds=True,dirichlet='.*');u,v=fes.TnT();n=fes.ndof
+        if n>2000:raise RuntimeError('Dense validation prototype is limited to 2000 DOFs')
         free=np.asarray(list(fes.FreeDofs()),dtype=bool)
         mass=ng.BilinearForm(fes);mass+=u*v*ng.dx;mass.Assemble()
         linear=ng.BilinearForm(fes);linear+=(ng.curl(u)*ng.curl(v)+u*v)*ng.dx;linear.Assemble()
@@ -53,35 +58,45 @@ def main(args):
         exact=ng.GridFunction(fes);exact.vec.FV().NumPy()[:]=np.random.default_rng(123).normal(size=n)*free*0.07
         rhs=exact.vec.CreateVector();form.Apply(exact.vec,rhs);rhs.FV().NumPy()[~free]=0
         gradient,_=fes.CreateGradient();coords=np.asarray([[mesh.ngmesh.Points()[i+1][k] for i in range(mesh.nv)] for k in range(3)])
-        x=ng.GridFunction(fes);history=[];start=time.perf_counter();setup=0
-        for outer in range(30):
-            residual=x.vec.CreateVector();form.Apply(x.vec,residual);residual.data-=rhs;residual.FV().NumPy()[~free]=0
-            rel=np.linalg.norm(residual.FV().NumPy())/np.linalg.norm(rhs.FV().NumPy())
-            if rel<=1e-9:break
-            form.AssembleLinearization(x.vec)
-            t=time.perf_counter();snapshot=bridge.snapshot(form.mat,gradient,fes.FreeDofs(),*coords,np.zeros((1,n)),1,1);setup+=time.perf_counter()-t
-            solver=ng.CGSolver(form.mat,pre=snapshot['cpu_preconditioner'],tol=1e-10,maxiter=2000)
-            delta=x.vec.CreateVector();delta.data=solver*residual
-            check=residual.CreateVector();check.data=form.mat*delta-residual
-            linrel=np.linalg.norm(check.FV().NumPy()[free])/np.linalg.norm(residual.FV().NumPy()[free])
-            if linrel>1e-6:raise RuntimeError('CPU linear residual')
-            alpha=1.;old=form.Energy(x.vec)-ng.InnerProduct(rhs,x.vec);slope=-ng.InnerProduct(residual,delta)
-            trial=x.vec.CreateVector()
-            while True:
-                trial.data=x.vec-alpha*delta
-                if form.Energy(trial)-ng.InnerProduct(rhs,trial)<=old+1e-4*alpha*slope:break
-                alpha*=.5
-                if alpha<2**-20:raise RuntimeError('CPU line search')
-            x.vec.data=trial;history.append([outer,float(rel),float(linrel),alpha])
-        if rel>1e-9:raise RuntimeError('CPU nonlinear residual')
-        cpu=x.vec.FV().NumPy().copy();record['cpu']=dict(total_seconds=time.perf_counter()-start,setup_seconds=setup,history=history,final_residual=float(rel))
-        model=dict(schema='radia.ams-native-input.v1',A=A,G=csr(gradient)[0],coordinates=coords.T.copy(),free=free.astype(np.int32),cycle=1)
+        record['shared_fe_setup_seconds']=time.perf_counter()-preprocessing_start
+        cpu_samples=[]
+        for sample in range(3):
+            x=ng.GridFunction(fes);history=[];start=time.perf_counter();setup=0
+            for outer in range(30):
+                residual=x.vec.CreateVector();form.Apply(x.vec,residual);residual.data-=rhs;residual.FV().NumPy()[~free]=0
+                rel=np.linalg.norm(residual.FV().NumPy())/np.linalg.norm(rhs.FV().NumPy())
+                if rel<=1e-9:break
+                form.AssembleLinearization(x.vec)
+                t=time.perf_counter();snapshot=bridge.snapshot(form.mat,gradient,fes.FreeDofs(),*coords,np.zeros((1,n)),1,1);setup+=time.perf_counter()-t
+                solver=ng.CGSolver(form.mat,pre=snapshot['cpu_preconditioner'],tol=1e-10,maxiter=2000)
+                delta=x.vec.CreateVector();delta.data=solver*residual
+                check=residual.CreateVector();check.data=form.mat*delta-residual
+                linrel=np.linalg.norm(check.FV().NumPy()[free])/np.linalg.norm(residual.FV().NumPy()[free])
+                if linrel>1e-6:raise RuntimeError('CPU linear residual')
+                alpha=1.;old=form.Energy(x.vec)-ng.InnerProduct(rhs,x.vec);slope=-ng.InnerProduct(residual,delta)
+                trial=x.vec.CreateVector()
+                while True:
+                    trial.data=x.vec-alpha*delta
+                    if form.Energy(trial)-ng.InnerProduct(rhs,trial)<=old+1e-4*alpha*slope:break
+                    alpha*=.5
+                    if alpha<2**-20:raise RuntimeError('CPU line search')
+                x.vec.data=trial;history.append([outer,float(rel),float(linrel),alpha])
+            if rel>1e-9:raise RuntimeError('CPU nonlinear residual')
+            cpu=x.vec.FV().NumPy().copy();cpu_samples.append(dict(total_seconds=time.perf_counter()-start,setup_seconds=setup,history=history,final_residual=float(rel)))
+        record['cpu_samples']=cpu_samples
+        record['cpu_warm_median_seconds']=statistics.median(v['total_seconds'] for v in cpu_samples[1:])
+        model=dict(schema='radia.ams-native-input.v1',A=A,G=csr(gradient)[0],coordinates=coords.T.copy(),free=free.astype(np.int32),cycle=1.)
         rows=np.repeat(np.arange(n),np.diff(sp.indptr));index=(rows+sp.indices*n+1).astype(np.float64)
         savemat(out/'input.mat',dict(model=model,Cx=C[:,0,:],Cy=C[:,1,:],Cz=C[:,2,:],weights=w[:,None],mass=M,rhs=rhs.FV().NumPy()[:,None],nu0=1.,gamma=4.,csrIndex=index[:,None]))
         import matlab.engine
-        eng=matlab.engine.start_matlab('-nodesktop -nosplash');eng.addpath(str(Path(__file__).parent),nargout=0)
+        startup=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash');record['matlab_startup_seconds']=time.perf_counter()-startup;eng.addpath(str(Path(__file__).parent),nargout=0)
         eng.nonlinear_resident(str(out/'input.mat'),str(out/'gpu.mat'),str(root/'build-ams-cuda'),str(root/'packages/radia-gpu/matlab'),nargout=0)
         gpu=loadmat(out/'gpu.mat',simplify_cells=True);record['gpu']=[]
+        record['build']=json.loads((root/'build-ams-cuda/build.json').read_text())
+        record['gpu_binary_sha256']=hashlib.sha256((root/'build-ams-cuda/radia_cuda_ams.mexw64').read_bytes()).hexdigest()
+        record['versions']={p:md.version(p) for p in ('ngsolve','numpy','scipy','matlabengine')}
+        record['source_dirty']=bool(subprocess.check_output(['git','status','--porcelain'],text=True).strip())
+        record['cpu_threads']=1
         for solution,report in zip(gpu['solutions'],gpu['reports']):
             actual=np.asarray(solution).reshape(-1);probe=ng.GridFunction(fes);probe.vec.FV().NumPy()[:]=actual
             residual=probe.vec.CreateVector();form.Apply(probe.vec,residual);residual.data-=rhs
