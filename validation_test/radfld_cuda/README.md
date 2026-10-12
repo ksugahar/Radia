@@ -182,3 +182,26 @@ FE L2 acceptance or general Radia-object/analytic/high-order/curved acceptance.
 Full legacy command migration, profiling counters, lifecycle across clear/reload,
 source-strength update tests, physical field gates and idle timing/memory are
 still pending. No speedup or complete RadFld migration is claimed.
+
+## Mixed precision checkpoint (2026-10-12)
+
+`tree_mixed32` explicitly evaluates accepted far-node multipoles in FP32.
+Opening tests, geometry, exact near-source kernels and output accumulation
+remain FP64. Unsafe FP32 coefficient/range cases use the documented FP64
+multipole calculation. Source and moment storage remains FP64; reduced memory
+or whole-operation speedup has not been established.
+
+`results/mixed32-projection-20261012.json` records an actual NGSolve SetValues
+projection with 256 positive point sources and 24 mapped targets. Independent
+pre-CUDA CPU direct fields give projected FE L2 relative errors below 1e-7 in
+HDiv, HCurl and VectorH1. This is a small cloud case, not acceptance for all
+analytic, high-order, curved, cancellation-sensitive or near-field inputs.
+The full analytic CUDA module now compiles; those families still need their
+independent numerical gates.
+
+`compareProjectionPrecision.m` is the pending idle-host ABBA measurement entry
+point. Its continuous timer includes source construction/upload, projection
+target capture, evaluation, projection, result recovery and release. Exact
+owned device buffer sizes and sampled CUDA free memory are distinguished from
+unmeasured process/host peaks. Timings on 100 are diagnostic, never formal mdx
+acceptance. Current timing and memory results remain pending due to host load.
