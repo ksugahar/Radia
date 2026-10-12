@@ -55,7 +55,7 @@ class build_py(_build_py):
         expected.update({"LICENSE", "README.md", "build.json", "ams-build.json"})
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
-                if path.name in {"FieldCloud.m", "FieldElements.m", "HMatrixOperator.m", "solveHDivRT0.m", "solveCurvedHDiv.m", "curvedHDivQuadrature.m"}:
+                if path.name in {"FieldCloud.m", "FieldElements.m", "HMatrixOperator.m", "solveHDivRT0.m", "solveCurvedHDiv.m", "curvedHDivQuadrature.m", "solveHDivElements.m", "affineHDivQuadrature.m"}:
                     continue  # Experimental field/H-matrix modules require separate acceptance.
                 if path.name in ("runRLCResonanceOptimizationDemo.m", "rlcResonanceObjective.m"):
                     continue  # Independent Optuna-dependent examples are not a runtime dependency.

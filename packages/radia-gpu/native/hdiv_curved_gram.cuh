@@ -2,7 +2,7 @@
 // Touch classification and symmetric entry arithmetic mirror the CPU path.
 #pragma once
 namespace radia_hmatrix_cuda {
-struct CurvedCharge {double nodes[30];int vertices[4],expo[3],kind,host;};
+struct CurvedCharge {double nodes[30];int vertices[4],expo[3],kind,host;bool affine=false;};
 struct ReferencePoint {double xi[3],weight;};
 struct CurvedBlock {std::vector<CurvedCharge> charges;std::vector<ReferencePoint> tet,tri;std::vector<double> gl,gw;};
 __device__ bool curvedTouch(const CurvedCharge& a,const CurvedCharge& b){
@@ -10,7 +10,21 @@ __device__ bool curvedTouch(const CurvedCharge& a,const CurvedCharge& b){
     return shared>=2||(shared==1&&(a.kind||b.kind));
 }
 __device__ double curvedMonomial(const CurvedCharge& a,const double* xi){
-    double result=1.;for(int c=0;c<3;++c)for(int k=0;k<a.expo[c];++k)result*=xi[c];return result;
+    double g[3]={xi[0],xi[1],xi[2]};if(a.affine){g[0]=xi[1];g[1]=a.kind?1.-xi[0]-xi[1]:xi[2];g[2]=1.-xi[0]-xi[1]-xi[2];}
+    double result=1.;for(int c=0;c<3;++c)for(int k=0;k<a.expo[c];++k)result*=g[c];return result;
+}
+__device__ double affineReferencePotential(const CurvedCharge& a,const double* p){
+    const int degree=a.expo[0]+a.expo[1]+a.expo[2];double moments[20]={};
+    if(!a.kind){double v[4][3];for(int i=0;i<4;++i)for(int c=0;c<3;++c)v[i][c]=a.nodes[3*((i+1)%4)+c];
+        rad_hdiv_cuda::TetReferencePotentialMomentsUpTo(v,p,degree,moments);
+    }else{
+        double v[3][3],edge[2][3],inverse[3][3]={};for(int i=0;i<3;++i)for(int c=0;c<3;++c)v[i][c]=a.nodes[3*((i+1)%3)+c];
+        double aa=0.,bb=0.,ab=0.;for(int c=0;c<3;++c){edge[0][c]=v[1][c]-v[0][c];edge[1][c]=v[2][c]-v[0][c];aa+=edge[0][c]*edge[0][c];bb+=edge[1][c]*edge[1][c];ab+=edge[0][c]*edge[1][c];}
+        const double determinant=aa*bb-ab*ab;if(determinant<=0)return nan("");
+        for(int c=0;c<3;++c){inverse[0][c]=(bb*edge[0][c]-ab*edge[1][c])/determinant;inverse[1][c]=(aa*edge[1][c]-ab*edge[0][c])/determinant;}
+        rad_hdiv_cuda::SurfaceReferencePotentialMomentsUpTo(v,p,degree,v[0],inverse,moments);
+    }
+    return moments[rad_hdiv_cuda::PotentialMomentIndex(a.expo[0],a.expo[1],a.expo[2])];
 }
 __device__ void curvedMappedPoint(const CurvedCharge& a,const ReferencePoint& q,double* x,double& weight){
     double measure;
@@ -24,7 +38,8 @@ __device__ double curvedQuadDot(const CurvedCharge& target,const CurvedCharge& s
     const auto* tq=target.kind?tri:tet;const auto n=target.kind?ns:nt;
     const bool touching=curvedTouch(target,source);double sum=0.;
     for(std::size_t t=0;t<n;++t){double p[3],weight;curvedMappedPoint(target,tq[t],p,weight);double inner=0.;
-        if(touching){
+        if(source.affine)inner=affineReferencePotential(source,p);
+        else if(touching){
             if(source.kind)inner=rad_hdiv_cuda::CurvedTriPotential(reinterpret_cast<const double(*)[3]>(source.nodes),source.expo[0],source.expo[1],p,gl,gw,nq,true);
             else inner=rad_hdiv_cuda::CurvedTetPotential(reinterpret_cast<const double(*)[3]>(source.nodes),source.expo[0],source.expo[1],source.expo[2],p,gl,gw,nq,true);
         }else{

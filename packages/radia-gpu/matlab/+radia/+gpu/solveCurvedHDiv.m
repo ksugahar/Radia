@@ -14,6 +14,7 @@ setup=radia_cuda_projection('assemble_hdiv_elements',meshPath,order,appliedField
 assert(setup.curved_cells>0,'Curved reference-frame assembly requires a curved mesh');
 config=radia.gpu.curvedHDivQuadrature(order);
 config.schema_version=1;
+config.geometry_mode='curved';
 for name={'cell_nodes','face_nodes','cell_vertices','face_vertices','host','kind','expo','charge_map'}
     config.(name{1})=setup.(name{1});
 end

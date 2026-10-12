@@ -73,6 +73,7 @@ inline std::vector<double> chargeMap(std::shared_ptr<ngcomp::MeshAccess> mesh,
 }
 inline mxArray* inspectElements(const std::string& path,int order,const std::array<double,3>& applied={0.,0.,0.}){
     auto mesh=std::make_shared<ngcomp::MeshAccess>(path);const auto ne=mesh->GetNE(ngfem::VOL);
+    if(mesh->GetCurveOrder()>2)throw std::invalid_argument("HDiv GPU geometry supports at most the existing P2 map");
     if(mesh->GetDimension()!=3||!ne||ne>128||mesh->GetDeformation()||order<1||order>3)
         throw std::invalid_argument("HDiv staging requires orders 1..3 and 1..128 undeformed tetrahedra");
     ngcore::Flags flags;flags.SetFlag("order",order);
