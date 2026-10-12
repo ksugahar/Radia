@@ -22,7 +22,7 @@ def main():
         compiler='C:/BuildTools/VS2022-CUDA/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64'
         eng.setenv('NVCC_CCBIN',compiler,nargout=0);eng.setenv('PATH',compiler+';'+eng.getenv('PATH'),nargout=0)
         config=Path(eng.matlabroot())/'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml'
-        flags='NVCCFLAGS=--fmad=false -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
+        flags='NVCCFLAGS=--std=c++17 --fmad=false -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
         eng.mexcuda('-v','-R2018a','-f',str(config),flags,'-I'+str(package/'native'),'-I'+str(root/'src/core'),'-DRAD_MATLAB_HOST','-lcublas','-outdir',str(out),str(sources[0]),str(root/'src/core/rad_bem_galerkin.cpp'),str(root/'src/core/rad_biot_savart_filaments.cpp'),nargout=0)
         if hashes()!=record['source_sha256'] or subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()!=record['source_commit']:raise RuntimeError('Source changed during build')
         record.update(accepted=True,matlab=eng.version(),binary_sha256=hashlib.sha256((out/'radia_cuda_ih.mexw64').read_bytes()).hexdigest(),cuda_targets=['sm_75','sm_80','compute_80 PTX'],cpu_fallback=False,python_runtime_required=False,taskmanager_regions=False)
