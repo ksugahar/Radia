@@ -1,0 +1,104 @@
+{
+  "accepted": true,
+  "scope": "Bounded public P2 sphere, HDiv orders 1 and 2, existing reference charge map and singular near-rule Gram, linear isotropic material",
+  "general_hdiv_validation_complete": false,
+  "release_accepted": false,
+  "timing_accepted": false,
+  "a100_used": false,
+  "cases": [
+    {
+      "accepted": true,
+      "scope": "Bounded original P2 unit sphere, tetrahedral HDiv, dense near-rule Gram, linear isotropic material",
+      "order": 1,
+      "a100_used": false,
+      "release_accepted": false,
+      "general_hdiv_validation_complete": false,
+      "timing_accepted": false,
+      "cells": 13,
+      "dofs": 105,
+      "charges": 67,
+      "cpu_true_residual": 1.4486940522390708e-12,
+      "cpu_iterations": 11,
+      "cpu_vim_sha256": "e03cdf61cd845984017c0a73f87f321db58bae9513f60d82a3d8c361c89b7dd5",
+      "input_sha256": "6aff0a87de5c8e3783b0312ffd6abcbcf8517f53191ec64e8a5a6f0993a8c357",
+      "mesh_sha256": "a339966a361391ad2b64e7f57645336b3ac70fa549c7f08b2007875523d02236",
+      "source_sha256": "757aadd3ace86f0408886bc985e5cc4848412eb1f59f0a4100ee22a0f4aff42e",
+      "projection_sha256": "62468b5fc63f50c366e401f4f2aed1e1d160efcfb4de34bde2d6a5834491010d",
+      "hmatrix_sha256": "2463b108eaefd91e03a3218a447efbb5418276ef3324ce0080833ebb3cbe99f1",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "ngsolve": "6.2.2607",
+      "native": {
+        "mass_error": 1.5312344938341912e-16,
+        "charge_error": 2.899268745251847e-15,
+        "rhs_error": 2.358082554315868e-16,
+        "coefficient_error": 3.619697823282078e-11,
+        "physical_error": 4.99025928922598e-13,
+        "independent_true_residual": 6.243570167284608e-12
+      },
+      "solver": {
+        "true_relative_residual": 6.243536179821815e-12,
+        "iterations": 57,
+        "operator_owned_device_bytes": 48832,
+        "solver_owned_device_bytes": 35072,
+        "setup_peak_owned_device_bytes": 68428,
+        "combined_peak_owned_device_bytes": 83904,
+        "scope": "Bounded P2 tetrahedral reference-monomial dense Gram, linear isotropic material",
+        "whole_seconds": 6.192777,
+        "memory_limitations": "Accounted owned buffers; no cuBLAS, host or global allocation peak."
+      }
+    },
+    {
+      "accepted": true,
+      "scope": "Bounded original P2 unit sphere, tetrahedral HDiv, dense near-rule Gram, linear isotropic material",
+      "order": 2,
+      "a100_used": false,
+      "release_accepted": false,
+      "general_hdiv_validation_complete": false,
+      "timing_accepted": false,
+      "cells": 13,
+      "dofs": 288,
+      "charges": 160,
+      "cpu_true_residual": 1.3011311018708777e-12,
+      "cpu_iterations": 12,
+      "cpu_vim_sha256": "e03cdf61cd845984017c0a73f87f321db58bae9513f60d82a3d8c361c89b7dd5",
+      "input_sha256": "dca034c75d9d61987d021f4ed920bd8952387037b26049159fd83edaa5c5b765",
+      "mesh_sha256": "a339966a361391ad2b64e7f57645336b3ac70fa549c7f08b2007875523d02236",
+      "source_sha256": "757aadd3ace86f0408886bc985e5cc4848412eb1f59f0a4100ee22a0f4aff42e",
+      "projection_sha256": "62468b5fc63f50c366e401f4f2aed1e1d160efcfb4de34bde2d6a5834491010d",
+      "hmatrix_sha256": "2463b108eaefd91e03a3218a447efbb5418276ef3324ce0080833ebb3cbe99f1",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "ngsolve": "6.2.2607",
+      "native": {
+        "mass_error": 1.9672325502252915e-16,
+        "charge_error": 2.2746676655798596e-14,
+        "rhs_error": 2.828595643112391e-16,
+        "coefficient_error": 5.022389020502436e-10,
+        "physical_error": 6.49120179054649e-13,
+        "independent_true_residual": 7.773738059082846e-12
+      },
+      "solver": {
+        "true_relative_residual": 7.773496226149014e-12,
+        "iterations": 164,
+        "operator_owned_device_bytes": 252136,
+        "solver_owned_device_bytes": 198152,
+        "setup_peak_owned_device_bytes": 300460,
+        "combined_peak_owned_device_bytes": 450288,
+        "scope": "Bounded P2 tetrahedral reference-monomial dense Gram, linear isotropic material",
+        "whole_seconds": 254.920684,
+        "memory_limitations": "Accounted owned buffers; no cuBLAS, host or global allocation peak."
+      }
+    }
+  ],
+  "limitations": [
+    "Dense near-rule diagnostic; no adaptive high-order HACApK acceptance",
+    "No images, constrained spaces, nonlinear materials or internal interfaces accepted",
+    "First payload times are 100 diagnostics; no warm ABBA or idle-mdx acceptance",
+    "Owned buffers accounted; cuBLAS, host and global peaks not measured"
+  ],
+  "durable_evidence": "W:/00_CAE/Radia/release-evidence/hmatrix-cuda-20261012/high-order-curved-20261013",
+  "rejected_initial_order1": {
+    "reason": "Mean normalization volume quadrature mismatched CPU default order 5",
+    "mean_relative_error": 0.0002586098696513743,
+    "retained": true
+  }
+}

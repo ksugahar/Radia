@@ -98,7 +98,7 @@ inline mxArray* inspectElements(const std::string& path,int order,const std::arr
         for(const auto& ip:rule){ngfem::MappedIntegrationPoint<3,3> mip(ip,trafo);fe.CalcMappedShape(mip,shape);const double w=mip.GetWeight();
             if(!std::isfinite(w)||w<=0)throw std::runtime_error("Invalid mapped measure");
             for(int i=0;i<dofs.Size();++i)for(int c=0;c<3;++c){rhs[dofs[i]]+=w*shape(i,c)*applied[c];mean[c*nd+dofs[i]]+=w*shape(i,c);}
-            for(int i=0;i<dofs.Size();++i)for(int j=0;j<dofs.Size();++j)for(int c=0;c<3;++c)mass[dofs[i]*nd+dofs[j]]+=w*shape(i,c)*shape(j,c);
+            for(int i=0;i<dofs.Size();++i)for(int j=0;j<dofs.Size();++j){double dot=0.;for(int c=0;c<3;++c)dot+=shape(i,c)*shape(j,c);mass[dofs[i]*nd+dofs[j]]+=w*dot;}
         }
         // Existing CPU mean magnetization divides by ng.Integrate(1,mesh),
         // whose declared default order is 5, independently of the mass rule.

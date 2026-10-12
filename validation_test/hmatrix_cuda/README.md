@@ -370,3 +370,13 @@ Remaining integration must preserve these existing mathematical contracts:
 
 FE staging parity alone leaves general HDiv and release acceptance pending.
 The NGSolve A100 is offline and is not started or contacted for this gate.
+
+### Bounded curved whole solve (2026-10-13)
+
+`results/curved-hdiv-solve-20261013.json` records native NGSolve charge-map setup,
+existing curved singular integration, resident material PCG and physical recovery
+for the original public 13-cell P2 sphere. HDiv orders 1 and 2 pass independent
+CPU coefficient, mean magnetization and true-residual gates. The earlier volume
+normalization failure is retained in durable evidence. This dense near-rule
+subgate does not certify general adaptive/high-order HDiv, constraints, images,
+nonlinear materials, performance, packaging or release. A100 was not used.
