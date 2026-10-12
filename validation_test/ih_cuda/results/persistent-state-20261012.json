@@ -1,0 +1,67 @@
+{
+  "schema": "radia.ih-cuda-algebra.v1",
+  "accepted": true,
+  "scope": "Resident algebra only; not a coupled IH/Simulink solver acceptance",
+  "timing_acceptance": false,
+  "a100_used": false,
+  "source_dirty": false,
+  "source_commit": "bce08e80089e5f13c593b382445f8c9a0344f72c",
+  "source_sha256": {
+    "validation_test/ih_cuda/resident_smoke.cu": "13cb3409277d84831ea9d037a7058f87bf6937caa0254e1a2a5a3cba8e468b59",
+    "packages/radia-gpu/native/ih_resident_kernels.cuh": "fbf2c80017687fb309f4f5aa965f70d74fe93f0a7b22f6430335e0cbc342d5dc",
+    "packages/radia-gpu/native/ih_bicgstab_kernels.cuh": "75ee48e211fc17261a39e656c7726584dee8808ffe3d403c4875978f969b618c",
+    "packages/radia-gpu/native/ih_complex_solver.cuh": "c2d03b8e754d94782e1a61b3bc51a78fc023a7d1a3347cabc0ba2ddf82505404",
+    "packages/radia-gpu/native/ih_thermal_kernels.cuh": "ddbe7e8a030a7092576d7f3edc0a217ad5c08ffae042bb5a625bcc1479bc0d29",
+    "packages/radia-gpu/native/ih_coupled_state.cuh": "1a006a0b026a8f4fb497882d64e56c20c114aca80f52103fde7ad371cebdcad8",
+    "validation_test/ih_cuda/run_resident_smoke.py": "90e1a5a1bf2f08c5b3aea219d4d78c20b619e551474eb84e7a947092b4845e6d"
+  },
+  "cases": [
+    {
+      "current_A": 0.0,
+      "complex_operator_relative": 0.0,
+      "quadratic_loss_relative": 0.0,
+      "resident_repeats": 10,
+      "bicgstab_identity_first_correction_checked": true,
+      "thermal_relative": 0.0,
+      "persistent_temperature_relative": 0.0,
+      "persistent_steps": 10,
+      "reset_checked": true,
+      "invalid_update_checked": true,
+      "missing_material_rejected": true,
+      "eddy_true_residual": 0.0,
+      "thermal_true_residual": 2.4323509676865724e-18
+    },
+    {
+      "current_A": 1.0,
+      "complex_operator_relative": 5.113104105558066e-16,
+      "quadratic_loss_relative": 8.887086115607503e-16,
+      "resident_repeats": 10,
+      "bicgstab_identity_first_correction_checked": true,
+      "thermal_relative": 0.0,
+      "persistent_temperature_relative": 0.0,
+      "persistent_steps": 10,
+      "reset_checked": true,
+      "invalid_update_checked": true,
+      "missing_material_rejected": true,
+      "eddy_true_residual": 2.8753866212157635e-16,
+      "thermal_true_residual": 1.592351515037632e-16
+    },
+    {
+      "current_A": -2.5,
+      "complex_operator_relative": 4.2132343119502575e-16,
+      "quadratic_loss_relative": 5.220646860056162e-16,
+      "resident_repeats": 10,
+      "bicgstab_identity_first_correction_checked": true,
+      "thermal_relative": 0.0,
+      "persistent_temperature_relative": 4.6730938281289366e-14,
+      "persistent_steps": 10,
+      "reset_checked": true,
+      "invalid_update_checked": true,
+      "missing_material_rejected": true,
+      "eddy_true_residual": 3.3732104010056935e-16,
+      "thermal_true_residual": 8.622054556013114e-17
+    }
+  ],
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "binary_sha256": "8b794a3493d98bcac6439d96527219c07e1beafdad2aebd318b42f6e06942f89"
+}

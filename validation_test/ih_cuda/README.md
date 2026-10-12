@@ -36,3 +36,11 @@ checks numerical plumbing, not a PEEC-BEM physical model. The context is current
 retained only during the validation call; checked persistent MATLAB ownership,
 Simulink output/update lifecycle and actual CPU/pybind11 physics comparison are
 still required. No timing/performance claim follows from this result.
+
+`persistent-state-20261012.json` checks ten coupled updates with one uploaded
+operator set, device-only electromagnetic/loss/thermal stage exchange, accepted
+state preservation on invalid controls, reset and rejection of a missing dynamic
+material implementation. The device state is currently scoped to a single
+validation MEX invocation. Checked persistent MATLAB handles, actual ESIM cell
+and reaction-field updates, independent physical CPU parity and Simulink
+acceptance remain pending. No full IH or release acceptance is claimed.
