@@ -134,6 +134,8 @@ public:
     // Numeric CUDA boundary for the existing retained-cloud representation.
     // Analytic/curved element sources are rejected, never sampled implicitly.
     FieldCloudSnapshot ExportCloudSnapshot() const;
+    // Preserve analytic/high-order/curved sources and the exact CPU tree ordering.
+    FieldCloudSnapshot ExportSnapshot() const;
 
     std::size_t SourceCount() const;
     std::size_t ImageCount() const;

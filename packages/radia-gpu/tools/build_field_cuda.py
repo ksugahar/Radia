@@ -23,7 +23,9 @@ def main():
     package = root / 'packages/radia-gpu'
     sources = [core/'rad_hdiv_field_evaluator.cpp', core/'rad_hdiv_vim.cpp',
                core/'rad_hdiv_field_evaluator.h', core/'rad_hdiv_vim.h', core/'rad_field_cloud_kernel.h',
-               package/'native/radia_cuda_field.cu', Path(__file__), root/'Build.ps1']
+               core/'rad_field_sources.h', core/'rad_field_source_kernel.inc', core/'rad_hdiv_field_math.inc',
+               core/'rad_hdiv_field_kernel_api.inc',
+               package/'native/radia_cuda_field.cu', package/'native/radia_field_exact.cuh', Path(__file__), root/'Build.ps1']
     hashes = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     out = root/'build-field-cuda'
     out.mkdir(exist_ok=True)
@@ -56,6 +58,8 @@ def main():
                     str(package/'native/radia_cuda_field.cu'), *objects, nargout=0)
         if hashes != {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}:
             raise RuntimeError('Source changed during build')
+        if subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip() != commit:
+            raise RuntimeError('Source commit changed during build')
         binary = out/'radia_cuda_field.mexw64'
         record = dict(schema='radia.field-cuda-build.v1', source_commit=commit, source_dirty=dirty,
                       source_sha256=hashes, binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),

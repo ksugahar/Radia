@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <vector>
+#include "rad_field_sources.h"
 
 #ifdef __CUDACC__
 #define RAD_FIELD_HD __host__ __device__
@@ -13,6 +14,17 @@
 
 namespace rad_hdiv {
 struct FieldCloudPoint { double position[3]; double strength; };
+struct FieldSourceView {
+    const FieldTetSource* tets;
+    const FieldTriSource* triangles;
+    const FieldCubicTriSource* cubic_triangles;
+    const FieldCurvedTetSource* curved_tets;
+    const FieldCurvedTriSource* curved_triangles;
+    const FieldCloudPoint* points;
+    const double* gauss_points;
+    const double* gauss_weights;
+    int nq;
+};
 struct FieldCloudNode {
     std::size_t begin, end;
     int left, escape;
@@ -21,6 +33,13 @@ struct FieldCloudNode {
 struct FieldCloudImage { int mask; double sign, angle; };
 struct FieldCloudSnapshot {
     std::vector<FieldCloudPoint> points;
+    std::vector<FieldSourceRef> sources;
+    std::vector<FieldTetSource> tets;
+    std::vector<FieldTriSource> triangles;
+    std::vector<FieldCubicTriSource> cubic_triangles;
+    std::vector<FieldCurvedTetSource> curved_tets;
+    std::vector<FieldCurvedTriSource> curved_triangles;
+    std::vector<double> gauss_points, gauss_weights;
     std::vector<std::size_t> order;
     std::vector<FieldCloudNode> nodes;
     std::vector<FieldCloudImage> images;

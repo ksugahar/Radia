@@ -56,5 +56,24 @@
     "scope": "Distribution/public evidence/TaskManager/privacy; does not certify CUDA numerical correctness"
   },
   "next_action": "On idle 100: rebuild current clean source, run lifecycle and small CPU parity, then ABBA scaling; save public JSON and private raw evidence.",
-  "timing_classification": "100 diagnostic only; formal idle-mdx GPU performance acceptance remains unavailable"
+  "timing_classification": "100 diagnostic only; formal idle-mdx GPU performance acceptance remains unavailable",
+  "migration_status": {
+    "state": "source-development-not-built",
+    "scope": "Shared analytic/high-order/curved formulas and source records; element creation/upload/parity still pending",
+    "contract_tests": {
+      "passed": 65,
+      "numerical_acceptance": false
+    },
+    "ci_wait": {
+      "run_id": 38209287559,
+      "workflow": "SparseSolv AMS",
+      "observed_status": "in_progress"
+    },
+    "source_sha256": {
+      "src/core/rad_hdiv_field_math.inc": "b71c97552825adb7391e522491f8e94f29ba334d0d7185bc18d388f55ee256d9",
+      "src/core/rad_field_source_kernel.inc": "cb8bec501a06ad1d80712371fb4b7c97d4edcb7cb14a8aa67e22ea0cf4919fb8",
+      "src/core/rad_field_sources.h": "28bbbd100a2bcdc01c71cedfff2756548427226ead2dcd7aae5b5510dafd4029",
+      "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127"
+    }
+  }
 }

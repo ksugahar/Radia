@@ -4,6 +4,7 @@
 #include "gpu/mxGPUArray.h"
 #include <cuda_runtime.h>
 #include "rad_hdiv_field_evaluator.h"
+#include "radia_field_exact.cuh"
 #include <algorithm>
 #include <cstdint>
 #include <chrono>
@@ -29,7 +30,8 @@ struct DeviceBuffer {
     template<class T> const T* as() const { return static_cast<const T*>(p); }
 };
 struct Context {
-    DeviceBuffer points,order,nodes,images;
+    DeviceBuffer points,order,nodes,images,sources,tets,triangles,cubic_triangles,curved_tets,curved_triangles,gauss_points,gauss_weights;
+    FieldSourceView view{};
     cudaStream_t stream=nullptr;
     std::size_t npoints=0, nimages=0, owned=0;
     double theta=0;
@@ -43,12 +45,12 @@ struct Context {
         if(state!=cudaSuccess && state!=cudaErrorNotReady) {
             // A device reset already released these allocations. Never free
             // stale addresses that another CUDA consumer may now own.
-            points.p=order.p=nodes.p=images.p=nullptr;
+            for(auto* buffer:{&points,&order,&nodes,&images,&sources,&tets,&triangles,&cubic_triangles,&curved_tets,&curved_triangles,&gauss_points,&gauss_weights}) buffer->p=nullptr;
             if(previous!=device) cudaSetDevice(previous);
             return;
         }
         cudaStreamSynchronize(stream);
-        for(auto* buffer:{&points,&order,&nodes,&images}) {
+        for(auto* buffer:{&points,&order,&nodes,&images,&sources,&tets,&triangles,&cubic_triangles,&curved_tets,&curved_triangles,&gauss_points,&gauss_weights}) {
             if(buffer->p) cudaFree(buffer->p);
             buffer->p=nullptr;
         }
@@ -108,14 +110,14 @@ template<class T> void upload(Context& c,DeviceBuffer& dst,const std::vector<T>&
     c.owned+=dst.size;
 }
 
-__device__ void base(const FieldCloudPoint* points,std::size_t npoints,
+__device__ void base(FieldSourceView view,const FieldSourceRef* sources,std::size_t npoints,
         const std::size_t* order,const FieldCloudNode* nodes,double theta,
         bool tree,const double r[3],double out[3]) {
     out[0]=out[1]=out[2]=0;
     if(!tree) {
         FieldCompensated3 sum;
         for(std::size_t i=0;i<npoints;++i) {
-            double v[3]{}; AddCloudPoint(points[i].position,points[i].strength,r,v); sum.Add(v);
+            double v[3]{}; rad_hdiv_cuda::AddFieldSource(view,sources[i],r,v); sum.Add(v);
         }
         sum.Store(out); return;
     }
@@ -130,14 +132,13 @@ __device__ void base(const FieldCloudPoint* points,std::size_t npoints,
             index=node.escape;
         } else if(node.left<0) {
             for(std::size_t p=node.begin;p<node.end;++p) {
-                const auto& source=points[order[p]];
-                AddCloudPoint(source.position,source.strength,r,out);
+                rad_hdiv_cuda::AddFieldSource(view,sources[order[p]],r,out);
             }
             index=node.escape;
         } else index=node.left;
     }
 }
-__global__ void evaluate(const FieldCloudPoint* points,std::size_t npoints,
+__global__ void evaluate(FieldSourceView view,const FieldSourceRef* sources,std::size_t npoints,
         const std::size_t* order,const FieldCloudNode* nodes,double theta,
         const FieldCloudImage* images,std::size_t nimages,const double* obs,
         std::size_t nobs,bool tree,double* result) {
@@ -145,7 +146,7 @@ __global__ void evaluate(const FieldCloudPoint* points,std::size_t npoints,
     if(i>=nobs) return;
     const double* r=obs+3*i;
     FieldCompensated3 sum;
-    double v[3]; base(points,npoints,order,nodes,theta,tree,r,v); sum.Add(v);
+    double v[3]; base(view,sources,npoints,order,nodes,theta,tree,r,v); sum.Add(v);
     for(std::size_t j=0;j<nimages;++j) {
         const auto& image=images[j]; double t[3]={r[0],r[1],r[2]};
         for(int k=0;k<3;++k) if(image.mask&(1<<k)) t[k]=-t[k];
@@ -153,7 +154,7 @@ __global__ void evaluate(const FieldCloudPoint* points,std::size_t npoints,
             const double c=cos(-image.angle),s=sin(-image.angle),x=t[0],y=t[1];
             t[0]=c*x-s*y; t[1]=s*x+c*y;
         }
-        base(points,npoints,order,nodes,theta,tree,t,v);
+        base(view,sources,npoints,order,nodes,theta,tree,t,v);
         if(image.angle!=0) {
             const double c=cos(image.angle),s=sin(image.angle),x=v[0],y=v[1];
             v[0]=c*x-s*y; v[1]=s*x+c*y;
@@ -202,7 +203,7 @@ void dispatch(int nlhs,mxArray** out,int nrhs,const mxArray** in) {
         const double leaf=scalar(in[6]);
         if(leaf<1||leaf>65536||leaf!=std::floor(leaf)) throw std::invalid_argument("Invalid leaf size");
         FieldEvaluatorOptions options; options.leaf_size=int(leaf); options.theta=scalar(in[7]);
-        room(bytes(n,sizeof(FieldCloudPoint)+sizeof(std::size_t)+2*sizeof(FieldCloudNode))+
+        room(bytes(n,sizeof(FieldCloudPoint)+sizeof(FieldSourceRef)+sizeof(std::size_t)+2*sizeof(FieldCloudNode))+
              bytes(ni,sizeof(FieldCloudImage)));
         auto host=HDivFieldEvaluator::FromCloud(std::move(xyz),std::vector<double>(q,q+n),im,si,options);
         host->SetImageRotations(an); auto packed=host->ExportCloudSnapshot();
@@ -218,10 +219,16 @@ void dispatch(int nlhs,mxArray** out,int nrhs,const mxArray** in) {
         c->npoints=n; c->nimages=ni; c->theta=packed.theta;
         const std::size_t need=bytes(packed.points.size(),sizeof(FieldCloudPoint))+
             bytes(packed.order.size(),sizeof(std::size_t))+bytes(packed.nodes.size(),sizeof(FieldCloudNode))+
-            bytes(packed.images.size(),sizeof(FieldCloudImage));
+            bytes(packed.images.size(),sizeof(FieldCloudImage))+bytes(packed.sources.size(),sizeof(FieldSourceRef));
         room(need); std::size_t before,total,after; check(cudaMemGetInfo(&before,&total));
+        check(UploadFieldFarGauss());
+        upload(*c,c->sources,packed.sources);
         upload(*c,c->points,packed.points); upload(*c,c->order,packed.order);
         upload(*c,c->nodes,packed.nodes); upload(*c,c->images,packed.images);
+        c->view={c->tets.as<FieldTetSource>(),c->triangles.as<FieldTriSource>(),
+            c->cubic_triangles.as<FieldCubicTriSource>(),c->curved_tets.as<FieldCurvedTetSource>(),
+            c->curved_triangles.as<FieldCurvedTriSource>(),c->points.as<FieldCloudPoint>(),
+            c->gauss_points.as<double>(),c->gauss_weights.as<double>(),0};
         check(cudaStreamSynchronize(c->stream)); check(cudaMemGetInfo(&after,&total));
         // Steady-clock generations survive module unload/reload without reusing
         // a counter starting at one. Creation is serialized by MATLAB.
@@ -247,7 +254,7 @@ void dispatch(int nlhs,mxArray** out,int nrhs,const mxArray** in) {
         std::vector<double> values(obs.size());
         if(n) {
             check(cudaMemcpyAsync(d_obs.p,obs.data(),one,cudaMemcpyHostToDevice,c.stream));
-            evaluate<<<unsigned((n+127)/128),128,0,c.stream>>>(c.points.as<FieldCloudPoint>(),c.npoints,
+            evaluate<<<unsigned((n+127)/128),128,0,c.stream>>>(c.view,c.sources.as<FieldSourceRef>(),c.npoints,
                 c.order.as<std::size_t>(),c.nodes.as<FieldCloudNode>(),c.theta,c.images.as<FieldCloudImage>(),
                 c.nimages,d_obs.as<double>(),n,algorithm=="tree",static_cast<double*>(d_out.p));
             check(cudaGetLastError());
