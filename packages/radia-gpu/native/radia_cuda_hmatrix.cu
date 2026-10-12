@@ -26,6 +26,35 @@ std::vector<double> numbers(const mxArray* a){
     const auto n=mxGetNumberOfElements(a);std::vector<double> v(n);auto* p=mxGetDoubles(a);
     for(std::size_t i=0;i<n;++i){if(!std::isfinite(p[i]))throw std::invalid_argument("Nonfinite input");v[i]=p[i];}return v;
 }
+std::vector<double> rowNumbers(const mxArray* a,std::size_t width){
+    auto col=numbers(a);if(mxGetN(a)!=width)throw std::invalid_argument("Curved row-major record width mismatch");
+    std::vector<double> result(col.size());const auto rows=mxGetM(a);for(std::size_t r=0;r<rows;++r)for(std::size_t c=0;c<width;++c)result[r*width+c]=col[r+rows*c];return result;
+}
+CurvedBlock curvedBlock(const mxArray* cfg){
+    if(!mxIsStruct(cfg)||mxGetNumberOfElements(cfg)!=1)throw std::invalid_argument("Expected scalar curved configuration");
+    const std::vector<std::string> allowed={"schema_version","cell_nodes","face_nodes","cell_vertices","face_vertices","host","kind","expo","tet_rule","tri_rule","gl","gw","charge_map"};
+    for(int f=0;f<mxGetNumberOfFields(cfg);++f)if(std::find(allowed.begin(),allowed.end(),mxGetFieldNameByNumber(cfg,f))==allowed.end())throw std::invalid_argument("Unsupported curved option");
+    auto schema=numbers(field(cfg,0,"schema_version"));if(schema.size()!=1||schema[0]!=1.)throw std::invalid_argument("Unsupported curved schema");
+    const auto cells=rowNumbers(field(cfg,0,"cell_nodes"),30),faces=rowNumbers(field(cfg,0,"face_nodes"),18);
+    const auto cv=rowNumbers(field(cfg,0,"cell_vertices"),4),fv=rowNumbers(field(cfg,0,"face_vertices"),3);
+    const auto hosts=numbers(field(cfg,0,"host")),kinds=numbers(field(cfg,0,"kind")),expo=rowNumbers(field(cfg,0,"expo"),3);
+    const auto n=hosts.size();if(!n||n>512||kinds.size()!=n||expo.size()!=3*n||cv.size()/4!=cells.size()/30||fv.size()/3!=faces.size()/18)throw std::invalid_argument("Curved assembly shape/budget mismatch");
+    CurvedBlock block;block.gl=numbers(field(cfg,0,"gl"));block.gw=numbers(field(cfg,0,"gw"));
+    if(block.gl.size()!=8||block.gw.size()!=8)throw std::invalid_argument("Curved assembly requires existing eight-point inner Gauss rule");
+    for(int k=0;k<8;++k)if(block.gl[k]<=0||block.gl[k]>=1||block.gw[k]<=0||(k&&block.gl[k]<=block.gl[k-1]))throw std::invalid_argument("Invalid curved inner quadrature");
+    auto rule=[&](const char* key,std::vector<ReferencePoint>& output){auto values=rowNumbers(field(cfg,0,key),4);if(values.empty()||values.size()>4*128)throw std::invalid_argument("Curved outer quadrature budget exceeded");
+        for(std::size_t i=0;i<values.size();i+=4){ReferencePoint q{};double sum=0.;for(int c=0;c<3;++c){q.xi[c]=values[i+c];sum+=q.xi[c];if(q.xi[c]<0)throw std::invalid_argument("Invalid simplex quadrature");}q.weight=values[i+3];if(sum>1.+1e-14||q.weight<=0)throw std::invalid_argument("Invalid simplex quadrature");output.push_back(q);}};
+    rule("tet_rule",block.tet);rule("tri_rule",block.tri);
+    for(std::size_t i=0;i<n;++i){if(kinds[i]!=0&&kinds[i]!=1)throw std::invalid_argument("Invalid curved charge kind");CurvedCharge c{};c.kind=int(kinds[i]);const auto width=c.kind?18:30,vertices=c.kind?3:4;
+        const auto& geometry=c.kind?faces:cells;const auto& ids=c.kind?fv:cv;
+        if(hosts[i]<0||std::floor(hosts[i])!=hosts[i]||hosts[i]>=double(geometry.size()/width))throw std::invalid_argument("Invalid curved charge host");c.host=int(hosts[i]);
+        for(int j=0;j<width;++j)c.nodes[j]=geometry[std::size_t(c.host)*width+j];
+        for(int j=0;j<vertices;++j){double id=ids[std::size_t(c.host)*vertices+j];if(id<0||id>2147483647.||std::floor(id)!=id)throw std::invalid_argument("Invalid topological vertex");c.vertices[j]=int(id);}
+        int degree=0;for(int j=0;j<3;++j){double e=expo[3*i+j];if(e<0||e>2||std::floor(e)!=e)throw std::invalid_argument("Unsupported curved exponent");degree+=int(e);c.expo[j]=int(e);}
+        if(degree>(c.kind?2:1)||(c.kind&&c.expo[2]))throw std::invalid_argument("Curved charge supports existing orders 1..2 only");block.charges.push_back(c);
+    }
+    return block;
+}
 std::size_t integer(const mxArray* a,bool positive=false){
     auto v=numbers(a);if(v.size()!=1||v[0]<double(positive)||v[0]>2147483647.||std::floor(v[0])!=v[0])
         throw std::invalid_argument("Expected bounded integer scalar");return std::size_t(v[0]);
@@ -235,6 +264,15 @@ try{
             const auto values=oracle.evaluate(batch,nullptr);result.insert(result.end(),values.begin(),values.end());
         }
         out[0]=mxCreateDoubleMatrix(result.size(),1,mxREAL);std::copy(result.begin(),result.end(),mxGetDoubles(out[0]));return;
+    }
+    if(command=="create_curved_hdiv"){
+        arity(nr,2,nl,1);std::size_t payloadBytes=0;checkPayload(in[1],payloadBytes);auto block=curvedBlock(in[1]);const auto n=block.charges.size();
+        Leaf leaf{0,0,n,n,0,std::vector<double>(checkedProduct(n,n),0.),{}};std::vector<std::size_t> permutation(n);for(std::size_t i=0;i<n;++i)permutation[i]=i;
+        auto plan=pack(n,{leaf},permutation,std::vector<double>(n,1.));auto map=readChargeMap(field(in[1],0,"charge_map"),n);
+        if(generation==0x0000ffffffffffffULL)throw std::overflow_error("Handle generation exhausted");
+        auto c=std::make_unique<Resident>(plan,&map);c->assembleCurved(block);const auto t=0x484d000000000000ULL|++generation;
+        auto* output=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);*static_cast<std::uint64_t*>(mxGetData(output))=t;
+        contexts.emplace(t,std::move(c));mexLock();mexAtExit(cleanup);out[0]=output;return;
     }
     if(command=="create"||command=="create_analytic_constant_block"){
         arity(nr,2,nl,1);if(!mxIsStruct(in[1])||mxGetNumberOfElements(in[1])!=1)throw std::invalid_argument("Expected scalar H-matrix configuration");std::size_t payloadBytes=0;checkPayload(in[1],payloadBytes);Plan plan;AnalyticBlock block;

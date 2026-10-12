@@ -11,7 +11,7 @@ def main():
     if args.require_clean_source and dirty:raise RuntimeError('Clean source required')
     files=[root/'packages/radia-gpu/native/radia_cuda_hmatrix.cu',root/'packages/radia-gpu/native/hmatrix_resident.cuh',root/'packages/radia-gpu/native/hmatrix_hacapk_pack.cuh',root/'packages/radia-gpu/native/hmatrix_entry_oracle.cuh',root/'packages/radia-gpu/native/hmatrix_aca_callback.cuh',root/'src/ext/HACApK/cHACApK_calc_entry_ij.h',root/'src/ext/HACApK/cHACApK_base.h',root/'packages/radia-gpu/native/analytic_matrix_build.cuh',root/'packages/radia-gpu/native/radia_field_exact.cuh',root/'src/core/rad_charge_quadrature.h',root/'src/core/rad_hdiv_vim.h',root/'src/core/rad_field_cloud_kernel.h',root/'src/core/rad_hdiv_field_math.inc',root/'src/core/rad_hdiv_field_kernel_api.inc',root/'src/core/rad_field_source_kernel.inc',Path(__file__),root/'Build.ps1']
     files += [root/'src/ext/HACApK/cHACApK_base.c',root/'src/ext/HACApK/cHACApK_aca.inc',root/'packages/radia-gpu/native/hmatrix_aca_host.c',root/'src/ext/HACApK/cHACApK_lib.c',root/'src/core/rad_hacapk_parallel.h'] + sorted((root/'src/ext/HACApK').glob('*.h'))
-    files += [root/'packages/radia-gpu/native/hmatrix_material_solver.cuh']
+    files += [root/'packages/radia-gpu/native/hmatrix_material_solver.cuh',root/'packages/radia-gpu/native/hdiv_curved_gram.cuh']
     if args.mkl_root:
         files += [root/'packages/radia-gpu/native/hmatrix_full_assembly.cuh',root/'packages/radia-gpu/native/hmatrix_serial_host.c',root/'src/ext/HACApK/cHACApK_cpp_impl.c',root/'src/ext/HACApK/cHACApK_pca_cluster.c']
     files=list(dict.fromkeys(files))

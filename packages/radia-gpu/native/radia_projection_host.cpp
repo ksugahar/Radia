@@ -75,6 +75,14 @@ extern "C" void RadiaProjectionGateway(int nl,mxArray* out[],int nr,const mxArra
 try{
     if(nr<1)throw std::runtime_error("Command required");
     auto command=text(in[0]);
+    if(command=="assemble_hdiv_elements"){
+        arity(nr,4,nl,1);
+        if(!mxIsDouble(in[2])||mxIsSparse(in[2])||mxIsComplex(in[2])||mxGetNumberOfElements(in[2])!=1)throw std::invalid_argument("HDiv order must be scalar double");
+        const double order=mxGetScalar(in[2]);if(!std::isfinite(order)||order<1||order>3||std::floor(order)!=order)throw std::invalid_argument("HDiv order must be 1..3");
+        if(!mxIsDouble(in[3])||mxIsSparse(in[3])||mxIsComplex(in[3])||mxGetNumberOfElements(in[3])!=3)throw std::invalid_argument("Applied field must contain three doubles");
+        std::array<double,3> applied;for(int c=0;c<3;++c){applied[c]=mxGetDoubles(in[3])[c];if(!std::isfinite(applied[c]))throw std::invalid_argument("Nonfinite applied field");}
+        out[0]=radia::hdiv_cuda::inspectElements(text(in[1]),int(order),applied);return;
+    }
     if(command=="inspect_hdiv_elements"){
         arity(nr,3,nl,1);
         if(!mxIsDouble(in[2])||mxIsComplex(in[2])||mxIsSparse(in[2])||mxGetNumberOfElements(in[2])!=1)throw std::invalid_argument("HDiv order must be scalar double");

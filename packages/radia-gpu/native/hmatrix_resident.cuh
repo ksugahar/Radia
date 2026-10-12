@@ -157,6 +157,7 @@ struct DeviceMap {
 };
 } // namespace radia_hmatrix_cuda
 #include "analytic_matrix_build.cuh"
+#include "hdiv_curved_gram.cuh"
 namespace radia_hmatrix_cuda {
 class Resident {
     Buffer<Direction> directions;Buffer<double> coefficients,scale,input,tmp,partial,state;
@@ -202,6 +203,20 @@ public:
         analyticPhysicalScale<<<unsigned((n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data,invalid.data);check(cudaGetLastError());
         int flag=0;check(cudaMemcpyAsync(&flag,invalid.data,sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
         if(flag)throw std::runtime_error("Analytic assembly produced invalid energy");
+        normalizeAnalytic<<<unsigned((n*n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data);check(cudaGetLastError());check(cudaStreamSynchronize(stream));
+    }
+    void assembleCurved(const CurvedBlock& block){
+        valid();if(initialized||count!=1||coefficients.size!=checkedProduct(n,n)||block.charges.size()!=n)throw std::invalid_argument("Curved assembly requires a fresh dense block");
+        const auto extra=checkedProduct(n,sizeof(CurvedCharge))+checkedProduct(block.tet.size()+block.tri.size(),sizeof(ReferencePoint))+checkedProduct(block.gl.size()+block.gw.size(),sizeof(double))+sizeof(int);
+        std::size_t free,total;check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
+        if(free<=reserve||extra>free-reserve)throw std::runtime_error("Curved assembly GPU reserve exceeded");
+        Buffer<CurvedCharge> charges;Buffer<ReferencePoint> tet,tri;Buffer<double> gl,gw;Buffer<int> invalid;
+        charges.upload(block.charges);tet.upload(block.tet);tri.upload(block.tri);gl.upload(block.gl);gw.upload(block.gw);invalid.upload(std::vector<int>{0});setupPeakOwnedBytes=ownedBytes+extra;
+        for(std::size_t first=0;first<n*n;first+=128){const auto batch=std::min(std::size_t(128),n*n-first);
+            assembleCurvedGram<<<unsigned((batch+31)/32),32,0,stream>>>(charges.data,n,tet.data,tet.size,tri.data,tri.size,gl.data,gw.data,int(gl.size),first,batch,coefficients.data,invalid.data);check(cudaGetLastError());check(cudaStreamSynchronize(stream));
+        }
+        analyticPhysicalScale<<<unsigned((n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data,invalid.data);check(cudaGetLastError());
+        int flag=0;check(cudaMemcpyAsync(&flag,invalid.data,sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));if(flag)throw std::runtime_error("Curved assembly produced invalid energy");
         normalizeAnalytic<<<unsigned((n*n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data);check(cudaGetLastError());check(cudaStreamSynchronize(stream));
     }
     ~Resident(){if(stream){int previous=device;cudaGetDevice(&previous);if(previous!=device)cudaSetDevice(device);
