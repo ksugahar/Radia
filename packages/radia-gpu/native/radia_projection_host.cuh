@@ -2,6 +2,8 @@
 // mexcuda host operation recovered from the retired MEX interpolation path.
 // NGSolve owns FE interpolation. No TaskManager region is created here.
 #include <gridfunction.hpp>
+#include <bilinearform.hpp>
+#include <linearform.hpp>
 #include <postproc.hpp>
 #include <chrono>
 #include <memory>
