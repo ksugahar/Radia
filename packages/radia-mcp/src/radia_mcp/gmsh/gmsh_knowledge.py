@@ -2257,8 +2257,12 @@ counts. Keep JSON evidence with solver identity, versions, units, dt,
 camera, seeding, source hashes and rendering limitations. Native replay
 keys may be sparse: report their stride separately from the full movie.
 
-## Executable reference in a source checkout
-validation_test/maglev/team28_fixed/README.md documents the checked recipe.
+## Executable reference in the TEAM28 development checkout
+The independently committed TEAM28 development work (commit bd256fbb1)
+contains validation_test/maglev/team28_fixed/README.md and the scripts below.
+This knowledge change does not integrate those numerical samples into main.
+Check that the files exist in the selected checkout before offering execution;
+if absent, use the existing MCP tools above or obtain that reviewed source.
 Run the scripts with --help first, then follow that README in order:
 transient.py -> moving_movie.py -> verify_movie.py -> encode_motion.py.
 The renderer supports disjoint --start-frame/--end-frame chunks and
