@@ -1908,7 +1908,7 @@ RAD_FIELD_KERNEL static bool coplanar_outside_inverse_cube_moment(
         scale=FieldMax(scale,v3nrm(side));
     }
     if(scale<1e-300)return false;
-    const double tolerance=32.0*std::numeric_limits<double>::epsilon()*scale;
+    const double tolerance=32.0*2.220446049250313080847263336181640625e-16*scale;
     if(std::fabs(height)>tolerance)return false;
     double projection[3];for(int k=0;k<3;++k)projection[k]=r[k]-height*normal[k];
     double closest[3];ClosestPointTriangle(projection,V[0],V[1],V[2],closest);

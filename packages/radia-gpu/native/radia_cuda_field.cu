@@ -121,9 +121,36 @@ template<class T> void upload(Context& c,DeviceBuffer& dst,const std::vector<T>&
     c.owned+=dst.size;
 }
 
+// Explicit mixed policy: far-node arithmetic FP32, geometry/opening and
+// exact near-element kernels FP64. Results are accumulated into FP64 output.
+__device__ void multipoleMixed32(const FieldCloudNode& node,const double r[3],double out[3]) {
+    float R[3],p[3],S[9];bool safe=true;
+    for(int k=0;k<3;++k){R[k]=float(r[k]-node.center[k]);p[k]=float(node.dipole[k]);}
+    for(int k=0;k<9;++k)S[k]=float(node.second[k]);
+    float q=float(node.charge);
+    for(int k=0;k<3;++k)safe=safe&&isfinite(R[k])&&isfinite(p[k])&&(node.dipole[k]==0||p[k]!=0);
+    for(int k=0;k<9;++k)safe=safe&&isfinite(S[k])&&(node.second[k]==0||S[k]!=0);
+    safe=safe&&isfinite(q)&&(node.charge==0||q!=0);
+    const float r2=R[0]*R[0]+R[1]*R[1]+R[2]*R[2];
+    safe=safe&&isfinite(r2)&&r2>1e-20f&&r2<1e20f;
+    float value[3]{};
+    if(safe){
+        float inv=1.0f/sqrtf(r2),i3=inv/r2,i5=i3/r2,i7=i5/r2;
+        float pr=p[0]*R[0]+p[1]*R[1]+p[2]*R[2],sr[3]{},trace=S[0]+S[4]+S[8];
+        for(int a=0;a<3;++a)for(int b=0;b<3;++b)sr[a]+=S[3*a+b]*R[b];
+        float rsr=R[0]*sr[0]+R[1]*sr[1]+R[2]*sr[2];
+        for(int a=0;a<3;++a){
+            value[a]=q*R[a]*i3+(3.0f*R[a]*pr*i5-p[a]*i3)
+                +(7.5f*R[a]*rsr*i7-1.5f*(trace*R[a]+2.0f*sr[a])*i5);
+            safe=safe&&isfinite(value[a]);
+        }
+    }
+    if(safe)for(int k=0;k<3;++k)out[k]+=double(value[k]);
+    else AddFieldMultipole(node.center,node.charge,node.dipole,node.second,r,out);
+}
 __device__ void base(FieldSourceView view,const FieldSourceRef* sources,std::size_t npoints,
         const std::size_t* order,const FieldCloudNode* nodes,double theta,
-        bool tree,const double r[3],double out[3]) {
+        bool tree,bool mixed,const double r[3],double out[3]) {
     out[0]=out[1]=out[2]=0;
     if(!tree) {
         FieldCompensated3 sum;
@@ -139,7 +166,8 @@ __device__ void base(FieldSourceView view,const FieldSourceRef* sources,std::siz
         const double x=r[0]-node.center[0], y=r[1]-node.center[1], z=r[2]-node.center[2];
         const double distance=sqrt(x*x+y*y+z*z);
         if(node.left>=0 && distance>0 && node.radius/distance<=theta) {
-            AddFieldMultipole(node.center,node.charge,node.dipole,node.second,r,out);
+            if(mixed) multipoleMixed32(node,r,out);
+            else AddFieldMultipole(node.center,node.charge,node.dipole,node.second,r,out);
             index=node.escape;
         } else if(node.left<0) {
             for(std::size_t p=node.begin;p<node.end;++p) {
@@ -152,12 +180,12 @@ __device__ void base(FieldSourceView view,const FieldSourceRef* sources,std::siz
 __global__ void evaluate(FieldSourceView view,const FieldSourceRef* sources,std::size_t npoints,
         const std::size_t* order,const FieldCloudNode* nodes,double theta,
         const FieldCloudImage* images,std::size_t nimages,const double* obs,
-        std::size_t nobs,bool tree,double* result) {
+        std::size_t nobs,bool tree,bool mixed,double* result) {
     const std::size_t i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;
     if(i>=nobs) return;
     const double* r=obs+3*i;
     FieldCompensated3 sum;
-    double v[3]; base(view,sources,npoints,order,nodes,theta,tree,r,v); sum.Add(v);
+    double v[3]; base(view,sources,npoints,order,nodes,theta,tree,mixed,r,v); sum.Add(v);
     for(std::size_t j=0;j<nimages;++j) {
         const auto& image=images[j]; double t[3]={r[0],r[1],r[2]};
         for(int k=0;k<3;++k) if(image.mask&(1<<k)) t[k]=-t[k];
@@ -165,7 +193,7 @@ __global__ void evaluate(FieldSourceView view,const FieldSourceRef* sources,std:
             const double c=cos(-image.angle),s=sin(-image.angle),x=t[0],y=t[1];
             t[0]=c*x-s*y; t[1]=s*x+c*y;
         }
-        base(view,sources,npoints,order,nodes,theta,tree,t,v);
+        base(view,sources,npoints,order,nodes,theta,tree,mixed,t,v);
         if(image.angle!=0) {
             const double c=cos(image.angle),s=sin(image.angle),x=v[0],y=v[1];
             v[0]=c*x-s*y; v[1]=s*x+c*y;
@@ -307,7 +335,7 @@ void dispatch(int nlhs,mxArray** out,int nrhs,const mxArray** in) {
     if(command=="field") {
         if(nrhs!=4||nlhs!=2) throw std::invalid_argument("field(handle,observations,algorithm) requires two outputs");
         auto& c=context(in[1]); const auto algorithm=text(in[3]);
-        if(algorithm!="direct"&&algorithm!="tree") throw std::invalid_argument("Explicit direct or tree algorithm required");
+        if(algorithm!="direct"&&algorithm!="tree"&&algorithm!="tree_mixed32") throw std::invalid_argument("Explicit direct or tree algorithm required");
         const std::size_t n=mxGetM(in[2]);
         if(n>std::size_t(std::numeric_limits<int>::max())) throw std::invalid_argument("Observation count exceeds launch range");
         const std::size_t one=bytes(n,3*sizeof(double)), temporary=bytes(one,2);
@@ -319,7 +347,7 @@ void dispatch(int nlhs,mxArray** out,int nrhs,const mxArray** in) {
             check(cudaMemcpyAsync(d_obs.p,obs.data(),one,cudaMemcpyHostToDevice,c.stream));
             evaluate<<<unsigned((n+127)/128),128,0,c.stream>>>(c.view,c.sources.as<FieldSourceRef>(),c.npoints,
                 c.order.as<std::size_t>(),c.nodes.as<FieldCloudNode>(),c.theta,c.images.as<FieldCloudImage>(),
-                c.nimages,d_obs.as<double>(),n,algorithm=="tree",static_cast<double*>(d_out.p));
+                c.nimages,d_obs.as<double>(),n,algorithm!="direct",algorithm=="tree_mixed32",static_cast<double*>(d_out.p));
             check(cudaGetLastError());
             check(cudaMemcpyAsync(values.data(),d_out.p,one,cudaMemcpyDeviceToHost,c.stream));
             check(cudaStreamSynchronize(c.stream));

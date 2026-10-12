@@ -31,7 +31,7 @@ classdef FieldCloud < handle
             arguments
                 obj (1,1) radia.gpu.FieldCloud
                 observations (:,3) double {mustBeReal,mustBeFinite}
-                algorithm (1,:) char {mustBeMember(algorithm,{'direct','tree'})} = 'direct'
+                algorithm (1,:) char {mustBeMember(algorithm,{'direct','tree','tree_mixed32'})} = 'direct'
             end
             assert(obj.Token~=0,'radia:cuda:fieldDeleted','Field evaluator has been deleted');
             timer=tic;
