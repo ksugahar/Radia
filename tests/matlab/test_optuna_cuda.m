@@ -44,7 +44,7 @@ x=linspace(-2,3,512)';
 actual=optuna_mex('optuna.parzen.log_pdf_numerical',x,1,0,1,-2,3,false,NaN);
 expected=-0.5*x.^2-0.5*log(2*pi)-log(0.5*(erf(3/sqrt(2))-erf(-2/sqrt(2))));
 verifyEqual(testCase,actual,expected,'AbsTol',5e-12);
-verifyError(testCase,@()optuna_mex('api.execution','auto'),'radia:optuna:mex:Exception');
+verifyError(testCase,@()evaluateCommand('api.execution','auto'),'radia:optuna:mex:Exception');
 verifyEqual(testCase,radia.optuna.executionMode(),"cpu");
 after=optuna_mex('api.info');
 verifyEqual(testCase,after.host_to_device_bytes,before.host_to_device_bytes);
@@ -59,13 +59,13 @@ verifyNotEmpty(testCase,string(info.gpu_operations));
 end
 
 function testValidationAndRepeatedDeviceUse(testCase)
-call=@()optuna_mex('optuna.parzen.log_pdf_numerical',[0;1],[.3;.7], ...
+call=@()evaluateCommand('optuna.parzen.log_pdf_numerical',[0;1],[.3;.7], ...
     [0;1],[1;1],-2,3,false,NaN);
 expected=call();
 for index=1:20, verifyEqual(testCase,call(),expected,'AbsTol',0); end
-verifyError(testCase,@()optuna_mex('optuna.parzen.log_pdf_categorical', ...
+verifyError(testCase,@()evaluateCommand('optuna.parzen.log_pdf_categorical', ...
     0,1,[.5,.5]),'radia:optuna:mex:Exception');
-verifyError(testCase,@()optuna_mex('optuna.parzen.log_pdf_numerical', ...
+verifyError(testCase,@()evaluateCommand('optuna.parzen.log_pdf_numerical', ...
     1e308,1,0,1,-2,3,false,NaN),'radia:optuna:mex:Exception');
 verifyEqual(testCase,call(),expected,'AbsTol',0);
 end
@@ -75,12 +75,14 @@ previous=radia.optuna.executionMode();
 restoreMode=onCleanup(@()radia.optuna.executionMode(previous));
 for mode=["cpu","gpu"]
 radia.optuna.executionMode(mode);
-lower=struct('categorical',true,'weights',1,'probabilities',[1,0]);
-upper=struct('categorical',true,'weights',1,'probabilities',[0,1]);
+lower=struct('categorical',false,'weights',1,'mu',0,'sigma',1, ...
+    'low',-2,'high',3,'internal_low',-2,'internal_high',3,'log',false,'step',NaN);
+upper=lower;
+upper.sigma=1e-308; % Finite valid input whose evaluated tails underflow.
 state=optuna_mex('optuna.random_state.create',42);
 reference=optuna_mex('optuna.random_state.create',42);
 cleanup=onCleanup(@()destroyStates(state,reference));
-verifyError(testCase,@()optuna_mex('optuna.tpe.best_joint',state,24,true,{lower},{upper}), ...
+verifyError(testCase,@()evaluateCommand('optuna.tpe.best_joint',state,24,false,{lower},{upper}), ...
     'radia:optuna:mex:Exception');
 actual=optuna_mex('optuna.random_state.rand',state,8);
 expected=optuna_mex('optuna.random_state.rand',reference,8);
@@ -92,4 +94,9 @@ end
 function destroyStates(state,reference)
 optuna_mex('optuna.random_state.destroy',state);
 optuna_mex('optuna.random_state.destroy',reference);
+end
+
+function value=evaluateCommand(varargin)
+% Request the actual command output so errors cannot come from MEX nargout.
+value=optuna_mex(varargin{:});
 end

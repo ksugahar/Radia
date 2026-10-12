@@ -39,7 +39,7 @@ def test_radia_mex_contract_routes_only_to_supported_gpu_owner():
     assert contract["runtime_checked"] is False
     assert contract["command_names"] == []
     assert contract["mex_entrypoint"] == "radia_cuda_csr_pcg"
-    assert contract["optuna_mex_command_count"] == 21
+    assert contract["optuna_mex_command_count"] == 22
     sections = contract["topic_data"]["sections"]
     assert sections["mex"]["owner"] == "radia-gpu"
     assert sections["ngsolve"]["cpu_execution"] == "Python/pybind11/NGSolve"
