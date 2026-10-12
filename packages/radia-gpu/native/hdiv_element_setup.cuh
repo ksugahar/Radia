@@ -27,7 +27,7 @@ inline std::vector<double> chargeMap(std::shared_ptr<ngcomp::MeshAccess> mesh,
             ngstd::HeapReset reset(heap);ngfem::ElementId eid(volume?ngfem::VOL:ngfem::BND,int(e));
             if(!volume){int in,out;mesh->GetSElNeighbouringDomains(int(e),in,out);if(in>0&&out>0)throw std::invalid_argument("Internal interface charge staging is not connected");}
             auto& trafo=mesh->GetTrafo(eid,heap);const auto& fe=space->GetFE(eid,heap);
-            const auto& dg=dynamic_cast<const ngfem::ScalarFiniteElement<>&>(volume?volumeSpace->GetFE(eid,heap):surfaceSpace->GetFE(eid,heap));
+            const auto& dg=dynamic_cast<const ngfem::BaseScalarFiniteElement&>(volume?volumeSpace->GetFE(eid,heap):surfaceSpace->GetFE(eid,heap));
             ngstd::Array<int> dofs;space->GetDofNrs(eid,dofs);const int nm=int(mons.size()),ns=dg.GetNDof(),nf=fe.GetNDof();
             if(nm!=ns||nf!=dofs.Size())throw std::runtime_error("Unexpected simplex DG basis dimensions");
             ngbla::Matrix<> mass(ns,ns),coupling(ns,nf),monoMass(nm,nm),cross(nm,ns);mass=0.;coupling=0.;monoMass=0.;cross=0.;

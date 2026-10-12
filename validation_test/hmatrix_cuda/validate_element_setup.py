@@ -22,6 +22,7 @@ def main():
         from netgen.csg import CSGeometry,Sphere,Pnt
         from scipy.sparse import coo_matrix
         from scipy.io import savemat,loadmat
+        from radia.vim._vim import _charge_basis,_charge_basis_curved
         root=Path(__file__).resolve().parents[2]
         mesh=ng.Mesh(str(root/'tests/fixtures/beam/affine_field_tetra.vol'))
         cases=[('affine',mesh,[1,2,3])]
@@ -47,17 +48,24 @@ def main():
                         trafo=mesh.GetTrafo(ng.ElementId(ng.VOL,e.nr))
                         node_rows.append([list(trafo(r).point) for r in node_rule])
                     nodes=np.array(node_rows).reshape(-1,30)
+                    charges=(_charge_basis_curved(space,4) if name=='curved' else _charge_basis(space,4))
+                    B=charges['B'].toarray()
                 cpu_path=a.out/f'{name}-{order}-cpu.mat'
-                savemat(cpu_path,dict(mass=matrix,cell_nodes=nodes))
+                savemat(cpu_path,dict(mass=matrix,cell_nodes=nodes,charge_map=B,host=charges['host'],kind=charges['kind'],expo=charges['expo']))
                 eng.workspace['mesh_path']=str(path);eng.workspace['degree']=float(order)
                 output=a.out/f'{name}-{order}.mat';eng.workspace['output_path']=str(output)
                 eng.eval("staging=radia_cuda_projection('inspect_hdiv_elements',mesh_path,degree);save(output_path,'-struct','staging','-v7');",nargout=0)
                 actual=loadmat(output)
                 error=float(np.linalg.norm(actual['mass']-matrix)/np.linalg.norm(matrix))
                 geometry_error=float(np.max(np.abs(actual['cell_nodes']-nodes)))
+                charge_error=float(np.linalg.norm(actual['charge_map']-B)/np.linalg.norm(B))
+                for key in ('host','kind','expo'):
+                    if not np.array_equal(actual[key].reshape(-1),np.asarray(charges[key]).reshape(-1)):raise RuntimeError(f'Charge ordering mismatch: {key}')
                 case=dict(geometry=name,order=order,cells=mesh.ne,dofs=space.ndof,mass_relative_error=error,mapped_node_max_absolute_error=geometry_error,curved_cells=int(actual['curved_cells'][0,0]),mesh_sha256=sha(path),cpu_reference_sha256=sha(cpu_path),native_output_sha256=sha(output))
                 result['cases'].append(case)
+                case['charge_map_relative_error']=charge_error
                 if error>1e-12 or geometry_error>1e-13:raise RuntimeError(f'FE staging parity failed: {case}')
+                if charge_error>1e-11:raise RuntimeError(f'Charge map parity failed: {case}')
                 if name=='curved' and not case['curved_cells']:raise RuntimeError('Curved fixture lost its mapped geometry')
         result['accepted']=True
     except BaseException as exc:
