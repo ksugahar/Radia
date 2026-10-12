@@ -291,7 +291,7 @@
       }
     }
   ],
-  "a100_status": "User started NGSolve; same-artifact evaluation staging, results pending",
+  "a100_status": "Same-artifact four-case numerical and warm diagnostic accepted; see hdiv-elements-a100-20261013.json",
   "host": "T7920 (100)",
   "timing_classification": "100 diagnostic only, not idle-mdx acceptance",
   "build_sources": {

@@ -390,3 +390,16 @@ coefficient disagreement is 5.02e-10 and independent true residual 7.95e-12.
 `validate_hdiv_artifact.py` evaluates the same native setup and built artifacts
 on an independently staged host; Python supplies independent validation fixtures
 and Engine orchestration only, with no GPU-user Python adapter.
+
+### Same-artifact A100 evaluation
+
+`results/hdiv-elements-a100-20261013.json` records all four native FE whole
+solves on the user-started NGSolve A100. Warm medians (two samples) are
+12.73 ms / 34.34 ms for affine orders 1 / 2 and 1.752 s / 86.30 s for curved
+orders 1 / 2. Independent true residuals remain below 7.96e-12. These are
+A100 diagnostics with exact owned-buffer counters and available-memory samples,
+not CPU speedup, global memory peaks or idle-mdx acceptance. Initial idle/DLL
+failures were retained privately. All 40 recovered job files were verified
+before deleting the isolated remote job; the host remains running. General
+adaptive high-order assembly, images, constraints, nonlinear material, broad
+physics, IH Simulink and release/distribution gates remain pending.
