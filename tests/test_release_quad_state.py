@@ -19,7 +19,7 @@ def state(**targets):
             'mex_sha256': 'b' * 64, 'targets': targets}
 
 
-@pytest.mark.parametrize("key,controller,allowed", [("100", "INTEL11", True), ("lab", "LAB", True), ("lab", "INTEL11", False), ("100", "LAB", False), ("lab", "mdx1", False)])
+@pytest.mark.parametrize("key,controller,allowed", [("100", "T7920", True), ("lab", "INTEL11", True), ("lab", "T7920", False), ("100", "INTEL11", False), ("lab", "mdx1", False)])
 def test_com_acceptance_never_labels_another_host_as_the_target(monkeypatch, tmp_path, key, controller, allowed):
     calls = []
     monkeypatch.setattr(module.platform, "node", lambda: controller)
@@ -30,8 +30,8 @@ def test_com_acceptance_never_labels_another_host_as_the_target(monkeypatch, tmp
     passed, _ = module._run_simulink_candidate_target(key, tmp_path / "candidate.zip", "a" * 64, "RADIA_SIMULINK_RELEASE_OK", "com:123")
     assert passed is allowed
     passed, _ = module._run_optuna_candidate_target(key, tmp_path / "candidate.whl", "a" * 64, "com:123")
-    assert passed is allowed
-    assert len(calls) == (2 if allowed else 0)
+    assert passed is (allowed and key == "100")
+    assert len(calls) == ((2 if key == "100" else 1) if allowed else 0)
     for command in calls:
         assert command[0] not in ("ssh", "scp")
         assert "com:123" in command
@@ -89,8 +89,8 @@ def test_lab_acceptance_from_another_controller_reaches_lab(tmp_path, monkeypatc
     else:
         passed, _ = module._run_optuna_candidate_target(
             "lab", tmp_path / "candidate.whl", "a" * 64)
-    assert passed
-    assert calls
+    assert passed is (lane == "simulink")
+    assert bool(calls) is (lane == "simulink")
 
 
 

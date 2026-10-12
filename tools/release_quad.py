@@ -484,7 +484,7 @@ def _local_com_target_error(key: str, session: str | None) -> str | None:
         return None
     if not re.fullmatch(r"com:[1-9][0-9]*", session):
         return "COM session must be com:<positive PID>"
-    expected = {"lab": "lab", "100": "intel11"}.get(key)
+    expected = {"lab": "intel11", "100": "t7920"}.get(key)
     if expected is None or platform.node().strip().lower() != expected:
         return f"Run COM acceptance locally in the selected {key} desktop logon"
     return None
@@ -775,6 +775,8 @@ def _optuna_remote_invocation(
 def _run_optuna_candidate_target(
         key: str, wheel: Path, wheel_sha256: str,
         engine_session: str | None = None) -> tuple[bool, str]:
+    if key not in OPTUNA_TARGETS:
+        return False, f"Unsupported Optuna CUDA acceptance target: {key}"
     label, host, python_command = OPTUNA_TARGETS[key]
     if key == "100" and platform.node().strip().lower() == "t7920":
         host = None
