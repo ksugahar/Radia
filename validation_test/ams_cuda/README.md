@@ -350,7 +350,7 @@ pending; these 100-host results are diagnostics. Full samples and provenance:
 
 ## Nonlinear GPU-resident correctness study
 
-`nonlinear_resident.py --out C:/temp/ams-nonlinear-study --maxh .35`
+`nonlinear_resident.py --out <job-owned-output> --maxh .35`
 runs an independently authored SI unit-cube magnetostatic model with
 `H=(1+4*|B|^2)B`, positive unit gauge mass, homogeneous tangential Dirichlet
 conditions, and a reproducible manufactured discrete excitation. The explicit
@@ -377,5 +377,13 @@ DOFs. It does not certify scalable sparse GPU assembly or persistent MEX
 workspace: workspace is allocated per linear solve. Report GPU input bytes and
 sampled device memory separately from an actual peak measurement. Total solve
 times include constitutive/tangent updates, line search, AMS setup, PCG and final
-download; shared FE preparation, upload and MATLAB startup are separate. 100
+download; shared FE preparation, upload and MATLAB startup are separate. Build-host
 numbers are diagnostics, never formal timing acceptance or CPU speedup claims.
+
+
+The accepted [nonlinear evidence](results/nonlinear-resident-20261013.json)
+contains 260- and 698-DOF cases on the same native binary, plus cycles 1 and 7
+linear setup parity. The larger case reproduced a nonfinite gradient coarse
+factor before the fix. Its known constant nullspace now receives an explicit
+potential gauge per connected zero-row-sum component before sparsecholesky;
+no diagonal perturbation or numerical fallback is used.
