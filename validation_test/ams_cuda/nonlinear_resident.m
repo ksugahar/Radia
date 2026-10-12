@@ -40,6 +40,7 @@ for sample=1:numel(routes)
         wait(d);t=tic;[delta,info]=radia.gpu.amsPCG(hierarchy,-r,1e-10,2000,false,false,op);
         wait(d);solveSeconds=solveSeconds+toc(t);
         if firstIterations==0;firstIterations=info.iterations;end
+        rebuildNext=info.iterations>max(30,2*firstIterations);
         % Explicit bounded backtracking uses the physical energy on device.
         energy=@(z) magneticEnergy(z,C,w,M,rhs,s.nu0,s.gamma);
         old=energy(x);slope=gather(r'*delta);alpha=1;
