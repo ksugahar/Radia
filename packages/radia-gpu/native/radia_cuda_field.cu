@@ -203,7 +203,10 @@ void dispatch(int nlhs,mxArray** out,int nrhs,const mxArray** in) {
         if(nrhs!=8-shift||nlhs!=2) throw std::invalid_argument("create_cloud requires xyz,q,masks,signs,angles,leaf,theta and two outputs");
         std::size_t n=0; std::vector<double> xyz,qv;
         if(!elements) {
-            n=mxGetM(in[1]); xyz=rows3(in[1],"xyz");
+            n=mxGetM(in[1]);
+            if(!n || n>std::size_t(std::numeric_limits<int>::max()/2)) throw std::invalid_argument("Source count outside tree index range");
+            room(bytes(n,sizeof(FieldCloudPoint)+sizeof(FieldSourceRef)+sizeof(std::size_t)+2*sizeof(FieldCloudNode)));
+            xyz=rows3(in[1],"xyz");
             const auto* q=doubles(in[2],1,"strength");
             if(mxGetM(in[2])!=n) throw std::invalid_argument("strength length mismatch");
             if(n) qv.assign(q,q+n);
@@ -307,8 +310,9 @@ void dispatch(int nlhs,mxArray** out,int nrhs,const mxArray** in) {
         if(algorithm!="direct"&&algorithm!="tree") throw std::invalid_argument("Explicit direct or tree algorithm required");
         const std::size_t n=mxGetM(in[2]);
         if(n>std::size_t(std::numeric_limits<int>::max())) throw std::invalid_argument("Observation count exceeds launch range");
-        auto obs=rows3(in[2],"observations"); const std::size_t one=bytes(n,3*sizeof(double)), temporary=bytes(one,2);
-        room(temporary); std::size_t before,total,after; check(cudaMemGetInfo(&before,&total));
+        const std::size_t one=bytes(n,3*sizeof(double)), temporary=bytes(one,2);
+        room(temporary);
+        auto obs=rows3(in[2],"observations"); std::size_t before,total,after; check(cudaMemGetInfo(&before,&total));
         DeviceBuffer d_obs,d_out; d_obs.allocate(one); d_out.allocate(one);
         std::vector<double> values(obs.size());
         if(n) {
