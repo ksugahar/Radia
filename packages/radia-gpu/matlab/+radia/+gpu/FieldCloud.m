@@ -20,6 +20,9 @@ classdef FieldCloud < handle
                 options.ImageAngles (:,1) double {mustBeReal,mustBeFinite} = zeros(0,1)
             end
             timer=tic;
+            if isempty(options.ImageAngles)
+                options.ImageAngles=zeros(size(options.ImageMasks));
+            end
             [obj.Token,obj.SetupInfo]=radia_cuda_field('create_cloud',xyz,strength, ...
                 options.ImageMasks,options.ImageSigns,options.ImageAngles,options.LeafSize,options.Theta);
             obj.SetupInfo.total_seconds=toc(timer);

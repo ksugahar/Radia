@@ -34,7 +34,27 @@ struct Context {
     std::size_t npoints=0, nimages=0, owned=0;
     double theta=0;
     int device=0;
-    ~Context() { if(stream) { cudaStreamSynchronize(stream); cudaStreamDestroy(stream); } }
+    ~Context() {
+        if(!stream) return;
+        int previous=device;
+        cudaGetDevice(&previous);
+        if(previous!=device) cudaSetDevice(device);
+        const auto state=cudaStreamQuery(stream);
+        if(state!=cudaSuccess && state!=cudaErrorNotReady) {
+            // A device reset already released these allocations. Never free
+            // stale addresses that another CUDA consumer may now own.
+            points.p=order.p=nodes.p=images.p=nullptr;
+            if(previous!=device) cudaSetDevice(previous);
+            return;
+        }
+        cudaStreamSynchronize(stream);
+        for(auto* buffer:{&points,&order,&nodes,&images}) {
+            if(buffer->p) cudaFree(buffer->p);
+            buffer->p=nullptr;
+        }
+        cudaStreamDestroy(stream);
+        if(previous!=device) cudaSetDevice(previous);
+    }
 };
 std::map<std::uint64_t,std::unique_ptr<Context>> registry;
 std::uint64_t last_generation=0;
@@ -79,6 +99,7 @@ Context& context(const mxArray* a) {
     if(found==registry.end()) throw std::invalid_argument("Invalid, stale, or foreign field handle");
     int device; check(cudaGetDevice(&device));
     if(device!=found->second->device) throw std::runtime_error("GPU device changed while field handle is live");
+    check(cudaStreamQuery(found->second->stream));
     return *found->second;
 }
 template<class T> void upload(Context& c,DeviceBuffer& dst,const std::vector<T>& src) {
@@ -159,7 +180,10 @@ void dispatch(int nlhs,mxArray** out,int nrhs,const mxArray** in) {
     }
     if(command=="destroy") {
         if(nrhs!=2||nlhs!=0) throw std::invalid_argument("destroy(handle) requires no output");
-        context(in[1]); registry.erase(token(in[1])); mexUnlock(); return;
+        auto found=registry.find(token(in[1]));
+        if(found==registry.end()) throw std::invalid_argument("Invalid, stale, or foreign field handle");
+        // Destruction remains possible after GPU reset or device selection.
+        registry.erase(found); mexUnlock(); return;
     }
     if(command=="create_cloud") {
         if(nrhs!=8||nlhs!=2) throw std::invalid_argument("create_cloud requires xyz,q,masks,signs,angles,leaf,theta and two outputs");
@@ -178,8 +202,17 @@ void dispatch(int nlhs,mxArray** out,int nrhs,const mxArray** in) {
         const double leaf=scalar(in[6]);
         if(leaf<1||leaf>65536||leaf!=std::floor(leaf)) throw std::invalid_argument("Invalid leaf size");
         FieldEvaluatorOptions options; options.leaf_size=int(leaf); options.theta=scalar(in[7]);
+        room(bytes(n,sizeof(FieldCloudPoint)+sizeof(std::size_t)+2*sizeof(FieldCloudNode))+
+             bytes(ni,sizeof(FieldCloudImage)));
         auto host=HDivFieldEvaluator::FromCloud(std::move(xyz),std::vector<double>(q,q+n),im,si,options);
         host->SetImageRotations(an); auto packed=host->ExportCloudSnapshot();
+        for(const auto& node:packed.nodes) {
+            if(!std::isfinite(node.radius)||!std::isfinite(node.charge))
+                throw std::invalid_argument("Source extent/strength overflows tree moments");
+            for(double x:node.center) if(!std::isfinite(x)) throw std::invalid_argument("Tree center overflow");
+            for(double x:node.dipole) if(!std::isfinite(x)) throw std::invalid_argument("Tree dipole overflow");
+            for(double x:node.second) if(!std::isfinite(x)) throw std::invalid_argument("Tree quadrupole overflow");
+        }
         auto c=std::make_unique<Context>(); check(cudaGetDevice(&c->device));
         check(cudaStreamCreateWithFlags(&c->stream,cudaStreamNonBlocking));
         c->npoints=n; c->nimages=ni; c->theta=packed.theta;

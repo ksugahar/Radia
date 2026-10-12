@@ -8,6 +8,7 @@ angles=h5read(inputPath,'/angles');
 leaf=h5read(inputPath,'/leaf');theta=h5read(inputPath,'/theta');
 device=gpuDevice();wait(device);
 memoryBefore=device.AvailableMemory;
+hostBefore=memory;
 timer=tic;
 object=radia.gpu.FieldCloud(xyz,q,LeafSize=leaf,Theta=theta, ...
     ImageMasks=masks,ImageSigns=signs,ImageAngles=angles);
@@ -17,5 +18,8 @@ setupInfo=object.SetupInfo;
 delete(object);clear owner;
 wait(device);totalSeconds=toc(timer);
 memoryAfter=device.AvailableMemory;
-save(outputPath,'value','info','setupInfo','totalSeconds','memoryBefore','memoryAfter','-v7');
+hostAfter=memory;
+hostBytesBefore=hostBefore.MemUsedMATLAB;hostBytesAfter=hostAfter.MemUsedMATLAB;
+save(outputPath,'value','info','setupInfo','totalSeconds','memoryBefore','memoryAfter', ...
+    'hostBytesBefore','hostBytesAfter','-v7');
 end

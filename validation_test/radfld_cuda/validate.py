@@ -11,6 +11,8 @@ import statistics
 import sys
 import time
 import importlib.util
+import ctypes
+import subprocess
 
 import h5py
 import numpy as np
@@ -26,6 +28,31 @@ def digest(path):
 
 def relative(value, reference):
     return float(np.linalg.norm(value-reference)/max(np.linalg.norm(reference), np.finfo(float).tiny))
+
+
+def point_relative(value, reference):
+    scale = np.linalg.norm(reference, axis=1)
+    floor = max(float(scale.max())*1e-12, np.finfo(float).tiny)
+    return float(np.max(np.linalg.norm(value-reference, axis=1)/np.maximum(scale, floor)))
+
+
+def cpu_memory():
+    """Windows process working set and private bytes, sampled outside timing."""
+    class Counters(ctypes.Structure):
+        _fields_ = [('cb', ctypes.c_ulong), ('PageFaultCount', ctypes.c_ulong)] + [
+            (name, ctypes.c_size_t) for name in ('PeakWorkingSetSize', 'WorkingSetSize',
+             'QuotaPeakPagedPoolUsage', 'QuotaPagedPoolUsage', 'QuotaPeakNonPagedPoolUsage',
+             'QuotaNonPagedPoolUsage', 'PagefileUsage', 'PeakPagefileUsage', 'PrivateUsage')]
+    counter = Counters()
+    counter.cb = ctypes.sizeof(counter)
+    ctypes.windll.kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+    handle = ctypes.windll.kernel32.GetCurrentProcess()
+    query = ctypes.windll.psapi.GetProcessMemoryInfo
+    query.argtypes = [ctypes.c_void_p, ctypes.POINTER(Counters), ctypes.c_ulong]
+    if not query(handle, ctypes.byref(counter), counter.cb):
+        raise ctypes.WinError()
+    return dict(working_set_bytes=counter.WorkingSetSize, private_bytes=counter.PrivateUsage,
+                process_lifetime_peak_working_set_bytes=counter.PeakWorkingSetSize)
 
 
 def main():
@@ -60,9 +87,13 @@ def main():
                   scope='existing retained point cloud only; no analytic/curved element substitution; no generic RadFld dispatch yet',
                   build=receipt, cpu_reference=reference_receipt, threads=args.threads,
                   script_sha256=digest(__file__), matlab_script_sha256=digest(Path(__file__).with_name('runFieldCase.m')),
+                  matlab_wrapper_sha256=digest(ROOT/'packages/radia-gpu/matlab/+radia/+gpu/FieldCloud.m'),
+                  idle_guard_sha256=digest(ROOT/'validation_test/ams_cuda/graph_validation.py'),
+                  validation_commit=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip(),
+                  validation_dirty=bool(subprocess.check_output(['git','-C',str(ROOT),'status','--porcelain'],text=True).strip()),
                   transfer_inclusive=True, a100_used=False, cases=[],
                   numerical_limits=dict(cuda_cpu_same_algorithm_relative=1e-12, tree_cpu_direct_relative=1e-5),
-                  memory_limits='CUDA owned allocations are exact simultaneous buffer counts. cudaMemGetInfo and MATLAB available memory are samples, not whole-process peaks. Host native peak is not measured.',
+                  memory_limits='CUDA owned allocations are exact simultaneous buffer counts. cudaMemGetInfo and MATLAB available/host memory are samples. Python working set/private bytes are process samples; its peak is process-lifetime, not case-local. Host native per-case peak is not measured.',
                   timing_scope='CPU: construct original evaluator, evaluate, return host output. CUDA: public MATLAB constructor, source/tree upload, observation upload, evaluate, result download, native destroy and wait. HDF5 read and numerical validation excluded. MATLAB startup recorded separately.')
     eng = None
     try:
@@ -93,20 +124,23 @@ def main():
                                         leaf=float(leaf), theta=theta).items():
                     h.create_dataset(name, data=value)
             def cpu(algorithm):
+                memory_before = cpu_memory()
                 with ng.TaskManager():
                     start = time.perf_counter()
                     f = oracle.Field(xyz, q, masks, signs, angles, leaf, theta)
                     value = np.asarray(f.field(obs, algorithm))
+                    del f
                     elapsed = time.perf_counter()-start
-                return value, elapsed
-            direct, _ = cpu('direct')
+                return value, elapsed, dict(before=memory_before, after=cpu_memory())
+            direct, _, _ = cpu('direct')
             references = {name: cpu(name)[0] for name in ('direct', 'tree')}
             tree_error = relative(references['tree'], direct)
             case = dict(sources=size, targets=args.targets, leaf_size=leaf, theta=theta,
                         image_count=2, input_sha256=digest(input_file), input_bytes=input_file.stat().st_size,
                         cpu_tree_vs_direct_relative=tree_error, samples=[])
+            case['cpu_tree_vs_direct_max_point_relative'] = point_relative(references['tree'], direct)
             record['cases'].append(case)
-            if tree_error > 1e-5:
+            if tree_error > 1e-5 or case['cpu_tree_vs_direct_max_point_relative'] > 1e-5:
                 raise RuntimeError('CPU tree accuracy exceeds declared tolerance')
             # Warm both native paths, including allocation/upload and destruction.
             for algorithm in ('direct', 'tree'):
@@ -115,8 +149,9 @@ def main():
                 for index, backend in enumerate(('cpu', 'cuda', 'cuda', 'cpu')*args.rounds):
                     guard.assert_idle_host()
                     if backend == 'cpu':
-                        value, elapsed = cpu(algorithm)
-                        sample = dict(algorithm=algorithm, backend=backend, total_seconds=elapsed)
+                        value, elapsed, host_memory = cpu(algorithm)
+                        sample = dict(algorithm=algorithm, backend=backend, total_seconds=elapsed,
+                                      cpu_host_memory=host_memory)
                     else:
                         raw = args.out/f'{size}-{algorithm}-{index}.mat'
                         eng.runFieldCase(str(input_file), algorithm, str(raw), nargout=0)
@@ -125,11 +160,17 @@ def main():
                         sample = dict(algorithm=algorithm, backend=backend, total_seconds=float(r['totalSeconds']),
                                       setup=r['setupInfo'], field=r['info'],
                                       matlab_memory_before_bytes=float(r['memoryBefore']),
-                                      matlab_memory_after_bytes=float(r['memoryAfter']))
+                                      matlab_memory_after_bytes=float(r['memoryAfter']),
+                                      matlab_host_used_before_bytes=float(r['hostBytesBefore']),
+                                      matlab_host_used_after_bytes=float(r['hostBytesAfter']))
                     sample['relative_to_cpu_same_algorithm'] = relative(value, references[algorithm])
                     sample['relative_to_cpu_direct'] = relative(value, direct)
+                    sample['max_point_relative_to_cpu_same_algorithm'] = point_relative(value, references[algorithm])
+                    sample['max_point_relative_to_cpu_direct'] = point_relative(value, direct)
                     case['samples'].append(sample)
-                    if sample['relative_to_cpu_same_algorithm'] > 1e-12 or sample['relative_to_cpu_direct'] > 1e-5:
+                    if (sample['relative_to_cpu_same_algorithm'] > 1e-12 or sample['relative_to_cpu_direct'] > 1e-5
+                        or sample['max_point_relative_to_cpu_same_algorithm'] > 1e-12
+                        or sample['max_point_relative_to_cpu_direct'] > 1e-5):
                         raise RuntimeError('CUDA/CPU field parity failed')
             case['comparison'] = {}
             for algorithm in ('direct', 'tree'):

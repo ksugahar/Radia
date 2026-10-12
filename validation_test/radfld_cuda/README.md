@@ -1,0 +1,90 @@
+# RadFld CUDA validation and next acceleration boundaries
+
+The first experimental CUDA backend implements **the existing retained point
+cloud representation** of the HDiv RadFld evaluator. It does not replace
+analytic polynomial or curved-element sources with sampled points, implement
+generic `rad.Fld` object dispatch, or claim that all RadFld source families are
+accelerated. Analytic/curved evaluators reject cloud export explicitly.
+
+Both CPU and CUDA share the point-source, compensated-sum and quadrupole
+kernels. The existing CPU tree constructor supplies exactly its source order,
+bounding boxes and moments. CUDA follows the same opening criterion, leaf
+order, and mirror/rotation images through a threaded traversal without a fixed
+device stack. Both `direct` and `tree` are explicit choices; there is no hidden
+CPU evaluation fallback or automatic change of approximation.
+
+`radia.gpu.FieldCloud` takes numeric source positions and strengths. Its result
+uses the existing cloud convention `sum q*(r-x)/|r-x|^3`, without `1/(4*pi)`;
+the caller retains the original physical conversion. The source geometry and
+tree stay on the device between calls. No Python adapter, Python-generated
+solver snapshot, NGSolve DLL or TaskManager region is required at runtime.
+This is a staged experiment, excluded from wheel staging until its own
+artifact/provenance and release gates are added. Published runtimes are unchanged.
+
+Build on 100 in an isolated clean checkout with `Build.ps1 -FieldCudaOnly
+-RequireNativeProvenance`. MATLAB-supported MSVC/CUDA configurations compile
+sm_75, sm_80 and compute_80 PTX. CUDA multiply-add contraction is disabled;
+there is no fast-math override. Exact device buffer counts are admitted only
+when max(2 GiB, 20% total GPU memory) remains free. A100 stays off and is never
+connected to by this workflow.
+
+## Independent CPU reference and measurements
+
+`build_reference.py --out <job-reference-dir>` compiles a validation-only
+pybind11 adapter against **unmodified pre-CUDA CPU sources** recovered from the
+explicit Git revision in its receipt. This is an independent CPU route using
+NGSolve scheduling, not an input prerequisite for MATLAB users. No reference
+binary is installed into another environment.
+
+`validate.py --reference-dir <job-reference-dir> --out <job-results-dir>` uses
+HDF5 inputs at every size (including inputs beyond 2 GB). It checks
+CI/preflight queues, other numerical/build processes and GPU load before
+starting MATLAB and between every sample. A conflict stops the run, closes
+only the task-owned Engine session and saves a failed/pending JSON; it never
+kills another job. Default sizes are 4096, 16384 and 65536 sources with 1024
+targets. Near, far, coincident-cloud, signed cancellation and image rotation
+cases are included. Increase sizes only within device and host memory budgets.
+
+Warm-up precedes two ABBA rounds for each algorithm, comparing original CPU
+construction/evaluation/result recovery against MATLAB source/tree setup,
+upload, CUDA evaluation, download, destruction and synchronization. Input
+reading and numerical checks are outside the timing. The public API completes
+within MATLAB. Startup time is recorded separately. CPU threads and all
+source, adapter, binary and input hashes are retained.
+
+GPU versus CPU **for the same algorithm** must meet relative vector and
+maximum pointwise error <= 1e-12. The tree also must meet <= 1e-5 versus CPU
+direct, with an explicitly recorded near-zero floor for pointwise ratios.
+Field comparisons use vector differences, never differences of magnitudes.
+Failure stops acceptance and retains the JSON. No linear solve occurs here,
+so a solver true residual is not applicable; HDiv-MMM solver validation still
+requires its existing true-residual and physical gates.
+
+JSON records exact simultaneously owned CUDA bytes, sampled CUDA free memory,
+MATLAB available/host memory, and Python process working-set/private bytes.
+These are not a whole-process native allocation peak; Python's reported peak
+is process-lifetime, not per-case. 100/RTX 5000 timing is diagnostic provenance,
+never formal idle-mdx performance acceptance. Raw MAT files, inputs, logs,
+compiler receipts and operational identities remain in private durable storage;
+only reviewed public JSON belongs in Git.
+
+## Following work authorized with this acceleration program
+
+1. Complete the staged cloud numerical/memory measurements after 100 is idle.
+   Connect supported RadFld source packing explicitly; do not present this
+   numeric backend as complete public RadFld parity. Port analytic/high-order
+   and curved near-field kernels without changing their physical contracts.
+2. Matrix Build: profile the existing `BuildHMatrix` and charge-basis timings.
+   Batch well-separated entry/block evaluation for CUDA while preserving
+   HACApK compression, symmetric host blocks, images, singular/Duffy near
+   integrals, and NGSolve-owned geometry/orientation/quadrature. Accelerating
+   a sampled-Laplace test strategy alone does not certify HDiv-MMM.
+3. HDiv-MMM: profile repeated H-matrix matvec, constitutive updates and solve
+   orchestration. Keep reusable data resident and measure transfer-inclusive
+   application time. Preserve NGSolve `sparsecholesky` for direct FE subsolves,
+   nonlinear convergence and true residual <= 1e-6. TaskManager is not started
+   in mexcuda. Record numerical, physical and memory evidence separately.
+4. A RadFld-specific FMM remains a candidate after direct/tree measurements.
+   Core compact interactions retain HACApK; do not restore core ExaFMM.
+   NGSolve native multipoles/FMM may serve the policy-approved smooth
+   free-space BEM/Biot-Savart scope. No GPU FMM backend is claimed here.
