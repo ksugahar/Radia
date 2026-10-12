@@ -124,3 +124,23 @@ the same binary on the already-running NGSolve A100. The generic diagonal
 block does not include complete coil/body reaction assembly or nonlinear B-H.
 The production persistent MEX gateway and Simulink connection remain pending.
 See `results/esim-coupling-20261013.json` for residuals and memory limits.
+
+## Persistent element-temperature context (2026-10-13)
+
+`checkPersistentElementESIM.m` verifies the `element-esim-operators` frontend
+in the production checked-handle gateway. Its explicit material tables use
+kelvin and one row per element; impedance-map rows follow the eddy matrix CSR
+storage order. `esim_cell_parameters` columns are node count, cell iteration
+limit, cylinder flag, half thickness (m), angular frequency (rad/s), cell
+tolerance and relaxation. Nonlinear temperature-dependent B-H inputs fail
+explicitly until their gateway is accepted. Loss weights contain the existing
+quadrature/one-half factors; the runtime multiplies them by real impedance.
+
+The generic diagonal block passes five updates, candidate rejection with all
+accepted states retained, reset, Simulink repeat, save/close/reopen and zero
+live handles on 100 and the same native artifact on NGSolve A100. Official
+MATLAB MCP execution and the official Toolkit structural check on 100 passed.
+This does not certify complete reaction geometry assembly, physical validity,
+or research release completion. That assembly must preserve the existing
+SL/DL singular quadrature, mass inverse, surface-Poisson transpose work, coil
+saddle constraint and total-field heat; incident-only coupling is insufficient.

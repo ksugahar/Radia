@@ -1,7 +1,7 @@
 function ihResidentSFunction(block)
 %IHRESIDENTSFUNCTION Retain a checked coupled IH CUDA context across steps.
-% The fixed-operator frontend is experimental; dynamic ESIM is rejected until
-% native physical assembly/material updates are connected and accepted.
+% Fixed and explicit element-ESIM operator frontends share this state owner.
+% Complete geometry/reaction assembly remains a separate research gate.
 setup(block);
 end
 function setup(block)
