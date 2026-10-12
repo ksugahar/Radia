@@ -13,6 +13,7 @@
 namespace optuna_cuda {
 namespace {
 Statistics stats;
+bool gpu_enabled = true;
 void check(cudaError_t code, const char* operation) {
     if (code != cudaSuccess)
         throw std::runtime_error(std::string("Optuna CUDA ") + operation +
@@ -98,7 +99,7 @@ struct Packed {
         }
     }
 };
-__device__ double log_mass(double lower, double upper) {
+__host__ __device__ double log_mass(double lower, double upper) {
     constexpr double inv = 0.70710678118654752440;
     double mass;
     if (upper <= 0.0) mass = 0.5 * (erfc(-upper * inv) - erfc(-lower * inv));
@@ -106,7 +107,7 @@ __device__ double log_mass(double lower, double upper) {
     else mass = 0.5 * (erf(upper * inv) - erf(lower * inv));
     return log(fmax(mass, DBL_MIN));
 }
-__device__ double component(const DeviceEstimator& e, const double* data,
+__host__ __device__ double component(const DeviceEstimator& e, const double* data,
                             double sample, std::size_t kernel) {
     if (e.categorical) {
         const auto choice = static_cast<std::size_t>(sample) - 1;
@@ -158,6 +159,40 @@ __global__ void select_best(const double* below, const double* above,
     }
     *result = best;
 }
+// Share component equations with CUDA; parallelize candidates only. Ordered
+// per-candidate summation and first-maximum selection preserve oracle behavior.
+std::vector<double> host_pdf(const std::vector<double>& samples,
+                             const std::vector<Estimator>& estimators) {
+    Packed packed(estimators);
+    if (samples.size() % estimators.size())
+        throw std::invalid_argument("Optuna CPU sample shape");
+    const auto count = samples.size() / estimators.size();
+    const auto kernels = packed.estimators.front().kernels;
+    if (count > static_cast<std::size_t>(LLONG_MAX))
+        throw std::overflow_error("Optuna CPU loop size overflow");
+    std::vector<double> terms(product(count, kernels)), result(count);
+    #pragma omp parallel for if(count >= 256) schedule(static)
+    for (long long row = 0; row < static_cast<long long>(count); ++row) {
+        double* values = terms.data() + static_cast<std::size_t>(row) * kernels;
+        double maximum = -INFINITY;
+        for (std::size_t k = 0; k < kernels; ++k) {
+            double value = std::log(packed.values[packed.estimators[0].weights + k]);
+            for (std::size_t d = 0; d < estimators.size(); ++d)
+                value += component(packed.estimators[d], packed.values.data(),
+                                   samples[row * estimators.size() + d], k);
+            values[k] = value;
+            maximum = std::fmax(maximum, value);
+        }
+        double total = 0.0;
+        for (std::size_t k = 0; k < kernels; ++k)
+            total += std::exp(values[k] - maximum);
+        result[row] = maximum + std::log(total);
+    }
+    for (double value : result)
+        if (!std::isfinite(value)) throw std::runtime_error("Optuna CPU density is nonfinite");
+    ++stats.cpu_density_calls;
+    return result;
+}
 void initialize() {
     mxInitGPU();
     check(cudaGetDevice(&stats.device), "get device");
@@ -186,6 +221,7 @@ void launch(Buffer& arena, std::size_t samples, std::size_t count, std::size_t d
 }
 std::vector<double> log_pdf(const std::vector<double>& samples,
                             const std::vector<Estimator>& estimators) {
+    if (!gpu_enabled) return host_pdf(samples, estimators);
     initialize();
     Packed packed(estimators);
     if (samples.size() % estimators.size()) throw std::invalid_argument("Optuna CUDA sample shape");
@@ -209,6 +245,21 @@ std::vector<double> log_pdf(const std::vector<double>& samples,
 }
 std::size_t best(const std::vector<double>& candidates,
                  const std::vector<Estimator>& below, const std::vector<Estimator>& above) {
+    if (!gpu_enabled) {
+        if (below.empty() || below.size() != above.size() || candidates.empty() || candidates.size() % below.size())
+            throw std::invalid_argument("Optuna CPU candidate shape");
+        const auto lower = host_pdf(candidates, below), upper = host_pdf(candidates, above);
+        std::size_t result = 0;
+        double maximum = -INFINITY;
+        for (std::size_t row = 0; row < lower.size(); ++row) {
+            const double acquisition = lower[row] - upper[row];
+            if (!std::isfinite(acquisition))
+                throw std::runtime_error("Optuna CPU candidate acquisition is nonfinite");
+            if (acquisition > maximum) { maximum = acquisition; result = row; }
+        }
+        ++stats.cpu_selection_calls;
+        return result;
+    }
     initialize();
     if (below.empty() || below.size() != above.size() || candidates.empty() || candidates.size() % below.size())
         throw std::invalid_argument("Optuna CUDA candidate shape");
@@ -235,5 +286,7 @@ std::size_t best(const std::vector<double>& candidates,
         throw std::runtime_error("Optuna CUDA candidate acquisition is nonfinite");
     return result;
 }
+bool use_gpu() { return gpu_enabled; }
+void set_gpu(bool enabled) { gpu_enabled = enabled; }
 Statistics statistics() { return stats; }
 }

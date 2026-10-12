@@ -33,6 +33,13 @@
       "file": "test_optuna_cuda.m",
       "oracle": null,
       "scope": "mexcuda execution boundary, device failure and lifecycle",
+      "test": "testCpuParallelDensityAndSwitchValidation"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_cuda.m",
+      "oracle": null,
+      "scope": "mexcuda execution boundary, device failure and lifecycle",
       "test": "testCudaBuildBoundary"
     },
     {
@@ -47,7 +54,7 @@
       "file": "test_optuna_cuda.m",
       "oracle": null,
       "scope": "mexcuda execution boundary, device failure and lifecycle",
-      "test": "testGpuFailureRestoresRandomState"
+      "test": "testExecutionFailureRestoresRandomState"
     },
     {
       "classification": "matlab-integration",

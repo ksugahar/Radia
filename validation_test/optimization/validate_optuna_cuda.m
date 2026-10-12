@@ -1,14 +1,31 @@
-function result = validate_optuna_cuda(repoRoot, outputPath)
-%VALIDATE_OPTUNA_CUDA GPU execution and pinned upstream TPE acceptance.
+function result = validate_optuna_cuda(repoRoot, outputPath, executionMode)
+%VALIDATE_OPTUNA_CUDA Explicit CPU/GPU execution and pinned upstream TPE acceptance.
 arguments
     repoRoot (1,1) string
     outputPath (1,1) string = fullfile(repoRoot,'validation_test','optimization','results_optuna_cuda_100.json')
+    executionMode (1,1) string {mustBeMember(executionMode,["cpu","gpu"])} = "gpu"
 end
 addpath(fullfile(repoRoot,'packages','radia-optuna','matlab'));
 binary = string(java.io.File(which('optuna_mex')).getCanonicalPath());
 expected = string(java.io.File(fullfile(repoRoot,'packages','radia-optuna','matlab',"optuna_mex."+mexext)).getCanonicalPath());
 assert(strcmpi(binary,expected), 'Unexpected native gateway: %s',binary);
-device = gpuDevice;
+previousMode = radia.optuna.executionMode();
+restoreMode = onCleanup(@()radia.optuna.executionMode(previousMode));
+radia.optuna.executionMode(executionMode);
+assert(radia.optuna.executionMode()==executionMode);
+try
+    rejected=optuna_mex('api.execution','auto');
+    error('Unexpected execution mode accepted: %s',rejected);
+catch exception
+    assert(contains(string(exception.message),'execution mode must be cpu or gpu'));
+end
+assert(radia.optuna.executionMode()==executionMode);
+if executionMode=="gpu"
+    device = gpuDevice;
+    gpuName=string(device.Name); capability=string(device.ComputeCapability); driver=string(device.DriverVersion);
+else
+    gpuName="not initialized"; capability=""; driver="";
+end
 fixturePath = fullfile(repoRoot,'tests','matlab','fixtures','optuna50_cuda_oracle.json');
 oracle = jsondecode(fileread(fixturePath));
 assert(string(oracle.optuna_version) == "5.0.0");
@@ -16,8 +33,8 @@ result = struct(schema="radia.optuna.cuda-acceptance.v1", ok=false, ...
     platform="windows-x64", source_sha=string(getenv('RADIA_OPTUNA_SOURCE_SHA')), ...
     execution_route="official-matlab-engine-or-batch", matlab=string(version), ...
     release=string(version('-release')), ...
-    gpu=string(device.Name), compute_capability=string(device.ComputeCapability), ...
-    driver=string(device.DriverVersion), binary="packages/radia-optuna/matlab/optuna_mex.mexw64", binary_sha256=sha256(binary), ...
+    execution_mode=executionMode, gpu=gpuName, compute_capability=capability, ...
+    driver=driver, binary="packages/radia-optuna/matlab/optuna_mex.mexw64", binary_sha256=sha256(binary), ...
     fixture_sha256=sha256(fixturePath), optuna_version=string(oracle.optuna_version), ...
     numpy_version=string(oracle.numpy_version), timing_class="diagnostic-only-not-performance-acceptance");
 sources=["packages/radia-optuna/native/optuna_mex.cpp", ...
@@ -73,7 +90,7 @@ try
             selected_candidate_max_abs_error=errorBest,random_state_exact=true,tie_breaking=true);
     end
     % History/grouping parity is covered once by validate_cuda.
-    result.density_diagnostics=profileDensity();
+    if executionMode=="gpu", result.density_diagnostics=profileDensity(); end
     result.ok=true;
 catch exception
     result.error=string(getReport(exception,'extended','hyperlinks','off'));
@@ -83,7 +100,18 @@ result.cases=records;
 result.native=optuna_mex('api.info');
 result.density_launch_delta=result.native.density_launches-before.density_launches;
 result.selection_launch_delta=result.native.selection_launches-before.selection_launches;
-result.ok=result.ok && result.density_launch_delta>0 && result.selection_launch_delta>0;
+result.cpu_density_delta=result.native.cpu_density_calls-before.cpu_density_calls;
+result.cpu_selection_delta=result.native.cpu_selection_calls-before.cpu_selection_calls;
+if executionMode=="gpu"
+    result.ok=result.ok && result.density_launch_delta>0 && result.selection_launch_delta>0 ...
+        && result.cpu_density_delta==0 && result.cpu_selection_delta==0;
+else
+    result.ok=result.ok && result.density_launch_delta==0 && result.selection_launch_delta==0 ...
+        && result.cpu_density_delta>0 && result.cpu_selection_delta>0 ...
+        && result.native.host_to_device_bytes==before.host_to_device_bytes ...
+        && result.native.device_to_host_bytes==before.device_to_host_bytes ...
+        && result.native.cuda_device==before.cuda_device;
+end
 folder=fileparts(outputPath);
 if ~isfolder(folder), mkdir(folder); end
 fid=fopen(outputPath,'w');

@@ -1,16 +1,35 @@
 # radia-optuna
 
 The native gateway is built with MATLAB `mexcuda`. TPE Parzen density,
-candidate scoring, and first-maximum selection execute on an NVIDIA GPU in
-double precision. Study/Trial management, estimator construction, seeded
-random consumption, and candidate generation remain on the CPU host.
-CPU host parallel kernels use OpenMP through the same mexcuda build; ordered
-random consumption remains serial. Ordinary `mex` compilation is prohibited.
-These TPE operations require Parallel Computing Toolbox and a supported
-NVIDIA GPU; a CPU-only gateway is rejected. GPU users do not need Python.
-Optional upstream-backed features retain their Python requirements below.
+candidate scoring and first-maximum selection can run on CPU or GPU in double
+precision. Select the execution explicitly in each MATLAB process:
 
-Use the same GPU-backed TPE from MATLAB or the included masked Simulink
+```matlab
+radia.optuna.executionMode("cpu"); % OpenMP host kernels, same mexcuda binary
+radia.optuna.executionMode("gpu"); % CUDA kernels; the initial/default mode
+mode = radia.optuna.executionMode();
+```
+
+CPU/GPU selection is a development addition after 0.3.0; the published 0.3.0
+wheel retains its original GPU-only TPE execution. See the
+[dual-route validation record](../../validation_test/radia_optuna/results/execution-choice-20261013.json).
+
+CPU mode does not initialize CUDA, allocate device memory or transfer data.
+GPU mode requires Parallel Computing Toolbox and a supported NVIDIA GPU;
+device errors raise and never switch to CPU. This is a process-wide execution
+setting, independent of Study storage and RNG state. Set it before a run and
+in each parallel worker; reloading `optuna_mex` resets it to GPU. Simulink
+uses the setting in its MATLAB process. No automatic size-based dispatch is
+provided. `api.info` reports `execution_mode`, CPU call counters and CUDA
+launch/transfer counters so the chosen path can be checked.
+
+Study/Trial management, estimator construction, seeded random consumption
+and candidate generation remain host work in both modes. CPU host parallel
+kernels use OpenMP in the mexcuda build; ordered random consumption remains
+serial. Ordinary `mex` compilation remains prohibited. GPU users do not need
+Python; optional upstream-backed features retain their requirements below.
+
+Use the same TPE from MATLAB or the included masked Simulink
 study block and `SimulinkRunner`. Simulink is optional for MATLAB-only use.
 
 Build on the designated 100 host with `Build.ps1 -OptunaMexOnly -Test`.
@@ -22,7 +41,7 @@ This is correctness evidence; formal speed comparisons require idle mdx.
 
 `radia-optuna` is an independent, separately distributed MATLAB optimization
 component from the Radia monorepo. It installs the `radia.optuna` MATLAB
-namespace, the 21-command `optuna_mex`, and checked compatibility contracts
+namespace, the 22-command `optuna_mex`, and checked compatibility contracts
 whose behavioral oracle is Optuna 5.0.0. Its checked public inventory contains
 812 present and mapped entries: 749 have evidence derived from an upstream
 oracle generator and 63 remain explicitly assertion-mapped. The required
@@ -262,13 +281,14 @@ PyPI, and attaches it to the matching GitHub Release.
 
 Build `optuna_mex` with `Build.ps1 -OptunaMexOnly`, which calls MATLAB
 `mexcuda` with its supported compiler configuration. A CUDA-capable NVIDIA
-host and Parallel Computing Toolbox are required for density evaluations.
+host and Parallel Computing Toolbox are required for GPU-mode density evaluations.
 No NGSolve, TaskManager, Radia CPU solver, or CPU-only MEX build is linked.
 
 Parzen numerical/categorical mixture densities and univariate/joint/grouped
-TPE candidate densities and selection execute in FP64 CUDA. Study/Trial management,
+TPE candidate densities and selection execute in FP64 CUDA in GPU mode or
+CPU host kernels in CPU mode. Study/Trial management,
 stateful random-number consumption, candidate generation and Pareto/Sobol
-remain host operations. Selection tie-breaking stays ordered on CUDA. Device errors raise; they do not
+remain host operations. Selection tie-breaking stays ordered on both routes. Device errors raise; they do not
 switch to a CPU density implementation. RNG state is restored on failed
 candidate evaluation. `api.info` reports this boundary and the build route;
 MATLAB rejects old CPU-only MEX binaries even if their command list matches.

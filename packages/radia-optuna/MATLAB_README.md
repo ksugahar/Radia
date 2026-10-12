@@ -9,14 +9,14 @@ status = radia.optuna.nativeStatus();
 assert(status.gateway == "optuna_mex")
 ```
 
-The package contains a separately compiled 21-command MEX gateway. It has no
+The package contains a separately compiled 22-command MEX gateway. It has no
 Radia solver, NGSolve, oneMKL, Cubit, or Python binary dependency. Missing or
 incompatible native gateways fail loudly and never redirect through
 `radia_mex`.
 
 Build the gateway with `Build.ps1 -OptunaMexOnly` using MATLAB's supported
 `mexcuda` toolchain. TPE density, candidate scoring and maximum selection
-require Parallel Computing Toolbox and a supported NVIDIA GPU. Random
+require Parallel Computing Toolbox and a supported NVIDIA GPU in GPU mode. Random
 consumption, candidate generation and study management execute on the host.
 The GPU path requires no Python runtime and rejects CPU-only gateway binaries.
 
@@ -105,3 +105,14 @@ sponsored by, or endorsed by Preferred Networks, Inc. or the Optuna project.
 Optuna, the Optuna logo and any related marks are trademarks of Preferred Networks, Inc.
 The Optuna logo is not used. See `THIRD_PARTY_NOTICES.md` in
 this directory for upstream MIT license notices and provenance links.
+
+## Explicit CPU/GPU TPE execution
+
+Use `radia.optuna.executionMode("cpu")` for OpenMP host evaluation or
+`radia.optuna.executionMode("gpu")` for CUDA evaluation (the default).
+Both use the same mexcuda-compiled gateway; ordinary mex builds remain unsupported.
+The setting applies to the MATLAB process, including Simulink, and must be
+selected separately in each worker. CPU mode does not initialize CUDA. GPU
+errors raise without falling back. Query `radia.optuna.executionMode()` or
+`optuna_mex('api.info')` to inspect the selected route. This extension does not
+change Optuna 5.0.0 sampler settings, random consumption or stored Study state.

@@ -643,7 +643,7 @@ void DestroyOptunaRandomState(std::uint64_t handle) {
 
 mxArray* Commands() {
     static const char* names[] = {
-        "api.info", "api.commands",
+        "api.info", "api.commands", "api.execution",
         "optuna.pareto.rank_crowding",
         "optuna.parzen.log_pdf_numerical",
         "optuna.parzen.log_pdf_categorical",
@@ -2210,7 +2210,7 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     const char* fields[] = {
         "api_version", "backend", "command_count", "handle_count", "build_route", "taskmanager", "gpu_operations", "host_operations"
         , "execution", "host_parallel_runtime", "allocator", "density_launches", "selection_launches", "host_to_device_bytes",
-        "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device"
+        "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device", "execution_mode", "cpu_density_calls", "cpu_selection_calls"
     };
     plhs[0] = mxCreateStructMatrix(1, 1, sizeof(fields) / sizeof(fields[0]), fields);
     mxSetField(plhs[0], 0, "build_route", mxCreateString("mexcuda"));
@@ -2219,8 +2219,11 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     mxSetField(plhs[0], 0, "host_operations", mxCreateString("Management, ordered RNG, candidate generation, Pareto and Sobol"));
     mxSetField(plhs[0], 0, "api_version", mxCreateDoubleScalar(1.0));
     mxSetField(plhs[0], 0, "backend", mxCreateString("optuna_mex"));
-    mxSetField(plhs[0], 0, "command_count", mxCreateDoubleScalar(21.0));
+    mxSetField(plhs[0], 0, "command_count", mxCreateDoubleScalar(22.0));
     const auto stats = optuna_cuda::statistics();
+    mxSetField(plhs[0], 0, "execution_mode", mxCreateString(optuna_cuda::use_gpu() ? "gpu" : "cpu"));
+    mxSetField(plhs[0], 0, "cpu_density_calls", mxCreateDoubleScalar(static_cast<double>(stats.cpu_density_calls)));
+    mxSetField(plhs[0], 0, "cpu_selection_calls", mxCreateDoubleScalar(static_cast<double>(stats.cpu_selection_calls)));
     mxSetField(plhs[0], 0, "execution", mxCreateString("matlab-mexcuda"));
     mxSetField(plhs[0], 0, "host_parallel_runtime", mxCreateString("openmp"));
     mxSetField(plhs[0], 0, "allocator", mxCreateString(
@@ -2304,6 +2307,17 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
               const mxArray* prhs[]) {
     if (command == "api.info") {
         ApiInfo(nlhs, plhs, nrhs);
+        return;
+    }
+    if (command == "api.execution") {
+        if ((nrhs != 1 && nrhs != 2) || nlhs != 1)
+            BadArgument("usage: mode = optuna_mex('api.execution' [, 'cpu'|'gpu'])");
+        if (nrhs == 2) {
+            const auto mode = Text(prhs[1], "execution mode");
+            if (mode != "cpu" && mode != "gpu") BadArgument("execution mode must be cpu or gpu");
+            optuna_cuda::set_gpu(mode == "gpu");
+        }
+        plhs[0] = mxCreateString(optuna_cuda::use_gpu() ? "gpu" : "cpu");
         return;
     }
     if (command == "api.commands") {
