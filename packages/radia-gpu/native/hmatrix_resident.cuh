@@ -155,6 +155,9 @@ struct DeviceMap {
     }
     void abandon(){offsets.data=nullptr;indices.data=nullptr;values.data=nullptr;}
 };
+} // namespace radia_hmatrix_cuda
+#include "analytic_matrix_build.cuh"
+namespace radia_hmatrix_cuda {
 class Resident {
     Buffer<Direction> directions;Buffer<double> coefficients,scale,input,tmp,partial,state;
     Buffer<std::size_t> permutation,rowOffsets,partialIndices;
@@ -162,7 +165,7 @@ class Resident {
     cudaStream_t stream=nullptr;std::size_t n,count;bool initialized=false;int device=0;
     void valid(){int current;check(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("H-matrix context belongs to another GPU");auto status=cudaStreamQuery(stream);if(status!=cudaSuccess&&status!=cudaErrorNotReady)check(status);}
 public:
-    std::size_t ownedBytes=0,applications=0,kernelsPerApplication=4;
+    std::size_t ownedBytes=0,setupPeakOwnedBytes=0,applications=0,kernelsPerApplication=4;
     explicit Resident(const Plan& p,const SparseMap* map=nullptr):n(p.n),count(p.directions.size()) {
         check(cudaGetDevice(&device));
         if(count>2147483647u||n>std::size_t(2147483647u)*256)throw std::invalid_argument("CUDA grid range exceeded");
@@ -183,6 +186,22 @@ public:
         permutation.upload(p.permutation);rowOffsets.upload(p.rowOffsets);partialIndices.upload(p.partialIndices);
         input.allocate(n);tmp.allocate(p.tmpCount);partial.allocate(p.partialCount);state.allocate(n);
         check(cudaStreamCreateWithFlags(&stream,cudaStreamNonBlocking));
+    }
+    void assemble(const AnalyticBlock& block){
+        valid();if(initialized||count!=1||coefficients.size!=checkedProduct(n,n)||block.sources.size()!=n)
+            throw std::invalid_argument("Analytic assembly requires a fresh single dense block");
+        std::size_t extra=checkedProduct(block.sources.size(),sizeof(AnalyticSource));
+        const auto quadBytes=checkedProduct(block.quadrature.size(),sizeof(QuadraturePoint));
+        if(quadBytes>std::numeric_limits<std::size_t>::max()-extra-sizeof(int))throw std::overflow_error("Assembly workspace overflow");extra+=quadBytes+sizeof(int);
+        std::size_t free,total;check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
+        if(free<=reserve||extra>free-reserve)throw std::runtime_error("Assembly GPU reserve would be exceeded");
+        Buffer<AnalyticSource> sources;Buffer<QuadraturePoint> quadrature;Buffer<int> invalid;
+        sources.upload(block.sources);quadrature.upload(block.quadrature);invalid.upload(std::vector<int>{0});setupPeakOwnedBytes=ownedBytes+extra;
+        assembleAnalyticConstant<<<unsigned((n*n+63)/64),64,0,stream>>>(sources.data,quadrature.data,n,coefficients.data,invalid.data);check(cudaGetLastError());
+        analyticPhysicalScale<<<unsigned((n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data,invalid.data);check(cudaGetLastError());
+        int flag=0;check(cudaMemcpyAsync(&flag,invalid.data,sizeof(int),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
+        if(flag)throw std::runtime_error("Analytic assembly produced invalid energy");
+        normalizeAnalytic<<<unsigned((n*n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data);check(cudaGetLastError());check(cudaStreamSynchronize(stream));
     }
     ~Resident(){if(stream){int previous=device;cudaGetDevice(&previous);if(previous!=device)cudaSetDevice(device);
         auto status=cudaStreamQuery(stream);

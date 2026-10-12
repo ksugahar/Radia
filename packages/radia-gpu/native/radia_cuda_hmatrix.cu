@@ -59,13 +59,28 @@ Plan read(const mxArray* cfg){
 void mexFunction(int nl,mxArray* out[],int nr,const mxArray* in[]){
 try{
     if(!nr)throw std::invalid_argument("Command required");auto command=text(in[0]);
-    if(command=="create"){
-        arity(nr,2,nl,1);auto plan=read(in[1]);
+    if(command=="create"||command=="create_analytic_constant_block"){
+        arity(nr,2,nl,1);Plan plan;AnalyticBlock block;
+        if(command=="create")plan=read(in[1]);
+        else{
+            if(integer(field(in[1],0,"schema_version"),true)!=1)throw std::invalid_argument("Unsupported analytic block schema");
+            for(int f=0;f<mxGetNumberOfFields(in[1]);++f){std::string key=mxGetFieldNameByNumber(in[1],f);
+                if(key!="schema_version"&&key!="cells"&&key!="faces"&&key!="operator_kind"&&key!="charge_map"&&key!="assembly")
+                    throw std::invalid_argument("Unsupported analytic block option: "+key);
+            }
+            if(mxGetN(field(in[1],0,"cells"))>1||mxGetN(field(in[1],0,"faces"))>1)
+                throw std::invalid_argument("Geometry uses flat row-major coordinate column vectors");
+            // No images, curved/high-order interpretation or alternate near/far strategy.
+            block=analyticSources(numbers(field(in[1],0,"cells")),numbers(field(in[1],0,"faces")));
+            const auto n=block.sources.size();Leaf leaf{0,0,n,n,0,std::vector<double>(checkedProduct(n,n),0.),{}};
+            std::vector<std::size_t> permutation(n);for(std::size_t i=0;i<n;++i)permutation[i]=i;
+            plan=pack(n,{leaf},permutation,std::vector<double>(n,1.));
+        }
         if(generation==0x0000ffffffffffffULL)throw std::overflow_error("Handle generation exhausted");
         const auto mode=text(field(in[1],0,"operator_kind"));SparseMap map;
         if(mode=="demag")map=readChargeMap(field(in[1],0,"charge_map"),plan.n);
         else if(mode!="gram")throw std::invalid_argument("Operator kind must be gram or demag");
-        auto c=std::make_unique<Resident>(plan,mode=="demag"?&map:nullptr);const auto t=0x484d000000000000ULL|++generation;
+        auto c=std::make_unique<Resident>(plan,mode=="demag"?&map:nullptr);if(command=="create_analytic_constant_block")c->assemble(block);const auto t=0x484d000000000000ULL|++generation;
         auto* output=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);*static_cast<std::uint64_t*>(mxGetData(output))=t;
         contexts.emplace(t,std::move(c));mexLock();mexAtExit(cleanup);out[0]=output;return;
     }
@@ -77,8 +92,8 @@ try{
         arity(nr,2,nl,1);auto v=contexts.at(token(in[1]))->download();out[0]=mxCreateDoubleMatrix(v.size(),1,mxREAL);std::copy(v.begin(),v.end(),mxGetDoubles(out[0]));return;
     }
     if(command=="stats"){
-        arity(nr,2,nl,1);const auto& c=*contexts.at(token(in[1]));const char* names[]={"owned_device_bytes","applications","kernel_launches","host_synchronizations_per_apply"};
-        out[0]=mxCreateStructMatrix(1,1,4,names);mxSetField(out[0],0,names[0],mxCreateDoubleScalar(c.ownedBytes));mxSetField(out[0],0,names[1],mxCreateDoubleScalar(c.applications));mxSetField(out[0],0,names[2],mxCreateDoubleScalar(c.kernelsPerApplication*c.applications));mxSetField(out[0],0,names[3],mxCreateDoubleScalar(0));return;
+        arity(nr,2,nl,1);const auto& c=*contexts.at(token(in[1]));const char* names[]={"owned_device_bytes","applications","kernel_launches","host_synchronizations_per_apply","setup_peak_owned_device_bytes"};
+        out[0]=mxCreateStructMatrix(1,1,5,names);mxSetField(out[0],0,names[0],mxCreateDoubleScalar(c.ownedBytes));mxSetField(out[0],0,names[1],mxCreateDoubleScalar(c.applications));mxSetField(out[0],0,names[2],mxCreateDoubleScalar(c.kernelsPerApplication*c.applications));mxSetField(out[0],0,names[3],mxCreateDoubleScalar(0));mxSetField(out[0],0,names[4],mxCreateDoubleScalar(std::max(c.ownedBytes,c.setupPeakOwnedBytes)));return;
     }
     throw std::invalid_argument("Unknown H-matrix command");
 }catch(const std::exception& e){mexErrMsgIdAndTxt("radia:cuda:hmatrix","%s",e.what());}

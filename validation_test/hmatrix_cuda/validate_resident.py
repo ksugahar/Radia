@@ -16,9 +16,9 @@ def structs(rows):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--artifact',type=Path,required=True);parser.add_argument('--out',type=Path,required=True);a=parser.parse_args();a.out.mkdir(parents=True,exist_ok=False)
-    record=dict(schema='radia.hmatrix-resident-numerical.v1',accepted=False,a100_used=False,timing_acceptance=False,scope='Resident symmetric leaf algebra and public sampled-Gram CPU parity; not Matrix Build or HDiv-MMM physics acceptance')
+    record=dict(schema='radia.hmatrix-resident-numerical.v1',accepted=False,a100_used=False,timing_acceptance=False,scope='Resident symmetric leaf algebra and public sampled/integrated-tet Gram CPU parity; not native Matrix Build or full HDiv-MMM physics acceptance')
     eng=None
-    source_files=(Path(__file__),Path(__file__).with_name('checkResidentHMatrix.m'))
+    source_files=(Path(__file__),Path(__file__).with_name('checkResidentHMatrix.m'),ROOT/'packages/radia-gpu/matlab/+radia/+gpu/HMatrixOperator.m')
     source_hashes={str(p.relative_to(ROOT)):sha(p) for p in source_files}
     try:
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
@@ -26,20 +26,21 @@ def main():
         if record['cpu_mean_percent']>=30 or psutil.virtual_memory().available<8*2**30:raise RuntimeError('Host budget unavailable')
         receipt=json.loads((a.artifact/'build.json').read_text(encoding='utf-8'));assert receipt['accepted'];assert sha(a.artifact/'radia_cuda_hmatrix.mexw64')==receipt['binary_sha256'];record['build']=receipt
         rng=np.random.default_rng(20261012);cases=[]
-        for mode in ('dense','lowrank','mixed'):
-            n=9;matrix=np.zeros((n,n));leaves=[]
+        for mode,widths in [('dense',[3,3,3]),('lowrank',[3,3,3]),('mixed',[3,3,3]),('mixed-uneven',[1,17,257])]:
+            n=sum(widths);starts=np.cumsum([0]+widths);matrix=np.zeros((n,n));leaves=[]
             for i in range(3):
                 for j in range(i,3):
-                    rank=0 if i==j or mode=='dense' or (mode=='mixed' and i==0 and j==2) else 2
+                    ni,nj=widths[i],widths[j];ri,rj=starts[i],starts[j]
+                    rank=0 if i==j or mode=='dense' or (mode.startswith('mixed') and i==0 and j==2) else min(7,ni,nj)
                     if rank:
-                        a1=rng.normal(size=(3,rank))*.03;a2=rng.normal(size=(3,rank))*.03;block=a2@a1.T
+                        a1=rng.normal(size=(nj,rank))*.03;a2=rng.normal(size=(ni,rank))*.03;block=a2@a1.T
                     else:
-                        block=rng.normal(size=(3,3))*.01
-                        if i==j:block=(block+block.T)*.5+np.eye(3)*.2
+                        block=rng.normal(size=(ni,nj))*.01
+                        if i==j:block=(block+block.T)*.5+np.eye(ni)*.2
                         a1=block.ravel(order='C').reshape(-1,1);a2=np.empty((0,1))
-                    matrix[3*i:3*i+3,3*j:3*j+3]=block
-                    if i!=j:matrix[3*j:3*j+3,3*i:3*i+3]=block.T
-                    leaves.append(dict(row=float(3*i+1),column=float(3*j+1),rows=3.,columns=3.,rank=float(rank),a1=a1,a2=a2))
+                    matrix[ri:ri+ni,rj:rj+nj]=block
+                    if i!=j:matrix[rj:rj+nj,ri:ri+ni]=block.T
+                    leaves.append(dict(row=float(ri+1),column=float(rj+1),rows=float(ni),columns=float(nj),rank=float(rank),a1=a1,a2=a2))
             permutation=rng.permutation(n);scale=rng.uniform(.5,1.5,size=n);original=np.zeros_like(matrix);original[np.ix_(permutation,permutation)]=matrix;original=scale[:,None]*original*scale[None,:]
             initial=rng.normal(size=(n,1));first=original@initial;third=original@(original@first)
             cases.append(dict(name=mode,config=dict(schema_version=1.,operator_kind='gram',dimension=float(n),permutation=(permutation+1).astype(float).reshape(-1,1),scale=scale[:,None],leaves=structs(leaves)),initial=initial,expected_first=first,expected_third=third))
@@ -63,11 +64,21 @@ def main():
                 def apply(v):return charge.T@np.asarray(gram.matvec_sym(charge@v))
                 y=apply(x);y3=apply(apply(y))
             cases.append(dict(name=name,config=config,initial=x[:,None],expected_first=y[:,None],expected_third=y3[:,None]))
+        # Integrated analytic tetrahedron operator: keep its production normalization.
+        tetra=np.array([[0.,0.,0.],[.4,0.,0.],[0.,.4,0.],[0.,0.,.4]])
+        tetra2=.5*tetra+np.array([.6,.1,.1]);cells=np.concatenate([tetra.ravel(),tetra2.ravel()])
+        with ng.TaskManager():
+            integrated=native._ChargeGramHMatrix(cells,np.empty(0),2,eps=1e-12,leaf=64,eta=2.,near_factor=1e30,build=True,far_quad=0)
+            raw=np.array([[integrated.entry(i,j) for j in range(2)] for i in range(2)])
+            sigma=np.asarray(integrated.charge_sigma());x=rng.normal(size=2);y=np.asarray(integrated.matvec_sym(x));y3=np.asarray(integrated.matvec_sym(integrated.matvec_sym(y)))
+        normalized=raw/sigma[:,None]/sigma[None,:]
+        config=dict(schema_version=1.,operator_kind='gram',dimension=2.,permutation=np.array([[1.],[2.]]),scale=sigma[:,None],leaves=structs([dict(row=1.,column=1.,rows=2.,columns=2.,rank=0.,a1=normalized.ravel(order='C')[:,None],a2=np.empty((0,1)))]))
+        cases.append(dict(name='public-pybind-analytic-tet-Gram',config=config,initial=x[:,None],expected_first=y[:,None],expected_third=y3[:,None]))
         record['CPU_oracle']=dict(module='radia._radia_pybind',binary_sha256=sha(native.__file__),ngsolve=ng.__version__,note='Installed independent CPU reference; sampled Gram only')
         inputfile=a.out/'inputs.mat';savemat(inputfile,dict(cases=structs(cases)));record['input_sha256']=sha(inputfile)
         import matlab.engine
         eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');pid=int(eng.feature('getpid'));subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)
-        eng.addpath(str(a.artifact),str(Path(__file__).parent),nargout=0)
+        eng.addpath(str(a.artifact),str(Path(__file__).parent),str(ROOT/'packages/radia-gpu/matlab'),nargout=0)
         eng.checkResidentHMatrix(str(inputfile),str(a.out/'matlab.json'),nargout=0)
         result=json.loads((a.out/'matlab.json').read_text(encoding='utf-8'));assert result['accepted']
         if source_hashes!={str(p.relative_to(ROOT)):sha(p) for p in source_files}:raise RuntimeError('Validation source changed while running')

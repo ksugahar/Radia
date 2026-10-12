@@ -52,7 +52,12 @@ try
     bad=inputs.cases(1).config;bad.leaves(1).a1=nan;
     mustFailCreate(bad);
     assert(radia_cuda_hmatrix('live_count')==0);
-    result.accepted=true;result.live_count=0;result.reload_stale_handle_rejected=true;
+    operator=radia.gpu.HMatrixOperator(inputs.cases(4).config);
+    free=onCleanup(@()delete(operator));operator.upload(inputs.cases(4).initial);operator.apply(3);
+    wrapper=operator.download();assert(norm(wrapper-inputs.cases(4).expected_third)<=1e-12*norm(inputs.cases(4).expected_third));
+    clear free
+    assert(radia_cuda_hmatrix('live_count')==0);
+    result.wrapper_checked=true;result.accepted=true;result.live_count=0;result.reload_stale_handle_rejected=true;
     result.invalid_create_released=true;
 catch failure
     result.error=struct('identifier',failure.identifier,'message',failure.message);
