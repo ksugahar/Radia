@@ -71,7 +71,9 @@ def main():
     except BaseException as exc:
         result['error']=f'{type(exc).__name__}: {exc}';raise
     finally:
-        if eng is not None:eng.quit()
+        if eng is not None:
+            try:eng.quit()
+            except BaseException as exc:result['session_release_error']=str(exc)
         (a.out/'result.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
 
 if __name__=='__main__':main()

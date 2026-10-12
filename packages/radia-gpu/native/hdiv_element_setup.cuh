@@ -31,7 +31,7 @@ inline std::vector<double> chargeMap(std::shared_ptr<ngcomp::MeshAccess> mesh,
             ngstd::Array<int> dofs;space->GetDofNrs(eid,dofs);const int nm=int(mons.size()),ns=dg.GetNDof(),nf=fe.GetNDof();
             if(nm!=ns||nf!=dofs.Size())throw std::runtime_error("Unexpected simplex DG basis dimensions");
             ngbla::Matrix<> mass(ns,ns),coupling(ns,nf),monoMass(nm,nm),cross(nm,ns);mass=0.;coupling=0.;monoMass=0.;cross=0.;
-            ngbla::Vector<> scalar(ns),density(nf),mono(nm);ngbla::Matrix<> normalShape(nf,1);
+            ngbla::Vector<> scalar(ns),density(nf),mono(nm);ngbla::Matrix<> normalShape(nf,3);
             auto accumulate=[&](const ngfem::IntegrationPoint& ip,double w,int mode){
                 dg.CalcShape(ip,scalar);
                 if(mode==0){for(int i=0;i<ns;++i)for(int j=0;j<ns;++j)mass(i,j)+=w*scalar[i]*scalar[j];}
@@ -52,7 +52,7 @@ inline std::vector<double> chargeMap(std::shared_ptr<ngcomp::MeshAccess> mesh,
                         if(mode==1){dynamic_cast<const ngfem::HDivFiniteElement<3>&>(fe).CalcMappedDivShape(mip,density);density*=-1.;}
                         accumulate(ip,mip.GetWeight(),mode);
                     }else{ngfem::MappedIntegrationPoint<2,3> mip(ip,trafo);
-                        if(mode==1){dynamic_cast<const ngfem::HDivNormalFiniteElement<2>&>(fe).CalcMappedShape(mip,normalShape);for(int i=0;i<nf;++i)density[i]=normalShape(i,0);}
+                        if(mode==1){dynamic_cast<const ngfem::HDivNormalFiniteElement<2>&>(fe).CalcMappedShape(mip,normalShape);const auto normal=mip.GetNV();for(int i=0;i<nf;++i){density[i]=0.;for(int c=0;c<3;++c)density[i]+=normalShape(i,c)*normal[c];}}
                         accumulate(ip,mip.GetWeight(),mode);
                     }
                 }
