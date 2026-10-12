@@ -46,7 +46,7 @@ def cpu_run(route,fes,form,rhs,gradient,coords,bridge,threads):
         if pre is None or route==1 or (route==3 and rebuild_next):
             t=time.perf_counter();pre=bridge.preconditioner(form.mat,gradient,fes.FreeDofs(),*coords,1)
             setup+=time.perf_counter()-t;builds+=1;first=0
-        solver=ng.CGSolver(form.mat,pre=pre,tol=1e-10,maxiter=4000)
+        solver=ng.CGSolver(form.mat,pre=pre,tol=1e-12,maxiter=4000)
         delta=x.vec.CreateVector();t=time.perf_counter()
         with ng.TaskManager():delta.data=solver*residual
         solving+=time.perf_counter()-t
@@ -82,7 +82,7 @@ def main(args):
         assembly_storage='sparse CSR plus 6 mapped curl vectors and 36 CSR slots per tetrahedron',
         gpu_residency='nonlinear CSR buffers and cached AMS/PCG workspace; explicit tangent download only for hierarchy rebuild',
         timing_boundary='numeric FE input to final solution; shared FE preparation and MATLAB startup separately; GPU total includes upload',
-        nonlinear_tolerance=1e-9,linear_true_tolerance=1e-10,independent_parity_limit=1e-7)
+        nonlinear_tolerance=1e-9,linear_true_tolerance=1e-10,cpu_cg_internal_tolerance=1e-12,independent_parity_limit=1e-7)
     eng=None;preprocessing=time.perf_counter()
     try:
         import netgen
