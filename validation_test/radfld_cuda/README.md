@@ -263,3 +263,25 @@ samples (3.02 percent mean), process CPU deltas and empty queues. The latter
 established the idle diagnostic window; socket CIM alone must not govern
 future waits. `measure_projection_precision.py` repeats the queue/process/GPU
 guards outside timed intervals. Formal performance acceptance remains mdx-only.
+
+## Larger projection and reuse numerical checkpoint (2026-10-12)
+
+`results/scale-reuse-numerical-20261012.json` increases actual mapped targets
+from 24 to 1820, and cloud sources from 256 to 1024. Curved source records
+also pass on this larger projection. Independent CPU direct-field references
+give projected FE L2 relative errors below 9.07e-8 (cloud) and 2.765e-6
+(curved). Explicit revision invalidation after doubling source coefficients
+passes; cached fields are valid only while their sources/options stay fixed.
+
+For three projection steps, 128-target chunks make 45 field calls, bulk
+evaluation makes three, and unchanged-field reuse makes one. Native/GPU state
+reuse and per-step rebuilding are separate modes. `profileProjectionReuse.m`
+includes construction, all transfers, three projections, recovery and release
+in each continuous sequence. `scale_projection_reuse.py` checks independent
+CPU values and projected FE L2, and guards idle timing outside the sequences.
+
+Competing computations appeared before the timing phase, then CI resumed.
+The bounded, single-thread, below-normal numerical checks completed; their
+times are excluded, not presented as speed comparisons. Exact device buffer
+ownership, logical MATLAB cache bytes and sampled GPU free memory retain
+their stated limits. Larger idle timing is still pending.
