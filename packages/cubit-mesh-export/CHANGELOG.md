@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.2 - 2026-10-12
+
+- Restore package availability with a new release version. Export algorithms, supported runtime and toolbar behavior are unchanged.
+
 ## 2.2.1 - Automatic toolbar registration on Cubit 2026.8
 
 - Register Coreform's official WorkflowToolbar during installation, including every requested user profile, without manual package import or GUI launch.
