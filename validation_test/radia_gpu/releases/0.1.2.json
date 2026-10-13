@@ -1,0 +1,966 @@
+{
+  "schema": "radia.gpu.stable-qualification.v1",
+  "version": "0.1.2",
+  "source_commit": "cbd56d1de5ea5a49f9a11bc4a384caf77ea6b34e",
+  "wheel_sha256": "cebf96b5cb1bf5227925023186a2313e6e71bfec0eda6d44b01c018f2175cd20",
+  "manifest_sha256": "db5459c9825f8db19e00e46e22ab640646995e3ebd1c9eb05e7fbcfc62ef4149",
+  "ci_run_id": 38328276129,
+  "independent_review": {
+    "source_commit": "cbd56d1de5ea5a49f9a11bc4a384caf77ea6b34e",
+    "outcome": "accepted",
+    "unresolved_findings": [],
+    "reviewer": "independent Codex source reviewer",
+    "report": "Read-only review accepted exact merge SHA cbd56d1de5ea5a49f9a11bc4a384caf77ea6b34e and tree 0ff326aec330495949831ef9b28a5c9a28935126, identical to reviewed PR head e5d9d8ebc5a4ea3255d42d207219fc9374af99a9. Covers sparse CSR bounds, persistent lifetime, true-residual PCG, current nonlinear tangent versus reused preconditioner, gradient-AMG nullspace, standalone MATLAB setup, package scope/version and installed lifecycle/evidence CI. Reviewer did not execute tests; numerical and exact-wheel machine acceptance are separately recorded."
+  },
+  "build_host_acceptance": {
+    "schema": "radia.gpu.installed-acceptance.v1",
+    "passed": true,
+    "device": "Quadro RTX 5000",
+    "compute_capability": "7.5",
+    "gpu_total_memory_bytes": 17179541504.0,
+    "matlab_release": "2026a",
+    "cuda_residual": 0,
+    "simulink_repeated_runs": 2,
+    "simulink_failure_cleanup": true,
+    "ltspice_checked": true,
+    "source_commit": "cbd56d1de5ea5a49f9a11bc4a384caf77ea6b34e",
+    "distribution_version": "0.1.2",
+    "manifest_sha256": "db5459c9825f8db19e00e46e22ab640646995e3ebd1c9eb05e7fbcfc62ef4149",
+    "wheel_sha256": "cebf96b5cb1bf5227925023186a2313e6e71bfec0eda6d44b01c018f2175cd20",
+    "execution_role": "cuda-build-host",
+    "cpu_parity_checked": true,
+    "cpu_parity": {
+      "csr_pcg": {
+        "relative_l2": 3.519930674787334e-10,
+        "true_relative_residual": 9.98616206327886e-11
+      },
+      "ams": {
+        "relative_l2": 6.732505271785751e-10,
+        "true_relative_residual": 3.083360201441717e-10
+      }
+    }
+  },
+  "optional_accelerator_validation": {
+    "status": "passed",
+    "required": false,
+    "source_commit": "cbd56d1de5ea5a49f9a11bc4a384caf77ea6b34e",
+    "wheel_sha256": "cebf96b5cb1bf5227925023186a2313e6e71bfec0eda6d44b01c018f2175cd20",
+    "device": {
+      "name": "NVIDIA A100-SXM4-40GB",
+      "compute_capability": "8.0",
+      "total_memory": 42628612096.0
+    },
+    "dofs": 251896,
+    "max_solution_relative_error": 1.5106142736243478e-13,
+    "max_B_relative_RMS_error": 2.452069375910718e-15,
+    "max_nonlinear_residual": 2.5781989783280573e-14,
+    "resident_contract": {
+      "accepted": 1,
+      "stale_handle_rejected": 1,
+      "wrong_type_rejected": 1,
+      "failed_update_preserves_context": 1,
+      "caller_source_release_safe": 1,
+      "workspace_survives_update": 1,
+      "native_buffer_allocations_during_solve": 0
+    },
+    "evidence": "validation_test/ams_cuda/results/nonlinear-installed-0.1.2-20261013.json"
+  },
+  "parity_provenance": {
+    "method": "Exact main CI wheel: independent Python NGSolve CPU references for Poisson and linear/native-setup AMS, plus nonlinear installed-wheel CPU parity on both devices. MATLAB batch owns GPU execution without Python adapter.",
+    "cuda_binary_sha256": {
+      "matlab/radia_cuda_csr_pcg.mexw64": "10395f12020bb4dee046a1afbd967b2aa2e17fdd12805bdd9503565754ae5711",
+      "matlab/radia_cuda_ams.mexw64": "e3f8cf9024ca55d66e2b6ff766ee924cc5556a82638e3e7df90ee0e5e1b7d097"
+    }
+  },
+  "nonlinear_ci": {
+    "schema": "radia.ams-nonlinear-sparse-resident.v2",
+    "accepted": true,
+    "source_commit": "cbd56d1de5ea5a49f9a11bc4a384caf77ea6b34e",
+    "versions": {
+      "ngsolve": "6.2.2607",
+      "numpy": "2.5.4",
+      "scipy": "1.18.1",
+      "matlabengine": "26.1"
+    },
+    "gpu_binary_sha256": "e3f8cf9024ca55d66e2b6ff766ee924cc5556a82638e3e7df90ee0e5e1b7d097",
+    "dofs": 260,
+    "free_dofs": 110,
+    "elements": 151,
+    "csr_nonzeros": 3278,
+    "mesh_sha256": "aef4d403e3ed7ac7632db3c48a65719db7f0a0c843d3cd227b2a01ea886b8a8f",
+    "map_assembly_relative_error": 1.1581799803642405e-16,
+    "cpu_threads": 2,
+    "gpu_host_setup_threads": 2,
+    "nonlinear_tolerance": 1e-09,
+    "linear_true_tolerance": 1e-10,
+    "independent_parity_limit": 1e-07,
+    "cpu_samples": [
+      {
+        "route": 1,
+        "total_seconds": 0.13228190000518225,
+        "setup_seconds": 0.06907249998766929,
+        "assembly_seconds": 0.02514879999216646,
+        "solve_seconds": 0.021546499978285283,
+        "builds": 7,
+        "history": [
+          [
+            0,
+            1.0,
+            14,
+            1.0090463400864402e-12,
+            0.125
+          ],
+          [
+            1,
+            2.931431134583226,
+            18,
+            1.0208158398193005e-13,
+            1.0
+          ],
+          [
+            2,
+            0.7492117525701029,
+            17,
+            4.1626213834081234e-13,
+            1.0
+          ],
+          [
+            3,
+            0.12809195289357206,
+            18,
+            1.2495653510423877e-13,
+            1.0
+          ],
+          [
+            4,
+            0.013940669581430145,
+            17,
+            9.70471880870258e-13,
+            1.0
+          ],
+          [
+            5,
+            0.0005987205150625462,
+            18,
+            2.1803431930584306e-13,
+            1.0
+          ],
+          [
+            6,
+            1.7535346630512397e-06,
+            17,
+            6.032521414704886e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 1.6931631721300235e-11,
+        "threads": 2
+      },
+      {
+        "route": 2,
+        "total_seconds": 0.11213160000625066,
+        "setup_seconds": 0.009219100000336766,
+        "assembly_seconds": 0.02428600001439918,
+        "solve_seconds": 0.06174259999534115,
+        "builds": 1,
+        "history": [
+          [
+            0,
+            1.0,
+            14,
+            1.0091592577732617e-12,
+            0.125
+          ],
+          [
+            1,
+            2.931431134583226,
+            83,
+            8.653240272828161e-13,
+            1.0
+          ],
+          [
+            2,
+            0.7492117525697999,
+            49,
+            1.3326520974076083e-12,
+            1.0
+          ],
+          [
+            3,
+            0.12809195289348238,
+            52,
+            1.079207780248497e-12,
+            1.0
+          ],
+          [
+            4,
+            0.013940669581418942,
+            55,
+            6.814483264396282e-13,
+            1.0
+          ],
+          [
+            5,
+            0.0005987205150598696,
+            56,
+            7.931288385486054e-13,
+            1.0
+          ],
+          [
+            6,
+            1.7535346631236387e-06,
+            56,
+            5.347957578612021e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 1.6931582127163796e-11,
+        "threads": 2
+      },
+      {
+        "route": 3,
+        "total_seconds": 0.09684289999131579,
+        "setup_seconds": 0.01971350000530947,
+        "assembly_seconds": 0.023675500007811934,
+        "solve_seconds": 0.03721189999487251,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            14,
+            1.0091592577732617e-12,
+            0.125
+          ],
+          [
+            1,
+            2.931431134583226,
+            83,
+            8.653240272828161e-13,
+            1.0
+          ],
+          [
+            2,
+            0.7492117525697999,
+            17,
+            4.163714264405643e-13,
+            1.0
+          ],
+          [
+            3,
+            0.12809195289346714,
+            21,
+            2.1372732121637042e-13,
+            1.0
+          ],
+          [
+            4,
+            0.013940669581404289,
+            23,
+            6.439198205257882e-13,
+            1.0
+          ],
+          [
+            5,
+            0.000598720515056097,
+            24,
+            2.624088685700817e-13,
+            1.0
+          ],
+          [
+            6,
+            1.7535346631070894e-06,
+            24,
+            1.882595787902275e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 1.6931736345918367e-11,
+        "threads": 2
+      },
+      {
+        "route": 3,
+        "total_seconds": 0.09976719999394845,
+        "setup_seconds": 0.01957270001003053,
+        "assembly_seconds": 0.024723099995753728,
+        "solve_seconds": 0.03891010000370443,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            14,
+            1.0091592577732617e-12,
+            0.125
+          ],
+          [
+            1,
+            2.931431134583226,
+            83,
+            8.653240272828161e-13,
+            1.0
+          ],
+          [
+            2,
+            0.7492117525697999,
+            17,
+            4.1631989732361687e-13,
+            1.0
+          ],
+          [
+            3,
+            0.12809195289346703,
+            21,
+            2.1374071179156162e-13,
+            1.0
+          ],
+          [
+            4,
+            0.013940669581404257,
+            23,
+            6.439705776265505e-13,
+            1.0
+          ],
+          [
+            5,
+            0.000598720515056271,
+            24,
+            2.6237511834785653e-13,
+            1.0
+          ],
+          [
+            6,
+            1.7535346629723142e-06,
+            24,
+            1.88285592466894e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 1.6931567295042913e-11,
+        "threads": 2
+      },
+      {
+        "route": 2,
+        "total_seconds": 0.11214779999863822,
+        "setup_seconds": 0.009330700006103143,
+        "assembly_seconds": 0.025048000024980865,
+        "solve_seconds": 0.06200999999418855,
+        "builds": 1,
+        "history": [
+          [
+            0,
+            1.0,
+            14,
+            1.0091592577732617e-12,
+            0.125
+          ],
+          [
+            1,
+            2.931431134583226,
+            83,
+            8.653240272828161e-13,
+            1.0
+          ],
+          [
+            2,
+            0.7492117525697999,
+            49,
+            1.3326520974076083e-12,
+            1.0
+          ],
+          [
+            3,
+            0.12809195289348238,
+            52,
+            1.079207780248497e-12,
+            1.0
+          ],
+          [
+            4,
+            0.013940669581418942,
+            55,
+            6.814483264396282e-13,
+            1.0
+          ],
+          [
+            5,
+            0.0005987205150598696,
+            56,
+            7.931288385486054e-13,
+            1.0
+          ],
+          [
+            6,
+            1.7535346631236387e-06,
+            56,
+            5.347957578612021e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 1.6931582127163796e-11,
+        "threads": 2
+      },
+      {
+        "route": 1,
+        "total_seconds": 0.12540950000402518,
+        "setup_seconds": 0.06586550000065472,
+        "assembly_seconds": 0.021480800001882017,
+        "solve_seconds": 0.022340600000461563,
+        "builds": 7,
+        "history": [
+          [
+            0,
+            1.0,
+            14,
+            1.0090173826820138e-12,
+            0.125
+          ],
+          [
+            1,
+            2.931431134583227,
+            18,
+            1.0201363256071896e-13,
+            1.0
+          ],
+          [
+            2,
+            0.749211752570103,
+            17,
+            4.1639738801043676e-13,
+            1.0
+          ],
+          [
+            3,
+            0.12809195289357223,
+            18,
+            1.2497589497781887e-13,
+            1.0
+          ],
+          [
+            4,
+            0.013940669581430467,
+            17,
+            9.704678805731334e-13,
+            1.0
+          ],
+          [
+            5,
+            0.0005987205150624348,
+            18,
+            2.1803285326544929e-13,
+            1.0
+          ],
+          [
+            6,
+            1.7535346631866222e-06,
+            17,
+            6.032252996986881e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 1.6931448093708906e-11,
+        "threads": 2
+      }
+    ],
+    "gpu": [
+      {
+        "route": 1,
+        "sample": 1,
+        "total_seconds": 0.445398,
+        "compute_seconds": 0.3696956,
+        "upload_seconds": 0.0757024,
+        "input_owned_bytes": 91820,
+        "device_memory_sample_delta_bytes": 16777216,
+        "setup_seconds": 0.19659770000000001,
+        "assembly_seconds": 0.008771900000000001,
+        "solve_seconds": 0.0843713,
+        "builds": 7,
+        "history": [
+          [
+            1.0,
+            1.0,
+            11.0,
+            9.808680889646385e-11,
+            0.125
+          ],
+          [
+            2.0,
+            2.9314311346814783,
+            14.0,
+            3.5223792015330746e-11,
+            1.0
+          ],
+          [
+            3.0,
+            0.7492117526622583,
+            14.0,
+            2.0280114164000132e-11,
+            1.0
+          ],
+          [
+            4.0,
+            0.12809195291973882,
+            14.0,
+            2.7868212781942394e-11,
+            1.0
+          ],
+          [
+            5.0,
+            0.013940669586792452,
+            14.0,
+            4.532516471773287e-11,
+            1.0
+          ],
+          [
+            6.0,
+            0.000598720515359428,
+            14.0,
+            5.259869698450698e-11,
+            1.0
+          ],
+          [
+            7.0,
+            1.753534665450055e-06,
+            14.0,
+            3.457532467796273e-11,
+            1.0
+          ]
+        ],
+        "final_residual": 1.693164493272522e-11,
+        "workspace_bytes": 10424,
+        "workspace_allocations": 1,
+        "native_buffer_allocations_during_solve": 0,
+        "resident_solve_count": 7,
+        "resident_hierarchy_builds": 7,
+        "graph_cached": 1,
+        "cpu_solution_relative_error": 1.1257895364424034e-14,
+        "independent_nonlinear_residual": 1.6931598579546727e-11,
+        "B_relative_RMS_error": 2.149503504327393e-16
+      },
+      {
+        "route": 2,
+        "sample": 2,
+        "total_seconds": 0.3104001,
+        "compute_seconds": 0.2346977,
+        "upload_seconds": 0.0757024,
+        "input_owned_bytes": 91820,
+        "device_memory_sample_delta_bytes": 8388608,
+        "setup_seconds": 0.0166917,
+        "assembly_seconds": 0.0061926,
+        "solve_seconds": 0.19053879999999998,
+        "builds": 1,
+        "history": [
+          [
+            1.0,
+            1.0,
+            11.0,
+            9.808688413589788e-11,
+            0.125
+          ],
+          [
+            2.0,
+            2.931431134681479,
+            68.0,
+            7.716974751820658e-11,
+            1.0
+          ],
+          [
+            3.0,
+            0.7492117525890537,
+            40.0,
+            9.432787293580201e-11,
+            1.0
+          ],
+          [
+            4.0,
+            0.12809195287799083,
+            41.0,
+            9.90054625304721e-11,
+            1.0
+          ],
+          [
+            5.0,
+            0.013940669576643588,
+            44.0,
+            7.015474987901597e-11,
+            1.0
+          ],
+          [
+            6.0,
+            0.0005987205142415138,
+            44.0,
+            9.462033087365829e-11,
+            1.0
+          ],
+          [
+            7.0,
+            1.7535346540402253e-06,
+            45.0,
+            5.998371811728638e-11,
+            1.0
+          ]
+        ],
+        "final_residual": 1.6931768516270245e-11,
+        "workspace_bytes": 10424,
+        "workspace_allocations": 1,
+        "native_buffer_allocations_during_solve": 0,
+        "resident_solve_count": 7,
+        "resident_hierarchy_builds": 1,
+        "graph_cached": 1,
+        "cpu_solution_relative_error": 4.557423610067335e-15,
+        "independent_nonlinear_residual": 1.6931735287875846e-11,
+        "B_relative_RMS_error": 2.5339495019486995e-16
+      },
+      {
+        "route": 3,
+        "sample": 3,
+        "total_seconds": 0.2315025,
+        "compute_seconds": 0.1558001,
+        "upload_seconds": 0.0757024,
+        "input_owned_bytes": 91820,
+        "device_memory_sample_delta_bytes": 8388608,
+        "setup_seconds": 0.0295543,
+        "assembly_seconds": 0.0055065,
+        "solve_seconds": 0.1034465,
+        "builds": 2,
+        "history": [
+          [
+            1.0,
+            1.0,
+            11.0,
+            9.808688413589788e-11,
+            0.125
+          ],
+          [
+            2.0,
+            2.931431134681479,
+            69.0,
+            7.655896713307432e-11,
+            1.0
+          ],
+          [
+            3.0,
+            0.7492117526221277,
+            14.0,
+            2.028004462005098e-11,
+            1.0
+          ],
+          [
+            4.0,
+            0.12809195289638944,
+            17.0,
+            2.4791737480284134e-11,
+            1.0
+          ],
+          [
+            5.0,
+            0.013940669576611033,
+            19.0,
+            3.238411259308033e-11,
+            1.0
+          ],
+          [
+            6.0,
+            0.0005987205142845606,
+            19.0,
+            5.0886205389272985e-11,
+            1.0
+          ],
+          [
+            7.0,
+            1.7535346539520426e-06,
+            19.0,
+            3.9274009452564056e-11,
+            1.0
+          ]
+        ],
+        "final_residual": 1.6931614818448682e-11,
+        "workspace_bytes": 10424,
+        "workspace_allocations": 1,
+        "native_buffer_allocations_during_solve": 0,
+        "resident_solve_count": 7,
+        "resident_hierarchy_builds": 2,
+        "graph_cached": 1,
+        "cpu_solution_relative_error": 7.488704677773064e-15,
+        "independent_nonlinear_residual": 1.6931654682363183e-11,
+        "B_relative_RMS_error": 2.1903224259002983e-16
+      },
+      {
+        "route": 3,
+        "sample": 4,
+        "total_seconds": 0.2285154,
+        "compute_seconds": 0.152813,
+        "upload_seconds": 0.0757024,
+        "input_owned_bytes": 91820,
+        "device_memory_sample_delta_bytes": 8388608,
+        "setup_seconds": 0.0298421,
+        "assembly_seconds": 0.005492899999999999,
+        "solve_seconds": 0.1009182,
+        "builds": 2,
+        "history": [
+          [
+            1.0,
+            1.0,
+            11.0,
+            9.808691994548056e-11,
+            0.125
+          ],
+          [
+            2.0,
+            2.9314311346814788,
+            68.0,
+            8.173354660192918e-11,
+            1.0
+          ],
+          [
+            3.0,
+            0.7492117526016179,
+            14.0,
+            2.028011729995205e-11,
+            1.0
+          ],
+          [
+            4.0,
+            0.1280919528916437,
+            17.0,
+            2.4791663903966822e-11,
+            1.0
+          ],
+          [
+            5.0,
+            0.01394066957621685,
+            19.0,
+            3.238408713918503e-11,
+            1.0
+          ],
+          [
+            6.0,
+            0.0005987205142468137,
+            19.0,
+            5.08862333062976e-11,
+            1.0
+          ],
+          [
+            7.0,
+            1.75353465371921e-06,
+            19.0,
+            3.927398737386114e-11,
+            1.0
+          ]
+        ],
+        "final_residual": 1.6931675725475057e-11,
+        "workspace_bytes": 10424,
+        "workspace_allocations": 1,
+        "native_buffer_allocations_during_solve": 0,
+        "resident_solve_count": 7,
+        "resident_hierarchy_builds": 2,
+        "graph_cached": 1,
+        "cpu_solution_relative_error": 9.485040513226166e-15,
+        "independent_nonlinear_residual": 1.6931634782396127e-11,
+        "B_relative_RMS_error": 2.354794133618057e-16
+      },
+      {
+        "route": 2,
+        "sample": 5,
+        "total_seconds": 0.2851901,
+        "compute_seconds": 0.2094877,
+        "upload_seconds": 0.0757024,
+        "input_owned_bytes": 91820,
+        "device_memory_sample_delta_bytes": 8388608,
+        "setup_seconds": 0.015432,
+        "assembly_seconds": 0.006058699999999999,
+        "solve_seconds": 0.17025710000000002,
+        "builds": 1,
+        "history": [
+          [
+            1.0,
+            1.0,
+            11.0,
+            9.808689759457283e-11,
+            0.125
+          ],
+          [
+            2.0,
+            2.9314311346814788,
+            68.0,
+            8.270978712377298e-11,
+            1.0
+          ],
+          [
+            3.0,
+            0.7492117526043583,
+            40.0,
+            9.86852187682899e-11,
+            1.0
+          ],
+          [
+            4.0,
+            0.12809195287948882,
+            41.0,
+            9.901173108448143e-11,
+            1.0
+          ],
+          [
+            5.0,
+            0.01394066957670507,
+            44.0,
+            7.015835107899224e-11,
+            1.0
+          ],
+          [
+            6.0,
+            0.0005987205142368723,
+            44.0,
+            9.44232990175236e-11,
+            1.0
+          ],
+          [
+            7.0,
+            1.7535346540888948e-06,
+            45.0,
+            5.998346692816457e-11,
+            1.0
+          ]
+        ],
+        "final_residual": 1.6931609186481114e-11,
+        "workspace_bytes": 10424,
+        "workspace_allocations": 1,
+        "native_buffer_allocations_during_solve": 0,
+        "resident_solve_count": 7,
+        "resident_hierarchy_builds": 1,
+        "graph_cached": 1,
+        "cpu_solution_relative_error": 1.342291705941893e-14,
+        "independent_nonlinear_residual": 1.6931580525680524e-11,
+        "B_relative_RMS_error": 2.0308846111180769e-16
+      },
+      {
+        "route": 1,
+        "sample": 6,
+        "total_seconds": 0.2576582,
+        "compute_seconds": 0.1819558,
+        "upload_seconds": 0.0757024,
+        "input_owned_bytes": 91820,
+        "device_memory_sample_delta_bytes": 8388608,
+        "setup_seconds": 0.0999854,
+        "assembly_seconds": 0.0055103,
+        "solve_seconds": 0.060921800000000005,
+        "builds": 7,
+        "history": [
+          [
+            1.0,
+            1.0,
+            11.0,
+            9.808683305794681e-11,
+            0.125
+          ],
+          [
+            2.0,
+            2.9314311346814796,
+            14.0,
+            3.522371855407013e-11,
+            1.0
+          ],
+          [
+            3.0,
+            0.7492117526622585,
+            14.0,
+            2.0280149049461735e-11,
+            1.0
+          ],
+          [
+            4.0,
+            0.12809195291973877,
+            14.0,
+            2.786819272167367e-11,
+            1.0
+          ],
+          [
+            5.0,
+            0.01394066958679248,
+            14.0,
+            4.5325151824326716e-11,
+            1.0
+          ],
+          [
+            6.0,
+            0.0005987205153593768,
+            14.0,
+            5.2598676927830963e-11,
+            1.0
+          ],
+          [
+            7.0,
+            1.753534665514645e-06,
+            14.0,
+            3.457533862266519e-11,
+            1.0
+          ]
+        ],
+        "final_residual": 1.6931552844462475e-11,
+        "workspace_bytes": 10424,
+        "workspace_allocations": 1,
+        "native_buffer_allocations_during_solve": 0,
+        "resident_solve_count": 7,
+        "resident_hierarchy_builds": 7,
+        "graph_cached": 1,
+        "cpu_solution_relative_error": 7.406692972018921e-15,
+        "independent_nonlinear_residual": 1.693153424492268e-11,
+        "B_relative_RMS_error": 2.449753479649047e-16
+      }
+    ],
+    "gpu_device": {
+      "name": "Quadro RTX 5000",
+      "compute_capability": "7.5",
+      "total_memory": 17179541504.0
+    },
+    "resident_contract": {
+      "accepted": 1,
+      "stale_handle_rejected": 1,
+      "wrong_type_rejected": 1,
+      "failed_update_preserves_context": 1,
+      "caller_source_release_safe": 1,
+      "workspace_survives_update": 1,
+      "native_buffer_allocations_during_solve": 0
+    },
+    "assembly_storage": "sparse CSR plus 6 mapped curl vectors and 36 CSR slots per tetrahedron",
+    "gpu_residency": "nonlinear CSR buffers and cached AMS/PCG workspace; explicit tangent download only for hierarchy rebuild",
+    "timing_boundary": "numeric FE input to final solution; shared FE preparation and MATLAB startup separately; GPU total includes upload",
+    "near_roundoff_line_search": "energy decrement <=64*eps*max(1,abs(E)): require 10 percent residual decrease or final nonlinear gate",
+    "shared_fe_setup_seconds": 1.9930282999994233,
+    "matlab_startup_seconds": 10.464626600005431,
+    "build": {
+      "schema": "radia.ams-cuda-build.v1",
+      "source_commit": "cbd56d1de5ea5a49f9a11bc4a384caf77ea6b34e",
+      "source_dirty": false,
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "sha256": {
+        "build-ams-cuda/_radia_ams_snapshot.pyd": "073b90948be5c074c292669e451ba9b1b0765655dc446bd98ca4a18180217fc7",
+        "build-ams-cuda/_radia_ams_cpu_reference.pyd": "7028fbfa0a7406d26c150c654d1761840380f4baf3a3f7b753f613a22b11a947",
+        "build-ams-cuda/radia_cuda_ams.mexw64": "e3f8cf9024ca55d66e2b6ff766ee924cc5556a82638e3e7df90ee0e5e1b7d097"
+      },
+      "source_sha256": {
+        "packages/radia-gpu/native/ams_snapshot_module.cpp": "cce1561d96b01b538e50862270f7bab44735155de2da70ca47a82702762979ec",
+        "packages/radia-gpu/native/ams_cpu_reference.cpp": "16916da7e5f0eedfd515bad959d3d207d7507083a932d937bc5ccc7411b014f5",
+        "packages/radia-gpu/native/ams_resident.cuh": "e99fc27edcc235d828bb67742a795fd88ab249dc9968557f0cafdcb17e372421",
+        "packages/radia-gpu/native/ams_nonlinear.cuh": "076e6d61259572594ac32a0e1fd05d471ac8e0341e51cff83d124eb96e7cecd1",
+        "packages/radia-gpu/native/radia_cuda_ams.cu": "26cd99c367228186e0ed83429fd7854b9634eefbbdea91e6e2c0e135308c8f81",
+        "packages/radia-gpu/native/ams_matlab_setup.cpp": "52e1d4c4697b47721826423d66503b895a15d9700e48337f9e6bcacc57c92960",
+        "packages/radia-gpu/native/ams_setup_gpu.hpp": "37ae39c14fcfae623acc879106a41f5983e2b4cc1248eeec9f5d9c061dac2439",
+        "packages/radia-gpu/native/ams_setup_gpu.cuh": "333ef9ce8329c502891e41eb1d6d12c8cb96f2dfa3fa7c07d0e83b872718b13d",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "fca70b5fd962aeac93aaf8b226c1d072848317f411a7de16a6fc2035d2c9e80a",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "a76fa599ae308b33370f8ee088dac7582ac3d706cace8975a895e63e48a60b4e",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp": "c78d9ef2596f95cd3c85f9d0e801c567622aa232c168bbce72de6e857646a121",
+        "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "a285fe6ca8448e7548365000e71e21e0ad8cd71769ae5e9792024398442709cb",
+        "packages/radia-gpu/tools/build_ams_cuda.py": "2cdf79227986813603a91b30b5bfd4afa9a7d0c5b93fcb3cdff6c22c80f8cc41",
+        "Build.ps1": "e65ff47aa12732c91bd84f5e8347457aa151ac9e826ef71f5cd9f8c2dfb5113a"
+      },
+      "no_cpu_solver_fallback": true
+    },
+    "timing_classification": "numerical installation diagnostics; not performance acceptance"
+  },
+  "limitations": [
+    "Experimental lowest-order affine-tetrahedron HCurl AMS with polynomial SI material and manufactured excitation; not ICCG/HDiv-MMM or measured nonlinear steel certification.",
+    "Timing is diagnostic and not a formal CPU/GPU performance comparison.",
+    "Native Buffer allocation reuse does not claim zero MATLAB or CUDA-internal allocation."
+  ]
+}
