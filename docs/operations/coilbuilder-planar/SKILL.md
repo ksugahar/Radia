@@ -26,4 +26,4 @@ Call `face_to_coilbuilder(face, current_A=..., turns=..., extrusion_vector_m=...
 
 Use Netgen directly when requested or when commercial CAD tools are disallowed. No Cubit dependency is needed. Keep project-specific geometry and results in the user's private project; skill examples and validation contain synthetic geometry only.
 
-Validate helper changes with `python scripts/validate_planar_converter.py --output C:/temp/coilbuilder_planar_validation`. The script checks reconstructed OCC volume, arbitrary-plane handling, current/turn semantics, module reload and rejection of unsupported contracts.
+Validate helper changes with `python scripts/validate_planar_converter.py --output <job-scratch>/coilbuilder_planar_validation`. The script checks reconstructed OCC volume, arbitrary-plane handling, current/turn semantics, module reload and rejection of unsupported contracts.

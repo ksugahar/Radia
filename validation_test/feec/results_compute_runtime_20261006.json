@@ -30,15 +30,15 @@
     "umf": "1.1.0"
   },
   "hosts": {
-    "mdx1": {
+    "worker_a": {
       "status": "passed",
       "passed_existing_tests": 2
     },
-    "mdx2": {
+    "worker_b": {
       "status": "passed",
       "passed_existing_tests": 2
     },
-    "hibino": {
+    "worker_c": {
       "status": "passed",
       "passed_existing_tests": 2
     }

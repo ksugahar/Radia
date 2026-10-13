@@ -76,7 +76,7 @@
     "source_model": "uniform current density rectangular CoilBuilder primitives; NOT automatically equal to resistive FEM current"
   },
   "runtime": {
-    "host": "hibino",
+    "role": "worker_c",
     "source_commit": "96f3bfd050af7f5a8acecca334e2ac50ddc8ce11",
     "lock_sha256": "ec8c7e92f978dd93dd77a9bda2a7039f5d1f1ad9ceecdeb99a0d7e22459edb05",
     "recovery_sha256": "40d9a28958b0f39d03440c2c026e9a4b75f9d8e1d9b52e7a91b901214bff0dbb"

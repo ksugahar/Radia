@@ -4,7 +4,7 @@
   "status": "passed",
   "purpose": "Synthetic forward BH and existing HDiv installed-wheel acceptance; no customer model data",
   "hosts": {
-    "mdx2": {
+    "worker_b": {
       "tests": [
         "validation_test/feec/test_hdiv_forward_bh.py",
         "validation_test/feec/test_hdiv_vim_demag_solve.py::test_rt1_linear_solve_is_physically_sane",
@@ -42,7 +42,7 @@
       ],
       "passed": true
     },
-    "hibino": {
+    "worker_c": {
       "tests": [
         "validation_test/feec/test_hdiv_forward_bh.py",
         "validation_test/feec/test_hdiv_vim_demag_solve.py::test_rt1_linear_solve_is_physically_sane",
@@ -80,7 +80,7 @@
       ],
       "passed": true
     },
-    "mdx1": {
+    "worker_a": {
       "tests": [
         "validation_test/feec/test_hdiv_forward_bh.py",
         "validation_test/feec/test_hdiv_vim_demag_solve.py::test_rt1_linear_solve_is_physically_sane",
