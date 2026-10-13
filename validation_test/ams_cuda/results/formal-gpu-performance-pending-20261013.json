@@ -1,0 +1,26 @@
+{
+  "schema": "radia.gpu-formal-performance-pending.v1",
+  "accepted": false,
+  "date": "2026-10-13",
+  "host": "mdx",
+  "gpu_available": false,
+  "observed_video_controllers": [
+    "Microsoft Remote Display Adapter",
+    "VMware SVGA 3D"
+  ],
+  "nvidia_smi_available": false,
+  "reason": "Current chat policy restricts formal timing to idle mdx, which has no NVIDIA GPU",
+  "unperformed": [
+    "Fresh matched independent CPU/GPU cold and warm ABBA",
+    "Transfer-inclusive scaling and throughput acceptance",
+    "Host/process/global-device peak memory performance acceptance"
+  ],
+  "remaining": [
+    "Designate an authorized GPU-equipped formal timing host",
+    "Verify queue, process load and available host/device memory",
+    "Run fresh same-input same-artifact independent CPU/GPU measurements and recover JSON"
+  ],
+  "diagnostics_relabelled": false,
+  "a100_same_binary_and_native_dll_acceptance": true,
+  "installed_full_wheel_acceptance": false
+}
