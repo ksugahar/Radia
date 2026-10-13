@@ -63,6 +63,10 @@ use fresh MATLAB sessions in ABBA order, with 1 and 16 configured MATLAB/OpenMP
 threads and 18 warmed samples per variant/case. The 16-thread reference is
 shown below; all times include `ask`, every suggestion, recording and `tell`,
 with full history retained and storage disabled.
+The default 24 candidates remain below the CPU density kernel's current
+256-candidate OpenMP threshold. Configuring 16 threads therefore does not
+parallelize that kernel in these cases; these results do not establish a GPU
+advantage over a CPU implementation tuned for this workload.
 
 | History trials | Parameters | Optimized CPU (ms) | Optimized GPU (ms) | CPU/GPU time ratio |
 | ---: | ---: | ---: | ---: | ---: |
@@ -88,7 +92,7 @@ MATLAB selects its supported CUDA toolkit and Visual Studio compiler.
 The focused acceptance saves `validation_test/optimization/results_optuna_cuda_100.json`,
 including upstream 5.0.0 density/selection checks, exact random consumption,
 CUDA launch counters, runtime versions, transfers and temporary device memory.
-This is correctness evidence; formal speed comparisons require idle mdx.
+This is correctness evidence; formal speed comparisons use the idle A100 host.
 
 `radia-optuna` is an independent, separately distributed MATLAB optimization
 component from the Radia monorepo. It installs the `radia.optuna` MATLAB
