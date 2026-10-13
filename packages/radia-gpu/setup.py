@@ -5,6 +5,7 @@ import json
 import shutil
 import subprocess
 import os
+import importlib.util
 try:
     import tomllib
 except ModuleNotFoundError:  # Python 3.10 build hosts
@@ -23,6 +24,14 @@ SIMULINK_FILES = (
     "+radia/+simulink/runLTspiceClosedLoop.m", "+radia/+simulink/+internal/runArtifacts.m",
     "radia_gpu_pcg_sfun.m", "radia_ltspice_sfun.m",
 )
+
+
+def payload_module():
+    # PEP 517 backends need not put this setup directory on sys.path.
+    spec = importlib.util.spec_from_file_location('radia_gpu_payload', PACKAGE / 'hdiv_payload.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class build_py(_build_py):
@@ -59,12 +68,10 @@ class build_py(_build_py):
         if bool(hmatrix) != bool(projection):
             raise RuntimeError('Select both HDiv HMatrix and projection build directories')
         if hmatrix:
-            from hdiv_payload import stage
-            expected.update(stage(ROOT, package, commit, hmatrix, projection))
+            expected.update(payload_module().stage(ROOT, package, commit, hmatrix, projection))
         fmm = os.environ.get('RADIA_FMM_BUILD')
         if fmm:
-            from hdiv_payload import stage_fmm
-            expected.update(stage_fmm(ROOT, package, commit, fmm))
+            expected.update(payload_module().stage_fmm(ROOT, package, commit, fmm))
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
                 if path.name == 'LaplaceFMM.m' and not fmm:
