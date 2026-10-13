@@ -170,6 +170,7 @@ on:
       - '.github/workflows/sparsesolv.yml'
       - 'pyproject.toml'
       - 'tests/test_tier_manifest.json'
+      - '!**/*.md'
   push:
     branches: [main]
     paths:
@@ -339,6 +340,7 @@ on:
       - '.github/workflows/sparsesolv.yml'
       - 'pyproject.toml'
       - 'tests/test_tier_manifest.json'
+      - '!**/*.md'
   workflow_dispatch:
 
 permissions:

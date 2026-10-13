@@ -15,6 +15,7 @@ on:
       - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
       - 'Build.ps1'
       - '.github/workflows/radia-gpu.yml'
+      - '!**/*.md'
   push:
     branches: [main]
     paths:
@@ -29,6 +30,7 @@ on:
       - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
       - 'Build.ps1'
       - '.github/workflows/radia-gpu.yml'
+      - '!**/*.md'
   workflow_dispatch:
 
 permissions:
