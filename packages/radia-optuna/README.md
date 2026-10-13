@@ -51,11 +51,34 @@ more history, but does not remove serialization or synchronous storage costs.
 
 `validation_test/optimization/benchmark_optuna_parameter_history.m` measures
 independent TPE with all history retained and CPU or GPU execution in the mexcuda
-module. Its JSON includes first-trial and warmed end-to-end times, MATLAB
-memory, and proposal arrays for differential comparison. This benchmark does
-not establish Python/DB speedup or GPU speedup.
+module. Its JSON includes module initialization, first-trial and warmed
+end-to-end times, MATLAB memory, and proposal arrays for differential
+comparison. Optional MAT fixtures reuse setup inputs only; sampling storage
+remains in memory. This benchmark does not compare Python/DB or Rustuna,
+or measure the default multivariate native-history route.
 See the [history-cache validation record](../../validation_test/radia_optuna/results/memory-history-20261013.json).
-Formal timing uses the on-demand NGSolve A100 host under the current host policy.
+
+[Formal A100 measurements](../../validation_test/optimization/results_optuna_memory_performance_a100_20261013.json)
+use fresh MATLAB sessions in ABBA order, with 1 and 16 configured MATLAB/OpenMP
+threads and 18 warmed samples per variant/case. The 16-thread reference is
+shown below; all times include `ask`, every suggestion, recording and `tell`,
+with full history retained and storage disabled.
+
+| History trials | Parameters | Optimized CPU (ms) | Optimized GPU (ms) | CPU/GPU time ratio |
+| ---: | ---: | ---: | ---: | ---: |
+| 24 | 1 | 1.077 | 1.437 | 0.75 |
+| 256 | 1 | 1.284 | 1.391 | 0.92 |
+| 1000 | 1 | 2.530 | 1.818 | 1.39 |
+| 24 | 40 | 26.404 | 39.760 | 0.66 |
+| 256 | 40 | 47.584 | 48.491 | 0.98 |
+| 1000 | 40 | 93.730 | 61.565 | 1.52 |
+
+For 1000 trials and 40 parameters, the history optimization reduces CPU time
+from 100.201 to 93.730 ms (1.07x) and GPU time from 68.464 to 61.565 ms (1.11x).
+The optimized GPU/CPU comparison is a separate 1.52x result. Small-case
+changes are mixed and close to baseline; the measured small histories favor
+explicit CPU execution. GPU launch/transfer overhead remains relevant.
+These are development-source results, not published 0.3.0 wheel timings.
 
 Use the same TPE from MATLAB or the included masked Simulink
 study block and `SimulinkRunner`. Simulink is optional for MATLAB-only use.
