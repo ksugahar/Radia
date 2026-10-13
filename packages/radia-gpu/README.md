@@ -6,7 +6,7 @@ CPU electromagnetic execution belongs to `radia` (Python/pybind11/NGSolve).
 `radia-mcp` is the AI operation interface. Neither package is required merely
 to locate and use the installed GPU MATLAB files.
 
-Version 0.1.3 contains FP64 CUDA CSR Jacobi-PCG, a Simulink block for the same
+Version 0.1.4 contains FP64 CUDA CSR Jacobi-PCG, a Simulink block for the same
 kernel, and the selected standalone LTspice workflow. It also contains experimental FP64 assembled-operator AMS and its versioned
 HDF5 exchange, bounded HDiv-MMM and Laplace FMM operators. This does not certify
 arbitrary production AMS, ICCG, general HDiv-MMM, or migration of the older CPU
@@ -16,6 +16,17 @@ and a persistent `radia.gpu.AMSContext` with reusable GPU PCG workspace. Its
 manufactured monotone-material verification does not certify measured steel or
 arbitrary nonlinear devices. See the sparse study in validation_test/ams_cuda.
 There is no CPU solver fallback.
+
+`radia.gpu.HCurlSystem` retains the affine linear HCurl matrix, source vector,
+AMS hierarchy and GPU workspace across solves. Geometry, boundary labels,
+reluctivity and gauge mass remain fixed; `CurrentScale` changes only the
+source amplitude. Construct a new system when any fixed input changes.
+Nonlinear materials continue to use `radia.gpu.solveHCurl` and its adaptive
+hierarchy updates. Supported HCurl geometry is first-order affine tetrahedra.
+The AMS iteration keeps curvature control on the GPU and caches bounded
+small coarse actions. Independent CPU comparisons, true residuals and
+transfer-inclusive tuning evidence are documented in
+[the FEM tuning study](../../validation_test/ams_cuda/FEM_TUNING.md).
 
 FMM accuracy depends on the geometry and selected settings. The candidate's
 independent scalar/dipole check uses `Order=8, Separation=2`; its measured
