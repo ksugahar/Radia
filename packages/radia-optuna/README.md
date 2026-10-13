@@ -63,6 +63,11 @@ remains in memory. This benchmark does not compare Python/DB or Rustuna,
 or measure the default multivariate native-history route.
 See the [history-cache validation record](../../validation_test/radia_optuna/results/memory-history-20261013.json).
 
+The following history-cache, OpenMP and resident-workspace measurements describe
+iterations before GPU model construction and parallel mixture exponentials.
+Their host-construction limits and recommendations apply to those artifacts;
+see the final model-construction comparison below for the current candidate.
+
 The [history-cache-only A100 measurements](../../validation_test/optimization/results_optuna_memory_performance_a100_20261013.json)
 precede CPU OpenMP dispatch tuning. Their 1.52x GPU/CPU ratio used a serial CPU
 density kernel at the default 24 candidates and is superseded by the comparison below.
@@ -148,7 +153,7 @@ but establishes no broad advantage over tuned CPU. Cold-inclusive totals are
 also recorded: first-use GPU initialization can reverse a warmed advantage.
 The default `ConstantLiar=true` includes pending observations, changing models
 during batch proposals; these runs avoid allocations but save no input-transfer
-bytes. GPU residency alone cannot eliminate host model construction.
+bytes. This workspace-only iteration still constructed models on the host.
 In the sequential 40D case, `ask` contains multivariate model preparation and
 candidate sampling through `beforeTrial`, plus Study setup. Its median is
 CPU 5.492 ms versus resident GPU 4.559 ms (1.20x). The subsequent 40 suggestions,
@@ -167,8 +172,8 @@ Warmed Branin inference is CPU 1.786 ms, previous GPU 2.072 ms, resident GPU
 23.740 ms. Thus transfer reuse does not establish an overall GPU speed
 advantage: workspace reuse helps small GPU calls, while the higher-dimensional
 inference remains close to tuned CPU and its previous GPU implementation.
-Host estimator construction and packing remain in this implementation;
-isolated phase profiling is needed before attributing the remaining cost.
+Host estimator construction and packing remained in those measured artifacts;
+these results motivated moving numerical construction and preparation to CUDA.
 The GPU route remains optional, with no general acceleration claim.
 
 GPU times include allocation, transfers, density and selection; isolated
@@ -178,6 +183,61 @@ Whole-runtime peak memory and objective-function execution time are not measured
 The speedups concern proposal processing, not the full optimization including
 an expensive objective. CPU thread screening is limited to the configurations
 shown and does not establish a universal optimum.
+
+## GPU model-construction comparison (2026-10-13)
+
+The [final A100 comparison](../../validation_test/optimization/results_optuna_gpu_model_performance_a100_20261013.json)
+includes GPU bandwidth/category construction, density preparation, CUB sorting
+above 256 observations and parallel exponentials with ordered final summation.
+The final CPU16/GPU16 comparison uses one hash-verified mexcuda binary in four
+fresh MATLAB Engine sessions, CPU / GPU / GPU / CPU, without overlapping jobs.
+CPU also reuses normalizers and prepares log-sigma once per model. Earlier
+CPU 1/4/8 screening is retained; the final refinements change GPU kernels only.
+All cases use the default 24 candidates, full history and in-memory storage.
+
+| Joint TPE case | CPU (ms) | GPU (ms) | GPU speedup |
+| --- | ---: | ---: | ---: |
+| Fixed history 24, 40D | 10.874 | 10.742 | 1.01x |
+| Fixed history 1,000, 40D | 16.062 | 11.601 | 1.38x |
+| Fixed history 5,000, 40D | 44.838 | 18.343 | 2.44x |
+| Sequential Branin, 2D | 1.057 | 1.137 | 0.93x |
+| Sequential correlated valley, 40D | 12.217 | 9.950 | 1.23x |
+
+Fixed-history timings include ask, suggestions, recording and tell; sequential
+inference timings include ask and suggestions. Sequential medians pool trials
+513-800, seeds 11/37 and two sessions per backend. The fixed-history 24-trial
+CPU value uses four threads from the earlier screening; the other displayed
+CPU values use 16 threads with the final binary. The JSON also records cold
+initialization, per-seed totals, timing distributions, transfers and memory.
+
+In the 40D sequential case, ask (model preparation/sampling plus Study setup)
+falls from 4.572 to 2.499 ms, a 1.83x improvement. Suggestions/recording remain
+7.633/7.457 ms, limiting the complete inference improvement to 1.23x.
+Full proposal arrays, objectives and convergence curves match exactly across
+the measured implementations within each configuration. These are public
+optimization problems, not engineering CAE performance acceptance.
+
+Independent TPE still has no substantial GPU advantage: the final six cases
+range from 0.86x to 1.03x versus CPU16. GPU is useful for large joint models;
+small and independent workloads should select CPU when their measurements
+favor it. The process default remains GPU for compatibility. Batch/reuse
+results in this JSON use the preceding model-construction binary and do not
+certify final CUB/parallel-exponential batch performance. No Python/DB,
+Rustuna, BoTorch or universal GPU speedup is claimed.
+
+The [focused construction/lifecycle record](../../validation_test/radia_optuna/results/gpu-model-construction-20261013.json)
+records 37 passing checks on both RTX 5000 and A100, plus the A100 oracle-manifest
+check. Fourteen Optuna 5.0.0-generated model fixtures run on CPU/GPU twice,
+including exact following random values. Large signed-zero sorting also has
+an explicit backend differential check. Failed-model cache invalidation,
+GPU reset, unrelated gpuArray liveness, CPU memory release and module reload
+are checked. This focused coverage does not certify every upstream API;
+the API/oracle manifests remain authoritative.
+
+To summarize recovered raw JSON without publishing operational paths or
+logs, run `summarize_optuna_gpu_model.py --input-directory <recovered-job>
+--output <result.json>` from `validation_test/optimization`. The summarizer
+checks idle-session receipts and exact trajectories before reporting speedups.
 
 Use the same TPE from MATLAB or the included masked Simulink
 study block and `SimulinkRunner`. Simulink is optional for MATLAB-only use.
