@@ -102,15 +102,15 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - mexcuda modules may retain CPU host control; not every calculation belongs on GPU. Never include, link, or use NGSolve TaskManager in mexcuda builds. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
 - No implicit CPU/GPU/Python fallback; where a mexcuda module offers both routes, expose explicit selection (for example `Backend="gpu"|"cpu"`), record the actual backend and raise when it fails. Internal CPU/GPU agreement does not replace Python CPU validation. Measure host setup and CPU solves separately.
-- Develop/build radia-gpu on 100; release acceptance uses 100 RTX 5000 and independent review; SSH host `NGSolve` (A100) is optional GPU evaluation. Never deploy to 102.
-- Record parity, artifact hashes and validation JSON; offline A100 stays pending and does not block development or publication. Poisson does not certify ICCG/AMS/HDiv-MMM.
+- Develop/build radia-gpu on 100; release acceptance uses 100 RTX 5000 and independent review; `NGSolve` A100 is optional. Never deploy to 102.
+- Record parity, artifact hashes and validation JSON. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### GPU Kernel Research Strategy (2026-10-11)
 
 - mexcuda is the GPU kernel route. Keep assumptions explicit and auditable; implement missing Radia-owned singular/near-field kernels in CUDA. NGSolve keeps FE semantics; HACApK/core-kernel policy is unchanged.
 - Checked numeric exchange (for example MAT/HDF5) may support Python/NGSolve validation but must not become a required adapter for GPU users. Record units, numbering, labels and ABI at exchange boundaries.
-- Numeric artifacts or individual variables exceeding 2 GB must use HDF5; MATLAB-compatible MAT v7.3 is permitted. Check size first; use a validated reader/writer pair, not splitting to bypass this. File-format capacity does not establish GPU working-set capacity.
-- Reuse gpuArray/BLAS where they implement the declared formulation. Keep GPU kernels independently callable; Simulink is optional. Validate iterative solvers for the actual operator.
+- Artifacts or variables over 2 GB use HDF5 (MAT v7.3 permitted) with a validated reader/writer; never split to bypass this. File-format capacity is not GPU working-set capacity.
+- Reuse gpuArray/BLAS where they implement the declared formulation. Keep GPU kernels independently callable. Validate iterative solvers for the actual operator.
 - Establish CPU/GPU agreement and performance on small publishable cases on the local RTX GPU before scaling; save timings, transfers, memory, versions and true residuals in JSON. Backend names are not speedup evidence.
 - Paid A100 is human-started only: prepare inputs, commands, acceptance criteria and bounded runtime, batch measurements and recover evidence.
 - Target development and compute GPU architectures with validated PTX compatibility; rebuild per OS/MATLAB ABI and verify before claiming portability or scaling.
@@ -175,7 +175,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
 **POLICY**: CI/builds use 100号機 with the `100` runner label.
 100号機 permits isolated tests and heavy numerical/memory validation.
 Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
-LAB owns SSH preflight. Start SSH host `NGSolve` (A100) on demand for CPU/GPU timing; mdx/mdx1/mdx2/hibino are retired execution targets.
+LAB owns SSH preflight. Start SSH host `NGSolve` (mdx A100) on demand only for mexcuda GPU work; mdx/mdx1/mdx2/hibino are retired execution targets.
 Release-quad requires 102号機 and 100号機 for the same release commit; on-demand NGSolve timing is separate.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development venv for maintainers/students, separate from the release runtime. LAB and NGSolve use verified wheels.
 `cubit-mesh-export` is tested independently on 100 and LAB/102; solver releases never install, uninstall, repoint or version-gate it.
@@ -216,11 +216,11 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 `jmag`: JMAG evaluation only. Keep Python 3.12.10, SSH service/config/keys, VC++ runtime and `inetpub` for control from 100. No Radia deployment, builds, CI/preflight, solver runs, validation or timing.
 
-**POLICY (2026-10-13)**: Start SSH host `NGSolve` (A100) on demand for CPU/GPU timing. mdx/mdx1/mdx2/hibino are retired execution targets.
+**POLICY (2026-10-14)**: Development completes on 100号機 (CPU time within ~20% of A100 host; CPU work stays local). Start SSH host `NGSolve` (mdx A100) on demand only for mexcuda GPU work. mdx/mdx1/mdx2/hibino are retired execution targets.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes NGSolve hostname`; check running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs. Never stop another session's jobs.
-Compare CPU/GPU on the same host; fix and record threads, including a 16-thread baseline where supported. Measure speed, scaling, setup, transfers and total time; save hardware, memory and versions in JSON.
-100 owns builds/CI and isolated numerical validation; 100/LAB timings are diagnostic. A100 is optional for development/publication. Gmsh rendering needs a desktop.
-Historical mdx measurements remain valid provenance; never relabel them. Keep hosts/IPs/paths private. Recover unique work before separately authorized VM/disk deletion.
+Compare CPU/GPU on the same host with recorded threads (16-thread baseline where supported). Measure speed, scaling, setup, transfers and total time; save hardware, memory and versions in JSON.
+100 owns development, builds/CI and isolated numerical validation; 100/LAB timings are diagnostic. A100 is optional for development/publication. Gmsh rendering needs a desktop.
+Historical measurements remain valid provenance: public evidence uses neutral roles; role-to-host maps, originals and hashes stay in private storage. Never relabel to another host. Keep hosts/IPs/paths private. Recover unique work before separately authorized VM/disk deletion.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
 
@@ -241,8 +241,8 @@ Historical mdx measurements remain valid provenance; never relabel them. Keep ho
 
 - Build ownership (2026-10-06): 100号機 is the build host. Build numerical
   solver candidates and release artifacts there from an isolated reviewed
-  checkout using current `Build.ps1`/CMake. LAB owns source development and
-  operation; compute hosts consume the same hash-verified built artifacts.
+  checkout using current `Build.ps1`/CMake. 100号機 also owns source
+  development; LAB and compute hosts consume the same hash-verified artifacts.
   Do not route an ad-hoc candidate build to LAB or a compute host merely
   because it has free resources. Never replace another session's runtime.
 - Dependency versions live in package metadata and CI; do not duplicate pins here.
@@ -292,5 +292,5 @@ Do not expand this file into a second manual.
 
 ## Private Commercial Reference Comparisons (2026-10-07)
 
-Commercial reference-solver comparisons (models, inputs, meshes, materials, outputs, values, figures, logs, benchmarks, reviews, provenance) are unpublished laboratory data. Keep them in private research storage (temporary work in C:	emp) and out of every public commit, document, notebook, package, release, CI output, paper, presentation or link; anonymizing or relabeling does not permit publication.
-Transfer only general algorithms without comparison data, validated independently against analytical, public or publishable original cases. Publication requires an explicit user policy change and license/contract clearance. Applies to Codex and Claude; never a reason to delete, relocate or rewrite existing artifacts or history.
+Commercial reference-solver comparisons (models, inputs, meshes, materials, outputs, values, figures, logs, benchmarks, reviews, provenance) are unpublished laboratory data. Keep them in private research storage and out of every public commit, document, notebook, package, release, CI output, paper, presentation or link; anonymizing or relabeling does not permit publication.
+Transfer only general algorithms without comparison data, validated independently against analytical, public or publishable original cases. Publication requires an explicit user policy change and license/contract clearance. Applies to Codex and Claude; never a reason to delete, move or rewrite existing artifacts or history.
