@@ -71,3 +71,12 @@ def test_installed_acceptance_rejects_a_different_build_of_the_same_source():
     installed = dict(wheel, manifest_sha256='c'*64)
     with pytest.raises(ValueError, match='differs from release wheel'):
         verifier.verify_installed_identity(installed, wheel)
+def test_runtime_and_package_versions_agree():
+    import ast
+    import tomllib
+    metadata = tomllib.loads((ROOT/'pyproject.toml').read_text())
+    module = ast.parse((ROOT/'src/radia_gpu/__init__.py').read_text())
+    assignment = next(node for node in module.body if isinstance(node, ast.Assign)
+                      and any(isinstance(target, ast.Name) and target.id=='__version__' for target in node.targets))
+    assert ast.literal_eval(assignment.value) == metadata['project']['version']
+
