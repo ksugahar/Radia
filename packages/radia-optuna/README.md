@@ -433,7 +433,55 @@ This evidence includes source-fidelity verification, the installed doctor,
 standalone Simulink success and typed-failure paths, and all seven persisted
 tables after MAT reload. Shared Study/Trial MCP operations remain upstream.
 
-Acceptance requires a GPU architecture included in the compiled artifact. Additional device acceptance remains pending until the same artifact is verified there.
+### 0.4.0 release and CPU/GPU acceptance
+
+[radia-optuna 0.4.0](https://github.com/ksugahar/Radia/releases/tag/radia-optuna-v0.4.0)
+uses the exact main-CI wheel from commit
+`6dc949d8fdfb7fa827af38bb7646c04dccb76581`, SHA256
+`912ae779a9c92bd499147cf7671550b00880969f04b9e146ea87a1a171f51f7d`.
+The PyPI and GitHub assets match that accepted wheel byte for byte.
+On both RTX 5000 and A100, isolated installed-wheel checks pass 16 CPU tests,
+21 GPU-suite tests and the oracle-manifest check, plus Simulink execution and
+save/resume on both modes. CPU execution initializes no CUDA device and
+transfers no data; GPU counters confirm native model construction and sorting.
+After reinstalling the published wheel, 40 Branin trials per mode produce
+identical CPU/GPU proposals and objective values on each host.
+
+The [release receipt](../../validation_test/radia_optuna/results/release-0.4.0.json)
+records source/artifact hashes, runtime versions and verified recovery/cleanup.
+[accept_wheel_modes.m](../../validation_test/radia_optuna/accept_wheel_modes.m)
+and [smoke_published_modes.m](../../validation_test/radia_optuna/smoke_published_modes.m)
+reproduce the installed-wheel and published-wheel checks. Raw operational logs
+remain in private validation storage. These are focused functional checks,
+not complete upstream API certification or release-wheel performance timings.
+
+### 0.3.0 release and installed-wheel acceptance
+
+[radia-optuna 0.3.0](https://github.com/ksugahar/Radia/releases/tag/radia-optuna-v0.3.0)
+was published on 2026-10-13 (JST), from commit
+`b9121af32ff26e380b00b0f07486480eec63ea3f`. The Windows x64 wheel is
+`radia_optuna-0.3.0-py3-none-win_amd64.whl`, with SHA256
+`f418f21854a276b0487bd1e2af7c157bcf8f5ad1d7a244001f65e45be0ef6608`.
+
+| Acceptance host | Exact-wheel verification | Result |
+| --- | --- | --- |
+| 100 / Quadro RTX 5000 | [Installed-wheel CI](https://github.com/ksugahar/Radia/actions/runs/38313458179); CI wheel hash equals the published asset | Passed |
+| NGSolve / A100-SXM4-40GB | Published asset installed in an isolated venv; MATLAB R2026a through an owned MathWorks Engine session | Passed |
+
+Both runs recorded four GPU density launches and two GPU selection launches,
+confirming device execution beyond mexcuda compilation. They passed the
+standalone Simulink success and typed-failure paths, four study-block trials
+and continuation to six trials, the twelve-trial teaching model, stable model
+topology, and restoration of all seven persisted tables. The native route is
+mexcuda with OpenMP host control and no TaskManager or implicit CPU fallback.
+The RTX 5000 uses the stream-ordered allocator; A100 uses `cudaMalloc`.
+The compatibility oracle remains Optuna 5.0.0; the earlier numerical oracle
+checks and the installed-wheel smoke checks serve different purposes.
+
+See the [published-wheel acceptance record](../../validation_test/radia_optuna/results/published-wheel-0.3.0-20261013.json).
+This functional acceptance does not measure performance or certify every
+optional sampler/integration. Other devices require acceptance with the same
+hash-verified artifact. Existing user environments were not repointed.
 
 ### Reproducible performance evidence
 
@@ -498,12 +546,30 @@ random-handle creation/destruction is outside the timer.
 | 4096 | 512 | 1 | 3020.7 | 2768.8 | 1.09x |
 | 4096 | 512 | 5 | 5624.1 | 5450.8 | 1.03x |
 
+The measured TPE speedup is modest: 1.03x to 1.18x across these six shapes.
+For the smallest one-dimensional case, 373.2 to 315.3 us is a 15.5% reduction
+in elapsed time. These are improvements to the existing CUDA implementation,
+primarily from reducing allocation and transfer overhead.
+
 Small density-only calls remain slower than the vectorized MATLAB CPU
-reference. These results compare two GPU implementations and do not establish
+reference: approximately 250 us on GPU versus 22--26 us on CPU in the measured
+small cases. Transfer, launch and allocation costs dominate such short work.
+Large density batches can amortize these costs, but density-kernel throughput
+alone does not establish end-to-end optimizer acceleration. These results
+compare two GPU implementations and do not establish
 a speedup over Optuna Python or a CPU C++ implementation. Selected candidates
 match across variants; both the RTX 5000 build host and A100 pass the Optuna
 5.0.0 oracle checks. See the [machine-readable results](../../validation_test/optimization/results_optuna_cuda_performance_a100_20261012.json)
-for raw observations, hashes, uncertainty and limitations.
+for raw observations, hashes, uncertainty and limitations. These formal timings
+used development binaries on the user-selected A100, not the published 0.3.0
+wheel, and are not mdx timing results. They must not be relabeled as release-wheel
+performance acceptance.
+
+Select GPU work from transfer-inclusive measurements. Management and ordered
+RNG remain host work. A heavy objective may dominate the total optimization
+cost; accelerating that objective requires its own validation and does not
+follow from these TPE measurements. No GPU speedup of an electromagnetic
+objective is claimed by this release record.
 
 To reproduce, use the same hash-verified binaries built on the build host and
 run `benchmark_optuna_cuda(binaryDirectory, outputPath, variant, 31)` from
