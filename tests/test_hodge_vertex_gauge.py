@@ -95,7 +95,7 @@ def test_nonpolynomial_flux_is_balanced_per_component(disconnected_mesh, order):
 @pytest.mark.parametrize('second_net', [0.0, -1.0])
 def test_incompatible_components_are_rejected(disconnected_mesh, second_net):
     from radia.kelvin_solver import (
-        _balance_hodge_surface_load, _hodge_vertex_gauges,
+        _balance_surface_source_load, _hodge_vertex_gauges,
         material_set_boundary_signs)
     mesh = disconnected_mesh
     fes = ng.H1(mesh, order=2)
@@ -107,7 +107,7 @@ def test_incompatible_components_are_rejected(disconnected_mesh, second_net):
         load.vec[pins[0]] = 1.0
         load.vec[pins[1]] = second_net
         with pytest.raises(RuntimeError, match='component compatibility failed'):
-            _balance_hodge_surface_load(
+            _balance_surface_source_load(
                 mesh, fes, load, fes.TestFunction(),
                 material_set_boundary_signs(mesh, ('iron',)), components, 0,
                 ng.CF((1.0, 0.0, 0.0)))

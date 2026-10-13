@@ -308,7 +308,7 @@ class SurfaceFluxCompatibilityFailed(RuntimeError):
         self.relative_imbalance = abs(self.net_load) / max(self.absolute_flux, 1e-300)
         self.tolerance = RELATIVE_LIMIT
         super().__init__(
-            "surface_flux Hodge component compatibility failed: "
+            "surface_flux component compatibility failed: "
             f"component={self.component}, net_load={self.net_load:.17g}, "
             f"absolute_flux={self.absolute_flux:.17g}, "
             f"relative={self.relative_imbalance:.6g} > {self.tolerance:.6g}; "
@@ -396,18 +396,19 @@ def material_set_boundary_signs(mesh, materials):
     return signs
 
 
-def outward_source_flux_form(mesh, H_s, signs, test_trace, *, bonus_intorder, scale=1.0):
-    """``scale (H_s . n_out) v`` on the enclosing boundary in ``signs``.
+def outward_source_flux_form(mesh, H_s, signs, test_trace, *, materials, order,
+                             bonus_intorder, scale=1.0):
+    """Compatible source boundary load in the scalar H1 test space.
 
     For a divergence-free source, ``int_Omega H_s . grad(v) dx`` equals
     ``oint_dOmega (H_s . n_out) v ds``; this is that boundary form, so a
     volume source load is replaced by source evaluations on faces only.
 
-    This form is used by the constrained mixed system; it must not subtract
-    an artificial source mean. Pure-Neumann Hodge compatibility is handled
-    separately on its actual assembled H1 load, component by component.
-    Returns ``(form, diagnostics)``. The NumberSpace flux integrals below are
-    diagnostics only and need not use the H1 load's quadrature order.
+    Constant tests of the volume source term vanish independently in each
+    connected source region. Interface coupling does not remove the coupled
+    system's common constant mode: incompatible boundary loads would still
+    concentrate at its point gauge. Use the actual source H1 assembly rule
+    to gate raw flux and remove its component boundary mean, as in Hodge.
     """
     from ngsolve import specialcf
 
@@ -415,17 +416,30 @@ def outward_source_flux_form(mesh, H_s, signs, test_trace, *, bonus_intorder, sc
     measure = ds(definedon=mesh.Boundaries("|".join(sorted(signs))),
                  bonus_intorder=int(bonus_intorder))
     outward = sign * InnerProduct(H_s, specialcf.normal(mesh.dim))
-    area = float(_measure_integral(mesh, CoefficientFunction(1.0), measure, boundary=True))
-    from ngsolve import IfPos
-
-    net = float(_measure_integral(mesh, outward, measure, boundary=True))
-    absolute = float(_measure_integral(mesh, IfPos(outward, outward, -outward), measure, boundary=True))
-    mean = net / area
-    form = float(scale) * outward * test_trace * measure
-    return form, {"mean_outward_flux": mean, "net_outward_flux": net,
-                  "relative_flux_imbalance": abs(net) / max(absolute, 1.0e-300),
-                  "mean_flux_removed": False,
-                  "diagnostic_space": "NumberSpace"}
+    source_fes = Compress(H1(mesh, order=int(order),
+                                definedon=mesh.Materials("|".join(materials))))
+    _, _, _, components = _hodge_vertex_gauges(mesh, source_fes, set(materials), None)
+    source_test = source_fes.TestFunction()
+    raw = LinearForm(source_fes)
+    raw += outward * source_test.Trace() * measure
+    raw.Assemble()
+    balance = _balance_surface_source_load(
+        mesh, source_fes, raw, source_test, signs, components, bonus_intorder, H_s)
+    constant = GridFunction(source_fes)
+    constant.Set(1.0)
+    mean_cf = GridFunction(source_fes)
+    for dofs, component in zip(components, balance):
+        indices = np.asarray(sorted(dofs), dtype=int)
+        mean_cf.vec.FV().NumPy()[indices] = (
+            component["removed_mean_load"] * constant.vec.FV().NumPy()[indices])
+    net = sum(c["assembled_net_load_before"] for c in balance)
+    area = sum(c["boundary_area"] for c in balance)
+    form = float(scale) * (outward - mean_cf.Trace()) * test_trace * measure
+    return form, {"mean_outward_flux": net / area, "net_outward_flux": net,
+                  "relative_flux_imbalance": max(c["raw_relative_flux_imbalance"] for c in balance),
+                  "mean_flux_removed": True,
+                  "diagnostic_space": "assembled_source_H1",
+                  "component_compatibility": balance}
 
 
 def _evaluate_cf_at_points(mesh, field, points):
@@ -620,7 +634,7 @@ def _hodge_vertex_gauges(mesh, fes, materials, gauge_vertices):
     return free, tuple(int(v) for v in selected), tuple(dofs), component_dofs
 
 
-def _balance_hodge_surface_load(mesh, fes, load, test, signs, component_dofs,
+def _balance_surface_source_load(mesh, fes, load, test, signs, component_dofs,
                                 bonus_intorder, H_s):
     """Remove each assembled Neumann incompatibility as a boundary mean.
 
@@ -763,7 +777,7 @@ def project_source_total_hodge(
     a_bf.Assemble()
     f_lf.Assemble()
     if source_load == "surface_flux":
-        component_balance = _balance_hodge_surface_load(
+        component_balance = _balance_surface_source_load(
             mesh, fes, f_lf, test, signs, component_dofs, bonus_intorder, H_s)
         flux_balance = {
             "component_compatibility": component_balance,
@@ -927,7 +941,7 @@ def solve_reduced_A_kelvin(mesh, A_s_cf, R_K, offset,
 
         a(A_r, v) = - int_kext nu_kelvin * curl(A_s_cf) . curl(v) dV
 
-    See docs/kelvin/KELVIN_TRANSFORMATION.md §7.5 for derivation.
+    See docs/kelvin/KELVIN_TRANSFORMATION.md ﾂｧ7.5 for derivation.
 
     The previous form ``-(nu - nu_0) * curl(A_s) * curl(v) dx`` is INVALID
     when A_s is a Kelvin pullback because the pullback satisfies nu'
@@ -960,7 +974,7 @@ def solve_reduced_A_kelvin(mesh, A_s_cf, R_K, offset,
     # The OLD form -(nu - nu_0) curl(A_s) . curl(v) dx is WRONG when A_s
     # is a Kelvin pullback (Convention A): the pullback satisfies nu'
     # Maxwell, not nu_0 Maxwell, breaking the (nu - nu_0) simplification.
-    # See docs/kelvin/KELVIN_TRANSFORMATION.md §7.5.
+    # See docs/kelvin/KELVIN_TRANSFORMATION.md ﾂｧ7.5.
     kelvin_mat_str = "|".join(kelvin_mats)
     f_lf += -nu_cf * curl(A_s_cf) * curl(v) \
         * dx(kelvin_mat_str, bonus_intorder=bonus_intorder)
@@ -1736,7 +1750,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh, mu_cf, reduced_materials, mu_r_by_material, role="reduced")
         flux_form, source_load_diagnostics["reduced"] = outward_source_flux_form(
             mesh, reduced_load_h, material_set_boundary_signs(mesh, reduced_materials),
-            test_reduced.Trace(), bonus_intorder=bonus_intorder, scale=mu_reduced)
+            test_reduced.Trace(), materials=reduced_materials, order=order,
+            bonus_intorder=bonus_intorder, scale=mu_reduced)
         fixed_rhs += flux_form
     if reduced_zero_normal_boundary is not None:
         from ngsolve import specialcf, BoundaryFromVolumeCF
@@ -1784,7 +1799,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
                     mesh, mu_cf, (name,), mu_r_by_material, role="total")
                 flux_form, source_load_diagnostics[f"total:{name}"] = outward_source_flux_form(
                     mesh, total_source_h, material_set_boundary_signs(mesh, (name,)),
-                    test_total.Trace(), bonus_intorder=bonus_intorder, scale=mu_material)
+                    test_total.Trace(), materials=(name,), order=order,
+                    bonus_intorder=bonus_intorder, scale=mu_material)
                 f_lf += flux_form
                 f_lf += mu_material * InnerProduct(
                     grad(total_source_potential), grad(test_total)) * dx(

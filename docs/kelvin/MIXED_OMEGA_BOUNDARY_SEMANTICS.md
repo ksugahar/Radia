@@ -76,7 +76,10 @@ computed with the H1 load's assembly rule. Larger defects raise
 `SurfaceFluxCompatibilityFailed`; they do not trigger an automatic volume-load
 fallback. Resolve source quadrature or source closure explicitly. Diagnostics
 retain raw/corrected compatibility, removed means, and fixed-row reactions.
-The constrained mixed-system boundary loads use the unmodified source flux;
-they do not subtract a mean computed in a different integration space.
+The mixed-system source boundary loads use the same component compatibility
+treatment in their scalar source H1 space. Interface constraints still leave
+a common constant mode, so they do not justify absorbing raw flux defects at
+the global point gauge. Prescribed physical flux boundary terms are separate
+and are not changed by this source correction.
 Compatibility, the tangential source gate, and physical-field accuracy are
 independent requirements.
