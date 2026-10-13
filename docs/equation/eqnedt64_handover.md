@@ -494,12 +494,15 @@ CI成功は今回もAPIで確認した。
 | 引き継ぎ書のbuild / merged main SHA | `6ad7cb448cf92128049c54eeb65a0f4137ba125d`、PR #320 |
 | build / signer | development host、ProductVersion `3.1.3`、Authenticode `Valid` / `CN=ksugahar`（公開報告） |
 | pinned certificate | `7E80D4365CFDBA7B22B33C35EB7CD6A41050E065` |
-| 署名済みEXE SHA-256 | `906513FFA96142AA5B6D20478AD7CFAB3A684EF31E40EEF5C76C8ADBA1D2D72D` |
+| 署名済みEXE SHA-256（API確認済み） | `906513FFA96142AA5B6D20478AD7CFAB3A684EF31E40EEF5C76C8ADBA1D2D72D` |
 | 公開JS SHA-256（公開報告） | `9E36689F6486833344272DB76E12F7754AA8BF6365576FD6F5231CCEF3A65B83` |
 
 SHAの留保：現在のGitHubタグは上記`72a2f984…`を参照するが、引き継ぎ書と当時の
-CI記録は`6ad7cb448…`を使用している。両SHAの同一性や差異の原因は未確認であり、
-exact source一致を今回改めて認定しない。公開済みタグ・成果物は変更しない。
+CI記録は`6ad7cb448…`を使用している。2026-10-14の相互レビューで両commitの
+`tools/eqnedit64`、`packages/eqnedit64`、`.github/workflows`のtree hash一致を
+Claude・Codexがそれぞれ確認した。commit全体は異なるため、製品関連ツリーの一致と
+build実行時のsource対応を区別する。後者は公開記録によるもので、ビルド再現を今回
+改めて認定しない。公開済みタグ・成果物は変更しない。
 
 - 公開報告ではO:、GitHub Release、[PyPI 3.1.3](https://pypi.org/project/eqnedit64/3.1.3/)
   のCPython 3.10–3.13 `win_amd64` wheel全4個の同梱EXEが上記ハッシュで一致。
@@ -527,9 +530,8 @@ exact source一致を今回改めて認定しない。公開済みタグ・成�
   bare functionの空`m:e`と`sin 2x`が2だけを収集する制限（N2/N3）は保留。
   PowerPointの色欠落は承認済み制限で、canvas/SVG/EMF/DIB/saved TeXの色保持は維持する。
 
-原記録はprivate作業領域の`reciprocal-review-20261007-eqnedit64`内r14–r19、
-特に`r19-codex-release-build-313.md`とClaude最終公開報告。今回参照できたのは
-それらを要約した`Eqnedit64-codex-handoff-20261011.md`であり、原記録の再監査とはしない。
+原記録はprivate相互レビュー記録r14–r19とClaude最終公開報告。今回参照できたのは
+それらを要約した2026-10-11のCodex引き継ぎ書であり、原記録の再監査とはしない。
 次の製品修正・リリースは別途依頼された範囲で扱う。
 
 ### 13.0 3.1.2 公開完了（2026-10-08）
