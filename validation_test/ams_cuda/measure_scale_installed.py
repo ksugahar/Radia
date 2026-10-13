@@ -152,6 +152,15 @@ def main(a):
                     actual=json.loads(ic_identity.read_text(encoding='utf-8-sig'))
                     if actual['sha256']!=ic_hash or Path(actual['path']).resolve()!=(a.ic_directory/'radia_cuda_ic.mexw64').resolve():raise RuntimeError('Actually loaded IC candidate identity changed')
                     report['ic_native_module']=actual
+                    if 'ic_runtime_library_sha256' not in r:
+                        libraries={}
+                        for name in ('cusparse64_12.dll','cublas64_12.dll'):
+                            library=output.with_name(output.stem+'.'+name+'.json')
+                            subprocess.run(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(job/'loaded_module.ps1'),'-ProcessId',str(pid),'-ModuleName',name,'-OutputPath',str(library)],check=True,capture_output=True)
+                            loaded=json.loads(library.read_text(encoding='utf-8-sig'))
+                            if not Path(loaded['path']).resolve().is_relative_to(Path(eng.matlabroot()).resolve()):raise RuntimeError('CUDA library resolved outside selected MATLAB runtime')
+                            libraries[name]=loaded['sha256']
+                        r['ic_runtime_library_sha256']=libraries
                 return data['solution'],report
             routes=[('cpu-ams',1),('cpu-ic',1),('gpu-ams',1),('cpu-ams',16),('cpu-ic',16)]
             if a.ic_directory:routes.append(('gpu-ic',1))

@@ -1,6 +1,6 @@
 param(
     [int]$ProcessId,
-    [ValidateSet('radia_cuda_ic.mexw64','radia_cuda_ams.mexw64')][string]$ModuleName,
+    [ValidateSet('radia_cuda_ic.mexw64','radia_cuda_ams.mexw64','cusparse64_12.dll','cublas64_12.dll')][string]$ModuleName,
     [string]$OutputPath
 )
 $ErrorActionPreference='Stop'
