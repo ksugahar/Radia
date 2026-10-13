@@ -1,7 +1,7 @@
 {
   "schema": "radia.native-hcurl-ams-validation.v1",
   "accepted": true,
-  "host": "T7920",
+  "host": "runtime",
   "formulation": "SI homogeneous nu=1, positive unit gauge mass, J=(1,0,0), tangential homogeneous Dirichlet",
   "supported": "lowest-order affine tetrahedral HCurl only",
   "python_role": "independent numerical oracle only",
@@ -11,11 +11,11 @@
   "source_commit": "fe872fdca4e710e51e2a22cc7bd1fe93e5cd76ad",
   "build": {
     "schema": "radia.ams-cuda-build.v1",
-    "host": "T7920",
-    "python": "C:\\Program Files\\Python312\\python.exe",
+    "host": "runtime",
+    "python": "<private runtime provenance retained in durable evidence>",
     "matlab": "26.1.0.3346908 (R2026a) Update 5",
-    "configuration": "C:\\Program Files\\MATLAB\\R2026a\\toolbox\\parallel\\gpu\\extern\\src\\mex\\win64\\nvcc_msvcpp2022.xml",
-    "compiler_bin": "C:\\BuildTools\\VS2022-CUDA\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64",
+    "configuration": "<private runtime provenance retained in durable evidence>",
+    "compiler_bin": "<private runtime provenance retained in durable evidence>",
     "source_commit": "cb1dd5adda182754f3dc158a7ce3d3ae3c67718a",
     "source_dirty": false,
     "sha256": {
@@ -247,5 +247,6 @@
     "warmed_transfer_inclusive_median": 0.1617446,
     "cold_production_seconds": 0.3394822,
     "total_seconds_definition": "Validation includes a separate assembly export in addition to the production solve"
-  }
+  },
+  "public_record_note": "Runtime host/path metadata omitted; numerical values and artifact/source hashes unchanged. Raw evidence retained privately."
 }
