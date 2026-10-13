@@ -9,6 +9,8 @@ on:
       - 'validation_test/radia_gpu/**'
       - 'validation_test/ams_cuda/**'
       - 'validation_test/ngsolve_cuda_mex/**'
+      - 'validation_test/hmatrix_cuda/**'
+      - 'validation_test/fmm_cuda/**'
       - 'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp'
       - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
       - 'Build.ps1'
@@ -21,6 +23,8 @@ on:
       - 'validation_test/radia_gpu/**'
       - 'validation_test/ams_cuda/**'
       - 'validation_test/ngsolve_cuda_mex/**'
+      - 'validation_test/hmatrix_cuda/**'
+      - 'validation_test/fmm_cuda/**'
       - 'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp'
       - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
       - 'Build.ps1'
@@ -38,7 +42,7 @@ jobs:
   cuda-mex:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Windows, X64, "100"]
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - name: Prepare isolated mexcuda environment
@@ -52,7 +56,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $pins.Count -ne 2) { throw 'Expected exact FE reference pins' }
           $matlab = Get-ChildItem "$env:ProgramFiles/MATLAB" -Directory | Sort-Object Name -Descending | Select-Object -First 1
           if (-not $matlab) { throw 'MATLAB is required for mexcuda CI' }
-          & $python -m pip install @pins numpy scipy h5py psutil build wheel pytest schemdraw "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
+          & $python -m pip install @pins numpy scipy h5py psutil build wheel pytest schemdraw mkl-devel "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Append -Encoding utf8
       - name: Build GPU mexcuda gateway
@@ -62,6 +66,32 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./Build.ps1 -AmsCudaOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $mklRoot = python -c "import sys; from pathlib import Path; print(Path(sys.prefix)/'Library')"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./Build.ps1 -HMatrixCudaOnly -HMatrixMklRoot $mklRoot -RequireNativeProvenance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $projectionStart = [DateTime]::UtcNow
+          & ./Build.ps1 -ProjectionCudaOnly -RequireNativeProvenance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./Build.ps1 -FmmCudaOnly -RequireNativeProvenance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $commit = git rev-parse HEAD
+          function Select-ExactBuild($candidates) {
+            $accepted = @($candidates | Where-Object {
+              $receipt = Join-Path $_.FullName 'build.json'
+              if (-not (Test-Path -LiteralPath $receipt)) { return $false }
+              $record = Get-Content -LiteralPath $receipt -Raw | ConvertFrom-Json
+              return ($record.accepted -eq $true -and $record.source_dirty -eq $false -and $record.source_commit -eq $commit)
+            } | Sort-Object LastWriteTimeUtc -Descending)
+            if ($accepted.Count -eq 0) { throw 'Missing accepted exact-commit CUDA build' }
+            return $accepted[0].FullName
+          }
+          $hmatrix = Select-ExactBuild (Get-ChildItem build-hmatrix-cuda -Directory -Filter 'job-*')
+          $projection = Select-ExactBuild (Get-ChildItem C:/temp -Directory -Filter 'projection-cuda-*' | Where-Object LastWriteTimeUtc -ge $projectionStart)
+          $fmm = Select-ExactBuild (Get-ChildItem build-fmm-cuda -Directory -Filter 'job-*')
+          "RADIA_HDIV_HMATRIX_BUILD=$hmatrix" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RADIA_HDIV_PROJECTION_BUILD=$projection" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RADIA_FMM_BUILD=$fmm" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Verify GPU boundary and Poisson precision
         shell: pwsh
         run: |
