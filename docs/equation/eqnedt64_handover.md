@@ -2,8 +2,8 @@
 
 - 文書状態: 現行
 - 対象製品: Eqnedit64 native / Python package / Web editor
-- 対象リリース: 3.1.2
-- 基準日: 2026-10-08
+- 対象リリース: 3.1.3
+- 基準日: 2026-10-11
 - リポジトリ: `ksugahar/Radia`
 
 この文書は、Eqnedit64を修正、試験、配布するときに最初に読む引き継ぎ正本である。
@@ -479,6 +479,61 @@ O:はdevelopment hostでは `private-runtime-path へのSUBSTであり、ユー�
 
 ## 13. 公開状態とレビュー記録
 
+### 13.0a 3.1.3 公開完了・検証記録（2026-10-11追記）
+
+3.1.3は公開済みで、再リリース作業はない。2026-10-11のCodex引き継ぎ書にある
+Claudeの最終公開報告を以下へ転記した。今回の文書更新でGUI・font登録・Office試験を
+再実行したものではない。GitHubの公開状態、EXE asset digest、タグ参照先と下記2件の
+CI成功は今回もAPIで確認した。
+
+| 項目 | リリース記録 |
+|---|---|
+| 正式タグ | [eqnedit64-v3.1.3](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.1.3) |
+| GitHub公開日時 | 2026-10-08 11:06:58 UTC |
+| 現在のタグ参照先commit | `72a2f984741e6b68486909add92c733103347449` |
+| 引き継ぎ書のbuild / merged main SHA | `6ad7cb448cf92128049c54eeb65a0f4137ba125d`、PR #320 |
+| build / signer | development host、ProductVersion `3.1.3`、Authenticode `Valid` / `CN=ksugahar`（公開報告） |
+| pinned certificate | `7E80D4365CFDBA7B22B33C35EB7CD6A41050E065` |
+| 署名済みEXE SHA-256（API確認済み） | `906513FFA96142AA5B6D20478AD7CFAB3A684EF31E40EEF5C76C8ADBA1D2D72D` |
+| 公開JS SHA-256（公開報告） | `9E36689F6486833344272DB76E12F7754AA8BF6365576FD6F5231CCEF3A65B83` |
+
+SHAの留保：現在のGitHubタグは上記`72a2f984…`を参照するが、引き継ぎ書と当時の
+CI記録は`6ad7cb448…`を使用している。2026-10-14の相互レビューで両commitの
+`tools/eqnedit64`、`packages/eqnedit64`、`.github/workflows`のtree hash一致を
+Claude・Codexがそれぞれ確認した。commit全体は異なるため、製品関連ツリーの一致と
+build実行時のsource対応を区別する。後者は公開記録によるもので、ビルド再現を今回
+改めて認定しない。公開済みタグ・成果物は変更しない。
+
+- 公開報告ではO:、GitHub Release、[PyPI 3.1.3](https://pypi.org/project/eqnedit64/3.1.3/)
+  のCPython 3.10–3.13 `win_amd64` wheel全4個の同梱EXEが上記ハッシュで一致。
+  Webはタグから再生成し、EXEリンク3.1.3と公開QA PASSを確認済み。
+  公開済みcandidateラベルはユーザー受入済みで、タグを書き換えて除去しない。
+- [main Eqnedit64 CI 37756898987](https://github.com/ksugahar/Radia/actions/runs/37756898987)
+  は`6ad7cb448…`で成功（今回APIで再確認）。公開報告では同じSHAの
+  [Policy Lint](https://github.com/ksugahar/Radia/actions/runs/37756899099)と
+  [Radia CI](https://github.com/ksugahar/Radia/actions/runs/37756898988)も成功。
+- [headed actual-wire gate 37721927723](https://github.com/ksugahar/Radia/actions/runs/37721927723)
+  は`25fca594e4d110dda280dde3cb5df180643fd687`で成功（今回APIで再確認）。
+  公開報告の52式中49 coveredの主OMML分岐がnative/Webでbyte一致し、style/functionもPASS。
+  Webの実OS clipboard書込みはheaded full Chromiumで確認した。
+  最初の実OS証拠はrun 37718032042の36 covered。
+  旧run 37692902458のheadless Web側はbrowser内部clipboardで、OS証拠へ格上げしない。
+- signed `25fca594e`のユーザー再試験は6件すべてOK：`sin x`、`mathbf A x`、
+  `mathrm d x`、`lim`（x→0）、`sin(x+1)`、`boldsymbol alpha`。
+  先行候補`01735b5cd`のH1/H5/H6・括弧・絶対値の成功と、同候補で失敗後に修正された
+  `sin`の再試験を区別する。
+- 共通nary fence境界は閉じfenceを`m:e`の外へ保つ。両版は`m:sty` p/b/biを共有し、
+  通常italicはsty省略、Unicode math alphabetはpを使用する。既知のupright関数は
+  `m:func/fName/e`で出力し、引数は1 atomまたはbalanced visible fence group。
+- 非対象3式は合格ではない：nativeのboxed/binomはunsupported commandを落とし、
+  cancelはWebの斜線と異なる下線。任意TeXの完全同値は保証しない。
+  bare functionの空`m:e`と`sin 2x`が2だけを収集する制限（N2/N3）は保留。
+  PowerPointの色欠落は承認済み制限で、canvas/SVG/EMF/DIB/saved TeXの色保持は維持する。
+
+原記録はprivate相互レビュー記録r14–r19とClaude最終公開報告。今回参照できたのは
+それらを要約した2026-10-11のCodex引き継ぎ書であり、原記録の再監査とはしない。
+次の製品修正・リリースは別途依頼された範囲で扱う。
+
 ### 13.0 3.1.2 公開完了（2026-10-08）
 
 配備担当Claudeが4配布先の一致と公開QAの合格を記録し、公開を完了した。
@@ -526,7 +581,9 @@ O:はdevelopment hostでは `private-runtime-path へのSUBSTであり、ユー�
   font登録は対話デスクトップで行わなかった。Claudeが統合・CI・配備・タグ・公開を担当。
 - 本追補は公開・レビュー結果だけの文書変更で、公開済み製品の動作変更ではない。
 
-#### 3.1.3 後続項目（公開後、未実装）
+#### 3.1.2公開後の3.1.3候補時点の後続項目（履歴）
+
+以下は候補当時の状態を保存したもの。3.1.3公開後の到達点・残る制限は§13.0aを正とする。
 
 | ID / 状態 | 指摘と次の作業 | 完了条件 |
 |---|---|---|
@@ -534,7 +591,7 @@ O:はdevelopment hostでは `private-runtime-path へのSUBSTであり、ユー�
 | F-2 / fixed-awaiting-review（3.1.3候補） | 両版へ同じoperand fence境界を追加。括弧・入れ子・角括弧・絶対値の閉じfenceがnary外のsiblingであることをlocal gateで検査 | hosted wireと変更経路のOffice qualification待ち。3.1.2の結果を新経路へ転用しない |
 | F-3 / confirmed-closed（source確認、peer再確認予定） | 両版はfence/stretchy/largeop属性差をOffice判定へ使わず、既知のtoken文字を共通に分類。任意の伸長fence同値は保証しない | 変更不要のFable判断と両ソースを再確認。詳細・追加式の状態はPRODUCT_PARITYの3.1.3候補節 |
 
-以下の§13.1–13.6は3.0.13の歴史的な公開・レビュー記録であり、現在の公開状態は上記3.1.2である。
+以下の§13.1–13.5は3.0.13の歴史的な公開・レビュー記録であり、現在の公開状態は§13.0aの3.1.3である。
 
 Eqnedit64 3.0.13は2026-09-03時点の公開済み基準版だった。未公開の3.0.12候補で整えた
 構造選択、TeX整形、簡潔な直接CLIを吸収し、改行操作、parser固定点、TeXソースfont検査、
