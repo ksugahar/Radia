@@ -157,8 +157,13 @@ for index=1:numel(entries)
         string(entries(index).test);
     verifyTrue(testCase,ismember(string(entries(index).classification),allowed));
     if string(entries(index).classification)=="upstream-python"
+        expectedOracle="optuna50_oracle.json";
+        if string(entries(index).file)=="test_optuna_cuda.m" && ...
+                string(entries(index).test)=="testDensityMatchesUpstream"
+            expectedOracle="optuna_cuda_density_oracle.json";
+        end
         verifyEqualWithPrecision(testCase,string(entries(index).oracle), ...
-            "optuna50_oracle.json");
+            expectedOracle);
     elseif string(entries(index).classification)=="upstream-mcp"
         verifyEqualWithPrecision(testCase,string(entries(index).oracle), ...
             "optuna50_mcp_oracle.json");

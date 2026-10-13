@@ -6,6 +6,7 @@ arguments
     options.Seeds (1,:) double = [11 37]
     options.ExecutionMode (1,1) string {mustBeMember(options.ExecutionMode,["cpu","gpu"])} = "cpu"
     options.BatchSize (1,1) double {mustBeInteger,mustBePositive} = 1
+    options.ConstantLiar (1,1) logical = true
 end
 root=fileparts(fileparts(fileparts(mfilename('fullpath'))));
 addpath(fullfile(root,'packages','radia-optuna','matlab'));
@@ -15,7 +16,7 @@ restoreMode=onCleanup(@()radia.optuna.executionMode(previous));
 entries=cell(0,1);
 for problem=["branin","correlated_valley"]
     for seed=options.Seeds
-        sampler=radia.optuna.TPESampler(Seed=seed,Multivariate=true);
+        sampler=radia.optuna.TPESampler(Seed=seed,Multivariate=true,ConstantLiar=options.ConstantLiar);
         study=radia.optuna.Study(Sampler=sampler,AutoSave=false);
         if problem=="branin", dimensions=2; else, dimensions=40; end
         proposals=zeros(options.Trials,dimensions);
@@ -69,6 +70,7 @@ for problem=["branin","correlated_valley"]
         result=struct('schema','radia.validation.optuna-closed-loop-inference.v1', ...
             'matlab',version,'execution_mode',options.ExecutionMode, ...
             'multivariate',true,'candidates',24,'batch_size',options.BatchSize, ...
+            'constant_liar',options.ConstantLiar, ...
             'module_configure_s',configureSeconds, ...
             'storage_enabled',false,'all_history_retained',true,'entries',{entries}, ...
             'notes',{{'Every trial evaluates its objective and updates the study; no prefilled history.', ...
