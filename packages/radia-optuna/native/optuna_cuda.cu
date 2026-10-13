@@ -354,12 +354,32 @@ __global__ void density(const double* samples, std::size_t count,
         components[k] = value;
     }
     __syncthreads();
+    __shared__ double maximum;
+    if (threadIdx.x == 0) {
+        maximum = -INFINITY;
+        for (std::size_t k = 0; k < kernels; ++k) maximum = fmax(maximum, components[k]);
+    }
+    if (kernels < 128) {
+        if (threadIdx.x != 0) return;
+        if (maximum == -INFINITY) { output[row] = maximum; return; }
+        double total = 0.0;
+        for (std::size_t k = 0; k < kernels; ++k) total += exp(components[k] - maximum);
+        output[row] = maximum + log(total);
+        return;
+    }
+    __syncthreads();
+    if (maximum == -INFINITY) {
+        if (threadIdx.x == 0) output[row] = maximum;
+        return;
+    }
+    // Independent exponentials can run in parallel. Keep both maximum and
+    // final addition ordered, including the first-maximum candidate contract.
+    for (std::size_t k = threadIdx.x; k < kernels; k += blockDim.x)
+        components[k] = exp(components[k] - maximum);
+    __syncthreads();
     if (threadIdx.x != 0) return;
-    double maximum = -INFINITY;
-    for (std::size_t k = 0; k < kernels; ++k) maximum = fmax(maximum, components[k]);
-    if (maximum == -INFINITY) { output[row] = maximum; return; }
     double total = 0.0;
-    for (std::size_t k = 0; k < kernels; ++k) total += exp(components[k] - maximum);
+    for (std::size_t k = 0; k < kernels; ++k) total += components[k];
     output[row] = maximum + log(total);
 }
 __global__ void select_best(const double* below, const double* above,

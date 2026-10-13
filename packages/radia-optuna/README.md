@@ -401,6 +401,10 @@ large-array ordering, including signed zeros. `model_radix_sorts` and
 `peak_sort_temporary_bytes` expose this route and its scratch requirement.
 Only successfully scored models become reusable; allocation or evaluation
 failures invalidate incomplete output caches and restore the sampling RNG.
+For mixtures with at least 128 components, independent exponentials execute
+in parallel before the final ordered addition. Maximum selection, component
+addition and candidate tie-breaking retain their original order; small
+mixtures keep the shorter serial exponential path within the CUDA kernel.
 `model_build_launches`, `model_reuses`, `preparation_launches` and
 `model_download_bytes` expose construction, reuse and host RNG transfers.
 CPU density also reuses the constructor's ordered normalizers and prepares
