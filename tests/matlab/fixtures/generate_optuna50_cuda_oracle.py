@@ -6,6 +6,46 @@ import json
 import numpy as np
 import optuna
 from optuna.samplers._tpe import probability_distributions as pd
+from optuna.samplers._tpe.parzen_estimator import _ParzenEstimator, _ParzenEstimatorParameters
+from optuna.samplers._tpe.sampler import default_weights
+
+
+def model_cases():
+    space = {"x": optuna.distributions.FloatDistribution(-2, 2),
+             "log": optuna.distributions.FloatDistribution(float(np.exp(-2)), float(np.exp(2)), log=True),
+             "integer": optuna.distributions.IntDistribution(0, 4096),
+             "category": optuna.distributions.CategoricalDistribution(["a", "b", "c"])}
+    cases = []
+    for n in [0, 1, 2, 7, 33, 257, 513]:
+        for endpoints in [False, True]:
+            seed = 700 + len(cases)
+            def observations(offset):
+                order = np.random.RandomState(seed + offset).permutation(n)
+                return {"x": np.linspace(-1.5, 1.5, n)[order],
+                        "log": np.exp(np.linspace(-1.3, 1.1, n))[order],
+                        "integer": (order % 4 if n <= 33 else order).astype(float),
+                        "category": (order % 3).astype(float)}
+            good, bad = observations(0), observations(1)
+            bad["x"] += 0.2
+            bad["log"] *= np.exp(0.1)
+            bad["integer"] += 5 if n <= 33 else 1024
+            bad["category"] = (bad["category"] + 1) % 3
+            parameters = _ParzenEstimatorParameters(1.0, True, endpoints, default_weights, True)
+            lower, upper = (_ParzenEstimator(o, space, parameters) for o in [good, bad])
+            rng = np.random.RandomState(seed)
+            samples = lower.sample(rng, 24)
+            selected = int(np.argmax(lower.log_pdf(samples) - upper.log_pdf(samples)))
+            def matrix(o):
+                result = np.column_stack(list(o.values()))
+                result[:, -1] += 1
+                return result.tolist()
+            cases.append(dict(name=f"rows_{n}_endpoints_{endpoints}", seed=seed,
+                              endpoints=endpoints, good=matrix(good), bad=matrix(bad),
+                              lows=[d.low if hasattr(d, "low") else 0 for d in space.values()],
+                              highs=[d.high if hasattr(d, "high") else 0 for d in space.values()],
+                              best=[float(samples[k][selected]) + (k == "category") for k in space],
+                              next_random=rng.rand(8).tolist()))
+    return cases
 
 
 def generate():
@@ -61,7 +101,7 @@ def generate():
                           best_index=best + 1, best=matlab_samples[best].tolist(), next_random=rng.rand(8).tolist()))
     return dict(schema="radia.optuna.cuda-oracle.v1", optuna_version=optuna.__version__,
                 numpy_version=np.__version__, generator_sha256=hashlib.sha256(Path(__file__).read_bytes().replace(b"\r\n", b"\n")).hexdigest(),
-                cases=cases)
+                cases=cases, model_cases=model_cases())
 
 
 if __name__ == "__main__":

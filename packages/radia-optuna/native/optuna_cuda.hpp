@@ -3,9 +3,23 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include <memory>
 
-// Host-owned estimator views. CUDA owns only per-call temporary buffers.
+// Host-owned RNG inputs and optional device-resident estimator construction.
 namespace optuna_cuda {
+class PreparedModel;
+struct ModelDimension {
+    double low, high, step, minimum;
+    std::size_t choices;
+    bool categorical, log_scale;
+};
+struct ModelConstruction {
+    std::shared_ptr<PreparedModel> device;
+    std::vector<std::vector<double>> mu, sigma, probabilities;
+};
+ModelConstruction build_model(const std::vector<double>& observations,
+    const std::vector<double>& weights, const std::vector<ModelDimension>& dimensions,
+    double prior_weight, bool endpoints, bool host_sampling);
 struct Estimator {
     const std::vector<double>* weights;
     const std::vector<double>* mu;
@@ -14,6 +28,7 @@ struct Estimator {
     std::size_t choices;
     double low, high, step;
     bool categorical, log_scale;
+    const PreparedModel* prepared = nullptr;
 };
 struct Statistics {
     std::uint64_t density_launches = 0, selection_launches = 0;
@@ -25,6 +40,8 @@ struct Statistics {
     std::uint64_t device_allocation_calls = 0, workspace_reuses = 0;
     std::uint64_t avoided_upload_bytes = 0;
     std::size_t cached_device_bytes = 0;
+    std::uint64_t model_build_launches = 0, model_reuses = 0;
+    std::uint64_t preparation_launches = 0, model_download_bytes = 0;
     int runtime_version = 0, driver_version = 0, device = -1;
     bool stream_ordered_allocator = false;
 };

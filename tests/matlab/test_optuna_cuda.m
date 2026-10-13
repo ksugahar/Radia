@@ -60,11 +60,49 @@ if str2double(getenv('OMP_NUM_THREADS'))>1
     verifyEqual(testCase,afterDefault.cpu_parallel_density_calls, ...
         beforeDefault.cpu_parallel_density_calls+1);
 end
+
 verifyError(testCase,@()evaluateCommand('api.execution','auto'),'radia:optuna:mex:Exception');
 verifyEqual(testCase,radia.optuna.executionMode(),"cpu");
 after=optuna_mex('api.info');
 verifyEqual(testCase,after.host_to_device_bytes,before.host_to_device_bytes);
 verifyEqual(testCase,after.cuda_device,before.cuda_device);
+end
+
+function testGpuModelConstructionMatchesUpstream(testCase)
+root=fileparts(mfilename('fullpath'));
+oracle=jsondecode(fileread(fullfile(root,'fixtures','optuna50_cuda_oracle.json')));
+verifyEqual(testCase,string(oracle.optuna_version),"5.0.0");
+previous=radia.optuna.executionMode();
+restoreMode=onCleanup(@()radia.optuna.executionMode(previous));
+for mode=["cpu","gpu"]
+    radia.optuna.executionMode(mode); before=optuna_mex('api.info');
+    for entry=reshape(oracle.model_cases,1,[])
+        good=entry.good; bad=entry.bad;
+        if isempty(good), good=zeros(0,4); end
+        if isempty(bad), bad=zeros(0,4); end
+        for repeat=1:2
+            state=optuna_mex('optuna.random_state.create',entry.seed);
+            cleanup=onCleanup(@()optuna_mex('optuna.random_state.destroy',state));
+            actual=optuna_mex('optuna.tpe.best_joint_observations',state,24, ...
+                [false false false true],entry.lows,entry.highs, ...
+                [false true false false],[NaN NaN 1 NaN],[0 0 0 3], ...
+                good,bad,1,true,entry.endpoints,[],[]);
+            verifyEqual(testCase,actual,reshape(entry.best,1,[]),'AbsTol',5e-11);
+            next=optuna_mex('optuna.random_state.rand',state,8);
+            verifyEqual(testCase,next(:),entry.next_random(:));
+            clear cleanup
+        end
+    end
+    after=optuna_mex('api.info');
+    if mode=="gpu"
+        verifyGreaterThan(testCase,after.model_build_launches,before.model_build_launches);
+        verifyGreaterThan(testCase,after.model_reuses,before.model_reuses);
+        verifyGreaterThan(testCase,after.model_download_bytes,before.model_download_bytes);
+    else
+        verifyEqual(testCase,after.model_build_launches,before.model_build_launches);
+        verifyEqual(testCase,after.host_to_device_bytes,before.host_to_device_bytes);
+    end
+end
 end
 
 function testCudaBuildBoundary(testCase)

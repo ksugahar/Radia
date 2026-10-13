@@ -23,8 +23,13 @@ uses the setting in its MATLAB process. No automatic size-based dispatch is
 provided. `api.info` reports `execution_mode`, CPU call counters and CUDA
 launch/transfer counters so the chosen path can be checked.
 
-Study/Trial management, estimator construction, seeded random consumption
-and candidate generation remain host work in both modes. CPU host parallel
+Study/Trial management, history selection/gathering, ordered mixture weights,
+seeded random consumption and candidate generation remain host work. In GPU
+mode, native observation-built TPE models now construct numerical bandwidths,
+categorical probabilities and density normalizers on the device. The good
+model's sampling parameters return to the ordered host RNG; the bad model
+stays on device through scoring. Caller-supplied estimators retain their
+existing construction boundary. CPU host parallel
 kernels use OpenMP in the mexcuda build; ordered random consumption remains
 serial. Ordinary `mex` compilation remains prohibited. GPU users do not need
 Python; optional upstream-backed features retain their requirements below.
@@ -385,7 +390,13 @@ Switching to CPU or unloading the module releases retained workspaces.
 Larger calls use temporary allocations; `allocator` describes that temporary
 allocation route. `api.info` additionally reports `device_allocation_calls`,
 `workspace_reuses`, `avoided_upload_bytes` and `cached_device_bytes`.
-Host estimator construction and ordered random consumption remain unchanged.
+The observation-built GPU model path additionally keeps model outputs in
+separate retained workspaces, within the same 64 MiB per-device total budget.
+Input shadows never include kernel-written outputs. GPU sorting preserves the
+existing small-array NumPy network and large-array value/index ordering;
+bandwidth clipping and categorical normalization keep their original order.
+`model_build_launches`, `model_reuses`, `preparation_launches` and
+`model_download_bytes` expose construction, reuse and host RNG transfers.
 
 `benchmark_optuna_inference.m` measures a complete optimization loop on Branin
 and a 40-dimensional correlated quadratic valley. It separates inference
@@ -459,6 +470,11 @@ remain host operations. Selection tie-breaking stays ordered on both routes. Dev
 switch to a CPU density implementation. RNG state is restored on failed
 candidate evaluation. `api.info` reports this boundary and the build route;
 MATLAB rejects old CPU-only MEX binaries even if their command list matches.
+
+Native observation-built numerical/categorical models and density preparation
+also execute on GPU in GPU mode. Mixture-weight ordering, history selection,
+domain checks and sampling RNG remain host operations; no CPU model-building
+fallback is used by a declared native GPU construction call.
 
 The oracle remains Optuna 5.0.0. Numerical parity and transfer-inclusive
 measurements are required before claiming acceleration. Building with

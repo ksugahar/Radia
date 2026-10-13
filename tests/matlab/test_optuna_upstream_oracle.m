@@ -162,6 +162,10 @@ for index=1:numel(entries)
                 string(entries(index).test)=="testDensityMatchesUpstream"
             expectedOracle="optuna_cuda_density_oracle.json";
         end
+        if string(entries(index).file)=="test_optuna_cuda.m" && ...
+                string(entries(index).test)=="testGpuModelConstructionMatchesUpstream"
+            expectedOracle="optuna50_cuda_oracle.json";
+        end
         verifyEqualWithPrecision(testCase,string(entries(index).oracle), ...
             expectedOracle);
     elseif string(entries(index).classification)=="upstream-mcp"

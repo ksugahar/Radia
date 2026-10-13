@@ -97,6 +97,10 @@ def build_manifest() -> dict[str, object]:
                 effective_classification = "upstream-python"
                 oracle = "optuna_cuda_density_oracle.json"
                 scope = "Optuna 5.0.0 mixture densities evaluated by CUDA"
+            if filename == "test_optuna_cuda.m" and test_name == "testGpuModelConstructionMatchesUpstream":
+                effective_classification = "upstream-python"
+                oracle = "optuna50_cuda_oracle.json"
+                scope = "Optuna 5.0.0 observation-built TPE models and ordered RNG"
             entries.append(
                 {
                     "classification": effective_classification,
