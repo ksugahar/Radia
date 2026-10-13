@@ -33,6 +33,7 @@ for face=1:faces
 end
 cfg=thermal;cfg.schema_version=1;cfg.material_mode='element-esim-operators';
 cfg.eddy=a;cfg.operator_impedance_map=entryMap;
+cfg.preconditioner_precision='fp64';cfg.preconditioner_block_ends=[port;n];
 cfg.loss_projection=sparse(size(f,1),n);cfg.loss_projection(:,phi)=f;
 cfg.loss_components=3;cfg.loss_weights=repelem(.5*area,3);
 cfg.rhs_per_amp=zeros(n,1);cfg.rhs_per_amp(port)=1;

@@ -124,6 +124,7 @@ struct Context {
   if(number(field(cfg,"schema_version"))!=1.)throw std::invalid_argument("Unsupported IH operator schema");
   const auto materialMode=text(field(cfg,"material_mode"));if(materialMode!="fixed"&&materialMode!="element-esim-operators")throw std::invalid_argument("Unsupported IH material frontend");
   const auto* precisionField=mxGetField(cfg,0,"preconditioner_precision");
+  const auto* blocksField=mxGetField(cfg,0,"preconditioner_block_ends");std::vector<int> blockEnds;
   if(precisionField){const auto mode=text(precisionField);
    if(mode=="fp32")precision=PreconditionerPrecision::FP32;
    else if(mode=="fp64")precision=PreconditionerPrecision::FP64;
@@ -131,7 +132,13 @@ struct Context {
   }
   a.read(field(cfg,"eddy"),true);p.read(field(cfg,"loss_projection"),true);system.read(field(cfg,"thermal_system"),true);
   k.read(field(cfg,"stiffness"),false);c.read(field(cfg,"convection"),false);projection.read(field(cfg,"heat_projection"),false);
-  if(precision!=PreconditionerPrecision::None){preconditioner.read(field(cfg,"preconditioner_inverse"),true);
+  if(blocksField){
+   if(precision!=PreconditionerPrecision::FP64||a.rows>512||mxGetField(cfg,0,"preconditioner_inverse"))throw std::invalid_argument("GPU block setup requires FP64, <=512 unknowns and no supplied inverse");
+   auto ends=realVector(blocksField,mxGetNumberOfElements(blocksField));int previous=0;
+   for(double x:ends){if(x<=previous||x>a.rows||x!=int(x))throw std::invalid_argument("Invalid block partition");blockEnds.push_back(int(x));previous=int(x);}if(previous!=a.rows)throw std::invalid_argument("Block partition must cover operator");
+   preconditioner.rows=preconditioner.columns=a.rows;preconditioner.rowptr.resize(a.rows+1);preconditioner.col.resize(a.rows*a.rows);preconditioner.z.assign(a.rows*a.rows,make_cuDoubleComplex(0.,0.));
+   for(size_t i=0;i<=a.rows;++i)preconditioner.rowptr[i]=int32_t(i*a.rows);for(size_t i=0;i<a.rows;++i)for(size_t j=0;j<a.rows;++j)preconditioner.col[i*a.rows+j]=int32_t(j);
+  }else if(precision!=PreconditionerPrecision::None){preconditioner.read(field(cfg,"preconditioner_inverse"),true);
    if(preconditioner.rows!=a.rows||preconditioner.columns!=a.columns)throw std::invalid_argument("Fixed preconditioner dimensions disagree");}
   const auto n=system.rows;double components=number(field(cfg,"loss_components"));
   if(components<1||components>INT_MAX||components!=int(components)||p.rows%int(components))throw std::invalid_argument("Invalid IH loss components");
@@ -145,7 +152,7 @@ struct Context {
   if(dt<=0.||conductivity<0.||convection<0.)throw std::invalid_argument("Invalid IH thermal parameters");
   owned=a.bytes()+p.bytes()+system.bytes()+k.bytes()+c.bytes()+projection.bytes()+b.size()*sizeof(cuDoubleComplex)+(w.size()+o.size()+t.size())*sizeof(double);
   if(precision!=PreconditionerPrecision::None)owned+=preconditioner.rowptr.size()*sizeof(int32_t)+preconditioner.col.size()*sizeof(int32_t)+preconditioner.z.size()*(precision==PreconditionerPrecision::FP32?sizeof(cuFloatComplex):sizeof(cuDoubleComplex));
-  const size_t workspace=(a.rows*(precision==PreconditionerPrecision::None?10:12)+n*9+2)*sizeof(cuDoubleComplex)+(2*samples+3*n+2)*sizeof(double)+2*sizeof(BiCGState)+sizeof(int);
+  const size_t workspace=(a.rows*(precision==PreconditionerPrecision::None?10:12)+n*9+2)*sizeof(cuDoubleComplex)+(2*samples+3*n+2)*sizeof(double)+2*sizeof(BiCGState)+sizeof(int)+(blocksField?a.rows*a.rows*sizeof(cuDoubleComplex)+blockEnds.size()*sizeof(int)+sizeof(int):0);
   size_t available,total;cudaCheck(cudaMemGetInfo(&available,&total));const size_t reserve=std::max<size_t>(2ULL<<30,total/5);
   if(available<=reserve||owned>available-reserve||workspace>available-reserve-owned)throw std::runtime_error("IH context exceeds GPU memory budget");
   cudaCheck(cudaGetDevice(&device));cudaCheck(cudaStreamCreateWithFlags(&guard,cudaStreamNonBlocking));
@@ -153,6 +160,10 @@ struct Context {
   for(auto* m:{&a,&p,&system,&k,&c,&projection})m->upload();
   if(precision==PreconditionerPrecision::FP32)preconditioner.uploadFP32();
   else if(precision==PreconditionerPrecision::FP64)preconditioner.upload();
+  if(blocksField){Buffer work,ends,status;work.put(std::vector<cuDoubleComplex>(a.rows*a.rows));ends.put(blockEnds);status.put(std::vector<int>{0});
+   buildBlockInverse<<<unsigned(blockEnds.size()),1>>>(a.complexView(),ends.get<int>(),int(blockEnds.size()),static_cast<cuDoubleComplex*>(work.p),static_cast<cuDoubleComplex*>(preconditioner.dz.p),static_cast<int*>(status.p));
+   cudaCheck(cudaGetLastError());int failed=0;cudaCheck(cudaMemcpy(&failed,status.p,sizeof(int),cudaMemcpyDeviceToHost));if(failed)throw std::runtime_error("GPU block preconditioner is singular or nonfinite");
+  }
   rhs.put(b);weights.put(w);ones.put(o);initial.put(t);
   CoupledOperators op{};op.eddy=a.complexView();op.lossProjection=p.complexView();op.thermalSystem=system.complexView();op.stiffness=k.realView();op.convection=c.realView();op.heatProjection=projection.realView();
   if(precision!=PreconditionerPrecision::None)op.eddyPreconditioner={a.rows,preconditioner.dr.get<int32_t>(),preconditioner.dc.get<int32_t>(),preconditioner.dz.get<cuDoubleComplex>(),preconditioner.df.get<cuFloatComplex>(),precision};
