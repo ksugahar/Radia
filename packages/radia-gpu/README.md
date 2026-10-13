@@ -104,6 +104,11 @@ rebuilding, requiring its exact SHA-256 and installed acceptance provenance.
 Stable versions additionally require the exact-source independent review and
 same-wheel 100 RTX 5000/CPU parity record described in
 [`validation_test/radia_gpu/releases`](../../validation_test/radia_gpu/releases/README.md).
+Every CUDA module in the wheel needs independent CPU parity. CSR-PCG, AMS and
+the HDiv material solve also require an original-equation true residual. FMM
+and projection apply operators and must explicitly record that a solve residual
+is not applicable, with a null residual and the measured operator error. A zero
+invented residual cannot qualify these operator checks.
 Configure PyPI Trusted Publishing for project `radia-gpu`, GitHub owner
 `ksugahar`, repository `Radia`, workflow `radia-gpu-release.yml`, environment
 `pypi`. A new project needs a pending publisher; checking availability does

@@ -77,6 +77,30 @@ def test_stable_release_requires_review_and_same_wheel_build_host_parity(tmp_pat
         qualify()
     path.write_text(json.dumps(qualification))
     assert qualify()['prerelease'] is False
+    # Applying FMM/projection operators has no Ax=b residual. Both still need
+    # independent CPU agreement, and the solver modules must retain residuals.
+    operator_record = dict(operation_kind='operator', relative_l2=1e-10,
+                           residual_applicability='not_applicable_operator',
+                           true_relative_residual=None)
+    extended = json.loads(json.dumps(qualification))
+    extended['build_host_acceptance']['cpu_parity'].update(
+        fmm=dict(operator_record), projection=dict(operator_record),
+        hmatrix=dict(relative_l2=5e-10, true_relative_residual=8e-12))
+    wheel['cuda_solvers'] = ['csr_pcg', 'ams', 'hmatrix', 'projection', 'fmm']
+    path.write_text(json.dumps(extended))
+    assert qualify()['prerelease'] is False
+    for module, key, value in (
+            ('fmm', 'true_relative_residual', 0),
+            ('projection', 'residual_applicability', 'unknown'),
+            ('projection', 'relative_l2', 1e-5),
+            ('hmatrix', 'operation_kind', 'operator'),
+            ('hmatrix', 'true_relative_residual', None)):
+        invalid = json.loads(json.dumps(extended))
+        invalid['build_host_acceptance']['cpu_parity'][module][key] = value
+        path.write_text(json.dumps(invalid))
+        with pytest.raises(ValueError):
+            qualify()
+    wheel['cuda_solvers'] = ['csr_pcg', 'ams']
     mutations = [
         ('source_commit', 'c'*40),
         ('independent_review.source_commit', 'c'*40),
