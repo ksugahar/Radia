@@ -44,7 +44,8 @@ TaskManager region is created by mexcuda.
 100 timings are diagnostic, including upload/download and warmed median.
 Native owned memory and sampled device-free memory are separately identified;
 neither is a whole-process peak measurement. Formal idle-mdx GPU performance
-acceptance is pending because the probed mdx host has no NVIDIA GPU.
+The original mdx timing gate could not run because that host has no NVIDIA GPU;
+the user subsequently authorized NGSolve(A100), as recorded below.
 Numerical agreement alone is not a claim of GPU acceleration or release readiness.
 
 ## Same-artifact A100 and native DLL acceptance (2026-10-13)
@@ -69,12 +70,49 @@ installed radia-gpu wheel or a common-commit release candidate. Third-party DLLs
 in the private acceptance bundle are not authorized wheel redistribution assets.
 
 Fresh mdx inspection found only Microsoft Remote Display Adapter and VMware
-SVGA 3D, with no NVIDIA device or nvidia-smi. Under this chat's idle-mdx timing
-policy, formal GPU cold/warm ABBA, matched CPU/GPU throughput, scaling and peak
-memory performance acceptance cannot run there. Remaining work is to designate
-an authorized GPU-equipped formal timing host, verify its idle queues/processes
-and memory, then run fresh same-input CPU/GPU ABBA measurements. Existing 100
-and A100 diagnostic times must not be relabelled as formal measurements. The
-HDiv chat's separately authorized A100 formal measurements do not certify these
-AMS/FMM operators. Complete installed-wheel acceptance remains with the
-radia-gpu release owner after common release source/artifact integration.
+SVGA 3D, with no NVIDIA device or nvidia-smi. The original pending JSON retains
+that observation and is marked superseded by the user's explicit change to
+NGSolve(A100). Previous diagnostic samples retain their original classification.
+
+## Formal NGSolve(A100) evaluation (2026-10-13)
+
+`measure_native_cpu_gpu.py` and `measure_native_sample.m` executed fresh same-host
+measurements with the already accepted native binary/DLL hashes. The HDiv owner
+confirmed no running/reserved job; CPU/GPU utilization and free-memory guards
+passed before every sample. CPU and GPU host setup used one thread. Each case
+has first CPU/GPU calls followed by two CPU/GPU/GPU/CPU cycles: 50 samples total.
+GPU API times include construction, all transfers, execution, result recovery
+and context release. Input fixture loading and result-file serialization are
+excluded equally from numerical timing. MATLAB startup (5.738 s), device
+initialization (0.415 s) and CPU script/import setup (2.989 s, excluding
+interpreter launch) are separately recorded. "First" is the first call of that
+case in the owned process, not a fresh operating system or device reset.
+
+| Case | CPU warm median, s | GPU whole warm median, s | CPU/GPU |
+| --- | ---: | ---: | ---: |
+| Native HCurl assembly + nonlinear Newton/AMS, 5,326 DOF | 0.84460 | 0.52494 | 1.61 |
+| Scalar/dipole FMM, 512 to 128 points | 0.01117 | 0.13308 | 0.084 |
+| Scalar/dipole FMM, 8,192 to 2,048 points | 4.94516 | 0.23619 | 20.94 |
+| Small sphere SL/DL, circular current and field-cloud pipeline | 0.07305 | 0.29879 | 0.244 |
+| Flat P1 Galerkin SL/DL construction and application | 20.51374 | 3.01749 | 6.80 |
+
+FMM and physical-pipeline CPU references are independent NumPy direct sums,
+not an optimized CPU FMM. Boundary CPU assembly uses NGSolve directly. The
+small FMM and physical pipeline are slower on GPU; no general speedup claim
+follows. Nonlinear GPU solutions passed independent CPU operator re-evaluation
+with maximum true residual 4.36e-12. All original field/operator accuracy gates,
+native registry cleanup and actual loaded MEX/DLL identity checks passed.
+
+Native AMS maximum phase-owned upper bound was 9,901,548 bytes. The large FMM
+reported 3,570,276 geometry + 3,411,072 workspace + 196,608 output bytes, excluding
+MATLAB-owned density arrays/runtime allocation overhead. Per-sample GPU free
+memory endpoints and 50 ms CPU/MATLAB process RSS/private-memory samples are
+saved. MATLAB host samples also cover output serialization outside timed API
+work. These samples do not certify transient host/global-device peaks; no memory
+reduction claim is made. See `results/formal-a100-20261013.json` for all samples,
+hashes, limits, first calls, setup breakdowns and version identities.
+
+Complete installed-wheel acceptance remains with the radia-gpu release owner
+after common release source/artifact integration. Broader geometry, high-order
+HCurl and larger-scale or different accuracy-parameter acceptance are outside
+these bounded cases.

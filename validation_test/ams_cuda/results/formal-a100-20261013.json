@@ -1,0 +1,3599 @@
+{
+  "schema": "radia.native-ams-fmm-formal-performance.v1",
+  "accepted": true,
+  "timing_accepted": true,
+  "release_accepted": false,
+  "host": "NGSolve",
+  "date": "2026-10-13",
+  "samples": [
+    {
+      "case": "ams",
+      "backend": "cpu",
+      "phase": "first",
+      "whole_seconds": 0.852416899999298,
+      "idle_before": {
+        "cpu_percent": 2.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40228.0,
+        "host_available_bytes": 55388282880
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 210640896,
+          "private": 1239048192,
+          "lifetime_peak_rss": 218382336
+        },
+        "after": {
+          "rss": 218009600,
+          "private": 1392476160,
+          "lifetime_peak_rss": 226541568
+        },
+        "sampled_peak_rss": 226521088,
+        "sampled_peak_private": 1402228736,
+        "sample_count": 15,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "route": 3,
+        "total_seconds": 0.7885268999998516,
+        "setup_seconds": 0.05639390000033018,
+        "assembly_seconds": 0.42556510000031267,
+        "solve_seconds": 0.226315900001282,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.311907866562493e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536461,
+            78,
+            2.150348575949621e-12,
+            1.0
+          ],
+          [
+            2,
+            0.2910880997757231,
+            22,
+            4.856467930498652e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375806,
+            23,
+            7.406486142288217e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800435172,
+            23,
+            1.0582582797866686e-12,
+            1.0
+          ],
+          [
+            5,
+            1.5501472802487325e-06,
+            23,
+            8.952100353918993e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.357143070128381e-12,
+        "threads": 1
+      }
+    },
+    {
+      "case": "ams",
+      "backend": "gpu",
+      "phase": "first",
+      "whole_seconds": 0.8860581,
+      "idle_before": {
+        "cpu_percent": 0.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40228.0,
+        "host_available_bytes": 55391260672
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1310015488,
+          "private": 1627561984,
+          "lifetime_peak_rss": 1310142464
+        },
+        "after": {
+          "rss": 1389723648,
+          "private": 1735192576,
+          "lifetime_peak_rss": 1389723648
+        },
+        "sampled_peak_rss": 1389723648,
+        "sampled_peak_private": 1735192576,
+        "sample_count": 17,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.8860581,
+        "native": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.35725280811096e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.408747614631093e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531787,
+              80.0,
+              7.869376011804856e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.29108809977544153,
+              21.0,
+              4.856416340718898e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311146,
+              22.0,
+              7.40644542985419e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800392662,
+              23.0,
+              3.0584606002483807e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.550147280125632e-06,
+              22.0,
+              8.952158830301593e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0663415,
+            "upload_assembly_seconds": 0.0496645,
+            "total_seconds": 0.1167157,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.150012,
+          "assembly_seconds": 0.004642900000000001,
+          "solve_seconds": 0.405958,
+          "total_seconds": 0.8010121,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952158830301593e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42181853184.0,
+        "device_free_after": 42161474624.0,
+        "available_memory_delta": 20378560,
+        "independent_relative_errors": [
+          1.519661745298611e-14
+        ],
+        "independent_cpu_true_residual": 4.357137803406551e-12
+      }
+    },
+    {
+      "case": "ams",
+      "backend": "cpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.8418938000013441,
+      "idle_before": {
+        "cpu_percent": 4.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55284285440
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 219205632,
+          "private": 1344528384,
+          "lifetime_peak_rss": 226541568
+        },
+        "after": {
+          "rss": 218509312,
+          "private": 1393025024,
+          "lifetime_peak_rss": 227176448
+        },
+        "sampled_peak_rss": 227176448,
+        "sampled_peak_private": 1402474496,
+        "sample_count": 15,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "route": 3,
+        "total_seconds": 0.7847833999985596,
+        "setup_seconds": 0.05611690000114322,
+        "assembly_seconds": 0.4252386000007391,
+        "solve_seconds": 0.2238696999993408,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.311907866562493e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536461,
+            78,
+            2.150348575949621e-12,
+            1.0
+          ],
+          [
+            2,
+            0.2910880997757231,
+            22,
+            4.856467930498652e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375806,
+            23,
+            7.406486142288217e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800435172,
+            23,
+            1.0582582797866686e-12,
+            1.0
+          ],
+          [
+            5,
+            1.5501472802487325e-06,
+            23,
+            8.952100353918993e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.357143070128381e-12,
+        "threads": 1
+      }
+    },
+    {
+      "case": "ams",
+      "backend": "gpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.5601857,
+      "idle_before": {
+        "cpu_percent": 0.1,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55308644352
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1389846528,
+          "private": 1735213056,
+          "lifetime_peak_rss": 1389940736
+        },
+        "after": {
+          "rss": 1407139840,
+          "private": 1743314944,
+          "lifetime_peak_rss": 1407139840
+        },
+        "sampled_peak_rss": 1407139840,
+        "sampled_peak_private": 1743314944,
+        "sample_count": 11,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.5601857,
+        "native": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357324604882958e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.407171537832943e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531785,
+              80.0,
+              7.86879899550854e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754416,
+              21.0,
+              4.856336122277177e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.02789824650731104,
+              22.0,
+              7.40663254660408e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800393196,
+              23.0,
+              3.058228513904316e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.550147279893144e-06,
+              22.0,
+              8.952022642552846e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0605086,
+            "upload_assembly_seconds": 0.0011313,
+            "total_seconds": 0.0622539,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0944363,
+          "assembly_seconds": 0.0026322999999999997,
+          "solve_seconds": 0.3818732,
+          "total_seconds": 0.5519831,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952022642552846e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42161474624.0,
+        "device_free_after": 42161599380.0,
+        "available_memory_delta": -124756,
+        "independent_relative_errors": [
+          1.4978136026139014e-14
+        ],
+        "independent_cpu_true_residual": 4.3572811215097195e-12
+      }
+    },
+    {
+      "case": "ams",
+      "backend": "gpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.5025924,
+      "idle_before": {
+        "cpu_percent": 0.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55288303616
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1407201280,
+          "private": 1743314944,
+          "lifetime_peak_rss": 1407238144
+        },
+        "after": {
+          "rss": 1408978944,
+          "private": 1744785408,
+          "lifetime_peak_rss": 1409482752
+        },
+        "sampled_peak_rss": 1409474560,
+        "sampled_peak_private": 1749803008,
+        "sample_count": 10,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.5025924,
+        "native": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357257294313202e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.409440448183452e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.388318582253178,
+              80.0,
+              7.868085568300443e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754414,
+              21.0,
+              4.856717318808974e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311014,
+              22.0,
+              7.406588622144386e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800392958,
+              23.0,
+              3.0578897536687103e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472801290423e-06,
+              22.0,
+              8.951994530100486e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0604408,
+            "upload_assembly_seconds": 0.0012033,
+            "total_seconds": 0.0621273,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0907038,
+          "assembly_seconds": 0.0018919,
+          "solve_seconds": 0.3321435,
+          "total_seconds": 0.4945873,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.951994530100486e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          1.4643451821050632e-14
+        ],
+        "independent_cpu_true_residual": 4.35719328022399e-12
+      }
+    },
+    {
+      "case": "ams",
+      "backend": "cpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.8465811000005488,
+      "idle_before": {
+        "cpu_percent": 1.2,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55286304768
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 219684864,
+          "private": 1244647424,
+          "lifetime_peak_rss": 227176448
+        },
+        "after": {
+          "rss": 218554368,
+          "private": 1292578816,
+          "lifetime_peak_rss": 227479552
+        },
+        "sampled_peak_rss": 227479552,
+        "sampled_peak_private": 1302552576,
+        "sample_count": 15,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "route": 3,
+        "total_seconds": 0.7893210000002,
+        "setup_seconds": 0.05648529999780294,
+        "assembly_seconds": 0.4262577000008605,
+        "solve_seconds": 0.22599740000077873,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.311907866562493e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536461,
+            78,
+            2.150348575949621e-12,
+            1.0
+          ],
+          [
+            2,
+            0.2910880997757231,
+            22,
+            4.856467930498652e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375806,
+            23,
+            7.406486142288217e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800435172,
+            23,
+            1.0582582797866686e-12,
+            1.0
+          ],
+          [
+            5,
+            1.5501472802487325e-06,
+            23,
+            8.952100353918993e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.357143070128381e-12,
+        "threads": 1
+      }
+    },
+    {
+      "case": "ams",
+      "backend": "cpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.8426199999994424,
+      "idle_before": {
+        "cpu_percent": 0.0,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55288037376
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 218533888,
+          "private": 1242845184,
+          "lifetime_peak_rss": 227479552
+        },
+        "after": {
+          "rss": 218505216,
+          "private": 1292500992,
+          "lifetime_peak_rss": 227479552
+        },
+        "sampled_peak_rss": 226975744,
+        "sampled_peak_private": 1302163456,
+        "sample_count": 15,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "route": 3,
+        "total_seconds": 0.7849505000012869,
+        "setup_seconds": 0.05615080000097805,
+        "assembly_seconds": 0.42508749999797146,
+        "solve_seconds": 0.2238967999983288,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.311907866562493e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536461,
+            78,
+            2.150348575949621e-12,
+            1.0
+          ],
+          [
+            2,
+            0.2910880997757231,
+            22,
+            4.856467930498652e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375806,
+            23,
+            7.406486142288217e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800435172,
+            23,
+            1.0582582797866686e-12,
+            1.0
+          ],
+          [
+            5,
+            1.5501472802487325e-06,
+            23,
+            8.952100353918993e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.357143070128381e-12,
+        "threads": 1
+      }
+    },
+    {
+      "case": "ams",
+      "backend": "gpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.5409679,
+      "idle_before": {
+        "cpu_percent": 0.7,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55289331712
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1407827968,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1409482752
+        },
+        "after": {
+          "rss": 1407856640,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1410117632
+        },
+        "sampled_peak_rss": 1410117632,
+        "sampled_peak_private": 1749655552,
+        "sample_count": 10,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.5409679,
+        "native": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.35745721488245e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.409452285655891e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531785,
+              80.0,
+              7.868118469779411e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.29108809977544214,
+              21.0,
+              4.856764913454731e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311243,
+              22.0,
+              7.406290521102322e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800393068,
+              23.0,
+              3.058263999950201e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.550147280036076e-06,
+              22.0,
+              8.952139519576719e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0606464,
+            "upload_assembly_seconds": 0.0011199,
+            "total_seconds": 0.0622672,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0879062,
+          "assembly_seconds": 0.0020391,
+          "solve_seconds": 0.3784414,
+          "total_seconds": 0.5362199,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952139519576719e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          1.4602788672514946e-14
+        ],
+        "independent_cpu_true_residual": 4.357348290404814e-12
+      }
+    },
+    {
+      "case": "ams",
+      "backend": "gpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.5089119,
+      "idle_before": {
+        "cpu_percent": 0.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55289520128
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1407877120,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1410117632
+        },
+        "after": {
+          "rss": 1408610304,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1410658304
+        },
+        "sampled_peak_rss": 1410658304,
+        "sampled_peak_private": 1749655552,
+        "sample_count": 10,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.5089119,
+        "native": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357441333964745e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.407056344173901e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531785,
+              80.0,
+              7.868294037763567e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754418,
+              21.0,
+              4.85672829771167e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311326,
+              22.0,
+              7.406654041546878e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800393443,
+              23.0,
+              3.0583357804350076e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472799613808e-06,
+              22.0,
+              8.952235192928467e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0602935,
+            "upload_assembly_seconds": 0.0010929,
+            "total_seconds": 0.0618641,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.08511350000000001,
+          "assembly_seconds": 0.001911,
+          "solve_seconds": 0.3318681,
+          "total_seconds": 0.4935783,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952235192928467e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          1.464676881646174e-14
+        ],
+        "independent_cpu_true_residual": 4.357415052785675e-12
+      }
+    },
+    {
+      "case": "ams",
+      "backend": "cpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.8473720000001776,
+      "idle_before": {
+        "cpu_percent": 0.5,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55289700352
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 219381760,
+          "private": 1244295168,
+          "lifetime_peak_rss": 227479552
+        },
+        "after": {
+          "rss": 218869760,
+          "private": 1292914688,
+          "lifetime_peak_rss": 227479552
+        },
+        "sampled_peak_rss": 227409920,
+        "sampled_peak_private": 1302552576,
+        "sample_count": 15,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "route": 3,
+        "total_seconds": 0.790397299999313,
+        "setup_seconds": 0.0563521000003675,
+        "assembly_seconds": 0.42515480000110983,
+        "solve_seconds": 0.22897110000121756,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.311907866562493e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536461,
+            78,
+            2.150348575949621e-12,
+            1.0
+          ],
+          [
+            2,
+            0.2910880997757231,
+            22,
+            4.856467930498652e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375806,
+            23,
+            7.406486142288217e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800435172,
+            23,
+            1.0582582797866686e-12,
+            1.0
+          ],
+          [
+            5,
+            1.5501472802487325e-06,
+            23,
+            8.952100353918993e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.357143070128381e-12,
+        "threads": 1
+      }
+    },
+    {
+      "case": "fmm-small",
+      "backend": "cpu",
+      "phase": "first",
+      "whole_seconds": 0.012204500000734697,
+      "idle_before": {
+        "cpu_percent": 0.7,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55275139072
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 218951680,
+          "private": 1243369472,
+          "lifetime_peak_rss": 227479552
+        },
+        "after": {
+          "rss": 222253056,
+          "private": 1296502784,
+          "lifetime_peak_rss": 227479552
+        },
+        "sampled_peak_rss": 222253056,
+        "sampled_peak_private": 1296502784,
+        "sample_count": 2,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "fmm-small",
+      "backend": "gpu",
+      "phase": "first",
+      "whole_seconds": 0.1677647,
+      "idle_before": {
+        "cpu_percent": 0.9,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55271731200
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1408614400,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1410658304
+        },
+        "after": {
+          "rss": 1409695744,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1426104320
+        },
+        "sampled_peak_rss": 1409695744,
+        "sampled_peak_private": 1743167488,
+        "sample_count": 4,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.1677647,
+        "native": {
+          "apply_seconds": 0.1175439,
+          "persistent_geometry_bytes": 16818456,
+          "workspace_bytes": 1966080,
+          "output_bytes": 12288,
+          "nodes": 80,
+          "levels": 4,
+          "order": 8,
+          "python_adapter_used": 0,
+          "far_pairs": 1758,
+          "near_pairs": 1909,
+          "nonleaf_far_pairs": 10
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          2.2287278830059667e-08,
+          2.4194628264137894e-08
+        ]
+      }
+    },
+    {
+      "case": "fmm-small",
+      "backend": "cpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.011174999999639113,
+      "idle_before": {
+        "cpu_percent": 1.2,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55275544576
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 222298112,
+          "private": 1246453760,
+          "lifetime_peak_rss": 227479552
+        },
+        "after": {
+          "rss": 222318592,
+          "private": 1296584704,
+          "lifetime_peak_rss": 227479552
+        },
+        "sampled_peak_rss": 222318592,
+        "sampled_peak_private": 1296584704,
+        "sample_count": 2,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "fmm-small",
+      "backend": "gpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.1368907,
+      "idle_before": {
+        "cpu_percent": 0.0,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55277801472
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1409748992,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1426104320
+        },
+        "after": {
+          "rss": 1409748992,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1426530304
+        },
+        "sampled_peak_rss": 1409748992,
+        "sampled_peak_private": 1743167488,
+        "sample_count": 4,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.1368907,
+        "native": {
+          "apply_seconds": 0.1094874,
+          "persistent_geometry_bytes": 16818456,
+          "workspace_bytes": 1966080,
+          "output_bytes": 12288,
+          "nodes": 80,
+          "levels": 4,
+          "order": 8,
+          "python_adapter_used": 0,
+          "far_pairs": 1758,
+          "near_pairs": 1909,
+          "nonleaf_far_pairs": 10
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          2.2287278830059667e-08,
+          2.4194628264137894e-08
+        ]
+      }
+    },
+    {
+      "case": "fmm-small",
+      "backend": "gpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.1292745,
+      "idle_before": {
+        "cpu_percent": 0.9,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55283191808
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1409732608,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1426530304
+        },
+        "after": {
+          "rss": 1409732608,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1426530304
+        },
+        "sampled_peak_rss": 1409732608,
+        "sampled_peak_private": 1743167488,
+        "sample_count": 4,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.1292745,
+        "native": {
+          "apply_seconds": 0.1030523,
+          "persistent_geometry_bytes": 16818456,
+          "workspace_bytes": 1966080,
+          "output_bytes": 12288,
+          "nodes": 80,
+          "levels": 4,
+          "order": 8,
+          "python_adapter_used": 0,
+          "far_pairs": 1758,
+          "near_pairs": 1909,
+          "nonleaf_far_pairs": 10
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          2.2287278830059667e-08,
+          2.4194628264137894e-08
+        ]
+      }
+    },
+    {
+      "case": "fmm-small",
+      "backend": "cpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.011155700000017532,
+      "idle_before": {
+        "cpu_percent": 0.6,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55283859456
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 222363648,
+          "private": 1246449664,
+          "lifetime_peak_rss": 227479552
+        },
+        "after": {
+          "rss": 222392320,
+          "private": 1296588800,
+          "lifetime_peak_rss": 227479552
+        },
+        "sampled_peak_rss": 222392320,
+        "sampled_peak_private": 1296588800,
+        "sample_count": 2,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "fmm-small",
+      "backend": "cpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.011624100001426996,
+      "idle_before": {
+        "cpu_percent": 0.8,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55282352128
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 222367744,
+          "private": 1246453760,
+          "lifetime_peak_rss": 227479552
+        },
+        "after": {
+          "rss": 222388224,
+          "private": 1296584704,
+          "lifetime_peak_rss": 227479552
+        },
+        "sampled_peak_rss": 222388224,
+        "sampled_peak_private": 1296584704,
+        "sample_count": 2,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "fmm-small",
+      "backend": "gpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.1425359,
+      "idle_before": {
+        "cpu_percent": 0.1,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55284400128
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1409732608,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1426530304
+        },
+        "after": {
+          "rss": 1409732608,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1426530304
+        },
+        "sampled_peak_rss": 1409732608,
+        "sampled_peak_private": 1743167488,
+        "sample_count": 4,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.1425359,
+        "native": {
+          "apply_seconds": 0.1169672,
+          "persistent_geometry_bytes": 16818456,
+          "workspace_bytes": 1966080,
+          "output_bytes": 12288,
+          "nodes": 80,
+          "levels": 4,
+          "order": 8,
+          "python_adapter_used": 0,
+          "far_pairs": 1758,
+          "near_pairs": 1909,
+          "nonleaf_far_pairs": 10
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          2.2287278830059667e-08,
+          2.4194628264137894e-08
+        ]
+      }
+    },
+    {
+      "case": "fmm-small",
+      "backend": "gpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.1191498,
+      "idle_before": {
+        "cpu_percent": 0.7,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55284117504
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1409740800,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1426530304
+        },
+        "after": {
+          "rss": 1410011136,
+          "private": 1743167488,
+          "lifetime_peak_rss": 1426657280
+        },
+        "sampled_peak_rss": 1410011136,
+        "sampled_peak_private": 1743167488,
+        "sample_count": 4,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.1191498,
+        "native": {
+          "apply_seconds": 0.0829311,
+          "persistent_geometry_bytes": 16818456,
+          "workspace_bytes": 1966080,
+          "output_bytes": 12288,
+          "nodes": 80,
+          "levels": 4,
+          "order": 8,
+          "python_adapter_used": 0,
+          "far_pairs": 1758,
+          "near_pairs": 1909,
+          "nonleaf_far_pairs": 10
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          2.2287278830059667e-08,
+          2.4194628264137894e-08
+        ]
+      }
+    },
+    {
+      "case": "fmm-small",
+      "backend": "cpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.011007099999915226,
+      "idle_before": {
+        "cpu_percent": 0.8,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55283490816
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 222371840,
+          "private": 1246449664,
+          "lifetime_peak_rss": 227479552
+        },
+        "after": {
+          "rss": 222400512,
+          "private": 1296588800,
+          "lifetime_peak_rss": 227479552
+        },
+        "sampled_peak_rss": 222400512,
+        "sampled_peak_private": 1296588800,
+        "sample_count": 2,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "fmm-large",
+      "backend": "cpu",
+      "phase": "first",
+      "whole_seconds": 4.911847600000328,
+      "idle_before": {
+        "cpu_percent": 1.2,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55278284800
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 222375936,
+          "private": 1246453760,
+          "lifetime_peak_rss": 227479552
+        },
+        "after": {
+          "rss": 222924800,
+          "private": 1297174528,
+          "lifetime_peak_rss": 294268928
+        },
+        "sampled_peak_rss": 294006784,
+        "sampled_peak_private": 1368682496,
+        "sample_count": 80,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "fmm-large",
+      "backend": "gpu",
+      "phase": "first",
+      "whole_seconds": 0.2641841,
+      "idle_before": {
+        "cpu_percent": 0.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55283093504
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1409974272,
+          "private": 1743114240,
+          "lifetime_peak_rss": 1426657280
+        },
+        "after": {
+          "rss": 1409974272,
+          "private": 1743114240,
+          "lifetime_peak_rss": 1426657280
+        },
+        "sampled_peak_rss": 1409974272,
+        "sampled_peak_private": 1743114240,
+        "sample_count": 6,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.2641841,
+        "native": {
+          "apply_seconds": 0.2543636,
+          "persistent_geometry_bytes": 3570276,
+          "workspace_bytes": 3411072,
+          "output_bytes": 196608,
+          "nodes": 329,
+          "levels": 4,
+          "order": 6,
+          "python_adapter_used": 0,
+          "far_pairs": 35409,
+          "near_pairs": 30098,
+          "nonleaf_far_pairs": 200
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42162385812.0,
+        "available_memory_delta": -786432,
+        "independent_relative_errors": [
+          1.53085867804373e-07,
+          5.9286636164896744e-08
+        ]
+      }
+    },
+    {
+      "case": "fmm-large",
+      "backend": "cpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 4.929078600000139,
+      "idle_before": {
+        "cpu_percent": 0.8,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55273160704
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 223219712,
+          "private": 1247215616,
+          "lifetime_peak_rss": 294268928
+        },
+        "after": {
+          "rss": 223248384,
+          "private": 1297350656,
+          "lifetime_peak_rss": 294592512
+        },
+        "sampled_peak_rss": 293052416,
+        "sampled_peak_private": 1368858624,
+        "sample_count": 80,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "fmm-large",
+      "backend": "gpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.2472534,
+      "idle_before": {
+        "cpu_percent": 0.8,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55264964608
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1409966080,
+          "private": 1743114240,
+          "lifetime_peak_rss": 1426657280
+        },
+        "after": {
+          "rss": 1409966080,
+          "private": 1743114240,
+          "lifetime_peak_rss": 1426657280
+        },
+        "sampled_peak_rss": 1409966080,
+        "sampled_peak_private": 1743114240,
+        "sample_count": 6,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.2472534,
+        "native": {
+          "apply_seconds": 0.2379546,
+          "persistent_geometry_bytes": 3570276,
+          "workspace_bytes": 3411072,
+          "output_bytes": 196608,
+          "nodes": 329,
+          "levels": 4,
+          "order": 6,
+          "python_adapter_used": 0,
+          "far_pairs": 35409,
+          "near_pairs": 30098,
+          "nonleaf_far_pairs": 200
+        },
+        "device_free_before": 42162533268.0,
+        "device_free_after": 42162385812.0,
+        "available_memory_delta": 147456,
+        "independent_relative_errors": [
+          1.53085867804373e-07,
+          5.9286636164896744e-08
+        ]
+      }
+    },
+    {
+      "case": "fmm-large",
+      "backend": "gpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.2236429,
+      "idle_before": {
+        "cpu_percent": 7.9,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55262654464
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1409957888,
+          "private": 1743114240,
+          "lifetime_peak_rss": 1426657280
+        },
+        "after": {
+          "rss": 1409957888,
+          "private": 1743114240,
+          "lifetime_peak_rss": 1426657280
+        },
+        "sampled_peak_rss": 1409957888,
+        "sampled_peak_private": 1743114240,
+        "sample_count": 5,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.2236429,
+        "native": {
+          "apply_seconds": 0.214403,
+          "persistent_geometry_bytes": 3570276,
+          "workspace_bytes": 3411072,
+          "output_bytes": 196608,
+          "nodes": 329,
+          "levels": 4,
+          "order": 6,
+          "python_adapter_used": 0,
+          "far_pairs": 35409,
+          "near_pairs": 30098,
+          "nonleaf_far_pairs": 200
+        },
+        "device_free_before": 42162533268.0,
+        "device_free_after": 42162385812.0,
+        "available_memory_delta": 147456,
+        "independent_relative_errors": [
+          1.53085867804373e-07,
+          5.9286636164896744e-08
+        ]
+      }
+    },
+    {
+      "case": "fmm-large",
+      "backend": "cpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 4.9674255000009,
+      "idle_before": {
+        "cpu_percent": 1.1,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55272448000
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 223412224,
+          "private": 1247391744,
+          "lifetime_peak_rss": 294592512
+        },
+        "after": {
+          "rss": 223375360,
+          "private": 1297416192,
+          "lifetime_peak_rss": 294785024
+        },
+        "sampled_peak_rss": 294191104,
+        "sampled_peak_private": 1369038848,
+        "sample_count": 81,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "fmm-large",
+      "backend": "cpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 4.961232800000289,
+      "idle_before": {
+        "cpu_percent": 0.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55276924928
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 223346688,
+          "private": 1247277056,
+          "lifetime_peak_rss": 294785024
+        },
+        "after": {
+          "rss": 223371264,
+          "private": 1297412096,
+          "lifetime_peak_rss": 294785024
+        },
+        "sampled_peak_rss": 290516992,
+        "sampled_peak_private": 1368915968,
+        "sample_count": 81,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "fmm-large",
+      "backend": "gpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.2556637,
+      "idle_before": {
+        "cpu_percent": 0.4,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55265701888
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1409884160,
+          "private": 1742999552,
+          "lifetime_peak_rss": 1426657280
+        },
+        "after": {
+          "rss": 1409884160,
+          "private": 1742999552,
+          "lifetime_peak_rss": 1426657280
+        },
+        "sampled_peak_rss": 1409884160,
+        "sampled_peak_private": 1742999552,
+        "sample_count": 6,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.2556637,
+        "native": {
+          "apply_seconds": 0.246231,
+          "persistent_geometry_bytes": 3570276,
+          "workspace_bytes": 3411072,
+          "output_bytes": 196608,
+          "nodes": 329,
+          "levels": 4,
+          "order": 6,
+          "python_adapter_used": 0,
+          "far_pairs": 35409,
+          "near_pairs": 30098,
+          "nonleaf_far_pairs": 200
+        },
+        "device_free_before": 42162533268.0,
+        "device_free_after": 42162385812.0,
+        "available_memory_delta": 147456,
+        "independent_relative_errors": [
+          1.53085867804373e-07,
+          5.9286636164896744e-08
+        ]
+      }
+    },
+    {
+      "case": "fmm-large",
+      "backend": "gpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.2251271,
+      "idle_before": {
+        "cpu_percent": 1.0,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55272058880
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1409880064,
+          "private": 1742999552,
+          "lifetime_peak_rss": 1426657280
+        },
+        "after": {
+          "rss": 1409880064,
+          "private": 1742999552,
+          "lifetime_peak_rss": 1426657280
+        },
+        "sampled_peak_rss": 1409880064,
+        "sampled_peak_private": 1742999552,
+        "sample_count": 5,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.2251271,
+        "native": {
+          "apply_seconds": 0.21581,
+          "persistent_geometry_bytes": 3570276,
+          "workspace_bytes": 3411072,
+          "output_bytes": 196608,
+          "nodes": 329,
+          "levels": 4,
+          "order": 6,
+          "python_adapter_used": 0,
+          "far_pairs": 35409,
+          "near_pairs": 30098,
+          "nonleaf_far_pairs": 200
+        },
+        "device_free_before": 42162533268.0,
+        "device_free_after": 42162385812.0,
+        "available_memory_delta": 147456,
+        "independent_relative_errors": [
+          1.53085867804373e-07,
+          5.9286636164896744e-08
+        ]
+      }
+    },
+    {
+      "case": "fmm-large",
+      "backend": "cpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 4.902650200001517,
+      "idle_before": {
+        "cpu_percent": 1.1,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55279521792
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 223592448,
+          "private": 1247526912,
+          "lifetime_peak_rss": 294785024
+        },
+        "after": {
+          "rss": 223617024,
+          "private": 1297661952,
+          "lifetime_peak_rss": 294961152
+        },
+        "sampled_peak_rss": 292229120,
+        "sampled_peak_private": 1369169920,
+        "sample_count": 80,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "physical",
+      "backend": "cpu",
+      "phase": "first",
+      "whole_seconds": 0.07400429999870539,
+      "idle_before": {
+        "cpu_percent": 0.6,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55280209920
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 223592448,
+          "private": 1247526912,
+          "lifetime_peak_rss": 294961152
+        },
+        "after": {
+          "rss": 226353152,
+          "private": 1300594688,
+          "lifetime_peak_rss": 294961152
+        },
+        "sampled_peak_rss": 242847744,
+        "sampled_peak_private": 1317462016,
+        "sample_count": 3,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "physical",
+      "backend": "gpu",
+      "phase": "first",
+      "whole_seconds": 0.5118506,
+      "idle_before": {
+        "cpu_percent": 0.1,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55276253184
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1409908736,
+          "private": 1742999552,
+          "lifetime_peak_rss": 1426657280
+        },
+        "after": {
+          "rss": 1467953152,
+          "private": 1817653248,
+          "lifetime_peak_rss": 1484730368
+        },
+        "sampled_peak_rss": 1482842112,
+        "sampled_peak_private": 1833865216,
+        "sample_count": 10,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.5118506,
+        "native": {
+          "sl": {
+            "apply_seconds": 0.0511311,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0
+          },
+          "dl": {
+            "apply_seconds": 0.050233,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0
+          },
+          "bs": {
+            "apply_seconds": 0.0733747,
+            "persistent_geometry_bytes": 16860764,
+            "workspace_bytes": 5357568,
+            "output_bytes": 6144,
+            "nodes": 218,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 155,
+            "near_pairs": 59,
+            "nonleaf_far_pairs": 0,
+            "physical_scaling": "SI: permeability/(4*pi); A in T*m, B in T"
+          },
+          "cloud": {
+            "apply_seconds": 0.0448493,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0,
+            "convention": "Existing RadFld retained-cloud convention, without 1/(4*pi)"
+          }
+        },
+        "device_free_before": 42162533268.0,
+        "device_free_after": 42162549163.0,
+        "available_memory_delta": -15895,
+        "independent_relative_errors": [
+          4.5247102838563547e-10,
+          2.063275888245823e-09,
+          1.8068127113979095e-06,
+          1.2523404563814358e-14,
+          3.425908124630722e-08
+        ]
+      }
+    },
+    {
+      "case": "physical",
+      "backend": "cpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.07310770000003686,
+      "idle_before": {
+        "cpu_percent": 1.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55218466816
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 226332672,
+          "private": 1250459648,
+          "lifetime_peak_rss": 294961152
+        },
+        "after": {
+          "rss": 226357248,
+          "private": 1300594688,
+          "lifetime_peak_rss": 294961152
+        },
+        "sampled_peak_rss": 241860608,
+        "sampled_peak_private": 1317466112,
+        "sample_count": 3,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "physical",
+      "backend": "gpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.3061107,
+      "idle_before": {
+        "cpu_percent": 0.8,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55218892800
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1468903424,
+          "private": 1818603520,
+          "lifetime_peak_rss": 1484730368
+        },
+        "after": {
+          "rss": 1468911616,
+          "private": 1818603520,
+          "lifetime_peak_rss": 1485688832
+        },
+        "sampled_peak_rss": 1485684736,
+        "sampled_peak_private": 1835421696,
+        "sample_count": 7,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.3061107,
+        "native": {
+          "sl": {
+            "apply_seconds": 0.0511099,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0
+          },
+          "dl": {
+            "apply_seconds": 0.0502175,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0
+          },
+          "bs": {
+            "apply_seconds": 0.0578309,
+            "persistent_geometry_bytes": 16860764,
+            "workspace_bytes": 5357568,
+            "output_bytes": 6144,
+            "nodes": 218,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 155,
+            "near_pairs": 59,
+            "nonleaf_far_pairs": 0,
+            "physical_scaling": "SI: permeability/(4*pi); A in T*m, B in T"
+          },
+          "cloud": {
+            "apply_seconds": 0.0398122,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0,
+            "convention": "Existing RadFld retained-cloud convention, without 1/(4*pi)"
+          }
+        },
+        "device_free_before": 42162549163.0,
+        "device_free_after": 42162549163.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          4.5247102838563547e-10,
+          2.063275888245823e-09,
+          1.8068127113979095e-06,
+          1.2523404563814358e-14,
+          3.425908124630722e-08
+        ]
+      }
+    },
+    {
+      "case": "physical",
+      "backend": "gpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.2914708,
+      "idle_before": {
+        "cpu_percent": 5.5,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55190863872
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1469009920,
+          "private": 1818738688,
+          "lifetime_peak_rss": 1485688832
+        },
+        "after": {
+          "rss": 1469521920,
+          "private": 1818738688,
+          "lifetime_peak_rss": 1486303232
+        },
+        "sampled_peak_rss": 1486303232,
+        "sampled_peak_private": 1835556864,
+        "sample_count": 6,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.2914708,
+        "native": {
+          "sl": {
+            "apply_seconds": 0.0397965,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0
+          },
+          "dl": {
+            "apply_seconds": 0.0390899,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0
+          },
+          "bs": {
+            "apply_seconds": 0.0585351,
+            "persistent_geometry_bytes": 16860764,
+            "workspace_bytes": 5357568,
+            "output_bytes": 6144,
+            "nodes": 218,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 155,
+            "near_pairs": 59,
+            "nonleaf_far_pairs": 0,
+            "physical_scaling": "SI: permeability/(4*pi); A in T*m, B in T"
+          },
+          "cloud": {
+            "apply_seconds": 0.0398032,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0,
+            "convention": "Existing RadFld retained-cloud convention, without 1/(4*pi)"
+          }
+        },
+        "device_free_before": 42162549163.0,
+        "device_free_after": 42162549163.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          4.5247102838563547e-10,
+          2.063275888245823e-09,
+          1.8068127113979095e-06,
+          1.2523404563814358e-14,
+          3.425908124630722e-08
+        ]
+      }
+    },
+    {
+      "case": "physical",
+      "backend": "cpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 0.072994899999685,
+      "idle_before": {
+        "cpu_percent": 1.7,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55199461376
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 226373632,
+          "private": 1250582528,
+          "lifetime_peak_rss": 294961152
+        },
+        "after": {
+          "rss": 226398208,
+          "private": 1300717568,
+          "lifetime_peak_rss": 294961152
+        },
+        "sampled_peak_rss": 242425856,
+        "sampled_peak_private": 1317588992,
+        "sample_count": 3,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "physical",
+      "backend": "cpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.07271439999931317,
+      "idle_before": {
+        "cpu_percent": 0.0,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55200456704
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 226377728,
+          "private": 1250582528,
+          "lifetime_peak_rss": 294961152
+        },
+        "after": {
+          "rss": 226406400,
+          "private": 1300721664,
+          "lifetime_peak_rss": 294961152
+        },
+        "sampled_peak_rss": 236920832,
+        "sampled_peak_private": 1311281152,
+        "sample_count": 3,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "physical",
+      "backend": "gpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.3130506,
+      "idle_before": {
+        "cpu_percent": 0.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55199588352
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1469878272,
+          "private": 1819107328,
+          "lifetime_peak_rss": 1486303232
+        },
+        "after": {
+          "rss": 1469923328,
+          "private": 1819107328,
+          "lifetime_peak_rss": 1486663680
+        },
+        "sampled_peak_rss": 1469923328,
+        "sampled_peak_private": 1819107328,
+        "sample_count": 7,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.3130506,
+        "native": {
+          "sl": {
+            "apply_seconds": 0.0511171,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0
+          },
+          "dl": {
+            "apply_seconds": 0.0501912,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0
+          },
+          "bs": {
+            "apply_seconds": 0.0749583,
+            "persistent_geometry_bytes": 16860764,
+            "workspace_bytes": 5357568,
+            "output_bytes": 6144,
+            "nodes": 218,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 155,
+            "near_pairs": 59,
+            "nonleaf_far_pairs": 0,
+            "physical_scaling": "SI: permeability/(4*pi); A in T*m, B in T"
+          },
+          "cloud": {
+            "apply_seconds": 0.0398743,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0,
+            "convention": "Existing RadFld retained-cloud convention, without 1/(4*pi)"
+          }
+        },
+        "device_free_before": 42162549163.0,
+        "device_free_after": 42162549163.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          4.5247102838563547e-10,
+          2.063275888245823e-09,
+          1.8068127113979095e-06,
+          1.2523404563814358e-14,
+          3.425908124630722e-08
+        ]
+      }
+    },
+    {
+      "case": "physical",
+      "backend": "gpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.2869627,
+      "idle_before": {
+        "cpu_percent": 0.5,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55197233152
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1470271488,
+          "private": 1819467776,
+          "lifetime_peak_rss": 1486663680
+        },
+        "after": {
+          "rss": 1470984192,
+          "private": 1819676672,
+          "lifetime_peak_rss": 1487523840
+        },
+        "sampled_peak_rss": 1487523840,
+        "sampled_peak_private": 1836285952,
+        "sample_count": 6,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 0.2869627,
+        "native": {
+          "sl": {
+            "apply_seconds": 0.0397886,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0
+          },
+          "dl": {
+            "apply_seconds": 0.0390802,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0
+          },
+          "bs": {
+            "apply_seconds": 0.0552318,
+            "persistent_geometry_bytes": 16860764,
+            "workspace_bytes": 5357568,
+            "output_bytes": 6144,
+            "nodes": 218,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 155,
+            "near_pairs": 59,
+            "nonleaf_far_pairs": 0,
+            "physical_scaling": "SI: permeability/(4*pi); A in T*m, B in T"
+          },
+          "cloud": {
+            "apply_seconds": 0.0397849,
+            "persistent_geometry_bytes": 16843112,
+            "workspace_bytes": 1294336,
+            "output_bytes": 3072,
+            "nodes": 158,
+            "levels": 6,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 727,
+            "near_pairs": 2742,
+            "nonleaf_far_pairs": 0,
+            "convention": "Existing RadFld retained-cloud convention, without 1/(4*pi)"
+          }
+        },
+        "device_free_before": 42162549163.0,
+        "device_free_after": 42162549163.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          4.5247102838563547e-10,
+          2.063275888245823e-09,
+          1.8068127113979095e-06,
+          1.2523404563814358e-14,
+          3.425908124630722e-08
+        ]
+      }
+    },
+    {
+      "case": "physical",
+      "backend": "cpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 0.07475809999959893,
+      "idle_before": {
+        "cpu_percent": 1.0,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55182385152
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 226426880,
+          "private": 1250582528,
+          "lifetime_peak_rss": 294961152
+        },
+        "after": {
+          "rss": 226451456,
+          "private": 1300717568,
+          "lifetime_peak_rss": 294961152
+        },
+        "sampled_peak_rss": 239718400,
+        "sampled_peak_private": 1314430976,
+        "sample_count": 3,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "boundary",
+      "backend": "cpu",
+      "phase": "first",
+      "whole_seconds": 20.470469899999443,
+      "idle_before": {
+        "cpu_percent": 1.0,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55189413888
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 226439168,
+          "private": 1250582528,
+          "lifetime_peak_rss": 294961152
+        },
+        "after": {
+          "rss": 227766272,
+          "private": 1300955136,
+          "lifetime_peak_rss": 438190080
+        },
+        "sampled_peak_rss": 227766272,
+        "sampled_peak_private": 1300971520,
+        "sample_count": 4,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "boundary",
+      "backend": "gpu",
+      "phase": "first",
+      "whole_seconds": 3.0403264,
+      "idle_before": {
+        "cpu_percent": 0.6,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55191937024
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1471135744,
+          "private": 1819910144,
+          "lifetime_peak_rss": 1487523840
+        },
+        "after": {
+          "rss": 1479204864,
+          "private": 1828438016,
+          "lifetime_peak_rss": 1495977984
+        },
+        "sampled_peak_rss": 1479204864,
+        "sampled_peak_private": 1832644608,
+        "sample_count": 50,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 3.0403264,
+        "native": {
+          "sl_setup": {
+            "schema": "radia.flat-p1-boundary-fmm.v1",
+            "global_dofs": [
+              0,
+              8,
+              18,
+              1,
+              13,
+              5,
+              15,
+              3,
+              16,
+              19,
+              4,
+              14,
+              2,
+              7,
+              11,
+              9,
+              6,
+              10,
+              12,
+              17
+            ],
+            "boundary_dofs": 20,
+            "quadrature_points": 2916,
+            "exact_near_pairs": 1296,
+            "setup_seconds": 1.4106259,
+            "near_quadrature": "Shared P1 Sauter-Schwab, singular order 10; regular degree 17",
+            "far_quadrature": "NGSolve triangle degree 16",
+            "geometry": "Flat exterior scalar P1 only"
+          },
+          "sl": {
+            "apply_seconds": 0.1042538,
+            "persistent_geometry_bytes": 17012376,
+            "workspace_bytes": 1744896,
+            "output_bytes": 93312,
+            "nodes": 213,
+            "levels": 5,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 5002,
+            "near_pairs": 7210,
+            "nonleaf_far_pairs": 457
+          },
+          "dl_setup": {
+            "schema": "radia.flat-p1-boundary-fmm.v1",
+            "global_dofs": [
+              0,
+              8,
+              18,
+              1,
+              13,
+              5,
+              15,
+              3,
+              16,
+              19,
+              4,
+              14,
+              2,
+              7,
+              11,
+              9,
+              6,
+              10,
+              12,
+              17
+            ],
+            "boundary_dofs": 20,
+            "quadrature_points": 2916,
+            "exact_near_pairs": 1296,
+            "setup_seconds": 1.4221556,
+            "near_quadrature": "Shared P1 Sauter-Schwab, singular order 10; regular degree 17",
+            "far_quadrature": "NGSolve triangle degree 16",
+            "geometry": "Flat exterior scalar P1 only"
+          },
+          "dl": {
+            "apply_seconds": 0.0797076,
+            "persistent_geometry_bytes": 17012376,
+            "workspace_bytes": 1744896,
+            "output_bytes": 93312,
+            "nodes": 213,
+            "levels": 5,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 5002,
+            "near_pairs": 7210,
+            "nonleaf_far_pairs": 457
+          }
+        },
+        "device_free_before": 42162549163.0,
+        "device_free_after": 42163028947.0,
+        "available_memory_delta": -479784,
+        "independent_relative_errors": [
+          9.141817279928511e-10,
+          2.0261266169644782e-08
+        ]
+      }
+    },
+    {
+      "case": "boundary",
+      "backend": "cpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 20.502404200000456,
+      "idle_before": {
+        "cpu_percent": 0.6,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55213285376
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 227762176,
+          "private": 1250820096,
+          "lifetime_peak_rss": 438190080
+        },
+        "after": {
+          "rss": 227536896,
+          "private": 1150353408,
+          "lifetime_peak_rss": 438370304
+        },
+        "sampled_peak_rss": 227774464,
+        "sampled_peak_private": 1250836480,
+        "sample_count": 4,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "boundary",
+      "backend": "gpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 3.0177956,
+      "idle_before": {
+        "cpu_percent": 1.1,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55204081664
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1378918400,
+          "private": 1828405248,
+          "lifetime_peak_rss": 1495977984
+        },
+        "after": {
+          "rss": 1378922496,
+          "private": 1828257792,
+          "lifetime_peak_rss": 1495977984
+        },
+        "sampled_peak_rss": 1378934784,
+        "sampled_peak_private": 1832611840,
+        "sample_count": 50,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 3.0177956,
+        "native": {
+          "sl_setup": {
+            "schema": "radia.flat-p1-boundary-fmm.v1",
+            "global_dofs": [
+              0,
+              8,
+              18,
+              1,
+              13,
+              5,
+              15,
+              3,
+              16,
+              19,
+              4,
+              14,
+              2,
+              7,
+              11,
+              9,
+              6,
+              10,
+              12,
+              17
+            ],
+            "boundary_dofs": 20,
+            "quadrature_points": 2916,
+            "exact_near_pairs": 1296,
+            "setup_seconds": 1.4028972,
+            "near_quadrature": "Shared P1 Sauter-Schwab, singular order 10; regular degree 17",
+            "far_quadrature": "NGSolve triangle degree 16",
+            "geometry": "Flat exterior scalar P1 only"
+          },
+          "sl": {
+            "apply_seconds": 0.1042577,
+            "persistent_geometry_bytes": 17012376,
+            "workspace_bytes": 1744896,
+            "output_bytes": 93312,
+            "nodes": 213,
+            "levels": 5,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 5002,
+            "near_pairs": 7210,
+            "nonleaf_far_pairs": 457
+          },
+          "dl_setup": {
+            "schema": "radia.flat-p1-boundary-fmm.v1",
+            "global_dofs": [
+              0,
+              8,
+              18,
+              1,
+              13,
+              5,
+              15,
+              3,
+              16,
+              19,
+              4,
+              14,
+              2,
+              7,
+              11,
+              9,
+              6,
+              10,
+              12,
+              17
+            ],
+            "boundary_dofs": 20,
+            "quadrature_points": 2916,
+            "exact_near_pairs": 1296,
+            "setup_seconds": 1.4015948,
+            "near_quadrature": "Shared P1 Sauter-Schwab, singular order 10; regular degree 17",
+            "far_quadrature": "NGSolve triangle degree 16",
+            "geometry": "Flat exterior scalar P1 only"
+          },
+          "dl": {
+            "apply_seconds": 0.1024855,
+            "persistent_geometry_bytes": 17012376,
+            "workspace_bytes": 1744896,
+            "output_bytes": 93312,
+            "nodes": 213,
+            "levels": 5,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 5002,
+            "near_pairs": 7210,
+            "nonleaf_far_pairs": 457
+          }
+        },
+        "device_free_before": 42163028947.0,
+        "device_free_after": 42163028947.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          9.141817279928511e-10,
+          2.0261266169733876e-08
+        ]
+      }
+    },
+    {
+      "case": "boundary",
+      "backend": "gpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 3.0171839,
+      "idle_before": {
+        "cpu_percent": 1.1,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55213465600
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1378938880,
+          "private": 1828257792,
+          "lifetime_peak_rss": 1495977984
+        },
+        "after": {
+          "rss": 1379319808,
+          "private": 1829310464,
+          "lifetime_peak_rss": 1495977984
+        },
+        "sampled_peak_rss": 1379319808,
+        "sampled_peak_private": 1833517056,
+        "sample_count": 50,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 3.0171839,
+        "native": {
+          "sl_setup": {
+            "schema": "radia.flat-p1-boundary-fmm.v1",
+            "global_dofs": [
+              0,
+              8,
+              18,
+              1,
+              13,
+              5,
+              15,
+              3,
+              16,
+              19,
+              4,
+              14,
+              2,
+              7,
+              11,
+              9,
+              6,
+              10,
+              12,
+              17
+            ],
+            "boundary_dofs": 20,
+            "quadrature_points": 2916,
+            "exact_near_pairs": 1296,
+            "setup_seconds": 1.413032,
+            "near_quadrature": "Shared P1 Sauter-Schwab, singular order 10; regular degree 17",
+            "far_quadrature": "NGSolve triangle degree 16",
+            "geometry": "Flat exterior scalar P1 only"
+          },
+          "sl": {
+            "apply_seconds": 0.1042512,
+            "persistent_geometry_bytes": 17012376,
+            "workspace_bytes": 1744896,
+            "output_bytes": 93312,
+            "nodes": 213,
+            "levels": 5,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 5002,
+            "near_pairs": 7210,
+            "nonleaf_far_pairs": 457
+          },
+          "dl_setup": {
+            "schema": "radia.flat-p1-boundary-fmm.v1",
+            "global_dofs": [
+              0,
+              8,
+              18,
+              1,
+              13,
+              5,
+              15,
+              3,
+              16,
+              19,
+              4,
+              14,
+              2,
+              7,
+              11,
+              9,
+              6,
+              10,
+              12,
+              17
+            ],
+            "boundary_dofs": 20,
+            "quadrature_points": 2916,
+            "exact_near_pairs": 1296,
+            "setup_seconds": 1.4088556,
+            "near_quadrature": "Shared P1 Sauter-Schwab, singular order 10; regular degree 17",
+            "far_quadrature": "NGSolve triangle degree 16",
+            "geometry": "Flat exterior scalar P1 only"
+          },
+          "dl": {
+            "apply_seconds": 0.0796968,
+            "persistent_geometry_bytes": 17012376,
+            "workspace_bytes": 1744896,
+            "output_bytes": 93312,
+            "nodes": 213,
+            "levels": 5,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 5002,
+            "near_pairs": 7210,
+            "nonleaf_far_pairs": 457
+          }
+        },
+        "device_free_before": 42163028947.0,
+        "device_free_after": 42163028947.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          9.141817279928511e-10,
+          2.0261266185648933e-08
+        ]
+      }
+    },
+    {
+      "case": "boundary",
+      "backend": "cpu",
+      "phase": "ABBA-0",
+      "whole_seconds": 20.52507279999918,
+      "idle_before": {
+        "cpu_percent": 1.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55222333440
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 227770368,
+          "private": 1101676544,
+          "lifetime_peak_rss": 438370304
+        },
+        "after": {
+          "rss": 227811328,
+          "private": 1151819776,
+          "lifetime_peak_rss": 438403072
+        },
+        "sampled_peak_rss": 227815424,
+        "sampled_peak_private": 1151836160,
+        "sample_count": 4,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "boundary",
+      "backend": "cpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 20.48066149999977,
+      "idle_before": {
+        "cpu_percent": 0.6,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55228981248
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 227790848,
+          "private": 1101676544,
+          "lifetime_peak_rss": 438403072
+        },
+        "after": {
+          "rss": 227815424,
+          "private": 1151815680,
+          "lifetime_peak_rss": 438476800
+        },
+        "sampled_peak_rss": 227819520,
+        "sampled_peak_private": 1151832064,
+        "sample_count": 4,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    },
+    {
+      "case": "boundary",
+      "backend": "gpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 3.0164721,
+      "idle_before": {
+        "cpu_percent": 0.2,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55223476224
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1378873344,
+          "private": 1829310464,
+          "lifetime_peak_rss": 1495977984
+        },
+        "after": {
+          "rss": 1378975744,
+          "private": 1829310464,
+          "lifetime_peak_rss": 1495977984
+        },
+        "sampled_peak_rss": 1378975744,
+        "sampled_peak_private": 1833517056,
+        "sample_count": 50,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 3.0164721,
+        "native": {
+          "sl_setup": {
+            "schema": "radia.flat-p1-boundary-fmm.v1",
+            "global_dofs": [
+              0,
+              8,
+              18,
+              1,
+              13,
+              5,
+              15,
+              3,
+              16,
+              19,
+              4,
+              14,
+              2,
+              7,
+              11,
+              9,
+              6,
+              10,
+              12,
+              17
+            ],
+            "boundary_dofs": 20,
+            "quadrature_points": 2916,
+            "exact_near_pairs": 1296,
+            "setup_seconds": 1.414151,
+            "near_quadrature": "Shared P1 Sauter-Schwab, singular order 10; regular degree 17",
+            "far_quadrature": "NGSolve triangle degree 16",
+            "geometry": "Flat exterior scalar P1 only"
+          },
+          "sl": {
+            "apply_seconds": 0.1042629,
+            "persistent_geometry_bytes": 17012376,
+            "workspace_bytes": 1744896,
+            "output_bytes": 93312,
+            "nodes": 213,
+            "levels": 5,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 5002,
+            "near_pairs": 7210,
+            "nonleaf_far_pairs": 457
+          },
+          "dl_setup": {
+            "schema": "radia.flat-p1-boundary-fmm.v1",
+            "global_dofs": [
+              0,
+              8,
+              18,
+              1,
+              13,
+              5,
+              15,
+              3,
+              16,
+              19,
+              4,
+              14,
+              2,
+              7,
+              11,
+              9,
+              6,
+              10,
+              12,
+              17
+            ],
+            "boundary_dofs": 20,
+            "quadrature_points": 2916,
+            "exact_near_pairs": 1296,
+            "setup_seconds": 1.4127358,
+            "near_quadrature": "Shared P1 Sauter-Schwab, singular order 10; regular degree 17",
+            "far_quadrature": "NGSolve triangle degree 16",
+            "geometry": "Flat exterior scalar P1 only"
+          },
+          "dl": {
+            "apply_seconds": 0.07971,
+            "persistent_geometry_bytes": 17012376,
+            "workspace_bytes": 1744896,
+            "output_bytes": 93312,
+            "nodes": 213,
+            "levels": 5,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 5002,
+            "near_pairs": 7210,
+            "nonleaf_far_pairs": 457
+          }
+        },
+        "device_free_before": 42163028947.0,
+        "device_free_after": 42163028947.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          9.141817495088453e-10,
+          2.0261266168882068e-08
+        ]
+      }
+    },
+    {
+      "case": "boundary",
+      "backend": "gpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 3.0224146,
+      "idle_before": {
+        "cpu_percent": 0.7,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55222902784
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 1378988032,
+          "private": 1829310464,
+          "lifetime_peak_rss": 1495977984
+        },
+        "after": {
+          "rss": 1379102720,
+          "private": 1829310464,
+          "lifetime_peak_rss": 1495977984
+        },
+        "sampled_peak_rss": 1395871744,
+        "sampled_peak_private": 1846124544,
+        "sample_count": 50,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {
+        "whole_seconds": 3.0224146,
+        "native": {
+          "sl_setup": {
+            "schema": "radia.flat-p1-boundary-fmm.v1",
+            "global_dofs": [
+              0,
+              8,
+              18,
+              1,
+              13,
+              5,
+              15,
+              3,
+              16,
+              19,
+              4,
+              14,
+              2,
+              7,
+              11,
+              9,
+              6,
+              10,
+              12,
+              17
+            ],
+            "boundary_dofs": 20,
+            "quadrature_points": 2916,
+            "exact_near_pairs": 1296,
+            "setup_seconds": 1.4145772,
+            "near_quadrature": "Shared P1 Sauter-Schwab, singular order 10; regular degree 17",
+            "far_quadrature": "NGSolve triangle degree 16",
+            "geometry": "Flat exterior scalar P1 only"
+          },
+          "sl": {
+            "apply_seconds": 0.1042497,
+            "persistent_geometry_bytes": 17012376,
+            "workspace_bytes": 1744896,
+            "output_bytes": 93312,
+            "nodes": 213,
+            "levels": 5,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 5002,
+            "near_pairs": 7210,
+            "nonleaf_far_pairs": 457
+          },
+          "dl_setup": {
+            "schema": "radia.flat-p1-boundary-fmm.v1",
+            "global_dofs": [
+              0,
+              8,
+              18,
+              1,
+              13,
+              5,
+              15,
+              3,
+              16,
+              19,
+              4,
+              14,
+              2,
+              7,
+              11,
+              9,
+              6,
+              10,
+              12,
+              17
+            ],
+            "boundary_dofs": 20,
+            "quadrature_points": 2916,
+            "exact_near_pairs": 1296,
+            "setup_seconds": 1.4122879,
+            "near_quadrature": "Shared P1 Sauter-Schwab, singular order 10; regular degree 17",
+            "far_quadrature": "NGSolve triangle degree 16",
+            "geometry": "Flat exterior scalar P1 only"
+          },
+          "dl": {
+            "apply_seconds": 0.0797218,
+            "persistent_geometry_bytes": 17012376,
+            "workspace_bytes": 1744896,
+            "output_bytes": 93312,
+            "nodes": 213,
+            "levels": 5,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 5002,
+            "near_pairs": 7210,
+            "nonleaf_far_pairs": 457
+          }
+        },
+        "device_free_before": 42163028947.0,
+        "device_free_after": 42163028947.0,
+        "available_memory_delta": 0,
+        "independent_relative_errors": [
+          9.141817279928511e-10,
+          2.0261266185648933e-08
+        ]
+      }
+    },
+    {
+      "case": "boundary",
+      "backend": "cpu",
+      "phase": "ABBA-1",
+      "whole_seconds": 20.578901200000473,
+      "idle_before": {
+        "cpu_percent": 0.7,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55230300160
+      },
+      "host_process_memory": {
+        "before": {
+          "rss": 228003840,
+          "private": 1101893632,
+          "lifetime_peak_rss": 438476800
+        },
+        "after": {
+          "rss": 228028416,
+          "private": 1152032768,
+          "lifetime_peak_rss": 438677504
+        },
+        "sampled_peak_rss": 228032512,
+        "sampled_peak_private": 1152049152,
+        "sample_count": 4,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "info": {}
+    }
+  ],
+  "scope": "Bounded independently validated HCurl Newton/AMS, scalar/dipole Laplace FMM and flat P1 boundary operators",
+  "classification": "Formal same-host NGSolve(A100) CPU/GPU evaluation, explicitly authorized by user",
+  "cpu_threads": 1,
+  "gpu_host_setup_threads": 1,
+  "cold_definition": "First numerical API call per case in one fresh owned process; process imports, MATLAB startup and GPU initialization recorded separately",
+  "memory_limits": "Exact native owned bounds and device-free endpoint samples plus 50ms host-process samples; no global-device/CUDA runtime transient peak certification",
+  "payload_sha256": {
+    "accept_payload.m": "2bbd9f49a227d26a35cec9a1ac9452cd9e4d9060a6194f99753fdb4f09c50967",
+    "ams-build.json": "ed2ed63e635956147dbd36554546a1b6ff9a118245557d977158c9fb250997cd",
+    "boundary-reference.mat": "efbf7c16e0fe6a241b273b1c412009f702d747c13ce87151bc878c3f6b9b25c9",
+    "boundary-vol-check.json": "1c219a6204090fb2fdd5b986f85d8ae89c5ed259e5eec6ddb9007b855a3aa0bc",
+    "boundary.vol": "d84d5dd430032285147d02be389e65013b88965c8f0275d52b68cec490c69e0d",
+    "dependency-imports.json": "813acdaf0ef99c5f5b2abd35c320d6000beb85aac15991e752e1e32e1dce6c40",
+    "fmm-build.json": "0630e9b7e7670f26d7553ceb26bb081290f96d583061c648dac8f5ebd2c1b5e6",
+    "fmm_boundary.m": "844b9c2a74a629bac0847fb4995e62027c5dab600fec2997c744ba701b41d15f",
+    "fmm_numeric.m": "c6b1b9dca3dd723ff842c5b7736ea222e07944b4ef7a4022fc046c837761761c",
+    "fmm_numeric.py": "1559610d0c06bff2f5d0e922cbb7d02b00ba4d6f4885900eaa5292d0ac97ebdd",
+    "fmm_physics.m": "caa548b8fcc7c77c87945e5560156fc2d336d55dc23eac64a5d9020ee1aa0299",
+    "measure_native_cpu_gpu.py": "e9cbadc1678e17f30859f4f885a427900b7494674c83d674e217c73968eaea9c",
+    "measure_native_sample.m": "f6d11b0fe4eb25dbd547f1e2e17059c98ac1aa29c841dff44c737f9d6dd6d459",
+    "model.vol": "4818353a2cccd3adf232f70af1db48a9679028b6ad76c277b1b6a34926137d54",
+    "modules.ps1": "d4e32e4e1e8239a8f33097be56b7da893bfbb67c92dd8133068ec21c4e7858ee",
+    "native_hcurl.m": "6a0b32fbe9ed9b4cc41504752f7740fae8047909d944ec09eb091c52ca8e39d5",
+    "nonlinear_resident.py": "e526ed1e837ae0983b40d15bb12d8421e52523fef615365ae2a2ce3e14a3df60",
+    "numeric-input.mat": "6a9c52e021c83f9e07213e6951af02d37bd57097603b8c8dafcd4dc25b4ae058",
+    "numeric-large.mat": "55a0bb047cdab7e714cf5ed687012f17094b5ff201ca146a760ea7bd08a8b544",
+    "owner.json": "b23c923846430a8192e5e7584456163682782dade712b6f9d35025bf219aede3",
+    "physics-input.mat": "56afae63bcb8ad6be1713470177bba5ea7960a9edd47ea6a9056203ba210c553",
+    "radia_cuda_ams.mexw64": "8c8a8110c26eb02e10c3542136c4c6e3f6dc1563a4d7da87ba9447e0427407e4",
+    "radia_cuda_fmm.mexw64": "a9659d7c657b8946886a2f479ef87a69127b15da4247a6d6229cc0f2cc618330",
+    "run_payload.ps1": "0adf04a26bf8c65757dfe8d6cf3d2fbe0bd817823dfd201c9e8d322de10e02d5",
+    "vol-check.json": "30165c171df735fe593a754dc770ca9cca5ddf9817dc0bde50e9651ebedac290",
+    "cpu/_radia_ams_cpu_reference.pyd": "5915fe13e7a6125928fb92d1cfb1bfe29e85871c073e49cd655a580debbb7c84",
+    "runtime/libngsolve.dll": "e70a3384994a6bb0c3b93b92dcfd83a208c129e7b883398dec48dad3a8a0b7c3",
+    "runtime/ngcore.dll": "5fffd984723eb74f701aef154227845cf4a3bdd63cdbb334a0d1c36480011a80",
+    "runtime/nglib.dll": "252e4c60e03f1f59eff98c2f2b54edc8026d322230215ffaf438a3138743445c",
+    "runtime/openblas.dll": "ea5706aaa7e88ea76f350faf4181c5e3393817a1ce1cd800501bf3ee21f205e8",
+    "runtime/python312.dll": "9a0e3435aaa680d868150f87ab3e388ad2eebc22f87e036155c7b4eda8cd2120",
+    "runtime/TKBO.dll": "d3b2713325bab8827d8cd8b941deca860c9f5b00ebba9fff0cdf1253fe025dac",
+    "runtime/TKBool.dll": "414145c8151059ffaf3e889fec5c71b79ab4cabbd68d8e9c7a5f36fdc363c8e1",
+    "runtime/TKBRep.dll": "4eeb8ac5448f05964f471149968ac085be93b9d7f031f0cd8848405bc6268d05",
+    "runtime/TKCAF.dll": "4c165333b0f95c4f4d3cdc5693f6ccfbde16057467ace5d911c495a866fd4727",
+    "runtime/TKCDF.dll": "c58882f366c25b5294c0bbdb56dad564a9974bc483bbf4f1a4d8f6104cdd8bb0",
+    "runtime/TKDE.dll": "7ffa031b9c98e7cdc364219bea7db1a8ae506b6cb60324df8afcdb0f8339be00",
+    "runtime/TKDEIGES.dll": "814ef5299bdbc1112f31f67b61ba41d455b75fbe7c1655231d5e8fff4a12a2f2",
+    "runtime/TKDESTEP.dll": "e1cc9208425a6fc30e6ab244a64e1a3b79721e6f49e8349e536bedab2115ced8",
+    "runtime/TKDESTL.dll": "a1c88b435c96d15ef57ded825afdbcbd5692523d76375464e707cf6701c34007",
+    "runtime/TKernel.dll": "883e7284a53c0da7c1e2dcf37f1a6596288c3e31ec82410d679d481e11c4a763",
+    "runtime/TKFillet.dll": "af109276a343f33c4551e0133ea7a99b68aa4b968bf257de9a60907405f5eece",
+    "runtime/TKG2d.dll": "75cb2397903008448394aac721cff43dad9d67dc0009c6a72a8b434600795331",
+    "runtime/TKG3d.dll": "95209d4993bd5727b174e423dcc037ea517022c54a6279b2ced91925552d6330",
+    "runtime/TKGeomAlgo.dll": "e9dd26ec6510708fde73488745b3349ff6cc0c4f68f5e7f8cf8b7efd3e680db0",
+    "runtime/TKGeomBase.dll": "8d005218401bc716654ef24cc8e48044c751ed893a45119fe838553d771c2389",
+    "runtime/TKHLR.dll": "a180c642e8e0274f4501090afd70ad5db05a968de7c9a3a2325ad5c2b2e83fa1",
+    "runtime/TKLCAF.dll": "f5e9395b130f4e3e8c868111729974f7dcc99da2486fff6c6fa05c4a67cbfde8",
+    "runtime/TKMath.dll": "8af896aa885d801adb5bf1755057bcb541696c7c2b50052d5b7f4c5d5e2ed7be",
+    "runtime/TKMesh.dll": "e08a33f2d41ea94940b5cae487c5550639960ec297c1bde6a6f058d5ff53ee7e",
+    "runtime/TKOffset.dll": "8a3e18af1f11dde245d45dfb12828a92e4fecc19b47d217483edfb6d40526b57",
+    "runtime/TKPrim.dll": "e8fbb1afbb9ba17797002ebd12b237f35f68202a805764e67b5edae2b6bf123b",
+    "runtime/TKService.dll": "adb8d475290c870a774ccad795fc9198540ee63cee06db6fb1bddc912026155b",
+    "runtime/TKShHealing.dll": "f482f534c7ed5fc5454a7ce45486eba9d5c3e727bb4ee1d76420c51c2b2975a5",
+    "runtime/TKTopAlgo.dll": "b3dae3787871b46f01e50f4da4f3f8a7fb1892f11918dfdd47950c1c50d8d86c",
+    "runtime/TKV3d.dll": "ded61f09e1acfae836eef4058c674f720f342176d7fe350fd25418876c18c419",
+    "runtime/TKVCAF.dll": "a4253ef4a77dcd466770376147365c9890ddebf1e2e48a229e455e642881fcb5",
+    "runtime/TKXCAF.dll": "b1a070316c131a808dbd5301f3c97507f9c81d639673a5d4978e038708e01ef0",
+    "runtime/TKXSBase.dll": "942f807c6b8b11872ffe05443af7bfbab96d93bcf6dc0c132a6923e0d55fc1e0",
+    "matlab/+radia/+gpu/affineHDivQuadrature.m": "c094de113eeee9e48ad4367e66548318eb2697d9f19c9ba9fe502d9b8e0188a8",
+    "matlab/+radia/+gpu/AMSContext.m": "04522dde928b1842b78c5b54507d592f78e4ef3f70d1433fad29bed5ec734cfd",
+    "matlab/+radia/+gpu/amsPCG.m": "9c57c38afb7d53f9df558e48a65c17a60215721cf5c818203405e3c9c529fb0c",
+    "matlab/+radia/+gpu/assembleHCurl.m": "014f91452466d6f02808e8b04bead05a023229193560819a10671bafade65290",
+    "matlab/+radia/+gpu/biotSavartFMM.m": "c9f85432d93904caa13a2dbd9008ebea4cc1299a54a312ad1b402a15fa91daef",
+    "matlab/+radia/+gpu/csrPCG.m": "9888d8ab40aab45700911b456887533b5dfd095f907a376ea13200bb14d995b6",
+    "matlab/+radia/+gpu/curvedHDivQuadrature.m": "da2cca32bfa95ba0866728248a24ef1a8897f5ccd12aa5997fb71e7bab618ab0",
+    "matlab/+radia/+gpu/FieldCloud.m": "69d8f056828c6ada4079d7d4754d2013723612455c04e9eda40a23f6bd4ae1c6",
+    "matlab/+radia/+gpu/fieldCloudFMM.m": "c189270af47a3a602198bea6ede2aeae5484c148a087dd8533a79313d1b62fbd",
+    "matlab/+radia/+gpu/FieldElements.m": "f092abbbc68c366ad46b0bba22e9fbc8bd0e15d6b70f93be5f86e461f807ecca",
+    "matlab/+radia/+gpu/HMatrixOperator.m": "d98a77641d51eea484cefc8d9ee5b12d03395725b3ac7ccda8150e242933052a",
+    "matlab/+radia/+gpu/LaplaceBoundaryFMM.m": "f9211a21a8f711e699f619d760fc0924a77cbbabe322b61810823b4de2f1ca6d",
+    "matlab/+radia/+gpu/LaplaceFMM.m": "5b0d760cb1defd1ad8467717604f0fc99f5120b3bb320e4de072098b9d0252f3",
+    "matlab/+radia/+gpu/prepareAMS.m": "34f3bb31f509077e6c793eb2e7e443d8d8f52ded514eea48a32e661c3f5e7f1f",
+    "matlab/+radia/+gpu/prepareBoundaryFMM.m": "c30aae481307ad13df99b45dace6ff99f0d78a6d0774f64d40f3d94f4c918d06",
+    "matlab/+radia/+gpu/readAMSExchange.m": "8156fd26a8c7f5ecdba09e7c3b70a41f85c6c5391597fea87644303e3cf6f895",
+    "matlab/+radia/+gpu/requireRuntime.m": "2f3638a60732290e455da8b9bfc5fa47d82d1950149c12d3e3a4b7e048ceb695",
+    "matlab/+radia/+gpu/solveCurvedHDiv.m": "0257c5fd6cb619d9eeba068304b97d19f2993810511de4c66947b04248af12c0",
+    "matlab/+radia/+gpu/solveHCurl.m": "a6cfc76fc8126304a031c115aa061cfb3b48fa4c935ec2676b213380a80f9088",
+    "matlab/+radia/+gpu/solveHDivElements.m": "b2cd8630e60341c39537c9d3364b616c7f9cd97881342a07a47b37d722e48bdc",
+    "matlab/+radia/+gpu/solveHDivRT0.m": "576a736903c29005077aab4161b44d2dae580d313f51b02810ecf9aa71c4b026"
+  },
+  "cpu_import_seconds": 2.9889777999997023,
+  "versions": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "ngsolve": "6.2.2607",
+    "numpy": "2.5.2"
+  },
+  "cpu_reference": {
+    "bridge_sha256": "5915fe13e7a6125928fb92d1cfb1bfe29e85871c073e49cd655a580debbb7c84",
+    "ngsolve_extension_sha256": "3cba06851555d56265e3235c5644b1f6e9a5959712a4d8e2379d89121f9749fc",
+    "nonlinear_cpu_sha256": "e526ed1e837ae0983b40d15bb12d8421e52523fef615365ae2a2ce3e14a3df60",
+    "direct_sum_sha256": "1559610d0c06bff2f5d0e922cbb7d02b00ba4d6f4885900eaa5292d0ac97ebdd"
+  },
+  "idle_before": {
+    "cpu_percent": 0.3,
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "gpu_utilization_percent": 0.0,
+    "device_free_MiB": 40645.0,
+    "host_available_bytes": 56865759232
+  },
+  "matlab_start_seconds": 5.738376799999969,
+  "matlab": "26.1.0.3203278 (R2026a)",
+  "gpu_init_seconds": 0.4152915,
+  "summary": {
+    "ams": {
+      "cpu_warm_median_seconds": 0.8446005499999956,
+      "gpu_transfer_inclusive_warm_median_seconds": 0.5249398999999999,
+      "cpu_over_gpu_speedup": 1.6089471385200396
+    },
+    "fmm-small": {
+      "cpu_warm_median_seconds": 0.011165349999828322,
+      "gpu_transfer_inclusive_warm_median_seconds": 0.1330826,
+      "cpu_over_gpu_speedup": 0.08389789499024157
+    },
+    "fmm-large": {
+      "cpu_warm_median_seconds": 4.945155700000214,
+      "gpu_transfer_inclusive_warm_median_seconds": 0.23619025,
+      "cpu_over_gpu_speedup": 20.937171199912843
+    },
+    "physical": {
+      "cpu_warm_median_seconds": 0.07305129999986093,
+      "gpu_transfer_inclusive_warm_median_seconds": 0.29879075,
+      "cpu_over_gpu_speedup": 0.2444898310937033
+    },
+    "boundary": {
+      "cpu_warm_median_seconds": 20.513738499999818,
+      "gpu_transfer_inclusive_warm_median_seconds": 3.01748975,
+      "cpu_over_gpu_speedup": 6.798279430775139
+    }
+  },
+  "idle_after": {
+    "cpu_percent": 0.0,
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "gpu_utilization_percent": 0.0,
+    "device_free_MiB": 40198.0,
+    "host_available_bytes": 55234105344
+  },
+  "actual_matlab_native_dependencies_verified": true,
+  "raw_result_sha256": "50cc8b8e2487357c4b0ce8e93848c5306a0330d86d546e69aa50adb9c4111f65",
+  "publication_notes": [
+    "Timings unchanged from recovered original JSON; added case descriptions and measurement limitations only",
+    "CPU process setup/import time excludes interpreter launch and includes payload verification",
+    "MATLAB process memory samples also cover result-file serialization, which is excluded from numerical API timing",
+    "FMM CPU baseline is independent NumPy direct summation, not an optimized CPU FMM; no general native CPU-FMM speed claim"
+  ],
+  "cases": {
+    "ams": {
+      "dofs": 5326,
+      "tetrahedra": 3937,
+      "gamma": 4,
+      "gauge_mass": 1,
+      "current_density": [
+        20,
+        0,
+        0
+      ],
+      "linear_tolerance": 1e-12,
+      "nonlinear_tolerance": 1e-09,
+      "ams_policy": "adaptive",
+      "cpu": "Independent NGSolve Newton/shared CPU AMS",
+      "gpu": "Native .vol staging/CUDA assembly/resident Newton/native AMS"
+    },
+    "fmm-small": {
+      "sources": 512,
+      "targets": 128,
+      "channels": 3,
+      "order": 8,
+      "separation": 1.5,
+      "leaf": 16,
+      "cpu": "NumPy direct scalar/dipole sum"
+    },
+    "fmm-large": {
+      "sources": 8192,
+      "targets": 2048,
+      "channels": 3,
+      "order": 6,
+      "separation": 2,
+      "leaf": 128,
+      "cpu": "NumPy direct scalar/dipole sum"
+    },
+    "physical": {
+      "sphere_sources": 1152,
+      "sphere_targets": 96,
+      "coil_sources": 2048,
+      "coil_targets": 64,
+      "order": 8,
+      "separation": 2,
+      "cpu": "NumPy direct shared sphere SL/cloud, DL and weighted current sum",
+      "gpu": "Public BEM SL/DL, Biot-Savart and fieldCloud APIs, rebuilt per sample"
+    },
+    "boundary": {
+      "cpu": "Independent NGSolve flat P1 exterior Galerkin SL/DL, bonus quadrature 16",
+      "gpu": "Native mapped P1 quadrature and shared exact-near correction plus CUDA FMM, complete setup each sample",
+      "order": 8,
+      "separation": 2
+    }
+  }
+}

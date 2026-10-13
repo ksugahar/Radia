@@ -22,5 +22,8 @@
   ],
   "diagnostics_relabelled": false,
   "a100_same_binary_and_native_dll_acceptance": true,
-  "installed_full_wheel_acceptance": false
+  "installed_full_wheel_acceptance": false,
+  "status": "superseded",
+  "superseded_by": "formal-a100-20261013.json",
+  "resolution": "User explicitly authorized NGSolve(A100) as formal timing host; fresh same-host measurements accepted; original mdx observations retained as historical provenance"
 }
