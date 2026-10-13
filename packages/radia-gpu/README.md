@@ -6,7 +6,7 @@ CPU electromagnetic execution belongs to `radia` (Python/pybind11/NGSolve).
 `radia-mcp` is the AI operation interface. Neither package is required merely
 to locate and use the installed GPU MATLAB files.
 
-The 0.1.3 candidate contains FP64 CUDA CSR Jacobi-PCG, a Simulink block for the same
+Version 0.1.3 contains FP64 CUDA CSR Jacobi-PCG, a Simulink block for the same
 kernel, and the selected standalone LTspice workflow. It also contains experimental FP64 assembled-operator AMS and its versioned
 HDF5 exchange, bounded HDiv-MMM and Laplace FMM operators. This does not certify
 arbitrary production AMS, ICCG, general HDiv-MMM, or migration of the older CPU
@@ -233,7 +233,7 @@ Full JSON, memory definitions, artifact/source hashes, numerical gates and
 limitations: `validation_test/ams_cuda/results/cuda-galerkin-73b33291d.json`.
 The candidate is not a deployed release; formal performance acceptance remains
 pending. No A100 operations were performed.
-# 0.1.3 common candidate scope
+# 0.1.3 common scope
 
 This candidate combines bounded HDiv-MMM, native affine lowest-order HCurl
 FEM/Newton/AMS, and experimental Laplace FMM in one exact-source wheel.
@@ -251,3 +251,44 @@ Compatible user-installed native dependencies remain required; no implicit
 CPU/Python solver fallback is provided. Separate historical performance
 results do not substitute for installed common-wheel acceptance.
 
+
+## Exact-wheel acceptance and performance
+
+The main CI artifact from `88049e809` has SHA-256
+`76a1b64ed290194a95aba755eb83ad6781538839012948c5adee1495259554ba`.
+The same wheel passed isolated installed acceptance on the build GPU and an
+A100, including independent CPU comparisons, original-equation residuals,
+actual loaded MEX identity, repeated Simulink runs and failure cleanup.
+The build-machine check also passed LTspice and the official Toolkit model check.
+
+Fresh idle same-machine measurements used two ABBA cycles. GPU whole time
+includes construction, all transfers, solve/application, result recovery and
+context destruction. HDiv includes mesh-file loading; reference-fixture reads
+and output serialization are excluded. FMM input-file reads and output
+serialization are excluded.
+
+| Bounded public case | CPU median | GPU median | CPU/GPU |
+| --- | ---: | ---: | ---: |
+| P2 sphere, HDiv order 2, host-cache; CPU 1 thread | 5.1781 s | 0.26823 s | 19.30 |
+| Same HDiv case; CPU 16 threads, BLAS 1 thread | 0.43456 s | 0.25845 s | 1.68 |
+| FMM, 8192 sources, 2048 targets, 3 channels, order 8, separation 2 | 4.4744 s | 0.99416 s | 4.50 |
+
+The FMM CPU route is a single-threaded NumPy direct sum, not CPU FMM.
+HDiv direct/cache coefficients were identical; independent true relative
+residual was `7.96e-12` or lower. Its exact accounted owned GPU peak was
+2286980 bytes with cache, compared with 450288 bytes for direct assembly.
+Cache improves this workload's time while consuming more memory.
+The FMM measured relative difference from direct sum remained below `1e-8`.
+
+These cases do not establish large-model scaling or a universal GPU speedup.
+The first numerical payload and MATLAB/GPU initialization are recorded
+separately; complete process-cold solver time is not certified. HDiv host and
+global CUDA/runtime peaks remain unmeasured. FMM native buffer counters and
+50 ms process samples are distinct measures; samples include runtime/baseline
+memory and may miss short allocation spikes. The HDiv CPU native file hash is
+verified, but its original build-source receipt remains unverified.
+
+Machine-readable qualification is in
+`validation_test/radia_gpu/releases/0.1.3.json`; measured samples, input/source/
+binary hashes and memory limits are in
+`validation_test/radia_gpu/results/0.1.3-performance.json`.

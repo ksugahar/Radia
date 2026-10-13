@@ -4,7 +4,7 @@ Consumes a hash-verified job payload and an independently built CPU reference.
 Python performs CPU validation and orchestration, never GPU solver work.
 """
 from pathlib import Path
-import argparse, ctypes, hashlib, json, os, statistics, sys, time
+import argparse, ctypes, hashlib, json, os, statistics, sys, time, math
 from validate_hdiv_artifact import idle
 
 
@@ -19,7 +19,12 @@ def main():
     parser.add_argument('--cpu-manifest', type=Path, required=True,
                         help='JSON mapping paths relative to cpu-root to SHA256')
     parser.add_argument('--cycles', type=int, default=2)
+    parser.add_argument('--wheel', type=Path,
+                        help='Require verified installed-wheel identity and use only its MATLAB payload')
+    parser.add_argument('--cpu-threads', type=int, default=1, help='NGSolve CPU reference threads; BLAS remains single-threaded')
     args = parser.parse_args()
+    if args.cpu_threads < 1:
+        parser.error('CPU threads must be positive')
     if args.cycles < 2:
         parser.error('At least two ABBA cycles are required')
     job = args.job.resolve()
@@ -27,6 +32,7 @@ def main():
                   classification='Formal same-host CPU/GPU measurement',
                   memory_limitations='Exact GPU owned buffers and available-memory samples only; host/global/CUDA runtime allocation peaks unmeasured',
                   cold_limitations='Fresh owned Engine startup and first payload separately; CPU interpreter/import startup excluded')
+    result['timing_boundary']='Public CPU whole solve and MATLAB solveHDivElements through result recovery and destruction; GPU Engine transport/report collection excluded'
     engine = None
     try:
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
@@ -57,7 +63,8 @@ def main():
         import radia._radia_pybind as native
         from scipy.io import loadmat
         import matlab.engine
-        ng.SetNumThreads(1)
+        ng.SetNumThreads(args.cpu_threads)
+        result['threads']={'cpu_ngsolve':args.cpu_threads,'cpu_blas':1,'matlab_single_comp_thread':True}
         for module in (cpu,native):
             relative=Path(module.__file__).resolve().relative_to(cpu_root).as_posix()
             if relative not in cpu_manifest:
@@ -67,12 +74,29 @@ def main():
                                    limitation='Loaded file identity; independent native build receipt must accompany release evidence')
         result['payload_sha256'] = manifest
         result['cpu_reference_sha256'] = cpu_manifest
+        matlab_path = job/'matlab'
+        if args.wheel:
+            import importlib.util
+            import radia_gpu
+            spec=importlib.util.spec_from_file_location('wheel_verifier',job/'verify_wheel.py')
+            verifier=importlib.util.module_from_spec(spec);spec.loader.exec_module(verifier)
+            wheel=verifier.verify(args.wheel)
+            verifier.verify_installed_identity(radia_gpu.verify(),wheel)
+            result['wheel']=wheel
+            matlab_path=radia_gpu.matlab_path()
         result['idle_before'] = idle()
         start = time.perf_counter()
         engine = matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread')
         result['engine_start_seconds'] = time.perf_counter()-start
         result['matlab'] = engine.version()
-        engine.addpath(str(job), str(job/'matlab'), nargout=0)
+        engine.restoredefaultpath(nargout=0)
+        engine.addpath(str(job), str(matlab_path), nargout=0)
+        if args.wheel:
+            installed_manifest=json.loads((matlab_path.parent/'manifest.json').read_text())
+            for name in ('radia_cuda_hmatrix','radia_cuda_projection'):
+                loaded=Path(engine.which(name)).resolve()
+                if loaded.parent!=matlab_path.resolve() or sha(loaded)!=installed_manifest['files']['matlab/'+loaded.name]:
+                    raise RuntimeError('HDiv must load from the verified installed wheel')
         for case in json.loads((job/'cases.json').read_text()):
             fixture = loadmat(job/case['fixture'], simplify_cells=True)
             expected = np.asarray(fixture['expected']).ravel()
@@ -105,11 +129,11 @@ def main():
                     elapsed=time.perf_counter()-start
                     owned=None
                 else:
-                    engine.eval("solution=radia.gpu.solveHDivElements(mesh_path,degree,[1 .2 .1],2.5,1e-11,1000,assembly_mode);assert(radia_cuda_hmatrix('live_count')==0);",nargout=0)
+                    engine.eval("timer=tic;solution=radia.gpu.solveHDivElements(mesh_path,degree,[1 .2 .1],2.5,1e-11,1000,assembly_mode);whole_seconds=toc(timer);assert(radia_cuda_hmatrix('live_count')==0);",nargout=0)
                     coefficients=np.asarray(engine.eval('solution.coefficients')).ravel()
                     mean=np.asarray(engine.eval('solution.mean_magnetization')).ravel()
                     owned=float(engine.eval('solution.combined_peak_owned_device_bytes'))
-                    elapsed=time.perf_counter()-start
+                    elapsed=float(engine.workspace['whole_seconds'])
                 error=float(np.linalg.norm(coefficients-expected)/np.linalg.norm(expected))
                 residual=float(np.linalg.norm(rhs-system@coefficients)/np.linalg.norm(rhs))
                 expected_mean=fixture['mean_operator']@expected
@@ -118,7 +142,7 @@ def main():
                             coefficient_error=error,mean_error=mean_error,true_relative_residual=residual,
                             exact_accounted_owned_peak_bytes=owned,idle_before=before,idle_after=idle())
                 result['samples'].append(sample)
-                if max(error,mean_error)>1e-8 or residual>1e-10:
+                if not all(math.isfinite(v) for v in (error,mean_error,residual,elapsed)) or elapsed<0 or max(error,mean_error)>1e-8 or residual>1e-10:
                     raise RuntimeError('Whole-solve parity/residual failed')
             run('cpu','first_payload');run('gpu','first_payload')
             for cycle in range(args.cycles):
