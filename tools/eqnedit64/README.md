@@ -1,6 +1,6 @@
 # Eqnedit64 — 数式入力に特化したTeXエディタ
 
-Released version: **3.1.3**.
+Source version: **3.1.3** (released).
 
 Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bit Windows
 数式エディタです。数式は常にTeXとして開き、編集し、保存します。

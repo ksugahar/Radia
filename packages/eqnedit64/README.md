@@ -1,6 +1,6 @@
 # Eqnedit64 for Python
 
-Released version: **3.1.3**.
+Source version: **3.1.3** (released).
 
 `eqnedit64` packages the same TeX-first equation engine and standalone Windows
 application maintained in the Radia monorepo. The signed one-file
