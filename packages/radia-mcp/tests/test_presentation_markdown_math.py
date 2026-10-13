@@ -54,6 +54,12 @@ def test_inline_display_notes_and_code_survive_pptx_roundtrip(tmp_path, backend)
             notes_name = next(n for n in archive.namelist() if n.startswith("ppt/notesSlides/notesSlide") and n.endswith(".xml"))
             notes = etree.fromstring(archive.read(notes_name))
             assert len(list(notes.iter(f"{{{assembly.A14_NS}}}m"))) == 2
+            p = "http://schemas.openxmlformats.org/presentationml/2006/main"
+            for shape in notes.iter(f"{{{p}}}sp"):
+                xfrm = shape.find(f"{{{p}}}spPr/{{{assembly.DRAWING_NS}}}xfrm")
+                assert xfrm is not None
+                extent = xfrm.find(f"{{{assembly.DRAWING_NS}}}ext")
+                assert int(extent.get("cx")) > 0 and int(extent.get("cy")) > 0
 
 
 @pytest.mark.parametrize("source", ["# x\n\n$x", "# x\n\n| a | b |", "# x\n\n**bold**", "# x\n\n- a\n  - b", "```\nno close", "# $x$", "# x\n\n[x](url)"])

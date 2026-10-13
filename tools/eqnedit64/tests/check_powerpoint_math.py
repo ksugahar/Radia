@@ -49,6 +49,28 @@ def normalized(node):
     return [name, attrs, children]
 
 
+def semantic_tree(root):
+    """Compare delimiter content independent of its stretchable layout form."""
+    root = ET.fromstring(ET.tostring(root))
+    for parent in list(root.iter())[::-1]:
+        for node in list(parent):
+            if node.tag != f"{{{M}}}d":
+                continue
+            props = node.find(f"{{{M}}}dPr")
+            tokens = [props.find(f"{{{M}}}{tag}").get(f"{{{M}}}val") for tag in ("begChr", "endChr")]
+            def run(text):
+                value = ET.Element(f"{{{M}}}r")
+                sty = ET.SubElement(ET.SubElement(value, f"{{{M}}}rPr"), f"{{{M}}}sty")
+                sty.set(f"{{{M}}}val", "p")
+                ET.SubElement(value, f"{{{A}}}t").text = text
+                return value
+            index = list(parent).index(node)
+            parent.remove(node)
+            for offset, child in enumerate([run(tokens[0]), *list(node.find(f"{{{M}}}e")), run(tokens[1])]):
+                parent.insert(index + offset, child)
+    return root
+
+
 def load_module(name, path):
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
@@ -99,7 +121,10 @@ def main():
             html = call(probe, [source])
             assert html.returncode == 0, html.stderr
             primary = html.stdout.split("<!--[if gte msEquation 12]>", 1)[1].split("<![endif]-->", 1)[0]
-            assert normalized(ET.fromstring(primary)) == normalized(root), fixture["id"]
+            semantic = semantic_tree(root)
+            assert normalized(ET.fromstring(primary)) == normalized(semantic), fixture["id"]
+            if r"\left" in fixture["tex"]:
+                assert root.find(f".//{{{M}}}d/{{{M}}}dPr/{{{M}}}grow").get(f"{{{M}}}val") == "1", fixture["id"]
             for expected in fixture.get("run_styles", []):
                 matching = "".join("".join(n.itertext()) for n in root.iter(f"{{{M}}}r")
                     if ((n.find(f"{{{M}}}rPr/{{{M}}}sty").get(f"{{{M}}}val")
@@ -113,8 +138,8 @@ def main():
                 assert fixture["function_name"] in names, fixture["id"]
             if fixture.get("nary_tail_outside"):
                 tail = fixture["nary_tail_outside"]
-                parents = {child: parent for parent in root.iter() for child in parent}
-                for nary in root.iter(f"{{{M}}}nary"):
+                parents = {child: parent for parent in semantic.iter() for child in parent}
+                for nary in semantic.iter(f"{{{M}}}nary"):
                     siblings = list(parents[nary])
                     following = siblings[siblings.index(nary) + 1:]
                     assert any("".join(node.itertext()).endswith(tail) for node in following), fixture["id"]

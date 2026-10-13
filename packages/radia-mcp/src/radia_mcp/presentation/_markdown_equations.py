@@ -218,6 +218,9 @@ def presentation_markdown_to_pptx(markdown: str, output_path: str,
             for mode, value in segments:
                 if current is None or mode == "display":
                     current = paragraph(frame, kind, number)
+                    if mode == "display":
+                        current.space_before = Pt(8)
+                        current.space_after = Pt(8)
                 if mode in {"text", "literal"}:
                     run = current.add_run(); run.text = value
                     if kind == "code" or mode == "literal":
@@ -250,7 +253,21 @@ def presentation_markdown_to_pptx(markdown: str, output_path: str,
             if slide is None:
                 new_slide(title)
             if kind == "notes":
-                frame = slide.notes_slide.notes_text_frame
+                notes = slide.notes_slide
+                # Office does not consistently inherit notes placeholder geometry
+                # once a math shape is enclosed in AlternateContent. Materialize
+                # the master's geometry for all cloned notes placeholders.
+                for placeholder in notes.placeholders:
+                    master = next((p for p in prs.notes_master.placeholders
+                                   if p.placeholder_format.type == placeholder.placeholder_format.type), None)
+                    if master is None:
+                        raise RuntimeError("Notes placeholder has no matching master")
+                    for attr in ("left", "top", "width", "height"):
+                        setattr(placeholder, attr, getattr(master, attr))
+                    if placeholder.has_text_frame and master.has_text_frame:
+                        target = placeholder.text_frame._txBody
+                        target.replace(target.bodyPr, deepcopy(master.text_frame._txBody.bodyPr))
+                frame = notes.notes_text_frame
                 if frame._txBody not in states:
                     frame.clear()
                 write(frame, text, "paragraph", 0, "notes_math")

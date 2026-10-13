@@ -455,6 +455,16 @@ std::string wrapped(const std::string &tag, const std::string &body) {
 std::string emit(const Xml &n) {
   const auto &name = n.name;
   auto child = [&](size_t i) { return emit(*n.children.at(i)); };
+  if (dialect_ == OfficeDialect::PowerPoint && name == "mrow" &&
+      n.children.size() >= 2 && n.children.front()->attr("fence") == "true" &&
+      n.children.back()->attr("fence") == "true") {
+    std::string body;
+    for (size_t i = 1; i + 1 < n.children.size(); ++i) body += child(i);
+    return wrapped("d", wrapped("dPr",
+        "<m:begChr m:val=\"" + escape(content(*n.children.front())) +
+        "\"/><m:endChr m:val=\"" + escape(content(*n.children.back())) +
+        "\"/><m:grow m:val=\"1\"/>" + control()) + wrapped("e", body));
+  }
   if (name == "math" || name == "mrow" || name == "mstyle" ||
       name == "semantics" || name == "mtd")
     return sequence(n);
