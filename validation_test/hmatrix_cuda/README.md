@@ -434,3 +434,14 @@ error/lifecycle coverage, general adaptive FE semantics, formal timing and exact
 release-wheel distribution acceptance remain pending. The wheel currently
 excludes these experimental HDiv wrappers; staged A100 acceptance is not wheel
 acceptance. AMS and FEM matrix-build work belong to the separate AMS session.
+
+For a release candidate containing bounded HDiv, explicitly set
+`RADIA_HDIV_HMATRIX_BUILD` and `RADIA_HDIV_PROJECTION_BUILD` to clean accepted
+build directories before building the wheel. Both receipts must name the exact
+wheel source commit and match every source and binary hash. Staging includes
+the two MEX files, the three standalone MATLAB wrappers and `hdiv-build.json`;
+the wheel verifier rejects a partial or mismatched payload. User-installed
+compatible native dependencies remain required and are not bundled. This
+packaging path has contract coverage but still needs fresh same-commit native
+builds and actual installed-wheel acceptance on 100/A100. The earlier staged
+artifacts deliberately cannot satisfy the new release-commit check.
