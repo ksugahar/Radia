@@ -13,6 +13,14 @@ for k=1:5
 end
 assert(all(isfinite(errors),'all')&&max(errors,[],'all')<1e-11);
 rejections=0;
+masked=toCSR(blkdiag(data.A,0));masked.free=gpuArray(int32([1;1;1;0]));
+[mh,maskInfo]=radia_cuda_ic('create',masked,1.05);maskCleanup=onCleanup(@()radia_cuda_ic('release',mh));
+[mx,~]=radia_cuda_ic('solve',mh,gpuArray([data.b;0]),1e-12,100);
+assert(norm(gather(mx)-[data.expected;0])<1e-11&&maskInfo.explicit_free_mask);
+assert(norm(gather(masked.values)-reshape(blkdiag(data.A,0).',[],1))==0);
+mustFail(@()solveLimited(mh,gpuArray([data.b;1])));rejections=rejections+1;clear maskCleanup;
+bad=op;bad.free=gpuArray(int32([1;2;1]));mustFail(@()badCreate(bad,1));rejections=rejections+1;
+bad=op;bad.free=gpuArray(int32([1;1;0]));mustFail(@()badCreate(bad,1));rejections=rejections+1;
 mustFail(@()solveLimited(h,rhs));rejections=rejections+1;
 mustFail(@()solveLimited(uint64(1),rhs));rejections=rejections+1;
 mustFail(@()solveLimited(double(h),rhs));rejections=rejections+1;
@@ -27,6 +35,8 @@ bad=op;bad.columns=gpuArray(int32([0;0;2;0;1;2;0;1;2]));mustFail(@()badCreate(ba
 bad=op;bad.columns=gpuArray(int32([0;1;3;0;1;2;0;1;2]));mustFail(@()badCreate(bad,1));rejections=rejections+1;
 bad=op;bad.rowptr=gpuArray(int32([1;3;6;9]));mustFail(@()badCreate(bad,1));rejections=rejections+1;
 bad=op;bad.values=gather(bad.values);mustFail(@()badCreate(bad,1));rejections=rejections+1;
+bad=struct('rows',2.,'cols',2.,'rowptr',gpuArray(int32([0;1;2])), ...
+    'columns',gpuArray(int32([1;0])),'values',gpuArray([1.;1.]));mustFail(@()badCreate(bad,1));rejections=rejections+1;
 mustFail(@()badCreate(op,NaN));rejections=rejections+1;
 mustFail(@()badCreate(op,.5));rejections=rejections+1;
 clear cleanup;

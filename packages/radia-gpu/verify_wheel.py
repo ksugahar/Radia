@@ -69,6 +69,13 @@ def verify(path: Path) -> dict:
                          "ams_exchange.py", "ltspice/__init__.py", "ltspice/cli.py", "LICENSE"):
             if required not in manifest["files"]:
                 raise ValueError(f"Missing GPU capability payload: {required}")
+        ic_files = {'ic-build.json','matlab/radia_cuda_ic.mexw64',
+                    'matlab/+radia/+gpu/ICContext.m','matlab/+radia/+gpu/HCurlICSystem.m'}
+        if ic_files & set(manifest['files']):
+            if not ic_files <= set(manifest['files']):
+                raise ValueError('Incomplete IC CUDA payload')
+            ic = json.loads(archive.read('radia_gpu/ic-build.json'))
+            verify_ic_receipt(manifest, ic)
         hdiv_binaries = {'matlab/radia_cuda_hmatrix.mexw64', 'matlab/radia_cuda_projection.mexw64'}
         if hdiv_binaries.intersection(manifest['files']) or 'hdiv-build.json' in manifest['files']:
             required = hdiv_binaries | {'hdiv-build.json'} | {
@@ -105,6 +112,16 @@ def verify(path: Path) -> dict:
                 wheel_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), files=len(expected),
                 manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
                 cuda_solvers=sorted(solvers))
+
+
+def verify_ic_receipt(manifest, receipt):
+    if (receipt.get('schema') != 'radia.gpu.ic-payload.v1'
+            or receipt.get('source_dirty') is not False
+            or receipt.get('source_commit') != manifest['source_commit']
+            or receipt.get('gpu_numerical_factorization') is not True
+            or receipt.get('no_cpu_solver_fallback') is not True
+            or receipt.get('binary_sha256') != manifest['files']['matlab/radia_cuda_ic.mexw64']):
+        raise ValueError('IC CUDA binary receipt mismatch')
 
 
 if __name__ == "__main__":

@@ -24,8 +24,8 @@ classdef HCurlICSystem < handle
                 Dirichlet=options.Dirichlet,Reluctivity=options.Reluctivity,MassCoefficient=options.MassCoefficient, ...
                 CurrentDensity=options.CurrentDensity,Gamma=0);
             h=radia_cuda_ams('nonlinear_create',fem);cleanup=onCleanup(@()radia_cuda_ams('nonlinear_release',h));
-            [~,values]=radia_cuda_ams('nonlinear_evaluate',h,zeros(size(fem.rhs),'like',fem.rhs));
-            operator=fem.mass;operator.values=values;self.RHS=fem.rhs;clear cleanup;
+            [~,values,~]=radia_cuda_ams('nonlinear_evaluate',h,zeros(size(fem.rhs),'like',fem.rhs));
+            operator=fem.mass;operator.values=values;operator.free=fem.free;self.RHS=fem.rhs;clear cleanup;
             wait(g);factorTimer=tic;self.Context=radia.gpu.ICContext(operator,Shift=options.Shift);wait(g);
             self.SetupInfo=struct('assembly',assembly,'ic_setup',self.Context.SetupInfo, ...
                 'ic_setup_seconds',toc(factorTimer),'total_seconds',toc(timer), ...
