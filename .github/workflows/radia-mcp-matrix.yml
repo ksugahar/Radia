@@ -273,7 +273,7 @@ jobs:
           if plan["package_tests"] == ["tests"] or any(
               "presentation" in path for path in plan["package_tests"]
           ):
-              subprocess.run([sys.executable, "-m", "pip", "install", "python-pptx>=1.0"], check=True)
+              subprocess.run([sys.executable, "-m", "pip", "install", "-e", "packages/radia-mcp[document]"], check=True)
               import pptx
               print("PPTX contracts enabled:", pptx.__version__)
           PY

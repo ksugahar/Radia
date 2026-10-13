@@ -102,8 +102,8 @@ def main():
             assert normalized(ET.fromstring(primary)) == normalized(root), fixture["id"]
             for expected in fixture.get("run_styles", []):
                 matching = "".join("".join(n.itertext()) for n in root.iter(f"{{{M}}}r")
-                    if (n.find(f"{{{M}}}rPr/{{{M}}}sty") is not None
-                        and n.find(f"{{{M}}}rPr/{{{M}}}sty").get(f"{{{M}}}val") == expected["sty"]))
+                    if ((n.find(f"{{{M}}}rPr/{{{M}}}sty").get(f"{{{M}}}val")
+                         if n.find(f"{{{M}}}rPr/{{{M}}}sty") is not None else None) == expected["sty"]))
                 assert expected["text"] in matching, (fixture["id"], expected)
             if fixture.get("function_name"):
                 assert any(fixture["function_name"] == "".join(n.itertext())
