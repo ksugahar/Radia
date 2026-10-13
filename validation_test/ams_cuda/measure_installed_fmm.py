@@ -17,6 +17,7 @@ def main(args):
     import verify_wheel
     import radia_gpu
     import numpy as np
+    import scipy
     from scipy.io import loadmat
     import matlab.engine
     expected_identity = verify_wheel.verify(args.wheel)
@@ -37,6 +38,9 @@ def main(args):
                   timing_accepted=False, release_accepted=False,
                   wheel=expected_identity, input_source_sha256=manifest, samples=[],
                   order=8, separation=2, cpu_threads=1,
+                  operation_kind='operator', true_relative_residual=None,
+                  residual_applicability='not_applicable_operator',
+                  versions=dict(python=sys.version, numpy=np.__version__, scipy=scipy.__version__),
                   cpu_algorithm='Independent NumPy direct sum, not CPU FMM',
                   cold_definition='First numerical call; interpreter/imports, MATLAB startup and GPU initialization are separate, not process-cold solver samples',
                   timing_boundary='Context construction, all uploads, apply, result download and context destruction; input-file read and output serialization excluded for both routes',
@@ -44,6 +48,11 @@ def main(args):
     engine = None
     oracle = None
     try:
+        numpy_root = Path(np.__file__).resolve().parent
+        record['numpy_native_sha256'] = {
+            str(path.relative_to(numpy_root)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in numpy_root.rglob('*.pyd')
+        }
         record['idle_before'] = idle()
         if 'A100' not in record['idle_before']['gpu']:
             raise RuntimeError('Formal FMM evaluation requires the selected A100 device')
