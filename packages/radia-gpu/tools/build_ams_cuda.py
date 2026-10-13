@@ -27,7 +27,7 @@ def main(args):
     os.environ['NVCC_CCBIN']=str(vs/'VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64')
     os.environ['PATH']=os.environ['NVCC_CCBIN']+os.pathsep+os.environ['PATH']
     source=package/'native/ams_snapshot_module.cpp'
-    sources=[source,package/'native/radia_cuda_ams.cu',package/'native/ams_matlab_setup.cpp',
+    sources=[source,package/'native/ams_cpu_reference.cpp',package/'native/ams_resident.cuh',package/'native/ams_nonlinear.cuh',package/'native/radia_cuda_ams.cu',package/'native/ams_matlab_setup.cpp',
              package/'native/ams_setup_gpu.hpp',package/'native/ams_setup_gpu.cuh',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp',
@@ -51,6 +51,14 @@ def main(args):
                      subprocess.list2cmdline(command)+'\nexit /b %errorlevel%\n',encoding='utf-8')
     with (out/'native-build.log').open('w') as log:
         subprocess.run(['cmd','/c',str(batch)],stdout=log,stderr=subprocess.STDOUT,check=True)
+    cpu_source=package/'native/ams_cpu_reference.cpp'
+    cpu_command=[arg.replace(str(source),str(cpu_source)).replace('_radia_ams_snapshot','_radia_ams_cpu_reference').replace('snapshot.obj','cpu_reference.obj')
+                 for arg in command if arg not in ('/DSPARSESOLV_SERIAL_AMS_SETUP','/DSPARSESOLV_OPENMP_AMS_SETUP','/openmp')]
+    cpu_batch=out/'compile-cpu-reference.cmd'
+    cpu_batch.write_text('@echo off\ncall "'+str(vcvars)+'" >nul\nif errorlevel 1 exit /b 1\n'+
+                        subprocess.list2cmdline(cpu_command)+'\nexit /b %errorlevel%\n',encoding='utf-8')
+    with (out/'cpu-reference-build.log').open('w') as log:
+        subprocess.run(['cmd','/c',str(cpu_batch)],stdout=log,stderr=subprocess.STDOUT,check=True)
     eng=matlab.engine.start_matlab('-nodesktop -nosplash')
     try:
         config=Path(eng.matlabroot())/'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml'
@@ -77,7 +85,7 @@ def main(args):
                 'matlab':eng.version(),'configuration':str(config),'compiler_bin':os.environ['NVCC_CCBIN'],
                 'source_commit':commit,'source_dirty':dirty,
                 'sha256':{p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
-                          for p in (binary,out/'radia_cuda_ams.mexw64')},
+                          for p in (binary,out/'_radia_ams_cpu_reference.pyd',out/'radia_cuda_ams.mexw64')},
                 'source_sha256':hashes,'no_cpu_solver_fallback':True}
         record['snapshot_setup_backend']='OpenMP row/chunk dispatch; default one thread; serial coarse factorization'
         record['matlab_setup_backend']='Shared native AMS; optional CUDA AP and Pt(AP); serial NGSolve sparsecholesky; no TaskManager regions'

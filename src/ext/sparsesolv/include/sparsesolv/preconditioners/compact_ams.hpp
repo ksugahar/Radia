@@ -660,6 +660,7 @@ private:
             } else {
                 if (!beta_zero_)
                     amg_G = make_shared<CompactAMG>(A_G_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+                if (amg_G) amg_G->SetConstantNullspace(true);
                 amg_Pix = make_shared<CompactAMG>(A_Pix_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
                 amg_Piy = make_shared<CompactAMG>(A_Piy_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
                 amg_Piz = make_shared<CompactAMG>(A_Piz_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
