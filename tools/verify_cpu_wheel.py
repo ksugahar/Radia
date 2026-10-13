@@ -19,8 +19,14 @@ def verify(path: Path) -> dict:
         if metadata['Name'] != 'radia':
             raise ValueError('CPU wheel must be the radia distribution')
         forbidden = []
+        retired_equation = []
         for name in names:
             member = PurePosixPath(name.lower())
+            if (member.parts[:2] == ('radia', 'equation')
+                    or (member.parent == PurePosixPath('radia')
+                        and member.name.startswith('_equation')
+                        and member.suffix in {'.pyd', '.so', '.dylib'})):
+                retired_equation.append(name)
             if (set(member.parts) & {'matlab', 'simulink', 'ltspice', 'radia_gpu'}
                     or member.stem in {'matlab', 'simulink', 'ltspice', 'radia_gpu'}
                     or member.suffix in {'.m', '.mlx', '.slx', '.mdl', '.mexw64',
@@ -34,10 +40,12 @@ def verify(path: Path) -> dict:
             dependency = re.sub(r'[-_.]+', '-', dependency).lower()
             if dependency in {'radia-gpu', 'matlab', 'matlabengine', 'matlab-engine-for-python'}:
                 forbidden.append('Requires-Dist: ' + requirement)
+        if retired_equation:
+            raise ValueError('CPU wheel contains retired equation payload: ' + ', '.join(retired_equation))
         if forbidden:
             raise ValueError('CPU wheel contains radia-gpu integration payload: ' + ', '.join(forbidden))
     return dict(passed=True, distribution='radia', version=metadata['Version'],
-                gpu_integration_absent=True, files=len(names))
+                gpu_integration_absent=True, retired_equation_absent=True, files=len(names))
 
 
 if __name__ == '__main__':

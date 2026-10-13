@@ -32,7 +32,7 @@ _COPY_TARGETS = {
 def presentation_equation_policy() -> dict:
     """Return the canonical source, publication, and format responsibilities."""
     return {
-        "schema": "radia-mcp.presentation-equation-policy.v3",
+        "schema": "radia-mcp.presentation-equation-policy.v4",
         "source_of_truth": {
             "native": "tools/eqnedit64/src",
             "web": "tools/eqnedit64/web/equation-editor.js",
@@ -56,7 +56,11 @@ def presentation_equation_policy() -> dict:
             "test_scope": "Eqnedit64 page, browser contract, and hidden PowerPoint render only",
         },
         "presentation_paths": {
-            "batch_pptx": "radia.equation.markdown_to_pptx (native OMML)",
+            "batch_pptx": {
+                "available": False,
+                "reason": "Markdown-to-PPTX equation migration to Eqnedit64 is pending",
+                "fallback": None,
+            },
             "interactive_clipboard": "presentation_copy_equation (Eqnedit64)",
             "image_file": "presentation_render_equation (Eqnedit64)",
         },
@@ -76,7 +80,6 @@ def presentation_equation_policy() -> dict:
             ),
         },
         "canonical_input": "TeX",
-        "retired_formats": ["MTEF", ".eqn"],
         "homepage_is_source_of_truth": False,
     }
 

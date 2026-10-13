@@ -25,7 +25,7 @@ def test_presentation_tools_export_eqnedit64_bridge() -> None:
 
 def test_equation_policy_keeps_standalone_distribution_boundary() -> None:
     policy = equation_cli.presentation_equation_policy()
-    assert policy["schema"] == "radia-mcp.presentation-equation-policy.v3"
+    assert policy["schema"] == "radia-mcp.presentation-equation-policy.v4"
     assert policy["source_of_truth"]["native"] == "tools/eqnedit64/src"
     assert policy["source_of_truth"]["web"].startswith("tools/eqnedit64/web/")
     assert policy["source_of_truth"]["distribution"] == "packages/eqnedit64"
@@ -33,7 +33,10 @@ def test_equation_policy_keeps_standalone_distribution_boundary() -> None:
     assert "optional" in policy["publication"]["integration"]
     assert policy["homepage_is_source_of_truth"] is False
     assert policy["canonical_input"] == "TeX"
-    assert policy["retired_formats"] == ["MTEF", ".eqn"]
+    batch = policy["presentation_paths"]["batch_pptx"]
+    assert batch["available"] is False
+    assert "Eqnedit64" in batch["reason"]
+    assert batch["fallback"] is None
     publication = policy["web_publication_contract"]
     assert publication["mode"] == "build-time import from Radia checkout"
     assert publication["checkout_environment_variable"] == "RADIA_REPOSITORY"

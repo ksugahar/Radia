@@ -166,6 +166,8 @@ radia = [
     # cubit-mesh-export package, never by radia -- exclude it from the
     # "*.pyd" glob in case a stale build artifact lingers in src/radia/.
     "cubit_mesh_curver.pyd",
+    # Retired equation backend must not return through a stale local build.
+    "_equation*.pyd", "_equation*.so", "_equation*.dylib",
     # Local lock-release and pre-change native backups must never enter a
     # wheel assembled from an editable development checkout.
     "*.locked-old.pyd",
