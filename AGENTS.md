@@ -102,7 +102,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - mexcuda modules may retain CPU host control; not every calculation belongs on GPU. Never include, link, or use NGSolve TaskManager in mexcuda builds. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing. Python CPU reference runs are independent validation, not GPU-user prerequisites.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
 - No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
-- Develop/build radia-gpu on 100; release acceptance uses 100 RTX 5000 and independent review; SSH host `NGSolve` (A100) is optional additional validation; `mdx` is a separate CPU VM. Never deploy to 102.
+- Develop/build radia-gpu on 100; release acceptance uses 100 RTX 5000 and independent review; SSH host `NGSolve` (A100) is optional additional validation; `mdx` is retired as an execution target. Never deploy to 102.
 - Record parity, artifact hashes and validation JSON; offline A100 stays pending and does not block development or publication. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### GPU Kernel Research Strategy (2026-10-11)
@@ -178,14 +178,14 @@ solver boundary is a checked `.vol` regardless of the creation route.
 **POLICY**: CI/builds use 100号機 with the `100` runner label.
 100号機 permits isolated tests and heavy numerical/memory validation.
 Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
-LAB owns SSH preflight; `NGSolve` validates radia-gpu on A100; mdx evaluates CPU timing. mdx1/mdx2/hibino are retired.
-Release-quad requires 102号機 and 100号機 for the same release commit; mdx timing is separate.
+LAB owns SSH preflight. Start SSH host `NGSolve` (A100) on demand for CPU/GPU timing and additional GPU validation; mdx/mdx1/mdx2/hibino are retired execution targets.
+Release-quad requires 102号機 and 100号機 for the same release commit; on-demand NGSolve timing is separate.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
-venv for maintainers/students, separate from the release runtime. LAB/mdx use
+venv for maintainers/students, separate from the release runtime. LAB and NGSolve use
 verified wheels.
 `cubit-mesh-export` is independently tested on 100 and LAB/102. NGSolve hosts start from checked exported .vol files, without Cubit.
 Solver releases must not install, uninstall, repoint, or version-gate the exporter.
-Do not install or run Cubit on mdx in either release lane. This boundary
+Do not install or run Cubit on NGSolve; consume checked .vol artifacts. This boundary
 does not prohibit Cubit-independent checker unit tests in isolated CI
 environments. Existing installations are not silently removed.
 CPU/MCP distribution tests run on LAB/102; `NGSolve` A100 validation runs without Cubit.
@@ -223,19 +223,18 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 ### Compute Host Routing
 
-**POLICY (2026-10-11)**: Use the consolidated `mdx` host for computation-time evaluations only; mdx1/mdx2/hibino no longer exist as targets.
-Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes mdx hostname`, then check
-running jobs and available memory. Run one heavy job at a time; preserve active timing jobs. Never stop another session's jobs. LAB may run high-memory tests when
-explicitly selected; Gmsh rendering needs a desktop.
-Formal timing requires idle mdx; incidental 100号機/LAB timings are diagnostic only.
-Measure speed; settle quadrature and threads first. Historical mdx measurements
-remain valid provenance. Publish OS, threads, versions/results; keep hosts/IPs/paths private.
+**POLICY (2026-10-13)**: Start SSH host `NGSolve` (A100) on demand for formal CPU/GPU timing. The 38-core `mdx` VM is retired as an execution target; mdx1/mdx2/hibino are also retired.
+Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes NGSolve hostname`, then check running jobs and available memory. Formal timing requires an otherwise idle host; run one heavy timing job at a time and never stop another session's jobs.
+Compare Python CPU and MATLAB/mexcuda GPU routes on the same host with fixed, recorded thread counts, including a 16-thread CPU baseline where supported. Measure scaling rather than assuming that all available cores improve performance. Record CPU/GPU hardware, memory, versions, transfers, setup and total elapsed time in JSON.
+100 owns builds, CI and isolated numerical/memory validation. Incidental 100/LAB timings remain diagnostic. A100 availability is not a mandatory development or publication gate. Gmsh rendering needs a desktop.
+Historical mdx measurements retain their original provenance; never relabel them as NGSolve results. Keep hostnames, IPs and local paths private in public evidence.
+Retiring an execution target does not authorize deleting its VM, disks or another session's data. Recover and verify unique work before any separately authorized deletion.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
 
 ### Compute Scratch Cleanup
 
-**POLICY (2026-09-13)**: mdx jobs finish only after verified recovery
+**POLICY (2026-10-13)**: Remote compute jobs, including NGSolve and retirement recovery from mdx, finish only after verified recovery
 and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments and helpers.
 - Recover JSON, logs, commands, runtime/source identity, hashes and non-reconstructible inputs
   to LAB durable storage. Numerical evidence goes in `validation_test/`, public demonstrations
