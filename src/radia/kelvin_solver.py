@@ -941,7 +941,7 @@ def solve_reduced_A_kelvin(mesh, A_s_cf, R_K, offset,
 
         a(A_r, v) = - int_kext nu_kelvin * curl(A_s_cf) . curl(v) dV
 
-    See docs/kelvin/KELVIN_TRANSFORMATION.md ﾂｧ7.5 for derivation.
+    See docs/kelvin/KELVIN_TRANSFORMATION.md section 7.5 for derivation.
 
     The previous form ``-(nu - nu_0) * curl(A_s) * curl(v) dx`` is INVALID
     when A_s is a Kelvin pullback because the pullback satisfies nu'
@@ -974,7 +974,7 @@ def solve_reduced_A_kelvin(mesh, A_s_cf, R_K, offset,
     # The OLD form -(nu - nu_0) curl(A_s) . curl(v) dx is WRONG when A_s
     # is a Kelvin pullback (Convention A): the pullback satisfies nu'
     # Maxwell, not nu_0 Maxwell, breaking the (nu - nu_0) simplification.
-    # See docs/kelvin/KELVIN_TRANSFORMATION.md ﾂｧ7.5.
+    # See docs/kelvin/KELVIN_TRANSFORMATION.md section 7.5.
     kelvin_mat_str = "|".join(kelvin_mats)
     f_lf += -nu_cf * curl(A_s_cf) * curl(v) \
         * dx(kelvin_mat_str, bonus_intorder=bonus_intorder)
