@@ -28,7 +28,7 @@ mxArray* RadiaPrepareBoundary(const mxArray* path,const mxArray* labels){
     for(auto name:mesh->GetMaterials(ngfem::BND))actual.emplace(name);
     if(expected.empty()||expected!=actual||expected.size()!=mxGetNumberOfElements(labels))throw std::invalid_argument("Boundary FMM label contract mismatch");
     ngcore::Flags flags;flags.SetFlag("order",1);auto space=std::make_shared<ngcomp::H1HighOrderFESpace>(mesh,flags);space->Update();space->FinalizeUpdate();
-    ngstd::LocalHeap heap(1<<22,"radia_cuda_boundary_maps");ngfem::IntegrationRule rule(ngfem::ET_TRIG,10);int nq=int(rule.Size());
+    ngstd::LocalHeap heap(1<<22,"radia_cuda_boundary_maps");ngfem::IntegrationRule rule(ngfem::ET_TRIG,16);int nq=int(rule.Size());
     std::vector<int> active;std::map<int,int> numbering;
     for(int t=0;t<int(nt);++t){ngstd::HeapReset reset(heap);ngfem::ElementId eid(ngfem::BND,t);ngstd::Array<int> dofs;space->GetDofNrs(eid,dofs);for(int d:dofs)if(!numbering.count(d)){if(d<0)throw std::invalid_argument("Constrained boundary DOF unsupported");numbering[d]=int(active.size());active.push_back(d);}}
     int nv=int(active.size());std::vector<double> vertices(size_t(nv)*3),nodes(nt*18),points,normals,mapRows,mapCols,mapValues,centers(nt*3),radius(nt),weights(nt*nq),shape(nt*nq*3);
@@ -49,7 +49,7 @@ mxArray* RadiaPrepareBoundary(const mxArray* path,const mxArray* labels){
             for(int c=0;c<3;++c){points.push_back(mip.GetPoint()[c]);normals.push_back(mip.GetNV()[c]);}
             for(int a=0;a<3;++a){double v=values[localDofs[t][a]];shape[(t*nq+q)*3+a]=v;mapRows.push_back(double(t*nq+q));mapCols.push_back(double(triangles[t*3+a]));mapValues.push_back(w*v);}}
     }
-    radia::bem::P1EntryProvider provider(vertices.data(),nv,triangles.data(),int(nt),nodes.data(),11,6,0);
+    radia::bem::P1EntryProvider provider(vertices.data(),nv,triangles.data(),int(nt),nodes.data(),17,10,0);
     std::map<std::pair<int,int>,std::array<double,2>> correction;size_t pairs=0;
     constexpr double scale=1./(4*3.141592653589793238462643383279502884);
     for(int a=0;a<int(nt);++a)for(int b=0;b<int(nt);++b){double d2=0;for(int c=0;c<3;++c){double d=centers[a*3+c]-centers[b*3+c];d2+=d*d;}double bound=2*(radius[a]+radius[b]);if(d2>bound*bound)continue;
