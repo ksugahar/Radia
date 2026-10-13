@@ -9,6 +9,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <omp.h>
 
 namespace optuna_cuda {
 namespace {
@@ -170,8 +171,19 @@ std::vector<double> host_pdf(const std::vector<double>& samples,
     const auto kernels = packed.estimators.front().kernels;
     if (count > static_cast<std::size_t>(LLONG_MAX))
         throw std::overflow_error("Optuna CPU loop size overflow");
-    std::vector<double> terms(product(count, kernels)), result(count);
-    #pragma omp parallel for if(count >= 256) schedule(static)
+    const auto component_count = product(count, kernels);
+    const auto work = product(component_count, estimators.size());
+    std::vector<double> terms(component_count), result(count);
+    // Default TPE has only 24 candidates but can have thousands of components.
+    // Keep short densities serial and bound the team by independent rows.
+    const int threads = static_cast<int>(std::min<std::size_t>(count, omp_get_max_threads()));
+    const bool parallel = threads > 1 && (count >= 256 || work >= 16384);
+    int used_threads = 1;
+    #pragma omp parallel if(parallel) num_threads(threads > 0 ? threads : 1)
+    {
+    #pragma omp single
+    used_threads = omp_get_num_threads();
+    #pragma omp for schedule(static)
     for (long long row = 0; row < static_cast<long long>(count); ++row) {
         double* values = terms.data() + static_cast<std::size_t>(row) * kernels;
         double maximum = -INFINITY;
@@ -188,9 +200,12 @@ std::vector<double> host_pdf(const std::vector<double>& samples,
             total += std::exp(values[k] - maximum);
         result[row] = maximum + std::log(total);
     }
+    }
     for (double value : result)
         if (!std::isfinite(value)) throw std::runtime_error("Optuna CPU density is nonfinite");
     ++stats.cpu_density_calls;
+    if (used_threads > 1) ++stats.cpu_parallel_density_calls;
+    stats.cpu_max_density_threads = std::max(stats.cpu_max_density_threads, used_threads);
     return result;
 }
 void initialize() {

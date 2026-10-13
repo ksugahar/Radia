@@ -44,6 +44,15 @@ x=linspace(-2,3,512)';
 actual=optuna_mex('optuna.parzen.log_pdf_numerical',x,1,0,1,-2,3,false,NaN);
 expected=-0.5*x.^2-0.5*log(2*pi)-log(0.5*(erf(3/sqrt(2))-erf(-2/sqrt(2))));
 verifyEqual(testCase,actual,expected,'AbsTol',5e-12);
+% Exercise the 24-candidate path with enough components to activate OpenMP.
+% Identical components have the same analytical density, independently of
+% candidate scheduling and the ordered mixture sum.
+x=linspace(-2,3,24)';
+weights=ones(1024,1)/1024;
+actual=optuna_mex('optuna.parzen.log_pdf_numerical',x,weights, ...
+    zeros(1024,1),ones(1024,1),-2,3,false,NaN);
+expected=-0.5*x.^2-0.5*log(2*pi)-log(0.5*(erf(3/sqrt(2))-erf(-2/sqrt(2))));
+verifyEqual(testCase,actual,expected,'AbsTol',5e-12);
 verifyError(testCase,@()evaluateCommand('api.execution','auto'),'radia:optuna:mex:Exception');
 verifyEqual(testCase,radia.optuna.executionMode(),"cpu");
 after=optuna_mex('api.info');
