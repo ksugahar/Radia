@@ -419,8 +419,12 @@ BARE_MDX_BASELINE = "tools/policy_lint_bare_mdx_baseline.json"
 
 def check_bare_mdx_growth():
     """Reject new bare 'mdx' host mentions; existing ones wait for history-rewrite redaction."""
-    with open(os.path.join(REPO, BARE_MDX_BASELINE), encoding="utf-8") as source:
-        baseline = json.load(source)["counts"]
+    # A missing baseline is empty (strict), so deleting it cannot disable the check.
+    path = os.path.join(REPO, BARE_MDX_BASELINE)
+    baseline = {}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as source:
+            baseline = json.load(source)["counts"]
     current = {}
     for record in _git_grep(BARE_MDX.pattern, [], extra=("-P", "-I", "-c")):
         path, count = record.rsplit(":", 1)
