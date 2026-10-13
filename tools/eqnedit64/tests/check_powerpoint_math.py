@@ -106,8 +106,11 @@ def main():
                          if n.find(f"{{{M}}}rPr/{{{M}}}sty") is not None else None) == expected["sty"]))
                 assert expected["text"] in matching, (fixture["id"], expected)
             if fixture.get("function_name"):
-                assert any(fixture["function_name"] == "".join(n.itertext())
-                           for n in root.iter(f"{{{M}}}fName")), fixture["id"]
+                names = []
+                for node in root.iter(f"{{{M}}}fName"):
+                    base = node.find(f"{{{M}}}limLow/{{{M}}}e")
+                    names.append("".join((base if base is not None else node).itertext()))
+                assert fixture["function_name"] in names, fixture["id"]
             if fixture.get("nary_tail_outside"):
                 tail = fixture["nary_tail_outside"]
                 parents = {child: parent for parent in root.iter() for child in parent}
