@@ -2265,7 +2265,7 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     const char* fields[] = {
         "api_version", "backend", "command_count", "handle_count", "build_route", "taskmanager", "gpu_operations", "host_operations"
         , "execution", "host_parallel_runtime", "allocator", "density_launches", "selection_launches", "host_to_device_bytes",
-        "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device", "execution_mode", "cpu_density_calls", "cpu_selection_calls", "cpu_parallel_density_calls", "cpu_max_density_threads", "device_allocation_calls", "workspace_reuses", "avoided_upload_bytes", "cached_device_bytes", "model_build_launches", "model_reuses", "preparation_launches", "model_download_bytes", "cpu_preparation_calls", "cpu_cached_normalizer_values"
+        "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device", "execution_mode", "cpu_density_calls", "cpu_selection_calls", "cpu_parallel_density_calls", "cpu_max_density_threads", "device_allocation_calls", "workspace_reuses", "avoided_upload_bytes", "cached_device_bytes", "model_build_launches", "model_reuses", "preparation_launches", "model_download_bytes", "cpu_preparation_calls", "cpu_cached_normalizer_values", "model_radix_sorts", "peak_sort_temporary_bytes"
     };
     plhs[0] = mxCreateStructMatrix(1, 1, sizeof(fields) / sizeof(fields[0]), fields);
     mxSetField(plhs[0], 0, "build_route", mxCreateString("mexcuda"));
@@ -2287,6 +2287,8 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     mxSetField(plhs[0], 0, "cached_device_bytes", mxCreateDoubleScalar(static_cast<double>(stats.cached_device_bytes)));
     mxSetField(plhs[0], 0, "model_build_launches", mxCreateDoubleScalar(static_cast<double>(stats.model_build_launches)));
     mxSetField(plhs[0], 0, "model_reuses", mxCreateDoubleScalar(static_cast<double>(stats.model_reuses)));
+    mxSetField(plhs[0], 0, "model_radix_sorts", mxCreateDoubleScalar(static_cast<double>(stats.model_radix_sorts)));
+    mxSetField(plhs[0], 0, "peak_sort_temporary_bytes", mxCreateDoubleScalar(static_cast<double>(stats.peak_sort_temporary_bytes)));
     mxSetField(plhs[0], 0, "preparation_launches", mxCreateDoubleScalar(static_cast<double>(stats.preparation_launches)));
     mxSetField(plhs[0], 0, "model_download_bytes", mxCreateDoubleScalar(static_cast<double>(stats.model_download_bytes)));
     mxSetField(plhs[0], 0, "cpu_preparation_calls", mxCreateDoubleScalar(static_cast<double>(stats.cpu_preparation_calls)));

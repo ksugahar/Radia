@@ -99,11 +99,29 @@ for mode=["cpu","gpu"]
         verifyGreaterThan(testCase,after.model_reuses,before.model_reuses);
         verifyGreaterThan(testCase,after.model_download_bytes,before.model_download_bytes);
         verifyEqual(testCase,after.cpu_preparation_calls,before.cpu_preparation_calls);
+        verifyGreaterThan(testCase,after.model_radix_sorts,before.model_radix_sorts);
     else
         verifyEqual(testCase,after.model_build_launches,before.model_build_launches);
         verifyEqual(testCase,after.host_to_device_bytes,before.host_to_device_bytes);
         verifyGreaterThan(testCase,after.cpu_cached_normalizer_values,before.cpu_cached_normalizer_values);
     end
+end
+% Differential guard for the existing stable large-array route, including
+% signed zeros. This is separate from the pinned Python oracle cases above.
+good=[zeros(129,1);-zeros(128,1)]; bad=good+0.2;
+values=zeros(1,2); next=zeros(8,2);
+for endpoints=[false true]
+    for index=1:2
+        modes=["cpu","gpu"];radia.optuna.executionMode(modes(index));
+        state=optuna_mex('optuna.random_state.create',731);
+        cleanup=onCleanup(@()optuna_mex('optuna.random_state.destroy',state));
+        values(index)=optuna_mex('optuna.tpe.best_joint_observations',state,24, ...
+            false,-2,2,false,NaN,0,good,bad,1,true,endpoints,[],[]);
+        next(:,index)=optuna_mex('optuna.random_state.rand',state,8);
+        clear cleanup
+    end
+    verifyEqual(testCase,values(1),values(2),'AbsTol',5e-12);
+    verifyEqual(testCase,next(:,1),next(:,2));
 end
 end
 
@@ -158,6 +176,24 @@ verifyError(testCase,@()evaluateCommand('optuna.tpe.best_joint',state,24,false,{
 actual=optuna_mex('optuna.random_state.rand',state,8);
 expected=optuna_mex('optuna.random_state.rand',reference,8);
 verifyEqual(testCase,actual,expected);
+clear cleanup
+state=optuna_mex('optuna.random_state.create',73);
+reference=optuna_mex('optuna.random_state.create',73);
+cleanup=onCleanup(@()destroyStates(state,reference));
+for repeat=1:2
+    before=optuna_mex('api.info');
+    % Overflowing support produces an invalid model after GPU construction.
+    verifyError(testCase,@()evaluateCommand('optuna.tpe.best_joint_observations', ...
+        state,24,false,-1e308,1e308,false,NaN,0,0,1,1,true,false,[],[]), ...
+        'radia:optuna:mex:Exception');
+    actual=optuna_mex('optuna.random_state.rand',state,8);
+    expected=optuna_mex('optuna.random_state.rand',reference,8);
+    verifyEqual(testCase,actual,expected);
+    after=optuna_mex('api.info');
+    if mode=="gpu"
+        verifyGreaterThan(testCase,after.model_build_launches,before.model_build_launches);
+    end
+end
 clear cleanup
 end
 end

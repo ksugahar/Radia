@@ -41,7 +41,8 @@ struct Statistics {
     std::uint64_t device_allocation_calls = 0, workspace_reuses = 0;
     std::uint64_t avoided_upload_bytes = 0;
     std::size_t cached_device_bytes = 0;
-    std::uint64_t model_build_launches = 0, model_reuses = 0;
+    std::uint64_t model_build_launches = 0, model_reuses = 0, model_radix_sorts = 0;
+    std::size_t peak_sort_temporary_bytes = 0;
     std::uint64_t preparation_launches = 0, model_download_bytes = 0;
     std::uint64_t cpu_preparation_calls = 0, cpu_cached_normalizer_values = 0;
     int runtime_version = 0, driver_version = 0, device = -1;

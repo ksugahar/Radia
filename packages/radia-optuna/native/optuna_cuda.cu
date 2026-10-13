@@ -1,6 +1,7 @@
 #include "optuna_cuda.hpp"
 #include "mex.h"
 #include <cuda_runtime.h>
+#include <cub/device/device_segmented_radix_sort.cuh>
 #include "gpu/mxGPUArray.h"
 #include <algorithm>
 #include <cfloat>
@@ -55,6 +56,7 @@ struct Workspace {
     mxArray* owner = nullptr;
     std::size_t capacity = 0;
     std::vector<unsigned char> input;
+    bool model_ready = false;
 };
 std::map<std::pair<int, int>, Workspace> workspaces;
 constexpr std::size_t max_cached_bytes = 64 * 1024 * 1024;
@@ -256,10 +258,22 @@ __device__ void network_blocks(SortValue* values, std::size_t padded,
     if (i < padded) values[i] = selected;
     __syncthreads();
 }
+__global__ void initialize_large_model(const double* observations, std::size_t n,
+    std::size_t dimensions, std::size_t padded, const ModelDimension* settings,
+    const DeviceEstimator* estimators, double* data, double* keys, std::size_t* indices) {
+    const auto i = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (i >= dimensions * padded) return;
+    const auto dim = i / padded, row = i % padded;
+    const auto& e = estimators[dim];
+    const double raw = row < n && !e.categorical ? observations[row * dimensions + dim] : INFINITY;
+    const double mu = row < n && !e.categorical && settings[dim].log_scale ? log(raw) : raw;
+    keys[i] = mu; indices[i] = row;
+    if (row < n && !e.categorical) data[e.mu + row] = mu;
+}
 __global__ void construct_model(const double* observations, std::size_t n,
     std::size_t dimensions, const ModelDimension* settings,
     const DeviceEstimator* estimators, double* data, SortValue* scratch,
-    std::size_t padded, double prior_weight, bool endpoints) {
+    std::size_t padded, const double* sorted_keys, const std::size_t* sorted_indices, double prior_weight, bool endpoints) {
     const auto dim = static_cast<std::size_t>(blockIdx.x);
     const auto& e = estimators[dim]; const auto& setting = settings[dim];
     if (e.categorical) {
@@ -282,7 +296,7 @@ __global__ void construct_model(const double* observations, std::size_t n,
         return;
     }
     auto* sorted = scratch + dim * padded;
-    for (std::size_t i = threadIdx.x; i < padded; i += blockDim.x) {
+    if (n <= 256) for (std::size_t i = threadIdx.x; i < padded; i += blockDim.x) {
         const double raw = i < n ? observations[i * dimensions + dim] : INFINITY;
         const double mu = i < n && setting.log_scale ? log(raw) : raw;
         sorted[i] = {mu, i < n ? i : static_cast<std::size_t>(-1)};
@@ -300,31 +314,18 @@ __global__ void construct_model(const double* observations, std::size_t n,
             network_stage(sorted, padded, 0x4E, 0xC); // 2,3,0,1
             network_stage(sorted, padded, 0xB1, 0xA);
         }
-    } else if (n > 256) {
-        // Stable value/index ordering matches the existing large-array route.
-        for (std::size_t width = 2; width <= padded; width *= 2)
-            for (std::size_t distance = width / 2; distance; distance /= 2) {
-                for (std::size_t i = threadIdx.x; i < padded; i += blockDim.x) {
-                    const auto other = i ^ distance;
-                    if (other <= i) continue;
-                    const auto a = sorted[i], b = sorted[other];
-                    const bool greater = a.key > b.key || (a.key == b.key && a.index > b.index);
-                    const bool less = a.key < b.key || (a.key == b.key && a.index < b.index);
-                    if ((i & width) ? less : greater) { sorted[i] = b; sorted[other] = a; }
-                }
-                __syncthreads();
-            }
     }
     for (std::size_t i = threadIdx.x; i < n; i += blockDim.x) {
-        const double value = sorted[i].key;
-        const double left = i == 0 ? e.low : sorted[i - 1].key;
-        const double right = i + 1 == n ? e.high : sorted[i + 1].key;
+        const auto position = dim * padded + i;
+        const double value = n > 256 ? sorted_keys[position] : sorted[i].key;
+        const double left = i == 0 ? e.low : (n > 256 ? sorted_keys[position - 1] : sorted[i - 1].key);
+        const double right = i + 1 == n ? e.high : (n > 256 ? sorted_keys[position + 1] : sorted[i + 1].key);
         double sigma = fmax(value - left, right - value);
         if (!endpoints && n >= 2) {
-            if (i == 0) sigma = sorted[1].key - value;
-            if (i + 1 == n) sigma = value - sorted[i - 1].key;
+            if (i == 0) sigma = (n > 256 ? sorted_keys[position + 1] : sorted[1].key) - value;
+            if (i + 1 == n) sigma = value - (n > 256 ? sorted_keys[position - 1] : sorted[i - 1].key);
         }
-        data[e.sigma + sorted[i].index] = fmin(fmax(sigma, setting.minimum), e.high - e.low);
+        data[e.sigma + (n > 256 ? sorted_indices[position] : sorted[i].index)] = fmin(fmax(sigma, setting.minimum), e.high - e.low);
     }
     if (threadIdx.x == 0) {
         data[e.mu + n] = 0.5 * (e.low + e.high);
@@ -465,6 +466,18 @@ class PreparedModel {
 public:
     std::unique_ptr<Buffer> storage;
     std::size_t descriptors = 0, dimensions = 0, kernels = 0;
+    mutable bool completed = false;
+    ~PreparedModel() {
+        // A launch, allocation, download or scoring failure must never leave
+        // a matching input shadow pointing at incomplete model outputs.
+        if (!completed && storage && storage->cached) {
+            storage->cached->input.clear(); storage->cached->model_ready = false;
+        }
+    }
+    void accept() const noexcept {
+        completed = true;
+        if (storage->cached) storage->cached->model_ready = true;
+    }
 };
 ModelConstruction build_model(const std::vector<double>& observations,
     const std::vector<double>& weights, const std::vector<ModelDimension>& dimensions,
@@ -483,6 +496,12 @@ ModelConstruction build_model(const std::vector<double>& observations,
     const auto weight_offset = layout.append(weights);
     const auto settings_offset = layout.append(dimensions);
     layout.append(std::vector<double>{prior_weight, endpoints ? 1.0 : 0.0});
+    const auto items = product(dims, padded);
+    if (n > 256 && items > static_cast<std::size_t>(INT_MAX))
+        throw std::overflow_error("Optuna CUDA segmented sort size overflow");
+    std::vector<int> offsets;
+    if (n > 256) for (std::size_t d = 0; d <= dims; ++d) offsets.push_back(static_cast<int>(d * padded));
+    const auto offsets_offset = layout.append(offsets);
     const auto descriptors_offset = layout.reserve<DeviceEstimator>(dims);
     const auto input_bytes = layout.bytes;
     const auto model_count = product(dims, kernels);
@@ -494,7 +513,11 @@ ModelConstruction build_model(const std::vector<double>& observations,
     const auto probabilities_offset = layout.reserve<double>(probability_count);
     const auto denominator_offset = layout.reserve<double>(model_count);
     const auto log_sigma_offset = layout.reserve<double>(model_count);
-    const auto scratch_offset = layout.reserve<SortValue>(product(dims, padded));
+    const auto scratch_offset = layout.reserve<SortValue>(n <= 256 ? items : 0);
+    const auto keys_in = layout.reserve<double>(n > 256 ? items : 0);
+    const auto keys_out = layout.reserve<double>(n > 256 ? items : 0);
+    const auto indices_in = layout.reserve<std::size_t>(n > 256 ? items : 0);
+    const auto indices_out = layout.reserve<std::size_t>(n > 256 ? items : 0);
     std::vector<DeviceEstimator> descriptors(dims);
     std::memset(descriptors.data(), 0, product(dims, sizeof(DeviceEstimator)));
     std::size_t probability_position = 0;
@@ -521,10 +544,36 @@ ModelConstruction build_model(const std::vector<double>& observations,
     model.descriptors = descriptors_offset; model.dimensions = dims; model.kernels = kernels;
     auto& arena = *model.storage;
     stats.peak_temporary_bytes = std::max(stats.peak_temporary_bytes, layout.bytes);
-    if (upload(arena, layout.input.data(), layout.input.size())) {
+    const bool changed = upload(arena, layout.input.data(), layout.input.size());
+    if (changed || !arena.cached || !arena.cached->model_ready) {
+        // Keep readiness in the workspace too: MATLAB allocation errors can
+        // leave the C++ stack without running ordinary exception destructors.
+        if (arena.cached) arena.cached->model_ready = false;
+        if (n > 256) {
+            initialize_large_model<<<static_cast<unsigned>((items + 255) / 256), 256>>>(
+                arena.as<double>(input), n, dims, padded, arena.as<ModelDimension>(settings_offset),
+                arena.as<DeviceEstimator>(descriptors_offset), arena.as<double>(),
+                arena.as<double>(keys_in), arena.as<std::size_t>(indices_in));
+            check(cudaGetLastError(), "initialize model sort"); ++stats.model_build_launches;
+            std::size_t bytes = 0;
+            check(cub::DeviceSegmentedRadixSort::SortPairs(nullptr, bytes,
+                arena.as<double>(keys_in), arena.as<double>(keys_out),
+                arena.as<std::size_t>(indices_in), arena.as<std::size_t>(indices_out),
+                static_cast<int>(items), static_cast<int>(dims), arena.as<int>(offsets_offset),
+                arena.as<int>(offsets_offset) + 1), "query segmented model sort");
+            stats.peak_sort_temporary_bytes = std::max(stats.peak_sort_temporary_bytes, bytes);
+            Buffer temporary(std::max<std::size_t>(bytes, 1), 3);
+            check(cub::DeviceSegmentedRadixSort::SortPairs(temporary.data, bytes,
+                arena.as<double>(keys_in), arena.as<double>(keys_out),
+                arena.as<std::size_t>(indices_in), arena.as<std::size_t>(indices_out),
+                static_cast<int>(items), static_cast<int>(dims), arena.as<int>(offsets_offset),
+                arena.as<int>(offsets_offset) + 1), "sort model observations");
+            ++stats.model_radix_sorts;
+        }
         construct_model<<<static_cast<unsigned>(dims), 256>>>(arena.as<double>(input), n,
             dims, arena.as<ModelDimension>(settings_offset), arena.as<DeviceEstimator>(descriptors_offset),
-            arena.as<double>(), arena.as<SortValue>(scratch_offset), padded, prior_weight, endpoints);
+            arena.as<double>(), arena.as<SortValue>(scratch_offset), padded, arena.as<double>(keys_out),
+            arena.as<std::size_t>(indices_out), prior_weight, endpoints);
         check(cudaGetLastError(), "construct TPE model");
         ++stats.model_build_launches;
     } else ++stats.model_reuses;
@@ -662,6 +711,10 @@ std::size_t best(const std::vector<double>& candidates,
 
     if (result >= count)
         throw std::runtime_error("Optuna CUDA candidate acquisition is nonfinite");
+    if (lower_model) {
+        lower_model->accept();
+        upper_model->accept();
+    }
     return result;
 }
 bool use_gpu() { return gpu_enabled; }

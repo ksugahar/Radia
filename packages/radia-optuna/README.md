@@ -395,6 +395,12 @@ separate retained workspaces, within the same 64 MiB per-device total budget.
 Input shadows never include kernel-written outputs. GPU sorting preserves the
 existing small-array NumPy network and large-array value/index ordering;
 bandwidth clipping and categorical normalization keep their original order.
+Above 256 observations, CUDA's CUB segmented radix sort replaces the initial
+global-memory bitonic implementation. Stable pairs preserve the existing
+large-array ordering, including signed zeros. `model_radix_sorts` and
+`peak_sort_temporary_bytes` expose this route and its scratch requirement.
+Only successfully scored models become reusable; allocation or evaluation
+failures invalidate incomplete output caches and restore the sampling RNG.
 `model_build_launches`, `model_reuses`, `preparation_launches` and
 `model_download_bytes` expose construction, reuse and host RNG transfers.
 CPU density also reuses the constructor's ordered normalizers and prepares
