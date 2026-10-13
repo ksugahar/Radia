@@ -66,8 +66,8 @@ checks. Maximum relative solution error was 1.122e-11;
 maximum original-equation true residual was 5.621e-12.
 The installed-module oracle and 24 rejection gates also passed.
 The full phase, transfer, reuse, memory and artifact records are in
-[100-ci-candidate-scaling.json](results/100-ci-candidate-scaling.json) and
-[100-installed-acceptance.json](results/100-installed-acceptance.json).
+[runtime-ci-candidate-scaling.json](results/runtime-ci-candidate-scaling.json) and
+[runtime-installed-acceptance.json](results/runtime-installed-acceptance.json).
 All times below are diagnostic 100 values, not formal performance acceptance.
 
 | Total DoFs | Route | Fresh median (s) | Reused median (s) |
