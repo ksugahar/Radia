@@ -59,3 +59,40 @@ was powered off on 2026-10-13, so the new IC implementation has no A100
 performance or same-binary runtime acceptance yet. The pending record must
 remain pending until that host is available and the exact accepted candidate
 artifact is loaded and verified. The published 0.1.4 wheel is unchanged.
+
+Candidate numerical acceptance on 100 (2026-10-13): installed CI wheel
+`0.1.5rc1`, run `38387288896`, passed all 360 independent FEM solution
+checks. Maximum relative solution error was 1.122e-11;
+maximum original-equation true residual was 5.621e-12.
+The installed-module oracle and 24 rejection gates also passed.
+The full phase, transfer, reuse, memory and artifact records are in
+[100-ci-candidate-scaling.json](results/100-ci-candidate-scaling.json) and
+[100-installed-acceptance.json](results/100-installed-acceptance.json).
+All times below are diagnostic 100 values, not formal performance acceptance.
+
+| Total DoFs | Route | Fresh median (s) | Reused median (s) |
+| ---: | --- | ---: | ---: |
+| 10,460 | cpu-ams-1 | 0.3140 | 0.0621 |
+| 10,460 | cpu-ic-1 | 0.3851 | 0.2310 |
+| 10,460 | gpu-ams-1 | 0.5074 | 0.0321 |
+| 10,460 | cpu-ams-16 | 0.4150 | 0.0353 |
+| 10,460 | cpu-ic-16 | 0.4886 | 0.3631 |
+| 10,460 | gpu-ic-1 | 0.8602 | 0.3520 |
+| 32,233 | cpu-ams-1 | 1.0019 | 0.1871 |
+| 32,233 | cpu-ic-1 | 1.5506 | 1.0620 |
+| 32,233 | gpu-ams-1 | 1.0225 | 0.0299 |
+| 32,233 | cpu-ams-16 | 0.7345 | 0.0565 |
+| 32,233 | cpu-ic-16 | 0.8487 | 0.5314 |
+| 32,233 | gpu-ic-1 | 1.6980 | 0.7753 |
+| 106,272 | cpu-ams-1 | 3.5753 | 0.8050 |
+| 106,272 | cpu-ic-1 | 7.0548 | 5.3869 |
+| 106,272 | gpu-ams-1 | 2.9077 | 0.0651 |
+| 106,272 | cpu-ams-16 | 1.8470 | 0.1240 |
+| 106,272 | cpu-ic-16 | 3.3028 | 2.3618 |
+| 106,272 | gpu-ic-1 | 5.8940 | 3.4049 |
+
+Natural-order GPU IC has many triangular dependency levels and scalar host
+synchronizations. These diagnostic results do not establish an IC speedup;
+A100 tuning and formal timings remain pending. AMS remains the preferred
+candidate for the larger HCurl cases. The selected wheel and IC binary
+hashes are pinned in [a100-pending.json](results/a100-pending.json).

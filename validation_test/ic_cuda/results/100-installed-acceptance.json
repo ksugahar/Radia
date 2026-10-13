@@ -1,0 +1,38 @@
+{
+  "schema": "radia.gpu.installed-acceptance.v1",
+  "passed": true,
+  "device": "Quadro RTX 5000",
+  "compute_capability": "7.5",
+  "gpu_total_memory_bytes": 17179541504.0,
+  "matlab_release": "2026a",
+  "cuda_residual": 0,
+  "simulink_repeated_runs": 2,
+  "simulink_failure_cleanup": true,
+  "ltspice_checked": true,
+  "ic_checked": true,
+  "ic_acceptance": {
+    "schema": "radia.gpu.ic-accuracy.v1",
+    "passed": true,
+    "binary_sha256": "c00b0cb1bdfc43e1154622dcc2105affeceb26c3fc009bd3a189ab5e57a89f1a",
+    "fixture_sha256": "c0420c9b73a15f3105c8b734f4fa4342c0e8e7d541da107e435fae21ee354494",
+    "numpy": "2.5.3",
+    "independent_cpu": "NumPy original-A solve, shifted full-pattern solve and independent square-root sparse IC(0) oracle",
+    "apply_relative": 1.743608947116815e-16,
+    "sparse_apply_relative": 1.3253928529842417e-16,
+    "solution_relative_max": 1.6314466480974827e-16,
+    "true_relative_residual_max": 1.3269703217737503e-16,
+    "rejection_count": 24,
+    "live_count_restored": true,
+    "frontend_checked": true,
+    "device": "Quadro RTX 5000",
+    "runtime_library_sha256": {
+      "cusparse64_12.dll": "0af1ee97b0c573951dd368a862d3e7eceb00bf1313e9344ad326734a8447db8f",
+      "cublas64_12.dll": "f34af240d84211f509020b4a6f88914bbc15a15c2678832fa330fc963d136c1d"
+    }
+  },
+  "source_commit": "5a627a194a5f153c0b4e6ad6e62ed3a4ce2c6064",
+  "distribution_version": "0.1.5rc1",
+  "manifest_sha256": "b5e893b0d72af0baab2933eccf5c76071a51097b32286c614c3b002c14222d7a",
+  "os_hostname": "runtime",
+  "wheel_sha256": "de899d5fc8faf48430f3de55d288f3a49077197f6af43d09d0b5cbeb44635884"
+}
