@@ -321,7 +321,8 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     normalized = " ".join(policy.split())
     assert "with the `100` runner label" in normalized
     assert "LAB/102 tests radia and radia-mcp wheels without radia-gpu" in normalized
-    assert "`NGSolve` validates radia-gpu on A100; mdx evaluates CPU timing" in normalized
+    assert "Start SSH host `NGSolve` (A100) on demand for CPU/GPU timing" in normalized
+    assert "mdx/mdx1/mdx2/hibino are retired execution targets" in normalized
     assert "`NGSolve` A100 validation runs without Cubit" in normalized
     assert "NGSolve hosts start from checked exported .vol files, without Cubit" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
@@ -357,8 +358,12 @@ def test_policy_twins_define_the_same_compute_host_routing():
     policy = routing_policy(agents)
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
-    assert "consolidated `mdx` host" in normalized
-    assert "mdx1/mdx2/hibino no longer exist as targets" in normalized
+    assert "Start SSH host `NGSolve` (A100) on demand for CPU/GPU timing" in normalized
+    assert "mdx/mdx1/mdx2/hibino are retired execution targets" in normalized
+    assert "BatchMode=yes NGSolve hostname" in normalized
+    assert "Compare CPU/GPU on the same host" in normalized
+    assert "A100 is optional for development/publication" in normalized
+    assert "100/LAB timings are diagnostic" in normalized
     assert "one heavy job at a time" in normalized
     assert "running jobs and available memory" in normalized
     assert "preserve active timing jobs" in normalized

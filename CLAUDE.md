@@ -223,12 +223,11 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 ### Compute Host Routing
 
-**POLICY (2026-10-13)**: Start SSH host `NGSolve` (A100) on demand for formal CPU/GPU timing. The 38-core `mdx` VM is retired as an execution target; mdx1/mdx2/hibino are also retired.
-Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes NGSolve hostname`, then check running jobs and available memory. Formal timing requires an otherwise idle host; run one heavy timing job at a time and never stop another session's jobs.
-Compare Python CPU and MATLAB/mexcuda GPU routes on the same host with fixed, recorded thread counts, including a 16-thread CPU baseline where supported. Measure scaling rather than assuming that all available cores improve performance. Record CPU/GPU hardware, memory, versions, transfers, setup and total elapsed time in JSON.
-100 owns builds, CI and isolated numerical/memory validation. Incidental 100/LAB timings remain diagnostic. A100 availability is not a mandatory development or publication gate. Gmsh rendering needs a desktop.
-Historical mdx measurements retain their original provenance; never relabel them as NGSolve results. Keep hostnames, IPs and local paths private in public evidence.
-Retiring an execution target does not authorize deleting its VM, disks or another session's data. Recover and verify unique work before any separately authorized deletion.
+**POLICY (2026-10-13)**: Start SSH host `NGSolve` (A100) on demand for CPU/GPU timing. mdx/mdx1/mdx2/hibino are retired execution targets.
+Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes NGSolve hostname`; check running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs. Never stop another session's jobs.
+Compare CPU/GPU on the same host; fix and record threads, including a 16-thread baseline where supported. Measure speed, scaling, setup, transfers and total time; save hardware, memory and versions in JSON.
+100 owns builds/CI and isolated numerical validation; 100/LAB timings are diagnostic. A100 is optional for development/publication. Gmsh rendering needs a desktop.
+Historical mdx measurements remain valid provenance; never relabel them. Keep hosts/IPs/paths private. Recover unique work before separately authorized VM/disk deletion.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
 
