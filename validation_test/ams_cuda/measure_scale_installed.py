@@ -68,13 +68,17 @@ def main(a):
         spec=importlib.util.spec_from_file_location('wheel_verifier',job/'verify_wheel.py');verifier=importlib.util.module_from_spec(spec);spec.loader.exec_module(verifier)
         wheel=verifier.verify(a.wheel);import radia_gpu
         installed=radia_gpu.verify();verifier.verify_installed_identity(installed,wheel)
-        if wheel['version']!='0.1.4' or wheel['wheel_sha256']!=owner['wheel_sha256']:raise RuntimeError('Selected stable wheel identity')
+        if wheel['version'] not in ('0.1.4','0.1.5rc1') or wheel['wheel_sha256']!=owner['wheel_sha256']:raise RuntimeError('Selected wheel identity')
         payload=Path(installed['matlab_path']);mex_hash=json.loads((payload.parent/'manifest.json').read_text())['files']['matlab/radia_cuda_ams.mexw64']
         ic_hash=None
         if a.ic_directory:
-            a.ic_directory=a.ic_directory.resolve();ic_build=json.loads((job/'ic-build.json').read_text());ic_hash=ic_build['binary_sha256_by_file']['radia_cuda_ic.mexw64']
+            a.ic_directory=a.ic_directory.resolve();ic_build=json.loads((job/'ic-build.json').read_text())
+            packaged=ic_build.get('schema')=='radia.gpu.ic-payload.v1'
+            ic_hash=ic_build['binary_sha256'] if packaged else ic_build['binary_sha256_by_file']['radia_cuda_ic.mexw64']
+            ic_source_hash=ic_build['source_sha256'] if packaged else ic_build['source_sha256_by_file']['radia_cuda_ic.cu']
+            if packaged and (ic_build['source_commit']!=wheel['source_commit'] or ic_build['source_dirty']):raise RuntimeError('Packaged IC source mismatch')
             if sha(a.ic_directory/'radia_cuda_ic.mexw64')!=ic_hash:raise RuntimeError('IC candidate build identity mismatch')
-            r['ic_candidate']=dict(build_source_commit=ic_build['source_commit'],binary_sha256=ic_hash,source_sha256=ic_build['source_sha256_by_file']['radia_cuda_ic.cu'],frontend_sha256={n:sha(a.ic_directory/'+radia/+gpu'/n) for n in ('ICContext.m','HCurlICSystem.m')},distribution_status='Experimental candidate separate from unchanged stable 0.1.4 AMS wheel')
+            r['ic_candidate']=dict(build_source_commit=ic_build['source_commit'],binary_sha256=ic_hash,source_sha256=ic_source_hash,frontend_sha256={n:sha(a.ic_directory/'+radia/+gpu'/n) for n in ('ICContext.m','HCurlICSystem.m')},distribution_status='Installed candidate IC payload' if packaged else 'Experimental candidate separate from unchanged stable 0.1.4 AMS wheel')
             r['comparison']='Independent CPU AMS/IC at NGSolve1/16 versus stable GPU AMS and experimental GPU IC'
         r.update(wheel=wheel,installed=installed,cpu_ams_build_receipt_sha256=sha(job/'bridge-provenance/build.json'),cpu_ic_origin=owner['cpu_ic_origin'],versions=dict(python=sys.version,ngsolve=ng.__version__,numpy=np.__version__,cpu_native_ngslib_sha256=sha(ng.ngslib.__file__)),protocol_sha256={n:sha(job/n) for n in ('measure_scale_installed.py','measure_scale_installed.m')})
         r['cpu_hardware']=json.loads(subprocess.check_output(['powershell','-NoProfile','-Command','Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors | ConvertTo-Json'],text=True))
