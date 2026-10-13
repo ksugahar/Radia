@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "rad_field_cloud_kernel.h"
 
 namespace rad_hdiv {
 
@@ -129,6 +130,12 @@ public:
     Algorithm AlgorithmFor(std::size_t n_observations) const;
     static Algorithm ParseAlgorithm(const std::string& name);
     static const char* AlgorithmName(Algorithm algorithm);
+
+    // Numeric CUDA boundary for the existing retained-cloud representation.
+    // Analytic/curved element sources are rejected, never sampled implicitly.
+    FieldCloudSnapshot ExportCloudSnapshot() const;
+    // Preserve analytic/high-order/curved sources and the exact CPU tree ordering.
+    FieldCloudSnapshot ExportSnapshot() const;
 
     std::size_t SourceCount() const;
     std::size_t ImageCount() const;

@@ -1,0 +1,104 @@
+{
+  "accepted": true,
+  "scope": "Three generic temperature/material cells only",
+  "research_preview": true,
+  "full_peec_bem_connected": false,
+  "simulink_accepted": false,
+  "release_accepted": false,
+  "independent_physics_validation": false,
+  "timing_accepted": false,
+  "source_sha256": {
+    "validation_test\\ih_cuda\\temperature_material_smoke.cu": "c297ba4a9225f18f47c3d45eeeb06d6e32c71a6b151b1b6dc1561531ecc2478e",
+    "validation_test\\ih_cuda\\run_temperature_material.py": "438fd80c44003e845c4c6c21f2cd3ee80d9c1a86a6acae95004b1a81de518ad2",
+    "packages\\radia-gpu\\native\\ih_temperature_material.cuh": "152e142744648db3729390344a0bf9f9cb25f046e0d265d4151fa1df283f581c",
+    "packages\\radia-gpu\\native\\ih_esim_cell.cuh": "a9006bfe7a6adc8ceffe07ad15555e665854b42dc88577ea185a12ca8ee54076",
+    "packages\\radia-gpu\\native\\ih_thermal_kernels.cuh": "ddbe7e8a030a7092576d7f3edc0a217ad5c08ffae042bb5a625bcc1479bc0d29",
+    "packages\\radia-gpu\\native\\ih_resident_kernels.cuh": "fbf2c80017687fb309f4f5aa965f70d74fe93f0a7b22f6430335e0cbc342d5dc"
+  },
+  "source_commit": "f76264df97ccc4016a72684e1a06431698e2ba86",
+  "source_dirty": true,
+  "rows": [
+    [
+      350,
+      1.5e-07,
+      0.00011519173063162577,
+      0.00025381234515938416,
+      0.0002554463094823655,
+      9.115618084227737e-14,
+      1
+    ],
+    [
+      400,
+      4e-07,
+      0.00010471975511965978,
+      6.275505000738324e-05,
+      0.0003117832305802881,
+      5.338114589783253e-13,
+      1
+    ],
+    [
+      500,
+      9e-07,
+      8.377580409572782e-05,
+      9.721149052649933e-05,
+      0.000503632332050081,
+      8.094900243197062e-13,
+      1
+    ]
+  ],
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "binary_sha256": "6c21c17f76717a1320d9e642666d6bdf435898cc8d88030f2d1edd4072e8b581",
+  "execution_route": "Owned MATLAB batch",
+  "repeated_calls": 5,
+  "out_of_table_rejected": true,
+  "a100": {
+    "accepted": true,
+    "rows": [
+      [
+        350,
+        1.5e-07,
+        0.00011519173063162577,
+        0.00025381234515938416,
+        0.0002554463094823655,
+        9.115618084227737e-14,
+        1
+      ],
+      [
+        400,
+        4e-07,
+        0.00010471975511965978,
+        6.275505000738324e-05,
+        0.0003117832305802881,
+        5.338114589783253e-13,
+        1
+      ],
+      [
+        500,
+        9e-07,
+        8.377580409572782e-05,
+        9.721149052649933e-05,
+        0.000503632332050081,
+        8.094900243197062e-13,
+        1
+      ]
+    ],
+    "matlab": "26.1.0.3203278 (R2026a)",
+    "scope": "generic material cell only",
+    "owner": "radfld-cuda-hdiv",
+    "binary_sha256": "6c21c17f76717a1320d9e642666d6bdf435898cc8d88030f2d1edd4072e8b581",
+    "gpu": "NVIDIA A100-SXM4-40GB, 0, 40645, 40960",
+    "host_free_bytes": 57253781504,
+    "cpu_sample": 4,
+    "independent_physics_validation": false,
+    "timing_accepted": false
+  },
+  "acceptance_policy": "User-authorized research preview; independent full physics certification is not a release requirement. Implementation, convergence, lifecycle and distribution gates remain.",
+  "pending": [
+    "Complete PEEC-BEM reaction coupling",
+    "Persistent MEX temperature/material and nonlinear ESIM update",
+    "Temperature-dependent nonlinear BH test",
+    "Simulink update/outputs, save/reopen and failure cleanup",
+    "Whole timing and memory",
+    "Exact artifact distribution and release"
+  ]
+}

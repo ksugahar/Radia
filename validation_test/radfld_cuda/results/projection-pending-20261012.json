@@ -1,0 +1,22 @@
+{
+  "schema": "radia.projection-investigation.v1",
+  "status": "pending_native_bridge",
+  "accepted": false,
+  "a100_used": false,
+  "relative_limit": 0.0001,
+  "matlab_analyzer_issues": [],
+  "findings": [
+    "MATLAB GridFunction.interpolate delegates to native NGSolve",
+    "RadiaField has PrepareCache/SetMemoize in CPU pybind11",
+    "Current operation-owned MATLAB session has no radia_mex on path"
+  ],
+  "pending": [
+    "Native RadFld CF and actual Set bridge in isolated mexcuda build",
+    "CF call/batch counters and mapped target collection",
+    "Physical FE L2 and held-out field validation",
+    "Idle-host continuous whole projection timing and memory"
+  ],
+  "transfer_inclusive_projection_seconds": null,
+  "peak_memory_bytes": null,
+  "source_commit": "02d77bae8"
+}

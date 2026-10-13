@@ -41,6 +41,11 @@ param(
     [switch]$Test,
     [switch]$Verbose,
     [switch]$RadiaOnly,
+    [switch]$HMatrixCudaOnly,    # isolated resident HACApK leaf application
+    [string]$HMatrixMklRoot,     # explicit isolated MKL for complete C HACApK assembly
+    [switch]$ProjectionCudaOnly, # experimental NGSolve target replay bridge
+    [switch]$IhCudaOnly,          # isolated persistent coupled IH CUDA gateway
+    [switch]$FieldCudaOnly,       # isolated retained-cloud RadFld CUDA gateway
     [switch]$AmsCudaOnly,         # experimental AMS snapshot adapter + CUDA MEX
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
     [switch]$CudaMexOnly,          # isolated CUDA-only assembled-operator gateway
@@ -50,8 +55,54 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($HMatrixMklRoot -and -not $HMatrixCudaOnly) { throw '-HMatrixMklRoot requires -HMatrixCudaOnly' }
 if ($args.Count -gt 0) {
     throw "Unsupported build arguments: $($args -join ' '). Radia CPU uses -RadiaOnly; GPU uses -CudaMexOnly."
+}
+
+if ($HMatrixCudaOnly) {
+    if ($RadiaOnly -or $ProjectionCudaOnly -or $IhCudaOnly -or $FieldCudaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+        throw '-HMatrixCudaOnly is an isolated experimental build'
+    }
+    $hMatrixBuildArgs = @()
+    if ($HMatrixMklRoot) { $hMatrixBuildArgs += @('--mkl-root', $HMatrixMklRoot) }
+    if ($RequireNativeProvenance) { $hMatrixBuildArgs += '--require-clean-source' }
+    & python (Join-Path $PSScriptRoot 'packages/radia-gpu/tools/build_hmatrix_cuda.py') @hMatrixBuildArgs
+    if ($LASTEXITCODE -ne 0) { throw 'H-matrix CUDA experimental build failed' }
+    return
+}
+
+if ($ProjectionCudaOnly) {
+    if ($RadiaOnly -or $IhCudaOnly -or $FieldCudaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+        throw '-ProjectionCudaOnly is an isolated experimental build'
+    }
+    $projectionBuildArgs = @()
+    if ($RequireNativeProvenance) { $projectionBuildArgs += '--require-clean-source' }
+    & python (Join-Path $PSScriptRoot 'packages/radia-gpu/tools/build_projection_cuda.py') @projectionBuildArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Projection CUDA experimental build failed' }
+    return
+}
+
+if ($IhCudaOnly) {
+    if ($RadiaOnly -or $FieldCudaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+        throw '-IhCudaOnly is an isolated experimental build; incompatible options supplied'
+    }
+    $ihBuildArgs = @()
+    if ($RequireNativeProvenance) { $ihBuildArgs += '--require-clean-source' }
+    & python (Join-Path $PSScriptRoot 'packages/radia-gpu/tools/build_ih_cuda.py') @ihBuildArgs
+    if ($LASTEXITCODE -ne 0) { throw 'IH CUDA experimental build failed' }
+    return
+}
+
+if ($FieldCudaOnly) {
+    if ($RadiaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+        throw '-FieldCudaOnly is an isolated experimental build; incompatible options supplied'
+    }
+    $fieldBuildArgs = @()
+    if ($RequireNativeProvenance) { $fieldBuildArgs += '--require-clean-source' }
+    & python (Join-Path $PSScriptRoot 'packages/radia-gpu/tools/build_field_cuda.py') @fieldBuildArgs
+    if ($LASTEXITCODE -ne 0) { throw 'RadFld CUDA experimental build failed' }
+    return
 }
 
 if ($AmsCudaOnly) {

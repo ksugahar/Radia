@@ -12,6 +12,9 @@
 
 namespace rad_hdiv {
 
+// Copy the CPU-generated far-field Gauss table for device constant upload.
+void CopyFieldFarGauss(double* x, double* w);
+
 typedef std::array<double, 3> Vec3;
 
 //-------------------------------------------------------------------------

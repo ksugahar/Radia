@@ -2,7 +2,9 @@
 
 #include "rad_hdiv_vim.h"
 
+#ifndef RADIA_FIELD_SERIAL_ONLY
 #include <core/taskmanager.hpp>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -14,30 +16,16 @@
 #include <numeric>
 #include <stdexcept>
 
+#define RAD_FIELD_NAMESPACE rad_hdiv
+#define RAD_FIELD_KERNEL
+#include "rad_field_source_kernel.inc"
+#undef RAD_FIELD_KERNEL
+#undef RAD_FIELD_NAMESPACE
+
 namespace rad_hdiv {
 namespace {
 
-struct CompensatedVec3 {
-    double sum[3] = {0.0, 0.0, 0.0};
-    double correction[3] = {0.0, 0.0, 0.0};
-
-    void Add(int component, double value) {
-        const double next = sum[component] + value;
-        correction[component] += std::fabs(sum[component]) >= std::fabs(value)
-            ? (sum[component] - next) + value
-            : (value - next) + sum[component];
-        sum[component] = next;
-    }
-
-    void Add(const double value[3]) {
-        for (int component = 0; component < 3; ++component) Add(component, value[component]);
-    }
-
-    void Store(double out[3]) const {
-        for (int component = 0; component < 3; ++component)
-            out[component] = sum[component] + correction[component];
-    }
-};
+using CompensatedVec3 = FieldCompensated3;
 
 using Vec = std::array<double, 3>;
 
@@ -61,54 +49,24 @@ double Det(const Vec& a, const Vec& b, const Vec& c) {
 
 // Polynomial coefficients are monomials of (x - origin).  The kernels see the
 // source and the target translated by the same origin.
-struct TetSource {
-    double v[4][3]{};
-    double coefficient[84]{};
-    int degree = 3;
-    double origin[3]{};
-};
+using TetSource = FieldTetSource;
 
-struct TriSource {
-    double v[3][3]{};
-    double sigma0 = 0.0;
-    double slope[3]{};
-    double hessian[3][3]{};
-    double origin[3]{};
-};
+using TriSource = FieldTriSource;
 
-struct CubicTriSource {
-    double v[3][3]{};
-    double coefficient[35]{};
-    int degree = 3;
-    double origin[3]{};
-};
+using CubicTriSource = FieldCubicTriSource;
 
-template <std::size_t N>
-void Translate(const double (&v)[N][3], const double origin[3], const double r[3],
-               double (&local_v)[N][3], double local_r[3]) {
-    for (std::size_t i = 0; i < N; ++i)
-        for (int k = 0; k < 3; ++k) local_v[i][k] = v[i][k] - origin[k];
-    for (int k = 0; k < 3; ++k) local_r[k] = r[k] - origin[k];
-}
 
-struct CurvedTetSource {
-    double nodes[10][3]{};
-    double coefficient[4]{}; // 1, xi, eta, zeta
-};
 
-struct CurvedTriSource {
-    double nodes[6][3]{};
-    double coefficient[6]{}; // 1, eta, eta^2, xi, xi*eta, xi^2
-};
+using CurvedTetSource = FieldCurvedTetSource;
+
+using CurvedTriSource = FieldCurvedTriSource;
 
 struct PointSource {
     Vec position{};
     double strength = 0.0;
 };
 
-enum class SourceKind : std::uint8_t {
-    Tet, Triangle, CubicTriangle, CurvedTet, CurvedTriangle, Point
-};
+using SourceKind = FieldSourceKind;
 
 struct SourceAtom {
     SourceKind kind = SourceKind::Point;
@@ -310,16 +268,9 @@ SourceAtom MakePointAtom(const PointSource& source, std::size_t index) {
     return atom;
 }
 
-double CurvedTetDensity(const CurvedTetSource& source, double xi, double eta, double zeta) {
-    return source.coefficient[0] + source.coefficient[1]*xi
-         + source.coefficient[2]*eta + source.coefficient[3]*zeta;
-}
 
-double CurvedTriDensity(const CurvedTriSource& source, double xi, double eta) {
-    return source.coefficient[0] + source.coefficient[1]*eta
-         + source.coefficient[2]*eta*eta + source.coefficient[3]*xi
-         + source.coefficient[4]*xi*eta + source.coefficient[5]*xi*xi;
-}
+
+
 
 SourceAtom MakeCurvedTetAtom(const CurvedTetSource& source, std::size_t index) {
     SourceAtom atom;
@@ -521,139 +472,20 @@ struct HDivFieldEvaluator::Impl {
         upper = nodes[0].upper;
     }
 
-    void AddCurvedTet(const CurvedTetSource& source, const double r[3], double out[3]) const {
-        double xi0[3];
-        ClosestRefTet(source.nodes, r, xi0);
-        static const double corners[4][3] = {{0,0,0},{1,0,0},{0,1,0},{0,0,1}};
-        static const int faces[4][3] = {{1,2,3},{0,3,2},{0,1,3},{2,1,0}};
-        const int nq = static_cast<int>(gauss_points.size());
-        for (int face = 0; face < 4; ++face) {
-            for (int lead = 0; lead < 3; ++lead) {
-                const double* b1 = corners[faces[face][lead]];
-                const double* b2 = corners[faces[face][(lead+1)%3]];
-                const double* b3 = corners[faces[face][(lead+2)%3]];
-                double d1[3], d2[3], d3[3], e21[3], e32[3];
-                for (int k = 0; k < 3; ++k) {
-                    d1[k] = b1[k]-xi0[k]; d2[k] = b2[k]-xi0[k]; d3[k] = b3[k]-xi0[k];
-                    e21[k] = b2[k]-b1[k]; e32[k] = b3[k]-b2[k];
-                }
-                const double determinant = d1[0]*(d2[1]*d3[2]-d2[2]*d3[1])
-                                         + d1[1]*(d2[2]*d3[0]-d2[0]*d3[2])
-                                         + d1[2]*(d2[0]*d3[1]-d2[1]*d3[0]);
-                if (std::fabs(determinant) < 1e-300) continue;
-                for (int ia = 0; ia < nq; ++ia) {
-                    const double u = gauss_points[static_cast<std::size_t>(ia)];
-                    for (int ib = 0; ib < nq; ++ib) {
-                        const double v = gauss_points[static_cast<std::size_t>(ib)];
-                        for (int ic = 0; ic < nq; ++ic) {
-                            const double w = gauss_points[static_cast<std::size_t>(ic)];
-                            double xi[3];
-                            for (int k = 0; k < 3; ++k)
-                                xi[k] = xi0[k] + u*(d1[k] + v*(e21[k] + w*e32[k]));
-                            double x[3], jacobian;
-                            CurvedTetMapMeasure(source.nodes, xi[0], xi[1], xi[2], x, jacobian);
-                            const double dx = r[0]-x[0], dy = r[1]-x[1], dz = r[2]-x[2];
-                            const double distance2 = dx*dx + dy*dy + dz*dz;
-                            if (distance2 <= 1e-300) continue;
-                            const double weight = gauss_weights[static_cast<std::size_t>(ia)]
-                                                * gauss_weights[static_cast<std::size_t>(ib)]
-                                                * gauss_weights[static_cast<std::size_t>(ic)] / 3.0
-                                                * u*u*v*determinant*jacobian;
-                            const double scale = CurvedTetDensity(source, xi[0], xi[1], xi[2])
-                                               * weight/(distance2*std::sqrt(distance2));
-                            out[0] += scale*dx; out[1] += scale*dy; out[2] += scale*dz;
-                        }
-                    }
-                }
-            }
-        }
-    }
 
-    void AddCurvedTriangle(const CurvedTriSource& source, const double r[3], double out[3]) const {
-        double xi0[2];
-        ClosestRefTri(source.nodes, r, xi0);
-        static const double corners[3][2] = {{0,0},{1,0},{0,1}};
-        const int nq = static_cast<int>(gauss_points.size());
-        for (int edge = 0; edge < 3; ++edge) {
-            const double* a = corners[edge];
-            const double* b = corners[(edge+1)%3];
-            const double e1x = a[0]-xi0[0], e1y = a[1]-xi0[1];
-            const double e2x = b[0]-xi0[0], e2y = b[1]-xi0[1];
-            const double determinant = e1x*e2y-e1y*e2x;
-            for (int iu = 0; iu < nq; ++iu) {
-                const double u = gauss_points[static_cast<std::size_t>(iu)];
-                for (int iv = 0; iv < nq; ++iv) {
-                    const double v = gauss_points[static_cast<std::size_t>(iv)];
-                    const double xi = xi0[0] + u*e1x + u*v*(e2x-e1x);
-                    const double eta = xi0[1] + u*e1y + u*v*(e2y-e1y);
-                    double x[3], jacobian;
-                    CurvedTriMapMeasure(source.nodes, xi, eta, x, jacobian);
-                    const double dx = r[0]-x[0], dy = r[1]-x[1], dz = r[2]-x[2];
-                    const double distance2 = dx*dx + dy*dy + dz*dz;
-                    if (distance2 <= 1e-300) continue;
-                    const double weight = gauss_weights[static_cast<std::size_t>(iu)]
-                                        * gauss_weights[static_cast<std::size_t>(iv)]
-                                        * u*determinant*jacobian;
-                    const double scale = CurvedTriDensity(source, xi, eta)
-                                       * weight/(distance2*std::sqrt(distance2));
-                    out[0] += scale*dx; out[1] += scale*dy; out[2] += scale*dz;
-                }
-            }
-        }
-    }
+
+
 
     void AddExact(const SourceAtom& atom, const double r[3], double out[3]) const {
-        if (atom.kind == SourceKind::Tet) {
-            const TetSource& source = tets[atom.index];
-            double v[4][3], local_r[3];
-            Translate(source.v, source.origin, r, v, local_r);
-            double value[3]{};
-            if (source.degree <= 3) {
-                TetVolFieldCubic(v, local_r, source.coefficient, value);
-            } else {
-                double basis[84][3];
-                TetVolFieldBasisUpTo6(v, local_r, basis);
-                for (int index = 0; index < 84; ++index)
-                    for (int k = 0; k < 3; ++k)
-                        value[k] += source.coefficient[index]*basis[index][k];
-            }
-            for (int k = 0; k < 3; ++k) out[k] += value[k];
-        } else if (atom.kind == SourceKind::Triangle) {
-            const TriSource& source = triangles[atom.index];
-            double v[3][3], local_r[3];
-            Translate(source.v, source.origin, r, v, local_r);
-            double value[3];
-            QuadTriField(v, local_r, source.sigma0, source.slope, source.hessian, value);
-            for (int k = 0; k < 3; ++k) out[k] += value[k];
-        } else if (atom.kind == SourceKind::CubicTriangle) {
-            const CubicTriSource& source = cubic_triangles[atom.index];
-            double v[3][3], local_r[3];
-            Translate(source.v, source.origin, r, v, local_r);
-            double value[3]{};
-            if (source.degree <= 3) {
-                CubicTriField(v, local_r, source.coefficient, value);
-            } else {
-                double basis[35][3];
-                TriFieldBasisUpTo4(v, local_r, basis);
-                for (int index = 0; index < 35; ++index)
-                    for (int k = 0; k < 3; ++k)
-                        value[k] += source.coefficient[index]*basis[index][k];
-            }
-            for (int k = 0; k < 3; ++k) out[k] += value[k];
-        } else if (atom.kind == SourceKind::CurvedTet) {
-            AddCurvedTet(curved_tets[atom.index], r, out);
-        } else if (atom.kind == SourceKind::CurvedTriangle) {
-            AddCurvedTriangle(curved_triangles[atom.index], r, out);
-        } else {
-            const PointSource& source = points[atom.index];
-            const double dx = r[0]-source.position[0];
-            const double dy = r[1]-source.position[1];
-            const double dz = r[2]-source.position[2];
-            const double r2 = dx*dx + dy*dy + dz*dz;
-            if (r2 <= 1e-300) return;
-            const double scale = source.strength/(r2*std::sqrt(r2));
-            out[0] += scale*dx; out[1] += scale*dy; out[2] += scale*dz;
+        if (atom.kind == SourceKind::Point) {
+            const auto& source=points[atom.index];
+            AddCloudPoint(source.position.data(),source.strength,r,out);
+            return;
         }
+        FieldSourceView view{tets.data(),triangles.data(),cubic_triangles.data(),
+            curved_tets.data(),curved_triangles.data(),nullptr,
+            gauss_points.data(),gauss_weights.data(),static_cast<int>(gauss_points.size())};
+        AddFieldSource(view,{atom.kind,atom.index},r,out);
     }
 
     void AddExactDirectional(const SourceAtom& atom, const double r[3],
@@ -766,27 +598,8 @@ struct HDivFieldEvaluator::Impl {
     }
 
     void AddMultipole(const TreeNode& node, const double r[3], double out[3]) const {
-        const Vec R = {r[0]-node.center[0], r[1]-node.center[1], r[2]-node.center[2]};
-        const double r2 = Dot(R, R);
-        if (r2 <= 1e-300) return;
-        const double inv_r = 1.0/std::sqrt(r2);
-        const double inv_r3 = inv_r/r2;
-        const double inv_r5 = inv_r3/r2;
-        const double inv_r7 = inv_r5/r2;
-        const double pR = Dot(node.dipole, R);
-        Vec second_R{};
-        double trace = 0.0;
-        for (int i = 0; i < 3; ++i) {
-            trace += node.second[3*i+i];
-            for (int j = 0; j < 3; ++j) second_R[i] += node.second[3*i+j]*R[j];
-        }
-        const double R_second_R = Dot(R, second_R);
-        for (int k = 0; k < 3; ++k) {
-            out[k] += node.charge*R[k]*inv_r3;
-            out[k] += 3.0*R[k]*pR*inv_r5 - node.dipole[k]*inv_r3;
-            out[k] += 7.5*R[k]*R_second_R*inv_r7
-                    - 1.5*(trace*R[k] + 2.0*second_R[k])*inv_r5;
-        }
+        AddFieldMultipole(node.center.data(), node.charge, node.dipole.data(),
+                          node.second.data(), r, out);
     }
 
     void AddTree(int node_index, const double r[3], double out[3]) const {
@@ -849,6 +662,7 @@ struct HDivFieldEvaluator::Impl {
     // INSIDE the source sum.  The chunked compensated reduction changes
     // the summation order, so a small-batch result may differ from the
     // same point evaluated inside a large batch at the last-ULP level.
+#ifndef RADIA_FIELD_SERIAL_ONLY
     void EvaluateBaseDirectParallel(const double r[3], double out[3]) const {
         const std::size_t total = atoms.size();
         const std::size_t threads = static_cast<std::size_t>(
@@ -897,6 +711,8 @@ struct HDivFieldEvaluator::Impl {
         }
         accumulated.Store(out);
     }
+
+#endif
 
     bool TreePassesProbe(const double* observations, std::size_t n_observations) const {
         const std::size_t count = std::min<std::size_t>(
@@ -1217,6 +1033,9 @@ std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromCurvedTet(
 
 void HDivFieldEvaluator::Evaluate(const double* observations, std::size_t n_observations,
                                   double* output, Algorithm algorithm) const {
+#ifdef RADIA_FIELD_SERIAL_ONLY
+    EvaluateSerial(observations, n_observations, output, algorithm);
+#else
     if (!observations || !output) {
         if (n_observations == 0) return;
         throw std::invalid_argument("HDivFieldEvaluator.field: null observation/output buffer");
@@ -1283,6 +1102,7 @@ void HDivFieldEvaluator::Evaluate(const double* observations, std::size_t n_obse
         output[3*index+1] = total[1];
         output[3*index+2] = total[2];
     });
+#endif
 }
 
 void HDivFieldEvaluator::EvaluateSerial(const double* observations, std::size_t n_observations,
@@ -1309,6 +1129,9 @@ void HDivFieldEvaluator::EvaluateSerial(const double* observations, std::size_t 
 void HDivFieldEvaluator::EvaluateGradient(
     const double* observations, std::size_t n_observations,
     double* gradient_out) const {
+#ifdef RADIA_FIELD_SERIAL_ONLY
+    EvaluateGradientSerial(observations, n_observations, gradient_out);
+#else
     if (!observations || !gradient_out) {
         if (n_observations == 0) return;
         throw std::invalid_argument(
@@ -1320,6 +1143,7 @@ void HDivFieldEvaluator::EvaluateGradient(
             m_impl->EvaluatePhysicalGradient(
                 observations+3*index, gradient_out+9*index);
         });
+#endif
 }
 
 void HDivFieldEvaluator::EvaluateGradientSerial(
@@ -1360,6 +1184,46 @@ const char* HDivFieldEvaluator::AlgorithmName(Algorithm algorithm) {
     if (algorithm == Algorithm::Auto) return "auto";
     if (algorithm == Algorithm::Direct) return "direct";
     return "tree";
+}
+
+FieldCloudSnapshot HDivFieldEvaluator::ExportCloudSnapshot() const {
+    if (m_impl->points.size() != m_impl->atoms.size())
+        throw std::invalid_argument("CUDA cloud boundary rejects analytic/curved element sources");
+    return ExportSnapshot();
+}
+
+FieldCloudSnapshot HDivFieldEvaluator::ExportSnapshot() const {
+    FieldCloudSnapshot packed;
+    packed.theta=m_impl->options.theta;
+    packed.order=m_impl->order;
+    packed.tets=m_impl->tets;
+    packed.triangles=m_impl->triangles;
+    packed.cubic_triangles=m_impl->cubic_triangles;
+    packed.curved_tets=m_impl->curved_tets;
+    packed.curved_triangles=m_impl->curved_triangles;
+    packed.gauss_points=m_impl->gauss_points;
+    packed.gauss_weights=m_impl->gauss_weights;
+    for (const auto& atom:m_impl->atoms) packed.sources.push_back({atom.kind,atom.index});
+    for(const auto& point:m_impl->points) {
+        FieldCloudPoint p{};
+        std::copy(point.position.begin(),point.position.end(),p.position);
+        p.strength=point.strength; packed.points.push_back(p);
+    }
+    // BuildNode emits preorder. A subtree ends at its parent's next sibling.
+    packed.nodes.resize(m_impl->nodes.size());
+    auto pack = [&](auto&& self,int index,int escape)->void {
+        const auto& n=m_impl->nodes[index]; auto& p=packed.nodes[index];
+        p.begin=n.begin; p.end=n.end; p.left=n.left; p.escape=escape;
+        std::copy(n.center.begin(),n.center.end(),p.center);
+        std::copy(n.dipole.begin(),n.dipole.end(),p.dipole);
+        std::copy(n.second.begin(),n.second.end(),p.second);
+        p.radius=n.radius; p.charge=n.charge;
+        if(!n.IsLeaf()) { self(self,n.left,n.right); self(self,n.right,escape); }
+    };
+    if (!packed.nodes.empty()) pack(pack,0,-1);
+    for(const auto& image:m_impl->images)
+        packed.images.push_back({image.mask,image.sign,image.angle});
+    return packed;
 }
 
 std::size_t HDivFieldEvaluator::SourceCount() const { return m_impl->atoms.size(); }

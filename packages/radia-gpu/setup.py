@@ -4,6 +4,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import os
 try:
     import tomllib
 except ModuleNotFoundError:  # Python 3.10 build hosts
@@ -53,8 +54,17 @@ class build_py(_build_py):
         staged.mkdir(parents=True, exist_ok=True)
         expected = {p.relative_to(PACKAGE / "src/radia_gpu").as_posix() for p in (PACKAGE / "src/radia_gpu").rglob("*") if p.is_file() and "__pycache__" not in p.parts}
         expected.update({"LICENSE", "README.md", "build.json", "ams-build.json"})
+        hmatrix = os.environ.get('RADIA_HDIV_HMATRIX_BUILD')
+        projection = os.environ.get('RADIA_HDIV_PROJECTION_BUILD')
+        if bool(hmatrix) != bool(projection):
+            raise RuntimeError('Select both HDiv HMatrix and projection build directories')
+        if hmatrix:
+            from hdiv_payload import stage
+            expected.update(stage(ROOT, package, commit, hmatrix, projection))
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
+                if path.name in {"FieldCloud.m", "FieldElements.m", "HMatrixOperator.m", "solveHDivRT0.m", "solveCurvedHDiv.m", "curvedHDivQuadrature.m", "solveHDivElements.m", "affineHDivQuadrature.m"}:
+                    continue  # Experimental field/H-matrix modules require separate acceptance.
                 if path.name in ("runRLCResonanceOptimizationDemo.m", "rlcResonanceObjective.m"):
                     continue  # Independent Optuna-dependent examples are not a runtime dependency.
                 target = staged / path.relative_to(MATLAB)

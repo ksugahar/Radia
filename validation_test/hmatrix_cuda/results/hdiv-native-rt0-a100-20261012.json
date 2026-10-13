@@ -1,0 +1,150 @@
+{
+  "schema": "radia.hdiv-rt0-native-cuda.v1",
+  "accepted_subgates": true,
+  "hdiv_mmm_general_validation_complete": false,
+  "release_accepted": false,
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "projection_source_commit": "86ef9834c391bb27cb3f2eb29ac597a1e2132060",
+  "hmatrix_source_commit": "ed6963204bc20af10a61be58c62c27ec64b28234",
+  "projection_binary_sha256": "0ba3ab177f72b1eebc826b2761f4a6e679f1c37b10fb1cf132a463017108e4aa",
+  "hmatrix_binary_sha256": "0c3dba5fd6c20867dbd930e747da965168040c2703522eb25e6023c27f3bc790",
+  "matlab_wrapper_sha256": "14b4e9200b6d6349571ca211a4d41666948267c576c16039269e215e9b822e82",
+  "mathematics": "((1/chi) M_mass + B^T G B) m = f_H; affine tetra RT0, exact dense constant-charge analytic Gram",
+  "cpu_reference": "Public pybind ChargeGram with independent NGSolve charge map, mass and RHS; mass-Riesz sparsecholesky",
+  "gpu_runtime": "MATLAB/mexcuda native NGSolve RT0 setup and CUDA Gram/material PCG; no Python adapter",
+  "gpu_preconditioner": "Explicit inv_chi mass diagonal; scalar cuBLAS reductions synchronize host control, vectors stay resident",
+  "single_tetra": {
+    "accepted": true,
+    "scope": "Public affine single-tetra RT0 MATLAB-native setup, exact dense CUDA Gram and linear material solve; not general adaptive HACApK acceptance",
+    "source_sha256": "b25622fa861f59cfb6652e4f3bc0c5a2bc6cd6cba869dca6a8e60fd1f0724b78",
+    "hashes": {
+      "projection": "0ba3ab177f72b1eebc826b2761f4a6e679f1c37b10fb1cf132a463017108e4aa",
+      "hmatrix": "0c3dba5fd6c20867dbd930e747da965168040c2703522eb25e6023c27f3bc790",
+      "mesh": "6ad1b48b0132e55ccc0fe2930a06fef4f1367c41ee0f9e2bb7c27d48985f8deb",
+      "cpu_reference": "2e5b24245347ec28b6c0ca726ba514b575c9f112dfb667e175e20a11a2271203"
+    },
+    "matlab": "26.1.0.3203278 (R2026a)",
+    "result": {
+      "accepted": true,
+      "mass_relative_error": 7.242031218619936e-17,
+      "rhs_relative_error": 2.2838695816637083e-16,
+      "mean_operator_relative_error": 2.0114045098299708e-14,
+      "coefficient_relative_error": 1.4990059206347866e-16,
+      "mean_magnetization_relative_error": 2.0031472104400138e-14,
+      "independent_true_relative_residual": 1.0213775272688118e-16,
+      "solution": {
+        "coefficients": [
+          0.5812164122629007,
+          -0.8485541344417177,
+          4.823875137285777,
+          6.269275249536424
+        ],
+        "mean_magnetization": [
+          0.34666094958819377,
+          0.07156396422830806,
+          0.036570237728087984
+        ],
+        "true_relative_residual": 2.549512416582222e-16,
+        "iterations": 4,
+        "preconditioner": "inv_chi mass diagonal",
+        "operator_owned_device_bytes": 1168,
+        "solver_owned_device_bytes": 552,
+        "scope": "Bounded affine-tetra RT0, exact dense analytic Gram, linear isotropic material",
+        "whole_seconds": 0.3520293,
+        "memory_limitations": "Owned operator and solver buffers; no process/global peak. Setup scratch and solver scratch have different lifetimes."
+      }
+    }
+  },
+  "eight_tetra": {
+    "accepted": true,
+    "scope": "Public affine single-tetra RT0 MATLAB-native setup, exact dense CUDA Gram and linear material solve; not general adaptive HACApK acceptance",
+    "source_sha256": "b25622fa861f59cfb6652e4f3bc0c5a2bc6cd6cba869dca6a8e60fd1f0724b78",
+    "hashes": {
+      "projection": "0ba3ab177f72b1eebc826b2761f4a6e679f1c37b10fb1cf132a463017108e4aa",
+      "hmatrix": "0c3dba5fd6c20867dbd930e747da965168040c2703522eb25e6023c27f3bc790",
+      "mesh": "a298e82dc1da9c31049340e780a0d52f0db17785a6466ced1b0c41c564f03858",
+      "cpu_reference": "4165539c9b3a0e68a77a07a9b46ff31ccbc895462d904e2c267dd369ef1b4203"
+    },
+    "matlab": "26.1.0.3203278 (R2026a)",
+    "result": {
+      "accepted": true,
+      "mass_relative_error": 1.7600827054519187e-16,
+      "rhs_relative_error": 2.4446652344412953e-16,
+      "mean_operator_relative_error": 2.015597355357315e-14,
+      "coefficient_relative_error": 1.125819709077238e-11,
+      "mean_magnetization_relative_error": 3.663190895952183e-12,
+      "independent_true_relative_residual": 9.728529584201392e-12,
+      "solution": {
+        "coefficients": [
+          -1.2586513422270231,
+          0.28930550553548695,
+          -0.21220292220964182,
+          -1.9943128342172527,
+          0.13087937155786056,
+          -0.20493382241118388,
+          -1.7397355916636348,
+          0.14409882662551132,
+          -0.10655219294050082,
+          -1.6046787416926893,
+          1.1773197355039389,
+          0.49499265613511934,
+          1.6589491930680975,
+          -1.0898889477322906,
+          0.12876439239279683,
+          1.537678173735308,
+          -1.4652906902383591,
+          -0.1932433139426191,
+          1.138246682403604,
+          1.502849484792995,
+          -1.6644308275269946,
+          -0.3705175226301898,
+          0.32352835298729016,
+          0.15360989267721875
+        ],
+        "mean_magnetization": [
+          0.34821135890784444,
+          0.07186252387860713,
+          0.03669391755828574
+        ],
+        "true_relative_residual": 9.728528027073833e-12,
+        "iterations": 21,
+        "preconditioner": "inv_chi mass diagonal",
+        "operator_owned_device_bytes": 9000,
+        "solver_owned_device_bytes": 3656,
+        "setup_peak_owned_device_bytes": 31852,
+        "combined_peak_owned_device_bytes": 31852,
+        "scope": "Bounded affine-tetra RT0, exact dense analytic Gram, linear isotropic material",
+        "whole_seconds": 0.2906674,
+        "memory_limitations": "Owned operator and solver buffers; no process/global peak. Setup scratch and solver scratch have different lifetimes."
+      }
+    }
+  },
+  "refinement_diagnosis": [
+    {
+      "state": "live_refined",
+      "elements": 8,
+      "dofs": 28,
+      "zero_diagonal_count": 4,
+      "min_eigenvalue": 0.0,
+      "free_dofs": 24
+    },
+    {
+      "state": "saved_reloaded",
+      "elements": 8,
+      "dofs": 24,
+      "zero_diagonal_count": 0,
+      "min_eigenvalue": 0.028724088564839628,
+      "free_dofs": 24
+    }
+  ],
+  "timing_classification": "First complete solve after FE assembly parity check; diagnostic, not warmed statistics or CPU speedup acceptance",
+  "memory_limitations": "Known owned buffers including geometry setup scratch; excludes cuBLAS/runtime allocations and host/global peaks",
+  "pending": [
+    "Adaptive whole HACApK assembly instead of bounded exact dense Gram",
+    "High-order/curved/other cell types and images",
+    "Material/nonlinear and constraints coverage",
+    "Warmed transfer-inclusive comparisons and process/global peak memory",
+    "Release CI and distribution acceptance",
+    "Real IH Simulink physical acceptance"
+  ]
+}

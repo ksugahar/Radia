@@ -390,3 +390,45 @@ Shared FE preparation (48.47 s) and MATLAB startup (11.09 s) are separately
 reported rather than hidden in solver timings. These are manufactured-model
 build-host diagnostics with two samples per policy, not physical-device or
 formal timing acceptance. A100 was not used.
+
+For staged scaling, `native_setup_validation.py --generate-only --cycles 7`
+creates only the manufactured model, independent CPU oracle and HDF5 exchange;
+it does not start MATLAB. Reduce `--maxh` one step at a time, checking idle-host
+status and available host/device memory before each stage. The existing native
+and MATLAB admission guards retain at least 20% of total GPU memory (or 2 GiB).
+
+`graph_validation.py --comparison generation --rounds 2` compares CPU Galerkin
+generation against CUDA generation with the same GPU solve, in warmed ABBA
+order. Use `--binary-dir`, `--matlab-dir` and `--build-receipt` to select an
+accepted installed distribution without rebuilding or changing that runtime.
+The binary must match the selected receipt. `--oracle-dir` selects the separate
+Python reference extension. Streamed input hashes also support exchanges above
+2 GB. Results include problem dimensions, independent CPU solution/residual
+checks, exact hierarchy parity, continuous public-API time including transfers,
+and memory admission estimates alongside measured allocation counters.
+The setup allocator peak and resident solve allocation delta describe different
+phases; neither is a measurement of whole-process peak, and they are not summed.
+Use `--require-idle-host` on Windows to reject queued/running CI, other active
+numerical/build processes and sustained GPU load before startup and between
+benchmark calls. A conflict aborts this validator, closes its owned Engine and
+saves a failed JSON; retry in a new output directory after the host becomes idle.
+
+Installed `radia-gpu 0.1.1` scaling diagnostics on RTX 5000 (2026-10-12):
+
+| DOFs | CPU generation + GPU solve | CUDA generation + GPU solve | Speedup | CUDA setup owned peak |
+| ---: | ---: | ---: | ---: | ---: |
+| 906,604 | 6.799 s | 3.572 s | 1.90x | 1.58 GiB |
+| 2,000,211 | 14.873 s | 7.842 s | 1.90x | 3.50 GiB |
+| 3,684,271 | 27.010 s | 13.666 s | 1.98x | 6.45 GiB |
+
+These are warmed ABBA medians of the continuous public API, including setup,
+transfers, solve and result recovery. All hierarchies are bitwise identical;
+maximum CPU solution difference is `1.10e-7` and independent true residual is
+below `9.86e-10`. The largest exchange is 3.48 GB plain HDF5. Its conservative
+benchmark admission estimate is 9.34 GiB; the native setup owned peak and
+approximately 2.27 GiB resident pipeline allocation describe separate phases.
+The latter counters are not whole-process peak memory. One attempt interrupted
+by another numerical job was excluded and restarted with between-call idle
+checks. A100 was not used. Formal idle-mdx performance acceptance remains
+pending; these 100-host results are diagnostics. Full samples and provenance:
+[scaling JSON](results/scaling-0.1.1-20261012.json).

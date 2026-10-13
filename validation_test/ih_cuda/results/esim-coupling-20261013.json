@@ -1,0 +1,69 @@
+{
+  "accepted": true,
+  "scope": "Three generic constitutive block cells; no complete physical reaction assembly",
+  "research_preview": true,
+  "full_peec_bem_connected": false,
+  "simulink_accepted": false,
+  "release_accepted": false,
+  "independent_physics_validation": false,
+  "timing_accepted": false,
+  "source_sha256": {
+    "validation_test\\ih_cuda\\esim_coupling_smoke.cu": "360cfa2db0eb1cdc857a81cd5ededa3b7c704e1f86f40305b7933fb5dc2b336d",
+    "validation_test\\ih_cuda\\run_esim_coupling.py": "8b19e37a4f1ba5079a5ef360249c9a18e755ca1ddcd24309db74f59a8662ca70",
+    "packages\\radia-gpu\\native\\ih_temperature_material.cuh": "152e142744648db3729390344a0bf9f9cb25f046e0d265d4151fa1df283f581c",
+    "packages\\radia-gpu\\native\\ih_esim_cell.cuh": "a9006bfe7a6adc8ceffe07ad15555e665854b42dc88577ea185a12ca8ee54076",
+    "packages\\radia-gpu\\native\\ih_thermal_kernels.cuh": "ddbe7e8a030a7092576d7f3edc0a217ad5c08ffae042bb5a625bcc1479bc0d29",
+    "packages\\radia-gpu\\native\\ih_resident_kernels.cuh": "fbf2c80017687fb309f4f5aa965f70d74fe93f0a7b22f6430335e0cbc342d5dc",
+    "packages\\radia-gpu\\native\\ih_esim_coupling.cuh": "9942b075d4ae15d5f0a21aa3ce6052d683464ab597c9a829e220030723b5e373",
+    "packages\\radia-gpu\\native\\ih_coupled_state.cuh": "08a705784361275bd9236adda980a89c4161c30154f388ad2e70ebd6c5c67020",
+    "packages\\radia-gpu\\native\\ih_complex_solver.cuh": "1b14b80ac40587ce0689184af281ed1984185220ff0c8b4da05d5d19ce31e271",
+    "packages\\radia-gpu\\native\\ih_bicgstab_kernels.cuh": "1869e8454c6fd1d26f6dc71199963f8d90e25d013981f713afb559e1e5ad8ed0",
+    "packages\\radia-gpu\\native\\ih_preconditioner.cuh": "03e834887794d66eabeb799bf386c1049ebc0fe56233c23629a2a93c42c3c5e2"
+  },
+  "source_commit": "2a51a759a61055fb138e436fe27d563207379966",
+  "source_dirty": true,
+  "rows": [
+    2.9865656334274215e-13,
+    4.1051596768050556e-09,
+    14,
+    8232,
+    2.9865399350394197e-13,
+    0,
+    5
+  ],
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "binary_sha256": "0339c3882e27e1c2c1f2376186fb13f82578b222b84fe71c2622d4f85306a629",
+  "execution_route": "Owned MATLAB batch",
+  "repeated_calls": 5,
+  "out_of_table_rejected": true,
+  "a100": {
+    "rows": [
+      2.9865656334274215e-13,
+      4.1051596768050556e-09,
+      14,
+      8232,
+      2.9865399350394197e-13,
+      0,
+      5
+    ],
+    "matlab": "26.1.0.3203278 (R2026a)",
+    "binary_sha256": "0339c3882e27e1c2c1f2376186fb13f82578b222b84fe71c2622d4f85306a629"
+  },
+  "checks": {
+    "coupled_updates": 5,
+    "failed_candidate_preserves_temperature_heat_electromagnetic_state": true,
+    "reset_clears_electromagnetic_state": true,
+    "nonlinear_equation_true_residual": 2.9865656334274215e-13,
+    "field_fixed_point_relative_change": 4.1051596768050556e-09,
+    "linear_true_residual": 2.9865399350394197e-13,
+    "thermal_true_residual": 0
+  },
+  "limitations": [
+    "Generic diagonal constitutive block, not complete coil/body PEEC-BEM reaction assembly",
+    "Temperature-dependent constant permeability only in this fixture; nonlinear B-H remains unaccepted",
+    "CoupledState owner callbacks exercised; calls do not yet cross the production persistent MEX gateway",
+    "No Simulink model acceptance, timing comparison or research release acceptance",
+    "Owned bytes cover solver/coupling state only; caller operators, CUDA runtime and global/host peak excluded",
+    "Dirty prototype artifact with explicit source hashes, not release provenance"
+  ]
+}
