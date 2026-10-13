@@ -1,7 +1,7 @@
 function ams_tuning_sample(job,binaryPath,output,matlabPath)
 % Numerical timing excludes fixture loading and output serialization.
 if nargin<4;matlabPath=fullfile(job,'matlab');end
-addpath(binaryPath,'-begin');addpath(matlabPath);g=gpuDevice;wait(g);
+addpath(matlabPath);addpath(binaryPath,'-begin');g=gpuDevice;wait(g);
 initial=radia_cuda_ams('resident_status');labels=["back","front","left","right","top","bottom"];
 before=g.AvailableMemory;timer=tic;
 [nonlinear,nonlinearInfo]=radia.gpu.solveHCurl(fullfile(job,'model.vol'),labels, ...
