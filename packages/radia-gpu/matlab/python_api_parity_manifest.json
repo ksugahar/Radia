@@ -85,6 +85,15 @@
       "cpu_fallback": false
     },
     {
+      "id": "reusable-gpu-ic0",
+      "scope": "Experimental real FP64 natural-order fixed-shift IC(0)-PCG and affine linear HCurl matrix/factor reuse; explicit free-mask constraints. A100 formal performance pending.",
+      "source": "packages/radia-gpu/native/radia_cuda_ic.cu",
+      "matlab": "packages/radia-gpu/matlab/+radia/+gpu/HCurlICSystem.m",
+      "validation": "validation_test/ic_cuda/validate_ic.m",
+      "cpu_reference": "Independent Python NGSolve sparsecholesky/IC and NumPy original-equation references; CPU execution remains Python only",
+      "cpu_fallback": false
+    },
+    {
       "id": "laplace-fmm-operators",
       "scope": "Experimental numeric Laplace scalar/dipole FMM, weighted Biot-Savart, retained field clouds and flat exterior P1 SL/DL boundary operators; speed acceptance pending",
       "source": "packages/radia-gpu/native/radia_cuda_fmm.cu",
