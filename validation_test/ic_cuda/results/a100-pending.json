@@ -6,10 +6,23 @@
   "reason": "Selected evaluation host is powered off; no connection, startup or measurement was attempted",
   "executed": false,
   "measurement_count": 0,
-  "target_total_dofs": [10460, 32233, 106272],
-  "cpu_ngsolve_threads": [1, 16],
-  "cpu_methods": ["IC(0), fixed shift 1.05, natural order", "AMS"],
-  "gpu_methods": ["IC(0), fixed shift 1.05, natural order", "AMS"],
+  "target_total_dofs": [
+    10460,
+    32233,
+    106272
+  ],
+  "cpu_ngsolve_threads": [
+    1,
+    16
+  ],
+  "cpu_methods": [
+    "IC(0), fixed shift 1.05, natural order",
+    "AMS"
+  ],
+  "gpu_methods": [
+    "IC(0), fixed shift 1.05, natural order",
+    "AMS"
+  ],
   "remaining": [
     "Verify accepted candidate wheel and actual loaded IC/AMS MEX hashes on the available A100 host",
     "Run independent CPU1/16 versus GPU IC/AMS at all three checked mesh sizes",
@@ -20,5 +33,24 @@
   "limitations": [
     "Build-host numerical timings are diagnostic only and cannot substitute for formal A100 evaluation",
     "Previously accepted 0.1.4 A100 AMS timings do not certify the new IC implementation"
-  ]
+  ],
+  "selected_candidate": {
+    "passed": true,
+    "version": "0.1.5rc1",
+    "source_commit": "5a627a194a5f153c0b4e6ad6e62ed3a4ce2c6064",
+    "wheel_sha256": "de899d5fc8faf48430f3de55d288f3a49077197f6af43d09d0b5cbeb44635884",
+    "files": 142,
+    "manifest_sha256": "b5e893b0d72af0baab2933eccf5c76071a51097b32286c614c3b002c14222d7a",
+    "cuda_solvers": [
+      "ams",
+      "csr_pcg",
+      "fmm",
+      "hmatrix",
+      "ic",
+      "projection"
+    ],
+    "ic_binary_sha256": "c00b0cb1bdfc43e1154622dcc2105affeceb26c3fc009bd3a189ab5e57a89f1a",
+    "ams_binary_sha256": "7cebfeb5eb6f135e261084f4cd1169a3a15147314dd00baa922d0837127a7dc3",
+    "ci_run": 38387288896
+  }
 }
