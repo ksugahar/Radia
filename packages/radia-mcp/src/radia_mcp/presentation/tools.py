@@ -120,6 +120,7 @@ from ._equation_cli import (  # noqa: F401
     presentation_copy_equation,
     presentation_render_equation,
 )
+from ._markdown_equations import presentation_markdown_to_pptx  # noqa: F401
 
 
 _HERE = pathlib.Path(__file__).resolve().parent
