@@ -81,13 +81,16 @@ def main(a):
             for variant in ('baseline','tuned','tuned','baseline'):
                 guard=idle();path=out/f'{cycle}-{len(record["samples"])}-{variant}.mat'
                 binaryPath=tunedPath if variant=='tuned' else job/'baseline'
-                with Memory(pid) as memory:eng.ams_tuning_sample(str(job),str(binaryPath),str(path),str(matlabPath),nargout=0)
+                with Memory(pid) as memory:eng.ams_tuning_sample(str(job),str(binaryPath),str(path),str(matlabPath),True,nargout=0)
+                modulePath=path.with_suffix('.module.json')
+                subprocess.run(['powershell','-NoProfile','-File',str(job/'ams_loaded_module.ps1'),'-ProcessId',str(pid),'-OutputPath',str(modulePath)],check=True,capture_output=True)
                 raw=loadmat(path,simplify_cells=True);report=raw['report']
                 loaded=Path(report['loaded_binary']).resolve()
                 expectedHash=tunedHash if variant=='tuned' else manifest['baseline/radia_cuda_ams.mexw64']
                 if loaded!=binaryPath/'radia_cuda_ams.mexw64' or sha(loaded)!=expectedHash:raise RuntimeError('Loaded MEX identity mismatch')
-                module=report['native_module']
+                module=json.loads(modulePath.read_text(encoding='utf-8-sig'));report['native_module']=module
                 if Path(module['path']).resolve()!=loaded or module['sha256']!=expectedHash:raise RuntimeError('Actual loaded Windows MEX module mismatch')
+                eng.eval('clear radia_cuda_ams;',nargout=0);eng.rmpath(str(binaryPath),nargout=0)
                 errors=dict(nonlinear=validate(raw['nonlinear'],True),linear=validate(raw['linear'],False),
                     reused=[validate(raw['reuse'][:,k],False,float(s)) for k,s in enumerate(np.atleast_1d(report['scales']))])
                 sample=dict(variant=variant,cycle=cycle,report=report,errors=errors,idle_before=guard,host_memory=memory.result());record['samples'].append(sample)
