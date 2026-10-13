@@ -4,6 +4,8 @@ import hashlib
 import json
 import shutil
 import subprocess
+import os
+import importlib.util
 try:
     import tomllib
 except ModuleNotFoundError:  # Python 3.10 build hosts
@@ -22,6 +24,14 @@ SIMULINK_FILES = (
     "+radia/+simulink/runLTspiceClosedLoop.m", "+radia/+simulink/+internal/runArtifacts.m",
     "radia_gpu_pcg_sfun.m", "radia_ltspice_sfun.m",
 )
+
+
+def payload_module():
+    # PEP 517 backends need not put this setup directory on sys.path.
+    spec = importlib.util.spec_from_file_location('radia_gpu_payload', PACKAGE / 'hdiv_payload.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class build_py(_build_py):
@@ -53,8 +63,21 @@ class build_py(_build_py):
         staged.mkdir(parents=True, exist_ok=True)
         expected = {p.relative_to(PACKAGE / "src/radia_gpu").as_posix() for p in (PACKAGE / "src/radia_gpu").rglob("*") if p.is_file() and "__pycache__" not in p.parts}
         expected.update({"LICENSE", "README.md", "build.json", "ams-build.json"})
+        hmatrix = os.environ.get('RADIA_HDIV_HMATRIX_BUILD')
+        projection = os.environ.get('RADIA_HDIV_PROJECTION_BUILD')
+        if bool(hmatrix) != bool(projection):
+            raise RuntimeError('Select both HDiv HMatrix and projection build directories')
+        if hmatrix:
+            expected.update(payload_module().stage(ROOT, package, commit, hmatrix, projection))
+        fmm = os.environ.get('RADIA_FMM_BUILD')
+        if fmm:
+            expected.update(payload_module().stage_fmm(ROOT, package, commit, fmm))
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
+                if path.name == 'LaplaceFMM.m' and not fmm:
+                    continue
+                if path.name in {"FieldCloud.m", "FieldElements.m", "HMatrixOperator.m", "solveHDivRT0.m", "solveCurvedHDiv.m", "curvedHDivQuadrature.m", "solveHDivElements.m", "affineHDivQuadrature.m"}:
+                    continue  # Experimental field/H-matrix modules require separate acceptance.
                 if path.name in ("runRLCResonanceOptimizationDemo.m", "rlcResonanceObjective.m"):
                     continue  # Independent Optuna-dependent examples are not a runtime dependency.
                 target = staged / path.relative_to(MATLAB)
@@ -96,7 +119,7 @@ class build_py(_build_py):
         metadata = tomllib.loads((PACKAGE / "pyproject.toml").read_text())
         manifest = dict(schema="radia.gpu.distribution.v1", version=metadata["project"]["version"],
                         source_commit=commit, files=payload,
-                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"],
+                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Bounded affine/P2 HDiv orders 1/2"] if hmatrix else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
                         runtime_requirements=["Windows x64", "MATLAB R2026a", "Parallel Computing Toolbox", "NVIDIA GPU/driver", "Simulink for blocks", "User-installed LTspice for circuit execution"])
         (package / "manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")
 

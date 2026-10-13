@@ -54,12 +54,22 @@ def nonlinear_public(record):
     return result
 
 
+def fmm_public(record):
+    result = {key: record[key] for key in ('schema', 'accepted', 'scope', 'metrics', 'report') if key in record}
+    result['build'] = {key: record.get('build', {})[key] for key in
+        ('source_commit', 'source_dirty', 'source_sha256', 'binary_sha256', 'taskmanager_used')
+        if key in record.get('build', {})}
+    result['timing_classification'] = 'numerical and lifecycle CI diagnostics; not performance acceptance'
+    return result
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--poisson', required=True, type=Path)
     parser.add_argument('--ams', type=Path)
     parser.add_argument('--setup', type=Path)
     parser.add_argument('--nonlinear', type=Path)
+    parser.add_argument('--fmm', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
@@ -85,3 +95,8 @@ if __name__ == '__main__':
         if record.get('schema') != 'radia.ams-nonlinear-sparse-resident.v2':
             raise ValueError('Unexpected nonlinear AMS schema')
         (args.output / 'ams-nonlinear-result.json').write_text(json.dumps(nonlinear_public(record), indent=2, allow_nan=False)+'\n', encoding='utf-8')
+    if args.fmm and (args.fmm / 'result.json').is_file():
+        record = json.loads((args.fmm / 'result.json').read_text(encoding='utf-8'))
+        if record.get('schema') != 'radia.fmm-physical-adapters.v1':
+            raise ValueError('Unexpected FMM acceptance schema')
+        (args.output / 'fmm-result.json').write_text(json.dumps(fmm_public(record), indent=2, allow_nan=False)+'\n', encoding='utf-8')

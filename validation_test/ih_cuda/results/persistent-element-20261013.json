@@ -1,0 +1,207 @@
+{
+  "accepted": true,
+  "scope": "Generic temperature-dependent operator MEX/Simulink diagnostic",
+  "full_reaction_assembly": false,
+  "release_accepted": false,
+  "temperature": [
+    [
+      300,
+      400,
+      500
+    ],
+    [
+      300.0000003156339,
+      400.0000000781869,
+      500.0000001210627
+    ],
+    [
+      300.00000063126777,
+      400.00000015637374,
+      500.00000024212545
+    ],
+    [
+      300.00000094690165,
+      400.0000002345606,
+      500.0000003631882
+    ],
+    [
+      300.00000126253553,
+      400.0000003127475,
+      500.0000004842509
+    ],
+    [
+      300.0000015781694,
+      400.00000039093436,
+      500.00000060531363
+    ]
+  ],
+  "heat": [
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0.3156338919457376,
+      0.0781868926637999,
+      0.12106273759124528
+    ],
+    [
+      0.3156338920905741,
+      0.0781868926149389,
+      0.1210627374781889
+    ],
+    [
+      0.3156338922354089,
+      0.07818689256607692,
+      0.1210627373651314
+    ],
+    [
+      0.3156338923802453,
+      0.0781868925172163,
+      0.12106273725207638
+    ],
+    [
+      0.31563389252508,
+      0.07818689246835564,
+      0.12106273713902511
+    ]
+  ],
+  "info": {
+    "steps": 5,
+    "owned_device_bytes": 9732,
+    "eddy_iterations": 28,
+    "eddy_true_residual": 2.9865399350394197e-13,
+    "thermal_iterations": 1,
+    "thermal_true_residual": 0,
+    "preconditioner_precision": "none",
+    "constitutive_iterations": 14,
+    "constitutive_true_residual": 2.9865656334274215e-13,
+    "constitutive_field_residual": 4.1051596768050556e-09,
+    "material_mode": "element-esim-operators"
+  },
+  "repeat_identical": true,
+  "save_close_reopen": true,
+  "contexts_released": true,
+  "failed_candidate_preserved": true,
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "toolkit_accepted": true,
+  "source_commit": "309558c9fc4923739fd4a0061171628923fc2e5d",
+  "binary_sha256": "1d83809f4982b87cabdce1191f24e5d99e7d09f2cef9effa97e70baabdce4806",
+  "source_sha256": {
+    "packages/radia-gpu/native/radia_cuda_ih.cu": "208aeb03e38de7a251a436eccf358f122e5f35d01959eef99cf51a3b5efe7513",
+    "packages/radia-gpu/native/ih_coupled_state.cuh": "08a705784361275bd9236adda980a89c4161c30154f388ad2e70ebd6c5c67020",
+    "packages/radia-gpu/native/ih_complex_solver.cuh": "1b14b80ac40587ce0689184af281ed1984185220ff0c8b4da05d5d19ce31e271",
+    "packages/radia-gpu/native/ih_bicgstab_kernels.cuh": "1869e8454c6fd1d26f6dc71199963f8d90e25d013981f713afb559e1e5ad8ed0",
+    "packages/radia-gpu/native/ih_thermal_kernels.cuh": "ddbe7e8a030a7092576d7f3edc0a217ad5c08ffae042bb5a625bcc1479bc0d29",
+    "packages/radia-gpu/native/ih_resident_kernels.cuh": "fbf2c80017687fb309f4f5aa965f70d74fe93f0a7b22f6430335e0cbc342d5dc",
+    "packages/radia-gpu/native/ih_preconditioner.cuh": "03e834887794d66eabeb799bf386c1049ebc0fe56233c23629a2a93c42c3c5e2",
+    "packages/radia-gpu/native/ih_esim_coupling.cuh": "9942b075d4ae15d5f0a21aa3ce6052d683464ab597c9a829e220030723b5e373",
+    "packages/radia-gpu/native/ih_temperature_material.cuh": "152e142744648db3729390344a0bf9f9cb25f046e0d265d4151fa1df283f581c",
+    "packages/radia-gpu/native/ih_esim_cell.cuh": "a9006bfe7a6adc8ceffe07ad15555e665854b42dc88577ea185a12ca8ee54076",
+    "packages/radia-gpu/tools/build_ih_cuda.py": "d914999c00178596e2f0c2713f1784b4cc4fe7b854ce5fb573581ed728ba9560",
+    "Build.ps1": "d07bc37be18b411066c7779a585da4a16b488bc5343ab6cffb0c6758fb945de5"
+  },
+  "build_clean_source": true,
+  "toolkit_check": "status: healthy\nvalidation_scope: root\nchecks_run: \n  - unconnected_ports\n  - unconnected_lines\n  - stateflow_lint",
+  "toolkit_source_commit": "c58e6aec7b904769ae43536e169d747feda95416",
+  "a100": {
+    "accepted": true,
+    "scope": "Generic temperature-dependent operator MEX/Simulink diagnostic",
+    "full_reaction_assembly": false,
+    "release_accepted": false,
+    "temperature": [
+      [
+        300,
+        400,
+        500
+      ],
+      [
+        300.0000003156339,
+        400.0000000781869,
+        500.0000001210627
+      ],
+      [
+        300.00000063126777,
+        400.00000015637374,
+        500.00000024212545
+      ],
+      [
+        300.00000094690165,
+        400.0000002345606,
+        500.0000003631882
+      ],
+      [
+        300.00000126253553,
+        400.0000003127475,
+        500.0000004842509
+      ],
+      [
+        300.0000015781694,
+        400.00000039093436,
+        500.00000060531363
+      ]
+    ],
+    "heat": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0.3156338919457376,
+        0.0781868926637999,
+        0.12106273759124528
+      ],
+      [
+        0.3156338920905741,
+        0.0781868926149389,
+        0.1210627374781889
+      ],
+      [
+        0.3156338922354089,
+        0.07818689256607692,
+        0.1210627373651314
+      ],
+      [
+        0.3156338923802453,
+        0.0781868925172163,
+        0.12106273725207638
+      ],
+      [
+        0.31563389252508,
+        0.07818689246835564,
+        0.12106273713902511
+      ]
+    ],
+    "info": {
+      "steps": 5,
+      "owned_device_bytes": 9732,
+      "eddy_iterations": 28,
+      "eddy_true_residual": 2.9865399350394197e-13,
+      "thermal_iterations": 1,
+      "thermal_true_residual": 0,
+      "preconditioner_precision": "none",
+      "constitutive_iterations": 14,
+      "constitutive_true_residual": 2.9865656334274215e-13,
+      "constitutive_field_residual": 4.1051596768050556e-09,
+      "material_mode": "element-esim-operators"
+    },
+    "repeat_identical": true,
+    "save_close_reopen": true,
+    "contexts_released": true,
+    "failed_candidate_preserved": true,
+    "matlab": "26.1.0.3203278 (R2026a)",
+    "toolkit_accepted": false
+  },
+  "timing_accepted": false,
+  "memory_scope": "9732 exact accounted owner/operator device bytes; excludes CUDA/cuBLAS runtime, host/global peak",
+  "independent_physics_validation": false,
+  "limitations": [
+    "Complete coil/body reaction geometry assembly is not connected",
+    "This fixture is generic diagonal algebra, not a physical PEEC-BEM case",
+    "Temperature-dependent constant permeability only; B-H tables explicitly rejected",
+    "No formal CPU speed comparison/cold-process measurement/global peak/release acceptance",
+    "Official Toolkit structural acceptance recorded on100; A100 uses same SLX generation/reload and Simulink repeated-run checks"
+  ]
+}

@@ -390,3 +390,133 @@ Shared FE preparation (48.47 s) and MATLAB startup (11.09 s) are separately
 reported rather than hidden in solver timings. These are manufactured-model
 build-host diagnostics with two samples per policy, not physical-device or
 formal timing acceptance. A100 was not used.
+
+For staged scaling, `native_setup_validation.py --generate-only --cycles 7`
+creates only the manufactured model, independent CPU oracle and HDF5 exchange;
+it does not start MATLAB. Reduce `--maxh` one step at a time, checking idle-host
+status and available host/device memory before each stage. The existing native
+and MATLAB admission guards retain at least 20% of total GPU memory (or 2 GiB).
+
+`graph_validation.py --comparison generation --rounds 2` compares CPU Galerkin
+generation against CUDA generation with the same GPU solve, in warmed ABBA
+order. Use `--binary-dir`, `--matlab-dir` and `--build-receipt` to select an
+accepted installed distribution without rebuilding or changing that runtime.
+The binary must match the selected receipt. `--oracle-dir` selects the separate
+Python reference extension. Streamed input hashes also support exchanges above
+2 GB. Results include problem dimensions, independent CPU solution/residual
+checks, exact hierarchy parity, continuous public-API time including transfers,
+and memory admission estimates alongside measured allocation counters.
+The setup allocator peak and resident solve allocation delta describe different
+phases; neither is a measurement of whole-process peak, and they are not summed.
+Use `--require-idle-host` on Windows to reject queued/running CI, other active
+numerical/build processes and sustained GPU load before startup and between
+benchmark calls. A conflict aborts this validator, closes its owned Engine and
+saves a failed JSON; retry in a new output directory after the host becomes idle.
+
+Installed `radia-gpu 0.1.1` scaling diagnostics on RTX 5000 (2026-10-12):
+
+| DOFs | CPU generation + GPU solve | CUDA generation + GPU solve | Speedup | CUDA setup owned peak |
+| ---: | ---: | ---: | ---: | ---: |
+| 906,604 | 6.799 s | 3.572 s | 1.90x | 1.58 GiB |
+| 2,000,211 | 14.873 s | 7.842 s | 1.90x | 3.50 GiB |
+| 3,684,271 | 27.010 s | 13.666 s | 1.98x | 6.45 GiB |
+
+These are warmed ABBA medians of the continuous public API, including setup,
+transfers, solve and result recovery. All hierarchies are bitwise identical;
+maximum CPU solution difference is `1.10e-7` and independent true residual is
+below `9.86e-10`. The largest exchange is 3.48 GB plain HDF5. Its conservative
+benchmark admission estimate is 9.34 GiB; the native setup owned peak and
+approximately 2.27 GiB resident pipeline allocation describe separate phases.
+The latter counters are not whole-process peak memory. One attempt interrupted
+by another numerical job was excluded and restarted with between-call idle
+checks. A100 was not used. Formal idle-mdx performance acceptance remains
+pending; these 100-host results are diagnostics. Full samples and provenance:
+[scaling JSON](results/scaling-0.1.1-20261012.json).
+
+
+## Nonlinear GPU-resident correctness study
+
+`nonlinear_resident.py --out <job-owned-output> --maxh .35`
+runs an independently authored SI unit-cube magnetostatic model with
+`H=(1+4*|B|^2)B`, positive unit gauge mass, homogeneous tangential Dirichlet
+conditions, and a reproducible manufactured discrete excitation. The explicit
+Netgen alternative generates a `.vol`, which is reloaded by NGSolve with a
+six-boundary contract. This is a nonlinear constitutive/solver test, not a
+measured steel curve, open-boundary device, or eddy-current model.
+
+NGSolve owns mapped HCurl shape functions and the independent CPU nonlinear
+assembly. MATLAB evaluates material state, energy, residual and consistent SPD
+tangent on GPU. The frozen AMS hierarchy and nonlinear state remain GPU arrays;
+only scalar convergence controls cross the boundary during reuse. Rebuilding
+AMS explicitly downloads tangent CSR values for the existing native host setup.
+The Python-generated FE maps are independent validation inputs; the production
+AMS API continues to accept numeric operators without a Python adapter.
+
+Three routes run in order 1,2,3,3,2,1: rebuild each Newton iteration, freeze AMS,
+and adaptive reuse. Adaptive reuse rebuilds on the next iteration if PCG exceeds
+`max(30, 2*iterations_at_last_rebuild)`. There is no backend fallback. Each linear
+solve checks a true residual at 1e-10, each nonlinear run at 1e-9, and independent
+CPU solution, B-field RMS and nonlinear residual parity must be <=1e-7.
+
+The current implementation assembles sparse CSR operators from six mapped curl
+vectors and 36 CSR slots per affine tetrahedron. It supports lowest-order HCurl
+on affine tetrahedra; other element orders or geometry fail explicitly. NGSolve
+owns orientation and mapped shape functions. No global dense matrix is formed.
+`radia.gpu.AMSContext` owns a checked native handle, persistent PCG buffers and
+cached CUDA graph. Hierarchy replacement preserves its PCG workspace. Nonlinear
+residual, tangent and element-energy buffers also remain on the device. Native
+buffer allocation counters must remain zero during each resident linear solve;
+returned MATLAB arrays and CUDA graph internals are outside this counter.
+
+CPU reference assembly and solves use caller-owned NGSolve TaskManager regions;
+MATLAB native setup uses OpenMP with serial sparsecholesky coarse factorization.
+Both backends enforce the same true linear residual. Near floating-point energy
+roundoff, a line-search step must reduce the actual residual by ten percent or
+pass the final nonlinear gate; tolerances are not relaxed.
+
+Run `nonlinear_resident.py --out <job-owned-output> --maxh .04 --threads 8
+--setup-threads 8 --contract` for sparse scaling and lifecycle checks. Total times
+include nonlinear updates, line search, AMS setup, PCG and final download; GPU
+total also includes upload. Shared FE preparation and MATLAB startup are recorded
+separately. Build-host numbers remain diagnostic timing, not formal performance
+acceptance. The historical dense study below is superseded for scaling.
+
+The accepted [nonlinear evidence](results/nonlinear-resident-20261013.json)
+contains 260- and 698-DOF cases on the same native binary, plus cycles 1 and 7
+linear setup parity. The larger case reproduced a nonfinite gradient coarse
+factor before the fix. Its known constant nullspace now receives an explicit
+potential gauge per connected zero-row-sum component before sparsecholesky;
+no diagonal perturbation or numerical fallback is used.
+
+
+## Sparse nonlinear scaling evidence
+
+[Accepted sparse study](results/nonlinear-sparse-resident-20261013.json) includes
+260, 5,326, 86,735 and 251,896 DOFs on the same native binary, with independent
+Python CPU assembly/AMS and MATLAB GPU assembly/AMS. The largest case has
+205,728 affine tetrahedra and 4,000,702 CSR nonzeros. Both CPU assembly/solve and
+GPU host setup use eight threads; GPU computation uses a Quadro RTX 5000.
+
+Largest-case total times (median of two samples per route, order 1,2,3,3,2,1):
+
+| AMS policy | Hierarchy builds | Python CPU | MATLAB GPU | CPU/GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Every Newton update | 8 | 14.205 s | 8.992 s | 1.58x |
+| Frozen | 1 | 21.212 s | 6.505 s | 3.26x |
+| Adaptive reuse | 2 | 14.088 s | 4.642 s | 3.03x |
+
+Adaptive GPU reuse reduces total time by 1.94x versus rebuilding every update;
+freezing is slower than adaptive reuse despite avoiding another setup. Each run
+requires eight Newton updates. Maximum independent solution difference is
+1.52e-13, B-field relative RMS difference 2.46e-15, and independent nonlinear
+residual 2.78e-14. Every linear solve passes the 1e-10 true-residual gate.
+
+The retained PCG workspace is 10,075,864 bytes. No additional native Buffer
+allocation occurs during resident solves. Maximum sampled device allocation
+delta is about 348 MiB; this is not a whole-process peak measurement. Lifecycle
+checks pass after hierarchy replacement and caller-array release, reject stale
+and incorrectly typed handles, and verify zero-RHS reset and context cleanup.
+Shared FE preparation (48.47 s) and MATLAB startup (11.09 s) are separately
+reported rather than hidden in solver timings. These are manufactured-model
+build-host diagnostics with two samples per policy, not physical-device or
+formal timing acceptance. A100 was not used.

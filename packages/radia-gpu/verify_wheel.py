@@ -68,6 +68,31 @@ def verify(path: Path) -> dict:
                          "ams_exchange.py", "ltspice/__init__.py", "ltspice/cli.py", "LICENSE"):
             if required not in manifest["files"]:
                 raise ValueError(f"Missing GPU capability payload: {required}")
+        hdiv_binaries = {'matlab/radia_cuda_hmatrix.mexw64', 'matlab/radia_cuda_projection.mexw64'}
+        if hdiv_binaries.intersection(manifest['files']) or 'hdiv-build.json' in manifest['files']:
+            required = hdiv_binaries | {'hdiv-build.json'} | {
+                'matlab/+radia/+gpu/' + name for name in
+                ('solveHDivElements.m', 'affineHDivQuadrature.m', 'curvedHDivQuadrature.m')}
+            if not required.issubset(manifest['files']):
+                raise ValueError('Incomplete HDiv CUDA payload')
+            hdiv = json.loads(archive.read('radia_gpu/hdiv-build.json'))
+            if hdiv.get('schema') != 'radia.gpu.hdiv-payload.v1':
+                raise ValueError('Invalid HDiv payload schema')
+            for name in ('hmatrix', 'projection'):
+                native = hdiv['artifacts'][name]
+                if (native['source_dirty'] or native['source_commit'] != manifest['source_commit']
+                        or native['taskmanager_started']
+                        or native['binary_sha256'] != manifest['files']['matlab/radia_cuda_' + name + '.mexw64']):
+                    raise ValueError('HDiv CUDA binary receipt mismatch')
+        fmm_files = {'fmm-build.json', 'matlab/radia_cuda_fmm.mexw64', 'matlab/+radia/+gpu/LaplaceFMM.m'}
+        if fmm_files & set(manifest['files']):
+            if not fmm_files <= set(manifest['files']):
+                raise ValueError('Incomplete FMM CUDA payload')
+            fmm = json.loads(archive.read('radia_gpu/fmm-build.json'))
+            if (fmm['source_dirty'] or fmm['source_commit'] != manifest['source_commit']
+                    or fmm['taskmanager_used'] or fmm['python_adapter_required']
+                    or fmm['binary_sha256'] != manifest['files']['matlab/radia_cuda_fmm.mexw64']):
+                raise ValueError('FMM CUDA binary receipt mismatch')
     solvers = []
     for relative in manifest['files']:
         if relative.endswith('.mexw64'):

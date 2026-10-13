@@ -47,8 +47,21 @@ def _qualify_stable(wheel, qualification_directory):
     if (not solvers or not isinstance(comparisons, dict)
             or set(comparisons) != set(solvers)):
         raise ValueError('Stable CPU parity must cover every published CUDA solver')
-    for result in comparisons.values():
-        for key, limit in (('relative_l2', 1e-8), ('true_relative_residual', 1e-6)):
+    for name, result in comparisons.items():
+        # These modules apply operators; they do not solve Ax=b. Require an
+        # explicit applicability declaration instead of a fabricated residual.
+        operator_only = name in ('fmm', 'projection')
+        if operator_only and (result.get('operation_kind') != 'operator'
+                or result.get('residual_applicability') != 'not_applicable_operator'
+                or 'true_relative_residual' not in result
+                or result['true_relative_residual'] is not None):
+            raise ValueError('Operator parity needs explicit residual applicability')
+        if not operator_only and result.get('operation_kind', 'solve') != 'solve':
+            raise ValueError('Solver parity requires an original-equation true residual')
+        limits = [('relative_l2', 1e-8)]
+        if not operator_only:
+            limits.append(('true_relative_residual', 1e-6))
+        for key, limit in limits:
             value = result.get(key)
             if (isinstance(value, bool) or not isinstance(value, (int, float))
                     or not math.isfinite(value) or value < 0 or value > limit):

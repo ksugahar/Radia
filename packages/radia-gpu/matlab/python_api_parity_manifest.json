@@ -65,6 +65,33 @@
       "validation": "validation_test/ams_cuda/native_setup_validation.py",
       "cpu_reference": "Python/pybind11 shared HypreBasedAMS, independent solve and true-residual validation",
       "cpu_fallback": false
+    },
+    {
+      "id": "native-hcurl-newton-ams",
+      "scope": "Experimental affine tetrahedral lowest-order HCurl assembly and positive-gauge nonlinear solve; explicit homogeneous coefficients",
+      "source": "packages/radia-gpu/native/ams_fem.cuh",
+      "matlab": "packages/radia-gpu/matlab/+radia/+gpu/solveHCurl.m",
+      "validation": "validation_test/ams_cuda/native_hcurl.py",
+      "cpu_reference": "Independent Python NGSolve FE assembly and Newton solve",
+      "cpu_fallback": false
+    },
+    {
+      "id": "laplace-fmm-operators",
+      "scope": "Experimental numeric Laplace scalar/dipole FMM, weighted Biot-Savart, retained field clouds and flat exterior P1 SL/DL boundary operators; speed acceptance pending",
+      "source": "packages/radia-gpu/native/radia_cuda_fmm.cu",
+      "matlab": "packages/radia-gpu/matlab/+radia/+gpu/prepareBoundaryFMM.m",
+      "validation": "validation_test/ams_cuda/NATIVE_FEM_FMM.md",
+      "cpu_reference": "NumPy direct sum, analytic sphere/current and independent NGSolve Galerkin BEM",
+      "cpu_fallback": false
+    },
+    {
+      "id": "bounded-hdiv-mmm",
+      "scope": "Bounded affine/P2 tetrahedral HDiv orders 1/2, linear isotropic material; native FE/charge setup and resident FP64 solve, optional host-vector cache. General adaptive geometry, interfaces, constraints and nonlinear materials remain unsupported.",
+      "source": "packages/radia-gpu/native/radia_cuda_hmatrix.cu",
+      "matlab": "packages/radia-gpu/matlab/+radia/+gpu/solveHDivElements.m",
+      "validation": "validation_test/hmatrix_cuda/validate_curved_hdiv.py",
+      "cpu_reference": "Independent Python/pybind11 NGSolve charge map, mass, sparsecholesky and original-equation true residual",
+      "cpu_fallback": false
     }
   ],
   "legacy_matlab_sources": "Historical sources remain under their integration owner but are not claims of supported CPU MEX or included wholesale in the GPU wheel."

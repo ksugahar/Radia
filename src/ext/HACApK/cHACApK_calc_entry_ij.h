@@ -47,6 +47,46 @@ extern "C" {
  */
 extern double cHACApK_entry_ij(int i, int j, int i_bemv);
 
+/* Opt-in native GPU build boundary. CPU builds keep scalar evaluation.
+ * Install at link time, not in mutable process-global callback state. The
+ * implementation must complete synchronously, capture errors at the C ABI,
+ * and never silently fall back to a different physical entry strategy. */
+#ifdef RAD_HACAPK_BATCH_ENTRIES
+extern void cHACApK_entry_batch(int count, const int *rows, const int *columns,
+                              int i_bemv, double *values);
+#endif
+
+static inline void cHACApK_active_entry_vector(
+    int ndp, int ip, int nstrtl, int nstrtt, const int *lod,
+    int i_bemv, const int *mask, int direction, double *vec)
+{
+#ifdef RAD_HACAPK_BATCH_ENTRIES
+    int rows[256], columns[256], positions[256], count=0;
+    double values[256];
+#endif
+    int ii;
+    for(ii=0;ii<ndp;++ii){
+        if(mask[ii]!=0)continue;
+        const int row=lod[(direction==0?ip:ii)+nstrtl];
+        const int column=lod[(direction==0?ii:ip)+nstrtt];
+#ifdef RAD_HACAPK_BATCH_ENTRIES
+        rows[count]=row;columns[count]=column;positions[count]=ii;++count;
+        if(count==256){
+            int j;cHACApK_entry_batch(count,rows,columns,i_bemv,values);
+            for(j=0;j<count;++j)vec[positions[j]]=values[j];count=0;
+        }
+#else
+        vec[ii]=cHACApK_entry_ij(row,column,i_bemv);
+#endif
+    }
+#ifdef RAD_HACAPK_BATCH_ENTRIES
+    if(count){
+        int j;cHACApK_entry_batch(count,rows,columns,i_bemv,values);
+        for(j=0;j<count;++j)vec[positions[j]]=values[j];
+    }
+#endif
+}
+
 #ifdef __cplusplus
 }
 #endif

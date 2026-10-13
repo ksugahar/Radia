@@ -6,15 +6,23 @@ CPU electromagnetic execution belongs to `radia` (Python/pybind11/NGSolve).
 `radia-mcp` is the AI operation interface. Neither package is required merely
 to locate and use the installed GPU MATLAB files.
 
-Version 0.1.2 contains FP64 CUDA CSR Jacobi-PCG, a Simulink block for the same
+The 0.1.3 candidate contains FP64 CUDA CSR Jacobi-PCG, a Simulink block for the same
 kernel, and the selected standalone LTspice workflow. It also contains experimental FP64 assembled-operator AMS and its versioned
-HDF5 exchange. This does not certify production AMS, ICCG, HDiv-MMM, or
-migration of the older CPU MEX application models.
+HDF5 exchange, bounded HDiv-MMM and Laplace FMM operators. This does not certify
+arbitrary production AMS, ICCG, general HDiv-MMM, or migration of the older CPU
+MEX application models.
 The experimental AMS also includes sparse nonlinear affine-tetrahedron assembly
 and a persistent `radia.gpu.AMSContext` with reusable GPU PCG workspace. Its
 manufactured monotone-material verification does not certify measured steel or
 arbitrary nonlinear devices. See the sparse study in validation_test/ams_cuda.
 There is no CPU solver fallback.
+
+FMM accuracy depends on the geometry and selected settings. The candidate's
+independent scalar/dipole check uses `Order=8, Separation=2`; its measured
+relative error is 1.64e-9. The same case at separation 1.5 gave 2.42e-8 and
+does not meet the stable publication gate of 1e-8. Defaults are unchanged.
+These bounds apply to the declared case, not arbitrary inputs; the separation-2
+setting has no formal speed acceptance yet.
 
 ## Install
 
@@ -104,6 +112,11 @@ rebuilding, requiring its exact SHA-256 and installed acceptance provenance.
 Stable versions additionally require the exact-source independent review and
 same-wheel 100 RTX 5000/CPU parity record described in
 [`validation_test/radia_gpu/releases`](../../validation_test/radia_gpu/releases/README.md).
+Every CUDA module in the wheel needs independent CPU parity. CSR-PCG, AMS and
+the HDiv material solve also require an original-equation true residual. FMM
+and projection apply operators and must explicitly record that a solve residual
+is not applicable, with a null residual and the measured operator error. A zero
+invented residual cannot qualify these operator checks.
 Configure PyPI Trusted Publishing for project `radia-gpu`, GitHub owner
 `ksugahar`, repository `Radia`, workflow `radia-gpu-release.yml`, environment
 `pypi`. A new project needs a pending publisher; checking availability does
@@ -220,3 +233,21 @@ Full JSON, memory definitions, artifact/source hashes, numerical gates and
 limitations: `validation_test/ams_cuda/results/cuda-galerkin-73b33291d.json`.
 The candidate is not a deployed release; formal performance acceptance remains
 pending. No A100 operations were performed.
+# 0.1.3 common candidate scope
+
+This candidate combines bounded HDiv-MMM, native affine lowest-order HCurl
+FEM/Newton/AMS, and experimental Laplace FMM in one exact-source wheel.
+Set `RADIA_HDIV_HMATRIX_BUILD`, `RADIA_HDIV_PROJECTION_BUILD` and
+`RADIA_FMM_BUILD` to accepted clean builds of the wheel commit. Stale artifacts
+are rejected even when their earlier numerical evidence passed.
+
+HDiv supports tetrahedra with affine or P2 geometry, orders 1/2 and linear
+isotropic material. Host-cache is opt-in and consumes additional memory.
+General adaptive high-order HACApK, images, internal interfaces, constraints
+and nonlinear HDiv are not accepted. FMM boundary maps are flat P1; the
+independently measured direct-sum speedup is not a comparison with CPU FMM.
+Small workloads can be slower on GPU. IH preview modules are not distributed.
+Compatible user-installed native dependencies remain required; no implicit
+CPU/Python solver fallback is provided. Separate historical performance
+results do not substitute for installed common-wheel acceptance.
+

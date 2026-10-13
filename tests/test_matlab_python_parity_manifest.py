@@ -19,7 +19,10 @@ def test_every_python_module_has_an_explicit_cpu_ownership_classification():
     assert not any(item["python"].startswith(("simulink/", "ltspice/"))
                    for item in result["assignments"])
     assert all(item["classification"] == "cpu-python-only" for item in result["binary_extensions"])
-    assert [item["id"] for item in result["gpu_features"]] == ["csr-pcg", "ams-experimental"]
+    assert [item["id"] for item in result["gpu_features"]] == [
+        "csr-pcg", "ams-experimental", "native-hcurl-newton-ams",
+        "laplace-fmm-operators", "bounded-hdiv-mmm",
+    ]
 
 
 def test_audit_rejects_reintroduced_cpu_mex_and_missing_gpu_source(tmp_path):

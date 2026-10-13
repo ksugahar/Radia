@@ -1,0 +1,41 @@
+{
+  "schema": "radia.hacapk-cuda-aca-connection.v1",
+  "accepted": false,
+  "a100_used": false,
+  "source_commit": "8a3885533266570d29341bdee534f0abe8b9c145",
+  "binary_sha256": "c29dd36fd092d5ce89d4039156a621394af9854097013cdc5348a1c010ad5d07",
+  "active_vector": {
+    "cases": 8,
+    "relative_error": 9.68786813520323e-16,
+    "scope": "Active vector C dispatch only, not compressed ACA matrix"
+  },
+  "indexed_entries": {
+    "count": 600,
+    "relative_error": 5.923942688463094e-16,
+    "workspace_capacity": 256
+  },
+  "compression": {
+    "rank": 1,
+    "relative_error": 0.05941964437285972,
+    "entry_batches": 6,
+    "entry_count": 13,
+    "owned_device_bytes": 11172,
+    "scope": "One raw physical offdiagonal block, not full adaptive matrix or solver"
+  },
+  "independent_scalar_cpu": {
+    "rank": 1,
+    "relative_error": 0.05941964437285974,
+    "route": "independent scalar C, no CUDA"
+  },
+  "disposition": "Stopped before large-scale assembly: existing ACA+ returns an inaccurate rank-one factorization for this two-by-two block on both routes",
+  "timing": {
+    "status": "not measured",
+    "reason": "Numerical gate failed and CI queued"
+  },
+  "next_gate": "Check admissible leaf selection and existing ACA+ small-block behavior before accepting adaptive assembly; do not change physical formulas or claim full solver parity",
+  "limitations": [
+    "No complete HACApK adaptive assembly or HDiv-MMM solver acceptance",
+    "CPU full native build of shared include remains required",
+    "No transfer-inclusive performance acceptance or global peak memory"
+  ]
+}
