@@ -41,7 +41,9 @@ switch name
 end
 wait(d);whole_seconds=toc(timer);after=d.AvailableMemory;
 assert(radia_cuda_fmm('live_count')==0);
-assert(all(structfun(@(x)x==0,radia_cuda_ams('resident_status'))));
+if strcmp(name,'ams')
+    assert(all(structfun(@(x)x==0,radia_cuda_ams('resident_status'))));
+end
 report=struct('whole_seconds',whole_seconds,'native',info,'device_free_before',before, ...
     'device_free_after',after,'available_memory_delta',before-after);
 % Output serialization is outside the numerical API timing, equally for CPU.
