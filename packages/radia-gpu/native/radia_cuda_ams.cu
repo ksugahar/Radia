@@ -162,21 +162,21 @@ __global__ void verify_factor(int n,int used,int nz,const int* order,const int* 
     }
 }
 __global__ void verify_permutation(int used,const int* seen,int* err){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<used&&seen[i]!=1)atomicExch(err,1);}
-// Cache the action of the original sparse LDLt factor, in factor ordering.
-// Each warp solves one identity column with the same dependency order as above.
+// Cache the original sparse LDLt action in Radia-owned row-major storage.
+// Each warp computes one column using the original factor dependency order.
 __global__ void inverse_sparse_coarse(int used,const int* rp,const int* ci,const double* a,const double* di,double* inverse){
-    int column=blockIdx.x,lane=threadIdx.x;double* w=inverse+size_t(column)*used;
-    for(int i=lane;i<used;i+=32)w[i]=i==column?1.:0.;__syncwarp();
-    for(int i=0;i<used;++i){double value=w[i];for(int j=rp[i]+lane;j<rp[i+1];j+=32)w[ci[j]]-=a[j]*value;__syncwarp();}
-    for(int i=lane;i<used;i+=32)w[i]*=di[i];__syncwarp();
-    for(int i=used-1;i>=0;--i){double sum=0;for(int j=rp[i]+lane;j<rp[i+1];j+=32)sum+=a[j]*w[ci[j]];
+    int column=blockIdx.x,lane=threadIdx.x;double* w=inverse+column;
+    for(int i=lane;i<used;i+=32)w[size_t(i)*used]=i==column?1.:0.;__syncwarp();
+    for(int i=0;i<used;++i){double value=w[size_t(i)*used];for(int j=rp[i]+lane;j<rp[i+1];j+=32)w[size_t(ci[j])*used]-=a[j]*value;__syncwarp();}
+    for(int i=lane;i<used;i+=32)w[size_t(i)*used]*=di[i];__syncwarp();
+    for(int i=used-1;i>=0;--i){double sum=0;for(int j=rp[i]+lane;j<rp[i+1];j+=32)sum+=a[j]*w[size_t(ci[j])*used];
         for(int offset=16;offset;offset/=2)sum+=__shfl_down_sync(0xffffffff,sum,offset);
-        if(lane==0)w[i]-=sum;__syncwarp();}
+        if(lane==0)w[size_t(i)*used]-=sum;__syncwarp();}
 }
 __global__ void cache_inverse_order(int n,const int* order,int* reverse){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n&&order[i]>=0)reverse[order[i]]=i;}
 __global__ void cached_sparse_coarse(int n,int used,const int* order,const int* reverse,const double* inverse,const double* b,double* x){
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=n)return;int row=order[i];double value=0;
-    if(row>=0)for(int j=0;j<used;++j)value+=inverse[size_t(j)*used+row]*b[reverse[j]];x[i]=value;
+    if(row>=0)for(int j=0;j<used;++j)value+=inverse[size_t(row)*used+j]*b[reverse[j]];x[i]=value;
 }
 struct CSR {
     int n,m,nz;const int *rp,*ci;const double* a;

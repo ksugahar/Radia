@@ -32,3 +32,13 @@ independent reviewer accepted this one-line contract update; both focused
 parity-manifest tests pass. Production numerical code is unchanged. The
 obsolete candidate build was canceled before qualification; the final
 source receives a fresh main CI build and exact-wheel acceptance.
+
+
+A final storage-policy review found a second P2 issue: the Radia-owned dense
+coarse-action cache used column-major storage without an external API owner.
+The cache now stores `inverse[row*used+column]` and applies it with the same
+row-major indexing. Per-column factor solves retain the original dependency
+and arithmetic order, with no additional temporary matrix or memory change.
+The independent reviewer confirmed that the external NGSolve factor layout
+does not own this derived cache. This correction requires a fresh build and
+exact-wheel numerical acceptance; earlier candidates remain historical.
