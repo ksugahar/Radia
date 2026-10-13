@@ -293,5 +293,15 @@
     "Management, history selection/gathering, mixture-weight ordering and seeded candidate generation remain host operations.",
     "No 100-host timing is used as performance acceptance. Formal A100 inference evidence is recorded separately.",
     "Development artifacts, not a release or a deployment."
-  ]
+  ],
+  "evidence_recovery": {
+    "files": 1125,
+    "all_sha256_verified": true,
+    "manifest_sha256": "e1c69a1a5574776b35a8d03e0c0366a9335e9b24abc0210b0bb04bd22e80b046",
+    "raw_evidence_location": "durable private validation storage",
+    "intended_public_evidence_committed_before_remote_deletion": true,
+    "remote_job_owned_scratch_removed": true,
+    "absence_verified": true,
+    "links_and_active_job_checks_passed": true
+  }
 }
