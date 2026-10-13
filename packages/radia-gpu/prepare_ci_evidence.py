@@ -40,11 +40,26 @@ def setup_public(record):
     return result
 
 
+def nonlinear_public(record):
+    keys = ('schema', 'accepted', 'source_commit', 'versions', 'gpu_binary_sha256',
+            'dofs', 'free_dofs', 'elements', 'csr_nonzeros', 'mesh_sha256',
+            'map_assembly_relative_error', 'cpu_threads', 'gpu_host_setup_threads',
+            'nonlinear_tolerance', 'linear_true_tolerance', 'independent_parity_limit',
+            'cpu_samples', 'gpu', 'gpu_device', 'resident_contract', 'assembly_storage',
+            'gpu_residency', 'timing_boundary', 'near_roundoff_line_search',
+            'shared_fe_setup_seconds', 'matlab_startup_seconds')
+    result = {key: record[key] for key in keys if key in record}
+    result['build'] = ams_public({'build': record.get('build', {})})['build']
+    result['timing_classification'] = 'numerical installation diagnostics; not performance acceptance'
+    return result
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--poisson', required=True, type=Path)
     parser.add_argument('--ams', type=Path)
     parser.add_argument('--setup', type=Path)
+    parser.add_argument('--nonlinear', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
@@ -65,3 +80,8 @@ if __name__ == '__main__':
         if record.get('schema') != 'radia.ams-setup-comparison.v1':
             raise ValueError('Unexpected AMS setup comparison schema')
         (args.output / 'ams-setup-result.json').write_text(json.dumps(setup_public(record),indent=2,allow_nan=False)+'\n',encoding='utf-8')
+    if args.nonlinear and (args.nonlinear / 'result.json').is_file():
+        record = json.loads((args.nonlinear / 'result.json').read_text(encoding='utf-8'))
+        if record.get('schema') != 'radia.ams-nonlinear-sparse-resident.v2':
+            raise ValueError('Unexpected nonlinear AMS schema')
+        (args.output / 'ams-nonlinear-result.json').write_text(json.dumps(nonlinear_public(record), indent=2, allow_nan=False)+'\n', encoding='utf-8')
