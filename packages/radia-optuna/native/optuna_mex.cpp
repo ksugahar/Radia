@@ -1404,7 +1404,7 @@ std::vector<double> OptunaBestJoint(
         for (const auto& e : source)
             result.push_back({&e.weights, &e.mu, &e.sigma, &e.probabilities,
                 e.choice_count, e.internal_low, e.internal_high, e.step,
-                e.categorical, e.log_scale, e.device_model.get()});
+                e.categorical, e.log_scale, e.device_model.get(), &e.denominator});
         return result;
     };
     const auto best = optuna_cuda::best(candidates, views(below), views(above));
@@ -2265,7 +2265,7 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     const char* fields[] = {
         "api_version", "backend", "command_count", "handle_count", "build_route", "taskmanager", "gpu_operations", "host_operations"
         , "execution", "host_parallel_runtime", "allocator", "density_launches", "selection_launches", "host_to_device_bytes",
-        "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device", "execution_mode", "cpu_density_calls", "cpu_selection_calls", "cpu_parallel_density_calls", "cpu_max_density_threads", "device_allocation_calls", "workspace_reuses", "avoided_upload_bytes", "cached_device_bytes", "model_build_launches", "model_reuses", "preparation_launches", "model_download_bytes"
+        "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device", "execution_mode", "cpu_density_calls", "cpu_selection_calls", "cpu_parallel_density_calls", "cpu_max_density_threads", "device_allocation_calls", "workspace_reuses", "avoided_upload_bytes", "cached_device_bytes", "model_build_launches", "model_reuses", "preparation_launches", "model_download_bytes", "cpu_preparation_calls", "cpu_cached_normalizer_values"
     };
     plhs[0] = mxCreateStructMatrix(1, 1, sizeof(fields) / sizeof(fields[0]), fields);
     mxSetField(plhs[0], 0, "build_route", mxCreateString("mexcuda"));
@@ -2289,6 +2289,8 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     mxSetField(plhs[0], 0, "model_reuses", mxCreateDoubleScalar(static_cast<double>(stats.model_reuses)));
     mxSetField(plhs[0], 0, "preparation_launches", mxCreateDoubleScalar(static_cast<double>(stats.preparation_launches)));
     mxSetField(plhs[0], 0, "model_download_bytes", mxCreateDoubleScalar(static_cast<double>(stats.model_download_bytes)));
+    mxSetField(plhs[0], 0, "cpu_preparation_calls", mxCreateDoubleScalar(static_cast<double>(stats.cpu_preparation_calls)));
+    mxSetField(plhs[0], 0, "cpu_cached_normalizer_values", mxCreateDoubleScalar(static_cast<double>(stats.cpu_cached_normalizer_values)));
     mxSetField(plhs[0], 0, "execution", mxCreateString("matlab-mexcuda"));
     mxSetField(plhs[0], 0, "host_parallel_runtime", mxCreateString("openmp"));
     mxSetField(plhs[0], 0, "allocator", mxCreateString(

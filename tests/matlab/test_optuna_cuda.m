@@ -98,9 +98,11 @@ for mode=["cpu","gpu"]
         verifyGreaterThan(testCase,after.model_build_launches,before.model_build_launches);
         verifyGreaterThan(testCase,after.model_reuses,before.model_reuses);
         verifyGreaterThan(testCase,after.model_download_bytes,before.model_download_bytes);
+        verifyEqual(testCase,after.cpu_preparation_calls,before.cpu_preparation_calls);
     else
         verifyEqual(testCase,after.model_build_launches,before.model_build_launches);
         verifyEqual(testCase,after.host_to_device_bytes,before.host_to_device_bytes);
+        verifyGreaterThan(testCase,after.cpu_cached_normalizer_values,before.cpu_cached_normalizer_values);
     end
 end
 end

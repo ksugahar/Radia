@@ -376,7 +376,22 @@ __global__ void select_best(const double* below, const double* above,
 // per-candidate summation and first-maximum selection preserve oracle behavior.
 std::vector<double> host_pdf(const std::vector<double>& samples,
                              const std::vector<Estimator>& estimators) {
-    Packed packed(estimators);
+    Packed packed(estimators, true);
+    std::vector<double> normalization(packed.normalization_count);
+    for (std::size_t d = 0; d < estimators.size(); ++d) {
+        const auto& e = packed.estimators[d];
+        if (e.categorical) continue;
+        const auto* cached = estimators[d].denominator;
+        const bool reuse = cached && cached->size() == e.kernels;
+        for (std::size_t k = 0; k < e.kernels; ++k) {
+            const double mu = packed.values[e.mu + k], sigma = packed.values[e.sigma + k];
+            normalization[e.denominator + k] = reuse ? (*cached)[k] :
+                log_mass((e.low - mu) / sigma, (e.high - mu) / sigma);
+            normalization[e.log_sigma + k] = std::log(sigma);
+        }
+        if (reuse) stats.cpu_cached_normalizer_values += e.kernels;
+    }
+    ++stats.cpu_preparation_calls;
     if (samples.size() % estimators.size())
         throw std::invalid_argument("Optuna CPU sample shape");
     const auto count = samples.size() / estimators.size();
@@ -403,7 +418,7 @@ std::vector<double> host_pdf(const std::vector<double>& samples,
             double value = std::log(packed.values[packed.estimators[0].weights + k]);
             for (std::size_t d = 0; d < estimators.size(); ++d)
                 value += component(packed.estimators[d], packed.values.data(),
-                                   samples[row * estimators.size() + d], k);
+                                   samples[row * estimators.size() + d], k, normalization.data());
             values[k] = value;
             maximum = std::fmax(maximum, value);
         }

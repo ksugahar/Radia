@@ -29,6 +29,7 @@ struct Estimator {
     double low, high, step;
     bool categorical, log_scale;
     const PreparedModel* prepared = nullptr;
+    const std::vector<double>* denominator = nullptr;
 };
 struct Statistics {
     std::uint64_t density_launches = 0, selection_launches = 0;
@@ -42,6 +43,7 @@ struct Statistics {
     std::size_t cached_device_bytes = 0;
     std::uint64_t model_build_launches = 0, model_reuses = 0;
     std::uint64_t preparation_launches = 0, model_download_bytes = 0;
+    std::uint64_t cpu_preparation_calls = 0, cpu_cached_normalizer_values = 0;
     int runtime_version = 0, driver_version = 0, device = -1;
     bool stream_ordered_allocator = false;
 };

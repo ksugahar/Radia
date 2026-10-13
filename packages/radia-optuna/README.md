@@ -397,6 +397,10 @@ existing small-array NumPy network and large-array value/index ordering;
 bandwidth clipping and categorical normalization keep their original order.
 `model_build_launches`, `model_reuses`, `preparation_launches` and
 `model_download_bytes` expose construction, reuse and host RNG transfers.
+CPU density also reuses the constructor's ordered normalizers and prepares
+log-sigma once per model, rather than recomputing them for every candidate.
+`cpu_preparation_calls` and `cpu_cached_normalizer_values` verify this CPU
+comparison route. GPU construction calls do not enter CPU density preparation.
 
 `benchmark_optuna_inference.m` measures a complete optimization loop on Branin
 and a 40-dimensional correlated quadratic valley. It separates inference
