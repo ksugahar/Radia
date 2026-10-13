@@ -15,6 +15,10 @@ def main(a):
             p=(job/n).resolve()
             if not p.is_relative_to(job) or sha(p)!=h:raise RuntimeError('Payload changed: '+n)
         record['payload_sha256']=manifest
+        if (job/'owner.json').is_file() and (job/'vol_check.json').is_file():
+            owner=json.loads((job/'owner.json').read_text(encoding='utf-8-sig'));volCheck=json.loads((job/'vol_check.json').read_text(encoding='utf-8-sig'))
+            if not volCheck.get('passed') or ('vol_sha256' in owner and owner['vol_sha256']!=sha(job/'model.vol')):raise RuntimeError('Checked mesh identity mismatch')
+            record['vol_check_passed']=True
         matlabPath=job/'matlab';tunedPath=job/'tuned'
         if bool(a.installed_python)!=bool(a.wheel):raise ValueError('Both --installed-python and --wheel are required')
         if a.installed_python:
