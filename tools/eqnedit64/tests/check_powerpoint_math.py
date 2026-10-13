@@ -70,7 +70,8 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     corpus = json.loads((COMPONENT / "tests/office_bit_corpus.json").read_text("utf-8"))
     report = {"schema": "eqnedit64.powerpoint-math.v1", "covered": 0, "rejected": 0,
-              "failures": [], "powerpoint": "NOT RUN: approved isolated Office session required",
+              "failures": [], "powerpoint": "NOT RUN: separate approved desktop acceptance required",
+              "release_acceptance": False,
               "schema_validation": "pending independent SDK gate",
               "semantic_comparison_scope": "structure/operators/text/style/colour; run grouping and dialect-specific control/vertical layout properties normalized",
               "app_sha256": hashlib.sha256(app.read_bytes()).hexdigest(),
@@ -130,6 +131,7 @@ def main():
         sys.modules["eqnedit64"] = types.SimpleNamespace(__version__="3.1.4", export_powerpoint_math=api.export_powerpoint_math)
         assembly = load_module("native_markdown_equations", REPO / "packages/radia-mcp/src/radia_mcp/presentation/_markdown_equations.py")
         markdown = "# Native equations\n\nInline $\\mathbf{A}x$ and $\\sin(x+1)$.\n\n$$\\int_a^b x^2\\,dx$$\n\n> Explain $\\alpha$ and\n> $$\\frac{x}{y}$$\n"
+        markdown += "\n# Structures\n\n$$\\sum_{k=1}^{n} k^2$$\n\n$$\\begin{matrix}a&b\\\\c&d\\end{matrix}$$\n\n$$\\left(\\frac{x}{y}\\right)$$\n"
         deck = args.output / "native-equations.pptx"
         report["deck"] = assembly.presentation_markdown_to_pptx(markdown, str(deck))
         # Do not store private runtime paths in public evidence.
