@@ -1,6 +1,6 @@
 """Independent FE oracle and same-host GPU/GPU AMS tuning acceptance."""
 from pathlib import Path
-import argparse,ctypes,hashlib,json,os,socket,statistics,subprocess,sys,time
+import argparse,ctypes,hashlib,importlib.util,json,os,socket,statistics,subprocess,sys,time
 
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
@@ -15,6 +15,18 @@ def main(a):
             p=(job/n).resolve()
             if not p.is_relative_to(job) or sha(p)!=h:raise RuntimeError('Payload changed: '+n)
         record['payload_sha256']=manifest
+        matlabPath=job/'matlab';tunedPath=job/'tuned'
+        if bool(a.installed_python)!=bool(a.wheel):raise ValueError('Both --installed-python and --wheel are required')
+        if a.installed_python:
+            spec=importlib.util.spec_from_file_location('wheel_verifier',job/'verify_wheel.py');verifier=importlib.util.module_from_spec(spec);spec.loader.exec_module(verifier)
+            wheel=verifier.verify(a.wheel.resolve())
+            installed=json.loads(subprocess.check_output([str(a.installed_python.resolve()),'-I','-c','import json,radia_gpu;print(json.dumps(radia_gpu.verify()))'],text=True))
+            verifier.verify_installed_identity(installed,wheel)
+            record['installed_wheel']=dict(wheel=wheel,installed=installed)
+            matlabPath=Path(installed['matlab_path']).resolve();tunedPath=matlabPath
+            wheelManifest=json.loads((matlabPath.parent/'manifest.json').read_text())
+            tunedHash=wheelManifest['files']['matlab/radia_cuda_ams.mexw64']
+        else:tunedHash=manifest['tuned/radia_cuda_ams.mexw64']
         os.environ.update(OMP_NUM_THREADS='1',OPENBLAS_NUM_THREADS='1',MKL_NUM_THREADS='1',MKL_THREADING_LAYER='SEQUENTIAL')
         import netgen
         net=Path(netgen.__file__).parent
@@ -61,10 +73,12 @@ def main(a):
         for cycle in range(a.cycles):
             for variant in ('baseline','tuned','tuned','baseline'):
                 guard=idle();path=out/f'{cycle}-{len(record["samples"])}-{variant}.mat'
-                with Memory(pid) as memory:eng.ams_tuning_sample(str(job),str(job/variant),str(path),nargout=0)
+                binaryPath=tunedPath if variant=='tuned' else job/'baseline'
+                with Memory(pid) as memory:eng.ams_tuning_sample(str(job),str(binaryPath),str(path),str(matlabPath),nargout=0)
                 raw=loadmat(path,simplify_cells=True);report=raw['report']
                 loaded=Path(report['loaded_binary']).resolve()
-                if loaded!=job/variant/'radia_cuda_ams.mexw64' or sha(loaded)!=manifest[variant+'/radia_cuda_ams.mexw64']:raise RuntimeError('Loaded MEX identity mismatch')
+                expectedHash=tunedHash if variant=='tuned' else manifest['baseline/radia_cuda_ams.mexw64']
+                if loaded!=binaryPath/'radia_cuda_ams.mexw64' or sha(loaded)!=expectedHash:raise RuntimeError('Loaded MEX identity mismatch')
                 errors=dict(nonlinear=validate(raw['nonlinear'],True),linear=validate(raw['linear'],False),
                     reused=[validate(raw['reuse'][:,k],False,float(s)) for k,s in enumerate(np.atleast_1d(report['scales']))])
                 sample=dict(variant=variant,cycle=cycle,report=report,errors=errors,idle_before=guard,host_memory=memory.result());record['samples'].append(sample)
@@ -85,4 +99,5 @@ def encode(v):
     if hasattr(v,'tolist'):return v.tolist()
     return str(v)
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--job',type=Path,required=True);p.add_argument('--cycles',type=int,default=2);main(p.parse_args())
+    p=argparse.ArgumentParser();p.add_argument('--job',type=Path,required=True);p.add_argument('--cycles',type=int,default=2)
+    p.add_argument('--installed-python',type=Path);p.add_argument('--wheel',type=Path);main(p.parse_args())
