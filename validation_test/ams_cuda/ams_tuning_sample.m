@@ -25,7 +25,8 @@ try;system.solve();error('radia:test:missingError','Released system accepted sol
 catch ex;assert(strcmp(ex.identifier,'radia:cuda:released')||contains(ex.identifier,'InvalidHandle'),ex.identifier);end
 assert(isequal(radia_cuda_ams('resident_status'),initial),'radia:test:leak','AMS state leaked');
 % Read the loaded Windows module, not merely MATLAB's search-path resolution.
-code=sprintf(['@(Get-Process -Id %d -Module | Where-Object {$_.ModuleName -eq ''radia_cuda_ams.mexw64''} | ' ...
+code=sprintf(['$ProgressPreference=''SilentlyContinue'';$ErrorActionPreference=''Stop'';' ...
+    '@(Get-Process -Id %d -Module | Where-Object {$_.ModuleName -eq ''radia_cuda_ams.mexw64''} | ' ...
     'ForEach-Object {[PSCustomObject]@{path=$_.FileName;sha256=(Get-FileHash -LiteralPath $_.FileName -Algorithm SHA256).Hash.ToLower()}}) | ConvertTo-Json -Compress'],feature('getpid'));
 encoded=matlab.net.base64encode(unicode2native(code,'UTF-16LE'));
 [status,loaded]=system(['powershell -NoProfile -EncodedCommand ' encoded]);
