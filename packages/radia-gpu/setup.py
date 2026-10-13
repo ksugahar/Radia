@@ -119,7 +119,7 @@ class build_py(_build_py):
         metadata = tomllib.loads((PACKAGE / "pyproject.toml").read_text())
         manifest = dict(schema="radia.gpu.distribution.v1", version=metadata["project"]["version"],
                         source_commit=commit, files=payload,
-                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Bounded affine/P2 HDiv orders 1/2"] if hmatrix else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
+                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "Reusable affine linear HCurl matrix and AMS hierarchy", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Bounded affine/P2 HDiv orders 1/2"] if hmatrix else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
                         runtime_requirements=["Windows x64", "MATLAB R2026a", "Parallel Computing Toolbox", "NVIDIA GPU/driver", "Simulink for blocks", "User-installed LTspice for circuit execution"])
         (package / "manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")
 

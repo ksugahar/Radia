@@ -110,6 +110,13 @@ __global__ void multiply_add(int n,const int* rp,const int* ci,const double* av,
 __global__ void pcg_update(int n,double alpha,const double* p,const double* ap,double* x,double* r) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n){x[i]+=alpha*p[i];r[i]-=alpha*ap[i];}
 }
+__global__ void pcg_update_device(int n,const double* scalars,const double* p,const double* ap,double* x,double* r) {
+    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=n)return;
+    double rho=scalars[0],pap=scalars[1];
+    // The immediately following host residual norm reports breakdown loudly.
+    if(!(rho>0)||!(pap>0)||!isfinite(rho)||!isfinite(pap)){r[i]=nan("");return;}
+    double alpha=rho/pap;x[i]+=alpha*p[i];r[i]-=alpha*ap[i];
+}
 __global__ void combine(int n,const double* z,const double* scalars,double* p) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)p[i]=z[i]+(scalars[2]/scalars[0])*p[i];
 }
@@ -155,6 +162,22 @@ __global__ void verify_factor(int n,int used,int nz,const int* order,const int* 
     }
 }
 __global__ void verify_permutation(int used,const int* seen,int* err){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<used&&seen[i]!=1)atomicExch(err,1);}
+// Cache the action of the original sparse LDLt factor, in factor ordering.
+// Each warp solves one identity column with the same dependency order as above.
+__global__ void inverse_sparse_coarse(int used,const int* rp,const int* ci,const double* a,const double* di,double* inverse){
+    int column=blockIdx.x,lane=threadIdx.x;double* w=inverse+size_t(column)*used;
+    for(int i=lane;i<used;i+=32)w[i]=i==column?1.:0.;__syncwarp();
+    for(int i=0;i<used;++i){double value=w[i];for(int j=rp[i]+lane;j<rp[i+1];j+=32)w[ci[j]]-=a[j]*value;__syncwarp();}
+    for(int i=lane;i<used;i+=32)w[i]*=di[i];__syncwarp();
+    for(int i=used-1;i>=0;--i){double sum=0;for(int j=rp[i]+lane;j<rp[i+1];j+=32)sum+=a[j]*w[ci[j]];
+        for(int offset=16;offset;offset/=2)sum+=__shfl_down_sync(0xffffffff,sum,offset);
+        if(lane==0)w[i]-=sum;__syncwarp();}
+}
+__global__ void cache_inverse_order(int n,const int* order,int* reverse){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n&&order[i]>=0)reverse[order[i]]=i;}
+__global__ void cached_sparse_coarse(int n,int used,const int* order,const int* reverse,const double* inverse,const double* b,double* x){
+    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=n)return;int row=order[i];double value=0;
+    if(row>=0)for(int j=0;j<used;++j)value+=inverse[size_t(j)*used+row]*b[reverse[j]];x[i]=value;
+}
 struct CSR {
     int n,m,nz;const int *rp,*ci;const double* a;
     CSR(const mxArray* v,Input& in):n(integer(field(v,"rows"))),m(integer(field(v,"cols"))) {
@@ -183,6 +206,8 @@ struct Coarse {
     std::string kind;int n,used=0;const double *a=nullptr,*di=nullptr;const int *order=nullptr,*rp=nullptr,*ci=nullptr;
     std::unique_ptr<Buffer> work;
     std::unique_ptr<Flag> seen;
+    std::unique_ptr<Buffer> inverse;
+    std::unique_ptr<Flag> reverse;
     Coarse(const mxArray* v,Input& in,int rows):kind(word(field(v,"kind"))),n(rows){
         if(integer(field(v,"rows"))!=n)throw std::runtime_error("coarse size mismatch");
         if(kind=="dense_inverse") {
@@ -204,10 +229,20 @@ struct Coarse {
             verify_factor<<<(n+T-1)/T,T,0,launch_stream>>>(n,used,int(count),order,rp,ci,seen->p,in.validation.p);
             verify_permutation<<<std::max(1,(used+T-1)/T),T,0,launch_stream>>>(used,seen->p,in.validation.p);
             verify_vec<<<std::max(1,(used+T-1)/T),T,0,launch_stream>>>(used,di,false,in.validation.p);work=std::make_unique<Buffer>(used);
+            // Validate every factor/index before construction dereferences it.
+            in.validation.check();
+            if(used>0&&used<=512){size_t available,total;ck(cudaMemGetInfo(&available,&total));size_t bytes=size_t(used)*used*sizeof(double)+size_t(used)*sizeof(int);
+                size_t reserve=std::max<size_t>(2ULL<<30,total/5);if(available<=reserve||bytes>available-reserve)throw std::runtime_error("coarse action cache exceeds CUDA memory reserve");
+                inverse=std::make_unique<Buffer>(size_t(used)*used);reverse=std::make_unique<Flag>(used);
+                cache_inverse_order<<<(n+T-1)/T,T>>>(n,order,reverse->p);
+                inverse_sparse_coarse<<<used,32>>>(used,rp,ci,a,di,inverse->p);
+                verify_vec<<<(used*used+T-1)/T,T>>>(used*used,inverse->p,false,in.validation.p);in.validation.check();
+            }
         } else if(kind!="ten_l1_jacobi_sweeps")throw std::runtime_error("unknown coarse solver");
     }
     void apply(const double* b,double* x)const{
         if(kind=="dense_inverse")dense_coarse<<<(n+T-1)/T,T,0,launch_stream>>>(n,a,b,x);
+        else if(inverse)cached_sparse_coarse<<<(n+T-1)/T,T,0,launch_stream>>>(n,used,order,reverse->p,inverse->p,b,x);
         else sparse_coarse<<<1,32,0,launch_stream>>>(n,used,order,rp,ci,a,di,b,x,work->p);
     }
 };
@@ -256,6 +291,7 @@ struct AMS {
             if(spaces.back()->p.n!=a.n)throw std::runtime_error("AMS interpolation dimension mismatch");}
     }
     void res(){a.res(x.p,b.p,r.p);}
+    size_t coarseCacheBytes()const{size_t bytes=0;for(const auto& s:spaces)for(const auto& l:s->levels)if(l->coarse&&l->coarse->inverse)bytes+=l->coarse->inverse->count*sizeof(double)+size_t(l->coarse->used)*sizeof(int);return bytes;}
     void relax(){for(int s=0;s<smooth;++s)a.relax(x,b.p,l1,tmp);}
     void initial(){initial_relax<<<(a.n+T-1)/T,T,0,launch_stream>>>(a.n,b.p,l1,x.p);for(int s=1;s<smooth;++s)a.relax(x,b.p,l1,tmp);}
     void grad(){if(!gradient)return;res();spaces[0]->add(r.p,omega,x.p);}

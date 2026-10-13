@@ -19,11 +19,7 @@ SolveStats residentPCG(AMS& ams,const CSR& op,const double* b,ResidentWork& w,
     blas.dot(n,r.p,z.p,scalars.p);stats.residual=1;
     for(stats.iterations=1;stats.iterations<=maxiter;++stats.iterations){
         op.mult(p.p,ap.p);blas.dot(n,p.p,ap.p,scalars.p+1);
-        double control[2];ck(cudaMemcpy(control,scalars.p,2*sizeof(double),cudaMemcpyDeviceToHost));
-        double rho=control[0],pap=control[1];
-        if(!(pap>0)||!(rho>0)||!std::isfinite(pap)||!std::isfinite(rho))
-            throw std::runtime_error("AMS PCG breakdown: nonpositive curvature");
-        pcg_update<<<(n+T-1)/T,T>>>(n,rho/pap,p.p,ap.p,w.x.p,r.p);
+        pcg_update_device<<<(n+T-1)/T,T>>>(n,scalars.p,p.p,ap.p,w.x.p,r.p);
         stats.residual=blas.norm(n,r.p)/bnorm;
         if(!std::isfinite(stats.residual))throw std::runtime_error("nonfinite residual");
         if(stats.residual<=tol){op.res(w.x.p,b,r.p);stats.residual=blas.norm(n,r.p)/bnorm;
@@ -106,10 +102,12 @@ bool amsResidentCommand(const std::string& command,int nlhs,mxArray** out,int nr
     if(useGraph&&!c.graph)c.graph=std::make_unique<AMSGraph>(c.hierarchy->ams,c.work.r.p,c.work.z.p);
     auto stats=residentPCG(c.hierarchy->ams,op,b,c.work,tol,limit,useGraph?c.graph.get():nullptr);++c.solves;
     ck(cudaGetLastError());ck(cudaDeviceSynchronize());out[0]=gpuCopy(c.work.x.p,n);
-    const char* names[]={"iterations","true_relative_residual","workspace_bytes","workspace_allocations","solve_count","hierarchy_builds","graph_cached","native_buffer_allocations_during_solve"};
-    out[1]=mxCreateStructMatrix(1,1,8,names);
+    const char* names[]={"iterations","true_relative_residual","workspace_bytes","workspace_allocations","solve_count","hierarchy_builds","graph_cached","native_buffer_allocations_during_solve","coarse_action_cache_bytes","iteration_host_syncs"};
+    out[1]=mxCreateStructMatrix(1,1,10,names);
     double values[]={double(stats.iterations),stats.residual,double(c.work.bytes()),1.,double(c.solves),double(c.rebuilds)};
     for(int k=0;k<6;++k)mxSetField(out[1],0,names[k],mxCreateDoubleScalar(values[k]));
     mxSetField(out[1],0,names[6],mxCreateLogicalScalar(useGraph));
-    mxSetField(out[1],0,names[7],mxCreateDoubleScalar(double(nativeBufferAllocations-allocationsBefore)));return true;
+    mxSetField(out[1],0,names[7],mxCreateDoubleScalar(double(nativeBufferAllocations-allocationsBefore)));
+    mxSetField(out[1],0,names[8],mxCreateDoubleScalar(double(c.hierarchy->ams.coarseCacheBytes())));
+    mxSetField(out[1],0,names[9],mxCreateDoubleScalar(1));return true;
 }

@@ -65,6 +65,7 @@ def verify(path: Path) -> dict:
         for required in (binary,"matlab/+radia/+gpu/csrPCG.m", "matlab/+radia/+simulink/cudaPCGSFunction.m",
                          "matlab/+radia/+ltspice/run.m", "matlab/radia_cuda_ams.mexw64",
                          "matlab/+radia/+gpu/readAMSExchange.m", "matlab/+radia/+gpu/amsPCG.m",
+                         "matlab/+radia/+gpu/HCurlSystem.m", "matlab/+radia/+gpu/solveHCurl.m",
                          "ams_exchange.py", "ltspice/__init__.py", "ltspice/cli.py", "LICENSE"):
             if required not in manifest["files"]:
                 raise ValueError(f"Missing GPU capability payload: {required}")
