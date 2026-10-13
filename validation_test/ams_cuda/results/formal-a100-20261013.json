@@ -3,7 +3,7 @@
   "accepted": true,
   "timing_accepted": true,
   "release_accepted": false,
-  "host": "NGSolve",
+  "host": "runtime",
   "date": "2026-10-13",
   "samples": [
     {
@@ -3602,5 +3602,6 @@
     "hash_verified": true,
     "job_and_environment_deleted": true,
     "host_stopped": false
-  }
+  },
+  "public_runtime_metadata": "Identifying execution metadata omitted; original hash-verified record retained privately. Numerical values unchanged."
 }

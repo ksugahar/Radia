@@ -2,7 +2,7 @@
   "schema": "radia.gpu-formal-performance-pending.v1",
   "accepted": false,
   "date": "2026-10-13",
-  "host": "mdx",
+  "host": "runtime",
   "gpu_available": false,
   "observed_video_controllers": [
     "Microsoft Remote Display Adapter",
@@ -25,5 +25,6 @@
   "installed_full_wheel_acceptance": false,
   "status": "superseded",
   "superseded_by": "formal-a100-20261013.json",
-  "resolution": "User explicitly authorized NGSolve(A100) as formal timing host; fresh same-host measurements accepted; original mdx observations retained as historical provenance"
+  "resolution": "User explicitly authorized NGSolve(A100) as formal timing host; fresh same-host measurements accepted; original mdx observations retained as historical provenance",
+  "public_runtime_metadata": "Identifying execution metadata omitted; original hash-verified record retained privately. Numerical values unchanged."
 }

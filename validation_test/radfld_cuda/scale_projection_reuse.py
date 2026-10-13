@@ -1,5 +1,6 @@
 """Progressive actual projection size, precision, batching and reuse diagnostics."""
 from pathlib import Path
+import tempfile
 import argparse,ctypes,hashlib,importlib.util,json,os,statistics,subprocess,sys,time
 import numpy as np
 import psutil
@@ -14,7 +15,7 @@ def main():
  if a.numerical_only and (a.sources>1024 or a.maxh<.25):p.error('Non-timing checks are limited to 1024 sources and maxh>=.25')
  if a.numerical_only:ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
  a.out.mkdir(exist_ok=False,parents=True)
- field=ROOT/'build-field-cuda/job-45q9rhs_';projection=Path('C:/temp/projection-cuda-l8o_j38p');reference=Path('C:/temp/radfld-elements-reference-20261012-1910')
+ field=ROOT/'build-field-cuda/job-45q9rhs_';projection=Path(tempfile.gettempdir())/'projection-cuda-l8o_j38p';reference=Path(tempfile.gettempdir())/'radfld-elements-reference-20261012-1910'
  receipts={label:json.loads((folder/name).read_text(encoding='utf-8')) for label,folder,name in [('field',field,'build.json'),('projection',projection,'build.json'),('CPU',reference,'reference.json')]}
  for label,folder,binary in [('field',field,'radia_cuda_field.mexw64'),('projection',projection,'radia_cuda_projection.mexw64'),('CPU',reference,'_radia_field_reference.pyd')]:assert sha(folder/binary)==receipts[label]['binary_sha256']
  spec=importlib.util.spec_from_file_location('idle_guard',ROOT/'validation_test/ams_cuda/graph_validation.py');guard=importlib.util.module_from_spec(spec);spec.loader.exec_module(guard)

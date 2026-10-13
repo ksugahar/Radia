@@ -258,11 +258,12 @@
   },
   "scope": "Independent elementary public 13-tetrahedron P2 sphere, HDiv order 2, linear isotropic material, host-cache",
   "artifact_commit": "a33c88c4cef68114f54c9a626d5f340d7e67e479",
-  "host": "NGSolve",
+  "host": "runtime",
   "gpu": "NVIDIA A100-SXM4-40GB",
   "warm_speedup": 18.900854873346596,
   "cpu_reference_native_source_provenance_verified": false,
   "installed_wheel_accepted": false,
   "general_hdiv_validation_complete": false,
-  "sha256_manifest_scope": "Hash-verified private job manifest retained with raw evidence"
+  "sha256_manifest_scope": "Hash-verified private job manifest retained with raw evidence",
+  "public_runtime_metadata": "Identifying execution metadata omitted; original hash-verified record retained privately. Numerical values unchanged."
 }

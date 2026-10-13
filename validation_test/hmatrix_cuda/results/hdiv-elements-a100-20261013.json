@@ -250,10 +250,11 @@
     "free_host_bytes": 55685791744,
     "limitation": "System samples do not exclude every instantaneous external load"
   },
-  "host": "NGSolve",
+  "host": "runtime",
   "gpu_model": "NVIDIA A100-SXM4-40GB",
   "ngsolve": "6.2.2607",
   "same_artifact_100_result": "curved-hdiv-solve-20261013.json",
   "cold_limitations": "Fresh owned Engine startup measured separately; first payload per case, later cases share initialized modules. Not four cold processes.",
-  "durable_evidence": "W:\\00_CAE\\Radia\\release-evidence\\hmatrix-cuda-20261012\\high-order-curved-20261013"
+  "durable_evidence": "<private-runtime>00_CAE\\Radia\\release-evidence\\hmatrix-cuda-20261012\\high-order-curved-20261013",
+  "public_runtime_metadata": "Identifying execution metadata omitted; original hash-verified record retained privately. Numerical values unchanged."
 }

@@ -74,5 +74,6 @@
   "timing_accepted": false,
   "release_accepted": false,
   "a100_used": false,
-  "durable_evidence": "W:\\00_CAE\\Radia\\release-evidence\\hmatrix-cuda-20261012\\high-order-staging-20261013"
+  "durable_evidence": "<private-runtime>00_CAE\\Radia\\release-evidence\\hmatrix-cuda-20261012\\high-order-staging-20261013",
+  "public_runtime_metadata": "Identifying execution metadata omitted; original hash-verified record retained privately. Numerical values unchanged."
 }

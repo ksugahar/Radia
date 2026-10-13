@@ -1,7 +1,7 @@
 {
   "schema": "radia.native-hcurl-ams-validation.v1",
   "accepted": true,
-  "host": "T7920",
+  "host": "runtime",
   "formulation": "SI homogeneous nu=1, positive unit gauge mass, J=(1,0,0), tangential homogeneous Dirichlet",
   "supported": "lowest-order affine tetrahedral HCurl only",
   "python_role": "independent numerical oracle only",
@@ -11,7 +11,7 @@
   "source_commit": "38ccf726f413139f89656550a8ecbb5307b0d702",
   "build": {
     "schema": "radia.ams-cuda-build.v1",
-    "host": "T7920",
+    "host": "runtime",
     "python": "C:\\Program Files\\Python312\\python.exe",
     "matlab": "26.1.0.3346908 (R2026a) Update 5",
     "configuration": "C:\\Program Files\\MATLAB\\R2026a\\toolbox\\parallel\\gpu\\extern\\src\\mex\\win64\\nvcc_msvcpp2022.xml",
@@ -287,5 +287,6 @@
     "validation_test/ams_cuda/native_hcurl.m": "6a0b32fbe9ed9b4cc41504752f7740fae8047909d944ec09eb091c52ca8e39d5",
     "validation_test/ams_cuda/nonlinear_resident.m": "09b8fe1f940a452caafaf23a03682f8c5eeb0185ab2ad6c0ce234153b3c6be6a",
     "validation_test/ams_cuda/resident_contract.m": "11adb148ba44e5b1bb1f0dfd99da9c51be5fd35787af975dde0a1633c4e837f8"
-  }
+  },
+  "public_runtime_metadata": "Identifying execution metadata omitted; original hash-verified record retained privately. Numerical values unchanged."
 }

@@ -1,9 +1,10 @@
 """Differential ESIM finite-cell physics check, not full PEEC-BEM acceptance."""
 from pathlib import Path
+import tempfile
 import ctypes,hashlib,importlib.util,json,subprocess,sys,types
 import numpy as np
 ROOT=Path(__file__).resolve().parents[2]
-OUT=Path('C:/temp/ih-esim-cell-cuda-20261012')
+OUT=Path(tempfile.gettempdir())/'ih-esim-cell-cuda-20261012'
 
 def main():
     OUT.mkdir(exist_ok=True)

@@ -1,9 +1,10 @@
 """Small non-timing IH CUDA algebra check; always retains a JSON result."""
 from pathlib import Path
+import tempfile
 import ctypes,hashlib,json,os,subprocess,time
 import numpy as np
 ROOT=Path(__file__).resolve().parents[2]
-OUT=Path('C:/temp/ih-cuda-resident-smoke-20261012')
+OUT=Path(tempfile.gettempdir())/'ih-cuda-resident-smoke-20261012'
 
 def main():
     OUT.mkdir(exist_ok=True)

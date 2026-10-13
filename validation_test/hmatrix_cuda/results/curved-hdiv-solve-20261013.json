@@ -95,7 +95,7 @@
     "First payload times are 100 diagnostics; no warm ABBA or idle-mdx acceptance",
     "Owned buffers accounted; cuBLAS, host and global peaks not measured"
   ],
-  "durable_evidence": "W:/00_CAE/Radia/release-evidence/hmatrix-cuda-20261012/high-order-curved-20261013",
+  "durable_evidence": "<private-runtime>00_CAE/Radia/release-evidence/hmatrix-cuda-20261012/high-order-curved-20261013",
   "rejected_initial_order1": {
     "reason": "Mean normalization volume quadrature mismatched CPU default order 5",
     "mean_relative_error": 0.0002586098696513743,
@@ -292,10 +292,11 @@
     }
   ],
   "a100_status": "Same-artifact four-case numerical and warm diagnostic accepted; see hdiv-elements-a100-20261013.json",
-  "host": "T7920 (100)",
+  "host": "runtime",
   "timing_classification": "100 diagnostic only, not idle-mdx acceptance",
   "build_sources": {
     "projection": "fb71b3386",
     "hmatrix": "1d42ca51b"
-  }
+  },
+  "public_runtime_metadata": "Identifying execution metadata omitted; original hash-verified record retained privately. Numerical values unchanged."
 }

@@ -1,5 +1,6 @@
 """Public P2-sphere HDiv whole-solve parity against independent CPU pybind11."""
 from pathlib import Path
+import tempfile
 import argparse,ctypes,hashlib,json,os,sys,shutil
 
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
@@ -54,7 +55,7 @@ def main():
         if cpu_residual>1e-10:raise RuntimeError('Independent CPU true residual failed')
         fixture=a.out/'cpu.mat';savemat(fixture,dict(B=B,mass=mass,rhs=rhs[:,None],system=system,expected=expected[:,None],mean_operator=means))
         result.update(cells=mesh.ne,dofs=fes.ndof,charges=B.shape[0],cpu_true_residual=cpu_residual,cpu_iterations=int(reference['iters']),cpu_vim_sha256=sha(cpu.__file__),input_sha256=sha(fixture),mesh_sha256=sha(mesh_path),source_sha256=sha(__file__),projection_sha256=sha(a.projection/'radia_cuda_projection.mexw64'),hmatrix_sha256=sha(a.hmatrix/'radia_cuda_hmatrix.mexw64'))
-        prefix=Path(sys.base_prefix);dep=Path('C:/temp/hacapk-native-deps-20261013/Library/bin')
+        prefix=Path(sys.base_prefix);dep=Path(tempfile.gettempdir())/'hacapk-native-deps-20261013/Library/bin'
         os.environ['PATH']=os.pathsep.join(map(str,[dep,prefix,prefix/'bin',prefix/'Lib/site-packages/netgen',prefix/'Lib/site-packages/netgen_mesher.libs',prefix/'Lib/site-packages/ngsolve.libs']))+os.pathsep+os.environ['PATH']
         import matlab.engine
         eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');result['matlab']=eng.version();result['ngsolve']=ng.__version__

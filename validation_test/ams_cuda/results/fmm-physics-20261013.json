@@ -1,7 +1,7 @@
 {
   "schema": "radia.fmm-physical-adapters.v1",
   "accepted": true,
-  "host": "T7920",
+  "host": "runtime",
   "timing_accepted": false,
   "scope": "smooth sphere potentials and axial circular current; not singular Galerkin traces or full FEM-BEM solve",
   "build": {
@@ -134,5 +134,6 @@
     "validation_test/ams_cuda/native_hcurl.m": "6a0b32fbe9ed9b4cc41504752f7740fae8047909d944ec09eb091c52ca8e39d5",
     "validation_test/ams_cuda/nonlinear_resident.m": "09b8fe1f940a452caafaf23a03682f8c5eeb0185ab2ad6c0ce234153b3c6be6a",
     "validation_test/ams_cuda/resident_contract.m": "11adb148ba44e5b1bb1f0dfd99da9c51be5fd35787af975dde0a1633c4e837f8"
-  }
+  },
+  "public_runtime_metadata": "Identifying execution metadata omitted; original hash-verified record retained privately. Numerical values unchanged."
 }
