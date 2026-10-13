@@ -3595,5 +3595,12 @@
       "order": 8,
       "separation": 2
     }
+  },
+  "post_measurement_platform_observation": "NVIDIA A100-SXM4-40GB, 591.59, 0, 40645, 40960",
+  "remote_recovery_cleanup": {
+    "recovered_files": 117,
+    "hash_verified": true,
+    "job_and_environment_deleted": true,
+    "host_stopped": false
   }
 }
