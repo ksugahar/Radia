@@ -13,7 +13,7 @@ h=radia_cuda_ih('create',cfg);c=onCleanup(@()radia_cuda_ih('destroy',h));
 for step=1:3
 radia_cuda_ih('update',h,1,300);[temperature,heat,info]=radia_cuda_ih('outputs',h);
 end
-result.accepted=true;result.temperature=temperature;result.heat=heat;result.info=info;result.em=radia_cuda_ih('electromagnetic_state',h);clear c;
+result.accepted=true;result.temperature=temperature;result.heat=heat;result.info=info;em=radia_cuda_ih('electromagnetic_state',h);result.em_real=real(em);result.em_imag=imag(em);clear c;
 catch e
 result.error=getReport(e,'extended','hyperlinks','off');
 end
