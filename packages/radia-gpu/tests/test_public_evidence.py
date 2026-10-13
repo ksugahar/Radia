@@ -25,3 +25,8 @@ def test_public_poisson_keeps_numerics_and_omits_private_provenance():
     assert setup['taskmanager_used'] is False
     assert setup['formal_performance_acceptance'] == 'pending'
     assert not {'hostname','host','python','error'} & setup.keys()
+    fmm = module.fmm_public(dict(source, accepted=True,
+        metrics={'field_relative':1e-9}, report={'reload_stale_handle_rejected':True}))
+    assert fmm['metrics']['field_relative'] == 1e-9
+    assert fmm['report']['reload_stale_handle_rejected'] is True
+    assert not {'hostname','host','python','error'} & fmm.keys()

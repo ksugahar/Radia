@@ -101,6 +101,8 @@ jobs:
           python validation_test/ams_cuda/run.py --out "$env:RUNNER_TEMP/radia-ams-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.5 --threads 1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python validation_test/ams_cuda/setup_benchmark.py --out "$env:RUNNER_TEMP/radia-ams-setup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.08 --rounds 1 --setup-threads 4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/fmm_physics.py --binary "$env:RADIA_FMM_BUILD" --out "$env:RUNNER_TEMP/radia-fmm-physics-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           exit $LASTEXITCODE
       - name: Package and verify independent distribution
         shell: pwsh
@@ -133,7 +135,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          python packages/radia-gpu/prepare_ci_evidence.py --poisson "$env:RUNNER_TEMP/radia-gpu-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --ams "$env:RUNNER_TEMP/radia-ams-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --setup "$env:RUNNER_TEMP/radia-ams-setup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --nonlinear "$env:RUNNER_TEMP/radia-ams-nonlinear-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --output "$env:RUNNER_TEMP/radia-gpu-public-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python packages/radia-gpu/prepare_ci_evidence.py --poisson "$env:RUNNER_TEMP/radia-gpu-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --ams "$env:RUNNER_TEMP/radia-ams-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --setup "$env:RUNNER_TEMP/radia-ams-setup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --nonlinear "$env:RUNNER_TEMP/radia-ams-nonlinear-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --fmm "$env:RUNNER_TEMP/radia-fmm-physics-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --output "$env:RUNNER_TEMP/radia-gpu-public-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           exit $LASTEXITCODE
       - uses: actions/upload-artifact@v4
         if: always()
