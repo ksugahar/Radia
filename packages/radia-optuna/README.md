@@ -58,31 +58,74 @@ remains in memory. This benchmark does not compare Python/DB or Rustuna,
 or measure the default multivariate native-history route.
 See the [history-cache validation record](../../validation_test/radia_optuna/results/memory-history-20261013.json).
 
-[Formal A100 measurements](../../validation_test/optimization/results_optuna_memory_performance_a100_20261013.json)
-use fresh MATLAB sessions in ABBA order, with 1 and 16 configured MATLAB/OpenMP
-threads and 18 warmed samples per variant/case. The 16-thread reference is
-shown below; all times include `ask`, every suggestion, recording and `tell`,
-with full history retained and storage disabled.
-The default 24 candidates remain below the CPU density kernel's current
-256-candidate OpenMP threshold. Configuring 16 threads therefore does not
-parallelize that kernel in these cases; these results do not establish a GPU
-advantage over a CPU implementation tuned for this workload.
+The [history-cache-only A100 measurements](../../validation_test/optimization/results_optuna_memory_performance_a100_20261013.json)
+precede CPU OpenMP dispatch tuning. Their 1.52x GPU/CPU ratio used a serial CPU
+density kernel at the default 24 candidates and is superseded by the comparison below.
 
-| History trials | Parameters | Optimized CPU (ms) | Optimized GPU (ms) | CPU/GPU time ratio |
+CPU density now parallelizes independent candidate rows when there are at least
+256 candidates or `candidates * mixture_components * dimensions >= 16384`,
+provided more than one OpenMP worker is available. The team is bounded by the
+candidate count. Component summation and first-maximum selection remain ordered.
+Set `OMP_NUM_THREADS` before starting MATLAB; `api.info` reports
+`cpu_parallel_density_calls` and `cpu_max_density_threads` to verify actual use.
+CPU execution still requires only the same mexcuda binary and performs no CUDA
+initialization or transfers.
+
+[Formal OpenMP A100 measurements](../../validation_test/optimization/results_optuna_openmp_performance_a100_20261013.json)
+use the same in-memory history implementation for both variants, default 24
+candidates, fresh-session ABBA order, 1 and 16 configured threads, and 18 warmed
+samples per variant/case. Times include `ask`, all suggestions, recording and
+`tell`, with complete history retained and persistence disabled. The 16-thread
+independent-TPE comparison is:
+
+| History trials | Parameters | Previous CPU (ms) | Tuned CPU (ms) | GPU (ms) |
 | ---: | ---: | ---: | ---: | ---: |
-| 24 | 1 | 1.077 | 1.437 | 0.75 |
-| 256 | 1 | 1.284 | 1.391 | 0.92 |
-| 1000 | 1 | 2.530 | 1.818 | 1.39 |
-| 24 | 40 | 26.404 | 39.760 | 0.66 |
-| 256 | 40 | 47.584 | 48.491 | 0.98 |
-| 1000 | 40 | 93.730 | 61.565 | 1.52 |
+| 24 | 1 | 1.097 | 1.092 | 1.408 |
+| 256 | 1 | 1.325 | 1.312 | 1.357 |
+| 1000 | 1 | 2.541 | 1.452 | 1.797 |
+| 5000 | 1 | 9.101 | 3.548 | 4.220 |
+| 24 | 40 | 26.640 | 26.049 | 39.778 |
+| 256 | 40 | 47.736 | 47.728 | 50.215 |
+| 1000 | 40 | 93.983 | 46.427 | 60.641 |
+| 5000 | 40 | 389.318 | 152.884 | 177.174 |
 
-For 1000 trials and 40 parameters, the history optimization reduces CPU time
-from 100.201 to 93.730 ms (1.07x) and GPU time from 68.464 to 61.565 ms (1.11x).
-The optimized GPU/CPU comparison is a separate 1.52x result. Small-case
-changes are mixed and close to baseline; the measured small histories favor
-explicit CPU execution. GPU launch/transfer overhead remains relevant.
-These are development-source results, not published 0.3.0 wheel timings.
+The threshold change speeds up the large independent cases by 1.75-2.57x.
+Tuned CPU is faster than GPU in all eight measured independent cases; small-case
+changes are close to baseline. All 17,056 paired proposal values match exactly,
+and CPU/GPU candidate proposals also match. Earlier interrupted runs are excluded.
+These are development-source results, not published 0.3.0 wheel timings or a
+comparison with Python storage/Rustuna.
+
+[Joint-TPE A100 measurements](../../validation_test/optimization/results_optuna_openmp_joint_a100_20261013.json)
+use `Multivariate=true`, 40 parameters, the same default 24 candidates and
+complete histories. CPU 1/4/8/16 and GPU 16 run in palindromic order, with a
+separate two-session CPU-12 check because 24 candidate rows divide evenly into
+12 workers. Each configuration/case has 18 warmed samples. The best measured
+CPU configuration is selected separately for each case:
+
+| History trials | CPU threads | Tuned CPU (ms) | GPU (ms) | GPU speedup |
+| ---: | ---: | ---: | ---: | ---: |
+| 24 | 8 | 11.792 | 12.000 | 0.98x |
+| 1000 | 16 | 17.826 | 16.533 | 1.08x |
+| 5000 | 16 | 53.613 | 43.897 | 1.22x |
+
+CPU parallelism reduces the 5000-trial joint case from 209.264 to 53.613 ms
+(3.90x versus serial CPU). GPU retains a modest 1.22x advantage in that case,
+while its 1.08x advantage at 1000 trials is small and it loses at 24 trials.
+All proposal arrays agree exactly across the measured CPU thread counts and GPU.
+The recommendation is CPU for routine use, with GPU retained as an explicit
+option for large joint histories whose end-to-end measurements justify it.
+These results do not support promoting GPU as a general TPE speed advantage.
+The process default remains GPU for compatibility; explicitly select
+`radia.optuna.executionMode("cpu")` to use the recommended CPU route.
+
+GPU times include allocation, transfers, density and selection; isolated
+transfer seconds are not measured. JSON includes first-trial and module/Engine
+startup times, before/after MATLAB memory and native temporary memory counters.
+Whole-runtime peak memory and objective-function execution time are not measured.
+The speedups concern proposal processing, not the full optimization including
+an expensive objective. CPU thread screening is limited to the configurations
+shown and does not establish a universal optimum.
 
 Use the same TPE from MATLAB or the included masked Simulink
 study block and `SimulinkRunner`. Simulink is optional for MATLAB-only use.
