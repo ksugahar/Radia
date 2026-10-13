@@ -144,6 +144,11 @@ also recorded: first-use GPU initialization can reverse a warmed advantage.
 The default `ConstantLiar=true` includes pending observations, changing models
 during batch proposals; these runs avoid allocations but save no input-transfer
 bytes. GPU residency alone cannot eliminate host model construction.
+In the sequential 40D case, `ask` contains multivariate model preparation and
+candidate sampling through `beforeTrial`, plus Study setup. Its median is
+CPU 5.492 ms versus resident GPU 4.559 ms (1.20x). The subsequent 40 suggestions,
+which retrieve relative parameters and record them, take 7.516/7.435 ms.
+These API phases show where the gain appears; neither is a kernel-only timer.
 
 A separate six-session
 [model-reuse comparison](../../validation_test/optimization/results_optuna_resident_reuse_a100_20261013.json)
