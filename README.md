@@ -508,7 +508,7 @@ explicit configuration.
 | :--- | :--- |
 | Operating system | Windows 10/11 or Windows Server, x64 |
 | Python core | 3.12 |
-| Lightweight radia-mcp | Python 3.10-3.12 |
+| Lightweight radia-mcp | Python 3.10 or later |
 | NGSolve / Netgen | 6.2.2607 |
 | MATLAB / Simulink package | R2026a, Windows x64 |
 | Coreform Cubit | 2025.12, optional |

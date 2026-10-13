@@ -23,7 +23,7 @@ shims. Existing deployments must regenerate their startup registration using
 `cubit_toolbar_guide` for the operating contract and
 `validation_test/cubit_mesh_export/STANDALONE_GUI.md` for acceptance evidence.
 
-Version 2.0.0 publishes this GUI and MCP independently of Radia. Installation
+This GUI and MCP are published independently of Radia. Installation
 and deployment verification never import Radia. validation host/100 acceptance
 uses `python tools/release_cubit_dual.py`, not the Radia solver's release-quad
 commands.

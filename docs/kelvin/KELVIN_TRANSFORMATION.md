@@ -1090,7 +1090,7 @@ case, but Kelvin transformation handles both cases uniformly.
 3. **K. Sugahara, H. Nagamine, A. Kameari** (internal note, 2026):
    "Kelvin Transformation for Open Boundary Problems in Reduced
    Potential Formulation". Reflected in
-   [Reduced_Potential_Kelvin.md](Reduced_Potential_Kelvin.md).
+   Reduced_Potential_Kelvin.md.
    - Paper not submitted; content lives in this repository.
    - H-formulation rule: `H'_s = -(rho'/R)^2 H_s` (3D).
    - Reduced-A extension and (nu - nu_0) form pitfall: derived in

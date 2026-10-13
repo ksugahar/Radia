@@ -24,16 +24,16 @@ For convergence, formulation comparisons and research evidence, use the
 
 | What would you like to do? | Start here |
 | :--- | :--- |
-| Work with NGSolve from MATLAB | [Native mesh, space, and matrix walkthrough](../matlab/README.md#persistent-mesh-space-form-and-matrix-handles) |
+| Work with NGSolve from MATLAB | [Native mesh, space, and matrix walkthrough](../packages/radia-gpu/matlab/README.md#persistent-mesh-space-form-and-matrix-handles) |
 | See Radia and NGSolve working together | [Integration notebook with saved results](ngsolve_integration/integration_basics.ipynb) |
 | Design coils and current sheets | [Stream-function applications](stream_function/application.md) |
 | Connect a circuit to a field workflow | [LTspice integration](ltspice/README.md) |
-| Build a MATLAB/Simulink application | [Radia library and native MEX interfaces](../matlab/README.md) |
+| Build a MATLAB/Simulink application | [Radia library and native MEX interfaces](../packages/radia-gpu/matlab/README.md) |
 | Explore magnetic materials and open boundaries | [HDiv-MMM](hdiv_vim/README.md) and [Kelvin transformation](kelvin/KELVIN_TRANSFORMATION.md) |
 
 The native MATLAB interface retains selected NGSolve objects in C++; it is more
 than a launcher for a Python script. Other capabilities use explicitly declared
-Python batch fallbacks. Check the [backend map](../matlab/python_api_parity_manifest.json)
+Python batch fallbacks. Check the [backend map](../packages/radia-gpu/matlab/python_api_parity_manifest.json)
 for the capability you need, and the
 [Python/MATLAB validation record](../validation_test/ngsolve_matlab_parity/README.md)
 for the tested cases. A demonstration is not a guarantee for every geometry,
@@ -49,7 +49,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 | Understand a capability and its demonstrated scope | This documentation and its saved notebooks |
 | Ask AI to carry out analysis operations | [MCP tools and setup](../packages/radia-mcp/README.md) |
 | Work with AI on geometry and mesh | [Cubit mesh workflow](cubit_mesh_export/README.md) |
-| Work with AI on an application model | [Radia Simulink library](../matlab/README.md) |
+| Work with AI on an application model | [Radia Simulink library](../packages/radia-gpu/matlab/README.md) |
 | Inspect small executable usage and contract examples | [tests/](../tests/README.md) |
 | Inspect physics, numerical and application examples with evidence | [validation_test/](../validation_test/README.md) |
 

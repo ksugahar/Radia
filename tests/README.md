@@ -19,7 +19,7 @@ For larger physics and application samples, use
 [documentation](../docs/README.md) introduces features and saved results.
 Actual CAE operation uses [MCP](../packages/radia-mcp/README.md), or human–AI
 collaboration through [Cubit](../docs/cubit_mesh_export/README.md) and
-[Simulink](../matlab/README.md).
+[Simulink](../packages/radia-gpu/matlab/README.md).
 
 ## Select a small sample
 

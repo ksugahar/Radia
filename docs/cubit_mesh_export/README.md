@@ -15,7 +15,7 @@ Use the [owning package guide](../../packages/cubit-mesh-export/README.md) for
 installation and supported operations. Cubit's MCP server is distributed with
 that package, independently of `radia-mcp`. Continue with
 [Radia MCP](../../packages/radia-mcp/README.md) or the
-[Simulink library](../../matlab/README.md) for supported analysis workflows.
+[Simulink library](../../packages/radia-gpu/matlab/README.md) for supported analysis workflows.
 
 For executable mesh cases and evidence, use
 [validation_test/cubit_mesh_export](../../validation_test/cubit_mesh_export/).

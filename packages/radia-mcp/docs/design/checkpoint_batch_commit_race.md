@@ -441,6 +441,6 @@ For BibTeX:
 
 ## Appendix A — Full cubit_mesh_race_with_human source
 
-See [`packages/cubit-mesh-export/src/cubit_mesh_export/mcp/server.py`](../../src/radia_mcp/cubit/server.py),
+See [`packages/cubit-mesh-export/src/cubit_mesh_export/mcp/server.py`](../../../cubit-mesh-export/src/cubit_mesh_export/mcp/server.py),
 function `cubit_mesh_race_with_human` (≈ 130 lines). License:
 BSD-3-Clause.

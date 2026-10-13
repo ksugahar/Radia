@@ -535,7 +535,7 @@ Department of Electric and Electronic Engineering, Kindai University
 
 ## License
 
-MIT — see [component license](../../src/radia/ltspice/LICENSE).
+MIT — see [component license](../../packages/radia-gpu/src/radia_gpu/ltspice/LICENSE).
 
 
 `radia_ltspice_status` reports the MCP runtime, complete tool contract and optional

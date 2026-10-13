@@ -60,9 +60,8 @@ published CUDA solver against Python/NGSolve on 100 (Quadro RTX 5000), and
 requires an independent review of the exact source. Record source/runtime
 versions, artifact hashes and machine-readable results. A100 validation and
 scaling are optional additional evidence, not publication requirements.
-Formal timing remains subject to the idle-mdx host policy; 100 timings are diagnostic. CPU-only mdx execution verifies
-the reference calculation, not CUDA execution. RTX 5000 installation acceptance
-does not certify A100 scaling.
+Formal GPU timing uses the on-demand A100 host when idle; 100 timings are diagnostic.
+RTX 5000 installation acceptance does not certify A100 scaling.
 Cubit mesh export is tested separately on 100 and 102. NGSolve validation
 starts by checking and loading an exported `.vol` with its versioned label
 contract; it does not require Cubit on the NGSolve host.
@@ -180,7 +179,7 @@ for the optional schemdraw route. MCP entry points, including
 only when circuit execution is requested. No circuit import alias is left in
 the CPU Radia distribution.
 
-The optional `coupling` extra requires Radia 5.3.1 or later with the CPU thermal-operator API. Existing Radia 5.3.0 wheels do not satisfy this contract; until that CPU release is available, use the standalone CUDA PCG, Simulink PCG and LTspice interfaces.
+The optional `coupling` extra requires Radia 5.3.1 or later with the CPU thermal-operator API.
 
 ### CUDA Graph experiment (2026-10-12)
 
@@ -197,7 +196,7 @@ setup-inclusive time changed from 4.74394 to 4.74596 seconds. This does not
 establish an end-to-end improvement. Host hierarchy construction remains the
 next acceleration target. CPU parity was verified independently; CPU timing
 was single-shot and does not establish repeated CPU/GPU speedup. These RTX
-5000 timings are diagnostic, not idle-mdx performance acceptance.
+5000 timings are diagnostic, not formal A100 performance acceptance.
 
 ### CUDA AMS matrix generation
 

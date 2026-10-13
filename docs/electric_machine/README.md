@@ -16,7 +16,7 @@ results. You define the operating conditions and judge the engineering outcome.
 | --- | --- |
 | Inspect torque between sampled rotor angles | [Angle-periodic ROM notebook](angle_periodic_motor_rom.ipynb) |
 | Operate supported analysis tools with AI | [MCP setup and tools](../../packages/radia-mcp/README.md) |
-| Collaborate on application models | [Radia Simulink library](../../matlab/README.md) and [motor adapter contract](../../src/radia/simulink/README.md) |
+| Collaborate on application models | [Radia Simulink library](../../packages/radia-gpu/matlab/README.md) and [motor adapter contract](../../packages/radia-gpu/SIMULINK_SOURCE.md) |
 | Prepare geometry and mesh | [Cubit workflow](../cubit_mesh_export/README.md) |
 | Read small executable ROM examples | [Motor-ROM tests](../../tests/test_motor_rom.py), using synthetic periodic tables |
 | Inspect full-model and runtime validation | [Electric-machine validation](../../validation_test/electric_machine/README.md) |
