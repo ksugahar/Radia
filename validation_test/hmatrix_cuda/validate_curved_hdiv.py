@@ -22,6 +22,17 @@ def main():
         from netgen.csg import CSGeometry,Sphere,Pnt
         from scipy.io import savemat,loadmat
         import radia.vim._vim as cpu
+        import radia._radia_pybind as cpu_native
+        import radia.vim._capabilities as cpu_capabilities
+        result['cpu_reference_provenance'] = dict(
+            interpreter=sys.executable, python=sys.version,
+            ngsolve_version=ng.__version__,
+            native_path=str(Path(cpu_native.__file__).resolve()),
+            native_sha256=sha(cpu_native.__file__),
+            frontend_sha256=sha(cpu.__file__),
+            capabilities_sha256=sha(cpu_capabilities.__file__),
+            execution='Python/pybind11, caller-owned NGSolve TaskManager',
+            scope='Loaded reference files; hashes alone do not certify native build source provenance')
         ng.SetNumThreads(1)
         root=Path(__file__).resolve().parents[2]
         if a.geometry=='curved':

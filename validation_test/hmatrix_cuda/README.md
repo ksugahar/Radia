@@ -445,3 +445,26 @@ compatible native dependencies remain required and are not bundled. This
 packaging path has contract coverage but still needs fresh same-commit native
 builds and actual installed-wheel acceptance on 100/A100. The earlier staged
 artifacts deliberately cannot satisfy the new release-commit check.
+
+### Formal A100 same-host comparison (2026-10-13)
+
+The user designated NGSolve A100 as the official CPU/GPU measurement host.
+`measure_hdiv_cpu_gpu.py` verifies the staged GPU payload and independent
+Python/pybind11 reference hashes, then performs two CPU/GPU/GPU/CPU cycles
+under before/after idle guards. Python CPU setup, assembly, solve and mean
+recovery are compared with MATLAB GPU setup, transfer, solve and recovery.
+Each sample checks independent coefficient/mean agreement and original-system
+true residual. Python does not execute GPU numerical kernels.
+
+For the independently authored public 13-tetrahedron P2 sphere, HDiv order 2,
+linear isotropic material and opt-in host-cache, warmed medians are CPU
+5.16058735 s and GPU 0.27303460 s (18.90x). Maximum true residual across ten
+first/warm samples is 7.96e-12. Exact accounted GPU owned peak is 2286980 bytes;
+available host/device samples do not measure host/global/CUDA runtime peaks.
+Engine startup and first payload are separate; this is not a complete
+process-cold CPU/GPU comparison. The loaded CPU native hash is recorded, but
+its native build-source receipt has not been independently established.
+See `results/formal-a100-curved2-20261013.json`. This bounded measurement
+does not certify other geometries, nonlinear materials, general adaptive
+HDiv, an installed wheel or release completion. Prior diagnostics retain
+their original classification.
