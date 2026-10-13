@@ -48,6 +48,8 @@ classdef TPESampler < radia.optuna.BaseSampler
         IntersectionTrialNumbers double = zeros(0,1)
         IntersectionCacheReady (1,1) logical = false
         IntersectionCache struct = struct()
+        GoodTrialCacheKey double = zeros(0,1)
+        GoodTrialCache double = zeros(0,1)
     end
 
     properties (Constant, Access=private)
@@ -525,6 +527,21 @@ classdef TPESampler < radia.optuna.BaseSampler
         end
 
         function goodNumbers=globalGoodTrialNumbers(obj,study,precomputed)
+            counts=study.trialStateCounts();
+            % Completed objectives cannot be edited. With no pruning or
+            % constraints, ranking is unchanged between parameter requests
+            % until a trial is added or a state transitions. Include total
+            % rows to detect replacement of a failed running trial.
+            cacheable=nargin<3 && numel(study.Directions)==1 && ...
+                counts(2)==0 && isempty(obj.GammaFcn) && ...
+                isempty(obj.ConstraintsFcn) && ~study.hasConstraintRecords();
+            if cacheable
+                key=[study.trialCount(),counts];
+                if isequal(key,obj.GoodTrialCacheKey)
+                    goodNumbers=obj.GoodTrialCache;
+                    return
+                end
+            end
             if nargin<3 || isempty(fieldnames(precomputed))
                 [~,objectives,numbers,pending,states]= ...
                     obj.relativeObservations(study,obj.emptySearchSpace());
@@ -539,6 +556,12 @@ classdef TPESampler < radia.optuna.BaseSampler
             order=obj.rankObservations(objectives, ...
                 study.Directions(1),study,numbers,pending,states);
             goodNumbers=numbers(order(1:nGood));
+            if cacheable
+                obj.GoodTrialCacheKey=key;
+                obj.GoodTrialCache=goodNumbers;
+            else
+                obj.GoodTrialCacheKey=zeros(0,1);
+            end
         end
 
         function warnIndependent(obj,study,trial,name)
@@ -617,9 +640,9 @@ classdef TPESampler < radia.optuna.BaseSampler
 
         function [x, y, trialNumbers, pending, states] = ...
                 numericObservations(obj, study, name)
-            p = study.parameterData();
+            p = study.parameterData(name);
             t = study.trialData();
-            rows = p.Name == string(name) & isfinite(p.ValueNumeric);
+            rows = isfinite(p.ValueNumeric);
             indices = find(rows);
             [indices,trialRows,states,pending]= ...
                 obj.usableObservationRows(study,t,p,indices);
@@ -633,9 +656,9 @@ classdef TPESampler < radia.optuna.BaseSampler
 
         function [tokens, y, trialNumbers, pending, states] = ...
                 categoricalObservations(obj, study, name)
-            p = study.parameterData();
+            p = study.parameterData(name);
             t = study.trialData();
-            rows = p.Name == string(name) & p.Kind == "categorical";
+            rows = p.Kind == "categorical";
             indices = find(rows);
             [indices,trialRows,states,pending]= ...
                 obj.usableObservationRows(study,t,p,indices);
@@ -1267,6 +1290,8 @@ classdef TPESampler < radia.optuna.BaseSampler
                 counts(2)==0 && counts(3)==1;
             if ~result
                 obj.NativeHistoryValid=false;
+                obj.GoodTrialCacheKey=zeros(0,1);
+                obj.GoodTrialCache=zeros(0,1);
             end
         end
 

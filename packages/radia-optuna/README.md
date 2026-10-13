@@ -29,6 +29,30 @@ kernels use OpenMP in the mexcuda build; ordered random consumption remains
 serial. Ordinary `mex` compilation remains prohibited. GPU users do not need
 Python; optional upstream-backed features retain their requirements below.
 
+Study history remains fully in host memory. Public tables are generated on
+demand from column stores; TPE does not materialize tables on every proposal.
+Independent sampling indexes parameter rows by their exact names, appends
+new rows to that index, and preserves chronological observation order.
+Single-parameter histories use the existing columns directly. For a single
+objective without pruning, constraints or a custom Gamma function, TPE also
+reuses the global good-trial split between parameter requests until the
+trial count or states change. Other splits retain their existing computation.
+These caches do not discard trials, change RNG consumption or select a
+different CPU/GPU backend. They are rebuilt after loading saved history.
+
+An empty `StoragePath` performs no persistence. To retain explicit checkpoints
+without writing a complete MAT snapshot at each mutation, configure
+`StoragePath` with `AutoSave=false`, then call `study.save()` at the required
+checkpoint boundaries. Unsaved progress is lost if the process exits; the
+default automatic persistence contract is unchanged. Additional RAM retains
+more history, but does not remove serialization or synchronous storage costs.
+
+`validation_test/optimization/benchmark_optuna_parameter_history.m` measures
+independent TPE with all history retained and CPU execution in the mexcuda
+module. Its JSON includes first-trial and warmed end-to-end times, MATLAB
+memory, and proposal arrays for differential comparison. This benchmark does
+not establish Python/DB speedup or GPU speedup.
+
 Use the same TPE from MATLAB or the included masked Simulink
 study block and `SimulinkRunner`. Simulink is optional for MATLAB-only use.
 
