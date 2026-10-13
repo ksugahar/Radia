@@ -1,0 +1,291 @@
+{
+  "schema": "radia.native-hcurl-ams-validation.v1",
+  "accepted": true,
+  "host": "T7920",
+  "formulation": "SI homogeneous nu=1, positive unit gauge mass, J=(1,0,0), tangential homogeneous Dirichlet",
+  "supported": "lowest-order affine tetrahedral HCurl only",
+  "python_role": "independent numerical oracle only",
+  "gpu_python_input_required": false,
+  "timing_accepted": false,
+  "timing_classification": "100 diagnostic",
+  "source_commit": "38ccf726f413139f89656550a8ecbb5307b0d702",
+  "build": {
+    "schema": "radia.ams-cuda-build.v1",
+    "host": "T7920",
+    "python": "C:\\Program Files\\Python312\\python.exe",
+    "matlab": "26.1.0.3346908 (R2026a) Update 5",
+    "configuration": "C:\\Program Files\\MATLAB\\R2026a\\toolbox\\parallel\\gpu\\extern\\src\\mex\\win64\\nvcc_msvcpp2022.xml",
+    "compiler_bin": "C:\\BuildTools\\VS2022-CUDA\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64",
+    "source_commit": "98f9c2fe57dff57eb0d7e34694458afd443755e3",
+    "source_dirty": false,
+    "sha256": {
+      "build-ams-cuda/_radia_ams_snapshot.pyd": "bbb2cdb48573107cfbdc5520d56f5d164a38f62a7612ea4cafbc4010bf8a08a3",
+      "build-ams-cuda/_radia_ams_cpu_reference.pyd": "5915fe13e7a6125928fb92d1cfb1bfe29e85871c073e49cd655a580debbb7c84",
+      "build-ams-cuda/radia_cuda_ams.mexw64": "8c8a8110c26eb02e10c3542136c4c6e3f6dc1563a4d7da87ba9447e0427407e4"
+    },
+    "source_sha256": {
+      "packages/radia-gpu/native/ams_snapshot_module.cpp": "cce1561d96b01b538e50862270f7bab44735155de2da70ca47a82702762979ec",
+      "packages/radia-gpu/native/ams_cpu_reference.cpp": "16916da7e5f0eedfd515bad959d3d207d7507083a932d937bc5ccc7411b014f5",
+      "packages/radia-gpu/native/ams_resident.cuh": "e99fc27edcc235d828bb67742a795fd88ab249dc9968557f0cafdcb17e372421",
+      "packages/radia-gpu/native/ams_nonlinear.cuh": "076e6d61259572594ac32a0e1fd05d471ac8e0341e51cff83d124eb96e7cecd1",
+      "packages/radia-gpu/native/radia_cuda_ams.cu": "9a43430220979b98d8159b94926ccf4f10d3e948fac55c7aea0df238c9551568",
+      "packages/radia-gpu/native/ams_matlab_setup.cpp": "52e1d4c4697b47721826423d66503b895a15d9700e48337f9e6bcacc57c92960",
+      "packages/radia-gpu/native/ams_setup_gpu.hpp": "37ae39c14fcfae623acc879106a41f5983e2b4cc1248eeec9f5d9c061dac2439",
+      "packages/radia-gpu/native/ams_setup_gpu.cuh": "333ef9ce8329c502891e41eb1d6d12c8cb96f2dfa3fa7c07d0e83b872718b13d",
+      "packages/radia-gpu/native/ams_fem_host.hpp": "782fc4f84915c9eaa59793a63e8dffa228e0f0d8f6e3dedfe9e8e56bd6065172",
+      "packages/radia-gpu/native/ams_fem_host.cpp": "f34220d38c856ce6521a6e18494aa99a88346892b9b7b423fc773f12ef9c41cc",
+      "packages/radia-gpu/native/ams_fem.cuh": "8e07461a8420c00b4c616fdb9d68821c71402486b523023550d49d306a399b35",
+      "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "fca70b5fd962aeac93aaf8b226c1d072848317f411a7de16a6fc2035d2c9e80a",
+      "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "a76fa599ae308b33370f8ee088dac7582ac3d706cace8975a895e63e48a60b4e",
+      "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp": "c78d9ef2596f95cd3c85f9d0e801c567622aa232c168bbce72de6e857646a121",
+      "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "a285fe6ca8448e7548365000e71e21e0ad8cd71769ae5e9792024398442709cb",
+      "packages/radia-gpu/tools/build_ams_cuda.py": "0d05898004627680cd1f908778658a10ac91753cf3ad5a59bbdc04e7b66dad06",
+      "Build.ps1": "bf211a9e905bfd2342dbcb19693f5f4e80ac21425bdb228fcf351464885bf5b9"
+    },
+    "no_cpu_solver_fallback": true,
+    "snapshot_setup_backend": "OpenMP row/chunk dispatch; default one thread; serial coarse factorization",
+    "matlab_setup_backend": "Shared native AMS; optional CUDA AP and Pt(AP); serial NGSolve sparsecholesky; no TaskManager regions",
+    "python_runtime_adapter_required": false,
+    "python_dll_indirect_dependency_permitted": true
+  },
+  "vol_check_passed": true,
+  "mesh_sha256": "4818353a2cccd3adf232f70af1db48a9679028b6ad76c277b1b6a34926137d54",
+  "cpu_solver": {
+    "route": 3,
+    "total_seconds": 0.6647079000103986,
+    "setup_seconds": 0.13446849999309052,
+    "assembly_seconds": 0.21325150001212023,
+    "solve_seconds": 0.22581809999246616,
+    "builds": 2,
+    "history": [
+      [
+        0,
+        1.0,
+        18,
+        4.311912276538303e-12,
+        0.25
+      ],
+      [
+        1,
+        1.3883185822536463,
+        78,
+        2.150335881298491e-12,
+        1.0
+      ],
+      [
+        2,
+        0.29108809977572303,
+        22,
+        4.856851209937493e-13,
+        1.0
+      ],
+      [
+        3,
+        0.027898246507375334,
+        23,
+        7.406964145628003e-13,
+        1.0
+      ],
+      [
+        4,
+        0.0009325739800436035,
+        23,
+        1.0582208360279352e-12,
+        1.0
+      ],
+      [
+        5,
+        1.5501472801721503e-06,
+        23,
+        8.952437400345584e-13,
+        1.0
+      ]
+    ],
+    "final_residual": 4.35746822258591e-12,
+    "threads": 4
+  },
+  "cpu_total_seconds": 0.7508300000044983,
+  "cpu_true_relative_residual": 4.35746822258591e-12,
+  "gamma": 4.0,
+  "current_density": [
+    20,
+    0,
+    0
+  ],
+  "matlab_startup_seconds": 10.518667399999686,
+  "dofs": 5326,
+  "elements": 3937,
+  "csr_nonzeros": 79006,
+  "metrics": {
+    "matrix_relative": 1.0837950390206556e-16,
+    "mass_relative": 1.11980316077979e-16,
+    "gradient_relative": 0.0,
+    "rhs_relative": 1.101263890472088e-16,
+    "solution_relative": 1.5686041418493178e-14,
+    "true_relative_residual": 4.357240486860154e-12,
+    "B_relative_RMS": 6.20000022279313e-16
+  },
+  "gpu": {
+    "total_seconds": 1.0684458,
+    "assembly": {
+      "schema": "radia.hcurl-cuda-assembly.v1",
+      "host_basis_seconds": 0.0947218,
+      "upload_assembly_seconds": 0.0624513,
+      "total_seconds": 0.1586532,
+      "gpu_peak_owned_bytes_upper_bound": 8903352,
+      "upload_bytes": 4465300,
+      "download_bytes": 632048,
+      "taskmanager_started": 0,
+      "python_adapter_used": 0,
+      "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+    },
+    "solver": {
+      "schema": "radia.native-hcurl-solve.v1",
+      "true_nonlinear_relative_residual": 4.3572050967666275e-12,
+      "history": [
+        [
+          0.0,
+          1.0,
+          16.0,
+          2.041922416620932e-11,
+          0.25
+        ],
+        [
+          1.0,
+          1.3883185822501776,
+          66.0,
+          9.584768746740942e-11,
+          1.0
+        ],
+        [
+          2.0,
+          0.29108809977618966,
+          17.0,
+          9.887082839729537e-11,
+          1.0
+        ],
+        [
+          3.0,
+          0.02789824650750677,
+          19.0,
+          3.331623975883683e-11,
+          1.0
+        ],
+        [
+          4.0,
+          0.0009325739801047374,
+          19.0,
+          4.623395690864356e-11,
+          1.0
+        ],
+        [
+          5.0,
+          1.5501472795947417e-06,
+          19.0,
+          3.803742842553984e-11,
+          1.0
+        ]
+      ],
+      "hierarchy_builds": 2,
+      "reuse_policy": [
+        [
+          "MCOS",
+          "string",
+          [
+            3707764736,
+            2,
+            1,
+            1,
+            1,
+            1
+          ]
+        ]
+      ],
+      "assembly": {
+        "schema": "radia.hcurl-cuda-assembly.v1",
+        "host_basis_seconds": 0.0869236,
+        "upload_assembly_seconds": 0.0028616,
+        "total_seconds": 0.0906814,
+        "gpu_peak_owned_bytes_upper_bound": 8903352,
+        "upload_bytes": 4465300,
+        "download_bytes": 632048,
+        "taskmanager_started": 0,
+        "python_adapter_used": 0,
+        "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+      },
+      "setup_seconds": 0.22252349999999999,
+      "assembly_seconds": 0.009767800000000002,
+      "solve_seconds": 0.3988292,
+      "total_seconds": 0.8091648,
+      "max_phase_owned_bytes_upper_bound": 9901548,
+      "last_linear_solve": {
+        "iterations": 19,
+        "true_relative_residual": 3.803742842553984e-11,
+        "workspace_bytes": 213064,
+        "workspace_allocations": 1,
+        "solve_count": 6,
+        "hierarchy_builds": 2,
+        "graph_cached": 1,
+        "native_buffer_allocations_during_solve": 0
+      },
+      "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+      "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+    },
+    "gpu_name": "Quadro RTX 5000",
+    "available_before": 16004415488.0,
+    "available_after": 15982023932.0,
+    "retained_device_memory_sample_bytes": 22391556,
+    "matlab_version": "26.1.0.3346908 (R2026a) Update 5",
+    "timing_classification": "100 build-host diagnostic; not formal performance acceptance",
+    "warmed_transfer_inclusive_seconds": [
+      0.6178064,
+      0.6303474,
+      0.5945338
+    ],
+    "warmed_transfer_inclusive_median": 0.6178064,
+    "cold_production_seconds": 0.8091648,
+    "total_seconds_definition": "Validation includes a separate assembly export in addition to the production solve"
+  },
+  "validation_and_wrapper_sha256": {
+    "packages/radia-gpu/matlab/+radia/+gpu/affineHDivQuadrature.m": "c094de113eeee9e48ad4367e66548318eb2697d9f19c9ba9fe502d9b8e0188a8",
+    "packages/radia-gpu/matlab/+radia/+gpu/AMSContext.m": "04522dde928b1842b78c5b54507d592f78e4ef3f70d1433fad29bed5ec734cfd",
+    "packages/radia-gpu/matlab/+radia/+gpu/amsPCG.m": "9c57c38afb7d53f9df558e48a65c17a60215721cf5c818203405e3c9c529fb0c",
+    "packages/radia-gpu/matlab/+radia/+gpu/assembleHCurl.m": "014f91452466d6f02808e8b04bead05a023229193560819a10671bafade65290",
+    "packages/radia-gpu/matlab/+radia/+gpu/biotSavartFMM.m": "c9f85432d93904caa13a2dbd9008ebea4cc1299a54a312ad1b402a15fa91daef",
+    "packages/radia-gpu/matlab/+radia/+gpu/csrPCG.m": "9888d8ab40aab45700911b456887533b5dfd095f907a376ea13200bb14d995b6",
+    "packages/radia-gpu/matlab/+radia/+gpu/curvedHDivQuadrature.m": "da2cca32bfa95ba0866728248a24ef1a8897f5ccd12aa5997fb71e7bab618ab0",
+    "packages/radia-gpu/matlab/+radia/+gpu/FieldCloud.m": "69d8f056828c6ada4079d7d4754d2013723612455c04e9eda40a23f6bd4ae1c6",
+    "packages/radia-gpu/matlab/+radia/+gpu/fieldCloudFMM.m": "c189270af47a3a602198bea6ede2aeae5484c148a087dd8533a79313d1b62fbd",
+    "packages/radia-gpu/matlab/+radia/+gpu/FieldElements.m": "f092abbbc68c366ad46b0bba22e9fbc8bd0e15d6b70f93be5f86e461f807ecca",
+    "packages/radia-gpu/matlab/+radia/+gpu/HMatrixOperator.m": "d98a77641d51eea484cefc8d9ee5b12d03395725b3ac7ccda8150e242933052a",
+    "packages/radia-gpu/matlab/+radia/+gpu/LaplaceBoundaryFMM.m": "f9211a21a8f711e699f619d760fc0924a77cbbabe322b61810823b4de2f1ca6d",
+    "packages/radia-gpu/matlab/+radia/+gpu/LaplaceFMM.m": "5b0d760cb1defd1ad8467717604f0fc99f5120b3bb320e4de072098b9d0252f3",
+    "packages/radia-gpu/matlab/+radia/+gpu/prepareAMS.m": "34f3bb31f509077e6c793eb2e7e443d8d8f52ded514eea48a32e661c3f5e7f1f",
+    "packages/radia-gpu/matlab/+radia/+gpu/prepareBoundaryFMM.m": "c30aae481307ad13df99b45dace6ff99f0d78a6d0774f64d40f3d94f4c918d06",
+    "packages/radia-gpu/matlab/+radia/+gpu/readAMSExchange.m": "8156fd26a8c7f5ecdba09e7c3b70a41f85c6c5391597fea87644303e3cf6f895",
+    "packages/radia-gpu/matlab/+radia/+gpu/requireRuntime.m": "2f3638a60732290e455da8b9bfc5fa47d82d1950149c12d3e3a4b7e048ceb695",
+    "packages/radia-gpu/matlab/+radia/+gpu/solveCurvedHDiv.m": "0257c5fd6cb619d9eeba068304b97d19f2993810511de4c66947b04248af12c0",
+    "packages/radia-gpu/matlab/+radia/+gpu/solveHCurl.m": "a6cfc76fc8126304a031c115aa061cfb3b48fa4c935ec2676b213380a80f9088",
+    "packages/radia-gpu/matlab/+radia/+gpu/solveHDivElements.m": "b2cd8630e60341c39537c9d3364b616c7f9cd97881342a07a47b37d722e48bdc",
+    "packages/radia-gpu/matlab/+radia/+gpu/solveHDivRT0.m": "576a736903c29005077aab4161b44d2dae580d313f51b02810ecf9aa71c4b026",
+    "validation_test/ams_cuda/compare.py": "a77005e5d3778e76497accee8a02bc6e8a5e6d2ce6d0aa891a69c4eb560f3167",
+    "validation_test/ams_cuda/fmm_boundary.py": "2f1bd98bcdc32343b8f6b210518556e9576f0f84defd70305947f9e707c95750",
+    "validation_test/ams_cuda/fmm_numeric.py": "1559610d0c06bff2f5d0e922cbb7d02b00ba4d6f4885900eaa5292d0ac97ebdd",
+    "validation_test/ams_cuda/fmm_physics.py": "7ab3d4a0106b8f888f07ac5fca474d9e44881ce32ddcc5b935f6f086e87f1a65",
+    "validation_test/ams_cuda/graph_validation.py": "656d7f6d1fd49fbdb9b24e52072c302c626d31f5b2a203a6a6fbfe87bb7fd9d6",
+    "validation_test/ams_cuda/native_hcurl.py": "ac1d2d42198ef7abc8d5fe61ff5b65ae336b5209f3ed89ca6ca340baa4202c04",
+    "validation_test/ams_cuda/native_setup_validation.py": "353327659d8373183e3893db2bc27ee4ca2788caa42779d1eac7012b8d6922cf",
+    "validation_test/ams_cuda/nonlinear_resident.py": "e526ed1e837ae0983b40d15bb12d8421e52523fef615365ae2a2ce3e14a3df60",
+    "validation_test/ams_cuda/run.py": "e46a494d8070e64307390fa0b4e44ef0b386002f2a84775c7469b3d3bf7e7adb",
+    "validation_test/ams_cuda/setup_benchmark.py": "cfefbbb269e1c984401b5b43056cc041205db7cacc93de69c90b61ad168e78cf",
+    "validation_test/ams_cuda/validate_exchange.py": "953b82b71893f57d5710df09562dd1fb7c7fe46c6f919c2e7cac459e4e256dbc",
+    "validation_test/ams_cuda/benchmark.m": "927e7cc6846c14f0d2ed1f656f9f5a64cda7eef599ae3e47ddc0fe2d4e203474",
+    "validation_test/ams_cuda/check_exchange.m": "d2d5413d4835a5bcdb2a867a01075e787179624872a2638548134861374c5a73",
+    "validation_test/ams_cuda/fmm_boundary.m": "844b9c2a74a629bac0847fb4995e62027c5dab600fec2997c744ba701b41d15f",
+    "validation_test/ams_cuda/fmm_numeric.m": "c6b1b9dca3dd723ff842c5b7736ea222e07944b4ef7a4022fc046c837761761c",
+    "validation_test/ams_cuda/fmm_physics.m": "caa548b8fcc7c77c87945e5560156fc2d336d55dc23eac64a5d9020ee1aa0299",
+    "validation_test/ams_cuda/native_hcurl.m": "6a0b32fbe9ed9b4cc41504752f7740fae8047909d944ec09eb091c52ca8e39d5",
+    "validation_test/ams_cuda/nonlinear_resident.m": "09b8fe1f940a452caafaf23a03682f8c5eeb0185ab2ad6c0ce234153b3c6be6a",
+    "validation_test/ams_cuda/resident_contract.m": "11adb148ba44e5b1bb1f0dfd99da9c51be5fd35787af975dde0a1633c4e837f8"
+  }
+}

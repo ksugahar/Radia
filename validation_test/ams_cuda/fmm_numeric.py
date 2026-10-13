@@ -1,6 +1,6 @@
 """Independent NumPy direct Laplace sum for CUDA scalar/dipole FMM."""
 from pathlib import Path
-import argparse,hashlib,json,socket,time
+import argparse,hashlib,json,socket,time,os,sys
 import numpy as np
 from scipy.io import savemat,loadmat
 
@@ -25,13 +25,14 @@ def main(args):
     try:
         receipt=json.loads((args.binary/'build.json').read_text());record['build']=receipt
         if hashlib.sha256((args.binary/'radia_cuda_fmm.mexw64').read_bytes()).hexdigest()!=receipt['binary_sha256']:raise RuntimeError('Binary hash mismatch')
-        import matlab.engine
+        import netgen,matlab.engine
+        net=Path(netgen.__file__).parent;os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),str(net.parent/'ngsolve_openblas'),str(Path(sys.base_prefix)),os.environ['PATH']])
         engine=matlab.engine.start_matlab('-nodesktop -nosplash');engine.addpath(str(Path(__file__).parent),nargout=0)
         rng=np.random.default_rng(19870909);sources=rng.uniform(-1,1,(args.sources,3));targets=rng.uniform(-1.2,1.2,(args.targets,3))
         charge=rng.normal(size=(args.sources,3));dipole=rng.normal(size=(args.sources,9))*.03
         t=time.perf_counter();expectedP,expectedE=direct(sources,targets,charge,dipole);record['cpu_direct_seconds']=time.perf_counter()-t
         for order in args.orders:
-            path=out/f'input-{order}.mat';savemat(path,dict(sources=sources,targets=targets,charge=charge,dipole=dipole,order=float(order)))
+            path=out/f'input-{order}.mat';savemat(path,dict(sources=sources,targets=targets,charge=charge,dipole=dipole,order=float(order),separation=args.separation,leaf=float(args.leaf)))
             output=out/f'output-{order}.mat';engine.fmm_numeric(str(path),str(args.binary.resolve()),str(root/'packages/radia-gpu/matlab'),str(output),nargout=0)
             result=loadmat(output,simplify_cells=True)
             p=float(np.linalg.norm(result['potential']-expectedP)/np.linalg.norm(expectedP));e=float(np.linalg.norm(result['field']-expectedE)/np.linalg.norm(expectedE))
@@ -43,4 +44,4 @@ def main(args):
         if engine is not None:engine.quit()
         (out/'result.json').write_text(json.dumps(record,indent=2,default=lambda v:v.tolist() if isinstance(v,np.ndarray) else v.item())+'\n',encoding='utf-8')
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--out',type=Path,required=True);p.add_argument('--binary',type=Path,required=True);p.add_argument('--sources',type=int,default=512);p.add_argument('--targets',type=int,default=128);p.add_argument('--orders',type=int,nargs='+',default=[4,6,8]);main(p.parse_args())
+    p=argparse.ArgumentParser();p.add_argument('--out',type=Path,required=True);p.add_argument('--binary',type=Path,required=True);p.add_argument('--separation',type=float,default=1.5);p.add_argument('--leaf',type=int,default=16);p.add_argument('--sources',type=int,default=512);p.add_argument('--targets',type=int,default=128);p.add_argument('--orders',type=int,nargs='+',default=[4,6,8]);main(p.parse_args())
