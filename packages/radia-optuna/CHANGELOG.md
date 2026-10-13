@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 (2026-10-13)
+
+- Select CPU/OpenMP or CUDA GPU execution explicitly within the same mexcuda module. GPU remains the compatible process default; device failures raise.
+- Cache eligible exact-name history and ranking without discarding trials or changing seeded random consumption.
+- Construct native TPE bandwidths, categorical probabilities and density normalizers on GPU; retain ordered sampling RNG on the host.
+- Reuse bounded device workspaces, use CUB sorting for large models and parallelize mixture exponentials with ordered final summation. Preserve reset, failure and unload behavior.
+- Tune CPU/OpenMP dispatch and reuse CPU normalizers for fair comparisons.
+- Preserve the Optuna 5.0.0 oracle contract with focused CPU/GPU checks. Formal A100 evidence shows a 2.44x joint-TPE gain at 40 variables/5,000 starting observations and 1.23x warmed complete inference on the 40D sequential benchmark; small/independent cases show no general GPU advantage.
+
+See README.md and linked machine-readable validation records for scope and limitations. These measurements do not claim complete upstream API coverage or Python/DB, Rustuna or BoTorch speedups.
+
 Notable changes to the independently released `radia-optuna` distribution.
 Releases before 0.2.0 are recorded only by their `radia-optuna-v*` tags.
 

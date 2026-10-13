@@ -10,8 +10,9 @@ radia.optuna.executionMode("gpu"); % CUDA kernels; the initial/default mode
 mode = radia.optuna.executionMode();
 ```
 
-CPU/GPU selection is a development addition after 0.3.0; the published 0.3.0
-wheel retains its original GPU-only TPE execution. See the
+Version 0.4.0 adds explicit CPU/GPU selection, in-memory history acceleration
+and GPU model construction. The published 0.3.0 wheel retains its original
+GPU-only TPE execution. See the
 [dual-route validation record](../../validation_test/radia_optuna/results/execution-choice-20261013.json).
 
 CPU mode does not initialize CUDA, allocate device memory or transfer data.
