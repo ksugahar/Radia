@@ -41,6 +41,9 @@ mustFail(@()solveLimited(uint64(1),rhs));rejections=rejections+1;
 mustFail(@()solveLimited(double(h),rhs));rejections=rejections+1;
 mustFail(@()solveLimited(h,gpuArray([NaN;1;1])));rejections=rejections+1;
 mustFail(@()solveLimited(h,gpuArray([Inf;1;1])));rejections=rejections+1;
+mustFail(@()solveExtreme(h,gpuArray([1e-300;0;0])));rejections=rejections+1;
+tiny=realmin('double')*eps('double');assert(tiny~=0);
+mustFail(@()solveExtreme(h,gpuArray([tiny;0;0])));rejections=rejections+1;
 % A rejected solve does not invalidate a live context.
 [recovered,~]=radia_cuda_ic('solve',h,rhs,1e-12,100);assert(norm(gather(recovered)-data.expected)<1e-11);
 for A={ [1 2;2 1], [1 1;2 3], [NaN 0;0 1], [Inf 0;0 1], [-1 0;0 1] }
@@ -81,6 +84,9 @@ op=struct('rows',double(n),'cols',double(n),'rowptr',gpuArray(int32([0;cumsum(co
 end
 function badCreate(op,shift)
 [h,~]=radia_cuda_ic('create',op,shift);radia_cuda_ic('release',h);
+end
+function solveExtreme(h,b)
+[~,~]=radia_cuda_ic('solve',h,b,1e-10,100);
 end
 function mustFail(callback)
 failed=false;try;callback();catch ex;assert(startsWith(ex.identifier,'radia:cuda:'),ex.identifier);failed=true;end
