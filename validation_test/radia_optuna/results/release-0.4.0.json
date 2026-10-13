@@ -368,14 +368,18 @@
       "files": 1195,
       "archive_sha256": "d49ab945f728d36b09be205d8583a6aea33a0841e24acc383118ff28f2d36e4c",
       "manifest_sha256": "4ee61cf69eb1820018826f3f8a51be78cb596b82e6dc3bf065d62197af55b340",
-      "all_member_sha256_verified": true
+      "all_member_sha256_verified": true,
+      "job_owned_scratch_removed": true,
+      "absence_verified": true
     },
     {
       "role": "a100",
       "files": 1197,
       "archive_sha256": "b326a9caf1fd007ae3a93e0c0f73fb2ff8d6125330ac1c039f6603f39c081b85",
       "manifest_sha256": "64890fb90b2b6743d4ed6b6e6330e341a88d5ffb42249ef75c75cdc61404bca6",
-      "all_member_sha256_verified": true
+      "all_member_sha256_verified": true,
+      "job_owned_scratch_removed": true,
+      "absence_verified": true
     }
   ],
   "raw_evidence_storage": "Durable private validation storage; archive/member SHA256 verified before job-owned scratch cleanup"
