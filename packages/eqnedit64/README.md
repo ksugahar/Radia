@@ -1,6 +1,6 @@
 # Eqnedit64 for Python
 
-Source version: **3.1.3** (review candidate; released version remains 3.1.2).
+Released version: **3.1.3**.
 
 `eqnedit64` packages the same TeX-first equation engine and standalone Windows
 application maintained in the Radia monorepo. The signed one-file
@@ -44,7 +44,7 @@ Only UTF-8 TeX is a source format. MTEF and `.eqn` are intentionally not
 supported. Current wheels target 64-bit Windows and Python 3.10 or newer.
 
 The wheel embeds the signed executable produced for the matching
-`eqnedit64-v3.1.1` GitHub Release; it does not build a second application
+`eqnedit64-v3.1.3` GitHub Release; it does not build a second application
 implementation. The package is BSD 2-Clause licensed. The embedded Eqnedit
 Math font is a TrueType-outline derivative of Latin Modern Math under the
 GUST Font License. Its license and derivation manifest are included in the wheel.
@@ -60,19 +60,26 @@ EMF/DIB output. This decision does not strip colour from the source or renderer.
 PowerPoint colour retention is not an acceptance requirement for this release.
 
 User hand tests: H1/H5/H6 EXE OK on ea787664d; H7 EXE canvas red, PowerPoint
-not red. Web H5/H6 OK on 8361ec916. Hosted CI 37692902458 verified 22/22 primary
-OMML branches byte-identical on the actual Windows clipboard at ea787664d.
+not red. Web H5/H6 OK on 8361ec916. Historical CI 37692902458 compared 22/22 primary OMML branches at ea787664d;
+its Web side used the headless browser clipboard, not the OS clipboard.
 This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
 corpus; it does not prove every TeX input or every Office/browser environment.
-Changed payload behaviour requires renewed qualification. The release metadata
-commit still requires its own CI. Formal publication follows the release gates.
+Changed payload behaviour requires renewed qualification. The completed 3.1.3
+publication record is in the [canonical handover](../../docs/equation/eqnedt64_handover.md).
 
 
-## 3.1.3 candidate coverage limits
+## 3.1.3 release and coverage limits
 
-The expanded Office gate distinguishes 36 matched fixtures from three non-covered
-constructs: native `\boxed` and `\binom` omit their structure, and native
-`\cancel` emits a bottom bar instead of Web's diagonal strike. These cases do
-not qualify for Web hand-test exemption. Hosted wire/review and changed-boundary
-qualification remain pending; 3.1.3 is not released. See PRODUCT_PARITY's fixture
-matrix. PowerPoint colour loss on the shared OMML route remains a known limitation.
+Version **3.1.3** is released. The 52-fixture Office corpus has 49 covered
+native/Web primary OMML branches that are byte-identical. Headed full Chromium
+run [37721927723](https://github.com/ksugahar/Radia/actions/runs/37721927723)
+verified Web OS-clipboard writes, styles and functions on `25fca594e`.
+The user accepted six signed-candidate retests, including function arguments
+and upright/bold styles. Qualification applies to the covered corpus.
+
+Three constructs remain non-covered: native `\boxed` and `\binom` drop the
+unsupported command, and native `\cancel` emits a bottom bar instead of Web's
+diagonal strike. They are not passes and do not qualify for Web hand-test
+exemption. Bare functions may have empty OMML arguments; `sin 2x` collects only
+`2`. PowerPoint colour loss on the shared OMML route remains a known limitation.
+Full arbitrary-TeX or Office/browser parity is not established.

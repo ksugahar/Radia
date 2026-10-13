@@ -68,15 +68,15 @@ Less common alphabets stay in Decoration: `\mathsf`, `\mathtt`, `\mathcal`,
 keeps `\bm`; only the MathJax boundary expands it to `\boldsymbol`.
 
 Inputs and saved/copied source are TeX. MTEF and `.eqn` are not supported
-formats. Office copy candidate emits conditional RichEdit HTML OMML in `text/html`
+formats. Office copy emits conditional RichEdit HTML OMML in `text/html`,
 plus plain TeX and a non-Office MathML fallback. PNG copy remains a separate
-action. Native and Web need not use identical transports: UXP-0029 prioritizes
-editable limits and row structure. Current production Web MathML was observed
-to flatten bounds and rows; the OMML candidate requires the user's PowerPoint
-H5/H6 re-test before 3.1.2 is released. Browser payload tests are not Office
-acceptance. Candidate BUILD is `3.1.2 (2026-10-08 OMML candidate)`.
+action. Native and Web share the primary OMML route; native does not publish
+competing registered MathML. Web H5/H6 hand tests passed for 3.1.2, and the
+3.1.3 headed clipboard gate extends the covered corpus as recorded below.
+Browser payload tests alone are not Office acceptance. Published candidate
+BUILD labels are retained in the immutable 3.1.3 artifacts.
 
-The candidate exporter handles token runs, normal/italic/bold/bold-italic,
+The exporter handles token runs, normal/italic/bold/bold-italic,
 colour inheritance, Unicode mathematical alphanumerics (including script,
 fraktur, double-struck, sans-serif and monospace), fractions and binomials, roots, sub/sup scripts and
 large-operator limits, accents/bars, arrays/matrices, phantom and box/strike
@@ -142,15 +142,22 @@ User hand tests: H1/H5/H6 EXE OK on ea787664d; H7 EXE canvas red, PowerPoint
 not red. Web H5/H6 OK on 8361ec916. Historical run 37692902458 on ea787664d used headless Chromium: the Web side provided in-memory browser-clipboard (producer-equivalent) evidence, not Web OS-clipboard evidence. The first genuine Web OS-clipboard evidence is 3.1.3 run 37718032042 on b06b8d89a (headed full Chromium).
 The user hand tests remain valid; the headed gate establishes the covered corpus
 wire contract, not every TeX input or every Office/browser environment.
-Changed payload behaviour requires renewed qualification. The release metadata
-commit still requires its own CI. Formal publication follows the release gates.
+Changed payload behaviour requires renewed qualification. The completed 3.1.3
+publication record is in the [canonical handover](../../../docs/equation/eqnedt64_handover.md).
 
 
-## 3.1.3 candidate coverage limits
+## 3.1.3 release and coverage limits
 
-The expanded Office gate distinguishes 36 matched fixtures from three non-covered
-constructs: native `\boxed` and `\binom` omit their structure, and native
-`\cancel` emits a bottom bar instead of Web's diagonal strike. These cases do
-not qualify for Web hand-test exemption. Hosted wire/review and changed-boundary
-qualification remain pending; 3.1.3 is not released. See PRODUCT_PARITY's fixture
-matrix. PowerPoint colour loss on the shared OMML route remains a known limitation.
+Version **3.1.3** is released. The 52-fixture Office corpus has 49 covered
+native/Web primary OMML branches that are byte-identical. Headed full Chromium
+run [37721927723](https://github.com/ksugahar/Radia/actions/runs/37721927723)
+verified Web OS-clipboard writes, styles and functions on `25fca594e`.
+The user accepted six signed-candidate retests, including function arguments
+and upright/bold styles. Qualification applies to the covered corpus.
+
+Three constructs remain non-covered: native `\boxed` and `\binom` drop the
+unsupported command, and native `\cancel` emits a bottom bar instead of Web's
+diagonal strike. They are not passes and do not qualify for Web hand-test
+exemption. Bare functions may have empty OMML arguments; `sin 2x` collects only
+`2`. PowerPoint colour loss on the shared OMML route remains a known limitation.
+Full arbitrary-TeX or Office/browser parity is not established.

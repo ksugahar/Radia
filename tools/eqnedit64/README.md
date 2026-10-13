@@ -1,6 +1,6 @@
 # Eqnedit64 — 数式入力に特化したTeXエディタ
 
-Source version: **3.1.3** (review candidate; released version remains 3.1.2).
+Released version: **3.1.3**.
 
 Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bit Windows
 数式エディタです。数式は常にTeXとして開き、編集し、保存します。
@@ -8,7 +8,7 @@ Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bi
 レジストリ登録は不要です。
 
 公開ソースはRadiaリポジトリの`tools/eqnedit64`、署名済み単体EXEは
-[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.1.1)
+[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.1.3)
 で配布します。旧Eqnedit32バイナリ、MTEF変換コード、逆アセンブリ資料は
 Eqnedit64のソース・ビルド・配布物に含めません。
 
@@ -338,19 +338,26 @@ EMF/DIB output. This decision does not strip colour from the source or renderer.
 PowerPoint colour retention is not an acceptance requirement for this release.
 
 User hand tests: H1/H5/H6 EXE OK on ea787664d; H7 EXE canvas red, PowerPoint
-not red. Web H5/H6 OK on 8361ec916. Hosted CI 37692902458 verified 22/22 primary
-OMML branches byte-identical on the actual Windows clipboard at ea787664d.
+not red. Web H5/H6 OK on 8361ec916. Historical CI 37692902458 compared 22/22 primary OMML branches at ea787664d;
+its Web side used the headless browser clipboard, not the OS clipboard.
 This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
 corpus; it does not prove every TeX input or every Office/browser environment.
-Changed payload behaviour requires renewed qualification. The release metadata
-commit still requires its own CI. Formal publication follows the release gates.
+Changed payload behaviour requires renewed qualification. The completed 3.1.3
+publication record is in the [canonical handover](../../docs/equation/eqnedt64_handover.md).
 
 
-## 3.1.3 candidate coverage limits
+## 3.1.3 release and coverage limits
 
-The expanded Office gate distinguishes 36 matched fixtures from three non-covered
-constructs: native `\boxed` and `\binom` omit their structure, and native
-`\cancel` emits a bottom bar instead of Web's diagonal strike. These cases do
-not qualify for Web hand-test exemption. Hosted wire/review and changed-boundary
-qualification remain pending; 3.1.3 is not released. See PRODUCT_PARITY's fixture
-matrix. PowerPoint colour loss on the shared OMML route remains a known limitation.
+Version **3.1.3** is released. The 52-fixture Office corpus has 49 covered
+native/Web primary OMML branches that are byte-identical. Headed full Chromium
+run [37721927723](https://github.com/ksugahar/Radia/actions/runs/37721927723)
+verified Web OS-clipboard writes, styles and functions on `25fca594e`.
+The user accepted six signed-candidate retests, including function arguments
+and upright/bold styles. Qualification applies to the covered corpus.
+
+Three constructs remain non-covered: native `\boxed` and `\binom` drop the
+unsupported command, and native `\cancel` emits a bottom bar instead of Web's
+diagonal strike. They are not passes and do not qualify for Web hand-test
+exemption. Bare functions may have empty OMML arguments; `sin 2x` collects only
+`2`. PowerPoint colour loss on the shared OMML route remains a known limitation.
+Full arbitrary-TeX or Office/browser parity is not established.
