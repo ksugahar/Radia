@@ -30,7 +30,7 @@ def main(args):
     try:
         import netgen,matlab.engine
         net=Path(netgen.__file__).parent
-        os.environ['PATH']=os.pathsep.join([str(net),str(net.parent/'ngsolve_openblas'),str(net.parent/'ngsolve.libs'),str(net.parent/'netgen_mesher.libs'),str(Path(sys.base_prefix)),os.environ['PATH']])
+        os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),str(net.parent/'ngsolve_openblas'),str(net.parent/'ngsolve.libs'),str(net.parent/'netgen_mesher.libs'),str(Path(sys.base_prefix)),os.environ['PATH']])
         build=json.loads((root/'build-ams-cuda/build.json').read_text())
         for rel,digest in build['source_sha256'].items():
             if hashlib.sha256((root/rel).read_bytes()).hexdigest()!=digest:raise RuntimeError('Source differs from build receipt')

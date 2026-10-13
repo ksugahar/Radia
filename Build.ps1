@@ -46,6 +46,7 @@ param(
     [switch]$ProjectionCudaOnly, # experimental NGSolve target replay bridge
     [switch]$IhCudaOnly,          # isolated persistent coupled IH CUDA gateway
     [switch]$FieldCudaOnly,       # isolated retained-cloud RadFld CUDA gateway
+    [switch]$FmmCudaOnly,         # isolated numeric Laplace FMM CUDA gateway
     [switch]$AmsCudaOnly,         # experimental AMS snapshot adapter + CUDA MEX
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
     [switch]$CudaMexOnly,          # isolated CUDA-only assembled-operator gateway
@@ -55,6 +56,16 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($FmmCudaOnly) {
+    if ($RadiaOnly -or $HMatrixCudaOnly -or $ProjectionCudaOnly -or $IhCudaOnly -or $FieldCudaOnly -or $AmsCudaOnly -or $AxiFemOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test -or $HMatrixMklRoot -or $args.Count) {
+        throw '-FmmCudaOnly is an isolated experimental build'
+    }
+    $fmmBuildArgs = @()
+    if ($RequireNativeProvenance) { $fmmBuildArgs += '--require-clean-source' }
+    & python (Join-Path $PSScriptRoot 'packages/radia-gpu/tools/build_fmm_cuda.py') @fmmBuildArgs
+    if ($LASTEXITCODE -ne 0) { throw 'FMM CUDA build failed' }
+    return
+}
 if ($HMatrixMklRoot -and -not $HMatrixCudaOnly) { throw '-HMatrixMklRoot requires -HMatrixCudaOnly' }
 if ($args.Count -gt 0) {
     throw "Unsupported build arguments: $($args -join ' '). Radia CPU uses -RadiaOnly; GPU uses -CudaMexOnly."
