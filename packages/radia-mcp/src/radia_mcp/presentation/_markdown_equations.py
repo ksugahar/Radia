@@ -262,8 +262,10 @@ def presentation_markdown_to_pptx(markdown: str, output_path: str,
                                    if p.placeholder_format.type == placeholder.placeholder_format.type), None)
                     if master is None:
                         raise RuntimeError("Notes placeholder has no matching master")
-                    for attr in ("left", "top", "width", "height"):
-                        setattr(placeholder, attr, getattr(master, attr))
+                    placeholder._element.replace(placeholder._element.spPr,
+                                                 deepcopy(master._element.spPr))
+                    if not placeholder.has_text_frame and master.has_text_frame:
+                        placeholder._element.append(deepcopy(master.text_frame._txBody))
                     if placeholder.has_text_frame and master.has_text_frame:
                         target = placeholder.text_frame._txBody
                         target.replace(target.bodyPr, deepcopy(master.text_frame._txBody.bodyPr))

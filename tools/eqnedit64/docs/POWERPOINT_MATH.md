@@ -42,6 +42,10 @@ choice and no fallback representation. Modern PowerPoint is required.
 iterator does not expose shapes nested in the choice. XML-aware consumers
 must inspect that choice; they must not silently treat those shapes as absent.
 Prose follows `font_pt`; native math stays at 18 pt.
+Display equations are left-aligned with 8 pt before/after paragraph spacing.
+Paired `\left...\right` fences use a stretchable Office delimiter structure.
+General `\middle` separators and one-sided fences currently retain visible
+characters without stretching; they are outside the stretchable-fence gate.
 
 ## Validation and limits
 
@@ -58,9 +62,10 @@ package structure and a strict DrawingML run profile. It does not completely
 validate the `a14` payload, and these checks do not certify PowerPoint import.
 The result JSON explicitly records that limitation.
 
-Hidden PowerPoint open/save/render in an approved isolated Office session is
-a separate mandatory release gate. A missing session is **NOT RUN**, not a
-pass. Do not run on an interactive desktop or reuse a user's active Office
-process. Publication and retirement-PR merge require their own approvals.
+Actual PowerPoint open/edit/save/reopen in an explicitly approved Office
+session is a separate mandatory release gate. A missing session is **NOT RUN**,
+not a pass. An approved desktop test uses a separate test presentation,
+protects the user's documents, and changes no Office settings. Publication
+and retirement-PR merge require their own approvals.
 
 Primary format reference: [Microsoft DrawingML math extension](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/853b19c7-68a9-4f9a-a2ae-5e6cb0d02e62).
