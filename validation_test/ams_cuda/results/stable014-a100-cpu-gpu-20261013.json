@@ -1,0 +1,2130 @@
+{
+  "schema": "radia.ams-installed-cpu-gpu-performance.v1",
+  "accepted": true,
+  "timing_accepted": true,
+  "host": "NGSolve",
+  "samples": [
+    {
+      "cpu_baseline_ngsolve_threads": 1,
+      "gpu_host_setup_threads": 1,
+      "route": "cpu",
+      "cycle": 0,
+      "seconds": 0.8462548999959836,
+      "report": {
+        "route": 3,
+        "total_seconds": 0.7889671999946586,
+        "setup_seconds": 0.05643670000426937,
+        "assembly_seconds": 0.4242233999975724,
+        "solve_seconds": 0.22362029999203514,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.311907866562493e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536461,
+            78,
+            2.150348575949621e-12,
+            1.0
+          ],
+          [
+            2,
+            0.2910880997757231,
+            22,
+            4.856467930498652e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375806,
+            23,
+            7.406486142288217e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800435172,
+            23,
+            1.0582582797866686e-12,
+            1.0
+          ],
+          [
+            5,
+            1.5501472802487325e-06,
+            23,
+            8.952100353918993e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.357143070128381e-12,
+        "threads": 1,
+        "ngsolve_threads": 1,
+        "ams_setup_coarse_factor_threads": 1,
+        "whole_api_seconds": 0.8462548999959836
+      },
+      "independent": {
+        "solution_relative": 0.0,
+        "true_relative_residual": 4.357143070128381e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 217452544,
+          "private": 1341730816,
+          "lifetime_peak_rss": 225787904
+        },
+        "after": {
+          "rss": 220319744,
+          "private": 1394524160,
+          "lifetime_peak_rss": 228397056
+        },
+        "sampled_peak_rss": 228397056,
+        "sampled_peak_private": 1403961344,
+        "sample_count": 15,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.4,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54598873088
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 1,
+      "gpu_host_setup_threads": 1,
+      "route": "gpu",
+      "cycle": 0,
+      "seconds": 0.3297032,
+      "report": {
+        "whole_api_seconds": 0.3297032,
+        "info": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357467039641674e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.407675768717186e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531792,
+              80.0,
+              7.868301585310888e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754416,
+              21.0,
+              4.856651980958761e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311018,
+              22.0,
+              7.406575339287283e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800394525,
+              23.0,
+              3.058174340294842e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472799895294e-06,
+              22.0,
+              8.952178881021038e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0616023,
+            "upload_assembly_seconds": 0.0011332,
+            "total_seconds": 0.063384,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.10579820000000001,
+          "assembly_seconds": 0.0028195000000000004,
+          "solve_seconds": 0.1379213,
+          "total_seconds": 0.3210666,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952178881021038e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2986180,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42161474624.0,
+        "device_free_after": 42161599380.0,
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "host_setup_threads": 1,
+        "registry_restored": 1,
+        "native_module": {
+          "sha256": "d04132b9c37817e93dc21e27dac3a1d8ab62cb1af2766e582dde61340d7a9a5f",
+          "path": "<private runtime provenance>"
+        }
+      },
+      "independent": {
+        "solution_relative": 1.455289240762684e-14,
+        "true_relative_residual": 4.35736941216235e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1385443328,
+          "private": 1728987136,
+          "lifetime_peak_rss": 1385545728
+        },
+        "after": {
+          "rss": 1403834368,
+          "private": 1737842688,
+          "lifetime_peak_rss": 1403834368
+        },
+        "sampled_peak_rss": 1403834368,
+        "sampled_peak_private": 1737842688,
+        "sample_count": 43,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54596136960
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 1,
+      "gpu_host_setup_threads": 1,
+      "route": "gpu",
+      "cycle": 0,
+      "seconds": 0.3102403,
+      "report": {
+        "whole_api_seconds": 0.3102403,
+        "info": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357365742572327e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.412466578308283e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531794,
+              80.0,
+              7.86893737461335e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754417,
+              21.0,
+              4.856925498704987e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.02789824650731104,
+              22.0,
+              7.406533082549184e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800392654,
+              23.0,
+              3.058280546880177e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.55014727991099e-06,
+              22.0,
+              8.952181570747143e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0611024,
+            "upload_assembly_seconds": 0.0012413,
+            "total_seconds": 0.0628359,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.1025268,
+          "assembly_seconds": 0.0020537,
+          "solve_seconds": 0.1264161,
+          "total_seconds": 0.3017291,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952181570747143e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2986180,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "host_setup_threads": 1,
+        "registry_restored": 1,
+        "native_module": {
+          "sha256": "d04132b9c37817e93dc21e27dac3a1d8ab62cb1af2766e582dde61340d7a9a5f",
+          "path": "<private runtime provenance>"
+        }
+      },
+      "independent": {
+        "solution_relative": 1.5077484749322546e-14,
+        "true_relative_residual": 4.357336422452136e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1402871808,
+          "private": 1736523776,
+          "lifetime_peak_rss": 1403850752
+        },
+        "after": {
+          "rss": 1403076608,
+          "private": 1736294400,
+          "lifetime_peak_rss": 1405165568
+        },
+        "sampled_peak_rss": 1403240448,
+        "sampled_peak_private": 1736548352,
+        "sample_count": 39,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.0,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54578352128
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 1,
+      "gpu_host_setup_threads": 1,
+      "route": "cpu",
+      "cycle": 0,
+      "seconds": 0.8465158000035444,
+      "report": {
+        "route": 3,
+        "total_seconds": 0.7892427000042517,
+        "setup_seconds": 0.05568330000824062,
+        "assembly_seconds": 0.42510000000766013,
+        "solve_seconds": 0.22431789999973262,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.311907866562493e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536461,
+            78,
+            2.150348575949621e-12,
+            1.0
+          ],
+          [
+            2,
+            0.2910880997757231,
+            22,
+            4.856467930498652e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375806,
+            23,
+            7.406486142288217e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800435172,
+            23,
+            1.0582582797866686e-12,
+            1.0
+          ],
+          [
+            5,
+            1.5501472802487325e-06,
+            23,
+            8.952100353918993e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.357143070128381e-12,
+        "threads": 1,
+        "ngsolve_threads": 1,
+        "ams_setup_coarse_factor_threads": 1,
+        "whole_api_seconds": 0.8465158000035444
+      },
+      "independent": {
+        "solution_relative": 0.0,
+        "true_relative_residual": 4.357143070128381e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 221200384,
+          "private": 1245597696,
+          "lifetime_peak_rss": 228397056
+        },
+        "after": {
+          "rss": 222642176,
+          "private": 1296429056,
+          "lifetime_peak_rss": 231288832
+        },
+        "sampled_peak_rss": 231268352,
+        "sampled_peak_private": 1305346048,
+        "sample_count": 15,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.7,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54579171328
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 1,
+      "gpu_host_setup_threads": 1,
+      "route": "cpu",
+      "cycle": 1,
+      "seconds": 0.8434072000018205,
+      "report": {
+        "route": 3,
+        "total_seconds": 0.7865119999987655,
+        "setup_seconds": 0.05609579999872949,
+        "assembly_seconds": 0.424241400010942,
+        "solve_seconds": 0.22268150001036702,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.311907866562493e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536461,
+            78,
+            2.150348575949621e-12,
+            1.0
+          ],
+          [
+            2,
+            0.2910880997757231,
+            22,
+            4.856467930498652e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375806,
+            23,
+            7.406486142288217e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800435172,
+            23,
+            1.0582582797866686e-12,
+            1.0
+          ],
+          [
+            5,
+            1.5501472802487325e-06,
+            23,
+            8.952100353918993e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.357143070128381e-12,
+        "threads": 1,
+        "ngsolve_threads": 1,
+        "ams_setup_coarse_factor_threads": 1,
+        "whole_api_seconds": 0.8434072000018205
+      },
+      "independent": {
+        "solution_relative": 0.0,
+        "true_relative_residual": 4.357143070128381e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 222855168,
+          "private": 1246531584,
+          "lifetime_peak_rss": 231288832
+        },
+        "after": {
+          "rss": 222830592,
+          "private": 1296986112,
+          "lifetime_peak_rss": 231702528
+        },
+        "sampled_peak_rss": 231702528,
+        "sampled_peak_private": 1306734592,
+        "sample_count": 15,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.0,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54581723136
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 1,
+      "gpu_host_setup_threads": 1,
+      "route": "gpu",
+      "cycle": 1,
+      "seconds": 0.301845,
+      "report": {
+        "whole_api_seconds": 0.301845,
+        "info": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357425366501216e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.409320182631471e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531792,
+              80.0,
+              7.869774625308274e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754414,
+              21.0,
+              4.856834106423875e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507310945,
+              22.0,
+              7.406402269869199e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800392333,
+              23.0,
+              3.05822915935219e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.550147280051396e-06,
+              22.0,
+              8.952255084912132e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0611046,
+            "upload_assembly_seconds": 0.0012229,
+            "total_seconds": 0.0629024,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0972595,
+          "assembly_seconds": 0.002069,
+          "solve_seconds": 0.12855450000000002,
+          "total_seconds": 0.2966856,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952255084912132e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2986180,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "host_setup_threads": 1,
+        "registry_restored": 1,
+        "native_module": {
+          "sha256": "d04132b9c37817e93dc21e27dac3a1d8ab62cb1af2766e582dde61340d7a9a5f",
+          "path": "<private runtime provenance>"
+        }
+      },
+      "independent": {
+        "solution_relative": 1.5338234560176263e-14,
+        "true_relative_residual": 4.3574026427554414e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1403076608,
+          "private": 1736294400,
+          "lifetime_peak_rss": 1405165568
+        },
+        "after": {
+          "rss": 1403535360,
+          "private": 1736294400,
+          "lifetime_peak_rss": 1405747200
+        },
+        "sampled_peak_rss": 1403535360,
+        "sampled_peak_private": 1736294400,
+        "sample_count": 39,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.9,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54575861760
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 1,
+      "gpu_host_setup_threads": 1,
+      "route": "gpu",
+      "cycle": 1,
+      "seconds": 0.3248354,
+      "report": {
+        "whole_api_seconds": 0.3248354,
+        "info": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357442535137012e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.409562761894842e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531785,
+              80.0,
+              7.869181370964168e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754419,
+              21.0,
+              4.856950033176652e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.02789824650731106,
+              22.0,
+              7.406320930601897e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800392416,
+              23.0,
+              3.0583993533635593e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472799875257e-06,
+              22.0,
+              8.952404301402404e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0609387,
+            "upload_assembly_seconds": 0.0013052,
+            "total_seconds": 0.062757,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0970986,
+          "assembly_seconds": 0.0021282000000000002,
+          "solve_seconds": 0.1324069,
+          "total_seconds": 0.3075813,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952404301402404e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2986180,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "host_setup_threads": 1,
+        "registry_restored": 1,
+        "native_module": {
+          "sha256": "d04132b9c37817e93dc21e27dac3a1d8ab62cb1af2766e582dde61340d7a9a5f",
+          "path": "<private runtime provenance>"
+        }
+      },
+      "independent": {
+        "solution_relative": 1.5399855629772292e-14,
+        "true_relative_residual": 4.357393491684913e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1403588608,
+          "private": 1736294400,
+          "lifetime_peak_rss": 1405747200
+        },
+        "after": {
+          "rss": 1404387328,
+          "private": 1736294400,
+          "lifetime_peak_rss": 1406369792
+        },
+        "sampled_peak_rss": 1404387328,
+        "sampled_peak_private": 1736294400,
+        "sample_count": 39,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 1.4,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54574157824
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 1,
+      "gpu_host_setup_threads": 1,
+      "route": "cpu",
+      "cycle": 1,
+      "seconds": 0.8467734000005294,
+      "report": {
+        "route": 3,
+        "total_seconds": 0.7900493999986793,
+        "setup_seconds": 0.05627219999587396,
+        "assembly_seconds": 0.42533270001149504,
+        "solve_seconds": 0.22379020000516903,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.311907866562493e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536461,
+            78,
+            2.150348575949621e-12,
+            1.0
+          ],
+          [
+            2,
+            0.2910880997757231,
+            22,
+            4.856467930498652e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375806,
+            23,
+            7.406486142288217e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800435172,
+            23,
+            1.0582582797866686e-12,
+            1.0
+          ],
+          [
+            5,
+            1.5501472802487325e-06,
+            23,
+            8.952100353918993e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.357143070128381e-12,
+        "threads": 1,
+        "ngsolve_threads": 1,
+        "ams_setup_coarse_factor_threads": 1,
+        "whole_api_seconds": 0.8467734000005294
+      },
+      "independent": {
+        "solution_relative": 0.0,
+        "true_relative_residual": 4.357143070128381e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 223834112,
+          "private": 1248018432,
+          "lifetime_peak_rss": 231702528
+        },
+        "after": {
+          "rss": 222842880,
+          "private": 1298128896,
+          "lifetime_peak_rss": 231882752
+        },
+        "sampled_peak_rss": 231882752,
+        "sampled_peak_private": 1306734592,
+        "sample_count": 15,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 1.0,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54574014464
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 16,
+      "gpu_host_setup_threads": 1,
+      "route": "cpu",
+      "cycle": 0,
+      "seconds": 0.7165129999993951,
+      "report": {
+        "route": 3,
+        "total_seconds": 0.6488988999990397,
+        "setup_seconds": 0.24198239999532234,
+        "assembly_seconds": 0.10350419999303995,
+        "solve_seconds": 0.1488695000152802,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.3118998913614e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536463,
+            78,
+            2.150285657070507e-12,
+            1.0
+          ],
+          [
+            2,
+            0.29108809977572336,
+            22,
+            4.856394240551267e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375688,
+            23,
+            7.40658291884588e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800434987,
+            23,
+            1.0582718491543108e-12,
+            1.0
+          ],
+          [
+            5,
+            1.5501472802052418e-06,
+            23,
+            8.952283521820882e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.357360817208958e-12,
+        "threads": 16,
+        "ngsolve_threads": 16,
+        "ams_setup_coarse_factor_threads": 1,
+        "whole_api_seconds": 0.7165129999993951
+      },
+      "independent": {
+        "solution_relative": 1.3124568749521999e-14,
+        "true_relative_residual": 4.357360817208958e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 222953472,
+          "private": 1248129024,
+          "lifetime_peak_rss": 231882752
+        },
+        "after": {
+          "rss": 226836480,
+          "private": 1301454848,
+          "lifetime_peak_rss": 239894528
+        },
+        "sampled_peak_rss": 237871104,
+        "sampled_peak_private": 2063290368,
+        "sample_count": 10,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.2,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54574563328
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 16,
+      "gpu_host_setup_threads": 1,
+      "route": "gpu",
+      "cycle": 0,
+      "seconds": 0.3026436,
+      "report": {
+        "whole_api_seconds": 0.3026436,
+        "info": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.3573614230925695e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.408351412104338e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531783,
+              80.0,
+              7.868471758505072e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754416,
+              21.0,
+              4.856689065735555e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311084,
+              22.0,
+              7.406682446248839e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.000932573980039223,
+              23.0,
+              3.0583144169889106e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472800816707e-06,
+              22.0,
+              8.952233391988018e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.060637,
+            "upload_assembly_seconds": 0.001279,
+            "total_seconds": 0.0624658,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0970268,
+          "assembly_seconds": 0.0021403,
+          "solve_seconds": 0.1332797,
+          "total_seconds": 0.299786,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952233391988018e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2986180,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "host_setup_threads": 1,
+        "registry_restored": 1,
+        "native_module": {
+          "sha256": "d04132b9c37817e93dc21e27dac3a1d8ab62cb1af2766e582dde61340d7a9a5f",
+          "path": "<private runtime provenance>"
+        }
+      },
+      "independent": {
+        "solution_relative": 1.4704639815231845e-14,
+        "true_relative_residual": 4.357345651252092e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1404387328,
+          "private": 1736294400,
+          "lifetime_peak_rss": 1406369792
+        },
+        "after": {
+          "rss": 1404796928,
+          "private": 1736343552,
+          "lifetime_peak_rss": 1406713856
+        },
+        "sampled_peak_rss": 1404825600,
+        "sampled_peak_private": 1736388608,
+        "sample_count": 43,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 1.0,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54570291200
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 16,
+      "gpu_host_setup_threads": 1,
+      "route": "gpu",
+      "cycle": 0,
+      "seconds": 0.306414,
+      "report": {
+        "whole_api_seconds": 0.306414,
+        "info": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357288987925913e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.408605598682855e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531785,
+              80.0,
+              7.86802685794173e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754417,
+              21.0,
+              4.856438441740548e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311014,
+              22.0,
+              7.406489187080622e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.000932573980039323,
+              23.0,
+              3.0580545637294344e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472800324945e-06,
+              22.0,
+              8.952245302231569e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0611809,
+            "upload_assembly_seconds": 0.001378,
+            "total_seconds": 0.0630813,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0967906,
+          "assembly_seconds": 0.0021844000000000004,
+          "solve_seconds": 0.1376811,
+          "total_seconds": 0.3040396,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952245302231569e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2986180,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "host_setup_threads": 1,
+        "registry_restored": 1,
+        "native_module": {
+          "sha256": "d04132b9c37817e93dc21e27dac3a1d8ab62cb1af2766e582dde61340d7a9a5f",
+          "path": "<private runtime provenance>"
+        }
+      },
+      "independent": {
+        "solution_relative": 1.571932010768918e-14,
+        "true_relative_residual": 4.357336143440436e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1404796928,
+          "private": 1736343552,
+          "lifetime_peak_rss": 1406713856
+        },
+        "after": {
+          "rss": 1404833792,
+          "private": 1736343552,
+          "lifetime_peak_rss": 1407070208
+        },
+        "sampled_peak_rss": 1407070208,
+        "sampled_peak_private": 1742827520,
+        "sample_count": 39,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54564253696
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 16,
+      "gpu_host_setup_threads": 1,
+      "route": "cpu",
+      "cycle": 0,
+      "seconds": 0.7027166999978363,
+      "report": {
+        "route": 3,
+        "total_seconds": 0.636104899997008,
+        "setup_seconds": 0.23373279999941587,
+        "assembly_seconds": 0.12096139999630395,
+        "solve_seconds": 0.13729039999452652,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.311883373322794e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536455,
+            78,
+            2.1503195616314642e-12,
+            1.0
+          ],
+          [
+            2,
+            0.29108809977572253,
+            22,
+            4.856611419108133e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375272,
+            23,
+            7.40660621330929e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800435724,
+            23,
+            1.0582335132097519e-12,
+            1.0
+          ],
+          [
+            5,
+            1.5501472801427326e-06,
+            23,
+            8.952190355889103e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.357304475759899e-12,
+        "threads": 16,
+        "ngsolve_threads": 16,
+        "ams_setup_coarse_factor_threads": 1,
+        "whole_api_seconds": 0.7027166999978363
+      },
+      "independent": {
+        "solution_relative": 1.3642129686899485e-14,
+        "true_relative_residual": 4.357304475759899e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 227913728,
+          "private": 1252679680,
+          "lifetime_peak_rss": 239894528
+        },
+        "after": {
+          "rss": 227053568,
+          "private": 1301364736,
+          "lifetime_peak_rss": 240644096
+        },
+        "sampled_peak_rss": 238399488,
+        "sampled_peak_private": 2063634432,
+        "sample_count": 10,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.1,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54564798464
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 16,
+      "gpu_host_setup_threads": 1,
+      "route": "cpu",
+      "cycle": 1,
+      "seconds": 0.6708818000042811,
+      "report": {
+        "route": 3,
+        "total_seconds": 0.6032143999982509,
+        "setup_seconds": 0.22315429999434855,
+        "assembly_seconds": 0.10414260002289666,
+        "solve_seconds": 0.14010269999562297,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.311960372144409e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536463,
+            78,
+            2.1503893093785965e-12,
+            1.0
+          ],
+          [
+            2,
+            0.2910880997757231,
+            22,
+            4.856702522144212e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375525,
+            23,
+            7.406553422295542e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800434802,
+            23,
+            1.0582581813693627e-12,
+            1.0
+          ],
+          [
+            5,
+            1.5501472800325243e-06,
+            23,
+            8.952159630837629e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.357248426410565e-12,
+        "threads": 16,
+        "ngsolve_threads": 16,
+        "ams_setup_coarse_factor_threads": 1,
+        "whole_api_seconds": 0.6708818000042811
+      },
+      "independent": {
+        "solution_relative": 1.3963314072753564e-14,
+        "true_relative_residual": 4.357248426410565e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 227188736,
+          "private": 1251405824,
+          "lifetime_peak_rss": 240644096
+        },
+        "after": {
+          "rss": 227721216,
+          "private": 1301569536,
+          "lifetime_peak_rss": 241078272
+        },
+        "sampled_peak_rss": 238833664,
+        "sampled_peak_private": 2064080896,
+        "sample_count": 10,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.8,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54565986304
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 16,
+      "gpu_host_setup_threads": 1,
+      "route": "gpu",
+      "cycle": 1,
+      "seconds": 0.3018958,
+      "report": {
+        "whole_api_seconds": 0.3018958,
+        "info": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.3573679653896946e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.410304987463136e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.388318582253178,
+              80.0,
+              7.868634039474849e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754413,
+              21.0,
+              4.856441866631455e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311007,
+              22.0,
+              7.406407832317426e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800394333,
+              23.0,
+              3.058081738796904e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.550147279987779e-06,
+              22.0,
+              8.952256477233692e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0606533,
+            "upload_assembly_seconds": 0.0013033,
+            "total_seconds": 0.0624652,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0976108,
+          "assembly_seconds": 0.0021044,
+          "solve_seconds": 0.1328178,
+          "total_seconds": 0.2992191,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952256477233692e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2986180,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "host_setup_threads": 1,
+        "registry_restored": 1,
+        "native_module": {
+          "sha256": "d04132b9c37817e93dc21e27dac3a1d8ab62cb1af2766e582dde61340d7a9a5f",
+          "path": "<private runtime provenance>"
+        }
+      },
+      "independent": {
+        "solution_relative": 1.5525876530893654e-14,
+        "true_relative_residual": 4.35738072720883e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1404833792,
+          "private": 1736343552,
+          "lifetime_peak_rss": 1407070208
+        },
+        "after": {
+          "rss": 1404919808,
+          "private": 1736359936,
+          "lifetime_peak_rss": 1407111168
+        },
+        "sampled_peak_rss": 1407111168,
+        "sampled_peak_private": 1742827520,
+        "sample_count": 39,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.4,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54557937664
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 16,
+      "gpu_host_setup_threads": 1,
+      "route": "gpu",
+      "cycle": 1,
+      "seconds": 0.3045524,
+      "report": {
+        "whole_api_seconds": 0.3045524,
+        "info": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357371295843205e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.410558111845833e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531796,
+              80.0,
+              7.869263732591899e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.29108809977544153,
+              21.0,
+              4.856570800941752e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311115,
+              22.0,
+              7.406508390883078e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800392725,
+              23.0,
+              3.0582516250108553e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472799953978e-06,
+              22.0,
+              8.952149563715165e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.060853,
+            "upload_assembly_seconds": 0.0014429,
+            "total_seconds": 0.0628905,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0953663,
+          "assembly_seconds": 0.0021693,
+          "solve_seconds": 0.1373489,
+          "total_seconds": 0.3020567,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952149563715165e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2986180,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "device_free_before": 42161599380.0,
+        "device_free_after": 42161599380.0,
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "host_setup_threads": 1,
+        "registry_restored": 1,
+        "native_module": {
+          "sha256": "d04132b9c37817e93dc21e27dac3a1d8ab62cb1af2766e582dde61340d7a9a5f",
+          "path": "<private runtime provenance>"
+        }
+      },
+      "independent": {
+        "solution_relative": 1.5144410391807146e-14,
+        "true_relative_residual": 4.357400554213195e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1404919808,
+          "private": 1736359936,
+          "lifetime_peak_rss": 1407111168
+        },
+        "after": {
+          "rss": 1404936192,
+          "private": 1736359936,
+          "lifetime_peak_rss": 1407193088
+        },
+        "sampled_peak_rss": 1404936192,
+        "sampled_peak_private": 1736359936,
+        "sample_count": 39,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.2,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54567071744
+      }
+    },
+    {
+      "cpu_baseline_ngsolve_threads": 16,
+      "gpu_host_setup_threads": 1,
+      "route": "cpu",
+      "cycle": 1,
+      "seconds": 0.6811711000045761,
+      "report": {
+        "route": 3,
+        "total_seconds": 0.614700999998604,
+        "setup_seconds": 0.2304158999977517,
+        "assembly_seconds": 0.10257840000849683,
+        "solve_seconds": 0.14805379998870194,
+        "builds": 2,
+        "history": [
+          [
+            0,
+            1.0,
+            18,
+            4.311831347366531e-12,
+            0.25
+          ],
+          [
+            1,
+            1.3883185822536455,
+            78,
+            2.150291013239203e-12,
+            1.0
+          ],
+          [
+            2,
+            0.2910880997757225,
+            22,
+            4.856713315787104e-13,
+            1.0
+          ],
+          [
+            3,
+            0.027898246507375324,
+            23,
+            7.406527955181406e-13,
+            1.0
+          ],
+          [
+            4,
+            0.0009325739800436093,
+            23,
+            1.0582093496616488e-12,
+            1.0
+          ],
+          [
+            5,
+            1.550147280150572e-06,
+            23,
+            8.95225922851943e-13,
+            1.0
+          ]
+        ],
+        "final_residual": 4.3574494461639574e-12,
+        "threads": 16,
+        "ngsolve_threads": 16,
+        "ams_setup_coarse_factor_threads": 1,
+        "whole_api_seconds": 0.6811711000045761
+      },
+      "independent": {
+        "solution_relative": 1.2865019739486761e-14,
+        "true_relative_residual": 4.3574494461639574e-12
+      },
+      "host_memory": {
+        "before": {
+          "rss": 228843520,
+          "private": 1252601856,
+          "lifetime_peak_rss": 241078272
+        },
+        "after": {
+          "rss": 227966976,
+          "private": 1301897216,
+          "lifetime_peak_rss": 241438720
+        },
+        "sampled_peak_rss": 239390720,
+        "sampled_peak_private": 2064592896,
+        "sample_count": 10,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      },
+      "idle_before": {
+        "cpu_percent": 0.8,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 54565371904
+      }
+    }
+  ],
+  "cpu_blas_threads": 1,
+  "gpu_host_setup_threads": 1,
+  "timing_boundary": "Fresh nonlinear mesh/space/operator/RHS/preconditioner/solve/result recovery per API call. GPU includes uploads and download; independent checks and output serialization excluded.",
+  "initialization": "CPU reference and first initialized GPU API are recorded separately. Warm ABBA follows both; no OS/device cold-reset or fresh-process cold-performance claim.",
+  "memory_definition": "50ms absolute process RSS/private samples and GPU free endpoints; includes loaded runtimes and validation/serialization around the timed API (GPU module-probe subprocess included), not an API-only peak or transient global GPU peak.",
+  "wheel": {
+    "passed": true,
+    "version": "0.1.4",
+    "source_commit": "91868346a9bafaf29abec6207a02780357a30137",
+    "wheel_sha256": "6b6cc5034365a1aebd6dc26c1d17b423ac509e874e021f70549905ed6f8ec154",
+    "files": 138,
+    "manifest_sha256": "32330627d628cef716fef9ac9e059903791dfb48f8a3daa05d2b6f53bda47380",
+    "cuda_solvers": [
+      "ams",
+      "csr_pcg",
+      "fmm",
+      "hmatrix",
+      "projection"
+    ]
+  },
+  "cpu_reference_build": {
+    "source_commit": "98f9c2fe57dff57eb0d7e34694458afd443755e3",
+    "source_dirty": false,
+    "receipt_sha256": "ed2ed63e635956147dbd36554546a1b6ff9a118245557d977158c9fb250997cd",
+    "verified_source_count": 17
+  },
+  "versions": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "ngsolve": "6.2.2607",
+    "numpy": "2.5.2",
+    "logical_cpus": 18,
+    "cpu_bridge_sha256": "5915fe13e7a6125928fb92d1cfb1bfe29e85871c073e49cd655a580debbb7c84",
+    "mesh_sha256": "4818353a2cccd3adf232f70af1db48a9679028b6ad76c277b1b6a34926137d54",
+    "runner_sha256": "ba71c2bc4701af65ab54f9773042b0e105454b780e32b6cc48372e93ce7a1dcf"
+  },
+  "cpu_hardware": {
+    "Name": "Intel(R) Xeon(R) Platinum 8368 CPU @ 2.40GHz",
+    "NumberOfCores": 18,
+    "NumberOfLogicalProcessors": 18
+  },
+  "gpu_hardware": "NVIDIA A100-SXM4-40GB, 591.59, 40960",
+  "cpu_diagnostics": "Python Newton iteration messages captured in memory inside the API timer; no diagnostic disk I/O in timing.",
+  "process_init_including_input_verification_seconds": 2.621883200001321,
+  "idle_before": {
+    "cpu_percent": 0.0,
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "gpu_utilization_percent": 0.0,
+    "device_free_MiB": 40645.0,
+    "host_available_bytes": 56182247424
+  },
+  "first_initialized_cpu_api": {
+    "route": 3,
+    "total_seconds": 0.7911839999942458,
+    "setup_seconds": 0.0561364000022877,
+    "assembly_seconds": 0.42723839999962365,
+    "solve_seconds": 0.22408110000105808,
+    "builds": 2,
+    "history": [
+      [
+        0,
+        1.0,
+        18,
+        4.311907866562493e-12,
+        0.25
+      ],
+      [
+        1,
+        1.3883185822536461,
+        78,
+        2.150348575949621e-12,
+        1.0
+      ],
+      [
+        2,
+        0.2910880997757231,
+        22,
+        4.856467930498652e-13,
+        1.0
+      ],
+      [
+        3,
+        0.027898246507375806,
+        23,
+        7.406486142288217e-13,
+        1.0
+      ],
+      [
+        4,
+        0.0009325739800435172,
+        23,
+        1.0582582797866686e-12,
+        1.0
+      ],
+      [
+        5,
+        1.5501472802487325e-06,
+        23,
+        8.952100353918993e-13,
+        1.0
+      ]
+    ],
+    "final_residual": 4.357143070128381e-12,
+    "threads": 1,
+    "ngsolve_threads": 1,
+    "ams_setup_coarse_factor_threads": 1,
+    "whole_api_seconds": 0.8528320000041276
+  },
+  "cpu_reference_check": {
+    "solution_relative": 0.0,
+    "true_relative_residual": 4.357143070128381e-12
+  },
+  "matlab_start_seconds": 6.211301299998013,
+  "gpu_init_seconds": 0.3896945,
+  "first_initialized_gpu_api": {
+    "whole_api_seconds": 0.5369578,
+    "info": {
+      "schema": "radia.native-hcurl-solve.v1",
+      "true_nonlinear_relative_residual": 4.357410648276888e-12,
+      "history": [
+        [
+          0.0,
+          1.0,
+          18.0,
+          8.408141150060044e-13,
+          0.25
+        ],
+        [
+          1.0,
+          1.3883185822531783,
+          80.0,
+          7.868420042349188e-13,
+          1.0
+        ],
+        [
+          2.0,
+          0.2910880997754417,
+          21.0,
+          4.85702130086059e-13,
+          1.0
+        ],
+        [
+          3.0,
+          0.027898246507311056,
+          22.0,
+          7.406234292768926e-13,
+          1.0
+        ],
+        [
+          4.0,
+          0.0009325739800393716,
+          23.0,
+          3.0582947922395304e-13,
+          1.0
+        ],
+        [
+          5.0,
+          1.5501472799454913e-06,
+          22.0,
+          8.952224298443507e-13,
+          1.0
+        ]
+      ],
+      "hierarchy_builds": 2,
+      "reuse_policy": [
+        [
+          "MCOS",
+          "string",
+          [
+            3707764736,
+            2,
+            1,
+            1,
+            1,
+            1
+          ]
+        ]
+      ],
+      "assembly": {
+        "schema": "radia.hcurl-cuda-assembly.v1",
+        "host_basis_seconds": 0.0659485,
+        "upload_assembly_seconds": 0.0426978,
+        "total_seconds": 0.1093705,
+        "gpu_peak_owned_bytes_upper_bound": 8903352,
+        "upload_bytes": 4465300,
+        "download_bytes": 632048,
+        "taskmanager_started": 0,
+        "python_adapter_used": 0,
+        "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+      },
+      "setup_seconds": 0.1468419,
+      "assembly_seconds": 0.004576899999999999,
+      "solve_seconds": 0.1397114,
+      "total_seconds": 0.476395,
+      "max_phase_owned_bytes_upper_bound": 9901548,
+      "last_linear_solve": {
+        "iterations": 22,
+        "true_relative_residual": 8.952224298443507e-13,
+        "workspace_bytes": 213064,
+        "workspace_allocations": 1,
+        "solve_count": 6,
+        "hierarchy_builds": 2,
+        "graph_cached": 1,
+        "native_buffer_allocations_during_solve": 0,
+        "coarse_action_cache_bytes": 2986180,
+        "iteration_host_syncs": 1
+      },
+      "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+      "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+    },
+    "device_free_before": 42181853184.0,
+    "device_free_after": 42161474624.0,
+    "device": "NVIDIA A100-SXM4-40GB",
+    "matlab": "26.1.0.3203278 (R2026a)",
+    "host_setup_threads": 1,
+    "registry_restored": 1,
+    "native_module": {
+      "sha256": "d04132b9c37817e93dc21e27dac3a1d8ab62cb1af2766e582dde61340d7a9a5f",
+      "path": "<private runtime provenance>"
+    },
+    "independent": {
+      "solution_relative": 1.5161924290581322e-14,
+      "true_relative_residual": 4.357547637129631e-12
+    }
+  },
+  "summary": {
+    "1": {
+      "cpu_median_seconds": 0.846385349999764,
+      "gpu_median_seconds": 0.31753785,
+      "cpu_over_gpu": 2.6654628731654006
+    },
+    "16": {
+      "cpu_median_seconds": 0.6919439000012062,
+      "gpu_median_seconds": 0.30359800000000003,
+      "cpu_over_gpu": 2.2791451195370396
+    }
+  },
+  "idle_after": {
+    "cpu_percent": 0.3,
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "gpu_utilization_percent": 0.0,
+    "device_free_MiB": 40198.0,
+    "host_available_bytes": 54566637568
+  },
+  "raw_evidence_sha256": "a4d63640c2d3507e39cd1f8e6d0f5974ce053de6dc7f6e441b01439ff8f98b54",
+  "protocol_sha256": {
+    "ams_tuning.py": "3cffba3279c54098dd211fcdcaea628ed60eed5e19ee8ad3e17a97265321a9c5",
+    "ams_tuning_sample.m": "08a6dbfefd5f1ad7104f3d07bb30193c014018795baf547d15a40d79ff44c40a",
+    "measure_installed_cpu_gpu.py": "ba71c2bc4701af65ab54f9773042b0e105454b780e32b6cc48372e93ce7a1dcf",
+    "measure_installed_cpu_gpu.m": "88baa6788b8339c36f1f69a04efe47c22f2b9473eecc60357cdc7f694cc0c017"
+  }
+}
