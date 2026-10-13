@@ -3411,5 +3411,11 @@
     "Previous max_phase_owned_bytes_upper_bound is not a total bound and excludes new coarse caches; separately reported cache/workspace bytes and endpoint/50ms process samples do not certify transient global device/host peaks.",
     "Candidate kernel tested on A100 is the same hash as the 100-built artifact. Unchanged private DLL payload was hash verified; this run did not repeat the historical live DLL-module audit.",
     "No installed/common-release wheel replacement; radia-gpu owner integration and release acceptance are separate."
-  ]
+  ],
+  "cleanup": {
+    "post_measurement_gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 40645, 40960",
+    "root": "C:\\temp\\ams-tuning-20261013",
+    "recovered_files": 631,
+    "deleted": true
+  }
 }
