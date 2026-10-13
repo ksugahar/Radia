@@ -1271,9 +1271,10 @@ classdef Study < handle
             count=obj.TrialStateCounts(1)+obj.TrialStateCounts(2);
         end
 
-        function counts=trialStateCounts(obj)
+        function [counts,multipleParameters]=trialStateCounts(obj)
             %TRIALSTATECOUNTS COMPLETE, PRUNED, RUNNING, WAITING; no history copy.
             counts=obj.TrialStateCounts;
+            multipleParameters=obj.ParamHasMultipleNames;
         end
 
         function count=trialCount(obj)

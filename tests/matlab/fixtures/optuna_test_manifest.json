@@ -929,6 +929,13 @@
       "file": "test_optuna_upstream_oracle.m",
       "oracle": "optuna50_oracle.json",
       "scope": "shared Optuna 5.0.0 behavior",
+      "test": "testTPEIndexedMixedHistoryMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
       "test": "testNativeTPEHistorySelectionMatchesUpstream"
     },
     {
