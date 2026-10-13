@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <chrono>
 #include <cstdint>
+#include "ams_fem_host.hpp"
 void RadiaAMSSetup(int,mxArray**,int,const mxArray**);
 namespace {
 constexpr int T=256;
@@ -309,12 +310,13 @@ struct Blas {
 struct Output {mxGPUArray* a;explicit Output(int n){mwSize s=n;a=mxGPUCreateGPUArray(1,&s,mxDOUBLE_CLASS,mxREAL,MX_GPU_INITIALIZE_VALUES);}~Output(){mxGPUDestroyGPUArray(a);}double* data(){return static_cast<double*>(mxGPUGetData(a));}};
 #include "ams_resident.cuh"
 #include "ams_nonlinear.cuh"
+#include "ams_fem.cuh"
 void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
     if(nrhs>0 && mxIsChar(args[0])) {
         auto command=word(args[0]);
         if(command=="setup"){RadiaAMSSetup(nlhs,out,nrhs,args);return;}
         mxInitGPU();
-        if(amsResidentCommand(command,nlhs,out,nrhs,args)||nonlinearCommand(command,nlhs,out,nrhs,args))return;
+        if(femCommand(command,nlhs,out,nrhs,args)||amsResidentCommand(command,nlhs,out,nrhs,args)||nonlinearCommand(command,nlhs,out,nrhs,args))return;
         throw std::runtime_error("Unknown AMS command");
     }
     if((nrhs<5||nrhs>7)||nlhs!=2)throw std::runtime_error("[x,info]=radia_cuda_ams(snapshot,b,tol,maxiter,apply_only[,use_graph])");

@@ -8,6 +8,7 @@ import socket
 import subprocess
 import sys
 import sysconfig
+import ctypes
 
 def main(args):
     import netgen
@@ -19,6 +20,7 @@ def main(args):
     if args.require_clean_source and dirty:raise RuntimeError('Clean source required for AMS build provenance')
     if socket.gethostname().lower()!='t7920':
         raise RuntimeError('Candidate builds belong to 100/T7920')
+    ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
     out=root/'build-ams-cuda';out.mkdir(exist_ok=True)
     net=Path(netgen.__file__).parent
     vs=Path('C:/BuildTools/VS2022-CUDA')
@@ -29,6 +31,7 @@ def main(args):
     source=package/'native/ams_snapshot_module.cpp'
     sources=[source,package/'native/ams_cpu_reference.cpp',package/'native/ams_resident.cuh',package/'native/ams_nonlinear.cuh',package/'native/radia_cuda_ams.cu',package/'native/ams_matlab_setup.cpp',
              package/'native/ams_setup_gpu.hpp',package/'native/ams_setup_gpu.cuh',
+             package/'native/ams_fem_host.hpp',package/'native/ams_fem_host.cpp',package/'native/ams_fem.cuh',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp',
@@ -61,6 +64,8 @@ def main(args):
         subprocess.run(['cmd','/c',str(cpu_batch)],stdout=log,stderr=subprocess.STDOUT,check=True)
     eng=matlab.engine.start_matlab('-nodesktop -nosplash')
     try:
+        pid=int(eng.feature('getpid'))
+        subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)
         config=Path(eng.matlabroot())/'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml'
         cuda=package/'native/radia_cuda_ams.cu'
         # Compile shared NGSolve host code with the same supported MSVC as
@@ -75,8 +80,14 @@ def main(args):
                          subprocess.list2cmdline(host_command)+'\nexit /b %errorlevel%\n',encoding='utf-8')
         with (out/'host-build.log').open('w') as log:
             subprocess.run(['cmd','/c',str(batch)],stdout=log,stderr=subprocess.STDOUT,check=True)
+        fem_obj=out/'ams_fem_host.obj'
+        fem_command=[arg.replace(str(host_obj),str(fem_obj)).replace('ams_matlab_setup.cpp','ams_fem_host.cpp') for arg in host_command]
+        batch.write_text('@echo off\ncall "'+str(vcvars)+'" >nul\nif errorlevel 1 exit /b 1\n'+
+                         subprocess.list2cmdline(fem_command)+'\nexit /b %errorlevel%\n',encoding='utf-8')
+        with (out/'fem-host-build.log').open('w') as log:
+            subprocess.run(['cmd','/c',str(batch)],stdout=log,stderr=subprocess.STDOUT,check=True)
         flags='NVCCFLAGS=-gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
-        eng.mexcuda('-v','-f',str(config),flags,'-lcublas','-outdir',str(out),str(cuda),str(host_obj),
+        eng.mexcuda('-v','-f',str(config),flags,'-lcublas','-outdir',str(out),str(cuda),str(host_obj),str(fem_obj),
                     str(python_lib),str(net/'lib/libngsolve.lib'),str(net/'lib/ngcore.lib'),str(net/'lib/nglib.lib'),nargout=0)
         if (hashes!={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
             or commit!=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()):

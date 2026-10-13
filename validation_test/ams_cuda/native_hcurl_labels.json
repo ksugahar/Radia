@@ -1,0 +1,13 @@
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "native-hcurl-cuda-unit-cube",
+  "strict_labels": true,
+  "required": {
+    "materials": ["domain"],
+    "boundaries": ["back", "front", "left", "right", "top", "bottom"]
+  },
+  "allowed": {
+    "materials": ["domain"],
+    "boundaries": ["back", "front", "left", "right", "top", "bottom"]
+  }
+}
