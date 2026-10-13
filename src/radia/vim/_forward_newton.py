@@ -23,7 +23,9 @@ def solve_forward_newton(mesh, fes, table, operator, h_ext, *,
     if isinstance(table, dict):
         raise NotImplementedError("forward-newton currently requires one B(H) table")
     inner_tol = 1e-9 if tol == "auto" else float(tol)
-    if not np.isfinite(inner_tol) or inner_tol <= 0 or maxit < 1 or nl_maxit < 1:
+    nl_tol = float(nl_tol)
+    if (not np.isfinite(inner_tol) or inner_tol <= 0 or not np.isfinite(nl_tol)
+            or nl_tol <= 0 or maxit < 1 or nl_maxit < 1):
         raise ValueError("forward-newton requires positive tolerances and iteration budgets")
     arr = np.asarray(table, dtype=float)
     _, bfun, bder, hmax, mmax = _bh_table_funcs(arr[:, 0], arr[:, 1])

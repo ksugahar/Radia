@@ -38,3 +38,16 @@ def test_linear_equivalence_and_falling_m_retention(tmp_path):
         falling_M_avg=falling["M_avg"].tolist(),
         linear_audit=falling["linear_audit"],
         nonlinear_residual=falling["nonlinear_final_relative_residual"])))
+
+
+
+def test_forward_newton_rejects_unchecked_controls():
+    import pytest
+    mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1)).GenerateMesh(maxh=.7))
+    base = dict(bh_table=[[0, 0], [20, MU0 * 60]], H_ext=ng.CF((0, 0, 2)),
+                order=1, nonlinear_solver="forward-newton", nl_maxit=30)
+    for extra in ({"nl_tol": float("inf")}, {"nl_tol": 0.0},
+                  {"newton_warmstart": "picard"}, {"newton_continuation": 3},
+                  {"newton_reuse_tangent_steps": 2}, {"newton_cg_x0": True}):
+        with pytest.raises(ValueError):
+            Solve(mesh, **base, **extra)

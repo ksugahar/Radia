@@ -1023,6 +1023,16 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
             raise NotImplementedError("vim.Solve: nonlinear_solver=%r is wired only with "
                                       "preconditioner='mass-riesz' for now" % (nonlinear_solver,))
         if nonlinear_solver == "forward-newton":
+            # These options steer only the energy-Newton route; ignoring them
+            # would report a forward solve the caller did not request.
+            for _nm, _val, _default in (
+                    ("newton_warmstart", newton_warmstart, "linear"),
+                    ("newton_continuation", newton_continuation, 1),
+                    ("newton_reuse_tangent_steps", newton_reuse_tangent_steps, 1),
+                    ("newton_cg_x0", newton_cg_x0, False)):
+                if _val != _default:
+                    raise ValueError("vim.Solve: %s is not supported by forward-newton "
+                                     "(got %r; leave it at %r)" % (_nm, _val, _default))
             from ._forward_newton import solve_forward_newton
             m, iters, stats = solve_forward_newton(
                 mesh, fes, bh_table, H, h_ext, tol=newton_inner_tol,
