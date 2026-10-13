@@ -10,6 +10,27 @@ payload = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(payload)
 
 
+@pytest.mark.parametrize('fault', [None, 'commit', 'binary', 'taskmanager'])
+def test_exact_fmm_artifact_staging(tmp_path, fault):
+    root=tmp_path/'source';root.mkdir()
+    (root/'native.cu').write_bytes(b'generic public FMM')
+    folder=tmp_path/'build';folder.mkdir()
+    binary=folder/'radia_cuda_fmm.mexw64';binary.write_bytes(b'fixture artifact')
+    receipt=dict(schema='radia.fmm-cuda-build.v1',accepted=True,source_commit='release',
+                 source_dirty=False,taskmanager_used=False,python_adapter_required=False,
+                 source_sha256={'native.cu':hashlib.sha256((root/'native.cu').read_bytes()).hexdigest()},
+                 binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),matlab='fixture')
+    if fault=='commit':receipt['source_commit']='stale'
+    if fault=='binary':binary.write_bytes(b'changed')
+    if fault=='taskmanager':receipt['taskmanager_used']=True
+    (folder/'build.json').write_text(json.dumps(receipt))
+    package=tmp_path/'package'
+    if fault:
+        with pytest.raises(RuntimeError):payload.stage_fmm(root,package,'release',folder)
+    else:
+        assert payload.stage_fmm(root,package,'release',folder)=={'fmm-build.json','matlab/radia_cuda_fmm.mexw64'}
+
+
 @pytest.mark.parametrize('fault', [None, 'commit', 'dirty', 'binary', 'source', 'taskmanager'])
 def test_exact_hdiv_artifact_staging(tmp_path, fault):
     root = tmp_path / 'source'

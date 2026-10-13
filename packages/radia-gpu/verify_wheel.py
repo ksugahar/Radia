@@ -84,6 +84,15 @@ def verify(path: Path) -> dict:
                         or native['taskmanager_started']
                         or native['binary_sha256'] != manifest['files']['matlab/radia_cuda_' + name + '.mexw64']):
                     raise ValueError('HDiv CUDA binary receipt mismatch')
+        fmm_files = {'fmm-build.json', 'matlab/radia_cuda_fmm.mexw64', 'matlab/+radia/+gpu/LaplaceFMM.m'}
+        if fmm_files & set(manifest['files']):
+            if not fmm_files <= set(manifest['files']):
+                raise ValueError('Incomplete FMM CUDA payload')
+            fmm = json.loads(archive.read('radia_gpu/fmm-build.json'))
+            if (fmm['source_dirty'] or fmm['source_commit'] != manifest['source_commit']
+                    or fmm['taskmanager_used'] or fmm['python_adapter_required']
+                    or fmm['binary_sha256'] != manifest['files']['matlab/radia_cuda_fmm.mexw64']):
+                raise ValueError('FMM CUDA binary receipt mismatch')
     solvers = []
     for relative in manifest['files']:
         if relative.endswith('.mexw64'):

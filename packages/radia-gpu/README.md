@@ -220,3 +220,21 @@ Full JSON, memory definitions, artifact/source hashes, numerical gates and
 limitations: `validation_test/ams_cuda/results/cuda-galerkin-73b33291d.json`.
 The candidate is not a deployed release; formal performance acceptance remains
 pending. No A100 operations were performed.
+# 0.1.3 common candidate scope
+
+This candidate combines bounded HDiv-MMM, native affine lowest-order HCurl
+FEM/Newton/AMS, and experimental Laplace FMM in one exact-source wheel.
+Set `RADIA_HDIV_HMATRIX_BUILD`, `RADIA_HDIV_PROJECTION_BUILD` and
+`RADIA_FMM_BUILD` to accepted clean builds of the wheel commit. Stale artifacts
+are rejected even when their earlier numerical evidence passed.
+
+HDiv supports tetrahedra with affine or P2 geometry, orders 1/2 and linear
+isotropic material. Host-cache is opt-in and consumes additional memory.
+General adaptive high-order HACApK, images, internal interfaces, constraints
+and nonlinear HDiv are not accepted. FMM boundary maps are flat P1; the
+independently measured direct-sum speedup is not a comparison with CPU FMM.
+Small workloads can be slower on GPU. IH preview modules are not distributed.
+Compatible user-installed native dependencies remain required; no implicit
+CPU/Python solver fallback is provided. Separate historical performance
+results do not substitute for installed common-wheel acceptance.
+

@@ -61,8 +61,14 @@ class build_py(_build_py):
         if hmatrix:
             from hdiv_payload import stage
             expected.update(stage(ROOT, package, commit, hmatrix, projection))
+        fmm = os.environ.get('RADIA_FMM_BUILD')
+        if fmm:
+            from hdiv_payload import stage_fmm
+            expected.update(stage_fmm(ROOT, package, commit, fmm))
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
+                if path.name == 'LaplaceFMM.m' and not fmm:
+                    continue
                 if path.name in {"FieldCloud.m", "FieldElements.m", "HMatrixOperator.m", "solveHDivRT0.m", "solveCurvedHDiv.m", "curvedHDivQuadrature.m", "solveHDivElements.m", "affineHDivQuadrature.m"}:
                     continue  # Experimental field/H-matrix modules require separate acceptance.
                 if path.name in ("runRLCResonanceOptimizationDemo.m", "rlcResonanceObjective.m"):
@@ -106,7 +112,7 @@ class build_py(_build_py):
         metadata = tomllib.loads((PACKAGE / "pyproject.toml").read_text())
         manifest = dict(schema="radia.gpu.distribution.v1", version=metadata["project"]["version"],
                         source_commit=commit, files=payload,
-                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"],
+                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Bounded affine/P2 HDiv orders 1/2"] if hmatrix else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
                         runtime_requirements=["Windows x64", "MATLAB R2026a", "Parallel Computing Toolbox", "NVIDIA GPU/driver", "Simulink for blocks", "User-installed LTspice for circuit execution"])
         (package / "manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")
 
