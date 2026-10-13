@@ -118,7 +118,10 @@ struct Context {
     }
     void valid(){int d;check(cudaGetDevice(&d));if(d!=device)throw std::runtime_error("FMM context belongs to another CUDA device");check(cudaStreamQuery(sentinel));}
 };
-std::map<uint64_t,std::unique_ptr<Context>> contexts;uint64_t generation=0;
+std::map<uint64_t,std::unique_ptr<Context>> contexts;
+// Seed each loaded module independently, as in the H-matrix registry. A MEX
+// reload must not recycle the first handle of the previous module lifetime.
+uint64_t generation=uint64_t(std::chrono::steady_clock::now().time_since_epoch().count())&0x00007fffffffffffULL;
 void cleanup(){contexts.clear();}
 uint64_t token(const mxArray* a){if(!mxIsUint64(a)||mxIsComplex(a)||mxGetNumberOfElements(a)!=1)throw std::invalid_argument("FMM handle must be scalar uint64");uint64_t h=*static_cast<const uint64_t*>(mxGetData(a));if(!contexts.count(h))throw std::invalid_argument("Stale or foreign FMM handle");return h;}
 struct GPUView {const mxGPUArray* a;GPUView(const mxArray* x){if(!mxIsGPUArray(x))throw std::invalid_argument("FMM densities must be gpuArray doubles");a=mxGPUCreateFromMxArray(x);if(mxGPUGetClassID(a)!=mxDOUBLE_CLASS||mxGPUGetComplexity(a)!=mxREAL){mxGPUDestroyGPUArray(a);throw std::invalid_argument("FMM densities must be real double");}}
