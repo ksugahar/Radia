@@ -24,7 +24,8 @@ classdef ICContext < handle
             end
             assert(self.NativeHandle~=0,'radia:cuda:released','IC context is released');
             [x,info]=radia_cuda_ic('solve',self.NativeHandle,rhs,options.Tolerance,options.MaxIterations);
-            if ~options.ReturnOnGPU;x=gather(x);end
+            info.result_download_bytes=0;
+            if ~options.ReturnOnGPU;x=gather(x);info.result_download_bytes=8*numel(x);end
         end
         function x=apply(self,rhs)
             assert(self.NativeHandle~=0,'radia:cuda:released','IC context is released');

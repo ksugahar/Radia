@@ -73,6 +73,7 @@ __global__ void subtract(int n,const double* b,double* ax){int i=blockIdx.x*bloc
 
 struct Context {
     int n=0,nz=0,device=-1,levels=0;unsigned solves=0;double shift=1.05;
+    size_t symbolicDownload=0,symbolicUpload=0,setupPeakOwned=0;
     Buffer<int> rp,ci,lrp,lci,failure;
     Buffer<double> av,l,x,r,p,ap,tmp,z;
     Buffer<char> forwardBuffer,backwardBuffer;
@@ -95,6 +96,8 @@ struct Context {
             for(int k=hrp[i];k<hrp[i+1];++k){int j=hci[k];if(j<0||j>=n||j<=previous)throw std::runtime_error("CSR columns must be sorted, unique and in range");previous=j;if(j<=i){lc.push_back(j);source.push_back(k);if(j<i)level[i]=std::max(level[i],level[j]+1);else diagonal=true;}}
             if(!diagonal)throw std::runtime_error("Missing CSR diagonal");lp[i+1]=int(lc.size());maximum=std::max(maximum,level[i]);
         }
+        symbolicDownload=(size_t(n)+1+size_t(nz))*sizeof(int);
+        symbolicUpload=(size_t(n)+1+size_t(nz)+size_t(n)+1+2*lc.size()+size_t(n)+1)*sizeof(int);
         levels=maximum+1;rp.upload(hrp);ci.upload(hci);lrp.upload(lp);lci.upload(lc);av.alloc(nz);ck(cudaMemcpy(av.p,vals,av.bytes(),cudaMemcpyDeviceToDevice));failure.upload(std::vector<int>{0});
         validate<<<blocks(n),T>>>(n,rp.p,ci.p,av.p,failure.p);flag();
         Buffer<int> mapping,ordered;mapping.upload(source);std::vector<int> offsets(size_t(levels)+1),order(n);
@@ -113,6 +116,7 @@ struct Context {
         cs(cusparseSpSV_bufferSize(sparse,CUSPARSE_OPERATION_TRANSPOSE,&one,lower,vt,vz,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,backward,&b));forwardBuffer.alloc(a);backwardBuffer.alloc(b);
         cs(cusparseSpSV_analysis(sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&one,lower,vr,vt,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,forward,forwardBuffer.p));
         cs(cusparseSpSV_analysis(sparse,CUSPARSE_OPERATION_TRANSPOSE,&one,lower,vt,vz,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,backward,backwardBuffer.p));ck(cudaDeviceSynchronize());
+        setupPeakOwned=bytes()+mapping.bytes()+ordered.bytes()+ld.bytes();
     }
     void apply(){double one=1;cs(cusparseSpSV_solve(sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&one,lower,vr,vt,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,forward));cs(cusparseSpSV_solve(sparse,CUSPARSE_OPERATION_TRANSPOSE,&one,lower,vt,vz,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,backward));}
     double norm(const double* v){double value;cb(cublasDnrm2(blas,n,v,1,&value));if(!std::isfinite(value))throw std::runtime_error("nonfinite FP64 norm");return value;}
@@ -137,14 +141,20 @@ Handle id(const mxArray* a){if(mxGetClassID(a)!=mxUINT64_CLASS||mxIsComplex(a)||
 Context& context(const mxArray* a){auto it=contexts.find(id(a));if(it==contexts.end())throw std::runtime_error("stale/released IC handle");it->second->selected();return *it->second;}
 void atExit(){int d=-1;cudaGetDevice(&d);contexts.clear();if(d>=0)cudaSetDevice(d);}
 mxArray* copyGPU(const double* p,int n){mwSize size=n;auto a=mxGPUCreateGPUArray(1,&size,mxDOUBLE_CLASS,mxREAL,MX_GPU_DO_NOT_INITIALIZE);try{ck(cudaMemcpy(mxGPUGetData(a),p,size_t(n)*sizeof(double),cudaMemcpyDeviceToDevice));auto out=mxGPUCreateMxArrayOnGPU(a);mxGPUDestroyGPUArray(a);return out;}catch(...){mxGPUDestroyGPUArray(a);throw;}}
-mxArray* info(Context& c,int iterations,double residual){const char* names[]={"iterations","true_relative_residual","shift","factor_levels","gpu_owned_bytes","solve_count","backend","preconditioner","factorization_backend","triangular_backend"};auto a=mxCreateStructMatrix(1,1,10,names);double v[]={double(iterations),residual,c.shift,double(c.levels),double(c.bytes()),double(c.solves)};for(int i=0;i<6;++i)mxSetField(a,0,names[i],mxCreateDoubleScalar(v[i]));const char* text[]={"MATLAB/mexcuda CUDA FP64","natural-order fixed-shift IC(0)","CUDA level-scheduled incomplete LDLT converted to Cholesky","cuSPARSE SpSV forward and transpose"};for(int i=0;i<4;++i)mxSetField(a,0,names[i+6],mxCreateString(text[i]));return a;}
+mxArray* info(Context& c,int iterations,double residual,bool checked=true){
+    const char* names[]={"iterations","true_relative_residual","shift","factor_levels","gpu_owned_bytes","solve_count","backend","preconditioner","factorization_backend","triangular_backend","residual_checked","symbolic_download_bytes","symbolic_upload_bytes","gpu_setup_peak_owned_bytes","memory_definition"};
+    auto a=mxCreateStructMatrix(1,1,15,names);double v[]={double(iterations),residual,c.shift,double(c.levels),double(c.bytes()),double(c.solves)};
+    for(int i=0;i<6;++i)mxSetField(a,0,names[i],i==1&&!checked?mxCreateDoubleMatrix(0,0,mxREAL):mxCreateDoubleScalar(v[i]));
+    const char* text[]={"MATLAB/mexcuda CUDA FP64","natural-order fixed-shift IC(0)","CUDA level-scheduled incomplete LDLT converted to Cholesky","cuSPARSE SpSV forward and transpose"};for(int i=0;i<4;++i)mxSetField(a,0,names[i+6],mxCreateString(text[i]));
+    mxSetField(a,0,names[10],mxCreateLogicalScalar(checked));mxSetField(a,0,names[11],mxCreateDoubleScalar(double(c.symbolicDownload)));mxSetField(a,0,names[12],mxCreateDoubleScalar(double(c.symbolicUpload)));mxSetField(a,0,names[13],mxCreateDoubleScalar(double(c.setupPeakOwned)));mxSetField(a,0,names[14],mxCreateString("Explicit owned CUDA buffers and queried SpSV workspaces; excludes opaque library/runtime allocations and caller inputs/outputs"));return a;
+}
 }
 void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** args){
     try{mxInitGPU();if(nrhs<1||!mxIsChar(args[0]))throw std::runtime_error("IC command required");char* chars=mxArrayToString(args[0]);if(!chars)throw std::runtime_error("invalid command");std::string command(chars);mxFree(chars);
         if(command=="create"){
             if(nrhs!=3||nlhs!=2)throw std::runtime_error("[handle,info]=radia_cuda_ic('create',GPU_CSR,shift)");auto c=std::make_unique<Context>();c->setup(args[1],scalar(args[2]));
             static Handle generation=Handle(std::chrono::high_resolution_clock::now().time_since_epoch().count())&0x0000ffffffffffffULL;if(generation==0x0000ffffffffffffULL)throw std::runtime_error("IC generation exhausted");Handle h=(TAG<<48)|++generation;
-            out[1]=info(*c,0,0);out[0]=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);*static_cast<Handle*>(mxGetData(out[0]))=h;contexts.emplace(h,std::move(c));static bool registered=false;if(!registered){mexAtExit(atExit);registered=true;}mexLock();return;
+            out[1]=info(*c,0,0,false);out[0]=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);*static_cast<Handle*>(mxGetData(out[0]))=h;contexts.emplace(h,std::move(c));static bool registered=false;if(!registered){mexAtExit(atExit);registered=true;}mexLock();return;
         }
         if(command=="release"){if(nrhs!=2||nlhs!=0)throw std::runtime_error("release requires IC handle");context(args[1]);contexts.erase(id(args[1]));mexUnlock();return;}
         if(command=="live_count"){if(nrhs!=1||nlhs!=1)throw std::runtime_error("live_count arity");out[0]=mxCreateDoubleScalar(double(contexts.size()));return;}
