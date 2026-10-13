@@ -6,7 +6,7 @@ import json
 from importlib.resources import files
 from pathlib import Path
 
-__version__ = "0.1.4.dev0"
+__version__ = "0.1.4"
 
 
 def matlab_path() -> Path:
