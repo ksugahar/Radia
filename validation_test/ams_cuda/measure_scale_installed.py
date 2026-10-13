@@ -74,7 +74,7 @@ def main(a):
         if a.ic_directory:
             a.ic_directory=a.ic_directory.resolve();ic_build=json.loads((job/'ic-build.json').read_text());ic_hash=ic_build['binary_sha256_by_file']['radia_cuda_ic.mexw64']
             if sha(a.ic_directory/'radia_cuda_ic.mexw64')!=ic_hash:raise RuntimeError('IC candidate build identity mismatch')
-            r['ic_candidate']=dict(build_source_commit=ic_build['source_commit'],binary_sha256=ic_hash,source_sha256=ic_build['source_sha256_by_file']['radia_cuda_ic.cu'],distribution_status='Experimental candidate separate from unchanged stable 0.1.4 AMS wheel')
+            r['ic_candidate']=dict(build_source_commit=ic_build['source_commit'],binary_sha256=ic_hash,source_sha256=ic_build['source_sha256_by_file']['radia_cuda_ic.cu'],frontend_sha256={n:sha(a.ic_directory/'+radia/+gpu'/n) for n in ('ICContext.m','HCurlICSystem.m')},distribution_status='Experimental candidate separate from unchanged stable 0.1.4 AMS wheel')
             r['comparison']='Independent CPU AMS/IC at NGSolve1/16 versus stable GPU AMS and experimental GPU IC'
         r.update(wheel=wheel,installed=installed,cpu_ams_build_receipt_sha256=sha(job/'bridge-provenance/build.json'),cpu_ic_origin=owner['cpu_ic_origin'],versions=dict(python=sys.version,ngsolve=ng.__version__,numpy=np.__version__,cpu_native_ngslib_sha256=sha(ng.ngslib.__file__)),protocol_sha256={n:sha(job/n) for n in ('measure_scale_installed.py','measure_scale_installed.m')})
         r['cpu_hardware']=json.loads(subprocess.check_output(['powershell','-NoProfile','-Command','Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors | ConvertTo-Json'],text=True))
