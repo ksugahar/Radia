@@ -3516,6 +3516,42 @@ def _constructor_default_contract() -> dict[str, object]:
     }
 
 
+def _memory_history_tpe_contract() -> dict[str, object]:
+    rng = np.random.RandomState(19)
+    numeric = rng.uniform(-2, 2, size=(512, 2))
+    choices = ["a", "b", "c"]
+    distributions = {
+        "x": optuna.distributions.FloatDistribution(-2, 2),
+        "category": optuna.distributions.CategoricalDistribution(choices),
+        "z": optuna.distributions.FloatDistribution(-2, 2),
+    }
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        sampler = optuna.samplers.TPESampler(
+            seed=37, multivariate=False, constant_liar=True
+        )
+    study = optuna.create_study(sampler=sampler)
+    history = []
+    for index, (x, z) in enumerate(numeric):
+        category = choices[index % len(choices)]
+        value = float(x * x + z * z + 0.1 * (index % len(choices)))
+        params = {"x": float(x), "category": category, "z": float(z)}
+        study.add_trial(optuna.trial.create_trial(
+            params=params, distributions=distributions, value=value
+        ))
+        history.append({**params, "value": value})
+    proposals = []
+    for _ in range(12):
+        trial = study.ask()
+        x = trial.suggest_float("x", -2, 2)
+        category = trial.suggest_categorical("category", choices)
+        z = trial.suggest_float("z", -2, 2)
+        value = x * x + z * z + 0.1 * choices.index(category)
+        study.tell(trial, value)
+        proposals.append({"x": x, "category": category, "z": z, "value": value})
+    return {"seed": 37, "choices": choices, "history": history, "proposals": proposals}
+
+
 def build_oracle() -> dict[str, object]:
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     if optuna.__version__ != EXPECTED_VERSION:
@@ -3583,6 +3619,7 @@ def build_oracle() -> dict[str, object]:
         "distribution_json": _distribution_json_contract(),
         "random_sampler_seed_123": _random_trials(),
         "tpe_sampler_seed_37": _tpe_trials(),
+        "memory_history_tpe": _memory_history_tpe_contract(),
         "tpe_intersection_transitions": _tpe_intersection_transitions(),
         "native_tpe_history_selection": _native_tpe_history_selection(),
         "tpe_constant_liar_seed_127": _tpe_constant_liar_contract(),

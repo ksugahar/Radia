@@ -683,7 +683,7 @@ def matlab_optuna_simulink_contract():
                 "optuna.parzen.log_pdf_categorical",
                 "optuna.sobol.points",
             ],
-            "policy": "Require the exact independent 21-command optuna_mex gateway for checked optimizer kernels; keep Study/Trial, persistence, callbacks, and unsupported fused-option orchestration in readable MATLAB. A missing or incompatible optuna_mex is an error and never redirects through radia_mex or a silent substitute.",
+            "policy": "Require the exact independent optuna_mex command contract for checked optimizer kernels; keep Study/Trial, persistence, callbacks, and unsupported fused-option orchestration in readable MATLAB. A missing or incompatible optuna_mex is an error and never redirects through radia_mex or a silent substitute.",
             "missing_mex_fallback": False,
             "full_optimizer_in_cpp": False,
             "python_per_trial": "false for MATLAB-native samplers; GPSampler Backend='upstream-python' and scrambled QMCSampler use Python and are excluded from the step-time block",

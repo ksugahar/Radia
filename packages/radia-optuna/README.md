@@ -1,16 +1,245 @@
 # radia-optuna
 
 The native gateway is built with MATLAB `mexcuda`. TPE Parzen density,
-candidate scoring, and first-maximum selection execute on an NVIDIA GPU in
-double precision. Study/Trial management, estimator construction, seeded
-random consumption, and candidate generation remain on the CPU host.
-CPU host parallel kernels use OpenMP through the same mexcuda build; ordered
-random consumption remains serial. Ordinary `mex` compilation is prohibited.
-These TPE operations require Parallel Computing Toolbox and a supported
-NVIDIA GPU; a CPU-only gateway is rejected. GPU users do not need Python.
-Optional upstream-backed features retain their Python requirements below.
+candidate scoring and first-maximum selection can run on CPU or GPU in double
+precision. Select the execution explicitly in each MATLAB process:
 
-Use the same GPU-backed TPE from MATLAB or the included masked Simulink
+```matlab
+radia.optuna.executionMode("cpu"); % OpenMP host kernels, same mexcuda binary
+radia.optuna.executionMode("gpu"); % CUDA kernels; the initial/default mode
+mode = radia.optuna.executionMode();
+```
+
+CPU/GPU selection is a development addition after 0.3.0; the published 0.3.0
+wheel retains its original GPU-only TPE execution. See the
+[dual-route validation record](../../validation_test/radia_optuna/results/execution-choice-20261013.json).
+
+CPU mode does not initialize CUDA, allocate device memory or transfer data.
+GPU mode requires Parallel Computing Toolbox and a supported NVIDIA GPU;
+device errors raise and never switch to CPU. This is a process-wide execution
+setting, independent of Study storage and RNG state. Set it before a run and
+in each parallel worker; reloading `optuna_mex` resets it to GPU. Simulink
+uses the setting in its MATLAB process. No automatic size-based dispatch is
+provided. `api.info` reports `execution_mode`, CPU call counters and CUDA
+launch/transfer counters so the chosen path can be checked.
+
+Study/Trial management, history selection/gathering, ordered mixture weights,
+seeded random consumption and candidate generation remain host work. In GPU
+mode, native observation-built TPE models now construct numerical bandwidths,
+categorical probabilities and density normalizers on the device. The good
+model's sampling parameters return to the ordered host RNG; the bad model
+stays on device through scoring. Caller-supplied estimators retain their
+existing construction boundary. CPU host parallel
+kernels use OpenMP in the mexcuda build; ordered random consumption remains
+serial. Ordinary `mex` compilation remains prohibited. GPU users do not need
+Python; optional upstream-backed features retain their requirements below.
+
+Study history remains fully in host memory. Public tables are generated on
+demand from column stores; TPE does not materialize tables on every proposal.
+Independent sampling uses the original column scan for histories below 512
+trials. Larger histories index parameter rows by their exact names, append
+new rows to that index, and preserve chronological observation order.
+Single-parameter histories use the existing columns directly. For a single
+objective with at least 512 completed trials and multiple parameters,
+without pruning, constraints or a custom Gamma function, TPE also
+reuses the global good-trial split between parameter requests until the
+trial count or states change. Other splits retain their existing computation.
+These caches do not discard trials, change RNG consumption or select a
+different CPU/GPU backend. They are rebuilt after loading saved history.
+
+An empty `StoragePath` performs no persistence. To retain explicit checkpoints
+without writing a complete MAT snapshot at each mutation, configure
+`StoragePath` with `AutoSave=false`, then call `study.save()` at the required
+checkpoint boundaries. Unsaved progress is lost if the process exits; the
+default automatic persistence contract is unchanged. Additional RAM retains
+more history, but does not remove serialization or synchronous storage costs.
+
+`validation_test/optimization/benchmark_optuna_parameter_history.m` measures
+independent TPE with all history retained and CPU or GPU execution in the mexcuda
+module. Its JSON includes module initialization, first-trial and warmed
+end-to-end times, MATLAB memory, and proposal arrays for differential
+comparison. Optional MAT fixtures reuse setup inputs only; sampling storage
+remains in memory. This benchmark does not compare Python/DB or Rustuna,
+or measure the default multivariate native-history route.
+See the [history-cache validation record](../../validation_test/radia_optuna/results/memory-history-20261013.json).
+
+The following history-cache, OpenMP and resident-workspace measurements describe
+iterations before GPU model construction and parallel mixture exponentials.
+Their host-construction limits and recommendations apply to those artifacts;
+see the final model-construction comparison below for the current candidate.
+
+The [history-cache-only A100 measurements](../../validation_test/optimization/results_optuna_memory_performance_a100_20261013.json)
+precede CPU OpenMP dispatch tuning. Their 1.52x GPU/CPU ratio used a serial CPU
+density kernel at the default 24 candidates and is superseded by the comparison below.
+
+CPU density now parallelizes independent candidate rows when there are at least
+256 candidates or `candidates * mixture_components * dimensions >= 16384`,
+provided more than one OpenMP worker is available. The team is bounded by the
+candidate count. Component summation and first-maximum selection remain ordered.
+Set `OMP_NUM_THREADS` before starting MATLAB; `api.info` reports
+`cpu_parallel_density_calls` and `cpu_max_density_threads` to verify actual use.
+CPU execution still requires only the same mexcuda binary and performs no CUDA
+initialization or transfers.
+
+[Formal OpenMP A100 measurements](../../validation_test/optimization/results_optuna_openmp_performance_a100_20261013.json)
+use the same in-memory history implementation for both variants, default 24
+candidates, fresh-session ABBA order, 1 and 16 configured threads, and 18 warmed
+samples per variant/case. Times include `ask`, all suggestions, recording and
+`tell`, with complete history retained and persistence disabled. The 16-thread
+independent-TPE comparison is:
+
+| History trials | Parameters | Previous CPU (ms) | Tuned CPU (ms) | GPU (ms) |
+| ---: | ---: | ---: | ---: | ---: |
+| 24 | 1 | 1.097 | 1.092 | 1.408 |
+| 256 | 1 | 1.325 | 1.312 | 1.357 |
+| 1000 | 1 | 2.541 | 1.452 | 1.797 |
+| 5000 | 1 | 9.101 | 3.548 | 4.220 |
+| 24 | 40 | 26.640 | 26.049 | 39.778 |
+| 256 | 40 | 47.736 | 47.728 | 50.215 |
+| 1000 | 40 | 93.983 | 46.427 | 60.641 |
+| 5000 | 40 | 389.318 | 152.884 | 177.174 |
+
+The threshold change speeds up the large independent cases by 1.75-2.57x.
+Tuned CPU is faster than GPU in all eight measured independent cases; small-case
+changes are close to baseline. All 17,056 paired proposal values match exactly,
+and CPU/GPU candidate proposals also match. Earlier interrupted runs are excluded.
+These are development-source results, not published 0.3.0 wheel timings or a
+comparison with Python storage/Rustuna.
+
+[Joint-TPE A100 measurements](../../validation_test/optimization/results_optuna_openmp_joint_a100_20261013.json)
+use `Multivariate=true`, 40 parameters, the same default 24 candidates and
+complete histories. CPU 1/4/8/16 and GPU 16 run in palindromic order, with a
+separate two-session CPU-12 check because 24 candidate rows divide evenly into
+12 workers. Each configuration/case has 18 warmed samples. The best measured
+CPU configuration is selected separately for each case:
+
+| History trials | CPU threads | Tuned CPU (ms) | GPU (ms) | GPU speedup |
+| ---: | ---: | ---: | ---: | ---: |
+| 24 | 8 | 11.792 | 12.000 | 0.98x |
+| 1000 | 16 | 17.826 | 16.533 | 1.08x |
+| 5000 | 16 | 53.613 | 43.897 | 1.22x |
+
+CPU parallelism reduces the 5000-trial joint case from 209.264 to 53.613 ms
+(3.90x versus serial CPU). GPU retains a modest 1.22x advantage in that case,
+while its 1.08x advantage at 1000 trials is small and it loses at 24 trials.
+All proposal arrays agree exactly across the measured CPU thread counts and GPU.
+The recommendation is CPU for routine use, with GPU retained as an explicit
+option for large joint histories whose end-to-end measurements justify it.
+These results do not support promoting GPU as a general TPE speed advantage.
+The process default remains GPU for compatibility; explicitly select
+`radia.optuna.executionMode("cpu")` to use the recommended CPU route.
+
+Those comparisons probe fixed histories. The
+[closed-loop inference measurements](../../validation_test/optimization/results_optuna_resident_inference_a100_20261013.json)
+instead optimize Branin and a 40-dimensional correlated quadratic valley for
+800 trials, seeds 11/37, default 24 candidates and `Multivariate=true`.
+Twelve fresh idle-A100 MATLAB Engine sessions run CPU / previous GPU / resident
+GPU / resident GPU / previous GPU / CPU, separately for batch sizes 1 and 8.
+CPU uses 16 configured threads. The following medians pool both seeds and
+both sessions, trials 513-800; inference includes `ask` and suggestions,
+with objective evaluation and `tell` timed separately:
+
+| Problem | Batch | CPU inference (ms) | Previous GPU (ms) | Resident GPU (ms) | GPU / CPU speedup |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Branin, 2D | 1 | 1.146 | 1.441 | 1.138 | 1.01x |
+| Correlated valley, 40D | 1 | 13.016 | 12.351 | 12.000 | 1.08x |
+| Branin, 2D | 8 | 1.758 | 2.075 | 1.797 | 0.98x |
+| Correlated valley, 40D | 8 | 23.363 | 23.632 | 23.414 | 1.00x |
+
+Full proposal arrays, objective values and convergence curves agree exactly
+across backends within each seed/problem/batch configuration. The retained
+workspace improves warmed inference over the previous GPU by 1.01-1.27x,
+but establishes no broad advantage over tuned CPU. Cold-inclusive totals are
+also recorded: first-use GPU initialization can reverse a warmed advantage.
+The default `ConstantLiar=true` includes pending observations, changing models
+during batch proposals; these runs avoid allocations but save no input-transfer
+bytes. This workspace-only iteration still constructed models on the host.
+In the sequential 40D case, `ask` contains multivariate model preparation and
+candidate sampling through `beforeTrial`, plus Study setup. Its median is
+CPU 5.492 ms versus resident GPU 4.559 ms (1.20x). The subsequent 40 suggestions,
+which retrieve relative parameters and record them, take 7.516/7.435 ms.
+These API phases show where the gain appears; neither is a kernel-only timer.
+
+A separate six-session
+[model-reuse comparison](../../validation_test/optimization/results_optuna_resident_reuse_a100_20261013.json)
+explicitly sets `ConstantLiar=false`, with batch size 8 and the same cases,
+seeds and measurements. This preserves that option's algorithm on all three
+backends; its trajectories must not be compared with `ConstantLiar=true`
+as if they were the same optimization configuration. Input transfers fall
+by 85.8%, confirming that model data remain on the GPU between proposals.
+Warmed Branin inference is CPU 1.786 ms, previous GPU 2.072 ms, resident GPU
+1.783 ms. For the 40D valley the corresponding times are 23.245, 23.713 and
+23.740 ms. Thus transfer reuse does not establish an overall GPU speed
+advantage: workspace reuse helps small GPU calls, while the higher-dimensional
+inference remains close to tuned CPU and its previous GPU implementation.
+Host estimator construction and packing remained in those measured artifacts;
+these results motivated moving numerical construction and preparation to CUDA.
+The GPU route remains optional, with no general acceleration claim.
+
+GPU times include allocation, transfers, density and selection; isolated
+transfer seconds are not measured. JSON includes first-trial and module/Engine
+startup times, before/after MATLAB memory and native temporary memory counters.
+Whole-runtime peak memory and objective-function execution time are not measured.
+The speedups concern proposal processing, not the full optimization including
+an expensive objective. CPU thread screening is limited to the configurations
+shown and does not establish a universal optimum.
+
+## GPU model-construction comparison (2026-10-13)
+
+The [final A100 comparison](../../validation_test/optimization/results_optuna_gpu_model_performance_a100_20261013.json)
+includes GPU bandwidth/category construction, density preparation, CUB sorting
+above 256 observations and parallel exponentials with ordered final summation.
+The final CPU16/GPU16 comparison uses one hash-verified mexcuda binary in four
+fresh MATLAB Engine sessions, CPU / GPU / GPU / CPU, without overlapping jobs.
+CPU also reuses normalizers and prepares log-sigma once per model. Earlier
+CPU 1/4/8 screening is retained; the final refinements change GPU kernels only.
+All cases use the default 24 candidates, full history and in-memory storage.
+
+| Joint TPE case | CPU (ms) | GPU (ms) | GPU speedup |
+| --- | ---: | ---: | ---: |
+| Fixed history 24, 40D | 10.874 | 10.742 | 1.01x |
+| Fixed history 1,000, 40D | 16.062 | 11.601 | 1.38x |
+| Fixed history 5,000, 40D | 44.838 | 18.343 | 2.44x |
+| Sequential Branin, 2D | 1.057 | 1.137 | 0.93x |
+| Sequential correlated valley, 40D | 12.217 | 9.950 | 1.23x |
+
+Fixed-history timings include ask, suggestions, recording and tell; sequential
+inference timings include ask and suggestions. Sequential medians pool trials
+513-800, seeds 11/37 and two sessions per backend. The fixed-history 24-trial
+CPU value uses four threads from the earlier screening; the other displayed
+CPU values use 16 threads with the final binary. The JSON also records cold
+initialization, per-seed totals, timing distributions, transfers and memory.
+
+In the 40D sequential case, ask (model preparation/sampling plus Study setup)
+falls from 4.572 to 2.499 ms, a 1.83x improvement. Suggestions/recording remain
+7.633/7.457 ms, limiting the complete inference improvement to 1.23x.
+Full proposal arrays, objectives and convergence curves match exactly across
+the measured implementations within each configuration. These are public
+optimization problems, not engineering CAE performance acceptance.
+
+Independent TPE still has no substantial GPU advantage: the final six cases
+range from 0.86x to 1.03x versus CPU16. GPU is useful for large joint models;
+small and independent workloads should select CPU when their measurements
+favor it. The process default remains GPU for compatibility. Batch/reuse
+results in this JSON use the preceding model-construction binary and do not
+certify final CUB/parallel-exponential batch performance. No Python/DB,
+Rustuna, BoTorch or universal GPU speedup is claimed.
+
+The [focused construction/lifecycle record](../../validation_test/radia_optuna/results/gpu-model-construction-20261013.json)
+records 37 passing checks on both RTX 5000 and A100, plus the A100 oracle-manifest
+check. Fourteen Optuna 5.0.0-generated model fixtures run on CPU/GPU twice,
+including exact following random values. Large signed-zero sorting also has
+an explicit backend differential check. Failed-model cache invalidation,
+GPU reset, unrelated gpuArray liveness, CPU memory release and module reload
+are checked. This focused coverage does not certify every upstream API;
+the API/oracle manifests remain authoritative.
+
+To summarize recovered raw JSON without publishing operational paths or
+logs, run `summarize_optuna_gpu_model.py --input-directory <recovered-job>
+--output <result.json>` from `validation_test/optimization`. The summarizer
+checks idle-session receipts and exact trajectories before reporting speedups.
+
+Use the same TPE from MATLAB or the included masked Simulink
 study block and `SimulinkRunner`. Simulink is optional for MATLAB-only use.
 
 Build on the designated 100 host with `Build.ps1 -OptunaMexOnly -Test`.
@@ -18,15 +247,17 @@ MATLAB selects its supported CUDA toolkit and Visual Studio compiler.
 The focused acceptance saves `validation_test/optimization/results_optuna_cuda_100.json`,
 including upstream 5.0.0 density/selection checks, exact random consumption,
 CUDA launch counters, runtime versions, transfers and temporary device memory.
-This is correctness evidence; formal speed comparisons require idle mdx.
+This is correctness evidence; formal speed comparisons use the idle A100 host.
 
 `radia-optuna` is an independent, separately distributed MATLAB optimization
 component from the Radia monorepo. It installs the `radia.optuna` MATLAB
-namespace, the 21-command `optuna_mex`, and checked compatibility contracts
+namespace, the 22-command `optuna_mex`, and checked compatibility contracts
 whose behavioral oracle is Optuna 5.0.0. Its checked public inventory contains
-812 present and mapped entries: 749 have evidence derived from an upstream
-oracle generator and 63 remain explicitly assertion-mapped. The required
-shared scope is 401/401 evidence-mapped with no asserted required entry. It
+812 present entries: 108 are oracle-verified in the checked coverage ledger
+and 704 remain assertion-mapped. All 401 required entries are present;
+79 have recorded oracle mappings and 322 still require that evidence.
+Full API compatibility verification is therefore incomplete. Focused TPE
+oracle tests certify their exercised cases, rather than the entire API. It
 does not install or load the Radia solver, NGSolve, oneMKL, or Cubit.
 
 Optuna 5.0.0 is also the algorithmic source of truth: native MATLAB and MEX
@@ -205,10 +436,50 @@ Acceptance requires a GPU architecture included in the compiled artifact. Additi
 
 ### Reproducible performance evidence
 
-The CUDA gateway packs inputs into one host-to-device transfer and uses one
-per-call GPU allocation, including joint TPE evaluation. It retains ordered
+The 2026-10-12 CUDA gateway packed inputs into one host-to-device transfer and
+used one per-call GPU allocation, including joint TPE evaluation. It retained ordered
 random consumption and the existing GPU kernels; it never chooses a CPU
 fallback for a declared GPU operation.
+
+The development gateway now retains a MATLAB-owned GPU workspace, up to 64 MiB
+per device. An exact host byte shadow identifies unchanged input ranges;
+only the contiguous changed range is uploaded. This reuses model data when
+successive calls share it without caching a stale estimator. MATLAB GPU-data
+liveness detects device resets, including reused allocation addresses.
+Switching to CPU or unloading the module releases retained workspaces.
+Larger calls use temporary allocations; `allocator` describes that temporary
+allocation route. `api.info` additionally reports `device_allocation_calls`,
+`workspace_reuses`, `avoided_upload_bytes` and `cached_device_bytes`.
+The observation-built GPU model path additionally keeps model outputs in
+separate retained workspaces, within the same 64 MiB per-device total budget.
+Input shadows never include kernel-written outputs. GPU sorting preserves the
+existing small-array NumPy network and large-array value/index ordering;
+bandwidth clipping and categorical normalization keep their original order.
+Above 256 observations, CUDA's CUB segmented radix sort replaces the initial
+global-memory bitonic implementation. Stable pairs preserve the existing
+large-array ordering, including signed zeros. `model_radix_sorts` and
+`peak_sort_temporary_bytes` expose this route and its scratch requirement.
+Only successfully scored models become reusable; allocation or evaluation
+failures invalidate incomplete output caches and restore the sampling RNG.
+For mixtures with at least 128 components, independent exponentials execute
+in parallel before the final ordered addition. Maximum selection, component
+addition and candidate tie-breaking retain their original order; small
+mixtures keep the shorter serial exponential path within the CUDA kernel.
+`model_build_launches`, `model_reuses`, `preparation_launches` and
+`model_download_bytes` expose construction, reuse and host RNG transfers.
+CPU density also reuses the constructor's ordered normalizers and prepares
+log-sigma once per model, rather than recomputing them for every candidate.
+`cpu_preparation_calls` and `cpu_cached_normalizer_values` verify this CPU
+comparison route. GPU construction calls do not enter CPU density preparation.
+
+`benchmark_optuna_inference.m` measures a complete optimization loop on Branin
+and a 40-dimensional correlated quadratic valley. It separates inference
+(`ask` plus suggestions, including preparation/recording), objective evaluation,
+and history updates. `BatchSize=8` proposes eight trials before updating their
+observations, with serial objective evaluation. These public optimization
+benchmarks do not certify engineering CAE objectives or change TPE into a GP
+surrogate. CPU/GPU comparisons must preserve the full proposal and convergence
+trajectories for each seed and batch size.
 
 An idle, user-selected A100 40 GB host was used for the 2026-10-12 formal
 comparison because the original timing host had no NVIDIA GPU. MATLAB R2026a
@@ -262,16 +533,22 @@ PyPI, and attaches it to the matching GitHub Release.
 
 Build `optuna_mex` with `Build.ps1 -OptunaMexOnly`, which calls MATLAB
 `mexcuda` with its supported compiler configuration. A CUDA-capable NVIDIA
-host and Parallel Computing Toolbox are required for density evaluations.
+host and Parallel Computing Toolbox are required for GPU-mode density evaluations.
 No NGSolve, TaskManager, Radia CPU solver, or CPU-only MEX build is linked.
 
 Parzen numerical/categorical mixture densities and univariate/joint/grouped
-TPE candidate densities and selection execute in FP64 CUDA. Study/Trial management,
+TPE candidate densities and selection execute in FP64 CUDA in GPU mode or
+CPU host kernels in CPU mode. Study/Trial management,
 stateful random-number consumption, candidate generation and Pareto/Sobol
-remain host operations. Selection tie-breaking stays ordered on CUDA. Device errors raise; they do not
+remain host operations. Selection tie-breaking stays ordered on both routes. Device errors raise; they do not
 switch to a CPU density implementation. RNG state is restored on failed
 candidate evaluation. `api.info` reports this boundary and the build route;
 MATLAB rejects old CPU-only MEX binaries even if their command list matches.
+
+Native observation-built numerical/categorical models and density preparation
+also execute on GPU in GPU mode. Mixture-weight ordering, history selection,
+domain checks and sampling RNG remain host operations; no CPU model-building
+fallback is used by a declared native GPU construction call.
 
 The oracle remains Optuna 5.0.0. Numerical parity and transfer-inclusive
 measurements are required before claiming acceleration. Building with

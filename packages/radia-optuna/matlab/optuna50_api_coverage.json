@@ -751,6 +751,7 @@
         "grid_sampler_seed_17",
         "importance",
         "lifecycle_errors",
+        "memory_history_tpe",
         "mixed_tpe_sampler_seed_43",
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
@@ -821,6 +822,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
+        "memory_history_tpe",
         "native_tpe_history_selection",
         "numeric_untransform",
         "rdb_storage",
@@ -947,6 +949,7 @@
         "gp_sampler_seed_53",
         "grid_sampler_seed_17",
         "lifecycle_errors",
+        "memory_history_tpe",
         "mixed_tpe_sampler_seed_43",
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
@@ -1040,6 +1043,7 @@
         "importance",
         "journal_storage",
         "lifecycle_errors",
+        "memory_history_tpe",
         "native_tpe_history_selection",
         "pruners",
         "rdb_storage",
@@ -1358,7 +1362,8 @@
       "oracle_sections": [
         "core_api",
         "frozen_trial",
-        "importance"
+        "importance",
+        "memory_history_tpe"
       ],
       "oracle_status": "verified",
       "scope": "required",
@@ -1457,6 +1462,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
+        "memory_history_tpe",
         "native_tpe_history_selection",
         "numeric_untransform",
         "rdb_storage",
@@ -3473,6 +3479,7 @@
         "constraints",
         "custom_tpe_sampler_gamma_weights",
         "lifecycle_errors",
+        "memory_history_tpe",
         "mixed_tpe_sampler_seed_43",
         "multiobjective_tpe_sampler_seed_41",
         "multivariate_tpe_sampler_seed_67",
@@ -7845,6 +7852,7 @@
         "grpc_storage",
         "importance",
         "journal_storage",
+        "memory_history_tpe",
         "native_tpe_history_selection",
         "rdb_storage",
         "retry_callback",
@@ -8179,6 +8187,6 @@
   "upstream_inventory": "tests/matlab/fixtures/optuna50_public_api.json",
   "upstream_inventory_sha256": "81CBD4C33ACAC95063994CC8DE8B5BBEF788C40ED23F8ECEAE690C9F0D14B602",
   "upstream_oracle": "tests/matlab/fixtures/optuna50_oracle.json",
-  "upstream_oracle_sha256": "509BAFF53C7B5DC14B7695C67FFC52CEBD41DF550DE11F75684EC65A784B7292",
+  "upstream_oracle_sha256": "EA0CEDC1C76DE02C4637126B81DD450164DB94D5974281EEFD764B20631E7EC4",
   "upstream_version": "5.0.0"
 }

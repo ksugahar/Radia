@@ -157,8 +157,17 @@ for index=1:numel(entries)
         string(entries(index).test);
     verifyTrue(testCase,ismember(string(entries(index).classification),allowed));
     if string(entries(index).classification)=="upstream-python"
+        expectedOracle="optuna50_oracle.json";
+        if string(entries(index).file)=="test_optuna_cuda.m" && ...
+                string(entries(index).test)=="testDensityMatchesUpstream"
+            expectedOracle="optuna_cuda_density_oracle.json";
+        end
+        if string(entries(index).file)=="test_optuna_cuda.m" && ...
+                string(entries(index).test)=="testGpuModelConstructionMatchesUpstream"
+            expectedOracle="optuna50_cuda_oracle.json";
+        end
         verifyEqualWithPrecision(testCase,string(entries(index).oracle), ...
-            "optuna50_oracle.json");
+            expectedOracle);
     elseif string(entries(index).classification)=="upstream-mcp"
         verifyEqualWithPrecision(testCase,string(entries(index).oracle), ...
             "optuna50_mcp_oracle.json");
@@ -1921,6 +1930,30 @@ for index=1:numel(expected)
     study.tell(trial,(actual(index)-0.25)^2);
 end
 verifyEqualWithPrecision(testCase,actual,expected,AbsTol=5e-12);
+end
+
+function testTPEIndexedMixedHistoryMatchesUpstream(testCase)
+contract=testCase.TestData.Oracle.memory_history_tpe;
+choices=reshape(string(contract.choices),1,[]);
+study=radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
+    Seed=contract.seed,Multivariate=false),AutoSave=false);
+distributions=struct('x',radia.optuna.FloatDistribution(-2,2), ...
+    'category',radia.optuna.CategoricalDistribution(choices), ...
+    'z',radia.optuna.FloatDistribution(-2,2));
+for row=reshape(contract.history,1,[])
+    study.add_trial(radia.optuna.create_trial(value=row.value, ...
+        params=struct('x',row.x,'category',string(row.category),'z',row.z), ...
+        distributions=distributions));
+end
+for row=reshape(contract.proposals,1,[])
+    trial=study.ask();
+    x=trial.suggest_float("x",-2,2);
+    category=trial.suggest_categorical("category",choices);
+    z=trial.suggest_float("z",-2,2);
+    verifyEqualWithPrecision(testCase,[x,z],[row.x,row.z],AbsTol=5e-12);
+    verifyEqual(testCase,string(category),string(row.category));
+    study.tell(trial,row.value);
+end
 end
 
 function testNativeTPEHistorySelectionMatchesUpstream(testCase)

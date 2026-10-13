@@ -589,6 +589,7 @@ void DestroyRegistered(Registry& registry, std::uint64_t handle,
 
 
 void Cleanup() {
+    optuna_cuda::release_cached_memory();
     std::size_t unlock_count = 0;
     {
         std::lock_guard<std::mutex> guard(registry_mutex);
@@ -643,7 +644,7 @@ void DestroyOptunaRandomState(std::uint64_t handle) {
 
 mxArray* Commands() {
     static const char* names[] = {
-        "api.info", "api.commands",
+        "api.info", "api.commands", "api.execution",
         "optuna.pareto.rank_crowding",
         "optuna.parzen.log_pdf_numerical",
         "optuna.parzen.log_pdf_categorical",
@@ -1192,6 +1193,7 @@ void OptunaTPEBestNumerical(int nlhs, mxArray* plhs[], int nrhs,
 }
 
 struct OptunaJointEstimator {
+    std::shared_ptr<optuna_cuda::PreparedModel> device_model;
     bool categorical = false;
     std::vector<double> weights;
     std::vector<double> mu;
@@ -1402,7 +1404,7 @@ std::vector<double> OptunaBestJoint(
         for (const auto& e : source)
             result.push_back({&e.weights, &e.mu, &e.sigma, &e.probabilities,
                 e.choice_count, e.internal_low, e.internal_high, e.step,
-                e.categorical, e.log_scale});
+                e.categorical, e.log_scale, e.device_model.get(), &e.denominator});
         return result;
     };
     const auto best = optuna_cuda::best(candidates, views(below), views(above));
@@ -1614,10 +1616,57 @@ std::vector<OptunaJointEstimator> OptunaBuildJointEstimators(
     const mxLogical* log_scale, const std::vector<double>& steps,
     const std::vector<int>& choice_counts, double prior_weight,
     bool magic_clip, bool endpoints,
-    const std::vector<double>& observation_weights) {
+    const std::vector<double>& observation_weights, bool host_sampling = true) {
     std::vector<OptunaJointEstimator> result(dimension);
     const auto weights = OptunaMixtureWeights(
         observation_count, prior_weight, observation_weights);
+    if (optuna_cuda::use_gpu()) {
+        std::vector<optuna_cuda::ModelDimension> settings(dimension);
+        std::memset(settings.data(), 0, dimension * sizeof(optuna_cuda::ModelDimension));
+        for (std::size_t dim = 0; dim < dimension; ++dim) {
+            auto& estimator = result[dim];
+            estimator.categorical = categorical[dim]; estimator.weights = weights;
+            estimator.low = lows[dim]; estimator.high = highs[dim];
+            estimator.step = steps[dim]; estimator.log_scale = log_scale[dim];
+            estimator.choice_count = choice_counts[dim] > 0 ? static_cast<std::size_t>(choice_counts[dim]) : 0;
+            if (estimator.categorical && !estimator.choice_count)
+                BadArgument("joint TPE categorical choice count must be positive");
+            const bool discrete = std::isfinite(estimator.step);
+            const double low = discrete ? estimator.low - 0.5 * estimator.step : estimator.low;
+            const double high = discrete ? estimator.high + 0.5 * estimator.step : estimator.high;
+            if (!estimator.categorical && (!(low < high) || (estimator.log_scale && low <= 0.0)))
+                BadArgument("joint TPE numerical support is invalid");
+            estimator.internal_low = estimator.log_scale ? std::log(low) : low;
+            estimator.internal_high = estimator.log_scale ? std::log(high) : high;
+            const double span = estimator.internal_high - estimator.internal_low;
+            const double minimum = magic_clip ? span / std::min<double>(100.0,
+                static_cast<double>(observation_count) + 2.0) :
+                std::numeric_limits<double>::epsilon();
+            auto& setting = settings[dim];
+            setting.low = estimator.internal_low; setting.high = estimator.internal_high;
+            setting.step = estimator.step; setting.minimum = minimum;
+            setting.choices = estimator.choice_count; setting.categorical = estimator.categorical;
+            setting.log_scale = estimator.log_scale;
+            for (std::size_t row = 0; row < observation_count; ++row) {
+                const double raw = observations[row * dimension + dim];
+                if (!std::isfinite(raw) || (estimator.categorical ?
+                    (raw != std::floor(raw) || raw < 1.0 || raw > static_cast<double>(estimator.choice_count)) :
+                    (estimator.log_scale && raw <= 0.0)))
+                    BadArgument("TPE observation is invalid");
+            }
+        }
+        auto model = optuna_cuda::build_model(observations, weights, settings,
+            prior_weight, endpoints, host_sampling);
+        for (std::size_t dim = 0; dim < dimension; ++dim) {
+            result[dim].device_model = model.device;
+            result[dim].mu = std::move(model.mu[dim]);
+            result[dim].sigma = std::move(model.sigma[dim]);
+            result[dim].probabilities = std::move(model.probabilities[dim]);
+
+
+        }
+        return result;
+    }
     for (std::size_t dim = 0; dim < dimension; ++dim) {
         auto& estimator = result[dim];
         estimator.categorical = categorical[dim];
@@ -1767,14 +1816,20 @@ void OptunaTPEBestJointObservations(int nlhs, mxArray* plhs[], int nrhs,
     const auto above = OptunaBuildJointEstimators(
         bad, bad_count, dimension, categorical, lows, highs, log_scale,
         steps, choice_counts, prior_weight, magic_clip, endpoints,
-        above_weights);
+        above_weights, false);
     plhs[0] = RealRow(OptunaBestJoint(state, count, below, above));
 }
 
 OptunaJointEstimator OptunaBuildUnivariateNumericalEstimator(
     const std::vector<double>& observations, double low, double high,
     bool log_scale, double step, double prior_weight, bool magic_clip,
-    bool endpoints, const std::vector<double>& observation_weights) {
+    bool endpoints, const std::vector<double>& observation_weights, bool host_sampling = true) {
+    if (optuna_cuda::use_gpu()) {
+        const mxLogical categorical = false, logarithmic = log_scale;
+        return OptunaBuildJointEstimators(observations, observations.size(), 1,
+            &categorical, {low}, {high}, &logarithmic, {step}, {0}, prior_weight,
+            magic_clip, endpoints, observation_weights, host_sampling).front();
+    }
     OptunaJointEstimator estimator;
     estimator.weights = OptunaMixtureWeights(
         observations.size(), prior_weight, observation_weights);
@@ -1865,7 +1920,7 @@ void OptunaTPEBestNumericalObservations(int nlhs, mxArray* plhs[], int nrhs,
     std::vector<OptunaJointEstimator> above = {
         OptunaBuildUnivariateNumericalEstimator(
             bad, low, high, log_scale, step_values.front(), prior_weight,
-            magic_clip, endpoints, above_weights)};
+            magic_clip, endpoints, above_weights, false)};
     plhs[0] = mxCreateDoubleScalar(
         OptunaBestJoint(state, count, below, above).front());
 }
@@ -2040,7 +2095,7 @@ void OptunaTPEBestGroupedHistory(int nlhs, mxArray* plhs[], int nrhs,
         const auto above = OptunaBuildJointEstimators(
             bad, bad.size() / group_dimension, group_dimension,
             categorical + begin, group_lows, group_highs, log_scale + begin,
-            group_steps, group_choices, prior_weight, magic_clip, endpoints, {});
+            group_steps, group_choices, prior_weight, magic_clip, endpoints, {}, false);
         const auto candidate = OptunaBestJoint(state, count, below, above);
         std::copy(candidate.begin(), candidate.end(), result.begin() + begin);
     }
@@ -2210,17 +2265,34 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     const char* fields[] = {
         "api_version", "backend", "command_count", "handle_count", "build_route", "taskmanager", "gpu_operations", "host_operations"
         , "execution", "host_parallel_runtime", "allocator", "density_launches", "selection_launches", "host_to_device_bytes",
-        "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device"
+        "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device", "execution_mode", "cpu_density_calls", "cpu_selection_calls", "cpu_parallel_density_calls", "cpu_max_density_threads", "device_allocation_calls", "workspace_reuses", "avoided_upload_bytes", "cached_device_bytes", "model_build_launches", "model_reuses", "preparation_launches", "model_download_bytes", "cpu_preparation_calls", "cpu_cached_normalizer_values", "model_radix_sorts", "peak_sort_temporary_bytes"
     };
     plhs[0] = mxCreateStructMatrix(1, 1, sizeof(fields) / sizeof(fields[0]), fields);
     mxSetField(plhs[0], 0, "build_route", mxCreateString("mexcuda"));
     mxSetField(plhs[0], 0, "taskmanager", mxCreateLogicalScalar(false));
-    mxSetField(plhs[0], 0, "gpu_operations", mxCreateString("Parzen densities and TPE candidate evaluation/selection"));
+    mxSetField(plhs[0], 0, "gpu_operations", mxCreateString("TPE bandwidth/category model construction, density preparation and candidate evaluation/selection"));
     mxSetField(plhs[0], 0, "host_operations", mxCreateString("Management, ordered RNG, candidate generation, Pareto and Sobol"));
     mxSetField(plhs[0], 0, "api_version", mxCreateDoubleScalar(1.0));
     mxSetField(plhs[0], 0, "backend", mxCreateString("optuna_mex"));
-    mxSetField(plhs[0], 0, "command_count", mxCreateDoubleScalar(21.0));
+    mxSetField(plhs[0], 0, "command_count", mxCreateDoubleScalar(22.0));
     const auto stats = optuna_cuda::statistics();
+    mxSetField(plhs[0], 0, "execution_mode", mxCreateString(optuna_cuda::use_gpu() ? "gpu" : "cpu"));
+    mxSetField(plhs[0], 0, "cpu_density_calls", mxCreateDoubleScalar(static_cast<double>(stats.cpu_density_calls)));
+    mxSetField(plhs[0], 0, "cpu_selection_calls", mxCreateDoubleScalar(static_cast<double>(stats.cpu_selection_calls)));
+    mxSetField(plhs[0], 0, "cpu_parallel_density_calls", mxCreateDoubleScalar(static_cast<double>(stats.cpu_parallel_density_calls)));
+    mxSetField(plhs[0], 0, "cpu_max_density_threads", mxCreateDoubleScalar(stats.cpu_max_density_threads));
+    mxSetField(plhs[0], 0, "device_allocation_calls", mxCreateDoubleScalar(static_cast<double>(stats.device_allocation_calls)));
+    mxSetField(plhs[0], 0, "workspace_reuses", mxCreateDoubleScalar(static_cast<double>(stats.workspace_reuses)));
+    mxSetField(plhs[0], 0, "avoided_upload_bytes", mxCreateDoubleScalar(static_cast<double>(stats.avoided_upload_bytes)));
+    mxSetField(plhs[0], 0, "cached_device_bytes", mxCreateDoubleScalar(static_cast<double>(stats.cached_device_bytes)));
+    mxSetField(plhs[0], 0, "model_build_launches", mxCreateDoubleScalar(static_cast<double>(stats.model_build_launches)));
+    mxSetField(plhs[0], 0, "model_reuses", mxCreateDoubleScalar(static_cast<double>(stats.model_reuses)));
+    mxSetField(plhs[0], 0, "model_radix_sorts", mxCreateDoubleScalar(static_cast<double>(stats.model_radix_sorts)));
+    mxSetField(plhs[0], 0, "peak_sort_temporary_bytes", mxCreateDoubleScalar(static_cast<double>(stats.peak_sort_temporary_bytes)));
+    mxSetField(plhs[0], 0, "preparation_launches", mxCreateDoubleScalar(static_cast<double>(stats.preparation_launches)));
+    mxSetField(plhs[0], 0, "model_download_bytes", mxCreateDoubleScalar(static_cast<double>(stats.model_download_bytes)));
+    mxSetField(plhs[0], 0, "cpu_preparation_calls", mxCreateDoubleScalar(static_cast<double>(stats.cpu_preparation_calls)));
+    mxSetField(plhs[0], 0, "cpu_cached_normalizer_values", mxCreateDoubleScalar(static_cast<double>(stats.cpu_cached_normalizer_values)));
     mxSetField(plhs[0], 0, "execution", mxCreateString("matlab-mexcuda"));
     mxSetField(plhs[0], 0, "host_parallel_runtime", mxCreateString("openmp"));
     mxSetField(plhs[0], 0, "allocator", mxCreateString(
@@ -2304,6 +2376,17 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
               const mxArray* prhs[]) {
     if (command == "api.info") {
         ApiInfo(nlhs, plhs, nrhs);
+        return;
+    }
+    if (command == "api.execution") {
+        if ((nrhs != 1 && nrhs != 2) || nlhs != 1)
+            BadArgument("usage: mode = optuna_mex('api.execution' [, 'cpu'|'gpu'])");
+        if (nrhs == 2) {
+            const auto mode = Text(prhs[1], "execution mode");
+            if (mode != "cpu" && mode != "gpu") BadArgument("execution mode must be cpu or gpu");
+            optuna_cuda::set_gpu(mode == "gpu");
+        }
+        plhs[0] = mxCreateString(optuna_cuda::use_gpu() ? "gpu" : "cpu");
         return;
     }
     if (command == "api.commands") {

@@ -1,0 +1,81 @@
+{
+  "schema": "radia.validation.optuna-memory-history.v1",
+  "date": "2026-10-13",
+  "implementation_commit": "f9d890644cea4ded82b1b0d32164d05bb358e17b",
+  "baseline_commit": "d76e4e20219aae4beeb4437e808bbe3229c88882",
+  "host_role": "100-build-and-functional-validation",
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "build_route": "mexcuda",
+  "binary_sha256": "6bf3ba422337ad847bf59c6b68e21298e922b6818c774708b4ceaca3663ecdc4",
+  "oracle": "optuna==5.0.0",
+  "cpu_upstream_passed": 15,
+  "gpu_upstream_and_boundary_passed": 20,
+  "history_regression_passed": 1,
+  "history_regression_execution": "Included with the CPU/GPU oracle suites in the focused acceptance runner; 36 passed, zero failures or incomplete tests.",
+  "mcp_source_contract_tests_passed": 7,
+  "history_retained": "complete history; no discarded trials",
+  "history_regression_scope": [
+    "exact and colliding parameter names",
+    "missing names and single-to-multiple parameter transition",
+    "incremental append",
+    "frozen trial import",
+    "MAT save/load index reconstruction"
+  ],
+  "diagnostic_comparison": {
+    "host_role": "100-diagnostic-validation",
+    "sampler": "TPESampler(Multivariate=false), CPU mode",
+    "history_counts": [
+      100,
+      1000
+    ],
+    "dimensions": [
+      1,
+      40
+    ],
+    "proposal_values_compared": 1066,
+    "all_proposals_exactly_equal": true,
+    "formal_performance_acceptance": false,
+    "notes": "Historical one-pass diagnostic for the initial cache, retained privately. Formal final-source results use A100.",
+    "implementation_commit": "9a2efc6d3927115d4e6c3c9bfec5ba34ed03a177"
+  },
+  "formal_performance": {
+    "status": "complete",
+    "host_role": "on-demand-a100-timing",
+    "result": "validation_test/optimization/results_optuna_memory_performance_a100_20261013.json",
+    "paired_proposal_values_compared": 12792,
+    "all_proposals_exactly_equal": true
+  },
+  "performance_speedup_claimed": true,
+  "oracle_history_case": {
+    "completed_trials": 512,
+    "parameters": [
+      "numeric",
+      "categorical",
+      "numeric"
+    ],
+    "upstream_proposals": 12,
+    "generator": "tests/matlab/fixtures/generate_optuna50_oracle.py",
+    "fixture_section": "memory_history_tpe"
+  },
+  "excluded_attempts": [
+    {
+      "host_role": "historical-mdx-timing",
+      "reason": "Independent numerical job appeared after idle preflight; benchmark stopped and no timings adopted.",
+      "recovery_files_verified": 486,
+      "scratch_deleted": true
+    },
+    {
+      "host_role": "on-demand-a100-timing",
+      "reason": "Independent archival job appeared during initial baseline; affected attempt excluded."
+    }
+  ],
+  "full_api_compatibility_verified": false,
+  "coverage_ledger": {
+    "surface_present": 812,
+    "oracle_verified": 108,
+    "assertion_mapped": 704,
+    "required_present": 401,
+    "required_oracle_mapped": 79,
+    "required_needing_oracle_evidence": 322
+  }
+}

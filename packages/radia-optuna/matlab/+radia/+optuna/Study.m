@@ -66,6 +66,10 @@ classdef Study < handle
         ObjectiveTableDirty (1,1) logical = true
         IntermediateTableDirty (1,1) logical = true
         ParamIndex
+        ParamNameRows
+        ParamNameIndexedRows (1,1) double = 0
+        ParamSingleName (1,1) string = ""
+        ParamHasMultipleNames (1,1) logical = false
         ObjectiveIndex
         IntermediateIndex
         UserAttrIndex
@@ -122,6 +126,7 @@ classdef Study < handle
             obj.SamplerHasBeforeTrial=ismethod(obj.Sampler,"beforeTrial");
             obj.SamplerHasAfterTrial=ismethod(obj.Sampler,"afterTrial");
             obj.ParamIndex=radia.optuna.internal.TrialRowIndex();
+            obj.ParamNameRows=containers.Map('KeyType','char','ValueType','any');
             obj.ObjectiveIndex=radia.optuna.internal.TrialRowIndex();
             obj.IntermediateIndex=radia.optuna.internal.TrialRowIndex();
             obj.UserAttrIndex=radia.optuna.internal.TrialRowIndex();
@@ -834,6 +839,14 @@ classdef Study < handle
             obj.ParamTableCache=value;
             obj.ParamTableDirty=false;
             obj.invalidateIndex(obj.ParamIndex);
+            obj.ParamNameRows=containers.Map('KeyType','char','ValueType','any');
+            obj.ParamNameIndexedRows=0;
+            obj.ParamSingleName="";
+            obj.ParamHasMultipleNames=false;
+            if ~isempty(obj.ParamNameData)
+                obj.ParamSingleName=obj.ParamNameData(1);
+                obj.ParamHasMultipleNames=any(obj.ParamNameData~=obj.ParamSingleName);
+            end
         end
 
         function value=get.ObjectiveTable(obj)
@@ -1159,12 +1172,48 @@ classdef Study < handle
                 'ErrorMessage',obj.TrialErrorData);
         end
 
-        function data=parameterData(obj)
-            data=struct('TrialNumber',obj.ParamTrialNumberData, ...
-                'Name',obj.ParamNameData,'Kind',obj.ParamKindData, ...
-                'ValueNumeric',obj.ParamValueNumericData, ...
-                'ValueText',obj.ParamValueTextData, ...
-                'Distribution',obj.ParamDistributionData);
+        function data=parameterData(obj,name)
+            if nargin<2 || (~obj.ParamHasMultipleNames && ...
+                    (isempty(obj.ParamNameData) || string(name)==obj.ParamSingleName))
+                data=struct('TrialNumber',obj.ParamTrialNumberData, ...
+                    'Name',obj.ParamNameData,'Kind',obj.ParamKindData, ...
+                    'ValueNumeric',obj.ParamValueNumericData, ...
+                    'ValueText',obj.ParamValueTextData, ...
+                    'Distribution',obj.ParamDistributionData);
+                return
+            else
+                % Index only newly appended rows. Names are exact keys (not
+                % MATLAB identifiers), and buckets retain history order.
+                first=obj.ParamNameIndexedRows+1;
+                if first<=numel(obj.ParamNameData)
+                    [names,~,groups]=unique(obj.ParamNameData(first:end));
+                    buckets=accumarray(groups,(first:numel(obj.ParamNameData))', ...
+                        [numel(names),1],@(indices){sort(indices)},{zeros(0,1)});
+                else
+                    names=strings(0,1);
+                    buckets=cell(0,1);
+                end
+                for index=1:numel(names)
+                    key=char(names(index));
+                    if isKey(obj.ParamNameRows,key)
+                        obj.ParamNameRows(key)=[obj.ParamNameRows(key);buckets{index}];
+                    else
+                        obj.ParamNameRows(key)=buckets{index};
+                    end
+                end
+                obj.ParamNameIndexedRows=numel(obj.ParamNameData);
+                key=char(string(name));
+                if isKey(obj.ParamNameRows,key)
+                    rows=obj.ParamNameRows(key);
+                else
+                    rows=zeros(0,1);
+                end
+            end
+            data=struct('TrialNumber',obj.ParamTrialNumberData(rows), ...
+                'Name',obj.ParamNameData(rows),'Kind',obj.ParamKindData(rows), ...
+                'ValueNumeric',obj.ParamValueNumericData(rows), ...
+                'ValueText',obj.ParamValueTextData(rows), ...
+                'Distribution',obj.ParamDistributionData(rows));
         end
 
         function data=objectiveData(obj)
@@ -1222,9 +1271,14 @@ classdef Study < handle
             count=obj.TrialStateCounts(1)+obj.TrialStateCounts(2);
         end
 
-        function counts=trialStateCounts(obj)
+        function [counts,multipleParameters]=trialStateCounts(obj)
             %TRIALSTATECOUNTS COMPLETE, PRUNED, RUNNING, WAITING; no history copy.
             counts=obj.TrialStateCounts;
+            multipleParameters=obj.ParamHasMultipleNames;
+        end
+
+        function count=trialCount(obj)
+            count=numel(obj.TrialNumberData);
         end
 
         function [steps,values]=lastIntermediateValues(obj,trialNumbers)
@@ -1795,6 +1849,8 @@ classdef Study < handle
                 row=numel(obj.ParamTrialNumberData)+1;
             else
                 row=existing(1);
+                obj.ParamNameRows=containers.Map('KeyType','char','ValueType','any');
+                obj.ParamNameIndexedRows=0;
                 if ~isscalar(existing)
                     stale=existing(2:end);
                     obj.ParamTrialNumberData(stale)=[];
@@ -1809,6 +1865,11 @@ classdef Study < handle
             appended=row>numel(obj.ParamTrialNumberData);
             obj.ParamTrialNumberData(row,1)=trial.Number;
             obj.ParamNameData(row,1)=string(name);
+            if row==1
+                obj.ParamSingleName=string(name);
+            elseif string(name)~=obj.ParamSingleName
+                obj.ParamHasMultipleNames=true;
+            end
             obj.ParamKindData(row,1)=string(kind);
             obj.ParamValueNumericData(row,1)=numeric;
             obj.ParamValueTextData(row,1)=text;
@@ -2373,6 +2434,11 @@ classdef Study < handle
             row=numel(obj.ParamTrialNumberData)+1;
             obj.ParamTrialNumberData(row,1)=number;
             obj.ParamNameData(row,1)=name;
+            if row==1
+                obj.ParamSingleName=name;
+            elseif name~=obj.ParamSingleName
+                obj.ParamHasMultipleNames=true;
+            end
             obj.ParamKindData(row,1)=string(distribution.kind);
             obj.ParamValueNumericData(row,1)=numeric;
             obj.ParamValueTextData(row,1)=textValue;

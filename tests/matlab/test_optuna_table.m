@@ -2,6 +2,44 @@ function tests = test_optuna_table
 tests = functiontests(localfunctions);
 end
 
+function testNamedHistorySurvivesAppendImportAndReload(testCase)
+storage=string(tempname)+".mat";
+cleanup=onCleanup(@()deleteIfPresent(storage));
+study=radia.optuna.Study(Sampler=radia.optuna.RandomSampler(19), ...
+    StoragePath=storage,AutoSave=false);
+verifyEmpty(testCase,study.parameterData("missing").TrialNumber);
+for index=1:3
+    trial=study.ask();
+    trial.suggest_float("x-1",-1,1);
+    verifyNamedHistory(testCase,study);
+    trial.suggest_int("x.1",0,4);
+    if mod(index,2)==1
+        trial.suggest_categorical("choice",["a","b"]);
+    end
+    study.tell(trial,index);
+    verifyNamedHistory(testCase,study);
+end
+frozen=study.get_trials();
+study.add_trial(frozen(1));
+verifyNamedHistory(testCase,study);
+study.save();
+reloaded=radia.optuna.Study(StoragePath=storage,AutoSave=false);
+verifyNamedHistory(testCase,reloaded);
+end
+
+function verifyNamedHistory(testCase,study)
+all=study.parameterData();
+for name=["x-1","x.1","choice","missing"]
+    expected=all;
+    fields=fieldnames(all);
+    rows=find(all.Name==name);
+    for index=1:numel(fields)
+        expected.(fields{index})=reshape(all.(fields{index})(rows),[],1);
+    end
+    verifyEqual(testCase,study.parameterData(name),expected);
+end
+end
+
 function testCollidingParameterNamesKeepMatchingFrozenKeys(testCase)
 study=radia.optuna.Study(Sampler=radia.optuna.RandomSampler(3), ...
     AutoSave=false);

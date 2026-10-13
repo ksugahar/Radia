@@ -33,6 +33,20 @@
       "file": "test_optuna_cuda.m",
       "oracle": null,
       "scope": "mexcuda execution boundary, device failure and lifecycle",
+      "test": "testCpuParallelDensityAndSwitchValidation"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_cuda.m",
+      "oracle": "optuna50_cuda_oracle.json",
+      "scope": "Optuna 5.0.0 observation-built TPE models and ordered RNG",
+      "test": "testGpuModelConstructionMatchesUpstream"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_cuda.m",
+      "oracle": null,
+      "scope": "mexcuda execution boundary, device failure and lifecycle",
       "test": "testCudaBuildBoundary"
     },
     {
@@ -47,7 +61,7 @@
       "file": "test_optuna_cuda.m",
       "oracle": null,
       "scope": "mexcuda execution boundary, device failure and lifecycle",
-      "test": "testGpuFailureRestoresRandomState"
+      "test": "testExecutionFailureRestoresRandomState"
     },
     {
       "classification": "matlab-integration",
@@ -454,6 +468,13 @@
       "oracle": null,
       "scope": "explicit MATLAB table/JSON handoff to upstream Optuna storages",
       "test": "testMatlabHandoffPreservesNamesAttributesAndConstraints"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testNamedHistorySurvivesAppendImportAndReload"
     },
     {
       "classification": "matlab-integration",
@@ -909,6 +930,13 @@
       "oracle": "optuna50_oracle.json",
       "scope": "shared Optuna 5.0.0 behavior",
       "test": "testTPESamplerSeededSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna50_oracle.json",
+      "scope": "shared Optuna 5.0.0 behavior",
+      "test": "testTPEIndexedMixedHistoryMatchesUpstream"
     },
     {
       "classification": "upstream-python",

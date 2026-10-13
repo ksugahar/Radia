@@ -38,7 +38,7 @@ Simulink pause/resume/select/apply controls and telemetry, MATLAB
 parallel execution, `optuna_mex`, and CAE artifact adapters. For Simulink
 optimization, use the MATLAB-native `radia.optuna` route rather than calling
 MATLAB Engine once per Python Optuna trial. `Study` and `Trial` remain readable
-MATLAB objects and own MAT persistence. The required 21-command `optuna_mex`
+MATLAB objects and own MAT persistence. The required independent `optuna_mex`
 gateway is inspected with `radia.optuna.nativeStatus`; a missing-MEX fallback is
 not permitted. The Optimization block exposes start/cancel/pause/resume/apply,
 selected/current/checkpoint telemetry, attempted/pruned/failed trial counts,

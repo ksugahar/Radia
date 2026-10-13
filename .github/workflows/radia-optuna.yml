@@ -108,11 +108,11 @@ jobs:
             Pop-Location
           }
 
-      - name: Verify upstream TPE parity and CUDA density lifecycle
+      - name: Verify CPU/GPU upstream TPE parity and density lifecycle
         shell: pwsh
         run: |
           $root = (Get-Location).Path.Replace("'", "''")
-          & matlab -batch "addpath('$root/validation_test/radia_optuna'); validate_cuda('$root','$root/packages/radia-optuna/matlab','$root/build-optuna-cuda/validation.json'); addpath('$root/validation_test/optimization'); validate_optuna_cuda('$root','$root/build-optuna-cuda/selection-validation.json');"
+          & matlab -batch "addpath('$root/validation_test/optimization'); validate_optuna_cuda('$root','$root/build-optuna-cuda/cpu-selection-validation.json','cpu'); addpath('$root/validation_test/radia_optuna'); validate_cuda('$root','$root/packages/radia-optuna/matlab','$root/build-optuna-cuda/validation.json'); addpath('$root/validation_test/optimization'); validate_optuna_cuda('$root','$root/build-optuna-cuda/selection-validation.json');"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload radia-optuna wheel
