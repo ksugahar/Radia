@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 using namespace radia_fmm;
+mxArray* RadiaPrepareBoundary(const mxArray*,const mxArray*);
 namespace {
 void check(cudaError_t s){if(s!=cudaSuccess)throw std::runtime_error(cudaGetErrorString(s));}
 size_t product(size_t a,size_t b){if(b&&a>SIZE_MAX/b)throw std::overflow_error("FMM allocation overflow");return a*b;}
@@ -123,7 +124,9 @@ uint64_t token(const mxArray* a){if(!mxIsUint64(a)||mxIsComplex(a)||mxGetNumberO
 struct GPUView {const mxGPUArray* a;GPUView(const mxArray* x){if(!mxIsGPUArray(x))throw std::invalid_argument("FMM densities must be gpuArray doubles");a=mxGPUCreateFromMxArray(x);if(mxGPUGetClassID(a)!=mxDOUBLE_CLASS||mxGPUGetComplexity(a)!=mxREAL){mxGPUDestroyGPUArray(a);throw std::invalid_argument("FMM densities must be real double");}}
     ~GPUView(){mxGPUDestroyGPUArray(a);}const double* data(){return static_cast<const double*>(mxGPUGetDataReadOnly(a));}};
 struct GPUOutput {mxGPUArray* a;GPUOutput(int n,int m){mwSize dims[2]={size_t(n),size_t(m)};a=mxGPUCreateGPUArray(2,dims,mxDOUBLE_CLASS,mxREAL,MX_GPU_DO_NOT_INITIALIZE);}~GPUOutput(){mxGPUDestroyGPUArray(a);}double* data(){return static_cast<double*>(mxGPUGetData(a));}};
-void dispatch(int nl,mxArray** out,int nr,const mxArray** in){if(!nr)throw std::invalid_argument("FMM command required");std::string command=text(in[0]);mxInitGPU();
+void dispatch(int nl,mxArray** out,int nr,const mxArray** in){if(!nr)throw std::invalid_argument("FMM command required");std::string command=text(in[0]);
+    if(command=="prepare_boundary"){if(nr!=3||nl!=1)throw std::invalid_argument("maps=radia_cuda_fmm('prepare_boundary',vol,boundaryLabels)");out[0]=RadiaPrepareBoundary(in[1],in[2]);return;}
+    mxInitGPU();
     if(command=="live_count"){if(nr!=1||nl!=1)throw std::invalid_argument("live_count arity");out[0]=mxCreateDoubleScalar(contexts.size());return;}
     if(command=="destroy"){if(nr!=2||nl!=0)throw std::invalid_argument("destroy arity");contexts.erase(token(in[1]));mexUnlock();return;}
     if(command=="create"){if(nr!=7||nl!=1)throw std::invalid_argument("handle=radia_cuda_fmm('create',sources,targets,order,leafCapacity,separation,omitSelf)");if(!mxIsLogicalScalar(in[6]))throw std::invalid_argument("omitSelf must be explicit logical");

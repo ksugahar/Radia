@@ -39,7 +39,14 @@ def main(args):
         record['build']=build
         ng.SetNumThreads(4)
         with ng.TaskManager():generated=ng.Mesh(unit_cube.GenerateMesh(maxh=args.maxh))
-        vol=out/'model.vol';generated.ngmesh.Save(str(vol));mesh=ng.Mesh(str(vol))
+        generated.ngmesh.SetMaterial(1,'domain')
+        vol=out/'model.vol';generated.ngmesh.Save(str(vol))
+        sys.path.insert(0,str(root/'packages/cubit-mesh-export/src'))
+        from cubit_mesh_export.check import check_consistency
+        checked=check_consistency(vol,contract=Path(__file__).with_name('native_hcurl_labels.json'),strict_labels=True)
+        (out/'vol_check.json').write_text(json.dumps(checked,indent=2)+'\n',encoding='utf-8')
+        if not checked['passed']:raise RuntimeError('check-vol topology/quality/label gate failed')
+        record['vol_check_passed']=True;mesh=ng.Mesh(str(vol))
         if set(mesh.GetBoundaries())!=LABELS:raise RuntimeError('Versioned six-boundary .vol contract failed')
         record['mesh_sha256']=hashlib.sha256(vol.read_bytes()).hexdigest()
         t=time.perf_counter();fes=ng.HCurl(mesh,order=1,nograds=True,dirichlet='.*');u,v=fes.TnT()
