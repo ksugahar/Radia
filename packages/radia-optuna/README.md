@@ -433,6 +433,28 @@ This evidence includes source-fidelity verification, the installed doctor,
 standalone Simulink success and typed-failure paths, and all seven persisted
 tables after MAT reload. Shared Study/Trial MCP operations remain upstream.
 
+### 0.4.0 release and CPU/GPU acceptance
+
+[radia-optuna 0.4.0](https://github.com/ksugahar/Radia/releases/tag/radia-optuna-v0.4.0)
+uses the exact main-CI wheel from commit
+`6dc949d8fdfb7fa827af38bb7646c04dccb76581`, SHA256
+`912ae779a9c92bd499147cf7671550b00880969f04b9e146ea87a1a171f51f7d`.
+The PyPI and GitHub assets match that accepted wheel byte for byte.
+On both RTX 5000 and A100, isolated installed-wheel checks pass 16 CPU tests,
+21 GPU-suite tests and the oracle-manifest check, plus Simulink execution and
+save/resume on both modes. CPU execution initializes no CUDA device and
+transfers no data; GPU counters confirm native model construction and sorting.
+After reinstalling the published wheel, 40 Branin trials per mode produce
+identical CPU/GPU proposals and objective values on each host.
+
+The [release receipt](../../validation_test/radia_optuna/results/release-0.4.0.json)
+records source/artifact hashes, runtime versions and verified recovery/cleanup.
+[accept_wheel_modes.m](../../validation_test/radia_optuna/accept_wheel_modes.m)
+and [smoke_published_modes.m](../../validation_test/radia_optuna/smoke_published_modes.m)
+reproduce the installed-wheel and published-wheel checks. Raw operational logs
+remain in private validation storage. These are focused functional checks,
+not complete upstream API certification or release-wheel performance timings.
+
 ### 0.3.0 release and installed-wheel acceptance
 
 [radia-optuna 0.3.0](https://github.com/ksugahar/Radia/releases/tag/radia-optuna-v0.3.0)
