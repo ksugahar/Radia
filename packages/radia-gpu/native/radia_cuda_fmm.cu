@@ -94,9 +94,11 @@ __global__ void evaluate(int nt,int ns,const double* target,const double* source
 }
 struct Context {
     Buffer nodes,source,target,sourceOrder,targetLeaf,farRp,far,nearRp,near,transfer,moments,local,error;
-    std::vector<std::unique_ptr<Buffer>> levels;std::vector<int> levelSizes;int ns,nt,nnode,p,q,device;bool omitSelf;size_t persistent=0;cudaStream_t sentinel=nullptr;
+    std::vector<std::unique_ptr<Buffer>> levels;std::vector<int> levelSizes;int ns,nt,nnode,p,q,device;bool omitSelf;size_t persistent=0,farPairs=0,nearPairs=0,nonleafFarPairs=0;cudaStream_t sentinel=nullptr;
     Context(const std::vector<double>& s,const std::vector<double>& t,int order,int leaf,double separation,bool omit):ns(int(s.size()/3)),nt(int(t.size()/3)),p(order),q(p*p*p),omitSelf(omit){
         Tree tree(s,t,leaf,separation);nnode=int(tree.nodes.size());check(cudaGetDevice(&device));
+        farPairs=tree.far.size();nearPairs=tree.near.size();
+        for(size_t i=0;i<tree.nodes.size();++i)if(!tree.nodes[i].leaf())nonleafFarPairs+=tree.farRows[i].size();
         std::vector<double> translation(size_t(8)*q*q);
         for(int oct=0;oct<8;++oct)for(int j=0;j<q;++j){double v[3][MAX_ORDER],d[MAX_ORDER];for(int a=0;a<3;++a){double x=.5*((oct&(1<<a)?1.:-1.)+abscissa(a==0?j%p:(a==1?(j/p)%p:j/(p*p)),p));basis(x,p,v[a],d);}for(int k=0;k<q;++k)translation[(size_t(oct)*q+k)*q+j]=v[0][k%p]*v[1][(k/p)%p]*v[2][k/(p*p)];}
         size_t bytes=s.size()*8+t.size()*8+tree.nodes.size()*sizeof(Node)+translation.size()*8+sizeof(int);
@@ -144,8 +146,8 @@ void dispatch(int nl,mxArray** out,int nr,const mxArray** in){if(!nr)throw std::
     evaluate<<<(c.nt+127)/128,128>>>(c.nt,c.ns,c.target.as<double>(),c.source.as<double>(),c.targetLeaf.as<int>(),c.nodes.as<Node>(),c.p,nc,c.local.as<double>(),c.nearRp.as<int>(),c.near.as<int>(),c.sourceOrder.as<int>(),charge.data(),dip.data(),c.omitSelf,potential.data(),field.data(),c.error.as<int>());
     check(cudaGetLastError());check(cudaMemcpy(&error,c.error.p,sizeof(int),cudaMemcpyDeviceToHost));if(error)throw std::runtime_error(error==2?"Coincident FMM source/target: select explicit self omission only with a declared correction":"FMM numerical overflow");check(cudaDeviceSynchronize());
     out[0]=mxGPUCreateMxArrayOnGPU(potential.a);out[1]=mxGPUCreateMxArrayOnGPU(field.a);
-    const char* names[]={"apply_seconds","persistent_geometry_bytes","workspace_bytes","output_bytes","nodes","levels","order","python_adapter_used"};out[2]=mxCreateStructMatrix(1,1,8,names);
-    double stats[]={std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(),double(c.persistent),double(workBytes),double(outputBytes),double(c.nnode),double(c.levels.size()),double(c.p),0};for(int i=0;i<8;++i)mxSetField(out[2],0,names[i],mxCreateDoubleScalar(stats[i]));
+    const char* names[]={"apply_seconds","persistent_geometry_bytes","workspace_bytes","output_bytes","nodes","levels","order","python_adapter_used","far_pairs","near_pairs","nonleaf_far_pairs"};out[2]=mxCreateStructMatrix(1,1,11,names);
+    double stats[]={std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(),double(c.persistent),double(workBytes),double(outputBytes),double(c.nnode),double(c.levels.size()),double(c.p),0,double(c.farPairs),double(c.nearPairs),double(c.nonleafFarPairs)};for(int i=0;i<11;++i)mxSetField(out[2],0,names[i],mxCreateDoubleScalar(stats[i]));
 }
 }
 void mexFunction(int nl,mxArray** out,int nr,const mxArray** in){try{dispatch(nl,out,nr,in);}catch(const std::exception& e){mexErrMsgIdAndTxt("radia:cuda:fmm","%s",e.what());}}
