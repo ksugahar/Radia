@@ -414,6 +414,21 @@ def public_runtime_identity_hits(path, content):
         hits.append(f"{path}: identifying filename")
     return hits
 
+BARE_MDX = re.compile(r"(?i)(?<![A-Za-z0-9_])mdx(?![A-Za-z0-9_])")  # no backslashes: _sh passes it through a shell
+BARE_MDX_BASELINE = "tools/policy_lint_bare_mdx_baseline.json"
+
+def check_bare_mdx_growth():
+    """Reject new bare 'mdx' host mentions; existing ones wait for history-rewrite redaction."""
+    with open(os.path.join(REPO, BARE_MDX_BASELINE), encoding="utf-8") as source:
+        baseline = json.load(source)["counts"]
+    current = {}
+    for record in _git_grep(BARE_MDX.pattern, [], extra=("-P", "-I", "-c")):
+        path, count = record.rsplit(":", 1)
+        if path != BARE_MDX_BASELINE:
+            current[path] = int(count)
+    return [f"{path}: bare 'mdx' host mention ({count} > baseline {baseline.get(path, 0)}); use a neutral role"
+            for path, count in sorted(current.items()) if count > baseline.get(path, 0)]
+
 def check_public_runtime_privacy():
     candidates = set()
     for pattern in (PUBLIC_RUNTIME_IDENTITY.pattern, PUBLIC_RUNTIME_UNC.pattern):
@@ -426,6 +441,7 @@ def check_public_runtime_privacy():
         if path not in PUBLIC_RUNTIME_OPERATIONAL_ALLOW:
             with open(os.path.join(REPO, path), encoding="utf-8") as source:
                 hits.extend(public_runtime_identity_hits(path, source.read()))
+    hits.extend(check_bare_mdx_growth())
     return hits
 
 def check_all():
