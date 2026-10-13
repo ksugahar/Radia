@@ -54,7 +54,7 @@ cubit.cmd('export gmsh "mesh.msh" order 2 overwrite')  # visualization only
 mesh = Mesh("mesh.vol")
 ```
 
-See the Netgen/NGSolve workflow for details.
+See the [mesh guide](../../visualization/MESH_GUIDE.md) for the Netgen/NGSolve workflow.
 
 ## DIM Parameter
 

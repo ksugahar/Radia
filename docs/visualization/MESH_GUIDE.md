@@ -654,8 +654,7 @@ High-order curving (Cubit):
 
 - Netgen PR #232: [NGSolve/netgen#232](https://github.com/NGSolve/netgen/pull/232)
 - SetGeomInfo Forum: [Feature Request - SetGeomInfo API](https://forum.ngsolve.org/t/feature-request-python-api-for-high-order-curving-of-externally-imported-meshes/3810)
-- radia Cubit plugin: see `src/cubit_plugin/` (replaces the old `cubit_mesh_export` PyPI package)
-- PEEC_INTEGRATION.md (to be created in the future)
+- Cubit mesh export: [`packages/cubit-mesh-export`](../../packages/cubit-mesh-export/README.md)
 
 ---
 

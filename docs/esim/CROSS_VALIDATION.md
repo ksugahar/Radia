@@ -769,6 +769,9 @@ At 50 kHz:
 
 ### 11.2 CLI invocation
 
+> Historical record: the `src/radia/panels` CLI and its samples are retired.
+> The demo coil STEP now lives in `validation_test/esim_spatial/inputs/`.
+
 ```bash
 python src/radia/panels/calc_inductance.py \
     --coil-solver peec \

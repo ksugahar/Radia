@@ -511,7 +511,7 @@ explicit configuration.
 | Lightweight radia-mcp | Python 3.10 or later |
 | NGSolve / Netgen | 6.2.2607 |
 | MATLAB / Simulink package | R2026a, Windows x64 |
-| Coreform Cubit | 2025.12, optional |
+| Coreform Cubit | 2026.8, optional |
 | Native build | Visual Studio 2022, CMake/Ninja, pip `mkl-devel` oneMKL |
 
 ### Python packages
