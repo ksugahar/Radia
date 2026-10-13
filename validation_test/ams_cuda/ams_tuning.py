@@ -73,6 +73,7 @@ def main(a):
             return dict(solution_relative=error,true_relative_residual=true)
         record['cpu_self_checks']=[validate(nonlinear,True),validate(linear,False)]
         t=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');record['matlab_start_seconds']=time.perf_counter()-t
+        eng.restoredefaultpath(nargout=0)
         eng.addpath(str(job),nargout=0);eng.eval('timer=tic;g=gpuDevice;wait(g);gpu_init_seconds=toc(timer);',nargout=0)
         record['gpu_init_seconds']=float(eng.workspace['gpu_init_seconds']);pid=int(eng.feature('getpid'))
         record['cold_boundary']='First API call per variant in one owned initialized MATLAB process is saved separately; not an operating-system/device cold reset. Startup and GPU initialization are separate.'
@@ -85,6 +86,8 @@ def main(a):
                 loaded=Path(report['loaded_binary']).resolve()
                 expectedHash=tunedHash if variant=='tuned' else manifest['baseline/radia_cuda_ams.mexw64']
                 if loaded!=binaryPath/'radia_cuda_ams.mexw64' or sha(loaded)!=expectedHash:raise RuntimeError('Loaded MEX identity mismatch')
+                module=report['native_module']
+                if Path(module['path']).resolve()!=loaded or module['sha256']!=expectedHash:raise RuntimeError('Actual loaded Windows MEX module mismatch')
                 errors=dict(nonlinear=validate(raw['nonlinear'],True),linear=validate(raw['linear'],False),
                     reused=[validate(raw['reuse'][:,k],False,float(s)) for k,s in enumerate(np.atleast_1d(report['scales']))])
                 sample=dict(variant=variant,cycle=cycle,report=report,errors=errors,idle_before=guard,host_memory=memory.result());record['samples'].append(sample)
