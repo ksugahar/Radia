@@ -2,7 +2,7 @@
   "schema": "radia.ams-fem-tuning.v1",
   "accepted": true,
   "timing_accepted": true,
-  "host": "NGSolve",
+  "host": "runtime",
   "samples": [
     {
       "variant": "baseline",

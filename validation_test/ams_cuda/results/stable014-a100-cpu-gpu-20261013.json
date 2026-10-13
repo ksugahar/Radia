@@ -2,7 +2,7 @@
   "schema": "radia.ams-installed-cpu-gpu-performance.v1",
   "accepted": true,
   "timing_accepted": true,
-  "host": "NGSolve",
+  "host": "runtime",
   "samples": [
     {
       "cpu_baseline_ngsolve_threads": 1,
