@@ -1,0 +1,12 @@
+{
+  "accepted": 1,
+  "stale_handle_rejected": 1,
+  "wrong_type_rejected": 1,
+  "failed_update_preserves_context": 1,
+  "caller_source_release_safe": 1,
+  "workspace_survives_update": 1,
+  "native_buffer_allocations_during_solve": 0,
+  "nan_rhs_rejected": 1,
+  "nonpositive_curvature_rejected": 1,
+  "breakdown_recovery": 1
+}

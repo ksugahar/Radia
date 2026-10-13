@@ -76,6 +76,15 @@
       "cpu_fallback": false
     },
     {
+      "id": "reusable-linear-hcurl-ams",
+      "scope": "Experimental fixed affine lowest-order linear HCurl matrix/hierarchy reuse with explicit source-current scaling; recreate for geometry, labels or coefficient changes",
+      "source": "packages/radia-gpu/native/ams_resident.cuh",
+      "matlab": "packages/radia-gpu/matlab/+radia/+gpu/HCurlSystem.m",
+      "validation": "validation_test/ams_cuda/ams_tuning.py",
+      "cpu_reference": "Independent Python NGSolve sparsecholesky linear solution and operator true residual; nonlinear candidate independently checked with NGSolve Newton/AMS",
+      "cpu_fallback": false
+    },
+    {
       "id": "laplace-fmm-operators",
       "scope": "Experimental numeric Laplace scalar/dipole FMM, weighted Biot-Savart, retained field clouds and flat exterior P1 SL/DL boundary operators; speed acceptance pending",
       "source": "packages/radia-gpu/native/radia_cuda_fmm.cu",

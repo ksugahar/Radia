@@ -1,0 +1,3415 @@
+{
+  "schema": "radia.ams-fem-tuning.v1",
+  "accepted": true,
+  "timing_accepted": true,
+  "host": "NGSolve",
+  "samples": [
+    {
+      "variant": "baseline",
+      "cycle": 0,
+      "report": {
+        "nonlinear_seconds": 0.777602,
+        "linear_fresh_seconds": 0.153626,
+        "prepared_setup_seconds": 0.1354354,
+        "reused_seconds": [
+          0.0466542,
+          0.0346357,
+          0.0336606,
+          0.033019,
+          0.0074969,
+          0.0314993
+        ],
+        "nonlinear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.3574866644414554e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.409857309295125e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531787,
+              80.0,
+              7.868600369329457e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.29108809977544153,
+              21.0,
+              4.856692368919553e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311087,
+              22.0,
+              7.406573837331807e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800394245,
+              23.0,
+              3.0583797124335337e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472799658567e-06,
+              22.0,
+              8.952075652703487e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0660366,
+            "upload_assembly_seconds": 0.0413471,
+            "total_seconds": 0.1081075,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.1409256,
+          "assembly_seconds": 0.0044496,
+          "solve_seconds": 0.3917646,
+          "total_seconds": 0.7184492,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952075652703487e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "linear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 8.409414932514118e-13,
+          "history": [
+            0.0,
+            1.0,
+            18.0,
+            8.407870878582557e-13,
+            1.0
+          ],
+          "hierarchy_builds": 1,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                2,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0595453,
+            "upload_assembly_seconds": 0.0009142,
+            "total_seconds": 0.0608872,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0453627,
+          "assembly_seconds": 0.0009693,
+          "solve_seconds": 0.0314456,
+          "total_seconds": 0.1453888,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 18,
+            "true_relative_residual": 8.407870878582557e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 1,
+            "hierarchy_builds": 1,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "reuse": [
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.406947037445382e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 1,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0352445,
+            "solve_count": 1,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.406947037445382e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 2,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0314192,
+            "solve_count": 2,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 2,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.406947037445382e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 3,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0314019,
+            "solve_count": 3,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0.5,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.406947037445382e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 4,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0313729,
+            "solve_count": 4,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 0,
+              "true_relative_residual": 0,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 5,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0023372,
+            "solve_count": 5,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.406947037445382e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 6,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.031052,
+            "solve_count": 6,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          }
+        ],
+        "setup": {
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0589732,
+            "upload_assembly_seconds": 0.0009967,
+            "total_seconds": 0.0603921,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "ams_setup": {
+            "schema": "radia.ams-matlab-setup.v1",
+            "setup_seconds": 0.0268252,
+            "export_seconds": 0.0021002,
+            "setup_threads": 1,
+            "python_adapter_used": 0,
+            "coarse_backend": "ngsolve_sparsecholesky",
+            "amg_phase_seconds": [
+              0.0008045,
+              0.0004394,
+              0.0017002,
+              0.0001754,
+              0.0069677,
+              3.55e-05,
+              0.006887
+            ],
+            "matrix_generation_backend": "CUDA deterministic Galerkin",
+            "gpu_products": 8,
+            "gpu_generation_seconds": 0.0136913,
+            "gpu_upload_bytes": 2964788,
+            "gpu_download_bytes": 974536,
+            "gpu_setup_peak_owned_bytes": 9901548,
+            "upload_seconds": 0.0037174
+          },
+          "total_seconds": 0.1106159,
+          "backend": "MATLAB/mexcuda GPU",
+          "geometry_and_coefficients_fixed": 1
+        },
+        "scales": [
+          1.0,
+          2.0,
+          0.5,
+          1.0,
+          0.0,
+          1.0
+        ],
+        "device_free_before": 42181853184.0,
+        "device_free_retained_before": 42149850452.0,
+        "device_free_retained_after": 42149850452.0,
+        "device_free_after": 42161553088.0,
+        "loaded_binary": "C:\\temp\\ams-tuning-20261013\\job\\baseline\\radia_cuda_ams.mexw64",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "device": "NVIDIA A100-SXM4-40GB",
+        "registry_restored": 1
+      },
+      "errors": {
+        "nonlinear": {
+          "solution_relative": 1.502606582718815e-14,
+          "true_relative_residual": 4.357502671097046e-12
+        },
+        "linear": {
+          "solution_relative": 1.4881802366453261e-13,
+          "true_relative_residual": 8.408786396328677e-13
+        },
+        "reused": [
+          {
+            "solution_relative": 1.5101639542437695e-13,
+            "true_relative_residual": 8.406243679022285e-13
+          },
+          {
+            "solution_relative": 1.5101639542437695e-13,
+            "true_relative_residual": 8.406243679022285e-13
+          },
+          {
+            "solution_relative": 1.5101639542437695e-13,
+            "true_relative_residual": 8.406243679022285e-13
+          },
+          {
+            "solution_relative": 1.5101639542437695e-13,
+            "true_relative_residual": 8.406243679022285e-13
+          },
+          {
+            "solution_relative": 0.0,
+            "true_relative_residual": 0.0
+          },
+          {
+            "solution_relative": 1.5101639542437695e-13,
+            "true_relative_residual": 8.406243679022285e-13
+          }
+        ]
+      },
+      "idle_before": {
+        "cpu_percent": 4.1,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40228.0,
+        "host_available_bytes": 55255044096
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1302720512,
+          "private": 1620410368,
+          "lifetime_peak_rss": 1305235456
+        },
+        "after": {
+          "rss": 1383260160,
+          "private": 1673048064,
+          "lifetime_peak_rss": 1397379072
+        },
+        "sampled_peak_rss": 1395871744,
+        "sampled_peak_private": 1735520256,
+        "sample_count": 28,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      }
+    },
+    {
+      "variant": "tuned",
+      "cycle": 0,
+      "report": {
+        "nonlinear_seconds": 0.2798123,
+        "linear_fresh_seconds": 0.1282005,
+        "prepared_setup_seconds": 0.1075652,
+        "reused_seconds": [
+          0.0100393,
+          0.009733,
+          0.0097146,
+          0.0096791,
+          0.0005902,
+          0.0096873
+        ],
+        "nonlinear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357442955852621e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.410409988720504e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531785,
+              80.0,
+              7.869221399610198e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754416,
+              21.0,
+              4.85685288758964e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.02789824650731099,
+              22.0,
+              7.406278221779416e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800393096,
+              23.0,
+              3.0583016092214623e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472799783282e-06,
+              22.0,
+              8.952200153147975e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0635965,
+            "upload_assembly_seconds": 0.0015986,
+            "total_seconds": 0.0656653,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.09758220000000001,
+          "assembly_seconds": 0.0021493000000000003,
+          "solve_seconds": 0.0973819,
+          "total_seconds": 0.2728021,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952200153147975e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2986180,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "linear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 8.408893400458816e-13,
+          "history": [
+            0.0,
+            1.0,
+            18.0,
+            8.409032154770892e-13,
+            1.0
+          ],
+          "hierarchy_builds": 1,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                2,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0590456,
+            "upload_assembly_seconds": 0.0009206,
+            "total_seconds": 0.0603944,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0431684,
+          "assembly_seconds": 0.0005457999999999999,
+          "solve_seconds": 0.0095972,
+          "total_seconds": 0.122708,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 18,
+            "true_relative_residual": 8.409032154770892e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 1,
+            "hierarchy_builds": 1,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2536300,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "reuse": [
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.407232694567533e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 1,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0096255,
+            "solve_count": 1,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.407232694567533e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 2,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093582,
+            "solve_count": 2,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 2,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.407232694567533e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 3,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093581,
+            "solve_count": 3,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0.5,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.407232694567533e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 4,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093293,
+            "solve_count": 4,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 0,
+              "true_relative_residual": 0,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 5,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0002407,
+            "solve_count": 5,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.407232694567533e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 6,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093456,
+            "solve_count": 6,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          }
+        ],
+        "setup": {
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0587906,
+            "upload_assembly_seconds": 0.0009212,
+            "total_seconds": 0.0601225,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "ams_setup": {
+            "schema": "radia.ams-matlab-setup.v1",
+            "setup_seconds": 0.026534,
+            "export_seconds": 0.0013877,
+            "setup_threads": 1,
+            "python_adapter_used": 0,
+            "coarse_backend": "ngsolve_sparsecholesky",
+            "amg_phase_seconds": [
+              0.0007967,
+              0.0004278,
+              0.0016771999999999998,
+              0.00017830000000000002,
+              0.006862200000000001,
+              3.4e-05,
+              0.006932499999999999
+            ],
+            "matrix_generation_backend": "CUDA deterministic Galerkin",
+            "gpu_products": 8,
+            "gpu_generation_seconds": 0.013404899999999999,
+            "gpu_upload_bytes": 2964788,
+            "gpu_download_bytes": 974536,
+            "gpu_setup_peak_owned_bytes": 9901548,
+            "upload_seconds": 0.0027214
+          },
+          "total_seconds": 0.1041875,
+          "backend": "MATLAB/mexcuda GPU",
+          "geometry_and_coefficients_fixed": 1
+        },
+        "scales": [
+          1.0,
+          2.0,
+          0.5,
+          1.0,
+          0.0,
+          1.0
+        ],
+        "device_free_before": 42161553088.0,
+        "device_free_retained_before": 42149850380.0,
+        "device_free_retained_after": 42149850380.0,
+        "device_free_after": 42161553088.0,
+        "loaded_binary": "C:\\temp\\ams-tuning-20261013\\job\\tuned\\radia_cuda_ams.mexw64",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "device": "NVIDIA A100-SXM4-40GB",
+        "registry_restored": 1
+      },
+      "errors": {
+        "nonlinear": {
+          "solution_relative": 1.4006739905626274e-14,
+          "true_relative_residual": 4.357423259463138e-12
+        },
+        "linear": {
+          "solution_relative": 1.5125931997488456e-13,
+          "true_relative_residual": 8.40758340811569e-13
+        },
+        "reused": [
+          {
+            "solution_relative": 1.513599049056374e-13,
+            "true_relative_residual": 8.407919621465347e-13
+          },
+          {
+            "solution_relative": 1.513599049056374e-13,
+            "true_relative_residual": 8.407919621465347e-13
+          },
+          {
+            "solution_relative": 1.513599049056374e-13,
+            "true_relative_residual": 8.407919621465347e-13
+          },
+          {
+            "solution_relative": 1.513599049056374e-13,
+            "true_relative_residual": 8.407919621465347e-13
+          },
+          {
+            "solution_relative": 0.0,
+            "true_relative_residual": 0.0
+          },
+          {
+            "solution_relative": 1.513599049056374e-13,
+            "true_relative_residual": 8.407919621465347e-13
+          }
+        ]
+      },
+      "idle_before": {
+        "cpu_percent": 0.7,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55186886656
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1383272448,
+          "private": 1673019392,
+          "lifetime_peak_rss": 1397379072
+        },
+        "after": {
+          "rss": 1389191168,
+          "private": 1677672448,
+          "lifetime_peak_rss": 1405898752
+        },
+        "sampled_peak_rss": 1405898752,
+        "sampled_peak_private": 1742422016,
+        "sample_count": 16,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      }
+    },
+    {
+      "variant": "tuned",
+      "cycle": 0,
+      "report": {
+        "nonlinear_seconds": 0.2977368,
+        "linear_fresh_seconds": 0.1172027,
+        "prepared_setup_seconds": 0.1063502,
+        "reused_seconds": [
+          0.0099529,
+          0.0096918,
+          0.0096801,
+          0.0096378,
+          0.0005629,
+          0.0096248
+        ],
+        "nonlinear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357370729253256e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.408750480378377e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531783,
+              80.0,
+              7.869747134642386e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.29108809977544164,
+              21.0,
+              4.856441934880266e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311205,
+              22.0,
+              7.406297439693918e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.000932573980039148,
+              23.0,
+              3.0583187056927575e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472801170614e-06,
+              22.0,
+              8.952272152950351e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0634133,
+            "upload_assembly_seconds": 0.0014802,
+            "total_seconds": 0.065558,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0905685,
+          "assembly_seconds": 0.0022689,
+          "solve_seconds": 0.1169666,
+          "total_seconds": 0.2845153,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952272152950351e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2986180,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "linear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 8.406601240111505e-13,
+          "history": [
+            0.0,
+            1.0,
+            18.0,
+            8.406430725353393e-13,
+            1.0
+          ],
+          "hierarchy_builds": 1,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                2,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0587406,
+            "upload_assembly_seconds": 0.0009249,
+            "total_seconds": 0.0600918,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0418297,
+          "assembly_seconds": 0.0005265000000000001,
+          "solve_seconds": 0.0095322,
+          "total_seconds": 0.1139091,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 18,
+            "true_relative_residual": 8.406430725353393e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 1,
+            "hierarchy_builds": 1,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2536300,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "reuse": [
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.407481863152482e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 1,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0095642,
+            "solve_count": 1,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.407481863152482e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 2,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093269,
+            "solve_count": 2,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 2,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.407481863152482e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 3,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093254,
+            "solve_count": 3,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0.5,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.407481863152482e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 4,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093073,
+            "solve_count": 4,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 0,
+              "true_relative_residual": 0,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 5,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0002327,
+            "solve_count": 5,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.407481863152482e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 6,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093047,
+            "solve_count": 6,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          }
+        ],
+        "setup": {
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0587141,
+            "upload_assembly_seconds": 0.0008734,
+            "total_seconds": 0.0600078,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "ams_setup": {
+            "schema": "radia.ams-matlab-setup.v1",
+            "setup_seconds": 0.026454,
+            "export_seconds": 0.0013597,
+            "setup_threads": 1,
+            "python_adapter_used": 0,
+            "coarse_backend": "ngsolve_sparsecholesky",
+            "amg_phase_seconds": [
+              0.0008013,
+              0.0004244,
+              0.001707,
+              0.00018240000000000002,
+              0.0068448,
+              3.44e-05,
+              0.0068904
+            ],
+            "matrix_generation_backend": "CUDA deterministic Galerkin",
+            "gpu_products": 8,
+            "gpu_generation_seconds": 0.0133549,
+            "gpu_upload_bytes": 2964788,
+            "gpu_download_bytes": 974536,
+            "gpu_setup_peak_owned_bytes": 9901548,
+            "upload_seconds": 0.0027735
+          },
+          "total_seconds": 0.1036291,
+          "backend": "MATLAB/mexcuda GPU",
+          "geometry_and_coefficients_fixed": 1
+        },
+        "scales": [
+          1.0,
+          2.0,
+          0.5,
+          1.0,
+          0.0,
+          1.0
+        ],
+        "device_free_before": 42161553088.0,
+        "device_free_retained_before": 42149850452.0,
+        "device_free_retained_after": 42149850452.0,
+        "device_free_after": 42161553088.0,
+        "loaded_binary": "C:\\temp\\ams-tuning-20261013\\job\\tuned\\radia_cuda_ams.mexw64",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "device": "NVIDIA A100-SXM4-40GB",
+        "registry_restored": 1
+      },
+      "errors": {
+        "nonlinear": {
+          "solution_relative": 1.514296582972946e-14,
+          "true_relative_residual": 4.3574614338014456e-12
+        },
+        "linear": {
+          "solution_relative": 1.5396008213031377e-13,
+          "true_relative_residual": 8.405956324461888e-13
+        },
+        "reused": [
+          {
+            "solution_relative": 1.5204438939787639e-13,
+            "true_relative_residual": 8.408116650337757e-13
+          },
+          {
+            "solution_relative": 1.5204438939787639e-13,
+            "true_relative_residual": 8.408116650337757e-13
+          },
+          {
+            "solution_relative": 1.5204438939787639e-13,
+            "true_relative_residual": 8.408116650337757e-13
+          },
+          {
+            "solution_relative": 1.5204438939787639e-13,
+            "true_relative_residual": 8.408116650337757e-13
+          },
+          {
+            "solution_relative": 0.0,
+            "true_relative_residual": 0.0
+          },
+          {
+            "solution_relative": 1.5204438939787639e-13,
+            "true_relative_residual": 8.408116650337757e-13
+          }
+        ]
+      },
+      "idle_before": {
+        "cpu_percent": 7.2,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55179055104
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1389178880,
+          "private": 1677647872,
+          "lifetime_peak_rss": 1405898752
+        },
+        "after": {
+          "rss": 1391562752,
+          "private": 1679233024,
+          "lifetime_peak_rss": 1408024576
+        },
+        "sampled_peak_rss": 1408024576,
+        "sampled_peak_private": 1743896576,
+        "sample_count": 16,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      }
+    },
+    {
+      "variant": "baseline",
+      "cycle": 0,
+      "report": {
+        "nonlinear_seconds": 0.4920611,
+        "linear_fresh_seconds": 0.1369607,
+        "prepared_setup_seconds": 0.1061234,
+        "reused_seconds": [
+          0.031639,
+          0.0313068,
+          0.0312921,
+          0.0312578,
+          0.0005736,
+          0.0312632
+        ],
+        "nonlinear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357425614117913e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.409436609624647e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531787,
+              80.0,
+              7.868513986535538e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754417,
+              21.0,
+              4.856732754715261e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.02789824650731111,
+              22.0,
+              7.406360955233063e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800393026,
+              23.0,
+              3.0580497443077136e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472799584568e-06,
+              22.0,
+              8.952110487456078e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0629055,
+            "upload_assembly_seconds": 0.0015403,
+            "total_seconds": 0.0649166,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.084692,
+          "assembly_seconds": 0.0020771,
+          "solve_seconds": 0.3312038,
+          "total_seconds": 0.4893119,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952110487456078e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "linear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 8.406251672784419e-13,
+          "history": [
+            0.0,
+            1.0,
+            18.0,
+            8.406174389036055e-13,
+            1.0
+          ],
+          "hierarchy_builds": 1,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                2,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0593937,
+            "upload_assembly_seconds": 0.0009363,
+            "total_seconds": 0.060731,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0406462,
+          "assembly_seconds": 0.0005337,
+          "solve_seconds": 0.0312183,
+          "total_seconds": 0.1348101,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 18,
+            "true_relative_residual": 8.406174389036055e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 1,
+            "hierarchy_builds": 1,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "reuse": [
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408744110413991e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 1,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0312382,
+            "solve_count": 1,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408744110413991e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 2,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0309335,
+            "solve_count": 2,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 2,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408744110413991e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 3,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0309274,
+            "solve_count": 3,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0.5,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408744110413991e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 4,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0309207,
+            "solve_count": 4,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 0,
+              "true_relative_residual": 0,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 5,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.000239,
+            "solve_count": 5,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408744110413991e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 6,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0309276,
+            "solve_count": 6,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          }
+        ],
+        "setup": {
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0592058,
+            "upload_assembly_seconds": 0.0009737,
+            "total_seconds": 0.0606149,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "ams_setup": {
+            "schema": "radia.ams-matlab-setup.v1",
+            "setup_seconds": 0.0266946,
+            "export_seconds": 0.0015529,
+            "setup_threads": 1,
+            "python_adapter_used": 0,
+            "coarse_backend": "ngsolve_sparsecholesky",
+            "amg_phase_seconds": [
+              0.0007981,
+              0.0004387,
+              0.0016870000000000001,
+              0.0001804,
+              0.0068476000000000006,
+              3.49e-05,
+              0.0069669
+            ],
+            "matrix_generation_backend": "CUDA deterministic Galerkin",
+            "gpu_products": 8,
+            "gpu_generation_seconds": 0.013460799999999998,
+            "gpu_upload_bytes": 2964788,
+            "gpu_download_bytes": 974536,
+            "gpu_setup_peak_owned_bytes": 9901548,
+            "upload_seconds": 0.0028644
+          },
+          "total_seconds": 0.103292,
+          "backend": "MATLAB/mexcuda GPU",
+          "geometry_and_coefficients_fixed": 1
+        },
+        "scales": [
+          1.0,
+          2.0,
+          0.5,
+          1.0,
+          0.0,
+          1.0
+        ],
+        "device_free_before": 42161553088.0,
+        "device_free_retained_before": 42149850380.0,
+        "device_free_retained_after": 42149850380.0,
+        "device_free_after": 42161553088.0,
+        "loaded_binary": "C:\\temp\\ams-tuning-20261013\\job\\baseline\\radia_cuda_ams.mexw64",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "device": "NVIDIA A100-SXM4-40GB",
+        "registry_restored": 1
+      },
+      "errors": {
+        "nonlinear": {
+          "solution_relative": 1.4540321567165302e-14,
+          "true_relative_residual": 4.3573284039803485e-12
+        },
+        "linear": {
+          "solution_relative": 1.529747856772286e-13,
+          "true_relative_residual": 8.407812491456048e-13
+        },
+        "reused": [
+          {
+            "solution_relative": 1.4936475890731365e-13,
+            "true_relative_residual": 8.408290504554494e-13
+          },
+          {
+            "solution_relative": 1.4936475890731365e-13,
+            "true_relative_residual": 8.408290504554494e-13
+          },
+          {
+            "solution_relative": 1.4936475890731365e-13,
+            "true_relative_residual": 8.408290504554494e-13
+          },
+          {
+            "solution_relative": 1.4936475890731365e-13,
+            "true_relative_residual": 8.408290504554494e-13
+          },
+          {
+            "solution_relative": 0.0,
+            "true_relative_residual": 0.0
+          },
+          {
+            "solution_relative": 1.4936475890731365e-13,
+            "true_relative_residual": 8.408290504554494e-13
+          }
+        ]
+      },
+      "idle_before": {
+        "cpu_percent": 0.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55182114816
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1391550464,
+          "private": 1679208448,
+          "lifetime_peak_rss": 1408024576
+        },
+        "after": {
+          "rss": 1393332224,
+          "private": 1680809984,
+          "lifetime_peak_rss": 1409626112
+        },
+        "sampled_peak_rss": 1409626112,
+        "sampled_peak_private": 1745207296,
+        "sample_count": 21,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      }
+    },
+    {
+      "variant": "baseline",
+      "cycle": 1,
+      "report": {
+        "nonlinear_seconds": 0.4920617,
+        "linear_fresh_seconds": 0.1372498,
+        "prepared_setup_seconds": 0.1145174,
+        "reused_seconds": [
+          0.0315877,
+          0.0312596,
+          0.0312563,
+          0.0312566,
+          0.0005877,
+          0.0312408
+        ],
+        "nonlinear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357512567236096e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.409845633160141e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531787,
+              80.0,
+              7.869509961568544e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754414,
+              21.0,
+              4.856639975012874e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311042,
+              22.0,
+              7.40643025839009e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800392796,
+              23.0,
+              3.0579814720475326e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.550147280052409e-06,
+              22.0,
+              8.952166510623313e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0632403,
+            "upload_assembly_seconds": 0.0014189,
+            "total_seconds": 0.0651481,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.08407300000000001,
+          "assembly_seconds": 0.0021206000000000003,
+          "solve_seconds": 0.3315436,
+          "total_seconds": 0.4889508,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952166510623313e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "linear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 8.406672969107174e-13,
+          "history": [
+            0.0,
+            1.0,
+            18.0,
+            8.406788556668011e-13,
+            1.0
+          ],
+          "hierarchy_builds": 1,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                2,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0595767,
+            "upload_assembly_seconds": 0.0009358,
+            "total_seconds": 0.0609217,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0404978,
+          "assembly_seconds": 0.000548,
+          "solve_seconds": 0.0311495,
+          "total_seconds": 0.1347691,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 18,
+            "true_relative_residual": 8.406788556668011e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 1,
+            "hierarchy_builds": 1,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "reuse": [
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408056152700763e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 1,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0311852,
+            "solve_count": 1,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408056152700763e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 2,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0308955,
+            "solve_count": 2,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 2,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408056152700763e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 3,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0309102,
+            "solve_count": 3,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0.5,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408056152700763e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 4,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0309098,
+            "solve_count": 4,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 0,
+              "true_relative_residual": 0,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 5,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0002436,
+            "solve_count": 5,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408056152700763e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 6,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0309049,
+            "solve_count": 6,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          }
+        ],
+        "setup": {
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0591748,
+            "upload_assembly_seconds": 0.0009231,
+            "total_seconds": 0.060507,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "ams_setup": {
+            "schema": "radia.ams-matlab-setup.v1",
+            "setup_seconds": 0.0266913,
+            "export_seconds": 0.0013766,
+            "setup_threads": 1,
+            "python_adapter_used": 0,
+            "coarse_backend": "ngsolve_sparsecholesky",
+            "amg_phase_seconds": [
+              0.0008064999999999999,
+              0.00042960000000000003,
+              0.0016852999999999998,
+              0.00017749999999999998,
+              0.0068584,
+              3.5799999999999996e-05,
+              0.0069901
+            ],
+            "matrix_generation_backend": "CUDA deterministic Galerkin",
+            "gpu_products": 8,
+            "gpu_generation_seconds": 0.013429600000000002,
+            "gpu_upload_bytes": 2964788,
+            "gpu_download_bytes": 974536,
+            "gpu_setup_peak_owned_bytes": 9901548,
+            "upload_seconds": 0.0027376
+          },
+          "total_seconds": 0.1062327,
+          "backend": "MATLAB/mexcuda GPU",
+          "geometry_and_coefficients_fixed": 1
+        },
+        "scales": [
+          1.0,
+          2.0,
+          0.5,
+          1.0,
+          0.0,
+          1.0
+        ],
+        "device_free_before": 42161553088.0,
+        "device_free_retained_before": 42149850452.0,
+        "device_free_retained_after": 42149850452.0,
+        "device_free_after": 42161553088.0,
+        "loaded_binary": "C:\\temp\\ams-tuning-20261013\\job\\baseline\\radia_cuda_ams.mexw64",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "device": "NVIDIA A100-SXM4-40GB",
+        "registry_restored": 1
+      },
+      "errors": {
+        "nonlinear": {
+          "solution_relative": 1.420560235351742e-14,
+          "true_relative_residual": 4.357468106688403e-12
+        },
+        "linear": {
+          "solution_relative": 1.5409709345433706e-13,
+          "true_relative_residual": 8.407467113017331e-13
+        },
+        "reused": [
+          {
+            "solution_relative": 1.504010084522874e-13,
+            "true_relative_residual": 8.409486510421118e-13
+          },
+          {
+            "solution_relative": 1.504010084522874e-13,
+            "true_relative_residual": 8.409486510421118e-13
+          },
+          {
+            "solution_relative": 1.504010084522874e-13,
+            "true_relative_residual": 8.409486510421118e-13
+          },
+          {
+            "solution_relative": 1.504010084522874e-13,
+            "true_relative_residual": 8.409486510421118e-13
+          },
+          {
+            "solution_relative": 0.0,
+            "true_relative_residual": 0.0
+          },
+          {
+            "solution_relative": 1.504010084522874e-13,
+            "true_relative_residual": 8.409486510421118e-13
+          }
+        ]
+      },
+      "idle_before": {
+        "cpu_percent": 0.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55180845056
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1392824320,
+          "private": 1680220160,
+          "lifetime_peak_rss": 1409626112
+        },
+        "after": {
+          "rss": 1393205248,
+          "private": 1680879616,
+          "lifetime_peak_rss": 1409626112
+        },
+        "sampled_peak_rss": 1409466368,
+        "sampled_peak_private": 1744568320,
+        "sample_count": 21,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      }
+    },
+    {
+      "variant": "tuned",
+      "cycle": 1,
+      "report": {
+        "nonlinear_seconds": 0.2620622,
+        "linear_fresh_seconds": 0.1160857,
+        "prepared_setup_seconds": 0.1046023,
+        "reused_seconds": [
+          0.0099509,
+          0.0096839,
+          0.0096686,
+          0.0096426,
+          0.0005629,
+          0.0096335
+        ],
+        "nonlinear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357258217492875e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.408692201703751e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531787,
+              80.0,
+              7.869117472078444e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.2910880997754413,
+              21.0,
+              4.856839166797304e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507310945,
+              22.0,
+              7.406403698454612e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800393936,
+              23.0,
+              3.0583587085419847e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472801015056e-06,
+              22.0,
+              8.952002789903092e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0633865,
+            "upload_assembly_seconds": 0.0014948,
+            "total_seconds": 0.0653647,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.08874080000000001,
+          "assembly_seconds": 0.0020654000000000002,
+          "solve_seconds": 0.0971729,
+          "total_seconds": 0.2595058,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952002789903092e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2986180,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "linear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 8.407894101895049e-13,
+          "history": [
+            0.0,
+            1.0,
+            18.0,
+            8.407529843877337e-13,
+            1.0
+          ],
+          "hierarchy_builds": 1,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                2,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0592421,
+            "upload_assembly_seconds": 0.0009125,
+            "total_seconds": 0.060547,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0420974,
+          "assembly_seconds": 0.0005369,
+          "solve_seconds": 0.0095221,
+          "total_seconds": 0.1143107,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 18,
+            "true_relative_residual": 8.407529843877337e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 1,
+            "hierarchy_builds": 1,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2536300,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "reuse": [
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.406737008916089e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 1,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0095781,
+            "solve_count": 1,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.406737008916089e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 2,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093149,
+            "solve_count": 2,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 2,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.406737008916089e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 3,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093223,
+            "solve_count": 3,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0.5,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.406737008916089e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 4,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093045,
+            "solve_count": 4,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 0,
+              "true_relative_residual": 0,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 5,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0002345,
+            "solve_count": 5,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.406737008916089e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 6,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093088,
+            "solve_count": 6,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          }
+        ],
+        "setup": {
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0595237,
+            "upload_assembly_seconds": 0.0008959,
+            "total_seconds": 0.0608083,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "ams_setup": {
+            "schema": "radia.ams-matlab-setup.v1",
+            "setup_seconds": 0.0265735,
+            "export_seconds": 0.0013963,
+            "setup_threads": 1,
+            "python_adapter_used": 0,
+            "coarse_backend": "ngsolve_sparsecholesky",
+            "amg_phase_seconds": [
+              0.0007952,
+              0.00043029999999999994,
+              0.0016871999999999998,
+              0.00018,
+              0.0068547,
+              3.59e-05,
+              0.0069353999999999996
+            ],
+            "matrix_generation_backend": "CUDA deterministic Galerkin",
+            "gpu_products": 8,
+            "gpu_generation_seconds": 0.013373800000000002,
+            "gpu_upload_bytes": 2964788,
+            "gpu_download_bytes": 974536,
+            "gpu_setup_peak_owned_bytes": 9901548,
+            "upload_seconds": 0.0027362
+          },
+          "total_seconds": 0.1037729,
+          "backend": "MATLAB/mexcuda GPU",
+          "geometry_and_coefficients_fixed": 1
+        },
+        "scales": [
+          1.0,
+          2.0,
+          0.5,
+          1.0,
+          0.0,
+          1.0
+        ],
+        "device_free_before": 42161553088.0,
+        "device_free_retained_before": 42149850380.0,
+        "device_free_retained_after": 42149850380.0,
+        "device_free_after": 42161553088.0,
+        "loaded_binary": "C:\\temp\\ams-tuning-20261013\\job\\tuned\\radia_cuda_ams.mexw64",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "device": "NVIDIA A100-SXM4-40GB",
+        "registry_restored": 1
+      },
+      "errors": {
+        "nonlinear": {
+          "solution_relative": 1.5896974135200298e-14,
+          "true_relative_residual": 4.3572238893988736e-12
+        },
+        "linear": {
+          "solution_relative": 1.5072805119880333e-13,
+          "true_relative_residual": 8.406756684426052e-13
+        },
+        "reused": [
+          {
+            "solution_relative": 1.521538690949236e-13,
+            "true_relative_residual": 8.40888706388249e-13
+          },
+          {
+            "solution_relative": 1.521538690949236e-13,
+            "true_relative_residual": 8.40888706388249e-13
+          },
+          {
+            "solution_relative": 1.521538690949236e-13,
+            "true_relative_residual": 8.40888706388249e-13
+          },
+          {
+            "solution_relative": 1.521538690949236e-13,
+            "true_relative_residual": 8.40888706388249e-13
+          },
+          {
+            "solution_relative": 0.0,
+            "true_relative_residual": 0.0
+          },
+          {
+            "solution_relative": 1.521538690949236e-13,
+            "true_relative_residual": 8.40888706388249e-13
+          }
+        ]
+      },
+      "idle_before": {
+        "cpu_percent": 0.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55183142912
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1392914432,
+          "private": 1680449536,
+          "lifetime_peak_rss": 1409626112
+        },
+        "after": {
+          "rss": 1393000448,
+          "private": 1680351232,
+          "lifetime_peak_rss": 1409691648
+        },
+        "sampled_peak_rss": 1409691648,
+        "sampled_peak_private": 1745231872,
+        "sample_count": 15,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      }
+    },
+    {
+      "variant": "tuned",
+      "cycle": 1,
+      "report": {
+        "nonlinear_seconds": 0.2929989,
+        "linear_fresh_seconds": 0.1170501,
+        "prepared_setup_seconds": 0.1036821,
+        "reused_seconds": [
+          0.0099427,
+          0.0096996,
+          0.0096782,
+          0.0096411,
+          0.0005629,
+          0.0096445
+        ],
+        "nonlinear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.357216395319208e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.407351916496343e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531794,
+              80.0,
+              7.86905138260165e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.29108809977544126,
+              21.0,
+              4.856576658102855e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507310882,
+              22.0,
+              7.40655600823253e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.0009325739800392548,
+              23.0,
+              3.058322988636895e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472800627666e-06,
+              22.0,
+              8.952312856928845e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0632119,
+            "upload_assembly_seconds": 0.0015605,
+            "total_seconds": 0.065285,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0922163,
+          "assembly_seconds": 0.0023851999999999996,
+          "solve_seconds": 0.12395389999999999,
+          "total_seconds": 0.2903633,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.952312856928845e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2986180,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "linear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 8.41003266253903e-13,
+          "history": [
+            0.0,
+            1.0,
+            18.0,
+            8.410027422315327e-13,
+            1.0
+          ],
+          "hierarchy_builds": 1,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                2,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.05998,
+            "upload_assembly_seconds": 0.0009197,
+            "total_seconds": 0.0612955,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0421225,
+          "assembly_seconds": 0.0005303,
+          "solve_seconds": 0.0096443,
+          "total_seconds": 0.1152473,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 18,
+            "true_relative_residual": 8.410027422315327e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 1,
+            "hierarchy_builds": 1,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0,
+            "coarse_action_cache_bytes": 2536300,
+            "iteration_host_syncs": 1
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "reuse": [
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408220717246883e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 1,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0095697,
+            "solve_count": 1,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408220717246883e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 2,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093403,
+            "solve_count": 2,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 2,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408220717246883e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 3,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093278,
+            "solve_count": 3,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0.5,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408220717246883e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 4,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093066,
+            "solve_count": 4,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 0,
+              "true_relative_residual": 0,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 5,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0002365,
+            "solve_count": 5,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408220717246883e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 6,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0,
+              "coarse_action_cache_bytes": 2536300,
+              "iteration_host_syncs": 1
+            },
+            "total_seconds": 0.0093199,
+            "solve_count": 6,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          }
+        ],
+        "setup": {
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0587058,
+            "upload_assembly_seconds": 0.0008777,
+            "total_seconds": 0.0599674,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "ams_setup": {
+            "schema": "radia.ams-matlab-setup.v1",
+            "setup_seconds": 0.0267473,
+            "export_seconds": 0.0013718,
+            "setup_threads": 1,
+            "python_adapter_used": 0,
+            "coarse_backend": "ngsolve_sparsecholesky",
+            "amg_phase_seconds": [
+              0.0007968,
+              0.0004267,
+              0.0018411,
+              0.0001782,
+              0.0068547999999999994,
+              3.56e-05,
+              0.0069544
+            ],
+            "matrix_generation_backend": "CUDA deterministic Galerkin",
+            "gpu_products": 8,
+            "gpu_generation_seconds": 0.0133946,
+            "gpu_upload_bytes": 2964788,
+            "gpu_download_bytes": 974536,
+            "gpu_setup_peak_owned_bytes": 9901548,
+            "upload_seconds": 0.0026473
+          },
+          "total_seconds": 0.1029871,
+          "backend": "MATLAB/mexcuda GPU",
+          "geometry_and_coefficients_fixed": 1
+        },
+        "scales": [
+          1.0,
+          2.0,
+          0.5,
+          1.0,
+          0.0,
+          1.0
+        ],
+        "device_free_before": 42161553088.0,
+        "device_free_retained_before": 42149850452.0,
+        "device_free_retained_after": 42149850452.0,
+        "device_free_after": 42161553088.0,
+        "loaded_binary": "C:\\temp\\ams-tuning-20261013\\job\\tuned\\radia_cuda_ams.mexw64",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "device": "NVIDIA A100-SXM4-40GB",
+        "registry_restored": 1
+      },
+      "errors": {
+        "nonlinear": {
+          "solution_relative": 1.5955699642015745e-14,
+          "true_relative_residual": 4.357207476011461e-12
+        },
+        "linear": {
+          "solution_relative": 1.5546299940315e-13,
+          "true_relative_residual": 8.409721028879666e-13
+        },
+        "reused": [
+          {
+            "solution_relative": 1.5320617811110456e-13,
+            "true_relative_residual": 8.406406222596802e-13
+          },
+          {
+            "solution_relative": 1.5320617811110456e-13,
+            "true_relative_residual": 8.406406222596802e-13
+          },
+          {
+            "solution_relative": 1.5320617811110456e-13,
+            "true_relative_residual": 8.406406222596802e-13
+          },
+          {
+            "solution_relative": 1.5320617811110456e-13,
+            "true_relative_residual": 8.406406222596802e-13
+          },
+          {
+            "solution_relative": 0.0,
+            "true_relative_residual": 0.0
+          },
+          {
+            "solution_relative": 1.5320617811110456e-13,
+            "true_relative_residual": 8.406406222596802e-13
+          }
+        ]
+      },
+      "idle_before": {
+        "cpu_percent": 0.3,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55185825792
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1392975872,
+          "private": 1680318464,
+          "lifetime_peak_rss": 1409691648
+        },
+        "after": {
+          "rss": 1393008640,
+          "private": 1680351232,
+          "lifetime_peak_rss": 1409695744
+        },
+        "sampled_peak_rss": 1409695744,
+        "sampled_peak_private": 1745092608,
+        "sample_count": 16,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      }
+    },
+    {
+      "variant": "baseline",
+      "cycle": 1,
+      "report": {
+        "nonlinear_seconds": 0.5267344,
+        "linear_fresh_seconds": 0.1374267,
+        "prepared_setup_seconds": 0.1019374,
+        "reused_seconds": [
+          0.0315894,
+          0.0312947,
+          0.0312752,
+          0.03127,
+          0.0005584,
+          0.031258
+        ],
+        "nonlinear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 4.3573424106856975e-12,
+          "history": [
+            [
+              0.0,
+              1.0,
+              18.0,
+              8.409288939440816e-13,
+              0.25
+            ],
+            [
+              1.0,
+              1.3883185822531794,
+              80.0,
+              7.870007273140512e-13,
+              1.0
+            ],
+            [
+              2.0,
+              0.29108809977544164,
+              21.0,
+              4.856734898166396e-13,
+              1.0
+            ],
+            [
+              3.0,
+              0.027898246507311104,
+              22.0,
+              7.406506988443493e-13,
+              1.0
+            ],
+            [
+              4.0,
+              0.000932573980039466,
+              23.0,
+              3.0580799844018207e-13,
+              1.0
+            ],
+            [
+              5.0,
+              1.5501472800558887e-06,
+              22.0,
+              8.95219512238464e-13,
+              1.0
+            ]
+          ],
+          "hierarchy_builds": 2,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0631155,
+            "upload_assembly_seconds": 0.0015442,
+            "total_seconds": 0.0651261,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0850063,
+          "assembly_seconds": 0.0021226,
+          "solve_seconds": 0.3659195,
+          "total_seconds": 0.5243924,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 22,
+            "true_relative_residual": 8.95219512238464e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 6,
+            "hierarchy_builds": 2,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "linear": {
+          "schema": "radia.native-hcurl-solve.v1",
+          "true_nonlinear_relative_residual": 8.407288774323497e-13,
+          "history": [
+            0.0,
+            1.0,
+            18.0,
+            8.407666068041873e-13,
+            1.0
+          ],
+          "hierarchy_builds": 1,
+          "reuse_policy": [
+            [
+              "MCOS",
+              "string",
+              [
+                3707764736,
+                2,
+                1,
+                1,
+                2,
+                1
+              ]
+            ]
+          ],
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0595378,
+            "upload_assembly_seconds": 0.0009397,
+            "total_seconds": 0.0609147,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "setup_seconds": 0.0415076,
+          "assembly_seconds": 0.0005216999999999999,
+          "solve_seconds": 0.031141,
+          "total_seconds": 0.1357161,
+          "max_phase_owned_bytes_upper_bound": 9901548,
+          "last_linear_solve": {
+            "iterations": 18,
+            "true_relative_residual": 8.407666068041873e-13,
+            "workspace_bytes": 213064,
+            "workspace_allocations": 1,
+            "solve_count": 1,
+            "hierarchy_builds": 1,
+            "graph_cached": 1,
+            "native_buffer_allocations_during_solve": 0
+          },
+          "memory_definition": "max of assembly bound and AMS setup owned peak; not aggregate whole-process peak",
+          "backend": "MATLAB/mexcuda GPU; NGSolve host basis and serial sparsecholesky setup; no Python adapter"
+        },
+        "reuse": [
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408105731278185e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 1,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0312097,
+            "solve_count": 1,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408105731278185e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 2,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0309363,
+            "solve_count": 2,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 2,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408105731278185e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 3,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0309318,
+            "solve_count": 3,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0.5,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408105731278185e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 4,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0309313,
+            "solve_count": 4,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 0,
+              "true_relative_residual": 0,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 5,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0002273,
+            "solve_count": 5,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 0,
+            "backend": "MATLAB/mexcuda GPU"
+          },
+          {
+            "linear": {
+              "iterations": 18,
+              "true_relative_residual": 8.408105731278185e-13,
+              "workspace_bytes": 213064,
+              "workspace_allocations": 1,
+              "solve_count": 6,
+              "hierarchy_builds": 1,
+              "graph_cached": 1,
+              "native_buffer_allocations_during_solve": 0
+            },
+            "total_seconds": 0.0309226,
+            "solve_count": 6,
+            "matrix_reused": 1,
+            "hierarchy_reused": 1,
+            "current_scale": 1,
+            "backend": "MATLAB/mexcuda GPU"
+          }
+        ],
+        "setup": {
+          "assembly": {
+            "schema": "radia.hcurl-cuda-assembly.v1",
+            "host_basis_seconds": 0.0586748,
+            "upload_assembly_seconds": 0.0009508,
+            "total_seconds": 0.0600389,
+            "gpu_peak_owned_bytes_upper_bound": 8903352,
+            "upload_bytes": 4465300,
+            "download_bytes": 632048,
+            "taskmanager_started": 0,
+            "python_adapter_used": 0,
+            "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+          },
+          "ams_setup": {
+            "schema": "radia.ams-matlab-setup.v1",
+            "setup_seconds": 0.0265984,
+            "export_seconds": 0.0013809,
+            "setup_threads": 1,
+            "python_adapter_used": 0,
+            "coarse_backend": "ngsolve_sparsecholesky",
+            "amg_phase_seconds": [
+              0.0007988,
+              0.0004293,
+              0.0016822999999999999,
+              0.0001851,
+              0.006861300000000001,
+              3.66e-05,
+              0.0069348
+            ],
+            "matrix_generation_backend": "CUDA deterministic Galerkin",
+            "gpu_products": 8,
+            "gpu_generation_seconds": 0.0133836,
+            "gpu_upload_bytes": 2964788,
+            "gpu_download_bytes": 974536,
+            "gpu_setup_peak_owned_bytes": 9901548,
+            "upload_seconds": 0.0026734
+          },
+          "total_seconds": 0.1012059,
+          "backend": "MATLAB/mexcuda GPU",
+          "geometry_and_coefficients_fixed": 1
+        },
+        "scales": [
+          1.0,
+          2.0,
+          0.5,
+          1.0,
+          0.0,
+          1.0
+        ],
+        "device_free_before": 42161553088.0,
+        "device_free_retained_before": 42149850380.0,
+        "device_free_retained_after": 42149850380.0,
+        "device_free_after": 42161553088.0,
+        "loaded_binary": "C:\\temp\\ams-tuning-20261013\\job\\baseline\\radia_cuda_ams.mexw64",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "device": "NVIDIA A100-SXM4-40GB",
+        "registry_restored": 1
+      },
+      "errors": {
+        "nonlinear": {
+          "solution_relative": 1.5024631950179238e-14,
+          "true_relative_residual": 4.357426675521133e-12
+        },
+        "linear": {
+          "solution_relative": 1.5567078349493305e-13,
+          "true_relative_residual": 8.406301809365611e-13
+        },
+        "reused": [
+          {
+            "solution_relative": 1.4946146497518144e-13,
+            "true_relative_residual": 8.4087502080316e-13
+          },
+          {
+            "solution_relative": 1.4946146497518144e-13,
+            "true_relative_residual": 8.4087502080316e-13
+          },
+          {
+            "solution_relative": 1.4946146497518144e-13,
+            "true_relative_residual": 8.4087502080316e-13
+          },
+          {
+            "solution_relative": 1.4946146497518144e-13,
+            "true_relative_residual": 8.4087502080316e-13
+          },
+          {
+            "solution_relative": 0.0,
+            "true_relative_residual": 0.0
+          },
+          {
+            "solution_relative": 1.4946146497518144e-13,
+            "true_relative_residual": 8.4087502080316e-13
+          }
+        ]
+      },
+      "idle_before": {
+        "cpu_percent": 0.1,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "gpu_utilization_percent": 0.0,
+        "device_free_MiB": 40198.0,
+        "host_available_bytes": 55178661888
+      },
+      "host_memory": {
+        "before": {
+          "rss": 1392992256,
+          "private": 1680318464,
+          "lifetime_peak_rss": 1409695744
+        },
+        "after": {
+          "rss": 1393016832,
+          "private": 1680347136,
+          "lifetime_peak_rss": 1409699840
+        },
+        "sampled_peak_rss": 1408528384,
+        "sampled_peak_private": 1745088512,
+        "sample_count": 21,
+        "period_seconds": 0.05,
+        "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+      }
+    }
+  ],
+  "memory_definition": "Exact added coarse-cache/workspace bytes, device-free endpoints and 50ms MATLAB-process samples; not a transient global-device peak",
+  "reuse_scope": "Fixed affine linear FE matrix, labels, coefficients and hierarchy; explicit source-current scaling. Nonlinear solve uses existing adaptive updates.",
+  "idle_before": {
+    "cpu_percent": 0.3,
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "gpu_utilization_percent": 0.0,
+    "device_free_MiB": 40645.0,
+    "host_available_bytes": 56755650560
+  },
+  "cpu_reference": {
+    "nonlinear": {
+      "route": 3,
+      "total_seconds": 0.7838115999984439,
+      "setup_seconds": 0.056416300001728814,
+      "assembly_seconds": 0.4249292000022251,
+      "solve_seconds": 0.22278949999599718,
+      "builds": 2,
+      "history": [
+        [
+          0,
+          1.0,
+          18,
+          4.311907866562493e-12,
+          0.25
+        ],
+        [
+          1,
+          1.3883185822536461,
+          78,
+          2.150348575949621e-12,
+          1.0
+        ],
+        [
+          2,
+          0.2910880997757231,
+          22,
+          4.856467930498652e-13,
+          1.0
+        ],
+        [
+          3,
+          0.027898246507375806,
+          23,
+          7.406486142288217e-13,
+          1.0
+        ],
+        [
+          4,
+          0.0009325739800435172,
+          23,
+          1.0582582797866686e-12,
+          1.0
+        ],
+        [
+          5,
+          1.5501472802487325e-06,
+          23,
+          8.952100353918993e-13,
+          1.0
+        ]
+      ],
+      "final_residual": 4.357143070128381e-12,
+      "threads": 1
+    },
+    "linear_backend": "NGSolve sparsecholesky",
+    "bridge_sha256": "5915fe13e7a6125928fb92d1cfb1bfe29e85871c073e49cd655a580debbb7c84",
+    "mesh_sha256": "4818353a2cccd3adf232f70af1db48a9679028b6ad76c277b1b6a34926137d54",
+    "dofs": 5326,
+    "elements": 3937
+  },
+  "versions": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "ngsolve": "6.2.2607",
+    "numpy": "2.5.2"
+  },
+  "cpu_self_checks": [
+    {
+      "solution_relative": 0.0,
+      "true_relative_residual": 4.357143070128381e-12
+    },
+    {
+      "solution_relative": 0.0,
+      "true_relative_residual": 1.983555767320027e-14
+    }
+  ],
+  "matlab_start_seconds": 6.481306599998788,
+  "summary": {
+    "baseline": {
+      "nonlinear_seconds": 0.50939805,
+      "linear_fresh_seconds": 0.13733825,
+      "prepared_setup_seconds": 0.11032040000000001,
+      "reused_warm_seconds": 0.0312726,
+      "artifact_sha256": "8c8a8110c26eb02e10c3542136c4c6e3f6dc1563a4d7da87ba9447e0427407e4"
+    },
+    "tuned": {
+      "nonlinear_seconds": 0.28640560000000004,
+      "linear_fresh_seconds": 0.1171264,
+      "prepared_setup_seconds": 0.10547625,
+      "reused_warm_seconds": 0.00967865,
+      "artifact_sha256": "1471abb19b2966e3b2080f03a91dcab64f91fb1908bac1ef9c5473fc43109012"
+    },
+    "nonlinear_speedup": 1.7785896993634203,
+    "linear_fresh_speedup": 1.1725644261242554,
+    "reused_warm_speedup": 3.2310911129134743
+  },
+  "idle_after": {
+    "cpu_percent": 0.5,
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "gpu_utilization_percent": 0.0,
+    "device_free_MiB": 40198.0,
+    "host_available_bytes": 55180775424
+  },
+  "payload": {
+    "files": 613,
+    "manifest_sha256": "cc80974cfc8d6055e0139d88ff9d2a5fafa7bba0343595325f7e9f6b3bbc3ddd",
+    "raw_result_sha256": "cfae79e0662431f27740447bb3bc5f0da2285abc40a3e01529014c4497b708f7",
+    "durable_root": "W:\\00_CAE\\Radia\\release-evidence\\ams-fem-fmm-20261013\\ams-tuning-a100"
+  },
+  "builds": {
+    "baseline": {
+      "schema": "radia.ams-cuda-build.v1",
+      "host": "T7920",
+      "python": "C:\\Program Files\\Python312\\python.exe",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "configuration": "C:\\Program Files\\MATLAB\\R2026a\\toolbox\\parallel\\gpu\\extern\\src\\mex\\win64\\nvcc_msvcpp2022.xml",
+      "compiler_bin": "C:\\BuildTools\\VS2022-CUDA\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64",
+      "source_commit": "98f9c2fe57dff57eb0d7e34694458afd443755e3",
+      "source_dirty": false,
+      "sha256": {
+        "build-ams-cuda/_radia_ams_snapshot.pyd": "bbb2cdb48573107cfbdc5520d56f5d164a38f62a7612ea4cafbc4010bf8a08a3",
+        "build-ams-cuda/_radia_ams_cpu_reference.pyd": "5915fe13e7a6125928fb92d1cfb1bfe29e85871c073e49cd655a580debbb7c84",
+        "build-ams-cuda/radia_cuda_ams.mexw64": "8c8a8110c26eb02e10c3542136c4c6e3f6dc1563a4d7da87ba9447e0427407e4"
+      },
+      "source_sha256": {
+        "packages/radia-gpu/native/ams_snapshot_module.cpp": "cce1561d96b01b538e50862270f7bab44735155de2da70ca47a82702762979ec",
+        "packages/radia-gpu/native/ams_cpu_reference.cpp": "16916da7e5f0eedfd515bad959d3d207d7507083a932d937bc5ccc7411b014f5",
+        "packages/radia-gpu/native/ams_resident.cuh": "e99fc27edcc235d828bb67742a795fd88ab249dc9968557f0cafdcb17e372421",
+        "packages/radia-gpu/native/ams_nonlinear.cuh": "076e6d61259572594ac32a0e1fd05d471ac8e0341e51cff83d124eb96e7cecd1",
+        "packages/radia-gpu/native/radia_cuda_ams.cu": "9a43430220979b98d8159b94926ccf4f10d3e948fac55c7aea0df238c9551568",
+        "packages/radia-gpu/native/ams_matlab_setup.cpp": "52e1d4c4697b47721826423d66503b895a15d9700e48337f9e6bcacc57c92960",
+        "packages/radia-gpu/native/ams_setup_gpu.hpp": "37ae39c14fcfae623acc879106a41f5983e2b4cc1248eeec9f5d9c061dac2439",
+        "packages/radia-gpu/native/ams_setup_gpu.cuh": "333ef9ce8329c502891e41eb1d6d12c8cb96f2dfa3fa7c07d0e83b872718b13d",
+        "packages/radia-gpu/native/ams_fem_host.hpp": "782fc4f84915c9eaa59793a63e8dffa228e0f0d8f6e3dedfe9e8e56bd6065172",
+        "packages/radia-gpu/native/ams_fem_host.cpp": "f34220d38c856ce6521a6e18494aa99a88346892b9b7b423fc773f12ef9c41cc",
+        "packages/radia-gpu/native/ams_fem.cuh": "8e07461a8420c00b4c616fdb9d68821c71402486b523023550d49d306a399b35",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "fca70b5fd962aeac93aaf8b226c1d072848317f411a7de16a6fc2035d2c9e80a",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "a76fa599ae308b33370f8ee088dac7582ac3d706cace8975a895e63e48a60b4e",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp": "c78d9ef2596f95cd3c85f9d0e801c567622aa232c168bbce72de6e857646a121",
+        "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "a285fe6ca8448e7548365000e71e21e0ad8cd71769ae5e9792024398442709cb",
+        "packages/radia-gpu/tools/build_ams_cuda.py": "0d05898004627680cd1f908778658a10ac91753cf3ad5a59bbdc04e7b66dad06",
+        "Build.ps1": "bf211a9e905bfd2342dbcb19693f5f4e80ac21425bdb228fcf351464885bf5b9"
+      },
+      "no_cpu_solver_fallback": true,
+      "snapshot_setup_backend": "OpenMP row/chunk dispatch; default one thread; serial coarse factorization",
+      "matlab_setup_backend": "Shared native AMS; optional CUDA AP and Pt(AP); serial NGSolve sparsecholesky; no TaskManager regions",
+      "python_runtime_adapter_required": false,
+      "python_dll_indirect_dependency_permitted": true
+    },
+    "tuned": {
+      "schema": "radia.ams-cuda-build.v1",
+      "host": "T7920",
+      "python": "C:\\Program Files\\Python312\\python.exe",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "configuration": "C:\\Program Files\\MATLAB\\R2026a\\toolbox\\parallel\\gpu\\extern\\src\\mex\\win64\\nvcc_msvcpp2022.xml",
+      "compiler_bin": "C:\\BuildTools\\VS2022-CUDA\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64",
+      "source_commit": "cb1dd5adda182754f3dc158a7ce3d3ae3c67718a",
+      "source_dirty": false,
+      "sha256": {
+        "build-ams-cuda/_radia_ams_snapshot.pyd": "47d4c77fa4e95a7f42d290b4b85a7cc9a408f08c9e18a98b6577f0996c37f9db",
+        "build-ams-cuda/_radia_ams_cpu_reference.pyd": "0a3acf4b40c21f9b73f653c0811265da25bcf4a0254c6e50b10a0ed512102c53",
+        "build-ams-cuda/radia_cuda_ams.mexw64": "1471abb19b2966e3b2080f03a91dcab64f91fb1908bac1ef9c5473fc43109012"
+      },
+      "source_sha256": {
+        "packages/radia-gpu/native/ams_snapshot_module.cpp": "cce1561d96b01b538e50862270f7bab44735155de2da70ca47a82702762979ec",
+        "packages/radia-gpu/native/ams_cpu_reference.cpp": "16916da7e5f0eedfd515bad959d3d207d7507083a932d937bc5ccc7411b014f5",
+        "packages/radia-gpu/native/ams_resident.cuh": "096f188568f7de09f0a9d1dc8d526e0e75d8cc9933765a4b5815c4136795c285",
+        "packages/radia-gpu/native/ams_nonlinear.cuh": "076e6d61259572594ac32a0e1fd05d471ac8e0341e51cff83d124eb96e7cecd1",
+        "packages/radia-gpu/native/radia_cuda_ams.cu": "cd3944f45856b743476bb3ce9debc515aa2ea71d16d08809e7987216ae9adee0",
+        "packages/radia-gpu/native/ams_matlab_setup.cpp": "52e1d4c4697b47721826423d66503b895a15d9700e48337f9e6bcacc57c92960",
+        "packages/radia-gpu/native/ams_setup_gpu.hpp": "37ae39c14fcfae623acc879106a41f5983e2b4cc1248eeec9f5d9c061dac2439",
+        "packages/radia-gpu/native/ams_setup_gpu.cuh": "333ef9ce8329c502891e41eb1d6d12c8cb96f2dfa3fa7c07d0e83b872718b13d",
+        "packages/radia-gpu/native/ams_fem_host.hpp": "782fc4f84915c9eaa59793a63e8dffa228e0f0d8f6e3dedfe9e8e56bd6065172",
+        "packages/radia-gpu/native/ams_fem_host.cpp": "f34220d38c856ce6521a6e18494aa99a88346892b9b7b423fc773f12ef9c41cc",
+        "packages/radia-gpu/native/ams_fem.cuh": "8e07461a8420c00b4c616fdb9d68821c71402486b523023550d49d306a399b35",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "fca70b5fd962aeac93aaf8b226c1d072848317f411a7de16a6fc2035d2c9e80a",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "a76fa599ae308b33370f8ee088dac7582ac3d706cace8975a895e63e48a60b4e",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp": "c78d9ef2596f95cd3c85f9d0e801c567622aa232c168bbce72de6e857646a121",
+        "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "a285fe6ca8448e7548365000e71e21e0ad8cd71769ae5e9792024398442709cb",
+        "packages/radia-gpu/tools/build_ams_cuda.py": "0d05898004627680cd1f908778658a10ac91753cf3ad5a59bbdc04e7b66dad06",
+        "Build.ps1": "bf211a9e905bfd2342dbcb19693f5f4e80ac21425bdb228fcf351464885bf5b9"
+      },
+      "no_cpu_solver_fallback": true,
+      "snapshot_setup_backend": "OpenMP row/chunk dispatch; default one thread; serial coarse factorization",
+      "matlab_setup_backend": "Shared native AMS; optional CUDA AP and Pt(AP); serial NGSolve sparsecholesky; no TaskManager regions",
+      "python_runtime_adapter_required": false,
+      "python_dll_indirect_dependency_permitted": true
+    }
+  },
+  "source_notes": {
+    "native_commit": "cb1dd5adda182754f3dc158a7ce3d3ae3c67718a",
+    "reuse_wrapper_commit": "3eecb7a97",
+    "validation_fix_commit": "fe872fdca",
+    "baseline": "Original accepted native MEX, unchanged. Both variants use the same new reuse wrapper."
+  },
+  "formal_host_authorization": "User explicitly selected NGSolve(A100) for GPU performance; not relabeled mdx timing.",
+  "limitations": [
+    "Bounded affine homogeneous lowest-order HCurl cube, 5326 DOF / 3937 tetrahedra; not high-order/curved/general-material acceptance.",
+    "Two ABBA cycles, 4 contexts per variant; nonlinear/linear whole-API times include transfers and output recovery, exclude MATLAB/GPU initialization, fixture loading and result serialization.",
+    "Linear reuse fixes geometry, labels, reluctivity and gauge mass and scales only the current source. Nonlinear solve retains adaptive rebuilding; nonlinear mesh/session reuse is not newly implemented.",
+    "Regular PCG iteration host synchronizations reduced from two to one; initial/final and convergence-triggered true residual checks remain.",
+    "Coarse action caching and device curvature were measured together; no isolated attribution to one optimization.",
+    "Previous max_phase_owned_bytes_upper_bound is not a total bound and excludes new coarse caches; separately reported cache/workspace bytes and endpoint/50ms process samples do not certify transient global device/host peaks.",
+    "Candidate kernel tested on A100 is the same hash as the 100-built artifact. Unchanged private DLL payload was hash verified; this run did not repeat the historical live DLL-module audit.",
+    "No installed/common-release wheel replacement; radia-gpu owner integration and release acceptance are separate."
+  ]
+}
