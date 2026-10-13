@@ -1,11 +1,12 @@
 function result=benchmark_optuna_parameter_history(outputPath,options)
-%BENCHMARK_OPTUNA_PARAMETER_HISTORY In-memory independent TPE end-to-end cost.
+%BENCHMARK_OPTUNA_PARAMETER_HISTORY In-memory TPE end-to-end cost.
 arguments
     outputPath (1,1) string
     options.TrialCounts (1,:) double {mustBeInteger,mustBePositive} = [100 1000 5000]
     options.Dimensions (1,:) double {mustBeInteger,mustBePositive} = [1 10 40]
     options.Repeats (1,1) double {mustBeInteger,mustBeGreaterThan(options.Repeats,4)} = 13
     options.ExecutionMode (1,1) string {mustBeMember(options.ExecutionMode,["cpu","gpu"])} = "cpu"
+    options.Multivariate (1,1) logical = false
     options.HistoryCacheDirectory (1,1) string = ""
 end
 root=fileparts(fileparts(fileparts(mfilename('fullpath'))));
@@ -17,7 +18,7 @@ restore=onCleanup(@()radia.optuna.executionMode(previous));
 entries=cell(0,1);
 for dimensions=options.Dimensions
     for count=options.TrialCounts
-        sampler=radia.optuna.TPESampler(Seed=37,Multivariate=false);
+        sampler=radia.optuna.TPESampler(Seed=37,Multivariate=options.Multivariate);
         study=radia.optuna.Study(Sampler=sampler,AutoSave=false);
         names="x"+string(1:dimensions);
         % Populate identical, deterministic history without timing setup.
@@ -82,7 +83,8 @@ for dimensions=options.Dimensions
             'execution_mode',options.ExecutionMode,'storage_enabled',false,'autosave',false, ...
             'module_configure_s',moduleConfigureSeconds, ...
             'setup_history_cache_enabled',strlength(options.HistoryCacheDirectory)>0, ...
-            'sampler','independent TPE','seed',37,'history_seed',19, ...
+            'sampler','TPE','multivariate',options.Multivariate, ...
+            'seed',37,'history_seed',19, ...
             'repeats',options.Repeats,'discarded_repeats',4, ...
             'entries',{entries},'api',optuna_mex('api.info'), ...
             'notes',{{'Includes ask, all suggestions, recording and tell.', ...
