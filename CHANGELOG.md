@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.3.3 - 2026-10-13
+
+- Add an explicit forward B(H) HDiv Newton route that retains falling
+  magnetization segments (dB/dH < mu0) instead of capping the inverse M law,
+  and honor the automatic inner tolerance. Existing routes are unchanged.
+- Fix the declared AMS gradient nullspace in sparse coarse factorization and
+  the ACA cyclic reference search; batch exact HACApK dense leaves.
+
 ## 5.3.2 - 2026-10-12
 
 - Repair dedicated development-runtime intent recording for the current build

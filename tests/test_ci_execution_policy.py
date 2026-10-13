@@ -321,7 +321,7 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     normalized = " ".join(policy.split())
     assert "with the `100` runner label" in normalized
     assert "LAB/102 tests radia and radia-mcp wheels without radia-gpu" in normalized
-    assert "Start SSH host `NGSolve` (A100) on demand for CPU/GPU timing" in normalized
+    assert "Start SSH host `NGSolve` (mdx A100) on demand only for mexcuda GPU work" in normalized
     assert "mdx/mdx1/mdx2/hibino are retired execution targets" in normalized
     assert "`NGSolve` A100 validation runs without Cubit" in normalized
     assert "NGSolve hosts start from checked exported .vol files, without Cubit" in normalized
@@ -358,7 +358,7 @@ def test_policy_twins_define_the_same_compute_host_routing():
     policy = routing_policy(agents)
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
-    assert "Start SSH host `NGSolve` (A100) on demand for CPU/GPU timing" in normalized
+    assert "Start SSH host `NGSolve` (mdx A100) on demand only for mexcuda GPU work" in normalized
     assert "mdx/mdx1/mdx2/hibino are retired execution targets" in normalized
     assert "BatchMode=yes NGSolve hostname" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
