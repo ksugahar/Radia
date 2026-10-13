@@ -37,7 +37,7 @@ def main(a):
         nonlinear,cpuInfo=cpu_run(3,fes,form,f.vec,G,[xyz[:,c] for c in range(3)],bridge,1)
         linearForm=ng.BilinearForm(fes);linearForm+=(ng.curl(u)*ng.curl(v)+u*v)*ng.dx
         with ng.TaskManager():linearForm.Assemble()
-        linearRHS=f.vec.CreateVector();linearRHS.data=f.vec/20
+        linearRHS=f.vec.CreateVector();linearRHS.data=.05*f.vec
         inverse=linearForm.mat.Inverse(freedofs=fes.FreeDofs(),inverse='sparsecholesky')
         lin=linearRHS.CreateVector()
         with ng.TaskManager():lin.data=inverse*linearRHS
