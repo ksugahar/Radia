@@ -83,7 +83,7 @@ def main(a):
                 binaryPath=tunedPath if variant=='tuned' else job/'baseline'
                 with Memory(pid) as memory:eng.ams_tuning_sample(str(job),str(binaryPath),str(path),str(matlabPath),True,nargout=0)
                 modulePath=path.with_suffix('.module.json')
-                subprocess.run(['powershell','-NoProfile','-File',str(job/'ams_loaded_module.ps1'),'-ProcessId',str(pid),'-OutputPath',str(modulePath)],check=True,capture_output=True)
+                subprocess.run(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(job/'ams_loaded_module.ps1'),'-ProcessId',str(pid),'-OutputPath',str(modulePath)],check=True,capture_output=True)
                 raw=loadmat(path,simplify_cells=True);report=raw['report']
                 loaded=Path(report['loaded_binary']).resolve()
                 expectedHash=tunedHash if variant=='tuned' else manifest['baseline/radia_cuda_ams.mexw64']

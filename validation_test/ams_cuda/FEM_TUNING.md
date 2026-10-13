@@ -120,3 +120,28 @@ the documented sampling limitations. No total-memory reduction is claimed.
 This candidate has not replaced the radia-gpu release owner's fixed wheel.
 Broader materials, high-order/curved elements and large-scale A100 timing
 remain outside this bounded acceptance.
+
+
+## Installed wheel acceptance
+
+The CI-built `radia-gpu 0.1.4.dev0` wheel from source
+`a88e158410b330279a5cb21354c264108db9cec7` passed installed acceptance on
+RTX 5000 and A100 with identical wheel, manifest and loaded AMS MEX hashes.
+See `results/installed-wheel014-cross-host-20261013.json` and the adjacent
+per-device records. The wheel remains a development candidate.
+
+Eight idle A100 ABBA contexts measured whole API calls including setup and
+transfers: nonlinear median 576.462 to 322.031 ms (1.79x), fresh linear
+142.117 to 125.756 ms, prepared setup 122.598 to 117.501 ms, and warmed
+matrix/hierarchy reuse 32.746 to 12.239 ms (2.68x). Initialization and first
+API calls are recorded separately. RTX timing remains diagnostic.
+
+Independent Python CPU checks passed. Cross-device coefficient differences
+were at most 3.91e-14. Cache/workspace memory and sampled process memory were
+rechecked; the sampling limitations above still apply. No global peak or
+large winding scaling certification is claimed.
+
+The A100 module identity probe required an explicit process-scoped
+PowerShell execution policy. The validation controller was corrected; the
+wheel was unchanged. The first failed probe and all successful samples were
+recovered with hashes before job-owned remote cleanup.
