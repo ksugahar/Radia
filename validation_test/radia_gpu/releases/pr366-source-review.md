@@ -23,3 +23,12 @@ The reviewer performed source review only; GPU execution and independent
 CPU numerical acceptance are recorded separately. This report does not
 qualify a stable release by itself. A stable source/version and its exact
 main CI wheel need fresh installed acceptance and final-source review.
+
+
+The post-merge fast contract run identified an outdated exact GPU feature
+list in `tests/test_matlab_python_parity_manifest.py`. Its expectation now
+includes the already-declared `reusable-linear-hcurl-ams` capability. The
+independent reviewer accepted this one-line contract update; both focused
+parity-manifest tests pass. Production numerical code is unchanged. The
+obsolete candidate build was canceled before qualification; the final
+source receives a fresh main CI build and exact-wheel acceptance.
