@@ -4,6 +4,22 @@ import argparse,ctypes,hashlib,importlib.util,json,os,socket,statistics,subproce
 
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
+def checked_errors(value,expected,applied,rhs,free,residual_limit):
+    """Reject invalid independent reference data before assessing tolerances."""
+    import numpy as np
+    value=np.asarray(value).ravel();expected=np.asarray(expected).ravel()
+    applied=np.asarray(applied).ravel();rhs=np.asarray(rhs).ravel()
+    if any(not np.all(np.isfinite(v)) for v in (value,expected,applied,rhs)):
+        raise RuntimeError('Independent CPU parity/true residual contains nonfinite data')
+    denominator=np.linalg.norm(rhs[free]);expected_norm=np.linalg.norm(expected)
+    if not np.isfinite(denominator) or not np.isfinite(expected_norm):
+        raise RuntimeError('Independent CPU parity/true residual contains nonfinite norm')
+    true=float(np.linalg.norm((applied-rhs)[free])/max(denominator,1e-300))
+    error=float(np.linalg.norm(value-expected)/max(expected_norm,1e-300))
+    if not np.isfinite(error) or not np.isfinite(true) or error>1e-7 or true>residual_limit:
+        raise RuntimeError(f'Independent CPU parity/true residual failed: {error}, {true}')
+    return dict(solution_relative=error,true_relative_residual=true)
+
 def main(a):
     job=a.job.resolve();out=job/'results';out.mkdir(exist_ok=False);eng=None
     record=dict(schema='radia.ams-fem-tuning.v1',accepted=False,timing_accepted=False,host=socket.gethostname(),samples=[],
@@ -66,11 +82,8 @@ def main(a):
                 if nonlinearMode:form.Apply(probe.vec,r)
                 else:r.data=linearForm.mat*probe.vec
             rhs=f.vec.FV().NumPy() if nonlinearMode else linearRHS.FV().NumPy()*scale
-            denominator=np.linalg.norm(rhs[free]);true=float(np.linalg.norm((r.FV().NumPy()-rhs)[free])/max(denominator,1e-300))
             expected=nonlinear if nonlinearMode else linear*scale
-            error=float(np.linalg.norm(np.asarray(value).ravel()-expected)/max(np.linalg.norm(expected),1e-300))
-            if error>1e-7 or true>(1e-9 if nonlinearMode else 1e-10):raise RuntimeError(f'Independent CPU parity/true residual failed: {error}, {true}')
-            return dict(solution_relative=error,true_relative_residual=true)
+            return checked_errors(value,expected,r.FV().NumPy(),rhs,free,1e-9 if nonlinearMode else 1e-10)
         record['cpu_self_checks']=[validate(nonlinear,True),validate(linear,False)]
         t=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');record['matlab_start_seconds']=time.perf_counter()-t
         eng.restoredefaultpath(nargout=0)
