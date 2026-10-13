@@ -75,14 +75,29 @@ verifyNotEmpty(testCase,string(info.gpu_operations));
 end
 
 function testValidationAndRepeatedDeviceUse(testCase)
+previous=radia.optuna.executionMode();
+restoreMode=onCleanup(@()radia.optuna.executionMode(previous));
 call=@()evaluateCommand('optuna.parzen.log_pdf_numerical',[0;1],[.3;.7], ...
     [0;1],[1;1],-2,3,false,NaN);
 expected=call();
+before=optuna_mex('api.info');
 for index=1:20, verifyEqual(testCase,call(),expected,'AbsTol',0); end
+after=optuna_mex('api.info');
+if radia.optuna.executionMode()=="gpu"
+    verifyEqual(testCase,after.device_allocation_calls,before.device_allocation_calls);
+    verifyEqual(testCase,after.host_to_device_bytes,before.host_to_device_bytes);
+    verifyGreaterThan(testCase,after.workspace_reuses,before.workspace_reuses);
+    verifyGreaterThan(testCase,after.avoided_upload_bytes,before.avoided_upload_bytes);
+end
 verifyError(testCase,@()evaluateCommand('optuna.parzen.log_pdf_categorical', ...
     0,1,[.5,.5]),'radia:optuna:mex:Exception');
 verifyError(testCase,@()evaluateCommand('optuna.parzen.log_pdf_numerical', ...
     1e308,1,0,1,-2,3,false,NaN),'radia:optuna:mex:Exception');
+verifyEqual(testCase,call(),expected,'AbsTol',0);
+radia.optuna.executionMode("cpu");
+after=optuna_mex('api.info');
+verifyEqual(testCase,after.cached_device_bytes,0);
+radia.optuna.executionMode("gpu");
 verifyEqual(testCase,call(),expected,'AbsTol',0);
 end
 

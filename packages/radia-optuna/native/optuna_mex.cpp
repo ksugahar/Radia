@@ -589,6 +589,7 @@ void DestroyRegistered(Registry& registry, std::uint64_t handle,
 
 
 void Cleanup() {
+    optuna_cuda::release_cached_memory();
     std::size_t unlock_count = 0;
     {
         std::lock_guard<std::mutex> guard(registry_mutex);
@@ -2210,7 +2211,7 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     const char* fields[] = {
         "api_version", "backend", "command_count", "handle_count", "build_route", "taskmanager", "gpu_operations", "host_operations"
         , "execution", "host_parallel_runtime", "allocator", "density_launches", "selection_launches", "host_to_device_bytes",
-        "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device", "execution_mode", "cpu_density_calls", "cpu_selection_calls", "cpu_parallel_density_calls", "cpu_max_density_threads"
+        "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device", "execution_mode", "cpu_density_calls", "cpu_selection_calls", "cpu_parallel_density_calls", "cpu_max_density_threads", "device_allocation_calls", "workspace_reuses", "avoided_upload_bytes", "cached_device_bytes"
     };
     plhs[0] = mxCreateStructMatrix(1, 1, sizeof(fields) / sizeof(fields[0]), fields);
     mxSetField(plhs[0], 0, "build_route", mxCreateString("mexcuda"));
@@ -2226,6 +2227,10 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     mxSetField(plhs[0], 0, "cpu_selection_calls", mxCreateDoubleScalar(static_cast<double>(stats.cpu_selection_calls)));
     mxSetField(plhs[0], 0, "cpu_parallel_density_calls", mxCreateDoubleScalar(static_cast<double>(stats.cpu_parallel_density_calls)));
     mxSetField(plhs[0], 0, "cpu_max_density_threads", mxCreateDoubleScalar(stats.cpu_max_density_threads));
+    mxSetField(plhs[0], 0, "device_allocation_calls", mxCreateDoubleScalar(static_cast<double>(stats.device_allocation_calls)));
+    mxSetField(plhs[0], 0, "workspace_reuses", mxCreateDoubleScalar(static_cast<double>(stats.workspace_reuses)));
+    mxSetField(plhs[0], 0, "avoided_upload_bytes", mxCreateDoubleScalar(static_cast<double>(stats.avoided_upload_bytes)));
+    mxSetField(plhs[0], 0, "cached_device_bytes", mxCreateDoubleScalar(static_cast<double>(stats.cached_device_bytes)));
     mxSetField(plhs[0], 0, "execution", mxCreateString("matlab-mexcuda"));
     mxSetField(plhs[0], 0, "host_parallel_runtime", mxCreateString("openmp"));
     mxSetField(plhs[0], 0, "allocator", mxCreateString(

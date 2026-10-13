@@ -324,10 +324,30 @@ Acceptance requires a GPU architecture included in the compiled artifact. Additi
 
 ### Reproducible performance evidence
 
-The CUDA gateway packs inputs into one host-to-device transfer and uses one
-per-call GPU allocation, including joint TPE evaluation. It retains ordered
+The 2026-10-12 CUDA gateway packed inputs into one host-to-device transfer and
+used one per-call GPU allocation, including joint TPE evaluation. It retained ordered
 random consumption and the existing GPU kernels; it never chooses a CPU
 fallback for a declared GPU operation.
+
+The development gateway now retains a MATLAB-owned GPU workspace, up to 64 MiB
+per device. An exact host byte shadow identifies unchanged input ranges;
+only the contiguous changed range is uploaded. This reuses model data when
+successive calls share it without caching a stale estimator. MATLAB GPU-data
+liveness detects device resets, including reused allocation addresses.
+Switching to CPU or unloading the module releases retained workspaces.
+Larger calls use temporary allocations; `allocator` describes that temporary
+allocation route. `api.info` additionally reports `device_allocation_calls`,
+`workspace_reuses`, `avoided_upload_bytes` and `cached_device_bytes`.
+Host estimator construction and ordered random consumption remain unchanged.
+
+`benchmark_optuna_inference.m` measures a complete optimization loop on Branin
+and a 40-dimensional correlated quadratic valley. It separates inference
+(`ask` plus suggestions, including preparation/recording), objective evaluation,
+and history updates. `BatchSize=8` proposes eight trials before updating their
+observations, with serial objective evaluation. These public optimization
+benchmarks do not certify engineering CAE objectives or change TPE into a GP
+surrogate. CPU/GPU comparisons must preserve the full proposal and convergence
+trajectories for each seed and batch size.
 
 An idle, user-selected A100 40 GB host was used for the 2026-10-12 formal
 comparison because the original timing host had no NVIDIA GPU. MATLAB R2026a

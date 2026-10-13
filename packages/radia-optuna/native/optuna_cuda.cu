@@ -1,4 +1,5 @@
 #include "optuna_cuda.hpp"
+#include "mex.h"
 #include <cuda_runtime.h>
 #include "gpu/mxGPUArray.h"
 #include <algorithm>
@@ -9,6 +10,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <map>
 #include <omp.h>
 
 namespace optuna_cuda {
@@ -30,8 +32,8 @@ std::size_t sum(std::size_t a, std::size_t b) {
         throw std::overflow_error("Optuna CUDA arena size overflow");
     return a + b;
 }
-// Pack all inputs into one upload and use one per-call device allocation.
-// Nothing persists across calls or MATLAB device changes.
+// Pack input into one range. Device workspaces retain an exact host shadow
+// so unchanged bytes can remain resident without relying on object identity.
 struct Arena {
     std::vector<unsigned char> input;
     std::size_t bytes = 0;
@@ -48,15 +50,58 @@ struct Arena {
         return offset;
     }
 };
+struct Workspace {
+    void* data = nullptr;
+    mxArray* owner = nullptr;
+    std::size_t capacity = 0;
+    std::vector<unsigned char> input;
+};
+std::map<int, Workspace> workspaces;
+constexpr std::size_t max_cached_bytes = 64 * 1024 * 1024;
+void update_cached_bytes() {
+    stats.cached_device_bytes = 0;
+    for (const auto& item : workspaces) stats.cached_device_bytes += item.second.capacity;
+}
 struct Buffer {
     void* data = nullptr;
+    Workspace* cached = nullptr;
     bool stream_ordered = stats.stream_ordered_allocator;
     explicit Buffer(std::size_t bytes) {
+        if (bytes && bytes <= max_cached_bytes) {
+            auto& workspace = workspaces[stats.device];
+            if (workspace.owner && !mxGPUIsValidGPUData(workspace.owner)) {
+                // MATLAB owns allocation liveness, including device-reset epochs.
+                // Pointer attributes alone cannot detect reused addresses.
+                mxDestroyArray(workspace.owner);
+                workspace = Workspace{};
+            }
+            if (workspace.capacity < bytes) {
+                if (workspace.owner) mxDestroyArray(workspace.owner);
+                workspace = Workspace{};
+                std::size_t capacity = 4096;
+                while (capacity < bytes) capacity *= 2;
+                const mwSize size = capacity;
+                auto* array = mxGPUCreateGPUArray(1, &size, mxUINT8_CLASS, mxREAL, MX_GPU_DO_NOT_INITIALIZE);
+                workspace.data = mxGPUGetData(array);
+                workspace.owner = mxGPUCreateMxArrayOnGPU(array);
+                mexMakeArrayPersistent(workspace.owner);
+                mxGPUDestroyGPUArray(array);
+                workspace.capacity = capacity;
+                ++stats.device_allocation_calls;
+            } else {
+                ++stats.workspace_reuses;
+            }
+            cached = &workspace;
+            data = workspace.data;
+            update_cached_bytes();
+            return;
+        }
         if (bytes) check(stream_ordered ? cudaMallocAsync(&data, bytes, 0) :
                                          cudaMalloc(&data, bytes), "allocate");
+        if (bytes) ++stats.device_allocation_calls;
     }
     ~Buffer() {
-        if (data) {
+        if (data && !cached) {
             if (stream_ordered) cudaFreeAsync(data, 0);
             else cudaFree(data);
         }
@@ -67,9 +112,28 @@ struct Buffer {
         return reinterpret_cast<T*>(static_cast<unsigned char*>(data) + offset);
     }
 };
-void upload(void* target, const void* source, std::size_t bytes) {
-    if (bytes) check(cudaMemcpy(target, source, bytes, cudaMemcpyHostToDevice), "upload");
-    stats.host_to_device_bytes += bytes;
+void upload(Buffer& target, const void* source, std::size_t bytes) {
+    const auto* input = static_cast<const unsigned char*>(source);
+    std::size_t first = 0, last = bytes;
+    std::vector<unsigned char> next;
+    if (target.cached) {
+        const auto& previous = target.cached->input;
+        if (previous.size() == bytes) {
+            while (first < bytes && previous[first] == input[first]) ++first;
+            while (last > first && previous[last - 1] == input[last - 1]) --last;
+        }
+        next.assign(input, input + bytes);
+    }
+    try {
+        if (last > first) check(cudaMemcpy(static_cast<unsigned char*>(target.data) + first,
+            input + first, last - first, cudaMemcpyHostToDevice), "upload");
+    } catch (...) {
+        if (target.cached) target.cached->input.clear();
+        throw;
+    }
+    stats.host_to_device_bytes += last - first;
+    stats.avoided_upload_bytes += bytes - (last - first);
+    if (target.cached) target.cached->input.swap(next);
 }
 void download(void* target, const void* source, std::size_t bytes) {
     if (bytes) check(cudaMemcpy(target, source, bytes, cudaMemcpyDeviceToHost), "download");
@@ -251,7 +315,7 @@ std::vector<double> log_pdf(const std::vector<double>& samples,
     const auto terms = layout.reserve<double>(product(count, packed.estimators.front().kernels));
     Buffer arena(layout.bytes);
     stats.peak_temporary_bytes = std::max(stats.peak_temporary_bytes, layout.bytes);
-    upload(arena.data, layout.input.data(), layout.input.size());
+    upload(arena, layout.input.data(), layout.input.size());
     launch(arena, input, count, estimators.size(), mixture, terms, output);
     download(result.data(), arena.as<double>(output), output_bytes);
     for (double value : result)
@@ -289,7 +353,7 @@ std::size_t best(const std::vector<double>& candidates,
         std::max(lower.estimators.front().kernels, upper.estimators.front().kernels)));
     Buffer arena(layout.bytes);
     stats.peak_temporary_bytes = std::max(stats.peak_temporary_bytes, layout.bytes);
-    upload(arena.data, layout.input.data(), layout.input.size());
+    upload(arena, layout.input.data(), layout.input.size());
     launch(arena, input, count, below.size(), lower_mix, terms, lower_pdf);
     launch(arena, input, count, above.size(), upper_mix, terms, upper_pdf);
     select_best<<<1, 1>>>(arena.as<double>(lower_pdf), arena.as<double>(upper_pdf), count, arena.as<std::size_t>(index));
@@ -302,6 +366,16 @@ std::size_t best(const std::vector<double>& candidates,
     return result;
 }
 bool use_gpu() { return gpu_enabled; }
-void set_gpu(bool enabled) { gpu_enabled = enabled; }
+void set_gpu(bool enabled) {
+    if (!enabled) release_cached_memory();
+    gpu_enabled = enabled;
+}
 Statistics statistics() { return stats; }
+void release_cached_memory() noexcept {
+    if (workspaces.empty()) return; // CPU-only use never enters CUDA.
+    for (auto& item : workspaces)
+        if (item.second.owner) mxDestroyArray(item.second.owner);
+    workspaces.clear();
+    stats.cached_device_bytes = 0;
+}
 }

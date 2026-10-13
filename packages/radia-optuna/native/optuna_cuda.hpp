@@ -22,6 +22,9 @@ struct Statistics {
     std::uint64_t cpu_density_calls = 0, cpu_selection_calls = 0;
     std::uint64_t cpu_parallel_density_calls = 0;
     int cpu_max_density_threads = 0;
+    std::uint64_t device_allocation_calls = 0, workspace_reuses = 0;
+    std::uint64_t avoided_upload_bytes = 0;
+    std::size_t cached_device_bytes = 0;
     int runtime_version = 0, driver_version = 0, device = -1;
     bool stream_ordered_allocator = false;
 };
@@ -33,4 +36,5 @@ std::size_t best(const std::vector<double>& candidates,
 bool use_gpu();
 void set_gpu(bool enabled);
 Statistics statistics();
+void release_cached_memory() noexcept;
 }
