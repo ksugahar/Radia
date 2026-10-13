@@ -264,9 +264,22 @@ def presentation_markdown_to_pptx(markdown: str, output_path: str,
                         raise RuntimeError("Notes placeholder has no matching master")
                     placeholder._element.replace(placeholder._element.spPr,
                                                  deepcopy(master._element.spPr))
-                    if not placeholder.has_text_frame and master.has_text_frame:
-                        placeholder._element.append(deepcopy(master.text_frame._txBody))
-                    if placeholder.has_text_frame and master.has_text_frame:
+                    p_ns = "http://schemas.openxmlformats.org/presentationml/2006/main"
+                    ph = placeholder._element.find(f"{{{p_ns}}}nvSpPr/{{{p_ns}}}nvPr/{{{p_ns}}}ph")
+                    ph_type = ph.get("type")
+                    if ph_type == "sldImg":
+                        continue  # A slide-image placeholder is not a text shape.
+                    if ph_type != "body":
+                        source_body = master._element.find(f"{{{p_ns}}}txBody")
+                        if source_body is not None:
+                            existing = placeholder._element.find(f"{{{p_ns}}}txBody")
+                            if existing is not None:
+                                placeholder._element.replace(existing, deepcopy(source_body))
+                            else:
+                                ext = placeholder._element.find(f"{{{p_ns}}}extLst")
+                                index = placeholder._element.index(ext) if ext is not None else len(placeholder._element)
+                                placeholder._element.insert(index, deepcopy(source_body))
+                    elif master.has_text_frame:
                         target = placeholder.text_frame._txBody
                         target.replace(target.bodyPr, deepcopy(master.text_frame._txBody.bodyPr))
                 frame = notes.notes_text_frame

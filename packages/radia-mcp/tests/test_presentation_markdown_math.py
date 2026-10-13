@@ -60,6 +60,13 @@ def test_inline_display_notes_and_code_survive_pptx_roundtrip(tmp_path, backend)
                 assert xfrm is not None
                 extent = xfrm.find(f"{{{assembly.DRAWING_NS}}}ext")
                 assert int(extent.get("cx")) > 0 and int(extent.get("cy")) > 0
+                order = [child.tag.split("}")[-1] for child in shape]
+                assert order == sorted(order, key=["nvSpPr", "spPr", "style", "txBody", "extLst"].index)
+                ph_type = shape.find(f"{{{p}}}nvSpPr/{{{p}}}nvPr/{{{p}}}ph").get("type")
+                if ph_type == "sldImg":
+                    assert shape.find(f"{{{p}}}txBody") is None
+                if ph_type == "sldNum":
+                    assert shape.find(f".//{{{assembly.DRAWING_NS}}}fld").get("type") == "slidenum"
 
 
 @pytest.mark.parametrize("source", ["# x\n\n$x", "# x\n\n| a | b |", "# x\n\n**bold**", "# x\n\n- a\n  - b", "```\nno close", "# $x$", "# x\n\n[x](url)"])
