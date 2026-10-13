@@ -119,6 +119,48 @@ These results do not support promoting GPU as a general TPE speed advantage.
 The process default remains GPU for compatibility; explicitly select
 `radia.optuna.executionMode("cpu")` to use the recommended CPU route.
 
+Those comparisons probe fixed histories. The
+[closed-loop inference measurements](../../validation_test/optimization/results_optuna_resident_inference_a100_20261013.json)
+instead optimize Branin and a 40-dimensional correlated quadratic valley for
+800 trials, seeds 11/37, default 24 candidates and `Multivariate=true`.
+Twelve fresh idle-A100 MATLAB Engine sessions run CPU / previous GPU / resident
+GPU / resident GPU / previous GPU / CPU, separately for batch sizes 1 and 8.
+CPU uses 16 configured threads. The following medians pool both seeds and
+both sessions, trials 513-800; inference includes `ask` and suggestions,
+with objective evaluation and `tell` timed separately:
+
+| Problem | Batch | CPU inference (ms) | Previous GPU (ms) | Resident GPU (ms) | GPU / CPU speedup |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Branin, 2D | 1 | 1.146 | 1.441 | 1.138 | 1.01x |
+| Correlated valley, 40D | 1 | 13.016 | 12.351 | 12.000 | 1.08x |
+| Branin, 2D | 8 | 1.758 | 2.075 | 1.797 | 0.98x |
+| Correlated valley, 40D | 8 | 23.363 | 23.632 | 23.414 | 1.00x |
+
+Full proposal arrays, objective values and convergence curves agree exactly
+across backends within each seed/problem/batch configuration. The retained
+workspace improves warmed inference over the previous GPU by 1.01-1.27x,
+but establishes no broad advantage over tuned CPU. Cold-inclusive totals are
+also recorded: first-use GPU initialization can reverse a warmed advantage.
+The default `ConstantLiar=true` includes pending observations, changing models
+during batch proposals; these runs avoid allocations but save no input-transfer
+bytes. GPU residency alone cannot eliminate host model construction.
+
+A separate six-session
+[model-reuse comparison](../../validation_test/optimization/results_optuna_resident_reuse_a100_20261013.json)
+explicitly sets `ConstantLiar=false`, with batch size 8 and the same cases,
+seeds and measurements. This preserves that option's algorithm on all three
+backends; its trajectories must not be compared with `ConstantLiar=true`
+as if they were the same optimization configuration. Input transfers fall
+by 85.8%, confirming that model data remain on the GPU between proposals.
+Warmed Branin inference is CPU 1.786 ms, previous GPU 2.072 ms, resident GPU
+1.783 ms. For the 40D valley the corresponding times are 23.245, 23.713 and
+23.740 ms. Thus transfer reuse does not establish an overall GPU speed
+advantage: workspace reuse helps small GPU calls, while the higher-dimensional
+inference remains close to tuned CPU and its previous GPU implementation.
+Host estimator construction and packing remain in this implementation;
+isolated phase profiling is needed before attributing the remaining cost.
+The GPU route remains optional, with no general acceleration claim.
+
 GPU times include allocation, transfers, density and selection; isolated
 transfer seconds are not measured. JSON includes first-trial and module/Engine
 startup times, before/after MATLAB memory and native temporary memory counters.
