@@ -14,8 +14,9 @@ def main(a):
     for target,h in [(10000,.12),(30000,.085),(100000,.056)]:
         trials=[]
         for attempt in range(10):
-            mesh=ng.Mesh(unit_cube.GenerateMesh(maxh=h));mesh.ngmesh.SetMaterial(1,'domain')
-            fes=ng.HCurl(mesh,order=1,nograds=True,dirichlet='.*');n=fes.ndof
+            with ng.TaskManager():
+                mesh=ng.Mesh(unit_cube.GenerateMesh(maxh=h));mesh.ngmesh.SetMaterial(1,'domain')
+                fes=ng.HCurl(mesh,order=1,nograds=True,dirichlet='.*');n=fes.ndof
             trials.append(dict(maxh=h,dofs=n,elements=mesh.ne))
             if abs(n-target)/target<=.08:break
             h*= (n/target)**(1/3)
