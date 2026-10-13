@@ -298,6 +298,23 @@ class SurfaceFluxGateFailed(RuntimeError):
             "source_load='volume', which retains the harmonic remainder")
 
 
+class SurfaceFluxCompatibilityFailed(RuntimeError):
+    """Raw component flux is incompatible; never an automatic route fallback."""
+
+    def __init__(self, component, net_load, absolute_flux):
+        self.component = int(component)
+        self.net_load = float(net_load)
+        self.absolute_flux = float(absolute_flux)
+        self.relative_imbalance = abs(self.net_load) / max(self.absolute_flux, 1e-300)
+        self.tolerance = RELATIVE_LIMIT
+        super().__init__(
+            "surface_flux Hodge component compatibility failed: "
+            f"component={self.component}, net_load={self.net_load:.17g}, "
+            f"absolute_flux={self.absolute_flux:.17g}, "
+            f"relative={self.relative_imbalance:.6g} > {self.tolerance:.6g}; "
+            "check source closure/divergence and resolve source quadrature")
+
+
 @contextmanager
 def _memoized_source(field):
     """Reuse coil evaluations across nonlinear iterations, values unchanged.
@@ -380,19 +397,17 @@ def material_set_boundary_signs(mesh, materials):
 
 
 def outward_source_flux_form(mesh, H_s, signs, test_trace, *, bonus_intorder, scale=1.0):
-    """``scale (H_s . n_out - q) v`` on the enclosing boundary in ``signs``.
+    """``scale (H_s . n_out) v`` on the enclosing boundary in ``signs``.
 
     For a divergence-free source, ``int_Omega H_s . grad(v) dx`` equals
     ``oint_dOmega (H_s . n_out) v ds``; this is that boundary form, so a
     volume source load is replaced by source evaluations on faces only.
 
-    The net outward flux of a divergence-free field through a closed surface
-    is zero, and the volume form satisfies that exactly (``grad 1 = 0``).  The
-    surface quadrature does not, and on a Neumann block a nonzero net load
-    drives the constant mode through its gauge.  ``q`` is the mean outward
-    flux, removed so the boundary load is compatible like the volume load.
-    Returns ``(form, diagnostics)``; ``relative_flux_imbalance`` is the
-    removed net flux over the absolute flux, a quadrature diagnostic.
+    This form is used by the constrained mixed system; it must not subtract
+    an artificial source mean. Pure-Neumann Hodge compatibility is handled
+    separately on its actual assembled H1 load, component by component.
+    Returns ``(form, diagnostics)``. The NumberSpace flux integrals below are
+    diagnostics only and need not use the H1 load's quadrature order.
     """
     from ngsolve import specialcf
 
@@ -403,13 +418,14 @@ def outward_source_flux_form(mesh, H_s, signs, test_trace, *, bonus_intorder, sc
     area = float(_measure_integral(mesh, CoefficientFunction(1.0), measure, boundary=True))
     from ngsolve import IfPos
 
-    # Same measure as the assembly, so the removed mean cancels its net load.
     net = float(_measure_integral(mesh, outward, measure, boundary=True))
     absolute = float(_measure_integral(mesh, IfPos(outward, outward, -outward), measure, boundary=True))
     mean = net / area
-    form = float(scale) * (outward - mean) * test_trace * measure
+    form = float(scale) * outward * test_trace * measure
     return form, {"mean_outward_flux": mean, "net_outward_flux": net,
-                  "relative_flux_imbalance": abs(net) / max(absolute, 1.0e-300)}
+                  "relative_flux_imbalance": abs(net) / max(absolute, 1.0e-300),
+                  "mean_flux_removed": False,
+                  "diagnostic_space": "NumberSpace"}
 
 
 def _evaluate_cf_at_points(mesh, field, points):
@@ -595,7 +611,67 @@ def _hodge_vertex_gauges(mesh, fes, materials, gauge_vertices):
             raise ValueError("Hodge gauge must own one active H1 vertex DOF")
         dofs.append(active[0])
         free[active[0]] = False
-    return free, tuple(int(v) for v in selected), tuple(dofs)
+    component_dofs = [set() for _ in components]
+    owners = {vertex: i for i, component in enumerate(components) for vertex in component}
+    for element in mesh.Elements(VOL):
+        if element.mat in materials:
+            component_dofs[owners[element.vertices[0].nr]].update(
+                d for d in fes.GetDofNrs(element) if d >= 0)
+    return free, tuple(int(v) for v in selected), tuple(dofs), component_dofs
+
+
+def _balance_hodge_surface_load(mesh, fes, load, test, signs, component_dofs,
+                                bonus_intorder, H_s):
+    """Remove each assembled Neumann incompatibility as a boundary mean.
+
+    A NumberSpace integral and an H1 load use different quadrature orders.
+    Compute compatibility from the actual load and H1 boundary measure instead.
+    This changes the RHS only; the stiffness and exact vertex gauge stay intact.
+    """
+    measure = ds(definedon=mesh.Boundaries("|".join(sorted(signs))),
+                 bonus_intorder=int(bonus_intorder))
+    boundary_mass = LinearForm(fes)
+    boundary_mass += test.Trace() * measure
+    boundary_mass.Assemble()
+    from ngsolve import specialcf, IfPos
+    outward = mesh.BoundaryCF(dict(signs), default=0.0) * InnerProduct(
+        H_s, specialcf.normal(mesh.dim))
+    absolute_flux = LinearForm(fes)
+    absolute_flux += IfPos(outward, outward, -outward) * test.Trace() * measure
+    absolute_flux.Assemble()
+    constant = GridFunction(fes)
+    constant.Set(1.0)
+    values = constant.vec.FV().NumPy()
+    rhs = load.vec.FV().NumPy()
+    weights = boundary_mass.vec.FV().NumPy()
+    absolute_weights = absolute_flux.vec.FV().NumPy()
+    diagnostics = []
+    for component, dofs in enumerate(component_dofs):
+        indices = np.asarray(sorted(dofs), dtype=int)
+        mode = values[indices]
+        area = float(np.dot(mode, weights[indices]))
+        if not math.isfinite(area) or area <= 0.0:
+            raise ValueError("Hodge surface component needs positive boundary area")
+        net = float(np.dot(mode, rhs[indices]))
+        absolute = float(np.dot(mode, absolute_weights[indices]))
+        relative = abs(net) / max(absolute, 1e-300)
+        if not math.isfinite(relative) or relative > RELATIVE_LIMIT:
+            raise SurfaceFluxCompatibilityFailed(component, net, absolute)
+        correction = (net / area) * weights[indices]
+        rhs[indices] -= correction
+        diagnostics.append({
+            "assembled_net_load_before": net,
+            "assembled_net_load_after": float(np.dot(mode, rhs[indices])),
+            "boundary_area": area,
+            "removed_mean_load": net / area,
+            "correction_norm": float(np.linalg.norm(correction)),
+            "raw_load_norm": float(np.linalg.norm(rhs[indices] + correction)),
+            "corrected_load_norm": float(np.linalg.norm(rhs[indices])),
+            "absolute_boundary_flux": absolute,
+            "raw_relative_flux_imbalance": relative,
+            "compatibility_limit": RELATIVE_LIMIT,
+        })
+    return diagnostics
 
 
 def project_source_total_hodge(
@@ -629,6 +705,16 @@ def project_source_total_hodge(
     fails when the boundary tangential residual
     ``|n x (H_s + grad Phi_s)| / |n x H_s|`` exceeds it, which is what a
     linked source produces.  The volume norms are not evaluated in this mode.
+    The existing mean-flux removal is enforced on each connected component
+    of the assembled H1 load, using its boundary functional and constant test
+    vector. Its pre/post compatibility and removed boundary mean are returned
+    in ``flux_balance['component_compatibility']``. This is a discrete
+    compatibility correction, not evidence of source quadrature convergence.
+    Before correction, each component's net flux divided by its absolute
+    boundary flux must be at most ``RELATIVE_LIMIT`` (1e-6). Both use the
+    actual H1 assembly quadrature. Larger defects raise
+    :class:`SurfaceFluxCompatibilityFailed`; resolve the source quadrature
+    or source closure explicitly rather than absorbing it at the gauge.
     """
     if inverse != "sparsecholesky":
         raise ValueError("source projection requires inverse='sparsecholesky'")
@@ -657,7 +743,7 @@ def project_source_total_hodge(
 
     selector = mesh.Materials("|".join(names))
     fes = Compress(H1(mesh, order=int(order), definedon=selector))
-    free_dofs, gauge_vertices, gauge_dofs = _hodge_vertex_gauges(
+    free_dofs, gauge_vertices, gauge_dofs, component_dofs = _hodge_vertex_gauges(
         mesh, fes, set(names), gauge_vertices)
     potential, test = fes.TnT()
     d_total = dx(definedon=selector, bonus_intorder=int(bonus_intorder))
@@ -667,12 +753,25 @@ def project_source_total_hodge(
     if source_load == "volume":
         f_lf += -InnerProduct(H_s, grad(test)) * d_total
     else:
+        from ngsolve import specialcf
         signs = material_set_boundary_signs(mesh, names)
-        flux_form, flux_balance = outward_source_flux_form(
-            mesh, H_s, signs, test.Trace(), bonus_intorder=bonus_intorder, scale=-1.0)
-        f_lf += flux_form
+        normal_flux = mesh.BoundaryCF(dict(signs), default=0.0) * InnerProduct(
+            H_s, specialcf.normal(mesh.dim))
+        f_lf += -normal_flux * test.Trace() * ds(
+            definedon=mesh.Boundaries("|".join(sorted(signs))),
+            bonus_intorder=int(bonus_intorder))
     a_bf.Assemble()
     f_lf.Assemble()
+    if source_load == "surface_flux":
+        component_balance = _balance_hodge_surface_load(
+            mesh, fes, f_lf, test, signs, component_dofs, bonus_intorder, H_s)
+        flux_balance = {
+            "component_compatibility": component_balance,
+            "net_outward_flux": -sum(c["assembled_net_load_before"] for c in component_balance),
+            "relative_flux_imbalance": max(c["raw_relative_flux_imbalance"] for c in component_balance),
+            "mean_outward_flux": -sum(c["assembled_net_load_before"] for c in component_balance)
+                / sum(c["boundary_area"] for c in component_balance),
+        }
     potential_gf = GridFunction(fes, name="total_source_potential")
     linear_residual = _solve_checked_direct(
         a_bf, f_lf, fes, potential_gf, inverse, free_dofs=free_dofs)

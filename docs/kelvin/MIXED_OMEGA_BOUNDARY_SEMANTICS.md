@@ -62,3 +62,21 @@ the projected gradient and the final physical field. The strict true-residual
 gate applies to the free rows. Returned gauge diagnostics also retain fixed-row
 reactions and the full residual, so a flux compatibility defect cannot be
 mistaken for a healthy unconstrained Neumann solve.
+
+Surface-flux Hodge loads enforce Neumann compatibility on the actual assembled
+H1 load, separately for every connected component, even when components share
+a material name. The constant test is represented by its FE coefficient vector;
+summing all hierarchical H1 coefficients does not represent a constant test.
+A NumberSpace flux integral generally uses a different quadrature order and
+cannot balance this load.
+
+Before removing the component boundary mean, the absolute net flux divided by
+the absolute boundary flux must be at most `RELATIVE_LIMIT` (1e-6). Both are
+computed with the H1 load's assembly rule. Larger defects raise
+`SurfaceFluxCompatibilityFailed`; they do not trigger an automatic volume-load
+fallback. Resolve source quadrature or source closure explicitly. Diagnostics
+retain raw/corrected compatibility, removed means, and fixed-row reactions.
+The constrained mixed-system boundary loads use the unmodified source flux;
+they do not subtract a mean computed in a different integration space.
+Compatibility, the tangential source gate, and physical-field accuracy are
+independent requirements.
