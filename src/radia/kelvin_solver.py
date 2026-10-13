@@ -89,11 +89,11 @@ def _measure_integral(mesh, integrand, measure, *, boundary):
     form.Assemble()
     return float(form.vec[0])
 
-def _solve_checked_direct(a_bf, f_lf, fes, potential_gf, inverse):
+def _solve_checked_direct(a_bf, f_lf, fes, potential_gf, inverse, *, free_dofs=None):
     """Solve a homogeneous-Dirichlet FE system and check its free-row residual."""
     if inverse != "sparsecholesky":
         raise ValueError("direct FE solves require inverse='sparsecholesky'")
-    freedofs = fes.FreeDofs()
+    freedofs = fes.FreeDofs() if free_dofs is None else free_dofs
     potential_gf.vec.data = a_bf.mat.Inverse(
         freedofs, inverse="sparsecholesky") * f_lf.vec
     residual = f_lf.vec.CreateVector()
@@ -551,9 +551,56 @@ def _uniform_permeability(mesh, mu_cf, materials, mu_r_by_material, *, role):
     return mu
 
 
+def _hodge_vertex_gauges(mesh, fes, materials, gauge_vertices):
+    """One actual H1 vertex DOF per connected projection component."""
+    from ngsolve import BitArray, VOL, NodeId, VERTEX
+
+    parents = {}
+
+    def root(vertex):
+        while parents[vertex] != vertex:
+            parents[vertex] = parents[parents[vertex]]
+            vertex = parents[vertex]
+        return vertex
+
+    for element in mesh.Elements(VOL):
+        if element.mat not in materials:
+            continue
+        vertices = [vertex.nr for vertex in element.vertices]
+        for vertex in vertices:
+            parents.setdefault(vertex, vertex)
+        for vertex in vertices[1:]:
+            parents[root(vertex)] = root(vertices[0])
+    components = {}
+    for vertex in parents:
+        components.setdefault(root(vertex), []).append(vertex)
+    components = sorted((sorted(values) for values in components.values()), key=lambda c: c[0])
+    if not components:
+        raise ValueError("Hodge projection materials contain no mesh vertices")
+    if gauge_vertices is None:
+        selected = [component[0] for component in components]
+    else:
+        selected = list(gauge_vertices)
+        if (any(isinstance(v, (bool, np.bool_)) or not isinstance(v, (int, np.integer))
+                for v in selected) or len(set(selected)) != len(selected)):
+            raise ValueError("gauge_vertices must contain unique integer mesh vertex numbers")
+        if (len(selected) != len(components) or any(v not in parents for v in selected)
+                or any(sum(v in component for v in selected) != 1 for component in components)):
+            raise ValueError("gauge_vertices must select one vertex per projection component")
+    free = BitArray(fes.FreeDofs())
+    dofs = []
+    for vertex in selected:
+        active = [d for d in fes.GetDofNrs(NodeId(VERTEX, int(vertex))) if d >= 0]
+        if len(active) != 1 or not free[active[0]]:
+            raise ValueError("Hodge gauge must own one active H1 vertex DOF")
+        dofs.append(active[0])
+        free[active[0]] = False
+    return free, tuple(int(v) for v in selected), tuple(dofs)
+
+
 def project_source_total_hodge(
         mesh, H_s, total_source_materials, *, order=2, inverse="sparsecholesky",
-        gauge_epsilon=1.0e-12, bonus_intorder=4, source_load="volume",
+        gauge_vertices=None, bonus_intorder=4, source_load="volume",
         tangential_tolerance=None):
     """Split a linked source inside total-potential materials.
 
@@ -565,6 +612,10 @@ def project_source_total_hodge(
     ``Phi_s`` supplies the reduced/total interface jump and ``H_harmonic``
     carries the non-exact cohomology class in the total region.  The caller
     owns the surrounding :class:`ngsolve.TaskManager` region.
+    The constant gauge is fixed by setting one actual mesh vertex to zero
+    per connected projection component, without a mass penalty. Optional
+    ``gauge_vertices`` selects zero-based mesh vertex numbers, exactly one
+    per component; the default picks each component's smallest vertex number.
     ``bonus_intorder`` controls projection assembly and norm diagnostics;
     use the mixed solver's value when composing the two operations. Matching
     bonuses does not establish source quadrature convergence or orthogonality
@@ -596,8 +647,6 @@ def project_source_total_hodge(
         raise ValueError("order must be positive")
     if isinstance(bonus_intorder, bool) or int(bonus_intorder) != bonus_intorder or bonus_intorder < 0:
         raise ValueError("bonus_intorder must be a nonnegative integer")
-    if gauge_epsilon <= 0.0 or not math.isfinite(gauge_epsilon):
-        raise ValueError("gauge_epsilon must be positive and finite")
     actual = {str(name) for name in mesh.GetMaterials()}
     unknown = sorted(set(names) - actual)
     if unknown:
@@ -608,11 +657,12 @@ def project_source_total_hodge(
 
     selector = mesh.Materials("|".join(names))
     fes = Compress(H1(mesh, order=int(order), definedon=selector))
+    free_dofs, gauge_vertices, gauge_dofs = _hodge_vertex_gauges(
+        mesh, fes, set(names), gauge_vertices)
     potential, test = fes.TnT()
     d_total = dx(definedon=selector, bonus_intorder=int(bonus_intorder))
     a_bf = BilinearForm(fes, symmetric=True)
     a_bf += InnerProduct(grad(potential), grad(test)) * d_total
-    a_bf += float(gauge_epsilon) * potential * test * d_total
     f_lf = LinearForm(fes)
     if source_load == "volume":
         f_lf += -InnerProduct(H_s, grad(test)) * d_total
@@ -624,7 +674,16 @@ def project_source_total_hodge(
     a_bf.Assemble()
     f_lf.Assemble()
     potential_gf = GridFunction(fes, name="total_source_potential")
-    linear_residual = _solve_checked_direct(a_bf, f_lf, fes, potential_gf, inverse)
+    linear_residual = _solve_checked_direct(
+        a_bf, f_lf, fes, potential_gf, inverse, free_dofs=free_dofs)
+    full_residual = f_lf.vec.CreateVector()
+    full_residual.data = f_lf.vec - a_bf.mat * potential_gf.vec
+    gauge_diagnostics = {
+        "vertices": gauge_vertices, "dofs": gauge_dofs,
+        "fixed_row_residual": tuple(float(full_residual[d]) for d in gauge_dofs),
+        "full_relative_residual": float(np.linalg.norm(full_residual.FV().NumPy())
+            / max(np.linalg.norm(f_lf.vec.FV().NumPy()), 1e-300)),
+    }
 
     harmonic_field = H_s + grad(potential_gf)
     if source_load == "surface_flux":
@@ -645,6 +704,8 @@ def project_source_total_hodge(
             raise SurfaceFluxGateFailed(relative_t, float(tangential_tolerance))
         return {
             "potential": potential_gf,
+            "gauge": gauge_diagnostics,
+            "free_dofs": free_dofs,
             "linear_true_relative_residual": linear_residual,
             "inverse": "sparsecholesky",
             "harmonic_field": harmonic_field,
@@ -666,6 +727,8 @@ def project_source_total_hodge(
         mesh, InnerProduct(H_s, H_s), d_total, boundary=False)))
     return {
         "potential": potential_gf,
+        "gauge": gauge_diagnostics,
+        "free_dofs": free_dofs,
         "linear_true_relative_residual": linear_residual,
         "inverse": "sparsecholesky",
         "harmonic_field": harmonic_field,

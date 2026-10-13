@@ -51,3 +51,14 @@ H and B under the same boundary, source lift, material law and gauge convention,
 not the raw total and reduced potential values. Those potentials generally
 differ by the source lift. If a harmonic source remainder is retained in the
 total region, reconstruct H with that remainder as well.
+
+The total-source Hodge projection fixes its additive constant by setting one
+actual mesh vertex DOF to zero in each connected projection component. It
+does not add a mass penalty. `gauge_vertices` can select those zero-based
+mesh vertex numbers explicitly; otherwise the smallest vertex number in
+each component is used. The retired `gauge_epsilon` argument is no longer
+accepted by `project_source_total_hodge`. A different gauge must preserve
+the projected gradient and the final physical field. The strict true-residual
+gate applies to the free rows. Returned gauge diagnostics also retain fixed-row
+reactions and the full residual, so a flux compatibility defect cannot be
+mistaken for a healthy unconstrained Neumann solve.
