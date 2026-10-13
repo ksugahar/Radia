@@ -68,11 +68,11 @@ __global__ void factorLevel(int count,const int* rows,const int* rp,const int* c
     ld[diag]=value;
 }
 __global__ void toCholesky(int n,const int* rp,const int* ci,const double* ld,double* l){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=n)return;for(int p=rp[i];p<rp[i+1];++p)l[p]=(ci[p]==i)?sqrt(ld[p]):ld[p]/sqrt(ld[rp[ci[p]+1]-1]);}
-__global__ void checkVector(int n,const double* x,const int* free,int* failure){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n&&(!isfinite(x[i])||(!free[i]&&x[i]!=0)))atomicExch(failure,1);}
+__global__ void checkVector(int n,const double* x,const int* free,int* failure){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n){if(!isfinite(x[i])||(!free[i]&&x[i]!=0))atomicExch(failure,1);if(x[i]!=0)atomicExch(failure+1,1);}}
 __global__ void spmv(int n,const int* rp,const int* ci,const double* av,const double* x,double* y){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n){double s=0;for(int p=rp[i];p<rp[i+1];++p)s+=av[p]*x[ci[p]];y[i]=s;}}
 __global__ void update(int n,double alpha,const double* p,const double* ap,double* x,double* r){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n){x[i]+=alpha*p[i];r[i]-=alpha*ap[i];}}
 __global__ void direction(int n,double beta,const double* z,double* p){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)p[i]=z[i]+beta*p[i];}
-__global__ void subtract(int n,const double* b,double* ax){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)ax[i]=b[i]-ax[i];}
+__global__ void subtract(int n,const double* b,double* ax,double bnorm){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n){double residual=b[i]-ax[i];ax[i]=bnorm>0?residual/bnorm:residual;}}
 
 struct Context {
     int n=0,nz=0,device=-1,levels=0;unsigned solves=0;double shift=1.05;
@@ -103,8 +103,8 @@ struct Context {
         auto mask=mxGetField(op,0,"free");explicitFree=mask!=nullptr;
         if(mask){auto f=input.get<int>(mask,mxINT32_CLASS,n);free.alloc(n);ck(cudaMemcpy(free.p,f,free.bytes(),cudaMemcpyDeviceToDevice));}
         else free.upload(std::vector<int>(n,1));
-        symbolicUpload=(size_t(n)+1+size_t(nz)+size_t(n)+1+2*lc.size()+size_t(n)+1+(explicitFree?0:size_t(n)))*sizeof(int);
-        levels=maximum+1;rp.upload(hrp);ci.upload(hci);lrp.upload(lp);lci.upload(lc);av.alloc(nz);ck(cudaMemcpy(av.p,vals,av.bytes(),cudaMemcpyDeviceToDevice));failure.upload(std::vector<int>{0});
+        symbolicUpload=(size_t(n)+1+size_t(nz)+size_t(n)+1+2*lc.size()+size_t(n)+2+(explicitFree?0:size_t(n)))*sizeof(int);
+        levels=maximum+1;rp.upload(hrp);ci.upload(hci);lrp.upload(lp);lci.upload(lc);av.alloc(nz);ck(cudaMemcpy(av.p,vals,av.bytes(),cudaMemcpyDeviceToDevice));failure.upload(std::vector<int>{0,0});
         validate<<<blocks(n),T>>>(n,rp.p,ci.p,free.p,av.p,failure.p);flag();identityRows<<<blocks(n),T>>>(n,rp.p,ci.p,free.p,av.p);
         Buffer<int> mapping,ordered;mapping.upload(source);std::vector<int> offsets(size_t(levels)+1),order(n);
         for(int v:level)++offsets[v+1];for(int k=0;k<levels;++k)offsets[k+1]+=offsets[k];auto cursor=offsets;
@@ -128,7 +128,8 @@ struct Context {
     double norm(const double* v){double value;cb(cublasDnrm2(blas,n,v,1,&value));if(!std::isfinite(value))throw std::runtime_error("nonfinite FP64 norm");return value;}
     double dot(const double* a,const double* b){double value;cb(cublasDdot(blas,n,a,1,b,1,&value));if(!std::isfinite(value))throw std::runtime_error("nonfinite PCG inner product");return value;}
     std::pair<int,double> solve(const double* rhs,double tol,int limit){
-        selected();ck(cudaMemset(failure.p,0,sizeof(int)));checkVector<<<blocks(n),T>>>(n,rhs,free.p,failure.p);flag();ck(cudaMemset(x.p,0,x.bytes()));ck(cudaMemcpy(r.p,rhs,r.bytes(),cudaMemcpyDeviceToDevice));double bnorm=norm(rhs);int iterations=0;
+        selected();ck(cudaMemset(failure.p,0,2*sizeof(int)));checkVector<<<blocks(n),T>>>(n,rhs,free.p,failure.p);flag();ck(cudaMemset(x.p,0,x.bytes()));ck(cudaMemcpy(r.p,rhs,r.bytes(),cudaMemcpyDeviceToDevice));double bnorm=norm(rhs);int iterations=0;
+        if(bnorm==0){int nonzero;ck(cudaMemcpy(&nonzero,failure.p+1,sizeof(int),cudaMemcpyDeviceToHost));if(nonzero)throw std::runtime_error("RHS norm outside supported FP64 range; explicitly rescale the system");}
         bool converged=bnorm==0;
         if(bnorm>0){apply();ck(cudaMemcpy(p.p,z.p,p.bytes(),cudaMemcpyDeviceToDevice));double rho=dot(r.p,z.p);
             for(int k=0;k<limit;++k){if(!(rho>0))throw std::runtime_error("IC PCG nonpositive preconditioned curvature");spmv<<<blocks(n),T>>>(n,rp.p,ci.p,av.p,p.p,ap.p);double pap=dot(p.p,ap.p);if(!(pap>0))throw std::runtime_error("IC PCG nonpositive operator curvature");double alpha=rho/pap;if(!std::isfinite(alpha))throw std::runtime_error("IC PCG invalid step");update<<<blocks(n),T>>>(n,alpha,p.p,ap.p,x.p,r.p);iterations=k+1;
@@ -137,7 +138,7 @@ struct Context {
             }
         }
         if(!converged)throw std::runtime_error("IC PCG iteration limit exhausted");
-        spmv<<<blocks(n),T>>>(n,rp.p,ci.p,av.p,x.p,ap.p);subtract<<<blocks(n),T>>>(n,rhs,ap.p);double error=norm(ap.p);double relative=bnorm>0?error/bnorm:error;
+        spmv<<<blocks(n),T>>>(n,rp.p,ci.p,av.p,x.p,ap.p);subtract<<<blocks(n),T>>>(n,rhs,ap.p,bnorm);double relative=norm(ap.p);
         if(!std::isfinite(relative)||relative>std::min(1e-6,std::max(10*tol,1e-12)))throw std::runtime_error("IC PCG original-A true residual failed");++solves;return {iterations,relative};
     }
 };
@@ -167,7 +168,7 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** args){
         if(command=="solve"||command=="apply"){
             bool solving=command=="solve";if(nrhs!=(solving?5:3)||nlhs!=(solving?2:1))throw std::runtime_error("IC solve/apply arity");auto& c=context(args[1]);Inputs input;auto b=input.get<double>(args[2],mxDOUBLE_CLASS,c.n);ck(cudaDeviceSynchronize());
             if(solving){double tol=scalar(args[3]),lim=scalar(args[4]);if(!(tol>0&&tol<=1e-6)||lim<1||lim>100000||lim!=floor(lim))throw std::runtime_error("IC tolerance or iteration limit invalid");auto result=c.solve(b,tol,int(lim));out[0]=copyGPU(c.x.p,c.n);out[1]=info(c,result.first,result.second);}
-            else{ck(cudaMemset(c.failure.p,0,sizeof(int)));checkVector<<<blocks(c.n),T>>>(c.n,b,c.free.p,c.failure.p);c.flag();ck(cudaMemcpy(c.r.p,b,c.r.bytes(),cudaMemcpyDeviceToDevice));c.apply();checkVector<<<blocks(c.n),T>>>(c.n,c.z.p,c.free.p,c.failure.p);c.flag();out[0]=copyGPU(c.z.p,c.n);}return;
+            else{ck(cudaMemset(c.failure.p,0,2*sizeof(int)));checkVector<<<blocks(c.n),T>>>(c.n,b,c.free.p,c.failure.p);c.flag();ck(cudaMemcpy(c.r.p,b,c.r.bytes(),cudaMemcpyDeviceToDevice));c.apply();checkVector<<<blocks(c.n),T>>>(c.n,c.z.p,c.free.p,c.failure.p);c.flag();out[0]=copyGPU(c.z.p,c.n);}return;
         }
         throw std::runtime_error("unknown IC command");
     }catch(const std::exception& ex){mexErrMsgIdAndTxt("radia:cuda:ic", "%s",ex.what());}
