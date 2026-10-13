@@ -12,6 +12,21 @@ for k=1:5
         norm(data.A*x-scales(k)*data.b)/max(norm(scales(k)*data.b),1)];
 end
 assert(all(isfinite(errors),'all')&&max(errors,[],'all')<1e-11);
+sparseApplyError=[];
+if isfield(data,'sparse_A')
+    sparseOp=toSparseCSR(data.sparse_A);[sh,~]=radia_cuda_ic('create',sparseOp,1.05);
+    sparseCleanup=onCleanup(@()radia_cuda_ic('release',sh));
+    pre=gather(radia_cuda_ic('apply',sh,gpuArray(data.sparse_b)));
+    sparseApplyError=norm(pre-data.sparse_expected_pre)/norm(data.sparse_expected_pre);
+    [sx,~]=radia_cuda_ic('solve',sh,gpuArray(data.sparse_b),1e-12,1000);sx=gather(sx);
+    assert(isfinite(sparseApplyError)&&sparseApplyError<1e-11);
+    assert(norm(sx-data.sparse_expected)/norm(data.sparse_expected)<1e-10);
+    assert(norm(data.sparse_A*sx-data.sparse_b)/norm(data.sparse_b)<1e-10);clear sparseCleanup;
+end
+object=radia.gpu.ICContext(op,Shift=1.05);objectCleanup=onCleanup(@()delete(object));
+[objectSolution,objectInfo]=object.solve(rhs,Tolerance=1e-12,ReturnOnGPU=false);
+assert(norm(objectSolution-data.expected)<1e-11&&objectInfo.result_download_bytes==24);
+assert(norm(gather(object.apply(rhs))-data.expected_pre)<1e-11);clear objectCleanup;
 rejections=0;
 masked=toCSR(blkdiag(data.A,0));masked.free=gpuArray(int32([1;1;1;0]));
 [mh,maskInfo]=radia_cuda_ic('create',masked,1.05);maskCleanup=onCleanup(@()radia_cuda_ic('release',mh));
@@ -45,7 +60,7 @@ mustFail(@()radia_cuda_ic('release',h));rejections=rejections+1;
 % Generations distinguish a released object from a fresh one.
 [fresh,~]=radia_cuda_ic('create',op,1.05);assert(fresh~=h);radia_cuda_ic('release',fresh);
 assert(radia_cuda_ic('live_count')==before);
-result=struct('passed',true,'apply_relative',applyError,'solve_errors',errors, ...
+result=struct('passed',true,'apply_relative',applyError,'sparse_apply_relative',sparseApplyError,'solve_errors',errors, ...
     'rejection_count',rejections,'setup',setup,'solve',{reports},'live_count_restored',true, ...
     'loaded_binary',which('radia_cuda_ic'),'matlab',version,'device',gpuDevice().Name);
 save(outputFile,'result','-v7');
@@ -58,6 +73,11 @@ n=size(A,1);op=struct('rows',double(n),'cols',double(n), ...
 end
 function solveLimited(h,b)
 [~,~]=radia_cuda_ic('solve',h,b,1e-12,1);
+end
+function op=toSparseCSR(A)
+n=size(A,1);[columns,rows,values]=find(sparse(A.'));counts=accumarray(rows,1,[n 1]);
+op=struct('rows',double(n),'cols',double(n),'rowptr',gpuArray(int32([0;cumsum(counts)])), ...
+    'columns',gpuArray(int32(columns-1)),'values',gpuArray(values));
 end
 function badCreate(op,shift)
 [h,~]=radia_cuda_ic('create',op,shift);radia_cuda_ic('release',h);
