@@ -76,7 +76,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 `cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; the only GUI run is the separately scoped human-facing release test, while journal/checkpoint handoff remains artifact-only.
 
 ### Shared MCP Runtime Ownership
-- radia-mcp releases independently of Radia: release-dual targets LAB (wheel) and 100 (editable). Never deploy radia-mcp to mdx/hibino/mdx1/mdx2; isolated CI tests are not deployment.
+- radia-mcp releases independently of Radia: release-dual targets LAB (wheel) and 100 (editable). Never deploy radia-mcp to jmag/mdx/hibino/mdx1/mdx2; isolated CI tests are not deployment.
 - Routine editable updates: update the usual source -> reconnect -> check the live source and one harmless affected tool. Pure Python edits need no reinstall; source relocation or dependency/package-metadata changes do. No new daemon or mandatory ledger; see the shared runtime policy for exceptions.
 - MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version. Retain obsolete copies only as identified debugging evidence with a removal condition, never as deployment targets or rollback reserves; remove them after consumer and unique-work checks. Details follow the shared runtime policy below.
 - MCP is experimental development tooling, not a numerical solver release. Developers may edit live MCP source and change its editable source with
@@ -102,7 +102,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - mexcuda modules may retain CPU host control; not every calculation belongs on GPU. Never include, link, or use NGSolve TaskManager in mexcuda builds. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing. Python CPU reference runs are independent validation, not GPU-user prerequisites.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
 - No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
-- Develop/build radia-gpu on 100; release acceptance uses 100 RTX 5000 and independent review; SSH host `NGSolve` (A100) is optional additional validation. Never deploy to 102.
+- Develop/build radia-gpu on 100; release acceptance uses 100 RTX 5000 and independent review; SSH host `NGSolve` (A100) is optional GPU evaluation. Never deploy to 102.
 - Record parity, artifact hashes and validation JSON; offline A100 stays pending and does not block development or publication. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### GPU Kernel Research Strategy (2026-10-11)
@@ -223,7 +223,7 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 ### Compute Host Routing
 
-`mdx`: JMAG evaluation only. Keep Python 3.12.10, SSH service/config/keys, VC++ runtime and `inetpub` for control from 100. No Radia deployment, builds, CI/preflight, solver runs, validation or timing.
+`jmag`: JMAG evaluation only. Keep Python 3.12.10, SSH service/config/keys, VC++ runtime and `inetpub` for control from 100. No Radia deployment, builds, CI/preflight, solver runs, validation or timing.
 
 **POLICY (2026-10-13)**: Start SSH host `NGSolve` (A100) on demand for CPU/GPU timing. mdx/mdx1/mdx2/hibino are retired execution targets.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes NGSolve hostname`; check running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs. Never stop another session's jobs.
@@ -235,7 +235,7 @@ Historical mdx measurements remain valid provenance; never relabel them. Keep ho
 
 ### Compute Scratch Cleanup
 
-**POLICY (2026-10-13)**: Remote compute jobs, including NGSolve and retirement recovery from mdx, finish only after verified recovery
+**POLICY (2026-10-13)**: Remote compute jobs, including NGSolve and retirement cleanup on jmag, finish only after verified recovery
 and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments and helpers.
 - Recover JSON, logs, commands, runtime/source identity, hashes and non-reconstructible inputs
   to LAB durable storage. Numerical evidence goes in `validation_test/`, public demonstrations
