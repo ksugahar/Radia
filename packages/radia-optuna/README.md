@@ -71,9 +71,11 @@ This is correctness evidence; formal speed comparisons require idle mdx.
 component from the Radia monorepo. It installs the `radia.optuna` MATLAB
 namespace, the 22-command `optuna_mex`, and checked compatibility contracts
 whose behavioral oracle is Optuna 5.0.0. Its checked public inventory contains
-812 present and mapped entries: 749 have evidence derived from an upstream
-oracle generator and 63 remain explicitly assertion-mapped. The required
-shared scope is 401/401 evidence-mapped with no asserted required entry. It
+812 present entries: 108 are oracle-verified in the checked coverage ledger
+and 704 remain assertion-mapped. All 401 required entries are present;
+79 have recorded oracle mappings and 322 still require that evidence.
+Full API compatibility verification is therefore incomplete. Focused TPE
+oracle tests certify their exercised cases, rather than the entire API. It
 does not install or load the Radia solver, NGSolve, oneMKL, or Cubit.
 
 Optuna 5.0.0 is also the algorithmic source of truth: native MATLAB and MEX

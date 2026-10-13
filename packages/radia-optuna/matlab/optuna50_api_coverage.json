@@ -699,10 +699,8 @@
     {
       "kind": "constant-or-type-alias",
       "matlab_name": "radia.optuna.version",
-      "oracle_sections": [
-        "memory_history_tpe"
-      ],
-      "oracle_status": "verified",
+      "oracle_sections": [],
+      "oracle_status": "asserted",
       "scope": "out-of-scope",
       "surface_status": "present",
       "upstream": "optuna.__version__"
@@ -8116,10 +8114,10 @@
     }
   ],
   "full_compatibility_complete": false,
-  "oracle_asserted_count": 703,
+  "oracle_asserted_count": 704,
   "oracle_partial_count": 0,
   "oracle_unmapped_count": 0,
-  "oracle_verified_count": 109,
+  "oracle_verified_count": 108,
   "required_entry_count": 401,
   "required_missing_count": 0,
   "required_oracle_asserted_count": 322,

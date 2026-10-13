@@ -3517,8 +3517,6 @@ def _constructor_default_contract() -> dict[str, object]:
 
 
 def _memory_history_tpe_contract() -> dict[str, object]:
-    if optuna.__version__ != EXPECTED_VERSION:
-        raise RuntimeError("Memory-history fixtures require Optuna 5.0.0")
     rng = np.random.RandomState(19)
     numeric = rng.uniform(-2, 2, size=(512, 2))
     choices = ["a", "b", "c"]
