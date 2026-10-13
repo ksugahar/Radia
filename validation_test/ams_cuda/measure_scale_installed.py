@@ -40,6 +40,12 @@ def main(a):
         from scipy.io import loadmat
         from measure_native_cpu_gpu import idle,Memory
         def quiet():
+            if a.diagnostic:
+                import psutil
+                cpu=psutil.cpu_percent(interval=1);raw=subprocess.check_output(['nvidia-smi','--query-gpu=name,utilization.gpu,memory.free,memory.total','--format=csv,noheader,nounits'],text=True).strip()
+                name,util,free,total=[v.strip() for v in raw.split(',')];available=psutil.virtual_memory().available
+                if float(free)<max(2048,.2*float(total)) or available<8*2**30:raise RuntimeError('Numerical validation memory reserve failed')
+                return dict(cpu_percent=cpu,gpu=name,gpu_utilization_percent=float(util),device_free_MiB=float(free),host_available_bytes=available,timing_accepted=False,settling_rejections=[])
             # A completed 16-thread call can leave a short utilization tail.
             # Keep the idle thresholds; record bounded settling, never time load.
             failed=[]
@@ -64,6 +70,12 @@ def main(a):
         installed=radia_gpu.verify();verifier.verify_installed_identity(installed,wheel)
         if wheel['version']!='0.1.4' or wheel['wheel_sha256']!=owner['wheel_sha256']:raise RuntimeError('Selected stable wheel identity')
         payload=Path(installed['matlab_path']);mex_hash=json.loads((payload.parent/'manifest.json').read_text())['files']['matlab/radia_cuda_ams.mexw64']
+        ic_hash=None
+        if a.ic_directory:
+            a.ic_directory=a.ic_directory.resolve();ic_build=json.loads((job/'ic-build.json').read_text());ic_hash=ic_build['binary_sha256_by_file']['radia_cuda_ic.mexw64']
+            if sha(a.ic_directory/'radia_cuda_ic.mexw64')!=ic_hash:raise RuntimeError('IC candidate build identity mismatch')
+            r['ic_candidate']=dict(build_source_commit=ic_build['source_commit'],binary_sha256=ic_hash,source_sha256=ic_build['source_sha256_by_file']['radia_cuda_ic.cu'],distribution_status='Experimental candidate separate from unchanged stable 0.1.4 AMS wheel')
+            r['comparison']='Independent CPU AMS/IC at NGSolve1/16 versus stable GPU AMS and experimental GPU IC'
         r.update(wheel=wheel,installed=installed,cpu_ams_build_receipt_sha256=sha(job/'bridge-provenance/build.json'),cpu_ic_origin=owner['cpu_ic_origin'],versions=dict(python=sys.version,ngsolve=ng.__version__,numpy=np.__version__,cpu_native_ngslib_sha256=sha(ng.ngslib.__file__)),protocol_sha256={n:sha(job/n) for n in ('measure_scale_installed.py','measure_scale_installed.m')})
         r['cpu_hardware']=json.loads(subprocess.check_output(['powershell','-NoProfile','-Command','Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors | ConvertTo-Json'],text=True))
         if (os.cpu_count() or 0)<16:raise RuntimeError('CPU16 baseline unavailable')
@@ -122,25 +134,34 @@ def main(a):
                     reports.append(dict(iterations=int(solver.GetSteps()),ngsolve_threads=threads))
                 info.update(fresh_total_seconds=info['setup_seconds']+seconds[0],solve_seconds=seconds,scales=scales,info=reports,preconditioner=kind,matrix_reused=True,preconditioner_reused=True)
                 return np.column_stack(values),info
-            def gpu(index):
-                output=out/f"{case['target_dofs']}-{index}.mat";eng.measure_scale_installed(str(path),str(payload),str(output),nargout=0)
+            def gpu(index,route):
+                output=out/f"{case['target_dofs']}-{index}.mat";backend='ic' if route=='gpu-ic' else 'ams'
+                eng.measure_scale_installed(str(path),str(payload),str(output),backend,str(a.ic_directory or ''),nargout=0)
                 data=loadmat(output,simplify_cells=True);module=output.with_suffix('.module.json')
                 subprocess.run(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(job/'ams_loaded_module.ps1'),'-ProcessId',str(pid),'-OutputPath',str(module)],check=True,capture_output=True)
                 identity=json.loads(module.read_text(encoding='utf-8-sig'))
                 if Path(identity['path']).resolve()!=(payload/'radia_cuda_ams.mexw64').resolve() or identity['sha256']!=mex_hash:raise RuntimeError('Actually loaded AMS identity changed')
-                return data['solution'],dict(data['report'],native_module=identity)
+                report=dict(data['report'],native_module=identity)
+                if route=='gpu-ic':
+                    ic_identity=output.with_suffix('.ic-module.json')
+                    subprocess.run(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(job/'loaded_module.ps1'),'-ProcessId',str(pid),'-ModuleName','radia_cuda_ic.mexw64','-OutputPath',str(ic_identity)],check=True,capture_output=True)
+                    actual=json.loads(ic_identity.read_text(encoding='utf-8-sig'))
+                    if actual['sha256']!=ic_hash or Path(actual['path']).resolve()!=(a.ic_directory/'radia_cuda_ic.mexw64').resolve():raise RuntimeError('Actually loaded IC candidate identity changed')
+                    report['ic_native_module']=actual
+                return data['solution'],report
             routes=[('cpu-ams',1),('cpu-ic',1),('gpu-ams',1),('cpu-ams',16),('cpu-ic',16)]
+            if a.ic_directory:routes.append(('gpu-ic',1))
             for index,(route,threads) in enumerate(routes):
                 gc.collect();guard=quiet()
-                with Memory(pid if route=='gpu-ams' else os.getpid()) as memory:
-                    value,info=gpu('first-'+str(index)) if route=='gpu-ams' else cpu(route[4:],threads)
+                with Memory(pid if route.startswith('gpu-') else os.getpid()) as memory:
+                    value,info=gpu('first-'+str(index),route) if route.startswith('gpu-') else cpu(route[4:],threads)
                 record['first_initialized'].append(dict(route=route,threads=threads,report=info,independent=validate(value),host_memory=memory.result(),idle_before=guard))
                 del value;gc.collect()
             for cycle in range(a.cycles):
                 for route,threads in routes+list(reversed(routes)):
                     gc.collect();guard=quiet();index=len(record['samples'])
-                    with Memory(pid if route=='gpu-ams' else os.getpid()) as memory:
-                        value,info=gpu(index) if route=='gpu-ams' else cpu(route[4:],threads)
+                    with Memory(pid if route.startswith('gpu-') else os.getpid()) as memory:
+                        value,info=gpu(index,route) if route.startswith('gpu-') else cpu(route[4:],threads)
                     row=dict(route=route,threads=threads,cycle=cycle,report=info,independent=validate(value),host_memory=memory.result(),idle_before=guard)
                     finite(row);record['samples'].append(row);del value;gc.collect();print(case['target_dofs'],route,threads,info['fresh_total_seconds'],flush=True)
                     (out/'progress.json').write_text(json.dumps(r,indent=2,default=lambda v:v.tolist() if hasattr(v,'tolist') else str(v))+'\n')
@@ -160,4 +181,4 @@ def main(a):
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     for n in ('job','wheel','out'):p.add_argument('--'+n,type=Path,required=True)
-    p.add_argument('--cycles',type=int,default=2);p.add_argument('--targets',nargs='*',type=int);p.add_argument('--diagnostic',action='store_true');main(p.parse_args())
+    p.add_argument('--cycles',type=int,default=2);p.add_argument('--targets',nargs='*',type=int);p.add_argument('--diagnostic',action='store_true');p.add_argument('--ic-directory',type=Path);main(p.parse_args())
