@@ -404,7 +404,7 @@ before deleting the isolated remote job; the host remains running. General
 adaptive high-order assembly, images, constraints, nonlinear material, broad
 physics, IH Simulink and release/distribution gates remain pending.
 
-### Host-vector cache candidate (not built or accepted)
+### Bounded host-vector cache numerical acceptance
 
 `host-vector-cache-stage-20261013.json` tracks an opt-in `host-cache` assembly
 mode. It reuses source potential at identical mapped target-host quadrature
@@ -412,5 +412,25 @@ points across target monomials. Charge weights, inner integral math, ordered
 outer sums and symmetric assembly stay unchanged. Reused hosts must have identical
 geometry and topology; inconsistent input fails. Temporary workspace increases
 setup owned memory and is budget checked. Default `direct` stays selected.
-Clean build, direct/cache and independent CPU whole-solve parity, lifecycle and
-idle whole timing are pending; implementation alone establishes no speedup.
+Clean native source `57a3dda15`, HMatrix artifact `job-6c403wdx`, now passes
+direct/cache whole-solve parity for affine order 2 and P2 curved orders 1 and 2.
+`results/cache-curved2-20261013.json` records identical direct/cache coefficients
+on both 100 and the already-running NGSolve A100. Independent Python CPU
+coefficient error is 5.02e-10, physical mean error 1.49e-12 and original-equation
+true residual 7.95e-12 for curved order 2 (288 DOFs, 160 charges).
+
+A100 transfer-inclusive whole-solve warm diagnostics are 86.4778011 s direct
+and 0.2696088 s cached, with one warm sample per mode, sequential rather than
+ABBA. These establish neither formal idle-mdx performance acceptance nor CPU
+speedup. Exact accounted setup/combined peak rises from 450288 to 2286980 bytes;
+cache does not reduce memory. Available-memory samples exclude CUDA/cuBLAS,
+host and global peaks. First payloads share initialized modules, with owned
+Engine startup reported separately. All 581 remote non-environment files were
+hash-recovered before guarded job deletion; environment freeze and DLL hashes
+are retained privately. The A100 host remains running.
+
+Default `direct` remains unchanged. Affine order 1 cache, broader operator and
+error/lifecycle coverage, general adaptive FE semantics, formal timing and exact
+release-wheel distribution acceptance remain pending. The wheel currently
+excludes these experimental HDiv wrappers; staged A100 acceptance is not wheel
+acceptance. AMS and FEM matrix-build work belong to the separate AMS session.
