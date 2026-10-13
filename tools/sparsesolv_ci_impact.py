@@ -235,7 +235,7 @@ def native_required(event_name, event, git):
         return True, "no comparison base"
     changed = git("diff", "--name-only", "-z", base, "HEAD", "--").split("\0")
     changed = set(filter(None, changed))
-    # Markdown never reaches the native build or AMS tests; the trigger excludes it too.
+    # No NATIVE_PATHS build or AMS test reads Markdown; the trigger excludes it too.
     if changed and all(path.endswith(".md") for path in changed):
         return False, "documentation-only change"
     changed = {path for path in changed if not path.endswith(".md")}

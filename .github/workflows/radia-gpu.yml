@@ -16,6 +16,7 @@ on:
       - 'Build.ps1'
       - '.github/workflows/radia-gpu.yml'
       - '!**/*.md'
+      - 'packages/radia-gpu/README.md'  # wheel metadata and payload
   push:
     branches: [main]
     paths:
@@ -31,6 +32,7 @@ on:
       - 'Build.ps1'
       - '.github/workflows/radia-gpu.yml'
       - '!**/*.md'
+      - 'packages/radia-gpu/README.md'  # wheel metadata and payload
   workflow_dispatch:
 
 permissions:
