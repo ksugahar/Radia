@@ -52,6 +52,8 @@ independent TPE with all history retained and CPU execution in the mexcuda
 module. Its JSON includes first-trial and warmed end-to-end times, MATLAB
 memory, and proposal arrays for differential comparison. This benchmark does
 not establish Python/DB speedup or GPU speedup.
+See the [history-cache validation record](../../validation_test/radia_optuna/results/memory-history-20261013.json).
+Formal timing remains pending while mdx runs another numerical job.
 
 Use the same TPE from MATLAB or the included masked Simulink
 study block and `SimulinkRunner`. Simulink is optional for MATLAB-only use.

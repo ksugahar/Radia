@@ -1,0 +1,47 @@
+{
+  "schema": "radia.validation.optuna-memory-history.v1",
+  "date": "2026-10-13",
+  "implementation_commit": "9a2efc6d3927115d4e6c3c9bfec5ba34ed03a177",
+  "baseline_commit": "d76e4e20219aae4beeb4437e808bbe3229c88882",
+  "host": "100",
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "build_route": "mexcuda",
+  "binary_sha256": "6bf3ba422337ad847bf59c6b68e21298e922b6818c774708b4ceaca3663ecdc4",
+  "oracle": "optuna==5.0.0",
+  "cpu_upstream_passed": 14,
+  "gpu_upstream_and_boundary_passed": 19,
+  "history_regression_passed": 1,
+  "history_regression_execution": "Separate focused MATLAB batch with assertSuccess.",
+  "mcp_source_contract_tests_passed": 7,
+  "history_retained": "complete history; no discarded trials",
+  "history_regression_scope": [
+    "exact and colliding parameter names",
+    "missing names and single-to-multiple parameter transition",
+    "incremental append",
+    "frozen trial import",
+    "MAT save/load index reconstruction"
+  ],
+  "diagnostic_comparison": {
+    "host": "100",
+    "sampler": "TPESampler(Multivariate=false), CPU mode",
+    "history_counts": [
+      100,
+      1000
+    ],
+    "dimensions": [
+      1,
+      40
+    ],
+    "proposal_values_compared": 1066,
+    "all_proposals_exactly_equal": true,
+    "formal_performance_acceptance": false,
+    "notes": "One-pass diagnostic timings and raw samples retained privately; host was not reserved for timing. Default multivariate native-history performance is outside this benchmark."
+  },
+  "formal_performance": {
+    "status": "pending",
+    "target": "idle mdx",
+    "reason": "An independent numerical job appeared after the idle preflight. Owned benchmark processes were stopped; no overlapping timing adopted.",
+    "interrupted_job_recovery_files_verified": 486
+  },
+  "performance_speedup_claimed": false
+}
