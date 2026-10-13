@@ -49,10 +49,17 @@ verifyEqual(testCase,actual,expected,'AbsTol',5e-12);
 % candidate scheduling and the ordered mixture sum.
 x=linspace(-2,3,24)';
 weights=ones(1024,1)/1024;
+beforeDefault=optuna_mex('api.info');
 actual=optuna_mex('optuna.parzen.log_pdf_numerical',x,weights, ...
     zeros(1024,1),ones(1024,1),-2,3,false,NaN);
 expected=-0.5*x.^2-0.5*log(2*pi)-log(0.5*(erf(3/sqrt(2))-erf(-2/sqrt(2))));
 verifyEqual(testCase,actual,expected,'AbsTol',5e-12);
+afterDefault=optuna_mex('api.info');
+verifyGreaterThanOrEqual(testCase,afterDefault.cpu_max_density_threads,1);
+if str2double(getenv('OMP_NUM_THREADS'))>1
+    verifyEqual(testCase,afterDefault.cpu_parallel_density_calls, ...
+        beforeDefault.cpu_parallel_density_calls+1);
+end
 verifyError(testCase,@()evaluateCommand('api.execution','auto'),'radia:optuna:mex:Exception');
 verifyEqual(testCase,radia.optuna.executionMode(),"cpu");
 after=optuna_mex('api.info');
