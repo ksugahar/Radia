@@ -73,7 +73,9 @@ def main(a):
             return dict(solution_relative=error,true_relative_residual=true)
         record['cpu_self_checks']=[validate(nonlinear,True),validate(linear,False)]
         t=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');record['matlab_start_seconds']=time.perf_counter()-t
-        eng.addpath(str(job),nargout=0);eng.eval('g=gpuDevice;wait(g);',nargout=0);pid=int(eng.feature('getpid'))
+        eng.addpath(str(job),nargout=0);eng.eval('timer=tic;g=gpuDevice;wait(g);gpu_init_seconds=toc(timer);',nargout=0)
+        record['gpu_init_seconds']=float(eng.workspace['gpu_init_seconds']);pid=int(eng.feature('getpid'))
+        record['cold_boundary']='First API call per variant in one owned initialized MATLAB process is saved separately; not an operating-system/device cold reset. Startup and GPU initialization are separate.'
         for cycle in range(a.cycles):
             for variant in ('baseline','tuned','tuned','baseline'):
                 guard=idle();path=out/f'{cycle}-{len(record["samples"])}-{variant}.mat'
@@ -89,6 +91,7 @@ def main(a):
                 print(variant,'nonlinear',report['nonlinear_seconds'],'linear',report['linear_fresh_seconds'],'reuse',np.median(report['reused_seconds']),flush=True)
                 (out/'result.json').write_text(json.dumps(record,indent=2,default=encode)+'\n')
         record['summary']={}
+        record['first_api_seconds']={v:next({k:float(s['report'][k]) for k in ('nonlinear_seconds','linear_fresh_seconds','prepared_setup_seconds')} for s in record['samples'] if s['variant']==v) for v in ('baseline','tuned')}
         for variant in ('baseline','tuned'):
             rows=[s['report'] for s in record['samples'] if s['variant']==variant]
             record['summary'][variant]={k:statistics.median(float(r[k]) for r in rows) for k in ('nonlinear_seconds','linear_fresh_seconds','prepared_setup_seconds')}
