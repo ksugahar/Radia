@@ -4,7 +4,7 @@ Consumes a hash-verified job payload and an independently built CPU reference.
 Python performs CPU validation and orchestration, never GPU solver work.
 """
 from pathlib import Path
-import argparse, ctypes, hashlib, json, os, statistics, sys, time
+import argparse, ctypes, hashlib, json, os, statistics, sys, time, math
 from validate_hdiv_artifact import idle
 
 
@@ -21,7 +21,10 @@ def main():
     parser.add_argument('--cycles', type=int, default=2)
     parser.add_argument('--wheel', type=Path,
                         help='Require verified installed-wheel identity and use only its MATLAB payload')
+    parser.add_argument('--cpu-threads', type=int, default=1, help='NGSolve CPU reference threads; BLAS remains single-threaded')
     args = parser.parse_args()
+    if args.cpu_threads < 1:
+        parser.error('CPU threads must be positive')
     if args.cycles < 2:
         parser.error('At least two ABBA cycles are required')
     job = args.job.resolve()
@@ -60,7 +63,8 @@ def main():
         import radia._radia_pybind as native
         from scipy.io import loadmat
         import matlab.engine
-        ng.SetNumThreads(1)
+        ng.SetNumThreads(args.cpu_threads)
+        result['threads']={'cpu_ngsolve':args.cpu_threads,'cpu_blas':1,'matlab_single_comp_thread':True}
         for module in (cpu,native):
             relative=Path(module.__file__).resolve().relative_to(cpu_root).as_posix()
             if relative not in cpu_manifest:
@@ -138,7 +142,7 @@ def main():
                             coefficient_error=error,mean_error=mean_error,true_relative_residual=residual,
                             exact_accounted_owned_peak_bytes=owned,idle_before=before,idle_after=idle())
                 result['samples'].append(sample)
-                if max(error,mean_error)>1e-8 or residual>1e-10:
+                if not all(math.isfinite(v) for v in (error,mean_error,residual,elapsed)) or elapsed<0 or max(error,mean_error)>1e-8 or residual>1e-10:
                     raise RuntimeError('Whole-solve parity/residual failed')
             run('cpu','first_payload');run('gpu','first_payload')
             for cycle in range(args.cycles):
