@@ -29,7 +29,15 @@ def check(engine,binary_dir,matlab_dir,out):
     subprocess.run(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(Path(__file__).with_name('loaded_module.ps1')),'-ProcessId',str(int(engine.feature('getpid'))),'-ModuleName','radia_cuda_ic.mexw64','-OutputPath',str(module)],check=True,capture_output=True)
     loaded=json.loads(module.read_text(encoding='utf-8-sig'))
     if Path(loaded['path']).resolve()!=binary.resolve() or loaded['sha256']!=sha(binary):raise RuntimeError('Actual loaded IC binary mismatch')
+    libraries={}
+    for name in ('cusparse64_12.dll','cublas64_12.dll'):
+        path=out/(name+'.json')
+        subprocess.run(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(Path(__file__).with_name('loaded_module.ps1')),'-ProcessId',str(int(engine.feature('getpid'))),'-ModuleName',name,'-OutputPath',str(path)],check=True,capture_output=True)
+        actual=json.loads(path.read_text(encoding='utf-8-sig'))
+        if not Path(actual['path']).resolve().is_relative_to(Path(engine.matlabroot()).resolve()):raise RuntimeError('CUDA library resolved outside the selected MATLAB runtime')
+        libraries[name]=actual['sha256']
     result=dict(schema='radia.gpu.ic-accuracy.v1',passed=True,binary_sha256=sha(binary),fixture_sha256=sha(fixture),numpy=np.__version__,independent_cpu='NumPy original-A solve, shifted full-pattern solve and independent square-root sparse IC(0) oracle',apply_relative=float(native['apply_relative']),sparse_apply_relative=float(native['sparse_apply_relative']),solution_relative_max=float(np.max(np.asarray(native['solve_errors'])[:,0])),true_relative_residual_max=float(np.max(np.asarray(native['solve_errors'])[:,1])),rejection_count=int(native['rejection_count']),live_count_restored=bool(native['live_count_restored']),frontend_checked=True,device=native['device'])
+    result['runtime_library_sha256']=libraries
     (out/'result.json').write_text(json.dumps(result,indent=2,allow_nan=False)+'\n');return result
 
 if __name__=='__main__':
