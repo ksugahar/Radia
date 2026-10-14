@@ -1,0 +1,8 @@
+{
+  "source_commit": "88049e80944ab3c9de38d4a320d74a1b14f051bf",
+  "outcome": "accepted",
+  "unresolved_findings": [],
+  "reviewer": "Independent read-only Codex reviewer",
+  "report": "validation_test/radia_gpu/releases/0.1.3-review.json",
+  "scope": "Source-only review. Numerical, packaging and release source unchanged from reviewed 44c3; final merge adds host-routing policy text only. Machine execution is certified separately."
+}

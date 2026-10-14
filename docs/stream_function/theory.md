@@ -1,0 +1,234 @@
+# Theory — Stream-function method + (ACA+)+TSVD
+
+> Runnable companion: [`theory.ipynb`](theory.ipynb) executes this method live
+> (the derivations/literature stay here; the notebook produces the numbers).
+
+## The inverse problem
+
+Given a desired magnetic field component (typically `Bz`) at a set of
+**target points** `r_j ∈ R³`, design a current-carrying source surface
+that produces this field as closely as possible.
+
+For a surface current density `K` on a source surface `Γ`:
+
+    B(r_target) = (μ₀ / 4π) ∫_Γ K(r') × (r_target − r') / |r_target − r'|³ dA(r')
+
+If `K` is **divergence-free** (no current sources / sinks on `Γ`), then
+on a 2D surface there exists a scalar **stream function** `ψ : Γ → R`
+such that `K = n̂ × ∇ψ`.  The level sets of `ψ` are then the
+streamlines of the surface current, which correspond directly to
+**equal-current wire loops** when discretised.
+
+## Discretisation
+
+Two equivalent paths, both shipped:
+
+### Path 1: basis-loop discretisation (legacy SA-25-020)
+
+Place `N` small quad current loops on a regular `(φ, z)` or `(x, y)`
+grid covering `Γ`.  Each loop carries unit current; the optimisation
+finds the amplitudes `φⱼ`.  The stream function reconstruction is just
+the grid sampled value `ψ(grid_pt) = φⱼ`.
+
+Pros: straightforward, no FE machinery.
+Cons: discrete grid spacing artefacts; ψ topology jumps under small
+perturbations (= why Path-A iteration only oscillates with this basis).
+
+### Path 2: FE-direct ψ (recommended; new 2026-05-30)
+
+`ψ ∈ H¹(Γ)` is a continuous finite-element GridFunction on a Netgen
+triangulation of `Γ`.  For each basis function `φᵢ` and each target
+`r_j`, assemble:
+
+    A[j, i] = (μ₀ / 4π) ∫_Γ (n̂ × ∇φᵢ(r')) × (r_j − r') / |r_j − r'|³ · ẑ dA(r')
+
+which on a flat plane reduces to:
+
+    A[j, i] = − (μ₀ / 4π) ∫_Γ ∇φᵢ(r') · (r_j − r')_xy / |r_j − r'|³ dA(r')
+
+In NGSolve this is one `LinearForm` per target.  See
+[`build_fem_matrix`](demo_planar_uniform_fem_psi.py)
+for the canonical (planar) assembly.
+
+**Γ can be ANY surface, not just a plane.** Mesh a curved former
+(cylinder, **sphere**, conformal / 3D-printed) and assemble the *same*
+general kernel (line above) with the surface gradient `grad(u).Trace()`
+and the surface normal `specialcf.normal(3)`; surface FEM is done
+robustly via a solid mesh + `H1(mesh, order=p, definedon=mesh.Boundaries(".*"))`
++ `ds` + `mesh.Curve(p)` (isoparametric).  **This is exactly the capability
+the basis-loop path lacks** — it needs a structured `(φ, z)` grid and cannot
+be laid on a sphere.  See
+[`demo_sphere_fe_direct.py`](demo_sphere_fe_direct.py)
+(uniform Bz: cres 3e-15, single-stroke 0.24 %; Z2 shim: 0.36 % after
+sheet-metal distortion).
+
+Pros: continuous ψ, improved contour stability, and **observed monotone
+improvement in the cited planar run** (not a general convergence guarantee), arbitrary polynomial order via
+`H1(mesh, order=p)`, **arbitrary former shape**.
+Cons: per-entry integration is more expensive than basis-loop kernel
+evaluation; without ACA+ the assembly is O(M × ndof × quad_pts).
+
+## The (ACA+)+TSVD least-norm solver
+
+Forming the dense `M × N` matrix `A` is `O(M N)` (basis-loop) or
+`O(M × ndof × quad)` (FE-direct) — both expensive for large M or
+expensive kernels (material).  Two-stage compression:
+
+### Stage 1 — ACA+ (Adaptive Cross Approximation Plus)
+
+Greedy pivot-based low-rank factorisation:
+
+    A ≈ C · Dᵀ        C ∈ R^{M × k_aca},  D ∈ R^{N × k_aca}
+
+evaluating only `~k_aca · (M + N)` entries of `A` — never the full
+`M·N`.  Implemented in `HACApK` (`src/ext/HACApK/cHACApK_acaplus`), MIT
+licensed, ppOpen-HPC project.
+
+Radia delegates ACA+ entirely to HACApK via the entry-function override
+`HACApK_set_entry_func` (default behaviour, the reusable material interaction matrix,
+is unchanged when the override is null).  No ACA+ re-implementation in
+Radia.
+
+### Stage 2 — TSVD recompression (manuscript Method 2/3, SA-25-020)
+
+Recompresses the rank-`k_aca` factors `C, D` to an explicit SVD of the
+low-rank approximation:
+
+    Method 3 (default, faster):
+        SVD(C) → Uc, Sc, VTc;   E := diag(Sc) · VTcᵀ · Dᵀ;
+        SVD(E) → UE, SE, VTE;   U := Uc · UE,  S := SE,  V := VTE.
+
+Two SVDs of `M × k_aca` and `k_aca × N` matrices; the full `M × N` SVD
+is never formed.
+
+## Least-norm pseudo-inverse
+
+Once we have `A ≈ U · diag(S) · Vᵀ` (truncated to `k_modes` modes):
+
+    ψ̂ = V · diag(1/S) · Uᵀ · B_target
+
+Truncation at `k_modes < k_aca` regularises the otherwise ill-posed
+inverse (small singular values amplify noise).  Sweeping `k_modes`
+traces the **L-curve** of residual `||A ψ − B||` vs solution norm
+`||ψ||`.
+
+## Improved DUCAS: TSVD is a magnetic-field mode design method
+
+A fixed prefix `1..k` is useful as a numerical baseline, but it is not the
+complete current-potential design rule.  In improved DUCAS (Abe, 2013), write
+
+    W_B B_TG = W_B A R Delta q
+    psi       = psi0 + R Delta q
+
+where `R` enforces equipotential boundary and connection constraints,
+`W_B` weights field accuracy, and `Delta` scales independent current
+potentials.  After the SVD of `W_B A R Delta`, the target strength of mode `i`
+is
+
+    D_i = u_i^T W_B B_TG,
+    P_i = |D_i| / sqrt(M).
+
+The selected set is therefore allowed to be **non-contiguous**.  A mode is
+retained only when its field distribution is admissible, its `P_i` is
+significant, its singular value is numerically safe, and its potential/current
+is physically realizable.  Modes are accumulated until the checked physical
+field residual meets the requested peak-to-peak and RMS tolerances.  If no
+admissible set meets the target, the correct action is to enlarge/redesign the
+source surface or accept a field tolerance—not to invert progressively smaller
+singular values without limit.
+
+Two design levers make the current paths manufacturable without sacrificing
+the selected low-order field content:
+
+1. **Node weights.** Use `delta_i proportional to d_i^2`, with `d_i` the
+   distance from current-potential node `i` to its nearest field-evaluation
+   point, then average through `R`.  This compensates the distance dependence
+   that otherwise concentrates contours near the target.  FE area is not
+   weighted again because it is already present in `A`.
+2. **Initial current potential.** Start from a smooth `psi0`.  Selected modes
+   correct its target-field error; unselected high-order content remains and
+   can smooth valleys, peaks and contour routing with little field effect.
+
+These levers complement, rather than replace, REGCOIL-style physical
+regularization.  Improved DUCAS exposes interpretable magnetic-field modes;
+H1, current-norm or inductance seminorms select a low-current/low-energy member
+of the feasible family.  For difficult geometry, compare the field-error vs
+current-norm Pareto front rather than treating an arbitrary TSVD cutoff as a
+physical optimum.
+
+For passive ferromagnetic placement, negative inferred volume is not silently
+accepted.  Clip to the realizable nonnegative/capacity bounds, recompute the
+actual field error, and solve that new error with the **same precomputed SVD**.
+The repeated bounded solve is the continuous planning layer; HDiv-MMM must
+still convert its signed demand to full-strength add/remove candidates and
+re-solve the magnetic system after each material batch.
+
+## Path-A compensated iteration (new 2026-05-30)
+
+Kuijpers, Jansen and Lomonova's COMPUMAG 2023 contribution 525,
+*Comparison of Discretization Methods for Continuous Stream-Function
+Distributions*, is identified by the official conference program. It is
+distinct from the same authors' 2023 extended-stream-function journal article.
+The program establishes the contribution's identity, not the previous claim
+that the authors proved spatial collocation of chain deviation and target-field
+error. That passage has not been verified and is not asserted here.
+
+The following **Radia-specific compensation iteration** folds the computed
+wire-field residual back into the solve; it is not attributed to that paper:
+
+    ψ⁽⁰⁾ = pseudo_inverse(B_target)         # initial SF
+    repeat:
+      χ⁽ᵏ⁾ = single_stroke_chain(ψ⁽ᵏ⁾)     # build coil
+      Bz⁽ᵏ⁾ = Bz_at_target(χ⁽ᵏ⁾, I_w)      # actual field
+      r⁽ᵏ⁾  = B_target − Bz⁽ᵏ⁾             # residual
+      ψ⁽ᵏ⁺¹⁾ = ψ⁽ᵏ⁾ + α · pseudo_inverse(r⁽ᵏ⁾)
+    until ||r|| < tol
+
+Each iteration RE-USES the cached TSVD factorisation (one back-
+substitution + one chain rebuild) → cheap.
+
+**Convergence depends on the ψ REPRESENTATION**:
+
+  - Basis-loop ψ (grid-sampled, matplotlib contour): topology of the
+    contour family JUMPS under small ψ perturbations → `B_c(ψ)` not
+    smooth → Picard does NOT contract.  Best-effort tracking finds
+    marginally better neighbourhoods.
+  - FE-direct H¹ ψ: a continuous GridFunction can improve contour stability,
+    but continuity alone proves neither smooth topology changes nor a
+    contraction of this iteration. In the saved example, iterations 40-47
+    on the planar uniform Bz benchmark drop **monotonically**
+    0.62 % → 0.49 % RMS, converging to **0.47 %**.
+
+This is empirical evidence for that example, not a general convergence theorem.
+
+## Complexity tier framework
+
+The saved examples motivate the following empirical topology-based grouping
+of design difficulty (chain construction + Radia Path-A). These are example
+results, not universal lower bounds on reachable error:
+
+| Tier   | Topology                  | Baseline RMS  | + Path-A      | Behaviour                    |
+|--------|---------------------------|---------------|---------------|------------------------------|
+| EASY   | axisym. / planar uniform  | 2–3 %         | < 1 %         | Path-A useful                |
+|        |   + FE-direct H¹          | 2 %           | **0.47 %**    | MONOTONE convergence         |
+| MEDIUM | cylindrical Gz            | already OK    | redundant     | smooth helix natural         |
+| HARD   | cylindrical Gx fingerprint| 9.3 % (field_aware) | oscillates | escape via geometry, below |
+| HARDER | shielded / biplanar / 3D  | --            | --            | FE-direct on the real former |
+
+Past EASY: FE-direct continuous ψ.  **Past HARD the practical escape is
+GEOMETRY, not more current DOFs**: the single-current **sheet-metal wire
+distortion** bends the manufactured wire (trade geometric DOF for current
+DOF) and takes the cylinder Gx fingerprint from 8.5 % → **1.4 %** with ONE
+feed (see [single_stroke.md](single_stroke.md)); a few separate-feed electric
+shims then refine to ~1.0 %.  The remaining classical routes are B-spline SFD
+(Kuijpers Methods 2/3) or a multivalued-potential D-path (research).  Note
+the tier is set by the COIL PATTERN topology, NOT the former shape — FE-direct
+solves an EASY uniform target on a *sphere* to 0.24 % single-stroke.
+
+## Cross-reference
+
+  - Math + literature: the paper outline (private-runtime-path)
+  - Regularisation choices: [regularization.md](regularization.md)
+  - Chain construction: [single_stroke.md](single_stroke.md)
+  - Deformation outer loop: [deformation.md](deformation.md)
+  - MCP topic: `streamfunction(topic=method)`, `streamfunction(topic=session_2026_05_30)`

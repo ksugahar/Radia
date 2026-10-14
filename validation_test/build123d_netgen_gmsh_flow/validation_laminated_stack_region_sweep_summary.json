@@ -1,0 +1,100 @@
+{
+  "kind": "build123d_laminated_stack_region_validation",
+  "validation_class": true,
+  "quick": false,
+  "elapsed_seconds": 4.598,
+  "cases": [
+    {
+      "label": "lam_stack_4layer_balanced",
+      "status": "ok",
+      "passed": true,
+      "n_regions": 7,
+      "lamination_fill_factor": 0.8695652173913044,
+      "stack_height": 4.6,
+      "max_volume_rel_error": 1.5789838572446671e-16,
+      "total_volume_rel_error": 1.3730294410823194e-16,
+      "post_region_names": [
+        "steel_01",
+        "insulation_01",
+        "steel_02",
+        "insulation_02",
+        "steel_03",
+        "insulation_03",
+        "steel_04"
+      ],
+      "post_region_element_counts": {
+        "steel_01": 1648,
+        "insulation_01": 1774,
+        "steel_02": 2001,
+        "insulation_02": 1850,
+        "steel_03": 2040,
+        "insulation_03": 1712,
+        "steel_04": 1684
+      },
+      "mesh_elements": 12709,
+      "mesh_vertices": 2813
+    },
+    {
+      "label": "lam_stack_5layer_high_fill",
+      "status": "ok",
+      "passed": true,
+      "n_regions": 9,
+      "lamination_fill_factor": 0.933609958506224,
+      "stack_height": 4.82,
+      "max_volume_rel_error": 4.531522549490435e-16,
+      "total_volume_rel_error": 0.0,
+      "post_region_names": [
+        "steel_01",
+        "insulation_01",
+        "steel_02",
+        "insulation_02",
+        "steel_03",
+        "insulation_03",
+        "steel_04",
+        "insulation_04",
+        "steel_05"
+      ],
+      "post_region_element_counts": {
+        "steel_01": 2688,
+        "insulation_01": 2605,
+        "steel_02": 3065,
+        "insulation_02": 2533,
+        "steel_03": 2958,
+        "insulation_03": 2602,
+        "steel_04": 2943,
+        "insulation_04": 2560,
+        "steel_05": 2592
+      },
+      "mesh_elements": 24546,
+      "mesh_vertices": 5277
+    },
+    {
+      "label": "lam_stack_3layer_thick_insulation",
+      "status": "ok",
+      "passed": true,
+      "n_regions": 5,
+      "lamination_fill_factor": 0.7741935483870968,
+      "stack_height": 3.1000000000000005,
+      "max_volume_rel_error": 0.0,
+      "total_volume_rel_error": 1.5280488941077422e-16,
+      "post_region_names": [
+        "steel_01",
+        "insulation_01",
+        "steel_02",
+        "insulation_02",
+        "steel_03"
+      ],
+      "post_region_element_counts": {
+        "steel_01": 1722,
+        "insulation_01": 1805,
+        "steel_02": 1810,
+        "insulation_02": 1764,
+        "steel_03": 1757
+      },
+      "mesh_elements": 8858,
+      "mesh_vertices": 2000
+    }
+  ],
+  "n_ok": 3,
+  "n_total": 3
+}

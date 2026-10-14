@@ -1,0 +1,8 @@
+* Double-precision RAW regression: RC charging from zero
+V1 in 0 1
+R1 in out 1k
+C1 out 0 1n
+.options numdgt=7
+.save V(in) V(out) I(R1)
+.tran 0 10u 0 100n uic
+.end

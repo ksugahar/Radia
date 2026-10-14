@@ -1,0 +1,294 @@
+\documentclass[a1paper,portrait]{bxjsarticle}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage[dvipdfmx]{color}
+\usepackage{amsmath}
+\usepackage{multicol}
+\usepackage{enumitem}
+\usepackage{bm}
+\usepackage{geometry}
+\usepackage{bicaption}
+\usepackage{algorithmic}
+\geometry{margin=2cm,top=1cm, bottom=1cm}
+\usepackage{tikz}
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable,skins}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{pgfplots}
+\usepackage{float}
+\usepackage{comment}
+\usepackage{anyfontsize}
+\usepackage{xcolor}
+\usetikzlibrary{positioning}
+\usetikzlibrary{calc}
+\pgfplotsset{compat=1.16}
+\usepackage{xcolor} % プリアンブルに追加
+\definecolor{comsolblue}{RGB}{40,40,120}
+\definecolor{comsolpink}{RGB}{180,40,100}
+
+% Times New Roman フォント設定
+% Use Times for math symbols, but set default text font to sans-serif for template matching.
+\usepackage{newtxtext,newtxmath}
+\renewcommand{\familydefault}{\sfdefault}
+
+\usepackage{scalefnt}
+
+% 日本語と英数字のフォントサイズ統一のためのコマンド定義
+\newcommand{\timesroman}[1]{\fontfamily{ptm}\selectfont #1}
+
+% 色の定義（PDFの配色を参考）
+\definecolor{headercolor}{RGB}{0,51,153}
+\definecolor{sectionblue}{RGB}{51,102,204}
+\definecolor{sectiongreen}{RGB}{102,153,51}
+\definecolor{boxcolor}{RGB}{240,245,255}
+\definecolor{resultbox}{RGB}{255,250,240}
+\definecolor{lightsectionblue}{RGB}{200,220,255}
+\definecolor{lightyellow}{RGB}{255, 255, 204}
+
+\makeatletter
+\DeclareMathSizes{40}{40}{32}{24}
+\makeatother
+\DeclareCaptionFont{biglabel}{\fontsize{30pt}{36pt}\selectfont}
+\captionsetup[figure]{labelfont=biglabel, textfont=normalsize}
+
+% セクションのスタイル設定
+\usepackage{titlesec}
+\titleformat{\section}
+{\normalfont\Huge\bfseries\color{white}}
+{\Roman{section}.}{0.5em}{}
+\titlespacing*{\section}{0pt}{0pt}{10pt}
+
+% サブセクションのスタイル
+\titleformat{\subsection}
+{\normalfont\Large\bfseries\color{sectionblue}}
+{\thesubsection}{0.5em}{}
+
+% tcolorboxの設定
+\tcbset{
+sectionbox/.style={colback=sectionblue,coltext=white,
+boxrule=0pt,
+arc=5mm,
+left=15pt,
+right=15pt,
+top=10pt,
+bottom=10pt,
+fontupper=\Large\bfseries
+},
+subsectionbox/.style={colback=sectionblue!15,   % 薄い水色背景
+coltext=sectionblue!80!black, % 文字はやや濃い青
+boxrule=0pt,
+arc=3mm,
+left=12pt,right=12pt,top=6pt,bottom=6pt,
+fontupper=\large\bfseries
+},
+contentbox/.style={colback=white,colframe=sectionblue,
+boxrule=2pt,
+arc=3mm,
+boxsep=10pt,
+left=10pt,
+right=10pt,
+top=10pt,
+bottom=10pt
+},
+subcontentbox/.style={colback=white,           % 背景は白
+colframe=sectionblue,   % 枠を薄い黄色
+boxrule=2pt,             % 枠の太さ
+arc=3mm,                 % 角を丸く
+boxsep=6pt,              % 中身と枠の余白
+left=5pt,right=5pt,top=1pt,bottom=1pt,
+enhanced,                % 高度なオプション有効
+},
+resultbox/.style={colback=resultbox,colframe=sectiongreen,
+boxrule=2pt,
+arc=3mm,
+boxsep=10pt
+}
+}
+
+\begin{document}
+
+% ヘッダー部分
+\begin{flushleft}
+{\fontsize{60}{72}\selectfont\bfseries\color{headercolor} 電磁場開領域問題におけるケルビン変換}
+
+\vspace{5pt}
+
+{\fontsize{40}{48}\selectfont\bfseries\color{headercolor} \quad ~~Maxwell方程式の共形変換を用いた外部領域の定式化}
+
+\vspace{5pt}
+
+{\fontsize{35}{42}\selectfont 近畿大学 理工学部 電気電子工学科 CAE-AI研究室 \quad 菅原賢悟}
+
+\vspace{5pt}
+
+\hrule
+\end{flushleft}
+
+
+\vspace{10pt}
+
+% I. Introduction（全幅で配置）
+\begin{tcolorbox}[sectionbox]
+\begin{center}
+{\fontsize{36pt}{40pt}\selectfont はじめに}
+\end{center}
+\end{tcolorbox}
+{\fontsize{24pt}{33pt}\selectfont\par
+ケルビン変換は無限空間を有限空間へ写像する座標変換であり、Maxwell方程式の共形変換として機能する。本研究では、微分幾何学の概念を適用し、外部領域における材料定数の計量および空間依存性を導出した。これにより、外部領域にも物体や材料特性、PMLを含めることが可能となる。低周波の渦電流問題と高周波の放射問題の両方に適用可能である。COMSOL Multiphysics®による数値計算例で本手法の妥当性を検証した。
+\par}
+
+\vspace{5pt}
+
+\setlength{\columnseprule}{0pt}
+\begin{multicols}{2}
+
+\begin{tcolorbox}[sectionbox]
+\begin{center}
+{\fontsize{36pt}{43pt}\selectfont ケルビン変換の定式化と電磁場問題への応用}
+\end{center}
+\end{tcolorbox}
+
+	\begin{tcolorbox}[contentbox,breakable]
+		\begin{tcolorbox}[subsectionbox]
+		{\fontsize{34pt}{40pt}
+			\selectfont 従来提案されているケルビン変換
+		}
+		\end{tcolorbox}
+
+		\begin{center}
+		\includegraphics[clip, width=0.65\linewidth]{figures/Kelvin_Concept.pdf}
+		\captionof{figure}{\fontsize{26pt}{30pt}\selectfont ケルビン変換の概念}
+		\end{center}
+
+		\vspace{10pt}
+
+		{\fontsize{20pt}{26pt}\selectfont
+		\begin{enumerate}[label={[\arabic*]}, leftmargin=*, itemsep=0pt]
+		\item E.~M.~Freeman, D.~A.~Lowther, "A novel mapping technique for open boundary finite element solutions to Poisson's equation," IEEE Trans. Magn., vol.24, no.6, pp.2934-2936, 1988.
+		\end{enumerate}
+		}
+	\end{tcolorbox}
+
+	\begin{tcolorbox}[contentbox,breakable]
+		\begin{tcolorbox}[subsectionbox]
+		{\fontsize{34pt}{40pt}\selectfont 
+		拡張型ケルビン変換の定式化
+		}
+		\end{tcolorbox}
+		\begin{center}
+		\includegraphics[clip, width=0.65\linewidth]{figures/formulation.pdf}
+		\captionof{figure}{\fontsize{26pt}{30pt}\selectfont Maxwell方程式の共形変換}
+		\end{center}
+		{\fontsize{24pt}{33pt}\selectfont\par
+		Maxwell方程式の共形変換により、外部領域の材料定数（透磁率・誘電率・導電率）の空間依存性を計量から導出。2次元・軸対称では$(a/r)^4$、3次元では$(a/r)^2$で変調される。COMSOL Multiphysics®の係数型PDEインターフェースで実装。
+		\par}
+	\end{tcolorbox}
+
+	\begin{tcolorbox}[contentbox,breakable]
+		\begin{tcolorbox}[subsectionbox]
+		{\fontsize{34pt}{40pt}\selectfont 想定される応用問題}
+		\end{tcolorbox}
+		\begin{center}
+		\includegraphics[clip, width=0.65\linewidth]{figures/Kelvin_application.pdf}
+		\captionof{figure}{\fontsize{26pt}{30pt}\selectfont 外部領域に散乱体を含む電磁場の放射問題}
+		\end{center}
+		{\fontsize{24pt}{33pt}\selectfont\par
+		外部領域にも物体や材料が存在する場合にも、ケルビン変換により無限領域を有限領域に写像することで、効率的な解析が可能。
+		\par}
+	\end{tcolorbox}
+
+\columnbreak
+
+\begin{tcolorbox}[sectionbox]
+	\begin{center}
+	{\fontsize{36pt}{43pt}\selectfont 拡張型ケルビン変換の適用事例}
+	\end{center}
+	\end{tcolorbox}
+
+	\begin{tcolorbox}[contentbox,breakable]
+		\begin{tcolorbox}[subsectionbox]
+		{\fontsize{34pt}{40pt}\selectfont 事例A：低周波渦電流探傷問題 }
+		\end{tcolorbox}
+
+		\begin{center}
+		\includegraphics[clip, width=0.50\linewidth]{figures/3d-example-ECT_earth.pdf}\hfill
+		\includegraphics[clip, width=0.50\linewidth]{figures/3d-example-kelvin-transform.pdf}
+		\captionof{figure}{\fontsize{26pt}{30pt}\selectfont 渦電流探傷解析}
+		\end{center}
+
+		{\fontsize{24pt}{33pt}\selectfont\par
+		外部境界に導体（軟磁性材料）を含めた渦電流探傷解析を、COMSOLのAC/DCモジュールで実施。複雑形状導体の渦電流分布を高精度・高速に解析できることを確認。
+		\par}
+
+		\vspace{10pt}
+
+		{\fontsize{20pt}{26pt}\selectfont
+		\begin{enumerate}[label={[\arabic*]}, leftmargin=*, itemsep=0pt, start=2]
+		\item K. Sugahara, "Electromagnetic Analysis of Eddy Current Testing With Kelvin Transformation," IEEE Trans. Magn., vol.58, no.9, pp.1-6, Sept. 2022.
+		\end{enumerate}
+		}
+	\end{tcolorbox}
+
+	\begin{tcolorbox}[contentbox,breakable]
+		\begin{tcolorbox}[subsectionbox]
+		{\fontsize{34pt}{40pt}\selectfont
+		事例B：高周波放射散乱問題（アンテナ解析）
+		}
+		\end{tcolorbox}
+
+		\begin{center}
+		\begin{minipage}{0.45\linewidth}
+			\centering
+			\includegraphics[clip, width=0.9\linewidth]{figures/HertzianDipole.pdf}
+			\captionof{figure}{\fontsize{26pt}{30pt}\selectfont 電磁場散乱問題}
+		\end{minipage}\hfill
+		\begin{minipage}{0.55\linewidth}
+			\centering
+			\includegraphics[clip, width=\linewidth]{figures/Figure_scatter_xy_E_abs.pdf}
+			\captionof{figure}{\fontsize{30pt}{36pt}\selectfont 電界分布の比較}
+		\end{minipage}
+		\end{center}
+
+		{\fontsize{24pt}{33pt}\selectfont\par
+		ヘルツアンテナの放射問題に適用し、解析解との高精度な一致を確認。PMLを外部領域に配置することで、従来のPMLやインピーダンス境界条件を用いず効率的な放射界解析を実現。
+		\par}
+
+		\vspace{10pt}
+
+		{\fontsize{20pt}{26pt}\selectfont
+		\begin{enumerate}[label={[\arabic*]}, leftmargin=*, itemsep=0pt, start=3]
+		\item K. Sugahara, "Extended Kelvin Transformation for Solving Radiating Electromagnetic Fields," IEICE Trans. Electron., vol.E108-C, no.4, pp.189-194, April 2025.
+		\end{enumerate}
+		}
+	\end{tcolorbox}
+
+\begin{tcolorbox}[sectionbox]
+	\begin{center}
+	{\fontsize{36pt}{43pt}\selectfont まとめ}
+	\end{center}
+	\end{tcolorbox}
+
+	\begin{tcolorbox}[contentbox,breakable]
+	{\fontsize{24pt}{33pt}\selectfont\par
+	Maxwell方程式の共形変換を用いた拡張ケルビン変換により、低周波から高周波まで単一手法で解析可能なことをCOMSOL Multiphysics®を用いて実証した。
+	\par
+	\begin{itemize}
+		\item 周波数帯域ごとの手法切替が不要
+		\item 外部境界に材料特性・PMLを含められる
+		\item 広帯域電磁界現象の統一的解析を実現
+	\end{itemize}
+	}\end{tcolorbox}
+\end{multicols}
+
+\begin{tikzpicture}[remember picture,overlay]
+\shade[left color=comsolblue, right color=comsolpink] 
+	([yshift=0pt]current page.south west) rectangle 
+	([yshift=40pt]current page.south east);
+
+\node[anchor=south, yshift=0pt, white] at (current page.south) {
+	\fontsize{24}{40}\selectfont Excerpt from proceedings of the 
+	\textbf{COMSOL CONFERENCE} 2025 TOKYO
+};
+\end{tikzpicture}
+
+\end{document}

@@ -1,0 +1,268 @@
+"""
+ESIM Integration Tests
+
+Comprehensive tests validating the complete ESIM workflow:
+1. Cell problem solver accuracy
+2. ESI table generation and interpolation
+3. Coupled solver convergence
+4. Physical consistency checks
+
+Author: Radia Development Team
+Date: 2026-01-08
+"""
+
+import numpy as np
+import pytest
+from scipy.constants import mu_0
+
+from radia.esim_cell_problem import (
+    ESIMCellProblemSolver,
+    ESIMFiniteSlabSolver,
+    BHCurveInterpolator,
+    ESITable,
+    generate_esi_table_from_bh_curve,
+)
+from radia.esim_workpiece import create_esim_block
+from radia.esim_coupled_solver import InductionHeatingCoil
+
+
+def test_bh_curve_interpolation():
+    """Test B-H curve interpolation accuracy."""
+    print("Test 1: B-H Curve Interpolation")
+    print("-" * 40)
+
+    # Steel B-H curve
+    bh_curve = [
+        [0, 0],
+        [100, 0.2],
+        [500, 0.9],
+        [1000, 1.3],
+        [5000, 1.8],
+        [50000, 2.1],
+    ]
+
+    bh_interp = BHCurveInterpolator(bh_curve)
+
+    # Test at known points using actual API: B() and mu_r()
+    tests = [
+        (0, 0.0, "Origin"),
+        (100, 0.2, "Data point 1"),
+        (1000, 1.3, "Data point 2"),
+        (300, None, "Interpolated point"),
+    ]
+
+    passed = 0
+    for H, B_expected, desc in tests:
+        B = bh_interp.B(H)  # Correct method name
+        mu_r = bh_interp.mu_r(H)  # Correct method name
+
+        if B_expected is not None:
+            error = abs(B - B_expected)
+            status = "PASS" if error < 0.01 else "FAIL"
+            print(f"  {desc}: H={H} A/m -> B={B:.4f} T (expected {B_expected}), mu_r={mu_r:.1f} [{status}]")
+            if status == "PASS":
+                passed += 1
+        else:
+            print(f"  {desc}: H={H} A/m -> B={B:.4f} T, mu_r={mu_r:.1f}")
+            passed += 1
+
+    print(f"  Result: {passed}/{len(tests)} tests passed")
+    print()
+    assert passed == len(tests)
+
+
+def test_bh_curve_saturation_extension_keeps_vacuum_slope():
+    bh_curve = [
+        [0, 0], [100, 0.2], [500, 0.9], [1000, 1.3],
+        [5000, 1.8], [50000, 2.1],
+    ]
+    law = BHCurveInterpolator(bh_curve)
+
+    assert law.B(100_000.0) == pytest.approx(2.1 + mu_0 * 50_000.0)
+    assert law.B(200_000.0) == pytest.approx(2.1 + mu_0 * 150_000.0)
+    assert law.B(200_000.0) > law.B(100_000.0) > law.B(50_000.0)
+
+
+def test_cylinder_resistance_ratio_is_invariant_under_radius_scaling():
+    def ratio(radius):
+        solver = ESIMFiniteSlabSolver.__new__(ESIMFiniteSlabSolver)
+        solver.geometry = "cylinder"
+        solver.half_thickness = radius
+        solver.n_nodes = 2001
+        solver.mesh_points = np.linspace(0.0, radius, solver.n_nodes)
+        normalized_radius = solver.mesh_points / radius
+        field = normalized_radius ** 8
+        return solver._compute_resistance_ratio(field, None, 1.0)
+
+    assert ratio(0.01) == pytest.approx(2.0, rel=2.0e-5)
+    assert ratio(0.1) == pytest.approx(ratio(0.01), rel=1.0e-12)
+
+
+def test_cell_problem_solver():
+    """Test 1D cell problem solver."""
+    print("Test 2: Cell Problem Solver")
+    print("-" * 40)
+
+    # Parameters
+    bh_curve = [
+        [0, 0], [100, 0.2], [500, 0.9], [1000, 1.3],
+        [5000, 1.8], [50000, 2.1],
+    ]
+    sigma = 2e6  # S/m
+    freq = 50000  # Hz
+
+    solver = ESIMCellProblemSolver(bh_curve, sigma, freq)
+
+    # Test at different H0 values
+    H0_values = [100, 500, 1000, 5000]
+    passed = True
+
+    for H0 in H0_values:
+        result = solver.solve(H0)
+        Z = result['Z']  # Correct key name
+        P_prime = result['P_prime']
+
+        # Check physical consistency
+        # Z should have positive real part (resistance)
+        # P_prime should be positive (power loss)
+        if Z.real <= 0:
+            print(f"  H0={H0}: Z.real = {Z.real:.6e} <= 0 [FAIL]")
+            passed = False
+        elif P_prime < 0:
+            print(f"  H0={H0}: P_prime = {P_prime:.6e} < 0 [FAIL]")
+            passed = False
+        else:
+            print(f"  H0={H0}: Z = {Z.real:.4e} + j{Z.imag:.4e} Ohm, P' = {P_prime:.2e} W/m^2 [PASS]")
+
+    print(f"  Result: {'All tests passed' if passed else 'Some tests failed'}")
+    print()
+    assert passed
+
+
+def test_esi_table_generation():
+    """Test ESI table generation and lookup."""
+    print("Test 3: ESI Table Generation")
+    print("-" * 40)
+
+    bh_curve = [
+        [0, 0], [100, 0.2], [500, 0.9], [1000, 1.3],
+        [5000, 1.8], [50000, 2.1],
+    ]
+    sigma = 2e6
+    freq = 50000
+
+    # Generate table (use actual API without H0_min/H0_max)
+    esi_table = generate_esi_table_from_bh_curve(
+        bh_curve, sigma, freq,
+        n_points=20
+    )
+
+    # Test interpolation (use actual API: get_impedance, get_power_loss)
+    H0_test = 500
+    Z = esi_table.get_impedance(H0_test)
+    P_prime, Q_prime = esi_table.get_power_loss(H0_test)
+
+    print(f"  Table generated with {len(esi_table.H0_values)} points")
+    print(f"  H0 range: {esi_table.H0_values[0]:.1f} to {esi_table.H0_values[-1]:.1f} A/m")
+    print(f"  Test at H0={H0_test}: Z = {Z.real:.4e} + j{Z.imag:.4e} Ohm")
+    print(f"  P' = {P_prime:.2e} W/m^2, Q' = {Q_prime:.2e} var/m^2")
+
+    # Check monotonicity of |Z| with H0 (should decrease due to saturation)
+    Z_mags = [abs(esi_table.get_impedance(H)) for H in [100, 500, 1000, 5000]]
+    monotonic = all(Z_mags[i] >= Z_mags[i+1] for i in range(len(Z_mags)-1))
+
+    if monotonic:
+        print(f"  |Z| decreases with H0 (saturation effect): [PASS]")
+    else:
+        print(f"  |Z| vs H0: {Z_mags} - Expected decreasing [FAIL]")
+
+    print()
+    assert monotonic
+
+
+def test_coil_field_computation():
+    """Test coil magnetic field computation."""
+    print("Test 4: Coil Field Computation")
+    print("-" * 40)
+
+    # Create spiral coil
+    coil = InductionHeatingCoil(
+        coil_type='spiral',
+        center=[0, 0, 0.02],
+        inner_radius=0.03,
+        outer_radius=0.05,
+        pitch=0.005,
+        num_turns=3,
+        axis=[0, 0, 1],
+    )
+    coil.set_current(100)
+
+    # Test field on axis
+    B_axis = coil.compute_field_at_point([0, 0, 0])
+    B_mag = np.linalg.norm(np.real(B_axis))
+
+    print(f"  Coil: 3-turn spiral, R_in=30mm, R_out=50mm, I=100A")
+    print(f"  B at origin: [{B_axis[0].real:.4e}, {B_axis[1].real:.4e}, {B_axis[2].real:.4e}] T")
+    print(f"  |B| = {B_mag*1000:.2f} mT")
+
+    # B should be primarily in z-direction on axis
+    if abs(B_axis[2].real) > abs(B_axis[0].real) and abs(B_axis[2].real) > abs(B_axis[1].real):
+        print(f"  B primarily in z-direction on axis: [PASS]")
+        passed = True
+    else:
+        print(f"  B direction check: [FAIL]")
+        passed = False
+
+    # Test field decay with distance
+    B_near = np.linalg.norm(np.real(coil.compute_field_at_point([0, 0, 0.01])))
+    B_far = np.linalg.norm(np.real(coil.compute_field_at_point([0, 0, 0.10])))
+
+    if B_near > B_far:
+        print(f"  B decays with distance: {B_near*1000:.2f} mT > {B_far*1000:.2f} mT [PASS]")
+    else:
+        print(f"  B decay check: [FAIL]")
+        passed = False
+
+    print()
+    assert passed
+
+
+def test_workpiece_power_distribution_uses_converged_esi_table():
+    """Test the supported table-driven ESIM workpiece power path."""
+    print("Test 5: Table-driven Workpiece Power")
+    print("-" * 40)
+
+    bh_curve = [
+        [0, 0], [100, 0.2], [500, 0.9], [1000, 1.3],
+        [5000, 1.8], [50000, 2.1],
+    ]
+    sigma = 2e6
+    freq = 50000
+
+    workpiece = create_esim_block(
+        center=[0, 0, -0.01],
+        dimensions=[0.08, 0.08, 0.02],
+        bh_curve=bh_curve,
+        sigma=sigma,
+        frequency=freq,
+        panels_per_side=2,
+        esi_n_points=30,
+    )
+    surface_field = 500.0
+    for panel in workpiece.panels:
+        panel.H_tangential = surface_field + 0j
+
+    p_density, q_density = workpiece.esi_table.get_power_loss(surface_field)
+    summary = workpiece.get_summary()
+    distribution = workpiece.get_power_distribution()
+
+    assert summary['P_total'] == pytest.approx(
+        p_density * workpiece.total_surface_area
+    )
+    assert summary['Q_total'] == pytest.approx(
+        q_density * workpiece.total_surface_area
+    )
+    assert summary['P_total'] > 0.0
+    assert sum(row['P_loss'] for row in distribution) == pytest.approx(
+        summary['P_total']
+    )

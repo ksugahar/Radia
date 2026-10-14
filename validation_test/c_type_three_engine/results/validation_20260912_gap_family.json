@@ -1,0 +1,75 @@
+{
+  "schema": "radia.validation.c-type-cubit-gap-family.v1",
+  "generated_at_utc": "2026-09-11T15:00:54.200514+00:00",
+  "passed": true,
+  "refined": "gap only: N parallel slabs through the full gap, in-gap size h/N",
+  "held_fixed": {
+    "iron_size_m": 0.03,
+    "air_size_m": 0.04,
+    "kelvin_mesh_size_m": 0.05,
+    "kelvin_radius_m": 0.22,
+    "curve_order": 2
+  },
+  "gap_height_m": 0.01,
+  "gap_refinement_ratio": 2.0,
+  "cad_authority": "cad/c_type_iron.jou",
+  "builder": "build_cubit_meshes.py",
+  "builder_sha256": "6892c9f2f4fc2dc4ca3c198496c8bd562bd502b2da4b78000ac09829de8065e0",
+  "physical_helper_sha256": "a161ee38491cb1cd25837eeff1127fb0403d86fa98a9f15087c0fa41afd29bdd",
+  "family_builder_sha256": "f0eab8d0528e569597d4756c84a9961f8daef4bc7f13b90a03b39799589ea325",
+  "levels": [
+    {
+      "name": "n06",
+      "gap_layers": 6,
+      "relative_directory": "n06",
+      "mesh_result": "n06/mesh_result.json",
+      "mesh_result_sha256": "a892bc3ef8461cbff90f5f6e50b497660cff3792e987fa9535ee1ee61bbc3f00",
+      "gap_size_m": 0.0016666666666666668,
+      "kelvin_elements": 104794,
+      "gap_elements": 11874,
+      "minimum_crossings": 16,
+      "curved_minimum_crossings": 16,
+      "maximum_piece_m": 0.0014273445764102434,
+      "piece_limit_m": 0.002,
+      "iron_vol_sha256": "932f99b95303e9dba2f40a43fca574d8e97430b5b68d109d7b06e3ead8aeb978",
+      "kelvin_domain_vol_sha256": "3fa08ed34de341c31447d1307b9acf06b292bcf60145c44b813032c171645f2d"
+    },
+    {
+      "name": "n12",
+      "gap_layers": 12,
+      "relative_directory": "n12",
+      "mesh_result": "n12/mesh_result.json",
+      "mesh_result_sha256": "57bcbd3312ba74c055882d3a775ab42ce24fc5bd4612f888a8895b6d890636aa",
+      "gap_size_m": 0.0008333333333333334,
+      "kelvin_elements": 528094,
+      "gap_elements": 96842,
+      "minimum_crossings": 34,
+      "curved_minimum_crossings": 34,
+      "maximum_piece_m": 0.0006330200594735153,
+      "piece_limit_m": 0.001,
+      "iron_vol_sha256": "932f99b95303e9dba2f40a43fca574d8e97430b5b68d109d7b06e3ead8aeb978",
+      "kelvin_domain_vol_sha256": "3c14c671a07f724ec548d182a2dba4cff60be2c4f352dbc7ba6cdfa0ccec75b5"
+    },
+    {
+      "name": "n24",
+      "gap_layers": 24,
+      "relative_directory": "n24",
+      "mesh_result": "n24/mesh_result.json",
+      "mesh_result_sha256": "6002e2d30913dd1caad01a38a9d59b49af42b548b4ccb523c1c591a2ccf690e1",
+      "gap_size_m": 0.0004166666666666667,
+      "kelvin_elements": 3501632,
+      "gap_elements": 801988,
+      "minimum_crossings": 72,
+      "curved_minimum_crossings": 72,
+      "maximum_piece_m": 0.00021094038550489066,
+      "piece_limit_m": 0.0005,
+      "iron_vol_sha256": "932f99b95303e9dba2f40a43fca574d8e97430b5b68d109d7b06e3ead8aeb978",
+      "kelvin_domain_vol_sha256": "6fcbd36000bcdda095776c7897b74da38b7b22d6bd96af837c5c1618cbe07405"
+    }
+  ],
+  "checks": {
+    "all_mesh_contracts_passed": true,
+    "element_counts_strictly_increase": true,
+    "geometric_layer_sequence": true
+  }
+}

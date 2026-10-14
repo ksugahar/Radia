@@ -1,0 +1,934 @@
+{
+  "schema": "radia.validation.hcurl_vim_hdiv_mmm_end_to_end.v8",
+  "generated_at_utc": "2026-07-17T05:01:01.716651+00:00",
+
+  "runtime": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.22000-SP0",
+    "ngsolve_version": "6.2.2604"
+  },
+  "note": "Correctness validation; timing fields are publishable only when validation_host is a designated compute host.",
+  "configuration": {
+    "geometry": "notched-box",
+    "parent_order": 6,
+    "krylov_steps": 8,
+    "hcurl_rtol": 1e-10,
+    "current_gram_rtol": 1e-10,
+    "frequencies_Hz": [
+      100.0,
+      10000.0
+    ],
+    "maxh": 2.5,
+    "sigma": 58000000.0,
+    "mu_r": 1001.0,
+    "intorder": 2,
+    "hdiv_order": 1,
+    "hdiv_family": "bdm",
+    "hdiv_intorder": 2,
+    "demag_eps": 1e-07,
+    "demag_eta": 2.0,
+    "multipole_degree": 2,
+    "hdiv_pod_rtol": 1e-10,
+    "hdiv_max_modes": null,
+    "hdiv_solve_tol": 1e-10,
+    "kernel_epsilon": 0.12,
+    "coupling_kernel_epsilon": 0.12,
+    "parent_order_ledger": {
+      "bulk_degree": 4,
+      "bridge_trace_degree": 0,
+      "surface_current_degree": 2,
+      "surface_omega_degree": 3,
+      "face_family": "simplex",
+      "bridge_trace_dim": 1,
+      "required_parent_order": 4,
+      "parent_order": 6,
+      "parent_order_admissible": true,
+      "parent_order_excess": 2
+    }
+  },
+  "hcurl_parent_ndof": 3557,
+  "hcurl_current_gram_removed_modes": 2,
+  "bulk_current_gram_identity_error": 1.486836179630748e-14,
+  "hdiv_reduction": {
+    "parent_space": "HDiv",
+    "parent_family": "BDM",
+    "parent_order": 1,
+    "parent_ndof": 267,
+    "reduced_modes": 8,
+    "compression_ratio": 0.0299625468164794,
+    "mu_r": 1001.0,
+    "chi": 1000.0,
+    "materials": [
+      "cond"
+    ],
+    "mass_hermitian_error": 0.0,
+    "demag_hermitian_error": 0.0,
+    "operator_hermitian_error": 0.0,
+    "min_mass_eigenvalue": 2.4694116723544255,
+    "min_demag_eigenvalue": 0.9924824298374619,
+    "min_operator_eigenvalue": 0.9999999999999991,
+    "demag_frobenius_norm": 2.8163057427478333,
+    "has_rhs": true,
+    "rhs_columns": 2,
+    "demag_backend": "DemagOperator",
+    "demag_hmatrix_backend": "_ChargeGramHMatrix",
+    "demag_hmatrix_active": true,
+    "basis_generation": {
+      "construction": "hdiv-mmm-response-energy-pod",
+      "snapshot_backend": "radia-cpp-mass-riesz-cg",
+      "snapshot_port_count": 10,
+      "physical_rhs_columns": 2,
+      "training_port_count": 8,
+      "port_names": [
+        "H_stator_x",
+        "H_stator_y",
+        "rsh_l1_x",
+        "rsh_l1_y",
+        "rsh_l1_z",
+        "rsh_l2_xy",
+        "rsh_l2_xz",
+        "rsh_l2_yz",
+        "rsh_l2_x2_y2",
+        "rsh_l2_z2"
+      ],
+      "normalize_ports": true,
+      "port_weights": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "snapshot_iterations": [
+        31,
+        32,
+        31,
+        32,
+        30,
+        31,
+        31,
+        31,
+        31,
+        31
+      ],
+      "snapshot_relative_residuals": [
+        9.590074138169289e-11,
+        4.918886466564447e-11,
+        9.590074138169289e-11,
+        4.918886466564447e-11,
+        9.907273200180178e-11,
+        6.303116352550526e-11,
+        5.93471796424981e-11,
+        6.113286713969517e-11,
+        6.116715774703044e-11,
+        5.4960134369759334e-11
+      ],
+      "max_snapshot_relative_residual": 9.907273200180178e-11,
+      "pod_rtol": 1e-10,
+      "protected_physical_modes": 2,
+      "protected_eigenvalues": [
+        1.2271239151186843,
+        0.7728760848813158
+      ],
+      "training_response_modes": 6,
+      "pod_eigenvalues": [
+        1.2368870680752129,
+        1.232025423921745,
+        1.192495702708239,
+        0.9999994495542476,
+        0.7634667301016544,
+        0.5751256256389025
+      ],
+      "available_modes": 8,
+      "retained_modes": 8,
+      "discarded_modes": 2,
+      "dependent_port_directions": 2,
+      "dependent_training_ports": [
+        "rsh_l1_x",
+        "rsh_l1_y"
+      ],
+      "pod_truncated_modes": 0,
+      "pod_truncation_curve": [
+        {
+          "rank": 1,
+          "max_all_response_relative_energy_error": 0.9999999995996194,
+          "rms_all_response_relative_energy_error": 0.8682542221422588,
+          "max_physical_response_relative_energy_error": 0.6216414098505834
+        },
+        {
+          "rank": 2,
+          "max_all_response_relative_energy_error": 0.9999998502142904,
+          "rms_all_response_relative_energy_error": 0.7553278301551536,
+          "max_physical_response_relative_energy_error": 5.853223428582957e-12
+        },
+        {
+          "rank": 3,
+          "max_all_response_relative_energy_error": 0.9999998176743182,
+          "rms_all_response_relative_energy_error": 0.6806955338243218,
+          "max_physical_response_relative_energy_error": 5.853223428582957e-12
+        },
+        {
+          "rank": 4,
+          "max_all_response_relative_energy_error": 0.9999995783050402,
+          "rms_all_response_relative_energy_error": 0.5843084898333107,
+          "max_physical_response_relative_energy_error": 5.853223428582957e-12
+        },
+        {
+          "rank": 5,
+          "max_all_response_relative_energy_error": 0.996438390862509,
+          "rms_all_response_relative_energy_error": 0.4713458521588161,
+          "max_physical_response_relative_energy_error": 5.853223428582957e-12
+        },
+        {
+          "rank": 6,
+          "max_all_response_relative_energy_error": 0.6130657774741207,
+          "rms_all_response_relative_energy_error": 0.35053776853127233,
+          "max_physical_response_relative_energy_error": 5.853223428582957e-12
+        },
+        {
+          "rank": 7,
+          "max_all_response_relative_energy_error": 0.4448789564354602,
+          "rms_all_response_relative_energy_error": 0.23981750974192548,
+          "max_physical_response_relative_energy_error": 5.853223428582957e-12
+        },
+        {
+          "rank": 8,
+          "max_all_response_relative_energy_error": 3.5396823630013044e-11,
+          "rms_all_response_relative_energy_error": 2.2032643797153776e-11,
+          "max_physical_response_relative_energy_error": 2.0779344405235583e-11
+        }
+      ],
+      "energy_orthonormality_error": 3.2865681680016514e-16,
+      "response_relative_energy_errors": [
+        2.0779344405235583e-11,
+        1.2546069026576822e-11,
+        2.0779344405235583e-11,
+        1.2546069026576822e-11,
+        2.157378372490249e-11,
+        3.4459703700047237e-11,
+        2.0503716659185232e-11,
+        1.505947058816113e-11,
+        1.108960889420952e-11,
+        3.5396823630013044e-11
+      ],
+      "max_response_relative_energy_error": 3.5396823630013044e-11,
+      "multipole_training": {
+        "family": "regular-solid-harmonic-gradient",
+        "count": 8,
+        "degrees": [
+          1,
+          1,
+          1,
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "degree_counts": {
+          "1": 3,
+          "2": 5
+        },
+        "names": [
+          "rsh_l1_x",
+          "rsh_l1_y",
+          "rsh_l1_z",
+          "rsh_l2_xy",
+          "rsh_l2_xz",
+          "rsh_l2_yz",
+          "rsh_l2_x2_y2",
+          "rsh_l2_z2"
+        ],
+        "center": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "radius": 0.8660254037844386
+      }
+    }
+  },
+  "mixed_system": {
+    "hdiv_modes": 8,
+    "hdiv_mmm_modes": 8,
+    "hcurl_vim_modes": 25,
+    "evrs_modes": 25,
+    "hybrid_blocks": {
+      "volume": [
+        0,
+        8
+      ],
+      "volume1": [
+        8,
+        22
+      ],
+      "surface": [
+        22,
+        25
+      ]
+    },
+    "eddy_basis_count": 3,
+    "eddy_basis_modes": [
+      8,
+      14,
+      3
+    ],
+    "eddy_block_roles": {
+      "volume": "bulk",
+      "volume1": "bridge",
+      "surface": "sibc"
+    },
+    "coupling_rows": 8,
+    "coupling_cols": 25,
+    "coupling_frobenius_norm": 1.8463942607071462e-06,
+    "has_shared_material_model": true,
+    "has_shared_mesh_material_model": true,
+    "has_magnetic_operator": true,
+    "has_magnetic_rhs": true,
+    "has_eddy_rhs": true,
+    "has_response_basis": true,
+    "response_basis": {
+      "ndof": 3557,
+      "active_dofs": 3557,
+      "rank": 8,
+      "port_visible_dofs": 8,
+      "eddy_visible_dofs": 8,
+      "compression_ratio": 0.002249086308687096,
+      "inactive_dofs": 0,
+      "port_invisible_dofs": 3549,
+      "eddy_invisible_dofs": 3549,
+      "eliminated_dofs": 3549,
+      "port_count": 2,
+      "krylov_steps": 8,
+      "construction": "ngsolve-operator-block-krylov+current-gram",
+      "parent_space": "HCurl",
+      "pre_current_gram_rank": 10,
+      "current_gram_rank": 8,
+      "current_gram_rtol": 1e-10,
+      "current_gram_relative_eigenvalues": [
+        1.0,
+        0.9176129445780496,
+        0.26182514684639574,
+        0.08426864591925563,
+        0.029852373973959637,
+        0.021143219024944725,
+        0.011407144428697068,
+        0.009573604661018472,
+        -1.5197170063140937e-16,
+        -2.3198435638527907e-16
+      ]
+    },
+    "has_eddy_bubbling": true,
+    "has_hdiv_reduction": true,
+    "hdiv_reduction": {
+      "parent_space": "HDiv",
+      "parent_family": "BDM",
+      "parent_order": 1,
+      "parent_ndof": 267,
+      "reduced_modes": 8,
+      "compression_ratio": 0.0299625468164794,
+      "mu_r": 1001.0,
+      "chi": 1000.0,
+      "materials": [
+        "cond"
+      ],
+      "mass_hermitian_error": 0.0,
+      "demag_hermitian_error": 0.0,
+      "operator_hermitian_error": 0.0,
+      "min_mass_eigenvalue": 2.4694116723544255,
+      "min_demag_eigenvalue": 0.9924824298374619,
+      "min_operator_eigenvalue": 0.9999999999999991,
+      "demag_frobenius_norm": 2.8163057427478333,
+      "has_rhs": true,
+      "rhs_columns": 2,
+      "demag_backend": "DemagOperator",
+      "demag_hmatrix_backend": "_ChargeGramHMatrix",
+      "demag_hmatrix_active": true,
+      "basis_generation": {
+        "construction": "hdiv-mmm-response-energy-pod",
+        "snapshot_backend": "radia-cpp-mass-riesz-cg",
+        "snapshot_port_count": 10,
+        "physical_rhs_columns": 2,
+        "training_port_count": 8,
+        "port_names": [
+          "H_stator_x",
+          "H_stator_y",
+          "rsh_l1_x",
+          "rsh_l1_y",
+          "rsh_l1_z",
+          "rsh_l2_xy",
+          "rsh_l2_xz",
+          "rsh_l2_yz",
+          "rsh_l2_x2_y2",
+          "rsh_l2_z2"
+        ],
+        "normalize_ports": true,
+        "port_weights": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "snapshot_iterations": [
+          31,
+          32,
+          31,
+          32,
+          30,
+          31,
+          31,
+          31,
+          31,
+          31
+        ],
+        "snapshot_relative_residuals": [
+          9.590074138169289e-11,
+          4.918886466564447e-11,
+          9.590074138169289e-11,
+          4.918886466564447e-11,
+          9.907273200180178e-11,
+          6.303116352550526e-11,
+          5.93471796424981e-11,
+          6.113286713969517e-11,
+          6.116715774703044e-11,
+          5.4960134369759334e-11
+        ],
+        "max_snapshot_relative_residual": 9.907273200180178e-11,
+        "pod_rtol": 1e-10,
+        "protected_physical_modes": 2,
+        "protected_eigenvalues": [
+          1.2271239151186843,
+          0.7728760848813158
+        ],
+        "training_response_modes": 6,
+        "pod_eigenvalues": [
+          1.2368870680752129,
+          1.232025423921745,
+          1.192495702708239,
+          0.9999994495542476,
+          0.7634667301016544,
+          0.5751256256389025
+        ],
+        "available_modes": 8,
+        "retained_modes": 8,
+        "discarded_modes": 2,
+        "dependent_port_directions": 2,
+        "dependent_training_ports": [
+          "rsh_l1_x",
+          "rsh_l1_y"
+        ],
+        "pod_truncated_modes": 0,
+        "pod_truncation_curve": [
+          {
+            "rank": 1,
+            "max_all_response_relative_energy_error": 0.9999999995996194,
+            "rms_all_response_relative_energy_error": 0.8682542221422588,
+            "max_physical_response_relative_energy_error": 0.6216414098505834
+          },
+          {
+            "rank": 2,
+            "max_all_response_relative_energy_error": 0.9999998502142904,
+            "rms_all_response_relative_energy_error": 0.7553278301551536,
+            "max_physical_response_relative_energy_error": 5.853223428582957e-12
+          },
+          {
+            "rank": 3,
+            "max_all_response_relative_energy_error": 0.9999998176743182,
+            "rms_all_response_relative_energy_error": 0.6806955338243218,
+            "max_physical_response_relative_energy_error": 5.853223428582957e-12
+          },
+          {
+            "rank": 4,
+            "max_all_response_relative_energy_error": 0.9999995783050402,
+            "rms_all_response_relative_energy_error": 0.5843084898333107,
+            "max_physical_response_relative_energy_error": 5.853223428582957e-12
+          },
+          {
+            "rank": 5,
+            "max_all_response_relative_energy_error": 0.996438390862509,
+            "rms_all_response_relative_energy_error": 0.4713458521588161,
+            "max_physical_response_relative_energy_error": 5.853223428582957e-12
+          },
+          {
+            "rank": 6,
+            "max_all_response_relative_energy_error": 0.6130657774741207,
+            "rms_all_response_relative_energy_error": 0.35053776853127233,
+            "max_physical_response_relative_energy_error": 5.853223428582957e-12
+          },
+          {
+            "rank": 7,
+            "max_all_response_relative_energy_error": 0.4448789564354602,
+            "rms_all_response_relative_energy_error": 0.23981750974192548,
+            "max_physical_response_relative_energy_error": 5.853223428582957e-12
+          },
+          {
+            "rank": 8,
+            "max_all_response_relative_energy_error": 3.5396823630013044e-11,
+            "rms_all_response_relative_energy_error": 2.2032643797153776e-11,
+            "max_physical_response_relative_energy_error": 2.0779344405235583e-11
+          }
+        ],
+        "energy_orthonormality_error": 3.2865681680016514e-16,
+        "response_relative_energy_errors": [
+          2.0779344405235583e-11,
+          1.2546069026576822e-11,
+          2.0779344405235583e-11,
+          1.2546069026576822e-11,
+          2.157378372490249e-11,
+          3.4459703700047237e-11,
+          2.0503716659185232e-11,
+          1.505947058816113e-11,
+          1.108960889420952e-11,
+          3.5396823630013044e-11
+        ],
+        "max_response_relative_energy_error": 3.5396823630013044e-11,
+        "multipole_training": {
+          "family": "regular-solid-harmonic-gradient",
+          "count": 8,
+          "degrees": [
+            1,
+            1,
+            1,
+            2,
+            2,
+            2,
+            2,
+            2
+          ],
+          "degree_counts": {
+            "1": 3,
+            "2": 5
+          },
+          "names": [
+            "rsh_l1_x",
+            "rsh_l1_y",
+            "rsh_l1_z",
+            "rsh_l2_xy",
+            "rsh_l2_xz",
+            "rsh_l2_yz",
+            "rsh_l2_x2_y2",
+            "rsh_l2_z2"
+          ],
+          "center": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "radius": 0.8660254037844386
+        }
+      }
+    },
+    "conductivity": 58000000.0
+  },
+  "eddy_bubbling": {
+    "rule": "topology-aware-eddy-bubbling",
+    "free_dofs": 3557,
+    "structural_keep_dofs": 1857,
+    "eddy_bubble_candidate_dofs": 1700,
+    "eddy_bubble_candidate_fraction": 0.4779308405960079,
+    "classes": {
+      "sibc_surface": 855,
+      "non_sibc_trace": 0,
+      "loop_bridge": 1002,
+      "ordinary_bulk_eddy_bubble": 1700
+    },
+    "policy": {
+      "ndof": 3557,
+      "free_dofs": 3557,
+      "sibc_surface_dofs": 903,
+      "surface_candidate_dofs": 903,
+      "non_sibc_trace_dofs": 0,
+      "loop_bridge_dofs": 1002,
+      "sibc_loop_bridge_overlap_dofs": 48,
+      "sibc_surface_only_dofs": 855,
+      "ordinary_evrs_candidate_dofs": 1700,
+      "partitioned_free_dofs": 3557,
+      "local_bubble_dofs": 1700,
+      "interface_dofs": 1780,
+      "wirebasket_dofs": 77,
+      "loop_bridge_fraction": 0.28169806016305876,
+      "sibc_surface_fraction": 0.25386561709305594,
+      "non_sibc_trace_fraction": 0.0,
+      "ordinary_evrs_fraction": 0.4779308405960079
+    },
+    "plan": {
+      "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+      "free_dofs": 3557,
+      "loop_bridge_keep_dofs": 1002,
+      "loop_bridge_reduced_modes": 14,
+      "loop_bridge_reduction_strategy": "cycle-basis",
+      "loop_bridge_reduction_savings": 988,
+      "sibc_surface_trace_dofs": 903,
+      "sibc_surface_only_dofs": 855,
+      "non_sibc_trace_dofs": 0,
+      "non_sibc_trace_modes": 0,
+      "sibc_loop_bridge_overlap_dofs": 48,
+      "ordinary_evrs_candidate_dofs": 1700,
+      "conservative_structural_keep_dofs": 1857,
+      "evrs_rank": 8,
+      "surface_modes": 3,
+      "conservative_estimated_reduced_modes": 1013,
+      "estimated_reduced_modes": 25,
+      "estimated_reduction_ratio": 0.007028394714647174,
+      "ordinary_evrs_candidate_fraction": 0.4779308405960079,
+      "conservative_structural_keep_fraction": 0.5220691594039921
+    },
+    "topology": {
+      "face_count": 89,
+      "roles": [
+        "conductor-conductor",
+        "conductor-exterior"
+      ],
+      "conductive_materials": [
+        "cond"
+      ],
+      "air_materials": [
+        "air",
+        "vacuum"
+      ],
+      "conductive_element_count": 34,
+      "conductive_component_count": 1,
+      "conductive_graph_edge_count": 47,
+      "conductive_graph_cycle_rank": 14,
+      "surface_face_count": 42,
+      "sibc_face_count": 42,
+      "non_sibc_trace_face_count": 0,
+      "loop_bridge_face_count": 47,
+      "conductor_exterior_face_count": 42,
+      "conductor_air_face_count": 0,
+      "conductor_insulator_face_count": 0,
+      "conductor_conductor_face_count": 47,
+      "conductive_interface_face_count": 0
+    },
+    "conductor_graph": {
+      "node_count": 34,
+      "edge_count": 47,
+      "component_count": 1,
+      "cycle_rank": 14,
+      "fundamental_cycle_count": 14,
+      "material_interface_edge_count": 0
+    },
+    "parent_order": 6,
+    "parent_order_ledger": {
+      "bulk_degree": 4,
+      "bridge_trace_degree": 0,
+      "surface_current_degree": 2,
+      "surface_omega_degree": 3,
+      "face_family": "simplex",
+      "bridge_trace_dim": 1,
+      "required_parent_order": 4,
+      "parent_order": 6,
+      "parent_order_admissible": true,
+      "parent_order_excess": 2,
+      "evrs_rank": 8,
+      "cycle_rank": 14,
+      "surface_modes": 3,
+      "non_sibc_trace_modes": 0,
+      "bridge_modes": 14,
+      "estimated_reduced_modes": 25
+    }
+  },
+  "frequency_rows": [
+    {
+      "frequency_Hz": 100.0,
+      "s": {
+        "real": 0.0,
+        "imag": 628.3185307179587
+      },
+      "surface_impedance": {
+        "real": 2.6089506942234867e-06,
+        "imag": 2.6089506942234867e-06
+      },
+      "n_excitations": 2,
+      "magnetization_modes": 8,
+      "eddy_modes": 25,
+      "parent_t_dofs": 3557,
+      "parent_hdiv_dofs": 267,
+      "eddy_blocks": [
+        "volume",
+        "volume1",
+        "surface"
+      ],
+      "eddy_block_roles": [
+        "bulk",
+        "bridge",
+        "sibc"
+      ],
+      "eddy_block_sample_counts": [
+        136,
+        47,
+        126
+      ],
+      "sampled_magnetization_norm": 80.10123444067969,
+      "sampled_eddy_current_norms": [
+        206385.77254137382,
+        22880.75512206047,
+        63204.288262426984
+      ],
+      "average_joule_loss": [
+        104.54466153684645,
+        121.8283566145246
+      ],
+      "residual_relative_norm": 4.69265509579196e-16,
+      "residual_backward_error": 2.5767823552599076e-20,
+      "solver_backend": "radia-cpp-dense-mixed-galerkin",
+      "orthogonalized_modes": 25,
+      "mixed_galerkin": {
+        "full_modes": 33,
+        "retained_modes": 25,
+        "eliminated_modes": 8,
+        "trial_orthogonality_relative_defect": 4.193928832668316e-21,
+        "test_orthogonality_relative_defect": 4.189605397448156e-21,
+        "schur_relative_error": 1.1102230116838849e-16,
+        "trial_test_relative_difference": 0.0,
+        "full_operator_condition": 2518650.393874507,
+        "reduced_operator_condition": 2502933.3049522913,
+        "kind": "mixed-galerkin-hdiv-hcurl",
+        "full_coupled_schur": true,
+        "hdiv_retained_modes": 8,
+        "hcurl_retained_modes": 17,
+        "hcurl_eliminated_modes": 8,
+        "keep_eddy_blocks": [
+          "volume1",
+          "surface"
+        ],
+        "eliminate_eddy_blocks": [
+          "volume"
+        ],
+        "hdiv_demag_backend": "DemagOperator",
+        "hdiv_demag_hmatrix_backend": "_ChargeGramHMatrix"
+      },
+      "mixed_operator_condition": 2518650.393874507,
+      "direct_solution_relative_error": 3.9708005015700605e-14,
+      "direct_port_response_relative_error": 4.557503069346765e-16,
+      "direct_joule_loss_relative_error": 3.191685196991952e-16,
+      "parent_t_coefficient_norm": 12220608.481619747,
+      "parent_hdiv_coefficient_norm": 15.148276847555552,
+      "eddy_flux_density_probe_T": {
+        "shape": [
+          2,
+          3
+        ],
+        "real": [
+          [
+            4.868466270394221e-07,
+            3.914265356351356e-07,
+            1.9315865977997043e-07
+          ],
+          [
+            1.0069311347093269e-08,
+            6.58743992698059e-07,
+            5.988793778166375e-07
+          ]
+        ],
+        "imag": [
+          [
+            -3.7944967084320246e-05,
+            -4.086630042901317e-05,
+            5.431806916618418e-05
+          ],
+          [
+            4.717836115132962e-05,
+            -3.902616562668163e-05,
+            -5.124158393787667e-05
+          ]
+        ]
+      },
+      "eddy_flux_density_probe_norm_T": 0.00011151720589587438,
+      "port_response": {
+        "shape": [
+          2,
+          2
+        ],
+        "real": [
+          [
+            211.91759474878586,
+            6.1365943733635255
+          ],
+          [
+            6.136594373363435,
+            246.48517811977075
+          ]
+        ],
+        "imag": [
+          [
+            -9190.707421181636,
+            1532.040301090106
+          ],
+          [
+            1532.040301090107,
+            -10360.967583518657
+          ]
+        ]
+      }
+    },
+    {
+      "frequency_Hz": 10000.0,
+      "s": {
+        "real": 0.0,
+        "imag": 62831.853071795864
+      },
+      "surface_impedance": {
+        "real": 2.6089506942234868e-05,
+        "imag": 2.6089506942234868e-05
+      },
+      "n_excitations": 2,
+      "magnetization_modes": 8,
+      "eddy_modes": 25,
+      "parent_t_dofs": 3557,
+      "parent_hdiv_dofs": 267,
+      "eddy_blocks": [
+        "volume",
+        "volume1",
+        "surface"
+      ],
+      "eddy_block_roles": [
+        "bulk",
+        "bridge",
+        "sibc"
+      ],
+      "eddy_block_sample_counts": [
+        136,
+        47,
+        126
+      ],
+      "sampled_magnetization_norm": 80.09896026027577,
+      "sampled_eddy_current_norms": [
+        2053.995959276271,
+        234.34719547699962,
+        660.4220518494722
+      ],
+      "average_joule_loss": [
+        0.11270992806214084,
+        0.13238385040370101
+      ],
+      "residual_relative_norm": 4.599015851590773e-16,
+      "residual_backward_error": 2.4969897502957002e-18,
+      "solver_backend": "radia-cpp-dense-mixed-galerkin",
+      "orthogonalized_modes": 25,
+      "mixed_galerkin": {
+        "full_modes": 33,
+        "retained_modes": 25,
+        "eliminated_modes": 8,
+        "trial_orthogonality_relative_defect": 1.8939766677848209e-19,
+        "test_orthogonality_relative_defect": 1.877797678468697e-19,
+        "schur_relative_error": 3.9249620373105093e-17,
+        "trial_test_relative_difference": 0.0,
+        "full_operator_condition": 25313.244185447158,
+        "reduced_operator_condition": 25148.948182193406,
+        "kind": "mixed-galerkin-hdiv-hcurl",
+        "full_coupled_schur": true,
+        "hdiv_retained_modes": 8,
+        "hcurl_retained_modes": 17,
+        "hcurl_eliminated_modes": 8,
+        "keep_eddy_blocks": [
+          "volume1",
+          "surface"
+        ],
+        "eliminate_eddy_blocks": [
+          "volume"
+        ],
+        "hdiv_demag_backend": "DemagOperator",
+        "hdiv_demag_hmatrix_backend": "_ChargeGramHMatrix"
+      },
+      "mixed_operator_condition": 25313.244185447158,
+      "direct_solution_relative_error": 2.4744132084284863e-14,
+      "direct_port_response_relative_error": 6.981893102201494e-16,
+      "direct_joule_loss_relative_error": 8.140009990151484e-16,
+      "parent_t_coefficient_norm": 121410.8818665096,
+      "parent_hdiv_coefficient_norm": 15.147723474495177,
+      "eddy_flux_density_probe_T": {
+        "shape": [
+          2,
+          3
+        ],
+        "real": [
+          [
+            5.105797449663709e-10,
+            4.180066455879074e-10,
+            2.3496424843698443e-10
+          ],
+          [
+            5.223408605688581e-11,
+            7.253077296849102e-10,
+            6.243642843172279e-10
+          ]
+        ],
+        "imag": [
+          [
+            -3.8405334858330656e-07,
+            -4.1243408197060926e-07,
+            5.410287462960003e-07
+          ],
+          [
+            4.71288169505722e-07,
+            -3.968225512056114e-07,
+            -5.18029541108128e-07
+          ]
+        ]
+      },
+      "eddy_flux_density_probe_norm_T": 1.1217163819030127e-06,
+      "port_response": {
+        "shape": [
+          2,
+          2
+        ],
+        "real": [
+          [
+            3.0537158524764627,
+            -0.6339959426684354
+          ],
+          [
+            -0.633995942668437,
+            3.0932625851667743
+          ]
+        ],
+        "imag": [
+          [
+            -93.9440953592606,
+            15.243115521598213
+          ],
+          [
+            15.243115521598206,
+            -106.00218189465429
+          ]
+        ]
+      }
+    }
+  ],
+  "checks": {
+    "parent_order_admissible": true,
+    "hdiv_parent_order_admissible": true,
+    "all_rhs_scaled_residuals_below_1e-8": true,
+    "all_backward_errors_below_1e-12": true,
+    "all_losses_nonnegative": true,
+    "all_eddy_flux_density_probes_finite": true,
+    "parent_t_reconstructed": true,
+    "parent_hdiv_reconstructed": true,
+    "demag_operator_is_active": true,
+    "reduced_magnetic_operator_is_positive": true,
+    "hdiv_response_snapshots_converged": true,
+    "hdiv_training_responses_preserved": true,
+    "production_bdm_family_locked": true,
+    "physical_hdiv_responses_are_protected": true,
+    "all_three_eddy_blocks_reconstructed": true,
+    "current_gram_rank_is_consistent": true,
+    "bulk_current_gram_is_identity": true,
+    "adjacency_roles_drive_reduction": true,
+    "full_coupled_mixed_galerkin_is_exact": true,
+    "hdiv_hacapk_charge_gram_is_active": true,
+    "passed": true
+  },
+  "elapsed_seconds": 6.418827599845827
+}

@@ -1,0 +1,389 @@
+{
+  "schema": "radia.hacapk-full-cuda-subgates.v1",
+  "accepted_subgates": true,
+  "general_hdiv_validation_complete": false,
+  "release_accepted": false,
+  "scope": "Constant affine tetra/triangle analytic charges, complete native hierarchy and CUDA entry generation; bounded affine RT0 physical solve",
+  "build": {
+    "schema": "radia.hmatrix-cuda-build.v1",
+    "accepted": true,
+    "source_dirty": false,
+    "source_commit": "9848756305109fe9e9a0dfd0e2841c4db4312ce3",
+    "source_sha256": {
+      "packages/radia-gpu/native/radia_cuda_hmatrix.cu": "13a36695b575455398408406540c927298c558b7b96f771d1938e1226dbfb540",
+      "packages/radia-gpu/native/hmatrix_resident.cuh": "ed2017f9fc0e4b06e6e2b9ae21e29130992a0a6314f58b8a2c736ca3142e69c4",
+      "packages/radia-gpu/native/hmatrix_hacapk_pack.cuh": "d3a33f64983f9bc50dab42be378924d61c38e74385c7caa23894d58c175264fb",
+      "packages/radia-gpu/native/hmatrix_entry_oracle.cuh": "f001674a50a599333cea7ace17da712fcef59ce7b226842b875fa23a3531542d",
+      "packages/radia-gpu/native/hmatrix_aca_callback.cuh": "0ef38272e639947d15151ff60136059645a7fcff2f2f83b1030ca2a62438812c",
+      "src/ext/HACApK/cHACApK_calc_entry_ij.h": "fad71d96a59e5c4ec7096224ae7e41ac45febe9e033ced29a3bff30c2dc7dc65",
+      "src/ext/HACApK/cHACApK_base.h": "0feb4603a640d028ff0cfc44ca1d0240552c3633f3fc4a3f33658ac7cac255c5",
+      "packages/radia-gpu/native/analytic_matrix_build.cuh": "31df893ee5007867455d4236a794a2e19caaed1118c59a412d457116de59e2e1",
+      "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127",
+      "src/core/rad_charge_quadrature.h": "f96cf5b92c6b4c26555cb4413e9efbe5e89754dc16ad9d502afecd09f1ee4989",
+      "src/core/rad_hdiv_vim.h": "bcc63c34546f21ab8fd65e39e6b6668fe687b217d62c1d61229653b5cad19308",
+      "src/core/rad_field_cloud_kernel.h": "af0fc87f58921c6368e5fbb448b372bea7fe40eef2bcff77f9508e09de374834",
+      "src/core/rad_hdiv_field_math.inc": "082adedb5c9a80d222bea026f4756aa4ea14d1e127774a4a7aff7867f8e8205e",
+      "src/core/rad_hdiv_field_kernel_api.inc": "18eb7b6468488c92a6e84a0be6ca7a97ddc6ab5eb4d0342b3453f210d024d589",
+      "src/core/rad_field_source_kernel.inc": "cb8bec501a06ad1d80712371fb4b7c97d4edcb7cb14a8aa67e22ea0cf4919fb8",
+      "packages/radia-gpu/tools/build_hmatrix_cuda.py": "1a022ecae4a07764826da81c02e8f4e7372ec72f670a5a6ec6602a9a990d47f7",
+      "Build.ps1": "d07bc37be18b411066c7779a585da4a16b488bc5343ab6cffb0c6758fb945de5",
+      "src/ext/HACApK/cHACApK_base.c": "f54be7f724c3ec7af705273f27e7adfb7858c8527b876ebeb0b2dac4405ee7e3",
+      "src/ext/HACApK/cHACApK_aca.inc": "72f78d46b4d4da59522faa6e3ff63b33597fa07bcddf5dd53530ef643fb14b7e",
+      "packages/radia-gpu/native/hmatrix_aca_host.c": "19d1d3ad7948f86b4ce63a8cbff9ae47e82386e17b95a4954d6c9fac65bb8100",
+      "src/ext/HACApK/cHACApK_lib.c": "94bcef9be652932b29785c417b446b91b984c5e92e41f8c55fb49a08df0e0cb8",
+      "src/core/rad_hacapk_parallel.h": "76a31060959b87db46dadeb247a4186b5a533ff7b1a742d27013fbc1c75ecf9d",
+      "src/ext/HACApK/cHACApK_block_tree.h": "84ece12e48084b36cf209fc2bf9e85a319ce5f19fe2d07fc2d42c850c0f5209a",
+      "src/ext/HACApK/cHACApK_cpp.h": "a0d11801e0bcbb5f4faa893e994ba8f3bd3baf0aa203031124192c38c9034c86",
+      "src/ext/HACApK/cHACApK_harith.h": "b8295d8c8fe427cef7517daa64e695b678302150f1b6a1306a5fd642fc71a18b",
+      "src/ext/HACApK/cHACApK_lib.h": "bd128cbf005444096be5a860bbbcaa23b57fac3f55890725ada5abf5646c9688",
+      "src/ext/HACApK/cHACApK_pca_cluster.h": "177ba81580c0ca5cec8996d32c55f17b3ecc224a21dd0296f05712b1d88a82ba",
+      "src/ext/HACApK/hacapk_log.h": "1b214205bf87ece8acb939c2a4694eea8466e22469ce4c4b2dc36eae2584b146",
+      "src/ext/HACApK/mpi_stub.h": "7f714678b49169e92b221f615d64e4c9f1192ba4bcda30fd7290cab2ad021dcf",
+      "packages/radia-gpu/native/hmatrix_material_solver.cuh": "2710bb8670c27a1a0028cff9c596876a81512bd4f5bc1b0c76add6046315730d",
+      "packages/radia-gpu/native/hmatrix_full_assembly.cuh": "4f91175ef07fe9a1dc8741f562a40c0e21921010ed6ed4e451631159f161bf63",
+      "packages/radia-gpu/native/hmatrix_serial_host.c": "2d18961c058a624d9d4d5f0bff2bf65360e81ba61a1f086963a6985dab91f2e5",
+      "src/ext/HACApK/cHACApK_cpp_impl.c": "daea8270a5204c366a68daf475e9a895757a4d71d71971c205a75ebf1140c8ee",
+      "src/ext/HACApK/cHACApK_pca_cluster.c": "f942f053d6742ce4a530a87cce6c2fba41bdbfdbdbc13032cb244cbc0eccb1d2"
+    },
+    "a100_used": false,
+    "scope": "Resident numeric HACApK leaf application only; assembly/physical solver not accepted",
+    "mkl_import_library_sha256": "47bde98a96791544094778455dd312c046b8087b15ca962b146c0b8abe7f9a45",
+    "matlab": "26.1.0.3346908 (R2026a) Update 5",
+    "binary_sha256": "c2c5819bbf3b45cee75e14ad656eba9816335d311b2175deff08dbacc3ffc1c0",
+    "cuda_targets": [
+      "sm_75",
+      "sm_80",
+      "compute_80 PTX"
+    ],
+    "taskmanager_started": false,
+    "python_runtime_required": false
+  },
+  "cpu_oracle": {
+    "module": "radia._radia_pybind",
+    "binary_sha256": "7871a3df0172de256235cf6eeeba31bd3269d2b1305d0632c7fa2df4c1e31275",
+    "ngsolve": "6.2.2607",
+    "note": "Independent installed public CPU reference: sampled and integrated constant-tet/triangle Gram"
+  },
+  "input_sha256": "6bfa403a0adc3c0dff9c24069b8167d161f4f65aff0079d88303744358f4ba90",
+  "full_assembly": {
+    "relative_difference": 1.4393232540254754e-11,
+    "stats": {
+      "owned_device_bytes": 99688,
+      "applications": 1,
+      "kernel_launches": 4,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 292324,
+      "assembly_entry_batches": 113,
+      "assembly_entry_count": 14272,
+      "assembly_leaf_count": 7,
+      "assembly_lowrank_count": 0
+    },
+    "scope": "Constant affine tetra charges; full native hierarchy and CUDA entries; not general HDiv physics"
+  },
+  "compression_limitations": "All selected low-rank leaves in the 132-charge strict-tolerance case were promoted to exact dense at the rank budget. No compressed-leaf success claim.",
+  "whole_solve_diagnostic": {
+    "accepted": true,
+    "classification": "Idle-100 diagnostic, not formal historical_cpu_worker acceptance",
+    "scope": "Eight affine tetra RT0 FE setup through CUDA HACApK/material solve/result recovery/release; not general HDiv",
+    "cold_limitations": "First payload per module in an initialized owned MATLAB process, not cold process",
+    "memory_limitations": "Exact owned buffers plus available-memory samples; excludes cuBLAS/runtime and host/global peaks",
+    "hashes": {
+      "mesh": "a298e82dc1da9c31049340e780a0d52f0db17785a6466ced1b0c41c564f03858",
+      "cpu_reference": "4165539c9b3a0e68a77a07a9b46ff31ccbc895462d904e2c267dd369ef1b4203",
+      "projection": "0ba3ab177f72b1eebc826b2761f4a6e679f1c37b10fb1cf132a463017108e4aa",
+      "wrapper": "576a736903c29005077aab4161b44d2dae580d313f51b02810ecf9aa71c4b026",
+      "matlab_runner": "185da5a487f2a9d6b751450e55e3219faa438c192a0c79b31ae3bbe7cfa30d05",
+      "python_runner": "f0bd25105c5cf6e2e9dbf0ed901a3d65314bb7e563637cc03f55cd6f95fe8699"
+    },
+    "before_build": {
+      "schema": "radia.hmatrix-cuda-build.v1",
+      "accepted": true,
+      "source_dirty": false,
+      "source_commit": "36499aecafc13a3cddf41a7e7c6eef272fb63544",
+      "source_sha256": {
+        "packages/radia-gpu/native/radia_cuda_hmatrix.cu": "596979083eabfc3bae81b4723dcb03d39197ef6ce89b2535b8bf48521bc319e3",
+        "packages/radia-gpu/native/hmatrix_resident.cuh": "d30246d09c4efbf4dce3c994a777b6cd8f62b84653ac7a7a339efd63c3d784ae",
+        "packages/radia-gpu/native/hmatrix_hacapk_pack.cuh": "d3a33f64983f9bc50dab42be378924d61c38e74385c7caa23894d58c175264fb",
+        "packages/radia-gpu/native/hmatrix_entry_oracle.cuh": "f001674a50a599333cea7ace17da712fcef59ce7b226842b875fa23a3531542d",
+        "packages/radia-gpu/native/hmatrix_aca_callback.cuh": "0ef38272e639947d15151ff60136059645a7fcff2f2f83b1030ca2a62438812c",
+        "src/ext/HACApK/cHACApK_calc_entry_ij.h": "fad71d96a59e5c4ec7096224ae7e41ac45febe9e033ced29a3bff30c2dc7dc65",
+        "src/ext/HACApK/cHACApK_base.h": "0feb4603a640d028ff0cfc44ca1d0240552c3633f3fc4a3f33658ac7cac255c5",
+        "packages/radia-gpu/native/analytic_matrix_build.cuh": "31df893ee5007867455d4236a794a2e19caaed1118c59a412d457116de59e2e1",
+        "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127",
+        "src/core/rad_charge_quadrature.h": "f96cf5b92c6b4c26555cb4413e9efbe5e89754dc16ad9d502afecd09f1ee4989",
+        "src/core/rad_hdiv_vim.h": "bcc63c34546f21ab8fd65e39e6b6668fe687b217d62c1d61229653b5cad19308",
+        "src/core/rad_field_cloud_kernel.h": "af0fc87f58921c6368e5fbb448b372bea7fe40eef2bcff77f9508e09de374834",
+        "src/core/rad_hdiv_field_math.inc": "082adedb5c9a80d222bea026f4756aa4ea14d1e127774a4a7aff7867f8e8205e",
+        "src/core/rad_hdiv_field_kernel_api.inc": "18eb7b6468488c92a6e84a0be6ca7a97ddc6ab5eb4d0342b3453f210d024d589",
+        "src/core/rad_field_source_kernel.inc": "cb8bec501a06ad1d80712371fb4b7c97d4edcb7cb14a8aa67e22ea0cf4919fb8",
+        "packages/radia-gpu/tools/build_hmatrix_cuda.py": "1a022ecae4a07764826da81c02e8f4e7372ec72f670a5a6ec6602a9a990d47f7",
+        "Build.ps1": "d07bc37be18b411066c7779a585da4a16b488bc5343ab6cffb0c6758fb945de5",
+        "src/ext/HACApK/cHACApK_base.c": "2d46f3d08133eddf75aa90bdc9bf40b97119bce9e5a09a7f77f0712a52884f20",
+        "src/ext/HACApK/cHACApK_aca.inc": "72f78d46b4d4da59522faa6e3ff63b33597fa07bcddf5dd53530ef643fb14b7e",
+        "packages/radia-gpu/native/hmatrix_aca_host.c": "19d1d3ad7948f86b4ce63a8cbff9ae47e82386e17b95a4954d6c9fac65bb8100",
+        "src/ext/HACApK/cHACApK_lib.c": "94bcef9be652932b29785c417b446b91b984c5e92e41f8c55fb49a08df0e0cb8",
+        "src/core/rad_hacapk_parallel.h": "76a31060959b87db46dadeb247a4186b5a533ff7b1a742d27013fbc1c75ecf9d",
+        "src/ext/HACApK/cHACApK_block_tree.h": "84ece12e48084b36cf209fc2bf9e85a319ce5f19fe2d07fc2d42c850c0f5209a",
+        "src/ext/HACApK/cHACApK_cpp.h": "a0d11801e0bcbb5f4faa893e994ba8f3bd3baf0aa203031124192c38c9034c86",
+        "src/ext/HACApK/cHACApK_harith.h": "b8295d8c8fe427cef7517daa64e695b678302150f1b6a1306a5fd642fc71a18b",
+        "src/ext/HACApK/cHACApK_lib.h": "bd128cbf005444096be5a860bbbcaa23b57fac3f55890725ada5abf5646c9688",
+        "src/ext/HACApK/cHACApK_pca_cluster.h": "177ba81580c0ca5cec8996d32c55f17b3ecc224a21dd0296f05712b1d88a82ba",
+        "src/ext/HACApK/hacapk_log.h": "1b214205bf87ece8acb939c2a4694eea8466e22469ce4c4b2dc36eae2584b146",
+        "src/ext/HACApK/mpi_stub.h": "7f714678b49169e92b221f615d64e4c9f1192ba4bcda30fd7290cab2ad021dcf",
+        "packages/radia-gpu/native/hmatrix_material_solver.cuh": "2710bb8670c27a1a0028cff9c596876a81512bd4f5bc1b0c76add6046315730d",
+        "packages/radia-gpu/native/hmatrix_full_assembly.cuh": "6114377507b57fb6b276e91aa5de98b5407499392c8fb001dad99385fe8b9ebc",
+        "packages/radia-gpu/native/hmatrix_serial_host.c": "2d18961c058a624d9d4d5f0bff2bf65360e81ba61a1f086963a6985dab91f2e5",
+        "src/ext/HACApK/cHACApK_cpp_impl.c": "daea8270a5204c366a68daf475e9a895757a4d71d71971c205a75ebf1140c8ee",
+        "src/ext/HACApK/cHACApK_pca_cluster.c": "f942f053d6742ce4a530a87cce6c2fba41bdbfdbdbc13032cb244cbc0eccb1d2"
+      },
+      "a100_used": false,
+      "scope": "Resident numeric HACApK leaf application only; assembly/physical solver not accepted",
+      "mkl_import_library_sha256": "47bde98a96791544094778455dd312c046b8087b15ca962b146c0b8abe7f9a45",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "binary_sha256": "77de8a9f0885fc4c43aea4c4a1131949df603354223f91caa16518f2367f6026",
+      "cuda_targets": [
+        "sm_75",
+        "sm_80",
+        "compute_80 PTX"
+      ],
+      "taskmanager_started": false,
+      "python_runtime_required": false
+    },
+    "after_build": {
+      "schema": "radia.hmatrix-cuda-build.v1",
+      "accepted": true,
+      "source_dirty": false,
+      "source_commit": "9848756305109fe9e9a0dfd0e2841c4db4312ce3",
+      "source_sha256": {
+        "packages/radia-gpu/native/radia_cuda_hmatrix.cu": "13a36695b575455398408406540c927298c558b7b96f771d1938e1226dbfb540",
+        "packages/radia-gpu/native/hmatrix_resident.cuh": "ed2017f9fc0e4b06e6e2b9ae21e29130992a0a6314f58b8a2c736ca3142e69c4",
+        "packages/radia-gpu/native/hmatrix_hacapk_pack.cuh": "d3a33f64983f9bc50dab42be378924d61c38e74385c7caa23894d58c175264fb",
+        "packages/radia-gpu/native/hmatrix_entry_oracle.cuh": "f001674a50a599333cea7ace17da712fcef59ce7b226842b875fa23a3531542d",
+        "packages/radia-gpu/native/hmatrix_aca_callback.cuh": "0ef38272e639947d15151ff60136059645a7fcff2f2f83b1030ca2a62438812c",
+        "src/ext/HACApK/cHACApK_calc_entry_ij.h": "fad71d96a59e5c4ec7096224ae7e41ac45febe9e033ced29a3bff30c2dc7dc65",
+        "src/ext/HACApK/cHACApK_base.h": "0feb4603a640d028ff0cfc44ca1d0240552c3633f3fc4a3f33658ac7cac255c5",
+        "packages/radia-gpu/native/analytic_matrix_build.cuh": "31df893ee5007867455d4236a794a2e19caaed1118c59a412d457116de59e2e1",
+        "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127",
+        "src/core/rad_charge_quadrature.h": "f96cf5b92c6b4c26555cb4413e9efbe5e89754dc16ad9d502afecd09f1ee4989",
+        "src/core/rad_hdiv_vim.h": "bcc63c34546f21ab8fd65e39e6b6668fe687b217d62c1d61229653b5cad19308",
+        "src/core/rad_field_cloud_kernel.h": "af0fc87f58921c6368e5fbb448b372bea7fe40eef2bcff77f9508e09de374834",
+        "src/core/rad_hdiv_field_math.inc": "082adedb5c9a80d222bea026f4756aa4ea14d1e127774a4a7aff7867f8e8205e",
+        "src/core/rad_hdiv_field_kernel_api.inc": "18eb7b6468488c92a6e84a0be6ca7a97ddc6ab5eb4d0342b3453f210d024d589",
+        "src/core/rad_field_source_kernel.inc": "cb8bec501a06ad1d80712371fb4b7c97d4edcb7cb14a8aa67e22ea0cf4919fb8",
+        "packages/radia-gpu/tools/build_hmatrix_cuda.py": "1a022ecae4a07764826da81c02e8f4e7372ec72f670a5a6ec6602a9a990d47f7",
+        "Build.ps1": "d07bc37be18b411066c7779a585da4a16b488bc5343ab6cffb0c6758fb945de5",
+        "src/ext/HACApK/cHACApK_base.c": "f54be7f724c3ec7af705273f27e7adfb7858c8527b876ebeb0b2dac4405ee7e3",
+        "src/ext/HACApK/cHACApK_aca.inc": "72f78d46b4d4da59522faa6e3ff63b33597fa07bcddf5dd53530ef643fb14b7e",
+        "packages/radia-gpu/native/hmatrix_aca_host.c": "19d1d3ad7948f86b4ce63a8cbff9ae47e82386e17b95a4954d6c9fac65bb8100",
+        "src/ext/HACApK/cHACApK_lib.c": "94bcef9be652932b29785c417b446b91b984c5e92e41f8c55fb49a08df0e0cb8",
+        "src/core/rad_hacapk_parallel.h": "76a31060959b87db46dadeb247a4186b5a533ff7b1a742d27013fbc1c75ecf9d",
+        "src/ext/HACApK/cHACApK_block_tree.h": "84ece12e48084b36cf209fc2bf9e85a319ce5f19fe2d07fc2d42c850c0f5209a",
+        "src/ext/HACApK/cHACApK_cpp.h": "a0d11801e0bcbb5f4faa893e994ba8f3bd3baf0aa203031124192c38c9034c86",
+        "src/ext/HACApK/cHACApK_harith.h": "b8295d8c8fe427cef7517daa64e695b678302150f1b6a1306a5fd642fc71a18b",
+        "src/ext/HACApK/cHACApK_lib.h": "bd128cbf005444096be5a860bbbcaa23b57fac3f55890725ada5abf5646c9688",
+        "src/ext/HACApK/cHACApK_pca_cluster.h": "177ba81580c0ca5cec8996d32c55f17b3ecc224a21dd0296f05712b1d88a82ba",
+        "src/ext/HACApK/hacapk_log.h": "1b214205bf87ece8acb939c2a4694eea8466e22469ce4c4b2dc36eae2584b146",
+        "src/ext/HACApK/mpi_stub.h": "7f714678b49169e92b221f615d64e4c9f1192ba4bcda30fd7290cab2ad021dcf",
+        "packages/radia-gpu/native/hmatrix_material_solver.cuh": "2710bb8670c27a1a0028cff9c596876a81512bd4f5bc1b0c76add6046315730d",
+        "packages/radia-gpu/native/hmatrix_full_assembly.cuh": "4f91175ef07fe9a1dc8741f562a40c0e21921010ed6ed4e451631159f161bf63",
+        "packages/radia-gpu/native/hmatrix_serial_host.c": "2d18961c058a624d9d4d5f0bff2bf65360e81ba61a1f086963a6985dab91f2e5",
+        "src/ext/HACApK/cHACApK_cpp_impl.c": "daea8270a5204c366a68daf475e9a895757a4d71d71971c205a75ebf1140c8ee",
+        "src/ext/HACApK/cHACApK_pca_cluster.c": "f942f053d6742ce4a530a87cce6c2fba41bdbfdbdbc13032cb244cbc0eccb1d2"
+      },
+      "a100_used": false,
+      "scope": "Resident numeric HACApK leaf application only; assembly/physical solver not accepted",
+      "mkl_import_library_sha256": "47bde98a96791544094778455dd312c046b8087b15ca962b146c0b8abe7f9a45",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "binary_sha256": "c2c5819bbf3b45cee75e14ad656eba9816335d311b2175deff08dbacc3ffc1c0",
+      "cuda_targets": [
+        "sm_75",
+        "sm_80",
+        "compute_80 PTX"
+      ],
+      "taskmanager_started": false,
+      "python_runtime_required": false
+    },
+    "result": {
+      "accepted": true,
+      "cold_payloads": [
+        {
+          "mode": 1,
+          "whole_seconds": 1.4937597,
+          "coefficient_relative_error": 1.125819709077238e-11,
+          "independent_true_residual": 9.728529584201392e-12,
+          "iterations": 21,
+          "owned_peak_device_bytes": 28996,
+          "available_device_bytes_before": 16004415488.0,
+          "available_device_bytes_after": 16002318336.0
+        },
+        {
+          "mode": 2,
+          "whole_seconds": 0.0482886,
+          "coefficient_relative_error": 1.125819709077238e-11,
+          "independent_true_residual": 9.728529584201392e-12,
+          "iterations": 21,
+          "owned_peak_device_bytes": 28996,
+          "available_device_bytes_before": 16002318336.0,
+          "available_device_bytes_after": 16002318336.0
+        }
+      ],
+      "samples": [
+        {
+          "mode": 1,
+          "whole_seconds": 1.3017768,
+          "coefficient_relative_error": 1.125819709077238e-11,
+          "independent_true_residual": 9.728529584201392e-12,
+          "iterations": 21,
+          "owned_peak_device_bytes": 28996,
+          "available_device_bytes_before": 16002318336.0,
+          "available_device_bytes_after": 16002318336.0
+        },
+        {
+          "mode": 2,
+          "whole_seconds": 0.0477051,
+          "coefficient_relative_error": 1.125819709077238e-11,
+          "independent_true_residual": 9.728529584201392e-12,
+          "iterations": 21,
+          "owned_peak_device_bytes": 28996,
+          "available_device_bytes_before": 16002318336.0,
+          "available_device_bytes_after": 16002318336.0
+        },
+        {
+          "mode": 2,
+          "whole_seconds": 0.0537613,
+          "coefficient_relative_error": 1.125819709077238e-11,
+          "independent_true_residual": 9.728529584201392e-12,
+          "iterations": 21,
+          "owned_peak_device_bytes": 28996,
+          "available_device_bytes_before": 16002318336.0,
+          "available_device_bytes_after": 16002318336.0
+        },
+        {
+          "mode": 1,
+          "whole_seconds": 1.3030053,
+          "coefficient_relative_error": 1.125819709077238e-11,
+          "independent_true_residual": 9.728529584201392e-12,
+          "iterations": 21,
+          "owned_peak_device_bytes": 28996,
+          "available_device_bytes_before": 16002318336.0,
+          "available_device_bytes_after": 16002318336.0
+        },
+        {
+          "mode": 1,
+          "whole_seconds": 1.304256,
+          "coefficient_relative_error": 1.125819709077238e-11,
+          "independent_true_residual": 9.728529584201392e-12,
+          "iterations": 21,
+          "owned_peak_device_bytes": 28996,
+          "available_device_bytes_before": 16002318336.0,
+          "available_device_bytes_after": 16002318336.0
+        },
+        {
+          "mode": 2,
+          "whole_seconds": 0.0482318,
+          "coefficient_relative_error": 1.125819709077238e-11,
+          "independent_true_residual": 9.728529584201392e-12,
+          "iterations": 21,
+          "owned_peak_device_bytes": 28996,
+          "available_device_bytes_before": 16002318336.0,
+          "available_device_bytes_after": 16002318336.0
+        },
+        {
+          "mode": 2,
+          "whole_seconds": 0.0479209,
+          "coefficient_relative_error": 1.125819709077238e-11,
+          "independent_true_residual": 9.728529584201392e-12,
+          "iterations": 21,
+          "owned_peak_device_bytes": 28996,
+          "available_device_bytes_before": 16002318336.0,
+          "available_device_bytes_after": 16002318336.0
+        },
+        {
+          "mode": 1,
+          "whole_seconds": 1.3126334,
+          "coefficient_relative_error": 1.125819709077238e-11,
+          "independent_true_residual": 9.728529584201392e-12,
+          "iterations": 21,
+          "owned_peak_device_bytes": 28996,
+          "available_device_bytes_before": 16002318336.0,
+          "available_device_bytes_after": 16002318336.0
+        }
+      ]
+    },
+    "matlab": "26.1.0.3346908 (R2026a) Update 5",
+    "median_whole_seconds": {
+      "1": 1.3036306500000001,
+      "2": 0.048076350000000004
+    }
+  },
+  "diagnostic_speedup": 27.115840740821632,
+  "a100_same_artifact": {
+    "accepted": true,
+    "matlab": "26.1.0.3203278 (R2026a)",
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "driver": "591.59",
+    "sha256": {
+      "radia_cuda_hmatrix.mexw64": "c2c5819bbf3b45cee75e14ad656eba9816335d311b2175deff08dbacc3ffc1c0",
+      "build.json": "9fb0ecf3bca5b279dc93d3edb98221046b19ef9ceee6c3557c1eba77d7019e8d",
+      "inputs.mat": "6bfa403a0adc3c0dff9c24069b8167d161f4f65aff0079d88303744358f4ba90",
+      "checkResidentHMatrix.m": "6e9e7864b3adfcc33622588dc1f745350c27a7f05250cd8e7b8fc44afc85387e",
+      "validate_same_artifact.py": "8bfd41b4ac1897351c53c7ff03d248019823116d1cbe82a9e91074255b110f61",
+      "matlab/+radia/+gpu/HMatrixOperator.m": "d98a77641d51eea484cefc8d9ee5b12d03395725b3ac7ccda8150e242933052a",
+      "runtime/mkl_rt.3.dll": "0ade2b44b4786fa3e4ed19c1e81fa2e2ac975093e373674db52f5db57d6e54b2",
+      "runtime/mkl_core.3.dll": "4c629fe2e3b8a1b23d536a7cbb73827f5d8bd0198d81358b5cc2eee7d0bab765",
+      "runtime/mkl_sequential.3.dll": "f4fd8034c1cc80b0a2342902c42427909834c313b00d05511e3b41516ff4140f"
+    },
+    "full_assembly": {
+      "relative_difference": 1.4393232540254754e-11,
+      "stats": {
+        "owned_device_bytes": 99688,
+        "applications": 1,
+        "kernel_launches": 4,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 292324,
+        "assembly_entry_batches": 113,
+        "assembly_entry_count": 14272,
+        "assembly_leaf_count": 7,
+        "assembly_lowrank_count": 0
+      },
+      "scope": "Constant affine tetra charges; full native hierarchy and CUDA entries; not general HDiv physics"
+    },
+    "material_solver": [
+      {
+        "relative_error": 1.0302340608294064e-15,
+        "independent_true_residual": 1.3440496909367178e-15,
+        "solver_true_residual": 1.545351921618523e-15,
+        "iterations": 5,
+        "solver_owned_device_bytes": 768,
+        "scope": "Sampled-Gram material algebra",
+        "mean_magnetization_relative_error": 0
+      },
+      {
+        "relative_error": 2.384691364615577e-16,
+        "independent_true_residual": 2.7511301222944107e-16,
+        "solver_true_residual": 2.066284742804406e-16,
+        "iterations": 5,
+        "solver_owned_device_bytes": 768,
+        "scope": "Sampled-Gram material algebra",
+        "mean_magnetization_relative_error": 0
+      },
+      {
+        "relative_error": 2.6407397573069986e-16,
+        "independent_true_residual": 2.5652018718461626e-16,
+        "solver_true_residual": 1.2018516789897273e-16,
+        "iterations": 4,
+        "solver_owned_device_bytes": 552,
+        "scope": "Public affine tetra RT0 FE material solve; Python-generated FE validation fixture, not native MATLAB setup",
+        "mean_magnetization_relative_error": 1.711050598723625e-16
+      }
+    ],
+    "limitations": "Independent CPU-generated validation fixtures; not native NGSolve FE setup on A100 for this artifact. Suite duration is not a performance comparison."
+  },
+  "pending": [
+    "Large successful compressed leaves and scaling",
+    "General high-order/curved FE charge semantics, images, constraints, nonlinear material",
+    "HDF5 large interchange",
+    "General HDiv physical acceptance",
+    "IH physical Simulink acceptance and release CI/distribution gates"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "radia.gpu.owner-transfer-evidence.v1",
+  "source_commit": "034e37971bce6b0401e21060bb26e7de962f2817",
+  "installed_acceptance": {
+    "schema": "radia.gpu.installed-acceptance.v1",
+    "passed": true,
+    "matlab_release": "2026a",
+    "cuda_residual": 0,
+    "simulink_repeated_runs": 2,
+    "simulink_failure_cleanup": true,
+    "ltspice_checked": true,
+    "source_commit": "034e37971bce6b0401e21060bb26e7de962f2817",
+    "distribution_version": "0.1.0a1",
+    "wheel_sha256": "324c30020df9788b637357ec85eb8dcafc647c6382e310628635134da6dc1410"
+  },
+  "wheel_payload_files": 115,
+  "focused_contract_tests_passed": 37,
+  "ci_policy_tests_passed": 17,
+  "independent_optuna_mex_smoke": {
+    "passed": true,
+    "command_count": 21,
+    "release_provenance": false
+  },
+  "remaining": [
+    "CPU wheel/source archive boundary verification",
+    "full integration CI on final source commit",
+    "gpu_evaluation_worker NGSolve final accuracy and A100 GPU execution/timing",
+    "PyPI prerelease publication and independent review before stable release"
+  ],
+  "pypi_published": false
+}

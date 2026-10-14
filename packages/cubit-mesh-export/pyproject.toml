@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cubit-mesh-export"
+version = "2.2.2"
+description = "Solver-neutral mesh export from Coreform Cubit: high-order curved .vol/.msh/.bdf, Kelvin transformation, Dirichlet/symmetry label conventions"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.13"
+authors = [
+    {name = "Kengo Sugahara"},
+]
+keywords = ["cubit", "mesh", "netgen", "ngsolve", "finite-element", "hex-mesh"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "mcp>=1.20.0,<2",
+    # The Python native curver uses the external Netgen C++ ABI; pin its runtime.
+    # The Cubit .ccm embeds Compact Netgen and is independent of this runtime.
+    "netgen-mesher==6.2.2607",
+    "ngsolve==6.2.2607",
+    "numpy",
+]
+
+[project.urls]
+Homepage = "https://github.com/ksugahar/Radia"
+
+[project.optional-dependencies]
+mesh-quality = ["gmsh"]
+sculpt = ["netCDF4"]
+youtube = ["youtube-transcript-api"]
+
+[project.scripts]
+mcp-server-cubit = "cubit_mesh_export.mcp.server:main"
+cubit-plugin-install = "cubit_mesh_export.install:main"
+cubit-smoke-test = "cubit_mesh_export.smoke_test:main"
+cubit-toolbar-smoke-test = "cubit_mesh_export.toolbar_smoke:main"
+check-vol = "cubit_mesh_export.check:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# The retired Qt5 GUI .ccl is not packaged. The exporter-owned PySide6 toolbar
+# is the only supported Cubit GUI; cubit-plugin-install deletes stale .ccl files.
+cubit_mesh_export = ["*.pyd", "*.so", "*.ccm", "native_payloads.json"]
+"cubit_mesh_export.cubit_helpers" = ["*.py"]
+"cubit_mesh_export.mcp" = ["README.md"]
+"cubit_mesh_export.mcp._support" = ["*.txt", "*.md"]
+"cubit_mesh_export.cubit_gui" = ["*.jou", "cubit_toolbar/scripts/*.py", "cubit_toolbar/icons/*.svg", "cubit_toolbar/toolbars/*.tmpl"]
+
+[tool.setuptools.exclude-package-data]
+cubit_mesh_export = ["bridge.py"]

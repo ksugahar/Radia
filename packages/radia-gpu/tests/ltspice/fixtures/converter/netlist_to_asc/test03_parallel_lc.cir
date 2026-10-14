@@ -1,0 +1,6 @@
+* Parallel LC Tank
+I1 0 top AC 1
+L1 top 0 1m
+C1 top 0 100n
+.ac dec 100 1k 100k
+.end

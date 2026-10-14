@@ -1,0 +1,199 @@
+{
+  "c_m_per_s": 343.0,
+  "checks": {
+    "ka20_radiation_efficiency": 0.9936980840981208,
+    "ka20_reactance_ratio": 0.031561170735588215,
+    "low_asymptote_errors": {
+      "reactance_rel_error": 0.0001666547623780651,
+      "resistance_rel_error": 0.00010416124231974601
+    },
+    "low_reactance_ratio": 1.9990001904603185,
+    "low_reactance_ratio_expected": 2.0,
+    "low_resistance_ratio": 3.9987501952999014,
+    "low_resistance_ratio_expected": 4.0,
+    "max_power_formula_rel_error": 0.0
+  },
+  "problem": "baffled circular piston acoustic radiation impedance",
+  "radius_m": 0.08,
+  "rho_kg_per_m3": 1.2041,
+  "rows": [
+    {
+      "frequency_hz": 17.059420462662533,
+      "ka": 0.025000000000000005,
+      "low_ka_reactance_asymptote": 0.021220659078919384,
+      "low_ka_resistance_asymptote": 0.0003125000000000001,
+      "power_formula_w": 5.189449636035033e-07,
+      "radiated_power_w": 5.189449636035033e-07,
+      "radiation_efficiency": 0.0003124674496117752,
+      "reactance_ratio": 0.02121712255502308,
+      "specific_impedance": {
+        "abs": 8.763755507576663,
+        "imag": 8.762805283096629,
+        "phase_rad": 1.5560702553618684,
+        "real": 0.12905102523459572
+      },
+      "volume_velocity_impedance": {
+        "abs": 435.87344033739,
+        "imag": 435.8261800489386,
+        "phase_rad": 1.5560702553618684,
+        "real": 6.418471430363383
+      }
+    },
+    {
+      "frequency_hz": 34.11884092532507,
+      "ka": 0.05000000000000001,
+      "low_ka_reactance_asymptote": 0.04244131815783877,
+      "low_ka_resistance_asymptote": 0.0012500000000000005,
+      "power_formula_w": 2.0751312745594093e-06,
+      "radiated_power_w": 2.0751312745594093e-06,
+      "radiation_efficiency": 0.0012494792751599482,
+      "reactance_ratio": 0.04241303202851106,
+      "specific_impedance": {
+        "abs": 17.524449039361144,
+        "imag": 17.516849429876846,
+        "phase_rad": 1.5413450487873008,
+        "real": 0.5160428123604921
+      },
+      "volume_velocity_impedance": {
+        "abs": 871.594590492607,
+        "imag": 871.2166169254214,
+        "phase_rad": 1.5413450487873008,
+        "real": 25.665863885692417
+      }
+    },
+    {
+      "frequency_hz": 68.23768185065013,
+      "ka": 0.10000000000000002,
+      "low_ka_reactance_asymptote": 0.08488263631567754,
+      "low_ka_resistance_asymptote": 0.005000000000000002,
+      "power_formula_w": 8.290155924579274e-06,
+      "radiated_power_w": 8.290155924579274e-06,
+      "radiation_efficiency": 0.004991673607639857,
+      "reactance_ratio": 0.08465654114459369,
+      "specific_impedance": {
+        "abs": 35.02441178750502,
+        "imag": 34.963684828926404,
+        "phase_rad": 1.511900691883572,
+        "real": 2.061592647498989
+      },
+      "volume_velocity_impedance": {
+        "abs": 1741.9713327710838,
+        "imag": 1738.951021634608,
+        "phase_rad": 1.511900691883572,
+        "real": 102.53520640355357
+      }
+    },
+    {
+      "frequency_hz": 341.1884092532506,
+      "ka": 0.49999999999999994,
+      "low_ka_reactance_asymptote": 0.42441318157838753,
+      "low_ka_resistance_asymptote": 0.12499999999999997,
+      "power_formula_w": 0.00019912759960949512,
+      "radiated_power_w": 0.00019912759960949512,
+      "radiation_efficiency": 0.119898828510133,
+      "reactance_ratio": 0.3969146724038887,
+      "specific_impedance": {
+        "abs": 171.24427889918354,
+        "imag": 163.9282602652422,
+        "phase_rad": 1.277435037854434,
+        "real": 49.518971537304544
+      },
+      "volume_velocity_impedance": {
+        "abs": 8516.991707191315,
+        "imag": 8153.122791771258,
+        "phase_rad": 1.277435037854434,
+        "real": 2462.871592809028
+      }
+    },
+    {
+      "frequency_hz": 682.3768185065012,
+      "ka": 0.9999999999999999,
+      "low_ka_reactance_asymptote": 0.8488263631567751,
+      "low_ka_resistance_asymptote": 0.4999999999999999,
+      "power_formula_w": 0.0007029741162024627,
+      "radiated_power_w": 0.0007029741162024627,
+      "radiation_efficiency": 0.4232751922431266,
+      "reactance_ratio": 0.6467637282835621,
+      "specific_impedance": {
+        "abs": 319.2368278840101,
+        "imag": 267.1174943925993,
+        "phase_rad": 0.991298443659612,
+        "real": 174.81532103012242
+      },
+      "volume_velocity_impedance": {
+        "abs": 15877.537242099002,
+        "imag": 13285.33425590744,
+        "phase_rad": 0.991298443659612,
+        "real": 8694.60077191892
+      }
+    },
+    {
+      "frequency_hz": 3411.884092532506,
+      "ka": 5.0,
+      "low_ka_reactance_asymptote": 4.244131815783875,
+      "low_ka_resistance_asymptote": 12.5,
+      "power_formula_w": 0.0016463569940068671,
+      "radiated_power_w": 0.0016463569940068671,
+      "radiation_efficiency": 0.9913054507662277,
+      "reactance_ratio": 0.17836649841890756,
+      "specific_impedance": {
+        "abs": 415.9900457831413,
+        "imag": 73.66648755594886,
+        "phase_rad": 0.17802602211365123,
+        "real": 409.41539639079184
+      },
+      "volume_velocity_impedance": {
+        "abs": 20689.647519815866,
+        "imag": 3663.870510858392,
+        "phase_rad": 0.17802602211365123,
+        "real": 20362.6512854757
+      }
+    },
+    {
+      "frequency_hz": 6823.768185065012,
+      "ka": 10.0,
+      "low_ka_reactance_asymptote": 8.48826363156775,
+      "low_ka_resistance_asymptote": 50.0,
+      "power_formula_w": 0.0016496972498244611,
+      "radiated_power_w": 0.0016496972498244611,
+      "radiation_efficiency": 0.993316687582415,
+      "reactance_ratio": 0.04726881842910433,
+      "specific_impedance": {
+        "abs": 410.710290109422,
+        "imag": 19.522319804776192,
+        "phase_rad": 0.04755098469639687,
+        "real": 410.2460498666692
+      },
+      "volume_velocity_impedance": {
+        "abs": 20427.054015506525,
+        "imag": 970.9605304846674,
+        "phase_rad": 0.04755098469639686,
+        "real": 20403.964600063933
+      }
+    },
+    {
+      "frequency_hz": 13647.536370130025,
+      "ka": 20.0,
+      "low_ka_reactance_asymptote": 16.9765272631355,
+      "low_ka_resistance_asymptote": 200.0,
+      "power_formula_w": 0.0016503306719655743,
+      "radiated_power_w": 0.0016503306719655743,
+      "radiation_efficiency": 0.9936980840981208,
+      "reactance_ratio": 0.031561170735588215,
+      "specific_impedance": {
+        "abs": 410.61052070834563,
+        "imag": 13.034962349173567,
+        "phase_rad": 0.03175065432813566,
+        "real": 410.4035690304537
+      },
+      "volume_velocity_impedance": {
+        "abs": 20422.091892584453,
+        "imag": 648.3058409024115,
+        "phase_rad": 0.03175065432813566,
+        "real": 20411.798960547683
+      }
+    }
+  ],
+  "surface_velocity_peak_m_per_s": 0.02,
+  "time_convention": "peak phasors with exp(+i omega t)"
+}

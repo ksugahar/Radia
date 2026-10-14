@@ -1,0 +1,2496 @@
+{
+  "schema": "radia.validation.optuna-memory-performance.v1",
+  "date": "2026-10-13",
+  "host_role": "on-demand-a100-timing",
+  "host_policy_date": "2026-10-13",
+  "formal_performance_acceptance": true,
+  "baseline_commit": "d76e4e20219aae4beeb4437e808bbe3229c88882",
+  "implementation_commit": "f9d890644cea4ded82b1b0d32164d05bb358e17b",
+  "binary_sha256": "6bf3ba422337ad847bf59c6b68e21298e922b6818c774708b4ceaca3663ecdc4",
+  "source_sha256": {
+    "baseline": {
+      "packages/radia-optuna/matlab/+radia/+optuna/Study.m": "d3f04fafe36f8ee66d26423de916ddc626e11f24aa7fb395fcacd0ee57ff9681",
+      "packages/radia-optuna/matlab/+radia/+optuna/TPESampler.m": "77b49750593dd07fe1ef36b13e1e5ba9054912378cbf1b3516fa7c9663639f0d",
+      "validation_test/optimization/benchmark_optuna_parameter_history.m": "bc2be9a65e21cfd65319b01e32d43cec48e14567e383a3f654c0635213e575e8"
+    },
+    "candidate": {
+      "packages/radia-optuna/matlab/+radia/+optuna/Study.m": "b9ad8962f3d62e336c7c46f560471ce5e5fa1314c5be812cebf0f89ea5dbbc2b",
+      "packages/radia-optuna/matlab/+radia/+optuna/TPESampler.m": "37960c40d66f44a00f313460953981bb932ade973b1d76273fa4b750d29009e2",
+      "validation_test/optimization/benchmark_optuna_parameter_history.m": "bc2be9a65e21cfd65319b01e32d43cec48e14567e383a3f654c0635213e575e8"
+    }
+  },
+  "runtime": {
+    "name": "NVIDIA A100-SXM4-40GB",
+    "compute_capability": "8.0",
+    "toolkit_version": 12.8,
+    "graphics_driver": "591.59",
+    "total_memory": 42628612096.0,
+    "engine_version": "26.1",
+    "matlab": "26.1.0.3203278 (R2026a)"
+  },
+  "hardware": {
+    "cpu": "Intel(R) Xeon(R) Platinum 8368 CPU @ 2.40GHz",
+    "logical_processors": 18,
+    "visible_ram_bytes": 61844000768
+  },
+  "design": {
+    "sampler": "TPESampler(Multivariate=false)",
+    "storage_enabled": false,
+    "all_history_retained": true,
+    "order_per_mode_and_thread_setting": [
+      "baseline",
+      "candidate",
+      "candidate",
+      "baseline"
+    ],
+    "fresh_matlab_sessions": 16,
+    "repeats_per_session_case": 13,
+    "discarded_initial_repeats": 4,
+    "warmed_samples_per_variant_case": 18,
+    "foreign_job_monitor_interval_s": 10,
+    "no_foreign_jobs_detected": true,
+    "all_matlab_sessions_closed": true,
+    "execution_route": "official MATLAB Engine for Python",
+    "paired_proposal_values_compared": 12792,
+    "all_baseline_candidate_proposals_exactly_equal": true,
+    "all_cpu_gpu_candidate_proposals_exactly_equal": true,
+    "seed": 37,
+    "history_seed": 19,
+    "history_cache": "Identical MAT setup fixtures only; sampling uses in-memory Study columns."
+  },
+  "configurations": [
+    {
+      "execution_mode": "cpu",
+      "configured_threads": 1,
+      "variants": {
+        "baseline": {
+          "engine_startup_s": [
+            5.897952100000111,
+            3.4215524999999616
+          ],
+          "module_configure_s": [
+            0.0194004,
+            0.0175209
+          ],
+          "native_statistics": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 3198,
+              "cpu_selection_calls": 1599
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 3198,
+              "cpu_selection_calls": 1599
+            }
+          ]
+        },
+        "candidate": {
+          "engine_startup_s": [
+            5.435303000000204,
+            4.673090399999637
+          ],
+          "module_configure_s": [
+            0.0193128,
+            0.0179901
+          ],
+          "native_statistics": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 3198,
+              "cpu_selection_calls": 1599
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 3198,
+              "cpu_selection_calls": 1599
+            }
+          ]
+        }
+      },
+      "entries": [
+        {
+          "history": 24,
+          "dimensions": 1,
+          "baseline": {
+            "warmed_median_ms": 1.0859,
+            "warmed_samples_ms": [
+              93.2884,
+              2.2509,
+              0.9433,
+              1.0723,
+              1.1069,
+              1.1257000000000001,
+              0.9602,
+              0.9112,
+              1.0995,
+              92.9722,
+              2.2537,
+              0.9652999999999999,
+              1.0689,
+              1.113,
+              1.0677,
+              0.9297,
+              0.9547000000000001,
+              1.1127
+            ],
+            "first_trial_ms": [
+              196.40650000000002,
+              193.4504
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2447917056.0,
+              2461655040.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2463207424.0,
+              2477101056.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 1.06935,
+            "warmed_samples_ms": [
+              95.18099999999998,
+              2.2466999999999997,
+              0.9168,
+              1.0627,
+              1.0706,
+              1.1164999999999998,
+              0.9672,
+              1.001,
+              1.0701,
+              96.842,
+              2.3297,
+              0.9262,
+              1.0814,
+              1.09,
+              1.045,
+              0.9293,
+              0.8876,
+              1.0686
+            ],
+            "first_trial_ms": [
+              193.48379999999997,
+              191.7271
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2448961536.0,
+              2451976192.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2463305728.0,
+              2466406400.0
+            ]
+          },
+          "optimization_speedup": 1.015476691448076
+        },
+        {
+          "history": 256,
+          "dimensions": 1,
+          "baseline": {
+            "warmed_median_ms": 1.3230000000000002,
+            "warmed_samples_ms": [
+              2.0521000000000003,
+              1.3886999999999998,
+              1.3512,
+              1.3309,
+              1.3267000000000002,
+              1.298,
+              1.3339,
+              1.3051,
+              1.3111,
+              2.0389000000000004,
+              1.3409000000000002,
+              1.3449,
+              1.3193000000000001,
+              1.2938,
+              1.3155000000000001,
+              1.3173000000000001,
+              1.2714,
+              1.2815
+            ],
+            "first_trial_ms": [
+              33.6402,
+              19.16
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2489139200.0,
+              2484432896.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2489139200.0,
+              2484432896.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 1.28545,
+            "warmed_samples_ms": [
+              2.0074,
+              1.3595,
+              1.3159999999999998,
+              1.287,
+              1.2793999999999999,
+              1.2866000000000002,
+              1.2675,
+              1.2586,
+              1.261,
+              1.9923000000000002,
+              1.3330999999999997,
+              1.3222000000000003,
+              1.2882,
+              1.2843,
+              1.2741,
+              1.2612,
+              1.2765,
+              1.2699
+            ],
+            "first_trial_ms": [
+              18.9476,
+              18.791999999999998
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2470440960.0,
+              2473496576.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2471489536.0,
+              2474545152.0
+            ]
+          },
+          "optimization_speedup": 1.029211560154032
+        },
+        {
+          "history": 1000,
+          "dimensions": 1,
+          "baseline": {
+            "warmed_median_ms": 2.5573500000000005,
+            "warmed_samples_ms": [
+              2.5721,
+              2.5558,
+              2.5362,
+              2.5589000000000004,
+              2.5599000000000003,
+              2.5437999999999996,
+              2.5662,
+              2.5704000000000002,
+              2.5392,
+              2.5219,
+              2.588,
+              2.5757999999999996,
+              2.5792999999999995,
+              2.5558,
+              2.5509,
+              2.5535,
+              2.5878,
+              2.531
+            ],
+            "first_trial_ms": [
+              17.1927,
+              19.339100000000002
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2516684800.0,
+              2518233088.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2516684800.0,
+              2518233088.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 2.5256999999999996,
+            "warmed_samples_ms": [
+              3.9576999999999996,
+              2.5905,
+              2.5315,
+              2.5273,
+              2.5547,
+              2.5242,
+              2.5271999999999997,
+              2.5206999999999997,
+              2.5168999999999997,
+              3.9009,
+              2.5961,
+              2.5237,
+              2.5096,
+              2.5584000000000002,
+              2.5199,
+              2.4985,
+              2.5185999999999997,
+              2.5208
+            ],
+            "first_trial_ms": [
+              30.5829,
+              30.351300000000002
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2505076736.0,
+              2508587008.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2505080832.0,
+              2508587008.0
+            ]
+          },
+          "optimization_speedup": 1.0125311794749974
+        },
+        {
+          "history": 24,
+          "dimensions": 40,
+          "baseline": {
+            "warmed_median_ms": 26.74195,
+            "warmed_samples_ms": [
+              26.402500000000003,
+              26.7324,
+              26.573,
+              26.6736,
+              26.7552,
+              26.8082,
+              27.094900000000003,
+              27.028899999999997,
+              26.9658,
+              26.2905,
+              26.7515,
+              26.4495,
+              26.464900000000004,
+              26.601799999999997,
+              26.784499999999998,
+              26.7053,
+              27.0434,
+              26.8507
+            ],
+            "first_trial_ms": [
+              46.8997,
+              46.1185
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2518798336.0,
+              2519289856.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2518806528.0,
+              2519293952.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 26.083599999999997,
+            "warmed_samples_ms": [
+              25.837299999999995,
+              25.8712,
+              26.0861,
+              26.0811,
+              26.039700000000003,
+              26.251800000000003,
+              26.2678,
+              26.607000000000003,
+              26.571499999999997,
+              25.7272,
+              25.7427,
+              25.657700000000002,
+              25.9103,
+              26.3144,
+              26.026200000000003,
+              26.123399999999997,
+              26.4682,
+              26.1533
+            ],
+            "first_trial_ms": [
+              48.15650000000001,
+              48.1032
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2506125312.0,
+              2509647872.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2506162176.0,
+              2509660160.0
+            ]
+          },
+          "optimization_speedup": 1.025239997546351
+        },
+        {
+          "history": 256,
+          "dimensions": 40,
+          "baseline": {
+            "warmed_median_ms": 48.81045,
+            "warmed_samples_ms": [
+              48.358399999999996,
+              48.343300000000006,
+              48.306000000000004,
+              48.37,
+              48.379099999999994,
+              48.4555,
+              48.6175,
+              49.886199999999995,
+              48.3967,
+              48.9584,
+              49.0706,
+              49.0983,
+              49.169900000000005,
+              49.1109,
+              50.2348,
+              48.909400000000005,
+              50.179899999999996,
+              48.7115
+            ],
+            "first_trial_ms": [
+              63.2418,
+              65.6202
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2572738560.0,
+              2540486656.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2572742656.0,
+              2540847104.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 48.0514,
+            "warmed_samples_ms": [
+              48.4257,
+              48.017199999999995,
+              48.3117,
+              48.0856,
+              48.170199999999994,
+              48.477900000000005,
+              48.1692,
+              49.8949,
+              48.29,
+              47.6524,
+              47.5356,
+              47.948499999999996,
+              47.5191,
+              47.744099999999996,
+              47.9763,
+              47.6182,
+              49.5148,
+              47.95099999999999
+            ],
+            "first_trial_ms": [
+              64.97930000000001,
+              64.4971
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2535350272.0,
+              2537295872.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2537148416.0,
+              2538647552.0
+            ]
+          },
+          "optimization_speedup": 1.0157966261128708
+        },
+        {
+          "history": 1000,
+          "dimensions": 40,
+          "baseline": {
+            "warmed_median_ms": 111.02885,
+            "warmed_samples_ms": [
+              111.1279,
+              111.1775,
+              110.9083,
+              110.9727,
+              110.86930000000001,
+              111.57849999999999,
+              111.19810000000001,
+              111.2664,
+              111.01310000000001,
+              110.9811,
+              111.00580000000001,
+              110.9144,
+              111.0703,
+              110.8575,
+              110.84920000000001,
+              111.07690000000001,
+              111.1023,
+              111.0446
+            ],
+            "first_trial_ms": [
+              128.1022,
+              131.98409999999998
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2727956480.0,
+              2729582592.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2729250816.0,
+              2730762240.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 92.65985,
+            "warmed_samples_ms": [
+              94.3302,
+              93.1974,
+              92.5551,
+              92.62819999999999,
+              92.66380000000001,
+              92.6079,
+              92.6559,
+              92.545,
+              92.6304,
+              94.3875,
+              93.8374,
+              93.94269999999999,
+              93.6558,
+              92.9986,
+              92.8711,
+              92.5641,
+              92.3932,
+              91.96640000000001
+            ],
+            "first_trial_ms": [
+              174.11459999999997,
+              173.88479999999998
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2722009088.0,
+              2725429248.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2723520512.0,
+              2726948864.0
+            ]
+          },
+          "optimization_speedup": 1.1982412015560138
+        }
+      ]
+    },
+    {
+      "execution_mode": "cpu",
+      "configured_threads": 16,
+      "variants": {
+        "baseline": {
+          "engine_startup_s": [
+            3.1101000999988173,
+            2.985672299999351
+          ],
+          "module_configure_s": [
+            0.0165447,
+            0.0189262
+          ],
+          "native_statistics": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 3198,
+              "cpu_selection_calls": 1599
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 3198,
+              "cpu_selection_calls": 1599
+            }
+          ]
+        },
+        "candidate": {
+          "engine_startup_s": [
+            4.727899800000159,
+            4.663059399999838
+          ],
+          "module_configure_s": [
+            0.0184511,
+            0.0175656
+          ],
+          "native_statistics": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 3198,
+              "cpu_selection_calls": 1599
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 3198,
+              "cpu_selection_calls": 1599
+            }
+          ]
+        }
+      },
+      "entries": [
+        {
+          "history": 24,
+          "dimensions": 1,
+          "baseline": {
+            "warmed_median_ms": 1.0799,
+            "warmed_samples_ms": [
+              92.03070000000001,
+              2.1766,
+              0.893,
+              1.0574999999999999,
+              1.0685,
+              1.0687000000000002,
+              0.8893,
+              0.8805,
+              1.0911,
+              95.8686,
+              2.2878,
+              0.9279000000000001,
+              1.0937,
+              1.0936,
+              1.1429,
+              0.9074,
+              0.9327999999999999,
+              1.1037
+            ],
+            "first_trial_ms": [
+              190.11109999999996,
+              190.98090000000002
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2442719232.0,
+              2361925632.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2457133056.0,
+              2376552448.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 1.0774,
+            "warmed_samples_ms": [
+              97.1493,
+              2.1875,
+              0.9018999999999999,
+              1.0640999999999998,
+              1.0829,
+              1.0872,
+              0.9009,
+              0.866,
+              1.0698999999999999,
+              94.8255,
+              2.2201999999999997,
+              0.8991,
+              1.1207,
+              1.0719,
+              1.0997000000000001,
+              0.9263,
+              0.9242,
+              1.0897
+            ],
+            "first_trial_ms": [
+              188.6987,
+              190.568
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2357772288.0,
+              2439487488.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2373111808.0,
+              2453708800.0
+            ]
+          },
+          "optimization_speedup": 1.0023204009652869
+        },
+        {
+          "history": 256,
+          "dimensions": 1,
+          "baseline": {
+            "warmed_median_ms": 1.2948,
+            "warmed_samples_ms": [
+              1.976,
+              1.3163,
+              1.2931,
+              1.302,
+              1.2622,
+              1.2711999999999999,
+              1.2772999999999999,
+              1.2564,
+              1.2612,
+              2.0071999999999997,
+              1.3635000000000002,
+              1.3121999999999998,
+              1.3051,
+              1.2885,
+              1.2668,
+              1.2975,
+              1.2845,
+              1.2965
+            ],
+            "first_trial_ms": [
+              18.796400000000002,
+              19.1584
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2477039616.0,
+              2395340800.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2477039616.0,
+              2395615232.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 1.2842,
+            "warmed_samples_ms": [
+              1.9909,
+              1.3401,
+              1.2785,
+              1.2891000000000001,
+              1.2729,
+              1.2425,
+              1.2792999999999999,
+              1.2712999999999999,
+              1.2657999999999998,
+              2.0383000000000004,
+              1.3655,
+              1.2989,
+              1.3068,
+              1.3014,
+              1.2685000000000002,
+              1.3078,
+              1.2766,
+              1.2627000000000002
+            ],
+            "first_trial_ms": [
+              19.379800000000003,
+              19.087300000000003
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2380267520.0,
+              2473656320.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2380816384.0,
+              2474704896.0
+            ]
+          },
+          "optimization_speedup": 1.0082541660177542
+        },
+        {
+          "history": 1000,
+          "dimensions": 1,
+          "baseline": {
+            "warmed_median_ms": 2.5424499999999997,
+            "warmed_samples_ms": [
+              2.489,
+              2.5135,
+              2.5061000000000004,
+              2.495,
+              2.5042,
+              2.4934,
+              2.5418,
+              2.5236,
+              2.4739999999999998,
+              2.5496,
+              2.5561999999999996,
+              2.5458999999999996,
+              2.5431,
+              2.5722,
+              2.5584,
+              2.5547,
+              2.5552,
+              2.5597000000000003
+            ],
+            "first_trial_ms": [
+              18.8774,
+              19.272
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2510970880.0,
+              2428768256.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2511163392.0,
+              2428956672.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 2.5300000000000002,
+            "warmed_samples_ms": [
+              3.9712,
+              2.6282,
+              2.5300000000000002,
+              2.6100000000000003,
+              2.5187999999999997,
+              2.5444999999999998,
+              2.53,
+              2.5294999999999996,
+              2.5289,
+              3.9246000000000003,
+              2.5762000000000005,
+              2.5513999999999997,
+              2.5077,
+              2.5334000000000003,
+              2.5236,
+              2.5095,
+              2.5075000000000003,
+              2.5120999999999998
+            ],
+            "first_trial_ms": [
+              30.581799999999998,
+              30.3703
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2414272512.0,
+              2509434880.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2414657536.0,
+              2509623296.0
+            ]
+          },
+          "optimization_speedup": 1.0049209486166006
+        },
+        {
+          "history": 24,
+          "dimensions": 40,
+          "baseline": {
+            "warmed_median_ms": 26.054899999999996,
+            "warmed_samples_ms": [
+              25.3835,
+              25.489099999999997,
+              25.351699999999997,
+              25.5891,
+              25.562,
+              25.663999999999998,
+              25.697,
+              25.9624,
+              25.8051,
+              26.147399999999998,
+              26.203899999999997,
+              26.1974,
+              26.2807,
+              26.392599999999998,
+              26.729599999999998,
+              26.4344,
+              26.828999999999997,
+              26.6014
+            ],
+            "first_trial_ms": [
+              43.7025,
+              44.8475
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2512211968.0,
+              2430017536.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2512220160.0,
+              2430029824.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 26.40415,
+            "warmed_samples_ms": [
+              26.331,
+              26.3627,
+              26.39,
+              26.5868,
+              26.7255,
+              26.7711,
+              26.966,
+              27.4136,
+              27.1038,
+              25.8801,
+              26.0933,
+              25.9682,
+              26.128999999999998,
+              26.2307,
+              26.370900000000002,
+              26.4183,
+              26.769499999999997,
+              26.500799999999998
+            ],
+            "first_trial_ms": [
+              49.682500000000005,
+              48.5422
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2415710208.0,
+              2510684160.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2415714304.0,
+              2510700544.0
+            ]
+          },
+          "optimization_speedup": 0.9867729125913917
+        },
+        {
+          "history": 256,
+          "dimensions": 40,
+          "baseline": {
+            "warmed_median_ms": 46.8272,
+            "warmed_samples_ms": [
+              45.962199999999996,
+              45.8339,
+              46.2245,
+              46.036100000000005,
+              46.027,
+              46.2292,
+              45.889900000000004,
+              47.53300000000001,
+              46.005199999999995,
+              46.9828,
+              46.8672,
+              47.1173,
+              46.7872,
+              47.0929,
+              47.242,
+              47.1082,
+              48.706900000000005,
+              46.936400000000006
+            ],
+            "first_trial_ms": [
+              62.882999999999996,
+              63.922599999999996
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2538283008.0,
+              2452713472.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2538479616.0,
+              2453782528.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 47.5844,
+            "warmed_samples_ms": [
+              47.117399999999996,
+              46.9048,
+              47.075500000000005,
+              46.4672,
+              46.6188,
+              46.867,
+              46.5986,
+              48.675000000000004,
+              46.772999999999996,
+              47.828,
+              47.7157,
+              48.085,
+              47.783899999999996,
+              47.885600000000004,
+              48.5384,
+              48.4191,
+              49.3501,
+              47.453100000000006
+            ],
+            "first_trial_ms": [
+              63.3991,
+              63.8497
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2442919936.0,
+              2536759296.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2442924032.0,
+              2537148416.0
+            ]
+          },
+          "optimization_speedup": 0.9840872218626272
+        },
+        {
+          "history": 1000,
+          "dimensions": 40,
+          "baseline": {
+            "warmed_median_ms": 100.20085,
+            "warmed_samples_ms": [
+              100.10609999999998,
+              100.0429,
+              100.3604,
+              100.07820000000001,
+              99.6165,
+              99.87310000000001,
+              100.6663,
+              100.4717,
+              100.32319999999999,
+              100.7843,
+              100.70499999999998,
+              100.08829999999999,
+              99.9324,
+              100.1233,
+              100.15400000000001,
+              100.2477,
+              100.9627,
+              100.7402
+            ],
+            "first_trial_ms": [
+              120.0634,
+              120.6662
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2728910848.0,
+              2644094976.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2730106880.0,
+              2644697088.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 93.7304,
+            "warmed_samples_ms": [
+              96.9889,
+              95.1979,
+              94.1862,
+              93.92950000000002,
+              93.402,
+              93.6287,
+              93.292,
+              93.2399,
+              93.1182,
+              95.063,
+              93.7211,
+              93.81639999999999,
+              94.2428,
+              93.4276,
+              93.7225,
+              93.8648,
+              93.73830000000001,
+              93.7211
+            ],
+            "first_trial_ms": [
+              167.1952,
+              167.7201
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2630352896.0,
+              2724220928.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              2631970816.0,
+              2725699584.0
+            ]
+          },
+          "optimization_speedup": 1.0690325657417443
+        }
+      ]
+    },
+    {
+      "execution_mode": "gpu",
+      "configured_threads": 1,
+      "variants": {
+        "baseline": {
+          "engine_startup_s": [
+            2.9850580000002083,
+            4.833428699999786
+          ],
+          "module_configure_s": [
+            0.0174713,
+            0.0178922
+          ],
+          "native_statistics": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3198,
+              "selection_launches": 1599,
+              "host_to_device_bytes": 17243616.0,
+              "device_to_host_bytes": 12792,
+              "peak_temporary_bytes": 214776,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3198,
+              "selection_launches": 1599,
+              "host_to_device_bytes": 17243616.0,
+              "device_to_host_bytes": 12792,
+              "peak_temporary_bytes": 214776,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0
+            }
+          ]
+        },
+        "candidate": {
+          "engine_startup_s": [
+            2.931748700000753,
+            2.974120099999709
+          ],
+          "module_configure_s": [
+            0.0172938,
+            0.0189643
+          ],
+          "native_statistics": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3198,
+              "selection_launches": 1599,
+              "host_to_device_bytes": 17243616.0,
+              "device_to_host_bytes": 12792,
+              "peak_temporary_bytes": 214776,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3198,
+              "selection_launches": 1599,
+              "host_to_device_bytes": 17243616.0,
+              "device_to_host_bytes": 12792,
+              "peak_temporary_bytes": 214776,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0
+            }
+          ]
+        }
+      },
+      "entries": [
+        {
+          "history": 24,
+          "dimensions": 1,
+          "baseline": {
+            "warmed_median_ms": 1.40665,
+            "warmed_samples_ms": [
+              93.2687,
+              2.5905,
+              1.2519,
+              1.3938,
+              1.4095,
+              1.4345,
+              1.2526,
+              1.2116,
+              1.4643,
+              93.3389,
+              2.5257,
+              1.2232,
+              1.3619999999999999,
+              1.4366999999999999,
+              1.4228,
+              1.2356,
+              1.2315,
+              1.4038
+            ],
+            "first_trial_ms": [
+              560.7782,
+              552.9476
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2445737984.0,
+              2448121856.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52207972352.0,
+              52209442816.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 1.4352500000000001,
+            "warmed_samples_ms": [
+              95.567,
+              2.5325,
+              1.2769000000000001,
+              1.3754,
+              1.3745999999999998,
+              1.4635,
+              1.2328000000000001,
+              1.1939,
+              1.4352000000000003,
+              98.86650000000002,
+              2.6537,
+              1.2697,
+              1.4353,
+              1.4530999999999998,
+              1.5040000000000002,
+              1.2453,
+              1.2495,
+              1.4567999999999999
+            ],
+            "first_trial_ms": [
+              548.6597999999999,
+              568.4781
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2445160448.0,
+              2377388032.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52203626496.0,
+              52136980480.0
+            ]
+          },
+          "optimization_speedup": 0.9800731579864134
+        },
+        {
+          "history": 256,
+          "dimensions": 1,
+          "baseline": {
+            "warmed_median_ms": 1.3605500000000001,
+            "warmed_samples_ms": [
+              2.0887000000000002,
+              1.4159,
+              1.382,
+              1.3749,
+              1.3497,
+              1.3881,
+              1.3605,
+              1.3272000000000002,
+              1.3606,
+              2.0835000000000004,
+              1.4436,
+              1.3539,
+              1.3587,
+              1.3605000000000003,
+              1.3766,
+              1.3528000000000002,
+              1.3522,
+              1.3504999999999998
+            ],
+            "first_trial_ms": [
+              19.407200000000003,
+              19.4491
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52227723264.0,
+              52216762368.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52227723264.0,
+              52216762368.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 1.4083999999999999,
+            "warmed_samples_ms": [
+              2.1349,
+              1.4623,
+              1.39,
+              1.4348999999999998,
+              1.4099999999999997,
+              1.4178000000000002,
+              1.3782999999999999,
+              1.3738000000000001,
+              1.3909999999999998,
+              2.0728,
+              1.4474000000000002,
+              1.4067999999999998,
+              1.4201,
+              1.4119,
+              1.3755,
+              1.3976000000000002,
+              1.3771,
+              1.3494
+            ],
+            "first_trial_ms": [
+              19.8578,
+              19.218000000000004
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52210634752.0,
+              52143988736.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52211683328.0,
+              52144263168.0
+            ]
+          },
+          "optimization_speedup": 0.966025276909969
+        },
+        {
+          "history": 1000,
+          "dimensions": 1,
+          "baseline": {
+            "warmed_median_ms": 1.7894999999999999,
+            "warmed_samples_ms": [
+              1.8187000000000002,
+              1.7913000000000001,
+              1.8078999999999998,
+              1.7762,
+              1.7876999999999998,
+              1.809,
+              1.7675,
+              1.7761,
+              1.7982999999999998,
+              1.812,
+              1.7729,
+              1.7950000000000002,
+              1.7767,
+              1.8077,
+              1.7948,
+              1.7685,
+              1.7783,
+              1.7611999999999999
+            ],
+            "first_trial_ms": [
+              18.604400000000002,
+              18.767400000000002
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52250025984.0,
+              52252499968.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52250034176.0,
+              52252499968.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 1.8218,
+            "warmed_samples_ms": [
+              3.2720000000000002,
+              1.8996,
+              1.852,
+              1.8079999999999998,
+              1.8105,
+              1.82,
+              1.8243,
+              1.7818999999999998,
+              1.8084,
+              3.2306,
+              1.8793,
+              1.7997,
+              1.8324,
+              1.8236,
+              1.8396,
+              1.8074000000000001,
+              1.8091,
+              1.7993
+            ],
+            "first_trial_ms": [
+              29.8633,
+              29.758
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52245508096.0,
+              52178440192.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52245508096.0,
+              52178440192.0
+            ]
+          },
+          "optimization_speedup": 0.9822702821385442
+        },
+        {
+          "history": 24,
+          "dimensions": 40,
+          "baseline": {
+            "warmed_median_ms": 38.7147,
+            "warmed_samples_ms": [
+              38.487,
+              39.6397,
+              38.7457,
+              38.385299999999994,
+              38.415200000000006,
+              38.639,
+              38.6837,
+              38.9588,
+              38.5063,
+              38.86600000000001,
+              38.656600000000005,
+              38.7969,
+              38.522299999999994,
+              38.6727,
+              40.6471,
+              41.505100000000006,
+              40.9808,
+              40.344699999999996
+            ],
+            "first_trial_ms": [
+              57.9839,
+              58.09010000000001
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52251082752.0,
+              52253548544.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52251086848.0,
+              52253564928.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 39.553799999999995,
+            "warmed_samples_ms": [
+              39.097500000000004,
+              38.8482,
+              39.1995,
+              38.8123,
+              38.9217,
+              38.9591,
+              39.041700000000006,
+              39.447300000000006,
+              39.240700000000004,
+              39.9571,
+              40.7243,
+              39.66029999999999,
+              39.8633,
+              39.7654,
+              40.0216,
+              39.895199999999996,
+              40.1709,
+              39.8326
+            ],
+            "first_trial_ms": [
+              64.06970000000001,
+              63.42100000000001
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52246560768.0,
+              52179496960.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52246560768.0,
+              52179496960.0
+            ]
+          },
+          "optimization_speedup": 0.9787858562262034
+        },
+        {
+          "history": 256,
+          "dimensions": 40,
+          "baseline": {
+            "warmed_median_ms": 49.75495000000001,
+            "warmed_samples_ms": [
+              49.5781,
+              49.3138,
+              49.753400000000006,
+              49.484500000000004,
+              49.5155,
+              49.8558,
+              50.8656,
+              51.5076,
+              49.359899999999996,
+              49.824,
+              49.614900000000006,
+              49.842,
+              49.5966,
+              49.7565,
+              49.9787,
+              49.843900000000005,
+              51.422200000000004,
+              49.5696
+            ],
+            "first_trial_ms": [
+              66.9869,
+              67.6016
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52276240384.0,
+              52281929728.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52277657600.0,
+              52281864192.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 51.23365,
+            "warmed_samples_ms": [
+              51.437,
+              51.118500000000004,
+              51.277,
+              51.15710000000001,
+              51.167199999999994,
+              50.9351,
+              51.6145,
+              52.922399999999996,
+              50.9773,
+              51.412,
+              51.1353,
+              51.43710000000001,
+              51.1903,
+              51.1766,
+              52.71790000000001,
+              51.3245,
+              52.974000000000004,
+              51.179199999999994
+            ],
+            "first_trial_ms": [
+              68.7428,
+              68.7864
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52268191744.0,
+              52199182336.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52271185920.0,
+              52201058304.0
+            ]
+          },
+          "optimization_speedup": 0.9711381094261293
+        },
+        {
+          "history": 1000,
+          "dimensions": 40,
+          "baseline": {
+            "warmed_median_ms": 78.78805,
+            "warmed_samples_ms": [
+              79.19239999999999,
+              79.03970000000001,
+              79.4913,
+              79.4798,
+              79.2149,
+              79.1068,
+              80.453,
+              79.2117,
+              79.1029,
+              76.589,
+              76.3978,
+              76.5427,
+              76.6378,
+              76.17150000000001,
+              76.55000000000001,
+              76.75500000000001,
+              78.53639999999999,
+              78.33319999999999
+            ],
+            "first_trial_ms": [
+              99.5424,
+              98.398
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52467326976.0,
+              52470296576.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52467654656.0,
+              52470960128.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 60.7586,
+            "warmed_samples_ms": [
+              62.726099999999995,
+              61.8446,
+              61.7156,
+              62.43070000000001,
+              62.0914,
+              62.99870000000001,
+              60.6405,
+              60.59539999999999,
+              60.1511,
+              60.9574,
+              60.091100000000004,
+              60.1528,
+              60.2845,
+              60.80779999999999,
+              60.7094,
+              60.6784,
+              67.5817,
+              59.568799999999996
+            ],
+            "first_trial_ms": [
+              145.3743,
+              141.0283
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52458487808.0,
+              52388954112.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52459311104.0,
+              52391043072.0
+            ]
+          },
+          "optimization_speedup": 1.2967390624537103
+        }
+      ]
+    },
+    {
+      "execution_mode": "gpu",
+      "configured_threads": 16,
+      "variants": {
+        "baseline": {
+          "engine_startup_s": [
+            4.638159099999029,
+            4.937406400000327
+          ],
+          "module_configure_s": [
+            0.0176721,
+            0.0188869
+          ],
+          "native_statistics": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3198,
+              "selection_launches": 1599,
+              "host_to_device_bytes": 17243616.0,
+              "device_to_host_bytes": 12792,
+              "peak_temporary_bytes": 214776,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3198,
+              "selection_launches": 1599,
+              "host_to_device_bytes": 17243616.0,
+              "device_to_host_bytes": 12792,
+              "peak_temporary_bytes": 214776,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0
+            }
+          ]
+        },
+        "candidate": {
+          "engine_startup_s": [
+            4.6960056999996596,
+            4.779743999999482
+          ],
+          "module_configure_s": [
+            0.0169991,
+            0.0175238
+          ],
+          "native_statistics": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3198,
+              "selection_launches": 1599,
+              "host_to_device_bytes": 17243616.0,
+              "device_to_host_bytes": 12792,
+              "peak_temporary_bytes": 214776,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3198,
+              "selection_launches": 1599,
+              "host_to_device_bytes": 17243616.0,
+              "device_to_host_bytes": 12792,
+              "peak_temporary_bytes": 214776,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0
+            }
+          ]
+        }
+      },
+      "entries": [
+        {
+          "history": 24,
+          "dimensions": 1,
+          "baseline": {
+            "warmed_median_ms": 1.45175,
+            "warmed_samples_ms": [
+              94.9169,
+              3.3437,
+              1.3032,
+              1.4022999999999999,
+              1.487,
+              1.4480000000000002,
+              1.2902,
+              1.2619,
+              1.4678999999999998,
+              96.6668,
+              2.6016,
+              1.2960999999999998,
+              1.4644,
+              1.4555,
+              1.4445000000000001,
+              1.2947,
+              1.2661,
+              2.7014
+            ],
+            "first_trial_ms": [
+              550.3645,
+              562.4038
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2443243520.0,
+              2359136256.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52205604864.0,
+              52119191552.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 1.4373,
+            "warmed_samples_ms": [
+              95.8595,
+              2.7001,
+              1.2717,
+              1.3698,
+              1.4346999999999999,
+              1.4716,
+              1.2630000000000001,
+              1.2291999999999998,
+              1.4055,
+              97.9182,
+              2.6366,
+              1.2840999999999998,
+              1.4493,
+              1.4399,
+              1.4582,
+              1.2729,
+              1.3068,
+              1.4864
+            ],
+            "first_trial_ms": [
+              551.2719000000001,
+              557.7352
+            ],
+            "matlab_memory_before_probes_bytes": [
+              2446172160.0,
+              2449301504.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52207767552.0,
+              52211564544.0
+            ]
+          },
+          "optimization_speedup": 1.0100535726709803
+        },
+        {
+          "history": 256,
+          "dimensions": 1,
+          "baseline": {
+            "warmed_median_ms": 1.39995,
+            "warmed_samples_ms": [
+              2.0997,
+              1.4494,
+              1.3867,
+              1.3944,
+              1.4049,
+              1.399,
+              1.3520999999999999,
+              1.397,
+              1.3651000000000002,
+              2.1201,
+              1.4707999999999999,
+              1.4009,
+              1.4271,
+              1.3941000000000001,
+              1.4157,
+              1.3684,
+              1.3886,
+              1.4022999999999999
+            ],
+            "first_trial_ms": [
+              19.4543,
+              20.0076
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52225482752.0,
+              52138663936.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52226805760.0,
+              52138663936.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 1.3912,
+            "warmed_samples_ms": [
+              2.0711000000000004,
+              1.396,
+              1.3387,
+              1.3729999999999998,
+              1.35,
+              1.3287000000000002,
+              1.3322,
+              1.3676000000000001,
+              1.3334,
+              2.157,
+              1.4548999999999999,
+              1.4350999999999998,
+              1.4179000000000002,
+              1.3864,
+              1.4178000000000002,
+              1.4098000000000002,
+              1.3995,
+              1.3825
+            ],
+            "first_trial_ms": [
+              19.008,
+              19.7084
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52214243328.0,
+              52217163776.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52215291904.0,
+              52218212352.0
+            ]
+          },
+          "optimization_speedup": 1.0062895342150662
+        },
+        {
+          "history": 1000,
+          "dimensions": 1,
+          "baseline": {
+            "warmed_median_ms": 1.8276000000000001,
+            "warmed_samples_ms": [
+              1.8296999999999999,
+              1.8361,
+              1.8219,
+              1.8516000000000001,
+              1.8291000000000002,
+              1.8223,
+              1.8215999999999999,
+              1.8362,
+              1.8233000000000001,
+              1.8261,
+              1.8589000000000002,
+              1.8328000000000002,
+              1.8615000000000002,
+              1.8231,
+              1.8419999999999999,
+              1.8259,
+              1.8127,
+              1.8197999999999999
+            ],
+            "first_trial_ms": [
+              18.861700000000003,
+              18.6797
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52261015552.0,
+              52174462976.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52261015552.0,
+              52174475264.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 1.8183500000000001,
+            "warmed_samples_ms": [
+              3.1689,
+              1.8281999999999998,
+              1.7934999999999999,
+              1.7878,
+              1.7541,
+              1.7853,
+              1.7622999999999998,
+              1.7845,
+              1.7814,
+              3.2467,
+              1.9220000000000002,
+              1.9068,
+              1.8660999999999999,
+              1.8785000000000003,
+              1.8279,
+              1.8362999999999998,
+              1.7976999999999999,
+              1.8088
+            ],
+            "first_trial_ms": [
+              29.780599999999996,
+              30.054299999999998
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52248514560.0,
+              52252327936.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52248514560.0,
+              52252336128.0
+            ]
+          },
+          "optimization_speedup": 1.0050870294497758
+        },
+        {
+          "history": 24,
+          "dimensions": 40,
+          "baseline": {
+            "warmed_median_ms": 40.0997,
+            "warmed_samples_ms": [
+              39.825599999999994,
+              39.75129999999999,
+              39.5767,
+              39.6543,
+              39.72260000000001,
+              39.8527,
+              39.7646,
+              40.0925,
+              39.8896,
+              40.1194,
+              40.1552,
+              40.1069,
+              40.1969,
+              40.3733,
+              40.243,
+              40.3881,
+              41.9801,
+              40.4696
+            ],
+            "first_trial_ms": [
+              58.98870000000001,
+              59.744699999999995
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52262060032.0,
+              52175523840.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52262080512.0,
+              52175523840.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 39.759550000000004,
+            "warmed_samples_ms": [
+              38.5171,
+              38.5145,
+              38.4842,
+              38.491200000000006,
+              38.558299999999996,
+              38.862,
+              38.7758,
+              39.1498,
+              39.2026,
+              40.4129,
+              41.1073,
+              40.337900000000005,
+              40.3692,
+              40.316500000000005,
+              40.5099,
+              40.422799999999995,
+              41.0491,
+              40.4869
+            ],
+            "first_trial_ms": [
+              61.652899999999995,
+              63.757099999999994
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52249567232.0,
+              52253384704.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52249628672.0,
+              52253401088.0
+            ]
+          },
+          "optimization_speedup": 1.0085551773096022
+        },
+        {
+          "history": 256,
+          "dimensions": 40,
+          "baseline": {
+            "warmed_median_ms": 49.84305,
+            "warmed_samples_ms": [
+              48.0938,
+              48.0039,
+              48.2387,
+              47.886199999999995,
+              49.05,
+              48.944,
+              48.4629,
+              50.083,
+              57.696999999999996,
+              49.97840000000001,
+              49.912,
+              50.0043,
+              50.033500000000004,
+              49.9095,
+              50.1545,
+              49.776599999999995,
+              51.3669,
+              49.0741
+            ],
+            "first_trial_ms": [
+              67.8881,
+              67.4481
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52289884160.0,
+              52202172416.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52292706304.0,
+              52204388352.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 48.4905,
+            "warmed_samples_ms": [
+              48.803200000000004,
+              48.4357,
+              50.0404,
+              48.411500000000004,
+              48.5453,
+              48.7195,
+              48.3443,
+              50.1028,
+              48.3885,
+              50.3913,
+              48.3045,
+              48.32899999999999,
+              48.124,
+              48.1771,
+              48.426500000000004,
+              50.4548,
+              51.3966,
+              49.6359
+            ],
+            "first_trial_ms": [
+              66.2508,
+              68.18579999999999
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52290162688.0,
+              52275273728.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52293206016.0,
+              52278120448.0
+            ]
+          },
+          "optimization_speedup": 1.02789309246141
+        },
+        {
+          "history": 1000,
+          "dimensions": 40,
+          "baseline": {
+            "warmed_median_ms": 68.46435,
+            "warmed_samples_ms": [
+              68.8125,
+              68.8734,
+              68.53129999999999,
+              68.60799999999999,
+              68.9608,
+              69.251,
+              68.3236,
+              68.39739999999999,
+              68.0623,
+              69.0319,
+              68.1416,
+              69.2517,
+              68.35979999999999,
+              67.6895,
+              67.922,
+              68.6536,
+              67.8739,
+              67.3194
+            ],
+            "first_trial_ms": [
+              88.45430000000002,
+              91.5668
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52478689280.0,
+              52391755776.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52479533056.0,
+              52392505344.0
+            ]
+          },
+          "candidate": {
+            "warmed_median_ms": 61.564800000000005,
+            "warmed_samples_ms": [
+              60.8819,
+              59.723099999999995,
+              59.174899999999994,
+              59.3928,
+              59.60079999999999,
+              62.0151,
+              60.730399999999996,
+              60.6947,
+              60.7513,
+              62.9531,
+              62.027100000000004,
+              61.574400000000004,
+              61.555200000000006,
+              61.6111,
+              62.027300000000004,
+              61.796699999999994,
+              62.7988,
+              61.741200000000006
+            ],
+            "first_trial_ms": [
+              132.3097,
+              134.8756
+            ],
+            "matlab_memory_before_probes_bytes": [
+              52478656512.0,
+              52465442816.0
+            ],
+            "matlab_memory_after_probes_bytes": [
+              52480692224.0,
+              52466118656.0
+            ]
+          },
+          "optimization_speedup": 1.1120697216591298
+        }
+      ]
+    }
+  ],
+  "optimized_cpu_gpu_comparison": [
+    {
+      "configured_threads": 1,
+      "history": 24,
+      "dimensions": 1,
+      "optimized_cpu_ms": 1.06935,
+      "optimized_gpu_ms": 1.4352500000000001,
+      "gpu_speedup_over_cpu": 0.7450618359170875,
+      "proposals_exactly_equal": true
+    },
+    {
+      "configured_threads": 1,
+      "history": 256,
+      "dimensions": 1,
+      "optimized_cpu_ms": 1.28545,
+      "optimized_gpu_ms": 1.4083999999999999,
+      "gpu_speedup_over_cpu": 0.9127023572848624,
+      "proposals_exactly_equal": true
+    },
+    {
+      "configured_threads": 1,
+      "history": 1000,
+      "dimensions": 1,
+      "optimized_cpu_ms": 2.5256999999999996,
+      "optimized_gpu_ms": 1.8218,
+      "gpu_speedup_over_cpu": 1.386376111538039,
+      "proposals_exactly_equal": true
+    },
+    {
+      "configured_threads": 1,
+      "history": 24,
+      "dimensions": 40,
+      "optimized_cpu_ms": 26.083599999999997,
+      "optimized_gpu_ms": 39.553799999999995,
+      "gpu_speedup_over_cpu": 0.659446121485167,
+      "proposals_exactly_equal": true
+    },
+    {
+      "configured_threads": 1,
+      "history": 256,
+      "dimensions": 40,
+      "optimized_cpu_ms": 48.0514,
+      "optimized_gpu_ms": 51.23365,
+      "gpu_speedup_over_cpu": 0.937887501671265,
+      "proposals_exactly_equal": true
+    },
+    {
+      "configured_threads": 1,
+      "history": 1000,
+      "dimensions": 40,
+      "optimized_cpu_ms": 92.65985,
+      "optimized_gpu_ms": 60.7586,
+      "gpu_speedup_over_cpu": 1.5250491288476036,
+      "proposals_exactly_equal": true
+    },
+    {
+      "configured_threads": 16,
+      "history": 24,
+      "dimensions": 1,
+      "optimized_cpu_ms": 1.0774,
+      "optimized_gpu_ms": 1.4373,
+      "gpu_speedup_over_cpu": 0.749599944340082,
+      "proposals_exactly_equal": true
+    },
+    {
+      "configured_threads": 16,
+      "history": 256,
+      "dimensions": 1,
+      "optimized_cpu_ms": 1.2842,
+      "optimized_gpu_ms": 1.3912,
+      "gpu_speedup_over_cpu": 0.9230879815986199,
+      "proposals_exactly_equal": true
+    },
+    {
+      "configured_threads": 16,
+      "history": 1000,
+      "dimensions": 1,
+      "optimized_cpu_ms": 2.5300000000000002,
+      "optimized_gpu_ms": 1.8183500000000001,
+      "gpu_speedup_over_cpu": 1.3913712981549207,
+      "proposals_exactly_equal": true
+    },
+    {
+      "configured_threads": 16,
+      "history": 24,
+      "dimensions": 40,
+      "optimized_cpu_ms": 26.40415,
+      "optimized_gpu_ms": 39.759550000000004,
+      "gpu_speedup_over_cpu": 0.6640957958528202,
+      "proposals_exactly_equal": true
+    },
+    {
+      "configured_threads": 16,
+      "history": 256,
+      "dimensions": 40,
+      "optimized_cpu_ms": 47.5844,
+      "optimized_gpu_ms": 48.4905,
+      "gpu_speedup_over_cpu": 0.9813138656025409,
+      "proposals_exactly_equal": true
+    },
+    {
+      "configured_threads": 16,
+      "history": 1000,
+      "dimensions": 40,
+      "optimized_cpu_ms": 93.7304,
+      "optimized_gpu_ms": 61.564800000000005,
+      "gpu_speedup_over_cpu": 1.5224673839596652,
+      "proposals_exactly_equal": true
+    }
+  ],
+  "isolated_transfer_seconds_measured": false,
+  "notes": [
+    "Development source comparison, not acceptance of the published 0.3.0 wheel.",
+    "Independent TPE only; the default multivariate native-history route is not measured.",
+    "Timings include ask, all suggestions, recording and tell; table materialization and setup fixture loading are outside the warmed region.",
+    "End-to-end GPU timings include allocation, upload, kernels and download; transfer byte counts are recorded, but isolated transfer seconds are not measured.",
+    "Thread counts configure MATLAB and OMP_NUM_THREADS; each operation need not use all configured threads.",
+    "Small-case changes are mixed and close to baseline; no universal speedup is claimed.",
+    "No Python/DB or Rustuna performance baseline is included.",
+    "Earlier overlapping historical_cpu_worker and A100 archival runs were excluded. Initial cache measurements are retained privately; these results use the final small-history path."
+  ]
+}

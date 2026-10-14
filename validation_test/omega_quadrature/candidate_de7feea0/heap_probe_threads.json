@@ -1,0 +1,17 @@
+[
+  {
+    "heap_requested": 200000000,
+    "threads": 60,
+    "error": "Local Heap overflow\n\tName: integrate-lh\n\tSize: 166666\n"
+  },
+  {
+    "heap_requested": 200000000,
+    "threads": 8,
+    "value": 172.73333333332724
+  },
+  {
+    "heap_requested": 200000000,
+    "threads": 1,
+    "value": 172.73333333332724
+  }
+]

@@ -1,0 +1,239 @@
+{
+  "checks": {
+    "closed_form_full_torque_Nm": 100.00000000000003,
+    "full_machine_torque_Nm": 100.00000000000003,
+    "half_over_full": 0.5,
+    "half_sector_torque_Nm": 50.000000000000014,
+    "max_force_identity_abs_error": 0.0,
+    "max_shear_vs_traction_abs_error": 0.0,
+    "max_torque_identity_abs_error": 0.0,
+    "reverse_over_full": -1.0,
+    "reverse_torque_Nm": -100.00000000000003,
+    "shear_stress_Pa": 63661.977236758146,
+    "zero_tangential_torque_Nm": 0.0
+  },
+  "field": {
+    "B_radial_T": 0.8,
+    "B_tangential_reference_T": 0.1
+  },
+  "geometry": {
+    "axial_length_m": 0.1,
+    "radius_m": 0.05
+  },
+  "kind": "air_gap_shear_torque_validation",
+  "rows": [
+    {
+      "force_identity_abs_error": 0.0,
+      "label": "full_machine_positive",
+      "shear_vs_traction_abs_error": 0.0,
+      "summary": {
+        "B_radial_T": 0.8,
+        "B_tangential_T": 0.1,
+        "angle_rad": 6.283185307179586,
+        "axial_length_m": 0.1,
+        "mu": 1.2566370614359173e-06,
+        "radius_m": 0.05,
+        "shear_stress_Pa": 63661.977236758146,
+        "surface_area_m2": 0.031415926535897934,
+        "tangential_force_N": 2000.0000000000005,
+        "torque_Nm": 100.00000000000003,
+        "torque_per_axial_length_N": 1000.0000000000002
+      },
+      "torque_identity_abs_error": 0.0,
+      "traction": {
+        "B": [
+          0.8,
+          0.1,
+          0.0
+        ],
+        "B_normal_T": 0.8,
+        "B_tangent_T": 0.10000000000000005,
+        "area_m2": 0.031415926535897934,
+        "force_N": [
+          7875.000000000002,
+          2000.0000000000005,
+          0.0
+        ],
+        "mu": 1.2566370614359173e-06,
+        "normal": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal_traction_Pa": 250669.0353697352,
+        "normal_traction_identity_Pa": 250669.0353697352,
+        "tangential_traction_Pa": [
+          0.0,
+          63661.977236758146,
+          0.0
+        ],
+        "tangential_traction_magnitude_Pa": 63661.977236758146,
+        "traction_Pa": [
+          250669.0353697352,
+          63661.977236758146,
+          0.0
+        ]
+      }
+    },
+    {
+      "force_identity_abs_error": 0.0,
+      "label": "half_sector_positive",
+      "shear_vs_traction_abs_error": 0.0,
+      "summary": {
+        "B_radial_T": 0.8,
+        "B_tangential_T": 0.1,
+        "angle_rad": 3.141592653589793,
+        "axial_length_m": 0.1,
+        "mu": 1.2566370614359173e-06,
+        "radius_m": 0.05,
+        "shear_stress_Pa": 63661.977236758146,
+        "surface_area_m2": 0.015707963267948967,
+        "tangential_force_N": 1000.0000000000002,
+        "torque_Nm": 50.000000000000014,
+        "torque_per_axial_length_N": 500.0000000000001
+      },
+      "torque_identity_abs_error": 0.0,
+      "traction": {
+        "B": [
+          0.8,
+          0.1,
+          0.0
+        ],
+        "B_normal_T": 0.8,
+        "B_tangent_T": 0.10000000000000005,
+        "area_m2": 0.015707963267948967,
+        "force_N": [
+          3937.500000000001,
+          1000.0000000000002,
+          0.0
+        ],
+        "mu": 1.2566370614359173e-06,
+        "normal": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal_traction_Pa": 250669.0353697352,
+        "normal_traction_identity_Pa": 250669.0353697352,
+        "tangential_traction_Pa": [
+          0.0,
+          63661.977236758146,
+          0.0
+        ],
+        "tangential_traction_magnitude_Pa": 63661.977236758146,
+        "traction_Pa": [
+          250669.0353697352,
+          63661.977236758146,
+          0.0
+        ]
+      }
+    },
+    {
+      "force_identity_abs_error": 0.0,
+      "label": "full_machine_reverse",
+      "shear_vs_traction_abs_error": 0.0,
+      "summary": {
+        "B_radial_T": 0.8,
+        "B_tangential_T": -0.1,
+        "angle_rad": 6.283185307179586,
+        "axial_length_m": 0.1,
+        "mu": 1.2566370614359173e-06,
+        "radius_m": 0.05,
+        "shear_stress_Pa": -63661.977236758146,
+        "surface_area_m2": 0.031415926535897934,
+        "tangential_force_N": -2000.0000000000005,
+        "torque_Nm": -100.00000000000003,
+        "torque_per_axial_length_N": -1000.0000000000002
+      },
+      "torque_identity_abs_error": 0.0,
+      "traction": {
+        "B": [
+          0.8,
+          -0.1,
+          0.0
+        ],
+        "B_normal_T": 0.8,
+        "B_tangent_T": 0.10000000000000005,
+        "area_m2": 0.031415926535897934,
+        "force_N": [
+          7875.000000000002,
+          -2000.0000000000005,
+          0.0
+        ],
+        "mu": 1.2566370614359173e-06,
+        "normal": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal_traction_Pa": 250669.0353697352,
+        "normal_traction_identity_Pa": 250669.0353697352,
+        "tangential_traction_Pa": [
+          0.0,
+          -63661.977236758146,
+          0.0
+        ],
+        "tangential_traction_magnitude_Pa": 63661.977236758146,
+        "traction_Pa": [
+          250669.0353697352,
+          -63661.977236758146,
+          0.0
+        ]
+      }
+    },
+    {
+      "force_identity_abs_error": 0.0,
+      "label": "no_tangential_field",
+      "shear_vs_traction_abs_error": 0.0,
+      "summary": {
+        "B_radial_T": 0.8,
+        "B_tangential_T": 0.0,
+        "angle_rad": 6.283185307179586,
+        "axial_length_m": 0.1,
+        "mu": 1.2566370614359173e-06,
+        "radius_m": 0.05,
+        "shear_stress_Pa": 0.0,
+        "surface_area_m2": 0.031415926535897934,
+        "tangential_force_N": 0.0,
+        "torque_Nm": 0.0,
+        "torque_per_axial_length_N": 0.0
+      },
+      "torque_identity_abs_error": 0.0,
+      "traction": {
+        "B": [
+          0.8,
+          0.0,
+          0.0
+        ],
+        "B_normal_T": 0.8,
+        "B_tangent_T": 0.0,
+        "area_m2": 0.031415926535897934,
+        "force_N": [
+          8000.000000000002,
+          0.0,
+          0.0
+        ],
+        "mu": 1.2566370614359173e-06,
+        "normal": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal_traction_Pa": 254647.90894703259,
+        "normal_traction_identity_Pa": 254647.90894703259,
+        "tangential_traction_Pa": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tangential_traction_magnitude_Pa": 0.0,
+        "traction_Pa": [
+          254647.90894703259,
+          0.0,
+          0.0
+        ]
+      }
+    }
+  ],
+  "validation_class": true
+}

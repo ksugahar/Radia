@@ -1,0 +1,169 @@
+{
+  "cases": {
+    "absorber": {
+      "absorptance": 1.0,
+      "area_m2": 0.5,
+      "cos_incidence": 0.5000000000000001,
+      "force_N": [
+        6.499687055219338e-09,
+        0.0,
+        -3.752596070979212e-09
+      ],
+      "force_magnitude_N": 7.505192141958422e-09,
+      "incident_intensity_W_per_m2": 4.500000000000001,
+      "incident_power_on_patch_W": 2.2500000000000004,
+      "normal_force_into_surface_N": 3.752596070979212e-09,
+      "poynting_W_per_m2": [
+        7.794228634059947,
+        0.0,
+        -4.500000000000001
+      ],
+      "poynting_magnitude_W_per_m2": 9.0,
+      "propagation_direction": [
+        0.8660254037844386,
+        0.0,
+        -0.5000000000000001
+      ],
+      "reflectance": 0.0,
+      "speed_m_per_s": 299792458.0,
+      "surface_normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "tangential_force_N": [
+        6.499687055219338e-09,
+        0.0,
+        0.0
+      ],
+      "tangential_force_magnitude_N": 6.499687055219338e-09,
+      "transmittance": 0.0
+    },
+    "reflector": {
+      "absorptance": 0.0,
+      "area_m2": 0.5,
+      "cos_incidence": 0.5000000000000001,
+      "force_N": [
+        0.0,
+        0.0,
+        -7.505192141958424e-09
+      ],
+      "force_magnitude_N": 7.505192141958424e-09,
+      "incident_intensity_W_per_m2": 4.500000000000001,
+      "incident_power_on_patch_W": 2.2500000000000004,
+      "normal_force_into_surface_N": 7.505192141958424e-09,
+      "poynting_W_per_m2": [
+        7.794228634059947,
+        0.0,
+        -4.500000000000001
+      ],
+      "poynting_magnitude_W_per_m2": 9.0,
+      "propagation_direction": [
+        0.8660254037844386,
+        0.0,
+        -0.5000000000000001
+      ],
+      "reflectance": 1.0,
+      "speed_m_per_s": 299792458.0,
+      "surface_normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "tangential_force_N": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "tangential_force_magnitude_N": 0.0,
+      "transmittance": 0.0
+    },
+    "scalar_absorber_reference": {
+      "absorptance": 1.0,
+      "area_m2": 0.5,
+      "force_components_N": {
+        "normal": 3.752596070979212e-09,
+        "tangent": 6.499687055219338e-09
+      },
+      "incidence_angle_deg": 59.99999999999999,
+      "incidence_angle_rad": 1.0471975511965976,
+      "incident_power_on_patch_W": 2.2500000000000004,
+      "intensity_W_per_m2": 9.0,
+      "normal_force_N": 3.752596070979212e-09,
+      "normal_momentum_factor": 1.0,
+      "normal_pressure_Pa": 7.505192141958424e-09,
+      "reflectance": 0.0,
+      "speed_m_per_s": 299792458.0,
+      "tangential_force_N": 6.499687055219338e-09,
+      "tangential_momentum_factor": 1.0,
+      "tangential_pressure_Pa": 1.2999374110438676e-08,
+      "transmittance": 0.0
+    },
+    "scalar_reflector_reference": {
+      "absorptance": 0.0,
+      "area_m2": 0.5,
+      "force_components_N": {
+        "normal": 7.505192141958424e-09,
+        "tangent": 0.0
+      },
+      "incidence_angle_deg": 59.99999999999999,
+      "incidence_angle_rad": 1.0471975511965976,
+      "incident_power_on_patch_W": 2.2500000000000004,
+      "intensity_W_per_m2": 9.0,
+      "normal_force_N": 7.505192141958424e-09,
+      "normal_momentum_factor": 2.0,
+      "normal_pressure_Pa": 1.5010384283916848e-08,
+      "reflectance": 1.0,
+      "speed_m_per_s": 299792458.0,
+      "tangential_force_N": 0.0,
+      "tangential_momentum_factor": 0.0,
+      "tangential_pressure_Pa": 0.0,
+      "transmittance": 0.0
+    }
+  },
+  "checks": {
+    "absorber_force_vector_N": [
+      6.499687055219338e-09,
+      0.0,
+      -3.752596070979212e-09
+    ],
+    "absorber_normal_force_abs_error_N": 0.0,
+    "absorber_tangential_force_abs_error_N": 0.0,
+    "expected_incident_power_on_patch_W": 2.2500000000000004,
+    "incident_power_on_patch_W": 2.2500000000000004,
+    "reflector_force_vector_N": [
+      0.0,
+      0.0,
+      -7.505192141958424e-09
+    ],
+    "reflector_normal_force_abs_error_N": 0.0,
+    "reflector_tangential_force_N": 0.0,
+    "speed_m_per_s": 299792458.0
+  },
+  "force_learning": "3D Poynting vectors reduce to normal and tangential radiation-force components",
+  "generated_at_utc": "2026-06-27T09:44:15Z",
+  "kind": "poynting_patch_force_vector",
+  "parameters": {
+    "area_m2": 0.5,
+    "incidence_angle_deg": 60.0,
+    "intensity_W_per_m2": 9.0,
+    "poynting_W_per_m2": [
+      7.794228634059947,
+      0.0,
+      -4.500000000000001
+    ],
+    "surface_normal": [
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "schema": "radia.validation.rf_waveguide.validation_poynting_patch_force_vector.v1",
+  "validation_class": true,
+  "versions": {
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "python_version": "3.12.10",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  }
+}

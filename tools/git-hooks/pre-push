@@ -1,0 +1,54 @@
+#!/bin/bash
+# Radia pre-push hook.
+#
+# TRACKED SOURCE: tools/git-hooks/pre-push
+# Installed into .git/hooks/pre-push by `python tools/install_git_hooks.py`
+# (run once per clone).  Edit THIS file, not the installed copy, then re-run
+# the installer.
+#
+# CI preflight gate -- on a push to main, send the unpushed candidate to LAB
+# and run `tools/ci_preflight_lab.py`. It ABORTS the push if LAB reports a red
+# fast contract gate. Native binaries are published only from the exact CI
+# artifact by the release workflow; a developer push must never upload mutable
+# workstation binaries. Bypass the preflight for an emergency with:
+# CI_PREFLIGHT_SKIP=1 git push
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+[ -z "$REPO_ROOT" ] && exit 0
+cd "$REPO_ROOT" || exit 0
+
+ZERO="0000000000000000000000000000000000000000"
+
+# ---- Duty 1: CI preflight on pushes to main -------------------------------
+if [ "${CI_PREFLIGHT_SKIP:-}" != "1" ]; then
+    while read -r local_ref local_sha remote_ref remote_sha; do
+        # Gate ONLY updates to main (skip deletes + feature branches).
+        [ "$remote_ref" = "refs/heads/main" ] || continue
+        [ "$local_sha" = "$ZERO" ] && continue          # branch delete
+        if [ ! -f tools/ci_preflight_lab.py ]; then
+            echo "pre-push: LAB preflight helper missing; update this checkout before pushing main." >&2
+            exit 1
+        fi
+        echo "pre-push: LAB CI preflight before pushing to main"
+        echo "          (bypass with: CI_PREFLIGHT_SKIP=1 git push)"
+        if ! (
+            # The remote helper creates a temporary LAB worktree. Inherited
+            # hook-local GIT_* variables must not leak into its local bundle.
+            unset $(git rev-parse --local-env-vars)
+            # The release worktree can be reached through a NAS drive mapping.
+            # Permit the local bundle command to inspect this approved tree.
+            export GIT_CONFIG_COUNT=1
+            export GIT_CONFIG_KEY_0=safe.directory
+            export GIT_CONFIG_VALUE_0='*'
+            python tools/ci_preflight_lab.py --base "$remote_sha" --head "$local_sha"
+        ); then
+            echo "" >&2
+            echo "pre-push: LAB CI preflight is RED -- push ABORTED." >&2
+            echo "          Fix the failing LAB gate, or override with" >&2
+            echo "          CI_PREFLIGHT_SKIP=1 git push" >&2
+            exit 1
+        fi
+    done
+fi
+
+exit 0

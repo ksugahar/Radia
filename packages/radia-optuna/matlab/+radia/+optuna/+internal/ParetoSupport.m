@@ -1,0 +1,455 @@
+classdef ParetoSupport
+    %PARETOSUPPORT Shared non-dominated ranking and observation extraction.
+    methods (Static)
+        function [x, values, trialNumbers] = numericObservations(study, name)
+            params=study.ParamTable; rows=params.Name==string(name) & isfinite(params.ValueNumeric);
+            [x,values,trialNumbers]=radia.optuna.internal.ParetoSupport.collect( ...
+                study,params.TrialNumber(rows),params.ValueNumeric(rows));
+        end
+
+        function [tokens, values, trialNumbers] = categoricalObservations(study, name)
+            params=study.ParamTable; rows=params.Name==string(name) & params.Kind=="categorical";
+            raw=params.ValueText(rows); numeric=params.ValueNumeric(rows);
+            for k=1:numel(raw)
+                if isfinite(numeric(k))
+                    raw(k)=append("numeric:",jsonencode(double(numeric(k))));
+                end
+            end
+            [tokens,values,trialNumbers]=radia.optuna.internal.ParetoSupport.collect( ...
+                study,params.TrialNumber(rows),raw);
+        end
+
+        function [goodMask,goodWeights] = splitMOTPE(study,trialNumbers,values,nBelow)
+            count=size(values,1); nBelow=max(0,min(count,nBelow));
+            goodMask=false(count,1); goodWeights=zeros(count,1);
+            if nBelow==0, return, end
+            violations=zeros(count,1); feasible=true(count,1);
+            for k=1:count
+                [present,constraints]=study.constraintRecord(trialNumbers(k));
+                if ~present
+                    % Optuna 5 exposes constraints as a dictionary. An
+                    % unset/empty dictionary has no violated entries.
+                    continue
+                end
+                positive=max(constraints,0);
+                feasible(k)=all(positive<=0);
+                violations(k)=sum(positive);
+            end
+            feasibleIndices=find(feasible);
+            takeFeasible=min(nBelow,numel(feasibleIndices));
+            if takeFeasible>0
+                selected=radia.optuna.internal.ParetoSupport.selectByParetoHV( ...
+                    values(feasibleIndices,:),study.Directions,takeFeasible);
+                goodMask(feasibleIndices(selected))=true;
+            end
+            remaining=nBelow-sum(goodMask);
+            if remaining>0
+                infeasibleIndices=find(~feasible);
+                [~,order]=sortrows([violations(infeasibleIndices),trialNumbers(infeasibleIndices)],[1 2]);
+                chosen=infeasibleIndices(order(1:min(remaining,numel(order))));
+                goodMask(chosen)=true;
+            end
+            % Optuna 5 removed hypervolume-contribution weighting below.
+            goodWeights=ones(sum(goodMask),1);
+        end
+
+        function [rank,crowding] = rankAndCrowding(values,directions)
+            if isempty(values)
+                rank=zeros(0,1); crowding=zeros(0,1); return
+            end
+            values=double(values); directions=string(directions);
+            if ~ismatrix(values) || size(values,2)~=numel(directions) || ...
+                    any(~isfinite(values),"all")
+                error("radia:optuna:InvalidParetoValues", ...
+                    "Values must be a finite matrix with one column per direction.");
+            end
+            if any(directions~="minimize" & directions~="maximize")
+                error("radia:optuna:InvalidDirection", ...
+                    "Directions must be minimize or maximize.");
+            end
+            signs=ones(1,numel(directions)); signs(directions=="maximize")=-1;
+            if radia.optuna.internal.NativeKernels.has( ...
+                    "optuna.pareto.rank_crowding")
+                [rank,crowding]=radia.optuna.internal.NativeKernels.call( ...
+                    "optuna.pareto.rank_crowding",values,signs);
+                return
+            end
+            normalized=values.*signs;
+            count=size(normalized,1); rank=inf(count,1); remaining=true(count,1); level=1;
+            while any(remaining)
+                front=false(count,1); candidates=find(remaining);
+                for ii=1:numel(candidates)
+                    i=candidates(ii); others=candidates(candidates~=i);
+                    dominated=any(all(normalized(others,:)<=normalized(i,:),2) & ...
+                        any(normalized(others,:)<normalized(i,:),2));
+                    front(i)=~dominated;
+                end
+                rank(front)=level; remaining(front)=false; level=level+1;
+            end
+            crowding=zeros(count,1);
+            for level=unique(rank)'
+                front=find(rank==level); n=numel(front);
+                if n<=2, crowding(front)=Inf; continue, end
+                for objective=1:size(normalized,2)
+                    [ordered,order]=sort(normalized(front,objective)); indices=front(order);
+                    crowding(indices([1 end]))=Inf; span=ordered(end)-ordered(1);
+                    if span>0
+                        for k=2:n-1
+                            if isfinite(crowding(indices(k)))
+                                crowding(indices(k))=crowding(indices(k)) + ...
+                                    (ordered(k+1)-ordered(k-1))/span;
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        function [feasible,violation,rank,crowding,order,missing] = ...
+                constrainedRankAndCrowding(study,trialNumbers,values)
+            %CONSTRAINEDRANKANDCROWDING Optuna 5 elite rank groups.
+            trialNumbers=reshape(double(trialNumbers),[],1);
+            values=double(values);
+            count=numel(trialNumbers);
+            if size(values,1)~=count || ...
+                    size(values,2)~=numel(study.Directions) || ...
+                    any(~isfinite(values),"all")
+                error("radia:optuna:NSGAIIObservations", ...
+                    "Trial numbers and finite objective values must align.");
+            end
+
+            feasible=true(count,1);
+            violation=zeros(count,1);
+            missing=false(count,1);
+            constrained=study.hasConstraintRecords();
+            if constrained
+                for index=1:count
+                    [present,constraints]=study.constraintRecord( ...
+                        trialNumbers(index));
+                    if ~present
+                        % An absent record is the same public empty
+                        % constraint dictionary exposed by FrozenTrial.
+                        continue
+                    end
+                    positive=max(constraints,0);
+                    feasible(index)=all(positive<=0);
+                    violation(index)=sum(positive);
+                end
+            end
+
+            rank=inf(count,1);
+            crowding=zeros(count,1);
+            feasibleIndices=find(feasible);
+            if ~isempty(feasibleIndices)
+                [localRank,crowding(feasibleIndices)]= ...
+                    radia.optuna.internal.ParetoSupport.rankAndCrowding( ...
+                    values(feasibleIndices,:),study.Directions);
+                rank(feasibleIndices)=localRank;
+            end
+            nextRank=max([0;rank(isfinite(rank))])+1;
+            infeasibleIndices=find(~feasible);
+            if ~isempty(infeasibleIndices)
+                uniqueViolation=unique(violation(infeasibleIndices),"sorted");
+                for index=1:numel(uniqueViolation)
+                    rank(infeasibleIndices( ...
+                        violation(infeasibleIndices)==uniqueViolation(index)))= ...
+                        nextRank+index-1;
+                end
+                nextRank=nextRank+numel(uniqueViolation);
+            end
+            [~,order]=sortrows([rank,(1:count)'],[1 2]);
+        end
+
+        function order = eliteSelectionOrder(study,trialNumbers,values,count)
+            %ELITESELECTIONORDER Front-wise selection used by Optuna NSGA-II.
+            [~,~,rank,~,~,~]= ...
+                radia.optuna.internal.ParetoSupport. ...
+                constrainedRankAndCrowding(study,trialNumbers,values);
+            order=zeros(0,1);
+            for level=reshape(unique(rank,"sorted"),1,[])
+                front=find(rank==level);
+                remaining=count-numel(order);
+                if remaining<=0
+                    break
+                end
+                if numel(front)<remaining
+                    order=[order;front]; %#ok<AGROW>
+                    continue
+                end
+                distance=radia.optuna.internal.ParetoSupport. ...
+                    crowdingDistance(values(front,:));
+                % _calc_crowding_distance leaves the working population
+                % sorted by the final objective. Python then performs a
+                % stable ascending distance sort and reverses the result.
+                [~,workingOrder]=sort(values(front,end),"ascend");
+                [~,distanceOrder]=sort(distance(workingOrder),"ascend");
+                cutoff=flipud(workingOrder(distanceOrder));
+                order=[order;front(cutoff(1:min(remaining,numel(front))))]; %#ok<AGROW>
+                break
+            end
+        end
+
+        function result = constrainedDominates(study,leftNumber,leftValues, ...
+                rightNumber,rightValues)
+            [leftPresent,leftConstraints]=study.constraintRecord(leftNumber);
+            [rightPresent,rightConstraints]=study.constraintRecord(rightNumber);
+            if ~leftPresent, leftConstraints=zeros(1,0); end
+            if ~rightPresent, rightConstraints=zeros(1,0); end
+            leftViolation=sum(max(leftConstraints,0));
+            rightViolation=sum(max(rightConstraints,0));
+            leftFeasible=leftViolation<=0;
+            rightFeasible=rightViolation<=0;
+            if leftFeasible~=rightFeasible
+                result=leftFeasible;
+                return
+            end
+            if ~leftFeasible
+                result=leftViolation<rightViolation;
+                return
+            end
+            signs=ones(1,numel(study.Directions));
+            signs(study.Directions=="maximize")=-1;
+            left=reshape(double(leftValues),1,[]).*signs;
+            right=reshape(double(rightValues),1,[]).*signs;
+            result=all(left<=right) && any(left<right);
+        end
+
+        function distance = crowdingDistance(values)
+            values=double(values);
+            count=size(values,1);
+            distance=zeros(count,1);
+            if count==0
+                return
+            end
+            for objective=1:size(values,2)
+                [sorted,indices]=sort(values(:,objective),"ascend");
+                finite=sorted(isfinite(sorted));
+                if isempty(finite)
+                    width=0;
+                else
+                    width=finite(end)-finite(1);
+                end
+                padded=[-Inf;sorted;Inf];
+                if width<=0
+                    gaps=zeros(count,1);
+                else
+                    gaps=(padded(3:end)-padded(1:end-2))/width;
+                end
+                distance(indices)=distance(indices)+gaps;
+            end
+        end
+
+        function order = preferenceOrder(values,directions)
+            [rank,crowding]=radia.optuna.internal.ParetoSupport.rankAndCrowding(values,directions);
+            finiteCrowding=crowding; finiteCrowding(isinf(finiteCrowding))=realmax;
+            [~,order]=sortrows([rank,-finiteCrowding],[1 2]);
+        end
+
+        function volume = computeHypervolume(points,reference)
+            %COMPUTEHYPERVOLUME Public internal contract for GP acquisition.
+            volume=radia.optuna.internal.ParetoSupport. ...
+                hypervolume(points,reference);
+        end
+
+        function improvement = hypervolumeImprovement2D( ...
+                samples,front,reference)
+            %HYPERVOLUMEIMPROVEMENT2D Vector contract for GP Monte Carlo.
+            samples=double(samples);
+            front=double(front);
+            reference=reshape(double(reference),1,[]);
+            if size(samples,2)~=2 || size(front,2)~=2 || ...
+                    numel(reference)~=2
+                error("radia:optuna:HypervolumeDimension", ...
+                    "Two-objective samples, front, and reference are required.");
+            end
+            front=front(all(isfinite(front),2),:);
+            front=front(front(:,1)<=reference(1) & ...
+                front(:,2)<=reference(2),:);
+            front=sortrows(front,1);
+            keep=false(size(front,1),1);
+            bestY=Inf;
+            for row=1:size(front,1)
+                if front(row,2)<bestY
+                    keep(row)=true;
+                    bestY=front(row,2);
+                end
+            end
+            front=front(keep,:);
+            improvement=zeros(size(samples,1),1);
+            for sample=1:size(samples,1)
+                point=samples(sample,:);
+                if any(~isfinite(point)) || ...
+                        point(1)>=reference(1) || point(2)>=reference(2)
+                    continue
+                end
+                left=point(1);
+                existingY=reference(2);
+                for row=1:size(front,1)
+                    if front(row,1)<=left
+                        existingY=min(existingY,front(row,2));
+                        continue
+                    end
+                    right=min(front(row,1),reference(1));
+                    improvement(sample)=improvement(sample)+ ...
+                        max(0,right-left)*max(0,existingY-point(2));
+                    left=right;
+                    existingY=min(existingY,front(row,2));
+                    if left>=reference(1), break, end
+                end
+                if left<reference(1)
+                    improvement(sample)=improvement(sample)+ ...
+                        (reference(1)-left)*max(0,existingY-point(2));
+                end
+            end
+        end
+    end
+
+    methods (Static,Access=private)
+        function [data,values,trialNumbers] = collect(study,trialNumbers,data)
+            objectiveCount = numel(study.Directions);
+            count = numel(trialNumbers);
+            values = NaN(count, objectiveCount);
+            [knownTrials, trialRows] = ismember( ...
+                trialNumbers, study.TrialTable.TrialNumber);
+            complete = false(count, 1);
+            complete(knownTrials) = ...
+                study.TrialTable.State(trialRows(knownTrials)) == "COMPLETE";
+            objectives = study.ObjectiveTable;
+            for objective = 1:objectiveCount
+                rows = objectives.ObjectiveIndex == objective;
+                numbers = objectives.TrialNumber(rows);
+                objectiveValues = objectives.Value(rows);
+                [present, locations] = ismember(trialNumbers, numbers);
+                values(present, objective) = objectiveValues(locations(present));
+            end
+            keep = complete & all(isfinite(values), 2);
+            data = data(keep);
+            values = values(keep,:);
+            trialNumbers = trialNumbers(keep);
+        end
+
+
+        function selected = selectByParetoHV(values,directions,count)
+            [rank,~]=radia.optuna.internal.ParetoSupport.rankAndCrowding(values,directions);
+            selected=false(size(values,1),1);
+            for level=reshape(unique(rank)',1,[])
+                front=find(rank==level); remaining=count-sum(selected);
+                if remaining<=0, break, end
+                if numel(front)<=remaining
+                    selected(front)=true;
+                else
+                    chosen = ...
+                        radia.optuna.internal.ParetoSupport.greedyHVSubset( ...
+                        values(front,:), directions, remaining);
+                    selected(front(chosen)) = true;
+                    break
+                end
+            end
+        end
+
+        function selected = greedyHVSubset(values, directions, count)
+            % Match Optuna HSSP's forward greedy hypervolume selection.
+            signs = ones(1, numel(directions));
+            signs(string(directions) == "maximize") = -1;
+            points = double(values) .* signs;
+            [points, order] = sortrows(points);
+            worst = max(points, [], 1);
+            reference = worst + max(0.1 * abs(worst), 1e-12);
+            if size(points, 2) == 2
+                selected = ...
+                    radia.optuna.internal.ParetoSupport.greedyHVSubset2D( ...
+                    points, order, count, reference);
+                return
+            end
+            chosen = false(size(points, 1), 1);
+            currentVolume = 0;
+            for slot = 1:min(count, size(points, 1))
+                contributions = -Inf(size(points, 1), 1);
+                for candidate = reshape(find(~chosen), 1, [])
+                    included = chosen;
+                    included(candidate) = true;
+                    contributions(candidate) = ...
+                        radia.optuna.internal.ParetoSupport.hypervolume( ...
+                        points(included,:), reference) - currentVolume;
+                end
+                [~, best] = max(contributions);
+                chosen(best) = true;
+                currentVolume = ...
+                    radia.optuna.internal.ParetoSupport.hypervolume( ...
+                    points(chosen,:), reference);
+            end
+            selected = sort(order(chosen));
+        end
+
+        function selected = greedyHVSubset2D( ...
+                points, originalOrder, count, reference)
+            % O(subset size * population) rectangle update for two objectives.
+            remainingIndices = (1:size(points, 1)).';
+            rectangleDiagonals = repmat(reference, size(points, 1), 1);
+            selectedSorted = zeros(min(count, size(points, 1)), 1);
+            for slot = 1:numel(selectedSorted)
+                contributions = prod(rectangleDiagonals - points, 2);
+                [~, best] = max(contributions);
+                selectedSorted(slot) = remainingIndices(best);
+                selectedPoint = points(best, :);
+
+                keep = true(size(points, 1), 1);
+                keep(best) = false;
+                remainingIndices = remainingIndices(keep);
+                rectangleDiagonals = rectangleDiagonals(keep, :);
+                points = points(keep, :);
+                if best > 1
+                    rectangleDiagonals(1:best-1, 1) = min( ...
+                        selectedPoint(1), rectangleDiagonals(1:best-1, 1));
+                end
+                if best <= size(rectangleDiagonals, 1)
+                    rectangleDiagonals(best:end, 2) = min( ...
+                        selectedPoint(2), rectangleDiagonals(best:end, 2));
+                end
+            end
+            selected = sort(originalOrder(selectedSorted));
+        end
+
+        function weights = hypervolumeContributions(values,directions)
+            if isempty(values), weights=zeros(0,1); return, end
+            signs=ones(1,numel(directions)); signs(string(directions)=="maximize")=-1;
+            points=double(values).*signs;
+            worst=max(points,[],1); reference=worst+max(0.1*abs(worst),1e-12);
+            [rank,~]=radia.optuna.internal.ParetoSupport. ...
+                rankAndCrowding(values,directions);
+            onFront=rank==min(rank);
+            paretoPoints=points(onFront,:);
+            total=radia.optuna.internal.ParetoSupport.hypervolume( ...
+                paretoPoints,reference);
+            weights=zeros(size(points,1),1);
+            frontIndices=find(onFront);
+            for index=1:numel(frontIndices)
+                remaining=paretoPoints;
+                remaining(index,:)=[];
+                weights(frontIndices(index))=max(total- ...
+                    radia.optuna.internal.ParetoSupport.hypervolume( ...
+                    remaining,reference),1e-12);
+            end
+        end
+
+        function volume = hypervolume(points,reference)
+            if isempty(points), volume=0; return, end
+            points=min(double(points),reference);
+            points=points(all(points<reference,2),:);
+            if isempty(points), volume=0; return, end
+            if size(points,2)==1
+                volume=max(0,reference(1)-min(points(:,1))); return
+            end
+            coordinates=sort(unique(points(:,1)));
+            volume=0;
+            for k=1:numel(coordinates)
+                left=coordinates(k);
+                if k<numel(coordinates), right=coordinates(k+1); else, right=reference(1); end
+                if right<=left, continue, end
+                active=points(points(:,1)<=left,2:end);
+                volume=volume+(right-left)* ...
+                    radia.optuna.internal.ParetoSupport.hypervolume(active,reference(2:end));
+            end
+        end
+    end
+end

@@ -1,0 +1,109 @@
+{
+  "checks": {
+    "coenergy_even_energy_residual_J": 0.0005000000000000004,
+    "coenergy_pair_force_N": 12.50000000000001,
+    "coenergy_sweep_center_force_N": 12.50000000000001,
+    "expected_even_energy_residual_J": 0.0005,
+    "stored_energy_even_energy_residual_J": 0.0005000000000000004,
+    "stored_energy_pair_force_N": 12.50000000000001,
+    "stored_energy_sweep_center_force_N": 12.50000000000001
+  },
+  "coenergy_pair": {
+    "center_position_m": 0.0,
+    "denergy_dx_N": 12.50000000000001,
+    "displacement_m": 0.001,
+    "energy_center_J": 0.25,
+    "energy_kind": "coenergy",
+    "energy_minus_J": 0.238,
+    "energy_plus_J": 0.263,
+    "energy_to_force_sign": 1.0,
+    "even_energy_residual_J": 0.0005000000000000004,
+    "even_energy_residual_abs_J": 0.0005000000000000004,
+    "force_N": 12.50000000000001,
+    "position_minus_m": -0.001,
+    "position_plus_m": 0.001,
+    "stencil": "symmetric_central_pair",
+    "virtual_work_identity": "F = dW_co/dx at fixed current"
+  },
+  "coenergy_sweep_summary": {
+    "energy_kind": "coenergy",
+    "energy_to_force_sign": 1.0,
+    "force_max_N": 14.000000000000012,
+    "force_mean_N": 12.500000000000004,
+    "force_min_N": 10.999999999999982,
+    "force_peak_abs_N": 14.000000000000012,
+    "n_samples": 5,
+    "virtual_work_identity": "F = dW_co/dx at fixed current"
+  },
+  "energy_model": {
+    "coenergy_formula": "Wco(x) = offset + F*x + 0.5*k*x^2",
+    "displacement_m": 0.001,
+    "expected_force_N": 12.5,
+    "offset_J": 0.25,
+    "positions_m": [
+      -0.002,
+      -0.001,
+      0.0,
+      0.001,
+      0.002
+    ],
+    "stiffness_N_per_m": 1000.0,
+    "stored_energy_formula": "W(x) = offset - F*x + 0.5*k*x^2"
+  },
+  "force_learning": "matched +/- displacement energies give the center force by a two-point virtual-work central difference",
+  "kind": "virtual_work_symmetric_pair_force",
+  "stored_energy_pair": {
+    "center_position_m": 0.0,
+    "denergy_dx_N": -12.50000000000001,
+    "displacement_m": 0.001,
+    "energy_center_J": 0.25,
+    "energy_kind": "stored_energy",
+    "energy_minus_J": 0.263,
+    "energy_plus_J": 0.238,
+    "energy_to_force_sign": -1.0,
+    "even_energy_residual_J": 0.0005000000000000004,
+    "even_energy_residual_abs_J": 0.0005000000000000004,
+    "force_N": 12.50000000000001,
+    "position_minus_m": -0.001,
+    "position_plus_m": 0.001,
+    "stencil": "symmetric_central_pair",
+    "virtual_work_identity": "F = -dW/dx at fixed flux/source-free displacement"
+  },
+  "stored_energy_sweep_summary": {
+    "energy_kind": "stored_energy",
+    "energy_to_force_sign": -1.0,
+    "force_max_N": 14.000000000000012,
+    "force_mean_N": 12.500000000000004,
+    "force_min_N": 10.999999999999982,
+    "force_peak_abs_N": 14.000000000000012,
+    "n_samples": 5,
+    "virtual_work_identity": "F = -dW/dx at fixed flux/source-free displacement"
+  },
+  "sweep_center_rows": {
+    "coenergy": {
+      "denergy_dx_N": 12.50000000000001,
+      "energy_J": 0.25,
+      "energy_kind": "coenergy",
+      "force_N": 12.50000000000001,
+      "index": 3,
+      "position_m": 0.0,
+      "position_minus_m": -0.001,
+      "position_plus_m": 0.001,
+      "stencil": "central",
+      "virtual_work_identity": "F = dW_co/dx at fixed current"
+    },
+    "stored_energy": {
+      "denergy_dx_N": -12.50000000000001,
+      "energy_J": 0.25,
+      "energy_kind": "stored_energy",
+      "force_N": 12.50000000000001,
+      "index": 3,
+      "position_m": 0.0,
+      "position_minus_m": -0.001,
+      "position_plus_m": 0.001,
+      "stencil": "central",
+      "virtual_work_identity": "F = -dW/dx at fixed flux/source-free displacement"
+    }
+  },
+  "validation_class": true
+}

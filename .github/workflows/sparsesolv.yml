@@ -1,0 +1,487 @@
+name: SparseSolv AMS
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/radia/_residual_gate.py'
+      - 'validation_test/open_boundary/test_kelvin_vector_direct_gate.py'
+      - 'validation_test/team21/**'
+      - 'tests/test_team21a_geometry_source.py'
+      - 'docs/maglev/demos/sphere/maglev_sphere_force.py'
+      - 'docs/maglev/demos/team28/team28_arnoldi_force.py'
+      - 'docs/maglev/demos/rotating_magnet_eddy.py'
+      - 'tests/test_maglev_sphere_golden.py'
+      - 'tests/test_team28_arnoldi_golden.py'
+      - 'tests/test_rotating_magnet_eddy_golden.py'
+      - 'validation_test/maglev/test_demo_evidence.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py'
+      - 'validation_test/radia_mcp/test_axi_eddy_current_drive.py'
+      - 'validation_test/radia_mcp/test_eddy_driven_region.py'
+      - 'validation_test/radia_mcp/test_aphi_gauge_point.py'
+      - 'src/radia/bem/sibc_hacapk.py'
+      - 'src/radia/panels/surface_mesh_extract.py'
+      - 'tests/test_surface_orientation.py'
+      - 'src/radia/bem_sibc_solver.py'
+      - 'tests/test_bem_sibc_acceptance.py'
+      - 'src/radia/esim_cell_problem.py'
+      - 'src/radia/analytical_formulas/induction_heating.py'
+      - 'tests/test_esim_integration.py'
+      - 'src/radia/esim_coupled_solver.py'
+      - 'packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py'
+      - 'src/radia/gmsh_post_export.py'
+      - 'src/radia/em_material.py'
+      - 'src/radia/coil_from_cad.py'
+      - 'src/radia/force_ngsolve.py'
+      - 'src/radia/scalar_bie_sibc.py'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/check.py'
+      - 'tests/test_ih_operator_assembly.py'
+      - 'tests/test_ih_operator_axisym.py'
+      - 'tests/test_ih_fin_surface_boundary.py'
+      - 'tests/axifem/test_heat_henrotte_smoke.py'
+      - 'tests/axifem/test_heat_field_extrema.py'
+      - 'validation_test/induction_heating/test_ih_operator_physics_golden.py'
+      - 'validation_test/axifem/test_heat_axisym_e2e.py'
+      - 'src/radia/esim_multiport.py'
+      - 'src/radia/panels/calc_inductance.py'
+      - 'tests/test_esim_incident_only_retirement.py'
+      - 'tests/test_esim_convergence_propagation.py'
+      - 'tests/analytical_formulas/test_induction_heating.py'
+      - 'src/radia/panels/em_table.py'
+      - 'tests/test_em_table.py'
+      - 'src/runtime/ih/radia_ih_thermal.cpp'
+      - 'tests/cpp/test_radia_ih_thermal_acceptance.cpp'
+      - 'src/radia/ih*.py'
+      - 'src/radia/panels/calc_heat*.py'
+      - 'src/radia/panels/calc_ih_axisym_coupled.py'
+      - 'src/radia/panels/calc_fem_kelvin.py'
+      - 'src/radia/panels/calc_fem_coilmesh.py'
+      - 'tests/test_ih_*.py'
+      - 'validation_test/induction_heating/test_fem_ams_parity.py'
+      - 'validation_test/induction_heating/fem_sibc_geometry.py'
+      - 'src/radia/vim/_nonlinear.py'
+      - 'src/radia/vim/_solve.py'
+      - 'tests/test_hdiv_energy_material_consistency.py'
+      - 'src/core/rad_arc_section.h'
+      - 'src/core/rad_arc_current.cpp'
+      - 'src/core/rad_ngsolve_radia_field.h'
+      - 'src/core/rad_parallel.h'
+      - 'tests/test_arc_far_rule.py'
+      - 'tests/test_radiafield_cache_parallel.py'
+      - 'tests/test_radiafield_memoize.py'
+      - 'tests/test_radiafield_precision.py'
+      - 'tests/test_mixed_omega_source_load.py'
+      - 'tests/test_three_engine_energy.py'
+      - 'validation_test/c_type_three_engine/magnetic_energy.py'
+      - 'tests/test_ams_internal_setup_parallel.py'
+      - 'src/core/rad_hacapk*'
+      - 'src/ext/HACApK/**'
+      - 'tests/test_hdiv_chargegram_build_safety.py'
+      - 'tests/test_hdiv_vim_native_matrix.py'
+      - 'tests/test_hdiv_same_process_determinism.py'
+      - 'src/radia/vector_potential_solver.py'
+      - 'src/radia/scalar_potential_solver.py'
+      - 'validation_test/panels/test_scalar_linear_direct.py'
+      - 'validation_test/panels/test_heat_boundary_roles.py'
+      - 'src/radia/topology_optimization.py'
+      - 'src/core/rad_hdiv*'
+      - 'src/radia/vim/**'
+      - 'src/radia/accelerator_lie_topopt.py'
+      - 'src/radia/isochronous_topopt.py'
+      - 'src/radia/ffag_topopt.py'
+      - 'src/radia/kelvin_identify_ngsolve.py'
+      - 'tests/feec/test_hdiv_vim_cyclic_periodic_hex.py'
+      - 'tests/test_hdiv_vim_bh_validation.py'
+      - 'tests/test_hdiv_vim_capabilities.py'
+      - 'tests/test_isochronous_topopt.py'
+      - 'tests/test_accelerator_lie_topopt.py'
+      - 'tests/test_topology_optimization.py'
+      - 'validation_test/topology_optimization/test_hex_cluster_derivative.py'
+      - 'src/radia/motor_design.py'
+      - 'src/radia/panels/calc_common.py'
+      - 'src/radia/panels/calc_axisym_volumetric.py'
+      - 'validation_test/panels/test_axisym_volumetric_direct.py'
+      - 'validation_test/panels/test_coilmesh_direct_residual.py'
+      - 'validation_test/panels/test_accel_linear_dispatch.py'
+      - 'validation_test/panels/test_kelvin_benchmark_direct.py'
+      - 'src/radia/panels/calc_kelvin_benchmark.py'
+      - 'src/radia/panels/calc_accel_magnet.py'
+      - 'tests/test_accel_solver_selection.py'
+      - 'src/radia/em_design.py'
+      - 'src/radia/panels/calc_motor_lamination.py'
+      - 'src/radia/panels/calc_motor_transient.py'
+      - 'validation_test/panels/test_motor_lamination_golden.py'
+      - 'validation_test/panels/test_motor_transient_golden.py'
+      - 'validation_test/panels/build_test_motor_mesh.py'
+      - 'tests/test_vim_eddy_hybrid.py'
+      - 'tests/test_vim_coupled_weak_vs_monolithic.py'
+      - 'tests/test_vector_potential_bh_tail.py'
+      - 'tests/test_reduced_a_source_materialization.py'
+      - 'tests/test_hdiv_response_contract.py'
+      - 'src/core/rad_beam_transfer.*'
+      - 'src/lib/rad_beam_transfer_pybind.*'
+      - 'src/radia/beam.py'
+      - 'validation_test/accelerator/benchmark_beam_transfer_mex_python.py'
+      - 'src/radia/ngsbem_peec_body_coupling.py'
+      - 'tests/test_ngsbem_peec_body_direct.py'
+      - 'src/radia/ngsbem_eddy.py'
+      - 'tests/test_ngsbem_eddy_direct.py'
+      - 'src/radia/eddy_aphi.py'
+      - 'src/radia/eddy_axisym_ring.py'
+      - 'src/radia/axisym_measure.py'
+      - 'src/radia/sibc_corner_patch.py'
+      - 'src/radia/mixed_omega_newton.py'
+      - 'src/radia/patch_recovery.py'
+      - 'tests/test_patch_recovery.py'
+      - 'src/radia/p1_newton.py'
+      - 'src/radia/p1_linear.py'
+      - 'tests/test_p1_newton.py'
+      - 'tests/test_p1_linear.py'
+      - 'src/radia/meshed_current.py'
+      - 'tests/test_meshed_current.py'
+      - 'src/radia/static_electromagnet.py'
+      - 'src/radia/kelvin_solver.py'
+      - 'src/radia/kelvin_mesh_validation.py'
+      - 'src/radia/scalar_potential_solver.py'
+      - 'validation_test/c_type_p1_ams_box/run_p1_box.py'
+      - 'tests/test_eddy_aphi_contract.py'
+      - 'tests/test_axisym_measure_contract.py'
+      - 'tests/test_sibc_corner_patch.py'
+      - 'tests/test_boundary_material_adjacency.py'
+      - 'tests/test_coil_axis_closed_form.py'
+      - 'tests/test_mixed_omega_newton.py'
+      - 'tests/test_kelvin_mixed_omega.py'
+      - 'tests/test_mixed_omega_review_fixes.py'
+      - 'tests/test_c_type_p1_box_lane.py'
+      - 'src/ext/sparsesolv/**'
+      - 'src/core/radia_mex_sparse_symmetry.h'
+      - 'tests/cpp/test_radia_mex_sparse_symmetry.cpp'
+      - 'src/radia/__init__.py'
+      - 'src/radia/_preconditioners.py'
+      - 'CMakeLists.txt'
+      - 'Build.ps1'
+      - 'tools/run_test_tier.py'
+      - 'tools/native_build_provenance.ps1'
+      - 'tests/test_native_build_provenance.py'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tests/test_sparsesolv_ci_contract.py'
+      - '.github/workflows/sparsesolv.yml'
+      - 'pyproject.toml'
+      - 'tests/test_tier_manifest.json'
+      - '!**/*.md'
+  push:
+    branches: [main]
+    paths:
+      - 'src/radia/_residual_gate.py'
+      - 'validation_test/open_boundary/test_kelvin_vector_direct_gate.py'
+      - 'validation_test/team21/**'
+      - 'tests/test_team21a_geometry_source.py'
+      - 'docs/maglev/demos/sphere/maglev_sphere_force.py'
+      - 'docs/maglev/demos/team28/team28_arnoldi_force.py'
+      - 'docs/maglev/demos/rotating_magnet_eddy.py'
+      - 'tests/test_maglev_sphere_golden.py'
+      - 'tests/test_team28_arnoldi_golden.py'
+      - 'tests/test_rotating_magnet_eddy_golden.py'
+      - 'validation_test/maglev/test_demo_evidence.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py'
+      - 'validation_test/radia_mcp/test_axi_eddy_current_drive.py'
+      - 'validation_test/radia_mcp/test_eddy_driven_region.py'
+      - 'validation_test/radia_mcp/test_aphi_gauge_point.py'
+      - 'src/radia/bem/sibc_hacapk.py'
+      - 'src/radia/panels/surface_mesh_extract.py'
+      - 'tests/test_surface_orientation.py'
+      - 'src/radia/bem_sibc_solver.py'
+      - 'tests/test_bem_sibc_acceptance.py'
+      - 'src/radia/esim_cell_problem.py'
+      - 'src/radia/analytical_formulas/induction_heating.py'
+      - 'tests/test_esim_integration.py'
+      - 'src/radia/esim_coupled_solver.py'
+      - 'packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py'
+      - 'src/radia/gmsh_post_export.py'
+      - 'src/radia/em_material.py'
+      - 'src/radia/coil_from_cad.py'
+      - 'src/radia/force_ngsolve.py'
+      - 'src/radia/scalar_bie_sibc.py'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/check.py'
+      - 'tests/test_ih_operator_assembly.py'
+      - 'tests/test_ih_operator_axisym.py'
+      - 'tests/test_ih_fin_surface_boundary.py'
+      - 'tests/axifem/test_heat_henrotte_smoke.py'
+      - 'tests/axifem/test_heat_field_extrema.py'
+      - 'validation_test/induction_heating/test_ih_operator_physics_golden.py'
+      - 'validation_test/axifem/test_heat_axisym_e2e.py'
+      - 'src/radia/esim_multiport.py'
+      - 'src/radia/panels/calc_inductance.py'
+      - 'tests/test_esim_incident_only_retirement.py'
+      - 'tests/test_esim_convergence_propagation.py'
+      - 'tests/analytical_formulas/test_induction_heating.py'
+      - 'src/radia/panels/em_table.py'
+      - 'tests/test_em_table.py'
+      - 'src/runtime/ih/radia_ih_thermal.cpp'
+      - 'tests/cpp/test_radia_ih_thermal_acceptance.cpp'
+      - 'src/radia/ih*.py'
+      - 'src/radia/panels/calc_heat*.py'
+      - 'src/radia/panels/calc_ih_axisym_coupled.py'
+      - 'src/radia/panels/calc_fem_kelvin.py'
+      - 'src/radia/panels/calc_fem_coilmesh.py'
+      - 'tests/test_ih_*.py'
+      - 'validation_test/induction_heating/test_fem_ams_parity.py'
+      - 'validation_test/induction_heating/fem_sibc_geometry.py'
+      - 'src/radia/vim/_nonlinear.py'
+      - 'src/radia/vim/_solve.py'
+      - 'tests/test_hdiv_energy_material_consistency.py'
+      - 'src/core/rad_arc_section.h'
+      - 'src/core/rad_arc_current.cpp'
+      - 'src/core/rad_ngsolve_radia_field.h'
+      - 'src/core/rad_parallel.h'
+      - 'tests/test_arc_far_rule.py'
+      - 'tests/test_radiafield_cache_parallel.py'
+      - 'tests/test_radiafield_memoize.py'
+      - 'tests/test_radiafield_precision.py'
+      - 'tests/test_mixed_omega_source_load.py'
+      - 'tests/test_three_engine_energy.py'
+      - 'validation_test/c_type_three_engine/magnetic_energy.py'
+      - 'tests/test_ams_internal_setup_parallel.py'
+      - 'src/core/rad_hacapk*'
+      - 'src/ext/HACApK/**'
+      - 'tests/test_hdiv_chargegram_build_safety.py'
+      - 'tests/test_hdiv_vim_native_matrix.py'
+      - 'tests/test_hdiv_same_process_determinism.py'
+      - 'src/radia/vector_potential_solver.py'
+      - 'src/radia/scalar_potential_solver.py'
+      - 'validation_test/panels/test_scalar_linear_direct.py'
+      - 'validation_test/panels/test_heat_boundary_roles.py'
+      - 'src/radia/topology_optimization.py'
+      - 'src/core/rad_hdiv*'
+      - 'src/radia/vim/**'
+      - 'src/radia/accelerator_lie_topopt.py'
+      - 'src/radia/isochronous_topopt.py'
+      - 'src/radia/ffag_topopt.py'
+      - 'src/radia/kelvin_identify_ngsolve.py'
+      - 'tests/feec/test_hdiv_vim_cyclic_periodic_hex.py'
+      - 'tests/test_hdiv_vim_bh_validation.py'
+      - 'tests/test_hdiv_vim_capabilities.py'
+      - 'tests/test_isochronous_topopt.py'
+      - 'tests/test_accelerator_lie_topopt.py'
+      - 'tests/test_topology_optimization.py'
+      - 'validation_test/topology_optimization/test_hex_cluster_derivative.py'
+      - 'src/radia/motor_design.py'
+      - 'src/radia/panels/calc_common.py'
+      - 'src/radia/panels/calc_axisym_volumetric.py'
+      - 'validation_test/panels/test_axisym_volumetric_direct.py'
+      - 'validation_test/panels/test_coilmesh_direct_residual.py'
+      - 'validation_test/panels/test_accel_linear_dispatch.py'
+      - 'validation_test/panels/test_kelvin_benchmark_direct.py'
+      - 'src/radia/panels/calc_kelvin_benchmark.py'
+      - 'src/radia/panels/calc_accel_magnet.py'
+      - 'tests/test_accel_solver_selection.py'
+      - 'src/radia/em_design.py'
+      - 'src/radia/panels/calc_motor_lamination.py'
+      - 'src/radia/panels/calc_motor_transient.py'
+      - 'validation_test/panels/test_motor_lamination_golden.py'
+      - 'validation_test/panels/test_motor_transient_golden.py'
+      - 'validation_test/panels/build_test_motor_mesh.py'
+      - 'tests/test_vim_eddy_hybrid.py'
+      - 'tests/test_vim_coupled_weak_vs_monolithic.py'
+      - 'tests/test_vector_potential_bh_tail.py'
+      - 'tests/test_reduced_a_source_materialization.py'
+      - 'tests/test_hdiv_response_contract.py'
+      - 'src/core/rad_beam_transfer.*'
+      - 'src/lib/rad_beam_transfer_pybind.*'
+      - 'src/radia/beam.py'
+      - 'validation_test/accelerator/benchmark_beam_transfer_mex_python.py'
+      - 'src/radia/ngsbem_peec_body_coupling.py'
+      - 'tests/test_ngsbem_peec_body_direct.py'
+      - 'src/radia/ngsbem_eddy.py'
+      - 'tests/test_ngsbem_eddy_direct.py'
+      - 'src/radia/eddy_aphi.py'
+      - 'src/radia/eddy_axisym_ring.py'
+      - 'src/radia/axisym_measure.py'
+      - 'src/radia/sibc_corner_patch.py'
+      - 'src/radia/mixed_omega_newton.py'
+      - 'src/radia/patch_recovery.py'
+      - 'tests/test_patch_recovery.py'
+      - 'src/radia/p1_newton.py'
+      - 'src/radia/p1_linear.py'
+      - 'tests/test_p1_newton.py'
+      - 'tests/test_p1_linear.py'
+      - 'src/radia/meshed_current.py'
+      - 'tests/test_meshed_current.py'
+      - 'src/radia/static_electromagnet.py'
+      - 'src/radia/kelvin_solver.py'
+      - 'src/radia/kelvin_mesh_validation.py'
+      - 'src/radia/scalar_potential_solver.py'
+      - 'validation_test/c_type_p1_ams_box/run_p1_box.py'
+      - 'tests/test_eddy_aphi_contract.py'
+      - 'tests/test_axisym_measure_contract.py'
+      - 'tests/test_sibc_corner_patch.py'
+      - 'tests/test_boundary_material_adjacency.py'
+      - 'tests/test_coil_axis_closed_form.py'
+      - 'tests/test_mixed_omega_newton.py'
+      - 'tests/test_kelvin_mixed_omega.py'
+      - 'tests/test_mixed_omega_review_fixes.py'
+      - 'tests/test_c_type_p1_box_lane.py'
+      - 'src/ext/sparsesolv/**'
+      - 'src/core/radia_mex_sparse_symmetry.h'
+      - 'tests/cpp/test_radia_mex_sparse_symmetry.cpp'
+      - 'src/radia/__init__.py'
+      - 'src/radia/_preconditioners.py'
+      - 'CMakeLists.txt'
+      - 'Build.ps1'
+      - 'tools/run_test_tier.py'
+      - 'tools/native_build_provenance.ps1'
+      - 'tests/test_native_build_provenance.py'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tests/test_sparsesolv_ci_contract.py'
+      - '.github/workflows/sparsesolv.yml'
+      - 'pyproject.toml'
+      - 'tests/test_tier_manifest.json'
+      - '!**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sparsesolv-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ams-regression:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Windows, X64, "100"]
+    # CPU Python/pybind11 build and numerical contracts. GPU mexcuda has its own workflow.
+    timeout-minutes: 45
+    env:
+      RADIA_VALIDATION_HOST_ROLE: cpu_validation
+      # Bound library pools before the parent and its fresh Python children
+      # import NumPy/SciPy. NGSolve parallel tests select their worker counts.
+      OMP_NUM_THREADS: '1'
+      NGS_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Select native AMS impact
+        id: native-impact
+        shell: pwsh
+        run: |
+          python tools/sparsesolv_ci_impact.py
+          exit $LASTEXITCODE
+
+      - name: Create isolated native environment
+        if: steps.native-impact.outputs.required == 'true'
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "sparsesolv-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $ciPython = Join-Path $venv 'Scripts\python.exe'
+          $pins = @(& $ciPython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x for x in d['project']['dependencies'] if x.startswith(('ngsolve==','netgen-mesher=='))], sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $pins.Count -ne 2) { throw 'Expected two exact FE runtime pins' }
+          $cadPins = @(& $ciPython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*d['project']['optional-dependencies']['build123d'], sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $cadPins.Count -eq 0) { throw 'Expected declared STEP CAD dependencies' }
+          & $ciPython -m pip install @pins @cadPins mkl-devel pybind11==3.0.2 ninja cmake pytest scipy pyyaml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_CI_VENV=$venv" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Verify native build provenance contracts
+        if: steps.native-impact.outputs.required == 'true'
+        shell: pwsh
+        run: |
+          python tools/run_test_tier.py --profile native-build-contracts
+          exit $LASTEXITCODE
+
+      - name: Build current package and SparseSolv
+        if: steps.native-impact.outputs.required == 'true'
+        shell: pwsh
+        run: |
+          # The package facade requires _radia_pybind; never borrow a developer binary.
+          # Bound MSVC commit usage on shared runners (C1060 at four jobs).
+          & .\Build.ps1 -RadiaOnly -BuildJobs 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Required axisymmetric solver tests import radia.axifem; build the
+          # native extension explicitly instead of borrowing or skipping it.
+          & .\Build.ps1 -AxiFemOnly -BuildJobs 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+          if (-not $vs) { throw 'MSVC installation not found' }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          & cmd.exe /d /c "call `"$vcvars`" && cmake --build build-msvc --config Release --target sparsesolv_ngsolve peec_matrices --parallel 2"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & cmd.exe /d /c "call `"$vcvars`" && cmake --build build-msvc --config Release --target test_radia_mex_sparse_symmetry test_radia_ih_thermal_acceptance --parallel 2"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build-msvc -C Release -R '^radia\.mex_sparse_symmetry\.cpp$' --output-on-failure --no-tests=error
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build-msvc -C Release -R '^radia\.ih_thermal_acceptance\.cpp$' --output-on-failure --no-tests=error
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify source provenance and run required AMS tests
+        if: steps.native-impact.outputs.required == 'true'
+        shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src'
+        run: |
+          python -c "import pathlib,radia.sparsesolv_ngsolve as s; p=pathlib.Path(s.__file__).resolve(); assert p.parent == (pathlib.Path.cwd()/'src'/'radia').resolve(), p; assert s.has_compact_ams(), 'AMS support missing'; print('tested native module:',p)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import pathlib,importlib.machinery,radia.peec_matrices as p; assert isinstance(p.__loader__,importlib.machinery.ExtensionFileLoader), p.__file__; assert pathlib.Path(p.__file__).resolve().parent == (pathlib.Path.cwd()/'src'/'radia').resolve(); assert hasattr(p,'PEECBuilder'); print('tested PEEC module:',p.__file__)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_test_tier.py --profile sparsesolv --junitxml "$env:RUNNER_TEMP\sparsesolv-results.xml"
+          exit $LASTEXITCODE
+
+      - name: Run required NGSolve numerical contracts
+        if: steps.native-impact.outputs.required == 'true'
+        shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-gpu\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          RADIA_TESTS_ALLOW_PARTIAL: '0'
+          RADIA_TEST_NGSOLVE_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+        run: |
+          python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_test_tier.py --profile solver-numerics --junitxml "$env:RUNNER_TEMP\solver-numerics.xml"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-numerics.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
+          exit $LASTEXITCODE
+
+      - name: Run required heavier numerical validation
+        if: steps.native-impact.outputs.required == 'true'
+        shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-gpu\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          RADIA_TESTS_ALLOW_PARTIAL: '0'
+          RADIA_TEST_NGSOLVE_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+        run: |
+          python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_test_tier.py --profile solver-heavy --junitxml "$env:RUNNER_TEMP\solver-heavy.xml"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-heavy.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
+          exit $LASTEXITCODE
+
+      - name: Upload solver test results
+        if: always() && steps.native-impact.outputs.required == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparsesolv-results
+          path: |
+            ${{ runner.temp }}/sparsesolv-results.xml
+            ${{ runner.temp }}/solver-numerics.xml
+            ${{ runner.temp }}/solver-heavy.xml
+            build-msvc/build.log
+          if-no-files-found: warn

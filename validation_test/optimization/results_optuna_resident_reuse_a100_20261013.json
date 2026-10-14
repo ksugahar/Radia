@@ -1,0 +1,2538 @@
+{
+  "schema": "radia.validation.optuna-resident-inference.v1",
+  "date": "2026-10-13",
+  "host_role": "on-demand-a100-timing",
+  "formal_performance_acceptance": true,
+  "implementation_commit": "429309576dbe30b2946120201fe2b2def402294e",
+  "benchmark_commit": "ee0dcd37f00b9c1057602d433655debf08b8d39c",
+  "source_archive_sha256": "8122600faee09ceebf98c9d3af0e9523d73b8c3a040d265cfd3ab3c2c39dfdfe",
+  "reuse_benchmark_archive_sha256": "58958f66512ce1af8221276260463bc52c07481726ccc31c2ad8701711e511f2",
+  "binary_sha256": {
+    "baseline": "440e105382ff9a6cb34ecc7ca9d44a48b85f8bf2fa3c49bef59b367d82a41eda",
+    "candidate": "9a27656de4b7ff2ae41d97bdfdefede478b3bd2b40f788b19b110c03f9fbb991"
+  },
+  "runtime": {
+    "name": "NVIDIA A100-SXM4-40GB",
+    "compute_capability": "8.0",
+    "toolkit_version": 12.8,
+    "graphics_driver": "591.59",
+    "total_memory": 42628612096.0,
+    "engine_version": "26.1",
+    "matlab": "26.1.0.3203278 (R2026a)"
+  },
+  "design": {
+    "fresh_sessions": 6,
+    "trials": 800,
+    "seeds": [
+      11,
+      37
+    ],
+    "candidates": 24,
+    "multivariate": true,
+    "batch_sizes": [
+      8
+    ],
+    "constant_liar": false,
+    "ordered_configurations": [
+      [
+        8,
+        "cpu",
+        "baseline"
+      ],
+      [
+        8,
+        "gpu",
+        "baseline"
+      ],
+      [
+        8,
+        "gpu",
+        "candidate"
+      ],
+      [
+        8,
+        "gpu",
+        "candidate"
+      ],
+      [
+        8,
+        "gpu",
+        "baseline"
+      ],
+      [
+        8,
+        "cpu",
+        "baseline"
+      ]
+    ],
+    "configured_cpu_threads": 16,
+    "all_history_retained": true,
+    "storage_enabled": false,
+    "all_proposals_values_and_convergence_curves_exactly_equal": true,
+    "compared_proposal_values": 403200,
+    "foreign_job_monitor_interval_s": 10,
+    "all_sessions_closed": true
+  },
+  "configurations": [
+    {
+      "batch_size": 8,
+      "mode": "cpu",
+      "variant": "baseline",
+      "configured_threads": 16,
+      "module_configure_s": [
+        0.018662,
+        0.0176722
+      ],
+      "engine_startup_s": [
+        5.696006599999237,
+        5.239161700003024
+      ],
+      "entries": [
+        {
+          "problem": "branin",
+          "seed": 11,
+          "dimensions": 2,
+          "best_value": 0.3987579449019911,
+          "initial_ten_best": 4.007618400111158,
+          "best_at_trials": {
+            "10": 4.007618400111158,
+            "100": 0.43008412580977584,
+            "256": 0.4047166452901685,
+            "512": 0.3987579449019911,
+            "800": 0.3987579449019911
+          },
+          "proposal_sha256": "c2be269b4e7f8660221cd2cb578bff3dfae190201066101994ea47fd0192a23b",
+          "inference_total_s": [
+            2.0091109999999994,
+            1.998064900000001
+          ],
+          "inference_median_total_s": 2.00358795,
+          "history_windows": [
+            {
+              "trials": [
+                11,
+                100
+              ],
+              "median_ms": 1.40885,
+              "p10_ms": 1.2932,
+              "p90_ms": 2.9065
+            },
+            {
+              "trials": [
+                101,
+                256
+              ],
+              "median_ms": 1.7802999999999998,
+              "p10_ms": 1.5363,
+              "p90_ms": 1.9737
+            },
+            {
+              "trials": [
+                257,
+                512
+              ],
+              "median_ms": 1.8673000000000002,
+              "p10_ms": 1.5929999999999997,
+              "p90_ms": 2.1999999999999997
+            },
+            {
+              "trials": [
+                513,
+                800
+              ],
+              "median_ms": 1.8263,
+              "p10_ms": 1.717,
+              "p90_ms": 2.1073999999999997
+            }
+          ],
+          "first_proposal_s": [
+            0.1873763,
+            0.1789425
+          ],
+          "objective_total_s": [
+            0.002431900000000003,
+            0.0023528000000000043
+          ],
+          "tell_total_s": [
+            0.18813519999999995,
+            0.1872324999999999
+          ],
+          "native_before": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            }
+          ],
+          "native_after": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 1568,
+              "cpu_selection_calls": 784,
+              "cpu_parallel_density_calls": 432,
+              "cpu_max_density_threads": 16
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 1568,
+              "cpu_selection_calls": 784,
+              "cpu_parallel_density_calls": 432,
+              "cpu_max_density_threads": 16
+            }
+          ],
+          "memory_before": [
+            2431344640.0,
+            2429239296.0
+          ],
+          "memory_after": [
+            2480107520.0,
+            2478100480.0
+          ]
+        },
+        {
+          "problem": "branin",
+          "seed": 37,
+          "dimensions": 2,
+          "best_value": 0.3987923895141883,
+          "initial_ten_best": 4.240995426675029,
+          "best_at_trials": {
+            "10": 4.240995426675029,
+            "100": 0.4302973673229289,
+            "256": 0.3992684059332898,
+            "512": 0.3992684059332898,
+            "800": 0.3987923895141883
+          },
+          "proposal_sha256": "80875caec15a96e4105f6f83d15d6d772f9b4c542f4bf3dcd891d1b98b0281b7",
+          "inference_total_s": [
+            1.3856613999999994,
+            1.4188322999999996
+          ],
+          "inference_median_total_s": 1.4022468499999996,
+          "history_windows": [
+            {
+              "trials": [
+                11,
+                100
+              ],
+              "median_ms": 1.3109000000000002,
+              "p10_ms": 1.1958,
+              "p90_ms": 1.5617
+            },
+            {
+              "trials": [
+                101,
+                256
+              ],
+              "median_ms": 1.6482,
+              "p10_ms": 1.4609,
+              "p90_ms": 1.9196
+            },
+            {
+              "trials": [
+                257,
+                512
+              ],
+              "median_ms": 1.77705,
+              "p10_ms": 1.4938,
+              "p90_ms": 2.0076
+            },
+            {
+              "trials": [
+                513,
+                800
+              ],
+              "median_ms": 1.74245,
+              "p10_ms": 1.6317,
+              "p90_ms": 1.9962
+            }
+          ],
+          "first_proposal_s": [
+            0.025467200000000002,
+            0.025827
+          ],
+          "objective_total_s": [
+            0.000959599999999999,
+            0.0009537999999999988
+          ],
+          "tell_total_s": [
+            0.0695099,
+            0.06953369999999998
+          ],
+          "native_before": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 1568,
+              "cpu_selection_calls": 784,
+              "cpu_parallel_density_calls": 432,
+              "cpu_max_density_threads": 16
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 1568,
+              "cpu_selection_calls": 784,
+              "cpu_parallel_density_calls": 432,
+              "cpu_max_density_threads": 16
+            }
+          ],
+          "native_after": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 3136,
+              "cpu_selection_calls": 1568,
+              "cpu_parallel_density_calls": 864,
+              "cpu_max_density_threads": 16
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 3136,
+              "cpu_selection_calls": 1568,
+              "cpu_parallel_density_calls": 864,
+              "cpu_max_density_threads": 16
+            }
+          ],
+          "memory_before": [
+            2485157888.0,
+            2482888704.0
+          ],
+          "memory_after": [
+            2483027968.0,
+            2477752320.0
+          ]
+        },
+        {
+          "problem": "correlated_valley",
+          "seed": 11,
+          "dimensions": 40,
+          "best_value": 8.353305600838015,
+          "initial_ten_best": 52.00500746337655,
+          "best_at_trials": {
+            "10": 52.00500746337655,
+            "100": 26.671326079462393,
+            "256": 18.870983297381283,
+            "512": 12.225068063475382,
+            "800": 8.353305600838015
+          },
+          "proposal_sha256": "2b43cdc25d82b577126d62639e317b224f62caa97ce20f386d42f77ad063538d",
+          "inference_total_s": [
+            15.6567053,
+            15.75666280000001
+          ],
+          "inference_median_total_s": 15.706684050000005,
+          "history_windows": [
+            {
+              "trials": [
+                11,
+                100
+              ],
+              "median_ms": 13.6435,
+              "p10_ms": 13.085,
+              "p90_ms": 17.0043
+            },
+            {
+              "trials": [
+                101,
+                256
+              ],
+              "median_ms": 16.118850000000002,
+              "p10_ms": 14.9216,
+              "p90_ms": 19.2984
+            },
+            {
+              "trials": [
+                257,
+                512
+              ],
+              "median_ms": 18.9251,
+              "p10_ms": 17.003999999999998,
+              "p90_ms": 21.3222
+            },
+            {
+              "trials": [
+                513,
+                800
+              ],
+              "median_ms": 23.24465,
+              "p10_ms": 21.0921,
+              "p90_ms": 26.4104
+            }
+          ],
+          "first_proposal_s": [
+            0.032187099999999996,
+            0.033095
+          ],
+          "objective_total_s": [
+            0.004490499999999998,
+            0.004678300000000001
+          ],
+          "tell_total_s": [
+            0.07347120000000004,
+            0.07469300000000001
+          ],
+          "native_before": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 3136,
+              "cpu_selection_calls": 1568,
+              "cpu_parallel_density_calls": 864,
+              "cpu_max_density_threads": 16
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 3136,
+              "cpu_selection_calls": 1568,
+              "cpu_parallel_density_calls": 864,
+              "cpu_max_density_threads": 16
+            }
+          ],
+          "native_after": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 4704,
+              "cpu_selection_calls": 2352,
+              "cpu_parallel_density_calls": 2272,
+              "cpu_max_density_threads": 16
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 4704,
+              "cpu_selection_calls": 2352,
+              "cpu_parallel_density_calls": 2272,
+              "cpu_max_density_threads": 16
+            }
+          ],
+          "memory_before": [
+            2484592640.0,
+            2479812608.0
+          ],
+          "memory_after": [
+            2494402560.0,
+            2507767808.0
+          ]
+        },
+        {
+          "problem": "correlated_valley",
+          "seed": 37,
+          "dimensions": 40,
+          "best_value": 14.728710368787397,
+          "initial_ten_best": 57.91384151731749,
+          "best_at_trials": {
+            "10": 57.91384151731749,
+            "100": 31.308357620650717,
+            "256": 27.11061204475399,
+            "512": 19.218377151261908,
+            "800": 14.728710368787397
+          },
+          "proposal_sha256": "822d88978d9eb785446f4b86fa38fcf22f88ffac51a307ad7aac7ab31079b8ff",
+          "inference_total_s": [
+            15.592480100000003,
+            15.6566444
+          ],
+          "inference_median_total_s": 15.62456225,
+          "history_windows": [
+            {
+              "trials": [
+                11,
+                100
+              ],
+              "median_ms": 13.782,
+              "p10_ms": 12.6181,
+              "p90_ms": 16.3694
+            },
+            {
+              "trials": [
+                101,
+                256
+              ],
+              "median_ms": 16.1038,
+              "p10_ms": 15.0296,
+              "p90_ms": 19.3862
+            },
+            {
+              "trials": [
+                257,
+                512
+              ],
+              "median_ms": 18.67205,
+              "p10_ms": 17.1281,
+              "p90_ms": 21.4776
+            },
+            {
+              "trials": [
+                513,
+                800
+              ],
+              "median_ms": 23.2447,
+              "p10_ms": 21.408499999999997,
+              "p90_ms": 26.464399999999998
+            }
+          ],
+          "first_proposal_s": [
+            0.0198275,
+            0.0205714
+          ],
+          "objective_total_s": [
+            0.0025068,
+            0.0025148999999999996
+          ],
+          "tell_total_s": [
+            0.06722170000000002,
+            0.06760369999999999
+          ],
+          "native_before": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 4704,
+              "cpu_selection_calls": 2352,
+              "cpu_parallel_density_calls": 2272,
+              "cpu_max_density_threads": 16
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 4704,
+              "cpu_selection_calls": 2352,
+              "cpu_parallel_density_calls": 2272,
+              "cpu_max_density_threads": 16
+            }
+          ],
+          "native_after": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 6272,
+              "cpu_selection_calls": 3136,
+              "cpu_parallel_density_calls": 3680,
+              "cpu_max_density_threads": 16
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "cpu",
+              "cpu_density_calls": 6272,
+              "cpu_selection_calls": 3136,
+              "cpu_parallel_density_calls": 3680,
+              "cpu_max_density_threads": 16
+            }
+          ],
+          "memory_before": [
+            2494402560.0,
+            2507767808.0
+          ],
+          "memory_after": [
+            2500292608.0,
+            2507739136.0
+          ]
+        }
+      ]
+    },
+    {
+      "batch_size": 8,
+      "mode": "gpu",
+      "variant": "baseline",
+      "configured_threads": 16,
+      "module_configure_s": [
+        0.0188818,
+        0.0172072
+      ],
+      "engine_startup_s": [
+        5.767399799999112,
+        4.731066300002567
+      ],
+      "entries": [
+        {
+          "problem": "branin",
+          "seed": 11,
+          "dimensions": 2,
+          "best_value": 0.3987579449019911,
+          "initial_ten_best": 4.007618400111158,
+          "best_at_trials": {
+            "10": 4.007618400111158,
+            "100": 0.43008412580977584,
+            "256": 0.4047166452901685,
+            "512": 0.3987579449019911,
+            "800": 0.3987579449019911
+          },
+          "proposal_sha256": "c2be269b4e7f8660221cd2cb578bff3dfae190201066101994ea47fd0192a23b",
+          "inference_total_s": [
+            2.4595988999999983,
+            2.434202100000001
+          ],
+          "inference_median_total_s": 2.4469005,
+          "history_windows": [
+            {
+              "trials": [
+                11,
+                100
+              ],
+              "median_ms": 1.63775,
+              "p10_ms": 1.5876000000000001,
+              "p90_ms": 3.1233
+            },
+            {
+              "trials": [
+                101,
+                256
+              ],
+              "median_ms": 1.7744499999999999,
+              "p10_ms": 1.6736999999999997,
+              "p90_ms": 1.9786000000000001
+            },
+            {
+              "trials": [
+                257,
+                512
+              ],
+              "median_ms": 1.87165,
+              "p10_ms": 1.8054,
+              "p90_ms": 2.1186
+            },
+            {
+              "trials": [
+                513,
+                800
+              ],
+              "median_ms": 2.0932000000000004,
+              "p10_ms": 1.9950000000000003,
+              "p90_ms": 2.3117
+            }
+          ],
+          "first_proposal_s": [
+            0.1796298,
+            0.17502
+          ],
+          "objective_total_s": [
+            0.002362400000000003,
+            0.0022945000000000014
+          ],
+          "tell_total_s": [
+            0.18462330000000002,
+            0.1858154
+          ],
+          "native_before": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            }
+          ],
+          "native_after": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 1568,
+              "selection_launches": 784,
+              "host_to_device_bytes": 15830528.0,
+              "device_to_host_bytes": 6272,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 1568,
+              "selection_launches": 784,
+              "host_to_device_bytes": 15830528.0,
+              "device_to_host_bytes": 6272,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            }
+          ],
+          "memory_before": [
+            2342596608.0,
+            2430300160.0
+          ],
+          "memory_after": [
+            52138094592.0,
+            52225286144.0
+          ]
+        },
+        {
+          "problem": "branin",
+          "seed": 37,
+          "dimensions": 2,
+          "best_value": 0.3987923895141883,
+          "initial_ten_best": 4.240995426675029,
+          "best_at_trials": {
+            "10": 4.240995426675029,
+            "100": 0.4302973673229289,
+            "256": 0.3992684059332898,
+            "512": 0.3992684059332898,
+            "800": 0.3987923895141883
+          },
+          "proposal_sha256": "80875caec15a96e4105f6f83d15d6d772f9b4c542f4bf3dcd891d1b98b0281b7",
+          "inference_total_s": [
+            1.5414830999999998,
+            1.5404117000000004
+          ],
+          "inference_median_total_s": 1.5409474,
+          "history_windows": [
+            {
+              "trials": [
+                11,
+                100
+              ],
+              "median_ms": 1.57935,
+              "p10_ms": 1.5211000000000001,
+              "p90_ms": 1.8305
+            },
+            {
+              "trials": [
+                101,
+                256
+              ],
+              "median_ms": 1.7098,
+              "p10_ms": 1.6268,
+              "p90_ms": 1.9777000000000002
+            },
+            {
+              "trials": [
+                257,
+                512
+              ],
+              "median_ms": 1.80585,
+              "p10_ms": 1.7362,
+              "p90_ms": 2.0162999999999998
+            },
+            {
+              "trials": [
+                513,
+                800
+              ],
+              "median_ms": 2.0355999999999996,
+              "p10_ms": 1.928,
+              "p90_ms": 2.2108000000000003
+            }
+          ],
+          "first_proposal_s": [
+            0.0256762,
+            0.0258808
+          ],
+          "objective_total_s": [
+            0.0009410999999999985,
+            0.0009580999999999988
+          ],
+          "tell_total_s": [
+            0.0691273,
+            0.06970140000000001
+          ],
+          "native_before": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 1568,
+              "selection_launches": 784,
+              "host_to_device_bytes": 15830528.0,
+              "device_to_host_bytes": 6272,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 1568,
+              "selection_launches": 784,
+              "host_to_device_bytes": 15830528.0,
+              "device_to_host_bytes": 6272,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            }
+          ],
+          "native_after": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3136,
+              "selection_launches": 1568,
+              "host_to_device_bytes": 31661056.0,
+              "device_to_host_bytes": 12544,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3136,
+              "selection_launches": 1568,
+              "host_to_device_bytes": 31661056.0,
+              "device_to_host_bytes": 12544,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            }
+          ],
+          "memory_before": [
+            52139200512.0,
+            52226199552.0
+          ],
+          "memory_after": [
+            52139290624.0,
+            52219707392.0
+          ]
+        },
+        {
+          "problem": "correlated_valley",
+          "seed": 11,
+          "dimensions": 40,
+          "best_value": 8.353305600838015,
+          "initial_ten_best": 52.00500746337655,
+          "best_at_trials": {
+            "10": 52.00500746337655,
+            "100": 26.671326079462393,
+            "256": 18.870983297381283,
+            "512": 12.225068063475382,
+            "800": 8.353305600838015
+          },
+          "proposal_sha256": "2b43cdc25d82b577126d62639e317b224f62caa97ce20f386d42f77ad063538d",
+          "inference_total_s": [
+            15.961460799999998,
+            15.8122329
+          ],
+          "inference_median_total_s": 15.886846849999998,
+          "history_windows": [
+            {
+              "trials": [
+                11,
+                100
+              ],
+              "median_ms": 13.379100000000001,
+              "p10_ms": 13.040199999999999,
+              "p90_ms": 16.8279
+            },
+            {
+              "trials": [
+                101,
+                256
+              ],
+              "median_ms": 15.770599999999998,
+              "p10_ms": 14.334200000000001,
+              "p90_ms": 18.2533
+            },
+            {
+              "trials": [
+                257,
+                512
+              ],
+              "median_ms": 19.36475,
+              "p10_ms": 17.8556,
+              "p90_ms": 22.0489
+            },
+            {
+              "trials": [
+                513,
+                800
+              ],
+              "median_ms": 23.62615,
+              "p10_ms": 21.8075,
+              "p90_ms": 26.255099999999995
+            }
+          ],
+          "first_proposal_s": [
+            0.0329035,
+            0.0325681
+          ],
+          "objective_total_s": [
+            0.004503899999999998,
+            0.0046321
+          ],
+          "tell_total_s": [
+            0.07417640000000002,
+            0.0745486
+          ],
+          "native_before": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3136,
+              "selection_launches": 1568,
+              "host_to_device_bytes": 31661056.0,
+              "device_to_host_bytes": 12544,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3136,
+              "selection_launches": 1568,
+              "host_to_device_bytes": 31661056.0,
+              "device_to_host_bytes": 12544,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            }
+          ],
+          "native_after": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 4704,
+              "selection_launches": 2352,
+              "host_to_device_bytes": 348271616.0,
+              "device_to_host_bytes": 18816,
+              "peak_temporary_bytes": 924168,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 4704,
+              "selection_launches": 2352,
+              "host_to_device_bytes": 348271616.0,
+              "device_to_host_bytes": 18816,
+              "peak_temporary_bytes": 924168,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            }
+          ],
+          "memory_before": [
+            52141641728.0,
+            52221759488.0
+          ],
+          "memory_after": [
+            52159832064.0,
+            52239740928.0
+          ]
+        },
+        {
+          "problem": "correlated_valley",
+          "seed": 37,
+          "dimensions": 40,
+          "best_value": 14.728710368787397,
+          "initial_ten_best": 57.91384151731749,
+          "best_at_trials": {
+            "10": 57.91384151731749,
+            "100": 31.308357620650717,
+            "256": 27.11061204475399,
+            "512": 19.218377151261908,
+            "800": 14.728710368787397
+          },
+          "proposal_sha256": "822d88978d9eb785446f4b86fa38fcf22f88ffac51a307ad7aac7ab31079b8ff",
+          "inference_total_s": [
+            15.891983900000001,
+            15.773565099999992
+          ],
+          "inference_median_total_s": 15.832774499999996,
+          "history_windows": [
+            {
+              "trials": [
+                11,
+                100
+              ],
+              "median_ms": 13.456299999999999,
+              "p10_ms": 12.5773,
+              "p90_ms": 16.3721
+            },
+            {
+              "trials": [
+                101,
+                256
+              ],
+              "median_ms": 15.882850000000001,
+              "p10_ms": 14.6007,
+              "p90_ms": 18.6183
+            },
+            {
+              "trials": [
+                257,
+                512
+              ],
+              "median_ms": 19.381999999999998,
+              "p10_ms": 17.8853,
+              "p90_ms": 21.8066
+            },
+            {
+              "trials": [
+                513,
+                800
+              ],
+              "median_ms": 23.80925,
+              "p10_ms": 21.7299,
+              "p90_ms": 25.916099999999997
+            }
+          ],
+          "first_proposal_s": [
+            0.0201685,
+            0.01987
+          ],
+          "objective_total_s": [
+            0.0025421000000000007,
+            0.0025230000000000014
+          ],
+          "tell_total_s": [
+            0.06786859999999999,
+            0.0675206
+          ],
+          "native_before": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 4704,
+              "selection_launches": 2352,
+              "host_to_device_bytes": 348271616.0,
+              "device_to_host_bytes": 18816,
+              "peak_temporary_bytes": 924168,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 4704,
+              "selection_launches": 2352,
+              "host_to_device_bytes": 348271616.0,
+              "device_to_host_bytes": 18816,
+              "peak_temporary_bytes": 924168,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            }
+          ],
+          "native_after": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 6272,
+              "selection_launches": 3136,
+              "host_to_device_bytes": 664882176.0,
+              "device_to_host_bytes": 25088,
+              "peak_temporary_bytes": 924168,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 6272,
+              "selection_launches": 3136,
+              "host_to_device_bytes": 664882176.0,
+              "device_to_host_bytes": 25088,
+              "peak_temporary_bytes": 924168,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0
+            }
+          ],
+          "memory_before": [
+            52159832064.0,
+            52239740928.0
+          ],
+          "memory_after": [
+            52160548864.0,
+            52242104320.0
+          ]
+        }
+      ]
+    },
+    {
+      "batch_size": 8,
+      "mode": "gpu",
+      "variant": "candidate",
+      "configured_threads": 16,
+      "module_configure_s": [
+        0.0191217,
+        0.0175695
+      ],
+      "engine_startup_s": [
+        4.805816599997343,
+        3.5343164000005345
+      ],
+      "entries": [
+        {
+          "problem": "branin",
+          "seed": 11,
+          "dimensions": 2,
+          "best_value": 0.3987579449019911,
+          "initial_ten_best": 4.007618400111158,
+          "best_at_trials": {
+            "10": 4.007618400111158,
+            "100": 0.43008412580977584,
+            "256": 0.4047166452901685,
+            "512": 0.3987579449019911,
+            "800": 0.3987579449019911
+          },
+          "proposal_sha256": "c2be269b4e7f8660221cd2cb578bff3dfae190201066101994ea47fd0192a23b",
+          "inference_total_s": [
+            2.2412356000000004,
+            2.2806446000000005
+          ],
+          "inference_median_total_s": 2.2609401000000005,
+          "history_windows": [
+            {
+              "trials": [
+                11,
+                100
+              ],
+              "median_ms": 1.33215,
+              "p10_ms": 1.2731000000000001,
+              "p90_ms": 3.1256
+            },
+            {
+              "trials": [
+                101,
+                256
+              ],
+              "median_ms": 1.45265,
+              "p10_ms": 1.3583,
+              "p90_ms": 1.6717
+            },
+            {
+              "trials": [
+                257,
+                512
+              ],
+              "median_ms": 1.5765,
+              "p10_ms": 1.4945,
+              "p90_ms": 1.7969000000000002
+            },
+            {
+              "trials": [
+                513,
+                800
+              ],
+              "median_ms": 1.8021999999999998,
+              "p10_ms": 1.6929,
+              "p90_ms": 1.9779999999999998
+            }
+          ],
+          "first_proposal_s": [
+            0.1813985,
+            0.1773696
+          ],
+          "objective_total_s": [
+            0.0023030000000000064,
+            0.002385600000000004
+          ],
+          "tell_total_s": [
+            0.1848846000000001,
+            0.18611970000000017
+          ],
+          "native_before": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 0,
+              "workspace_reuses": 0,
+              "avoided_upload_bytes": 0,
+              "cached_device_bytes": 0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 0,
+              "selection_launches": 0,
+              "host_to_device_bytes": 0,
+              "device_to_host_bytes": 0,
+              "peak_temporary_bytes": 0,
+              "cuda_runtime": 0,
+              "cuda_driver": 0,
+              "cuda_device": -1,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 0,
+              "workspace_reuses": 0,
+              "avoided_upload_bytes": 0,
+              "cached_device_bytes": 0
+            }
+          ],
+          "native_after": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 1568,
+              "selection_launches": 784,
+              "host_to_device_bytes": 2241789.0,
+              "device_to_host_bytes": 6272,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 6,
+              "workspace_reuses": 778,
+              "avoided_upload_bytes": 13588739.0,
+              "cached_device_bytes": 262144
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 1568,
+              "selection_launches": 784,
+              "host_to_device_bytes": 2241789.0,
+              "device_to_host_bytes": 6272,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 6,
+              "workspace_reuses": 778,
+              "avoided_upload_bytes": 13588739.0,
+              "cached_device_bytes": 262144
+            }
+          ],
+          "memory_before": [
+            2430836736.0,
+            2429005824.0
+          ],
+          "memory_after": [
+            52222214144.0,
+            52222537728.0
+          ]
+        },
+        {
+          "problem": "branin",
+          "seed": 37,
+          "dimensions": 2,
+          "best_value": 0.3987923895141883,
+          "initial_ten_best": 4.240995426675029,
+          "best_at_trials": {
+            "10": 4.240995426675029,
+            "100": 0.4302973673229289,
+            "256": 0.3992684059332898,
+            "512": 0.3992684059332898,
+            "800": 0.3987923895141883
+          },
+          "proposal_sha256": "80875caec15a96e4105f6f83d15d6d772f9b4c542f4bf3dcd891d1b98b0281b7",
+          "inference_total_s": [
+            1.2861350000000003,
+            1.3185483000000002
+          ],
+          "inference_median_total_s": 1.3023416500000002,
+          "history_windows": [
+            {
+              "trials": [
+                11,
+                100
+              ],
+              "median_ms": 1.24945,
+              "p10_ms": 1.1925,
+              "p90_ms": 1.5057999999999998
+            },
+            {
+              "trials": [
+                101,
+                256
+              ],
+              "median_ms": 1.3896000000000002,
+              "p10_ms": 1.2994999999999999,
+              "p90_ms": 1.6272
+            },
+            {
+              "trials": [
+                257,
+                512
+              ],
+              "median_ms": 1.5154999999999998,
+              "p10_ms": 1.4291,
+              "p90_ms": 1.7118
+            },
+            {
+              "trials": [
+                513,
+                800
+              ],
+              "median_ms": 1.7514,
+              "p10_ms": 1.6337000000000002,
+              "p90_ms": 1.9194
+            }
+          ],
+          "first_proposal_s": [
+            0.0254992,
+            0.0258838
+          ],
+          "objective_total_s": [
+            0.000935399999999999,
+            0.0009350999999999986
+          ],
+          "tell_total_s": [
+            0.06878120000000001,
+            0.07023650000000004
+          ],
+          "native_before": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 1568,
+              "selection_launches": 784,
+              "host_to_device_bytes": 2241789.0,
+              "device_to_host_bytes": 6272,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 6,
+              "workspace_reuses": 778,
+              "avoided_upload_bytes": 13588739.0,
+              "cached_device_bytes": 262144
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 1568,
+              "selection_launches": 784,
+              "host_to_device_bytes": 2241789.0,
+              "device_to_host_bytes": 6272,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 6,
+              "workspace_reuses": 778,
+              "avoided_upload_bytes": 13588739.0,
+              "cached_device_bytes": 262144
+            }
+          ],
+          "native_after": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3136,
+              "selection_launches": 1568,
+              "host_to_device_bytes": 4483621.0,
+              "device_to_host_bytes": 12544,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 6,
+              "workspace_reuses": 1562,
+              "avoided_upload_bytes": 27177435.0,
+              "cached_device_bytes": 262144
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3136,
+              "selection_launches": 1568,
+              "host_to_device_bytes": 4483621.0,
+              "device_to_host_bytes": 12544,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 6,
+              "workspace_reuses": 1562,
+              "avoided_upload_bytes": 27177435.0,
+              "cached_device_bytes": 262144
+            }
+          ],
+          "memory_before": [
+            52227256320.0,
+            52228292608.0
+          ],
+          "memory_after": [
+            52223733760.0,
+            52220583936.0
+          ]
+        },
+        {
+          "problem": "correlated_valley",
+          "seed": 11,
+          "dimensions": 40,
+          "best_value": 8.353305600838015,
+          "initial_ten_best": 52.00500746337655,
+          "best_at_trials": {
+            "10": 52.00500746337655,
+            "100": 26.671326079462393,
+            "256": 18.870983297381283,
+            "512": 12.225068063475382,
+            "800": 8.353305600838015
+          },
+          "proposal_sha256": "2b43cdc25d82b577126d62639e317b224f62caa97ce20f386d42f77ad063538d",
+          "inference_total_s": [
+            15.824635200000005,
+            15.840778200000006
+          ],
+          "inference_median_total_s": 15.832706700000006,
+          "history_windows": [
+            {
+              "trials": [
+                11,
+                100
+              ],
+              "median_ms": 13.3891,
+              "p10_ms": 12.833,
+              "p90_ms": 16.7415
+            },
+            {
+              "trials": [
+                101,
+                256
+              ],
+              "median_ms": 15.5201,
+              "p10_ms": 14.1507,
+              "p90_ms": 18.2091
+            },
+            {
+              "trials": [
+                257,
+                512
+              ],
+              "median_ms": 19.3463,
+              "p10_ms": 17.7439,
+              "p90_ms": 21.6834
+            },
+            {
+              "trials": [
+                513,
+                800
+              ],
+              "median_ms": 23.712450000000004,
+              "p10_ms": 21.7853,
+              "p90_ms": 26.4791
+            }
+          ],
+          "first_proposal_s": [
+            0.0322331,
+            0.03284
+          ],
+          "objective_total_s": [
+            0.00443,
+            0.004560599999999999
+          ],
+          "tell_total_s": [
+            0.07326949999999997,
+            0.07335080000000001
+          ],
+          "native_before": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3136,
+              "selection_launches": 1568,
+              "host_to_device_bytes": 4483621.0,
+              "device_to_host_bytes": 12544,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 6,
+              "workspace_reuses": 1562,
+              "avoided_upload_bytes": 27177435.0,
+              "cached_device_bytes": 262144
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 3136,
+              "selection_launches": 1568,
+              "host_to_device_bytes": 4483621.0,
+              "device_to_host_bytes": 12544,
+              "peak_temporary_bytes": 186664,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 6,
+              "workspace_reuses": 1562,
+              "avoided_upload_bytes": 27177435.0,
+              "cached_device_bytes": 262144
+            }
+          ],
+          "native_after": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 4704,
+              "selection_launches": 2352,
+              "host_to_device_bytes": 49327763.0,
+              "device_to_host_bytes": 18816,
+              "peak_temporary_bytes": 924168,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 8,
+              "workspace_reuses": 2344,
+              "avoided_upload_bytes": 298943853.0,
+              "cached_device_bytes": 1048576.0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 4704,
+              "selection_launches": 2352,
+              "host_to_device_bytes": 49327763.0,
+              "device_to_host_bytes": 18816,
+              "peak_temporary_bytes": 924168,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 8,
+              "workspace_reuses": 2344,
+              "avoided_upload_bytes": 298943853.0,
+              "cached_device_bytes": 1048576.0
+            }
+          ],
+          "memory_before": [
+            52225642496.0,
+            52224155648.0
+          ],
+          "memory_after": [
+            52250828800.0,
+            52246740992.0
+          ]
+        },
+        {
+          "problem": "correlated_valley",
+          "seed": 37,
+          "dimensions": 40,
+          "best_value": 14.728710368787397,
+          "initial_ten_best": 57.91384151731749,
+          "best_at_trials": {
+            "10": 57.91384151731749,
+            "100": 31.308357620650717,
+            "256": 27.11061204475399,
+            "512": 19.218377151261908,
+            "800": 14.728710368787397
+          },
+          "proposal_sha256": "822d88978d9eb785446f4b86fa38fcf22f88ffac51a307ad7aac7ab31079b8ff",
+          "inference_total_s": [
+            15.756200099999994,
+            15.770685000000006
+          ],
+          "inference_median_total_s": 15.76344255,
+          "history_windows": [
+            {
+              "trials": [
+                11,
+                100
+              ],
+              "median_ms": 13.180699999999998,
+              "p10_ms": 12.269599999999999,
+              "p90_ms": 16.117
+            },
+            {
+              "trials": [
+                101,
+                256
+              ],
+              "median_ms": 15.48645,
+              "p10_ms": 14.232999999999999,
+              "p90_ms": 18.1321
+            },
+            {
+              "trials": [
+                257,
+                512
+              ],
+              "median_ms": 19.224449999999997,
+              "p10_ms": 17.633,
+              "p90_ms": 21.8091
+            },
+            {
+              "trials": [
+                513,
+                800
+              ],
+              "median_ms": 23.777949999999997,
+              "p10_ms": 21.8782,
+              "p90_ms": 25.9111
+            }
+          ],
+          "first_proposal_s": [
+            0.0200434,
+            0.0195601
+          ],
+          "objective_total_s": [
+            0.0025731000000000018,
+            0.0025510000000000007
+          ],
+          "tell_total_s": [
+            0.06831179999999998,
+            0.06768669999999999
+          ],
+          "native_before": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 4704,
+              "selection_launches": 2352,
+              "host_to_device_bytes": 49327763.0,
+              "device_to_host_bytes": 18816,
+              "peak_temporary_bytes": 924168,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 8,
+              "workspace_reuses": 2344,
+              "avoided_upload_bytes": 298943853.0,
+              "cached_device_bytes": 1048576.0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 4704,
+              "selection_launches": 2352,
+              "host_to_device_bytes": 49327763.0,
+              "device_to_host_bytes": 18816,
+              "peak_temporary_bytes": 924168,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 8,
+              "workspace_reuses": 2344,
+              "avoided_upload_bytes": 298943853.0,
+              "cached_device_bytes": 1048576.0
+            }
+          ],
+          "native_after": [
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 6272,
+              "selection_launches": 3136,
+              "host_to_device_bytes": 94171918.0,
+              "device_to_host_bytes": 25088,
+              "peak_temporary_bytes": 924168,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 8,
+              "workspace_reuses": 3128,
+              "avoided_upload_bytes": 570710258.0,
+              "cached_device_bytes": 1048576.0
+            },
+            {
+              "api_version": 1,
+              "backend": "optuna_mex",
+              "command_count": 22,
+              "handle_count": 4,
+              "build_route": "mexcuda",
+              "taskmanager": false,
+              "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+              "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+              "execution": "matlab-mexcuda",
+              "host_parallel_runtime": "openmp",
+              "allocator": "cudaMalloc",
+              "density_launches": 6272,
+              "selection_launches": 3136,
+              "host_to_device_bytes": 94171918.0,
+              "device_to_host_bytes": 25088,
+              "peak_temporary_bytes": 924168,
+              "cuda_runtime": 12080,
+              "cuda_driver": 13010,
+              "cuda_device": 0,
+              "execution_mode": "gpu",
+              "cpu_density_calls": 0,
+              "cpu_selection_calls": 0,
+              "cpu_parallel_density_calls": 0,
+              "cpu_max_density_threads": 0,
+              "device_allocation_calls": 8,
+              "workspace_reuses": 3128,
+              "avoided_upload_bytes": 570710258.0,
+              "cached_device_bytes": 1048576.0
+            }
+          ],
+          "memory_before": [
+            52250828800.0,
+            52246740992.0
+          ],
+          "memory_after": [
+            52250812416.0,
+            52250738688.0
+          ]
+        }
+      ]
+    }
+  ],
+  "comparisons": [
+    {
+      "batch_size": 8,
+      "problem": "branin",
+      "seed": 11,
+      "cpu_inference_s": 2.00358795,
+      "previous_gpu_inference_s": 2.4469005,
+      "resident_gpu_inference_s": 2.2609401000000005,
+      "resident_gpu_speedup_over_cpu": 0.8861747155530567,
+      "resident_gpu_speedup_over_previous_gpu": 1.0822491493693263
+    },
+    {
+      "batch_size": 8,
+      "problem": "branin",
+      "seed": 37,
+      "cpu_inference_s": 1.4022468499999996,
+      "previous_gpu_inference_s": 1.5409474,
+      "resident_gpu_inference_s": 1.3023416500000002,
+      "resident_gpu_speedup_over_cpu": 1.0767119749260874,
+      "resident_gpu_speedup_over_previous_gpu": 1.1832128689119323
+    },
+    {
+      "batch_size": 8,
+      "problem": "correlated_valley",
+      "seed": 11,
+      "cpu_inference_s": 15.706684050000005,
+      "previous_gpu_inference_s": 15.886846849999998,
+      "resident_gpu_inference_s": 15.832706700000006,
+      "resident_gpu_speedup_over_cpu": 0.9920403597194154,
+      "resident_gpu_speedup_over_previous_gpu": 1.0034195132282715
+    },
+    {
+      "batch_size": 8,
+      "problem": "correlated_valley",
+      "seed": 37,
+      "cpu_inference_s": 15.62456225,
+      "previous_gpu_inference_s": 15.832774499999996,
+      "resident_gpu_inference_s": 15.76344255,
+      "resident_gpu_speedup_over_cpu": 0.9911897227043213,
+      "resident_gpu_speedup_over_previous_gpu": 1.0043982746649458
+    }
+  ],
+  "warmed_summary": [
+    {
+      "batch_size": 8,
+      "problem": "branin",
+      "warmed_trials": [
+        513,
+        800
+      ],
+      "cpu_warmed_median_ms": 1.7858,
+      "cpu_ask_median_ms": 1.2689,
+      "cpu_suggestions_median_ms": 0.51315,
+      "cpu_warmed_p10_ms": 1.655,
+      "cpu_warmed_p90_ms": 2.0509999999999997,
+      "cpu_upload_bytes": 0,
+      "previous_gpu_warmed_median_ms": 2.0715000000000003,
+      "previous_gpu_ask_median_ms": 1.5513500000000002,
+      "previous_gpu_suggestions_median_ms": 0.5156,
+      "previous_gpu_warmed_p10_ms": 1.9488999999999999,
+      "previous_gpu_warmed_p90_ms": 2.259,
+      "previous_gpu_upload_bytes": 63322112.0,
+      "resident_gpu_warmed_median_ms": 1.7832499999999998,
+      "resident_gpu_ask_median_ms": 1.2695500000000002,
+      "resident_gpu_suggestions_median_ms": 0.5078,
+      "resident_gpu_warmed_p10_ms": 1.6556,
+      "resident_gpu_warmed_p90_ms": 1.9491999999999998,
+      "resident_gpu_upload_bytes": 8967242.0,
+      "avoided_upload_bytes": 54354870.0,
+      "device_allocation_calls": 12,
+      "workspace_reuses": 3124,
+      "gpu_speedup_over_cpu": 1.0014299733632415,
+      "gpu_speedup_over_previous_gpu": 1.161643067433058
+    },
+    {
+      "batch_size": 8,
+      "problem": "correlated_valley",
+      "warmed_trials": [
+        513,
+        800
+      ],
+      "cpu_warmed_median_ms": 23.24465,
+      "cpu_ask_median_ms": 15.46335,
+      "cpu_suggestions_median_ms": 7.73655,
+      "cpu_warmed_p10_ms": 21.171499999999998,
+      "cpu_warmed_p90_ms": 26.4618,
+      "cpu_upload_bytes": 0,
+      "previous_gpu_warmed_median_ms": 23.712500000000002,
+      "previous_gpu_ask_median_ms": 15.89895,
+      "previous_gpu_suggestions_median_ms": 7.7259,
+      "previous_gpu_warmed_p10_ms": 21.7742,
+      "previous_gpu_warmed_p90_ms": 26.1945,
+      "previous_gpu_upload_bytes": 1266442240.0,
+      "resident_gpu_warmed_median_ms": 23.740000000000002,
+      "resident_gpu_ask_median_ms": 15.992149999999999,
+      "resident_gpu_suggestions_median_ms": 7.74765,
+      "resident_gpu_warmed_p10_ms": 21.8528,
+      "resident_gpu_warmed_p90_ms": 26.2566,
+      "resident_gpu_upload_bytes": 179376594.0,
+      "avoided_upload_bytes": 1087065646.0,
+      "device_allocation_calls": 4,
+      "workspace_reuses": 3132,
+      "gpu_speedup_over_cpu": 0.9791343723673125,
+      "gpu_speedup_over_previous_gpu": 0.9988416175231677
+    }
+  ],
+  "limitations": [
+    "Development source and same build-host binaries, not a released wheel.",
+    "Branin and a correlated quadratic valley are public optimization benchmarks, not engineering CAE acceptance.",
+    "Inference includes ask and suggestions, including host estimator/candidate construction and recording; it is not pure kernel timing.",
+    "Only 16 CPU threads are measured here; previous thread sweep remains separate evidence.",
+    "Two sessions per configuration; process initialization affects total inference, and history windows expose warmed behavior.",
+    "Batch objectives execute serially; this measures proposal reuse, not objective parallelism.",
+    "Transfer bytes and retained workspace capacity are measured; isolated transfer time and whole-process peak memory are not.",
+    "No Python/DB, Rustuna, GP/BoTorch or general Optuna API compatibility claim."
+  ]
+}

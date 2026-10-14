@@ -1,0 +1,93 @@
+{
+  "schema": "radia.hacapk-aca-cyclic-search-fix.v1",
+  "accepted": true,
+  "scope": "Cyclic-search fix and CPU/CUDA entry/block numerical subgates only; not complete adaptive assembly or HDiv-MMM acceptance",
+  "a100_used": false,
+  "source_commit": "af2f12ad6e90288a6bc640a325f3139a9f6869d8",
+  "binary_sha256": "a0468b435c0c223858b74a35ee448f86cb9fd2b1163d414a0054aa31912c509b",
+  "cause": "Cyclic reference search excluded the final row/column candidate; in the 2x2 case the only unmasked candidate was skipped and zero residual norms triggered early stopping",
+  "fix": "Bound cyclic scan by dimension while retaining existing retry budget, masking, updates and tolerances",
+  "before": {
+    "rank": 1,
+    "relative_error": 0.05941964437285972
+  },
+  "after": {
+    "rank": 2,
+    "relative_error": 1.4034375488003454e-16,
+    "entry_batches": 7,
+    "entry_count": 14,
+    "owned_device_bytes": 11172,
+    "scope": "One raw physical offdiagonal block, not full adaptive matrix or solver"
+  },
+  "independent_scalar_cpu": {
+    "rank": 2,
+    "relative_error": 1.2353238550862573e-16,
+    "route": "independent scalar C, no CUDA"
+  },
+  "regression": {
+    "schema": "radia.hacapk-entry-batch-contract.v1",
+    "accepted": true,
+    "a100_used": false,
+    "scope": "Shared C ACA search regression only; no CUDA/whole solver acceptance",
+    "cases": {
+      "scalar": {
+        "accepted": true,
+        "cases": 12,
+        "max_relative_error": 7.898640968858655e-17
+      },
+      "batch": {
+        "accepted": true,
+        "cases": 12,
+        "max_relative_error": 7.898640968858655e-17
+      }
+    },
+    "source_sha256": {
+      "validation_test/hmatrix_cuda/check_aca_regression.c": "eef106d7a24598985112b0e034f7f031894c3b8753d8a7e0ee06415cf4af2450",
+      "src/ext/HACApK/cHACApK_calc_entry_ij.h": "fad71d96a59e5c4ec7096224ae7e41ac45febe9e033ced29a3bff30c2dc7dc65",
+      "validation_test/hmatrix_cuda/check_entry_batch.py": "842f500fd281487a8384215a67dfa75d41faa34a2110296f75778e406968e5ca",
+      "packages/radia-gpu/native/hmatrix_aca_host.c": "19d1d3ad7948f86b4ce63a8cbff9ae47e82386e17b95a4954d6c9fac65bb8100",
+      "src/ext/HACApK/cHACApK_lib.c": "94bcef9be652932b29785c417b446b91b984c5e92e41f8c55fb49a08df0e0cb8",
+      "src/ext/HACApK/cHACApK_aca.inc": "72f78d46b4d4da59522faa6e3ff63b33597fa07bcddf5dd53530ef643fb14b7e"
+    }
+  },
+  "admissible_block": {
+    "rows": 66,
+    "columns": 66,
+    "rank": 32,
+    "relative_error": 2.0462869966243266e-09,
+    "entry_count": 4214,
+    "entry_batches": 81,
+    "owned_device_bytes": 292324,
+    "scope": "Separated constant-tet block above default 65-charge leaf threshold",
+    "cpu_leaf_stats": {
+      "n_dof": 132,
+      "n_leaves": 10,
+      "n_lowrank": 2,
+      "n_dense": 8,
+      "max_rank": 66
+    },
+    "rank_limit": 32,
+    "rank_budget_exhausted": true,
+    "requested_compression_epsilon": 1e-10,
+    "compression_convergence_accepted": false,
+    "requires_dense_promotion_by_existing_cpu_rule": true
+  },
+  "leaf_selection": {
+    "scope": "Uniform one-charge-per-element CPU builder, leaf_size64",
+    "effective_threshold": 65,
+    "symmetric_diagonal_dense": true,
+    "geometric_condition": "Either support-box width <= eta * box gap; both dimensions >= threshold and <= maximum leaf size",
+    "tiny_block": "2x2 is normally dense at this threshold; forced ACA diagnostic still exposed a real shared search defect",
+    "rank_cap_rule": "Promote to exact dense if rank reaches cap while both block dimensions exceed cap"
+  },
+  "timing": {
+    "status": "not measured",
+    "reason": "CI running/queued; 100 data remain diagnostic only"
+  },
+  "pending": [
+    "Complete adaptive native HACApK assembly and exact dense promotion",
+    "Real FE charge-map/material/constraints/solver/true residual",
+    "Full CPU native build after shared-source change",
+    "Whole transfer-inclusive timing and peak-memory acceptance"
+  ]
+}

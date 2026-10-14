@@ -1,0 +1,49 @@
+{
+  "wheel_sha256": "bb5337ea9aacf8f720634c5c1a3b8ea1722a53869bff6f26994e7eeb33eecd0a",
+  "native_sha256": "9020a4f700d381fe5388870ef3b77a43b67506f9f1610f9ef8b94906bdfc4996",
+  "source_commit": "0bdd66c9cf8c94410f14dc7fa5fe81e5b04c6619",
+  "ci_run": 38262424368,
+  "sources_verified": 263,
+  "version": "5.3.2",
+  "fixture_sha256": "f4a679c782663e5bf0d3ead5ea0c2295517fea673915e4191aad03a5f7967758",
+  "steps": [
+    {
+      "name": "pip-check",
+      "exit_code": 0,
+      "elapsed_s": 1.1336169999995036
+    },
+    {
+      "name": "full6",
+      "exit_code": 0,
+      "elapsed_s": 22.189360200005467
+    },
+    {
+      "name": "focused",
+      "exit_code": 0,
+      "elapsed_s": 17.316161299997475
+    },
+    {
+      "name": "pip-freeze",
+      "exit_code": 0,
+      "elapsed_s": 0.6448693999991519
+    }
+  ],
+  "passed": true,
+  "private_runtime_verification": {
+    "schema": "radia.private-runtime-verification.v1",
+    "execution_role": "build",
+    "current_machine_verified": true,
+    "verification_batch": "3bca6787d776271e1a7bb1ffbb1adbf6828c481ff56c6a0cd23b7d465ba9176e",
+    "machine_token": "9ed731b6511dc53b29bcc5fb7480f660c54322a1e3bfa5157b7be654cc269dc3",
+    "raw_records_sha256": {
+      "acceptance": "8fdfe630f5e99d6297b17e2da98532e9a1a3882fe8e2fd6a80a8d077f9094050",
+      "full6": "0b206c26ec3a3a3746d636ae551ae9226f109c22dbc19addc84e2e7d727984c1",
+      "focused": "826a88d7e170fc87ed27e6ff306594d02d7e68cc0e868bfe5b10d5825dae28a0"
+    },
+    "public_records_sha256": {
+      "acceptance": "8fdfe630f5e99d6297b17e2da98532e9a1a3882fe8e2fd6a80a8d077f9094050",
+      "full6": "787064f146d4d0ff21177352883a36dda012ecbff04fa4ce41570a9465eb7743",
+      "focused": "273bef3ae6f6d9550317e036b58f5154112c1626c1846f6c93a73bd022e9d473"
+    }
+  }
+}

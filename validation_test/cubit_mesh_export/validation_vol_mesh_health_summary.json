@@ -1,0 +1,475 @@
+{
+  "kind": "netgen_vol_mesh_health_validation",
+  "validation_class": true,
+  "gate": {
+    "min_surface_triangle_quality": 1e-06,
+    "min_tetrahedron_quality": 0.01,
+    "closure_relative_tolerance": 1e-09,
+    "worst_limit": 3
+  },
+  "lesson": "A first-order FEM/BEM .vol mesh needs shape quality, closed boundary topology, and boundary-to-volume face consistency at the same time.",
+  "builtin_cases": [
+    {
+      "label": "clean_right_tetrahedron",
+      "mesh_summary": {
+        "points": 4,
+        "surface_triangles": 4,
+        "tetrahedra": 1,
+        "materials": 1,
+        "boundary_names": 1
+      },
+      "health": {
+        "policy": "netgen_vol_tri_tet_first_order_fem_bem_mesh_health",
+        "status": "ok",
+        "ok_for_first_order_fem_bem": true,
+        "inventory": {
+          "points": 4,
+          "surface_triangles": 4,
+          "tetrahedra": 1,
+          "materials": 1,
+          "boundary_names": 1
+        },
+        "thresholds": {
+          "min_surface_triangle_quality": 1e-06,
+          "min_tetrahedron_quality": 0.01,
+          "closure_relative_tolerance": 1e-09
+        },
+        "checks": {
+          "has_points": true,
+          "has_surface_triangles": true,
+          "has_tetrahedra": true,
+          "surface_is_closed_manifold": true,
+          "surface_vector_area_closes": true,
+          "surface_volume_matches_tetrahedra": true,
+          "boundary_faces_match_tetrahedra": true,
+          "surface_triangle_quality_above_threshold": true,
+          "tetrahedron_quality_above_threshold": true
+        },
+        "issues": [],
+        "surface_triangle_quality": {
+          "surface_triangles": 4,
+          "min_radius_ratio_quality": 0.8284271247461901,
+          "max_radius_ratio_quality": 0.9999999999999996,
+          "mean_radius_ratio_quality": 0.8713203435596424,
+          "min_area": 0.5,
+          "max_edge_ratio": 1.4142135623730951,
+          "min_angle_deg": 44.999999999999986,
+          "max_angle_deg": 90.00000000000001
+        },
+        "tetrahedron_quality": {
+          "tetrahedra": 1,
+          "min_radius_ratio_quality": 0.7320508075688774,
+          "max_radius_ratio_quality": 0.7320508075688774,
+          "mean_radius_ratio_quality": 0.7320508075688774,
+          "min_inradius": 0.21132486540518713,
+          "max_circumradius": 0.8660254037844386,
+          "min_normalized_corner_jacobian": 0.4999999999999999,
+          "mean_min_normalized_corner_jacobian": 0.4999999999999999,
+          "max_edge_ratio": 1.4142135623730951
+        },
+        "closure": {
+          "surface_triangles": 4,
+          "tetrahedra": 1,
+          "total_surface_area": 2.3660254037844384,
+          "surface_vector_area": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "surface_vector_area_norm": 0.0,
+          "surface_vector_area_norm_over_area": 0.0,
+          "surface_signed_volume": -0.16666666666666666,
+          "surface_abs_volume": 0.16666666666666666,
+          "tetrahedron_total_volume": 0.16666666666666666,
+          "surface_abs_volume_error": 0.0,
+          "surface_abs_volume_rel_error": 0.0,
+          "boundary_orientation": "inward"
+        },
+        "manifold": {
+          "trace_nodes": 4,
+          "surface_edges": 6,
+          "surface_triangles": 4,
+          "closed_edges": 6,
+          "open_edges": 0,
+          "is_closed_manifold": true,
+          "euler_characteristic": 2
+        },
+        "boundary_tet_face_incidence": {
+          "surface_triangles": 4,
+          "tetrahedra": 1,
+          "exterior_surface_triangles": 4,
+          "interface_surface_triangles": 0,
+          "orphan_surface_triangles": 0,
+          "overconnected_surface_triangles": 0,
+          "domain_material_mismatch_count": 0,
+          "max_adjacent_tetrahedra": 1,
+          "is_volume_boundary_consistent": true,
+          "policy": "surface_triangles_match_volume_tet_faces_for_tri_tet_vol"
+        },
+        "worst_surface_triangles": [
+          {
+            "surface_triangle": 1,
+            "boundary_number": 1,
+            "surfnr": 1,
+            "area": 0.5,
+            "inradius": 0.2928932188134525,
+            "circumradius": 0.7071067811865476,
+            "radius_ratio_quality": 0.8284271247461901,
+            "min_edge": 1.0,
+            "max_edge": 1.4142135623730951,
+            "edge_ratio": 1.4142135623730951,
+            "min_angle_deg": 44.999999999999986,
+            "max_angle_deg": 90.00000000000001
+          },
+          {
+            "surface_triangle": 2,
+            "boundary_number": 1,
+            "surfnr": 1,
+            "area": 0.5,
+            "inradius": 0.2928932188134525,
+            "circumradius": 0.7071067811865476,
+            "radius_ratio_quality": 0.8284271247461901,
+            "min_edge": 1.0,
+            "max_edge": 1.4142135623730951,
+            "edge_ratio": 1.4142135623730951,
+            "min_angle_deg": 44.999999999999986,
+            "max_angle_deg": 90.00000000000001
+          },
+          {
+            "surface_triangle": 4,
+            "boundary_number": 1,
+            "surfnr": 1,
+            "area": 0.5,
+            "inradius": 0.2928932188134525,
+            "circumradius": 0.7071067811865476,
+            "radius_ratio_quality": 0.8284271247461901,
+            "min_edge": 1.0,
+            "max_edge": 1.4142135623730951,
+            "edge_ratio": 1.4142135623730951,
+            "min_angle_deg": 44.999999999999986,
+            "max_angle_deg": 90.00000000000001
+          }
+        ],
+        "worst_tetrahedra": [
+          {
+            "tetrahedron": 1,
+            "volume": 0.16666666666666666,
+            "surface_area": 2.3660254037844384,
+            "inradius": 0.21132486540518713,
+            "circumradius": 0.8660254037844386,
+            "radius_ratio_quality": 0.7320508075688774,
+            "corner_normalized_jacobians": [
+              1.0,
+              0.4999999999999999,
+              0.4999999999999999,
+              0.4999999999999999
+            ],
+            "min_normalized_corner_jacobian": 0.4999999999999999,
+            "max_normalized_corner_jacobian": 1.0,
+            "min_edge": 1.0,
+            "max_edge": 1.4142135623730951,
+            "edge_ratio": 1.4142135623730951
+          }
+        ]
+      }
+    },
+    {
+      "label": "thin_sliver_quality_gate",
+      "mesh_summary": {
+        "points": 4,
+        "surface_triangles": 4,
+        "tetrahedra": 1,
+        "materials": 1,
+        "boundary_names": 1
+      },
+      "health": {
+        "policy": "netgen_vol_tri_tet_first_order_fem_bem_mesh_health",
+        "status": "needs_attention",
+        "ok_for_first_order_fem_bem": false,
+        "inventory": {
+          "points": 4,
+          "surface_triangles": 4,
+          "tetrahedra": 1,
+          "materials": 1,
+          "boundary_names": 1
+        },
+        "thresholds": {
+          "min_surface_triangle_quality": 1e-06,
+          "min_tetrahedron_quality": 0.01,
+          "closure_relative_tolerance": 1e-09
+        },
+        "checks": {
+          "has_points": true,
+          "has_surface_triangles": true,
+          "has_tetrahedra": true,
+          "surface_is_closed_manifold": true,
+          "surface_vector_area_closes": true,
+          "surface_volume_matches_tetrahedra": true,
+          "boundary_faces_match_tetrahedra": true,
+          "surface_triangle_quality_above_threshold": true,
+          "tetrahedron_quality_above_threshold": false
+        },
+        "issues": [
+          "at least one tetrahedron is below the volume quality threshold"
+        ],
+        "surface_triangle_quality": {
+          "surface_triangles": 4,
+          "min_radius_ratio_quality": 0.0023108634818815765,
+          "max_radius_ratio_quality": 0.8284271247461901,
+          "mean_radius_ratio_quality": 0.4150756014840378,
+          "min_area": 0.0007071067811865475,
+          "max_edge_ratio": 577.3502691896257,
+          "min_angle_deg": 0.08110952385102314,
+          "max_angle_deg": 125.18328015890484
+        },
+        "tetrahedron_quality": {
+          "tetrahedra": 1,
+          "min_radius_ratio_quality": 0.0012254623180562366,
+          "max_radius_ratio_quality": 0.0012254623180562366,
+          "mean_radius_ratio_quality": 0.0012254623180562366,
+          "min_inradius": 0.0004997927286763739,
+          "max_circumradius": 1.2235204330128697,
+          "min_normalized_corner_jacobian": 0.0007078138865510446,
+          "mean_min_normalized_corner_jacobian": 0.0007078138865510446,
+          "max_edge_ratio": 816.4965809277261
+        },
+        "closure": {
+          "surface_triangles": 4,
+          "tetrahedra": 1,
+          "total_surface_area": 1.0004147145641256,
+          "surface_vector_area": [
+            0.0,
+            0.0,
+            4.336808689942018e-19
+          ],
+          "surface_vector_area_norm": 4.336808689942018e-19,
+          "surface_vector_area_norm_over_area": 4.3350108977870625e-19,
+          "surface_signed_volume": -0.00016666666666666666,
+          "surface_abs_volume": 0.00016666666666666666,
+          "tetrahedron_total_volume": 0.00016666666666666666,
+          "surface_abs_volume_error": 0.0,
+          "surface_abs_volume_rel_error": 0.0,
+          "boundary_orientation": "inward"
+        },
+        "manifold": {
+          "trace_nodes": 4,
+          "surface_edges": 6,
+          "surface_triangles": 4,
+          "closed_edges": 6,
+          "open_edges": 0,
+          "is_closed_manifold": true,
+          "euler_characteristic": 2
+        },
+        "boundary_tet_face_incidence": {
+          "surface_triangles": 4,
+          "tetrahedra": 1,
+          "exterior_surface_triangles": 4,
+          "interface_surface_triangles": 0,
+          "orphan_surface_triangles": 0,
+          "overconnected_surface_triangles": 0,
+          "domain_material_mismatch_count": 0,
+          "max_adjacent_tetrahedra": 1,
+          "is_volume_boundary_consistent": true,
+          "policy": "surface_triangles_match_volume_tet_faces_for_tri_tet_vol"
+        },
+        "worst_surface_triangles": [
+          {
+            "surface_triangle": 2,
+            "boundary_number": 1,
+            "surfnr": 1,
+            "area": 0.0007071067811865475,
+            "inradius": 0.0007068477031931202,
+            "circumradius": 0.6117606762452128,
+            "radius_ratio_quality": 0.0023108634818815765,
+            "min_edge": 0.0017320508075688774,
+            "max_edge": 1.0,
+            "edge_ratio": 577.3502691896257,
+            "min_angle_deg": 0.08110952385102314,
+            "max_angle_deg": 125.18328015890484
+          },
+          {
+            "surface_triangle": 4,
+            "boundary_number": 1,
+            "surfnr": 1,
+            "area": 0.0007071067811865475,
+            "inradius": 0.0007068477031931202,
+            "circumradius": 0.6117606762452128,
+            "radius_ratio_quality": 0.0023108634818815765,
+            "min_edge": 0.0017320508075688774,
+            "max_edge": 1.0,
+            "edge_ratio": 577.3502691896257,
+            "min_angle_deg": 0.08110952385102314,
+            "max_angle_deg": 125.18328015890484
+          },
+          {
+            "surface_triangle": 3,
+            "boundary_number": 1,
+            "surfnr": 1,
+            "area": 0.4990005010017525,
+            "inradius": 0.29247888451812076,
+            "circumradius": 0.707108196813253,
+            "radius_ratio_quality": 0.8272535542261981,
+            "min_edge": 0.9990010010004995,
+            "max_edge": 1.4142135623730951,
+            "edge_ratio": 1.4156277731020892,
+            "min_angle_deg": 44.942675649249765,
+            "max_angle_deg": 90.11464870150046
+          }
+        ],
+        "worst_tetrahedra": [
+          {
+            "tetrahedron": 1,
+            "volume": 0.00016666666666666666,
+            "surface_area": 1.0004147145641256,
+            "inradius": 0.0004997927286763739,
+            "circumradius": 1.2235204330128697,
+            "radius_ratio_quality": 0.0012254623180562366,
+            "corner_normalized_jacobians": [
+              0.5773502691896257,
+              0.0007078138865510446,
+              0.0007078138865510446,
+              0.5785055447625166
+            ],
+            "min_normalized_corner_jacobian": 0.0007078138865510446,
+            "max_normalized_corner_jacobian": 0.5785055447625166,
+            "min_edge": 0.0017320508075688774,
+            "max_edge": 1.4142135623730951,
+            "edge_ratio": 816.4965809277261
+          }
+        ]
+      }
+    },
+    {
+      "label": "open_surface_topology_gate",
+      "mesh_summary": {
+        "points": 3,
+        "surface_triangles": 1,
+        "tetrahedra": 0,
+        "materials": 0,
+        "boundary_names": 1
+      },
+      "health": {
+        "policy": "netgen_vol_tri_tet_first_order_fem_bem_mesh_health",
+        "status": "needs_attention",
+        "ok_for_first_order_fem_bem": false,
+        "inventory": {
+          "points": 3,
+          "surface_triangles": 1,
+          "tetrahedra": 0,
+          "materials": 0,
+          "boundary_names": 1
+        },
+        "thresholds": {
+          "min_surface_triangle_quality": 1e-06,
+          "min_tetrahedron_quality": 0.01,
+          "closure_relative_tolerance": 1e-09
+        },
+        "checks": {
+          "has_points": true,
+          "has_surface_triangles": true,
+          "has_tetrahedra": false,
+          "surface_is_closed_manifold": false,
+          "surface_vector_area_closes": false,
+          "surface_volume_matches_tetrahedra": false,
+          "boundary_faces_match_tetrahedra": false,
+          "surface_triangle_quality_above_threshold": true,
+          "tetrahedron_quality_above_threshold": false
+        },
+        "issues": [
+          "mesh has no volume tetrahedra",
+          "boundary triangles are not a closed edge manifold",
+          "oriented boundary vector area does not close",
+          "boundary-triangle enclosed volume does not match tetrahedron volume",
+          "at least one boundary triangle is orphaned, overconnected, or material-mismatched",
+          "at least one tetrahedron is below the volume quality threshold"
+        ],
+        "surface_triangle_quality": {
+          "surface_triangles": 1,
+          "min_radius_ratio_quality": 0.8284271247461901,
+          "max_radius_ratio_quality": 0.8284271247461901,
+          "mean_radius_ratio_quality": 0.8284271247461901,
+          "min_area": 0.5,
+          "max_edge_ratio": 1.4142135623730951,
+          "min_angle_deg": 44.999999999999986,
+          "max_angle_deg": 90.00000000000001
+        },
+        "tetrahedron_quality": {
+          "tetrahedra": 0,
+          "min_radius_ratio_quality": null,
+          "max_radius_ratio_quality": null,
+          "mean_radius_ratio_quality": null,
+          "min_inradius": null,
+          "max_circumradius": null,
+          "min_normalized_corner_jacobian": null,
+          "mean_min_normalized_corner_jacobian": null,
+          "max_edge_ratio": null
+        },
+        "closure": {
+          "surface_triangles": 1,
+          "tetrahedra": 0,
+          "total_surface_area": 0.5,
+          "surface_vector_area": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "surface_vector_area_norm": 0.5,
+          "surface_vector_area_norm_over_area": 1.0,
+          "surface_signed_volume": 0.0,
+          "surface_abs_volume": 0.0,
+          "tetrahedron_total_volume": 0,
+          "surface_abs_volume_error": 0.0,
+          "surface_abs_volume_rel_error": null,
+          "boundary_orientation": "zero_or_open"
+        },
+        "manifold": {
+          "trace_nodes": 3,
+          "surface_edges": 3,
+          "surface_triangles": 1,
+          "closed_edges": 0,
+          "open_edges": 3,
+          "is_closed_manifold": false,
+          "euler_characteristic": 1
+        },
+        "boundary_tet_face_incidence": {
+          "surface_triangles": 1,
+          "tetrahedra": 0,
+          "exterior_surface_triangles": 0,
+          "interface_surface_triangles": 0,
+          "orphan_surface_triangles": 1,
+          "overconnected_surface_triangles": 0,
+          "domain_material_mismatch_count": 1,
+          "max_adjacent_tetrahedra": 0,
+          "is_volume_boundary_consistent": false,
+          "policy": "surface_triangles_match_volume_tet_faces_for_tri_tet_vol"
+        },
+        "worst_surface_triangles": [
+          {
+            "surface_triangle": 1,
+            "boundary_number": 1,
+            "surfnr": 1,
+            "area": 0.5,
+            "inradius": 0.2928932188134525,
+            "circumradius": 0.7071067811865476,
+            "radius_ratio_quality": 0.8284271247461901,
+            "min_edge": 1.0,
+            "max_edge": 1.4142135623730951,
+            "edge_ratio": 1.4142135623730951,
+            "min_angle_deg": 44.999999999999986,
+            "max_angle_deg": 90.00000000000001
+          }
+        ],
+        "worst_tetrahedra": []
+      }
+    }
+  ],
+  "checks": {
+    "clean_status": "ok",
+    "clean_ok": true,
+    "sliver_status": "needs_attention",
+    "sliver_tet_quality_ok": false,
+    "open_status": "needs_attention",
+    "open_closed_manifold_ok": false,
+    "open_boundary_face_match_ok": false
+  }
+}

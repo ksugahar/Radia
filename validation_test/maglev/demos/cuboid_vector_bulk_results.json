@@ -1,0 +1,54 @@
+{
+  "geometry": "Cu cuboid 5x2x1 mm",
+  "sigma": 58000000.0,
+  "mu": 1.2566370614359173e-06,
+  "dims_m": [
+    0.005,
+    0.002,
+    0.001
+  ],
+  "analytic_tau_te_us": {
+    "x": 5.907831487571155,
+    "y": 7.100758999484561,
+    "z": 25.464790894703253
+  },
+  "runs": {
+    "h_0.25mm": {
+      "ne": 2462,
+      "n_modes": 36,
+      "leading_tau": {
+        "x": {
+          "tau_us": 5.974133715059988,
+          "err_pct": 1.1222768900622704
+        },
+        "y": {
+          "tau_us": 7.995911077067689,
+          "err_pct": 12.606428096603556
+        },
+        "z": {
+          "tau_us": 25.91868106782657,
+          "err_pct": 1.7824225417760045
+        }
+      }
+    },
+    "h_0.18mm": {
+      "ne": 9821,
+      "n_modes": 36,
+      "leading_tau": {
+        "x": {
+          "tau_us": 5.825624756213066,
+          "err_pct": -1.391487410076518
+        },
+        "y": {
+          "tau_us": 7.077075550204296,
+          "err_pct": -0.33353405293693883
+        },
+        "z": {
+          "tau_us": 26.076939204298487,
+          "err_pct": 2.4039007904147436
+        }
+      }
+    }
+  },
+  "scope_note": "interior-PEC eddy modes (A x n = 0), the de-Rham HCurl partner of the scalar H1 bulk; physical exterior-matched tensor is ellipsoid/ellipsoid_alpha_tensor_3d.py"
+}

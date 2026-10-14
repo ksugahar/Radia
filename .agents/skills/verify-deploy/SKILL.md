@@ -1,0 +1,95 @@
+---
+name: verify-deploy
+description: Verify that Radia edits are loaded from the intended runtime by external Python and Simulink, while Cubit loads only its deployed embedded-Python toolbar files.
+---
+
+# Verify Deploy
+
+Use this after changing `src/radia`, Simulink application code, or the Cubit
+toolbar. The supported runtime boundary is:
+
+- external Python 3.12: editable `radia` on 100号機; verified wheel on LAB;
+  both run the headless application code;
+- MATLAB/Simulink: the same external source through the checked MATLAB/MEX
+  entry point and tracked Radia library;
+- Coreform Cubit: deployed `.ccm`, curver module, startup hook, and toolbar in
+  Cubit's private Python/PySide6 runtime.
+
+The retired desktop PySide applications and notebook workbenches are not a
+deployment target.
+
+## 1. Identify the loaded Python source
+
+Run from the machine being verified:
+
+```powershell
+python -c "import pathlib,radia; print(radia.__version__); print(pathlib.Path(radia.__file__).resolve())"
+python -c "import pathlib,radia.simulink.application as m; print(pathlib.Path(m.__file__).resolve())"
+```
+
+On 100号機, both paths must resolve to the explicitly intended current editable
+checkout. On LAB, they must resolve to the verified wheel in `site-packages`.
+A reviewed release worktree is valid while selected as the 100号機 source; a
+historically canonical path is not an automatic recovery target. Only 100号機
+uses an editable install. If its source is wrong, verify the intended source
+and repoint only `radia`, without an uninstall-first step:
+
+```powershell
+python -m pip install -e <intended-current-radia-root> --no-deps
+```
+
+On 100, verify editable metadata; on LAB, verify the installed wheel version
+and package path. Confirm fresh imports before touching long-lived clients.
+Then reconnect only affected MCP/MATLAB clients at a safe boundary. A process
+keeps imported modules and registered tool objects until it reloads or restarts.
+Fix a failed update forward; never repoint to an older tree merely because it
+was previously installed.
+
+## 2. Verify the Simulink application boundary
+
+Run the repository's structural and lifecycle checks:
+
+```powershell
+python tools/audit_new_panel_contract.py
+python -m pytest tests/test_simulink_application.py -q
+```
+
+Then use `simulink-app-health`. Open the exact tracked `.slx`, confirm its
+resolved `FileName`, run `model_read`, `model_check`, and the focused MATLAB
+test. Generated scratch models do not prove that the tracked production model
+loads the edited source.
+
+For a solver-backed run, inspect `run.log` and `result.json`. Provenance must
+name the expected checkout/backend, and spatial runs must index their checked
+`.vol` report and GMSH post-processing artifact.
+
+## 3. Verify the Cubit boundary
+
+Do not import Cubit's PySide6 into external Radia Python. Verify and install the
+toolbar with the package-owned commands:
+
+```powershell
+check-vol --help
+cubit-plugin-install
+python tools/audit_pyside6_only.py
+```
+
+Inside Cubit, use **Reload Toolbar**, then exercise one export action. Confirm
+that the deployed startup hook, toolbar module, `.ccm`, and curver binary have
+the expected version/hash. Use `radia-plugin-check` for the complete deployed
+inventory and a real export/check cycle.
+
+## 4. Cross-machine acceptance
+
+- LAB: verified wheel and fast application checks; 100号機: explicitly
+  intended editable source and fast application checks.
+- mdx1/mdx2: isolated CI/compute environments; never infer their state from LAB
+  files.
+- hibino: optional long optimization/validation compute host.
+- Release verification: use `release-quad`; every result must be attributable to
+  one immutable commit SHA.
+
+Reject the deployment when a machine resolves a source different from its
+recorded intended source or release commit, a long-lived process exposes a
+stale tool list, the tracked Simulink model cannot be reopened cleanly, or Cubit
+binaries and toolbar files disagree.

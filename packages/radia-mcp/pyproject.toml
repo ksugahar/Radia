@@ -1,0 +1,292 @@
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "radia-mcp"
+version = "2.0.2"
+# IMPORTANT: PyPI Warehouse enforces Summary max length = 512 chars.
+# 0.72.0-0.74.0 silently failed publish-pypi (twine reject) because
+# the per-release changelog accumulated >512 chars here.  Keep this
+# short and stable; release-specific notes go in CHANGELOG.md.
+description = "MCP workflows and executable engineering guidance for Radia: build123d, Gmsh post-processing, NGSolve, mixed-omega, PEEC, induction heating, optimization and research publications. Cubit MCP is distributed separately in cubit-mesh-export."
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{name = "Kengo Sugahara"}]
+# Core servers import without Radia, Cubit, MKL or a native build.
+# Optional execution backends are installed only for their selected workflows.
+dependencies = [
+    "mcp>=1.21.1,<2",
+]
+
+[project.optional-dependencies]
+maintenance = ["tomlkit>=0.13,<1"]
+# build123d-side tools need the build123d library itself.
+build123d = [
+    "build123d>=0.6",
+]
+# Licensed Cubit execution is owned by the separate exporter (Windows/Python 3.12).
+cubit = [
+    "cubit-mesh-export>=1.0.2; python_version == '3.12' and sys_platform == 'win32'",
+]
+# CadQuery interop: `execute_cadquery` + `cadquery_to_cubit_hex` let
+# users author geometry in either sibling OCCT CAD library and route
+# through the same Cubit hex-mesh pipeline. Enables interop with
+# rishigundakaram/cadquery-mcp-server via the STEP boundary.
+cadquery = [
+    "cadquery>=2.5",
+]
+# gmsh_post: MSH v4.1 inspect / validate / convert / write_node_data, plus
+# the NumPy/SciPy field post-processing and Matplotlib raster tools.
+gmsh = [
+    "gmsh>=4.10",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "matplotlib>=3.8",
+]
+# Solver-neutral optimization, Krylov and inverse-problem helpers
+# (radia-design / matrix-solvers tools).
+numeric = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+]
+# Topology-optimization shape regeneration: Radia density/level-set output
+# -> watertight STL -> headless Cubit -> gated `.vol` / `.msh` artifacts.
+# `trimesh` is also the independent STL closure/volume referee used before
+# Cubit consumes the surface.
+# The STL/marching-cubes stack belongs to radia's own `topopt-cad` extra.
+shape-regeneration = [
+    "cubit-mesh-export>=1.0.2; python_version == '3.12' and sys_platform == 'win32'",
+    "radia[topopt-cad]>=4.95.51",
+    "scipy>=1.10",
+    "gmsh>=4.10",
+]
+# YouTube transcript scraping for Cubit/build123d/gmsh tutorial
+# absorption (cubit_youtube / build123d_youtube / gmsh_youtube
+# sub-sources). stdlib-only otherwise.
+youtube = [
+    "youtube-transcript-api>=1.0",
+]
+# radia-ngsolve pulls in ngsolve + radia core for full-fidelity FEM
+# scripting help (example snippets referenced in `radia_knowledge.py`).
+# The MCP server itself loads without radia installed; users only need
+# radia for tools that embed radia computation. Install with:
+#   pip install radia-mcp[radia]
+radia = [
+    "radia>=4.6.1",
+    "scipy>=1.10",
+]
+# ChromaDB + sentence-transformers RAG for literature_index
+# semantic search. Pattern adopted from wjc9011/COMSOL_Multiphysics_MCP
+# (2026-05-24). Adds ~500 MB (sentence-transformers model + chromadb +
+# pymupdf). Optional — keyword search still works without it.
+#   pip install radia-mcp[rag]
+rag = [
+    "chromadb>=0.4.0",
+    "sentence-transformers>=2.2.0",
+    "pymupdf>=1.24.0",
+]
+# Optional OCR engines for scanned PDFs and slide images (literature index
+# fallback, presentation text audits). Google Cloud Vision sends images to an
+# external service and needs explicit permission for unpublished material.
+ocr = [
+    "easyocr>=1.7",
+    "google-cloud-vision>=3.0",
+]
+# Universal response network fitting (radia_ngsolve urn tools).
+urn = [
+    "radia[urn]>=4.6.1",
+]
+# Native equation rendering for presentations.
+equation = [
+    "eqnedit64>=3.1.4; sys_platform == 'win32'",
+]
+# md2html: Markdown -> HTML conversion requires Python-Markdown.
+# pymdown-extensions supplies arithmatex, which owns math detection: it keeps
+# \begin{...} environments and inline code containing "$" out of the hands of
+# the Markdown processors.
+md2html = [
+    "markdown>=3.0",
+    "pymdown-extensions>=10.0",
+]
+# document: paper_writing / grant_writing / presentation / poster / pdf /
+# doc_convert / bibliography --
+# promoted 2026-06-02 from the LAB-private mcp-server-document.  PDF +
+# PPTX manipulation, proposal/paper lint, poster rendering, bibliography fetch.
+#   pip install radia-mcp[document]
+document = [
+    "pymupdf>=1.24",
+    "python-pptx>=1.0",
+    "Pillow>=10.0",
+    "opencv-python-headless>=4.8",
+    "matplotlib>=3.8",
+    "numpy>=1.24",
+    "requests>=2.0",
+    "edge-tts>=6.1",
+    "pywin32>=306; platform_system == 'Windows'",
+]
+# All MCP servers including the radia-coupled knowledge base.
+full = [
+    "radia-mcp[build123d,cadquery,gmsh,numeric,shape-regeneration,youtube,radia,rag,ocr,urn,md2html,document,equation]",
+]
+
+[project.urls]
+Repository = "https://github.com/ksugahar/Radia"
+
+[project.scripts]
+mcp-server-radia-ltspice = "radia_mcp.ltspice.server:main"
+mcp-server-radia-spice-lab = "radia_mcp.ltspice.server:main"
+mcp-spice-circuit-lab = "radia_mcp.ltspice.server:main"
+mcp-ltspice = "radia_mcp.ltspice.server:main"
+mcp-server-radia-design = "radia_mcp.radia_design.server:main"
+mcp-server-radia-electrical = "radia_mcp.radia_electrical.server:main"
+mcp-server-radia-motion = "radia_mcp.radia_motion.server:main"
+mcp-server-radia-analysis = "radia_mcp.radia_analysis.server:main"
+mcp-server-radia-acoustic-workflows = "radia_mcp.radia_acoustic_workflows.server:main"
+mcp-server-document-ops = "radia_mcp.document_ops.server:main"
+mcp-server-radia-publication = "radia_mcp.radia_publication.server:main"
+# Public MCP servers. All load standalone on the MCP Python SDK 1.x. The
+# "radia-coupled" ones reference radia from inside example snippets in
+# their knowledge modules, but importing the server does not require
+# radia to be installed.
+mcp-server-build123d = "radia_mcp.build123d.server:main"
+mcp-server-gmsh = "radia_mcp.gmsh.server:main"
+# mcp-server-elf moved to standalone package: pip install mcp-server-elf
+# (https://github.com/ksugahar/mcp-server-elf, https://pypi.org/project/mcp-server-elf/)
+mcp-server-radia-ngsolve = "radia_mcp.radia_ngsolve.server:main"
+mcp-server-force = "radia_mcp.force.server:main"
+mcp-server-radia-acoustic = "radia_mcp.radia_acoustic.server:main"
+mcp-server-radia-matlab = "radia_mcp.matlab.server:main"
+mcp-server-acoustic-fembem = "radia_mcp.acoustic_fembem.server:main"
+radia-acoustic-fembem-mcp-config = "radia_mcp.acoustic_fembem.integration:main"
+mcp-server-radia-streamfunction = "radia_mcp.streamfunction.server:main"
+mcp-server-ih = "radia_mcp.ih.server:main"
+mcp-server-peec = "radia_mcp.peec.server:main"
+mcp-server-electromagnet = "radia_mcp.electromagnet.server:main"
+mcp-server-differential-forms = "radia_mcp.differential_forms.server:main"
+mcp-server-mathematica = "radia_mcp.mathematica.server:main"
+mcp-server-topology-optimization = "radia_mcp.topology_optimization.server:main"
+mcp-server-bayesian-opt = "radia_mcp.bayesian_opt.server:main"
+mcp-server-evolutionary = "radia_mcp.evolutionary.server:main"
+mcp-server-gnn = "radia_mcp.gnn.server:main"
+mcp-server-data-assimilation = "radia_mcp.data_assimilation.server:main"
+mcp-server-radia-meta = "radia_mcp.meta.server:main"
+mcp-server-mor = "radia_mcp.mor.server:main"
+mcp-server-pinn = "radia_mcp.pinn.server:main"
+mcp-server-accelerator = "radia_mcp.accelerator.server:main"
+mcp-server-ndt = "radia_mcp.ndt.server:main"
+mcp-server-metamaterial = "radia_mcp.metamaterial.server:main"
+mcp-server-nmr-mri = "radia_mcp.nmr_mri.server:main"
+mcp-server-motor = "radia_mcp.motor.server:main"
+mcp-server-magnetic-materials = "radia_mcp.magnetic_materials.server:main"
+mcp-server-matrix-solvers = "radia_mcp.matrix_solvers.server:main"
+mcp-server-bem = "radia_mcp.bem.server:main"
+mcp-server-fem = "radia_mcp.fem.server:main"
+mcp-server-pcb = "radia_mcp.pcb.server:main"
+mcp-server-team-benchmark = "radia_mcp.team_benchmark.server:main"
+mcp-server-litz-transmission = "radia_mcp.litz_transmission.server:main"
+mcp-server-maglev = "radia_mcp.maglev.server:main"
+mcp-server-fusion-reactor = "radia_mcp.fusion_reactor.server:main"
+mcp-server-rna-mec = "radia_mcp.rna_mec.server:main"
+mcp-server-literature-index = "radia_mcp.literature_index.server:main"
+# 2026-05-26 v0.82.0: md2html -- Markdown -> self-contained HTML
+# with MathJax + tables + fenced code + base64 image embed +
+# [N] reference linking.  Promoted from
+# s:/mcp-server/src/mcp_server_document/md2html/ (source deleted).
+mcp-server-md2html = "radia_mcp.md2html.server:main"
+# 2026-05-26 v0.88.0: paper_writing -- 67 paper_writing_* tools +
+# 5 new image-based PDF layout tools (pymupdf-based, vision-agent
+# friendly) + 1 LaTeX figure-placement knowledge tool.
+# Promoted from s:/mcp-server/src/mcp_server_document/paper_writing/.
+mcp-server-paper-writing = "radia_mcp.paper_writing.server:main"
+# 2026-06-27: grant_writing -- proposal and recommendation-letter lint,
+# restored as a first-class public document server so the writing pair is
+# registered in parallel: paper-writing / grant-writing.
+mcp-server-grant-writing = "radia_mcp.grant_writing.server:main"
+# 2026-05-26 v0.81.0: chart2d -- 22 paper-quality 2D charts as MCP
+# tools (line / loglog / semilog / step / errorbar / fill_between /
+# bode / histogram / bar / box / violin / ecdf / contour / contourf /
+# pcolormesh / quiver / streamplot / imshow / polar / scatter / phase).
+# Companion to the figure toolset (figure_* / paper_figure_*, now served
+# by mcp-server-paper-writing); inherits its profiles + gate stack.
+# Recipe (text) + MCP-Image (inline) dual return.
+mcp-server-chart2d = "radia_mcp.chart2d.server:main"
+# 2026-05-26: figure -- Sugahara Lab publication-figure toolkit
+# (Times New Roman default, IEEE/IEEJ/beamer profiles).  Promoted from
+# s:/mcp-server/src/mcp_server_document/graph/ into radia-mcp.
+# 2026-07-18: figure's standalone server was RETIRED and all figure_* /
+# paper_figure_* tools were merged into mcp-server-paper-writing (figure
+# was a shared middle layer for paper-writing + presentation; since
+# presentation merged into paper-writing on 2026-07-17, figure follows).
+# The radia_mcp.figure module remains the implementation home.
+# 2026-05-24 evening (radia-mcp 0.70.0): GUI panel review skill-chain.
+# Surfaces panel-cli-diff / panel-review / panel-qt-test / panel-preview /
+# panel-smoke + known bug catalogue (val()-checkbox-truthy, AMG-class
+# map-value typos, widget-vs-calc Stage-1 gap, etc.) via single
+# panel_review(topic=...) query.  Triggered by IGTE 2026 ESIM digest
+# GUI reproducibility audit (kubota's per-element headline).
+mcp-server-panel-review = "radia_mcp.panel_review.server:main"
+# 2026-06-02: poster / pdf / doc_convert / bibliography -- promoted from
+# s:/mcp-server/src/mcp_server_document/ (LAB-private) to radia-mcp
+# (public).  Poster lint, PDF/PPTX conversion + PDF manipulation,
+# BibTeX/citation tooling.  deps: pip install radia-mcp[document]
+# (presentation was also promoted then; 2026-07-17 its standalone server
+# was retired and the presentation_* tools merged into
+# mcp-server-paper-writing -- AI cannot yet author slide decks end-to-end.)
+mcp-server-poster = "radia_mcp.poster.server:main"
+mcp-server-pdf = "radia_mcp.pdf.server:main"
+mcp-server-doc-convert = "radia_mcp.doc_convert.server:main"
+mcp-server-bibliography = "radia_mcp.bibliography.server:main"
+# document_meta -- cross-cutting helpers (deadline / diff / template / lint-all).
+# REDESIGNED on promotion: lint_all is now a declarative registry over
+# radia-mcp's own lints (grant_writing/presentation/paper_writing/poster).
+mcp-server-document-meta = "radia_mcp.document_meta.server:main"
+# research_project -- project dashboard / scan across document types.  Its
+# grant-health handler now uses radia_mcp.grant_writing directly; all domains
+# come from radia-mcp.
+mcp-server-research-project = "radia_mcp.research_project.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"radia_mcp.ih" = ["prompts/*.md"]
+"radia_mcp.peec" = ["prompts/*.md"]
+"radia_mcp.matlab" = [
+    "skill.md",
+    "extensions/*.json",
+    "matlab/+radia_mcp_matlab/*.m",
+]
+"radia_mcp.acoustic_fembem" = [
+    "skill.md",
+    "extensions/*.json",
+]
+"radia_mcp.matlab_agentic_ml" = [
+    "skill.md",
+]
+"radia_mcp.paper_writing" = [
+    "skill.md",
+]
+"radia_mcp.grant_writing" = [
+    "skill.md",
+]
+"radia_mcp.presentation" = [
+    "skill.md",
+]
+"radia_mcp.poster" = [
+    "skill.md",
+    "templates/*.tex",
+]
+"radia_mcp.bibliography" = [
+    "data/references.bib",
+]
+"radia_mcp.mathematica" = [
+    "*.md",
+    "basis_functions/*.md",
+    "basis_functions/*.m",
+    "basis_functions/*.wls",
+    "differential_geometry/*.md",
+    "differential_geometry/*.wls",
+]

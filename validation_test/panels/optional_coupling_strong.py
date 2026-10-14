@@ -1,0 +1,309 @@
+"""Optional demo-input validation; collect this file explicitly.
+
+Missing optional demo inputs produce visible skips. Required fixture-free
+strong CLI contracts live in test_strong_coupling_cli_contract.py.
+
+Explicit run (requires the demo STEP/VOL inputs):
+    python -m pytest -q validation_test/panels/optional_coupling_strong.py
+"""
+from __future__ import annotations
+
+import json
+import math
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+# conftest.py puts src/radia, src/radia/panels and validation_test/panels
+# on sys.path.
+
+_REPO = Path(__file__).resolve().parents[2]
+_SAMPLES = _REPO / "src" / "radia" / "panels" / "samples"
+_CALC = _REPO / "src" / "radia" / "panels" / "calc_inductance.py"
+_DEMO_COIL_STEP = _SAMPLES / "ih_fem_kelvin_demo_coil.step"
+_DEMO_VOL = _SAMPLES / "ih_fem_kelvin_demo.vol"
+
+
+# ----------------------------------------------------------------------
+# 1. argparse surface
+# ----------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------
+# 2. fail-fast guards (return before any heavy solve)
+# ----------------------------------------------------------------------
+
+
+
+
+# ----------------------------------------------------------------------
+# 3. shared application DesignSpec build_command <-> calc argparse
+# ----------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------
+# 4. end-to-end self-consistency smoke on the committed demo
+# ----------------------------------------------------------------------
+@pytest.mark.skipif(
+    not (_DEMO_COIL_STEP.is_file() and _DEMO_VOL.is_file()),
+    reason="demo coil STEP / workpiece .vol fixtures not present")
+def test_strong_end_to_end_self_consistent(tmp_path):
+    """Run --coupling-mode strong on the demo (coil STEP -> coil.vol,
+    workpiece = sibc hole) and assert the coupled solve is self-consistent.
+
+    Values are tiny (the demo geometry is small/coarse); the physics
+    magnitude golden is in the bem_reference lane.  Here we lock the
+    wiring: status ok, coupling_mode strong, converged, and the output
+    assembly identities L_total = L_coil + dL, R_total = R_coil + dR,
+    dR = 2 P_reaction / I^2 for the ideal surface coil.
+    """
+    from _bema_coil_vol_helper import coil_vol_for
+
+    coil_vol = coil_vol_for(str(_DEMO_COIL_STEP), cache_dir=str(tmp_path))
+    out_json = tmp_path / "strong.json"
+    current = 1.0
+    cmd = [
+        sys.executable, str(_CALC),
+        "--coil-solver", "bem-a", "--coupling-mode", "strong",
+        "--coil-vol", coil_vol,
+        "--vol", str(_DEMO_VOL), "--wp-label", "sibc",
+        "--frequency", "7000", "--current", str(current),
+        "--sigma", "5.8e6", "--mu-r", "100", "--half-thickness", "0.005",
+        "--coupling-max-iter", "4", "--coupling-tol", "5e-3",
+        "--output", str(out_json),
+    ]
+    env = dict(os.environ, MKL_NUM_THREADS="1", OMP_NUM_THREADS="1")
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                          timeout=1200, env=env)
+    assert proc.returncode == 0, f"calc failed:\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
+    assert out_json.is_file(), f"no output json; stdout tail:\n{proc.stdout[-2000:]}"
+
+    d = json.loads(out_json.read_text(encoding="utf-8"))
+    assert d.get("status") == "ok", d
+    assert d["coupling_mode"] == "strong"
+    assert d["method"] == "bem-a-bem-strong"
+    assert int(d["coupling_iterations"]) >= 1
+
+    # Output-assembly identities.
+    assert math.isclose(d["L_total_nH"], d["L_coil_nH"] + d["delta_L_nH"],
+                        rel_tol=0, abs_tol=1e-9)
+    assert math.isclose(d["R_total_mOhm"], d["R_coil_mOhm"] + d["delta_R_mOhm"],
+                        rel_tol=0, abs_tol=1e-9)
+    # Port loss comes from complete reaction, rather than manufactured heat.
+    assert math.isclose(d["delta_R_mOhm"],
+                        2.0 * d["body_reaction_power_W"] / (current * current) * 1e3,
+                        rel_tol=1e-6, abs_tol=1e-12)
+    assert d["body_power_balance_relative_error"] <= .1
+    assert d["body_residual"] <= 1e-6
+    assert d["P_wp_W"] >= 0.0
+    assert math.isfinite(d["delta_L_nH"])
+
+    # The re-exposed path must surface the coupled-solver context keys.
+    for key in ("coupled_L_air_nH", "coupled_L_total_nH", "wp_ndof",
+                "coupled_n_J_coil", "H_t_rms_A_per_m", "t_coupled_solve_s"):
+        assert key in d, f"missing coupled key {key!r}"
+
+
+@pytest.mark.skipif(
+    not (_DEMO_COIL_STEP.is_file() and _DEMO_VOL.is_file()),
+    reason="demo coil STEP / workpiece .vol fixtures not present")
+def test_strong_output_scales_with_terminal_current(tmp_path):
+    """P_wp ~ I^2, H_t ~ I; dL and dR current-independent.
+
+    Regression for the Kubota 2026-07-16 incident: CoupledBEMSolver drives
+    the coil EFIE at UNIT terminal current (its solve() takes no current),
+    and the strong driver forgot to rescale -- so at 6700 A the panel
+    reported P_wp = 8.3e-4 W / H_t = 9.84 A/m (1 A-drive values, I^2 =
+    4.5e7x low) while Delta_L came out sane and masked the bug.  The
+    problem is linear, so run the demo at I = 1 A and I = 5 A and require
+    exact linear-scaling ratios.
+    """
+    from _bema_coil_vol_helper import coil_vol_for
+
+    coil_vol = coil_vol_for(str(_DEMO_COIL_STEP), cache_dir=str(tmp_path))
+    env = dict(os.environ, MKL_NUM_THREADS="1", OMP_NUM_THREADS="1")
+
+    def _run(current):
+        out_json = tmp_path / f"strong_I{current:g}.json"
+        cmd = [
+            sys.executable, str(_CALC),
+            "--coil-solver", "bem-a", "--coupling-mode", "strong",
+            "--coil-vol", coil_vol,
+            "--vol", str(_DEMO_VOL), "--wp-label", "sibc",
+            "--frequency", "7000", "--current", str(current),
+            "--sigma", "5.8e6", "--mu-r", "100", "--half-thickness", "0.005",
+            "--coupling-max-iter", "4", "--coupling-tol", "5e-3",
+            "--output", str(out_json),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              timeout=1200, env=env)
+        assert proc.returncode == 0, \
+            f"[I={current}]\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
+        return json.loads(out_json.read_text(encoding="utf-8"))
+
+    d1 = _run(1.0)
+    d5 = _run(5.0)
+
+    assert d1["P_wp_W"] > 0
+    # Dissipation scales as I^2, fields as I.
+    assert math.isclose(d5["P_wp_W"], 25.0 * d1["P_wp_W"], rel_tol=1e-6)
+    assert math.isclose(d5["H_t_rms_A_per_m"], 5.0 * d1["H_t_rms_A_per_m"],
+                        rel_tol=1e-6)
+    # Inductance / resistance deltas are current-independent.
+    assert math.isclose(d5["delta_L_nH"], d1["delta_L_nH"],
+                        rel_tol=1e-6, abs_tol=1e-12)
+    assert math.isclose(d5["delta_R_mOhm"], d1["delta_R_mOhm"],
+                        rel_tol=1e-6, abs_tol=1e-12)
+    # And the energy identity holds at BOTH currents.
+    for d, I in ((d1, 1.0), (d5, 5.0)):
+        assert math.isclose(d["delta_R_mOhm"],
+                            2.0 * d["body_reaction_power_W"] / (I * I) * 1e3,
+                            rel_tol=1e-6, abs_tol=1e-12)
+
+
+@pytest.mark.skipif(
+    not (_DEMO_COIL_STEP.is_file() and _DEMO_VOL.is_file()),
+    reason="demo coil STEP / workpiece .vol fixtures not present")
+def test_strong_wp_hacapk_matches_dense(tmp_path):
+    """Q1: the workpiece HACApK backend reproduces the dense result.
+
+    CoupledBEMSolver's workpiece BIE gained an O(N log N) intree-HACApK
+    backend (--wp-bem-backend hacapk, the default) so the coupled solve
+    scales past the dense-assembly wall.  On the demo it must agree with the dense path
+    (--wp-bem-backend intree-dense) to within the ACA compression accuracy.
+    """
+    from _bema_coil_vol_helper import coil_vol_for
+
+    coil_vol = coil_vol_for(str(_DEMO_COIL_STEP), cache_dir=str(tmp_path))
+
+    def _run(backend):
+        out_json = tmp_path / f"strong_{backend}.json"
+        cmd = [
+            sys.executable, str(_CALC),
+            "--coil-solver", "bem-a", "--coupling-mode", "strong",
+            "--coil-vol", coil_vol,
+            "--vol", str(_DEMO_VOL), "--wp-label", "sibc",
+            "--frequency", "7000", "--current", "1",
+            "--sigma", "5.8e6", "--mu-r", "100", "--half-thickness", "0.005",
+            "--coupling-max-iter", "4", "--coupling-tol", "5e-3",
+            "--wp-bem-backend", backend,
+            "--output", str(out_json),
+        ]
+        env = dict(os.environ, MKL_NUM_THREADS="1", OMP_NUM_THREADS="1")
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              timeout=1200, env=env)
+        assert proc.returncode == 0, \
+            f"[{backend}]\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
+        return json.loads(out_json.read_text(encoding="utf-8"))
+
+    dense = _run("intree-dense")
+    hac = _run("hacapk")
+    assert dense["wp_bem_backend"] == "intree-dense"
+    assert hac["wp_bem_backend"] == "hacapk"
+
+    # Same physics to well within the HACApK ACA compression accuracy
+    # (measured worst rel.diff ~7e-4 on the demo's tiny P_wp).
+    for k in ("L_total_nH", "coupled_L_total_nH", "R_total_mOhm",
+              "P_wp_W", "H_t_rms_A_per_m"):
+        a, b = float(dense[k]), float(hac[k])
+        rel = abs(a - b) / max(abs(a), 1e-30)
+        assert rel < 5e-3, f"{k}: dense={a:.6e} hacapk={b:.6e} rel={rel:.2e}"
+
+
+@pytest.mark.skipif(
+    not (_DEMO_COIL_STEP.is_file() and _DEMO_VOL.is_file()),
+    reason="demo coil STEP / workpiece .vol fixtures not present")
+def test_strong_coil_hacapk_matches_dense(tmp_path):
+    """Q1: the coil HACApK (loop-COCR) saddle backend reproduces dense LU.
+
+    CoupledBEMSolver's coil EFIE gained an O(N log N) H-matrix + loop-COCR
+    saddle solve (--coil-saddle-solver hacapk_cocr; O(N r) storage, built
+    once and re-solved each Picard iteration).  Holding the workpiece
+    backend fixed (intree-dense), the coil H-matrix path must reproduce the
+    dense-LU coil solve to loop-COCR tolerance (~1e-8).
+    """
+    from _bema_coil_vol_helper import coil_vol_for
+
+    coil_vol = coil_vol_for(str(_DEMO_COIL_STEP), cache_dir=str(tmp_path))
+
+    def _run(coil_saddle):
+        out_json = tmp_path / f"strong_coil_{coil_saddle}.json"
+        cmd = [
+            sys.executable, str(_CALC),
+            "--coil-solver", "bem-a", "--coupling-mode", "strong",
+            "--coil-vol", coil_vol,
+            "--vol", str(_DEMO_VOL), "--wp-label", "sibc",
+            "--frequency", "7000", "--current", "1",
+            "--sigma", "5.8e6", "--mu-r", "100", "--half-thickness", "0.005",
+            "--coupling-max-iter", "4", "--coupling-tol", "5e-3",
+            "--wp-bem-backend", "intree-dense",   # hold wp fixed -> isolate coil
+            "--coil-saddle-solver", coil_saddle,
+            "--output", str(out_json),
+        ]
+        env = dict(os.environ, MKL_NUM_THREADS="1", OMP_NUM_THREADS="1")
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              timeout=1200, env=env)
+        assert proc.returncode == 0, \
+            f"[{coil_saddle}]\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
+        return json.loads(out_json.read_text(encoding="utf-8"))
+
+    dense = _run("auto")            # auto -> dense LU on this small coil
+    hac = _run("hacapk_cocr")
+    assert dense["coil_bem_backend"] == "dense-lu"
+    assert hac["coil_bem_backend"] == "hacapk_cocr"
+
+    # The coil H-matrix matvec (aca_eps 1e-10) is tighter than the loop-COCR
+    # tolerance, so the coil solve matches dense LU to ~1e-8 (measured ~4e-11).
+    for k in ("L_coil_nH", "L_total_nH", "coupled_L_total_nH", "R_total_mOhm",
+              "P_wp_W", "H_t_rms_A_per_m"):
+        a, b = float(dense[k]), float(hac[k])
+        rel = abs(a - b) / max(abs(a), 1e-30)
+        assert rel < 1e-6, f"{k}: dense={a:.6e} hacapk={b:.6e} rel={rel:.2e}"
+
+
+@pytest.mark.skipif(
+    not (_DEMO_COIL_STEP.is_file() and _DEMO_VOL.is_file()),
+    reason="demo coil STEP / workpiece .vol fixtures not present")
+def test_strong_accepts_volume_coil_vol(tmp_path):
+    """A VOLUME coil .vol (tets present, the common Cubit export) must run.
+
+    Regression for the volume-coil input failure: the strong driver loaded
+    ``Mesh(args.coil_vol)`` raw, so on a volume .vol HDivSurface picked up
+    thousands of extra null modes, the coupled saddle LU went singular, and the solve died
+    with "array must not contain infs or NaNs".  The driver now routes
+    through ``_build_bema_coil_mesh`` (label validation + volume->surface
+    extraction), the same loader as the vacuum BEM-A path.
+    """
+    from _bema_coil_vol_helper import step_to_coil_vol
+
+    coil_vol = str(tmp_path / "coil_volume.vol")
+    step_to_coil_vol(str(_DEMO_COIL_STEP), coil_vol, volume_mesh=True)
+
+    # Confirm the fixture actually has volume elements (else this test
+    # silently degenerates to the surface case).
+    from ngsolve import Mesh
+    assert Mesh(coil_vol).ne > 0, "fixture must contain volume tets"
+
+    out_json = tmp_path / "strong_volvol.json"
+    cmd = [
+        sys.executable, str(_CALC),
+        "--coil-solver", "bem-a", "--coupling-mode", "strong",
+        "--coil-vol", coil_vol,
+        "--vol", str(_DEMO_VOL), "--wp-label", "sibc",
+        "--frequency", "7000", "--current", "1",
+        "--sigma", "5.8e6", "--mu-r", "100", "--half-thickness", "0.005",
+        "--coupling-max-iter", "4", "--coupling-tol", "5e-3",
+        "--output", str(out_json),
+    ]
+    env = dict(os.environ, MKL_NUM_THREADS="1", OMP_NUM_THREADS="1")
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                          timeout=1200, env=env)
+    assert proc.returncode == 0, \
+        f"volume coil .vol strong run failed:\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
+    d = json.loads(out_json.read_text(encoding="utf-8"))
+    assert d.get("status") == "ok", d
+    assert math.isfinite(d["P_wp_W"]) and d["P_wp_W"] >= 0.0
+    assert math.isfinite(d["delta_L_nH"])

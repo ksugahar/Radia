@@ -1,0 +1,52 @@
+{
+  "k": 5.0,
+  "dtheta_rad": 0.3,
+  "aperture": [
+    0.944853541296837,
+    1.0583650865376162
+  ],
+  "B_K_iron_T": 1.2,
+  "radii": {
+    "low_r_body": {
+      "r_ref": 1.0,
+      "B_local_linear_T": 0.4,
+      "B_local_saturated_T": 1.4,
+      "L_eff_linear": 0.44879998753448314,
+      "L_eff_saturated": 0.44859856168095014,
+      "L_eff_drift_rel": -0.0004488098465411009,
+      "fringe_per_gap_linear": 1.4879998753448314,
+      "fringe_per_gap_saturated": 1.4859856168095014,
+      "mur_mean_linear": 1719.086500822429,
+      "mur_mean_saturated": 693.7817083148121,
+      "end_overshoot_linear": -0.035366077623179226,
+      "end_overshoot_saturated": -0.036053585167129754
+    },
+    "high_r_edge": {
+      "r_ref": 1.0583650865376162,
+      "B_local_linear_T": 0.5311748643256741,
+      "B_local_saturated_T": 1.859112025139859,
+      "L_eff_linear": 0.4192014746381511,
+      "L_eff_saturated": 0.41883991949088567,
+      "L_eff_drift_rel": -0.0008624853898176882,
+      "fringe_per_gap_linear": 1.5829206779585046,
+      "fringe_per_gap_saturated": 1.5781194528011302,
+      "mur_mean_linear": 1574.3796062061285,
+      "mur_mean_saturated": 480.8679505755277,
+      "end_overshoot_linear": -0.004069506843961124,
+      "end_overshoot_saturated": -0.006345421391671824
+    }
+  },
+  "high_r_iron_saturates": true,
+  "high_r_mur_collapse_factor": 0.305433294918182,
+  "L_eff_robust_under_saturation": true,
+  "high_r_L_eff_drift_rel": -0.0008624853898176882,
+  "fringe_per_gap_stable": true,
+  "radial_k_droops_high_r": true,
+  "radial_field_index": {
+    "B_target_hi": 2.6,
+    "B_gap_max_hi": 3.316655794723498,
+    "dk_hi": -0.2567809472255016,
+    "dk_tilt": -0.12688705057018623
+  },
+  "planes_differ_under_saturation": true
+}

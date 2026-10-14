@@ -1,0 +1,636 @@
+from __future__ import annotations
+
+import argparse
+import base64
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
+import hashlib
+import importlib.util
+import json
+import subprocess
+import sys
+import tomllib
+import types
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+
+TOOL = Path(__file__).resolve().parents[1] / "tools" / "release_quad.py"
+SPEC = importlib.util.spec_from_file_location("radia_release_quad_optuna", TOOL)
+assert SPEC is not None and SPEC.loader is not None
+release_quad = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(release_quad)
+
+
+def test_release_quad_tracks_the_independent_optuna_version():
+    versions = release_quad._read_repo_versions()
+    package = TOOL.parents[1] / "packages/radia-optuna/pyproject.toml"
+    expected = tomllib.loads(package.read_text(encoding="utf-8"))["project"]["version"]
+    assert versions["radia-optuna"] == expected
+    assert versions["optuna.__version__"] == expected
+
+
+def test_optuna_candidate_requires_the_independent_distribution_workflow():
+    source = TOOL.read_text(encoding="utf-8")
+    assert '"workflowName": "radia-optuna"' in source
+    assert '"workflowName": "CI"' not in source
+
+
+def test_genuine_optuna_build_runs_its_release_quad_candidate_contract():
+    """A triggered radia-optuna build checks the candidate contract at its own SHA.
+
+    Whether release tooling triggers that workflow is owned by
+    test_test_tier_policy (it must not; fast-contracts covers it).
+    """
+    import yaml
+
+    root = Path(__file__).resolve().parents[1]
+    workflow = yaml.safe_load(
+        (root / ".github/workflows/radia-optuna.yml").read_text(encoding="utf-8")
+    )
+    build = next(
+        step["run"] for step in workflow["jobs"]["build-test"]["steps"]
+        if step.get("name") == "Test, build, and verify radia-optuna wheel"
+    )
+    assert "-m pytest tests\\test_release_quad_optuna_candidate.py" in build
+    # The exact successful push-event binding stays in force.
+    source = TOOL.read_text(encoding="utf-8")
+    assert '"event": "push"' in source and '"headSha": head' in source
+
+
+def test_optuna_workflow_uses_supported_mexcuda_without_pybind():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/radia-optuna.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "pip install pybind11" not in workflow
+    assert "& .\\Build.ps1 -OptunaMexOnly" in workflow
+    assert "runs-on: windows-latest" not in workflow
+    builder = (root / "packages/radia-optuna/buildOptunaMex.m").read_text(encoding="utf-8")
+    assert "mexcuda(" in builder
+    assert (
+        "& $env:RADIA_OPTUNA_CI_PYTHON -m pip install "
+        "build wheel pytest optuna==5.0.0"
+    ) in workflow
+
+
+def test_optuna_candidate_records_every_machine_for_one_exact_wheel(
+    monkeypatch, tmp_path
+):
+    wheel = tmp_path / "radia_optuna-0.1.1-py3-none-win_amd64.whl"
+    wheel.write_bytes(b"exact-ci-wheel")
+    digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    monkeypatch.setattr(release_quad, "OPTUNA_GATE_ROOT", tmp_path / "state")
+    monkeypatch.setattr(
+        release_quad,
+        "_download_verified_optuna_ci_wheel",
+        lambda _run_id: (
+            {
+                "ci_run_id": "12345",
+                "ci_url": "https://example.invalid/run/12345",
+                "commit": "a" * 40,
+                "wheel": str(wheel),
+                "wheel_sha256": digest,
+                "version": "0.1.1",
+            },
+            "verified",
+        ),
+    )
+    calls = []
+
+    def pass_target(key, candidate_wheel, candidate_hash, engine_session=None):
+        calls.append((key, candidate_wheel, candidate_hash, engine_session))
+        return True, release_quad.OPTUNA_SUCCESS_MARKER
+
+    monkeypatch.setattr(release_quad, "_run_optuna_candidate_target", pass_target)
+    args = argparse.Namespace(
+        ci_run_id="12345", target="all", engine_session=["100=radia_shared"]
+    )
+    assert release_quad.cmd_optuna_candidate(args) == 0
+    assert [call[0] for call in calls] == list(release_quad.OPTUNA_TARGETS)
+    assert {call[0]: call[3] for call in calls if call[3]} == {"100": "radia_shared"}
+    state = json.loads(
+        release_quad._optuna_state_path(digest).read_text(encoding="utf-8")
+    )
+    assert state["wheel_sha256"] == digest
+    assert set(state["targets"]) == set(release_quad.OPTUNA_TARGETS)
+    assert {row["status"] for row in state["targets"].values()} == {"passed"}
+    assert state["targets"]["100"]["engine_session"] == "radia_shared"
+
+
+def test_optuna_candidate_rejects_ambiguous_engine_sessions_before_any_target(
+    monkeypatch, tmp_path
+):
+    wheel = tmp_path / "radia_optuna-0.1.1-py3-none-win_amd64.whl"
+    wheel.write_bytes(b"exact-ci-wheel")
+    monkeypatch.setattr(release_quad, "OPTUNA_GATE_ROOT", tmp_path / "state")
+    monkeypatch.setattr(
+        release_quad,
+        "_download_verified_optuna_ci_wheel",
+        lambda _run_id: (
+            {
+                "ci_run_id": "12345",
+                "commit": "a" * 40,
+                "wheel": str(wheel),
+                "wheel_sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+                "version": "0.1.1",
+            },
+            "verified",
+        ),
+    )
+
+    def no_target(*_args, **_kwargs):
+        raise AssertionError("no MATLAB target may run after a bad session map")
+
+    monkeypatch.setattr(release_quad, "_run_optuna_candidate_target", no_target)
+    for target, sessions in (
+        ("100", ["lab=radia_shared"]),            # unselected target
+        ("lab", ["lab=a", "lab=b"]),             # duplicate target
+        ("lab", ["lab="]),                        # empty name
+        ("lab", ["radia_shared"]),                 # missing HOST=
+    ):
+        args = argparse.Namespace(
+            ci_run_id="12345", target=target, engine_session=sessions
+        )
+        assert release_quad.cmd_optuna_candidate(args) == 2
+
+
+def test_optuna_candidate_parser_accepts_repeatable_engine_sessions(monkeypatch):
+    captured = {}
+
+    def record(args):
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr(release_quad, "cmd_optuna_candidate", record)
+    monkeypatch.setattr(
+        release_quad.sys, "argv",
+        ["release_quad.py", "optuna-candidate", "--ci-run-id", "1",
+         "--target", "lab,100", "--engine-session", "lab=a",
+         "--engine-session", "100=b"],
+    )
+    try:
+        release_quad.main()
+    except SystemExit as stop:
+        assert stop.code in (0, None)
+    assert captured["args"].engine_session == ["lab=a", "100=b"]
+
+
+def test_optuna_done_requires_exact_head_hash_version_and_both_targets(
+    monkeypatch, tmp_path
+):
+    wheel = tmp_path / "radia_optuna-0.1.1-py3-none-win_amd64.whl"
+    wheel.write_bytes(b"four-machine-candidate")
+    digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    head = "b" * 40
+    monkeypatch.setattr(release_quad, "OPTUNA_GATE_ROOT", tmp_path / "state")
+    monkeypatch.setattr(
+        release_quad,
+        "_verify_optuna_wheel",
+        lambda _wheel: ({"ok": True, "version": "0.1.1"}, "verified"),
+    )
+    monkeypatch.setattr(
+        release_quad, "_optuna_release_source_ready", lambda: (True, head)
+    )
+    state = {
+        "schema": "radia.release-quad.optuna-candidate.v1",
+        "ci_run_id": "12345",
+        "commit": head,
+        "wheel": str(wheel),
+        "wheel_sha256": digest,
+        "version": "0.1.1",
+        "targets": {
+            key: {"status": "passed"} for key in release_quad.OPTUNA_TARGETS
+        },
+    }
+    path = release_quad._optuna_state_path(digest)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(state), encoding="utf-8")
+
+    rc, checked = release_quad._verify_optuna_candidate_state(str(wheel))
+    assert rc == 0
+    assert checked == state
+
+    state["targets"]["100"]["status"] = "failed"
+    path.write_text(json.dumps(state), encoding="utf-8")
+    rc, checked = release_quad._verify_optuna_candidate_state(str(wheel))
+    assert rc == 4
+    assert checked is None
+
+
+def _fake_git(head, origin_main, dirty=""):
+    def run_git(*argv, **_kwargs):
+        if argv[:2] == ("rev-parse", "HEAD"):
+            return SimpleNamespace(returncode=0, stdout=head + "\n", stderr="")
+        if argv[:2] == ("rev-parse", "origin/main"):
+            return SimpleNamespace(returncode=0, stdout=origin_main + "\n", stderr="")
+        if argv[0] == "status":
+            return SimpleNamespace(returncode=0, stdout=dirty, stderr="")
+        if argv[0] == "fetch":
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        raise AssertionError(f"unexpected git call: {argv}")
+
+    return run_git
+
+
+def test_optuna_source_identity_is_the_checkout_not_the_solver_tag(monkeypatch):
+    main = "d" * 40
+
+    def solver_tag():
+        raise AssertionError("radia-optuna must not resolve the solver release tag")
+
+    monkeypatch.setattr(release_quad, "_release_commit", solver_tag)
+    monkeypatch.setattr(release_quad, "_release_head", solver_tag)
+    monkeypatch.setattr(release_quad, "_git", _fake_git(main, main))
+    assert release_quad._optuna_release_source_ready() == (True, main)
+
+
+def test_optuna_source_rejects_a_checkout_behind_main_or_dirty(monkeypatch):
+    main = "d" * 40
+    behind = "1" * 40
+    monkeypatch.setattr(release_quad, "_git", _fake_git(behind, main))
+    ready, message = release_quad._optuna_release_source_ready()
+    assert ready is False
+    assert behind in message and main in message
+
+    monkeypatch.setattr(release_quad, "_git", _fake_git(main, main, dirty=" M x.py\n"))
+    assert release_quad._optuna_release_source_ready() == (
+        False,
+        "tracked release source is dirty",
+    )
+
+
+def test_installed_wheel_runner_emits_quad_success_marker_and_checks_notices():
+    root = Path(__file__).resolve().parents[1]
+    runner = (
+        root / "packages/radia-optuna/tests/run_installed_wheel_simulink.ps1"
+    ).read_text(encoding="utf-8")
+    doctor = (
+        root / "packages/radia-optuna/src/radia_optuna/cli.py"
+    ).read_text(encoding="utf-8")
+    assert "RADIA_OPTUNA_WHEEL_SIMULINK_OK" in runner
+    assert "PythonExecutable" in runner
+    assert "PreverifiedWheelSha256" in runner
+    assert "Get-FileHash" in runner
+    assert "upstream_notices_complete" in doctor
+    assert "notices_complete" in doctor
+
+
+def test_local_candidate_decodes_matlab_output_as_utf8(monkeypatch, tmp_path):
+    monkeypatch.setattr(release_quad.platform, "node", lambda: "T7920")
+    wheel = tmp_path / "radia_optuna-0.1.1-py3-none-win_amd64.whl"
+    wheel.write_bytes(b"platform-wheel")
+    observed = {}
+
+    def completed(_command, **kwargs):
+        observed["command"] = _command
+        observed.update(kwargs)
+        return SimpleNamespace(
+            returncode=0,
+            stdout=f"・ MATLAB ready\n{release_quad.OPTUNA_SUCCESS_MARKER}\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(release_quad.subprocess, "run", completed)
+    passed, output = release_quad._run_optuna_candidate_target(
+        "100", wheel, hashlib.sha256(wheel.read_bytes()).hexdigest()
+    )
+
+    assert passed is True
+    assert "・ MATLAB ready" in output
+    assert observed["encoding"] == "utf-8"
+    assert observed["errors"] == "replace"
+    assert "-PreverifiedWheelSha256" in observed["command"]
+    assert hashlib.sha256(wheel.read_bytes()).hexdigest() in observed["command"]
+    worker = observed["command"][observed["command"].index("-EngineWorker") + 1]
+    assert Path(worker) == release_quad.REPO / "tools/verify_simulink_release.py"
+    # No selected session: the runner may only own a MATLAB it starts itself.
+    assert "-EngineSession" not in observed["command"]
+
+    release_quad._run_optuna_candidate_target(
+        "100", wheel, hashlib.sha256(wheel.read_bytes()).hexdigest(), "radia_lab"
+    )
+    command = observed["command"]
+    assert command[command.index("-EngineSession") + 1] == "radia_lab"
+
+
+def test_remote_candidate_copies_the_engine_worker_and_selects_the_session(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(release_quad.platform, "node", lambda: "CONTROLLER")
+    wheel = tmp_path / "radia_optuna-0.1.1-py3-none-win_amd64.whl"
+    wheel.write_bytes(b"platform-wheel")
+    digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    copies, scripts = [], []
+
+    def completed(command, **kwargs):
+        if command[0] == "scp":
+            copies.append((Path(command[1]).name, command[2]))
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        assert command[0] == "ssh" and "100" in command
+        assert "-Command" not in command
+        scripts.append(base64.b64decode(command[-1]).decode("utf-16le"))
+        kwargs["stdout"].write(release_quad.OPTUNA_SUCCESS_MARKER.encode())
+        return SimpleNamespace(
+            returncode=0, stdout=release_quad.OPTUNA_SUCCESS_MARKER, stderr=""
+        )
+
+    monkeypatch.setattr(release_quad.subprocess, "run", completed)
+    passed, _ = release_quad._run_optuna_candidate_target(
+        "100", wheel, digest, "o'shared"
+    )
+    assert passed is True
+    remote_root = f"100:C:/temp/radia-release-quad/optuna-{digest[:16]}"
+    assert ("verify_simulink_release.py",
+            f"{remote_root}/verify_simulink_release.py") in copies
+    invocation = scripts[-1]
+    worker = "C:\\temp\\radia-release-quad\\optuna-" + digest[:16] + \
+        "\\verify_simulink_release.py"
+    assert f"-EngineWorker '{worker}'" in invocation
+    # The PowerShell literal doubles an embedded quote.
+    assert "-EngineSession 'o''shared'" in invocation
+
+    scripts.clear()
+    release_quad._run_optuna_candidate_target("100", wheel, digest)
+    assert "-EngineWorker" in scripts[-1]
+    assert "-EngineSession" not in scripts[-1]
+
+
+RUNNER = (
+    Path(__file__).resolve().parents[1]
+    / "packages/radia-optuna/tests/run_installed_wheel_simulink.ps1"
+)
+
+
+@lru_cache(maxsize=2)
+def _runner_expression(session: str) -> str:
+    """Evaluate the runner's own expression lines with fixed inputs."""
+    lines = RUNNER.read_text(encoding="utf-8").splitlines()
+    source = [line.strip() for line in lines
+              if line.strip().startswith(("$pathReset = ", "$batch = "))]
+    assert len(source) == 2
+    script = "\n".join([
+        f"$EngineSession = '{session}'",
+        "$matlabPathLiteral = 'C:\\venv\\matlab'",
+        "$testDirectoryLiteral = 'C:\\tests\\matlab'",
+        "$simulinkEvidenceLiteral = 'C:\\temp\\run\\simulink-evidence.json'",
+        *source,
+        "[Console]::Out.Write($batch)",
+    ])
+    result = subprocess.run(
+        ["pwsh", "-NoProfile", "-NonInteractive", "-Command", "-"],
+        input=script, capture_output=True, text=True, encoding="utf-8",
+        check=True, timeout=60,
+    )
+    return result.stdout
+
+
+def _top_level_statements(expression: str) -> list[str]:
+    statements, depth, quoted, current = [], 0, False, ""
+    for character in expression:
+        if character == "'":
+            quoted = not quoted
+        elif not quoted and character in "([{":
+            depth += 1
+        elif not quoted and character in ")]}":
+            depth -= 1
+        if character == ";" and depth == 0 and not quoted:
+            statements.append(current.strip())
+            current = ""
+        else:
+            current += character
+    return [statement for statement in statements + [current.strip()] if statement]
+
+
+@pytest.mark.parametrize("blocked", [None, "model", "mex"])
+def test_runner_expression_leaves_a_borrowed_session_as_found(
+    monkeypatch, tmp_path, blocked
+):
+    """Drive the shared worker with the runner's real expression."""
+    expression = _runner_expression("owned_by_user")
+    statements = _top_level_statements(expression)
+    # A borrowed session keeps its path: no reset, candidates prepended.
+    assert not any("restoredefaultpath" in statement for statement in statements)
+    assert statements[-1].startswith("run_installed_wheel_acceptance(")
+
+    worker_spec = importlib.util.spec_from_file_location(
+        "optuna_engine_worker", TOOL.parent / "verify_simulink_release.py"
+    )
+    worker = importlib.util.module_from_spec(worker_spec)
+    worker_spec.loader.exec_module(worker)
+    base = {"result": "user result", "fileId": 7, "cleanupFile": "user"}
+    state = {"path": "user path", "pwd": "user folder",
+             "env": {"PATH": "user PATH"}}
+    evaluated = []
+
+    class Engine:
+        def feature(self, _name): return 123
+        def find_system(self, *_args): return ["user_model"] if blocked == "model" else []
+        def inmem(self, **_kwargs): return [], ["optuna_mex"] if blocked == "mex" else []
+        def path(self, *args, **_kwargs):
+            if args:
+                state["path"] = args[0]
+            return state["path"]
+        def pwd(self): return state["pwd"]
+        def cd(self, value, **_kwargs): state["pwd"] = value
+        def getenv(self, name): return state["env"].get(name, "")
+        def setenv(self, name, value, **_kwargs): state["env"][name] = value
+        def matlabroot(self): return str(tmp_path)
+        def eval(self, text, **_kwargs):
+            evaluated.append(text)
+            # MATLAB assigns base variables only for top-level "name =" forms.
+            for statement in _top_level_statements(text):
+                name, separator, _ = statement.partition("=")
+                if separator and name.strip().isidentifier():
+                    base[name.strip()] = "overwritten"
+                if statement.startswith("addpath("):
+                    state["path"] = "candidate;" + state["path"]
+            if text == expression:
+                state["pwd"] = "C:\\temp\\scratch"
+                raise RuntimeError("acceptance failed")
+        def quit(self): pytest.fail("a borrowed MATLAB must stay alive")
+
+    api = types.ModuleType("matlab.engine")
+    api.find_matlab = lambda: ("owned_by_user",)
+    api.connect_matlab = lambda name: Engine()
+    api.start_matlab = lambda *_: pytest.fail("must reuse the selected Engine")
+    parent = types.ModuleType("matlab")
+    parent.engine = api
+    monkeypatch.setitem(sys.modules, "matlab", parent)
+    monkeypatch.setitem(sys.modules, "matlab.engine", api)
+    monkeypatch.setattr(worker, "_matlab_process_ids", lambda: {123})
+
+    with pytest.raises(RuntimeError):
+        worker._engine_worker(str(tmp_path), expression, "owned_by_user")
+    if blocked:
+        # Refused before the acceptance touched the session.
+        assert evaluated == []
+    else:
+        assert evaluated == [expression, "clear radia_mex optuna_mex"]
+    assert base == {"result": "user result", "fileId": 7, "cleanupFile": "user"}
+    assert state["path"] == "user path" and state["pwd"] == "user folder"
+    assert state["env"]["PATH"] == "user PATH"
+
+
+def test_runner_expression_resets_the_path_only_for_an_owned_session():
+    statements = _top_level_statements(_runner_expression(""))
+    assert statements[0] == "restoredefaultpath"
+    assert statements[-1].startswith("run_installed_wheel_acceptance(")
+
+
+def test_installed_wheel_runner_uses_the_isolated_engine_worker():
+    runner = RUNNER.read_text(encoding="utf-8")
+    # No unconditional MATLAB launch: the worker owns every start or reuse,
+    # through the Engine installed into the isolated venv from this MATLAB.
+    assert "-batch" not in runner
+    assert "& $venvPython @workerArguments" in runner
+    assert "matlabengine==$($Matches[1]).$($Matches[2]).*" in runner
+    assert "matlabengine binds to" in runner
+    assert "matlab_engine = $engineEvidence" in runner
+    # A borrowed session gets no license retry.
+    assert "$maxMatlabAttempts = if ($EngineSession) { 1 } else { 3 }" in runner
+
+
+FAKE_RUNNER = """param(
+    [string]$Wheel, [string]$MatlabExecutable, [string]$PythonExecutable,
+    [string]$PreverifiedWheelSha256, [string]$EngineWorker, [string]$EngineSession
+)
+$ErrorActionPreference = 'Stop'
+Write-Output 'RADIA_OPTUNA_WHEEL_SIMULINK_OK'
+& $PythonExecutable -c "pass"
+{tail}
+"""
+
+
+def _fake_runner(tmp_path, tail):
+    runner = tmp_path / "fake_runner.ps1"
+    runner.write_text(FAKE_RUNNER.replace("{tail}", tail), encoding="utf-8")
+    return runner
+
+
+@pytest.mark.parametrize("tail,passes", [
+    ("", True),
+    # A cleanup failure after the marker, with a stale native exit code of 0.
+    ("throw 'owned scratch cleanup failed'", False),
+])
+def test_local_candidate_requires_the_runner_to_finish(monkeypatch, tmp_path,
+                                                        tail, passes):
+    monkeypatch.setattr(release_quad.platform, "node", lambda: "T7920")
+    wheel = tmp_path / "radia_optuna-0.2.0-py3-none-win_amd64.whl"
+    wheel.write_bytes(b"wheel")
+    monkeypatch.setattr(release_quad, "OPTUNA_WHEEL_RUNNER", _fake_runner(tmp_path, tail))
+    passed, output = release_quad._run_optuna_candidate_target(
+        "100", wheel, hashlib.sha256(wheel.read_bytes()).hexdigest()
+    )
+    assert release_quad.OPTUNA_SUCCESS_MARKER in output
+    assert passed is passes
+
+
+def test_remote_invocation_propagates_powershell_and_native_failures(tmp_path):
+    """Run the exact SSH script locally against a runner that prints success."""
+    cases = [("", 0), ("throw 'owned scratch cleanup failed'", 1),
+             ("& $PythonExecutable -c 'import sys; sys.exit(3)'", 3)]
+    scripts = []
+    for index, (tail, _) in enumerate(cases):
+        folder = tmp_path / str(index)
+        folder.mkdir()
+        runner = _fake_runner(folder, tail)
+        scripts.append(release_quad._optuna_remote_invocation(
+            str(runner), str(folder / "w.whl"), str(folder / "worker.py"),
+            "'" + sys.executable.replace("'", "''") + "'", "0" * 64, "o'shared"))
+    # These isolated subprocesses share no files or MATLAB state. Overlap shell
+    # startup instead of spending the fast-contract budget waiting three times.
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        results = list(pool.map(_run_pwsh, scripts))
+    for (tail, code), result in zip(cases, results):
+        assert release_quad.OPTUNA_SUCCESS_MARKER in result.stdout, tail
+        assert result.returncode == code, (tail, result.stderr)
+
+
+def _cleanup_script(root, body):
+    runner = str(RUNNER).replace("'", "''")
+    return "\n".join([
+        "$ErrorActionPreference = 'Stop'",
+        "$tokens = $null; $errors = $null",
+        f"$ast = [System.Management.Automation.Language.Parser]::ParseFile('{runner}', [ref]$tokens, [ref]$errors)",
+        "$function = $ast.FindAll({ param($node) $node -is "
+        "[System.Management.Automation.Language.FunctionDefinitionAst] -and "
+        "$node.Name -eq 'Remove-OwnedRunRoot' }, $true)[0]",
+        "Invoke-Expression $function.Extent.Text",
+        f"$root = '{str(root)}'",
+        "$target = Join-Path $root 'owned'",
+        "New-Item -ItemType Directory -Path $target | Out-Null",
+        "$file = Join-Path $target 'optuna_mex.mexw64'",
+        "Set-Content -LiteralPath $file -Value 'image'",
+        # Held without sharing, as a MEX image is until MATLAB releases it.
+        "$held = [IO.File]::Open($file, 'Open', 'Read', 'None')",
+        body,
+    ])
+
+
+def _run_pwsh(script):
+    return subprocess.run(
+        ["pwsh", "-NoProfile", "-NonInteractive", "-EncodedCommand",
+         base64.b64encode(script.encode("utf-16le")).decode("ascii")],
+        capture_output=True, text=True, encoding="utf-8",
+        timeout=120,
+    )
+
+
+def test_owned_scratch_removal_waits_for_a_released_image(tmp_path):
+    result = _run_pwsh(_cleanup_script(tmp_path, "\n".join([
+        "$job = Start-ThreadJob { Start-Sleep -Milliseconds 250; ($using:held).Dispose() }",
+        "Remove-OwnedRunRoot -Path $target -TempRoot $root -TimeoutSeconds 30",
+        "Receive-Job $job -Wait | Out-Null",
+        "'removed=' + (-not (Test-Path -LiteralPath $target))",
+    ])))
+    assert result.returncode == 0, result.stderr
+    assert "removed=True" in result.stdout
+
+
+def test_owned_scratch_kept_and_failed_when_never_released(tmp_path):
+    result = _run_pwsh(_cleanup_script(tmp_path, "\n".join([
+        "try { Remove-OwnedRunRoot -Path $target -TempRoot $root -TimeoutSeconds 0.1; 'UNEXPECTED_REMOVAL' }",
+        "catch { 'failed=' + $_.Exception.Message }",
+        "finally { $held.Dispose() }",
+        "'kept=' + (Test-Path -LiteralPath $target)",
+    ])))
+    assert result.returncode == 0, result.stderr
+    assert "kept for diagnosis" in result.stdout
+    assert "kept=True" in result.stdout
+    assert "UNEXPECTED_REMOVAL" not in result.stdout
+
+
+def test_owned_scratch_removal_refuses_outside_its_root(tmp_path):
+    result = _run_pwsh(_cleanup_script(tmp_path / "root", "\n".join([
+        "$held.Dispose()",
+        "try { Remove-OwnedRunRoot -Path (Split-Path $root) -TempRoot $root; 'UNEXPECTED_REMOVAL' }",
+        "catch { 'refused=' + $_.Exception.Message }",
+    ])))
+    assert "Refusing to remove a folder outside" in result.stdout
+    assert (tmp_path / "root" / "owned").is_dir()
+
+
+def test_runner_emits_evidence_and_marker_only_after_cleanup():
+    runner = RUNNER.read_text(encoding="utf-8")
+    cleanup = runner.index("Remove-OwnedRunRoot -Path $resolvedRunRoot")
+    assert runner.index("Write-Output 'RADIA_OPTUNA_WHEEL_SIMULINK_OK'") > cleanup
+    assert runner.index("[IO.File]::WriteAllText(") > cleanup
+    assert "$evidence.owned_scratch_removed = $true" in runner
+
+
+def test_owned_scratch_refuses_a_junction(tmp_path):
+    result = _run_pwsh(_cleanup_script(tmp_path / "root", "\n".join([
+        "$held.Dispose()",
+        "$outside = Join-Path (Split-Path $root) 'outside'",
+        "New-Item -ItemType Directory -Path $outside | Out-Null",
+        "Set-Content -LiteralPath (Join-Path $outside 'keep.txt') -Value 'keep'",
+        "New-Item -ItemType Junction -Path (Join-Path $target 'link') -Target $outside | Out-Null",
+        "try { Remove-OwnedRunRoot -Path $target -TempRoot $root; throw 'UNEXPECTED_REMOVAL' }",
+        "catch { if ($_.Exception.Message -notlike '*reparse point*') { throw }; 'refused-junction' }",
+    ])))
+    assert result.returncode == 0, result.stderr
+    assert "refused-junction" in result.stdout
+    assert (tmp_path / "outside" / "keep.txt").read_text().strip() == "keep"

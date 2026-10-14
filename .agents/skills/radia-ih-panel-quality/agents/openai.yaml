@@ -1,0 +1,4 @@
+interface:
+  display_name: "Radia IH Simulink Quality"
+  short_description: "Quality gate for the production IH Simulink block"
+  default_prompt: "Use $radia-ih-panel-quality to review the Radia IH Simulink block, numerical contract, artifacts, and deployment before release."

@@ -1,0 +1,8 @@
+- [HCurl-SIBC HACApK cross composition](memory/hcurl_sibc_hacapk_cross.md): use a stable full current Gram plus reduced diagonal correction; keep HDiv-HCurl coupling separate.
+- [MATLAB NGSolve GridFunction projection](memory/matlab_ngsolve_gridfunction_setvalues.md): match Python gf.Set with ngcomp::SetValues; direct FE Interpolate fails for high-order HDiv.
+- [Unsafe extruded constructors retired](memory/retired_unsafe_extruded_constructors.md): delete Python, MATLAB, and C ABI surfaces; never reintroduce ObjMltExtPgn/Rtg/Tri.
+- [IH Simulink native-only contract](memory/docs_cruft_prune_2026_06_28.md#ih-simulink-native-only-contract-2026-07-23): Level-2 MATLAB wrappers own checked MEX handles; retire LUT/lumped IH paths.
+- [MATLAB Optuna MOTPE Parzen migration](memory/matlab_optuna_motpe_parzen.md): use weighted shared Parzen mixtures and retire the scalar KDE candidate path.
+- [HDiv-MMM topopt native CG](memory/hdiv_mmm_topopt_native_cg.md): use native Jacobi-PCG, verify true residuals, and do not restore the slower Python MultiVector attempt.
+- [HDiv-MMM topopt without BESO](memory/hdiv_mmm_topopt_no_beso.md): keep raw Schur responses; put geometry regularization in the discrete master and use graph cut only for submodular backends.
+- [Eqnedit64 PowerPoint normal paste](memory/eqnedit64_powerpoint_normal_paste.md): accept editable left-aligned 18 pt Office Math for normal Ctrl+V; test with `ExecuteMso("Paste")`, never `Shapes.Paste()`.

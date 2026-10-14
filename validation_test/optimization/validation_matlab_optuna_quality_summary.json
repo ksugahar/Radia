@@ -1,0 +1,221 @@
+{
+  "schema": "radia.validation.matlab-optuna-quality.v3",
+  "generated_at_utc": "2026-07-24T00:57:32.410Z",
+
+  "matlab_version": "26.1.0.3203278 (R2026a)",
+  "matlab_release": "2026a",
+  "platform": "PCWIN64",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "single_trials": 80,
+  "multi_trials": 120,
+  "single_objective": {
+    "branin_random": {
+      "median_regret": 0.72650374532079631,
+      "regret": [
+        0.042117575452687461,
+        0.2010193148520063,
+        1.0005719843271397,
+        0.72650374532079631,
+        1.3068382446919173
+      ],
+      "median_elapsed_s": 0.4064559,
+      "median_ask_tell_ms_per_trial": 5.08069875
+    },
+    "branin_tpe": {
+      "median_regret": 0.090905721617938084,
+      "regret": [
+        0.0022542747842813071,
+        0.062944113616518749,
+        0.14471609866137314,
+        0.10526169453005174,
+        0.090905721617938084
+      ],
+      "median_elapsed_s": 0.7229136,
+      "median_ask_tell_ms_per_trial": 9.0364200000000015
+    },
+    "branin_tpe_joint": {
+      "median_regret": 0.0893066986836164,
+      "regret": [
+        0.016312716688416273,
+        0.015168153715588772,
+        0.48468679022066929,
+        0.49615775974102938,
+        0.0893066986836164
+      ],
+      "median_elapsed_s": 2.3413704,
+      "median_ask_tell_ms_per_trial": 29.26713
+    },
+    "branin_cmaes": {
+      "median_regret": 0.038739733451688352,
+      "regret": [
+        0.057459260895088349,
+        0.0911697238527438,
+        0.00065712260118111487,
+        0.021231511101637679,
+        0.038739733451688352
+      ],
+      "median_elapsed_s": 1.389487,
+      "median_ask_tell_ms_per_trial": 17.368587499999997
+    },
+    "correlated_valley_random": {
+      "median_regret": 0.17699803339897993,
+      "regret": [
+        0.19545881556248704,
+        0.17699803339897993,
+        0.056384071474978169,
+        0.12409887513968763,
+        0.27685807808176432
+      ],
+      "median_elapsed_s": 0.4541888,
+      "median_ask_tell_ms_per_trial": 5.67736
+    },
+    "correlated_valley_tpe": {
+      "median_regret": 0.094873405279759265,
+      "regret": [
+        0.11643195663119731,
+        0.094873405279759265,
+        0.07216031191808496,
+        0.15916362052386962,
+        0.02453187977236522
+      ],
+      "median_elapsed_s": 0.9660386,
+      "median_ask_tell_ms_per_trial": 12.0754825
+    },
+    "correlated_valley_tpe_joint": {
+      "median_regret": 0.053368485571423527,
+      "regret": [
+        0.13210815805935125,
+        0.012555796407489158,
+        0.017373559994541293,
+        0.072633066583959391,
+        0.053368485571423527
+      ],
+      "median_elapsed_s": 3.4900287,
+      "median_ask_tell_ms_per_trial": 43.62535875
+    },
+    "correlated_valley_cmaes": {
+      "median_regret": 0.020833123938007975,
+      "regret": [
+        0.016091730278970911,
+        0.020833123938007975,
+        0.013547084028673865,
+        0.024299874662514782,
+        0.043210299828252412
+      ],
+      "median_elapsed_s": 1.6449893,
+      "median_ask_tell_ms_per_trial": 20.56236625
+    }
+  },
+  "multi_objective_zdt1": {
+    "random": {
+      "median_front_error": 0.481342465780339,
+      "front_error": [
+        1.3037668077058739,
+        0.73320448940037952,
+        0.14639279723666734,
+        0.37760534474739971,
+        0.481342465780339
+      ],
+      "median_f1_coverage": 0.82700109635338759,
+      "f1_coverage": [
+        0.81655981606389161,
+        0.82700109635338759,
+        0.79043714792580988,
+        0.82825555643282744,
+        0.969950517510759
+      ],
+      "median_pareto_points": 8,
+      "pareto_points": [
+        10,
+        8,
+        6,
+        8,
+        10
+      ],
+      "median_elapsed_s": 0.6174234,
+      "median_ask_tell_ms_per_trial": 5.1451949999999993
+    },
+    "motpe": {
+      "median_front_error": 0.063701121516994988,
+      "front_error": [
+        0.063701121516994988,
+        0.14031841275089402,
+        0.044635929744509112,
+        0.049971188427953755,
+        0.0935153816564094
+      ],
+      "median_f1_coverage": 0.91368787376933625,
+      "f1_coverage": [
+        0.91120533368454382,
+        0.91368787376933625,
+        0.960933573493711,
+        0.62286547581216745,
+        0.97599258632233643
+      ],
+      "median_pareto_points": 20,
+      "pareto_points": [
+        20,
+        21,
+        23,
+        19,
+        19
+      ],
+      "median_elapsed_s": 1.2752731,
+      "median_ask_tell_ms_per_trial": 10.627275833333332
+    },
+    "nsgaii": {
+      "median_front_error": 0.014781087258541152,
+      "front_error": [
+        0.66352312209729325,
+        0.013648507655995701,
+        0.17786272123098756,
+        0.0016861570233888006,
+        0.014781087258541152
+      ],
+      "median_f1_coverage": 0.61436617732452425,
+      "f1_coverage": [
+        0.61436617732452425,
+        0.69210223698704354,
+        0.36292516774085654,
+        0.16146004678056775,
+        0.96728835710868677
+      ],
+      "median_pareto_points": 12,
+      "pareto_points": [
+        12,
+        12,
+        12,
+        19,
+        34
+      ],
+      "median_elapsed_s": 1.1473594,
+      "median_ask_tell_ms_per_trial": 9.5613283333333339
+    }
+  },
+  "quality_gates": {
+    "branin_tpe_beats_random": true,
+    "branin_joint_tpe_beats_random": true,
+    "branin_cmaes_beats_random": true,
+    "correlated_tpe_beats_random": true,
+    "correlated_joint_tpe_beats_random": true,
+    "correlated_cmaes_beats_random": true,
+    "motpe_front_error_beats_random": true,
+    "motpe_coverage_exceeds_half_domain": true,
+    "all_passed": true
+  },
+  "interpretation": {
+    "lower_single_regret_is_better": true,
+    "lower_front_error_is_better": true,
+    "higher_f1_coverage_is_better": true,
+    "tpe_joint_uses_automatic_intersection_search_space": true,
+    "cmaes_uses_full_covariance_evolution_paths": true,
+    "sampler_state_storage": "MATLAB SamplerStateTable",
+    "timing_scope": "MATLAB sampler plus table-backed ask/tell and analytic objective"
+  }
+}

@@ -1,0 +1,1355 @@
+{
+  "tools": [
+    {
+      "name": "matlab_activation_probability_gate",
+      "title": "Activation Probability Gate",
+      "description": "Checks sigmoid and softmax derivatives against finite differences, softmax shift invariance and normalization, and a saturation negative control.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_topology_information_gate",
+      "title": "Topology and Information-Geometry Gate",
+      "description": "Checks tropical distributivity, monotone component merging, manifold chart round trips, Fisher-metric positivity, and invalid-probability rejection.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_integrity_encoding_gate",
+      "title": "Integrity and Encoding Gate",
+      "description": "Checks a transparent chained-checksum tamper control and UTF-8 binary round trip while explicitly rejecting production-cryptography claims.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_tabular_transform_gate",
+      "title": "Tabular Transform Gate",
+      "description": "Checks string split/mid/find/left/right, sum/sumproduct/conditional/cumulative aggregation, and missing/empty negative controls for CAE tables.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_bayes_inference_gate",
+      "title": "Bayesian Inference Gate",
+      "description": "Checks Beta-Binomial conjugacy and normalization, MLE/MAP, seeded MCMC agreement and mixing, bounded R-squared, and invalid-prior rejection.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_time_series_gate",
+      "title": "Time-Series Gate",
+      "description": "Checks stable VAR recovery, impulse-response decay, Granger SSE gain, nearly white innovations, and unstable-process rejection.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_gradient_boost_gate",
+      "title": "Gradient-Boost Gate",
+      "description": "Fits readable residual stumps, checks monotone loss reduction and an excessive-step negative control, and withholds boosted predictions from solver truth.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_neural_ode_gate",
+      "title": "Neural ODE Gate",
+      "description": "Checks Euler convergence order, continuous-depth sensitivity against finite differences, invalid-step rejection, and an epsilon-delta control.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_tabular_lookup_gate",
+      "title": "Tabular Lookup Gate",
+      "description": "Checks exact and approximate lookup, INDEX/MATCH equivalence, sorted-key requirements, missing-key rejection, and deterministic joined identifiers for CAE tables.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_graphical_model_gate",
+      "title": "Graphical Model Gate",
+      "description": "Checks Bayesian-network normalization and conditional independence, Gaussian precision missing edges, sampled partial correlation, and cyclic-DAG rejection.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_sde_ito_gate",
+      "title": "SDE and Ito Gate",
+      "description": "Checks an Ito identity and isometry by seeded Monte Carlo plus analytic Black-Scholes price and PDE residual, with invalid-volatility rejection.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_cnn_architecture_gate",
+      "title": "CNN Architecture Gate",
+      "description": "Checks convolution shapes, depthwise-separable parameter reduction, zero-residual identity, SENet excitation bounds, and Inception channel concatenation.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_recurrent_sequence_gate",
+      "title": "Recurrent Sequence Gate",
+      "description": "Checks RNN/bi-LSTM sequence shapes, LSTM/GRU gate bounds, finite memory states, and an explicit exploding-recurrence negative control.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_latent_structural_gate",
+      "title": "Latent Structural Gate",
+      "description": "Checks hierarchical shrinkage, stable structural-equation covariance, unstable-SEM rejection, and categorical quantification coefficients before solver promotion.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_quantification_ii_gate",
+      "title": "Quantification II Gate",
+      "description": "Checks within/between covariance symmetry, generalized eigen-equation, normalized Lagrange constraint, and maximal discrimination ratio.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_factor_rotation_gate",
+      "title": "Factor Rotation Gate",
+      "description": "Checks orthogonal communalities, varimax-style rotation geometry, Promax oblique covariance preservation, factor correlation, and singular-rotation rejection.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_text_retrieval_gate",
+      "title": "Text Retrieval Gate",
+      "description": "Checks subword/document vectors and deterministic tf-idf/BM25 relevance ranking with empty-query rejection before using text retrieval for CAE knowledge.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_projective_geometry_gate",
+      "title": "Projective Geometry Gate",
+      "description": "Checks homogeneous scale invariance, invertible homography round trips, conic-incidence preservation, transformed-conic symmetry, and singular-map rejection.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_nlp_transformer_gate",
+      "title": "NLP Transformer Gate",
+      "description": "Checks normalized causal attention, no future leakage, ALBERT-style parameter sharing, pretrain/inference mask distinction, BLEU controls, sparse document vectors, and task-prefix contracts.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_quantification_gate",
+      "title": "Quantification III Gate",
+      "description": "Checks preference-table normalization, correspondence/SVD reconstruction, Lagrange eigen-equation, Rayleigh maximality, and finite row/column scores.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_hypothesis_test_gate",
+      "title": "Hypothesis-Test Gate",
+      "description": "Runs deterministic null/alternative controls for a known-variance z test, checks bounded p-values and threshold-based contradiction logic, and withholds statistical results from solver truth.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_transformer_scaling_gate",
+      "title": "Transformer Scaling Gate",
+      "description": "Checks power-law scaling recovery, causal sparse-attention structure, I/O-safe provenance, and withholding of unverified large-model extrapolations before CAE use.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_pca_covariance_gate",
+      "title": "PCA and Covariance Gate",
+      "description": "Checks covariance symmetry, orthogonal eigenvectors, PCA variance maximization, monotone reconstruction error, and covariance/correlation geometry.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_quantum_linear_gate",
+      "title": "Quantum Linear-Algebra Gate",
+      "description": "Checks unitary gates, state-norm preservation, a one-bit Deutsch constant/balanced control, nonunitary rejection, and end-to-end I/O cost before any CAE use.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_bellman_control_gate",
+      "title": "Bellman Control Gate",
+      "description": "Checks Bellman expectation and optimal fixed points, policy/value iteration convergence, Q-learning versus SARSA targets, n-step TD, on/off-policy importance ratios, and invalid discounts.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_spectral_linear_algebra_gate",
+      "title": "Spectral Linear Algebra Gate",
+      "description": "Checks SVD reconstruction and component formulas, orthogonal isometry, symmetric diagonalization, covariance SPD rejection, and multivariate-normal whitening.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_random_matrix_stability_gate",
+      "title": "Random-Matrix Gradient Stability Gate",
+      "description": "Propagates random orthogonal layer Jacobians and explicit expanding/contracting negative controls to detect deep-network gradient explosion or vanishing before CAE surrogate promotion.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_latent_distribution_gate",
+      "title": "Latent Distribution Gate",
+      "description": "Checks normalized generative priors, Bayesian identification posteriors, sampling frequencies, and forward-QoI evaluation for latent-variable CAE candidates.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_linear_inverse_gate",
+      "title": "Linear Inverse and SVD Gate",
+      "description": "Checks transpose shape, Moore-Penrose identities, least squares, TSVD rank handling, CCA bounds, and solver-promotion policy for CAE inverse problems.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_actor_critic_gate",
+      "title": "Actor-Critic and Policy-Gradient Gate",
+      "description": "Checks softmax policy normalization, REINFORCE gradient finite differences, actor-critic baseline variance reduction, eligibility traces, and finite DQN targets.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_a3c_async_gate",
+      "title": "A3C Asynchronous Worker Gate",
+      "description": "Checks asynchronous worker arrival order, on-policy version identity, bounded gradient staleness, explicit stale/off-policy rejection, and forward-solver promotion replay.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_policy_trust_gate",
+      "title": "CAE Policy Trust Gate",
+      "description": "Checks deterministic-policy gradients against finite differences, TRPO-style KL update limits, DDPG soft-target contraction, action bounds, and solver promotion.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_variational_geometry_gate",
+      "title": "Variational and Geometry Gate",
+      "description": "Checks KL nonnegativity, ELBO/evidence/free-energy identities, five equivalent free-energy forms, coordinate round trips, symplectic preservation, and a non-symplectic negative control.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_rl_stability_gate",
+      "title": "RL Stability Gate",
+      "description": "Checks prioritized replay probabilities and importance correction plus a Monte Carlo Double-DQN overestimation-bias control before CAE reward promotion.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_energy_model_gate",
+      "title": "Boltzmann/DBN Energy Gate",
+      "description": "Exactly enumerates a teaching RBM, checks probability normalization, likelihood-gradient finite differences, likelihood improvement, DBN layer handoff, and forward-solver candidate evaluation.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_dueling_cae_action_gate",
+      "title": "Dueling Network CAE Action Gate",
+      "description": "Checks Q=V+A decomposition for sequential CAE design: zero-mean advantage identifiability, state-offset invariance, invalid-action rejection, selected-action ranking, and independent forward-solver reward replay.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_vae_field_gate",
+      "title": "VAE CAE Field Gate",
+      "description": "Runs a readable linear VAE contract for CAE field snapshots: reconstruction, nonnegative KL, ELBO components, reparameterization-gradient finite-difference check, latent OOD control, and forward-QoI verification.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_gan_design_gate",
+      "title": "GAN CAE Design Gate",
+      "description": "Checks multi-mode coverage, a collapsed-generator negative control, held-out discriminator accuracy, and independent forward-solver acceptance before promoting GAN-derived CAE design candidates.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_alphago_cae_search_gate",
+      "title": "AlphaGo-Inspired CAE Search Gate",
+      "description": "Separates policy priors, value estimates, and PUCT-style tree search for a discrete CAE design fixture, then requires independent forward-solver verification against the exhaustive reference.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_nice_flow_gate",
+      "title": "NICE Flow CAE Design Gate",
+      "description": "Learns a reversible additive coupling for correlated CAE design variables, checks analytic and finite-difference Jacobians, likelihood improvement, exact round trip, OOD filtering, and forward-QoI replay.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_diffusion_inverse_gate",
+      "title": "Diffusion-Inspired CAE Inverse Gate",
+      "description": "Applies a monotone diffusion noise schedule to a reproducible ill-conditioned CAE fixture, performs truncated-modal least-squares denoising, and requires independent forward-operator residual improvement. Learned candidates are not ground truth.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_optimization_learning_gate",
+      "title": "MATLAB Optimization Learning Gate",
+      "description": "Audits gradient agreement (reference, central finite difference, complex step), shared Bayesian/GP uncertainty, SVD/TSVD/POD rank policies, reproducible bounded PSO/CMA-ES histories, and independent forward-solver replay.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "matlab_ml_cae_pipeline",
+      "title": "MATLAB CAE/ML Pipeline Gate",
+      "description": "Runs a reproducible CAE/ML teaching contract spanning schema, POD/SVD, Gaussian-process uncertainty, active learning, forward-solver verification, and VAE/normalizing-flow or reinforcement-learning toolbox preflight. Generated or learned candidates are never ground truth and require forward verification.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": [
+              "schema",
+              "pod",
+              "gp",
+              "active_learning",
+              "forward_verify",
+              "generative_preflight",
+              "rl_preflight",
+              "all"
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Nonnegative integer reproducibility seed."
+          }
+        },
+        "required": [
+          "stage",
+          "seed"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    }
+  ],
+  "signatures": {
+    "matlab_activation_probability_gate": {
+      "function": "radia_mcp_matlab.check_activation_probability_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_topology_information_gate": {
+      "function": "radia_mcp_matlab.check_topology_information_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_integrity_encoding_gate": {
+      "function": "radia_mcp_matlab.check_integrity_encoding_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_tabular_transform_gate": {
+      "function": "radia_mcp_matlab.check_tabular_transform_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_bayes_inference_gate": {
+      "function": "radia_mcp_matlab.check_bayes_inference_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_time_series_gate": {
+      "function": "radia_mcp_matlab.check_time_series_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_gradient_boost_gate": {
+      "function": "radia_mcp_matlab.check_gradient_boost_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_neural_ode_gate": {
+      "function": "radia_mcp_matlab.check_neural_ode_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_tabular_lookup_gate": {
+      "function": "radia_mcp_matlab.check_tabular_lookup_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_graphical_model_gate": {
+      "function": "radia_mcp_matlab.check_graphical_model_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_sde_ito_gate": {
+      "function": "radia_mcp_matlab.check_sde_ito_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_cnn_architecture_gate": {
+      "function": "radia_mcp_matlab.check_cnn_architecture_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_recurrent_sequence_gate": {
+      "function": "radia_mcp_matlab.check_recurrent_sequence_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_latent_structural_gate": {
+      "function": "radia_mcp_matlab.check_latent_structural_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_quantification_ii_gate": {
+      "function": "radia_mcp_matlab.check_quantification_ii_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_factor_rotation_gate": {
+      "function": "radia_mcp_matlab.check_factor_rotation_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_text_retrieval_gate": {
+      "function": "radia_mcp_matlab.check_text_retrieval_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_projective_geometry_gate": {
+      "function": "radia_mcp_matlab.check_projective_geometry_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_nlp_transformer_gate": {
+      "function": "radia_mcp_matlab.check_nlp_transformer_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_quantification_gate": {
+      "function": "radia_mcp_matlab.check_quantification_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_hypothesis_test_gate": {
+      "function": "radia_mcp_matlab.check_hypothesis_test_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_transformer_scaling_gate": {
+      "function": "radia_mcp_matlab.check_transformer_scaling_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_pca_covariance_gate": {
+      "function": "radia_mcp_matlab.check_pca_covariance_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_quantum_linear_gate": {
+      "function": "radia_mcp_matlab.check_quantum_linear_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_bellman_control_gate": {
+      "function": "radia_mcp_matlab.check_bellman_control_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_spectral_linear_algebra_gate": {
+      "function": "radia_mcp_matlab.check_spectral_linear_algebra_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_random_matrix_stability_gate": {
+      "function": "radia_mcp_matlab.check_random_matrix_stability_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_latent_distribution_gate": {
+      "function": "radia_mcp_matlab.check_latent_distribution_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_linear_inverse_gate": {
+      "function": "radia_mcp_matlab.check_linear_inverse_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_actor_critic_gate": {
+      "function": "radia_mcp_matlab.check_actor_critic_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_a3c_async_gate": {
+      "function": "radia_mcp_matlab.check_a3c_async_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_policy_trust_gate": {
+      "function": "radia_mcp_matlab.check_policy_trust_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_variational_geometry_gate": {
+      "function": "radia_mcp_matlab.check_variational_geometry_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_rl_stability_gate": {
+      "function": "radia_mcp_matlab.check_rl_stability_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_energy_model_gate": {
+      "function": "radia_mcp_matlab.check_energy_model_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_dueling_cae_action_gate": {
+      "function": "radia_mcp_matlab.check_dueling_cae_action_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_vae_field_gate": {
+      "function": "radia_mcp_matlab.check_vae_field_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_gan_design_gate": {
+      "function": "radia_mcp_matlab.check_gan_design_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_alphago_cae_search_gate": {
+      "function": "radia_mcp_matlab.check_alphago_cae_search_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_nice_flow_gate": {
+      "function": "radia_mcp_matlab.check_nice_flow_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_diffusion_inverse_gate": {
+      "function": "radia_mcp_matlab.check_diffusion_inverse_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_optimization_learning_gate": {
+      "function": "radia_mcp_matlab.check_optimization_learning_gate",
+      "input": {
+        "order": [
+          "seed"
+        ]
+      }
+    },
+    "matlab_ml_cae_pipeline": {
+      "function": "radia_mcp_matlab.check_ml_cae_pipeline",
+      "input": {
+        "order": [
+          "stage",
+          "seed"
+        ]
+      }
+    }
+  }
+}

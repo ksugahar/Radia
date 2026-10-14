@@ -1,0 +1,67 @@
+# Include license and copyright files
+include LICENSE
+include COPYRIGHT.txt
+
+# Include documentation
+include README.md
+include BUILD.md
+
+
+# Include Python utilities
+recursive-include src/radia *.py
+
+# Exclude Path B reference implementation (requires netgen fork, not for distribution)
+exclude src/radia/panels/cub5_to_vol.py
+
+# Include Cubit toolbar panels and sample .jou files
+recursive-include src/radia/panels *.txt *.ui *.jou
+recursive-include src/radia/panels/cubit_toolbar *.tmpl *.py *.svg
+
+# Include conventions document
+include src/radia/CONVENTIONS.md
+
+# Include compiled extension modules (.pyd) and Cubit plugin (.ccm).
+# Note (radia 4.80.0): the .ccl was removed (Qt5 GUI deleted; PySide6
+# toolbar at src/radia/panels/radia_export_menu.py replaces it).
+recursive-include src/radia *.pyd
+recursive-include src/radia *.dll *.so *.dylib
+recursive-include src/radia *.ccm
+
+# Public examples live in docs; never resurrect the retired scratch tree.
+prune examples
+
+# Match wheel exclusions: stale local binaries are not source-release inputs.
+exclude src/radia/cubit_mesh_curver.pyd
+recursive-exclude src/radia _equation*.pyd _equation*.so _equation*.dylib
+prune src/radia/equation
+recursive-exclude src/radia *.locked-old.pyd *.lockedold.pyd *.pre_*.pyd *.backup*.pyd
+
+# Include tests
+recursive-include tests *.py
+include tests/README.md
+
+# Include documentation
+recursive-include docs *.md
+
+# Caller-owned downloaded NASA measurements must not enter source distributions,
+# even when present locally or selected by a VCS-aware file finder.
+recursive-exclude docs/universal_relaxation_network/data/real_world/nasa_battery *.csv *.mat *.zip
+
+# Exclude build artifacts
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.so
+global-exclude .DS_Store
+global-exclude *.swp
+
+# Exclude large output files
+global-exclude *.vtu
+global-exclude *_field_compare.vtu
+
+# Exclude build directories
+prune build
+prune dist
+prune .git
+prune .vscode
+prune .idea

@@ -1,0 +1,261 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "cmake>=3.20"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "radia"
+version = "5.3.3"
+description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Oleg Chubar", email = "chubar@bnl.gov"},
+    {name = "Pascal Elleaume"},
+]
+maintainers = [
+    {name = "Radia Development Team"},
+]
+keywords = ["magnetostatics", "magnetic field", "radia", "ngsolve", "fem", "synchrotron", "cubit", "mesh", "export", "gmsh", "nastran", "netgen"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: C++",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+dependencies = [
+    "numpy>=1.20",
+    # CoilBuilder's orientation and standard source construction require SciPy.
+    "scipy>=1.12",
+    # Coordinate-defining SVDs use a one-thread BLAS context so canonical
+    # HCurl bases remain bit-reproducible across caller thread settings.
+    "threadpoolctl>=3.1",
+    # Radia/HACApK intentionally uses oneMKL rather than NGSolve's OpenBLAS:
+    # The dense HACApK kernels are performance-critical. MKL 2026
+    # uses the mkl_rt.3.dll ABI, so keep runtime and build packages in 2026.x.
+    "mkl>=2026,<2027",
+    "intel-cmplr-lib-rt>=2026,<2027",
+    # NGSolve + Netgen-mesher pinned to 6.2.2607 for BEM near-field quadrature correction.
+    # Rebuild native extensions linked to these external libraries together:
+    # NGSolve and Netgen expose C++ ABI used directly by the shipped binaries.
+    # Bump consequences:
+    #   * BLAS backend: 2606 ships `ngsolve-openblas` (mandatory dep) and
+    #     NGSolve uses OpenBLAS exclusively — `libngsolve.dll` links
+    #     `openblas.dll`, NOT `mkl_rt.*`. Radia intentionally keeps a separate
+    #     MKL 2026 runtime and `_radia_pybind.pyd` links `mkl_rt.3.dll` for
+    #     HACApK and dense BLAS/LAPACK performance.
+    #     (Verified 2026-05-28: `pip show ngsolve` Requires = netgen-mesher,
+    #     ngsolve-openblas; no mkl.  libngsolve.dll BLAS string = openblas.dll.)
+    #   * ABI change: `_radia_pybind.pyd`, axifem, sparsesolv_ngsolve,
+    #     and cubit_mesh_curver MUST be rebuilt against
+    #     2607. The Cubit .ccm embeds Compact Netgen and is independent.
+    #   * HTool callback bridge (NGSolve commit d90c59ea) is added in
+    #     2604 but Radia does NOT integrate with it.  Radia has no
+    #     ngsolve-side H-matrix path: `rad.RadiaField(...)` has no
+    #     `use_hmatrix=` parameter (passing it raises TypeError), and
+    #     BEM-A remains dense (H-matrix deferred — see
+    #     memory/direction_bem_a_hmatrix_in_radia.md).  Radia-specific
+    #     H-matrix acceleration is kept in Radia's C++ kernels, primarily
+    #     the HDiv-VIM open-boundary path.
+    "ngsolve==6.2.2607",
+    "netgen-mesher==6.2.2607",
+]
+
+[project.optional-dependencies]
+optuna = ["optuna==5.0.0"]
+cubit = [
+    "cubit-mesh-export",
+]
+topopt-cad = [
+    # Density/level-set -> watertight STL -> Cubit mesh regeneration.
+    # Kept optional because these packages are not needed by the solver core.
+    "scikit-image>=0.22",
+    "trimesh>=4.0",
+    "netCDF4>=1.6",
+    "fast-simplification>=0.1",
+]
+build123d = [
+    # Pythonic OCCT front-end used by PEEC coil-from-shape helpers
+    # (label / color reading, STEP XCAF access). netgen.occ does not
+    # expose XCAF labels, so a pythonocc-core-based reader is required
+    # when the user wants labeled STEP ports.
+    "build123d>=0.9",
+]
+beam = [
+    # Radia owns inspectable native SI Lorentz/RK4/Boris and transfer kernels.
+    # Xsuite adds accelerator-coordinate workflows; SciPy is a core dependency.
+    "xtrack>=0.109.1",
+]
+viz = [
+    "matplotlib>=3.5",
+]
+docs = [
+    # netgen.webgui in the pinned NGSolve release uses AnyWidget for saved
+    # Jupyter scenes; without it Draw silently degrades to text/plain output.
+    "anywidget>=0.11",
+    "jupyter>=1.0",
+    "matplotlib>=3.5",
+    "nbconvert>=7.0",
+    "nbformat>=5.0",
+]
+urn = [
+    "torch>=2.0",
+]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    # Execute MANIFEST.in with the build backend's file-selection implementation.
+    "setuptools>=45",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "setuptools>=45",
+    "matplotlib>=3.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/ksugahar/Radia"
+Documentation = "https://github.com/ksugahar/Radia/blob/main/README.md"
+Repository = "https://github.com/ksugahar/Radia"
+Issues = "https://github.com/ksugahar/Radia/issues"
+"Original Radia" = "https://github.com/ochubar/Radia"
+"ESRF Radia Page" = "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia"
+
+[project.scripts]
+# Desktop PySide and notebook-workbench entry points are retired. Human
+# production operation uses the Radia Simulink library. Python/MCP use the
+# headless calc_*.py and DesignSpec contracts.
+# Plugin + panels: cubit-plugin-install (from cubit-mesh-export)
+# MCP servers: radia-mcp package (pip install radia-mcp)
+
+[tool.setuptools.package-data]
+# Note (2026-06): standalone PySide desktop adapters are retired.  The Cubit
+# embedded Export Mesh toolbar remains package data; normal Radia Python uses
+# headless workflows and does not depend on PySide6.
+# Note (Tier-2, 2026-06-01): the Cubit plugin binaries (cubit_mesh_export.ccm,
+# cubit_mesh_curver.pyd) are NO LONGER bundled in the radia wheel.  They are
+# shipped + deployed SOLELY by the cubit-mesh-export package, so radia and
+# cubit-mesh-export release fully independently.  "*.ccm" is dropped here;
+# cubit_mesh_curver.pyd is excluded below (the "*.pyd" glob ships only
+# _radia_pybind.pyd / peec_matrices.pyd /
+# sparsesolv_ngsolve.pyd).
+# Eqnedit64 is built and released independently from tools/eqnedit64.  The
+# radia wheel contains only the headless TeX/Office module, not another GUI.
+radia = [
+    "*.pyd", "*.dll", "*.so", "*.dylib", "*.pyi", "*.png", "*.ico",
+    "resources/*.png", "resources/*.ico",
+    "panels/samples/*.jou",
+    "panels/samples/*.vol",
+    "panels/samples/*.py",
+    "panels/samples/em_sample_bh.txt",
+    "panels/samples/em/c_type_dipole/*.md",
+    "panels/samples/em/c_type_dipole/*.step",
+    "CONVENTIONS.md",
+]
+
+[tool.setuptools.exclude-package-data]
+radia = [
+    # NOTE: .py files are NOT excludable via exclude-package-data (only
+    # non-Python data assets are).  panels/cub5_to_vol.py is therefore
+    # not in this repo at all — the reference implementation lives in
+    # to_developers/ngsolve/cub5_to_vol.py (gitignored, LAB local).
+    # Tier-2 (2026-06-01): the Cubit plugin .pyd is shipped only by the
+    # cubit-mesh-export package, never by radia -- exclude it from the
+    # "*.pyd" glob in case a stale build artifact lingers in src/radia/.
+    "cubit_mesh_curver.pyd",
+    # Retired equation backend must not return through a stale local build.
+    "_equation*.pyd", "_equation*.so", "_equation*.dylib",
+    # Local lock-release and pre-change native backups must never enter a
+    # wheel assembled from an editable development checkout.
+    "*.locked-old.pyd",
+    "*.lockedold.pyd",
+    "*.pre_*.pyd",
+    "*.backup*.pyd",
+    # Debug/temp files that match package-data globs but should not ship
+    "panels/samples/_*.jou",
+    "panels/samples/_*.py",
+    "panels/samples/test_*.jou",
+    "panels/samples/test_*.py",
+    "panels/samples/compare_*.py",
+    "panels/_pconv_*.json",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::pytest.PytestReturnNotNoneWarning",
+    "ignore:Netgen fork.*is NOT installed:UserWarning",
+    "ignore:Field 'lifespan' has an incomplete definition.*",
+]
+markers = [
+    "basic: Basic functionality tests (fast)",
+    "comprehensive: Comprehensive test suite",
+    "advanced: Advanced features and edge cases",
+    "performance: Performance and scaling tests",
+    "slow: Tests that take more than 10 seconds",
+    "golden: Golden/reference tests separated from the ordinary CI gate",
+    "benchmark: Performance benchmarks (not run by default)",
+    "validation: Heavy validation_test suite (manual / release validation)",
+    "compute_host: Solver-heavy validation restricted to approved compute hosts",
+]
+minversion = "7.0"
+norecursedirs = [
+    ".git",
+    ".tox",
+    "dist",
+    "build",
+    "*.egg",
+    "__pycache__",
+    "fixtures",
+]
+
+[tool.coverage.run]
+source = ["radia"]
+omit = [
+    "tests/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100

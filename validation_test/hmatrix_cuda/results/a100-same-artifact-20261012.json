@@ -1,0 +1,309 @@
+{
+  "schema": "radia.hmatrix-a100-same-artifact.v1",
+  "accepted_subgates": true,
+  "release_accepted": false,
+  "source_commit": "15e2bef2adfaf9434392e9b7f1e34289eb9e002b",
+  "binary_sha256": "1a4b405c54ab998a6c6eeba121a6ae8a960e044155fb7b9a96e9e62ef709e86c",
+  "input_sha256": "aad4241e52943c9f830482d7a0a3cca2f1b2edb314150dd22c3d2dd733dd52fb",
+  "validation_sha256": {
+    "checkResidentHMatrix.m": "66b49d2ad46237669d5b76e00f67fe5fd2be31bbac02af4af3190d3ce3832486",
+    "inputs.mat": "aad4241e52943c9f830482d7a0a3cca2f1b2edb314150dd22c3d2dd733dd52fb",
+    "profileResidentHMatrix.m": "323b2a39370b8f7f8648008357a19ffed6ceb552ec0f8d54c46d0f4f4ba4fa65",
+    "radia_cuda_hmatrix.mexw64": "1a4b405c54ab998a6c6eeba121a6ae8a960e044155fb7b9a96e9e62ef709e86c",
+    "validate_same_artifact.py": "52824728d68e6e7fb7e6f6994d6b49651151381dca0fabfdd2ed58299389f5e9",
+    "matlab/+radia/+gpu/HMatrixOperator.m": "d98a77641d51eea484cefc8d9ee5b12d03395725b3ac7ccda8150e242933052a"
+  },
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "driver": "591.59",
+  "matlab": "26.1.0.3203278 (R2026a)",
+  "scope": "Existing numerical leaf/operator subgates, not full HACApK/HDiv-MMM solve",
+  "true_residual": null,
+  "true_residual_reason": "Operator subgate, not a linear solve",
+  "numerical_result": {
+    "accepted": true,
+    "cases": [
+      {
+        "name": "dense",
+        "first_relative_error": 2.0842277492356747e-16,
+        "third_relative_error": 2.429505540148151e-16,
+        "stats": {
+          "owned_device_bytes": 1952,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 1952
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "lowrank",
+        "first_relative_error": 1.1054564207825698e-16,
+        "third_relative_error": 3.084379830382407e-16,
+        "stats": {
+          "owned_device_bytes": 2312,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 2312
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "mixed",
+        "first_relative_error": 1.6254035190650066e-16,
+        "third_relative_error": 2.860820257816377e-16,
+        "stats": {
+          "owned_device_bytes": 2192,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 2192
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "mixed-uneven",
+        "first_relative_error": 4.703128312253036e-16,
+        "third_relative_error": 7.222706075575992e-16,
+        "stats": {
+          "owned_device_bytes": 573312,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 573312
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "public-pybind-sampled-Gram",
+        "first_relative_error": 1.4578813943781033e-16,
+        "third_relative_error": 1.5765945442104818e-16,
+        "stats": {
+          "owned_device_bytes": 1048,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 1048
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "demag-dense-map",
+        "first_relative_error": 3.12819723385529e-16,
+        "third_relative_error": 2.7186949784278837e-16,
+        "stats": {
+          "owned_device_bytes": 2488,
+          "applications": 3,
+          "kernel_launches": 18,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 2488
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "demag-sparse-map",
+        "first_relative_error": 3.854557465143725e-17,
+        "third_relative_error": 1.1317479058154843e-16,
+        "stats": {
+          "owned_device_bytes": 1752,
+          "applications": 3,
+          "kernel_launches": 18,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 1752
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "public-pybind-analytic-tet-Gram",
+        "first_relative_error": 1.2026215981623038e-16,
+        "third_relative_error": 5.448692995994837e-16,
+        "stats": {
+          "owned_device_bytes": 232,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 232
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "native-CUDA-analytic-tet-block",
+        "first_relative_error": 1.2575220168118067e-16,
+        "third_relative_error": 1.8474802763860587e-16,
+        "stats": {
+          "owned_device_bytes": 232,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 4572
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "native-CUDA-analytic-tet-triangle-block",
+        "first_relative_error": 2.0935959282232402e-16,
+        "third_relative_error": 2.0028905896328281e-16,
+        "stats": {
+          "owned_device_bytes": 440,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 5468
+        },
+        "invalid_input_preserved_state": true
+      }
+    ],
+    "indexed_entries": {
+      "count": 600,
+      "relative_error": 5.923942688463094e-16,
+      "workspace_capacity": 256
+    },
+    "aca_cuda_vector": {
+      "cases": 8,
+      "relative_error": 9.68786813520323e-16,
+      "scope": "Active vector C dispatch only, not compressed ACA matrix"
+    },
+    "aca_cuda_compression": {
+      "rank": 2,
+      "relative_error": 1.4034375488003454e-16,
+      "entry_batches": 7,
+      "entry_count": 14,
+      "owned_device_bytes": 11172,
+      "scope": "One raw physical offdiagonal block, not full adaptive matrix or solver"
+    },
+    "admissible_block": {
+      "rows": 66,
+      "columns": 66,
+      "rank": 32,
+      "relative_error": 2.0462869966243266e-09,
+      "entry_count": 4214,
+      "entry_batches": 81,
+      "owned_device_bytes": 292324,
+      "scope": "Separated constant-tet block above default 65-charge leaf threshold",
+      "cpu_leaf_stats": {
+        "n_dof": 132,
+        "n_leaves": 10,
+        "n_lowrank": 2,
+        "n_dense": 8,
+        "max_rank": 66
+      }
+    },
+    "dense_promotion": {
+      "relative_error": 1.7258802605070546e-09,
+      "direct_cuda_relative_error": 0,
+      "cpu_physical_limit": 1e-08,
+      "aca_rank": 32,
+      "entry_count": 8570,
+      "entry_batches": 99,
+      "owned_device_bytes": 292324,
+      "scope": "Exact CUDA leaf; full adaptive assembly pending"
+    },
+    "wrapper_checked": true,
+    "live_count": 0,
+    "reload_stale_handle_rejected": true,
+    "invalid_create_released": true
+  },
+  "operator_profile": {
+    "accepted": true,
+    "steps": 3,
+    "samples": [
+      {
+        "mode": "rebuild",
+        "whole_seconds": 0.0047622,
+        "amortized_apply_seconds": 0.0015874,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "resident",
+        "whole_seconds": 0.0025416,
+        "amortized_apply_seconds": 0.0008472000000000001,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "resident",
+        "whole_seconds": 0.0024206,
+        "amortized_apply_seconds": 0.0008068666666666667,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "rebuild",
+        "whole_seconds": 0.0042938,
+        "amortized_apply_seconds": 0.0014312666666666668,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "rebuild",
+        "whole_seconds": 0.0042901,
+        "amortized_apply_seconds": 0.0014300333333333332,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "resident",
+        "whole_seconds": 0.0034196,
+        "amortized_apply_seconds": 0.0011398666666666668,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "resident",
+        "whole_seconds": 0.0017377,
+        "amortized_apply_seconds": 0.0005792333333333333,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "rebuild",
+        "whole_seconds": 0.0042371,
+        "amortized_apply_seconds": 0.0014123666666666665,
+        "relative_error": 7.222706075575992e-16
+      }
+    ],
+    "scope": "Numeric leaf construction, transfers, repeated operator apply, recovery and release only",
+    "sampled_free_before": 42179756032.0,
+    "memory": {
+      "owned_device_bytes": 573312,
+      "applications": 0,
+      "kernel_launches": 0,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 573312
+    },
+    "cold_rebuild": {
+      "mode": "rebuild",
+      "whole_seconds": 0.0146776,
+      "amortized_apply_seconds": 0.004892533333333333,
+      "relative_error": 7.222706075575992e-16
+    },
+    "cold_resident": {
+      "mode": "resident",
+      "whole_seconds": 0.0102683,
+      "amortized_apply_seconds": 0.0034227666666666666,
+      "relative_error": 7.222706075575992e-16
+    },
+    "sampled_free_after": 42179756032.0,
+    "live_count": 0,
+    "cold_scope": "First payload calls after MATLAB/MEX initialization and a memory probe; not cold process or MEX loading.",
+    "memory_limitations": "Owned device buffers exact; CUDA driver/MATLAB free-memory samples are not peaks. Native host/process peak unmeasured."
+  },
+  "median_operator_whole_seconds": {
+    "rebuild": 0.00429195,
+    "resident": 0.0024811
+  },
+  "resident_speedup": 1.729857724396437,
+  "timing_classification": "Guarded A100 operator diagnostic; not full physical solver or idle-gpu_evaluation_worker CPU performance acceptance",
+  "idle_before": {
+    "cpu_percent": 6.3153310104529625,
+    "gpu_percent": 0,
+    "free_host_bytes": 55328743424
+  },
+  "idle_after": {
+    "cpu_percent": 2.2261021388040203,
+    "gpu_percent": 0,
+    "free_host_bytes": 55070429184
+  },
+  "memory_limitations": "Exact owned device counters only; no global/process peak",
+  "initial_measurement_attempt": "Failed before profiling because psutil was absent; standard Windows API guard used in successful retry",
+  "pending": [
+    "Adaptive whole HACApK assembly",
+    "NGSolve FE charge map/material/preconditioner/full HDiv-MMM solve and true residual",
+    "Real IH Simulink physical acceptance",
+    "Release CI and exact package acceptance"
+  ]
+}

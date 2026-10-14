@@ -1,0 +1,12 @@
+{
+  "accepted": false,
+  "build_accepted": true,
+  "source_commit": "923e638cc567ab7c790201ad788536cf744fe3f2",
+  "binary_sha256": "7d52bcfcfda9f02453cd00320e74835d8f8b439fc4043dceed7311bee049d05d",
+  "full_reaction_converged": false,
+  "full_reaction_true_residual": null,
+  "generic_persistent_simulink_regression_passed": true,
+  "generic_true_residual": 3.035e-13,
+  "a100_evaluated": false,
+  "release_accepted": false
+}

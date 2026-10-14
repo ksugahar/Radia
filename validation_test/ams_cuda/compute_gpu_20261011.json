@@ -1,0 +1,5069 @@
+{
+  "schema": "radia.ams-compute-gpu-validation.v1",
+  "accepted": true,
+  "machine_started_by_agent": false,
+  "gpu_used": "already-running user-provisioned compute GPU",
+  "old_a100_ssh_alias_accessed": false,
+  "acceptance": {
+    "schema": "radia.ams-cuda-validation.v1",
+    "accepted": true,
+    "platform": "Windows-11-10.0.26200-SP0",
+    "versions": {
+      "ngsolve": "6.2.2607",
+      "numpy": "2.5.4",
+      "scipy": "1.18.1",
+      "h5py": "3.16.0",
+      "matlabengine": "26.1"
+    },
+    "threads": 4,
+    "precision": "FP64",
+    "cases": [
+      {
+        "maxh": 0.5,
+        "cycle": 1,
+        "dofs": 96,
+        "free_dofs": 42,
+        "elements": 53,
+        "assembly_seconds": 0.11715279999998529,
+        "snapshot_setup_and_probes_seconds": 0.020926900000063142,
+        "cpu_direct_factor_seconds": 0.001467300000058458,
+        "cpu_ams_seconds": [
+          0.0020448999999871376,
+          0.0019192999999404492,
+          0.0019119000000955566,
+          0.001891900000032365,
+          0.0019277000000101907,
+          0.0018115999999963606
+        ],
+        "cpu_iterations": [
+          9,
+          9,
+          9,
+          9,
+          9,
+          9
+        ],
+        "cpu_warm_median_seconds": 0.0019119000000955566,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 56220,
+            "workspaceEstimateBytes": 16160,
+            "estimatedAdditionalBytes": 268624884,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 8525722419.200001,
+            "availableBeforeBytes": 42181853184.0,
+            "budgetBytes": 33656130764.8,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0538539,
+          "info": {
+            "iterations": 8,
+            "true_relative_residual": 3.083360711325571e-10,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0352359,
+          "probeErrors": [
+            2.6485459562869153e-15,
+            2.916097726432515e-15,
+            2.892112759229155e-15
+          ],
+          "times": [
+            0.003921,
+            0.0038032,
+            0.0037276,
+            0.0037179,
+            0.0040784
+          ],
+          "inclusiveSeconds": 0.0060571,
+          "memoryBytes": 6291456,
+          "zeroRhsTimes": [
+            0.0013678,
+            0.0011635,
+            0.0010544,
+            0.0010288,
+            0.0013744,
+            0.0010579
+          ],
+          "applyOnlyTimes": [
+            0.0010456,
+            0.0009189,
+            0.0008881,
+            0.0008848,
+            0.0011449,
+            0.0008048
+          ],
+          "zeroRhsWarmMedianSeconds": 0.0010579,
+          "applyOnlyWarmMedianSeconds": 0.0008881,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "NVIDIA A100-SXM4-40GB",
+            "compute_capability": "8.0",
+            "total_memory": 42628612096.0,
+            "driver": "591.59",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3203278 (R2026a)"
+        },
+        "cpu_true_residual": 3.0833606908007477e-10,
+        "gpu_true_residual": 3.0833605570410575e-10,
+        "relative_difference_from_direct": 6.732513351118464e-10,
+        "max_preconditioner_probe_relative_error": 2.916097726432515e-15,
+        "relative_difference_from_cpu_ams": 3.7207002245399985e-15,
+        "input_sha256": "f93fb1cb118352d4b5df362f97ee04deb21d7db4309b8e6056bf25cb0b9716ed",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 60828,
+          "file_bytes": 98486,
+          "arrays": 68
+        },
+        "auxiliary_level_rows": [
+          [
+            26
+          ],
+          [
+            26
+          ],
+          [
+            26
+          ],
+          [
+            26
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0038032,
+        "speedup_resident_inputs": 0.5027082457129671,
+        "speedup_including_transfers": 0.3156461012853604,
+        "accepted": true
+      },
+      {
+        "maxh": 0.5,
+        "cycle": 7,
+        "dofs": 96,
+        "free_dofs": 42,
+        "elements": 53,
+        "assembly_seconds": 0.1015629999999419,
+        "snapshot_setup_and_probes_seconds": 0.02024919999996655,
+        "cpu_direct_factor_seconds": 0.0014388999999255248,
+        "cpu_ams_seconds": [
+          0.0018125999999938358,
+          0.0017742999999654785,
+          0.0017741000000341955,
+          0.0017426999999088366,
+          0.0017127999999502208,
+          0.0017340000000558575
+        ],
+        "cpu_iterations": [
+          7,
+          7,
+          7,
+          7,
+          7,
+          7
+        ],
+        "cpu_warm_median_seconds": 0.0017426999999088366,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 56220,
+            "workspaceEstimateBytes": 16160,
+            "estimatedAdditionalBytes": 268624884,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 8525722419.200001,
+            "availableBeforeBytes": 42167173120.0,
+            "budgetBytes": 33641450700.8,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0025713,
+          "info": {
+            "iterations": 6,
+            "true_relative_residual": 3.8234033726760364e-11,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0036059,
+          "probeErrors": [
+            8.511891714842269e-16,
+            4.191581108472303e-15,
+            1.8449971473028746e-15
+          ],
+          "times": [
+            0.0033048,
+            0.0031844,
+            0.0030626,
+            0.0030971,
+            0.0030537
+          ],
+          "inclusiveSeconds": 0.0049087,
+          "memoryBytes": 0,
+          "zeroRhsTimes": [
+            0.0013334,
+            0.0010541,
+            0.0009819,
+            0.0009814,
+            0.0009444,
+            0.0009338
+          ],
+          "applyOnlyTimes": [
+            0.0010552,
+            0.0008563,
+            0.0008061,
+            0.0008093,
+            0.000823,
+            0.0008174
+          ],
+          "zeroRhsWarmMedianSeconds": 0.0009814,
+          "applyOnlyWarmMedianSeconds": 0.0008174,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "NVIDIA A100-SXM4-40GB",
+            "compute_capability": "8.0",
+            "total_memory": 42628612096.0,
+            "driver": "591.59",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3203278 (R2026a)"
+        },
+        "cpu_true_residual": 3.823401832106423e-11,
+        "gpu_true_residual": 3.823401324671398e-11,
+        "relative_difference_from_direct": 6.88392840057806e-11,
+        "max_preconditioner_probe_relative_error": 4.191581108472303e-15,
+        "relative_difference_from_cpu_ams": 3.4532964175111073e-15,
+        "input_sha256": "5fc7f27a62680f6bb9c81bb5c854f3dccfb7c732ef967b2ed52a4ca013570064",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 60828,
+          "file_bytes": 98486,
+          "arrays": 68
+        },
+        "auxiliary_level_rows": [
+          [
+            26
+          ],
+          [
+            26
+          ],
+          [
+            26
+          ],
+          [
+            26
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0030971,
+        "speedup_resident_inputs": 0.5626876755380312,
+        "speedup_including_transfers": 0.35502271475316,
+        "accepted": true
+      },
+      {
+        "maxh": 0.2,
+        "cycle": 1,
+        "dofs": 1081,
+        "free_dofs": 613,
+        "elements": 712,
+        "assembly_seconds": 0.14859820000003765,
+        "snapshot_setup_and_probes_seconds": 0.025171200000045246,
+        "cpu_direct_factor_seconds": 0.0040558999999120715,
+        "cpu_ams_seconds": [
+          0.004359199999953489,
+          0.004269899999940208,
+          0.004199000000085107,
+          0.004190799999946648,
+          0.004231899999922462,
+          0.004193499999928463
+        ],
+        "cpu_iterations": [
+          13,
+          13,
+          13,
+          13,
+          13,
+          13
+        ],
+        "cpu_warm_median_seconds": 0.004199000000085107,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 775112,
+            "workspaceEstimateBytes": 165584,
+            "estimatedAdditionalBytes": 270978264,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 8525722419.200001,
+            "availableBeforeBytes": 42167173120.0,
+            "budgetBytes": 33641450700.8,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0021501,
+          "info": {
+            "iterations": 12,
+            "true_relative_residual": 1.937310401369615e-10,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0196544,
+          "probeErrors": [
+            1.3641999903504405e-14,
+            1.0083178873555267e-14,
+            1.580696490642363e-14
+          ],
+          "times": [
+            0.0191447,
+            0.0191202,
+            0.0190392,
+            0.0190712,
+            0.019066
+          ],
+          "inclusiveSeconds": 0.0213233,
+          "memoryBytes": 0,
+          "zeroRhsTimes": [
+            0.0010767,
+            0.001024,
+            0.0010283,
+            0.0009932,
+            0.0010209,
+            0.0009956
+          ],
+          "applyOnlyTimes": [
+            0.0020694,
+            0.0020319,
+            0.002004,
+            0.0019993,
+            0.002,
+            0.0020193
+          ],
+          "zeroRhsWarmMedianSeconds": 0.0010209,
+          "applyOnlyWarmMedianSeconds": 0.002004,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "NVIDIA A100-SXM4-40GB",
+            "compute_capability": "8.0",
+            "total_memory": 42628612096.0,
+            "driver": "591.59",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3203278 (R2026a)"
+        },
+        "cpu_true_residual": 1.937310518782467e-10,
+        "gpu_true_residual": 1.9373104360139603e-10,
+        "relative_difference_from_direct": 4.090255206996463e-10,
+        "max_preconditioner_probe_relative_error": 1.580696490642363e-14,
+        "relative_difference_from_cpu_ams": 2.0711795516973907e-14,
+        "input_sha256": "6770dd5854532c9fb98fe7eea3a33a9fea0173f0df2f52cad818c7381bd591d8",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 827000,
+          "file_bytes": 864684,
+          "arrays": 68
+        },
+        "auxiliary_level_rows": [
+          [
+            214
+          ],
+          [
+            214
+          ],
+          [
+            214
+          ],
+          [
+            214
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0190712,
+        "speedup_resident_inputs": 0.22017492344923795,
+        "speedup_including_transfers": 0.19692073928918633,
+        "accepted": true
+      },
+      {
+        "maxh": 0.2,
+        "cycle": 7,
+        "dofs": 1081,
+        "free_dofs": 613,
+        "elements": 712,
+        "assembly_seconds": 0.08890380000002551,
+        "snapshot_setup_and_probes_seconds": 0.024731599999995524,
+        "cpu_direct_factor_seconds": 0.003895599999964361,
+        "cpu_ams_seconds": [
+          0.003774600000042483,
+          0.0036804000000074666,
+          0.003725300000041898,
+          0.0036682999999584354,
+          0.0036432999999078675,
+          0.0036813000000393004
+        ],
+        "cpu_iterations": [
+          10,
+          10,
+          10,
+          10,
+          10,
+          10
+        ],
+        "cpu_warm_median_seconds": 0.0036804000000074666,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 775112,
+            "workspaceEstimateBytes": 165584,
+            "estimatedAdditionalBytes": 270978264,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 8525722419.200001,
+            "availableBeforeBytes": 42167572188.0,
+            "budgetBytes": 33641849768.8,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0020144,
+          "info": {
+            "iterations": 8,
+            "true_relative_residual": 9.351120532711363e-10,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0111606,
+          "probeErrors": [
+            1.3493652251245032e-14,
+            1.4650809854933615e-14,
+            1.3363094407205786e-14
+          ],
+          "times": [
+            0.0107127,
+            0.0107356,
+            0.0106166,
+            0.0106527,
+            0.010637
+          ],
+          "inclusiveSeconds": 0.0126643,
+          "memoryBytes": 339736,
+          "zeroRhsTimes": [
+            0.0010667,
+            0.0010303,
+            0.001001,
+            0.000995,
+            0.0009787,
+            0.0010038
+          ],
+          "applyOnlyTimes": [
+            0.0017679,
+            0.0018004,
+            0.0017052,
+            0.0017113,
+            0.0017227,
+            0.0017163
+          ],
+          "zeroRhsWarmMedianSeconds": 0.001001,
+          "applyOnlyWarmMedianSeconds": 0.0017163,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "NVIDIA A100-SXM4-40GB",
+            "compute_capability": "8.0",
+            "total_memory": 42628612096.0,
+            "driver": "591.59",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3203278 (R2026a)"
+        },
+        "cpu_true_residual": 7.490906245516812e-11,
+        "gpu_true_residual": 9.351120625110852e-10,
+        "relative_difference_from_direct": 2.4799434431474918e-09,
+        "max_preconditioner_probe_relative_error": 1.4650809854933615e-14,
+        "relative_difference_from_cpu_ams": 2.5621526784518238e-09,
+        "input_sha256": "f9d936dac7d34748ad45dc587e87e29a223f4dcfa9eb2faac2da7642a16cebbc",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 827000,
+          "file_bytes": 864684,
+          "arrays": 68
+        },
+        "auxiliary_level_rows": [
+          [
+            214
+          ],
+          [
+            214
+          ],
+          [
+            214
+          ],
+          [
+            214
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0106527,
+        "speedup_resident_inputs": 0.3454898758068346,
+        "speedup_including_transfers": 0.2906121933314488,
+        "accepted": true
+      },
+      {
+        "maxh": 0.12,
+        "cycle": 1,
+        "dofs": 5326,
+        "free_dofs": 3919,
+        "elements": 3937,
+        "assembly_seconds": 0.4130354000000125,
+        "snapshot_setup_and_probes_seconds": 0.03948549999995521,
+        "cpu_direct_factor_seconds": 0.02991420000000744,
+        "cpu_ams_seconds": [
+          0.00992359999997916,
+          0.009772200000043085,
+          0.009774199999924349,
+          0.009816399999976966,
+          0.009882800000013958,
+          0.009737099999938437
+        ],
+        "cpu_iterations": [
+          14,
+          14,
+          14,
+          14,
+          14,
+          14
+        ],
+        "cpu_warm_median_seconds": 0.009774199999924349,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 3739252,
+            "workspaceEstimateBytes": 793064,
+            "estimatedAdditionalBytes": 280701924,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 8525722419.200001,
+            "availableBeforeBytes": 42167572188.0,
+            "budgetBytes": 33641849768.8,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0040658,
+          "info": {
+            "iterations": 13,
+            "true_relative_residual": 2.1964112062468093e-10,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0251208,
+          "probeErrors": [
+            3.170588788188477e-14,
+            3.2279377910353507e-14,
+            3.063358775631114e-14
+          ],
+          "times": [
+            0.0246512,
+            0.0245489,
+            0.0244948,
+            0.0244585,
+            0.0244491
+          ],
+          "inclusiveSeconds": 0.0292492,
+          "memoryBytes": 6325592,
+          "zeroRhsTimes": [
+            0.0015369,
+            0.0014613,
+            0.0013896,
+            0.0015726,
+            0.0013622,
+            0.0013363
+          ],
+          "applyOnlyTimes": [
+            0.0025775,
+            0.0025461,
+            0.0025022,
+            0.0024928,
+            0.0024932,
+            0.0025007
+          ],
+          "zeroRhsWarmMedianSeconds": 0.0013896,
+          "applyOnlyWarmMedianSeconds": 0.0025007,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "NVIDIA A100-SXM4-40GB",
+            "compute_capability": "8.0",
+            "total_memory": 42628612096.0,
+            "driver": "591.59",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3203278 (R2026a)"
+        },
+        "cpu_true_residual": 2.196411179424462e-10,
+        "gpu_true_residual": 2.1964112103646962e-10,
+        "relative_difference_from_direct": 7.919515817329328e-10,
+        "max_preconditioner_probe_relative_error": 3.2279377910353507e-14,
+        "relative_difference_from_cpu_ams": 7.518768748797878e-14,
+        "input_sha256": "e52aaad23207fdebf06662e14a32026dfab0976f3d75152817da92bf1463f30f",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 3994900,
+          "file_bytes": 4052712,
+          "arrays": 108
+        },
+        "auxiliary_level_rows": [
+          [
+            921,
+            222
+          ],
+          [
+            921,
+            298
+          ],
+          [
+            921,
+            295
+          ],
+          [
+            921,
+            303
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0244948,
+        "speedup_resident_inputs": 0.39903163120026897,
+        "speedup_including_transfers": 0.3341698234455763,
+        "accepted": true
+      },
+      {
+        "maxh": 0.12,
+        "cycle": 7,
+        "dofs": 5326,
+        "free_dofs": 3919,
+        "elements": 3937,
+        "assembly_seconds": 0.3156627999999273,
+        "snapshot_setup_and_probes_seconds": 0.04092400000001817,
+        "cpu_direct_factor_seconds": 0.029932700000017576,
+        "cpu_ams_seconds": [
+          0.009638200000040342,
+          0.009572299999945244,
+          0.00943849999998747,
+          0.009467000000086045,
+          0.009481499999992593,
+          0.009826200000020435
+        ],
+        "cpu_iterations": [
+          12,
+          12,
+          12,
+          12,
+          12,
+          12
+        ],
+        "cpu_warm_median_seconds": 0.009481499999992593,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 3739252,
+            "workspaceEstimateBytes": 793064,
+            "estimatedAdditionalBytes": 280701924,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 8525722419.200001,
+            "availableBeforeBytes": 42165348564.0,
+            "budgetBytes": 33639626144.8,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.003116,
+          "info": {
+            "iterations": 11,
+            "true_relative_residual": 1.6627946566611822e-10,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0215146,
+          "probeErrors": [
+            3.378566949776882e-14,
+            3.252736439609129e-14,
+            3.2879491447269376e-14
+          ],
+          "times": [
+            0.0213209,
+            0.0212281,
+            0.0211931,
+            0.021126,
+            0.0211793
+          ],
+          "inclusiveSeconds": 0.0247248,
+          "memoryBytes": 5503892,
+          "zeroRhsTimes": [
+            0.0012992,
+            0.0012792,
+            0.001237,
+            0.0012191,
+            0.0011692,
+            0.0011752
+          ],
+          "applyOnlyTimes": [
+            0.0026808,
+            0.0025661,
+            0.0025274,
+            0.0025101,
+            0.0025149,
+            0.0025357
+          ],
+          "zeroRhsWarmMedianSeconds": 0.0012191,
+          "applyOnlyWarmMedianSeconds": 0.0025274,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "NVIDIA A100-SXM4-40GB",
+            "compute_capability": "8.0",
+            "total_memory": 42628612096.0,
+            "driver": "591.59",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3203278 (R2026a)"
+        },
+        "cpu_true_residual": 1.6627946346076685e-10,
+        "gpu_true_residual": 1.6627946652690103e-10,
+        "relative_difference_from_direct": 4.7545982745187885e-09,
+        "max_preconditioner_probe_relative_error": 3.378566949776882e-14,
+        "relative_difference_from_cpu_ams": 8.399793091436276e-14,
+        "input_sha256": "7d86c18f9a66b71dd61f5d4b10c462841acf40d87a3bf43fb4e20abff559b2f7",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 3994900,
+          "file_bytes": 4052712,
+          "arrays": 108
+        },
+        "auxiliary_level_rows": [
+          [
+            921,
+            222
+          ],
+          [
+            921,
+            298
+          ],
+          [
+            921,
+            295
+          ],
+          [
+            921,
+            303
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0211931,
+        "speedup_resident_inputs": 0.4473861775763146,
+        "speedup_including_transfers": 0.38348136284186696,
+        "accepted": true
+      },
+      {
+        "maxh": 0.08,
+        "cycle": 1,
+        "dofs": 12217,
+        "free_dofs": 9031,
+        "elements": 9081,
+        "assembly_seconds": 0.9128723999999693,
+        "snapshot_setup_and_probes_seconds": 0.05692099999998845,
+        "cpu_direct_factor_seconds": 0.08718329999999241,
+        "cpu_ams_seconds": [
+          0.017146500000080778,
+          0.017227999999931853,
+          0.01694529999997485,
+          0.01757400000008147,
+          0.017093000000045322,
+          0.01684720000002926
+        ],
+        "cpu_iterations": [
+          15,
+          15,
+          15,
+          15,
+          15,
+          15
+        ],
+        "cpu_warm_median_seconds": 0.017093000000045322,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 8163136,
+            "workspaceEstimateBytes": 1819152,
+            "estimatedAdditionalBytes": 295330432,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 8525722419.200001,
+            "availableBeforeBytes": 42165515436.0,
+            "budgetBytes": 33639793016.8,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0054714,
+          "info": {
+            "iterations": 14,
+            "true_relative_residual": 3.599942752774199e-10,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0229382,
+          "probeErrors": [
+            5.209376817442771e-14,
+            4.694310236315715e-14,
+            4.654702396105163e-14
+          ],
+          "times": [
+            0.0227959,
+            0.0226901,
+            0.0226751,
+            0.0226301,
+            0.0226737
+          ],
+          "inclusiveSeconds": 0.0284614,
+          "memoryBytes": 14977732,
+          "zeroRhsTimes": [
+            0.0015738,
+            0.0014864,
+            0.0014256,
+            0.0014178,
+            0.0014272,
+            0.00141
+          ],
+          "applyOnlyTimes": [
+            0.002535,
+            0.0024714,
+            0.0024431,
+            0.002422,
+            0.002414,
+            0.0024178
+          ],
+          "zeroRhsWarmMedianSeconds": 0.0014256,
+          "applyOnlyWarmMedianSeconds": 0.002422,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "NVIDIA A100-SXM4-40GB",
+            "compute_capability": "8.0",
+            "total_memory": 42628612096.0,
+            "driver": "591.59",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3203278 (R2026a)"
+        },
+        "cpu_true_residual": 3.599942776888388e-10,
+        "gpu_true_residual": 3.5999427611067214e-10,
+        "relative_difference_from_direct": 2.249980549340744e-09,
+        "max_preconditioner_probe_relative_error": 5.209376817442771e-14,
+        "relative_difference_from_cpu_ams": 1.4874780578181556e-13,
+        "input_sha256": "bf59651a6dd7f6a62032b302bcadcc69d9506c4fc08badebfaffa86dc60d9167",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 8749552,
+          "file_bytes": 8827882,
+          "arrays": 148
+        },
+        "auxiliary_level_rows": [
+          [
+            2075,
+            509,
+            114
+          ],
+          [
+            2075,
+            675,
+            240
+          ],
+          [
+            2075,
+            679,
+            253
+          ],
+          [
+            2075,
+            685,
+            241
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0226751,
+        "speedup_resident_inputs": 0.753822474875318,
+        "speedup_including_transfers": 0.600567786547581,
+        "accepted": true
+      },
+      {
+        "maxh": 0.08,
+        "cycle": 7,
+        "dofs": 12217,
+        "free_dofs": 9031,
+        "elements": 9081,
+        "assembly_seconds": 0.8893631999999343,
+        "snapshot_setup_and_probes_seconds": 0.058404500000051485,
+        "cpu_direct_factor_seconds": 0.08688470000004145,
+        "cpu_ams_seconds": [
+          0.017649599999913335,
+          0.017097199999966506,
+          0.017313700000045174,
+          0.01714680000009139,
+          0.01710609999997814,
+          0.01707669999996142
+        ],
+        "cpu_iterations": [
+          13,
+          13,
+          13,
+          13,
+          13,
+          13
+        ],
+        "cpu_warm_median_seconds": 0.01710609999997814,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 8163136,
+            "workspaceEstimateBytes": 1819152,
+            "estimatedAdditionalBytes": 295330432,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 8525722419.200001,
+            "availableBeforeBytes": 42163890984.0,
+            "budgetBytes": 33638168564.8,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0048469,
+          "info": {
+            "iterations": 12,
+            "true_relative_residual": 3.40934584181559e-10,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0202845,
+          "probeErrors": [
+            4.734863771930622e-14,
+            4.7964141026711326e-14,
+            5.248643586387321e-14
+          ],
+          "times": [
+            0.020035,
+            0.0199565,
+            0.0198976,
+            0.0198964,
+            0.0199177
+          ],
+          "inclusiveSeconds": 0.0251486,
+          "memoryBytes": 14184388,
+          "zeroRhsTimes": [
+            0.0015645,
+            0.0015208,
+            0.0014266,
+            0.0014128,
+            0.0014147,
+            0.001408
+          ],
+          "applyOnlyTimes": [
+            0.0025667,
+            0.0024871,
+            0.0024655,
+            0.0024662,
+            0.0024586,
+            0.0024672
+          ],
+          "zeroRhsWarmMedianSeconds": 0.0014147,
+          "applyOnlyWarmMedianSeconds": 0.0024662,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "NVIDIA A100-SXM4-40GB",
+            "compute_capability": "8.0",
+            "total_memory": 42628612096.0,
+            "driver": "591.59",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3203278 (R2026a)"
+        },
+        "cpu_true_residual": 3.4093458988773847e-10,
+        "gpu_true_residual": 3.4093458409853964e-10,
+        "relative_difference_from_direct": 2.200742144246522e-08,
+        "max_preconditioner_probe_relative_error": 5.248643586387321e-14,
+        "relative_difference_from_cpu_ams": 1.5042136171743873e-13,
+        "input_sha256": "1ce386cf26755c64b4d8b5a6102c90bbd0ef722eeb50c632d613ebb0d04bf7c5",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 8749552,
+          "file_bytes": 8827882,
+          "arrays": 148
+        },
+        "auxiliary_level_rows": [
+          [
+            2075,
+            509,
+            114
+          ],
+          [
+            2075,
+            675,
+            240
+          ],
+          [
+            2075,
+            679,
+            253
+          ],
+          [
+            2075,
+            685,
+            241
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0199177,
+        "speedup_resident_inputs": 0.858839122990011,
+        "speedup_including_transfers": 0.6802008859331391,
+        "accepted": true
+      }
+    ],
+    "source_commit": "c4385e17693f3bf8194549f66cff48f1ad354c23",
+    "source_dirty": false,
+    "matlab_start_seconds": 5.495100999999977,
+    "gpu_binary_sha256": "a4b03fb27216d549977507771cc2fc8da95560a4ee94c1117b87055293962135",
+    "execution_mode": "cpu-gpu-parity",
+    "build": {
+      "schema": "radia.ams-cuda-build.v1",
+      "source_commit": "30ad348f3441751c40103fdc8c33783e807283e9",
+      "source_dirty": false,
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "sha256": {
+        "build-ams-cuda/_radia_ams_snapshot.pyd": "561975cfdb27483bc1839c25cb9356193bd3537974054e9eff6dbc1ee2f57544",
+        "build-ams-cuda/radia_cuda_ams.mexw64": "a4b03fb27216d549977507771cc2fc8da95560a4ee94c1117b87055293962135"
+      },
+      "source_sha256": {
+        "packages/radia-gpu/native/ams_snapshot_module.cpp": "f7591e3a574424715871439cb5c20f45fd90cfb430458b886bc69f24529714a3",
+        "packages/radia-gpu/native/radia_cuda_ams.cu": "caa3b0745e582f7dec283a09ff0fe844c2bebea789e55d3ec15950f9691a6cc4",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "c2a00a117adc1872a318735e0671a5aa1c80bf223f96437af6eef779f5c8dd3b",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "503c7600d4e4771b70e14f3da93b9f4af828d28301176c0261a6c8f5f1bf8af6",
+        "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "48bc89044da24ae796e246087013b275fd4cbb2c3c9f9585a737caf2452c3bd7",
+        "packages/radia-gpu/tools/build_ams_cuda.py": "5974c17be91bd3d0efc6ce6f0edf824e8e9127cc5f81e6fbca17c71f1a75497a",
+        "Build.ps1": "e505b29b19b5c50996defb37e773601b782e49f4f894c15d473400196f213916"
+      },
+      "no_cpu_solver_fallback": true
+    },
+    "timing_classification": "same-host CPU/GPU acceptance timings after operational idle gate"
+  },
+  "comparison": {
+    "schema": "radia.ams-cuda-comparison.v1",
+    "accepted": true,
+    "order": [
+      "before",
+      "after",
+      "after",
+      "before",
+      "before",
+      "after",
+      "after",
+      "before",
+      "before",
+      "after",
+      "after",
+      "before"
+    ],
+    "builds": [
+      {
+        "source_commit": "72c3f8170342a7f1e04a16a31cc0d2c817d03690",
+        "source_dirty": false,
+        "mex_sha256": "a216a812d0227eeb625c6d38bc23297288d22341c9f3f491a363d5127adef4ef"
+      },
+      {
+        "source_commit": "30ad348f3441751c40103fdc8c33783e807283e9",
+        "source_dirty": false,
+        "mex_sha256": "a4b03fb27216d549977507771cc2fc8da95560a4ee94c1117b87055293962135"
+      }
+    ],
+    "cases": [
+      {
+        "input_sha256": "e52aaad23207fdebf06662e14a32026dfab0976f3d75152817da92bf1463f30f",
+        "dofs": 5326,
+        "cycle": 1,
+        "runs": [
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42181853184.0,
+              "budgetBytes": 33656130764.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0545815,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.1964112062468093e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0636722,
+            "probeErrors": [
+              3.170588788188477e-14,
+              3.2279377910353507e-14,
+              3.063358775631114e-14
+            ],
+            "times": [
+              0.0326898,
+              0.0325148,
+              0.0324914,
+              0.0324254,
+              0.0327904
+            ],
+            "inclusiveSeconds": 0.0361552,
+            "memoryBytes": 12582912,
+            "zeroRhsTimes": [
+              0.0017485,
+              0.0015213,
+              0.0014934,
+              0.0014234,
+              0.001785,
+              0.001421
+            ],
+            "applyOnlyTimes": [
+              0.0029795,
+              0.0028135,
+              0.0027618,
+              0.0027663,
+              0.0030431,
+              0.0026902
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0014934,
+            "applyOnlyWarmMedianSeconds": 0.0027663,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167080040.0,
+              "budgetBytes": 33641357620.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0036606,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.1964112062468093e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0275308,
+            "probeErrors": [
+              3.170588788188477e-14,
+              3.2279377910353507e-14,
+              3.063358775631114e-14
+            ],
+            "times": [
+              0.0247018,
+              0.0245883,
+              0.024561,
+              0.0244849,
+              0.024493
+            ],
+            "inclusiveSeconds": 0.0282675,
+            "memoryBytes": 5503148,
+            "zeroRhsTimes": [
+              0.0017476,
+              0.0014767,
+              0.0014072,
+              0.0013805,
+              0.0013723,
+              0.0013948
+            ],
+            "applyOnlyTimes": [
+              0.0027426,
+              0.0025144,
+              0.0024927,
+              0.0024816,
+              0.0025122,
+              0.0024939
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0013948,
+            "applyOnlyWarmMedianSeconds": 0.0024939,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0032484,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.1964112062468093e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0276319,
+            "probeErrors": [
+              3.170588788188477e-14,
+              3.2279377910353507e-14,
+              3.063358775631114e-14
+            ],
+            "times": [
+              0.0248526,
+              0.0247618,
+              0.0247177,
+              0.0247463,
+              0.0246648
+            ],
+            "inclusiveSeconds": 0.0283068,
+            "memoryBytes": 5669384,
+            "zeroRhsTimes": [
+              0.0015063,
+              0.0014509,
+              0.0014167,
+              0.0014312,
+              0.0014249,
+              0.0014259
+            ],
+            "applyOnlyTimes": [
+              0.0025885,
+              0.002592,
+              0.0025217,
+              0.0025181,
+              0.0025324,
+              0.0025048
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0014259,
+            "applyOnlyWarmMedianSeconds": 0.0025217,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0032204,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.1964112062468093e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.028567,
+            "probeErrors": [
+              3.170588788188477e-14,
+              3.2279377910353507e-14,
+              3.063358775631114e-14
+            ],
+            "times": [
+              0.0257176,
+              0.0256775,
+              0.0256792,
+              0.0255858,
+              0.0256197
+            ],
+            "inclusiveSeconds": 0.0292032,
+            "memoryBytes": 5669948,
+            "zeroRhsTimes": [
+              0.0016205,
+              0.0015908,
+              0.0016092,
+              0.0015582,
+              0.0015367,
+              0.001514
+            ],
+            "applyOnlyTimes": [
+              0.0027988,
+              0.0027474,
+              0.0027147,
+              0.0027327,
+              0.0027303,
+              0.0027435
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0015582,
+            "applyOnlyWarmMedianSeconds": 0.0027327,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0036312,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.1964112062468093e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0285344,
+            "probeErrors": [
+              3.170588788188477e-14,
+              3.2279377910353507e-14,
+              3.063358775631114e-14
+            ],
+            "times": [
+              0.0257505,
+              0.0256898,
+              0.0256331,
+              0.0256395,
+              0.0255758
+            ],
+            "inclusiveSeconds": 0.0300297,
+            "memoryBytes": 5669384,
+            "zeroRhsTimes": [
+              0.0017996,
+              0.0016426,
+              0.001555,
+              0.0015541,
+              0.0015419,
+              0.0015443
+            ],
+            "applyOnlyTimes": [
+              0.0027981,
+              0.0027606,
+              0.0027886,
+              0.0027373,
+              0.0027402,
+              0.0027077
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0015541,
+            "applyOnlyWarmMedianSeconds": 0.0027402,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030382,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.1964112062468093e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0272313,
+            "probeErrors": [
+              3.170588788188477e-14,
+              3.2279377910353507e-14,
+              3.063358775631114e-14
+            ],
+            "times": [
+              0.0248101,
+              0.0247455,
+              0.024694,
+              0.024727,
+              0.0247046
+            ],
+            "inclusiveSeconds": 0.028238,
+            "memoryBytes": 5670020,
+            "zeroRhsTimes": [
+              0.0014521,
+              0.0014326,
+              0.0013947,
+              0.0013727,
+              0.0013682,
+              0.0013384
+            ],
+            "applyOnlyTimes": [
+              0.002672,
+              0.0025259,
+              0.0024973,
+              0.0025015,
+              0.0024935,
+              0.0024878
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0013727,
+            "applyOnlyWarmMedianSeconds": 0.0024973,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030191,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.1964112062468093e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0273248,
+            "probeErrors": [
+              3.170588788188477e-14,
+              3.2279377910353507e-14,
+              3.063358775631114e-14
+            ],
+            "times": [
+              0.0248385,
+              0.0247461,
+              0.0247351,
+              0.0246807,
+              0.0247005
+            ],
+            "inclusiveSeconds": 0.0280815,
+            "memoryBytes": 5669312,
+            "zeroRhsTimes": [
+              0.0014472,
+              0.0014571,
+              0.0013726,
+              0.0013757,
+              0.0013634,
+              0.0013669
+            ],
+            "applyOnlyTimes": [
+              0.00256,
+              0.0025216,
+              0.0024918,
+              0.0024969,
+              0.0024964,
+              0.0024854
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0013726,
+            "applyOnlyWarmMedianSeconds": 0.0024964,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0031003,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.1964112062468093e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0282712,
+            "probeErrors": [
+              3.170588788188477e-14,
+              3.2279377910353507e-14,
+              3.063358775631114e-14
+            ],
+            "times": [
+              0.0257823,
+              0.0257393,
+              0.0256447,
+              0.0256081,
+              0.0256548
+            ],
+            "inclusiveSeconds": 0.0292066,
+            "memoryBytes": 5670020,
+            "zeroRhsTimes": [
+              0.0016102,
+              0.0015856,
+              0.0015549,
+              0.0015378,
+              0.0015211,
+              0.0015307
+            ],
+            "applyOnlyTimes": [
+              0.0027843,
+              0.0027696,
+              0.0027056,
+              0.0027407,
+              0.0027121,
+              0.0027141
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0015378,
+            "applyOnlyWarmMedianSeconds": 0.0027141,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030132,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.1964112062468093e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0282433,
+            "probeErrors": [
+              3.170588788188477e-14,
+              3.2279377910353507e-14,
+              3.063358775631114e-14
+            ],
+            "times": [
+              0.0256871,
+              0.025624,
+              0.0256068,
+              0.0255708,
+              0.025552
+            ],
+            "inclusiveSeconds": 0.0291282,
+            "memoryBytes": 5669384,
+            "zeroRhsTimes": [
+              0.001628,
+              0.0016214,
+              0.0015339,
+              0.0015407,
+              0.0015112,
+              0.0015697
+            ],
+            "applyOnlyTimes": [
+              0.0028747,
+              0.0027821,
+              0.0027369,
+              0.0027456,
+              0.0027233,
+              0.0027375
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0015407,
+            "applyOnlyWarmMedianSeconds": 0.0027375,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0029958,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.1964112062468093e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0273037,
+            "probeErrors": [
+              3.170588788188477e-14,
+              3.2279377910353507e-14,
+              3.063358775631114e-14
+            ],
+            "times": [
+              0.024837,
+              0.024758,
+              0.0247387,
+              0.0247002,
+              0.0246978
+            ],
+            "inclusiveSeconds": 0.0280962,
+            "memoryBytes": 5669948,
+            "zeroRhsTimes": [
+              0.0014497,
+              0.0014424,
+              0.0014011,
+              0.001361,
+              0.0013674,
+              0.0013616
+            ],
+            "applyOnlyTimes": [
+              0.0025573,
+              0.002538,
+              0.0024817,
+              0.0024856,
+              0.0025044,
+              0.0025056
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0013674,
+            "applyOnlyWarmMedianSeconds": 0.0025044,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030163,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.1964112062468093e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0273136,
+            "probeErrors": [
+              3.170588788188477e-14,
+              3.2279377910353507e-14,
+              3.063358775631114e-14
+            ],
+            "times": [
+              0.024792,
+              0.0247952,
+              0.0247066,
+              0.0246925,
+              0.0247242
+            ],
+            "inclusiveSeconds": 0.0280062,
+            "memoryBytes": 5669384,
+            "zeroRhsTimes": [
+              0.0014519,
+              0.0014322,
+              0.0013724,
+              0.0013549,
+              0.0013611,
+              0.0013572
+            ],
+            "applyOnlyTimes": [
+              0.0025559,
+              0.0025322,
+              0.0024983,
+              0.0024963,
+              0.0025128,
+              0.0025075
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0013611,
+            "applyOnlyWarmMedianSeconds": 0.0025075,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030503,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.1964112062468093e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0282633,
+            "probeErrors": [
+              3.170588788188477e-14,
+              3.2279377910353507e-14,
+              3.063358775631114e-14
+            ],
+            "times": [
+              0.02572,
+              0.0256796,
+              0.0256237,
+              0.0256495,
+              0.0255996
+            ],
+            "inclusiveSeconds": 0.0290668,
+            "memoryBytes": 5670020,
+            "zeroRhsTimes": [
+              0.0016147,
+              0.001602,
+              0.0015569,
+              0.0015243,
+              0.0015664,
+              0.0015464
+            ],
+            "applyOnlyTimes": [
+              0.0028159,
+              0.0027352,
+              0.0027292,
+              0.0027078,
+              0.0027042,
+              0.0027399
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0015569,
+            "applyOnlyWarmMedianSeconds": 0.0027292,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          }
+        ],
+        "before_warm_median_seconds": 0.02566615,
+        "after_warm_median_seconds": 0.02472095,
+        "warm_speedup": 1.0382347765761428,
+        "warm_improvement_percent": 3.6826715342971217,
+        "warm_timing_improved": true,
+        "before_inclusive_median_seconds": 0.0292049,
+        "after_inclusive_median_seconds": 0.0281671
+      },
+      {
+        "input_sha256": "7d86c18f9a66b71dd61f5d4b10c462841acf40d87a3bf43fb4e20abff559b2f7",
+        "dofs": 5326,
+        "cycle": 7,
+        "runs": [
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0029841,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.6627946566611822e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0248718,
+            "probeErrors": [
+              3.378566949776882e-14,
+              3.252736439609129e-14,
+              3.2879491447269376e-14
+            ],
+            "times": [
+              0.0223875,
+              0.0222825,
+              0.0222379,
+              0.0222453,
+              0.0222291
+            ],
+            "inclusiveSeconds": 0.0256737,
+            "memoryBytes": 5669312,
+            "zeroRhsTimes": [
+              0.0016328,
+              0.0016215,
+              0.0015712,
+              0.0015391,
+              0.0015281,
+              0.0015314
+            ],
+            "applyOnlyTimes": [
+              0.0028321,
+              0.0027852,
+              0.0027586,
+              0.0027483,
+              0.0027551,
+              0.0027383
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0015391,
+            "applyOnlyWarmMedianSeconds": 0.0027551,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030255,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.6627946566611822e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0241401,
+            "probeErrors": [
+              3.378566949776882e-14,
+              3.252736439609129e-14,
+              3.2879491447269376e-14
+            ],
+            "times": [
+              0.0215076,
+              0.0214437,
+              0.0214186,
+              0.0213922,
+              0.0214132
+            ],
+            "inclusiveSeconds": 0.0247062,
+            "memoryBytes": 5670020,
+            "zeroRhsTimes": [
+              0.0014505,
+              0.0014379,
+              0.0014059,
+              0.0013774,
+              0.0013799,
+              0.0013729
+            ],
+            "applyOnlyTimes": [
+              0.002593,
+              0.0025486,
+              0.0025142,
+              0.0025213,
+              0.0025133,
+              0.0025159
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0013799,
+            "applyOnlyWarmMedianSeconds": 0.0025159,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030888,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.6627946566611822e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0240478,
+            "probeErrors": [
+              3.378566949776882e-14,
+              3.252736439609129e-14,
+              3.2879491447269376e-14
+            ],
+            "times": [
+              0.0214721,
+              0.0214106,
+              0.0213846,
+              0.0213371,
+              0.021386
+            ],
+            "inclusiveSeconds": 0.0248206,
+            "memoryBytes": 5669384,
+            "zeroRhsTimes": [
+              0.0014454,
+              0.0014453,
+              0.0013886,
+              0.0013631,
+              0.0013666,
+              0.0013614
+            ],
+            "applyOnlyTimes": [
+              0.002581,
+              0.002571,
+              0.0025249,
+              0.0025248,
+              0.0025289,
+              0.0025296
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0013666,
+            "applyOnlyWarmMedianSeconds": 0.0025289,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030981,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.6627946566611822e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0250208,
+            "probeErrors": [
+              3.378566949776882e-14,
+              3.252736439609129e-14,
+              3.2879491447269376e-14
+            ],
+            "times": [
+              0.0224518,
+              0.0223419,
+              0.0222756,
+              0.0222508,
+              0.0222549
+            ],
+            "inclusiveSeconds": 0.0258097,
+            "memoryBytes": 5669948,
+            "zeroRhsTimes": [
+              0.0016635,
+              0.0016605,
+              0.0016018,
+              0.001617,
+              0.001568,
+              0.0015446
+            ],
+            "applyOnlyTimes": [
+              0.0028505,
+              0.0028124,
+              0.0027903,
+              0.0027858,
+              0.0027691,
+              0.0027802
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0016018,
+            "applyOnlyWarmMedianSeconds": 0.0027858,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030614,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.6627946566611822e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0249485,
+            "probeErrors": [
+              3.378566949776882e-14,
+              3.252736439609129e-14,
+              3.2879491447269376e-14
+            ],
+            "times": [
+              0.0223765,
+              0.022352,
+              0.0222919,
+              0.0222768,
+              0.0222767
+            ],
+            "inclusiveSeconds": 0.0256645,
+            "memoryBytes": 5669384,
+            "zeroRhsTimes": [
+              0.0016376,
+              0.0016403,
+              0.0016026,
+              0.0015719,
+              0.0015373,
+              0.0015422
+            ],
+            "applyOnlyTimes": [
+              0.0028257,
+              0.0027875,
+              0.0027557,
+              0.0027607,
+              0.0027599,
+              0.0027635
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0015719,
+            "applyOnlyWarmMedianSeconds": 0.0027607,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030515,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.6627946566611822e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0240926,
+            "probeErrors": [
+              3.378566949776882e-14,
+              3.252736439609129e-14,
+              3.2879491447269376e-14
+            ],
+            "times": [
+              0.021545,
+              0.0214896,
+              0.0214678,
+              0.0213925,
+              0.0213959
+            ],
+            "inclusiveSeconds": 0.0247955,
+            "memoryBytes": 5670020,
+            "zeroRhsTimes": [
+              0.0014519,
+              0.0014706,
+              0.0014074,
+              0.0013792,
+              0.0013761,
+              0.0013734
+            ],
+            "applyOnlyTimes": [
+              0.0026169,
+              0.0025677,
+              0.0025143,
+              0.002554,
+              0.0025368,
+              0.0025464
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0013792,
+            "applyOnlyWarmMedianSeconds": 0.0025464,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030522,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.6627946566611822e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0240579,
+            "probeErrors": [
+              3.378566949776882e-14,
+              3.252736439609129e-14,
+              3.2879491447269376e-14
+            ],
+            "times": [
+              0.0215495,
+              0.0214812,
+              0.021449,
+              0.0214238,
+              0.021397
+            ],
+            "inclusiveSeconds": 0.024708,
+            "memoryBytes": 5669312,
+            "zeroRhsTimes": [
+              0.0014931,
+              0.0014485,
+              0.0014073,
+              0.0013993,
+              0.0013895,
+              0.0013975
+            ],
+            "applyOnlyTimes": [
+              0.0025977,
+              0.0025661,
+              0.0025289,
+              0.0025204,
+              0.0025147,
+              0.0025335
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0013993,
+            "applyOnlyWarmMedianSeconds": 0.0025289,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030488,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.6627946566611822e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0249932,
+            "probeErrors": [
+              3.378566949776882e-14,
+              3.252736439609129e-14,
+              3.2879491447269376e-14
+            ],
+            "times": [
+              0.0224055,
+              0.0223677,
+              0.0222972,
+              0.022264,
+              0.0222785
+            ],
+            "inclusiveSeconds": 0.0256905,
+            "memoryBytes": 5670020,
+            "zeroRhsTimes": [
+              0.0016559,
+              0.0016324,
+              0.0015787,
+              0.0015866,
+              0.0015581,
+              0.0015681
+            ],
+            "applyOnlyTimes": [
+              0.0028707,
+              0.0028069,
+              0.0027683,
+              0.0027582,
+              0.0027709,
+              0.0027909
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0015787,
+            "applyOnlyWarmMedianSeconds": 0.0027709,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0031212,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.6627946566611822e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0249136,
+            "probeErrors": [
+              3.378566949776882e-14,
+              3.252736439609129e-14,
+              3.2879491447269376e-14
+            ],
+            "times": [
+              0.0223916,
+              0.0223212,
+              0.022273,
+              0.0222851,
+              0.0222484
+            ],
+            "inclusiveSeconds": 0.0257954,
+            "memoryBytes": 5669384,
+            "zeroRhsTimes": [
+              0.0016493,
+              0.0016411,
+              0.0015769,
+              0.0015435,
+              0.0015573,
+              0.0015803
+            ],
+            "applyOnlyTimes": [
+              0.0028524,
+              0.0028065,
+              0.0027795,
+              0.0027703,
+              0.0027557,
+              0.0027447
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0015769,
+            "applyOnlyWarmMedianSeconds": 0.0027703,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030648,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.6627946566611822e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0241321,
+            "probeErrors": [
+              3.378566949776882e-14,
+              3.252736439609129e-14,
+              3.2879491447269376e-14
+            ],
+            "times": [
+              0.0215339,
+              0.0214971,
+              0.0214593,
+              0.0214152,
+              0.0214553
+            ],
+            "inclusiveSeconds": 0.0249066,
+            "memoryBytes": 5669948,
+            "zeroRhsTimes": [
+              0.0015236,
+              0.001504,
+              0.0014286,
+              0.0014244,
+              0.0014217,
+              0.0014061
+            ],
+            "applyOnlyTimes": [
+              0.0027558,
+              0.0026296,
+              0.0025475,
+              0.0025424,
+              0.0025536,
+              0.002536
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0014244,
+            "applyOnlyWarmMedianSeconds": 0.0025475,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0031149,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.6627946566611822e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0240483,
+            "probeErrors": [
+              3.378566949776882e-14,
+              3.252736439609129e-14,
+              3.2879491447269376e-14
+            ],
+            "times": [
+              0.0215641,
+              0.0215283,
+              0.021426,
+              0.0214785,
+              0.0214229
+            ],
+            "inclusiveSeconds": 0.0249631,
+            "memoryBytes": 5669384,
+            "zeroRhsTimes": [
+              0.0014629,
+              0.0014323,
+              0.0013868,
+              0.0013531,
+              0.0013726,
+              0.0013727
+            ],
+            "applyOnlyTimes": [
+              0.0026301,
+              0.002563,
+              0.0025352,
+              0.002533,
+              0.002524,
+              0.0025116
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0013727,
+            "applyOnlyWarmMedianSeconds": 0.002533,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0030337,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.6627946566611822e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0249802,
+            "probeErrors": [
+              3.378566949776882e-14,
+              3.252736439609129e-14,
+              3.2879491447269376e-14
+            ],
+            "times": [
+              0.0224314,
+              0.0223855,
+              0.0223354,
+              0.0222713,
+              0.0222823
+            ],
+            "inclusiveSeconds": 0.0259164,
+            "memoryBytes": 5670020,
+            "zeroRhsTimes": [
+              0.0017,
+              0.0016813,
+              0.0015982,
+              0.0016035,
+              0.001607,
+              0.0015814
+            ],
+            "applyOnlyTimes": [
+              0.0028703,
+              0.0028057,
+              0.0027913,
+              0.0027991,
+              0.0027919,
+              0.0027803
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0016035,
+            "applyOnlyWarmMedianSeconds": 0.0027919,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          }
+        ],
+        "before_warm_median_seconds": 0.0222838,
+        "after_warm_median_seconds": 0.02144635,
+        "warm_speedup": 1.0390486026759798,
+        "warm_improvement_percent": 3.7581112736606914,
+        "warm_timing_improved": true,
+        "before_inclusive_median_seconds": 0.02574295,
+        "after_inclusive_median_seconds": 0.02480805
+      },
+      {
+        "input_sha256": "bf59651a6dd7f6a62032b302bcadcc69d9506c4fc08badebfaffa86dc60d9167",
+        "dofs": 12217,
+        "cycle": 1,
+        "runs": [
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42167246912.0,
+              "budgetBytes": 33641524492.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0053922,
+            "info": {
+              "iterations": 14,
+              "true_relative_residual": 3.599942752774199e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0267415,
+            "probeErrors": [
+              5.209376817442771e-14,
+              4.694310236315715e-14,
+              4.654702396105163e-14
+            ],
+            "times": [
+              0.0240404,
+              0.0239565,
+              0.0239017,
+              0.0239173,
+              0.0239001
+            ],
+            "inclusiveSeconds": 0.029942,
+            "memoryBytes": 17048944,
+            "zeroRhsTimes": [
+              0.0016647,
+              0.0016252,
+              0.0015591,
+              0.0015717,
+              0.0015634,
+              0.0015624
+            ],
+            "applyOnlyTimes": [
+              0.0027864,
+              0.0027162,
+              0.0026799,
+              0.0026735,
+              0.0026677,
+              0.0026506
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0015634,
+            "applyOnlyWarmMedianSeconds": 0.0026735,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0045507,
+            "info": {
+              "iterations": 14,
+              "true_relative_residual": 3.599942752774199e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0254333,
+            "probeErrors": [
+              5.209376817442771e-14,
+              4.694310236315715e-14,
+              4.654702396105163e-14
+            ],
+            "times": [
+              0.0228837,
+              0.0228315,
+              0.0227488,
+              0.0227389,
+              0.0227196
+            ],
+            "inclusiveSeconds": 0.0278764,
+            "memoryBytes": 14183940,
+            "zeroRhsTimes": [
+              0.0017061,
+              0.0016925,
+              0.001652,
+              0.001653,
+              0.0016468,
+              0.0016366
+            ],
+            "applyOnlyTimes": [
+              0.0025726,
+              0.0024918,
+              0.0024484,
+              0.0024551,
+              0.0024349,
+              0.0024614
+            ],
+            "zeroRhsWarmMedianSeconds": 0.001652,
+            "applyOnlyWarmMedianSeconds": 0.0024551,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0045127,
+            "info": {
+              "iterations": 14,
+              "true_relative_residual": 3.599942752774199e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.025417,
+            "probeErrors": [
+              5.209376817442771e-14,
+              4.694310236315715e-14,
+              4.654702396105163e-14
+            ],
+            "times": [
+              0.0228148,
+              0.0228125,
+              0.0227595,
+              0.022757,
+              0.0226952
+            ],
+            "inclusiveSeconds": 0.02783,
+            "memoryBytes": 14184244,
+            "zeroRhsTimes": [
+              0.0017174,
+              0.0016792,
+              0.0016647,
+              0.0016364,
+              0.0016428,
+              0.0016408
+            ],
+            "applyOnlyTimes": [
+              0.0025672,
+              0.0024866,
+              0.0024489,
+              0.0024529,
+              0.0024522,
+              0.0024592
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0016428,
+            "applyOnlyWarmMedianSeconds": 0.0024529,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0045194,
+            "info": {
+              "iterations": 14,
+              "true_relative_residual": 3.599942752774199e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0266437,
+            "probeErrors": [
+              5.209376817442771e-14,
+              4.694310236315715e-14,
+              4.654702396105163e-14
+            ],
+            "times": [
+              0.0240595,
+              0.0240692,
+              0.0240161,
+              0.0239635,
+              0.0240027
+            ],
+            "inclusiveSeconds": 0.0293859,
+            "memoryBytes": 14183940,
+            "zeroRhsTimes": [
+              0.001875,
+              0.0018475,
+              0.0017903,
+              0.0017814,
+              0.0017965,
+              0.0017606
+            ],
+            "applyOnlyTimes": [
+              0.0027817,
+              0.002721,
+              0.0026962,
+              0.0026831,
+              0.0026601,
+              0.0026814
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0017903,
+            "applyOnlyWarmMedianSeconds": 0.0026831,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0045715,
+            "info": {
+              "iterations": 14,
+              "true_relative_residual": 3.599942752774199e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0267737,
+            "probeErrors": [
+              5.209376817442771e-14,
+              4.694310236315715e-14,
+              4.654702396105163e-14
+            ],
+            "times": [
+              0.0242045,
+              0.0241739,
+              0.0241332,
+              0.0240785,
+              0.0242616
+            ],
+            "inclusiveSeconds": 0.0292575,
+            "memoryBytes": 14184244,
+            "zeroRhsTimes": [
+              0.0018793,
+              0.0018353,
+              0.0018122,
+              0.0017587,
+              0.001782,
+              0.0017723
+            ],
+            "applyOnlyTimes": [
+              0.002771,
+              0.0027098,
+              0.0026697,
+              0.0026853,
+              0.0026705,
+              0.0026869
+            ],
+            "zeroRhsWarmMedianSeconds": 0.001782,
+            "applyOnlyWarmMedianSeconds": 0.0026853,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0044659,
+            "info": {
+              "iterations": 14,
+              "true_relative_residual": 3.599942752774199e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0253399,
+            "probeErrors": [
+              5.209376817442771e-14,
+              4.694310236315715e-14,
+              4.654702396105163e-14
+            ],
+            "times": [
+              0.02286,
+              0.022746,
+              0.0227288,
+              0.0227626,
+              0.0226971
+            ],
+            "inclusiveSeconds": 0.0277158,
+            "memoryBytes": 14183940,
+            "zeroRhsTimes": [
+              0.0016969,
+              0.0016789,
+              0.0016352,
+              0.0016369,
+              0.0016253,
+              0.0016166
+            ],
+            "applyOnlyTimes": [
+              0.0025673,
+              0.0025236,
+              0.0024519,
+              0.0024593,
+              0.0024696,
+              0.0024691
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0016352,
+            "applyOnlyWarmMedianSeconds": 0.0024691,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0045003,
+            "info": {
+              "iterations": 14,
+              "true_relative_residual": 3.599942752774199e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0253891,
+            "probeErrors": [
+              5.209376817442771e-14,
+              4.694310236315715e-14,
+              4.654702396105163e-14
+            ],
+            "times": [
+              0.02281,
+              0.0227394,
+              0.0227414,
+              0.0227293,
+              0.0226917
+            ],
+            "inclusiveSeconds": 0.0277851,
+            "memoryBytes": 14184244,
+            "zeroRhsTimes": [
+              0.0017172,
+              0.0016834,
+              0.001633,
+              0.0016239,
+              0.0016408,
+              0.0016299
+            ],
+            "applyOnlyTimes": [
+              0.0025737,
+              0.0024918,
+              0.0024434,
+              0.0024474,
+              0.0024397,
+              0.0024974
+            ],
+            "zeroRhsWarmMedianSeconds": 0.001633,
+            "applyOnlyWarmMedianSeconds": 0.0024474,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0044416,
+            "info": {
+              "iterations": 14,
+              "true_relative_residual": 3.599942752774199e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0266536,
+            "probeErrors": [
+              5.209376817442771e-14,
+              4.694310236315715e-14,
+              4.654702396105163e-14
+            ],
+            "times": [
+              0.0241177,
+              0.024013,
+              0.0239787,
+              0.0240021,
+              0.0239424
+            ],
+            "inclusiveSeconds": 0.029052,
+            "memoryBytes": 14183940,
+            "zeroRhsTimes": [
+              0.0018992,
+              0.0018074,
+              0.0017611,
+              0.0017663,
+              0.0017875,
+              0.0017653
+            ],
+            "applyOnlyTimes": [
+              0.0027767,
+              0.0027198,
+              0.0026791,
+              0.0026502,
+              0.0026572,
+              0.0026682
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0017663,
+            "applyOnlyWarmMedianSeconds": 0.0026682,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0045753,
+            "info": {
+              "iterations": 14,
+              "true_relative_residual": 3.599942752774199e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0266898,
+            "probeErrors": [
+              5.209376817442771e-14,
+              4.694310236315715e-14,
+              4.654702396105163e-14
+            ],
+            "times": [
+              0.0242162,
+              0.0240782,
+              0.0241061,
+              0.024092,
+              0.0241133
+            ],
+            "inclusiveSeconds": 0.0291209,
+            "memoryBytes": 14184244,
+            "zeroRhsTimes": [
+              0.0018566,
+              0.0019253,
+              0.0018501,
+              0.0017864,
+              0.0017542,
+              0.0017587
+            ],
+            "applyOnlyTimes": [
+              0.0027614,
+              0.0027131,
+              0.0026764,
+              0.002673,
+              0.0026726,
+              0.0026555
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0017864,
+            "applyOnlyWarmMedianSeconds": 0.002673,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0045089,
+            "info": {
+              "iterations": 14,
+              "true_relative_residual": 3.599942752774199e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0254073,
+            "probeErrors": [
+              5.209376817442771e-14,
+              4.694310236315715e-14,
+              4.654702396105163e-14
+            ],
+            "times": [
+              0.0228789,
+              0.0228386,
+              0.0227851,
+              0.0227954,
+              0.0227697
+            ],
+            "inclusiveSeconds": 0.0277833,
+            "memoryBytes": 14183940,
+            "zeroRhsTimes": [
+              0.0017307,
+              0.0016954,
+              0.001651,
+              0.0016422,
+              0.0016694,
+              0.0016351
+            ],
+            "applyOnlyTimes": [
+              0.0025651,
+              0.002496,
+              0.0024684,
+              0.0024573,
+              0.0024865,
+              0.0024794
+            ],
+            "zeroRhsWarmMedianSeconds": 0.001651,
+            "applyOnlyWarmMedianSeconds": 0.0024794,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0044234,
+            "info": {
+              "iterations": 14,
+              "true_relative_residual": 3.599942752774199e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0253974,
+            "probeErrors": [
+              5.209376817442771e-14,
+              4.694310236315715e-14,
+              4.654702396105163e-14
+            ],
+            "times": [
+              0.0228621,
+              0.0227815,
+              0.0227166,
+              0.0227195,
+              0.0226937
+            ],
+            "inclusiveSeconds": 0.0276562,
+            "memoryBytes": 14184244,
+            "zeroRhsTimes": [
+              0.0016952,
+              0.0016917,
+              0.0016444,
+              0.0016399,
+              0.0016273,
+              0.0016315
+            ],
+            "applyOnlyTimes": [
+              0.0025514,
+              0.0024766,
+              0.0024538,
+              0.0024447,
+              0.0024355,
+              0.002453
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0016399,
+            "applyOnlyWarmMedianSeconds": 0.002453,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0045642,
+            "info": {
+              "iterations": 14,
+              "true_relative_residual": 3.599942752774199e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0265658,
+            "probeErrors": [
+              5.209376817442771e-14,
+              4.694310236315715e-14,
+              4.654702396105163e-14
+            ],
+            "times": [
+              0.0240134,
+              0.02402,
+              0.0239604,
+              0.0239599,
+              0.0239356
+            ],
+            "inclusiveSeconds": 0.0290835,
+            "memoryBytes": 14183940,
+            "zeroRhsTimes": [
+              0.001838,
+              0.001823,
+              0.0017673,
+              0.0017675,
+              0.0017699,
+              0.001741
+            ],
+            "applyOnlyTimes": [
+              0.00276,
+              0.0027138,
+              0.0026766,
+              0.0026545,
+              0.0026471,
+              0.0026735
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0017675,
+            "applyOnlyWarmMedianSeconds": 0.0026735,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          }
+        ],
+        "before_warm_median_seconds": 0.02401805,
+        "after_warm_median_seconds": 0.02275825,
+        "warm_speedup": 1.0553557501125965,
+        "warm_improvement_percent": 5.245221822754131,
+        "warm_timing_improved": true,
+        "before_inclusive_median_seconds": 0.0291892,
+        "after_inclusive_median_seconds": 0.027784200000000002
+      },
+      {
+        "input_sha256": "1ce386cf26755c64b4d8b5a6102c90bbd0ef722eeb50c632d613ebb0d04bf7c5",
+        "dofs": 12217,
+        "cycle": 7,
+        "runs": [
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0044893,
+            "info": {
+              "iterations": 12,
+              "true_relative_residual": 3.40934584181559e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0238384,
+            "probeErrors": [
+              4.734863771930622e-14,
+              4.7964141026711326e-14,
+              5.248643586387321e-14
+            ],
+            "times": [
+              0.0213539,
+              0.021206,
+              0.0211652,
+              0.021207,
+              0.0211481
+            ],
+            "inclusiveSeconds": 0.0261733,
+            "memoryBytes": 14184244,
+            "zeroRhsTimes": [
+              0.0018507,
+              0.0018024,
+              0.0017839,
+              0.0017579,
+              0.0017329,
+              0.0017344
+            ],
+            "applyOnlyTimes": [
+              0.0028147,
+              0.0027249,
+              0.0026856,
+              0.002698,
+              0.0026997,
+              0.0026729
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0017579,
+            "applyOnlyWarmMedianSeconds": 0.002698,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0046176,
+            "info": {
+              "iterations": 12,
+              "true_relative_residual": 3.40934584181559e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0225489,
+            "probeErrors": [
+              4.734863771930622e-14,
+              4.7964141026711326e-14,
+              5.248643586387321e-14
+            ],
+            "times": [
+              0.0201493,
+              0.0200656,
+              0.0199737,
+              0.0199628,
+              0.0199627
+            ],
+            "inclusiveSeconds": 0.0249308,
+            "memoryBytes": 14183940,
+            "zeroRhsTimes": [
+              0.0017046,
+              0.0016846,
+              0.0016656,
+              0.0016429,
+              0.0016202,
+              0.0016429
+            ],
+            "applyOnlyTimes": [
+              0.0025737,
+              0.0025044,
+              0.0024809,
+              0.0024665,
+              0.0024529,
+              0.0024753
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0016429,
+            "applyOnlyWarmMedianSeconds": 0.0024753,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0044607,
+            "info": {
+              "iterations": 12,
+              "true_relative_residual": 3.40934584181559e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.022598,
+            "probeErrors": [
+              4.734863771930622e-14,
+              4.7964141026711326e-14,
+              5.248643586387321e-14
+            ],
+            "times": [
+              0.0200626,
+              0.0199498,
+              0.0199463,
+              0.0198897,
+              0.0199226
+            ],
+            "inclusiveSeconds": 0.0249777,
+            "memoryBytes": 14184244,
+            "zeroRhsTimes": [
+              0.0017128,
+              0.0016929,
+              0.0016409,
+              0.0016307,
+              0.0016314,
+              0.0016299
+            ],
+            "applyOnlyTimes": [
+              0.0025758,
+              0.0025079,
+              0.0024701,
+              0.0024723,
+              0.0024628,
+              0.0024699
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0016314,
+            "applyOnlyWarmMedianSeconds": 0.0024701,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0044102,
+            "info": {
+              "iterations": 12,
+              "true_relative_residual": 3.40934584181559e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0237745,
+            "probeErrors": [
+              4.734863771930622e-14,
+              4.7964141026711326e-14,
+              5.248643586387321e-14
+            ],
+            "times": [
+              0.0212079,
+              0.0211651,
+              0.0210978,
+              0.0211255,
+              0.0211118
+            ],
+            "inclusiveSeconds": 0.0264459,
+            "memoryBytes": 14183940,
+            "zeroRhsTimes": [
+              0.0018626,
+              0.0018448,
+              0.0017612,
+              0.0017697,
+              0.0017603,
+              0.0017685
+            ],
+            "applyOnlyTimes": [
+              0.0028099,
+              0.0027475,
+              0.0027055,
+              0.0026964,
+              0.0027055,
+              0.0026922
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0017685,
+            "applyOnlyWarmMedianSeconds": 0.0027055,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0045457,
+            "info": {
+              "iterations": 12,
+              "true_relative_residual": 3.40934584181559e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0238903,
+            "probeErrors": [
+              4.734863771930622e-14,
+              4.7964141026711326e-14,
+              5.248643586387321e-14
+            ],
+            "times": [
+              0.0213404,
+              0.021216,
+              0.0211865,
+              0.0211669,
+              0.0211936
+            ],
+            "inclusiveSeconds": 0.0263143,
+            "memoryBytes": 14184244,
+            "zeroRhsTimes": [
+              0.0018583,
+              0.0017855,
+              0.0017745,
+              0.0017319,
+              0.0017537,
+              0.0017384
+            ],
+            "applyOnlyTimes": [
+              0.0028142,
+              0.0027451,
+              0.0026885,
+              0.002678,
+              0.0026877,
+              0.0026952
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0017537,
+            "applyOnlyWarmMedianSeconds": 0.0026885,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0044897,
+            "info": {
+              "iterations": 12,
+              "true_relative_residual": 3.40934584181559e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0227878,
+            "probeErrors": [
+              4.734863771930622e-14,
+              4.7964141026711326e-14,
+              5.248643586387321e-14
+            ],
+            "times": [
+              0.0200447,
+              0.0200033,
+              0.0199647,
+              0.0199794,
+              0.0200065
+            ],
+            "inclusiveSeconds": 0.0251085,
+            "memoryBytes": 14183940,
+            "zeroRhsTimes": [
+              0.0017058,
+              0.0022283,
+              0.0016444,
+              0.0016343,
+              0.001612,
+              0.0016197
+            ],
+            "applyOnlyTimes": [
+              0.0025951,
+              0.0025414,
+              0.0024915,
+              0.0024702,
+              0.0024761,
+              0.0024813
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0016343,
+            "applyOnlyWarmMedianSeconds": 0.0024813,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0045295,
+            "info": {
+              "iterations": 12,
+              "true_relative_residual": 3.40934584181559e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0225994,
+            "probeErrors": [
+              4.734863771930622e-14,
+              4.7964141026711326e-14,
+              5.248643586387321e-14
+            ],
+            "times": [
+              0.0200592,
+              0.0199767,
+              0.019969,
+              0.0199661,
+              0.0199615
+            ],
+            "inclusiveSeconds": 0.0249797,
+            "memoryBytes": 14184244,
+            "zeroRhsTimes": [
+              0.0017082,
+              0.0016712,
+              0.0016278,
+              0.0016309,
+              0.0016252,
+              0.0016232
+            ],
+            "applyOnlyTimes": [
+              0.0025857,
+              0.0025074,
+              0.0024858,
+              0.0024818,
+              0.0024834,
+              0.0024815
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0016278,
+            "applyOnlyWarmMedianSeconds": 0.0024834,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0044245,
+            "info": {
+              "iterations": 12,
+              "true_relative_residual": 3.40934584181559e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0237288,
+            "probeErrors": [
+              4.734863771930622e-14,
+              4.7964141026711326e-14,
+              5.248643586387321e-14
+            ],
+            "times": [
+              0.021222,
+              0.0211362,
+              0.0211285,
+              0.0210813,
+              0.0210719
+            ],
+            "inclusiveSeconds": 0.0261819,
+            "memoryBytes": 14183940,
+            "zeroRhsTimes": [
+              0.001833,
+              0.0018055,
+              0.0017743,
+              0.0017327,
+              0.001746,
+              0.0017393
+            ],
+            "applyOnlyTimes": [
+              0.0027917,
+              0.0027278,
+              0.0026946,
+              0.0026952,
+              0.0026799,
+              0.0026802
+            ],
+            "zeroRhsWarmMedianSeconds": 0.001746,
+            "applyOnlyWarmMedianSeconds": 0.0026946,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0044509,
+            "info": {
+              "iterations": 12,
+              "true_relative_residual": 3.40934584181559e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0237327,
+            "probeErrors": [
+              4.734863771930622e-14,
+              4.7964141026711326e-14,
+              5.248643586387321e-14
+            ],
+            "times": [
+              0.0213003,
+              0.0212026,
+              0.0212217,
+              0.0211701,
+              0.0211896
+            ],
+            "inclusiveSeconds": 0.0262022,
+            "memoryBytes": 14184244,
+            "zeroRhsTimes": [
+              0.0018253,
+              0.001814,
+              0.001783,
+              0.0017569,
+              0.0017595,
+              0.0017443
+            ],
+            "applyOnlyTimes": [
+              0.0027714,
+              0.0027091,
+              0.0026938,
+              0.0026975,
+              0.0026815,
+              0.0026702
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0017595,
+            "applyOnlyWarmMedianSeconds": 0.0026938,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0044498,
+            "info": {
+              "iterations": 12,
+              "true_relative_residual": 3.40934584181559e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0227017,
+            "probeErrors": [
+              4.734863771930622e-14,
+              4.7964141026711326e-14,
+              5.248643586387321e-14
+            ],
+            "times": [
+              0.0200485,
+              0.0200339,
+              0.0199727,
+              0.0199703,
+              0.0200263
+            ],
+            "inclusiveSeconds": 0.0249422,
+            "memoryBytes": 14183940,
+            "zeroRhsTimes": [
+              0.0016854,
+              0.0016922,
+              0.0016493,
+              0.0016091,
+              0.001652,
+              0.0016273
+            ],
+            "applyOnlyTimes": [
+              0.0025884,
+              0.0025207,
+              0.0024805,
+              0.0024802,
+              0.002465,
+              0.0024642
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0016493,
+            "applyOnlyWarmMedianSeconds": 0.0024802,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "after",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0044504,
+            "info": {
+              "iterations": 12,
+              "true_relative_residual": 3.40934584181559e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0225615,
+            "probeErrors": [
+              4.734863771930622e-14,
+              4.7964141026711326e-14,
+              5.248643586387321e-14
+            ],
+            "times": [
+              0.02006,
+              0.0200295,
+              0.0199982,
+              0.0199312,
+              0.0199436
+            ],
+            "inclusiveSeconds": 0.0249583,
+            "memoryBytes": 14184244,
+            "zeroRhsTimes": [
+              0.001704,
+              0.0016723,
+              0.0016198,
+              0.0016023,
+              0.0016321,
+              0.0016175
+            ],
+            "applyOnlyTimes": [
+              0.0026206,
+              0.0025476,
+              0.002498,
+              0.0025059,
+              0.0024553,
+              0.0024681
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0016198,
+            "applyOnlyWarmMedianSeconds": 0.002498,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          },
+          {
+            "variant": "before",
+            "memoryPlan": {
+              "inputBytes": 8163136,
+              "workspaceEstimateBytes": 1819152,
+              "estimatedAdditionalBytes": 295330432,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 8525722419.200001,
+              "availableBeforeBytes": 42165647952.0,
+              "budgetBytes": 33639925532.8,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "uploadSeconds": 0.0044113,
+            "info": {
+              "iterations": 12,
+              "true_relative_residual": 3.40934584181559e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0237252,
+            "probeErrors": [
+              4.734863771930622e-14,
+              4.7964141026711326e-14,
+              5.248643586387321e-14
+            ],
+            "times": [
+              0.0212287,
+              0.0211599,
+              0.0210687,
+              0.0211014,
+              0.0210858
+            ],
+            "inclusiveSeconds": 0.026137,
+            "memoryBytes": 14183940,
+            "zeroRhsTimes": [
+              0.0018381,
+              0.001817,
+              0.001775,
+              0.0017672,
+              0.0017608,
+              0.0017581
+            ],
+            "applyOnlyTimes": [
+              0.0027955,
+              0.0027276,
+              0.0026849,
+              0.0026815,
+              0.0027166,
+              0.0027101
+            ],
+            "zeroRhsWarmMedianSeconds": 0.0017672,
+            "applyOnlyWarmMedianSeconds": 0.0027101,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "memory_budget_rejection": 1
+            },
+            "device": {
+              "name": "NVIDIA A100-SXM4-40GB",
+              "compute_capability": "8.0",
+              "total_memory": 42628612096.0,
+              "driver": "591.59",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3203278 (R2026a)"
+          }
+        ],
+        "before_warm_median_seconds": 0.0211685,
+        "after_warm_median_seconds": 0.0199752,
+        "warm_speedup": 1.059739076454804,
+        "warm_improvement_percent": 5.6371495382289805,
+        "warm_timing_improved": true,
+        "before_inclusive_median_seconds": 0.02619205,
+        "after_inclusive_median_seconds": 0.024967999999999997
+      }
+    ],
+    "measurement_source_commit": "c4385e17693f3bf8194549f66cff48f1ad354c23",
+    "measurement_source_dirty": false,
+    "provenance_route": "hash-verified exported Git tree",
+    "measurement_source_sha256": {
+      "validation_test/ams_cuda/compare.py": "5de0859546b6c4474b930156622cea5c13415d2f1a039d7ae47dc20d70d6f3f6",
+      "validation_test/ams_cuda/benchmark.m": "04984598b21b5ef9164837cb536ca4564192ca03cc5f82b347af701f189496d6"
+    },
+    "timing_classification": "same-host paired ABBA; 30 warmed samples per variant/case"
+  },
+  "timing_context": {
+    "started_utc": "2026-10-11T10:13:45.498022+00:00",
+    "ended_utc": "2026-10-11T10:14:58.482264+00:00",
+    "thread_environment": {
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "4",
+      "MKL_NUM_THREADS": "1"
+    },
+    "before": {
+      "utc": "2026-10-11T10:13:45.576983+00:00",
+      "cpu_percent_5s": 5.1,
+      "free_ram_bytes": 56995028992,
+      "gpu": "NVIDIA A100-SXM4-40GB, 40960, 10, 0, 591.59",
+      "other_jobs_count": 0
+    },
+    "between": {
+      "utc": "2026-10-11T10:14:10.676820+00:00",
+      "cpu_percent_5s": 0.6,
+      "free_ram_bytes": 57001598976,
+      "gpu": "NVIDIA A100-SXM4-40GB, 40960, 10, 6, 591.59",
+      "other_jobs_count": 0
+    },
+    "after": {
+      "utc": "2026-10-11T10:14:53.480293+00:00",
+      "cpu_percent_5s": 0.3,
+      "free_ram_bytes": 57045020672,
+      "gpu": "NVIDIA A100-SXM4-40GB, 40960, 10, 6, 591.59",
+      "other_jobs_count": 0
+    }
+  },
+  "exchange_validation": {
+    "schema": "radia.ams-hdf5-validation.v1",
+    "accepted": true,
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "a100_started": false,
+    "versions": {
+      "numpy": "2.5.4",
+      "h5py": "3.16.0",
+      "matlabengine": "26.1"
+    },
+    "cases": [
+      {
+        "accepted": true,
+        "large": false,
+        "schema": "radia.ams-hdf5.v1",
+        "format": "HDF5",
+        "numeric_bytes": 156,
+        "file_bytes": 5568,
+        "arrays": 4,
+        "write_seconds": 0.08807969999907073,
+        "matlab_read_and_check_seconds": 0.2220128000008117,
+        "sha256": "3be323dc9428222628eebc74ab0559eb38dc240fd60ac36823e4cb43f952d2af"
+      },
+      {
+        "accepted": true,
+        "large": true,
+        "schema": "radia.ams-hdf5.v1",
+        "format": "HDF5",
+        "numeric_bytes": 2147483812,
+        "file_bytes": 2147490184,
+        "arrays": 5,
+        "write_seconds": 7.955091200001334,
+        "matlab_read_and_check_seconds": 1.6665539000023273,
+        "sha256": "9cf97478dfd60ad863ce13fd94b6c35c71f3918803d139f64da3c72d145b41d4"
+      }
+    ],
+    "matlab": "26.1.0.3346908 (R2026a) Update 5"
+  },
+  "limitations": [
+    "Before/after GPU timing uses identical HDF5 inputs, ABBA order and independent numerical gates.",
+    "CPU versus GPU ratios include differing stopping norms; both satisfy independent true-residual gates.",
+    "Host-idle checks are operational observations, not a hardware reservation or continuous load trace.",
+    "Memory admission is a conservative estimate, not a measured allocator peak or a 10 GB solve certificate."
+  ],
+  "cpu_hardware": {
+    "Name": "Intel(R) Xeon(R) Platinum 8368 CPU @ 2.40GHz",
+    "NumberOfCores": 18,
+    "NumberOfLogicalProcessors": 18
+  },
+  "ci": {
+    "validated_code_commit": "170717fa7",
+    "run_url": "https://github.com/ksugahar/Radia/actions/runs/38130979094",
+    "conclusion": "success"
+  }
+}

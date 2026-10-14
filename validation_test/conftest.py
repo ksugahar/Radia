@@ -1,0 +1,67 @@
+"""Pytest configuration for the heavy Radia validation suite.
+
+`tests/` is the lightweight debug/CI gate.  `validation_test/` is the
+operator-triggered suite for solver-heavy, GUI, Cubit, golden, benchmark, and
+cross-validation checks.  Reuse the root test configuration so imports,
+markers, and optional-dependency handling stay identical.
+"""
+
+import pytest
+
+from tests.conftest import *  # noqa: F401,F403
+
+
+@pytest.fixture(scope="module")
+def ngsolve_taskmanager():
+    """Own NGSolve parallel state for validation modules that explicitly opt in."""
+    try:
+        import ngsolve as ng
+    except ImportError:
+        yield
+        return
+
+    with ng.TaskManager():
+        yield
+
+
+def _load_slow_nodeids():
+    """Load measured slow node IDs owned by the validation suite."""
+    from pathlib import Path
+
+    path = Path(__file__).with_name("slow_nodeids.txt")
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return set()
+    return {
+        line.split("#", 1)[0].strip().replace("\\", "/")
+        for line in lines
+        if line.split("#", 1)[0].strip()
+    }
+
+
+SLOW_NODEIDS = _load_slow_nodeids()
+
+
+def _is_compute_host():
+    import os
+
+    return os.environ.get("RADIA_VALIDATION_HOST_ROLE") in {
+        "cpu_validation", "gpu_evaluation"
+    }
+
+
+def pytest_collection_modifyitems(config, items):
+    """Mark validation tests and require an explicit isolated validation job role."""
+    import pytest
+    from tests.conftest import pytest_collection_modifyitems as _root_modify
+
+    _root_modify(config, items)
+    compute_skip = pytest.mark.skip(reason="compute_host validation requires RADIA_VALIDATION_HOST_ROLE=cpu_validation or gpu_evaluation")
+    for item in items:
+        nodeid = item.nodeid.replace("\\", "/")
+        item.add_marker(pytest.mark.validation)
+        if nodeid in SLOW_NODEIDS:
+            item.add_marker(pytest.mark.slow)
+        if item.get_closest_marker("compute_host") and not _is_compute_host():
+            item.add_marker(compute_skip)

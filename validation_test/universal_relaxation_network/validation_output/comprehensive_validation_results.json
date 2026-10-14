@@ -1,0 +1,60 @@
+{
+  "timestamp": "2026-01-19 10:44:57",
+  "results": [
+    {
+      "dataset": "NASA 18650 Battery",
+      "vf_nrmse": 0.2699605914130634,
+      "urn_nrmse": 0.24544383545701084,
+      "improvement": 9.081605514243286,
+      "vf_time": 0.0015606880187988281,
+      "urn_time": 177.84286379814148,
+      "n_params": 16,
+      "n_points": 47
+    },
+    {
+      "dataset": "TDK PC47 Ferrite",
+      "vf_nrmse": 0.014580554735688206,
+      "urn_nrmse": 0.008832483512115522,
+      "improvement": 39.422856864995495,
+      "vf_time": 0.0,
+      "urn_time": 175.33770155906677,
+      "n_params": 16,
+      "n_points": 11
+    },
+    {
+      "dataset": "TDK PC50 Ferrite",
+      "vf_nrmse": 0.02876969722899477,
+      "urn_nrmse": 0.009796097263085396,
+      "improvement": 65.94994662226526,
+      "vf_time": 0.0005376338958740234,
+      "urn_time": 175.67323684692383,
+      "n_params": 16,
+      "n_points": 14
+    },
+    {
+      "dataset": "TDK PC95 Ferrite",
+      "vf_nrmse": 0.00804101182414678,
+      "urn_nrmse": 0.01197548482088684,
+      "improvement": -48.930073512950486,
+      "vf_time": 0.0006451606750488281,
+      "urn_time": 176.33726811408997,
+      "n_params": 16,
+      "n_points": 11
+    },
+    {
+      "dataset": "TDK PC200 Ferrite",
+      "vf_nrmse": 0.010781881664235821,
+      "urn_nrmse": 0.005564804715553738,
+      "improvement": 48.38744396525381,
+      "vf_time": 0.0,
+      "urn_time": 177.2424032688141,
+      "n_params": 16,
+      "n_points": 14
+    }
+  ],
+  "summary": {
+    "n_datasets": 5,
+    "avg_improvement": 22.782355890761472,
+    "avg_urn_time": 176.48669471740723
+  }
+}

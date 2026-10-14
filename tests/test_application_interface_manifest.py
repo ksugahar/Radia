@@ -1,0 +1,115 @@
+import json
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_simulink_application_guide_has_no_retired_panel_path():
+    assert not (
+        REPO_ROOT / "docs" / "panels" / "ADDING_NEW_PANEL.md"
+    ).exists()
+    guide = REPO_ROOT / "docs" / "simulink" / "ADDING_APPLICATION_BLOCK.md"
+    assert guide.is_file()
+    assert guide.read_text(encoding="utf-8").startswith(
+        "# Adding a Radia Simulink Application Block"
+    )
+    old_audit = REPO_ROOT / "tools" / "audit_new_panel_contract.py"
+    assert not old_audit.exists()
+    audit = (
+        REPO_ROOT / "tools" / "audit_application_block_contract.py"
+    ).read_text(encoding="utf-8")
+    assert "docs/simulink/ADDING_APPLICATION_BLOCK.md" in audit
+    assert "docs/panels/ADDING_NEW_PANEL.md" not in audit
+
+
+def test_application_manifest_has_no_notebook_workbenches():
+    manifest_path = (
+        REPO_ROOT / "packages" / "radia-gpu"
+        / "application_interface_manifest.json"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest['inventory_scope'].startswith('Source-only legacy')
+    assert not (REPO_ROOT/'src/radia/panels/application_interface_manifest.json').exists()
+    applications = {item["id"]: item for item in manifest["applications"]}
+    spatial = manifest["library"]["spatial_artifact"]
+    mesh_preflight = manifest["library"]["mesh_preflight"]
+    assert spatial["format"] == "GMSH .msh v4.1"
+    assert spatial["location"] == "application run directory"
+    assert spatial["scalar_only"] == "not-applicable"
+    assert mesh_preflight["checker"] == "check-vol"
+    assert mesh_preflight["label_contract_schema"] == "radia.vol-label-contract.v1"
+    assert mesh_preflight["report_schema"] == "cubit-mesh-export.vol-check.v1"
+    assert "never inferred" in mesh_preflight["material_constants"]
+
+    expected_blocks = {
+        "radia-em",
+        "radia-pcb",
+        "radia-motor",
+        "radia-streamfunction",
+        "radia-ih",
+        "radia-maglev",
+    }
+    for application_id in expected_blocks:
+        application = applications[application_id]
+        assert application["state"] == "active-simulink-block"
+        assert application["block"].startswith("radia_simulink_library/Applications/")
+        assert application["notebook"] is None
+        assert "adapter" not in application
+
+    ih = applications["radia-ih"]
+    assert ih["backend"] == "matlab-level2+radia-mex-handles"
+    assert "Level-2 MATLAB" in ih["backend_policy"]
+    assert "radia_mex object handles" in ih["backend_policy"]
+    assert "not a per-step fallback" in ih["backend_policy"]
+
+    electromagnet = applications["radia-em"]
+    assert electromagnet["optimization_sample"] == (
+        "packages/radia-gpu/matlab/radia_electromagnet.slx"
+    )
+    assert electromagnet["optimization_block"].endswith(
+        "/Electromagnet Topology Optimization"
+    )
+    assert "one state solve and one adjoint solve" in (
+        electromagnet["optimization_backend"]
+    )
+
+    maglev = applications["radia-maglev"]
+    assert maglev["backend"] == "matlab-level2-shared-mode-foster"
+    assert maglev["sample"] == "packages/radia-gpu/matlab/radia_maglev.slx"
+    assert "never called per step" in maglev["backend_policy"]
+    assert maglev["optimization_scope"].startswith("control optimization only")
+
+    export_menu = applications["radia-export-menu"]
+    assert export_menu["state"] == "active-cubit-toolbar"
+    assert export_menu["notebook"] is None
+
+
+def test_packaged_panel_notebook_directory_is_absent_or_empty():
+    notebook_dir = REPO_ROOT / "src" / "radia" / "panels" / "notebooks"
+    assert not notebook_dir.exists() or not list(notebook_dir.glob("*.ipynb"))
+
+
+def test_retired_optimization_adapters_are_absent():
+    retired = [
+        REPO_ROOT / "src" / "radia" / "panels" / "optuna_study_helper.py",
+        REPO_ROOT / "src" / "radia" / "ih_claude_proposer.py",
+        REPO_ROOT / "src" / "radia" / "esim_vtk_export.py",
+        REPO_ROOT / "src" / "radia" / "esim_hantila.py",
+    ]
+    assert all(not path.exists() for path in retired)
+
+
+def test_legacy_ih_quality_skill_routes_only_to_simulink():
+    skill = (
+        REPO_ROOT / ".agents" / "skills" / "radia-ih-panel-quality"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    normalized = " ".join(skill.split())
+
+    assert "simulink-app-health" in normalized
+    assert "IHDesignSpec" in normalized
+    assert "official MathWorks model lane" in normalized
+    assert "Do not recreate `src/radia/radia_ih.py`" in normalized
+    assert "tests/panels/test_ih_panel_qt.py" not in normalized
+    assert "panel-qt-test" not in normalized

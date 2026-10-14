@@ -1,0 +1,187 @@
+"""Stage-2 golden test for calc_motor_transient.py.
+
+Locks the Lange-Henrotte-Hameyer transient solver outputs on a
+toy 8-pole BLAC motor (built by build_test_motor_mesh.py) inside a
+loose-but-non-trivial hard band.
+
+This test exists to detect *regressions* — bit-for-bit reproducibility
+across NGSolve / scipy / Numpy version bumps would be too strict.  The
+band is set at ~30% on amplitudes and ~50% on integrated quantities,
+sufficient to catch genuine breakage (sign flips, off-by-pole-pairs,
+factorization failures) while tolerating floating-point drift.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+
+import pytest
+
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
+PANELS = os.path.join(REPO, "src", "radia", "panels")
+@pytest.fixture(scope="module")
+def pmsm_mesh(tmp_path_factory):
+    """Build (or rebuild) the test PMSM mesh."""
+    sys.path.insert(0, HERE)
+    from build_test_motor_mesh import build_pmsm_mesh
+    mesh_path = str(tmp_path_factory.mktemp("motor-mesh") / "motor.vol")
+    build_pmsm_mesh(out_vol=mesh_path)
+    return mesh_path
+
+
+def _run(extra_args, mesh_path, output_dir):
+    """Run calc_motor_transient.py and return parsed JSON."""
+    output_json = str(output_dir / "result.json")
+    output_msh = str(output_dir / "result.msh")
+    cmd = [
+        sys.executable,
+        os.path.join(PANELS, "calc_motor_transient.py"),
+        "--vol", mesh_path,
+        "--method", "linearization",
+        "--msh-output", output_msh,
+        "--output", output_json,
+    ] + extra_args
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    r = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    assert r.returncode == 0, (
+        f"calc_motor_transient.py failed (rc={r.returncode}):\n"
+        f"STDOUT:\n{r.stdout[-1500:]}\n"
+        f"STDERR:\n{r.stderr[-1500:]}"
+    )
+    with open(output_json, "r", encoding="utf-8") as f:
+        result = json.load(f)
+    assert result["gmsh_file"] == os.path.abspath(output_msh)
+    with open(output_msh, "r", encoding="utf-8") as f:
+        assert f.read(40).startswith("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
+    return result
+
+
+def test_purely_inductive_no_pm(pmsm_mesh, tmp_path):
+    """No PMs, voltage-driven 3-phase: currents should grow with R/L
+    time constant; T_em near zero; back-EMF zero."""
+    result = _run([
+        "--t-end", "5e-4",
+        "--dt-FE", "1e-4",
+        "--dt-circ", "1e-5",
+        "--n-steps-per-FE", "10",
+        "--v-amp", "10",
+        "--v-freq", "50",
+        "--pm-Br-value", "0",
+        "--R-phase", "0.5",
+    ], pmsm_mesh, tmp_path)
+    assert result["method"] == "linearization"
+    assert result["n_FE_calls"] == 5      # PM-only solves skipped (no PM)
+    assert result["n_circ_steps"] == 50
+    # Currents should be modest (R-limited)
+    final_i = result["final_i"]
+    assert all(abs(i) < 10.0 for i in final_i), \
+        f"currents diverging: {final_i}"
+    # T_em should be tiny (no PM, no resulting torque pattern)
+    assert all(abs(T) < 1e-3 for T in result["T_em_history"]), \
+        f"unexpected torque without PMs: max={max(result['T_em_history'])}"
+    assert result["force_result_schema"] == "radia.force-result/v1"
+    assert result["final_force_torque_result"]["schema"] == "radia.force-result/v1"
+    # Default route is the single air-gap contour; "arkkio" is opt-in via
+    # --airgap-torque and only then may the result claim Arkkio's name.
+    assert (result["final_force_torque_result"]["method"]
+            == "contour_air_gap_maxwell_stress")
+    assert result["final_force_torque_result"]["dimensionality"] == "2d_planar"
+    assert result["final_force_torque_result"]["torque_Nm"][2] == pytest.approx(
+        result["T_em_history"][-1]
+    )
+    # Back-EMF should be exactly zero (omega=0 default + no PMs)
+    for e in result["e_bemf_history"]:
+        assert all(abs(ej) == 0.0 for ej in e)
+
+
+def test_pmsm_with_rotation(pmsm_mesh, tmp_path):
+    """8-pole PMSM, prescribed rotor speed, voltage-driven.
+    Validate: PM-only FE solves are executed; T_em values are finite
+    and bounded; back-EMF responds to omega."""
+    result = _run([
+        "--t-end", "5e-4",
+        "--dt-FE", "1e-4",
+        "--dt-circ", "1e-5",
+        "--n-steps-per-FE", "10",
+        "--v-amp", "50",
+        "--v-freq", "100",
+        "--pm-Br-value", "1.2",
+        "--n-pole-pairs", "4",
+        "--omega-init", "62.83",   # ~600 rpm
+        "--R-phase", "0.5",
+    ], pmsm_mesh, tmp_path)
+    # With PMs: 1 op-point + 2 PM-only per FE refresh = 3 calls/refresh
+    assert result["n_FE_calls"] == 15
+    # T_em finite, not insane (loose band -- 8-pole BLAC ratings span 0.001
+    # to a few hundred Nm depending on geometry; our toy is tiny).
+    #
+    # The LOWER bound is the one that matters.  Until 2026-09-11 the contour
+    # integral fed grad(A) straight into a BND integral on the internal
+    # "airgap_mid" edge, so this machine reported max|T_em| = 1.1e-13 N m --
+    # round-off, i.e. the mechanical ODE was never driven by the field at all.
+    # The old band `0 <= Tmax < 100` accepted that happily.
+    Tmax = max(abs(T) for T in result["T_em_history"])
+    assert 0 <= Tmax < 100.0, f"|T_em| out of band: {Tmax}"
+    assert Tmax > 0.1, (
+        f"PM excitation must produce a real torque, got {Tmax:.3e} N m -- "
+        "a collapsed air-gap contour integral looks exactly like this")
+    # Back-EMF: ensure the data path is exercised.  At omega=62.83
+    # rad/s + Br=1.2T, expect non-trivial values (volts to hundreds of
+    # volts on toy mesh).
+    assert len(result["e_bemf_history"]) == 50   # n_steps_per_FE * n_FE
+    e_max = 0.0
+    for e in result["e_bemf_history"]:
+        assert len(e) == 3
+        assert all(ej == ej for ej in e), f"NaN in back-EMF: {e}"
+        e_max = max(e_max, max(abs(ej) for ej in e))
+    assert e_max > 0.1, f"back-EMF suspiciously small: max={e_max}"
+    # Currents should grow but stay bounded
+    final_i = result["final_i"]
+    Imax = max(abs(i) for i in final_i)
+    assert 0.01 < Imax < 100.0, f"|i_final| out of band: {Imax}"
+
+
+def test_voltage_sign_changes_current_response(pmsm_mesh, tmp_path):
+    """Sanity: PM-free purely-inductive run with opposite voltages
+    gives opposite-sign currents.  Tests that voltage source threads
+    through Crank-Nicolson circuit ODE with correct sign.
+
+    Note: with PMs + back-EMF + rotation the dynamics are nonlinear
+    in the current direction (back-EMF depends on theta which
+    advances independently), so we use the PM-free case for the
+    clean linearity test.
+    """
+    r_pos = _run([
+        "--t-end", "1e-4",
+        "--dt-FE", "1e-4",
+        "--dt-circ", "1e-5",
+        "--n-steps-per-FE", "10",
+        "--v-amp", "100", "--v-freq", "50",
+        "--pm-Br-value", "0",
+        "--R-phase", "1.0",
+    ], pmsm_mesh, tmp_path)
+    r_neg = _run([
+        "--t-end", "1e-4",
+        "--dt-FE", "1e-4",
+        "--dt-circ", "1e-5",
+        "--n-steps-per-FE", "10",
+        "--v-amp", "-100", "--v-freq", "50",
+        "--pm-Br-value", "0",
+        "--R-phase", "1.0",
+    ], pmsm_mesh, tmp_path)
+    i_pos = r_pos["final_i"]
+    i_neg = r_neg["final_i"]
+    # PM-free linear system: i(-v) = -i(v) exactly (up to round-off)
+    for j in range(3):
+        assert abs(i_pos[j] + i_neg[j]) < 1e-9 * max(abs(i_pos[j]), 1e-12), \
+            f"phase {j} current not -i(v): i_pos={i_pos[j]} i_neg={i_neg[j]}"
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

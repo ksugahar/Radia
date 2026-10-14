@@ -1,0 +1,106 @@
+{
+  "schema": "radia.gpu.a100-acceptance/v1",
+  "source_commit": "4195b093cfa9e8fb959e1a2b4fc565ae4186d755",
+  "wheel_sha256": "30bc7a86d6a65c6aed29b70d4d9ec8f40020c1ef2a089965f393a8c2ae4922c5",
+  "installation_100": {
+    "schema": "radia.gpu.installed-acceptance.v1",
+    "passed": true,
+    "matlab_release": "2026a",
+    "cuda_residual": 0,
+    "simulink_repeated_runs": 2,
+    "simulink_failure_cleanup": true,
+    "ltspice_checked": true,
+    "source_commit": "4195b093cfa9e8fb959e1a2b4fc565ae4186d755",
+    "distribution_version": "0.1.0a1",
+    "wheel_sha256": "30bc7a86d6a65c6aed29b70d4d9ec8f40020c1ef2a089965f393a8c2ae4922c5"
+  },
+  "installation_a100": {
+    "schema": "radia.gpu.installed-acceptance.v1",
+    "passed": true,
+    "matlab_release": "2026a",
+    "cuda_residual": 0,
+    "simulink_repeated_runs": 2,
+    "simulink_failure_cleanup": true,
+    "ltspice_checked": false,
+    "source_commit": "4195b093cfa9e8fb959e1a2b4fc565ae4186d755",
+    "distribution_version": "0.1.0a1",
+    "wheel_sha256": "30bc7a86d6a65c6aed29b70d4d9ec8f40020c1ef2a089965f393a8c2ae4922c5"
+  },
+  "poisson": {
+    "schema": "radia.gpu.vol-cpu-gpu-comparison/v1",
+    "passed": true,
+    "source_commit": "4195b093cfa9e8fb959e1a2b4fc565ae4186d755",
+    "cpu_reference": {
+      "schema": "radia.gpu.ngsolve-vol-reference/v1",
+      "passed": true,
+      "ngsolve": "6.2.2607",
+      "python": "3.12.10",
+      "source_commit": "c6eed887a8f6d19fa60930b655a861297930ee27",
+      "mesh_sha256": "79380a44c462fc4f41237b1b556ae8964568d14bdba7404922dd34abd4671113",
+      "mesh_preflight_passed": true,
+      "label_contract_schema": "radia.vol-label-contract.v1",
+      "cpu_threads": 1,
+      "ndof": 881,
+      "free_dofs": 455,
+      "nnz": 8883,
+      "cpu_true_relative_residual": 2.16881837719939e-15,
+      "system_sha256": "afac3ea139f3e05dea6508ddba828c5fcb3d02f407b9bf2fe3277e81251b6def",
+      "gpu_checked": false,
+      "timing_checked": true,
+      "formal_performance_checked": false,
+      "cpu_solver": "sparsecholesky",
+      "cpu_factor_seconds": 0.003197099999852071,
+      "cpu_cold_solve_seconds": 0.00021740000011050142,
+      "cpu_warm_solve_seconds": [
+        0.00014929999997548293,
+        0.00013900000021749293,
+        0.0001370999998471234,
+        0.0001741000000947679,
+        0.0001720000000204891
+      ],
+      "cpu_warm_median_seconds": 0.00014929999997548293,
+      "cubit_execution": false,
+      "execution_source_sha256": "82edaf51146b612034bfefa9b5f9d2475ef61302d595ba31b7ef338c3eecd052"
+    },
+    "gpu_vs_ngsolve_direct_relative_l2": 3.519927506721829e-10,
+    "gpu_report": {
+      "passed": 1,
+      "schema": "radia.cuda-poisson-gpu.v1",
+      "backend": "custom CUDA CSR PCG; NGSolve CPU assembly; not upstream ngscuda",
+      "device": "NVIDIA A100-SXM4-40GB",
+      "compute_capability": "8.0",
+      "total_memory_bytes": 42628612096.0,
+      "available_memory_before": 42181853184.0,
+      "available_memory_after": 42177658880.0,
+      "precision": "float64",
+      "upload_seconds": 0.0433224,
+      "cold_solve_seconds": 0.0062438,
+      "warm_seconds": [
+        0.0020987,
+        0.0019344,
+        0.0018949,
+        0.0018945,
+        0.0022647
+      ],
+      "warm_median_seconds": 0.0019344,
+      "download_seconds": 0.000833,
+      "warm_with_transfers_seconds": 0.0460898,
+      "info": {
+        "iterations": 46,
+        "true_relative_residual": 9.986174353185562e-11,
+        "precision": "float64",
+        "backend": "CUDA custom CSR kernels; NGSolve CPU assembly",
+        "preconditioner": "Jacobi; not IC or AMS"
+      }
+    },
+    "a100_checked": true,
+    "formal_performance_checked": false
+  },
+  "tiny_rhs_rejection_assertion_executed": true,
+  "independent_review": {
+    "completed": true,
+    "findings_addressed": 3,
+    "stable_release_review": false
+  },
+  "pypi_published": false
+}

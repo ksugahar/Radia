@@ -1,0 +1,463 @@
+{
+  "case": "3D .vol magnetic-material pair force",
+  "case_parameters": {
+    "mesh_maxh_m": 0.008,
+    "source_magnetization_A_per_m": 800000.0,
+    "source_radius_m": 0.04,
+    "sphere_separation_m": 0.3,
+    "target_magnetization_A_per_m": 800000.0,
+    "target_radius_m": 0.04
+  },
+  "checks": {
+    "magnetic_material_pair_gate_ok": true,
+    "magnetic_volumes_error_ok": true,
+    "maxwell_stress_crosscheck_ok": true,
+    "not_lorentz_force": true,
+    "ran_to_completion": true,
+    "result_files_exist": true,
+    "source_material_present": true,
+    "target_material_present": true,
+    "validation_passed": true,
+    "virtual_work_crosscheck_ok": true,
+    "vol_loaded_by_ngsolve": true
+  },
+  "created_at_utc": "2026-07-05T04:10:54Z",
+  "errors": {
+    "axial_rel_error": 0.014478454889012518,
+    "force_vector_rel_error": 0.014478546719862477,
+    "max_abs": 0.049329685191321214,
+    "max_rel": 0.014656177465474833,
+    "source_volume_rel_error": 0.014656177465474833,
+    "target_volume_rel_error": 0.014495291291192189
+  },
+  "magnetic_material_pair_force_gate": {
+    "axis": {
+      "axial_axis": "z",
+      "force_basis": "global_cartesian_components"
+    },
+    "case_id": "vol_two_magnetized_spheres_force",
+    "checks": {
+      "axial_component_matches_reference": true,
+      "computed_force_vector_finite": true,
+      "force_vector_matches_reference": true,
+      "reference_force_vector_finite": true,
+      "transverse_components_match_reference": true
+    },
+    "computed": {
+      "force_norm_N": 3.3577587983638613,
+      "force_vector_N": [
+        0.0001556593231005093,
+        8.147519187399282e-05,
+        -3.357758793767338
+      ],
+      "transverse_components_N": [
+        0.0001556593231005093,
+        8.147519187399282e-05
+      ],
+      "transverse_magnitude_N": 0.0001756930042973046
+    },
+    "errors": {
+      "axial_abs_error_N": 0.04932937231551904,
+      "axial_allowed_error_N": 0.08517720415207143,
+      "axial_rel_error": 0.014478454889012518,
+      "component_abs_error_N": [
+        0.0001556593231005093,
+        8.147519187399282e-05,
+        0.04932937231551904
+      ],
+      "transverse_abs_error_N": 0.0001756930042973046,
+      "transverse_allowed_error_N": 0.006814176332165714,
+      "vector_abs_error_N": 0.049329685191321214,
+      "vector_allowed_error_N": 0.08517720415207143,
+      "vector_rel_error": 0.014478546719862477
+    },
+    "metadata": {
+      "force_density": "M dot grad(B_source), target magnetization constant",
+      "mesh_source": "coreform_cubit_export_netgen",
+      "producer": "ngsolve_vol_magnetic_material_force_integral"
+    },
+    "policy": "magnetic_material_pair_force_gate",
+    "reference": {
+      "force_norm_N": 3.407088166082857,
+      "force_vector_N": [
+        0.0,
+        0.0,
+        -3.407088166082857
+      ],
+      "transverse_components_N": [
+        0.0,
+        0.0
+      ],
+      "transverse_magnitude_N": 0.0
+    },
+    "reference_method": "analytic_dipole_dipole_force_between_uniformly_magnetized_spheres",
+    "required_result_contract": [
+      "state whether the force is magnetic-material/Maxwell-stress/coenergy, not Lorentz JxB",
+      "record source and target material selections",
+      "record global Cartesian force-vector basis and sign convention",
+      "record mesh/order/solver versions and timing with the result JSON"
+    ],
+    "status": "ok",
+    "tolerances": {
+      "axial_atol_N": 0.0,
+      "axial_rtol": 0.025,
+      "transverse_atol_N": 0.0,
+      "transverse_rtol": 0.002,
+      "vector_atol_N": 0.0,
+      "vector_rtol": 0.025
+    }
+  },
+  "mesh_generation": {
+    "cubit_command": "coreform_cubit.com -nographics -batch -nojournal -input <journal>",
+    "cubit_exit_code": 0,
+    "cubit_journal": "validation_test/force_validation/magnetic_material_pair_spheres_cubit.jou",
+    "cubit_log_had_license_error_line": false,
+    "cubit_log_written_to_temp": true,
+    "cubit_success_criterion": "exported .vol exists and is non-empty",
+    "generated": true,
+    "mesh_generation_duration_s": 2.954442,
+    "mesh_source": "coreform_cubit_export_netgen",
+    "vol_path": "validation_test/force_validation/magnetic_material_pair_spheres.vol"
+  },
+  "method_crosschecks": {
+    "maxwell_stress_surface": {
+      "force_vector_N": [
+        -6.726823958969064e-15,
+        2.109125591190364e-15,
+        -3.4070881660833496
+      ],
+      "gate": {
+        "axis": {
+          "axial_axis": "z",
+          "force_basis": "global_cartesian_components"
+        },
+        "case_id": "vol_two_magnetized_spheres_maxwell_stress_crosscheck",
+        "checks": {
+          "axial_component_matches_reference": true,
+          "computed_force_vector_finite": true,
+          "force_vector_matches_reference": true,
+          "reference_force_vector_finite": true,
+          "transverse_components_match_reference": true
+        },
+        "computed": {
+          "force_norm_N": 3.4070881660833496,
+          "force_vector_N": [
+            -6.726823958969064e-15,
+            2.109125591190364e-15,
+            -3.4070881660833496
+          ],
+          "transverse_components_N": [
+            -6.726823958969064e-15,
+            2.109125591190364e-15
+          ],
+          "transverse_magnitude_N": 7.049721365726047e-15
+        },
+        "errors": {
+          "axial_abs_error_N": 4.924949337237194e-13,
+          "axial_allowed_error_N": 3.4070881660828572e-09,
+          "axial_rel_error": 1.4455009959130927e-13,
+          "component_abs_error_N": [
+            6.726823958969064e-15,
+            2.109125591190364e-15,
+            4.924949337237194e-13
+          ],
+          "transverse_abs_error_N": 7.049721365726047e-15,
+          "transverse_allowed_error_N": 3.40708816608335e-09,
+          "vector_abs_error_N": 4.925453870607918e-13,
+          "vector_allowed_error_N": 3.4070881660828572e-09,
+          "vector_rel_error": 1.445649079363279e-13
+        },
+        "policy": "magnetic_material_pair_force_gate",
+        "reference": {
+          "force_norm_N": 3.407088166082857,
+          "force_vector_N": [
+            0.0,
+            0.0,
+            -3.407088166082857
+          ],
+          "transverse_components_N": [
+            0.0,
+            0.0
+          ],
+          "transverse_magnitude_N": 0.0
+        },
+        "reference_method": "closed_air_surface_maxwell_stress_total_dipole_field",
+        "required_result_contract": [
+          "state whether the force is magnetic-material/Maxwell-stress/coenergy, not Lorentz JxB",
+          "record source and target material selections",
+          "record global Cartesian force-vector basis and sign convention",
+          "record mesh/order/solver versions and timing with the result JSON"
+        ],
+        "status": "ok",
+        "tolerances": {
+          "axial_atol_N": 0.0,
+          "axial_rtol": 1e-09,
+          "transverse_atol_N": 0.0,
+          "transverse_rtol": 1e-09,
+          "vector_atol_N": 0.0,
+          "vector_rtol": 1e-09
+        }
+      },
+      "method": "closed_air_surface_maxwell_stress_total_dipole_field",
+      "quadrature": {
+        "n_phi_midpoint": 96,
+        "n_theta_gauss_legendre": 48
+      },
+      "surface_radius_m": 0.07
+    },
+    "virtual_work_energy_difference": {
+      "force_vector_N": [
+        -0.0,
+        -0.0,
+        -3.4070881671880806
+      ],
+      "gate": {
+        "axis": {
+          "axial_axis": "z",
+          "force_basis": "global_cartesian_components"
+        },
+        "case_id": "vol_two_magnetized_spheres_virtual_work_crosscheck",
+        "checks": {
+          "axial_component_matches_reference": true,
+          "computed_force_vector_finite": true,
+          "force_vector_matches_reference": true,
+          "reference_force_vector_finite": true,
+          "transverse_components_match_reference": true
+        },
+        "computed": {
+          "force_norm_N": 3.4070881671880806,
+          "force_vector_N": [
+            -0.0,
+            -0.0,
+            -3.4070881671880806
+          ],
+          "transverse_components_N": [
+            -0.0,
+            -0.0
+          ],
+          "transverse_magnitude_N": 0.0
+        },
+        "errors": {
+          "axial_abs_error_N": 1.1052234683006645e-09,
+          "axial_allowed_error_N": 3.407088166082857e-08,
+          "axial_rel_error": 3.24389453417879e-10,
+          "component_abs_error_N": [
+            0.0,
+            0.0,
+            1.1052234683006645e-09
+          ],
+          "transverse_abs_error_N": 0.0,
+          "transverse_allowed_error_N": 3.407088167188081e-08,
+          "vector_abs_error_N": 1.1052234683006645e-09,
+          "vector_allowed_error_N": 3.407088166082857e-08,
+          "vector_rel_error": 3.24389453417879e-10
+        },
+        "policy": "magnetic_material_pair_force_gate",
+        "reference": {
+          "force_norm_N": 3.407088166082857,
+          "force_vector_N": [
+            0.0,
+            0.0,
+            -3.407088166082857
+          ],
+          "transverse_components_N": [
+            0.0,
+            0.0
+          ],
+          "transverse_magnitude_N": 0.0
+        },
+        "reference_method": "centered_difference_of_dipole_interaction_energy",
+        "required_result_contract": [
+          "state whether the force is magnetic-material/Maxwell-stress/coenergy, not Lorentz JxB",
+          "record source and target material selections",
+          "record global Cartesian force-vector basis and sign convention",
+          "record mesh/order/solver versions and timing with the result JSON"
+        ],
+        "status": "ok",
+        "tolerances": {
+          "axial_atol_N": 0.0,
+          "axial_rtol": 1e-08,
+          "transverse_atol_N": 0.0,
+          "transverse_rtol": 1e-08,
+          "vector_atol_N": 0.0,
+          "vector_rtol": 1e-08
+        }
+      },
+      "interaction_energy_J": -0.34070881660828567,
+      "method": "virtual_work_interaction_energy_centered_difference",
+      "step_m": 3e-06
+    },
+    "volume_force_density": {
+      "force_vector_N": [
+        0.0001556593231005093,
+        8.147519187399282e-05,
+        -3.357758793767338
+      ],
+      "gate": {
+        "axis": {
+          "axial_axis": "z",
+          "force_basis": "global_cartesian_components"
+        },
+        "case_id": "vol_two_magnetized_spheres_force",
+        "checks": {
+          "axial_component_matches_reference": true,
+          "computed_force_vector_finite": true,
+          "force_vector_matches_reference": true,
+          "reference_force_vector_finite": true,
+          "transverse_components_match_reference": true
+        },
+        "computed": {
+          "force_norm_N": 3.3577587983638613,
+          "force_vector_N": [
+            0.0001556593231005093,
+            8.147519187399282e-05,
+            -3.357758793767338
+          ],
+          "transverse_components_N": [
+            0.0001556593231005093,
+            8.147519187399282e-05
+          ],
+          "transverse_magnitude_N": 0.0001756930042973046
+        },
+        "errors": {
+          "axial_abs_error_N": 0.04932937231551904,
+          "axial_allowed_error_N": 0.08517720415207143,
+          "axial_rel_error": 0.014478454889012518,
+          "component_abs_error_N": [
+            0.0001556593231005093,
+            8.147519187399282e-05,
+            0.04932937231551904
+          ],
+          "transverse_abs_error_N": 0.0001756930042973046,
+          "transverse_allowed_error_N": 0.006814176332165714,
+          "vector_abs_error_N": 0.049329685191321214,
+          "vector_allowed_error_N": 0.08517720415207143,
+          "vector_rel_error": 0.014478546719862477
+        },
+        "metadata": {
+          "force_density": "M dot grad(B_source), target magnetization constant",
+          "mesh_source": "coreform_cubit_export_netgen",
+          "producer": "ngsolve_vol_magnetic_material_force_integral"
+        },
+        "policy": "magnetic_material_pair_force_gate",
+        "reference": {
+          "force_norm_N": 3.407088166082857,
+          "force_vector_N": [
+            0.0,
+            0.0,
+            -3.407088166082857
+          ],
+          "transverse_components_N": [
+            0.0,
+            0.0
+          ],
+          "transverse_magnitude_N": 0.0
+        },
+        "reference_method": "analytic_dipole_dipole_force_between_uniformly_magnetized_spheres",
+        "required_result_contract": [
+          "state whether the force is magnetic-material/Maxwell-stress/coenergy, not Lorentz JxB",
+          "record source and target material selections",
+          "record global Cartesian force-vector basis and sign convention",
+          "record mesh/order/solver versions and timing with the result JSON"
+        ],
+        "status": "ok",
+        "tolerances": {
+          "axial_atol_N": 0.0,
+          "axial_rtol": 0.025,
+          "transverse_atol_N": 0.0,
+          "transverse_rtol": 0.002,
+          "vector_atol_N": 0.0,
+          "vector_rtol": 0.025
+        }
+      },
+      "method": "target volume integral of M dot grad(B_source)"
+    }
+  },
+  "ngsolve_vol_result": {
+    "force_vector_N": [
+      0.0001556593231005093,
+      8.147519187399282e-05,
+      -3.357758793767338
+    ],
+    "mesh": {
+      "boundaries": [
+        "Surface_1",
+        "Surface_2"
+      ],
+      "materials": [
+        "source_magnetic",
+        "target_magnetic"
+      ],
+      "ne": 9670,
+      "nv": 2041,
+      "source_volume_exact_m3": 0.00026808257310632905,
+      "source_volume_m3": 0.00026415350733948156,
+      "source_volume_rel_error": 0.014656177465474833,
+      "target_volume_exact_m3": 0.00026808257310632905,
+      "target_volume_m3": 0.0002641966381190605,
+      "target_volume_rel_error": 0.014495291291192189
+    },
+    "ngsolve_version": "6.2.2604",
+    "timing": {
+      "mesh_import": 0.070235,
+      "ngsolve_magnetic_material_force_integral": 0.046239,
+      "source_field_gradient_build": 0.000317
+    }
+  },
+  "pass": true,
+  "reference": {
+    "basis": "analytic dipole-dipole force, full 3D geometry, parallel z magnetizations",
+    "force_vector_N": [
+      0.0,
+      0.0,
+      -3.407088166082857
+    ]
+  },
+  "result_files": [
+    "validation_test/force_validation/validation_magnetic_material_pair_vol_force_summary.json",
+    "validation_test/force_validation/magnetic_material_pair_spheres.vol",
+    "validation_test/force_validation/magnetic_material_pair_spheres_cubit.jou",
+    "validation_test/force_validation/validation_magnetic_material_pair_vol_force_ready.json"
+  ],
+  "run": {
+    "command": "python validation_test/force_validation/validation_magnetic_material_pair_vol_force.py --rebuild-vol --mesh-source auto",
+    "duration_s": 3.260823,
+    "exit_code": 0,
+    "workdir": "."
+  },
+  "schema": "cae-ai-lab.solver-run.v1",
+  "solver": "radia-ngsolve",
+  "source_artifact": "validation_test/force_validation/validation_magnetic_material_pair_vol_force.py",
+  "timing_breakdown_s": {
+    "maxwell_stress_and_virtual_work_crosschecks": 0.029773,
+    "mesh_generation_or_reuse": 2.954442,
+    "mesh_import": 0.070235,
+    "ngsolve_magnetic_material_force_integral": 0.046239,
+    "source_field_gradient_build": 0.000317
+  },
+  "tolerances": {
+    "axial_rtol": 0.025,
+    "force_vector_rtol": 0.025,
+    "max_abs": 0.0,
+    "max_rel": 0.025,
+    "transverse_rtol": 0.002,
+    "volume_rtol": 0.025
+  },
+  "tool_versions": {
+    "ngsolve": "6.2.2604",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "python": "3.12.10",
+    "radia": "4.95.5",
+    "radia_mcp": "1.4.3"
+  },
+  "validation_class": true,
+  "verification": {
+    "command": "python validation_test/force_validation/validation_magnetic_material_pair_vol_force.py --rebuild-vol --mesh-source auto",
+    "independent_methods": [
+      "volume force density M dot grad(B_source)",
+      "closed air-surface Maxwell stress of total dipole field",
+      "virtual work from centered finite difference of interaction energy"
+    ],
+    "method": "NGSolve Mesh(.vol) magnetic-material force integral checked by analytic dipole-dipole force"
+  }
+}

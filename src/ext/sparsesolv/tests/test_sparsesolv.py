@@ -1,0 +1,2359 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+"""
+Tests for SparseSolv iterative solvers and preconditioners.
+
+Tests SparseSolvSolver (ICCG) and standalone
+preconditioners (IC) for use with NGSolve's Krylov solvers.
+
+Factory functions (ICPreconditioner, etc.) auto-dispatch real/complex
+based on mat.IsComplex() and auto-call Update() on construction.
+"""
+
+import pytest
+import subprocess
+import sys
+import numpy as np
+from netgen.geom2d import unit_square
+from netgen.csg import unit_cube
+from ngsolve import *
+from radia.sparsesolv_ngsolve import ICPreconditioner
+from radia.sparsesolv_ngsolve import SparseSolvSolver
+from ngsolve import la
+from ngsolve.krylovspace import CGSolver
+
+
+@pytest.mark.parametrize("cycle", [1, 7])
+@pytest.mark.parametrize("subspace_solver", [0, 1])
+def test_beta_zero_ams_solves_compatible_singular_system_and_updates(cycle, subspace_solver):
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.35))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    u, v = space.TnT()
+    a = BilinearForm(space)
+    a += curl(u) * curl(v) * dx
+    a.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    before = a.mat.AsVector().FV().NumPy().copy()
+    pre = HypreBasedAMSPreconditioner(a.mat, grad, freedofs=space.FreeDofs(),
+        coord_x=coords[0], coord_y=coords[1], coord_z=coords[2], beta_zero=True,
+        cycle_type=cycle, subspace_solver=subspace_solver, print_level=1)
+    assert pre.beta_zero is True
+    exact = GridFunction(space)
+    free = np.asarray(list(space.FreeDofs()), dtype=bool)
+    exact.vec.FV().NumPy()[:] = np.random.default_rng(418).normal(size=space.ndof) * free
+    rhs = exact.vec.CreateVector()
+    rhs.data = a.mat * exact.vec
+    rhs.FV().NumPy()[~free] = 0
+    for update in (None, a.mat):
+        if update is None:
+            pre.Update()
+        else:
+            pre.Update(update)
+        np.testing.assert_array_equal(a.mat.AsVector().FV().NumPy(), before)
+        solution = GridFunction(space)
+        with TaskManager():
+            inv = CGSolver(a.mat, pre, tol=1e-10, maxiter=500, printrates=False)
+            solution.vec.data = inv * rhs
+        residual = rhs.CreateVector()
+        residual.data = rhs - a.mat * solution.vec
+        assert np.linalg.norm(residual.FV().NumPy()[free]) / Norm(rhs) < 1e-7
+        difference = curl(solution) - curl(exact)
+        assert Integrate(difference * difference, mesh) < 1e-12 * Integrate(curl(exact)*curl(exact), mesh)
+
+
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_reused_ams_hierarchy_refreshes_and_still_converges(beta_zero):
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.2))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    u, v = space.TnT()
+    nu = GridFunction(L2(mesh, order=0))
+    nu.vec.FV().NumPy()[:] = 1.0
+    a = BilinearForm(space)
+    a += nu * curl(u) * curl(v) * dx
+    if not beta_zero:
+        a += 1e-6 * u * v * dx
+    a.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    options = dict(freedofs=space.FreeDofs(), coord_x=coords[0], coord_y=coords[1],
+                   coord_z=coords[2], beta_zero=beta_zero, cycle_type=1)
+    reused = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, **options)
+    assert reused.reuse_hierarchy is True and reused.hierarchy_refreshes == 0
+    free = np.asarray(list(space.FreeDofs()), dtype=bool)
+    exact = GridFunction(space)
+    exact.vec.FV().NumPy()[:] = np.random.default_rng(5).normal(size=space.ndof) * free
+    # A coefficient jump of three decades on half of the elements.
+    nu.vec.FV().NumPy()[: mesh.ne // 2] = 1e3
+    a.Assemble()
+    rhs = exact.vec.CreateVector()
+    rhs.data = a.mat * exact.vec
+    rhs.FV().NumPy()[~free] = 0
+    reused.Update(a.mat)
+    assert reused.hierarchy_refreshes == 1
+    fresh = HypreBasedAMSPreconditioner(a.mat, grad, **options)
+    iterations = {}
+    for name, pre in (("reused", reused), ("fresh", fresh)):
+        solution = GridFunction(space)
+        with TaskManager():
+            inv = CGSolver(a.mat, pre, tol=1e-10, maxiter=2000, printrates=False)
+            solution.vec.data = inv * rhs
+        residual = rhs.CreateVector()
+        residual.data = rhs - a.mat * solution.vec
+        assert np.linalg.norm(residual.FV().NumPy()[free]) / Norm(rhs) < 1e-7
+        iterations[name] = inv.iterations
+    assert iterations["reused"] <= 2 * iterations["fresh"] + 5, iterations
+
+
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_in_place_ams_update_matches_symbolic_galerkin_products(beta_zero):
+    """With reuse_hierarchy and an unchanged pattern, Update refreshes the
+    Galerkin matrices numerically on their previous patterns. On unchanged
+    values that must reproduce the symbolic products of the first build.
+
+    G^T A G cancels the curl-curl part exactly in exact arithmetic, so with a
+    gauge eps its round-off relative to eps scales like 1/eps whatever the
+    summation order; the gauged case uses eps = 1e-2 to compare the products,
+    not that cancellation."""
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.2))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet="left|bottom")
+    u, v = space.TnT()
+    nu = GridFunction(L2(mesh, order=0))
+    nu.vec.FV().NumPy()[:] = np.random.default_rng(3).uniform(1.0, 1e3, mesh.ne)
+    a = BilinearForm(space)
+    a += nu * curl(u) * curl(v) * dx
+    if not beta_zero:
+        a += 1e-2 * u * v * dx
+    a.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    pre = HypreBasedAMSPreconditioner(a.mat, grad, freedofs=space.FreeDofs(), coord_x=coords[0],
+                                      coord_y=coords[1], coord_z=coords[2], beta_zero=beta_zero,
+                                      cycle_type=1, reuse_hierarchy=True)
+    x = a.mat.CreateColVector()
+    x.FV().NumPy()[:] = np.random.default_rng(4).normal(size=space.ndof)
+    before, after = x.CreateVector(), x.CreateVector()
+    before.data = pre * x
+    pre.Update(a.mat)
+    assert pre.in_place_updates == 1 and pre.hierarchy_refreshes == 1
+    after.data = pre * x
+    scale = np.linalg.norm(before.FV().NumPy())
+    # Measured: 1e-12 beta-zero; 1e-9 gauged at eps 1e-2 (1e-5 at eps 1e-6).
+    tolerance = 1e-11 if beta_zero else 1e-7
+    assert np.linalg.norm(after.FV().NumPy() - before.FV().NumPy()) <= tolerance * scale
+    # A different matrix object with the same pattern is compared and refreshed in place.
+    b = BilinearForm(space)
+    b += nu * curl(u) * curl(v) * dx
+    if not beta_zero:
+        b += 1e-2 * u * v * dx
+    b.Assemble()
+    pre.Update(b.mat)
+    assert pre.in_place_updates == 2
+    after.data = pre * x
+    assert np.linalg.norm(after.FV().NumPy() - before.FV().NumPy()) <= tolerance * scale
+
+
+def _ams_system(beta_zero, maxh=0.2):
+    import numpy as np
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=maxh))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet="left|bottom")
+    u, v = space.TnT()
+    nu = GridFunction(L2(mesh, order=0))
+    nu.vec.FV().NumPy()[:] = np.random.default_rng(21).uniform(1.0, 1e3, mesh.ne)
+    a = BilinearForm(space)
+    a += nu * curl(u) * curl(v) * dx
+    if not beta_zero:
+        a += 1e-2 * u * v * dx
+    a.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    options = dict(freedofs=space.FreeDofs(), coord_x=coords[0], coord_y=coords[1],
+                   coord_z=coords[2], beta_zero=beta_zero, cycle_type=1)
+    return mesh, space, a, grad, options
+
+
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_native_first_build_matches_the_restrict_build(beta_zero):
+    """reuse_hierarchy builds its first Galerkin matrices natively (vertex-graph
+    pattern, fused Pi pass, native AMG products); the preconditioner must equal
+    the default Restrict build up to summation order."""
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh, space, a, grad, options = _ams_system(beta_zero)
+    native = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, **options)
+    reference = HypreBasedAMSPreconditioner(a.mat, grad, **options)
+    x = a.mat.CreateColVector()
+    x.FV().NumPy()[:] = np.random.default_rng(22).normal(size=space.ndof)
+    y1, y2 = x.CreateVector(), x.CreateVector()
+    with TaskManager():
+        y1.data = native * x
+        y2.data = reference * x
+    scale = np.linalg.norm(y2.FV().NumPy())
+    tolerance = 1e-10 if beta_zero else 1e-6  # gauged G^T A G: cancellation round-off
+    assert np.linalg.norm(y1.FV().NumPy() - y2.FV().NumPy()) <= tolerance * scale
+
+
+@pytest.mark.parametrize("beta_zero,mixed", [(False, False), (True, False), (True, True)])
+def test_row_tracked_update_equals_a_full_refresh(beta_zero, mixed):
+    """An in-place Update recomputes only the rows its value changes reach
+    (Galerkin rows, AMG levels, l1 norms, float mirrors). Its preconditioner
+    must be the one of an Update that recomputes everything."""
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh, space, a, grad, options = _ams_system(beta_zero)
+    values = a.mat.AsVector().FV().NumPy()
+    original = values.copy()
+    kwargs = dict(reuse_hierarchy=True, mixed_precision=mixed, **options)
+    # One object for both states: separately built hierarchies differ in the
+    # last bits (the setup is not bit-reproducible), the refresh kernels are.
+    pre = HypreBasedAMSPreconditioner(a.mat, grad, **kwargs)
+    # New values on the rows of a few elements only (a symmetric local change).
+    rows = set()
+    for el in list(mesh.Elements(VOL))[:40]:
+        rows.update(space.GetDofNrs(el))
+    rows = np.array(sorted(rows))
+    _, cols, offsets = (np.asarray(v) for v in a.mat.CSR())
+    offsets = offsets.astype(np.int64)
+    target = original.copy()
+    for r in rows:
+        for k in range(offsets[r], offsets[r + 1]):
+            if cols[k] in rows:
+                target[k] *= 1.7
+    x = a.mat.CreateColVector()
+    x.FV().NumPy()[:] = np.random.default_rng(41).normal(size=space.ndof)
+    y0, y1, y2 = x.CreateVector(), x.CreateVector(), x.CreateVector()
+    y0.data = pre * x
+    # Tracked: only the element rows change.
+    values[:] = target
+    pre.Update(a.mat)
+    y1.data = pre * x   # serial: bit-reproducible
+    # Full: every row changes first, then the same target values again.
+    values[:] = original * 3.0
+    pre.Update(a.mat)
+    values[:] = target
+    pre.Update(a.mat)
+    y2.data = pre * x
+    assert pre.in_place_updates == 3
+    # The build uses /fp:fast and parallel ranges, so even two full refreshes
+    # agree only to round-off (1e-16 beta-zero, ~1e-9 gauged: G^T A G
+    # cancellation); a row the tracking missed would differ like the change.
+    def rel(p, q):
+        return np.max(np.abs(p.FV().NumPy() - q.FV().NumPy())) / np.max(np.abs(q.FV().NumPy()))
+    tolerance = 1e-13 if beta_zero else 1e-7
+    assert rel(y0, y1) > 1e-4                 # the change is seen
+    assert rel(y1, y2) <= tolerance
+
+
+def test_mixed_precision_ams_requires_beta_zero():
+    """With a gauge, float32 values lose the gauge-scale gradient components
+    that the G correction amplifies (measured: 33 % off the double cycle)."""
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh, space, a, grad, options = _ams_system(False)
+    with pytest.raises(Exception, match="requires beta_zero"):
+        HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, mixed_precision=True, **options)
+
+
+def test_mixed_precision_ams_is_symmetric_and_close_to_double():
+    """mixed_precision reads float32 matrix/transfer values inside the cycle:
+    the preconditioner stays symmetric (CG-valid) and within float round-off of
+    the double cycle, and its refresh keeps the mirrors current."""
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner, NativePCG
+    beta_zero = True
+    mesh, space, a, grad, options = _ams_system(beta_zero)
+    mixed = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, mixed_precision=True, **options)
+    double = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, **options)
+    assert mixed.mixed_precision and not double.mixed_precision
+    free = np.asarray(list(space.FreeDofs()), dtype=bool)
+    rng = np.random.default_rng(31)
+    x, y = a.mat.CreateColVector(), a.mat.CreateColVector()
+    x.FV().NumPy()[:] = rng.normal(size=space.ndof) * free
+    y.FV().NumPy()[:] = rng.normal(size=space.ndof) * free
+    mx, my, dx_ = x.CreateVector(), x.CreateVector(), x.CreateVector()
+    with TaskManager():
+        mx.data = mixed * x
+        my.data = mixed * y
+        dx_.data = double * x
+    xmy, ymx = float(np.dot(x.FV().NumPy(), my.FV().NumPy())), float(np.dot(y.FV().NumPy(), mx.FV().NumPy()))
+    assert abs(xmy - ymx) <= 1e-5 * max(abs(xmy), abs(ymx))
+    tolerance = 1e-5
+    assert np.linalg.norm(mx.FV().NumPy() - dx_.FV().NumPy()) <= tolerance * np.linalg.norm(dx_.FV().NumPy())
+    # After a value change the mirrors follow (in-place refresh).
+    a.mat.AsVector().FV().NumPy()[:] *= 3.0
+    mixed.Update(a.mat)
+    double.Update(a.mat)
+    with TaskManager():
+        mx.data = mixed * x
+        dx_.data = double * x
+    assert np.linalg.norm(mx.FV().NumPy() - dx_.FV().NumPy()) <= tolerance * np.linalg.norm(dx_.FV().NumPy())
+    b = x.CreateVector()
+    b.data = a.mat * x
+    b.FV().NumPy()[~free] = 0.0
+    sol = b.CreateVector()
+    with TaskManager():
+        its, rel, ok = NativePCG(a.mat, mixed, space.FreeDofs()).Solve(b, sol, 1e-10, 500)
+    assert ok and rel <= 1e-10
+
+
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_native_pcg_solves_to_the_true_residual(beta_zero):
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner, NativePCG
+    mesh, space, a, grad, options = _ams_system(beta_zero)
+    pre = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, **options)
+    free = np.asarray(list(space.FreeDofs()), dtype=bool)
+    exact = a.mat.CreateColVector()
+    exact.FV().NumPy()[:] = np.random.default_rng(23).normal(size=space.ndof) * free
+    b = exact.CreateVector()
+    b.data = a.mat * exact
+    b.FV().NumPy()[~free] = 0.0
+    pcg = NativePCG(a.mat, pre, space.FreeDofs())
+    x1, x2 = b.CreateVector(), b.CreateVector()
+    with TaskManager():
+        its, rel, ok = pcg.Solve(b, x1, 1e-10, 500)
+        its2, rel2, ok2 = pcg.Solve(b, x2, 1e-10, 500)
+    assert ok and rel <= 1e-10
+    residual = b.CreateVector()
+    residual.data = b - a.mat * x1
+    assert np.linalg.norm(residual.FV().NumPy()[free]) <= 1e-10 * np.linalg.norm(b.FV().NumPy()[free]) * 1.0001
+    # The PCG's own inner products are deterministic; the AMS application under a
+    # TaskManager differs between runs at round-off (2e-16), which two solves to
+    # 1e-10 amplify to ~1e-9 in the solution.
+    assert its == its2 and abs(rel - rel2) <= 1e-3 * rel
+    np.testing.assert_allclose(x1.FV().NumPy(), x2.FV().NumPy(), rtol=0,
+                               atol=1e-6 * np.max(np.abs(x1.FV().NumPy())))
+    if not beta_zero:  # the gauged system is nonsingular: the solution is the field itself
+        np.testing.assert_allclose(x1.FV().NumPy(), exact.FV().NumPy(), rtol=0,
+                                   atol=1e-6 * np.max(np.abs(exact.FV().NumPy())))
+    with TaskManager():
+        its3, rel3, ok3 = pcg.Solve(b, x1, 1e-12, 1)
+    assert its3 == 1 and not ok3 and rel3 > 1e-12
+    negative = BilinearForm(space)
+    negative += -1.0 * InnerProduct(space.TrialFunction(), space.TestFunction()) * dx
+    negative.Assemble()
+    with TaskManager(), pytest.raises(Exception, match="not SPD"):
+        NativePCG(a.mat, negative.mat, None).Solve(b, x1, 1e-8, 10)
+
+
+def test_lowest_order_gradient_equals_create_gradient():
+    import numpy as np
+    from radia.sparsesolv_ngsolve import LowestOrderGradient
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    reference, _ = space.CreateGradient()
+    with TaskManager():
+        fast = LowestOrderGradient(space)
+    assert (fast.height, fast.width) == (reference.height, reference.width)
+    for a, b in zip(reference.CSR(), fast.CSR()):
+        np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
+    with pytest.raises(Exception, match="one HCurl dof per edge"):
+        LowestOrderGradient(HCurl(mesh, order=1))
+
+
+def _bddc_order2_solve(coarse, complex_system, face_wirebasket=False, order=2, **coarseflags):
+    import radia.sparsesolv_ngsolve as ssn
+    # Keep p=3 interior modes; production-size evidence lives in validation_test/.
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.35 if order == 3 else 0.2))
+    space = HCurl(mesh, order=order, nograds=True, dirichlet=".*", complex=complex_system)
+    if face_wirebasket:
+        # As HCurl does on badly shaped faces: some face dofs join the wirebasket.
+        for dof in range(mesh.nedge, space.ndof, 7):
+            space.SetCouplingType(dof, COUPLING_TYPE.WIREBASKET_DOF)
+    u, v = space.TnT()
+    mass = (1e-3 + 1j) if complex_system else 1e-3
+    a = BilinearForm(curl(u) * curl(v) * dx + mass * u * v * dx)
+    flags = {"coarsetype": coarse}
+    if coarse != "direct":
+        flags["coarseflags"] = {"eps": 1e-6, **coarseflags}
+    pre = Preconditioner(a, "bddc", **flags)
+    f = LinearForm(CoefficientFunction((y, -x, 1)) * v * dx)
+    with TaskManager():  # the wirebasket AMS is built inside Assemble
+        a.Assemble()
+        f.Assemble()
+        solver = ssn.COCRSolver(a.mat, pre, freedofs=space.FreeDofs(), maxiter=400, tol=1e-11)
+        gfu = GridFunction(space)
+        gfu.vec.data = solver * f.vec
+    # Read the stats while BDDC (and its wirebasket AMS) is still alive.
+    _bddc_order2_solve.stats = dict(ssn.AMSCoarseStats()) if coarse != "direct" else {}
+    return mesh, gfu, solver.iterations
+
+
+@pytest.mark.parametrize("complex_system,face_wirebasket",
+                         [(False, False), (True, False), (True, True)])
+def test_bddc_wirebasket_ams_matches_direct_coarse_solve(complex_system, face_wirebasket):
+    import radia.sparsesolv_ngsolve as ssn
+    mesh, direct, _ = _bddc_order2_solve("direct", complex_system, face_wirebasket)
+    _, ams, iterations = _bddc_order2_solve("sparsesolv_ams", complex_system, face_wirebasket)
+    stats = ssn.AMSCoarseStats()
+    assert stats["complex"] == complex_system
+    assert stats["n_edges"] == mesh.nedge
+    assert (stats["n_extra"] > 0) == face_wirebasket
+    assert 0 < stats["n_free"] < mesh.nedge + stats["n_extra"]
+    assert stats["applies"] >= iterations > 0
+    diff = Integrate(InnerProduct(ams - direct, ams - direct).real, mesh)
+    norm = Integrate(InnerProduct(direct, direct).real, mesh)
+    assert diff ** 0.5 < 1e-8 * norm ** 0.5
+
+
+@pytest.mark.parametrize("coarseflags", [{"lean_coarse": 0}, {"cycles": 2}, {"order": 3}])
+def test_bddc_wirebasket_ams_variants_match_direct_coarse_solve(coarseflags):
+    # lean_coarse=0 keeps the sparse coarsest factorizations (the default
+    # solves small coarsest levels densely). Both stay fixed symmetric operators.
+    import radia.sparsesolv_ngsolve as ssn
+    coarseflags = dict(coarseflags)
+    order = coarseflags.pop("order", 2)  # order 3: the wirebasket is still the edge block
+    mesh, direct, _ = _bddc_order2_solve("direct", True, order=order)
+    _, ams, iterations = _bddc_order2_solve("sparsesolv_ams", True, order=order, **coarseflags)
+    assert iterations > 0
+    levels = _bddc_order2_solve.stats["amg_levels"]
+    coarsest = {name: rows[-1][3] for name, rows in levels.items()}
+    if coarseflags.get("lean_coarse", 1) == 0:
+        assert set(coarsest.values()) == {1}
+    diff = Integrate(InnerProduct(ams - direct, ams - direct).real, mesh)
+    norm = Integrate(InnerProduct(direct, direct).real, mesh)
+    assert diff ** 0.5 < 1e-8 * norm ** 0.5
+
+
+def test_bddc_wirebasket_ams_default_uses_dense_coarsest_levels():
+    import radia.sparsesolv_ngsolve as ssn
+    _bddc_order2_solve("sparsesolv_ams", True)
+    levels = _bddc_order2_solve.stats["amg_levels"]
+    # 2 = dense inverse (accepted only after it reproduces a test vector)
+    assert any(rows[-1][3] == 2 for rows in levels.values())
+
+
+def test_bddc_wirebasket_ams_rejects_non_edge_spaces():
+    import radia.sparsesolv_ngsolve  # noqa: F401  (registers the coarse type)
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
+    space = H1(mesh, order=2, dirichlet=".*")
+    u, v = space.TnT()
+    a = BilinearForm(grad(u) * grad(v) * dx)
+    pre = Preconditioner(a, "bddc", coarsetype="sparsesolv_ams")  # noqa: F841 (kept alive)
+    with pytest.raises(Exception, match="lowest-order edge dofs by edge"):
+        a.Assemble()
+
+
+def test_lowest_order_curl_system_matches_form_assembly():
+    import numpy as np
+    from radia.sparsesolv_ngsolve import LowestOrderCurlSystem
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.25))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    coefficient = np.random.default_rng(7).uniform(0.5, 2.0, mesh.ne)
+    with TaskManager():
+        system = LowestOrderCurlSystem(space, coefficient=coefficient)
+    dofs, curl_e, volume, pos = (system[k] for k in ("dofs", "curl", "volume", "positions"))
+    assert dofs.shape == (mesh.ne, 6) and np.all(np.diff(dofs, axis=1) > 0)
+    reference_volume = np.asarray(Integrate(CoefficientFunction(1.0), mesh, VOL, element_wise=True))
+    np.testing.assert_allclose(volume, reference_volume, rtol=1e-13)
+    # Element curl of a random field equals NGSolve's element mean of curl(u).
+    u = GridFunction(space)
+    u.vec.FV().NumPy()[:] = np.random.default_rng(8).normal(size=space.ndof)
+    mean = np.stack([np.asarray(Integrate(curl(u)[k], mesh, VOL, element_wise=True)) for k in range(3)],
+                    axis=1) / reference_volume[:, None]
+    ours = np.einsum("nkj,nj->nk", curl_e, u.vec.FV().NumPy()[dofs])
+    np.testing.assert_allclose(ours, mean, rtol=0, atol=1e-12 * np.max(np.abs(mean)))
+    # The matrix is the curl-curl form with the element coefficient, on its exact pattern.
+    nu = GridFunction(L2(mesh, order=0))
+    nu.vec.FV().NumPy()[:] = coefficient
+    trial, test = space.TnT()
+    form = BilinearForm(space, symmetric=True)
+    form += nu * curl(trial) * curl(test) * dx
+    form.Assemble()
+    fv, fc, fo = (np.asarray(x) for x in form.mat.CSR())
+    sv, sc, so = (np.asarray(x) for x in system["matrix"].CSR())
+    np.testing.assert_array_equal(sc, fc)
+    np.testing.assert_array_equal(so, fo)
+    np.testing.assert_allclose(sv, fv, rtol=0, atol=1e-13 * np.max(np.abs(fv)))
+    rows = np.repeat(np.arange(len(so) - 1), np.diff(so.astype(np.int64)))
+    assert np.array_equal(rows[pos[:, 7]], dofs[:, 1]) and np.array_equal(sc[pos[:, 7]], dofs[:, 1])
+    assert np.array_equal(rows[pos[:, 11]], dofs[:, 1]) and np.array_equal(sc[pos[:, 11]], dofs[:, 5])
+    # Exactly symmetric: (i, j) and (j, i) hold the same bits.
+    transpose = pos.reshape(-1, 6, 6).transpose(0, 2, 1).reshape(-1, 36)
+    assert np.array_equal(sv[pos], sv[transpose])
+    with TaskManager():
+        empty = LowestOrderCurlSystem(space)
+    assert not np.any(np.asarray(empty["matrix"].CSR()[0]))
+    with pytest.raises(Exception, match="six regular"):
+        LowestOrderCurlSystem(HCurl(mesh, order=1))
+    with pytest.raises(Exception, match="one value per element"):
+        LowestOrderCurlSystem(space, coefficient=np.ones(3))
+
+
+def test_lowest_order_curl_jacobian_refresh_is_the_tangent_form():
+    import numpy as np
+    from radia.sparsesolv_ngsolve import LowestOrderCurlJacobian, LowestOrderCurlSystem
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.25))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    rng = np.random.default_rng(11)
+    subset = np.sort(rng.choice(mesh.ne, mesh.ne // 3, replace=False))
+    constant = np.full(mesh.ne, 2.0)
+    constant[subset] = 0.0
+    with TaskManager():
+        system = LowestOrderCurlSystem(space, coefficient=constant)
+    matrix = system["matrix"]
+    before = np.asarray(matrix.CSR()[0]).copy()
+    native = LowestOrderCurlJacobian(matrix, system["dofs"][subset], system["curl"][subset],
+                                     system["volume"][subset], system["positions"][subset])
+    assert native.elements == len(subset)
+    nu, q = rng.uniform(1.0, 3.0, len(subset)), rng.uniform(-0.5, 2.0, len(subset))
+    b = rng.normal(size=(len(subset), 3))
+    for _ in range(2):  # a refresh rewrites, it does not accumulate
+        with TaskManager():
+            native.Refresh(nu, q, b)
+    fields = [GridFunction(L2(mesh, order=0)) for _ in range(5)]
+    for gf, values in zip(fields[:2], (nu, q)):
+        gf.vec.FV().NumPy()[subset] = values
+    for k in range(3):
+        fields[2 + k].vec.FV().NumPy()[subset] = b[:, k]
+    coefficient = GridFunction(L2(mesh, order=0))
+    coefficient.vec.FV().NumPy()[:] = constant
+    bvec = CoefficientFunction(tuple(fields[2:]))
+    trial, test = space.TnT()
+    form = BilinearForm(space, symmetric=True)
+    form += (coefficient + fields[0]) * curl(trial) * curl(test) * dx
+    form += fields[1] * InnerProduct(bvec, curl(trial)) * InnerProduct(bvec, curl(test)) * dx
+    form.Assemble()
+    reference = np.asarray(form.mat.CSR()[0])
+    values = np.asarray(matrix.CSR()[0])
+    np.testing.assert_allclose(values, reference, rtol=0, atol=1e-13 * np.max(np.abs(reference)))
+    pos = system["positions"]
+    transpose = pos.reshape(-1, 6, 6).transpose(0, 2, 1).reshape(-1, 36)
+    assert np.array_equal(values[pos], values[transpose])
+    untouched = np.ones(len(values), bool)
+    untouched[pos[subset].ravel()] = False
+    touched_rows = np.unique(system["dofs"][subset])
+    so = np.asarray(matrix.CSR()[2]).astype(np.int64)
+    for row in touched_rows:
+        untouched[so[row]:so[row + 1]] = False
+    assert np.array_equal(values[untouched], before[untouched])
+    with pytest.raises(Exception, match="same n"):
+        LowestOrderCurlJacobian(matrix, system["dofs"][:2], system["curl"][:3], system["volume"][:3],
+                                system["positions"][:3])
+    shifted = system["positions"][subset].copy()
+    shifted[:, 1] = shifted[:, 0]
+    with pytest.raises(Exception, match="do not match"):
+        LowestOrderCurlJacobian(matrix, system["dofs"][subset], system["curl"][subset],
+                                system["volume"][subset], shifted)
+
+
+@pytest.mark.parametrize("with_source", [False, True])
+def test_lowest_order_curl_residual_matches_numpy(with_source):
+    import numpy as np
+    from radia.sparsesolv_ngsolve import LowestOrderCurlResidual, LowestOrderCurlSystem
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.25))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    rng = np.random.default_rng(12)
+    iron = np.sort(rng.choice(mesh.ne, mesh.ne // 2, replace=False)).astype(np.int64)
+    with TaskManager():
+        system = LowestOrderCurlSystem(space)
+    dofs, curl_e, volume = system["dofs"], system["curl"], system["volume"]
+    nu0 = 7.0
+    grid = np.concatenate(([0.0], np.geomspace(1e-7, 50.0, 400)))
+    nu_table = 1.0 + 3.0 / (1.0 + grid)
+    dhdb_table = np.gradient(nu_table * grid, grid)
+    x = rng.normal(size=space.ndof)
+    load = rng.normal(size=space.ndof)
+    source = rng.normal(size=(len(iron), 3)) if with_source else None
+    native = LowestOrderCurlResidual(dofs, curl_e, volume, space.ndof, iron, nu0)
+    residual = np.empty(space.ndof)
+    with TaskManager():
+        b, magnitude, nu, q = native.Evaluate(x, source, grid, nu_table, dhdb_table, load, residual)
+    element = np.einsum("nkj,nj->nk", curl_e, x[dofs])
+    b_ref = element[iron] + (source if with_source else 0.0)
+    m_ref = np.linalg.norm(b_ref, axis=1)
+    nu_ref = np.interp(m_ref, grid, nu_table)
+    q_ref = (np.interp(m_ref, grid, dhdb_table) - nu_ref) / m_ref ** 2
+    np.testing.assert_allclose(b, b_ref, rtol=1e-14, atol=1e-14)
+    np.testing.assert_allclose(magnitude, m_ref, rtol=1e-14)
+    np.testing.assert_allclose(nu, nu_ref, rtol=1e-13)
+    np.testing.assert_allclose(q, q_ref, rtol=1e-11)
+    coefficient = np.full(mesh.ne, nu0)
+    coefficient[iron] = nu_ref
+    loads = coefficient[:, None] * element
+    if with_source:
+        loads[iron] += (nu_ref - nu0)[:, None] * source
+    weights = np.einsum("nkj,nk->nj", curl_e, loads) * volume[:, None]
+    r_ref = np.bincount(dofs.ravel(), weights=weights.ravel(), minlength=space.ndof) - load
+    np.testing.assert_allclose(residual, r_ref, rtol=0, atol=1e-12 * np.max(np.abs(r_ref)))
+    with pytest.raises(Exception, match="distinct"):
+        LowestOrderCurlResidual(dofs, curl_e, volume, space.ndof, np.array([0, 0]), nu0)
+    with pytest.raises(Exception, match="source_mean"):
+        native.Evaluate(x, np.zeros((2, 3)), grid, nu_table, dhdb_table, load, residual)
+
+
+def test_taskmanager_active_reports_the_parallel_region():
+    from radia.sparsesolv_ngsolve import TaskManagerActive
+    assert TaskManagerActive() is False
+    with TaskManager():
+        assert TaskManagerActive() is True
+    assert TaskManagerActive() is False
+
+
+@pytest.mark.parametrize("factory", [
+    "HypreBasedAMSPreconditioner", "CompactAMSPreconditioner",
+    "ComplexHypreBasedAMSPreconditioner", "ComplexCompactAMSPreconditioner",
+])
+def test_ams_taskmanager_setup_is_catchable(factory):
+    """A native crash must fail only the child, never take down the test runner."""
+    import radia.sparsesolv_ngsolve as native
+    script = r'''
+import importlib.util
+import sys
+import numpy as np
+from ngsolve import Mesh, HCurl, BilinearForm, TaskManager, curl, dx, SetNumThreads
+from netgen.csg import unit_cube
+spec = importlib.util.spec_from_file_location("sparsesolv_ngsolve", sys.argv[1])
+native = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(native)
+SetNumThreads(2)
+mesh = Mesh(unit_cube.GenerateMesh(maxh=0.8))
+space = HCurl(mesh, order=1, nograds=True)
+u, v = space.TnT()
+a = BilinearForm(space)
+a += (curl(u)*curl(v) + u*v)*dx
+a.Assemble()
+grad, h1 = space.CreateGradient()
+coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+factory = getattr(native, sys.argv[2])
+kwargs = dict(freedofs=space.FreeDofs(), coord_x=coords[0], coord_y=coords[1], coord_z=coords[2])
+def make():
+    return factory(a.mat, grad, **kwargs)
+def rejected(operation):
+    try:
+        operation()
+    except RuntimeError as error:
+        assert "outside ngsolve.TaskManager" in str(error), str(error)
+    else:
+        raise AssertionError("AMS setup inside TaskManager was not rejected")
+with TaskManager():
+    rejected(make)
+pre = make()
+rhs, before = pre.CreateColVector(), pre.CreateRowVector()
+rhs.FV().NumPy()[:] = 1
+pre.Mult(rhs, before)
+expected = before.FV().NumPy().copy()
+with TaskManager():
+    rejected(pre.Update)
+    rejected(lambda: pre.Update(a.mat))
+    after = pre.CreateRowVector()
+    pre.Mult(rhs, after)
+np.testing.assert_allclose(after.FV().NumPy(), expected, rtol=1e-11, atol=1e-12)
+pre.Update()
+pre.Mult(rhs, after)
+np.testing.assert_allclose(after.FV().NumPy(), expected, rtol=1e-11, atol=1e-12)
+assert np.all(np.isfinite(expected)) and np.linalg.norm(expected) > 0
+print("AMS_CONTEXT_GUARD_OK")
+'''
+    result = subprocess.run(
+        [sys.executable, "-c", script, native.__file__, factory],
+        capture_output=True, text=True, timeout=90,
+    )
+    assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
+    assert "AMS_CONTEXT_GUARD_OK" in result.stdout
+
+
+@pytest.mark.parametrize("factory", [
+    "HypreBasedAMSPreconditioner", "CompactAMSPreconditioner",
+    "ComplexHypreBasedAMSPreconditioner", "ComplexCompactAMSPreconditioner",
+])
+def test_ams_rejects_higher_order_space(factory):
+    """AMS is lowest-order only: an order-2 space must be rejected, not degraded.
+
+    With nograds=True the order-2 discrete gradient still has one column per
+    vertex, so the coordinate-size check cannot tell it from order 1.  Before
+    the structural check the constructor accepted it and CG needed about five
+    times more iterations.  The MATLAB MEX already rejected this space; the C++
+    check makes the Python route fail the same way.
+    """
+    import radia.sparsesolv_ngsolve as native
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.5))
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    for order, accepted in ((1, True), (2, False)):
+        space = HCurl(mesh, order=order, nograds=True)
+        u, v = space.TnT()
+        a = BilinearForm(space)
+        a += (curl(u)*curl(v) + u*v)*dx
+        a.Assemble()
+        grad, _ = space.CreateGradient()
+        assert grad.width == mesh.nv   # a dimension check alone cannot separate the orders
+
+        def make():
+            return getattr(native, factory)(
+                a.mat, grad, freedofs=space.FreeDofs(),
+                coord_x=coords[0], coord_y=coords[1], coord_z=coords[2])
+
+        if accepted:
+            make()
+        else:
+            with pytest.raises(RuntimeError, match="order=1, nograds=True"):
+                make()
+
+
+# ============================================================================
+# Fixtures
+# ============================================================================
+
+@pytest.mark.parametrize("is_complex", [False, True])
+def test_operator_scalar_type_matches_native_vectors(is_complex):
+    mesh = Mesh(unit_square.GenerateMesh(maxh=0.5))
+    space = H1(mesh, order=1, complex=is_complex)
+    u, v = space.TnT()
+    a = BilinearForm(space)
+    a += u*v*dx
+    a.Assemble()
+    for operator in (ICPreconditioner(a.mat), SparseSolvSolver(a.mat)):
+        assert operator.is_complex == is_complex
+        assert operator.CreateColVector().is_complex == is_complex
+
+@pytest.fixture
+def poisson_2d():
+    """2D Poisson problem with exact solution."""
+    mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
+    fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
+    u, v = fes.TnT()
+
+    exact = sin(pi * x) * sin(pi * y)
+    f_rhs = 2 * pi * pi * sin(pi * x) * sin(pi * y)
+
+    a = BilinearForm(fes)
+    a += grad(u) * grad(v) * dx
+    a.Assemble()
+
+    f = LinearForm(fes)
+    f += f_rhs * v * dx
+    f.Assemble()
+
+    gfu_bc = GridFunction(fes)
+    gfu_bc.Set(exact, BND)
+    f.vec.data -= a.mat * gfu_bc.vec
+
+    return mesh, fes, a, f, gfu_bc, exact
+
+
+@pytest.fixture
+def poisson_3d():
+    """3D Poisson problem with exact solution."""
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
+    fes = H1(mesh, order=2, dirichlet="bottom|right|top|left|front|back")
+    u, v = fes.TnT()
+
+    exact = sin(pi * x) * sin(pi * y) * sin(pi * z)
+    f_rhs = 3 * pi * pi * sin(pi * x) * sin(pi * y) * sin(pi * z)
+
+    a = BilinearForm(fes)
+    a += grad(u) * grad(v) * dx
+    a.Assemble()
+
+    f = LinearForm(fes)
+    f += f_rhs * v * dx
+    f.Assemble()
+
+    gfu_bc = GridFunction(fes)
+    gfu_bc.Set(exact, BND)
+    f.vec.data -= a.mat * gfu_bc.vec
+
+    return mesh, fes, a, f, gfu_bc, exact
+
+
+# ============================================================================
+# SparseSolvSolver tests
+# ============================================================================
+
+@pytest.mark.parametrize("method", ["ICCG"])
+def test_sparsesolv_solver_2d_poisson(poisson_2d, method):
+    """All solver methods converge on 2D Poisson."""
+    mesh, fes, a, f, gfu_bc, exact = poisson_2d
+
+    solver = SparseSolvSolver(a.mat, method=method,
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-10, maxiter=2000)
+
+    gfu = GridFunction(fes)
+    gfu.vec.data = solver * f.vec
+    gfu.vec.data += gfu_bc.vec
+
+    error = sqrt(Integrate((gfu - exact) ** 2, mesh))
+    result = solver.last_result
+    print(f"{method}: iterations={result.iterations}, L2 error={error:.2e}")
+    assert result.converged
+    assert result.iterations < 100
+    assert error < 1e-3
+
+
+def test_sparsesolv_solver_3d_poisson(poisson_3d):
+    """ICCG converges on 3D Poisson."""
+    mesh, fes, a, f, gfu_bc, exact = poisson_3d
+
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-8, maxiter=5000)
+
+    gfu = GridFunction(fes)
+    gfu.vec.data = solver * f.vec
+    gfu.vec.data += gfu_bc.vec
+
+    error = sqrt(Integrate((gfu - exact) ** 2, mesh))
+    result = solver.last_result
+    print(f"ICCG 3D: iterations={result.iterations}, L2 error={error:.2e}")
+    assert result.converged
+    assert error < 1e-2
+
+
+def test_sparsesolv_solver_vs_direct(poisson_2d):
+    """ICCG matches direct solver solution."""
+    mesh, fes, a, f, gfu_bc, exact = poisson_2d
+
+    gfu_direct = GridFunction(fes)
+    gfu_direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-12, maxiter=2000)
+    gfu_iccg = GridFunction(fes)
+    gfu_iccg.vec.data = solver * f.vec
+
+    diff = gfu_iccg.vec.CreateVector()
+    diff.data = gfu_iccg.vec - gfu_direct.vec
+    rel_err = Norm(diff) / Norm(gfu_direct.vec)
+    print(f"Relative error vs direct: {rel_err:.2e}")
+    assert rel_err < 1e-6
+
+
+# ============================================================================
+# Preconditioner tests (with NGSolve CGSolver)
+# ============================================================================
+
+@pytest.mark.parametrize("PreClass,kwargs", [
+    (ICPreconditioner, {"shift": 1.05}),
+])
+def test_preconditioners_with_ngsolve_cg(poisson_2d, PreClass, kwargs):
+    """Preconditioners work with NGSolve's CGSolver."""
+    mesh, fes, a, f, gfu_bc, exact = poisson_2d
+
+    pre = PreClass(a.mat, freedofs=fes.FreeDofs(), **kwargs)
+    pre.Update()
+
+    inv = CGSolver(a.mat, pre, printrates=False, tol=1e-10, maxiter=2000)
+
+    gfu = GridFunction(fes)
+    gfu.vec.data = inv * f.vec
+    gfu.vec.data += gfu_bc.vec
+
+    error = sqrt(Integrate((gfu - exact) ** 2, mesh))
+    print(f"{PreClass.__name__}: L2 error={error:.2e}")
+    assert error < 1e-3
+
+
+# ============================================================================
+# Auto-shift and diagonal scaling (3D curl-curl)
+# ============================================================================
+
+def test_auto_shift_curl_curl():
+    """Auto-shift + diagonal scaling for 3D curl-curl with nograds=True."""
+    from netgen.occ import Box, Pnt
+
+    box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
+    for face in box.faces:
+        face.name = "outer"
+    mesh = box.GenerateMesh(maxh=0.4)
+
+    fes = HCurl(mesh, order=1, dirichlet="outer", nograds=True)
+    u, v = fes.TnT()
+
+    a = BilinearForm(fes)
+    a += curl(u) * curl(v) * dx
+    a.Assemble()
+
+    f = LinearForm(fes)
+    f += CF((0, 0, 1)) * v * dx
+    f.Assemble()
+
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-8, maxiter=2000, shift=1.0)
+    solver.auto_shift = True
+    solver.diagonal_scaling = True
+
+    gfu = GridFunction(fes)
+    gfu.vec.data = solver * f.vec
+    result = solver.last_result
+    print(f"Auto-shift curl-curl: iterations={result.iterations}")
+    assert result.converged
+    assert result.iterations < 100
+
+
+# ============================================================================
+# Residual history and best-result tracking
+# ============================================================================
+
+def test_residual_history(poisson_2d):
+    """Residual history is recorded when enabled."""
+    _, fes, a, f, _, _ = poisson_2d
+
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-10, maxiter=2000,
+                               save_residual_history=True)
+    gfu = GridFunction(fes)
+    result = solver.Solve(f.vec, gfu.vec)
+
+    assert result.converged
+    assert len(result.residual_history) > 0
+    assert result.residual_history[-1] < result.residual_history[0]
+
+
+def test_no_residual_history(poisson_2d):
+    """Residual history is empty when disabled."""
+    _, fes, a, f, _, _ = poisson_2d
+
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs(),
+                               save_residual_history=False)
+    gfu = GridFunction(fes)
+    result = solver.Solve(f.vec, gfu.vec)
+
+    assert len(result.residual_history) == 0
+
+
+# ============================================================================
+# Property accessors
+# ============================================================================
+
+def test_properties(poisson_2d):
+    """Property getters and setters work correctly."""
+    _, fes, a, _, _, _ = poisson_2d
+
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs())
+
+    assert solver.method == "ICCG"
+    assert solver.tol == 1e-8
+    assert solver.maxiter == 0
+    assert solver.shift == 1.0
+    assert solver.save_best_result is True
+    assert solver.save_residual_history is False
+    assert solver.auto_shift is True
+    assert solver.diagonal_scaling is True
+    assert solver.divergence_check is True
+    assert solver.divergence_threshold == 10.0
+    assert solver.divergence_count == 10
+
+    solver.tol = 1e-10
+    assert solver.tol == 1e-10
+
+    solver.maxiter = 500
+    assert solver.maxiter == 500
+
+    solver.auto_shift = False
+    assert solver.auto_shift is False
+
+    solver.diagonal_scaling = False
+    assert solver.diagonal_scaling is False
+
+    solver.divergence_check = False
+    assert solver.divergence_check is False
+
+    solver.divergence_threshold = 100.0
+    assert solver.divergence_threshold == 100.0
+
+    solver.divergence_count = 5
+    assert solver.divergence_count == 5
+
+
+def test_invalid_method(poisson_2d):
+    """An unknown method is rejected when the solver is built."""
+    _, fes, a, f, _, _ = poisson_2d
+
+    with pytest.raises(ValueError):
+        SparseSolvSolver(a.mat, method="INVALID", freedofs=fes.FreeDofs())
+
+
+# ============================================================================
+# Solver contract: stopping, best iterate, initial guess, options
+# ============================================================================
+
+def _poisson_rhs_from_solution(poisson_2d):
+    _, fes, a, _, _, _ = poisson_2d
+    exact = GridFunction(fes)
+    exact.Set(x * (1 - x) * y * (1 - y) * 16)
+    free = np.array(list(fes.FreeDofs()), dtype=bool)
+    exact.vec.FV().NumPy()[~free] = 0.0  # an exact solution of the free-DOF system
+    rhs = exact.vec.CreateVector()
+    rhs.data = a.mat * exact.vec
+    rhs.FV().NumPy()[~free] = 0.0
+    return fes, a, exact, rhs, free
+
+
+def test_iccg_contract_default_solve(poisson_2d):
+    """Defaults: converged iterate is the best one, history starts at 1, true residual reported."""
+    fes, a, _, rhs, free = _poisson_rhs_from_solution(poisson_2d)
+    solver = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs(), save_residual_history=True)
+    sol = GridFunction(fes)
+    result = solver.Solve(rhs, sol.vec)
+    assert result.converged
+    assert result.final_residual < 1e-8
+    assert result.best_iteration == result.iterations > 0
+    assert len(result.residual_history) == result.iterations + 1
+    assert result.residual_history[0] == 1.0
+    assert result.actual_shift >= 1.0
+    check = rhs.CreateVector()
+    check.data = rhs - a.mat * sol.vec
+    true = np.linalg.norm(check.FV().NumPy()[free]) / np.linalg.norm(rhs.FV().NumPy()[free])
+    assert abs(result.true_residual - true) <= 1e-12 + 1e-6 * true
+
+
+def test_iccg_contract_initial_guess_and_zero_rhs(poisson_2d):
+    """An exact initial guess and a zero right-hand side return without iterating."""
+    fes, a, exact, rhs, free = _poisson_rhs_from_solution(poisson_2d)
+    solver = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs())
+    sol = exact.vec.CreateVector()
+    sol.data = exact.vec
+    result = solver.Solve(rhs, sol)
+    assert result.converged and result.iterations == 0 and result.best_iteration == 0
+    zero = rhs.CreateVector()
+    zero[:] = 0.0
+    sol.FV().NumPy()[:] = 3.0
+    result = solver.Solve(zero, sol)
+    assert result.converged and result.iterations == 0
+    assert np.all(sol.FV().NumPy()[free] == 0.0)
+
+
+def test_iccg_contract_iteration_limit_returns_best(poisson_2d):
+    """At the iteration limit the iterate with the smallest residual is returned."""
+    fes, a, _, rhs, _ = _poisson_rhs_from_solution(poisson_2d)
+    solver = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs(), maxiter=3,
+                              save_residual_history=True)
+    sol = GridFunction(fes)
+    result = solver.Solve(rhs, sol.vec)
+    assert not result.converged and result.iterations == 3
+    assert result.final_residual == min(result.residual_history)
+    assert result.residual_history[result.best_iteration] == result.final_residual
+
+
+def test_iccg_contract_stagnation_counter_is_strict(poisson_2d):
+    """divergence_count=0 stops on the first iteration that sets no new best (count + 1 bad steps)."""
+    fes, a, _, rhs, _ = _poisson_rhs_from_solution(poisson_2d)
+    solver = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs(), divergence_threshold=1.0,
+                              divergence_count=0, save_residual_history=True)
+    sol = GridFunction(fes)
+    result = solver.Solve(rhs, sol.vec)
+    history = result.residual_history
+    if not result.converged:
+        assert history[-1] >= min(history[:-1])
+        assert all(history[k] < history[k - 1] for k in range(1, len(history) - 1))
+
+
+@pytest.mark.parametrize("option,value", [("tol", 0.0), ("tol", -1.0), ("maxiter", -1),
+                                          ("shift", 0.5), ("divergence_count", -1),
+                                          ("divergence_threshold", 0.0)])
+def test_iccg_contract_rejects_undefined_options(poisson_2d, option, value):
+    _, fes, a, f, _, _ = poisson_2d
+    with pytest.raises(ValueError):
+        SparseSolvSolver(a.mat, freedofs=fes.FreeDofs(), **{option: value}).Solve(
+            f.vec, GridFunction(fes).vec)
+
+
+def test_iccg_contract_reports_auto_shift(poisson_2d):
+    """The auto-shift search reports the shift it used; fixed mode keeps the given shift."""
+    fes, a, _, rhs, _ = _poisson_rhs_from_solution(poisson_2d)
+    sol = GridFunction(fes)
+    fixed = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs(), shift=1.2, auto_shift=False)
+    assert fixed.Solve(rhs, sol.vec).actual_shift == 1.2
+    sol.vec[:] = 0.0
+    auto = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs())
+    shift = auto.Solve(rhs, sol.vec).actual_shift
+    assert 1.0 <= shift <= 5.01
+
+
+def _dense_system(entries, rhs, x0=None):
+    """NGSolve matrix and vectors for a small dense system (rows of entries)."""
+    n = len(entries)
+    rows, cols, vals = [], [], []
+    for i, row in enumerate(entries):
+        for j, value in enumerate(row):
+            rows.append(i); cols.append(j); vals.append(float(value))
+    m = la.SparseMatrixdouble.CreateFromCOO(rows, cols, vals, n, n)
+    b = m.CreateRowVector()
+    b.FV().NumPy()[:] = rhs
+    x = m.CreateColVector()
+    x.FV().NumPy()[:] = 0.0 if x0 is None else x0
+    return m, b, x
+
+
+@pytest.mark.parametrize("a,b,scaling", [(1e64, 1.0, True), (1.0, 1e-31, False),
+                                         (1.0, 1e-300, False), (1e-200, 1e100, True)])
+def test_iccg_contract_tiny_and_huge_scales_are_solved(a, b, scaling):
+    """A nonzero right-hand side of any magnitude is solved and the true residual is relative."""
+    m, rhs, x = _dense_system([[a]], [b])
+    result = SparseSolvSolver(m, diagonal_scaling=scaling).Solve(rhs, x)
+    assert result.converged
+    assert x.FV().NumPy()[0] == pytest.approx(b / a, rel=1e-14)
+    assert result.true_residual < 1e-14
+
+
+@pytest.mark.parametrize("scaling", [True, False])
+@pytest.mark.parametrize("rhs,x0", [([float("nan")], None), ([1.0], [float("nan")]),
+                                    ([float("inf")], None), ([1.0], [float("-inf")])])
+def test_iccg_contract_rejects_non_finite_rhs_and_initial_guess(scaling, rhs, x0):
+    m, b, x = _dense_system([[1.0]], rhs, x0=x0)
+    with pytest.raises(ValueError):
+        SparseSolvSolver(m, diagonal_scaling=scaling).Solve(b, x)
+
+
+def test_iccg_contract_rejects_a_single_nan_among_finite_entries(poisson_2d):
+    fes, a, _, rhs, free = _poisson_rhs_from_solution(poisson_2d)
+    bad = rhs.CreateVector()
+    bad.data = rhs
+    bad.FV().NumPy()[np.flatnonzero(free)[3]] = float("nan")
+    with pytest.raises(ValueError):
+        SparseSolvSolver(a.mat, freedofs=fes.FreeDofs()).Solve(bad, GridFunction(fes).vec)
+
+
+@pytest.mark.parametrize("scaling", [True, False])
+def test_iccg_contract_subnormal_rhs_has_a_finite_relative_residual(scaling):
+    m, b, x = _dense_system([[3.0]], [1e-310])
+    result = SparseSolvSolver(m, diagonal_scaling=scaling).Solve(b, x)
+    xs = x.FV().NumPy()[0]
+    reference = abs(1e-310 - 3.0 * xs) / 1e-310   # residual of the subnormal result itself
+    assert result.converged
+    assert np.isfinite(result.true_residual) and result.true_residual < 1e-10
+    assert result.true_residual == pytest.approx(reference, abs=1e-12)
+
+
+@pytest.mark.parametrize("scale", [2.0 ** -500, 2.0 ** 500])
+def test_iccg_contract_is_scale_invariant(poisson_2d, scale):
+    """Scaling A and b by a power of two (about 1e+-150) leaves the iteration unchanged."""
+    fes, a, _, rhs, _ = _poisson_rhs_from_solution(poisson_2d)
+    reference = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs()).Solve(rhs, GridFunction(fes).vec)
+    scaled = a.mat.CreateMatrix()
+    scaled.AsVector().data = scale * a.mat.AsVector()
+    srhs = rhs.CreateVector()
+    srhs.data = scale * rhs
+    result = SparseSolvSolver(scaled, freedofs=fes.FreeDofs(), diagonal_scaling=False).Solve(
+        srhs, GridFunction(fes).vec)
+    plain = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs(), diagonal_scaling=False).Solve(
+        rhs, GridFunction(fes).vec)
+    assert reference.converged and result.converged
+    assert result.iterations == plain.iterations
+    assert result.true_residual == pytest.approx(plain.true_residual, rel=1e-6)
+
+
+def test_iccg_contract_exact_guess_returns_before_ic_factorization():
+    """x0 that already solves the system returns even where the IC factor would fail."""
+    m, rhs, x = _dense_system([[1, 1], [1, 1]], [2, 2], x0=[1, 1])
+    solver = SparseSolvSolver(m, shift=1.0, auto_shift=False)
+    result = solver.Solve(rhs, x)
+    assert result.converged and result.iterations == 0 and result.actual_shift == 0.0
+    assert list(x.FV().NumPy()) == [1.0, 1.0]
+    x.FV().NumPy()[:] = 0.0
+    with pytest.raises(RuntimeError):
+        solver.Solve(rhs, x)  # iterating needs the IC factor, whose pivot is zero
+
+
+@pytest.mark.parametrize("method", ["COCR"])
+def test_cocr_contract_rejects_conjugate(poisson_2d, method):
+    _, fes, a, f, _, _ = poisson_2d
+    solver = SparseSolvSolver(a.mat, method=method, freedofs=fes.FreeDofs(), conjugate=True)
+    with pytest.raises(ValueError):
+        solver.Solve(f.vec, GridFunction(fes).vec)
+    cg = SparseSolvSolver(a.mat, method="CG", freedofs=fes.FreeDofs(), conjugate=True)
+    assert cg.Solve(f.vec, GridFunction(fes).vec).converged
+
+
+# ============================================================================
+# Operator interface
+# ============================================================================
+
+def test_operator_interface(poisson_2d):
+    """solver * vec gives same result as solver.Solve()."""
+    _, fes, a, f, _, _ = poisson_2d
+
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-10, maxiter=2000)
+
+    gfu1 = GridFunction(fes)
+    gfu1.vec.data = solver * f.vec
+
+    gfu2 = GridFunction(fes)
+    solver.Solve(f.vec, gfu2.vec)
+
+    diff = gfu1.vec.CreateVector()
+    diff.data = gfu1.vec - gfu2.vec
+    assert Norm(diff) / max(Norm(gfu1.vec), 1e-30) < 1e-6
+
+
+# ============================================================================
+# Divergence detection (stagnation-based early termination)
+# ============================================================================
+
+def test_divergence_check_early_termination():
+    """Divergence check terminates early on semi-definite system."""
+    from netgen.occ import Box, Pnt
+
+    box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
+    for face in box.faces:
+        face.name = "outer"
+    mesh = box.GenerateMesh(maxh=0.4)
+
+    # Pure curl-curl (semi-definite) with localized source (div J != 0)
+    # This system has a null-space component that makes CG stagnate
+    fes = HCurl(mesh, order=1, dirichlet="outer", nograds=True)
+    u, v = fes.TnT()
+
+    a = BilinearForm(fes)
+    a += curl(u) * curl(v) * dx
+    a.Assemble()
+
+    f = LinearForm(fes)
+    f += CF((1, 0, 0)) * v * dx  # localized source
+    f.Assemble()
+
+    # Without auto-shift, CG on this semi-definite system will stagnate
+    # Enable divergence_check to detect stagnation early
+    solver = SparseSolvSolver(a.mat, method="CG",
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-12, maxiter=5000)
+    solver.divergence_check = True
+    solver.divergence_threshold = 10.0
+    solver.divergence_count = 20
+
+    gfu = GridFunction(fes)
+    result = solver.Solve(f.vec, gfu.vec)
+
+    # Solver should terminate early (not run all 5000 iterations)
+    print(f"Divergence check: converged={result.converged}, "
+          f"iterations={result.iterations}")
+    assert result.iterations < 5000
+
+
+def test_save_best_result_restores_best(poisson_2d):
+    """save_best_result returns the best solution found (even if converged)."""
+    _, fes, a, f, _, _ = poisson_2d
+
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-10, maxiter=2000,
+                               save_best_result=True,
+                               save_residual_history=True)
+    gfu = GridFunction(fes)
+    result = solver.Solve(f.vec, gfu.vec)
+
+    assert result.converged
+    # Best residual should be <= final residual
+    assert result.final_residual <= result.residual_history[0]
+
+
+# ============================================================================
+# Complex auto-dispatch tests
+# ============================================================================
+
+@pytest.fixture
+def poisson_2d_complex():
+    """2D Poisson in complex FE space (Hermitian, real coefficients)."""
+    mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
+    fes = H1(mesh, order=2, complex=True, dirichlet="bottom|right|top|left")
+    u, v = fes.TnT()
+
+    a = BilinearForm(fes)
+    a += grad(u) * grad(v) * dx + u * v * dx
+    a.Assemble()
+
+    f = LinearForm(fes)
+    f += 1 * v * dx
+    f.Assemble()
+
+    return mesh, fes, a, f
+
+
+def test_factory_auto_dispatch_complex_solver(poisson_2d_complex):
+    """SparseSolvSolver factory auto-dispatches for complex matrix."""
+    mesh, fes, a, f = poisson_2d_complex
+
+    # Same function name works for complex
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-10, maxiter=2000)
+
+    gfu = GridFunction(fes)
+    gfu.vec.data = solver * f.vec
+
+    result = solver.last_result
+    print(f"Complex ICCG: iterations={result.iterations}")
+    assert result.converged
+    assert Norm(gfu.vec) > 0
+
+
+@pytest.mark.parametrize("Factory,kwargs", [
+    (ICPreconditioner, {"shift": 1.05}),
+])
+def test_factory_auto_dispatch_complex_precond(poisson_2d_complex, Factory, kwargs):
+    """Preconditioner factories auto-dispatch for complex matrix."""
+    mesh, fes, a, f = poisson_2d_complex
+
+    # Factory auto-dispatches to complex and auto-calls Update()
+    pre = Factory(a.mat, freedofs=fes.FreeDofs(), **kwargs)
+
+    inv = CGSolver(a.mat, pre, printrates=False, tol=1e-10, maxiter=2000)
+
+    gfu = GridFunction(fes)
+    gfu.vec.data = inv * f.vec
+    assert Norm(gfu.vec) > 0
+
+
+def test_factory_returns_typed_class(poisson_2d):
+    """Factory returns correctly typed internal class (D suffix)."""
+    _, fes, a, _, _, _ = poisson_2d
+
+    pre = ICPreconditioner(a.mat, freedofs=fes.FreeDofs())
+    assert type(pre).__name__ == "ICPreconditionerD"
+
+    solver = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs())
+    assert type(solver).__name__ == "SparseSolvSolverD"
+
+
+def test_factory_returns_typed_class_complex(poisson_2d_complex):
+    """Factory returns correctly typed internal class (C suffix)."""
+    _, fes, a, _ = poisson_2d_complex
+
+    pre = ICPreconditioner(a.mat, freedofs=fes.FreeDofs())
+    assert type(pre).__name__ == "ICPreconditionerC"
+
+    solver = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs())
+    assert type(solver).__name__ == "SparseSolvSolverC"
+
+
+# ============================================================================
+# Complex eddy current tests (complex-symmetric systems)
+# ============================================================================
+
+@pytest.fixture
+def eddy_current_3d():
+    """3D eddy current problem: curl-curl + i*omega*sigma mass (complex-symmetric)."""
+    from netgen.occ import Box, Pnt, OCCGeometry
+
+    box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
+    for face in box.faces:
+        face.name = "outer"
+    mesh = Mesh(OCCGeometry(box).GenerateMesh(maxh=0.3))
+
+    fes = HCurl(mesh, order=1, complex=True, dirichlet="outer", nograds=True)
+    u, v = fes.TnT()
+
+    # curl-curl + i*sigma mass: A^T = A (complex-symmetric, NOT Hermitian)
+    a = BilinearForm(fes)
+    a += InnerProduct(curl(u), curl(v)) * dx
+    a += 1j * InnerProduct(u, v) * dx
+    a.Assemble()
+
+    f_form = LinearForm(fes)
+    f_form += InnerProduct(CF((1, 0, 0)), v) * dx
+    f_form.Assemble()
+
+    return mesh, fes, a, f_form
+
+
+@pytest.mark.parametrize("method", ["ICCG"])
+def test_complex_eddy_current(eddy_current_3d, method):
+    """All solver methods converge on complex eddy current (complex-symmetric)."""
+    mesh, fes, a, f = eddy_current_3d
+
+    solver = SparseSolvSolver(a.mat, method=method,
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-8, maxiter=5000,
+                               save_best_result=True)
+
+    gfu = GridFunction(fes)
+    gfu.vec.data = solver * f.vec
+
+    result = solver.last_result
+    print(f"{method} eddy current: iterations={result.iterations}, "
+          f"residual={result.final_residual:.2e}")
+    assert result.converged
+    assert result.iterations < 200
+
+
+def test_complex_eddy_current_vs_direct(eddy_current_3d):
+    """ICCG matches direct solver on complex eddy current."""
+    mesh, fes, a, f = eddy_current_3d
+
+    gfu_direct = GridFunction(fes)
+    gfu_direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-10, maxiter=5000,
+                               save_best_result=True)
+    gfu_iccg = GridFunction(fes)
+    gfu_iccg.vec.data = solver * f.vec
+
+    diff = gfu_iccg.vec.CreateVector()
+    diff.data = gfu_iccg.vec - gfu_direct.vec
+    rel_err = Norm(diff) / Norm(gfu_direct.vec)
+    print(f"Complex ICCG vs direct: relative error={rel_err:.2e}")
+    assert rel_err < 1e-4
+
+
+# ============================================================================
+# BDDC comparison tests
+# ============================================================================
+
+def test_sparsesolv_vs_bddc_3d_poisson():
+    """SparseSolv ICCG achieves similar accuracy as BDDC+CG on 3D Poisson."""
+    from netgen.occ import Box, Pnt, OCCGeometry
+
+    box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
+    for face in box.faces:
+        face.name = "outer"
+    mesh = Mesh(OCCGeometry(box).GenerateMesh(maxh=0.3))
+
+    fes = H1(mesh, order=2, dirichlet="outer")
+    u, v = fes.TnT()
+
+    a = BilinearForm(fes)
+    a += grad(u) * grad(v) * dx
+    a.Assemble()
+
+    f = LinearForm(fes)
+    f += 1 * v * dx
+    f.Assemble()
+
+    # Direct solver reference
+    gfu_direct = GridFunction(fes)
+    gfu_direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+    # SparseSolv ICCG
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-10, maxiter=5000)
+    gfu_iccg = GridFunction(fes)
+    gfu_iccg.vec.data = solver * f.vec
+    iccg_result = solver.last_result
+
+    # BDDC+CG
+    a_bddc = BilinearForm(fes)
+    a_bddc += grad(u) * grad(v) * dx
+    c_bddc = Preconditioner(a_bddc, type="bddc")
+    a_bddc.Assemble()
+
+    gfu_bddc = GridFunction(fes)
+    inv_bddc = CGSolver(a_bddc.mat, c_bddc.mat, printrates=False,
+                         tol=1e-10, maxiter=200)
+    gfu_bddc.vec.data = inv_bddc * f.vec
+
+    # Both should match direct solver
+    diff_iccg = gfu_iccg.vec.CreateVector()
+    diff_iccg.data = gfu_iccg.vec - gfu_direct.vec
+    err_iccg = Norm(diff_iccg) / Norm(gfu_direct.vec)
+
+    diff_bddc = gfu_bddc.vec.CreateVector()
+    diff_bddc.data = gfu_bddc.vec - gfu_direct.vec
+    err_bddc = Norm(diff_bddc) / Norm(gfu_direct.vec)
+
+    print(f"ICCG: iters={iccg_result.iterations}, rel_err={err_iccg:.2e}")
+    print(f"BDDC: rel_err={err_bddc:.2e}")
+    assert iccg_result.converged
+    assert err_iccg < 1e-6
+    assert err_bddc < 1e-6
+
+
+def test_sparsesolv_vs_bddc_eddy_current(eddy_current_3d):
+    """SparseSolv ICCG achieves similar accuracy as BDDC+CG on eddy current."""
+    mesh, fes, a, f = eddy_current_3d
+
+    u, v = fes.TnT()
+
+    # Direct solver reference
+    gfu_direct = GridFunction(fes)
+    gfu_direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+    # SparseSolv ICCG
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-10, maxiter=5000,
+                               save_best_result=True)
+    gfu_iccg = GridFunction(fes)
+    gfu_iccg.vec.data = solver * f.vec
+    iccg_result = solver.last_result
+
+    # BDDC+CG (conjugate=False for complex-symmetric)
+    a_bddc = BilinearForm(fes)
+    a_bddc += InnerProduct(curl(u), curl(v)) * dx
+    a_bddc += 1j * InnerProduct(u, v) * dx
+    c_bddc = Preconditioner(a_bddc, type="bddc")
+    a_bddc.Assemble()
+
+    gfu_bddc = GridFunction(fes)
+    inv_bddc = CGSolver(a_bddc.mat, c_bddc.mat, printrates=False,
+                         conjugate=False, tol=1e-10, maxiter=200)
+    gfu_bddc.vec.data = inv_bddc * f.vec
+
+    # Both should match direct solver
+    diff_iccg = gfu_iccg.vec.CreateVector()
+    diff_iccg.data = gfu_iccg.vec - gfu_direct.vec
+    err_iccg = Norm(diff_iccg) / Norm(gfu_direct.vec)
+
+    diff_bddc = gfu_bddc.vec.CreateVector()
+    diff_bddc.data = gfu_bddc.vec - gfu_direct.vec
+    err_bddc = Norm(diff_bddc) / Norm(gfu_direct.vec)
+
+    print(f"ICCG: iters={iccg_result.iterations}, rel_err={err_iccg:.2e}")
+    print(f"BDDC: rel_err={err_bddc:.2e}")
+    assert iccg_result.converged
+    assert err_iccg < 1e-4
+    assert err_bddc < 1e-4
+
+
+# ============================================================================
+# Conjugate inner product tests (Hermitian vs complex-symmetric)
+# ============================================================================
+
+def test_conjugate_property(poisson_2d):
+    """conjugate property getter and setter work correctly."""
+    _, fes, a, _, _, _ = poisson_2d
+
+    solver = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs())
+    assert solver.conjugate is False  # default
+
+    solver.conjugate = True
+    assert solver.conjugate is True
+
+    solver.conjugate = False
+    assert solver.conjugate is False
+
+
+def test_conjugate_factory_parameter(poisson_2d_complex):
+    """conjugate parameter in factory function is passed through."""
+    _, fes, a, _ = poisson_2d_complex
+
+    solver = SparseSolvSolver(a.mat, method="ICCG",
+                               freedofs=fes.FreeDofs(),
+                               conjugate=True)
+    assert solver.conjugate is True
+
+
+@pytest.mark.parametrize("method", ["CG", "ICCG"])
+def test_hermitian_system_with_conjugate(poisson_2d_complex, method):
+    """Hermitian system (real coefficients, complex space) solves with conjugate=True."""
+    mesh, fes, a, f = poisson_2d_complex
+
+    # This is a Hermitian system (A^H = A) because coefficients are real.
+    solver = SparseSolvSolver(a.mat, method=method,
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-10, maxiter=2000,
+                               conjugate=True)
+
+    gfu = GridFunction(fes)
+    gfu.vec.data = solver * f.vec
+
+    result = solver.last_result
+    print(f"{method} Hermitian (conjugate=True): iterations={result.iterations}")
+    assert result.converged
+    assert Norm(gfu.vec) > 0
+
+
+def test_hermitian_vs_direct(poisson_2d_complex):
+    """Hermitian CG with conjugate=True matches direct solver."""
+    mesh, fes, a, f = poisson_2d_complex
+
+    gfu_direct = GridFunction(fes)
+    gfu_direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+    solver = SparseSolvSolver(a.mat, method="CG",
+                               freedofs=fes.FreeDofs(),
+                               tol=1e-12, maxiter=2000,
+                               conjugate=True)
+    gfu_iccg = GridFunction(fes)
+    gfu_iccg.vec.data = solver * f.vec
+
+    diff = gfu_iccg.vec.CreateVector()
+    diff.data = gfu_iccg.vec - gfu_direct.vec
+    rel_err = Norm(diff) / Norm(gfu_direct.vec)
+    print(f"Hermitian ICCG vs direct: relative error={rel_err:.2e}")
+    assert rel_err < 1e-6
+
+
+# ============================================================================
+# ABMC Ordering Tests
+# ============================================================================
+
+class TestABMCProperties:
+    """Test ABMC property accessors."""
+
+    def test_abmc_property_defaults(self, poisson_2d):
+        """ABMC properties have correct defaults."""
+        mesh, fes, a, f, *_ = poisson_2d
+        solver = SparseSolvSolver(a.mat, method="ICCG", freedofs=fes.FreeDofs())
+        assert solver.use_abmc == False
+        assert solver.abmc_block_size == 4
+        assert solver.abmc_num_colors == 4
+
+    def test_abmc_property_set(self, poisson_2d):
+        """ABMC properties can be set and read back."""
+        mesh, fes, a, f, *_ = poisson_2d
+        solver = SparseSolvSolver(a.mat, method="ICCG", freedofs=fes.FreeDofs())
+        solver.use_abmc = True
+        solver.abmc_block_size = 8
+        solver.abmc_num_colors = 6
+        assert solver.use_abmc == True
+        assert solver.abmc_block_size == 8
+        assert solver.abmc_num_colors == 6
+
+    def test_abmc_factory_parameter(self, poisson_2d):
+        """ABMC parameters can be set via factory function."""
+        mesh, fes, a, f, *_ = poisson_2d
+        solver = SparseSolvSolver(a.mat, method="ICCG",
+                                   freedofs=fes.FreeDofs(),
+                                   use_abmc=True,
+                                   abmc_block_size=8,
+                                   abmc_num_colors=6)
+        assert solver.use_abmc == True
+        assert solver.abmc_block_size == 8
+        assert solver.abmc_num_colors == 6
+
+
+class TestABMCSolve:
+    """Test ABMC-ICCG solver correctness."""
+
+    def test_abmc_poisson_2d(self, poisson_2d):
+        """ABMC-ICCG solves 2D Poisson correctly."""
+        mesh, fes, a, f, *_ = poisson_2d
+
+        # Direct solution for reference
+        gfu_direct = GridFunction(fes)
+        gfu_direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+        # ABMC-ICCG
+        solver = SparseSolvSolver(a.mat, method="ICCG",
+                                   freedofs=fes.FreeDofs(),
+                                   tol=1e-10, maxiter=2000,
+                                   use_abmc=True,
+                                   abmc_block_size=4,
+                                   abmc_num_colors=4)
+        gfu = GridFunction(fes)
+        gfu.vec.data = solver * f.vec
+
+        assert solver.last_result.converged
+        diff = gfu.vec.CreateVector()
+        diff.data = gfu.vec - gfu_direct.vec
+        rel_err = Norm(diff) / Norm(gfu_direct.vec)
+        print(f"ABMC-ICCG 2D Poisson: {solver.last_result.iterations} iters, err={rel_err:.2e}")
+        assert rel_err < 1e-6
+
+    def test_abmc_poisson_3d(self):
+        """ABMC-ICCG solves 3D Poisson (larger problem)."""
+        mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
+        fes = H1(mesh, order=2, dirichlet="left|right|top|bottom|back|front")
+        u, v = fes.TnT()
+        a = BilinearForm(fes)
+        a += grad(u) * grad(v) * dx
+        a.Assemble()
+        f = LinearForm(fes)
+        f += 1 * v * dx
+        f.Assemble()
+
+        # Direct
+        gfu_direct = GridFunction(fes)
+        gfu_direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+        # ABMC-ICCG
+        solver = SparseSolvSolver(a.mat, method="ICCG",
+                                   freedofs=fes.FreeDofs(),
+                                   tol=1e-10, maxiter=3000,
+                                   use_abmc=True,
+                                   abmc_block_size=8,
+                                   abmc_num_colors=4)
+        gfu = GridFunction(fes)
+        gfu.vec.data = solver * f.vec
+
+        assert solver.last_result.converged
+        diff = gfu.vec.CreateVector()
+        diff.data = gfu.vec - gfu_direct.vec
+        rel_err = Norm(diff) / Norm(gfu_direct.vec)
+        print(f"ABMC-ICCG 3D Poisson: {solver.last_result.iterations} iters, err={rel_err:.2e}")
+        assert rel_err < 1e-6
+
+    def test_abmc_curl_curl(self):
+        """ABMC-ICCG with auto_shift for semi-definite curl-curl."""
+        from netgen.occ import Box, Pnt
+        box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
+        for face in box.faces:
+            face.name = "outer"
+        mesh = box.GenerateMesh(maxh=0.4)
+
+        fes = HCurl(mesh, order=1, dirichlet="outer", nograds=True)
+        u, v = fes.TnT()
+        a = BilinearForm(fes)
+        a += curl(u) * curl(v) * dx
+        a.Assemble()
+        f = LinearForm(fes)
+        f += CF((0, 0, 1)) * v * dx
+        f.Assemble()
+
+        solver = SparseSolvSolver(a.mat, method="ICCG",
+                                   freedofs=fes.FreeDofs(),
+                                   tol=1e-8, maxiter=3000, shift=1.0,
+                                   use_abmc=True,
+                                   abmc_block_size=4,
+                                   abmc_num_colors=4)
+        solver.auto_shift = True
+        solver.diagonal_scaling = True
+
+        gfu = GridFunction(fes)
+        gfu.vec.data = solver * f.vec
+        print(f"ABMC curl-curl: converged={solver.last_result.converged}, "
+              f"iters={solver.last_result.iterations}")
+        assert solver.last_result.converged
+
+    def test_abmc_complex_symmetric(self, poisson_2d_complex):
+        """ABMC-ICCG with complex-symmetric system."""
+        mesh, fes, a, f, *_ = poisson_2d_complex
+
+        solver = SparseSolvSolver(a.mat, method="ICCG",
+                                   freedofs=fes.FreeDofs(),
+                                   tol=1e-10, maxiter=2000,
+                                   use_abmc=True,
+                                   abmc_block_size=4,
+                                   abmc_num_colors=4)
+        gfu = GridFunction(fes)
+        gfu.vec.data = solver * f.vec
+
+        assert solver.last_result.converged
+        print(f"ABMC complex: {solver.last_result.iterations} iters")
+
+    def test_abmc_vs_level_schedule(self, poisson_2d):
+        """ABMC and level-scheduling produce the same solution."""
+        mesh, fes, a, f, *_ = poisson_2d
+
+        # Without ABMC (level scheduling)
+        solver_ls = SparseSolvSolver(a.mat, method="ICCG",
+                                      freedofs=fes.FreeDofs(),
+                                      tol=1e-12, maxiter=2000)
+        gfu_ls = GridFunction(fes)
+        gfu_ls.vec.data = solver_ls * f.vec
+
+        # With ABMC
+        solver_abmc = SparseSolvSolver(a.mat, method="ICCG",
+                                        freedofs=fes.FreeDofs(),
+                                        tol=1e-12, maxiter=2000,
+                                        use_abmc=True)
+        gfu_abmc = GridFunction(fes)
+        gfu_abmc.vec.data = solver_abmc * f.vec
+
+        assert solver_ls.last_result.converged
+        assert solver_abmc.last_result.converged
+
+        diff = gfu_abmc.vec.CreateVector()
+        diff.data = gfu_abmc.vec - gfu_ls.vec
+        rel_err = Norm(diff) / Norm(gfu_ls.vec)
+        print(f"ABMC vs level-schedule: rel_err={rel_err:.2e}, "
+              f"iters ABMC={solver_abmc.last_result.iterations} vs LS={solver_ls.last_result.iterations}")
+        assert rel_err < 1e-6
+
+    @pytest.mark.parametrize("block_size", [2, 4, 8, 16])
+    def test_abmc_block_size_variations(self, poisson_2d, block_size):
+        """ABMC converges with various block sizes."""
+        mesh, fes, a, f, *_ = poisson_2d
+
+        solver = SparseSolvSolver(a.mat, method="ICCG",
+                                   freedofs=fes.FreeDofs(),
+                                   tol=1e-10, maxiter=2000,
+                                   use_abmc=True,
+                                   abmc_block_size=block_size,
+                                   abmc_num_colors=4)
+        gfu = GridFunction(fes)
+        gfu.vec.data = solver * f.vec
+
+        assert solver.last_result.converged
+        print(f"ABMC block_size={block_size}: {solver.last_result.iterations} iters")
+
+
+# ============================================================================
+# ABMC reordered space tests
+# ============================================================================
+
+class TestABMCReorderedSpace:
+    """Test CG in ABMC-reordered space (no per-iteration permutation)."""
+
+    def test_reordered_space_poisson_2d(self, poisson_2d):
+        """ABMC with CG in reordered space solves 2D Poisson correctly."""
+        mesh, fes, a, f, *_ = poisson_2d
+
+        solver = SparseSolvSolver(a.mat, method="ICCG",
+                                   freedofs=fes.FreeDofs(),
+                                   tol=1e-10, maxiter=2000,
+                                   use_abmc=True,
+                                   abmc_block_size=4,
+                                   abmc_num_colors=4)
+        gfu = GridFunction(fes)
+        gfu.vec.data = solver * f.vec
+
+        assert solver.last_result.converged
+        # Compare with direct solver
+        gfu_direct = GridFunction(fes)
+        gfu_direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+        diff = gfu.vec.CreateVector()
+        diff.data = gfu.vec - gfu_direct.vec
+        rel_err = Norm(diff) / Norm(gfu_direct.vec)
+        print(f"ABMC reordered-space 2D: {solver.last_result.iterations} iters, err={rel_err:.2e}")
+        assert rel_err < 1e-6
+
+    def test_reordered_space_vs_level_schedule(self, poisson_2d):
+        """Reordered-space ABMC and level scheduling give same solution."""
+        mesh, fes, a, f, *_ = poisson_2d
+
+        # Level scheduling (no ABMC)
+        solver_ls = SparseSolvSolver(a.mat, method="ICCG",
+                                      freedofs=fes.FreeDofs(),
+                                      tol=1e-12, maxiter=2000)
+        gfu_ls = GridFunction(fes)
+        gfu_ls.vec.data = solver_ls * f.vec
+
+        # ABMC (CG in reordered space)
+        solver_abmc = SparseSolvSolver(a.mat, method="ICCG",
+                                        freedofs=fes.FreeDofs(),
+                                        tol=1e-12, maxiter=2000,
+                                        use_abmc=True,
+                                        abmc_block_size=4,
+                                        abmc_num_colors=4)
+        gfu_abmc = GridFunction(fes)
+        gfu_abmc.vec.data = solver_abmc * f.vec
+
+        assert solver_ls.last_result.converged
+        assert solver_abmc.last_result.converged
+
+        diff = gfu_ls.vec.CreateVector()
+        diff.data = gfu_ls.vec - gfu_abmc.vec
+        rel_err = Norm(diff) / Norm(gfu_ls.vec)
+        print(f"Reordered vs LS: rel_err={rel_err:.2e}, "
+              f"iters LS={solver_ls.last_result.iterations} / "
+              f"ABMC={solver_abmc.last_result.iterations}")
+        assert rel_err < 1e-6
+
+    def test_reordered_space_diagonal_scaling(self):
+        """Reordered-space ABMC with diagonal scaling."""
+        from netgen.occ import Box, Pnt
+        box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
+        for face in box.faces:
+            face.name = "outer"
+        mesh = box.GenerateMesh(maxh=0.4)
+
+        fes = HCurl(mesh, order=1, dirichlet="outer", nograds=True)
+        u, v = fes.TnT()
+        a = BilinearForm(fes)
+        a += curl(u) * curl(v) * dx
+        a.Assemble()
+        f = LinearForm(fes)
+        f += CF((0, 0, 1)) * v * dx
+        f.Assemble()
+
+        solver = SparseSolvSolver(a.mat, method="ICCG",
+                                   freedofs=fes.FreeDofs(),
+                                   tol=1e-8, maxiter=3000, shift=1.0,
+                                   use_abmc=True,
+                                   abmc_block_size=4,
+                                   abmc_num_colors=4)
+        solver.auto_shift = True
+        solver.diagonal_scaling = True
+
+        gfu = GridFunction(fes)
+        gfu.vec.data = solver * f.vec
+        print(f"ABMC reordered diag_scaling: converged={solver.last_result.converged}, "
+              f"iters={solver.last_result.iterations}")
+        assert solver.last_result.converged
+
+    def test_reordered_space_3d_poisson(self):
+        """Reordered-space ABMC on 3D Poisson."""
+        mesh = Mesh(unit_cube.GenerateMesh(maxh=0.2))
+        fes = H1(mesh, order=1, dirichlet="left|right|top|bottom|front|back")
+        u, v = fes.TnT()
+        a = BilinearForm(fes)
+        a += grad(u) * grad(v) * dx
+        a.Assemble()
+        f = LinearForm(fes)
+        f += 1 * v * dx
+        f.Assemble()
+
+        solver = SparseSolvSolver(a.mat, method="ICCG",
+                                   freedofs=fes.FreeDofs(),
+                                   tol=1e-10, maxiter=3000,
+                                   use_abmc=True,
+                                   abmc_block_size=8,
+                                   abmc_num_colors=4)
+        gfu = GridFunction(fes)
+        gfu.vec.data = solver * f.vec
+
+        # Compare with direct solver
+        gfu_direct = GridFunction(fes)
+        gfu_direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+        diff = gfu.vec.CreateVector()
+        diff.data = gfu.vec - gfu_direct.vec
+        rel_err = Norm(diff) / Norm(gfu_direct.vec)
+        print(f"ABMC reordered 3D: {solver.last_result.iterations} iters, err={rel_err:.2e}")
+        assert rel_err < 1e-6
+
+    def test_reordered_space_complex(self, poisson_2d_complex):
+        """Reordered-space ABMC with complex-symmetric system."""
+        mesh, fes, a, f, *_ = poisson_2d_complex
+
+        solver = SparseSolvSolver(a.mat, method="ICCG",
+                                   freedofs=fes.FreeDofs(),
+                                   tol=1e-10, maxiter=2000,
+                                   use_abmc=True,
+                                   abmc_block_size=4,
+                                   abmc_num_colors=4)
+        gfu = GridFunction(fes)
+        gfu.vec.data = solver * f.vec
+        print(f"ABMC reordered complex: converged={solver.last_result.converged}, "
+              f"iters={solver.last_result.iterations}")
+        assert solver.last_result.converged
+
+
+# ============================================================================
+# COCR Solver (standalone) tests
+# ============================================================================
+
+class TestCOCRSolverStandalone:
+    """Tests for standalone COCRSolver with external preconditioner."""
+
+    def test_cocr_complex_solve(self, eddy_current_3d):
+        """COCRSolver converges on complex-symmetric eddy current problem."""
+        from radia.sparsesolv_ngsolve import COCRSolver
+
+        mesh, fes, a, f = eddy_current_3d
+
+        pre = ICPreconditioner(a.mat, freedofs=fes.FreeDofs(), shift=1.05)
+        inv = COCRSolver(a.mat, pre, maxiter=500, tol=1e-8)
+
+        gfu = GridFunction(fes)
+        gfu.vec.data = inv * f.vec
+        assert Norm(gfu.vec) > 0
+        print(f"COCRSolver: {inv.iterations} iterations")
+        assert inv.iterations < 500
+
+    def test_cocr_with_freedofs(self, eddy_current_3d):
+        """COCRSolver works with freedofs parameter."""
+        from radia.sparsesolv_ngsolve import COCRSolver
+
+        mesh, fes, a, f = eddy_current_3d
+
+        pre = ICPreconditioner(a.mat, freedofs=fes.FreeDofs(), shift=1.05)
+        inv = COCRSolver(a.mat, pre, freedofs=fes.FreeDofs(), maxiter=500, tol=1e-8)
+
+        gfu = GridFunction(fes)
+        gfu.vec.data = inv * f.vec
+        assert Norm(gfu.vec) > 0
+
+
+# ============================================================================
+# GMRES Solver tests
+# ============================================================================
+
+class TestGMRESSolver:
+    """Tests for GMRESSolver (non-symmetric systems)."""
+
+    def test_gmres_basic_solve(self):
+        """GMRESSolver solves a non-symmetric system (convection-diffusion)."""
+        from radia.sparsesolv_ngsolve import GMRESSolver
+
+        mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
+        fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
+        u, v = fes.TnT()
+
+        # Non-symmetric: diffusion + convection
+        a = BilinearForm(fes)
+        a += grad(u) * grad(v) * dx
+        a += CF((1, 0)) * grad(u) * v * dx  # convection term
+        a.Assemble()
+
+        f = LinearForm(fes)
+        f += 1 * v * dx
+        f.Assemble()
+
+        pre = ICPreconditioner(a.mat, freedofs=fes.FreeDofs(), shift=1.05)
+        inv = GMRESSolver(a.mat, pre, freedofs=fes.FreeDofs(),
+                          maxiter=500, tol=1e-8)
+
+        gfu = GridFunction(fes)
+        gfu.vec.data = inv * f.vec
+        assert Norm(gfu.vec) > 0
+        print(f"GMRES convection-diffusion: {inv.iterations} iterations")
+        assert inv.iterations < 200
+
+    def test_gmres_with_preconditioner(self):
+        """GMRESSolver works with IC preconditioner."""
+        from radia.sparsesolv_ngsolve import GMRESSolver
+
+        mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
+        fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
+        u, v = fes.TnT()
+
+        a = BilinearForm(fes)
+        a += grad(u) * grad(v) * dx
+        a += CF((1, 0)) * grad(u) * v * dx
+        a.Assemble()
+
+        f = LinearForm(fes)
+        f += 1 * v * dx
+        f.Assemble()
+
+        pre = ICPreconditioner(a.mat, freedofs=fes.FreeDofs(), shift=1.05)
+        inv = GMRESSolver(a.mat, pre, maxiter=500, tol=1e-8)
+
+        gfu = GridFunction(fes)
+        gfu.vec.data = inv * f.vec
+        assert Norm(gfu.vec) > 0
+
+
+# ============================================================================
+# CompactAMG Preconditioner tests
+# ============================================================================
+
+class TestCompactAMG:
+    """Tests for CompactAMG preconditioner."""
+
+    def test_registration_survives_a_fresh_process_and_reassembly(self):
+        """The user-facing name must exist without a manual native import."""
+        script = r'''
+print("compactamg: import", flush=True)
+import radia
+import ngsolve as ng
+import numpy as np
+from netgen.csg import unit_cube
+from ngsolve.krylovspace import CGSolver
+ng.SetNumThreads(2)
+print("compactamg: mesh", flush=True)
+mesh = ng.Mesh(unit_cube.GenerateMesh(maxh=0.4))
+fes = ng.H1(mesh, order=1, dirichlet=".*")
+u, v = fes.TnT()
+factor = ng.Parameter(1.0)
+a = ng.BilinearForm(fes)
+a += factor * ng.grad(u) * ng.grad(v) * ng.dx
+pre = ng.Preconditioner(a, "compactamg")
+print("compactamg: registered", flush=True)
+f = ng.LinearForm(fes)
+f += v * ng.dx
+f.Assemble()
+free = np.asarray(list(fes.FreeDofs()), dtype=bool)
+for scale in (1.0, 3.0):
+    print("compactamg: assemble", scale, flush=True)
+    factor.Set(scale)
+    a.Assemble()
+    assert type(pre.mat).__name__ == "CompactAMGPreconditionerImpl"
+    sol = ng.GridFunction(fes)
+    inv = CGSolver(a.mat, pre.mat, tol=1e-11, maxiter=200, printrates=False)
+    print("compactamg: solve", scale, flush=True)
+    sol.vec.data = inv * f.vec
+    residual = f.vec.CreateVector()
+    residual.data = f.vec - a.mat * sol.vec
+    relative = np.linalg.norm(residual.FV().NumPy()[free]) / np.linalg.norm(f.vec.FV().NumPy()[free])
+    assert np.isfinite(relative) and relative < 1e-8, relative
+print("COMPACTAMG_REGISTERED_AND_REASSEMBLED")
+'''
+        result = subprocess.run(
+            [sys.executable, "-u", "-X", "faulthandler", "-c", script],
+            capture_output=True, text=True, timeout=90
+        )
+        if result.returncode:
+            pytest.fail(
+                f"compactamg child exited {result.returncode}\n"
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+                pytrace=False,
+            )
+        assert "COMPACTAMG_REGISTERED_AND_REASSEMBLED" in result.stdout
+
+    @pytest.fixture
+    def has_amg(self):
+        from radia.sparsesolv_ngsolve import has_compact_ams
+        assert has_compact_ams(), "Required CompactAMG support is missing"
+
+    def test_compact_amg_basic(self, has_amg):
+        """CompactAMG + CG solves 3D Poisson."""
+        from radia.sparsesolv_ngsolve import CompactAMGPreconditioner
+
+        mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
+        fes = H1(mesh, order=1, dirichlet="left|right|top|bottom|front|back")
+        u, v = fes.TnT()
+        a = BilinearForm(fes)
+        a += grad(u) * grad(v) * dx
+        a.Assemble()
+        f = LinearForm(fes)
+        f += 1 * v * dx
+        f.Assemble()
+
+        pre = CompactAMGPreconditioner(a.mat, freedofs=fes.FreeDofs())
+        inv = CGSolver(a.mat, pre, printrates=False, tol=1e-10, maxiter=200)
+
+        gfu = GridFunction(fes)
+        gfu.vec.data = inv * f.vec
+
+        gfu_direct = GridFunction(fes)
+        gfu_direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+        diff = gfu.vec.CreateVector()
+        diff.data = gfu.vec - gfu_direct.vec
+        rel_err = Norm(diff) / Norm(gfu_direct.vec)
+        print(f"CompactAMG+CG: rel_err={rel_err:.2e}")
+        assert rel_err < 1e-6
+
+
+# ============================================================================
+# CompactAMS Preconditioner tests
+# ============================================================================
+
+class TestCompactAMS:
+    """Tests for CompactAMS preconditioner (HCurl systems)."""
+
+    @pytest.fixture
+    def has_ams(self):
+        from radia.sparsesolv_ngsolve import has_compact_ams
+        assert has_compact_ams(), "Required CompactAMS support is missing"
+
+    @pytest.fixture
+    def curl_curl_3d(self):
+        """3D curl-curl + mass problem for AMS testing."""
+        from netgen.occ import Box, Pnt, OCCGeometry
+        box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
+        for face in box.faces:
+            face.name = "outer"
+        mesh = Mesh(OCCGeometry(box).GenerateMesh(maxh=0.3))
+
+        fes = HCurl(mesh, order=1, dirichlet="outer", nograds=True)
+        u, v = fes.TnT()
+
+        a = BilinearForm(fes)
+        a += curl(u) * curl(v) * dx + 0.01 * u * v * dx  # regularized
+        a.Assemble()
+
+        f_form = LinearForm(fes)
+        f_form += CF((0, 0, 1)) * v * dx
+        f_form.Assemble()
+
+        return mesh, fes, a, f_form
+
+    def test_compact_ams_basic(self, has_ams, curl_curl_3d):
+        """CompactAMS + CG solves curl-curl + mass system."""
+        from radia.sparsesolv_ngsolve import CompactAMSPreconditioner
+
+        mesh, fes, a, f = curl_curl_3d
+
+        # Get gradient matrix and coordinates
+        G_mat, h1_fes = fes.CreateGradient()
+
+        # Extract vertex coordinates
+        coord_x = [mesh.ngmesh.Points()[i+1][0] for i in range(mesh.nv)]
+        coord_y = [mesh.ngmesh.Points()[i+1][1] for i in range(mesh.nv)]
+        coord_z = [mesh.ngmesh.Points()[i+1][2] for i in range(mesh.nv)]
+
+        pre = CompactAMSPreconditioner(a.mat, G_mat,
+                                        freedofs=fes.FreeDofs(),
+                                        coord_x=coord_x, coord_y=coord_y,
+                                        coord_z=coord_z)
+
+        poisoned = f.vec.CreateVector()
+        poisoned.FV().NumPy()[:] = float("nan")
+        pre.Mult(f.vec, poisoned)
+        assert not any(value != value for value in poisoned.FV().NumPy())
+
+        inv = CGSolver(a.mat, pre, printrates=False, tol=1e-8, maxiter=200)
+
+        gfu = GridFunction(fes)
+        gfu.vec.data = inv * f.vec
+
+        gfu_direct = GridFunction(fes)
+        gfu_direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+        diff = gfu.vec.CreateVector()
+        diff.data = gfu.vec - gfu_direct.vec
+        rel_err = Norm(diff) / Norm(gfu_direct.vec)
+        print(f"CompactAMS+CG: rel_err={rel_err:.2e}")
+        assert rel_err < 1e-4
+
+    def test_compact_ams_update(self, has_ams, curl_curl_3d):
+        """CompactAMS Update() preserves solution quality."""
+        from radia.sparsesolv_ngsolve import CompactAMSPreconditioner
+
+        mesh, fes, a, f = curl_curl_3d
+
+        G_mat, h1_fes = fes.CreateGradient()
+        coord_x = [mesh.ngmesh.Points()[i+1][0] for i in range(mesh.nv)]
+        coord_y = [mesh.ngmesh.Points()[i+1][1] for i in range(mesh.nv)]
+        coord_z = [mesh.ngmesh.Points()[i+1][2] for i in range(mesh.nv)]
+
+        pre = CompactAMSPreconditioner(a.mat, G_mat,
+                                        freedofs=fes.FreeDofs(),
+                                        coord_x=coord_x, coord_y=coord_y,
+                                        coord_z=coord_z)
+
+        # First solve
+        inv1 = CGSolver(a.mat, pre, printrates=False, tol=1e-8, maxiter=200)
+        gfu1 = GridFunction(fes)
+        gfu1.vec.data = inv1 * f.vec
+        iters1 = inv1.iterations
+
+        # Update (same matrix - should give same iterations)
+        pre.Update()
+        inv2 = CGSolver(a.mat, pre, printrates=False, tol=1e-8, maxiter=200)
+        gfu2 = GridFunction(fes)
+        gfu2.vec.data = inv2 * f.vec
+        iters2 = inv2.iterations
+
+        print(f"AMS Update: iters before={iters1}, after={iters2}")
+        assert abs(iters1 - iters2) <= 1  # Should be identical or +-1
+
+        diff = gfu1.vec.CreateVector()
+        diff.data = gfu1.vec - gfu2.vec
+        rel_err = Norm(diff) / Norm(gfu1.vec)
+        assert rel_err < 1e-6
+
+
+# ============================================================================
+# ComplexCompactAMS Preconditioner tests
+# ============================================================================
+
+class TestComplexCompactAMS:
+    """Tests for ComplexCompactAMS preconditioner."""
+
+    @pytest.fixture
+    def has_ams(self):
+        from radia.sparsesolv_ngsolve import has_compact_ams
+        assert has_compact_ams(), "Required ComplexCompactAMS support is missing"
+
+    def test_complex_ams_basic(self, has_ams, eddy_current_3d):
+        """ComplexCompactAMS + COCR solves eddy current problem."""
+        from radia.sparsesolv_ngsolve import ComplexCompactAMSPreconditioner, COCRSolver
+
+        mesh, fes, a, f = eddy_current_3d
+        u, v = fes.TnT()
+
+        # Build real auxiliary matrix: K + |omega|*sigma*M
+        fes_real = HCurl(mesh, order=1, dirichlet="outer", nograds=True)
+        u_r, v_r = fes_real.TnT()
+        a_real = BilinearForm(fes_real)
+        a_real += curl(u_r) * curl(v_r) * dx + 1.0 * u_r * v_r * dx
+        a_real.Assemble()
+
+        G_mat, h1_fes = fes_real.CreateGradient()
+        coord_x = [mesh.ngmesh.Points()[i+1][0] for i in range(mesh.nv)]
+        coord_y = [mesh.ngmesh.Points()[i+1][1] for i in range(mesh.nv)]
+        coord_z = [mesh.ngmesh.Points()[i+1][2] for i in range(mesh.nv)]
+
+        pre = ComplexCompactAMSPreconditioner(
+            a_real.mat, G_mat,
+            freedofs=fes_real.FreeDofs(),
+            coord_x=coord_x, coord_y=coord_y, coord_z=coord_z,
+            ndof_complex=fes.ndof)
+
+        inv = COCRSolver(a.mat, pre, maxiter=500, tol=1e-6)
+        gfu = GridFunction(fes)
+        gfu.vec.data = inv * f.vec
+
+        assert Norm(gfu.vec) > 0
+        print(f"ComplexCompactAMS+COCR: {inv.iterations} iterations")
+        assert inv.iterations < 500
+        # Iteration count and a nonzero vector do not prove that AMS solved
+        # the complex HCurl problem. Check the actual free-row residual and
+        # an independent direct solve of the same unmodified operator.
+        import numpy as np
+        free = np.asarray(list(fes.FreeDofs()), dtype=bool)
+        residual = f.vec.CreateVector()
+        residual.data = f.vec - a.mat * gfu.vec
+        relative = np.linalg.norm(residual.FV().NumPy()[free]) / np.linalg.norm(
+            f.vec.FV().NumPy()[free])
+        assert np.isfinite(relative) and relative < 1e-5
+        direct = GridFunction(fes)
+        direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        difference = gfu.vec.CreateVector()
+        difference.data = gfu.vec - direct.vec
+        relative_error = Norm(difference) / Norm(direct.vec)
+        print(f"ComplexCompactAMS true residual={relative:.3e}, direct error={relative_error:.3e}")
+        assert relative_error < 1e-4
+
+    def test_complex_ams_ndof_auto(self, has_ams, eddy_current_3d):
+        """ComplexCompactAMS with ndof_complex=0 auto-derives from matrix."""
+        from radia.sparsesolv_ngsolve import ComplexCompactAMSPreconditioner
+
+        mesh, fes, a, f = eddy_current_3d
+
+        fes_real = HCurl(mesh, order=1, dirichlet="outer", nograds=True)
+        u_r, v_r = fes_real.TnT()
+        a_real = BilinearForm(fes_real)
+        a_real += curl(u_r) * curl(v_r) * dx + 1.0 * u_r * v_r * dx
+        a_real.Assemble()
+
+        G_mat, h1_fes = fes_real.CreateGradient()
+        coord_x = [mesh.ngmesh.Points()[i+1][0] for i in range(mesh.nv)]
+        coord_y = [mesh.ngmesh.Points()[i+1][1] for i in range(mesh.nv)]
+        coord_z = [mesh.ngmesh.Points()[i+1][2] for i in range(mesh.nv)]
+
+        # ndof_complex=0 (default) should auto-derive from matrix
+        pre = ComplexCompactAMSPreconditioner(
+            a_real.mat, G_mat,
+            freedofs=fes_real.FreeDofs(),
+            coord_x=coord_x, coord_y=coord_y, coord_z=coord_z)
+        # Should not raise an error - ndof_complex is auto-derived
+
+        # Verify it works: use complex vectors (ComplexCompactAMS expects complex)
+        test_vec = a.mat.CreateRowVector()
+        result_vec = a.mat.CreateRowVector()
+        # Basic smoke test
+        pre.Mult(test_vec, result_vec)
+
+
+# ============================================================================
+# IC Preconditioner ABMC path switch regression test
+# ============================================================================
+
+class TestICPreconditionerRegression:
+    """Regression tests for IC preconditioner fixes."""
+
+    def test_abmc_path_switch(self, poisson_2d):
+        """ABMC <-> standard path switch works correctly (regression for cached_use_abmc_)."""
+        mesh, fes, a, f, *_ = poisson_2d
+
+        # Start without ABMC
+        pre = ICPreconditioner(a.mat, freedofs=fes.FreeDofs(), shift=1.05)
+        inv1 = CGSolver(a.mat, pre, printrates=False, tol=1e-10, maxiter=2000)
+        gfu1 = GridFunction(fes)
+        gfu1.vec.data = inv1 * f.vec
+        assert Norm(gfu1.vec) > 0
+
+        # Switch to ABMC (this used to segfault before the fix)
+        pre.use_abmc = True
+        pre.Update()
+        inv2 = CGSolver(a.mat, pre, printrates=False, tol=1e-10, maxiter=2000)
+        gfu2 = GridFunction(fes)
+        gfu2.vec.data = inv2 * f.vec
+
+        # Results should be similar
+        diff = gfu1.vec.CreateVector()
+        diff.data = gfu1.vec - gfu2.vec
+        rel_err = Norm(diff) / Norm(gfu1.vec)
+        print(f"ABMC path switch: rel_err={rel_err:.2e}")
+        assert rel_err < 1e-6
+
+        # Switch back to standard
+        pre.use_abmc = False
+        pre.Update()
+        inv3 = CGSolver(a.mat, pre, printrates=False, tol=1e-10, maxiter=2000)
+        gfu3 = GridFunction(fes)
+        gfu3.vec.data = inv3 * f.vec
+
+        diff.data = gfu1.vec - gfu3.vec
+        rel_err = Norm(diff) / Norm(gfu1.vec)
+        print(f"Back to standard: rel_err={rel_err:.2e}")
+        assert rel_err < 1e-6
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

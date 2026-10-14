@@ -1,0 +1,18 @@
+# 01_pure_cad.jou — primitives + boolean + move + rename
+# Expected: translate cleanly to build123d (tet pipeline candidate)
+reset
+
+# Base plate
+create brick x 100 y 50 z 20
+
+# Two mounting holes, symmetric about the X axis
+create cylinder radius 10 height 20
+move volume 2 x 30 y 0 z 0
+subtract volume 2 from volume 1
+
+create cylinder radius 10 height 20
+move volume 3 x -30 y 0 z 0
+subtract volume 3 from volume 1
+
+# Label the final body
+rename volume 1 "bracket"

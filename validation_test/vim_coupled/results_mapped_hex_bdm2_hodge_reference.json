@@ -1,0 +1,189 @@
+{
+  "schema": "radia.validation.mapped-hex-bdm2-hodge-reference.v3",
+  "created_at_utc": "2026-08-30T03:31:47.383566+00:00",
+  "tool_versions": {
+    "radia": "4.95.71",
+    "radia_source_head": "a73c2d8c5ee6b58aff264e1560bb328cac7c3423",
+    "radia_source_head_end": "a73c2d8c5ee6b58aff264e1560bb328cac7c3423",
+    "radia_source_dirty": true,
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606",
+    "numpy": "2.5.2",
+    "scipy": "1.17.1"
+  },
+  "source_fingerprints": {
+    "validation_test/vim_coupled/validate_mapped_hex_bdm2_hodge_reference.py": "a8e95d9e0d5063274d0c4941f07d614ae560a83fbe5d9de7b0f7b5921e7b96be",
+    "src/radia/vim/_vim.py": "18aa361e32e550cbfadfaa2ab6908c1028424f681149ba7226566351547ff47c",
+    "src/radia/vim/_eddy_hybrid.py": "8a226e8752ed6078210634b1228469ab318853c6edb21179f9919b1609b7efd6",
+    "src/radia/_radia_pybind.pyd": "73542c663d118264526e2ec310e96b9e42ce5b3307c2b038d8ab0347ab40e629"
+  },
+  "identity": {
+    "outer_mesh": "54 mapped HEX, air plus central body",
+    "body_mesh": "same central two mapped HEX regenerated independently",
+    "hdiv_family": "BDM2",
+    "body_active_dofs": 207,
+    "meshes_tracked": false
+  },
+  "h1_hodge_reference": [
+    {
+      "formulation": "finite-domain H1 Omega discrete Hodge projection",
+      "backend": {
+        "formulation": "HDiv-to-H1 discrete Hodge projection",
+        "operator": "C.T @ K^-1 @ C",
+        "hdiv_dofs": 403,
+        "hdiv_active_dofs": 207,
+        "h1_dofs": 637,
+        "h1_free_dofs": 275,
+        "h1_constrained_dofs": 362,
+        "inverse_backend": "sparsecholesky",
+        "boundary_contract": "finite-dirichlet-validation",
+        "definedon": null,
+        "unit_stiffness": true,
+        "contraction_contract": "standard-unit-H1 metric",
+        "claim_boundary": "finite-domain reference unless the caller supplied and independently verified a Kelvin-transformed potential domain"
+      },
+      "h1_order": 2,
+      "h1_dofs": 637,
+      "h1_free_dofs": 275,
+      "hdiv_dofs": 403,
+      "hdiv_active_dofs": 207,
+      "spectrum": {
+        "minimum": -1.5588286662488887e-15,
+        "maximum": 0.9917861681011916,
+        "outside_count": 0
+      }
+    },
+    {
+      "formulation": "finite-domain H1 Omega discrete Hodge projection",
+      "backend": {
+        "formulation": "HDiv-to-H1 discrete Hodge projection",
+        "operator": "C.T @ K^-1 @ C",
+        "hdiv_dofs": 403,
+        "hdiv_active_dofs": 207,
+        "h1_dofs": 1900,
+        "h1_free_dofs": 1088,
+        "h1_constrained_dofs": 812,
+        "inverse_backend": "sparsecholesky",
+        "boundary_contract": "finite-dirichlet-validation",
+        "definedon": null,
+        "unit_stiffness": true,
+        "contraction_contract": "standard-unit-H1 metric",
+        "claim_boundary": "finite-domain reference unless the caller supplied and independently verified a Kelvin-transformed potential domain"
+      },
+      "h1_order": 3,
+      "h1_dofs": 1900,
+      "h1_free_dofs": 1088,
+      "hdiv_dofs": 403,
+      "hdiv_active_dofs": 207,
+      "spectrum": {
+        "minimum": -1.8436376085407073e-15,
+        "maximum": 0.987723344475204,
+        "outside_count": 0
+      }
+    }
+  ],
+  "h1_hcurl_mixed_reference": {
+    "formulation": "finite-domain H1-Hodge BDM2 plus HCurl eddy-bubble",
+    "validation_role": "shared-mesh mixed-mechanics gate, not open-boundary accuracy",
+    "frequency_hz": 100.0,
+    "sigma_s_per_m": 1000000.0,
+    "mu_r": 100.0,
+    "mesh_elements": 54,
+    "hdiv_parent_dofs": 403,
+    "hdiv_active_dofs": 207,
+    "hdiv_modes": 2,
+    "hcurl_parent_dofs": 3432,
+    "hcurl_modes": 1,
+    "demag_backend": "H1HodgeDemagOperator",
+    "snapshot_backend": "ngsolve-mass-preconditioned-cg",
+    "snapshot_iterations": [
+      28,
+      18
+    ],
+    "max_snapshot_relative_residual": 2.9348548839689745e-12,
+    "reduced_demag_generalized_spectrum": {
+      "minimum": 0.15248306873019793,
+      "maximum": 0.1943995001501886
+    },
+    "hcurl_interaction_backend": "hacapk-sampled-laplace",
+    "mixed_relative_residual": 3.27652671098187e-16,
+    "average_joule_loss": 5.056840301682453e-11,
+    "magnetization_coefficient_norm": 0.015661648784533917,
+    "eddy_coefficient_norm": 0.010056679672419177,
+    "wall_s": 0.7032508999982383
+  },
+  "charge_hacapk_production": {
+    "formulation": "mapped BDM2 cancellation-preserving HACApK ChargeGram",
+    "hdiv_dofs": 207,
+    "spectrum": {
+      "minimum": -4.646920684974006e-16,
+      "maximum": 0.9960959092424728,
+      "outside_count": 0
+    },
+    "affinity": {
+      "cell_count": 2,
+      "nonaffine_cell_count": 2,
+      "nonaffine_cells": [
+        0,
+        1
+      ],
+      "maximum_relative_residual": 0.7628353742578918,
+      "relative_tolerance": 1e-10
+    },
+    "solve": {
+      "mu_r": 100.0,
+      "iterations": 24,
+      "converged": true,
+      "final_relative_residual": 5.805110288773586e-11,
+      "M_avg": [
+        7.165073976134334e-10,
+        -1.538441210792122e-09,
+        3741.224780769636
+      ],
+      "field_points": [
+        [
+          0.1,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.1,
+          0.0
+        ]
+      ],
+      "field": [
+        [
+          -1.1294801640345295e-11,
+          -3.5549555760551206,
+          -18.537859540227927
+        ],
+        [
+          -3.3895936796855755,
+          -2.1241152516687e-12,
+          -18.14530839105779
+        ]
+      ],
+      "field_finite": true
+    }
+  },
+  "checks": {
+    "source_fingerprints_stable_during_run": true,
+    "body_is_nonaffine": true,
+    "h1_hodge_active_dofs_match_body_bdm2": true,
+    "h1_hodge_spectra_are_contractions": true,
+    "h1_hodge_public_operator_path_verified": true,
+    "charge_hacapk_spectrum_is_a_contraction": true,
+    "charge_hacapk_material_solve_and_field_are_production_finite": true,
+    "mapped_bdm2_response_uses_generic_ngsolve_cg": true,
+    "mapped_bdm2_hcurl_mixed_solve_is_finite_and_converged": true
+  },
+  "pass": true,
+  "timing_s": {
+    "total": 12.314830799994525
+  },
+  "claim_boundary": {
+    "established": "the mapped BDM2 HDiv space and NGSolve mass/coupling admit a bounded discrete Hodge projection; the cancellation-preserving HACApK ChargeGram is also bounded on the same 207 active DoFs and completes a linear material solve plus native field evaluation; the same BDM2 response reduction feeds a converged shared-mesh HCurl eddy-bubble mixed solve",
+    "not_established": "an open-boundary H1 accuracy reference, nonlinear/IMA closure for every mapped HEX family, or universal solver superiority"
+  }
+}

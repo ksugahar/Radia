@@ -1,0 +1,170 @@
+{
+  "checks": {
+    "coenergy_force_mean_N": 12.500000000000004,
+    "coenergy_force_peak_abs_N": 12.50000000000001,
+    "stored_energy_force_mean_N": 12.500000000000004,
+    "stored_energy_force_peak_abs_N": 12.50000000000001
+  },
+  "coenergy_summary": {
+    "energy_kind": "coenergy",
+    "energy_to_force_sign": 1.0,
+    "force_max_N": 12.50000000000001,
+    "force_mean_N": 12.500000000000004,
+    "force_min_N": 12.499999999999982,
+    "force_peak_abs_N": 12.50000000000001,
+    "n_samples": 5,
+    "virtual_work_identity": "F = dW_co/dx at fixed current"
+  },
+  "energy_model": {
+    "coenergy_formula": "Wco(x) = offset + F*x",
+    "expected_force_N": 12.5,
+    "offset_J": 0.25,
+    "positions_m": [
+      -0.002,
+      -0.001,
+      0.0,
+      0.001,
+      0.002
+    ],
+    "stored_energy_formula": "W(x) = offset - F*x"
+  },
+  "force_learning": "fixed-current coenergy uses +dWco/dx; stored field energy uses -dW/dx",
+  "kind": "virtual_work_force_displacement_sweep",
+  "sample_rows": {
+    "coenergy": [
+      {
+        "denergy_dx_N": 12.499999999999982,
+        "energy_J": 0.225,
+        "energy_kind": "coenergy",
+        "force_N": 12.499999999999982,
+        "index": 1,
+        "position_m": -0.002,
+        "position_minus_m": -0.002,
+        "position_plus_m": -0.001,
+        "stencil": "forward",
+        "virtual_work_identity": "F = dW_co/dx at fixed current"
+      },
+      {
+        "denergy_dx_N": 12.499999999999996,
+        "energy_J": 0.2375,
+        "energy_kind": "coenergy",
+        "force_N": 12.499999999999996,
+        "index": 2,
+        "position_m": -0.001,
+        "position_minus_m": -0.002,
+        "position_plus_m": 0.0,
+        "stencil": "central",
+        "virtual_work_identity": "F = dW_co/dx at fixed current"
+      },
+      {
+        "denergy_dx_N": 12.50000000000001,
+        "energy_J": 0.25,
+        "energy_kind": "coenergy",
+        "force_N": 12.50000000000001,
+        "index": 3,
+        "position_m": 0.0,
+        "position_minus_m": -0.001,
+        "position_plus_m": 0.001,
+        "stencil": "central",
+        "virtual_work_identity": "F = dW_co/dx at fixed current"
+      },
+      {
+        "denergy_dx_N": 12.50000000000001,
+        "energy_J": 0.2625,
+        "energy_kind": "coenergy",
+        "force_N": 12.50000000000001,
+        "index": 4,
+        "position_m": 0.001,
+        "position_minus_m": 0.0,
+        "position_plus_m": 0.002,
+        "stencil": "central",
+        "virtual_work_identity": "F = dW_co/dx at fixed current"
+      },
+      {
+        "denergy_dx_N": 12.50000000000001,
+        "energy_J": 0.275,
+        "energy_kind": "coenergy",
+        "force_N": 12.50000000000001,
+        "index": 5,
+        "position_m": 0.002,
+        "position_minus_m": 0.001,
+        "position_plus_m": 0.002,
+        "stencil": "backward",
+        "virtual_work_identity": "F = dW_co/dx at fixed current"
+      }
+    ],
+    "stored_energy": [
+      {
+        "denergy_dx_N": -12.50000000000001,
+        "energy_J": 0.275,
+        "energy_kind": "stored_energy",
+        "force_N": 12.50000000000001,
+        "index": 1,
+        "position_m": -0.002,
+        "position_minus_m": -0.002,
+        "position_plus_m": -0.001,
+        "stencil": "forward",
+        "virtual_work_identity": "F = -dW/dx at fixed flux/source-free displacement"
+      },
+      {
+        "denergy_dx_N": -12.50000000000001,
+        "energy_J": 0.2625,
+        "energy_kind": "stored_energy",
+        "force_N": 12.50000000000001,
+        "index": 2,
+        "position_m": -0.001,
+        "position_minus_m": -0.002,
+        "position_plus_m": 0.0,
+        "stencil": "central",
+        "virtual_work_identity": "F = -dW/dx at fixed flux/source-free displacement"
+      },
+      {
+        "denergy_dx_N": -12.50000000000001,
+        "energy_J": 0.25,
+        "energy_kind": "stored_energy",
+        "force_N": 12.50000000000001,
+        "index": 3,
+        "position_m": 0.0,
+        "position_minus_m": -0.001,
+        "position_plus_m": 0.001,
+        "stencil": "central",
+        "virtual_work_identity": "F = -dW/dx at fixed flux/source-free displacement"
+      },
+      {
+        "denergy_dx_N": -12.499999999999996,
+        "energy_J": 0.2375,
+        "energy_kind": "stored_energy",
+        "force_N": 12.499999999999996,
+        "index": 4,
+        "position_m": 0.001,
+        "position_minus_m": 0.0,
+        "position_plus_m": 0.002,
+        "stencil": "central",
+        "virtual_work_identity": "F = -dW/dx at fixed flux/source-free displacement"
+      },
+      {
+        "denergy_dx_N": -12.499999999999982,
+        "energy_J": 0.225,
+        "energy_kind": "stored_energy",
+        "force_N": 12.499999999999982,
+        "index": 5,
+        "position_m": 0.002,
+        "position_minus_m": 0.001,
+        "position_plus_m": 0.002,
+        "stencil": "backward",
+        "virtual_work_identity": "F = -dW/dx at fixed flux/source-free displacement"
+      }
+    ]
+  },
+  "stored_energy_summary": {
+    "energy_kind": "stored_energy",
+    "energy_to_force_sign": -1.0,
+    "force_max_N": 12.50000000000001,
+    "force_mean_N": 12.500000000000004,
+    "force_min_N": 12.499999999999982,
+    "force_peak_abs_N": 12.50000000000001,
+    "n_samples": 5,
+    "virtual_work_identity": "F = -dW/dx at fixed flux/source-free displacement"
+  },
+  "validation_class": true
+}

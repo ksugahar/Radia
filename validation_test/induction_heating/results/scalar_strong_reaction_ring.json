@@ -1,0 +1,97 @@
+{
+  "schema": "radia.scalar-strong-reaction.v1",
+  "qualification": "Self-authored prescribed circuit and flat torus; finite-mesh power and reciprocity defects, no general accuracy claim.",
+  "rows": [
+    {
+      "L_air": 2.111122216142822e-07,
+      "R_air": 0.0012098642042857543,
+      "L_total": 2.0160554904784293e-07,
+      "R_total": 0.001278578150167332,
+      "Delta_L": -9.506672566439274e-09,
+      "Delta_R": 6.871394588157768e-05,
+      "P_total": 3.448694775509996e-05,
+      "H_t_rms": 19.37989504404628,
+      "iterations": 11,
+      "converged": true,
+      "coupling_residual": 4.0675722872329694e-10,
+      "body_residual": 9.886092287358628e-17,
+      "body_reaction_power_W": 3.4787263985684086e-05,
+      "body_power_balance_relative_error": 0.008708112782747322,
+      "coil_loss_W": 0.0006045018110979819,
+      "coil_loss_air_W": 0.0006049321021428771,
+      "coil_loss_change_W": -4.302910448952639e-07,
+      "port_power_W": 0.000639289075083666,
+      "n_filaments": 2,
+      "n_phi_wp": 64,
+      "wp_loop_theta_jump": 0.9986320961915365,
+      "wp_loop_cut_n_vertices": 16,
+      "wp_loop_P_frozen": 1.3338962412978726e-05,
+      "wp_loop_H_t_frozen": 12.052719946536097,
+      "wp_loop_screening_ratio": 2.5854295624631476,
+      "t_loop_dof_s": 0.5029325999930734,
+      "wp_loop_faraday_residual": 6.697782242773994e-19,
+      "triangles": 128,
+      "reaction_reciprocity_relative_error": 8.2609297080963e-05,
+      "currents": [
+        [
+          0.5575899051389687,
+          -0.0014519962365910236
+        ],
+        [
+          0.44241009486103133,
+          0.0014519962365910236
+        ]
+      ],
+      "alpha": [
+        -0.30336193418144003,
+        -0.005802054686181529
+      ],
+      "terminal_current_scaling_passed": true
+    },
+    {
+      "L_air": 2.111122216142822e-07,
+      "R_air": 0.0012098642042857543,
+      "L_total": 2.0045356048791093e-07,
+      "R_total": 0.0012885793803154477,
+      "Delta_L": -1.0658661126371247e-08,
+      "Delta_R": 7.871517602969346e-05,
+      "P_total": 3.973830603212515e-05,
+      "H_t_rms": 19.87583050741478,
+      "iterations": 11,
+      "converged": true,
+      "coupling_residual": 4.617953377999438e-10,
+      "body_residual": 2.3434407470918863e-16,
+      "body_reaction_power_W": 3.9843729542652456e-05,
+      "body_power_balance_relative_error": 0.0026529442508717,
+      "coil_loss_W": 0.0006044459606150714,
+      "coil_loss_air_W": 0.0006049321021428771,
+      "coil_loss_change_W": -4.861415278057052e-07,
+      "port_power_W": 0.0006442896901577239,
+      "n_filaments": 2,
+      "n_phi_wp": 256,
+      "wp_loop_theta_jump": 0.9999950867817224,
+      "wp_loop_cut_n_vertices": 32,
+      "wp_loop_P_frozen": 1.684838233419551e-05,
+      "wp_loop_H_t_frozen": 12.941949898215224,
+      "wp_loop_screening_ratio": 2.3585828742426034,
+      "t_loop_dof_s": 1.1845090999995591,
+      "wp_loop_faraday_residual": 1.2035447173327046e-18,
+      "triangles": 512,
+      "reaction_reciprocity_relative_error": 2.8346268121875524e-05,
+      "currents": [
+        [
+          0.5578535189259096,
+          -0.0014347052309889674
+        ],
+        [
+          0.44214648107409044,
+          0.0014347052309889674
+        ]
+      ],
+      "alpha": [
+        -0.3236448212486064,
+        -0.005907013515431568
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1497 @@
+/* rad_hacapk_hdiv.h -- HACApK H-matrix for the symmetric BDM1 HDiv-VIM charge Gram.
+ *
+ * Production stores the Coulomb Gram G and applies the demagnetizing operator as
+ * N = B^T G B.  Symmetric-fill HACApK plus MatVecSym makes N exactly symmetric at
+ * the discrete apply level, so the physical material system
+ * ((1/chi) M_mass + N) is SPD and is solved by mass-Riesz-preconditioned CG.
+ *
+ * Conventions (CLAUDE.md): row-major [target][source]; +N physical sign; HACApK ACA+ only.
+ */
+#ifndef __RAD_HACAPK_HDIV_H
+#define __RAD_HACAPK_HDIV_H
+
+#include "rad_hacapk.h"     // RadHACApKBase
+#include "rad_hdiv_vim.h"   // analytic charge-potential kernels
+#include "rad_hdiv_field_evaluator.h"
+#include "rad_planar_charges.h"
+#include <unordered_map>
+#include <memory>
+#include <mutex>
+#include <shared_mutex>
+#include <cmath>
+
+enum class ChargeDerivativeFamily { Hex, Tet, Wedge };
+class RadHACApKChargeGramDerivative;
+#include <memory>
+#include <string>
+#include <utility>
+#include <atomic>
+#include <limits>
+
+struct RadHACApKSymmetricLeafQuadratic {
+    int leaf_index = -1;
+    bool low_rank = false;
+    int row_start = 0;
+    int row_size = 0;
+    int column_start = 0;
+    int column_size = 0;
+    int rank = 0;
+    double hmatrix_quadratic = 0.0;
+    double raw_quadratic = std::numeric_limits<double>::quiet_NaN();
+};
+
+struct RadHACApKSymmetricLeafQuadraticReport {
+    double hmatrix_quadratic = 0.0;
+    int upper_leaf_count = 0;
+    int upper_low_rank_count = 0;
+    int upper_dense_count = 0;
+    int diagonal_low_rank_count = 0;
+    std::vector<RadHACApKSymmetricLeafQuadratic> dominant_leaves;
+};
+
+// Persistent exact HDiv mass factor for the MASS RIESZ preconditioner, cached
+// across solves.  Broken spaces use local dense blocks; general masses use sparsecholesky.
+struct RadMassRieszCache;
+
+//-------------------------------------------------------------------------
+// RadHACApKChargeGram: the charge-charge Coulomb Gram G as a HACApK H-matrix.
+//-------------------------------------------------------------------------
+
+/* The general-mesh production path.  Charges = volume and boundary charge-basis functions
+ * extracted from the supported NGSolve BDM1 HDiv space.
+ * This manager builds the n_charge x n_charge
+ * Coulomb Gram G as a HACApK H-matrix (a clean 1/r kernel over the charge centroids):
+ *   G[a][b] = meas_a meas_b / (4pi |c_a - c_b|)   (a != b, centroid monopole)
+ *   G[a][a] = self_energy[a]                       (the accurate sub-divided self, computed by the
+ *                                                   caller per element shape -- tet/tri/hex/quad).
+ * The demag operator N = B^T G B is then applied matrix-free as B^T (G-Hmatvec (B m)) with B the
+ * sparse charge map; the H-matrix gives the O(N log N) Gram matvec that makes the solve scalable
+ * on real geometry.  Stores +G (ComputeSystemEntry = default); MatVec/stats from RadHACApKBase. */
+class RadHACApKChargeGram : public RadHACApKBase {
+public:
+    // MONOPOLE mode: centroids [n*3] charge centroids; measures [n] cell volumes / face areas;
+    // self_energy [n] the diagonal G[a][a] (caller-computed accurate self-energy, element-shape-aware).
+    RadHACApKChargeGram(std::vector<double> centroids,
+                        std::vector<double> measures,
+                        std::vector<double> self_energy);
+
+    // SAMPLED LAPLACE mode for hybrid HCurl-VIM/SIBC coupling.  Each
+    // quadrature point is one scalar HACApK charge and the persistent vector
+    // charge map projects the three current components to reduced modes:
+    //   L = mu * sum_c B_c^T G B_c,
+    //   G_ij = w_i w_j / (4*pi*sqrt(|x_i-x_j|^2 + kernel_epsilon^2)).
+    // The H-matrix always stores the stable full Gram.  Hybrid assembly can
+    // replace a reduced diagonal block by adding a small diagonal correction;
+    // imposing same-partition zeros inside ACA is deliberately unsupported.
+    RadHACApKChargeGram(std::vector<double> points,
+                        std::vector<double> weights,
+                        double kernel_epsilon);
+
+    // SAMPLED PLANAR LOG mode for 2-D hybrid HCurl-VIM/SIBC coupling:
+    //   G_ij = -w_i w_j log(sqrt(|x_i-x_j|^2 + eps^2)/reference_length)/(2*pi).
+    // The exact planar HCurl volume block is supplied separately and replaces
+    // the sampled diagonal through the same reduced-correction composition as
+    // the 3-D sampled Laplace path.
+    RadHACApKChargeGram(std::vector<double> points,
+                        std::vector<double> weights,
+                        double kernel_epsilon,
+                        double reference_length);
+
+    // ANALYTIC mode (M2b): the EXACT charge Gram from per-charge GEOMETRY -- matches the independent
+    // analytic reference entry-by-entry.  cell_verts [n_el*12] (tets, 4 verts) then
+    // face_verts [n_bf*9] (triangles, 3 verts); the n_charge charges are the n_el volume cells
+    // (rho = -div M) followed by the n_bf boundary faces (sigma = M.n).  Entry
+    //   G[a][b] = (1/4pi) INT_a Phi_b   (Phi_b = PhiTet/TriPotential of source b, exact analytic),
+    // the outer INT_a by tet barycentric sub-points (cells) / Dunavant-5 (faces), symmetrized; the
+    // diagonal is the analytic self (the Wilton/phi_tet potential is exact through the 1/r singularity).
+    //
+    // near_factor: the NEAR/FAR split that makes the BUILD fast.  A pair (a,b) is NEAR when
+    // |c_a - c_b| <= near_factor*(size_a + size_b) and uses the expensive analytic entry; FAR pairs use
+    // the cheap centroid-monopole meas_a*meas_b/(4pi r).  Physically correct: the analytic entry only
+    // matters for the NEAR (non-uniform-M, div M != 0) interaction; the far field is monopole to
+    // O((size/r)^2) (the validated monopole+near-correction split).  near_factor defaults to a HUGE
+    // value => ALL pairs near => all-analytic (matches the independent analytic reference golden);
+    // pass near_factor ~= 2 for the fast split.
+    // The CELL outer-quad uses a built-in 4-pt Gauss-Duffy tet rule (64 nodes) -- the lowest-order charge is
+    // constant so the inner is the EXACT analytic PhiTet and INT_T PhiTet dx is smooth, integrated to
+    // ~machine precision.  (The old hardcoded equal-weight _bary_tet(3) under-integrated the volume self-
+    // energy by ~6.5% -- golden-invisible because every uniform-M demag golden has div M = 0.)
+    // far_quad: the FAR-pair evaluation when near_factor < inf.  0 (default) = centroid-MONOPOLE
+    // (meas_a*meas_b/4pi r) -- cheap but O((size/r)^2), it slightly breaks geometric symmetry (the uniform
+    // sphere transverse leak).  >0 = a low-order DOUBLE-QUADRATURE of the true 1/r kernel over a degree-2
+    // rule (4-pt tet / 3-pt tri) -- ~16 cheap evals/pair (vs the full analytic's ~1e3 transcendentals), but
+    // accurate to O((size/r)^4) so it reproduces the all-analytic Gram (verified: sphere transverse 7.26e-4
+    // == exact 7.25e-4, vs monopole 1.19e-3).  This is the precision-preserving build speedup: near=analytic,
+    // far=low-quad.  Tet/tri and polytope analytic modes both support this option.
+    RadHACApKChargeGram(std::vector<double> cell_verts,
+                        std::vector<double> face_verts,
+                        int n_el, double near_factor = 1e30,
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {},
+                        int far_quad = 0);
+
+    // POLYTOPE analytic mode (HEX / WEDGE cells + QUAD faces): the same EXACT analytic entry as the tet/
+    // triangle analytic mode above, generalized to ANY flat-faced convex cell + quad face with NO new
+    // singular quadrature -- the cell Newtonian potential is the divergence-theorem sum over the cell's
+    // (convex-hull) TRIANGLES of the SAME exact Wilton triangle potential (rad_hdiv::TriPotential), and a
+    // quad face is two flat triangles.  Matches the independent analytic polytope reference
+    // polytope path entry-by-entry.  The triangulation is supplied FROM PYTHON (which computes the convex
+    // hulls / sub-triangles) so the C++ needs no hull algorithm and the two share the exact decomposition:
+    //   cell_tris  : flat triangle soup (9 doubles/tri = P0,P1,P2 each xyz) of ALL cells' hull triangles;
+    //   cell_troff : [n_el+1] CSR offsets into cell_tris (in TRIANGLES) -> cell c's hull tris;
+    //   cell_cent  : [n_el*3] cell vertex-mean centroid (the centroid-fan apex AND the outward-normal ref);
+    //   cell_meas  : [n_el]   cell volume;
+    //   face_tris  : flat triangle soup of ALL boundary faces' sub-triangles (triangle->1, quad->2);
+    //   face_troff : [n_bf+1] CSR offsets into face_tris; face_cent [n_bf*3]; face_meas [n_bf] area.
+    // Outer quadrature: cells use the built-in 64-node Gauss-Duffy tet rule on each centroid-fan sub-tet
+    // (apex = cell_cent); faces use built-in Dunavant-5 per sub-triangle -- the SAME rules the tet/tri mode
+    // uses, so an all-tet/all-triangle mesh routed through here would agree with the tet mode to quadrature
+    // precision (it is NOT routed here: the tet mode is kept bit-identical via cell_verts/face_verts).
+    // near_factor: identical NEAR/FAR build split as the analytic mode (default 1e30 = all-analytic).
+    // far_quad: same precision-preserving far option as the tet/tri ctor, here on the polytope (hex/wedge)
+    // charges -- the low-order FAR rule is a degree-2 quadrature on the SAME centroid-fan sub-tets (cells,
+    // 4-pt) / sub-triangles (faces, 3-pt) used for the outer quad, so it reproduces the all-analytic Gram
+    // for hex/wedge far pairs at ~monopole cost.  0 (default) = centroid-monopole far.
+    RadHACApKChargeGram(std::vector<double> cell_tris, std::vector<int> cell_troff,
+                        std::vector<double> cell_cent, std::vector<double> cell_meas,
+                        std::vector<double> face_tris, std::vector<int> face_troff,
+                        std::vector<double> face_cent, std::vector<double> face_meas,
+                        int n_el, double near_factor = 1e30,
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {},
+                        int far_quad = 0);
+
+    // HIGH-ORDER (order-p) mode: POLYNOMIAL charges (a monomial basis on each host element), the order-p
+    // extension checked against the independent high-order analytic reference.  charge_host[c] = host element
+    // index (a cell when charge_kind[c]==0, a boundary face when ==1); charge_expo[3*c+{0,1,2}] = the
+    // monomial exponents in the host's REFERENCE barycentric coords (tet cell: lam1^i lam2^j lam3^k;
+    // face: lam1^i lam2^j, the 3rd exponent ignored).  The SAME reference convention is used by the
+    // Python charge-density map B (so B and G share the basis; N = B^T G B is then basis-invariant and
+    // matches the NGSolve-L2-basis dense reference's demag).  Entry
+    //   G[a][b] = (1/4pi) INT_ha INT_hb m_a(x) m_b(y)/|x-y|
+    // = the monomial-WEIGHTED outer quad (m_a folded into the outer weights) x the polynomial-charge
+    // inner potential PhiAt(b,.) by singularity SUBTRACTION reusing the exact PhiTet/TriPotential through
+    // the 1/r singularity.  ref_tet_pts[nqt*3]/ref_tet_w[nqt] (weights sum to 1/6) + ref_tri_pts[nqr*2]/
+    // ref_tri_w[nqr] (sum to 1/2) are the REFERENCE-element Gauss-Duffy rules (Python-supplied), mapped per
+    // host and used for BOTH the monomial-weighted outer quad and the FIXED inner-potential subtraction
+    // table.
+    //
+    // NEAR/FAR adaptive quadrature (build speedup, ACCURACY-PRESERVING): the per-entry cost is the nested
+    // outer x inner quadrature (~O(quad^6) for vol-vol).  The expensive HIGH-quad subtraction is only needed
+    // for NEAR/self pairs (through the 1/r singularity); for a well-separated (FAR) pair the kernel 1/|x-y|
+    // is SMOOTH, so a CHEAP LOW-quad PLAIN double-Gauss (no PhiTet, no subtraction) is already accurate.  If
+    // the optional ref_*_lo LOW-quad rules are supplied (and ho_far_factor < inf), a pair (a,b) with
+    // |c_a-c_b| > ho_far_factor*(size_a+size_b) uses QuadDotFar (the low-quad plain double sum); NEAR/self
+    // pairs keep the full high-quad subtraction.  This is NOT FMM/multipole (the zero-mean high-order modes
+    // have zero monopole, so a monopole far is WRONG); it is just adaptive quadrature order, and the HACApK
+    // ACA still compresses the well-separated low-rank blocks (now from cheap entries).  ho_far_factor
+    // defaults to 1e30 (=> all pairs NEAR => the original all-high-quad behavior, golden-equivalent).
+    // The production path averages both FAR directions.  A one-sided block keeps matrix symmetry when the
+    // upper triangle is mirrored, but is not invariant under an explicit reflected mesh at finite quadrature
+    // order.  RADIA_HDIV_HO_FAR_ONESIDED=1 is therefore diagnostic/benchmark-only.
+    RadHACApKChargeGram(std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
+                        std::vector<int> charge_host, std::vector<int> charge_kind,
+                        std::vector<int> charge_expo,
+                        std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
+                        std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+                        std::vector<double> ref_tet_pts_lo = {}, std::vector<double> ref_tet_w_lo = {},
+                        std::vector<double> ref_tri_pts_lo = {}, std::vector<double> ref_tri_w_lo = {},
+                        double ho_far_factor = 1e30,
+                        std::vector<double> ref_tet_pts_in = {}, std::vector<double> ref_tet_w_in = {},
+                        std::vector<double> ref_tri_pts_in = {}, std::vector<double> ref_tri_w_in = {},
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
+
+    // HCurl local-polynomial mode.  Each scalar HACApK charge is an arbitrary
+    // linear combination of the common reference monomial list, rather than
+    // one monomial.  A caller can therefore rank-reveal all retained
+    // vector-current components on each sub-tet, keep stable original
+    // component polynomials, and build only the local polynomial rank.
+    // polynomial_coefficients layout is [charge][monomial].  Entries use the
+    // exact reference-coordinate Newton moments through degree 18 and host-pair
+    // block reuse, while the final HCurl map remains Bx/By/Bz outside G.
+    RadHACApKChargeGram(std::vector<double> cell_verts, int n_el,
+                        std::vector<int> charge_host,
+                        std::vector<double> polynomial_coefficients,
+                        std::vector<int> polynomial_exponents,
+                        std::vector<double> ref_tet_pts,
+                        std::vector<double> ref_tet_w);
+
+    // CURVED HIGH-ORDER mode (isoparametric P2, curve_order=2): the same monomial-charge Gram as the flat HO
+    // mode above, but on a CURVED (mesh.Curve(2)) geometry -- the boundary surface charge sigma=M.n and the
+    // volume charge live on the true curved element.  cell_nodes [n_cell*30] = 10 P2 nodes/tet (corners
+    // 0..3, mid-edges 4=(0-1),5=(1-2),6=(2-0),7=(0-3),8=(1-3),9=(2-3)); face_nodes [n_bf*18] = 6 P2 nodes/tri
+    // (corners 0..2, mid-edges 3=(0-1),4=(1-2),5=(2-0)).  charge_host/kind/expo: the monomial is in the
+    // NGSolve REFERENCE frame (the Python charge map B uses the SAME reference-frame change-of-basis, so B and
+    // G share the basis).  The OUTER quadrature maps the reference Gauss-Duffy points (ref_tet_pts/ref_tri_pts)
+    // through the curved P2 map X(xi) + curved measure (CurvedTet/TriMapMeasure), folding xi^expo at the
+    // REFERENCE point; the INNER potential is the curved Duffy (rad_hdiv::CurvedTet/TriPotential, gl/gw = an
+    // nq-point Gauss-Legendre rule on [0,1]) for near/self pairs.  Optional ref_*_lo rules enable the same
+    // smooth-kernel far double-Gauss path as the flat high-order operator; all low points are mapped through
+    // the curved P2 geometry in C++.  No analytic curved moments and no inner-subtraction table.  ROLE
+    // (de-risked 2026-06-28): curved helps NEAR-SURFACE FIELD / FLUX accuracy
+    // (sigma on the true curved surface), NOT the volume-averaged demag FACTOR (which is curving-insensitive on
+    // a sphere, ~3e-5).  Accuracy is the Duffy ~1e-3..1e-5 (the order>=3 conditioning caveat applies on curved).
+    RadHACApKChargeGram(std::vector<double> cell_nodes, std::vector<double> face_nodes,
+                        std::vector<int> cell_vertices, std::vector<int> face_vertices,
+                        int n_el, int curve_order,
+                        std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
+                        std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
+                        std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+                        std::vector<double> curve_gl, std::vector<double> curve_gw,
+                        std::vector<double> ref_tet_pts_lo = {}, std::vector<double> ref_tet_w_lo = {},
+                        std::vector<double> ref_tri_pts_lo = {}, std::vector<double> ref_tri_w_lo = {},
+                        double ho_far_factor = 1e30,
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {},
+                        bool reference_density = false);
+
+    // CURVED POLYTOPE mode (curved hex/wedge): FULLY curved -- both the CELL volume charge AND the boundary
+    // FACE surface charge live on the true mesh.Curve(2) geometry (the cell volume charge is DOMINANT for the
+    // demag, NOT zero -- the lowest-order curved charge representation cannot represent uniform M exactly,
+    // so div M != 0).  Each curved hex CELL
+    // is split (Python, Kuhn 6-tet) into curved P2 sub-TETS, each fed through CurvedTetPotential; each curved
+    // quad FACE into curved P2 sub-TRIS through CurvedTriPotential -- reusing the golden curved-tet/tri kernels.
+    // cell_curved_nodes [n_cell_subtet*30] = 10 P2 nodes/sub-tet; cell_subtet_off [n_cell+1] CSR; ditto
+    // face_curved_nodes [n_bf_subtri*18] + face_subtri_off [n_bf+1].  The CELL outer quad maps ref_tet_pts
+    // through CurvedTetMapMeasure; the FACE outer quad maps ref_tri_pts through CurvedTriMapMeasure.
+    // PhiAt(cell,.) = sum CurvedTetPotential, PhiAt(face,.) = sum CurvedTriPotential (constant charge ->
+    // monomial exponent 0; curve_gl/gw the inner Duffy rule).  14 vectors + int n_el (distinct overload).
+    RadHACApKChargeGram(std::vector<double> cell_curved_nodes, std::vector<int> cell_subtet_off,
+                        std::vector<double> cell_cent, std::vector<double> cell_meas,
+                        std::vector<double> face_curved_nodes, std::vector<int> face_subtri_off,
+                        std::vector<double> face_cent, std::vector<double> face_meas,
+                        std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
+                        std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+                        std::vector<double> curve_gl, std::vector<double> curve_gw, int n_el);
+
+    // HEX BDM1/BDM2 mode: the HDiv(hexmesh, order=p) charge Gram uses tensor Qp monomial charges
+    // (8/27 per volume and 4/9 per quad face at p=1/2) over the DIRECT Q2 isoparametric geometry:
+    // hex_cell_nodes [n_el*81] = 27-node triquadratic lattice (n = ix + 3*iy + 9*iz, ref (ix/2,iy/2,iz/2)),
+    // quad_face_nodes [n_bf*27] = 9-node biquadratic lattice (n = iu + 3*iv), both extracted via GetTrafo at
+    // the reference lattice -> ONE code path for FLAT (trilinear subset of Q2, machine-exact incl. distorted)
+    // and CURVED (mesh.Curve(2)) hexes.  Quadrature follows the numpy-validated eig(M^-1 N)<=1 scheme
+    // (independent prototype eig 0.998): per (target sub-simplex, source sub-simplex) pair
+    // of the ref-hex 6-sub-tet / ref-quad 2-sub-tri decomposition,
+    //   OUTER: near/self sub pair (|cA-cB| <= near_grade*(sA+sB), hosts near) -> a Duffy-graded product rule
+    //          (gl_out/gw_out, graded toward the source sub centroid; BOTH domains graded is the key eig<=1
+    //          lesson); far sub pair -> the regular symmetric rule (sym_tet_* = Keast-15 / sym_tri_* =
+    //          Dunavant-7, bary pts + weights summing to the ref simplex measure 1/6 / 1/2).
+    //   INNER: field point far from the source sub (> far_inner_factor*size) -> the cheap far rule
+    //          (far_tet_*/far_tri_*); else the FINE corner-graded Duffy (gl_in/gw_in, graded toward the
+    //          source-sub vertex nearest the field point) -- effectively exact.
+    // All rules are consumed as tables (Python owns the constants).  Mixed and pyramid meshes remain
+    // outside this pure-topology production constructor and fail before dispatch.
+    RadHACApKChargeGram(std::vector<double> hex_cell_nodes, std::vector<double> quad_face_nodes,
+                        int n_el, int n_bf,
+                        std::vector<int> charge_host, std::vector<int> charge_kind,
+                        std::vector<int> charge_expo,
+                        std::vector<double> sym_tet_pts, std::vector<double> sym_tet_w,
+                        std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+                        std::vector<double> gl_out, std::vector<double> gw_out,
+                        std::vector<double> gl_in, std::vector<double> gw_in,
+                        std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
+                        std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+                        double near_grade, double far_inner_factor,
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {},
+                        std::vector<double> gl_near = {}, std::vector<double> gw_near = {},
+                        bool near_inner_exact = true,
+                        std::vector<double> gl_in_self = {}, std::vector<double> gw_in_self = {},
+                        std::vector<double> gl_pair = {}, std::vector<double> gw_pair = {},
+                        std::vector<double> gl_pair_affine = {}, std::vector<double> gw_pair_affine = {});
+
+    // 2D PLANAR mode (2026-07-03, the motor cross-section layer; memory hdiv-vim-tri-quad-motor):
+    // charges rho = -div M on 2D cells (BDM1: TRI P0 / QUAD Q1; BDM2: TRI P1 / QUAD Q2)
+    // + sigma = M.n on boundary EDGES (P1/P2), all in the NGSolve REF
+    // frame with the Piola-exact extraction (the dimension-independent J-cancellation identity).  Kernel
+    // = the 2D Laplace Green's function -ln(r)/(2*pi); the ln-scale shift is killed because every HDiv
+    // dof's total charge is zero (divergence theorem), so N = B^T G B is scale-invariant.  Geometry =
+    // Q1..Q3 polynomial maps fitted from GetTrafo (cell_type 0=tri/1=quad) -> ONE path flat/curved.
+    // BDM1 admits geometry through Q2; BDM2 admits geometry through Q3.  Quadrature
+    // (numpy-validated, <private-path>/vim2d_proto.py): REGULAR symmetric outer everywhere (the log kernel's
+    // single-layer potentials are continuous, so NO graded outer is needed -- simpler than 3D); inner =
+    // signed radial cones from the nearest anchor SITE for near field points, cheap far cloud otherwise.
+    // Gates: eig(M^-1 N) in [0,1]; DISK demag == 1/2 exact; ellipse a:b -> N=b/(a+b); 2D Clausius-
+    // Mossotti M = chi H/(1+chi/2).  The 2D-mode flag is the FIRST argument (dim2 tag) to keep the
+    // overload set unambiguous.
+    RadHACApKChargeGram(int dim2_tag, int geometry_order,
+                        std::vector<double> cell_map, std::vector<int> cell_type,
+                        std::vector<double> edge_map,
+                        int n_el, int n_be,
+                        std::vector<int> charge_host, std::vector<int> charge_kind,
+                        std::vector<int> charge_expo,
+                        std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+                        std::vector<double> gl_quad, std::vector<double> gw_quad,
+                        std::vector<double> gl_edge, std::vector<double> gw_edge,
+                        std::vector<double> gl_in, std::vector<double> gw_in,
+                        std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+                        double near_grade, double far_inner_factor,
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
+
+    // WEDGE (PRISM) BDM1/BDM2 mode: the HDiv(prismmesh, order=p) charge Gram uses tri-Pp (x) z-Pp
+    // volume charges (6/18 per prism) over the 18-node tri-P2 (x) z-P2 lattice (node n = t + 6*iz,
+    // t = the Tri6 node 0..5, iz = the z level 0..2).  Boundary faces are MIXED (2 tri caps + 3 quad
+    // sides per prism): a tri face -> SurfaceL2 P1/P2 (3/6 monomials, 1 sub-tri), a quad
+    // face -> SurfaceL2 Q1/Q2 (4/9 monomials, 2 sub-tris).  Faces
+    // are stored in 9-node slots (a tri fills the first 6) + a per-face type array (0=tri/1=quad),
+    // mirroring the 2D mode's mixed-cell storage.  The cell 3-sub-tet decomposition (WEDGEREF_TETS) + the
+    // per-face-type 1/2 sub-tri decomposition drive the SAME both-domains-graded Duffy singular quadrature
+    // as the hex mode (numpy de-risk eig(M_mass^-1 N) in [0,1]: 0.989 @ n=2, 0.997 @ n=3, demag_z ~ 1/3).
+    // Served through the hex block memo / GetHexBlock dispatch (m_wedgemode -> QuadBlockWedge); the leaf
+    // helpers (HexMonoEval, HexDuffyBary, the HexSiteRad tables, HexGetCloud / HexQuadCloud) are shared.
+    // Arg 3 (vector<int> face_type) disambiguates the
+    // overload from the hex ctor (whose arg 3 is int n_el).
+    RadHACApKChargeGram(std::vector<double> wedge_cell_nodes, std::vector<double> face_nodes,
+                        std::vector<int> face_type, int n_el, int n_bf,
+                        std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
+                        std::vector<double> sym_tet_pts, std::vector<double> sym_tet_w,
+                        std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+                        std::vector<double> field_tri_pts, std::vector<double> field_tri_w,
+                        std::vector<double> gl_out, std::vector<double> gw_out,
+                        std::vector<double> gl_in, std::vector<double> gw_in,
+                        std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
+                        std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+                        double near_grade, double far_inner_factor,
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
+    // Q2 lattice geometry maps (PUBLIC static utilities: the file-local cloud builder uses them too).
+    static void HexQ2Map(const double* nd27, const double xi[3], double X[3], double J[3][3]);
+    static void QuadQ2Map(const double* nd9, const double uv[2], double X[3], double T[3][2]);
+    // Values-only variants (no Jacobian): the radial inner integrands are Piola (REF measure, no |det J|),
+    // so the self radial loop needs only X -- ~4x less shape work per point than the full map.
+    static void HexQ2MapX(const double* nd27, const double xi[3], double X[3]);
+    static void QuadQ2MapX(const double* nd9, const double uv[2], double X[3]);
+    // WEDGE geometry maps: prism 18-node tri-P2 (x) z-P2 (WedgeQ2MapX), surface tri 6-node P2 (TriSurfMap,
+    // 3D X since a boundary face lives in space).  Values-only (the Piola charge model never uses |det J|).
+    static void WedgeQ2MapX(const double* nd18, const double xi[3], double X[3]);
+    static void TriSurfMap(const double* nd18, const double uv[2], double X[3]);   // nd18 = 6 nodes x 3D
+    ~RadHACApKChargeGram() override {}
+
+    double GetInteractionMatrixElement(int a, int b) const override;
+
+    // Analytic directional derivative of one HEX volume-charge self host block.
+    // node_velocity is the Q2 lattice velocity [27][3].  The returned row-major
+    // block follows the host's production charge ordering and includes 1/(4*pi).
+    // This differentiates the fixed-reference Piola radial-Duffy rule directly;
+    // no finite differencing or Python-side FE reconstruction is involved.
+    std::vector<double> HexVolumeSelfBlockDirectionalDerivative(
+        int host, const std::vector<double>& node_velocity) const;
+    std::vector<double> HexFaceSelfBlockDirectionalDerivative(
+        int host, const std::vector<double>& node_velocity) const;
+    std::vector<double> HexChargeGramDirectionalDerivative(
+        const std::vector<double>& cell_node_velocity,
+        const std::vector<double>& face_node_velocity) const;
+    std::unique_ptr<RadHACApKChargeGramDerivative> BuildDirectionalDerivativeOperator(
+        ChargeDerivativeFamily family,const std::vector<double>& cell_velocity,
+        const std::vector<double>& face_velocity,const RadHACApKParams& params) const;
+    std::vector<double> DirectionalDerivativeContractions(
+        ChargeDerivativeFamily family,int n_directions,
+        const std::vector<double>& cell_velocity,const std::vector<double>& face_velocity,
+        const std::vector<double>& left,const std::vector<double>& right) const;
+    // Row-major [left][direction] contractions.  Derivative block evaluation
+    // and leaf ACA are shared by every left vector instead of being rebuilt
+    // once per adjoint functional.
+    std::vector<double> DirectionalDerivativeContractionsMany(
+        ChargeDerivativeFamily family,int n_directions,int n_left,
+        const std::vector<double>& cell_velocity,const std::vector<double>& face_velocity,
+        const std::vector<double>& left,const std::vector<double>& right) const;
+    std::vector<double> TetVolumeSelfBlockDirectionalDerivative(
+        int host, const std::vector<double>& vertex_velocity) const;
+    std::vector<double> TetFaceSelfBlockDirectionalDerivative(
+        int host, const std::vector<double>& vertex_velocity) const;
+    // Dense row-major derivative of the complete flat affine TET ChargeGram.
+    // Velocities use the constructor host ordering: [ncell,4,3] and
+    // [nface,3,3].  The production 0.5*(AB+BA) symmetrization is
+    // differentiated exactly; self blocks reuse the analytic APIs above.
+    std::vector<double> TetChargeGramDirectionalDerivative(
+        const std::vector<double>& cell_vertex_velocity,
+        const std::vector<double>& face_vertex_velocity) const;
+    // Per-charge-row logarithmic derivative of the flat TET Piola density
+    // map B.  The monomial rows are in each host's fixed reference frame, so
+    // dB[row,:] = rate[row] * B[row,:] (orientation remains caller-owned).
+    std::vector<double> TetChargeMapRowDirectionalRates(
+        const std::vector<double>& cell_vertex_velocity,
+        const std::vector<double>& face_vertex_velocity) const;
+    std::vector<double> WedgeVolumeSelfBlockDirectionalDerivative(
+        int host, const std::vector<double>& node_velocity) const;
+    std::vector<double> WedgeFaceSelfBlockDirectionalDerivative(
+        int host, const std::vector<double>& node_velocity) const;
+    // Dense row-major derivative of the complete production WEDGE ChargeGram.
+    // Face velocities are padded to the constructor's nine-node slots (tri
+    // hosts consume the first six nodes).
+    std::vector<double> WedgeChargeGramDirectionalDerivative(
+        const std::vector<double>& cell_node_velocity,
+        const std::vector<double>& face_node_velocity) const;
+    // Scalar oracle for ACA/H-matrix construction of one WEDGE directional
+    // derivative without materialising dense dG.  cache_token identifies an
+    // immutable velocity mode and must change when either velocity array does.
+    double WedgeChargeGramDirectionalDerivativeElement(
+        int row, int col,
+        const std::vector<double>& cell_node_velocity,
+        const std::vector<double>& face_node_velocity,
+        unsigned long long cache_token) const;
+    double TetChargeGramDirectionalDerivativeElement(
+        int row, int col,
+        const std::vector<double>& cell_vertex_velocity,
+        const std::vector<double>& face_vertex_velocity,
+        unsigned long long cache_token) const;
+
+    // SYMMETRIC-FILL build (2026-07-03): the charge Gram is symmetric BY CONSTRUCTION (every entry is the
+    // 0.5*(AB+BA)-symmetrized kernel), and every apply of it goes through the symmetric H-matvec, so the
+    // strictly-lower H-matrix leaves are never read -- matvec_sym mirrors the upper triangle.  This shadow
+    // of the (non-virtual) base build turns on cHACApK_set_sym_fill around the fill: the lower leaves stay
+    // EMPTY, saving ~half the build time (ACA sampling + dense-block entry fill + the per-thread block-memo
+    // rebuild of the mirror leaves) and ~half the leaf memory.  The UPPER leaves fill identically, so
+    // MatVecSym is bit-identical to a full build.  Plain MatVec / MatVecTranspose are ROUTED to MatVecSym
+    // (for the symmetric operator they are the same map; the base implementations would silently read the
+    // empty lower leaves -- the routing makes that failure mode unrepresentable).
+    bool BuildHMatrix(const RadHACApKParams& params = RadHACApKParams());
+    // Initialize charge count/coordinates without allocating HACApK blocks.
+    // Used by prescribed-magnetization field sources, which need the exact
+    // charge geometry and B map but never apply the charge Gram matrix.
+    void PrepareGeometryOnly() { ExtractCoordinates(); }
+    void MatVec(const std::vector<double>& x, std::vector<double>& y) override { MatVecSym(x, y); }
+    void MatVecTranspose(const std::vector<double>& x, std::vector<double>& y) override { MatVecSym(x, y); }
+
+    // ---- charge-basis normalization (2026-08-09 roundoff-amplification fix) --
+    // The H-matrix STORES the normalized Gram Ghat = S^-1 G S^-1 with
+    // S = diag(sigma), sigma_p = sqrt(raw G_pp): diag(Ghat) = 1 and every
+    // leaf/ACA entry carries O(1) dynamic range.  These overrides wrap the
+    // scaling back (G x = S (Ghat (S x))), so EVERY caller -- configured
+    // demag applies, solvers, pybind matvecs -- keeps the PHYSICAL Gram
+    // semantics unchanged.  Why: on meshes whose element sizes span decades
+    // (marching-cubes micro-facet blobs measured 3700x volume ratio), the
+    // unnormalized monomial charge basis puts charge-map rows at ~3e10 while
+    // G's diagonal spans 1.2e10 in magnitude, and the congruence N = B^T G B
+    // then amplifies G's ABSOLUTE rounding band (~eps*||G||) by ||B||^2 into
+    // O(1) NEGATIVE demag eigenvalues (measured mu_min = -2.67 against the
+    // physical [0,1] spectrum; CG stalls at any tolerance).  Storing Ghat
+    // eliminates that absolute-roundoff amplification, but it does NOT make
+    // independently compressed ACA leaves positive semidefinite.  H-matrix
+    // material solves therefore require their own PSD certificate; the
+    // explicit dense backend below is the exact medium-mesh reference.
+    // See bug pattern facet-tet-charge-gram-indefinite-cg-stall.
+    void MatVecSym(const std::vector<double>& x, std::vector<double>& y) override;
+    void MatVecSymMany(const std::vector<double>& x, int nrhs,
+                       std::vector<double>& y) override;
+    // Diagnostic access: sigma_p = sqrt(raw G_pp) (empty before BuildHMatrix).
+    const std::vector<double>& ChargeSigma() const { return m_chargeSigma; }
+    // Diagnostic oracle only: evaluate x^T G_raw x directly from the analytic
+    // entry kernel, without H-matrix compression or fill-time normalization.
+    // This intentionally O(n^2) check separates an entry-kernel PSD defect
+    // from an ACA/H-matrix PSD defect on a release-blocking mesh.
+    double RawSymmetricQuadraticForm(const std::vector<double>& x) const;
+    // Diagnostic-only decomposition of x^T G_hmat x into symmetric upper-leaf
+    // contributions.  The dominant leaves are checked directly against the raw
+    // entry kernel, which isolates a bad hierarchy/ACA block without changing
+    // the production H-matrix or solve path.
+    RadHACApKSymmetricLeafQuadraticReport DiagnoseSymmetricLeafQuadratics(
+        const std::vector<double>& x, int raw_check_count) const;
+    // Exact dense fallback for medium-size release-validation meshes.  The
+    // normalized analytic Gram is materialized once and then reused by every
+    // C++ solve/apply.  It is intentionally memory-bounded; large meshes must
+    // pass the H-matrix PSD certificate rather than silently becoming dense.
+    double BuildExactDenseNormalizedGram(std::size_t maximum_bytes);
+    bool UsesExactDenseNormalizedGram() const {
+        return !m_exactDenseNormalizedGram.empty();
+    }
+    double ExactDenseNormalizedGramMemoryMB() const {
+        return (double)(m_exactDenseNormalizedGram.size() * sizeof(double)) /
+               (1024.0 * 1024.0);
+    }
+
+    // M3 (the iterative-solve hot kernel in C++): solve the SPD HDiv-VIM linear material system
+    //   ((1/chi) M_mass + B^T G B) m = rhs
+    // by Jacobi-preconditioned conjugate gradients, with G applied as THIS charge-Gram H-matvec
+    // (O(N log N)) -- no dense N, no Python per-iteration glue.  This is the linear soft-iron demag
+    // solve AND the symmetric Picard warmstart of the nonlinear Newton.  Sparse inputs are caller-
+    // provided: B as CSR over charges (B_indptr [n_charge+1], B_indices/B_data = face columns, so
+    // (B x)[charge] = sum data*x[face]); M_mass as COO (mI,mJ,mV) on the n_face DOFs; prec = the
+    // Jacobi diagonal of the system (length n_face).  Returns m (length n_face); iters_out = CG iters.
+    // mass_riesz=false: diagonal-Jacobi PCG (z = r/prec).  mass_riesz=true (the DEFAULT 'auto' path):
+    // PCG preconditioned by an exact factor of the HDiv mass M_mass (z = M_mass^{-1} r, the MASS
+    // RIESZ map) built from the COO (mI,mJ,mV).  Broken-space element blocks use TaskManager-parallel
+    // dense Cholesky; a connected conforming mass uses sparsecholesky.  This gives ~3-5x fewer iters and
+    // nearly mu_r-flat behavior; `prec` is
+    // then ignored.  Moves the whole linear demag solve (H-matvec + mass solve + Krylov) into C++.
+    // The factor is PERSISTENT on the object (m_massRieszCache, exact-COO key): constant-mass chains --
+    // the Hantila hysteresis loop (W(nu0) fixed by construction) and the C++ scalar Picard (geometry
+    // M_mass; scalar inv_chi is outside the preconditioner) -- factor once.  Callers that pass a
+    // per-iteration TANGENT mass (the Python nu-secant / Newton W_tan) compare-miss and refactor as before.
+    // symmetric=true (DEFAULT): G is applied via the EXACTLY-symmetric H-matvec (MatVecSym, upper-tri
+    // leaves define both triangles), so the +N CG operator is machine-symmetric and removes the reported
+    // independently-ACA'd off-diagonal asymmetry failure mode.  symmetric=false
+    // uses the general (asymmetric) MatVec (legacy / cross-check only).
+    std::vector<double> SolveLinearMaterial(
+        const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
+        const std::vector<double>& B_data, int n_face,
+        const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
+        double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
+        double tol, int maxit, int& iters_out, bool mass_riesz = false, bool symmetric = true,
+        const std::vector<double>* x0 = nullptr,
+        const std::vector<double>* coarse_basis = nullptr,
+        const std::vector<double>* coarse_applied = nullptr,
+        const std::vector<double>* coarse_factor = nullptr,
+        int coarse_dim = 0);
+    // Matrix-free postprocessing primitives used by the production planar and
+    // three-dimensional HDiv paths.  ApplyDemagOperator computes B^T G B x
+    // without materializing N.  ApplyMassRiesz computes M_mass^{-1} rhs with a
+    // dedicated persistent exact factor, so nonlinear material factors used
+    // by SolveLinearMaterial are not evicted by local-field postprocessing.
+    std::vector<double> ApplyDemagOperator(
+        const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
+        const std::vector<double>& B_data, int n_face,
+        const std::vector<double>& x, bool symmetric = true);
+    std::vector<double> ApplyMassRiesz(
+        const std::vector<int>& mI, const std::vector<int>& mJ,
+        const std::vector<double>& mV, int n_face,
+        const std::vector<double>& rhs);
+
+    // NGSolve-style persistent operator configuration.  The charge map B is geometry/FESpace data and is
+    // registered once with the Gram object; the material mass is replaced only when the constitutive tangent
+    // changes.  Production matvec/solve calls then cross Python with vectors only, instead of copying CSR/COO
+    // topology on every application.
+    void ConfigureChargeMap(
+        std::vector<int> B_indptr, std::vector<int> B_indices,
+        std::vector<double> B_data, int n_face);
+    void ConfigureVectorChargeMap(
+        std::vector<int> B_indptr, std::vector<int> B_indices,
+        std::vector<double> B_data, int n_face, int n_components);
+    void ConfigureMassMatrix(
+        std::vector<int> mI, std::vector<int> mJ,
+        std::vector<double> mV, int n_face);
+    void ConfigureGeometryMassMatrix(
+        std::vector<int> mI, std::vector<int> mJ,
+        std::vector<double> mV, int n_face);
+    bool RestoreGeometryMassMatrix();
+    bool HasConfiguredChargeMap() const { return m_operatorChargeConfigured; }
+    bool HasConfiguredMassMatrix() const { return m_operatorMassConfigured; }
+    bool HasConfiguredGeometryMassMatrix() const { return m_operatorGeometryMassConfigured; }
+    int ConfiguredNFace() const { return m_operatorNFace; }
+    int ConfiguredConstraintCount() const;
+    std::vector<int> ConfiguredActiveHMatrixStats(int component = 0) const;
+    void SetConfiguredConstraints(const std::vector<int>& dofs,
+                                  bool preserve_existing = false);
+    std::vector<double> ApplyConfiguredDemag(
+        const std::vector<double>& x, bool symmetric = true);
+    void ApplyConfiguredDemag(
+        const double* x, double* y, bool symmetric = true);
+    void ApplyConfiguredDemagAdd(
+        double scale, const double* x, double* y, bool symmetric = true);
+    std::vector<double> ApplyConfiguredGeometryMass(const std::vector<double>& x);
+    void ApplyConfiguredGeometryMass(const double* x, double* y);
+    // Apply A = inv_chi*M + B^T*G*B to one vector.  Candidate-element
+    // generation sets respect_constraints=false to extract full-strength
+    // Schur columns while the active solve keeps those DOFs constrained.
+    std::vector<double> ApplyConfiguredLinearMaterialOperator(
+        double inv_chi, const std::vector<double>& x,
+        bool respect_constraints = true);
+    // Row-major shared-operator application for finite-insertion columns.
+    // B, G, and M are traversed once per RHS batch; G uses the native
+    // HACApK MatVecSymMany kernel rather than repeated scalar Python calls.
+    std::vector<double> ApplyConfiguredLinearMaterialOperatorMany(
+        double inv_chi, const std::vector<double>& x, int nrhs,
+        bool respect_constraints = true);
+    // Throw unless every row of the constrained solve A x = b meets
+    // ||b - A x|| <= max(5 tol, 1e-12) ||b||.  The batched multi-RHS solver
+    // reports per-row iteration counts, not convergence, so callers that
+    // consume its solutions internally must check them here.
+    void CheckConfiguredSolveResiduals(
+        double inv_chi, const std::vector<double>& rhs,
+        const std::vector<double>& solutions, int nrhs, double tol,
+        const char* where);
+    // Exact row-major element-local blocks of A=inv_chi*M+B^T*G*B for a
+    // packed candidate-DOF list.  block_offsets partitions candidate_dofs;
+    // the returned values concatenate square blocks in that order.  Only the
+    // charge supports touched by each block are evaluated, so topology
+    // screening does not require one global H-matrix matvec per local DOF.
+    std::vector<double> ConfiguredLinearMaterialElementBlocks(
+        double inv_chi, const std::vector<int>& candidate_dofs,
+        const std::vector<int>& block_offsets);
+    // Assign each packed element block to the dominant node of the preserved
+    // charge H-matrix cluster tree.  Candidate HDiv DOFs are lifted to charge
+    // space through the configured B map; absolute B weights make the result
+    // orientation independent.  The returned labels are deterministic
+    // integers in [0,n_cluster), one per block.  This is a topology-screening
+    // primitive only: accepted material moves are still checked by the full
+    // configured operator solve.
+    std::vector<int> ConfiguredLinearMaterialCandidateClusters(
+        const std::vector<int>& candidate_dofs,
+        const std::vector<int>& block_offsets, int requested_clusters,
+        int& n_cluster_out);
+    struct CandidateSchurReduction {
+        std::vector<double> schur;       // row-major [n_candidate,n_candidate]
+        std::vector<double> rhs;         // [n_candidate]
+        std::vector<double> response;    // row-major [n_response,n_candidate]
+        // Backward-compatible candidate-length upper-bound diagnostics.
+        std::vector<int> iterations;
+        // Actual active solve count for each retained coupling TSVD mode.
+        std::vector<int> coupling_mode_iterations;
+        int n_candidate = 0;
+        int n_response = 0;
+        int coupling_rank = 0;
+        double coupling_relative_truncation_error = 0.0;
+        double operator_s = 0.0;
+        double solve_s = 0.0;
+        double contraction_s = 0.0;
+    };
+    // Fuse A*e_j construction, constrained active solves, and Schur/response
+    // contractions for a screened candidate-DOF set.  Sparse topology and
+    // H-matrix state remain native; only the small reduced arrays return.
+    CandidateSchurReduction ReduceConfiguredCandidateSchur(
+        double inv_chi, const std::vector<int>& candidate_dofs,
+        const std::vector<double>& rhs, const std::vector<double>& state,
+        const std::vector<double>& response_matrix,
+        const std::vector<double>& adjoints, int n_response,
+        double tol, int maxit, int solve_batch_size,
+        bool mass_riesz = true);
+    // Proposal-only Schur reduction on one caller-supplied Ritz direction per
+    // element block.  candidate_dofs/block_offsets/directions are packed in
+    // matching order.  The reduced dimension is the number of blocks rather
+    // than the number of local HDiv DOFs; accepted topology moves must still be
+    // checked by a complete configured solve.
+    CandidateSchurReduction ReduceConfiguredCandidateDirectionalSchur(
+        double inv_chi, const std::vector<int>& candidate_dofs,
+        const std::vector<int>& block_offsets,
+        const std::vector<double>& directions,
+        const std::vector<double>& rhs, const std::vector<double>& state,
+        const std::vector<double>& response_matrix,
+        const std::vector<double>& adjoints, int n_response,
+        double tol, int maxit, int solve_batch_size,
+        bool mass_riesz = true);
+    std::vector<double> ApplyConfiguredMassRiesz(const std::vector<double>& rhs);
+    std::vector<double> SolveConfiguredLinearMaterial(
+        double inv_chi, const std::vector<double>& rhs, double tol, int maxit,
+        int& iters_out, bool mass_riesz = true, bool symmetric = true,
+        const std::vector<double>* x0 = nullptr);
+    std::vector<double> SolveConfiguredLinearMaterialAutoPrec(
+        double inv_chi, const std::vector<double>& rhs, double tol, int maxit,
+        int& iters_out, double& prec_min, double& prec_max,
+        const std::vector<double>* x0 = nullptr);
+    // Shared-operator multi-RHS solve used by HDiv-MMM topology optimization.
+    // The charge H-matrix cluster tree defines aggregate charge candidates,
+    // lifted to HDiv faces through D^-1 B^T.  A cluster Galerkin Rayleigh--Ritz
+    // contraction retains its lowest modes; a balanced two-level preconditioner
+    // and initial Galerkin correction deflate them for every right-hand side;
+    // already-converged solutions also form a small Ritz recycle space for
+    // later columns.  PCG's true-residual gate remains unchanged, so the
+    // acceleration does not change the converged system.  rhs/x0 are row-major
+    // [nrhs][n_face].
+    std::vector<double> SolveConfiguredLinearMaterialAutoPrecMany(
+        double inv_chi, const std::vector<double>& rhs, int nrhs,
+        double tol, int maxit, int cluster_coarse_size,
+        int cluster_deflation_size, int recycle_size,
+        std::vector<int>& iters_out, double& prec_min, double& prec_max,
+        int& coarse_dim_out, int& recycle_dim_out,
+        double& coarse_setup_s, double& projection_s,
+        bool mass_riesz = false,
+        const std::vector<double>* x0 = nullptr);
+    std::shared_ptr<rad_hdiv::HDivFieldEvaluator> CreateConfiguredFieldEvaluator(
+        const std::vector<double>& magnetization,
+        const rad_hdiv::FieldEvaluatorOptions& options = {}) const;
+    // Exact flat-TET or affine-HEX observation rows without constructing one
+    // global field evaluator per HDiv basis vector.  weights is row-major
+    // [n_rows,n_observations,3]; the return is row-major
+    // [n_rows,ConfiguredNFace()] and maps magnetization coefficients directly
+    // to H-field functionals (the Laplace 1/(4*pi) normalization is included).
+    // Each column materializes only the charge modes touched by that HDiv DOF,
+    // so work is linear in the sparse charge map rather than quadratic in the
+    // number of elements.  This is the exact analytic TET/TRI field kernel,
+    // not a volume-quadrature reciprocity approximation.
+    std::vector<double> ConfiguredFieldFunctionalRows(
+        const std::vector<double>& observations,
+        const std::vector<double>& weights, int n_rows) const;
+    // Analytic GetTrafo directional derivative of the exact rows above.
+    // Velocities are row-major [n_modes,ncell,4,3] and
+    // [n_modes,nface,3,3]; the return is
+    // [n_modes,n_rows,ConfiguredNFace()].  The flat-TET Piola B-rate,
+    // physical polynomial coefficients, analytic TET/TRI field moments, and
+    // image transforms are differentiated together in this C++ source.
+    std::vector<double> ConfiguredFieldFunctionalRowsDirectionalDerivative(
+        const std::vector<double>& observations,
+        const std::vector<double>& weights, int n_rows, int n_modes,
+        const std::vector<double>& cell_vertex_velocity,
+        const std::vector<double>& face_vertex_velocity) const;
+    // Total analytic field tangent at fixed physical observation points.
+    // ``magnetization_jacobian`` is row-major [n_modes,n_face].  The return
+    // is [n_modes,n_observations,3] and includes C*dm + dC*m with the exact
+    // flat-TET/TRI kernels and 1/(4*pi) normalization.  This is the source
+    // term consumed by variational closed-orbit tracking.
+    std::vector<double> ConfiguredFieldValuesShapeDerivative(
+        const std::vector<double>& observations,
+        const std::vector<double>& magnetization,
+        const std::vector<double>& magnetization_jacobian,
+        int n_modes,
+        const std::vector<double>& cell_vertex_velocity,
+        const std::vector<double>& face_vertex_velocity) const;
+    std::shared_ptr<rad_planar_charges::PlanarFieldEvaluator> CreateConfiguredPlanarFieldEvaluator(
+        const std::vector<double>& magnetization) const;
+    std::vector<std::pair<std::string, double>> LastSolveTimings() const;
+
+protected:
+    void OnBuildStarting(const RadHACApKParams& params) override;
+    void ExtractCoordinates() override;
+    void OnBeforeBuild() override;
+    bool UseSymmetricFill() const override { return true; }
+    void OnBuildFinished(bool succeeded) noexcept override;
+    void InitializeInvChi() override { m_inv_chi.assign(m_ndof, 0.0); }
+    bool IsVariableDOF() const override { return false; }
+    int  GetUniformNFFC() const override { return 1; }
+
+private:
+    friend class RadHACApKChargeGramDerivative;
+    struct EntryStrategy {
+        virtual ~EntryStrategy() = default;
+        virtual double Evaluate(const RadHACApKChargeGram& owner, int row, int col) const = 0;
+    protected:
+        static double EvaluateHostBlock(const RadHACApKChargeGram& owner, int row, int col);
+    };
+    struct SampledLaplaceEntryStrategy;
+    struct SampledPlanarEntryStrategy;
+    struct PlanarEntryStrategy;
+    struct HexEntryStrategy;
+    struct WedgeEntryStrategy;
+    struct HighOrderTetEntryStrategy;
+    struct AnalyticEntryStrategy;
+    struct MonopoleEntryStrategy;
+    const EntryStrategy& GetEntryStrategy() const;
+    mutable std::once_flag m_entryStrategyOnce;
+    mutable std::unique_ptr<EntryStrategy> m_entryStrategy;
+    double EvaluateDirectSelfEntry(int a) const;
+    static bool HOFarOneSidedEnabled();
+    static bool HOAnalyticBlockEnabled();
+    static bool HOTetImageBlockEnabled();
+    // The selected element strategy supplies the complete physical entry; the
+    // public virtual wraps it and serves Ghat = sigma_a^-1 sigma_b^-1 * raw
+    // only while the H-matrix fill is running (m_fillNormalized).
+    double GetInteractionMatrixElementRaw(int a, int b) const;
+    // Pre-fill diagonal pass: sigma_p = sqrt(raw G_pp). Exact zero from an
+    // antisymmetric fixed-plane image remains unscaled; invalid diagonals fail.
+    void ComputeChargeSigma();
+    std::vector<double> m_chargeSigma;     // sigma_p (empty before build)
+    std::vector<double> m_chargeSigmaInv;  // 1/sigma_p
+    bool m_sigmaActive = false;            // leaves hold Ghat; applies wrap S
+    mutable bool m_fillNormalized = false; // fill-time oracle serves Ghat
+    std::vector<double> m_exactDenseNormalizedGram; // row-major Ghat; explicit medium-mesh fallback
+    // Regression-only fault injection.  BuildHMatrix reads
+    // RADIA_HDIV_TEST_FAIL_FILL_AFTER once; no test hook is exposed in pybind.
+    int m_testFillFailureAfter = -1;
+    mutable std::atomic<int> m_testFillEntryCalls{0};
+    void ApplyConfiguredDemagImpl(
+        const double* x, double* y, double scale, bool add, bool symmetric,
+        bool respect_constraints = true);
+    double PhiAt(int src, const double p[3]) const;   // exact analytic potential of source charge src at p
+    double QuadDot(int tgt, int src) const;            // (1/4pi) sum_p w_p PhiAt(src, p) over tgt's outer quad
+    // IMA image term: (1/4pi) sum_p w_p PhiAt(src, T^-1(p)) -- tgt's outer points mapped by the INVERSE image
+    // transform.  Uses Phi_{T(b)}(x) = Phi_b(T^-1(x)) (isometry), so only the eval point moves.
+    double QuadDotRefl(int tgt, int src, int img) const;
+
+public:
+    // Attach per-image rotation angles about +z (radians), one per entry of image_masks.  Empty (the default)
+    // means pure mirrors and leaves every code path byte-identical.  Must be called before the H-matrix build.
+    // Validates length and INVERSE-CLOSURE: the assembled Gram symmetrizes each image with its transpose, and
+    // 0.5*(G_T + G_{T^-1}) only sums to the intended Sum_i s_i G_{T_i} when the image set is closed under
+    // inversion with matching signs.  A cyclic group is closed automatically; a partial list is rejected.
+    void SetImageRotations(std::vector<double> angles);
+
+private:
+    // The image transform of image index img (0 = identity/direct, i>0 = image i-1):
+    //   T_i = M_i o R_{theta_i}   (rotate about +z by theta_i, THEN mirror on the 3-bit mask axes).
+    // ImageEvalPoint applies T^-1 (used on EVAL POINTS, via the isometry |x - T(y)| = |T^-1(x) - y|);
+    // ImageApplyVector applies T forward (used on FIELD VECTORS: E_{T(sigma)}(x) = T E_sigma(T^-1 x)).
+    // INVERSE-ROTATION TRAP: a mirror is its own inverse, so the historical mask code could not tell the two
+    // apart.  A rotation is not an involution -- using +theta where -theta belongs silently couples the wrong
+    // neighbouring pole (a sign error on alternating poles) without any crash.
+    void ImageEvalPoint(int img, const double* v, double* o) const
+    {
+        double t[3] = {v[0], v[1], v[2]};
+        if (img > 0) {
+            const size_t i = (size_t)img - 1;
+            const int mask = m_image_masks[i];
+            if (mask & 1) t[0] = -t[0];
+            if (mask & 2) t[1] = -t[1];
+            if (mask & 4) t[2] = -t[2];
+            if (i < m_image_rot_angle.size() && m_image_rot_angle[i] != 0.0) {
+                const double a = -m_image_rot_angle[i];          // INVERSE rotation
+                const double c = std::cos(a), s = std::sin(a);
+                const double x = t[0], y = t[1];
+                t[0] = c*x - s*y;  t[1] = s*x + c*y;
+            }
+        }
+        o[0] = t[0]; o[1] = t[1]; o[2] = t[2];
+    }
+    void ImageApplyVector(int img, const double* v, double* o) const
+    {
+        double t[3] = {v[0], v[1], v[2]};
+        if (img > 0) {
+            const size_t i = (size_t)img - 1;
+            if (i < m_image_rot_angle.size() && m_image_rot_angle[i] != 0.0) {
+                const double a = m_image_rot_angle[i];           // FORWARD rotation
+                const double c = std::cos(a), s = std::sin(a);
+                const double x = t[0], y = t[1];
+                t[0] = c*x - s*y;  t[1] = s*x + c*y;
+            }
+            const int mask = m_image_masks[i];
+            if (mask & 1) t[0] = -t[0];
+            if (mask & 2) t[1] = -t[1];
+            if (mask & 4) t[2] = -t[2];
+        }
+        o[0] = t[0]; o[1] = t[1]; o[2] = t[2];
+    }
+    // FAR low-order double-quadrature (analytic mode, far_quad>0): (1/4pi) sum_i sum_j qwf[a][i] qwf[b][j] /
+    // |qpf[a][i]-qpf[b][j]| over the degree-2 far rule -- symmetric in (a,b) by construction (1/r symmetric).
+    double QuadDotFarLow(int a, int b) const;
+
+    std::vector<double> m_cent, m_meas, m_self;        // monopole mode (m_cent also = the cluster-tree points)
+    int  m_n = 0;
+    bool m_sampledLaplace = false;
+    // Accuracy/rank controls reused by the matrix-free derivative contraction.
+    // They are captured from the primal H-matrix build so derivative far leaves
+    // follow the same cluster-tree compression contract.
+    double m_derivativeAcaEps = 1.0e-4;
+    int m_derivativeMaxRank = 200;
+    bool m_sampledPlanarLog = false;
+    double m_sampledKernelEpsilon = 0.0;
+    double m_sampledReferenceLength = 1.0;
+    // analytic mode (M2b)
+    bool m_analytic = false;
+    int  m_n_el = 0;
+    std::vector<double> m_cellV, m_faceV;              // [n_el*12], [n_bf*9]
+    std::vector<std::vector<rad_hdiv::Vec3>> m_qp;     // [n] outer-quad points per charge
+    std::vector<std::vector<double>>          m_qw;    // [n] outer-quad weights per charge
+    std::vector<double> m_size;                        // [n] characteristic size: vol^(1/3) / area^(1/2)
+    double m_near_factor = 1e30;                       // near/far split: NEAR if |c_a-c_b| <= nf*(size_a+size_b)
+    int    m_far_quad = 0;                             // 0=monopole far; >0=low-order double-quad far (tet/tri)
+    std::vector<std::vector<rad_hdiv::Vec3>> m_qpf;    // [n] FAR low-order quad points (built iff m_far_quad>0)
+    std::vector<std::vector<double>>          m_qwf;   // [n] FAR low-order quad weights (sum = measure)
+    // IMA mirror symmetry (image method): G_IMA(a,b) = G(a,b) + sum_i sign_i*0.5*(QuadDotRefl(a,b,mask_i)
+    // + QuadDotRefl(b,a,mask_i)).  The 2^P-1 non-empty subsets of the P mirror planes (image_group); each
+    // reflects the eval point on its axes.  Always the full analytic image (the self-on-plane image can be
+    // singular -> needs the exact PhiTet/TriPotential, not a monopole far).  Empty = no IMA.
+    std::vector<int>    m_image_masks;                 // [n_img] 3-bit axis mask (bit0=x,1=y,2=z) of the subset
+    std::vector<double> m_image_signs;                 // [n_img] product-sign of the subset
+    // CYCLIC images (optional; empty == pure mirrors, byte-identical to the historical path).  Per image, a
+    // rotation angle about +z.  The image transform is T_i = M_i o R_{theta_i}: rotate by theta_i, THEN
+    // mirror on the mask axes.  A cyclic (N-fold) machine sector reproduces the whole ring with
+    // theta_k = 2*pi*k/N; alternating N/S poles ride m_image_signs as (-1)^k, because the surface charge
+    // sigma = M.n is a SCALAR under a rotation that maps the magnetization along with the geometry.
+    std::vector<double> m_image_rot_angle;             // [n_img] rotation angle about +z (radians)
+
+    // POLYTOPE analytic mode (hex/wedge): per-charge source triangulation (cell hull tris / face sub-tris).
+    // PhiAt(src,.) is the divergence-theorem polytope potential (cell) / sum-of-sub-triangle (face) over
+    // these; the outer quadrature (m_qp/m_qw) is built in the ctor (centroid-fan / Dunavant per sub-tri).
+    bool m_polytope = false;
+    std::vector<std::vector<std::array<rad_hdiv::Vec3, 3>>> m_srcTris;  // [n] source triangle soup per charge
+
+    // CURVED HIGH-ORDER (isoparametric P2) mode: m_curved sets m_highorder=true too (the QuadDot/PhiInner path
+    // is shared); PhiInner -> PhiAtHO_Curved (always the curved Duffy).  m_cellNodes [n_cell*30] / m_faceNodes
+    // [n_bf*18] hold the P2 high-order nodes; m_gl/m_gw the curved Duffy Gauss rule.  No analytic moments and
+    // no inner-subtraction table.  The near/far split IS available: the curved constructor takes the same
+    // low-quad tables as the flat path, so FAR pairs use QuadDotFar (direct) / QuadDotFarImage (image).
+    // Direct host pairs go through QuadBlockHOTet (curved product rule when the hosts do not touch, the
+    // vectorized curved Duffy when they do); image host pairs go through QuadBlockHOTetImage with the
+    // image-aware ImageHostsTouch test, so a mirror or cyclic image is integrated by the same rules as the
+    // corresponding direct pair of the full model.
+    bool m_curved = false;
+    // HCurl curl-Piola currents are supplied as K(xi)=J(X(xi))*|det dX/dxi|.
+    // Their physical volume measures are already folded into K, so both Gram
+    // integrations use reference measure while retaining the exact curved map
+    // in the Laplace distance.
+    bool m_curvedReferenceDensity = false;
+    int  m_curve_order = 0;
+    std::vector<double> m_cellNodes, m_faceNodes;      // [n_cell*30] (P2 tet), [n_bf*18] (P2 tri)
+    std::vector<int> m_cellVertices, m_faceVertices;   // [n_cell*4], [n_bf*3] global mesh vertex ids
+    std::vector<double> m_gl, m_gw;                    // curved Duffy Gauss-Legendre rule on [0,1]
+    // Symmetric reference-triangle rule for the base of each radial Duffy
+    // sub-tet.  This removes reference-vertex-order dependence and reduces the
+    // inner curved kernel from nq^3 to nq*ntri evaluations.
+    // Canonical touching host pair (lo << 32 | hi over the cell-then-face host numbering) -> block slot.
+    // A hash map, not an n_host x n_host table: the table cost 22 GB on a 63k-tet mesh (75k hosts) and
+    // took compute host down through its commit limit, while the touching pairs themselves number ~16 per host.
+    std::unordered_map<unsigned long long, int> m_curvedTouchBlockIndex;
+    std::vector<std::vector<double>> m_curvedTouchBlocks; // precomputed symmetric touching blocks
+    double m_curvedTouchBuildTime = 0.0;
+    void PrecomputeCurvedTouchBlocks();
+    bool CurvedTouchBlockValue(int kindA, int hostA, int localA,
+                               int kindB, int hostB, int localB, double& value) const;
+
+    // CURVED POLYTOPE mode (curved hex/wedge): both cell volume charges and boundary face charges follow
+    // the curved P2 geometry.  m_srcCurvedTets[c] holds the 10-node P2 sub-tets for a cell charge;
+    // m_srcCurvedTris[a] holds the 6-node P2 sub-tris for a face charge.  When m_curved_face is true,
+    // PhiAt dispatches to CurvedTetPotential / CurvedTriPotential and m_qp/m_qw are mapped by the matching
+    // curved outer quadrature rules.
+    bool m_curved_face = false;
+    std::vector<std::vector<std::array<rad_hdiv::Vec3, 6>>> m_srcCurvedTris;  // [n] curved-face P2 sub-tri nodes
+    std::vector<std::vector<std::array<rad_hdiv::Vec3, 10>>> m_srcCurvedTets; // [n] curved-cell P2 sub-tet nodes
+
+    // HEX BDM1/BDM2 mode (direct Q2 isoparametric geometry; see the hex ctor doc).  The charge monomial lives in
+    // the HEX/QUAD REFERENCE frame (evaluated directly at ref coords -- no physical->ref inverse), geometry +
+    // measure come from the Q2 lattice maps.  Entries are served block-wise (GetHexBlock); the inner is the
+    // ref-frame radial decomposition (PhiInnerHexRadialVec) for near/self, cached far clouds otherwise.
+    bool m_hexmode = false;
+    bool m_hexCacheStatsEnabled = false;                  // opt-in block-cache stats; hot hits avoid atomics by default
+    int  m_hex_n_bf = 0;
+    std::vector<double> m_hexNodes, m_quadNodes;        // [n_el*81] 27-node Q2 hex, [n_bf*27] 9-node Q2 quad
+    std::vector<double> m_symTetP, m_symTetW;           // regular outer tet rule (bary lam1..3; W sums 1/6)
+    std::vector<double> m_symTriP, m_symTriW;           // regular outer tri rule (bary lam1..2; W sums 1/2)
+    std::vector<double> m_glOut, m_gwOut;               // 1D [0,1] Gauss -> graded OUTER Duffy (near/self subs)
+    std::vector<double> m_glIn, m_gwIn;                 // 1D [0,1] Gauss -> the RADIAL inner rule (PhiInnerHexRadialVec)
+    // NEAR family (2026-09-05, ESRF #6 HEX Gram indefiniteness): the graded OUTER Duffy rule of self and
+    // touching sub pairs is DECOUPLED from gl_out (which the far tensor product shares -- raising gl_out
+    // alone multiplies the far cost by (n/4)^6), and touching non-self pairs take the EXACT-anchor radial
+    // inner (the source-host reference inverse of the outer point) instead of the static-site radial.
+    std::vector<double> m_glNear, m_gwNear;             // 1D [0,1] Gauss -> endpoint-graded tensor OUTER of near/self hosts
+    std::vector<double> m_glInSelf, m_gwInSelf;         // 1D [0,1] Gauss -> the RADIAL inner of SELF pairs (finer than m_glIn)
+    std::vector<double> m_glPair, m_gwPair;             // 1D [0,1] Gauss per dimension of the pair-domain Duffy rule
+    // The same rule for pairs whose BOTH hosts are affine (2026-09-07): with affine maps the Duffy
+    // integrand is exponentially convergent (unit-cube self-energy 5e-9 at 6 points), whereas a
+    // distorted host converges only ~10x per two points (sector lattice: 7e-5 at 6, 6e-6 at 8), so
+    // affine-affine pairs -- most pairs of a real magnet -- take the cheaper count.
+    std::vector<double> m_glPairAffine, m_gwPairAffine;
+    // Separate 1D rule for the DOMINANT (cone-radius w) direction of the pair-domain Duffy rule.  After
+    // the substitution the 1/r singularity is cancelled exactly by the Duffy Jacobian w^(kcone-1), and
+    // within one subdomain the reference coordinates are affine in w, so this direction carries a smooth
+    // -- for affine host pairs polynomial -- integrand and needs fewer points than the angular ones.
+    // Empty means "use the pair rule", which is the historical uniform-N behaviour.
+    std::vector<double> m_glPairW, m_gwPairW, m_glPairAffineW, m_gwPairAffineW;
+    const std::vector<double>& PairRuleWNodes(int kindT, int hT, int kindS, int hS) const;
+    const std::vector<double>& PairRuleWWeights(int kindT, int hT, int kindS, int hS) const;
+    bool HexHostAffine(int kind, int h) const;
+    const std::vector<double>& PairRuleNodes(int kindT, int hT, int kindS, int hS) const;
+    const std::vector<double>& PairRuleWeights(int kindT, int hT, int kindS, int hS) const;
+    bool m_nearInnerExact = true;                       // false = legacy static-site radial (diagnostic only)
+    std::vector<double> m_farTetP, m_farTetW;           // cheap FAR inner tet rule (bary; W sums 1/6)
+    std::vector<double> m_farTriP, m_farTriW;           // cheap FAR inner tri rule (bary; W sums 1/2)
+    double m_near_grade = 1.5, m_far_inner_factor = 4.0;
+    std::vector<double> m_cellSubC, m_cellSubS, m_cellSubV;  // [n_el*6*3] sub-tet centroids, [n_el*6] sizes, [n_el*6*4*3] phys corners
+    std::vector<double> m_faceSubC, m_faceSubS, m_faceSubV;  // [n_bf*2*3], [n_bf*2], [n_bf*2*3*3] (sub-tri)
+    std::vector<unsigned char> m_hexAffineCell;              // [n_el] true when the Q2 lattice is affine
+    int m_hexAffineOrder = 1, m_hexAffineMonoCount = 8, m_hexAffinePolyCount = 20;
+    std::vector<double> m_hexAffineCoeff;                    // [n_el*mono*moment], BDM1 8x20; BDM2 27x84
+    // Affine coefficients are monomials of (x - center); the analytic moments
+    // see the source and target translated by the same center.
+    std::vector<double> m_hexAffineCenter;                   // [n_el*3] Q2 map of the reference cell center
+    std::vector<unsigned char> m_quadAffineFace;             // [n_bf] true when the Q2 face lattice is affine
+    int m_quadAffineMonoCount = 4, m_quadAffinePolyCount = 10;
+    std::vector<double> m_quadAffineCoeff;                   // [n_bf*mono*moment], BDM1 4x10; BDM2 9x35
+    std::vector<double> m_quadAffineCenter;                  // [n_bf*3] Q2 map of the reference face center
+    bool m_hexUniformAffineCells = false;                    // same affine cell map for every cell -> translation block cache
+    std::vector<int> m_hexCellLattice;                       // [n_el*3] integer lattice coordinate for uniform affine cells
+    bool m_hexUniformTransHosts = false;                      // cell/face hosts are translated template copies
+    std::vector<int> m_hexHostTemplate;                       // [n_el+n_bf] template id per host (cell ids and face ids are separate by kind)
+    std::vector<int> m_hexHostLattice2;                       // [3*(n_el+n_bf)] half-cell lattice coordinates of host centers
+    double HexMonoEval(int charge, const double xi[3]) const;   // ref-frame Q1/Q2 monomial
+    // BLOCK-MEMO (the 64x co-location win): the near/far/grading decisions depend ONLY on host+sub geometry
+    // (all co-located charges of a (kind,host) share m_cent/m_size), so the WHOLE directed host-pair block is
+    // computed in ONE pass -- the 1/r sqrt is shared across all nT*nS monomial combos (the numpy-proto
+    // block += wq*outer(Phia,inn) structure).  Bit-identical to per-entry QuadDotHex; ~64x fewer sqrt on near
+    // hex-hex blocks.  m_hexLocalOf / m_cellCharges / m_faceCharges are the (kind,host)->local reverse maps.
+    std::vector<int> m_hexLocalOf;                       // [n] local index of charge within its (kind,host) group
+    std::vector<std::vector<int>> m_cellCharges;         // [n_el] global charge indices per cell (local order)
+    std::vector<std::vector<int>> m_faceCharges;         // [n_bf] global charge indices per boundary face
+    struct SolveTiming {
+        double total_s = 0.0, factor_s = 0.0, prec_s = 0.0, bx_s = 0.0, gmatvec_s = 0.0;
+        double btx_s = 0.0, mass_s = 0.0, dot_s = 0.0, ax_total_s = 0.0, ax_other_s = 0.0;
+        double pcg_update_s = 0.0;
+        double hmatvec_total_s = 0.0, hmatvec_zero_s = 0.0, hmatvec_permute_s = 0.0;
+        double hmatvec_leaf_s = 0.0, hmatvec_reduce_s = 0.0, hmatvec_meta_s = 0.0;
+        double hmatvec_lowrank_flop_est = 0.0, hmatvec_dense_flop_est = 0.0;
+        double hmatvec_calls = 0.0, hmatvec_lowrank_leaves = 0.0, hmatvec_dense_leaves = 0.0;
+        double hmatvec_mirrored_upper_leaves = 0.0, hmatvec_diagonal_leaves = 0.0;
+        double hmatvec_skipped_lower_leaves = 0.0, hmatvec_last_nd = 0.0, hmatvec_last_nthr = 0.0;
+        double hmatvec_lowrank_upper_leaves = 0.0, hmatvec_dense_upper_leaves = 0.0;
+        double hmatvec_inactive_skipped_leaves = 0.0, hmatvec_lowrank_directions = 0.0;
+        double hmatvec_dense_directions = 0.0, hmatvec_gemm_calls = 0.0;
+        double hmatvec_lowrank_rank_sum = 0.0, hmatvec_lowrank_rank_max = 0.0;
+        double hmatvec_lowrank_rank_le4 = 0.0, hmatvec_lowrank_rank_le8 = 0.0;
+        double hmatvec_lowrank_rank_le16 = 0.0, hmatvec_lowrank_rank_le32 = 0.0;
+        int mass_riesz_local_blocks = 0, mass_riesz_max_block = 0;
+        // 1.0 when a material-weighted Galerkin system uses the immutable
+        // geometry mass as its Riesz preconditioner.  The system remains the
+        // caller-configured material mass plus the demagnetization operator.
+        double mass_riesz_geometry_preconditioner = 0.0;
+        int apply_count = 0, prec_count = 0, dot_count = 0;
+        // Outcome of the last linear solve, measured from the TRUE residual
+        // (not the CG recurrence): 1.0 = met tol, 0.0 = ran out of iterations.
+        double converged = 0.0;
+        double final_relative_residual = 0.0;
+    };
+    SolveTiming m_lastSolveTiming;
+    // Persistent exact mass-Riesz factor, keyed on the EXACT (n_face, mI, mJ, mV) COO arrays: reused by
+    // SolveLinearMaterial reuses this when the mass is unchanged (any difference refactors), so
+    // constant-mass iteration chains pay the analyze+factor ONCE.  Identical input -> identical factor ->
+    // bit-identical preconditioner: timing-only.  shared_ptr keeps the .h to a forward declaration.
+    std::shared_ptr<RadMassRieszCache> m_massRieszCache;
+    std::shared_ptr<RadMassRieszCache> m_geometryMassRieszCache;
+    std::vector<int> m_operatorBIndptr, m_operatorBIndices;
+    std::vector<double> m_operatorBData;
+    // Transposed charge map, built once at ConfigureChargeMap.  The production
+    // operator applies B^T by row gather, avoiding an atomic scatter for every
+    // H-matrix matvec and matching NGSolve's persistent BaseMatrix model.
+    std::vector<int> m_operatorBTIndptr, m_operatorBTIndices;
+    std::vector<double> m_operatorBTData;
+    int m_operatorChargeComponents = 0;
+    std::vector<int> m_operatorMassI, m_operatorMassJ;
+    std::vector<double> m_operatorMassV;
+    // Material mass in CSR, built once when the COO tangent is registered.
+    // Krylov applications then use it directly instead of rebuilding sparse
+    // topology at the start of every C++ solve.
+    std::vector<int> m_operatorMassIndptr, m_operatorMassIndices;
+    std::vector<double> m_operatorMassData;
+    std::vector<int> m_operatorGeometryMassI, m_operatorGeometryMassJ;
+    std::vector<double> m_operatorGeometryMassV;
+    std::vector<int> m_operatorGeometryMassIndptr, m_operatorGeometryMassIndices;
+    std::vector<double> m_operatorGeometryMassData;
+    std::vector<unsigned char> m_operatorConstrained;
+    // Per charge component, prefix counts in HACApK's permuted ordering.
+    // A symmetric leaf contributes to the constrained principal submatrix
+    // only when both its row and column ranges contain an active charge.
+    std::vector<int> m_operatorActiveChargePrefix;
+    int m_operatorNFace = 0;
+    bool m_operatorChargeConfigured = false;
+    bool m_operatorMassConfigured = false;
+    bool m_operatorGeometryMassConfigured = false;
+    bool m_operatorMassIsGeometry = false;
+    void UpdateConfiguredActiveChargePrefixes();
+    void MatVecSymManyConfigured(
+        const std::vector<double>& x, int nrhs, int component,
+        bool respect_constraints, std::vector<double>& y);
+    // Get-or-build the persistent factor (the single shared implementation for both solve methods,
+    // defined in the .cpp under HAVE_LAPACK).  Returns a PINNED shared_ptr the caller must hold for the
+    // duration of its Krylov loop -- pinning makes a concurrent/nested replacement of the slot unable to
+    // free a factor in use.  On a key MISS the old entry is released BEFORE the new factor is built, so
+    // at most ONE factor is resident at any instant (the pre-cache peak-memory contract).  When
+    // factor_s_accum is non-null it accumulates the fresh-factor wall time (a hit adds 0).
+    std::shared_ptr<RadMassRieszCache> EnsureMassRieszFactor(
+        const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
+        int n_face, const char* caller, double* factor_s_accum, bool geometry_cache = false);
+    void PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
+                           const std::vector<int>& srcG, double* inn,
+                           const double* anchor = nullptr) const;  // inner over ALL source locals (shares sqrt);
+                           // anchor = the outer point's reference coordinates in the SOURCE host (exact-anchor radial)
+    // Complete-host tensor rule for smooth mapped-BDM2 source potentials.
+    // The former degree-five sub-simplex far cloud was not exact enough for
+    // the O(1e-3) volume/surface cancellation of high charge modes.
+    void PhiInnerHexTensorVec(int kindS, int hS, const double p[3],
+                              const std::vector<int>& srcG, double* inn) const;
+    // Reflection-invariant whole-host Duffy rule for mapped-BDM2 self pairs.
+    // A cube is swept from the singular reference point to its six complete
+    // faces; a quad is swept to its four complete edges.  No diagonal is
+    // selected, so every signed reference-axis permutation is preserved.
+    void PhiInnerHexRadialHostVec(int kindS, int hS, const double p[3],
+                                  const double* reference,
+                                  const std::vector<int>& srcG, double* inn) const;
+    // Cone/fan/sinh inner of the BDM1 near family (2026-09-05): six face cones from the apex (the
+    // singular point -- the outer point of a self pair, the physical closest point of a touching pair),
+    // each face integrated by four edge fans from the apex's physical foot, with Johnston-Elliott sinh
+    // substitutions along the ray (near-singular peak of a touching pair), the fan radius (apex close to
+    // the face) and the edge parameter (foot close to an edge).  Every nested peak is resolved by
+    // construction, so the accuracy does not degrade with the cell aspect ratio; m_glIn rules the smooth
+    // directions and m_glInSelf the substituted ones.
+    void PhiInnerHexConeFanVec(int kindS, int hS, const double p[3], const double* reference,
+                               const std::vector<int>& srcG, double* inn) const;
+    // Closest reference point of a (possibly exterior) physical point on a Q2 cell host: the converged
+    // interior inverse, else the nearest of the six face closest-point solves.
+    static bool HexQ2ClosestReference(const double* nd27, const double X[3], double xi[3]);
+    // Try the physical inverse for an accurate near-pair anchor.  For an
+    // exterior non-self target, retain the last finite in-cube point because
+    // any such point gives an exact six-cone partition of the source host.
+    static bool HexQ2Inverse(const double* nd27, const double X[3], double xi[3]);
+    static bool QuadQ2ClosestReference(const double* nd9, const double X[3], double uv[2]);
+    void PhiInnerHexAffineCellSubVec(int hS, int subB, const double p[3],
+                                     const std::vector<int>& srcG, double* inn) const;
+    void PhiInnerHexAffineFaceSubVec(int hS, int subB, const double p[3],
+                                     const std::vector<int>& srcG, double* inn) const;
+    void PhiInnerHexAffineCellVec(int hS, const double p[3],
+                                  const std::vector<int>& srcG, double* inn) const;
+    void PhiInnerHexAffineFaceVec(int hS, const double p[3],
+                                  const std::vector<int>& srcG, double* inn) const;
+    std::vector<double> QuadBlockHexAffineFarProduct(
+        int kindT, int hT, int kindS, int hS, int img) const;
+    // Mapped BDM2 uses one target-host quadrature grid for every source host.
+    // This preserves the volume/surface cancellation of one HDiv basis before
+    // the directed block is symmetrized into B^T G B.
+    std::vector<double> QuadBlockHexCompositeProduct(
+        int kindT, int hT, int kindS, int hS, int img) const;
+    // SELF inner by the tet path's PhiAtHO_Duffy RADIAL signed decomposition, ported to the REF frame:
+    // anchor x0 = xiT, the outer point's OWN ref coords (the pulled-back kernel 1/|p-X(xi)| peaks there --
+    // exact, no inverse), CLAMPED into the ref sub-simplex, then 4 signed radial sub-tets (3 signed
+    // sub-tris on faces) from x0 with the Duffy apex AT x0: the u^2 (u) volume element kills the 1/r peak
+    // exactly, and the map's warp enters only as a SMOOTH factor per quadrature point -- robust on strongly
+    // distorted (|J| ratio ~0.4) and curved hexes alike, where the corner-graded-cloud / linearized-
+    // subtraction schemes oscillated +-3% (eig 1.02-1.11 > 1 on the real Cubit cylinder mesh).  SELF-ONLY
+    // since 2026-07-03: non-self near calls use the static-SITE radial below (the anchor-Newton branch was
+    // removed with them).  m_glIn/m_gwIn is the radial 1D Gauss rule (n=5 -> 4*125 pts per cell call);
+    // not cacheable here (x0 = xiT varies per outer point).
+    void PhiInnerHexRadialVec(int kindS, int hS, int subB, const double p[3], const double* xiT,
+                              const std::vector<int>& srcG, double* inn, bool self_rule = false) const;
+    void DPhiInnerHexRadialCellVec(int hS, int subB, const double p[3], const double dp[3],
+                                  const double* xiT, const double* node_velocity,
+                                  const std::vector<int>& srcG, double* dinn,
+                                  const std::vector<double>* radial_points = nullptr,
+                                  const std::vector<double>* radial_weights = nullptr) const;
+    void DPhiInnerHexRadialFaceVec(int hS, int subB, const double p[3], const double dp[3],
+                                   const double* xiT, const double* node_velocity,
+                                   const std::vector<int>& srcG, double* dinn) const;
+    void DPhiInnerHexSubVec(int kindS,int hS,int subB,const double p[3],const double dp[3],
+                            const double* node_velocity,const std::vector<int>& srcG,double* dinn) const;
+    std::vector<double> QuadBlockHexDirectionalDerivative(int kindT,int hT,int kindS,int hS,
+        const double* velocityT,const double* velocityS,int mask=0) const;
+    // NON-SELF near inner (touch/shell, 2026-07-03): the SAME radial signed decomposition but anchored at
+    // the nearest of a FIXED set of ref-space SITES (tet: 4 corners + 6 edge mids + 4 face centers +
+    // centroid = 15; tri: 3+3+1 = 7).  The radial cone tiling is EXACT from ANY anchor -- the site only
+    // aligns the grading with the kernel peak (p is OUTSIDE the sub-simplex here, r_min > 0), so nearest-
+    // site anchoring costs only quadrature alignment, measured at the entry-drift/eig gates.  Because the
+    // sites are fixed in REF space, EVERYTHING host-independent is precomputed per (sub, site) at ctor
+    // time: the Q2 shape-value matrix S [nq x 27|9] (so the mapped nodes are X = S @ nodes -- no per-point
+    // HexLag3), the Q1 monomial matrix M [nq x 8|4], and the signed Piola weights w [nq] (GW^3 u^2 v D,
+    // orientation folded; cones whose base face contains the site are degenerate and skipped, so corner
+    // sites carry 1 cone, edge 2, face-center 3, centroid 4 -- nq varies).  Per call this leaves ONE
+    // nq x 27 "GEMV" + nq kernel evals: ~3-6x cheaper than the removed per-point Newton radial, with ZERO
+    // per-host cloud memory (the old per-(host,sub,corner) cloud cache idea was rejected for its O(hosts)
+    // thread_local footprint).
+    struct HexSiteRad { int nq = 0; std::vector<double> S, M, w; };
+    std::vector<HexSiteRad> m_cellSiteRad;               // [6*15] per (sub, site), ref-space tables
+    std::vector<HexSiteRad> m_faceSiteRad;               // [2*7]
+    std::vector<double> m_cellSiteX;                     // [n_el*6*15*3] mapped site positions (site pick)
+    std::vector<double> m_faceSiteX;                     // [n_bf*2*7*3]
+    void BuildHexSiteTables();                           // ctor helper: fills the four members above
+    void PhiInnerHexSiteVec(int kindS, int hS, int subB, const double p[3],
+                            const std::vector<int>& srcG, double* inn) const;
+    std::vector<double> QuadBlockHexAffineProduct(int kindT, int hT, int kindS, int hS, int img) const;
+public:
+    // Heap-stomp canary (2026-07-03 flake hunt): checksum over every hex-mode member array a block
+    // computation reads, stored at ctor end.  A later mismatch proves the instance data was OVERWRITTEN
+    // (the 0xc0000374-class heap corruption) rather than computed wrong.
+    double HexStateChecksum() const;
+    double HexStateCtorChecksum() const { return m_hex_state_sum; }
+    std::vector<std::pair<std::string, double>> HexStateBreakdown() const;   // per-array (forensics)
+    std::vector<std::pair<std::string, double>> HexCacheStats() const;       // block-cache hit/miss stats
+    const std::vector<double>& HexStoredCellNodes() const { return m_hexNodes; }
+    const std::vector<double>& HexStoredFaceNodes() const { return m_quadNodes; }
+private:
+    double m_hex_state_sum = 0.0;
+    mutable std::atomic<long long> m_hexBlockLookups{0};
+    mutable std::atomic<long long> m_hexBlockHits{0};
+    mutable std::atomic<long long> m_hexBlockMisses{0};
+    mutable std::atomic<long long> m_hexBlockClears{0};
+    mutable std::atomic<long long> m_hexTransBlockLookups{0};
+    mutable std::atomic<long long> m_hexTransBlockHits{0};
+    mutable std::atomic<long long> m_hexTransBlockMisses{0};
+    mutable std::atomic<long long> m_hexTransBlockClears{0};
+    mutable std::atomic<long long> m_hexSymBlockLookups{0};
+    mutable std::atomic<long long> m_hexSymBlockHits{0};
+    mutable std::atomic<long long> m_hexSymBlockMisses{0};
+    mutable std::atomic<long long> m_hexSymBlockClears{0};
+    mutable std::atomic<long long> m_hexSymTransBlockLookups{0};
+    mutable std::atomic<long long> m_hexSymTransBlockHits{0};
+    mutable std::atomic<long long> m_hexSymTransBlockMisses{0};
+    mutable std::atomic<long long> m_hexSymTransBlockClears{0};
+    mutable std::atomic<long long> m_hoSymBlockLookups{0};
+    mutable std::atomic<long long> m_hoSymBlockHits{0};
+    mutable std::atomic<long long> m_hoSymBlockMisses{0};
+    mutable std::atomic<long long> m_hoSymBlockClears{0};
+    // Image (IMA mirror / cyclic) entry dispatch profile of the high-order TET Gram: how many (entry, image)
+    // terms took the cheap far rule, the host-block rule, or the per-entry scalar fold.
+    mutable std::atomic<long long> m_hoImageFarEntries{0};
+    mutable std::atomic<long long> m_hoImageBlockEntries{0};
+    mutable std::atomic<long long> m_hoImageScalarEntries{0};
+    // QuadBlockHex dispatch profile: block counts + wall nanoseconds per branch (affine near product /
+    // affine far product / distorted-pair far product / general graded path split by host proximity).
+    // Always accumulated -- a relaxed fetch_add per BLOCK is negligible against the block quadrature.
+    mutable std::atomic<long long> m_hexBlkAffineNear{0};
+    mutable std::atomic<long long> m_hexBlkAffineFar{0};
+    mutable std::atomic<long long> m_hexBlkDistortedFar{0};
+    mutable std::atomic<long long> m_hexBlkGeneralNear{0};
+    mutable std::atomic<long long> m_hexPairNonconforming{0};   // touching pairs without canonical frames (hanging nodes)
+    mutable std::atomic<long long> m_hexPairAnisotropyGraded{0}; // near pairs whose length-scale ratio sent them to the graded rule
+    mutable std::atomic<long long> m_hexBlkGeneralFar{0};
+    mutable std::atomic<long long> m_hexNsAffineNear{0};
+    mutable std::atomic<long long> m_hexNsAffineFar{0};
+    mutable std::atomic<long long> m_hexNsDistortedFar{0};
+    mutable std::atomic<long long> m_hexNsGeneralNear{0};
+    mutable std::atomic<long long> m_hexNsGeneralFar{0};
+    // INSTANCE-shared cache for the expensive GENERAL-path blocks: the graded near/self machinery
+    // (~30 ms/block) plus the site-radial mid band up to the distorted-far switch (~0.5 ms/block).
+    // The per-thread block caches duplicate those across the fill workers (measured ~2x waste); the
+    // general set is the O(n_hosts) neighborhood ring (sep <= factor*(sizes)), so this map stays small
+    // and is never capacity-cleared.  Values are stable once inserted (unordered_map references survive
+    // rehash), so readers hold no lock after lookup.  Classification (HexPairTakesGeneralPath) picks
+    // the CACHE only, never the quadrature -- a borderline misclassification just caches a cheap block
+    // here (or a heavy one thread-locally), both harmless.
+    // Shared-cache key.  mode 0 = the directed host pair (kindT, hT, kindS, hS, img).  mode 1 =
+    // TRANSLATION-CONGRUENT pair (2026-09-06): the two host templates plus the quantized centre
+    // offset.  A charge-Gram block depends only on the relative geometry of its two hosts, so every
+    // translated copy of a pair (the z-layers of a swept HEX mesh: 5 of 6 near blocks on a 6-layer
+    // quadrupole, 14 of 15 at 4 mm) is served from one evaluation, exactly.  Image blocks (img > 0)
+    // are not translation invariant and keep mode 0.
+    struct HexSharedBlockKey {
+        int mode, kindT, a, kindS, b, img, same;
+        long long qx, qy, qz;
+        bool operator==(const HexSharedBlockKey& o) const
+        {
+            return mode == o.mode && kindT == o.kindT && a == o.a && kindS == o.kindS && b == o.b
+                && img == o.img && same == o.same && qx == o.qx && qy == o.qy && qz == o.qz;
+        }
+    };
+    struct HexSharedBlockKeyHash {
+        std::size_t operator()(const HexSharedBlockKey& k) const
+        {
+            std::size_t h = 1469598103934665603ull;
+            auto mix = [&](long long v) {
+                h ^= static_cast<std::size_t>(static_cast<unsigned long long>(v));
+                h *= 1099511628211ull;
+            };
+            mix(k.mode); mix(k.kindT); mix(k.a); mix(k.kindS); mix(k.b); mix(k.img); mix(k.same);
+            mix(k.qx); mix(k.qy); mix(k.qz);
+            return h;
+        }
+    };
+    // Congruence templates of every host (cells then faces): the quantized Q2 lattice nodes relative
+    // to the host centre plus the charge exponents; hosts with equal templates are translated copies.
+    std::vector<int> m_hexHostCongruentTemplate;   // [n_el+n_bf] template id, -1 before the build
+    std::vector<double> m_hexHostCenter;           // [3*(n_el+n_bf)] mean of the host's lattice nodes
+    double m_hexCongruentQuantum = 0.0;            // 1e-10 x the largest host spread
+    int m_hexCongruentTemplateCount = 0;
+    bool m_hexCongruentReady = false;
+    void BuildHexCongruenceTemplates(int n_el, int n_bf);
+    // One slot per key.  The slot is inserted on the first lookup and its block is computed under
+    // std::call_once, so concurrent misses on the same key WAIT for one computation instead of each
+    // recomputing the block (the previous "racing first insert wins" design duplicated the expensive
+    // Duffy near blocks whenever several fill workers reached the same congruence key together).
+    // unique_ptr keeps the slot address stable across rehashing; the returned block reference lives
+    // as long as the instance.
+    struct HexSharedBlockSlot {
+        std::once_flag once;
+        std::vector<double> blk;
+    };
+    mutable std::shared_mutex m_hexGeneralSharedMutex;
+    mutable std::unordered_map<HexSharedBlockKey, std::unique_ptr<HexSharedBlockSlot>, HexSharedBlockKeyHash>
+        m_hexGeneralSharedCache;
+    mutable std::atomic<long long> m_hexGeneralSharedLookups{0};
+    mutable std::atomic<long long> m_hexGeneralSharedHits{0};
+    mutable std::atomic<long long> m_hexGeneralSharedMisses{0};
+    bool HexPairTakesGeneralPath(int kindT, int hT, int kindS, int hS, int img) const;
+    // TOUCHING hex hosts (a shared Q2 lattice node after the image transform): always the graded near
+    // family, never the far tensor product, whatever the centroid-separation ratio says.
+    bool HexHostsTouch(int kindT, int hT, int kindS, int hS, int img) const;
+    // Shared lattice entity of a touching host pair (2026-09-06): entity_dim = 0 vertex, 1 edge, 2 face,
+    // 3 identical cells (-1 = not touching) and the canonical frames (axis permutation + flips) that put
+    // the shared entity at zeta_k = 1 (target) / zeta_k = 0 (source) for k >= entity_dim with matching
+    // in-entity coordinates, derived from the coincident Q2 lattice nodes after the image transform.
+    struct HexPairAdjacency {
+        int entity_dim = -1;
+        int permT[3] = {0, 1, 2}, flipT[3] = {0, 0, 0};
+        int permS[3] = {0, 1, 2}, flipS[3] = {0, 0, 0};
+    };
+    HexPairAdjacency HexPairAdjacencyOf(int kindT, int hT, int kindS, int hS, int img) const;
+    // Physical lengths of a host's reference axes from its Q2 lattice corners: shortest and longest.
+    void HexHostAxisLengths(int kind, int h, double& shortest, double& longest) const;
+    // Whether the exponentially convergent BDM1 rules (pair-domain Duffy, plain pair product) resolve
+    // this pair.  They do while every length scale of the pair -- each host's axis anisotropy and, for a
+    // non-touching pair, its extent over its closest approach -- stays within
+    // HEX_EXPONENTIAL_RULE_MAX_ANISOTROPY; beyond it the graded near tensor rule is the accurate one.
+    // The ratio that decided is returned so a refusal can name it.
+    bool HexPairExponentialRulesResolve(int kindT, int hT, int kindS, int hS, int img,
+                                        bool touching, double* ratio_out) const;
+    // TOUCHING pairs of the BDM1 family: the (dT + dS)-dimensional product integral is regularized on
+    // the product domain itself (Sauter-Schwab / Taylor-Duffy pattern): relative in-entity coordinates
+    // u = zeta_S - zeta_T plus the transverse coordinates form a cone vector c whose max-norm w is the
+    // Duffy variable (one subdomain per dominant coordinate, two signs for the relative ones), so
+    // |Phi_T - Phi_S| = w X with X smooth and nonvanishing and the Jacobian w^(k-1) cancels the 1/r
+    // singularity; the remaining in-entity coordinates run over the intersection box.  Tensor Gauss on
+    // the unit hypercube converges exponentially, which the block-wise near family (graded outer x
+    // separate inner) cannot: on ESRF #6 the near-zero modes are 1e-3 cancellations of block energies,
+    // so 1e-8 block accuracy is required (memory hdiv_hex_gram_m_metric_amplification).
+    std::vector<double> QuadBlockHexPairDuffy(int kindT, int hT, int kindS, int hS, int img,
+        const double* velocityT = nullptr, const double* velocityS = nullptr) const;
+    // Non-touching pairs inside the near band (BDM1): plain tensor Gauss on both reference domains with
+    // the pair rule (the hosts are separated, so the integrand is smooth).
+    std::vector<double> QuadBlockHexProductN(int kindT, int hT, int kindS, int hS, int img,
+        const double* velocityT = nullptr, const double* velocityS = nullptr) const;
+    // NEAR host pairs (self / touching / within near_grade): endpoint-graded tensor outer over the whole
+    // target host, exact-anchor radial (or far cloud) inner per source sub-simplex.
+    std::vector<double> QuadBlockHexNearTensor(int kindT, int hT, int kindS, int hS, int img,
+                                               bool self_pair) const;
+    // Per-host tensor rule of the far product (points, tensor weights, per-local-charge monomial
+    // values).  The rule is PAIR-INDEPENDENT (mask reflections are applied to the target points at
+    // kernel time), so QuadBlockHexAffineFarProduct fetches it from this instance-shared cache
+    // instead of re-running the Q2 map per block -- bit-identical values, same data, computed once.
+    // Same lifetime discipline as the general-block cache: never erased, references stable.
+    struct HexFarRule {
+        std::vector<double> x;        // [np*3] mapped physical points
+        std::vector<double> w;        // [np] tensor weights (reference measure, Piola)
+        std::vector<double> values;   // [np*n_local] monomial values at the reference points
+        int np = 0;
+        int n_local = 0;
+    };
+    const HexFarRule& GetHexFarRule(int kind, int host) const;
+    mutable std::shared_mutex m_hexFarRuleMutex;
+    mutable std::unordered_map<unsigned long long, HexFarRule> m_hexFarRuleCache;
+    void BuildHexInnerRules();
+    std::vector<HexFarRule> m_hexInnerRules;  // cells, then boundary faces; immutable during fill
+    void ResetHexCacheStats();
+    // img (IMA): 0 = direct block; i>0 = image block i-1 (target host x the source host mapped by the image
+    // transform T_{i-1}), for the reduced-symmetry image method -- mirrors (1/2,1/4,1/8 models) and cyclic
+    // N-fold rotations.  Default 0 keeps the direct hex/wedge Gram byte-identical.
+    std::vector<double> QuadBlockHex(int kindT, int hT, int kindS, int hS, int img = 0) const;  // directed [nT*nS] block, INV4PI folded
+    const std::vector<double>& GetHexBlock(int kindT, int hT, int kindS, int hS, int img = 0) const;  // thread_local block cache
+    const std::vector<double>& GetHexSymBlock(int kindA, int hA, int kindB, int hB, int img = 0) const;  // cached 0.5*(AB+BA^T)
+
+    // ---- 2D PLANAR mode (see the dim2 ctor doc) ----
+    bool m_d2 = false;
+    int  m_d2_n_be = 0;
+    int  m_d2GeometryOrder = 1;
+    int  m_d2CellMapStride = 0;
+    int  m_d2EdgeMapStride = 0;
+    std::vector<double> m_d2CellMap;     // polynomial map coefficients; Qq slot x 2D (tri uses Pq prefix)
+    std::vector<int>    m_d2CellType;    // [n_el] 0=tri, 1=quad
+    std::vector<double> m_d2EdgeMap;     // polynomial map coefficients; (q+1) x 2D
+    std::vector<double> m_d2SymTriP, m_d2SymTriW;   // OUTER tri rule (bary lam1..2; W sums 1/2)
+    std::vector<double> m_d2GlQ, m_d2GwQ;           // 1D [0,1] tensor outer rule for quads
+    std::vector<double> m_d2GlE, m_d2GwE;           // 1D [0,1] edge outer rule
+    std::vector<double> m_d2FarTriP, m_d2FarTriW;   // cheap FAR inner tri rule (bary; W sums 1/2)
+    // per-sub geometry (cells: up to 4 sub-tris; edges: 1) -- centroid/size for the near test + anchor
+    // SITES (tri sub: 3 corners + 3 edge mids + centroid = 7; edge: 2 ends + mid = 3), mapped positions.
+    std::vector<double> m_d2CellSubC, m_d2CellSubS;   // [n_el*4*2], [n_el*4] (quad D4 centre fan)
+    std::vector<double> m_d2EdgeC, m_d2EdgeS;         // [n_be*2],   [n_be]
+    std::vector<double> m_d2CellSiteX;                // [n_el*4*7*2]
+    std::vector<double> m_d2EdgeSiteX;                // [n_be*3*2]
+    void D2CellMap(int cell_type, const double* coeff, const double xi[2], double X[2]) const;
+    void D2EdgeMap(const double* coeff, double t, double X[2]) const;
+    void D2EdgeTangent(const double* coeff, double t, double T[2]) const;
+    // inner INT over sub subB of source (kindS,hS) of m_b(eta)*(-ln|p-X(eta)|) d(ref eta): radial cones
+    // from the anchor (xiT = the outer point's own ref coords on the SELF host; else the nearest SITE)
+    // for near field points, the cached-rule far cloud otherwise.
+    void PhiInner2DVec(int kindS, int hS, int subB, const double p[2], const double* xiT,
+                       const std::vector<int>& srcG, double* inn) const;
+    std::vector<double> QuadBlock2D(int kindT, int hT, int kindS, int hS,
+                                    int mask = 0) const;  // directed block, 1/(2pi) folded
+
+    // ---- WEDGE (PRISM) BDM1/BDM2 mode (see the wedge ctor doc) ----  Reuses the hex-mode quadrature tables
+    // (m_symTetP/W, m_symTriP/W, m_glOut/gwOut, m_glIn/gwIn, m_farTetP/W, m_farTriP/W, m_near_grade,
+    // m_far_inner_factor) and the block-serving infra (m_hexLocalOf, m_cellCharges, m_faceCharges,
+    // m_cent, m_size) verbatim; only the geometry (prism cells + mixed tri/quad faces) is wedge-specific.
+    bool m_wedgemode = false;
+    int  m_wedge_n_bf = 0;
+    std::vector<double> m_wCellNodes;    // [n_el*54]  18-node tri-P2 (x) z-P2 prism lattice (n = t + 6*iz)
+    std::vector<double> m_wFaceNodes;    // [n_bf*27]  9-node slots x 3D (a tri face fills the first 6 = 18)
+    std::vector<int>    m_wFaceType;     // [n_bf] 0=tri (1 sub-tri, 6-node), 1=quad (2 sub-tris, 9-node)
+    std::vector<double> m_wFieldTriP, m_wFieldTriW; // higher symmetric tri rule used only by field materialization
+    std::vector<double> m_wCellSubC, m_wCellSubS, m_wCellSubV;  // [n_el*3*3], [n_el*3], [n_el*3*4*3]  (3 sub-tets)
+    std::vector<double> m_wFaceSubC, m_wFaceSubS, m_wFaceSubV;  // [n_bf*2*3], [n_bf*2], [n_bf*2*3*3]  (tri uses sub 0)
+    std::vector<HexSiteRad> m_wCellSiteRad;     // [3*15]  per (sub-tet, site) ref-space radial tables
+    std::vector<HexSiteRad> m_wFaceSiteRadTri;  // [1*7]   tri face: 1 sub-tri x 7 sites
+    std::vector<HexSiteRad> m_wFaceSiteRadQuad; // [2*7]   quad face: 2 sub-tris x 7 sites
+    std::vector<double> m_wCellSiteX;           // [n_el*3*15*3]  mapped site positions (nearest-site pick)
+    std::vector<double> m_wFaceSiteX;           // [n_bf*2*7*3]   (tri face uses sub 0 only)
+    void BuildWedgeSiteTables();                // ctor helper (fills the six members above)
+    void PhiInnerWedgeSiteVec(int kindS, int hS, int subB, const double p[3],
+                              const std::vector<int>& srcG, double* inn) const;   // non-self near: static-site radial
+    void PhiInnerWedgeSubVec(int kindS, int hS, int subB, const double p[3],
+                             const std::vector<int>& srcG, double* inn) const;    // far cloud / -> site radial
+    void PhiInnerWedgeRadialVec(int kindS, int hS, int subB, const double p[3], const double* xiT,
+                                const std::vector<int>& srcG, double* inn) const; // SELF exact-anchor radial
+    void DPhiInnerWedgeRadialVec(int kindS, int hS, int subB,
+                                 const double p[3], const double dp[3], const double* xiT,
+                                 const double* node_velocity,
+                                 const std::vector<int>& srcG, double* dinn) const;
+    void DPhiInnerWedgeSubVec(int kindS,int hS,int subB,const double p[3],const double dp[3],
+                              const double* node_velocity,const std::vector<int>& srcG,double* dinn) const;
+    std::vector<double> QuadBlockWedgeDirectionalDerivative(
+        int kindT, int hT, int kindS, int hS,
+        const double* target_velocity, const double* source_velocity,
+        int mask = 0) const;
+    const std::vector<double>& GetWedgeDirectionalSymBlock(
+        int kindA,int hostA,int kindB,int hostB,
+        const std::vector<double>& cell_node_velocity,
+        const std::vector<double>& face_node_velocity,
+        unsigned long long cache_token) const;
+    std::vector<double> TetChargeGramDirectionalDerivativeImpl(
+        const std::vector<double>& cell_vertex_velocity,
+        const std::vector<double>& face_vertex_velocity,
+        int selected_host_a,int selected_host_b) const;
+    std::vector<double> QuadBlockWedge(int kindT, int hT, int kindS, int hS, int img = 0) const;
+
+    // HIGH-ORDER (polynomial-charge) mode
+    bool m_highorder = false;
+    bool m_polyCombo = false;                           // arbitrary local polynomial per scalar charge
+    int m_comboNMono = 0;
+    std::vector<double> m_comboCoeffs;                  // [n][m_comboNMono]
+    std::vector<std::array<int,3>> m_comboExponents;    // shared reference monomial list
+    std::vector<int> m_host, m_kind, m_expo;           // [n] host elem, [n] 0=cell/1=face, [n*3] monomial exponents
+    std::vector<int> m_nmono;                          // [n] # co-located charges per (kind,host) group -- QuadDot memo gating (skip groups of 1)
+    std::vector<int> m_hoLocalOf;                      // [n] local charge index within the flat high-order host
+    std::vector<std::vector<int>> m_hoCellCharges;     // [n_el] flat high-order charge indices per tetrahedron
+    std::vector<std::vector<int>> m_hoFaceCharges;     // [n_bf] flat high-order charge indices per boundary triangle
+    long long m_build_id = 0;                          // monotonic per-build id -> the QuadDot thread_local memo owner key (pointer-reuse-safe)
+    std::vector<double> m_cellInv;                     // [n_el*9] physical->ref affine inverse per cell (row-major)
+    std::vector<double> m_faceGinv;                    // [n_bf*4] 2x2 (a.a) Gram inverse per face (for 2D ref coords)
+    std::vector<int> m_hoPolyDegree;                   // [n] physical-polynomial degree (flat order<=2)
+    std::vector<double> m_hoPolyA, m_hoPolyB, m_hoPolyC; // [n], [n*3], [n*9]: A + B.y + y^T C y
+    bool m_hoAnalyticBlock = false;                    // flat BDM2: all charges covered and quadratic face modes present
+    std::vector<std::vector<rad_hdiv::Vec3>> m_inP;    // [n] FIXED inner-potential Gauss points per HOST (cell/face)
+    std::vector<std::vector<double>>          m_inW;   // [n] inner-potential Gauss weights (sum = host measure)
+    std::vector<std::vector<double>>          m_srcval; // [n] PRECOMPUTED m_src(y_q) at the FIXED m_inP points -- bit-exact hoist of EvalMono out of the PhiAtHO inner loop (value depends only on (src,q))
+    // near/far adaptive quadrature: LOW-quad tables for the cheap FAR plain double-Gauss (empty => disabled)
+    double m_ho_far_factor = 1e30;                     // FAR if |c_a-c_b| > m_ho_far_factor*(size_a+size_b)
+    std::vector<std::vector<rad_hdiv::Vec3>> m_qp_lo;  // [n] LOW-quad outer points (m_a folded into m_qw_lo)
+    std::vector<std::vector<double>>          m_qw_lo; // [n] LOW-quad outer weights (monomial-folded)
+    std::vector<std::vector<rad_hdiv::Vec3>> m_inP_lo; // [n] LOW-quad inner points (plain)
+    std::vector<std::vector<double>>          m_inW_lo;// [n] LOW-quad inner weights (plain, NOT monomial-folded)
+    std::vector<std::vector<double>>          m_srcval_lo; // [n] PRECOMPUTED m_src(y_q) at the FIXED m_inP_lo points (for QuadDotFar)
+    double EvalMono(int charge, const double p[3]) const;   // charge's monomial at physical p (host ref-coord map)
+    void InitHOPolynomialCoefficients();                    // flat order<=2 reference monomials -> physical A/B/C
+    // Vertex centroid of a flat TET cell (kind 0) or face host; A/B/C are
+    // polynomials of x minus this point.
+    void HOHostCentroid(int kind, int host, double center[3]) const;
+    void PhiInnerHOHostVec(int kind, int host, const double p[3],
+                           const std::vector<int>& charges, double* values) const;
+    void PhiInnerHOCurvedHostVec(int kind, int host, const double p[3],
+                                 const std::vector<int>& charges, double* values) const;
+    bool CurvedHostsTouch(int kindA, int hostA, int kindB, int hostB) const;
+    // Image-aware touch test for the block rules: does the IMAGE T_img(S) share a vertex / edge / face with
+    // the target host T?  S's corner vertices are mapped FORWARD by the image transform and matched against
+    // T's corners by coordinates, so mirror-fixed vertices (a cut face lying on the plane) and
+    // rotation-identified sector vertices are both found -- the vertex-id test of CurvedHostsTouch sees
+    // neither.  img == 0 delegates to CurvedHostsTouch.  The criterion itself is the direct one (>= 2 shared
+    // corners, or one shared corner when a boundary-face charge participates).
+    bool ImageHostsTouch(int kindT, int hostT, int kindS, int hostS, int img) const;
+    bool IsMirrorImage(int img) const;                        // img > 0 with no rotation angle (an involution)
+    bool ImageFarPair(int a, int b, int img) const;           // |T^-1 c_a - c_b| > m_ho_far_factor*(size_a+size_b)
+    double QuadDotFarImage(int tgt, int src, int img) const;  // QuadDotFar with tgt's low outer points mapped by T^-1
+    static bool HOTetImageFarEnabled();                       // RADIA_HDIV_DISABLE_HO_IMAGE_FAR (diagnostic A/B switch)
+    std::vector<double> QuadBlockHOCurvedDirect(int kindT, int hostT, int kindS, int hostS,
+                                                int img = 0) const;
+    std::vector<double> QuadBlockHOTet(int kindT, int hostT, int kindS, int hostS) const;
+    std::vector<double> QuadBlockHOTetImage(
+        int kindT, int hostT, int kindS, int hostS, int img) const;
+    const std::vector<double>& GetHOTetSymBlock(
+        int kindA, int hostA, int kindB, int hostB, int img = 0) const;
+    double PhiAtHO(int src, const double p[3]) const;       // polynomial-charge inner potential (subtraction, NEAR) -- superseded by PhiAtHO_Analytic for order<=2
+    double PhiAtHO_Analytic(int src, const double p[3]) const; // EXACT analytic poly-charge potential (moment kernels, flat order<=2; machine precision, all pair types)
+    double PhiAtHO_Duffy(int src, const double p[3]) const;    // Duffy singular-quadrature poly-charge potential (order>=3 / curved; ~1e-4)
+    double PhiAtHO_Curved(int src, const double p[3]) const;   // CURVED isoparametric Duffy (rad_hdiv::CurvedTet/TriPotential at the host's P2 nodes)
+    double PhiInner(int src, const double p[3]) const;        // dispatch: curved Duffy (m_curved) else analytic moments (charge deg<=2) else flat Duffy
+    double QuadDotFar(int tgt, int src) const;              // cheap LOW-quad plain double-Gauss (FAR, no subtraction)
+};
+
+class RadHACApKChargeGramDerivative final : public RadHACApKBase {
+public:
+    RadHACApKChargeGramDerivative(const RadHACApKChargeGram& parent,
+        ChargeDerivativeFamily family,std::vector<double> cell_velocity,
+        std::vector<double> face_velocity);
+    ~RadHACApKChargeGramDerivative() override = default;
+    double GetInteractionMatrixElement(int i,int j) const override;
+    void ClearEntryCache();
+protected:
+    void ExtractCoordinates() override;
+    void OnBeforeBuild() override {}
+    void InitializeInvChi() override { m_inv_chi.assign(m_ndof,0.0); }
+    bool IsVariableDOF() const override { return false; }
+    int GetUniformNFFC() const override { return 1; }
+private:
+    const RadHACApKChargeGram& m_parent;
+    ChargeDerivativeFamily m_family;
+    std::vector<double> m_cell_velocity,m_face_velocity;
+    mutable std::mutex m_cache_mutex;
+    mutable std::unordered_map<long long,std::vector<double>> m_block_cache;
+    unsigned long long m_cache_token;
+};
+
+#endif // __RAD_HACAPK_HDIV_H
