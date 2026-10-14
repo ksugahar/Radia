@@ -26,15 +26,22 @@ def test_reduced_normal_boundary_is_not_total_normal_boundary():
                 interface_boundary='interface',kelvin_mats=(),order=1)
     with ng.TaskManager():
         correction=solve_magnetostatic_mixed_total_reduced_omega_kelvin(
-            mesh,source,-ng.z,1.,(0,0,0),reduced_zero_normal_boundary='outer',**kwargs)
+            mesh,source,-ng.z,1.,(0,0,0),reduced_zero_normal_boundary='outer',
+            current_free_total_source_boxes=[[[2.,2.,2.],[3.,3.,3.]]],**kwargs)
         shifted=solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh,source,-ng.z,1.,(0,0,0),reduced_zero_normal_boundary='outer',
-            total_dirichlet_cf=ng.CoefficientFunction(2.),**kwargs)
+            total_dirichlet_cf=ng.CoefficientFunction(2.),
+            current_free_total_source_boxes=[[[2.,2.,2.],[3.,3.,3.]]],**kwargs)
         total=solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh,source,-ng.z,1.,(0,0,0),**kwargs)
         with pytest.raises(ValueError,match='exterior'):
             solve_magnetostatic_mixed_total_reduced_omega_kelvin(
                 mesh,source,-ng.z,1.,(0,0,0),reduced_zero_normal_boundary='interface',**kwargs)
+        with pytest.raises(ValueError,match='cannot carry'):
+            solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+                mesh,source,-ng.z,1.,(0,0,0),total_source_h=source,
+                current_free_total_source_boxes=[[[2.,2.,2.],[3.,3.,3.]]],**kwargs)
+    assert correction['current_free_total_certificate']['passed']
     for point in ((.1,.1,.1),(.6,.1,.1)):
         assert np.linalg.norm(np.asarray(correction['H_cf'](mesh(*point)))-[0,0,1])<1e-10
         assert np.linalg.norm(np.asarray(shifted['H_cf'](mesh(*point)))-[0,0,1])<1e-10
