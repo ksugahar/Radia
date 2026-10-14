@@ -287,8 +287,6 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     'validation_test/cubit_mesh_export/geometric_refit_benchmark.py': 'Executable validation admission/scratch routing; phase 2, result metadata is sanitized.',
     'validation_test/cubit_mesh_export/paper_capacitor_benchmark.py': 'Executable validation admission/scratch routing; phase 2, result metadata is sanitized.',
     'validation_test/cubit_mesh_export/paper_sphere_benchmark.py': 'Executable validation admission/scratch routing; phase 2, result metadata is sanitized.',
-    'validation_test/equation/compare_boxes_with_tex.py': 'Executable validation admission/scratch routing; phase 2, result metadata is sanitized.',
-    'validation_test/equation/score_against_tex.py': 'Executable validation admission/scratch routing; phase 2, result metadata is sanitized.',
     'validation_test/equivalence_source/phase3_e2e_cubit_to_sol.py': 'Executable validation admission/scratch routing; phase 2, result metadata is sanitized.',
     'validation_test/esrf_three_engine/results/surface_overlap_20260913/esrf6_surface_overlap_controls_v3.py': 'Executable validation admission/scratch routing; phase 2, result metadata is sanitized.',
     'validation_test/esrf_three_engine/results/surface_overlap_20260913/esrf6_surface_overlap_precision_controls.py': 'Executable validation admission/scratch routing; phase 2, result metadata is sanitized.',
