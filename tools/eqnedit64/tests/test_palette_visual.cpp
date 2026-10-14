@@ -1,6 +1,6 @@
 // Visual evidence harness. Include the exact application source
 // so neither font selection nor owner-draw is reimplemented by the reviewer.
-#include "../src/eqnedt64_app.cpp"
+#include "../src/eqnedit64_app.cpp"
 
 bool save_proof(HBITMAP bitmap, const wchar_t* path) {
     IWICImagingFactory* factory = nullptr;

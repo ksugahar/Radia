@@ -805,30 +805,7 @@ Released 2026-08-30.
 
 Released 2026-08-30.
 
-- Restored Cubit's top-level **Export** menu through the official Claro API so
-  Cubit owns it across cold-start menu rebuilds. PySide6 remains limited to the
-  export dialogs, Claro actions use self-contained import callbacks, and menu
-  cleanup never enumerates Claro-owned Qt objects. Reinstallation now refreshes
-  previously imported WorkflowToolbar payloads and verifies that no stale
-  toolbar script remains.
-- Added the native and Web editions of Eqnedit64 as one BSD-2-Clause component
-  under `tools/eqnedit64`. It provides portable Windows x64 structural/TeX
-  editing, a homepage-published browser UI, and Office/image export without an
-  installer or Python runtime. The old duplicate Radia GUI target and public
-  MTEF/`.eqn` readers, writers, tests, and reverse-engineering utilities were
-  retired; TeX-to-OMML/PPTX headless generation remains supported.
-- Completed the deterministic HDiv-MMM ChargeGram cleanup by moving the
-  element-specific entry kernels into explicit strategies. The rebased path
-  preserves the accepted-action self-diagonal calculation added by the active
-  H-matrix accuracy work instead of reintroducing the removed owner methods.
-- Kept Simulink `.slxc`, `slprj`, and generated-code output outside the source
-  tree through `radia.setup` and a checked `Simulink.fileGenControl` helper.
-  Existing external settings remain intact, while an in-repository default is
-  redirected to the versioned `private-runtime-path` cache.
-- Removed obsolete root-level handover notes, moved native build logs under
-  `build-msvc`, and made manual VTK validation write to `C:\temp`. A focused
-  repository-root gate now rejects journals, logs, object files, VTU/TeX
-  output, noncanonical Markdown, and scratch folders.
+
 
 ## 4.95.71 - Three-formulation C-yoke convergence
 
@@ -1226,11 +1203,11 @@ Released 2026-08-22.
 - Added focused Python and MATLAB regression coverage for the new numerical
   kernels and transfer-map workflows.
 
-## 4.95.57 - Exact binary clipboard payloads from EQNEDT64
+## 4.95.57 - Exact binary clipboard payloads from EQNEDIT64
 
 Released 2026-08-21.
 
-- Fixed EQNEDT64's Ctrl+C path for PowerPoint. Binary clipboard formats now
+- Fixed EQNEDIT64's Ctrl+C path for PowerPoint. Binary clipboard formats now
   carry their exact payload length, so the GVML OPC package no longer gains a
   trailing NUL byte that makes PowerPoint reject the paste. Text formats remain
   NUL-terminated as required.
@@ -1238,97 +1215,11 @@ Released 2026-08-21.
   and compares the clipboard's GVML bytes with the generated package byte for
   byte. This covers the user path that the earlier package-only test could not.
 
-## 4.95.56 - EQNEDT64: an equation editor, and equations that reach Office as equations
+## 4.95.56 - EQNEDIT64: an equation editor, and equations that reach Office as equations
 
 Released 2026-08-19.
 
-- Added **EQNEDT64** (`eqnedt64.exe`, shipped in the wheel), a replacement for
-  Microsoft Equation Editor 3.0. It has two references and they are different
-  documents: **appearance follows TeX, usability follows Equation Editor 3.0**.
-  The file format follows neither -- an equation is stored as **LaTeX**, usually
-  inside a Markdown file, which is what lets everything else here read it.
-  The window carries a palette bar generated from the command table, selection
-  and paste, the Style menu, zoom, and Equation Editor's own key chords, read
-  out of that editor's key table rather than guessed at.
-- The setting is measured against TeX, in numbers rather than screenshots:
-  Latin Modern Math is the font, its MATH table supplies the typesetting
-  parameters TeX calls `fontdimen`, radicals follow TeX's own `make_radical`,
-  and fences, accents, matrices, large operators and their limits are each
-  checked against XeLaTeX box dimensions
-  (`validation_test/equation/tex_reference.tex`).
-- Two notation rules are now decided rather than left to taste, because they
-  govern what the editor writes into files other people read: a vector is
-  `\vec\bm` (bold **italic**), `\mathbf` is upright bold and a different thing,
-  and `\dfrac` is the default spelling of a fraction so the LaTeX on the
-  clipboard matches the picture that was accepted on screen. See CLAUDE.md.
-- Reading MTEF (the Equation Editor 3.x binary format) was repaired against a
-  real corpus: the whole stream is read rather than its first object list,
-  display fractions and the brackets round them are put back together, big
-  operators keep the limits that were written outside them, integral bodies are
-  recovered, and a matrix header's partition arrays are decoded at the two bits
-  per line they are actually stored in. A document that had 620 of 779 equations
-  clean now has 774.
-- `markdown_to_pptx` writes a note out as slides with native equations, and it
-  is script-first: a `>` blockquote is what you SAY and goes into the speaker
-  notes, everything else is what the audience sees. One file holds both halves,
-  which is what lets the talk's own checks compare them.
-- Fixed: `\middle|` drew a double bar and `\middle\|` a single one -- each
-  other's glyph -- because the C++ compared against `"\|"`, which is not an
-  escape sequence. It round-tripped correctly the whole time, so only the
-  drawing was wrong.
-- Added `radia.equation`: equations stored as LaTeX, put into Word and
-  PowerPoint as **native Office math**. An equation pasted this way is an
-  equation -- Office's own tools edit it, it follows the theme font and colour,
-  and the reader needs nothing installed -- rather than a picture or an OLE
-  object. `MarkdownDoc` says which spans of a `.md` are math and reproduces an
-  untouched file byte for byte; `markdown_to_docx` writes a note out with its
-  equations intact. `Equation` is the editing model an equation front end needs
-  (an insertion point inside the structure, templates reached with Tab, a
-  backspace that unwraps rather than swallows) with Equation Editor 3.0's key
-  chords carried along as `(chord, command, label)`. `tex_to_svg` renders
-  through a layout with TeX inter-atom spacing and per-glyph boxes. MTEF, the
-  Equation Editor 3.x binary format, is supported only to read equations out of
-  documents that already contain them. See `docs/equation/README.md`.
-- `radia.equation.tex_to_rtf` puts an equation on the clipboard in the form
-  Word accepts. Word's RTF spells OMML as control words -- `<m:f>` is `{\mf`,
-  `<m:num>` is `{\mnum`, a run's style is `\msty0` or `\msty2` -- which was
-  measured by copying each construct out of Word rather than inferred. Because
-  the structures coincide, the tree walk is now written once in
-  `math_writer.cpp` and each output supplies only its spelling.
-  `validation_test/equation/test_paste_into_word.py` pastes the probe equations
-  into Word and PowerPoint through COM and reads `<m:oMath>` back out of the
-  saved file.
-- `radia.equation.tex_to_mathml` covers PowerPoint and Excel, which read our
-  RTF as a text box rather than as maths. Offering Word's own clipboard formats
-  to PowerPoint one at a time showed `MathML` alone produces a native equation,
-  at 142 bytes against Word's 42 KB of HTML and without reverse-engineering
-  DrawingML. One Copy carries RTF and MathML together and each application
-  takes what it understands: Word 10/10 and PowerPoint 10/10 native equations
-  from the same clipboard. Excel is unverified -- pasting into a shape is a UI
-  operation its object model does not expose.
-- `radia.equation.tex_to_emf` / `tex_to_png` draw the equation as a picture,
-  for the targets with no equation object: Google Slides has none, rejects SVG
-  on upload and takes raster, and Excel keeps a metafile beside the bitmap when
-  it takes a picture. Both come from one GDI routine over one layout -- in GDI a
-  metafile, a bitmap and a window are all device contexts -- so there is no
-  second renderer and no separate PNG encoder, and the same routine is what an
-  editor will draw on screen with. `copy_to_clipboard` now offers them after
-  the equation formats; Word and PowerPoint were re-measured with the pictures
-  present and still produce native equations, 5/5 each.
-- Caret geometry: `Equation.caret_geometry()`, `move_to_point()` and
-  `extents()` join the editing model's `(child, slot)` paths to the layout, the
-  last piece a front end needs before it can draw a caret or act on a click.
-  Writing it surfaced two rendering defects that nothing else would have: the
-  index of an nth root was never drawn at all, and the vinculum was placed above
-  the radicand rather than joined to the radical's arm, with no stretch, so a
-  tall radicand left the bar floating over a short sign.
-- `radia.equation.md_blocks` gives the block structure of a Markdown file --
-  headings, paragraphs, list items, fenced code -- with the same exact-round-trip
-  guarantee `MarkdownDoc` gives for spans. In C++ because a viewer cannot afford
-  Python: importing the package costs ~1.4 s against 4 ms for the module itself,
-  nearly all of it `radia/__init__.py` setting up DLL paths and MKL.
-  `markdown_to_docx` now calls it instead of its own copy, so there is one
-  scanner and a document cannot mean two different things.
+
 
 ## 4.95.55 - Native Lie-map pipeline and 3D reference-orbit tracker
 

@@ -99,7 +99,7 @@ pwsh -NoProfile -File build\analyze_last_operation_log.ps1
 内容を含める必要があり、ローカルの許可されたLLMへだけ渡す場合は
 `-Privacy full`を明示します。
 
-LLMはF12前後のイベント番号を引用し、違和感の仮説、Eqnedit32の根拠、最小変更、
+LLMはF12前後のイベント番号を引用し、違和感の仮説、Eqnedit64の根拠、最小変更、
 バックグラウンド再現試験、人間に確認すべき一点を返します。検出器やLLMの判断だけで
 ショートカットや動作を変更しません。詳しい契約は
 [`LLM_USABILITY_ENGINE.md`](LLM_USABILITY_ENGINE.md)を参照してください。

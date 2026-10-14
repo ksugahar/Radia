@@ -272,6 +272,13 @@ jobs:
           path: tools/eqnedit64/font-session-*.json
           if-no-files-found: warn
 
+      - name: Check public product boundary
+        run: |
+          python tests/check_public_names.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/check_pe_debug.py build_cmake/Release/Eqnedit64.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Check command-line image artifacts
         run: |
           $app = Resolve-Path 'build_cmake\Release\Eqnedit64.exe'

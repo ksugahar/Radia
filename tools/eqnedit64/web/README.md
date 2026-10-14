@@ -67,8 +67,7 @@ Less common alphabets stay in Decoration: `\mathsf`, `\mathtt`, `\mathcal`,
 `\mathbb`, `\mathfrak`, `\bm`, and the `\mathnormal` reset. The Web source
 keeps `\bm`; only the MathJax boundary expands it to `\boldsymbol`.
 
-Inputs and saved/copied source are TeX. MTEF and `.eqn` are not supported
-formats. Office copy emits conditional RichEdit HTML OMML in `text/html`,
+Inputs and saved/copied source are TeX. Office copy emits conditional RichEdit HTML OMML in `text/html`,
 plus plain TeX and a non-Office MathML fallback. PNG copy remains a separate
 action. Native and Web share the primary OMML route; native does not publish
 competing registered MathML. Web H5/H6 hand tests passed for 3.1.2, and the
@@ -143,7 +142,7 @@ not red. Web H5/H6 OK on 8361ec916. Historical run 37692902458 on ea787664d used
 The user hand tests remain valid; the headed gate establishes the covered corpus
 wire contract, not every TeX input or every Office/browser environment.
 Changed payload behaviour requires renewed qualification. The completed 3.1.3
-publication record is in the [canonical handover](../../../docs/equation/eqnedt64_handover.md).
+publication record is in the [canonical handover](../../../docs/equation/eqnedit64_handover.md).
 
 
 ## 3.1.3 release and coverage limits

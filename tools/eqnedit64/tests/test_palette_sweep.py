@@ -49,7 +49,7 @@ def is_alias(one: str, other: str) -> bool:
 
 def build(command: str) -> Equation | None:
     """Apply one palette command to a fresh equation, exactly as the window
-    does in eqnedt64_app.cpp: templates, symbols, raw LaTeX and typeface
+    does in eqnedit64_app.cpp: templates, symbols, raw LaTeX and typeface
     changes each have their own entry point, and using the wrong one would
     test something the user never does."""
     equation = Equation()

@@ -1,6 +1,6 @@
 /* Toolbar palettes: the catalogue of everything that can be inserted.
  *
- * Eqnedt32 puts every symbol and every template on one of nineteen toolbar
+ * the editor puts every symbol and every template on one of nineteen toolbar
  * palettes -- ten of symbols, nine of templates -- and has no Insert menu at
  * all.  Two clicks reach any of its ~300 items.  Eqnedit64 had flat menus
  * instead, which left 117 of its 160 symbols with no mouse route and no
@@ -31,7 +31,7 @@ struct PaletteItem {
 struct Palette {
     std::string title;   /* palette name, shown as the popup heading */
     std::string face;    /* toolbar button face */
-    int columns = 3;     /* grid width, as in Eqnedt32's drop-downs */
+    int columns = 3;     /* grid width, as in the editor drop-downs */
     std::vector<PaletteItem> items;
 };
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """The toolbar palettes must be a complete, non-overlapping catalogue.
 
-Eqnedt32 reaches every one of its symbols and templates from a toolbar
+the editor reaches every one of its symbols and templates from a toolbar
 palette, so nothing is available only to someone who already knows the
 command.  Eqnedit64 drifted away from that: at one point 117 of its 160
 symbols had neither a shortcut nor a mouse route.
@@ -109,7 +109,7 @@ def test_every_palette_cell_produces_a_tex_lesson():
 
 
 def test_symbol_palettes_come_first_then_template_palettes():
-    """The shape of Eqnedt32's bar: symbols on the first row, templates on
+    """The shape of the editor bar: symbols on the first row, templates on
     the second, so the eye knows which row to look at.  Eqnedit64 adds a
     browser-shared differential-geometry symbol palette.  The dedicated
     over/underline palette remains on the template row, while labelled arrows

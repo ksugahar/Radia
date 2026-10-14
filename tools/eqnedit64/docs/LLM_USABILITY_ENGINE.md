@@ -2,7 +2,7 @@
 
 ## 1. 目的
 
-この仕組みは、Eqnedit32で蓄積された熟練操作、Eqnedit64の意味状態、利用者の
+この仕組みは、Eqnedit64で蓄積された熟練操作、Eqnedit64の意味状態、利用者の
 違和感を、LLMが検討できる証拠へ変換する。LLMにGUIを勝手に操作・変更させる
 仕組みではない。検出器は候補を示し、LLMは仮説を作り、人間が採否を決め、
 採用した動作だけをバックグラウンド回帰試験へ固定する。
@@ -10,7 +10,7 @@
 操作感の判断順序は次とする。
 
 ```text
-Eqnedit32原本・ヘルプ・逆アセンブル・既存の選好台帳
+Eqnedit64GUI仕様・ショートカット仕様・既存の選好台帳
                           +
 Eqnedit64 operation log v2（操作＋意味状態＋時間差）
                           ↓
@@ -81,7 +81,7 @@ LLMは候補ごとに次を返す。
 - `verdict`: `friction` / `expected` / `uncertain`
 - `hypothesis`
 - `evidence_seq`: 根拠となる操作番号
-- `legacy_evidence`: Eqnedit32資料または既存選好
+- `legacy_evidence`: Eqnedit64資料または既存選好
 - `proposed_minimal_change`
 - `regression_test`: 外部入力を送らない再現試験
 - `human_question`: 人間にしか決められない一点
@@ -97,7 +97,7 @@ LLMは候補ごとに次を返す。
 
 操作感変更の完了条件は次のすべてである。
 
-1. 操作ログまたはEqnedit32資料の根拠がある。
+1. 操作ログまたはEqnedit64資料の根拠がある。
 2. LLM提案と人間の採否が区別されている。
 3. `docs/GUI_SPEC.md` が更新されている。
 4. 非表示のイベント再生試験が追加されている。

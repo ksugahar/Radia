@@ -9,7 +9,7 @@ if /I not "%EQNEDIT64_ISOLATED_TEST_SESSION%"=="1" (
     exit /b 90
 )
 
-call build\build_eqnedt64.bat || exit /b 1
+call build\build_eqnedit64.bat || exit /b 1
 call build\build_pymodule.bat || exit /b 1
 build\test_tex_document.exe || exit /b 1
 python tests\run_model_tests.py || exit /b 1

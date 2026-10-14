@@ -46,7 +46,7 @@ GitHub/PyPI success alone does not complete an Eqnedit64 release.
 - Build and sign the standalone executable on INTEL11 (100号機) from that
   exact `origin/main` commit. LAB is reserved for validation; do not compile
   or sign release binaries there. Use
-  `tools/eqnedit64/build/build_eqnedt64.bat`. The signing key is
+  `tools/eqnedit64/build/build_eqnedit64.bat`. The signing key is
   deliberately non-exportable; the CMake executable produced by GitHub-hosted
   CI is an unsigned test artifact and must not be published or copied to `O:`.
 - Require product version equal to the tag version, Authenticode status
@@ -150,7 +150,7 @@ resume the homepage phase from the same tag. Do not tag a new version merely
 to retry an upload. `release_eqnedit64.ps1` dispatches the binary release;
 its return value is not proof of end-to-end publication.
 
-The individual steps, for diagnosis: `tools/eqnedit64/build/build_eqnedt64.bat`
+The individual steps, for diagnosis: `tools/eqnedit64/build/build_eqnedit64.bat`
 compiles and signs; then, before any tag exists,
 
 ```powershell

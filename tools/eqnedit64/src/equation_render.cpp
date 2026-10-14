@@ -2864,7 +2864,7 @@ std::wstring first_family(const std::string& families) {
  * thirty-glyph equation cost thirty CreateFontW/DeleteObject pairs on every
  * keystroke -- and CreateFontW is among the most expensive GDI calls there
  * is.  Layout, by contrast, measures at 0.017 ms for a typical equation, so
- * this loop was the whole of the difference in responsiveness.  Eqnedit32
+ * this loop was the whole of the difference in responsiveness.  the editor
  * creates fonts at twelve places in the entire program; it does not make one
  * per character either. */
 struct DrawFontKey {

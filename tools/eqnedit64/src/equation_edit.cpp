@@ -173,7 +173,7 @@ bool is_letter(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 bool is_digit(char c)  { return c >= '0' && c <= '9'; }
 
 bool is_automatic_function_name(const std::string& name) {
-    /* Eqnedit32 string resources 11000--11038, plus common engineering
+    /* the editor string resources 11000--11038, plus common engineering
      * operators already understood by Eqnedit64's TeX emitter/parser. */
     static const char* kNames[] = {
         "Im", "Pr", "Re", "arg", "arcsin", "arccos", "arctan",
@@ -623,7 +623,7 @@ void Equation::clear_selection() {
  * on an equation built from fractions and fenced groups nearly every drag
  * crosses a boundary, so nothing ever highlighted, and the first outside
  * reader fell back to copying the whole equation and deleting the parts he
- * did not want.  Promote instead, the way Eqnedt32 and Word's editor do:
+ * did not want.  Promote instead, the way the editor and Word's editor do:
  * walk up to the deepest slot that holds both ends, and take the whole
  * child that each end is nested inside.  Numerator to denominator selects
  * the fraction; inside a fraction out to a neighbour selects the fraction
@@ -2212,7 +2212,7 @@ const std::vector<std::string>& Equation::templates() {
 const std::vector<Equation::SequenceBinding>& Equation::sequence_shortcuts() {
     static const std::vector<SequenceBinding> kSequences = [] {
         std::vector<SequenceBinding> result = {
-        /* Eqnedit32's template family. */
+        /* the editor template family. */
         {'T', 'F', false, "template.frac",       "fraction"},
         {'T', '/', false, "template.slashfrac",  "slashed fraction"},
         {'T', 'H', false, "template.sup",        "superscript"},
@@ -2243,7 +2243,7 @@ const std::vector<Equation::SequenceBinding>& Equation::sequence_shortcuts() {
         {'T', '_', false, "template.underline",  "underline"},
         {'T', 'W', false, "template.tilde",      "tilde accent"},
 
-        /* Eqnedit32's Ctrl+K symbol family. */
+        /* the editor Ctrl+K symbol family. */
         {'K', 'I', false, "symbol.\\infty",      "infinity"},
         {'K', 'A', false, "symbol.\\rightarrow", "right arrow"},
         {'K', 'D', false, "symbol.\\partial",    "partial derivative"},
@@ -2292,7 +2292,7 @@ const std::vector<Equation::SequenceBinding>& Equation::sequence_shortcuts() {
         };
 
         /* Ctrl+B makes the next character a matrix/vector character, as in
-         * Eqnedit32.  Keeping it in the same table makes it testable and lets
+         * the editor.  Keeping it in the same table makes it testable and lets
          * the shortcut coach teach it. */
         for (char key = 'A'; key <= 'Z'; ++key) {
             const char lower = static_cast<char>(key - 'A' + 'a');

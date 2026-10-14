@@ -3,7 +3,7 @@
 
 The deterministic detectors do not claim to decide what feels natural.  They
 locate evidence windows where an LLM can compare the event sequence, semantic
-editor state, Eqnedit32 reference, and an explicit user marker.  A human still
+editor state, the editor reference, and an explicit user marker.  A human still
 accepts or rejects every behavioural change.
 """
 
@@ -200,7 +200,7 @@ def detect_candidates(events: Sequence[TraceEvent]) -> list[Candidate]:
                 reason="A remembered or guessed shortcut chord was rejected.",
                 llm_question=(
                     "Is this a missing learned chord, an ambiguous prefix, or a discoverability "
-                    "problem? Compare the Eqnedit32 shortcut reference before proposing a key."
+                    "problem? Compare the the editor shortcut reference before proposing a key."
                 ),
             ))
 

@@ -61,7 +61,7 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
    - GUIとTeXソースのどちらでも `Tab` / `Shift+Tab` により次／前の空欄へ
      移動でき、同じ手癖で式を埋められること。
 3. **Eqnedit64 の高速構造入力**
-   - Microsoft 数式3.0（Eqnedit32）から回収した操作系列を互換層として維持する。
+   - 既存の構造入力ショートカットを基本層として維持し、削除・変更しない。
    - 互換キーを削除・変更しない。追加ショートカットは拡張層として区別し、
      実キー経路をバックグラウンド試験する。
 
@@ -83,7 +83,7 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 | 挿入・行区切りの取り消し | 単一Undoへまとめる | ブラウザのUndo履歴（`Ctrl+Z`）を壊さない | 共通学習面 |
 | 論文TeXの意味保全 | native parserで標準環境・コメント・メタ命令を正規化 | MathJaxの標準TeX解釈へ委譲 | `~`を`\sim`にせず、`align`の`&`を失わず、命令名を本文にしない |
 | 構造キャンバス編集 | 必須 | 非該当 | native固有 |
-| 数式3.0由来ショートカット | 互換層として必須 | 非該当 | native固有 |
+| 構造入力ショートカット | 基本層として必須 | 非該当 | native固有 |
 | インストール不要のブラウザ利用 | 非該当 | 必須 | Web固有 |
 
 2026-10-08 の UXP-0031 により、両版は条件付き RichEdit-HTML OMML の CF_HTML を主形式とする。
@@ -133,7 +133,6 @@ PowerPointの通常貼り付け受入試験は、画面外の一時プレゼン�
   貼り付け変更は両方とも実Office APIによる可視描画試験を省略しない。
 - Web版の正本は `web/equation-editor.js` と
   `web/equation-editor.fragment.html`。ホームページへ置いたコピーを直接改変しない。
-- MTEFと`.eqn`を互換形式として復活させない。両実装とも入出力の正本はTeXとする。
 - native変換器の公開境界はPythonを介さない
   `Eqnedit64.exe INPUT OUTPUT`である。CLI dispatchをpybind11へ複製しない。Python
   packageのlauncherや補助関数は必要に応じて同じEXEをsubprocess実行する薄い利用者であり、

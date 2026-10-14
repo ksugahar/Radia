@@ -82,7 +82,7 @@ def test_complete_native_intent_catalogue():
 
 
 def test_persistent_native_style_buttons():
-    source = (ROOT / "src/eqnedt64_app.cpp").read_text(encoding="utf-8")
+    source = (ROOT / "src/eqnedit64_app.cpp").read_text(encoding="utf-8")
     calls = re.findall(r'apply_math_alphabet\("(roman|italic|vector)",[^;]+;', source)
     assert sorted(calls) == sorted(PERSISTENT_STYLES)
     for style, tex in PERSISTENT_STYLES.items():

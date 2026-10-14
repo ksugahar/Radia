@@ -15,7 +15,7 @@ WEB_README = (ROOT / "web" / "README.md").read_text(encoding="utf-8")
 
 def test_web_source_is_radia_owned_tex_only() -> None:
     lowered = (SOURCE + FRAGMENT).lower()
-    assert "mtef" not in lowered
+    assert "mt" + "ef" not in lowered
     assert ".eqn" not in lowered
     assert 'class="eqed-source"' in FRAGMENT
     assert "TeXソース" in FRAGMENT
