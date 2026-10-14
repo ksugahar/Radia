@@ -217,7 +217,7 @@
   "publication_ready": false,
   "limitations": [
     "Focused validation is not complete upstream qualification",
-    "No formal idle-mdx performance acceptance",
+    "No formal idle-historical_cpu_worker performance acceptance",
     "No shared runtime deployment or package publication"
   ],
   "installed_wheel": {

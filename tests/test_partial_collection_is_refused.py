@@ -10,7 +10,7 @@ removed every NGSolve-dependent file.
 
 The refusal is scoped to what the invocation asked for.  A tier that names its
 files from the checked manifest cannot lose one this way, so the fast contract
-lane on mdx keeps running without NGSolve installed; only a directory-wide
+lane on development/build host keeps running without NGSolve installed; only a directory-wide
 collection can shrink without saying so.
 """
 
@@ -60,7 +60,7 @@ def test_a_broken_pinned_dependency_refuses_a_whole_directory_run(module):
 
 
 def test_a_named_file_still_runs_without_the_pinned_dependency():
-    """The mdx fast-contracts lane: explicit files, no NGSolve, nothing lost."""
+    """The development/build host fast-contracts lane: explicit files, no NGSolve, nothing lost."""
     out = _pytest([NAMED_FILE, "-q"], broken="ngsolve")
     assert out.returncode == 0, (out.stdout + out.stderr)[-2000:]
 

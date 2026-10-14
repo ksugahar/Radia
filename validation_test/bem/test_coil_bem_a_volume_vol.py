@@ -5,7 +5,7 @@ calc_inductance.py --coil-solver bem-a is given a Cubit-exported
 volume mesh (with internal tetrahedra in addition to the boundary
 triangles).
 
-Before 2026-05-12 (Keiko mdx report): _build_bema_coil_mesh returned
+Before 2026-05-12 (Keiko historical_cpu_worker report): _build_bema_coil_mesh returned
 the loaded volume mesh as-is, and compute_inductance_source_sink fed
 it to HDivSurface(order=0) + LaplaceSL.  The saddle-point K matrix
 gained extra null modes that the D[:-1, :] deflation could not

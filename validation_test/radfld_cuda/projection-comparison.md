@@ -49,7 +49,7 @@ JSON must contain acceptance/pending reasons, accuracy metrics, all timing
 samples, GPU owned bytes, sampled device/host memory and peak limitations,
 precision, algorithm parameters, hashes and runtime versions. Use warmup and
 ABBA repetitions only under idle conditions. 100 timings are diagnostic;
-formal timing acceptance remains idle-mdx-only. Reserve max(2 GiB,20%) of RTX
+formal timing acceptance remains idle-development/build host-only. Reserve max(2 GiB,20%) of RTX
 5000 device capacity, HDF5 for >2 GB interchange. A100 is not operated.
 
 ## Primary method references

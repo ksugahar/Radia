@@ -13,7 +13,7 @@
     "worktree_dirty": true,
     "full_result": "<private-path>/ffag_full_field_selected_real_iter1_20260825.json",
     "performance_measurement": "disabled",
-    "note": "Correctness and restart evidence only; repeat benchmark measurements on mdx or compute."
+    "note": "Correctness and restart evidence only; repeat benchmark measurements on historical_cpu_worker or compute."
   },
   "problem": {
     "element_family": "HEX",
@@ -81,7 +81,7 @@
     "selected_component_objective_improves": true,
     "selected_component_objective_is_inside_bands": false,
     "manufactured_inverse_gate_remains_the_exact_recovery_oracle": true,
-    "next_run": "Restart from the full result and continue multiple material iterations on mdx or compute after SSH recovers."
+    "next_run": "Restart from the full result and continue multiple material iterations on historical_cpu_worker or compute after SSH recovers."
   },
   "gates": {
     "coil_yoke_clearance": true,

@@ -42,7 +42,7 @@
     ]
   },
   "machines": {
-    "mdx": {
+    "historical_cpu_worker": {
       "cpu": "Intel(R) Xeon(R) Platinum 8368 CPU @ 2.40GHz",
       "physical_cores": 38,
       "logical_processors": 38,

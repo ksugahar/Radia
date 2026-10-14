@@ -20,7 +20,7 @@ This lane rebuilds the production Gram on the real asset and checks, in order:
    agree to ``--compression-tolerance`` of the M-scale (the separate compression-error evaluation).
 
 Any failed check exits non-zero.  Timings are recorded with the host name and are relative only unless
-the host is an idle mdx/compute-host.  Run::
+the host is an idle development/build host/compute-host.  Run::
 
     python validate_hex_gram_definiteness.py --assets-dir <dir with model.vol> --output results/hex_gram_definiteness_<host>.json
 """

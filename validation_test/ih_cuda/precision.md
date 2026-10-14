@@ -58,7 +58,7 @@ FP64-relative differences and physical CPU errors; requested and measured
 residuals; convergence/correction counts; input/source/binary hashes; versions;
 and failures. Only after full-model correctness, compare transfer-inclusive
 cold and warm whole-workflow time and memory on otherwise idle 100. Label 100
-measurements diagnostic, separately from formal idle-mdx acceptance. Include
+measurements diagnostic, separately from formal idle-development/build host acceptance. Include
 FP64 validation storage in memory budgeting and retain max(2 GiB,20%) free.
 For transfers above 2 GB use HDF5.
 

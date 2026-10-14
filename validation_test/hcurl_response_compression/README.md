@@ -305,7 +305,7 @@ can keep after eddy bubbles are removed.
 
 ## Compute-host curved and broadband validation
 
-The result-bearing sweeps below were run on `mdx`; the JSON files record the
+The result-bearing sweeps below were run on `historical_cpu_worker`; the JSON files record the
 host, runtime, NGSolve version, and wall time.  They supersede the desktop smoke
 numbers for paper claims.
 

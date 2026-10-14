@@ -173,11 +173,11 @@ with TaskManager():
 |---------|-------|-----------------|
 | validation runtime (Threadripper Pro) | 28 | 28 |
 | runtime host (multi-user)   | 16 | 16 (shared) |
-| mdx (compute node)     | 28-56 | 28-56 |
+| development/build host (compute node)     | 28-56 | 28-56 |
 | CI runner (GH Actions) | 4 | 4 |
 
 On runtime host (shared with other users), prefer `--nthreads 8` or `12` to
-avoid starving other users.  validation runtime and mdx: default is fine.
+avoid starving other users.  validation runtime and development/build host: default is fine.
 
 ## Reading the current thread cap
 

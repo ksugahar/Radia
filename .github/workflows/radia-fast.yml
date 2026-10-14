@@ -99,7 +99,7 @@ jobs:
           & $env:RADIA_FAST_PYTHON tools/audit_taskmanager.py
           exit $LASTEXITCODE
 
-      - name: Run mdx preflight contracts
+      - name: Run development/build host preflight contracts
         shell: pwsh
         run: |
           & $env:RADIA_FAST_PYTHON tools/audit_ci_no_system_install.py

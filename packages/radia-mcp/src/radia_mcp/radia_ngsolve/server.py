@@ -1460,7 +1460,7 @@ def matlab_acoustic_fembem_agent_guide() -> str:
     Use this when an agent needs to work on MATLAB acoustic FEM/BEM code while
     respecting the repository policy that MathWorks' official MATLAB MCP Server
     is the execution substrate.  The guide records the stack contract
-    (toolbox detection, Code Analyzer, MATLAB unit tests, and mdx fallback),
+    (toolbox detection, Code Analyzer, MATLAB unit tests, and development/build host fallback),
     plus lab-specific domain gates for `.vol` meshes, P1 FEM/BEM assembly,
     convolution quadrature conventions, and NGSolve / `ngsolve.bem`
     cross-validation.
@@ -1870,7 +1870,7 @@ def install_deploy(topic: str = "") -> str:
     Topics:
       overview     -- machine roles and installation model
       development  -- editable source and native-build rules
-      ci_compute   -- mdx CI and explicit validation workloads
+      ci_compute   -- development/build host CI and explicit validation workloads
       release      -- immutable numerical-solver release-quad artifact flow
       mcp_release  -- independent radia-mcp publish and validation runtime/100 release-dual
       cubit        -- independent Cubit plugin boundary

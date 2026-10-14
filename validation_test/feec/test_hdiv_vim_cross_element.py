@@ -22,7 +22,7 @@ analytic anchor for this method lives in the SEPARATE sphere check (external fie
 the exact point dipole, docs/hdiv_vim); THIS test locks element-INDEPENDENCE.
 
 Correctness only (numerical agreement), so it runs on LAB per the Benchmark Policy;
-timing lives in the mdx scaling study.
+timing lives in the historical_cpu_worker scaling study.
 """
 import json
 import platform

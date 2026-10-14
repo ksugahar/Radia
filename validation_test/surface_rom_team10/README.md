@@ -264,7 +264,7 @@ trajectory finishes with finite fields. See
 `results/sparsecholesky_smoke_20260929.json`. This does not establish p3
 memory capacity or reproduce the historical ROM accuracy/timing campaign.
 
-Heavy.  Run on compute-host (one job at a time) or on an idle mdx host.  The
+Heavy.  Run on compute-host (one job at a time) or on an idle development/build host host.  The
 selection run committed about 27 GB of private memory on worker-b.  That host has
 no pagefile (commit limit 57.4 GB), and a concurrent MATLAB session holding
 about 10 GB was enough to make it fail.

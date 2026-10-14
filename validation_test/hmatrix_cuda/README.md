@@ -61,7 +61,7 @@ construction, transfers, apply, recovery and release. It excludes geometry/FE
 assembly and is an operator-residency diagnostic only. The first-payload labels
 are after MATLAB/MEX initialization, not cold process/module startup.
 
-100 timing is diagnostic, not formal idle-mdx performance acceptance. Exact
+100 timing is diagnostic, not formal idle-historical_cpu_worker performance acceptance. Exact
 owned CUDA buffers, setup scratch and sampled free memory are distinguished;
 no host/process/global allocation peak is claimed. Allocation checks leave
 max(2 GiB, 20% device memory) free. A100 is never started or connected. The gateway rejects direct payloads over 2 GiB. The required HDF5 frontend is
@@ -84,7 +84,7 @@ operator, three applications, continuous packing/setup/transfers/recovery/releas
 median 7.718 ms rebuilding versus 3.696 ms resident (2.09x). Exact owned device
 buffers are 573312 bytes in both modes; no buffer-memory reduction is claimed.
 These times do not certify the latest artifact, a large physical problem, cold
-process startup or mdx performance. A later timing attempt was rejected by the
+process startup or historical_cpu_worker performance. A later timing attempt was rejected by the
 other-computation guard, so latest-artifact timing remains pending.
 
 `results/quadrature-sharing-20261012.json` verifies that the extracted shared
@@ -292,7 +292,7 @@ coefficient difference 1.126e-11 and independent true residual 9.729e-12.
 `measure_hdiv_assembly.py` compares the previous scalar-dense CUDA assembly
 with batched CUDA assembly using the same physical mesh and CPU reference.
 Its guarded ABBA timer includes FE setup, assembly, transfers, solve, result
-recovery and destruction. It is an idle-100 diagnostic, not formal mdx
+recovery and destruction. It is an idle-100 diagnostic, not formal historical_cpu_worker
 performance acceptance. First payloads are distinguished from cold processes;
 available-memory samples are not global peaks. General high-order/curved FE,
 images, constraints, nonlinear physics, large compressed-leaf validation and
@@ -398,7 +398,7 @@ solves on the user-started NGSolve A100. Warm medians (two samples) are
 12.73 ms / 34.34 ms for affine orders 1 / 2 and 1.752 s / 86.30 s for curved
 orders 1 / 2. Independent true residuals remain below 7.96e-12. These are
 A100 diagnostics with exact owned-buffer counters and available-memory samples,
-not CPU speedup, global memory peaks or idle-mdx acceptance. Initial idle/DLL
+not CPU speedup, global memory peaks or idle-historical_cpu_worker acceptance. Initial idle/DLL
 failures were retained privately. All 40 recovered job files were verified
 before deleting the isolated remote job; the host remains running. General
 adaptive high-order assembly, images, constraints, nonlinear material, broad
@@ -421,7 +421,7 @@ true residual 7.95e-12 for curved order 2 (288 DOFs, 160 charges).
 
 A100 transfer-inclusive whole-solve warm diagnostics are 86.4778011 s direct
 and 0.2696088 s cached, with one warm sample per mode, sequential rather than
-ABBA. These establish neither formal idle-mdx performance acceptance nor CPU
+ABBA. These establish neither formal idle-historical_cpu_worker performance acceptance nor CPU
 speedup. Exact accounted setup/combined peak rises from 450288 to 2286980 bytes;
 cache does not reduce memory. Available-memory samples exclude CUDA/cuBLAS,
 host and global peaks. First payloads share initialized modules, with owned

@@ -473,12 +473,11 @@ Record these quantities in validation and benchmark artifacts:
 - peak memory when available;
 - field source count, evaluator build time, observation count, selected
   direct/tree route, and direct-reference field error;
-- machine label (`validation runtime` smoke vs `compute host` validation or mdx fallback).
+- machine label (`validation runtime` smoke vs `compute host` validation or development/build host fallback).
 
 Small problems are allowed to be simply "interactive".  The scaling question
 matters at engineering size, where charge count and matrix build dominate.
-Timing claims should be taken on compute host first. Use mdx only when compute host is
-unavailable and the mdx CI runner and job queue are idle.
+Timing claims should be taken on the development/build host in an isolated job; local timings are diagnostic.
 
 ## HEX fill profile and the distorted-far dispatch (2026-08-09)
 
@@ -761,7 +760,7 @@ When a disagreement appears:
 3. Compare charge maps and field evaluation before nonlinear iteration.
 4. Check the same observable through two evaluators (`M_avg`, `rad.Fld`, probe
    grid, energy) before changing solver tolerances.
-5. Move heavy sweeps to compute host first, or to mdx only behind an idle CI queue,
+5. Move heavy sweeps to the development/build host in an isolated job,
    and label the result as validation, not validation runtime smoke.
 """
 
@@ -800,12 +799,10 @@ Open work:
 - differentiate the composite mapped-HEX BDM2 charge operator and lock its
   shape derivative against finite differences before topology optimization;
 - continue BDM1/BDM2 TET/HEX/WEDGE accuracy, memory, and timing measurements on
-  compute host first, with mdx as an idle-CI fallback;
-- continue charge-Gram H-matrix performance checks on compute host first, with mdx as
-  an idle-CI fallback;
+  the development/build host in an isolated job;
+- continue charge-Gram H-matrix performance checks on the development/build host in an isolated job;
 - run `validation_test/feec/bench_hdiv_field_evaluator_scaling.py` after a
-  normal release to measure public `rad.Fld` on compute host first or an idle-CI mdx
-  fallback;
+  normal release to measure public `rad.Fld` on the development/build host in an isolated job;
 - keep Cubit/GMSH mesh-export artifacts aligned with the HDiv API.
 - extend application-level force validation while keeping the existing
   curved motor Maxwell/volume/coenergy torque agreement green.

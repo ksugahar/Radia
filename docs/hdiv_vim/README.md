@@ -288,7 +288,7 @@ the large BDM2 cancellation.  WEDGE BDM2 uses the corresponding tri-P2 by
 z-P2 charge basis.
 
 The mapped-HEX production gate is recorded by
-`validate_mapped_hex_bdm2_production.py`.  On mdx its 756-DoF non-affine
+`validate_mapped_hex_bdm2_production.py`.  On historical_cpu_worker its 756-DoF non-affine
 trilinear body had generalized spectrum `[-8.53e-16, 0.999899]` with the
 q9/q12 default,
 linear and nonlinear solves converged, and the q9/q12 material response was
@@ -301,7 +301,7 @@ composite quadrature has a consistent differentiated form.
 The distinct true-curvature gate regenerates a four-HEX cylinder through
 Cubit 2025.12 with Netgen export order 2.  `check-vol` confirms all four cells
 are non-affine with mesh curve order 2 and minimum scaled Jacobian `0.33473`.
-On mdx, BDM2 has 396 DoF, the linear mass-Riesz CG solve converges in 19
+On historical_cpu_worker, BDM2 has 396 DoF, the linear mass-Riesz CG solve converges in 19
 iterations, the equivalent nonlinear Energy-Newton solve converges, and the
 prescribed-source `rad.Fld` agrees with an independent NGSolve boundary
 integral to `1.06e-10` maximum relative error.  The generated `.vol` remains
@@ -358,7 +358,7 @@ ellipse torque check showed no accuracy gain over BDM1/Q2.
 For a geometrically and topologically symmetric reduced/full hex pair, the
 persistent field evaluator must agree at the roundoff contract (`< 10 eps`
 relative error), not merely within a percent.  The mapped BDM2 prescribed-source
-gate is `2.75 eps` on mdx.  Two independently converged mass-Riesz CG material
+gate is `2.75 eps` on historical_cpu_worker.  Two independently converged mass-Riesz CG material
 solves currently agree to `3.28e-13` in the sampled field; that is a separate
 Krylov/reduction error budget and is not represented as a field-evaluator pass.
 
@@ -427,7 +427,7 @@ fields, while NumPy buffers replace Python lists at pybind boundaries. Hot
 block-cache counters remain opt-in so ordinary timing runs avoid per-entry
 atomic overhead.
 
-The first mdx cube timing sweep on 2026-07-08 reached structured-hex N=40
+The first historical_cpu_worker cube timing sweep on 2026-07-08 reached structured-hex N=40
 (`1.56M` HDiv DOF) in about `355 s` wall time and `116 s` H-matrix build time.
 The matching Netgen tet comparison showed that unstructured tet runs need a
 tighter ACA tolerance (`gram_eps=1e-8` to `1e-10`) to keep mass-Riesz CG near
@@ -447,7 +447,7 @@ PSD-preserving compression/certificate gate described in
 `HDiv-MMM_review.md` passes; use the explicitly capped exact-dense backend only
 for medium-mesh validation meanwhile.
 
-The 2026-07-09 mdx nonlinear energy-Newton preconditioner sweep showed why the
+The 2026-07-09 historical_cpu_worker nonlinear energy-Newton preconditioner sweep showed why the
 `auto` policy is element- and size-aware.  For structured hex, the tuned
 diagonal branch reduced N=16 from `247.8 s` to `33.7 s` and completed N=20 in
 `79.9 s`, with `M_avg_z` matching the mass-Riesz tuned result at the
@@ -457,7 +457,7 @@ For tet, exact mass-Riesz is still faster on small meshes (`maxh=0.20`,
 wins by `maxh=0.15` (`8193` DOF: `8.82 s` vs `13.21 s`).  The supporting JSON
 and CSV are stored under the manuscript `results/` directory as
 `hdiv_energy_newton_preconditioner_mdx_20260709_*`.  The cube benchmark
-drivers expose these timing defaults as `--nonlinear-profile mdx-scaling`
+drivers expose these timing defaults as `--nonlinear-profile study-scaling`
 (`nl_tol=3e-4`, `newton_continuation=2`, `newton_reuse_tangent_steps=3`,
 `preconditioner=auto`); the default `strict` profile keeps solver-regression
 settings.
@@ -475,9 +475,9 @@ N=4 solve matched `M_avg_z` to `3.2e-16` relative while cutting local H-matrix
 build from `2.14 s` to `0.315 s`.  The wedge charge-basis build now mirrors the
 hex fast path on linear prism meshes: Q2 lattice nodes are interpolated from
 mesh vertices, and the small L2/SurfaceL2-to-monomial transforms are cached and
-applied as sparse block transforms instead of solving per element.  On mdx this
+applied as sparse block transforms instead of solving per element.  On historical_cpu_worker this
 cut wedge N=12 basis construction from about `59 s` to `0.75 s`.  With both
-changes, mdx N=8/N=12 translation-cache A/B at `gram_eps=1e-8` moved from
+changes, historical_cpu_worker N=8/N=12 translation-cache A/B at `gram_eps=1e-8` moved from
 `12.0/44.2 s` to `2.52/6.59 s` wall time; H-matrix build moved from
 `9.31/34.84 s` to `1.04/2.34 s`, with relative `M_avg_z` drift
 `4.8e-13/2.5e-8`.  The follow-up apply/solve profile added optional
@@ -485,7 +485,7 @@ changes, mdx N=8/N=12 translation-cache A/B at `gram_eps=1e-8` moved from
 thread count inside HACApK leaf dgemv calls through
 `RADIA_HACAPK_MATVEC_MKL_THREADS` (default `1`) so TaskManager remains the
 outer parallel layer while PARDISO mass-Riesz solves can still use the process
-thread setting.  On mdx, the updated all/default wedge sweep reached N=20
+thread setting.  On historical_cpu_worker, the updated all/default wedge sweep reached N=20
 (`293.6k` HDiv DOF) in `25.3 s` wall time with `6.7 s` H-matrix build and
 `8.1 s` solve time; the charge-Gram H-matvec portion of that solve was
 `0.64 s`, leaving PARDISO mass-Riesz factor/apply as the next solve-side
@@ -513,7 +513,7 @@ universal default for all wedge geometries.
 
 Fast tests belong in `tests/`; heavier numerical checks belong in
 `validation_test/feec/` and JSON artifacts labelled with the actual validation
-host (`mdx` or `compute-host`).  Required HDiv gates:
+host (`development/build host` or `compute-host`).  Required HDiv gates:
 
 - analytic demag factors where available;
 - nonlinear BH convergence metadata;
@@ -530,8 +530,8 @@ host (`mdx` or `compute-host`).  Required HDiv gates:
 - BDM1/BDM2 flat/curved TET/HEX/WEDGE operator accuracy and cost, including
   mapped-HEX BDM2 spectrum, quadrature convergence, linear/nonlinear solve,
   IMA, and fail-loud shape-derivative gates, plus charge-Gram H-matrix build stats and
-  memory/timing on compute-host first, or on mdx only when compute-host is unavailable and
-  the mdx CI queue is idle, for large runs;
+  memory/timing on the development/build host; ensure
+  CI and user workloads remain isolated, for large runs;
 - 2D planar motor saliency checks for the motor lane.
 - reduced-motor torque agreement among Maxwell stress, magnetization-volume
   coupling, and fixed-current coenergy while reusing one charge Gram;

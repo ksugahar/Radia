@@ -4,7 +4,7 @@
   "distribution": "radia-gpu 0.1.1",
   "distribution_wheel_sha256": "558167e229b0208bedb04f7af34a4c442472709c84b0e3aa5f256da9b2b9a9fb",
   "execution_host_role": "100 build and numerical-validation host",
-  "timing_classification": "diagnostic; not formal idle-mdx performance acceptance",
+  "timing_classification": "diagnostic; not formal idle-historical_cpu_worker performance acceptance",
   "a100_started": false,
   "taskmanager_regions_enabled": false,
   "python_role": "independent CPU accuracy oracle, fixture generation and validation orchestration only",

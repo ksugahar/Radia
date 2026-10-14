@@ -57,7 +57,7 @@ crash recovery before changing full-checkpoint durability. Rustuna was not run.
 - Unchanged MEX SHA256:
   `f2bbd68bb3e427ddf75fdc0880d790cd24f44336b237812aba812927358f7c3e`.
 - Run `benchmark_optuna_storage_scaling(outputPath,true)` in a dedicated
-  Engine on an idle compute host. Use the authenticated mdx service context.
+  Engine on an idle compute host. Use the authenticated development/build host service context.
   The experimental service workflow is not a production workflow change.
 - The owned MATLAB Engine shut down; no python/MATLAB process remained on worker-b.
 - 76 pinned upstream-oracle tests passed locally, including repeated persisted

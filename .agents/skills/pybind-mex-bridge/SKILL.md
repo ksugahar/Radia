@@ -49,4 +49,4 @@ objects in MATLAB.
 Small deterministic regressions belong in `tests/`. Multi-mesh, scale,
 manufactured-solution, and published numerical evidence belongs in
 `validation_test/` with a versioned JSON result. Long MATLAB runs execute on
-HIBINO or mdx; routine CI checks the artifact contract and focused fast lane.
+the development/build host in an isolated job; routine CI checks the artifact contract and focused fast lane.

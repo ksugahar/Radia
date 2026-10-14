@@ -1,6 +1,6 @@
 """Compare identical AMS hierarchies with serial/OpenMP setup; always save JSON.
 
-100 timings are diagnostics. Formal performance acceptance requires idle mdx.
+100 timings are diagnostics. Formal performance acceptance requires idle development/build host.
 The explicit CPU-only option records transfer-inclusive timing as pending.
 """
 from __future__ import annotations
@@ -46,7 +46,7 @@ def main(args):
     build=json.loads((ROOT/'build-ams-cuda/build.json').read_text(encoding='utf-8'))
     record=dict(schema='radia.ams-setup-comparison.v1',accepted=False,
         host=socket.gethostname(),timing_classification='diagnostic; not formal performance acceptance',
-        formal_performance_acceptance='pending: requires idle mdx with a GPU',
+        formal_performance_acceptance='pending: requires idle gpu evaluation worker with a GPU',
         taskmanager_used=False,ngsolve_threads=1,**source_identity(ROOT),
         versions={p:md.version(p) for p in ('ngsolve','numpy','scipy','h5py')},
         build=build,

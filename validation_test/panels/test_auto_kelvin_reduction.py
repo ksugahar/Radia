@@ -22,7 +22,7 @@ Verifies (2026-04-25 regression guard):
   6. The .vol.json companion lists sym_bn=0_z / sym_ht=0_x with CAD
      areas.
 
-Runtime ~15 s on validation runtime.  Skipped when Cubit is absent (CI / mdx).
+Runtime ~15 s on validation runtime.  Skipped when Cubit is absent (CI / development/build host).
 """
 from __future__ import annotations
 

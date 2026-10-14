@@ -32,7 +32,7 @@ with the agent-facing guidance in `AGENTS.md` / `CLAUDE.md`.
 - Extend the current material model around the HDiv-VIM solve path.
 - Keep the Play-model and rate-dependent loss terms compatible with energy-based
   formulations where symmetry and solver robustness matter.
-- Record nonlinear benchmark claims under `validation_test/` with mdx timing
+- Record nonlinear benchmark claims under `validation_test/` with development/build host timing
   provenance when the run is heavy.
 
 ### Field Reconstruction For Beam And Motion Workflows

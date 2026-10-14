@@ -266,6 +266,6 @@
   },
   "follow_up": {
     "next_solver_target": "Investigate deterministic same-object factor diagnostics or private-output grouped low-rank applies; do not reintroduce per-leaf JIT or HDiv post-build QR+TSVD without a solve-level accuracy and timing win.",
-    "remote_measurement": "mdx and compute are available again; repeat after a formal build/release and PyPI installation, without copying a local pyd."
+    "remote_measurement": "historical_cpu_worker and compute are available again; repeat after a formal build/release and PyPI installation, without copying a local pyd."
   }
 }

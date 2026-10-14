@@ -45,7 +45,7 @@
   "release_accepted": false,
   "limitations": [
     "Undeformed affine tetra RT0 and linear isotropic material only.",
-    "Whole seconds is initial payload diagnostic on 100, not warm ABBA or formal mdx timing.",
+    "Whole seconds is initial payload diagnostic on 100, not warm ABBA or formal historical_cpu_worker timing.",
     "No global/runtime/host peak measured.",
     "A100 same-artifact acceptance of this new projection binary pending."
   ]

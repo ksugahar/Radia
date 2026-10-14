@@ -128,7 +128,7 @@ active compute process, and nonrecursive `Remove-Item -LiteralPath`.
 
 Audit scratch cleanup completed after durable recovery, hash verification, and
 evidence commit `d3b6e0e2a`. The remote verification/deletion receipts record
-25 files removed on compute-host and 5 on each mdx host. Transfer manifests and helper
+25 files removed on compute-host and 5 on each historical_cpu_worker host. Transfer manifests and helper
 scripts were also removed. Receipts were recovered, hash-verified, and removed
 remotely; the durable archive contains `recovery_verification.json` and each
 host's `recovery_receipt.json`.

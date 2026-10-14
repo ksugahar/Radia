@@ -38,7 +38,7 @@ entry points are needed.
 
 If the official MATLAB MCP tools are not available in the current agent session,
 say so and use the nearest safe fallback (`matlab -batch` or foreground SSH to
-mdx for long jobs). Do not silently pretend a MATLAB run happened.
+development/build host for long jobs). Do not silently pretend a MATLAB run happened.
 
 ## Default Workflow
 

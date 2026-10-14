@@ -39,6 +39,7 @@ jobs:
     # for diagnosis without chasing the next cliff.
 
     env:
+      RADIA_VALIDATION_HOST_ROLE: cpu_validation
       # Was hardcoded 'Cubit 2025.3\bin' until 2026-05-25. Build.ps1 and
       # cubit_plugin scripts now auto-discover the available installation
       # via tools/find_cubit.ps1, so this env var is informational. Set
@@ -114,14 +115,14 @@ jobs:
       # ----------------------------------------------------------------
       # Guard: a self-hosted job must NOT pip-install a Radia package into its
       # persistent system Python. The static audit keeps the source checkout
-      # isolated from the mdx service host.
+      # isolated from the development/build host service host.
       # ----------------------------------------------------------------
       - name: Audit -- no Radia installs into persistent system Python
         shell: pwsh
         run: python tools/audit_ci_no_system_install.py
 
       # ----------------------------------------------------------------
-      # Isolate NGSolve/Netgen from the mdx service Python. Other development
+      # Isolate NGSolve/Netgen from the development/build host service Python. Other development
       # tasks may legitimately install an older Radia release and therefore
       # change the shared NGSolve ABI while CI is queued. Building
       # against one header set and testing against another produces a valid-
@@ -422,7 +423,7 @@ jobs:
             Write-Host "Manual validation gate -- excluding @pytest.mark.slow tests. Use full_slow=true for the full validation set."
           } else {
             $markerExpr = 'not compute_host'
-            Write-Host "Manual full validation gate -- running validation_test including slow tests; compute_host tests remain mdx/hibino-only."
+            Write-Host "Manual full validation gate -- running validation_test including slow tests; compute_host tests remain development/build host/hibino-only."
           }
           if ($markerExpr) { $pytestArgs += @('-m', $markerExpr) }
           python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log"
@@ -485,7 +486,7 @@ jobs:
             } elseif (Test-Path $logPath) {
               # No junit XML -- pytest likely crashed.  Surface the
               # tail of the stdout log so the failing test is at least
-              # in the workflow log (the mdx worker log is a fallback).
+              # in the workflow log (the development/build host worker log is a fallback).
               Write-Host "::error::[$label] pytest crashed without writing junit XML -- last 30 stdout lines:"
               Get-Content $logPath -Tail 30 | ForEach-Object { Write-Host "  $_" }
             }
@@ -497,7 +498,7 @@ jobs:
       # ----------------------------------------------------------------
       # L2 (2026-05-30): Archive junit + stdout to a per-SHA folder on
       # the self-hosted runner.  This makes historical CI data live on
-      # mdx disk (not just GitHub artifact storage), so we can later
+      # development/build host disk (not just GitHub artifact storage), so we can later
       # `grep` C:\actions-runner\test-history\<sha>\ without hitting
       # the 60-req/hour unauthenticated GitHub API rate limit.
       # ----------------------------------------------------------------

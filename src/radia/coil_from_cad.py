@@ -4290,7 +4290,7 @@ def _section_faces_from_solid(solid, cad_units_per_meter: float,
     # face centroid jump between cap_a (station 0) and the first
     # interior station is much larger than the typical interior
     # station-to-station spacing.  Detect this and surface a hint
-    # instead of producing silently-wrong filaments (keiko / mdx
+    # instead of producing silently-wrong filaments (keiko / historical_cpu_worker
     # 2026-05-11 report: 'Gmsh にリードが表示されない / filament も
     # リードの形状に追随されてない').
     if (cap_a_face is not None and cap_b_face is not None
@@ -4328,7 +4328,7 @@ def _section_faces_from_solid(solid, cad_units_per_meter: float,
                         f"vertex='inner' or 'outer' loft orientation "
                         f"(see gen_*_loft.py -- the vertex=None "
                         f"default produces twisted lateral surfaces "
-                        f"that confuse the tracer; keiko/mdx case), "
+                        f"that confuse the tracer; keiko/historical_cpu_worker case), "
                         f"or (b) use a Cubit-meshed .vol with "
                         f"--coil-solver bem-a (BEM-A consumes the "
                         f"surface mesh directly and does not need "

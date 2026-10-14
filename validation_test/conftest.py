@@ -44,19 +44,20 @@ SLOW_NODEIDS = _load_slow_nodeids()
 
 
 def _is_compute_host():
-    import platform
+    import os
 
-    node = platform.node().lower().split(".", 1)[0]
-    return node.startswith(("mdx", "hibino"))
+    return os.environ.get("RADIA_VALIDATION_HOST_ROLE") in {
+        "cpu_validation", "gpu_evaluation"
+    }
 
 
 def pytest_collection_modifyitems(config, items):
-    """Mark validation tests and keep compute-only jobs on mdx/hibino."""
+    """Mark validation tests and require an explicit isolated validation job role."""
     import pytest
     from tests.conftest import pytest_collection_modifyitems as _root_modify
 
     _root_modify(config, items)
-    compute_skip = pytest.mark.skip(reason="compute_host validation runs only on mdx or hibino")
+    compute_skip = pytest.mark.skip(reason="compute_host validation requires RADIA_VALIDATION_HOST_ROLE=cpu_validation or gpu_evaluation")
     for item in items:
         nodeid = item.nodeid.replace("\\", "/")
         item.add_marker(pytest.mark.validation)

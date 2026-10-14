@@ -1,6 +1,6 @@
 # Mixed Omega quadrature re-solves
 
-Run this heavy validation on mdx or compute-host, not as part of fast CI. This lane
+Run this heavy validation on development/build host or compute-host, not as part of fast CI. This lane
 does not grant #6 or three-engine field acceptance. No p=4 run is needed.
 It uses the production mixed solver, requests the assembled system explicitly,
 and solves again for every assembly bonus and response order. The source Hodge

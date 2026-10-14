@@ -69,14 +69,14 @@ python tools/ci_preflight.py --validation --full
 ```
 
 Tests marked `compute_host` are solver-heavy and are skipped unless the actual
-hostname is `mdx` or `compute-host`. Run them over SSH on compute-host first:
+hostname is `development/build host` or `compute-host`. Run on the development/build host with an explicit isolated CPU job role:
 
 ```powershell
-ssh compute-host python -m pytest validation_test/ -m compute_host -q
+$env:RADIA_VALIDATION_HOST_ROLE="cpu_validation"
+python -m pytest validation_test/ -m compute_host -q
 ```
 
-Use mdx only when compute-host is unavailable and the mdx CI runner and job queue are
-idle. A validation job must never delay CI or preflight.
+Run CPU validation on the development/build host in an isolated job. A validation job must never delay CI or preflight.
 
 Manual scripts:
 

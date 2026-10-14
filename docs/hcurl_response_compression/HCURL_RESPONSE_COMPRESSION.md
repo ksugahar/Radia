@@ -819,7 +819,7 @@ reconstructed fields, port response, and Joule loss now agree simultaneously.
 
 ### 6.2 Local ESIM-SIBC Broadband Gate
 
-`validation_test/hcurl_response_compression/evrs_esim_sibc_mixed_notched_p6.json` is the mdx record
+`validation_test/hcurl_response_compression/evrs_esim_sibc_mixed_notched_p6.json` is the historical_cpu_worker record
 for the p=6 notched conductor at 1 kHz, 10 kHz, 100 kHz, and 1 MHz.  It couples
 the topology-aware 25-mode EVRS/bridge/surface model to the nonlinear ESIM cell
 and iterates the local surface Gram to a relative impedance tolerance of
@@ -842,13 +842,13 @@ is valuable in the high-frequency SIBC branch.  The uniform-to-local difference
 isolates the smaller but systematic error caused by averaging a nonlinear
 surface impedance.  At depth 8, response construction took `0.368 s`, VIM and
 HACApK assembly took `2.026 s`, and the retained dense blocks occupy 20,000
-bytes on the recorded mdx run.
+bytes on the recorded historical_cpu_worker run.
 
 ### 6.3 p=6 Cell-Family and Curved-Geometry Gate
 
 `validation_test/hcurl_response_compression/hcurl_p6_cell_family_matrixfree.py` applies the same
 native COCR solve to every NGSolve HCurl cell family and a P2-curved tetrahedral
-mesh.  The mdx record is:
+mesh.  The historical_cpu_worker record is:
 
 | cell | parent DoF | polynomial degree | projection residual | compressed / original scalar charges |
 |---|---:|---:|---:|---:|

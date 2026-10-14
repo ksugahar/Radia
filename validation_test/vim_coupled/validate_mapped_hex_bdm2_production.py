@@ -1,8 +1,7 @@
 """Production validation for mapped/non-affine HEX BDM2 HDiv-VIM.
 
 This is intentionally a validation_test workload. Its two dense Gram builds,
-linear/nonlinear solves, and full/reduced IMA comparisons run on compute-host first,
-or on mdx only behind an idle CI queue, not in the lightweight CI test suite.
+linear/nonlinear solves, and full/reduced IMA comparisons run on the development/build host in an isolated job, not in the lightweight CI test suite.
 """
 
 from __future__ import annotations

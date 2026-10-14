@@ -1409,9 +1409,9 @@ alongside `radia` v4.86.0:
 
 Released 2026-05-26.
 
-User directive: "残課題をクリアしてからpypi公開＋development hostとmdxにデプロイ
+User directive: "残課題をクリアしてからpypi公開＋development hostとhistorical_cpu_workerにデプロイ
 だね。" (clear the 3 residual paper-writing gaps then PyPI publish +
-deploy to development host/mdx).
+deploy to development host/historical_cpu_worker).
 
 Closes 3 known gaps that surfaced during v0.92.0 selftest review:
 

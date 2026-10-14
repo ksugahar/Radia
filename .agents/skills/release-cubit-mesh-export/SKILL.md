@@ -8,7 +8,7 @@ description: Release and LAB/100 release-dual deployment of cubit-mesh-export (v
 cubit-mesh-export releases independently of Radia. Its deployment is the
 LAB/100 **release-dual** (`tools/release_cubit_dual.py`); the Radia solver
 release-quad must not install, repoint or gate it. Never install or run Cubit
-on mdx. mdx is used only for computation-time evaluation.
+on GPU evaluation workers; they consume checked .vol artifacts without Cubit.
 Distribution acceptance and pre-push contracts run on LAB with Cubit 2026.8.
 
 ## Hosts (check `hostname` first)

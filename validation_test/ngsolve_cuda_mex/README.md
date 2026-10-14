@@ -64,7 +64,7 @@ recomputed true residual <= 1e-6, and the GPU solution must agree with the
 direct reference to relative vector L2 <= 1e-8. The direct factorization and
 reuse times are reported separately. Small 100 acceptance cases establish
 operation, not peak GPU speed or A100 scaling; unfavorable speed results must
-remain visible. Large measurements belong on the coordinated mdx/A100 host.
+remain visible. Large measurements belong on the coordinated gpu evaluation worker/A100 host.
 
 Official references:
 - [MathWorks CUDA MEX](https://www.mathworks.com/help/parallel-computing/run-mex-functions-containing-cuda-code.html)

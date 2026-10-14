@@ -1,7 +1,7 @@
 """rad.Fld batch parallel scaling -- regression guard for the allocation-free per-triangle field.
 
 Background (2026-07-04): rad.Fld's obs-point batch (radTApplication::ComputeFieldBatch, an
-ngcore::ParallelFor over points) used to SLOW DOWN with threads (0.4x at 38 cores on idle mdx) because
+ngcore::ParallelFor over points) used to SLOW DOWN with threads (0.4x at 38 cores on idle historical_cpu_worker) because
 the per-triangle field RadFieldFromTriangleFaceGlobal allocated EIGHT std::vectors + ran a NESTED
 ngcore::ParallelFor per call (thousands of calls per observation point) -> Windows CRT heap-lock
 contention.  Delegating it to the allocation-free RadFieldFromTriangleFaceWithBasis (the closed form the
@@ -9,7 +9,7 @@ HACApK path already used, which scales) fixed it: single-thread ~3x faster AND ~
 A RegionTaskManager self-wrap in the batch entry makes a BARE rad.Fld (no caller `with TaskManager()`)
 run parallel too.
 
-RUN ON compute-host first per the Benchmark Policy; use mdx only when compute-host is unavailable and its CI queue is idle.
+RUN ON the development/build host with isolated workloads; local timings are diagnostic.
 Timing must not be measured on the codex-contended validation runtime.
 Isolated env: PYTHONPATH -> a HEAD src/radia copy over the system Python; MKL/OMP=1 so TaskManager owns
 the swept parallelism.  Writes results_radfld_parallel_scaling.json next to this file.

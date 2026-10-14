@@ -24,7 +24,7 @@
   "remaining": [
     "CPU wheel/source archive boundary verification",
     "full integration CI on final source commit",
-    "mdx NGSolve final accuracy and A100 GPU execution/timing",
+    "gpu_evaluation_worker NGSolve final accuracy and A100 GPU execution/timing",
     "PyPI prerelease publication and independent review before stable release"
   ],
   "pypi_published": false

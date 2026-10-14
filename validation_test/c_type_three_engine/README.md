@@ -90,8 +90,7 @@ change, tolerance, and iteration limit for every engine. Pairwise agreement is
 not a pass when any engine is unconverged. Use `--nonlinear-verbose` for remote
 progress logs.
 
-Heavy nonlinear runs belong on compute-host first, with mdx allowed only when compute-host
-is unavailable and its CI queue is idle. The mesh build remains a
+Heavy nonlinear runs belong on the development/build host in an isolated job. The mesh build remains a
 foreground Cubit job, and the solver run remains a foreground Python job so a
 result cannot be mistaken for a completed validation while a detached process
 is still running.
@@ -115,7 +114,7 @@ python validation_test/c_type_three_engine/run_mesh_convergence.py `
 
 The independent-host result is mandatory. Its mesh, software version,
 implementation hashes, comparison contract, and observation points must match
-the mdx finest result. The certificate bounds discretization and
+the historical_cpu_worker finest result. The certificate bounds discretization and
 cross-formulation spread; it does not rename their agreement as an unavailable
 analytic solution.
 
@@ -154,7 +153,7 @@ with its portable level artifacts:
 - finest all-pair gap-core RMS: `0.27714%`;
 - maximum discretisation uncertainty: `0.17601%`;
 - conservative combined numerical envelope: `0.35399%`;
-- mdx/compute host independent-host replay: `5.25e-14` relative RMS.
+- historical_cpu_worker/compute host independent-host replay: `5.25e-14` relative RMS.
 
 All certificate checks pass for `radia 4.95.77`, including nonlinear
 convergence, mesh contraction, cross-formulation agreement, and independent
@@ -249,7 +248,7 @@ All three pass the exact reflection, periodic Kelvin (462 pairs, trace ratio
 ### The direct reduced-A solve, and why N=24 first failed
 
 The first attempts at the family stopped in PARDISO: N=6 order 3 and N=12
-order 2 exhausted the 57 GB of mdx at about 1.5 M HCurl unknowns, and N=24
+order 2 exhausted the 57 GB of historical_cpu_worker at about 1.5 M HCurl unknowns, and N=24
 order 1 (4.1 M) exhausted the 220 GB of compute-host.  The iterative routes do not
 apply (AMS is refused on periodic Kelvin HCurl; BDDC at order 1 keeps every
 edge in the coarse space).  The cause was the pip NGSolve PARDISO wrapper:
@@ -287,7 +286,7 @@ source is `4.95.91`), linear, HDiv BDM2, direct reduced-A with METIS,
 | N=6 | 2 | 0.092% | 0.117% | 0.051% | 544,793 |
 | N=12 | 2 | 0.088% | 0.107% | 0.035% | 2,732,075 |
 
-(`results/compute-host_20260912_gap_family_*_metis.json`; the `mdx*_20260911_*`
+(`results/compute-host_20260912_gap_family_*_metis.json`; the `historical_cpu_worker*_20260911_*`
 and `compute-host_20260912_*_order{1,2}.json` files without `_metis` are the
 same levels on the shipped solver, identical fields to 4e-14.)
 

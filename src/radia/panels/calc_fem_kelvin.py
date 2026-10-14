@@ -908,7 +908,7 @@ def solve_fem(vol_file="", fes_order=1,
             # everywhere — physics broken, downstream P_total / L /
             # q_surf all evaluate to 0.  Detect this case and refuse
             # rather than emit silently-wrong numbers.
-            # (kubota mdx report 2026-05-12: 3turnCoil_work, no
+            # (kubota historical_cpu_worker report 2026-05-12: 3turnCoil_work, no
             # Kelvin, SIBC workpiece; iters=0, all stats zero.)
             import numpy as _np
             sol_norm = float(_np.linalg.norm(

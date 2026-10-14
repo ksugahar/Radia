@@ -56,7 +56,7 @@
     "scope": "Distribution/public evidence/TaskManager/privacy; does not certify CUDA numerical correctness"
   },
   "next_action": "On idle 100: rebuild current clean source, run lifecycle and small CPU parity, then ABBA scaling; save public JSON and private raw evidence.",
-  "timing_classification": "100 diagnostic only; formal idle-mdx GPU performance acceptance remains unavailable",
+  "timing_classification": "100 diagnostic only; formal idle-historical_cpu_worker GPU performance acceptance remains unavailable",
   "migration_status": {
     "state": "source-development-not-built",
     "scope": "Shared analytic/high-order/curved formulas, versioned MATLAB element creation and GPU upload, and independent element-family validation wiring; builds and numerical acceptance still pending",
@@ -79,5 +79,5 @@
   "latest_precision_evidence": "elements-projection-precision-20261012.json",
   "historical_fields_note": "Initial build and migration fields below retain their original checkpoint provenance; latest precision evidence supersedes old unbuilt status.",
   "latest_timing_evidence": "projection-abba-20261012.json",
-  "timing_note": "Small idle-100 diagnostic complete; not formal mdx acceptance. Earlier socket CIM load was contradicted by per-logical-CPU/process probes. Larger scaling and whole-application acceptance remain pending."
+  "timing_note": "Small idle-100 diagnostic complete; not formal historical_cpu_worker acceptance. Earlier socket CIM load was contradicted by per-logical-CPU/process probes. Larger scaling and whole-application acceptance remain pending."
 }

@@ -1016,7 +1016,7 @@ def progress(tag, msg):
     short uppercase identifiers.
 
     History (2026-05-23): historically this only wrote to stderr.
-    Keiko's 27-minute BEM-A + BEM run on mdx finished cleanly but the
+    Keiko's 27-minute BEM-A + BEM run on historical_cpu_worker finished cleanly but the
     panel log file had ZERO intermediate progress lines between start
     and end.  For long runs the user had no post-hoc record of WHERE
     the time was spent.  Mirror every ``progress()`` call to

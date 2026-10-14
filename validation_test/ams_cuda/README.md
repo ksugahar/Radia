@@ -282,7 +282,7 @@ Run on 100 for numerical acceptance and diagnostics:
 python validation_test/ams_cuda/setup_benchmark.py --out "$env:TEMP/ams-setup-run" --maxh 0.08 --setup-threads 4 --rounds 2
 ```
 
-Formal performance acceptance requires an idle GPU-capable mdx. A CPU-only
+Formal performance acceptance requires an idle GPU-capable gpu evaluation worker. A CPU-only
 run uses `--cpu-only` and leaves GPU/transfer timing pending. Never start A100
 to satisfy this benchmark. Each run writes `result.json`, including failures.
 
@@ -429,7 +429,7 @@ benchmark admission estimate is 9.34 GiB; the native setup owned peak and
 approximately 2.27 GiB resident pipeline allocation describe separate phases.
 The latter counters are not whole-process peak memory. One attempt interrupted
 by another numerical job was excluded and restarted with between-call idle
-checks. A100 was not used. Formal idle-mdx performance acceptance remains
+checks. A100 was not used. Formal idle-gpu evaluation worker performance acceptance remains
 pending; these 100-host results are diagnostics. Full samples and provenance:
 [scaling JSON](results/scaling-0.1.1-20261012.json).
 

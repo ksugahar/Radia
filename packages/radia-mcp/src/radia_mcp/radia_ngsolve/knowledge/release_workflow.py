@@ -221,7 +221,7 @@ python tools/ci_preflight.py --validation           # validation collect-only
 python tools/ci_preflight.py --full --validation    # run validation_test/
 ```
 
-Routine CI mirrors this separation: mdx owns the fast repository lane,
+Routine CI mirrors this separation: development/build host owns the fast repository lane,
 `radia-mcp` uses its change selector, and native/release validation is manual or
 tag-scoped. A release candidate advances only after its selected gates pass for
 the exact candidate SHA; a tag must not repeat unrelated package matrices.

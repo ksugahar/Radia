@@ -13,7 +13,7 @@ One HDiv-MMM solve is shared by all orbits.  Momentum-family orbits are
 nearly degenerate for this short weak magnet (sagitta ~0.1 mm), so the
 family is spanned by entrance offsets instead.
 
-Usage (validation runtime smoke; heavy sweeps use compute-host first or an idle-CI mdx fallback):
+Usage (validation runtime smoke; heavy sweeps use the development/build host in an isolated job):
   python validation_canonical_hcurl_multiorbit.py --orbit-offsets-mm -8 -4 0 4 8
 """
 

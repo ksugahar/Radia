@@ -3401,7 +3401,7 @@
     "validation_fix_commit": "fe872fdca",
     "baseline": "Original accepted native MEX, unchanged. Both variants use the same new reuse wrapper."
   },
-  "formal_host_authorization": "User explicitly selected NGSolve(A100) for GPU performance; not relabeled mdx timing.",
+  "formal_host_authorization": "User explicitly selected NGSolve(A100) for GPU performance; not relabeled gpu_evaluation_worker timing.",
   "limitations": [
     "Bounded affine homogeneous lowest-order HCurl cube, 5326 DOF / 3937 tetrahedra; not high-order/curved/general-material acceptance.",
     "Two ABBA cycles, 4 contexts per variant; nonlinear/linear whole-API times include transfers and output recovery, exclude MATLAB/GPU initialization, fixture loading and result serialization.",

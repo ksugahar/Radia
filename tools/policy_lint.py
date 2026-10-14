@@ -25,6 +25,7 @@ Policies (see CLAUDE.md):
 from __future__ import annotations
 
 import os
+import hashlib
 import json
 import re
 import subprocess
@@ -480,7 +481,6 @@ def public_runtime_identity_hits(path, content):
     return hits
 
 BARE_MDX = re.compile(r"(?i)(?<![A-Za-z0-9_])mdx(?![A-Za-z0-9_])")  # no backslashes: _sh passes it through a shell
-BARE_MDX_BASELINE = "tools/policy_lint_bare_mdx_baseline.json"
 
 def _bare_mdx_notebook_lines(path):
     """Matching notebook lines, excluding encoded payload lines (bytes, not prose)."""
@@ -501,25 +501,124 @@ def _bare_mdx_notebook_lines(path):
             count += 1
     return count
 
-def check_bare_mdx_growth():
-    """Reject new bare 'mdx' host mentions; existing ones wait for history-rewrite redaction."""
-    # A missing baseline is empty (strict), so deleting it cannot disable the check.
-    path = os.path.join(REPO, BARE_MDX_BASELINE)
-    baseline = {}
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as source:
-            baseline = json.load(source)["counts"]
-    current = {}
-    for record in _git_grep(BARE_MDX.pattern, [], extra=("-P", "-I", "-c")):
-        path, count = record.rsplit(":", 1)
-        if path == BARE_MDX_BASELINE:
+BARE_MDX_ALLOWED_CONTEXTS = {'packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib': [{'reason': 'Public academic '
+                                                                                  'cloud service '
+                                                                                  'keyword, '
+                                                                                  'fictional grant '
+                                                                                  'fixture, or '
+                                                                                  'verified '
+                                                                                  'bibliographic '
+                                                                                  'title.',
+                                                                        'sha256': '5bc200b589e209edf34c52a19febbcb70aa7d31112b42bd3cff4fcf5aef5bfaf'}],
+ 'packages/radia-mcp/src/radia_mcp/grant_writing/skill.md': [{'reason': 'Public academic cloud '
+                                                                        'service keyword, '
+                                                                        'fictional grant fixture, '
+                                                                        'or verified bibliographic '
+                                                                        'title.',
+                                                              'sha256': '435209da82c988c461131e32fe13e53fb46fd1384c8da63041737164762650bf'}],
+ 'packages/radia-mcp/src/radia_mcp/grant_writing/tools.py': [{'reason': 'Public academic cloud '
+                                                                        'service keyword, '
+                                                                        'fictional grant fixture, '
+                                                                        'or verified bibliographic '
+                                                                        'title.',
+                                                              'sha256': 'e5f7101646237f6a8609cc2c931c10a50539056a971edb6ec4a5666b604efa20'},
+                                                             {'reason': 'Public academic cloud '
+                                                                        'service keyword, '
+                                                                        'fictional grant fixture, '
+                                                                        'or verified bibliographic '
+                                                                        'title.',
+                                                              'sha256': '522ac0cef71e45d794ba4cdc11411def55c3645e7da6c96da21595ab4724ae03'},
+                                                             {'reason': 'Public academic cloud '
+                                                                        'service keyword, '
+                                                                        'fictional grant fixture, '
+                                                                        'or verified bibliographic '
+                                                                        'title.',
+                                                              'sha256': 'a3591beaea192ec32edd49c57a5bf1b970a046fa11ac584169490bbbcf8178a0'},
+                                                             {'reason': 'Public academic cloud '
+                                                                        'service keyword, '
+                                                                        'fictional grant fixture, '
+                                                                        'or verified bibliographic '
+                                                                        'title.',
+                                                              'sha256': '9865fd4548fe4ff144610326e51726ef296cb58df07f4edb7970c50a7b4f2eed'},
+                                                             {'reason': 'Public academic cloud '
+                                                                        'service keyword, '
+                                                                        'fictional grant fixture, '
+                                                                        'or verified bibliographic '
+                                                                        'title.',
+                                                              'sha256': 'a2ac794efa76fd97c031df56341eef4f57bee630dae40411c9d122801676e904'},
+                                                             {'reason': 'Public academic cloud '
+                                                                        'service keyword, '
+                                                                        'fictional grant fixture, '
+                                                                        'or verified bibliographic '
+                                                                        'title.',
+                                                              'sha256': '2200b0baf3a67a6479e093663da635e0d3b663e32403829bb6054884219e4275'},
+                                                             {'reason': 'Public academic cloud '
+                                                                        'service keyword, '
+                                                                        'fictional grant fixture, '
+                                                                        'or verified bibliographic '
+                                                                        'title.',
+                                                              'sha256': 'b7e9071b1df8ca653df274580cbd20071feb8bf91a8267a29f65e34b144907a0'}],
+ 'packages/radia-mcp/tests/test_grant_writing.py': [{'reason': 'Public academic cloud service '
+                                                               'keyword, fictional grant fixture, '
+                                                               'or verified bibliographic title.',
+                                                     'sha256': 'e2ea042b5784866ad6883ca1497bed8f27b07597525c45ed12c1a9310a9ecaa8'},
+                                                    {'reason': 'Public academic cloud service '
+                                                               'keyword, fictional grant fixture, '
+                                                               'or verified bibliographic title.',
+                                                     'sha256': '0033e8e7240705788311033bc1f5a010d0b9079dab5d7eb54b5bc5ccf49e17a1'},
+                                                    {'reason': 'Public academic cloud service '
+                                                               'keyword, fictional grant fixture, '
+                                                               'or verified bibliographic title.',
+                                                     'sha256': '1c573b0cf4e6461568fea2e9de86a66bea7156e30532619b82132d8c714e63c0'},
+                                                    {'reason': 'Public academic cloud service '
+                                                               'keyword, fictional grant fixture, '
+                                                               'or verified bibliographic title.',
+                                                     'sha256': '6f0b3feef20aaff84758e8032b96f3c038ff1c6fd3e913a2ebe4662bbdf28a25'},
+                                                    {'reason': 'Public academic cloud service '
+                                                               'keyword, fictional grant fixture, '
+                                                               'or verified bibliographic title.',
+                                                     'sha256': '8f3f1df6aa1da4727e357e97f6b81a6eb90f3acee6735bff6d9749321cc0cd62'}],
+ 'tools/policy_lint.py': [{'reason': 'Detection regex declaration must spell the forbidden token.',
+                           'sha256': 'c75cbd21a1492d8132af31dd136dce35d66d5d5915548eac1b1dd4a4ad607681'},
+                          {'reason': 'Detection regex declaration must spell the forbidden token.',
+                           'sha256': 'bba352ba873461f501afabc3428560a45d7dc740f15500a7f7d396adb0832321'}]}
+
+def bare_private_host_lines(path, content):
+    """Reject private host labels; permit only reviewed exact service contexts."""
+    allowed = {entry["sha256"] for entry in BARE_MDX_ALLOWED_CONTEXTS.get(path, ())}
+    payloads = set()
+    if path.endswith(".ipynb"):
+        try:
+            payloads = {text for _, _, text in notebook_binary_payloads(json.loads(content))}
+        except ValueError:
+            pass
+    hits = []
+    for number, original in enumerate(content.splitlines(), 1):
+        line = original
+        for payload in payloads:
+            if payload:
+                line = line.replace(payload, "")
+        if not BARE_MDX.search(line):
             continue
-        if path.endswith(".ipynb"):
-            count = _bare_mdx_notebook_lines(path)
-        if int(count):
-            current[path] = int(count)
-    return [f"{path}: bare 'mdx' host mention ({count} > baseline {baseline.get(path, 0)}); use a neutral role"
-            for path, count in sorted(current.items()) if count > baseline.get(path, 0)]
+        context = hashlib.sha256(original.strip().encode("utf-8")).hexdigest()
+        if context not in allowed:
+            hits.append(f"{path}:{number}: private host identifier; use a neutral role")
+    return hits
+
+
+def check_bare_mdx_growth():
+    """Strict semantic scan; no historical baseline can waive a violation."""
+    hits = []
+    candidates = set()
+    for record in _git_grep(BARE_MDX.pattern, [], extra=("-P", "-I")):
+        candidates.add(record.split(":", 1)[0])
+    for path in sorted(candidates):
+        file = os.path.join(REPO, path)
+        if os.path.isfile(file):
+            with open(file, encoding="utf-8") as source:
+                hits.extend(bare_private_host_lines(path, source.read()))
+    return hits
+
 
 def check_public_runtime_privacy():
     candidates = set()
@@ -530,7 +629,7 @@ def check_public_runtime_privacy():
                       if _identifying_runtime_filename(path) or path.endswith((".json", ".ipynb", ".xml")))
     hits = []
     for path in sorted(candidates):
-        if path not in PUBLIC_RUNTIME_OPERATIONAL_ALLOW:
+        if path not in PUBLIC_RUNTIME_OPERATIONAL_ALLOW and os.path.isfile(os.path.join(REPO, path)):
             with open(os.path.join(REPO, path), encoding="utf-8") as source:
                 hits.extend(public_runtime_identity_hits(path, source.read()))
     hits.extend(check_bare_mdx_growth())

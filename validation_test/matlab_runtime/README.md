@@ -42,6 +42,6 @@ and all raw samples are retained separately. This does not demonstrate a 65%
 reduction in solver runtime, and these timings are not a universal CI limit.
 
 The runtime tests live in `tests/matlab/test_mex_runtime_setup.m`. The existing
-mdx SparseSolv MEX lane runs them alongside numerical AMS parity, including on
+development/build host SparseSolv MEX lane runs them alongside numerical AMS parity, including on
 changes to the shared setup/gateway files. Benchmark timing is not run in
 normal CI. Original shared WIP remains preserved, not overwritten or deleted.

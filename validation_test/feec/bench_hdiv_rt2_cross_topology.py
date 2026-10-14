@@ -1,6 +1,6 @@
 """Compare RT2 TET/HEX/WEDGE at approximately 29k HDiv DoF.
 
-Run one topology per process on hibino first, or on mdx only when hibino is
+Run one topology per process on the development/build host; ensure the job is
 unavailable and its CI queue is idle. All cases use the
 same unit cube and solver settings.  ``--curve-order 2`` exercises each Q2
 geometry path on an affine cube, isolating implementation cost from CAD shape
@@ -13,6 +13,7 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import os
 import platform
 import time
 
@@ -49,9 +50,9 @@ def _jsonable(value):
 def _require_compute_host() -> str:
     hostname = platform.node()
     short = hostname.lower().split(".", 1)[0]
-    if short not in {"mdx", "hibino"}:
+    if os.environ.get("RADIA_VALIDATION_HOST_ROLE") != "cpu_validation":
         raise SystemExit(
-            "bench_hdiv_rt2_cross_topology.py must run on mdx or hibino; "
+            "bench_hdiv_rt2_cross_topology.py requires RADIA_VALIDATION_HOST_ROLE=cpu_validation; "
             f"got {hostname!r}")
     return hostname
 

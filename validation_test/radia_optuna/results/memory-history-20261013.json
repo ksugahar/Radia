@@ -59,7 +59,7 @@
   },
   "excluded_attempts": [
     {
-      "host_role": "historical-mdx-timing",
+      "host_role": "historical-historical_cpu_worker-timing",
       "reason": "Independent numerical job appeared after idle preflight; benchmark stopped and no timings adopted.",
       "recovery_files_verified": 486,
       "scratch_deleted": true

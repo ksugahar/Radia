@@ -9,7 +9,7 @@
     "VMware SVGA 3D"
   ],
   "nvidia_smi_available": false,
-  "reason": "Current chat policy restricts formal timing to idle mdx, which has no NVIDIA GPU",
+  "reason": "Current chat policy restricts formal timing to idle historical_cpu_worker, which has no NVIDIA GPU",
   "unperformed": [
     "Fresh matched independent CPU/GPU cold and warm ABBA",
     "Transfer-inclusive scaling and throughput acceptance",
@@ -25,6 +25,6 @@
   "installed_full_wheel_acceptance": false,
   "status": "superseded",
   "superseded_by": "formal-a100-20261013.json",
-  "resolution": "User explicitly authorized NGSolve(A100) as formal timing host; fresh same-host measurements accepted; original mdx observations retained as historical provenance",
+  "resolution": "User explicitly authorized NGSolve(A100) as formal timing host; fresh same-host measurements accepted; original gpu_evaluation_worker observations retained as historical provenance",
   "public_runtime_metadata": "Identifying execution metadata omitted; original hash-verified record retained privately. Numerical values unchanged."
 }

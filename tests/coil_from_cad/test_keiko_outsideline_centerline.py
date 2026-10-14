@@ -1,4 +1,4 @@
-"""Regression test for keiko's `1turn_coil_loft_outsideline.step` (mdx).
+"""Regression test for keiko's `1turn_coil_loft_outsideline.step` (historical_cpu_worker).
 
 This STEP is an "arc + 2 lead-bars" loft with a 2-BSPLINE-symmetric
 lateral surface.  Geometry summary (verified 2026-05-15):

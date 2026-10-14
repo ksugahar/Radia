@@ -65,7 +65,7 @@ observations consume the same seeded proposal sequence.
 
 Long timing and scaling work belongs under `validation_test/optimization`.
 The active paired lane is `benchmark_optuna50_python.py` plus
-`benchmark_matlab_optuna50.m`. Earlier 4.x mdx JSON remains useful historical
+`benchmark_matlab_optuna50.m`. Earlier 4.x historical_cpu_worker JSON remains useful historical
 engineering evidence but cannot satisfy the 0.2.0 release gate.
 
 The scalar automatic-multivariate path updates its intersection only for newly
@@ -149,11 +149,11 @@ was reaped. Complete an idle-host before/after measurement before accepting
 this increment as an end-to-end performance improvement.
 
 MATLAB Engine 26.1 is installed on worker-b. The official dedicated Engine
-startup/calculation/shutdown diagnostic passed on both mdx runner accounts in
+startup/calculation/shutdown diagnostic passed on both historical_cpu_worker runner accounts in
 [run 34210024491](https://github.com/ksugahar/Radia/actions/runs/34210024491).
 SSH startup timed out with both installed and bundled Engine, and owned probe
 processes were reaped. There is no worker-b MATLAB timing result from these attempts;
-fresh mdx performance validation remains a release requirement.
+fresh development/build host performance validation remains a release requirement.
 
 ## Distribution, MCP, and licensing boundary
 

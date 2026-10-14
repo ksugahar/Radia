@@ -30,7 +30,7 @@ matlab/optuna*.json text eol=lf
 
 # The independent MagLev 3-D validation records SHA-256 fingerprints for the
 # executed driver and force adapter.  Preserve identical bytes on Windows and
-# mdx so the evidence remains replayable across both hosts.
+# historical_cpu_worker so the evidence remains replayable across both hosts.
 validation_test/maglev/ecb_foster_lorentz_3d_reference.py text eol=lf
 src/radia/maglev/ecb/lorentz.py text eol=lf
 docs/hdiv_vim/c_type_three_formulation_convergence_iron.vol binary
@@ -59,7 +59,7 @@ validation_test/showcase/results/*.json -text whitespace=cr-at-eol
 
 # test_agent_policies_stay_compact_and_share_one_policy_body caps these policy
 # files by on-disk bytes. Pin them to LF so a Windows autocrlf checkout
-# measures the same bytes as the index and as Linux/mdx CI.
+# measures the same bytes as the index and as Linux/historical_cpu_worker CI.
 AGENTS.md text eol=lf
 CLAUDE.md text eol=lf
 

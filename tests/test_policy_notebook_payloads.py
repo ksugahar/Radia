@@ -56,3 +56,18 @@ def test_bare_mdx_count_ignores_payload_lines(tmp_path, monkeypatch):
     assert LINT._bare_mdx_notebook_lines("nb.ipynb") == 0
     (tmp_path / "nb.ipynb").write_text(json.dumps(json.loads(notebook(PNG_TEXT, source="ran on " + MDX_WORD)), indent=1))
     assert LINT._bare_mdx_notebook_lines("nb.ipynb") == 1
+
+
+def test_public_service_allowlist_is_exact_path_and_context():
+    path = "packages/radia-mcp/src/radia_mcp/grant_writing/tools.py"
+    lines = (ROOT / path).read_text(encoding="utf-8").splitlines()
+    line = next(line for line in lines if '"shared_compute":' in line)
+    assert LINT.bare_private_host_lines(path, line) == []
+    assert LINT.bare_private_host_lines("other.py", line)
+    assert LINT.bare_private_host_lines(path, line + " # host " + MDX_WORD)
+
+
+def test_strict_private_host_scan_does_not_need_a_baseline():
+    assert LINT.bare_private_host_lines("ordinary.md", "run on " + MDX_WORD)
+    assert LINT.bare_private_host_lines("docs/demo.ipynb", notebook(PNG_TEXT)) == []
+    assert LINT.bare_private_host_lines("docs/demo.ipynb", notebook(PNG_TEXT, source="run on " + MDX_WORD))

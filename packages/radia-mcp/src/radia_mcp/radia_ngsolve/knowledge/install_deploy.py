@@ -14,18 +14,16 @@ Available topics: overview, development, ci_compute, release, mcp_release, cubit
 
 ## overview
 
-| Machine | Primary role | Installation rule |
+| Machine role | Primary role | Installation rule |
 |---|---|---|
-| LAB | test site and operations | verified wheels for `radia`, `cubit-mesh-export`, `radia-mcp` |
-| 100号機 | development and execution | the only editable development host |
-| mdx | CI priority and MATLAB compute | isolated per-run environment; validated workloads |
-| hibino | long optimization and validation when available | release or job-specific environment |
+| LAB | wheel testing and operations | verified wheels |
+| development/build host | CI priority, CPU development and numerical validation | the only editable development host; isolated job environments |
+| on-demand GPU worker | optional mexcuda GPU evaluation | hash-verified artifacts; no Cubit |
 
-Regular GitHub Actions CI uses the `mdx` runner label. LAB is not a CI runner.
-Validation studies run on hibino first, or on mdx only when hibino is
-unavailable and the mdx CI queue is idle. They are not part of every
-source-change CI run. An idle LAB may also run tests and validation, but never
-timing or performance measurements.
+Regular GitHub Actions CI uses the `100` runner label. LAB is not a CI runner.
+CPU development, builds and numerical validation stay on the development/build
+host. Optional GPU evaluation uses the on-demand GPU worker. Isolate jobs from
+CI and user runtimes; never interrupt another session's workload.
 
 ## development
 
@@ -43,19 +41,19 @@ installation.
 
 ## ci_compute
 
-mdx owns routine CI. Each native job creates a run-local virtual environment,
-installs the exact NGSolve/Netgen pins and `mkl-devel`, builds from the checked
-commit, and retains the resulting artifact as CI evidence. Normal CI runs only
-compact impact-selected regression tests from changed package paths. Solver studies,
-benchmarks, paper data, and machine comparisons belong to `validation_test/`
-and run on hibino first, with mdx reserved as an idle-CI fallback and an idle
-LAB allowed for anything except timing.
+The development/build host owns routine CI. Native jobs create run-local virtual
+environments, install exact NGSolve/Netgen pins and `mkl-devel`, and build the
+identified commit. Normal CI runs compact impact-selected regression tests.
+Heavy CPU studies belong to `validation_test/` and run in isolated job-owned
+environments with RADIA_VALIDATION_HOST_ROLE=cpu_validation. Optional mexcuda
+GPU evaluation uses the on-demand GPU worker. Save JSON, hardware and thread
+settings; local timings are diagnostic. Recover evidence and clean job scratch.
 
 ## release
 
 For the Radia solver, use `tools/release_quad.py` and the `release-quad` skill. The release candidate
 must be built from one immutable commit, pass its required CI and package gates,
-and pass the four-machine `done` gate before GitHub Release publication. The
+and pass the two-machine `done` gate before GitHub Release publication. The
 release workflow consumes the accepted artifact for that exact commit; it does
 not rebuild from a mutable checkout or upload a developer-machine binary.
 

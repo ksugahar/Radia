@@ -13,7 +13,7 @@ object/MMPM solver comparisons.
 The common problem is a 1 m cube centered at the origin with an applied field
 of 200 kA/m in +z. The main drivers write JSON into this directory by default.
 Useful sizes are validation workloads: run them on compute-host when available, or on
-mdx while its CI queue is idle.
+development/build host while its CI queue is idle.
 
 ```powershell
 python validation_test\cube_uniform_field\hdiv\bench_hdiv_cube.py `
@@ -30,7 +30,7 @@ HACApK statistics, timing, and memory information.
 
 ## Committed Evidence
 
-The mdx sweep from 2026-07-08 is preserved as raw JSON:
+The historical_cpu_worker sweep from 2026-07-08 is preserved as raw JSON:
 
 - `hdiv_cube_compute_scaling_20260708.json`: structured HEX scaling.
 - `hdiv_tet_cube_compute_scaling_20260708.json`: TET scaling and ACA sensitivity.

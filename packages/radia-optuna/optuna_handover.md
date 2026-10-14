@@ -99,7 +99,7 @@ The newly built wheel passed strict source/native fidelity verification
 and distribution behavior, not a measured performance gain or exhaustive
 compatibility outside the fixtures.
 
-The 2026-09-09 mdx attempt is recorded in
+The 2026-09-09 historical_cpu_worker attempt is recorded in
 `validation_test/optimization/results_optuna50_native_selection_attempt_20260909.json`.
 Both old/new MEX completed the same MATLAB workload with matching checksums,
 but another computation started during the worker-a comparison; the pair is not
@@ -334,7 +334,7 @@ active branch now contains only the 5.0 fixture names and bridge pin, uses
 unified public TPE, named constraints, Optuna 5 defaults and mutation points,
 and has deleted removed integrations and APIs. The local 150-test fast suite,
 wheel verification, installed-wheel Simulink E2E, and paired validation host development
-benchmark pass. Release status remains pending until the fresh long mdx
+benchmark pass. Release status remains pending until the fresh long development/build host
 performance lane, CI, merge, tag, publication, and release-quad gates pass.
 
 The follow-up scalar performance change enables the completed-history MEX for
@@ -346,7 +346,7 @@ The separate table-export ratio is 0.886; no universal speed claim is made.
 All 150 MATLAB tests (74 shared-oracle and 76 integration) and 11 Python package
 tests pass after this change; the rebuilt wheel passes strict source fidelity.
 Engine startup/calculation/
-shutdown passed on both mdx CI runner accounts in run 34210024491. worker-b has
+shutdown passed on both historical_cpu_worker CI runner accounts in run 34210024491. worker-b has
 Engine 26.1 installed, but its SSH startup still timed out; this does not
 provide a MATLAB performance result on worker-b.
 
@@ -851,7 +851,7 @@ release evidence):
 - tracked production library and teaching model: official-agent
   read/edit/check/save/reopen, clean-path reopen, full-window visual QA, and
   embedded-text scans passed.
-- mdx long validation: MATLAB/Python warmed-time ratios were 0.670 scalar,
+- historical_cpu_worker long validation: MATLAB/Python warmed-time ratios were 0.670 scalar,
   0.491 grouped-conditional, and 0.630 table export; four-worker deterministic
   batch evaluation was 2.357x sequential throughput; 4,000-trial indexed
   lookup was 5.683x the scan reference with freeze exponent 0.862; first MEX
@@ -897,7 +897,7 @@ release evidence):
 - [x] a multiobjective model with a selectable Pareto trial
 - [x] pruning and failed-trial exercise
 - [x] student worksheet/notebook with saved results
-- [x] long mdx performance and parallel validation
+- [x] long historical_cpu_worker performance and parallel validation
 
 ### Phase 5 — distribution and release
 

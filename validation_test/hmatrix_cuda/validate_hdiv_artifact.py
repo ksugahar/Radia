@@ -21,7 +21,7 @@ def idle():
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--job',type=Path,required=True);p.add_argument('--warm',type=int,default=2);a=p.parse_args();j=a.job.resolve();eng=None
-    r=dict(accepted=False,release_accepted=False,general_hdiv_validation_complete=False,scope='Bounded public affine tetra and P2 sphere, existing near-rule dense Gram, linear material',cases=[],timing_classification='Exact host diagnostic, not idle-mdx performance acceptance',memory_limitations='Exact owned buffers and available-memory samples; no cuBLAS, host or global allocation peak')
+    r=dict(accepted=False,release_accepted=False,general_hdiv_validation_complete=False,scope='Bounded public affine tetra and P2 sphere, existing near-rule dense Gram, linear material',cases=[],timing_classification='Exact host diagnostic, not idle-development/build host performance acceptance',memory_limitations='Exact owned buffers and available-memory samples; no cuBLAS, host or global allocation peak')
     try:
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
         manifest=json.loads((j/'manifest.json').read_text());r['sha256']=manifest

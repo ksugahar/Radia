@@ -294,7 +294,7 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	// observation point (6 faces x 2 tris x up to 3 M-dirs, per element, per point).  Under a
 	// multithreaded rad.Fld that meant tens of millions of heap allocations + nested tasks per second,
 	// serialising on the Windows CRT heap lock, so more threads made rad.Fld SLOWER than serial
-	// (mdx: 0.4x at 38 threads).  WithBasis is pure stack arithmetic (no alloc, no nested ParallelFor);
+	// (historical_cpu_worker: 0.4x at 38 threads).  WithBasis is pure stack arithmetic (no alloc, no nested ParallelFor);
 	// HACApK uses it and scales ~18x.  The basis construction, local-2D projection, and edge parameters
 	// here are the SAME operations as before (RadComputeTriangleFaceBasis mirrors them), and
 	// basis.basis_c == the raw face normal (e2 x (e2-e1/2) = 1/2 e1 x e2, same unit vector), so

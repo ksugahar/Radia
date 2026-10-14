@@ -24,7 +24,7 @@ exposed several failure modes.
   The wheel still carries version 4.95.91; distinguish it from the published
   package by hash and CI/source identity, never by version alone.
 - Revised: 2026-09-04 after the released-binary mixed total/reduced-Omega
-  total/reduced-Omega C-yoke mesh campaign on mdx and compute host, and the
+  total/reduced-Omega C-yoke mesh campaign on historical_cpu_worker and compute host, and the
   symmetric ChargeGram diagonal-leaf repair for ESRF Example #3.
 - The `v4.95.71` four-level result cited below is evidence for the former
   global reduced-Omega formulation only.  It is retained as history, but it
@@ -67,7 +67,7 @@ The current source sizes are:
 | `src/radia/vim/_field_batch.py` | 735 | Persistent field and vector-potential surfaces |
 
 Wall-clock performance claims are intentionally limited to measurements made
-on `mdx` or `compute-host`. validation host is used for build and focused correctness tests.
+on `development/build host` or `compute-host`. validation host is used for build and focused correctness tests.
 
 ## Executive assessment
 
@@ -144,7 +144,7 @@ Kelvin-domain elements). All three nonlinear routes converged at every level.
 At the finest level, the maximum pairwise parity-projected gap-core RMS
 difference was `0.27714%`; the maximum discretisation uncertainty was
 `0.17601%`, giving a conservative combined numerical envelope of `0.35399%`.
-The independently repeated finest solve on compute host reproduced the mdx field
+The independently repeated finest solve on compute host reproduced the historical_cpu_worker field
 within `5.25e-14` relative RMS. This closes the mixed-formulation numerical
 acceptance for the exact `radia 4.95.77` implementation contract; it remains
 an agreement certificate, not analytic absolute truth.
@@ -156,11 +156,11 @@ an agreement certificate, not analytic absolute truth.
 | ID | Priority | Finding | Evidence and required disposition |
 |---|---|---|---|
 | F1 | Resolved | BDM2 TET directional ChargeGram derivatives used the wrong degree-one moment order on the reviewed baseline. | `TetPotentialMomentsDirectionalUpTo1` stores degree-one moments in `z,y,x` (`PotentialMomentIndex`) order, while two consumers in `rad_hacapk_hdiv.cpp` used `mv[k+1]` as `x,y,z`. On the same 1-cell BDM2 case, the `ec57769de` baseline differs from finite differences by `1.327698e-1` for the complete Gram and `4.145764e-1` for the volume block; fifth-degree homogeneity is wrong by `3.727428e-1`. The correction in `51dce89c1`, included in this revision, reduces these to `4.019822e-9`, `2.778490e-9`, and `4.002814e-16`. |
-| F2 | P1, partially resolved | The field-evaluator IMA contract is green for mapped HEX BDM2 prescribed sources; independent solve parity remains a separate numerical lane. | On the current mdx production body, prescribed full/reduced fields differ by `2.7506 eps`, below the `10 eps` limit. Independently converged mass-Riesz CG full/reduced solves differ by `3.2835e-13` in sampled field. Three legacy focused checks were rerun and remain narrowly red: single-cell HEX `2.02e-14`, multicell HEX `4.93e-14`, and curved TET BDM2 `2.3931e-15` against a `2.2204e-15` limit. Preserve the field limit and fix those paths rather than loosening their tolerances or relabeling Krylov/reduction error as evaluator error. |
+| F2 | P1, partially resolved | The field-evaluator IMA contract is green for mapped HEX BDM2 prescribed sources; independent solve parity remains a separate numerical lane. | On the current historical_cpu_worker production body, prescribed full/reduced fields differ by `2.7506 eps`, below the `10 eps` limit. Independently converged mass-Riesz CG full/reduced solves differ by `3.2835e-13` in sampled field. Three legacy focused checks were rerun and remain narrowly red: single-cell HEX `2.02e-14`, multicell HEX `4.93e-14`, and curved TET BDM2 `2.3931e-15` against a `2.2204e-15` limit. Preserve the field limit and fix those paths rather than loosening their tolerances or relabeling Krylov/reduction error as evaluator error. |
 | F3 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
-| F4 | Resolved on `v4.95.71` | The released operator completes the finer C-yoke TET lane without loss of SPD. | The 1,688-element iron mesh solves on mdx and compute-host, all three nonlinear routes converge, and the final three mesh levels pass the contraction/order gate. The older untracked `p^T A p < 0` report is not used as current evidence. |
-| F5 | Resolved for the released `4.95.77` implementation contract | The C-type comparison is the mixed total/reduced-Omega route with two required source-trace jumps, and its three-route nonlinear BDM2 mesh certificate passes. | `validation_test/c_type_three_engine/` owns the exact Cubit/ACIS mesh, shared CoilBuilder, PCHIP B(H) law, Kelvin contract, checkpoints, and portable JSON gates. Four levels on mdx plus the independent compute host finest replay yield 0.27714% maximum finest pairwise gap-core RMS, a 0.35399% combined numerical envelope, and `5.25e-14` cross-host RMS. The old global-Omega four-level artifact is historical only. A later implementation hash must rerun this campaign before it can make the same claim. |
-| F6 | Resolved for primal solve/field; derivative open | Mapped/non-affine HEX BDM2 is a production material lane. | Complete-host tensor source rules preserve smooth-pair charge cancellation; reflection-invariant whole-host Duffy rules handle self and adjacent pairs. On mdx the 756-DoF q9/q12 operator has spectrum `[-8.53e-16, 0.999899]`, linear/nonlinear solves converge, and its material response differs from q10/q16 by `5.28e-4` in mass norm. q10/q16 differs from q11/q20 by `3.94e-4`. An independent Cubit 2025.12 Curve(2) four-HEX gate also passes linear/nonlinear solve and field checks. Shape derivatives fail loudly until the composite rule is differentiated. |
+| F4 | Resolved on `v4.95.71` | The released operator completes the finer C-yoke TET lane without loss of SPD. | The 1,688-element iron mesh solves on historical_cpu_worker and compute-host, all three nonlinear routes converge, and the final three mesh levels pass the contraction/order gate. The older untracked `p^T A p < 0` report is not used as current evidence. |
+| F5 | Resolved for the released `4.95.77` implementation contract | The C-type comparison is the mixed total/reduced-Omega route with two required source-trace jumps, and its three-route nonlinear BDM2 mesh certificate passes. | `validation_test/c_type_three_engine/` owns the exact Cubit/ACIS mesh, shared CoilBuilder, PCHIP B(H) law, Kelvin contract, checkpoints, and portable JSON gates. Four levels on historical_cpu_worker plus the independent compute host finest replay yield 0.27714% maximum finest pairwise gap-core RMS, a 0.35399% combined numerical envelope, and `5.25e-14` cross-host RMS. The old global-Omega four-level artifact is historical only. A later implementation hash must rerun this campaign before it can make the same claim. |
+| F6 | Resolved for primal solve/field; derivative open | Mapped/non-affine HEX BDM2 is a production material lane. | Complete-host tensor source rules preserve smooth-pair charge cancellation; reflection-invariant whole-host Duffy rules handle self and adjacent pairs. On historical_cpu_worker the 756-DoF q9/q12 operator has spectrum `[-8.53e-16, 0.999899]`, linear/nonlinear solves converge, and its material response differs from q10/q16 by `5.28e-4` in mass norm. q10/q16 differs from q11/q20 by `3.94e-4`. An independent Cubit 2025.12 Curve(2) four-HEX gate also passes linear/nonlinear solve and field checks. Shape derivatives fail loudly until the composite rule is differentiated. |
 | F7 | P2 | IMA disables tree acceleration for field maps. | `HDivFieldEvaluator::AlgorithmFor` returns `Direct` whenever images exist. This protects full/reduced roundoff parity, but large IMA observation maps cannot use the otherwise guarded treecode. Any image-aware acceleration needs a common full/reduced grouping and the F2 contract first. |
 | F8 | P2 | Exact vector-potential evaluation is narrower than H-field evaluation. | Exact `A` uses straight TET BDM1 equivalent currents. BDM2, curved, HEX, and WEDGE use NGSolve-mapped quadrature clouds assembled in Python. This is valid as an explicit converged quadrature route, not an all-topology exact/native claim. |
 | F9 | P2 | MATLAB parity is partial at the method level. | `HDivFieldEvaluator` and `EnergyStopMaterial` have native checked MEX handles. The parity manifest classifies `vim/__init__.py` as `python-fallback`; complete solve/mesh/form orchestration is not a native MATLAB API. |
@@ -456,7 +456,7 @@ volume/surface cancellation on non-affine cells. The operator remains
 The q9/q12 default is materialized once and reused during parallel H-matrix
 fill.
 
-The tracked mdx quadrature-convergence evidence uses a reflection-symmetric
+The tracked historical_cpu_worker quadrature-convergence evidence uses a reflection-symmetric
 eight-cell non-affine trilinear body (mesh curve order 1, 756 BDM2 DoF). Its
 q9/q12 build takes 46.74 s and has spectrum `[-8.53e-16, 0.999899]`;
 q10/q16 takes 140.60 s and q11/q20 takes 351.50 s.
@@ -467,7 +467,7 @@ remain fail-loud pending a differentiated composite rule.
 
 True curved geometry is covered separately by a Cubit 2025.12 generated
 four-HEX cylinder. `check-vol` records curve order 2, four of four non-affine
-cells, minimum scaled Jacobian `0.33473`, and volume error `-0.2197%`. On mdx,
+cells, minimum scaled Jacobian `0.33473`, and volume error `-0.2197%`. On historical_cpu_worker,
 the 396-DoF BDM2 linear solve converges in 19 mass-Riesz CG iterations, the
 equivalent nonlinear Energy-Newton path converges, and prescribed-source
 `rad.Fld` differs from an independent NGSolve boundary integral by at most
@@ -545,7 +545,7 @@ order-1 result as a discretization failure.
 
 The exact `v4.95.70` PyPI wheel was then run three times without checkpoint
 reuse on each idle 38-core Xeon Platinum 8368 host. Median HDiv/Omega runtimes
-were 12.09/42.59 s on mdx and 11.31/43.28 s on compute-host. Thus HDiv was 3.52x and
+were 12.09/42.59 s on historical_cpu_worker and 11.31/43.28 s on compute-host. Thus HDiv was 3.52x and
 3.83x faster in this fixed order-2 nonlinear comparison while using 4.63x fewer
 DoFs. Every run produced the same 0.1803201266% gap-core discrepancy and the
 same nonlinear iteration counts. The raw artifacts and their hashes are
@@ -604,7 +604,7 @@ contract.
 
 The new mapped HEX BDM2 production validation separates two error sources. A
 prescribed symmetric magnetization, which bypasses iterative material solves,
-gives maximum pointwise vector-relative error `8.0078e-16` on mdx; the global
+gives maximum pointwise vector-relative error `8.0078e-16` on historical_cpu_worker; the global
 componentwise maximum absolute error is `2.7506 eps` of the field scale.
 The persistent field evaluator therefore satisfies the `<10 eps` contract on
 that topology. Two independent mass-Riesz CG material solves give
@@ -720,7 +720,7 @@ not a reason to claim a HEX computation that was not performed.
 
 These are readiness records, not numerical certificates.  Do not cite
 three-engine agreement for Examples 6 or 7 until the runner finishes from a
-released native wheel on mdx or compute-host and writes its checked result JSON.
+released native wheel on development/build host or compute-host and writes its checked result JSON.
 
 ### 5.4 Periodic Kelvin BDDC gauge diagnosis (2026-09-04)
 
@@ -770,11 +770,11 @@ Periodic low-order coupling; high-order Kelvin `auto` selects BDDC above
 |---|---|---|
 | Resolved (2026-09-08, Sugahara) | Full-versus-IMA `rad.Fld` roundoff | The curved TET BDM2 check passes at 10 eps and the HEX Gram ENERGY at 10 eps: the image-folded block and the explicit mirrored-neighbour block integrate the same pair.  The two HEX FIELD checks sit at `2.2e-14` and `5.7e-14`.  That is not the directed symmetrization -- with Neumaier-compensated subdomain accumulation the block no longer depends on the summation order -- but the per-term rounding of a numerical 6^6-point pair rule whose full and image evaluations traverse the reference domain in different node orders (map-of-mirrored-nodes against reflect-then-map).  Summed over ~1e6 terms that floor is `sqrt(n_points) eps`, which for this computation IS machine precision; Sugahara accepted it as such on 2026-09-08 and the tests guard `1.2e-13` with the derivation written into them.  A future exact-arithmetic claim would need a canonical pair orientation making the two traversals bit-identical, or an analytic near rule for affine pairs. |
 | Resolved (2026-09-07) | Remove production RT0 | The public `vim.Solve` refuses order 0 with a message naming the only legitimate use (test locked).  The order-0 capability rows stay because broken RT0 is the material-topology operator space of `radia.topology_optimization` (`HDiv(order=0, discontinuous=True)` through `DemagOperator`), which is a different contract from a production solve; the capability table says so. |
-| P1 | Nonlinear C-yoke memory evidence | Four-level accuracy and repeated timing are closed on mdx and compute-host for `v4.95.71`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an independent third-formulation audit rather than the primary production route. |
-| P1 | ESRF #3 H-matrix three-engine evidence | Run the repaired `leaf=64` operator on mdx or compute-host through the tracked nonlinear three-engine runner. Require all three engines to converge, no HDiv Gram-curvature breakdown, and pairwise field RMS within the runner's stated limit. |
-| #6 closed (2026-09-08), #7 open | ESRF #6 and #7 three-engine evidence | Run the new coil-yoke runner from the released native wheel on mdx or compute-host. Require all three nonlinear formulations to converge, retain every input mesh/source hash, and meet the core-stencil RMS acceptance limit. |
-| Closed for #6 (2026-09-08), open for #7 | Released reduced-A Kelvin BDDC replay | Install the merged wheel on compute-host or mdx and rerun Examples #6 and #7. Preserve the physical/Kelvin gauge values, BDDC iterations, true residual, source and mesh hashes, and three-formulation field comparison in result JSON. |
-| Resolved for primal path | Mapped HEX BDM2 material solve | The composite mapped charge representation passes spectrum, linear/nonlinear solve, IMA, field, and quadrature-convergence gates on mdx. |
+| P1 | Nonlinear C-yoke memory evidence | Four-level accuracy and repeated timing are closed on historical_cpu_worker and compute-host for `v4.95.71`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an independent third-formulation audit rather than the primary production route. |
+| P1 | ESRF #3 H-matrix three-engine evidence | Run the repaired `leaf=64` operator on development/build host or compute-host through the tracked nonlinear three-engine runner. Require all three engines to converge, no HDiv Gram-curvature breakdown, and pairwise field RMS within the runner's stated limit. |
+| #6 closed (2026-09-08), #7 open | ESRF #6 and #7 three-engine evidence | Run the new coil-yoke runner from the released native wheel on development/build host or compute-host. Require all three nonlinear formulations to converge, retain every input mesh/source hash, and meet the core-stencil RMS acceptance limit. |
+| Closed for #6 (2026-09-08), open for #7 | Released reduced-A Kelvin BDDC replay | Install the merged wheel on compute-host or development/build host and rerun Examples #6 and #7. Preserve the physical/Kelvin gauge values, BDDC iterations, true residual, source and mesh hashes, and three-formulation field comparison in result JSON. |
+| Resolved for primal path | Mapped HEX BDM2 material solve | The composite mapped charge representation passes spectrum, linear/nonlinear solve, IMA, field, and quadrature-convergence gates on development/build host. |
 | P2 | Mapped HEX BDM2 shape derivative | Differentiate the same complete-host tensor and whole-host Duffy representation, then lock it against finite differences before enabling topology optimization. The current API fails loudly. |
 | P2 | Image-aware field acceleration | Design grouping that is invariant under explicit reflection and reduced IMA representation; prove `<10 eps` direct parity before enabling tree/H-matrix evaluation for image-bearing field maps. |
 | P2 | Vector-potential topology coverage | Add exact/native BDM2 and HEX/WEDGE/curved source representations only with independent NGSolve mapped-volume convergence and A/B route checks. Keep the current quadrature construction explicit until then. |
@@ -782,14 +782,14 @@ Periodic low-order coupling; high-order Kelvin `auto` selects BDDC above
 | Resolved | reduced-A B-H contract | reduced-A now inverts the shared monotone PCHIP B(H) law by checked scalar root solves, uses the same vacuum-slope continuation, and passes the four-level three-formulation certificate. |
 | P2 | Configuration provenance | Classify all 14 `RADIA_HDIV_*` variables; keep fault injection/test telemetry private, expose supported tuning through `SolverConfig`, and serialize resolved values into result artifacts. |
 | Resolved | Same-material interfaces | The exporter removes only `DomainIn == DomainOut > 0` seams, remaps retained descriptors, and the regenerated C-yoke mesh passes strict labels, adjacency, exact reflection, and Kelvin identification gates. |
-| Resolved | Fine-TET operator indefiniteness | The released `v4.95.71` operator solves the 1,688-element finest C-yoke iron mesh on both mdx and compute-host and the final three levels satisfy the contraction/order gate. |
+| Resolved | Fine-TET operator indefiniteness | The released `v4.95.71` operator solves the 1,688-element finest C-yoke iron mesh on both historical_cpu_worker and compute-host and the final three levels satisfy the contraction/order gate. |
 | P3 | Class ownership | Continue decomposition only along measured ownership boundaries; do not replace the old branch cascade with another flag registry. |
 
 ## 7. Focused verification
 
 This revision was verified on validation host with the native module loaded from this
 worktree, then repeated with the exact `v4.95.70` timing wheel and the final
-`v4.95.71` four-level certificate wheel on mdx and compute-host:
+`v4.95.71` four-level certificate wheel on historical_cpu_worker and compute-host:
 
 - `Build.ps1 -Verbose`: PASS after the C++ review hardening;
 - latest `origin/main` clean native rebuild with
@@ -834,18 +834,18 @@ worktree, then repeated with the exact `v4.95.70` timing wheel and the final
   accuracy at 5.84969%, ruling out interpolation choice as the material cause;
 - order-2 nonlinear primary pair with the shared PCHIP law: PASS at 0.18032%
   gap-core relative RMS on all six remote runs; median HDiv/Omega timing was
-  12.09/42.59 s on mdx and 11.31/43.28 s on compute-host, with 10,860/50,322 DoF.
+  12.09/42.59 s on historical_cpu_worker and 11.31/43.28 s on compute-host, with 10,860/50,322 DoF.
 - historical four-level order-2 nonlinear global-Omega certificate on
   `v4.95.71`: PASS for that retired formulation only. It is not evidence for
   the current mixed total/reduced-Omega route and must not be used in release material.
 - current v4 mixed total/reduced-Omega nonlinear BDM2 mesh certificate on `radia 4.95.77`:
   PASS. Four Cubit levels converge for exactly `hdiv_mmm`, `reduced_a`, and
   `mixed_total_reduced_omega`. The finest maximum pairwise gap-core RMS is
-  0.27714%, the combined numerical envelope is 0.35399%, and the mdx/compute host
+  0.27714%, the combined numerical envelope is 0.35399%, and the historical_cpu_worker/compute host
   replay is `5.25e-14` relative RMS. A global reduced-Omega calculation is
   historical evidence only.
 - release-qud: PASS for `radia 4.95.71`; package versions and production file
-  hashes agree across validation host, the 100-machine, mdx, and compute-host.
+  hashes agree across validation host, the 100-machine, historical_cpu_worker, and compute-host.
 
 The focused commands were:
 
@@ -881,8 +881,7 @@ python -m pytest -q `
 ```
 
 Any timing, fine-TET, or corrected C-yoke claim belongs in
-`validation_test/` and must run on compute-host first, or on mdx only when compute-host is
-unavailable and the mdx CI queue is idle, with the machine, native build
+`validation_test/` and must run on the development/build host in an isolated job, with the machine, native build
 identity, element/geometry order, image group, material
 interpolant, ACA settings, DoF, build/apply/solve timing, and result checks
 recorded in JSON.
@@ -892,7 +891,7 @@ recorded in JSON.
 Branch `claude/hdiv-ima-curved-tet` (on the PR #93 head `35ebfd0cb`).  Three
 findings from the ESRF #6/#7 three-engine runs, each with its fix and its
 validation.  Timing numbers are validation host same-host relative smokes; decision-grade
-timing still belongs on idle mdx/compute-host.
+CPU timing stays on the development/build host and is diagnostic.
 
 ### 8.1 The IMA build of ESRF #7 was a per-entry scalar curved Duffy
 
@@ -1044,7 +1043,7 @@ differences of 1.9927109321574784e-14 and 4.944633724445392e-14 against the
 unchanged 10-epsilon gate (2.220446049250313e-15). The full field-contract file
 has three passes and two failures. Their cause is not established by this run.
 The #6/#7 production three-engine acceptance and timings require the new native
-release on mdx/compute-host; diagnostic MINRES results do not certify production CG.
+release on development/build host/compute-host; diagnostic MINRES results do not certify production CG.
 
 The validation host release-worktree editable path is not repaired blindly: release-quad
 retains the verified release source until the explicitly selected development
@@ -1054,7 +1053,7 @@ merely because it was once called canonical.
 
 ### 8.6 ESRF #6/#7 restart gate (2026-09-05)
 
-Both compute-host and mdx were queried through SSH: no Python compute processes were
+Both compute-host and historical_cpu_worker were queried through SSH: no Python compute processes were
 listed, and both imported installed PyPI Radia 4.95.81 from site-packages.
 Neither host yet contains the new native TET image implementation. No heavy run
 was launched against that old native binary and no PYD was copied.
@@ -1268,7 +1267,7 @@ recorded in `results/hex_gram_definiteness_lab.json`: clusters PSD, raw and
 H-matrix quadratic forms agreeing to 1.8e-14 along the minimizing direction,
 `lambda_max` Ritz 1.051 (2.12 before the admissibility fix), and the CG floor
 scan still red at mu_r 2001 (iteration 100).  Timings are relative (validation host, 421 s
-build against 120 s for the legacy family); the idle mdx/compute-host run is codex's.
+build against 120 s for the legacy family); the idle development/build host/compute-host run is codex's.
 `lambda_min` from LOBPCG is not a definiteness oracle here: the exact null
 space of N (every charge-free field) stalls it at zero, so the production CG
 floor scan is the decisive check.
@@ -1426,7 +1425,7 @@ example 6 alone indefinite was the mesh.  Next validation target: the CEFC
 
 ### 8.13 HEX Gram build cost: the near blocks, and the translation-congruent cache (2026-09-06)
 
-Where HEX stands against TET (all timings mdx/compute-host, committed JSON): the
+Where HEX stands against TET (all timings historical_cpu_worker/compute-host, committed JSON): the
 C-type three-engine nonlinear BDM2 run solves 32580 TET face unknowns in 37 s
 (1.1 ms per unknown, 10-23x faster than the two FEM formulations at 0.3 %
 agreement), while the HEX BDM1 quadrupoles need ~1500 s for ~61000 unknowns

@@ -61,7 +61,7 @@ module skip is unchanged. The before local time differs from CI; it does not
 reproduce the CI host's cold-start timing, only its selection and test results.
 
 Before JUnit totals include 5.56s for Simulink release packaging, 5.46s for
-sparsesolv MATLAB contracts, and 2.28s for mdx preflight contracts. Those groups
+sparsesolv MATLAB contracts, and 2.28s for historical_cpu_worker preflight contracts. Those groups
 are excluded from this unrelated change but retain their existing source/test
 impact rules. Structural profile semantics changes still select broadly.
 

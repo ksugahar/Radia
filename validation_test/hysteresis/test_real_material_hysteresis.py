@@ -13,7 +13,7 @@ Two results a K=3 toy cannot demonstrate and a 0D material model cannot produce:
       resolves the spatial map + integrates the total, which a 0D loss curve cannot.
 
 Correctness (numerical agreement / physical soundness), so validation runtime per the Benchmark
-Policy; per-step timing uses compute-host first or an idle-CI mdx fallback. Results saved to
+Policy; per-step timing uses the development/build host in an isolated job. Results saved to
 real_material_*.json.
 """
 import json

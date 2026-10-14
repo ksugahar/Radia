@@ -59,7 +59,7 @@ formulation) and run on compute-host, one job at a time; results are committed u
 `results/` with the host name in the file name.
 
 `run_qmag_hdiv.py` defaults to `--radia-source repo`. For distributed-wheel
-validation on compute-host or mdx, use a dedicated non-editable environment and add
+validation on compute-host or development/build host, use a dedicated non-editable environment and add
 `--radia-source installed`. This checks the distribution's WHEEL metadata,
 rejects editable installs (including another checkout), and verifies that the
 loaded `radia/__init__.py` matches the distribution's recorded file. Missing

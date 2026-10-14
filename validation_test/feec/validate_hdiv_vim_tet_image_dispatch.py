@@ -19,7 +19,7 @@ Checks per case
              RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK=1 RADIA_HDIV_DISABLE_HO_IMAGE_FAR=1): entry agreement on
              the sampled pairs, field agreement, and the build-time ratio
 
-Build times are a relative, same-host smoke.  Decision-grade timing belongs on an idle mdx / compute-host
+Build times are a relative, same-host smoke.  Decision-grade timing belongs on an idle development/build host / compute-host
 (Benchmark Policy); the JSON records the host so nobody mistakes a validation runtime number for one.
 
 Usage
@@ -475,7 +475,7 @@ def main(argv=None):
         "schema": "radia.validation.hdiv-vim-tet-image-dispatch.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "platform_class": platform.system(),
-        "timing_role": "relative same-host smoke; decision-grade timing belongs on idle mdx/compute-host",
+        "timing_role": "relative same-host smoke; decision-grade timing belongs on idle development/build host/compute-host",
         "radia_version": getattr(radia, "__version__", None),
         "ngsolve_version": getattr(ngsolve, "__version__", None),
         "python_version": sys.version.split()[0],

@@ -20,7 +20,7 @@ The user selected complete ownership transfer within the existing monorepo.
 2. Remove integration dependencies, CLI exports and package data from CPU distribution metadata. Separate reusable CPU domain methods from integration adapters.
 3. Update MCP routing with explicit optional-backend errors and preserve cross-package knowledge. Update CI selectors to distribution ownership.
 4. Verify CPU wheel and source-distribution boundaries, GPU wheel inventory and provenance, and MCP discovery without the GPU package installed.
-5. Rebuild the exact final commit on 100 and repeat installed CUDA, Simulink and LTspice acceptance before PyPI publication. Develop radia-gpu on 100; final accuracy acceptance compares against Python/NGSolve on mdx; formal GPU timing uses the mdx A100 when online. CPU-only reference execution does not establish CUDA acceptance. A100 acceptance remains pending while unreachable; never deploy GPU to 102.
+5. Rebuild the exact final commit on 100 and repeat installed CUDA, Simulink and LTspice acceptance before PyPI publication. Develop radia-gpu on 100; final accuracy acceptance compares against Python/NGSolve on gpu evaluation worker; formal GPU timing uses the gpu evaluation worker A100 when online. CPU-only reference execution does not establish CUDA acceptance. A100 acceptance remains pending while unreachable; never deploy GPU to 102.
 
 ## Current evidence and limits
 

@@ -15,6 +15,6 @@
   "median_first_call_seconds": 0.0114385,
   "binary_size_bytes": 152576,
   "binary_sha256": "8e107f1ee20f6354d5c3c5ba40ec7cd3ff3b38309b67ff8962e43ea63839bd91",
-  "gateway_directory": "<private-path>/radia-optuna-mdx-20260829\\matlab",
+  "gateway_directory": "<private-path>/radia-optuna-historical_cpu_worker-20260829\\matlab",
   "boundary": "First optuna_mex api.info call in each fresh MATLAB process; excludes MATLAB executable startup."
 }

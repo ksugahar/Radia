@@ -151,9 +151,7 @@ MEX path merely because it compiles.
 - Timeout, missing dependency, invalid config, and solver failure remain
   inspectable in `run.log` and `result.json`.
 
-Long solver validation runs on compute-host first. Use mdx only when compute-host is
-unavailable and the mdx CI queue is idle. validation host and development host are for build, import,
-mask, and fast numerical checks.
+Long solver validation runs on the development/build host in an isolated job; preserve CI and user runtimes. The development/build host also permits isolated heavy numerical validation.
 
 ## Current References
 

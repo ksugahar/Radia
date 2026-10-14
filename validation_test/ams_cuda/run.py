@@ -1,4 +1,4 @@
-"""Small AMS CUDA parity acceptance; larger studies belong on idle mdx/A100."""
+"""Small AMS CUDA parity acceptance; larger studies belong on idle gpu evaluation worker/A100."""
 from __future__ import annotations
 import argparse
 import importlib.metadata as md

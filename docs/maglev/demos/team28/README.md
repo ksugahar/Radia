@@ -167,7 +167,7 @@ interpolated model stays passive.
 The fixed-position 3-D HCurl-VIM force gate now passes without a kernel
 epsilon.  Each reduced `curl(T)` mode is projected exactly to degree-5
 reference polynomials, the tetrahedron self interaction uses analytic moments
-from the shared degree-18 engine, and only the smooth outer integral is quadrature.  The mdx
+from the shared degree-18 engine, and only the smooth outer integral is quadrature.  The historical_cpu_worker
 validation produced:
 
 | maximum tetrahedron size | p=6 parent DoF | response modes | physical `F_z` | relative error |

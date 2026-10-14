@@ -19,7 +19,7 @@ A-RK reuse the established three-route harness and are wired in a follow-up
 run; the chain metric is ``g = 1 + h*x`` with ``h = signed_curvature``,
 the EarlyTimes planar convention pinned against B-RK there.
 
-Usage (validation runtime smoke; heavy sweeps use compute-host first or an idle-CI mdx fallback):
+Usage (validation runtime smoke; heavy sweeps use the development/build host in an isolated job):
   python validation_canonical_hcurl_ctype.py --iron-maxh 0.02
 """
 

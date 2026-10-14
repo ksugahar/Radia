@@ -1,5 +1,5 @@
 function result = compareProjectionPrecision(volPath,xyz,strength,jsonPath,options)
-% Diagnostic comparison on an otherwise idle 100; not mdx acceptance.
+% Diagnostic comparison on an otherwise idle 100; not development/build host acceptance.
 % The caller checks CI, computation load and memory before calling this.
 arguments
     volPath (1,:) char

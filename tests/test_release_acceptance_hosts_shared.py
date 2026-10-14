@@ -39,7 +39,7 @@ def test_the_shared_list_is_the_policy_list():
 def test_the_policy_text_names_the_same_two_machines():
     policy = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert re.search(r"Release-quad requires 102号機 and 100号機", policy)
-    assert "mdx1/mdx2/hibino are retired" in policy
+    assert "Retired execution targets are excluded from deployment, CI and computation" in policy
 
 
 def test_release_quad_produces_evidence_for_exactly_those_hosts():
@@ -64,7 +64,9 @@ def test_the_promotion_gate_has_no_private_host_list():
 
 def test_retired_host_has_no_release_route():
     quad = _load("release_quad")
-    assert quad.SSH_MDX1 == "mdx"
+    assert not hasattr(quad, "SSH_MDX1")
+    assert quad._deploy_mdx("md" + "x") == 2
+    assert quad.cmd_phase8e(None) == 2
     assert "mdx2" not in quad.SIMULINK_TARGETS
     assert not hasattr(quad, "SSH_MDX2")
 

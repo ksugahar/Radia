@@ -43,8 +43,8 @@ TaskManager region is created by mexcuda.
 
 100 timings are diagnostic, including upload/download and warmed median.
 Native owned memory and sampled device-free memory are separately identified;
-neither is a whole-process peak measurement. Formal idle-mdx GPU performance
-The original mdx timing gate could not run because that host has no NVIDIA GPU;
+neither is a whole-process peak measurement. Formal idle-gpu evaluation worker GPU performance
+The original gpu evaluation worker timing gate could not run because that host has no NVIDIA GPU;
 the user subsequently authorized NGSolve(A100), as recorded below.
 Numerical agreement alone is not a claim of GPU acceleration or release readiness.
 
@@ -69,7 +69,7 @@ and are recorded. See `results/payload-a100-20261013.json` and the matching
 installed radia-gpu wheel or a common-commit release candidate. Third-party DLLs
 in the private acceptance bundle are not authorized wheel redistribution assets.
 
-Fresh mdx inspection found only Microsoft Remote Display Adapter and VMware
+Fresh historical_cpu_worker inspection found only Microsoft Remote Display Adapter and VMware
 SVGA 3D, with no NVIDIA device or nvidia-smi. The original pending JSON retains
 that observation and is marked superseded by the user's explicit change to
 NGSolve(A100). Previous diagnostic samples retain their original classification.

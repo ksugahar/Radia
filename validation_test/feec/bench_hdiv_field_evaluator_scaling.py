@@ -1,7 +1,6 @@
 """Compute-host scaling benchmark for solved HDiv ``rad.Fld``.
 
-Run on compute-host first after a normal package release. Use mdx only when compute-host is
-unavailable and the mdx CI runner and queue are idle. The driver measures the
+Run on the development/build host after a normal package release, in an isolated job. The driver measures the
 public field call and checks the forced tree against the exact direct source
 sum on a deterministic observation subset.
 """

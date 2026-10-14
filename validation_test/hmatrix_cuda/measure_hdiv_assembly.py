@@ -1,4 +1,4 @@
-"""Guarded actual RT0 whole-solve ABBA diagnostic on idle 100, not mdx acceptance."""
+"""Guarded actual RT0 whole-solve ABBA diagnostic on idle 100, not development/build host acceptance."""
 from pathlib import Path
 import argparse,ctypes,hashlib,importlib.util,json,os,statistics,subprocess,sys
 
@@ -7,7 +7,7 @@ def main():
     p=argparse.ArgumentParser()
     for key in ['before','after','projection','mesh','reference','out']:p.add_argument('--'+key,type=Path,required=True)
     a=p.parse_args();a.out.mkdir(parents=True,exist_ok=False);root=Path(__file__).resolve().parents[2];eng=None
-    result=dict(accepted=False,classification='Idle-100 diagnostic, not formal mdx acceptance',scope='Eight affine tetra RT0 FE setup through CUDA HACApK/material solve/result recovery/release; not general HDiv',cold_limitations='First payload per module in an initialized owned MATLAB process, not cold process',memory_limitations='Exact owned buffers plus available-memory samples; excludes cuBLAS/runtime and host/global peaks')
+    result=dict(accepted=False,classification='Idle-100 diagnostic, not formal gpu evaluation worker acceptance',scope='Eight affine tetra RT0 FE setup through CUDA HACApK/material solve/result recovery/release; not general HDiv',cold_limitations='First payload per module in an initialized owned MATLAB process, not cold process',memory_limitations='Exact owned buffers plus available-memory samples; excludes cuBLAS/runtime and host/global peaks')
     try:
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
         spec=importlib.util.spec_from_file_location('guard',root/'validation_test/ams_cuda/graph_validation.py');guard=importlib.util.module_from_spec(spec);spec.loader.exec_module(guard)

@@ -24,7 +24,7 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
 - On geometrically and topologically symmetric full/reduced hex meshes, the
   persistent `rad.Fld` evaluator is locked at the roundoff-level contract
   (`< 10 eps` relative error).  The mapped BDM2 prescribed-source gate is
-  `2.75 eps` on mdx.  Independent material solves retain their separately
+  `2.75 eps` on historical_cpu_worker.  Independent material solves retain their separately
   reported Krylov/reduction error budget.
 - BDM1 and BDM2 are public for pure TET/HEX/WEDGE operators, IMA, persistent
   field evaluation, and the
@@ -34,7 +34,7 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
 - Mapped/non-affine HEX BDM2 material solves use one cancellation-preserving
   C++ composite operator: complete-host tensor rules for smooth pairs and
   reflection-invariant whole-host Duffy rules for self and adjacent pairs.
-  On mdx the 756-DoF q9/q12 production operator has spectrum
+  On historical_cpu_worker the 756-DoF q9/q12 production operator has spectrum
   `[-8.53e-16, 0.999899]`; linear and nonlinear solves converge, and its
   material response differs from q10/q16 by `5.28e-4` in the mass norm.
   q10/q16 differs from q11/q20 by `3.94e-4`, so the q9/q12 default meets the
@@ -155,11 +155,10 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
 
 ## Release Gate
 
-Before release or `mdx`/`compute-host` deployment:
+Before release or `development/build host`/`compute-host` deployment:
 
 - run focused HDiv smoke tests on validation host/development host;
-- run heavy validation/benchmark sweeps on compute-host first; use mdx only when
-  compute-host is unavailable and the mdx CI runner and job queue are idle;
+- run heavy validation/benchmark sweeps on the development/build host in an isolated job;
 - record the actual validation host in the result JSON/log;
 - record charge count, HDiv DoF, H-matrix compression, build time, solve time,
   iteration count, and machine label;
@@ -186,4 +185,4 @@ Before release or `mdx`/`compute-host` deployment:
   safeguards;
 - extend force tests around motor workflows; torque/coenergy are locked;
 - keep Cubit/GMSH mesh export aligned with the HDiv API;
-- continue mdx scaling measurements for charge-Gram build and solve time.
+- continue development/build host scaling measurements for charge-Gram build and solve time.

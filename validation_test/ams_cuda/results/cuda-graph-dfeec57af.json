@@ -2259,7 +2259,7 @@
   },
   "implementation_commit": "dfeec57af",
   "limitations": [
-    "Diagnostic RTX 5000 measurements; not idle-mdx performance acceptance.",
+    "Diagnostic RTX 5000 measurements; not idle-historical_cpu_worker performance acceptance.",
     "CPU parity reference solve was single-shot; these results do not certify repeated end-to-end CPU versus GPU speedup.",
     "First case total includes cold native setup in its first direct sample; do not use its total speedup as acceptance.",
     "Graph capture and instantiation costs are included in each solve. Graph remains opt-in.",

@@ -2,7 +2,7 @@
   "schema": "radia.projection-precision-timing.v1",
   "accepted": true,
   "timing_acceptance": false,
-  "classification": "100 RTX 5000 idle diagnostic; not mdx performance acceptance",
+  "classification": "100 RTX 5000 idle diagnostic; not historical_cpu_worker performance acceptance",
   "a100_used": false,
   "field_build": {
     "schema": "radia.field-cuda-build.v1",

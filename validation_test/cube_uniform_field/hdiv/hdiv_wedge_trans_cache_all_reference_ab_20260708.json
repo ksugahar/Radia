@@ -1,6 +1,6 @@
 {
   "generated_at_utc": "2026-07-08T03:17:14.073069+00:00",
-  "description": "mdx A/B sweep for wedge translated host-block cache, off vs all/default",
+  "description": "historical_cpu_worker A/B sweep for wedge translated host-block cache, off vs all/default",
   "off_source": "<private-path>/hdiv_wedge_trans_off_mdx_20260708.json",
   "all_source": "<private-path>/hdiv_wedge_trans_all_mdx_20260708.json",
   "rows": [

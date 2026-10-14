@@ -48,7 +48,7 @@ checker reports. These are operational artifacts, not committed log files.
 
 ## MATLAB Engine: environment gate remains open
 
-Both mdx runner services were observed running as `.\\Administrator`, and both
+Both historical_cpu_worker runner services were observed running as `.\\Administrator`, and both
 Python 3.12 interpreters imported MATLAB Engine. No shared Engine or running
 MATLAB/ServiceHost process was observed during the read-only inventory.
 
@@ -75,7 +75,7 @@ acceptance and does not constitute a fresh installed-package simulation.
 
 ## Remaining acceptance
 
-- Complete mdx authentication/startup and repeat the four-host exact-package gate.
+- Complete development/build host authentication/startup and repeat the four-host exact-package gate.
 - Complete clean installed-package open/run and the remaining UI interactions.
 - Complete the unmocked CAD/VOL-to-EM-to-axisymmetric-heat chain. The checked
   cylinder here is the **3D EM workpiece input**, not a 2D thermal mesh.

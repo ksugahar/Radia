@@ -799,7 +799,7 @@ message(STATUS "sparsesolv_ngsolve module configured (NGSolve preconditioners)")
 #
 # Source: src/ext/axifem/ (formerly a standalone axifem add-on; absorbed
 # into the radia-core wheel 2026-05-10 to fix the
-# 100号機 / mdx ImportError that was blocking IH axisymmetric work).
+# 100号機 / historical_cpu_worker ImportError that was blocking IH axisymmetric work).
 #
 # Imported as `radia.axifem` (the .pyd lives at
 # src/radia/axifem.pyd alongside _radia_pybind.pyd).

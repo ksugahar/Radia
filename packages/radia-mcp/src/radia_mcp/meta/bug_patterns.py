@@ -379,7 +379,7 @@ PATTERNS: list[dict] = [
         "severity": "high",
         "first_seen": "2026-05-30",
         "last_seen": "2026-05-30",
-        "what": "After logging off LAB + runtime host + mdx, all three "
+        "what": "After logging off LAB + runtime host + historical_cpu_worker, all three "
                 "still get NoAvailableSeats on the next --login.  Seat "
                 "stays stuck for hours.",
         "root_cause": "Cubit 2025.8 introduced a new licensing portal.  "
@@ -591,7 +591,7 @@ PATTERNS: list[dict] = [
         "severity": "medium",
         "first_seen": "2026-06-01",
         "last_seen": "2026-06-01",
-        "what": "phase8 on runtime host + mdx fails: cubit-smoke 'export did "
+        "what": "phase8 on runtime host + historical_cpu_worker fails: cubit-smoke 'export did "
                 "not produce smoke.vol', Cubit exit=1 (0xC0000005); "
                 "cubit.log says 'License Error: No license found'.  This "
                 "stops `all` before phase8e/phase9 even though the "
@@ -781,16 +781,16 @@ PATTERNS: list[dict] = [
                     "CLAUDE.md: Green's Function: Laplace Kernel Only"],
     },
     {
-        "id": "mdx-pip-orphans-block-reinstall",
+        "id": "historical-worker-pip-orphans-block-reinstall",
         "title": "pip interrupted-uninstall orphans (~adia, ~gsolve, ...) "
                  "in site-packages leave a package NOT importable after a "
                  "force-reinstall.",
-        "topics": ["deploy", "pip", "mdx", "release", "lab"],
+        "topics": ["deploy", "pip", "retired_worker", "release", "lab"],
         "severity": "medium",
         "first_seen": "2026-06-02",
         "last_seen": "2026-06-02",
         "what": "release_quad phase8e reported radia not importable on "
-                "mdx (ModuleNotFoundError) even though pip 'Successfully "
+                "historical_cpu_worker (ModuleNotFoundError) even though pip 'Successfully "
                 "installed' earlier; cubit-smoke 'Cannot locate "
                 "ih_bem_sample.jou -- install the radia package'.",
         "root_cause": "A previously interrupted pip uninstall left "

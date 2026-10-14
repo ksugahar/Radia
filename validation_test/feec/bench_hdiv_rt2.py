@@ -1,6 +1,6 @@
 """Measure the public pure-TET BDM1/BDM2 material path on a compute host.
 
-Use hibino first, or mdx only when hibino is unavailable and its CI queue is
+Use the development/build host in an isolated job; keep CI and user workloads
 idle.
 
 The filename is retained as a legacy validation entry point.
@@ -17,6 +17,7 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import os
 import platform
 import time
 
@@ -31,13 +32,8 @@ from radia.vim import Solve
 def _require_compute_host() -> str:
     node = platform.node()
     short = node.lower().split(".", 1)[0]
-    if not (
-        short == "mdx"
-        or short.startswith("mdx-")
-        or short == "hibino"
-        or short.startswith("hibino-")
-    ):
-        raise SystemExit("bench_hdiv_rt2.py must run on mdx or hibino; got hostname %r" % node)
+    if os.environ.get("RADIA_VALIDATION_HOST_ROLE") != "cpu_validation":
+        raise SystemExit("Set RADIA_VALIDATION_HOST_ROLE=cpu_validation for an isolated job")
     return node
 
 

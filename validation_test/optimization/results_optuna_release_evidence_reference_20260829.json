@@ -271,7 +271,7 @@
       "median_first_call_seconds": 0.0114385,
       "binary_size_bytes": 152576,
       "binary_sha256": "8e107f1ee20f6354d5c3c5ba40ec7cd3ff3b38309b67ff8962e43ea63839bd91",
-      "gateway_directory": "<private-path>/radia-optuna-mdx-20260829\\matlab",
+      "gateway_directory": "<private-path>/radia-optuna-historical_cpu_worker-20260829\\matlab",
       "boundary": "First optuna_mex api.info call in each fresh MATLAB process; excludes MATLAB executable startup."
     }
   },
@@ -342,7 +342,7 @@
         "passed": true,
         "requirement": "Identical seeded proposal checksum and best value; warmed batch-parallel median no slower than sequential."
       },
-      "environment_note": "mdx release-candidate run; measured_jointconvex_ridge.py PID 9772 active on one core; pre-run total CPU sampled",
+      "environment_note": "historical_cpu_worker release-candidate run; measured_jointconvex_ridge.py PID 9772 active on one core; pre-run total CPU sampled",
       "claim_boundary": "Synthetic calibrated scalar objective used to measure radia.optuna.optimize scheduling and worker throughput. It does not predict a specific CAE model's solver speedup."
     },
     "history_store": {
@@ -424,7 +424,7 @@
     }
   },
   "benchmark_environment": {
-    "note": "mdx release-candidate run; unrelated measured_jointconvex_ridge.py PID 9772 remained active on one core and was not stopped",
+    "note": "historical_cpu_worker release-candidate run; unrelated measured_jointconvex_ridge.py PID 9772 remained active on one core and was not stopped",
     "pre_run_total_cpu_percent": [
       4.73,
       3.92,
@@ -455,8 +455,8 @@
     "installed": "1964959ebdfe3bcae1acbe6f654a91a81fdf1fb786fcb0d164cf942398501127",
     "python_performance": "087ceb3591a5c476d9a20d3b0c4b27887f86f7f0032baf3d916a787a10060e63",
     "matlab_performance": "7346b6096ed57a5ad949576702f00adc3174cbb3caae26b2e1ae63023e6501d0",
-    "mex_cold": "b55a7bb73d884a16a366b6888e182d7740457aa3ad9ac2314b607fa51ca4db7d",
-    "parallel": "e8498f8f6b59f08480d5bc86eb4afd91c9969c80abe5ed164fddbe3579ec9a48",
+    "mex_cold": "4bd81652f0d07507d3d867bd272170654ea48941bde52cee85632063783b09c5",
+    "parallel": "27195399ea443af2e8613e1074023274d487aead3b9581f023432362cc51597c",
     "history": "f0790eb7968f39608d0c49be21c360bcbd7e5e3f07ea9a82f2629ba7b48e9d83"
   }
 }

@@ -122,7 +122,7 @@ spaces and compares the C++ direct evaluators.  That manufactured source has no
 nonlinear-solve difference, so its full-ring/cyclic-sector comparison is the
 roundoff contract for the image field implementation.
 
-The checked mdx fold-12 result is
+The checked historical_cpu_worker fold-12 result is
 `results_ffag_cubit_cyclic_nonlinear_yoke.json`.  Cubit 2025.12 produced an
 8-HEX, 720-DoF sector and an explicit 96-HEX, 8640-DoF ring.  The C++ nonlinear
 solves converged in 20 and 21 Picard steps with final residuals below 9.7e-13.
@@ -132,7 +132,7 @@ larger 8.68e-5 because the sampled closed-ring demagnetizing field is nearly
 cancelled.  The independent prescribed-source evaluators agree to 1.40e-16
 A/m absolute and 6.96e-17 of source amplitude, establishing that the direct
 cyclic image evaluator itself is roundoff-consistent with the explicit ring.
-The full validation took 432.9 s with 38 threads on mdx.
+The full validation took 432.9 s with 38 threads on historical_cpu_worker.
 
 When a density filter is active, `optimize_density(..., design_map=...)`
 orthogonally averages the filtered element values back onto each cyclic
@@ -550,7 +550,7 @@ apply diagnostic fell from 30.22 ms to 18.50 ms with bit-identical active
 output.  A quiet final validation host run took 4.78 s for one RHS and 13.56 s for six RHS;
 the latter retained a relative residual below 1.0e-8.  Internal profiling puts
 7.27 s of the 13.64 s profiled solve in HACApK leaf kernels, making small-leaf
-GEMM overhead the next performance target.  Repeat on mdx and compute-host after a
+GEMM overhead the next performance target.  Repeat on development/build host and compute-host after a
 formal release and PyPI installation before using validation host wall times as publication
 claims.
 

@@ -1,4 +1,4 @@
-"""Idle-100 operator residency diagnostic; never formal mdx performance acceptance."""
+"""Idle-100 operator residency diagnostic; never formal development/build host performance acceptance."""
 from pathlib import Path
 import argparse,hashlib,importlib.util,json,statistics,subprocess
 import psutil
@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[2]
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def main():
     p=argparse.ArgumentParser();p.add_argument('--artifact',type=Path,required=True);p.add_argument('--inputs',type=Path,required=True);p.add_argument('--out',type=Path,required=True);a=p.parse_args();a.out.mkdir(parents=True,exist_ok=False)
-    record=dict(schema='radia.hmatrix-residency-diagnostic.v1',accepted=False,timing_acceptance=False,a100_used=False,classification='Idle-100 diagnostic, not mdx performance acceptance',scope='Preassembled numeric leaf setup and three repeated operator applications, not FE Matrix Build or HDiv-MMM solve')
+    record=dict(schema='radia.hmatrix-residency-diagnostic.v1',accepted=False,timing_acceptance=False,a100_used=False,classification='Idle-100 diagnostic, not gpu evaluation worker performance acceptance',scope='Preassembled numeric leaf setup and three repeated operator applications, not FE Matrix Build or HDiv-MMM solve')
     files=[Path(__file__),Path(__file__).with_name('profileResidentHMatrix.m'),ROOT/'packages/radia-gpu/matlab/+radia/+gpu/HMatrixOperator.m'];hashes={str(p.relative_to(ROOT)):sha(p) for p in files};eng=None
     try:
         spec=importlib.util.spec_from_file_location('guard',ROOT/'validation_test/ams_cuda/graph_validation.py');guard=importlib.util.module_from_spec(spec);spec.loader.exec_module(guard)

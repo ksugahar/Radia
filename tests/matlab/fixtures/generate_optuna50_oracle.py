@@ -2963,7 +2963,7 @@ def _trials_dataframe_contract() -> dict[str, object]:
             params={"x": 0.75, "mode": "B"},
             distributions=common_distributions,
             intermediate_values={0: 3.0, 2: 1.0},
-            user_attrs={"owner": "mdx"},
+            user_attrs={"owner": "test-owner"},
             system_attrs={"origin": "oracle"},
             state=TrialState.PRUNED,
         ),

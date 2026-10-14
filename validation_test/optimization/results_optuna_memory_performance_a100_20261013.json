@@ -2491,6 +2491,6 @@
     "Thread counts configure MATLAB and OMP_NUM_THREADS; each operation need not use all configured threads.",
     "Small-case changes are mixed and close to baseline; no universal speedup is claimed.",
     "No Python/DB or Rustuna performance baseline is included.",
-    "Earlier overlapping mdx and A100 archival runs were excluded. Initial cache measurements are retained privately; these results use the final small-history path."
+    "Earlier overlapping historical_cpu_worker and A100 archival runs were excluded. Initial cache measurements are retained privately; these results use the final small-history path."
   ]
 }

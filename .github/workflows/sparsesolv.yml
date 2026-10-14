@@ -357,6 +357,7 @@ jobs:
     # CPU Python/pybind11 build and numerical contracts. GPU mexcuda has its own workflow.
     timeout-minutes: 45
     env:
+      RADIA_VALIDATION_HOST_ROLE: cpu_validation
       # Bound library pools before the parent and its fresh Python children
       # import NumPy/SciPy. NGSolve parallel tests select their worker counts.
       OMP_NUM_THREADS: '1'

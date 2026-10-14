@@ -39,7 +39,7 @@ Small builds and correctness checks may run on 100 under low load with a
 below-normal-priority owned MATLAB session and one compiler invocation, without
 replacing installed runtimes. Do not compete with active heavy CI computation.
 Formal transfer-inclusive time and memory comparisons require an otherwise idle
-100 and are diagnostic provenance, not formal idle-mdx performance acceptance.
+100 and are diagnostic provenance, not formal idle-historical_cpu_worker performance acceptance.
 Results are always written as JSON. A100 is never started or connected to.
 
 Next connect checked persistent context ownership, complete complex PEEC-BEM

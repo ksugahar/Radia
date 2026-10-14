@@ -49,7 +49,7 @@
     },
     {
       "gate": "release-quad deploy smoke",
-      "required_for": "claiming operational quality across validation runtime, 100 machine, mdx, and compute"
+      "required_for": "claiming operational quality across validation runtime, 100 machine, historical_cpu_worker, and compute"
     },
     {
       "gate": "GUI panel and MCP knowledge round-trip",

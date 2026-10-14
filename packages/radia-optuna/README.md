@@ -562,7 +562,7 @@ match across variants; both the RTX 5000 build host and A100 pass the Optuna
 5.0.0 oracle checks. See the [machine-readable results](../../validation_test/optimization/results_optuna_cuda_performance_a100_20261012.json)
 for raw observations, hashes, uncertainty and limitations. These formal timings
 used development binaries on the user-selected A100, not the published 0.3.0
-wheel, and are not mdx timing results. They must not be relabeled as release-wheel
+wheel, and are not historical_cpu_worker timing results. They must not be relabeled as release-wheel
 performance acceptance.
 
 Select GPU work from transfer-inclusive measurements. Management and ordered

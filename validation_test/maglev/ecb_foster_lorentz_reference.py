@@ -28,7 +28,7 @@ Until 2026-09-11 the kernel built the current as -omega sigma Im(v).  On this
 lane it gave zero lift for a centred magnet and a horizontal force of 1906 N at
 5 kHz against the 11.7 N bound; ``history`` in the summary keeps that record.
 
-Solver-heavy validation: run on an idle mdx or compute-host host.  The recorded host
+Solver-heavy validation: run on an idle development/build host or compute-host host.  The recorded host
 is written into the summary.
 """
 

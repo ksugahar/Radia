@@ -1,7 +1,6 @@
 """High-order quadrature reference for mapped HEX BDM2 HDiv-VIM.
 
-Run this expensive companion on compute-host first, or on mdx only when compute-host is
-unavailable and the mdx CI queue is idle. The ordinary production gate
+Run this expensive companion on the development/build host in an isolated job. The ordinary production gate
 uses q9/q12 against q10/q16; this script checks that q10/q16 itself approaches
 the still richer q11/q20 rule.
 """

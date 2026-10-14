@@ -1845,7 +1845,7 @@
         "warm_median_whole_seconds": 0.2696088
       }
     ],
-    "timing_classification": "Exact host diagnostic, not idle-mdx performance acceptance",
+    "timing_classification": "Exact host diagnostic, not idle-historical_cpu_worker performance acceptance",
     "memory_limitations": "Exact owned buffers and available-memory samples; no cuBLAS, host or global allocation peak",
     "sha256": {
       "cases.json": "7e41409e32b3194d21af5bada1270416585e8f4921b9bd2bbd830e55b5620780",
@@ -2436,7 +2436,7 @@
   },
   "limitations": [
     "100 first-payload timings are incidental diagnostics during CI activity, not a performance comparison.",
-    "A100 has one warm sample per mode; sequential direct/cache, not ABBA or idle-mdx acceptance.",
+    "A100 has one warm sample per mode; sequential direct/cache, not ABBA or idle-gpu_evaluation_worker acceptance.",
     "Cache increases exact accounted setup peak from 450288 to 2286980 bytes.",
     "Owned buffers and available-memory samples exclude cuBLAS, host and global allocation peaks.",
     "Higher geometry, adaptive high-order HACApK, interfaces, constraints and nonlinear materials remain outside this gate."

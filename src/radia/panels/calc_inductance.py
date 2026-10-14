@@ -442,7 +442,7 @@ def _build_bema_coil_mesh(args):
         # Fuzzy / typo hint (e.g. user wrote "sorce" instead of
         # "source").  Use difflib.get_close_matches at cutoff=0.7 so
         # 1-2 char edits count but unrelated names don't.  This is the
-        # actual kubota / mdx 2026-05-11 case (sideset name typo).
+        # actual kubota / historical_cpu_worker 2026-05-11 case (sideset name typo).
         try:
             import difflib
             typos = []
@@ -474,7 +474,7 @@ def _build_bema_coil_mesh(args):
     # The volume .vol is returned as-is.  Its boundary is the coil surface,
     # and compute_inductance_source_sink now wraps HDivSurface in Compress,
     # which removes the interior-edge DOFs whose null modes made the dense
-    # saddle singular on 2026-05-12 (Keiko mdx + validation runtime gapped_torus_2port).
+    # saddle singular on 2026-05-12 (Keiko historical_cpu_worker + validation runtime gapped_torus_2port).
     # The workaround then was to extract a flat surface here; that also threw
     # away the curving order baked into the .vol at export, so the coil BEM-A
     # ran on a polygonised surface while the workpiece BEM honoured
@@ -493,7 +493,7 @@ def _arrays_from_bema_coil_mesh(mesh, source_name="source", sink_name="sink"):
     silent failure mode: validation passed (using the user's name) but
     the masks were empty (using "source"/"sink"), giving a misleading
     "coil source/sink mesh empty after labelling" runtime error
-    (kubota / mdx, 2026-05-11).
+    (kubota / historical_cpu_worker, 2026-05-11).
     """
     from ngsolve import BND
     n_v = mesh.nv

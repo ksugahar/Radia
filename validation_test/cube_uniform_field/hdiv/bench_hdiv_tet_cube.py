@@ -4,7 +4,7 @@
 This is the unstructured-tet counterpart of bench_hdiv_cube.py.  It uses the
 current production path, radia.vim.Solve, not the retired Radia object/MMPM
 benchmark. Useful sizes are validation-class workloads and should run on
-compute-host first, or on mdx only when compute-host is unavailable and its CI queue is
+the development/build host; ensure its CI queue is
 idle.
 """
 from __future__ import annotations
@@ -247,14 +247,14 @@ def _materials(selection: str) -> list[str]:
 def _apply_nonlinear_profile(args: argparse.Namespace) -> None:
     """Resolve nonlinear timing defaults after argparse.
 
-    `strict` keeps solver-oriented defaults.  `mdx-scaling` is the timing lane
+    `strict` keeps solver-oriented defaults.  `study-scaling` is the timing lane
     used for the 2026-07-09 nonlinear preconditioner sweep; explicit CLI values
     still win because these fields default to None in argparse.
     """
     if args.preconditioner is None:
         args.preconditioner = "auto"
     if args.nl_tol is None:
-        args.nl_tol = 3.0e-4 if args.nonlinear_profile == "mdx-scaling" else 1.0e-6
+        args.nl_tol = 3.0e-4 if args.nonlinear_profile == "study-scaling" else 1.0e-6
     if args.nl_maxit is None:
         args.nl_maxit = 300
     if args.newton_inner_tol is None:
@@ -262,9 +262,9 @@ def _apply_nonlinear_profile(args: argparse.Namespace) -> None:
     if args.newton_warmstart is None:
         args.newton_warmstart = "linear"
     if args.newton_continuation is None:
-        args.newton_continuation = 2 if args.nonlinear_profile == "mdx-scaling" else 1
+        args.newton_continuation = 2 if args.nonlinear_profile == "study-scaling" else 1
     if args.newton_reuse_tangent_steps is None:
-        args.newton_reuse_tangent_steps = 3 if args.nonlinear_profile == "mdx-scaling" else 1
+        args.newton_reuse_tangent_steps = 3 if args.nonlinear_profile == "study-scaling" else 1
 
 
 def _build_payload(args: argparse.Namespace, rows: list[dict[str, Any]], bh_source: str) -> dict[str, Any]:
@@ -348,8 +348,8 @@ def main() -> int:
         choices=["energy-newton", "picard-mass-riesz", "picard-energy"],
         default="energy-newton",
     )
-    ap.add_argument("--nonlinear-profile", choices=["strict", "mdx-scaling"], default="strict",
-                    help="Resolve nonlinear defaults. mdx-scaling uses nl_tol=3e-4, continuation=2, "
+    ap.add_argument("--nonlinear-profile", choices=["strict", "study-scaling"], default="strict",
+                    help="Resolve nonlinear defaults. study-scaling uses nl_tol=3e-4, continuation=2, "
                          "and tangent reuse=3 unless explicitly overridden.")
     ap.add_argument("--newton-inner-tol", default=None,
                     help="'auto', 'fixed', or a numeric inner CG tolerance floor for energy-newton.")

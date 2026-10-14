@@ -208,7 +208,7 @@ def test_em_elf_quarter_xz_NI_2000():
     reference; users who need the exact 13-hex mesh can disable the
     `unite` step.  Runtime ~6.5 min on validation runtime.
 
-    Skipped if the ELF .meg is not present (CI / mdx environments).
+    Skipped if the ELF .meg is not present (CI / development/build host environments).
     """
     g = _load_golden(GOLDEN_ELF)
     vol, coil_py = _require_sample(g)

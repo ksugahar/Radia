@@ -14,7 +14,7 @@ def test_install_deploy_topics_match_current_machine_roles():
     ci_compute = get_install_deploy_documentation("ci_compute")
 
     assert "LAB is not a CI runner" in overview
-    assert "mdx" in overview and "CI priority" in overview
+    assert "development/build host" in overview and "CI priority" in overview
     assert "the only editable development host" in overview
     assert "verified wheels" in overview
     assert "editable `radia`, `cubit-mesh-export`, `radia-mcp`" not in overview

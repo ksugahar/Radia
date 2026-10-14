@@ -155,7 +155,6 @@ SSH_100 = "100"
 # from the machine's release runtime (host policy, 2026-10-04).
 DEV_PYTHON_100 = r"W:\00_CAE\Radia\environments\development\Scripts\python.exe"
 DEV_PYTHON_100_PS = "'" + DEV_PYTHON_100 + "'"
-SSH_MDX1 = "mdx"
 SSH_HIBINO = "hibino"
 PY_HIBINO = "py -3.12"
 MATLAB_EXE = r"C:\Program Files\MATLAB\R2026a\bin\matlab.exe"
@@ -167,7 +166,6 @@ OPTUNA_WHEEL_RUNNER = REPO / "packages/radia-optuna/tests/run_installed_wheel_si
 _KNOWN_SIMULINK_TARGETS = {
     "lab": ("LAB", "102", "python"),
     "100": ("100号機", SSH_100, "python"),
-    "mdx1": ("mdx1", SSH_MDX1, "python"),
 }
 # The promotion gate imports the same tuple, so the machines that produce
 # release evidence and the machines the gate demands evidence from cannot
@@ -1281,10 +1279,9 @@ def _deploy_100():
 
 
 def _deploy_mdx(host):
-    if host != "mdx1":
-        fail(f"unknown computation target: {host!r}")
-        return 2
-    return _deploy_pypi(SSH_MDX1, "mdx1")
+    """Reject every retired refresh route before runtime or network changes."""
+    fail("Retired compute deployment routes are disabled")
+    return 2
 
 
 def cmd_phase8(args):
@@ -1321,12 +1318,9 @@ def cmd_phase8(args):
 
 
 def cmd_phase8e(args):
-    """Explicit refresh-when-needed on alias mdx; never part of release gates."""
-    for host in ("mdx1",):
-        rc = _deploy_mdx(host)
-        if rc != 0:
-            return rc
-    return 0
+    """Reject the retired optional compute refresh command."""
+    fail("Retired compute refresh is disabled; release targets are LAB and 100")
+    return 2
 
 
 CROSS_MACHINE_PROBE = '''import hashlib, importlib.metadata as md, os
@@ -1927,7 +1921,7 @@ def cmd_restore_editable(args):
 # ============================================================
 # Phase 5.5 gate: CI-green BEFORE tagging
 # ============================================================
-# Routine CI now runs on mdx. Verify GitHub check-runs by immutable commit SHA;
+# Routine CI now runs on development/build host. Verify GitHub check-runs by immutable commit SHA;
 # never infer remote CI state from a local Runner.Worker process or C:\temp.
 
 
@@ -2435,7 +2429,7 @@ def main():
     s8.add_argument("--target", default="lab,100",
                      help="comma list: lab, 100, all (default lab,100)")
     sub.add_parser("phase8e",
-                    help="optional mdx refresh from PyPI; never part of release acceptance")
+                    help="retired compute refresh; always rejected")
     sub.add_parser("phase9",
                     help="cross-machine consistency probe")
     ss = sub.add_parser(

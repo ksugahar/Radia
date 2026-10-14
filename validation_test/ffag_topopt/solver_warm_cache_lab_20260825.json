@@ -10,7 +10,7 @@
     "worktree_dirty": true,
     "full_performance_result": "<private-path>/ffag_full_field_selected_real_iter1_warm_cache_20260825.json",
     "warm_cold_diagnostic_result": "<private-path>/ffag_full_field_selected_real_iter1_warm_cold_diagnostic_20260825.json",
-    "measurement_scope": "exploratory validation runtime measurement; repeat timing on mdx or compute after cooling-system recovery"
+    "measurement_scope": "exploratory validation runtime measurement; repeat timing on historical_cpu_worker or compute after cooling-system recovery"
   },
   "problem": {
     "element_family": "HEX",

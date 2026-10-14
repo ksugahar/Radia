@@ -28,7 +28,7 @@ The first assert (a) requires capturing the export's stdout.  We assert
 (b) directly via parse_cubit_list -- robust regardless of how Cubit
 reports messages.
 
-Skipped automatically when Cubit is not on the LAB / 100号機 / mdx path
+Skipped automatically when Cubit is not on the LAB / 100号機 / development/build host path
 (running locally without Cubit installed).
 """
 

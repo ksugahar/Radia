@@ -287,7 +287,7 @@
     "resident": 0.0024811
   },
   "resident_speedup": 1.729857724396437,
-  "timing_classification": "Guarded A100 operator diagnostic; not full physical solver or idle-mdx CPU performance acceptance",
+  "timing_classification": "Guarded A100 operator diagnostic; not full physical solver or idle-gpu_evaluation_worker CPU performance acceptance",
   "idle_before": {
     "cpu_percent": 6.3153310104529625,
     "gpu_percent": 0,

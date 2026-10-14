@@ -83,7 +83,7 @@
   "compression_limitations": "All selected low-rank leaves in the 132-charge strict-tolerance case were promoted to exact dense at the rank budget. No compressed-leaf success claim.",
   "whole_solve_diagnostic": {
     "accepted": true,
-    "classification": "Idle-100 diagnostic, not formal mdx acceptance",
+    "classification": "Idle-100 diagnostic, not formal historical_cpu_worker acceptance",
     "scope": "Eight affine tetra RT0 FE setup through CUDA HACApK/material solve/result recovery/release; not general HDiv",
     "cold_limitations": "First payload per module in an initialized owned MATLAB process, not cold process",
     "memory_limitations": "Exact owned buffers plus available-memory samples; excludes cuBLAS/runtime and host/global peaks",

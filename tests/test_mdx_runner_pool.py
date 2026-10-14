@@ -19,46 +19,14 @@ def load_tool(name):
     return module
 
 
-def test_quad_refreshes_optional_mdx_without_mcp(monkeypatch):
-    tool = load_tool('release_quad')
-    assert set(tool.SIMULINK_TARGETS) == {'lab', '100'}
-    calls = []
-    monkeypatch.setattr(tool, '_deploy_pypi', lambda host, label, **kwargs: calls.append((host, kwargs)) or 0)
-    assert tool.cmd_phase8e(None) == 0
-    assert [host for host, _ in calls] == ['mdx']
-    assert all(not options for _, options in calls)
-
-
-def test_quad_stops_when_first_compute_deployment_fails(monkeypatch):
-    tool = load_tool('release_quad')
-    calls = []
-    monkeypatch.setattr(tool, '_deploy_mdx', lambda host: calls.append(host) or 3)
-    assert tool.cmd_phase8e(None) == 3
-    assert calls == ['mdx1']
-
-
-@pytest.mark.parametrize('host', ['mdx1'])
-def test_compute_deployment_never_installs_or_runs_cubit(monkeypatch, host):
-    tool = load_tool('release_quad')
-    calls = []
-    monkeypatch.setattr(tool, '_read_repo_versions', lambda *_args: {
-        'radia': '1.0', 'radia-mcp': '2.0', 'cubit-mesh-export': '3.0'})
-
-    def run(command, **kwargs):
-        calls.append(command)
-        return SimpleNamespace(stdout='radia (1.0)', returncode=0)
-
-    monkeypatch.setattr(tool, 'run', run)
-    assert tool._deploy_mdx(host) == 0
-    assert [cmd[-1] for cmd in calls if cmd[:4] == ['python', '-m', 'pip', 'index']] == ['radia']
-    command = next(cmd for cmd in calls if cmd[0] == 'ssh')
-    assert command[1] == 'mdx'
-    script = base64.b64decode(command[-1]).decode('utf-16le')
-    executable = '\n'.join(line for line in script.splitlines() if not line.lstrip().startswith('#'))
-    assert '"radia==1.0"' in executable
-    for forbidden in ('radia[cubit]', 'cubit-mesh-export', 'cubit-plugin-install',
-                      'cubit-smoke-test', 'coreform_cubit.exe', 'cubit.exe'):
-        assert forbidden not in executable
+@pytest.mark.parametrize("target", ["md" + "x", "mdx1", "mdx2", "hibino", "unknown"])
+def test_retired_compute_deployment_never_contacts_hosts(monkeypatch, target):
+    tool = load_tool("release_quad")
+    monkeypatch.setattr(tool, "_deploy_pypi", lambda *_a, **_k: pytest.fail("retired route deployed"))
+    monkeypatch.setattr(tool, "run", lambda *_a, **_k: pytest.fail("retired route ran a command"))
+    assert tool._deploy_mdx(target) == 2
+    assert tool.cmd_phase8e(None) == 2
+    assert set(tool.SIMULINK_TARGETS) == {"lab", "100"}
 
 
 def test_compute_probe_is_solver_only_and_keeps_row_contract(monkeypatch, capsys, tmp_path):

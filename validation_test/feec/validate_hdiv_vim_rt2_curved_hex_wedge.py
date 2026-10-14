@@ -2,8 +2,8 @@
 
 The input ``.vol`` files are supplied explicitly because curved HEX/WEDGE
 meshes are produced by the Cubit export workflow and are not tiny CI fixtures.
-Use ``--solve`` on compute-host first, or on mdx only when compute-host is unavailable and
-the mdx CI queue is idle. The JSON records the host, topology, dimensions,
+Use ``--solve`` on the development/build host; ensure
+CI and user workloads remain isolated. The JSON records the host, topology, dimensions,
 build/solve timings, and finite field-evaluation gate.
 """
 from __future__ import annotations

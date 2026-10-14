@@ -18,7 +18,7 @@ python validation_test/sparsesolv/hiruma/bench_compact_ams.py --verify-baseline
 The gate fixes mesh hashes and finite-element sizes exactly, while accepting a
 small iteration/residual range.  Setup and solve times are recorded but are not
 gated because they depend on the machine and concurrent load.  Heavy scaling
-runs belong on mdx; the tracked 2.5T case is suitable as a validation host smoke run.
+runs belong on development/build host; the tracked 2.5T case is suitable as a validation host smoke run.
 
 The fixture was converted from the existing laboratory `mesh1_2.5T.msh`
 dataset.  `prepare_hiruma_vol.py` preserves its points and volume elements and

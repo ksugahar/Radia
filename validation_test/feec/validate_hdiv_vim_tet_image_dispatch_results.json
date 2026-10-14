@@ -2,7 +2,7 @@
   "schema": "radia.validation.hdiv-vim-tet-image-dispatch.v1",
   "generated_at_utc": "2026-09-04T22:07:52.588080+00:00",
 
-  "timing_role": "relative same-host smoke; decision-grade timing belongs on idle mdx/compute",
+  "timing_role": "relative same-host smoke; decision-grade timing belongs on idle historical_cpu_worker/compute",
   "radia_version": "4.95.81",
   "ngsolve_version": "6.2.2606",
   "python_version": "3.12.10",

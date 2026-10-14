@@ -71,7 +71,7 @@ total budget to resume the same experiment. Variable-length histories and
 Pareto points stay in normalized MAT tables, so `reviewOptunaStudy` and
 `applyOptunaTrial` expose full saved results without adding signal lines.
 
-Release performance is measured on mdx from raw JSON under
+Release performance is measured on development/build host from raw JSON under
 `validation_test/optimization`, not inferred from unit-test timing. The 5.0
 release gate requires the paired `optuna50` benchmark outputs; older results
 remain historical evidence only.

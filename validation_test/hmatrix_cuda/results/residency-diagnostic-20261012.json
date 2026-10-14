@@ -3,7 +3,7 @@
   "accepted": true,
   "timing_acceptance": false,
   "a100_used": false,
-  "classification": "Idle-100 diagnostic, not mdx performance acceptance",
+  "classification": "Idle-100 diagnostic, not historical_cpu_worker performance acceptance",
   "scope": "Preassembled numeric leaf setup and three repeated operator applications, not FE Matrix Build or HDiv-MMM solve",
   "cpu_mean_percent": 0.8,
   "build": {

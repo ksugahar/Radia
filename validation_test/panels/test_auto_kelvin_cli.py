@@ -16,7 +16,7 @@ to toggle the ``add_kelvin`` boolean in the config JSON.
 
 Not marked slow because it's not that slow (~30s with coarse mesh),
 but does require Cubit to be installed at the standard location.
-Skipped when Cubit is absent (CI / mdx).
+Skipped when Cubit is absent (CI / development/build host).
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ ENTRY_SCRIPT = CUBIT_HELPERS / "auto_kelvin_entry.py"
 
 
 def _find_cubit() -> Path | None:
-    # validation runtime / runtime host / mdx use this path; mdx rarely runs this test
+    # validation runtime / runtime host / development/build host use this path; development/build host rarely runs this test
     p = Path(r"C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe")
     return p if p.is_file() else None
 

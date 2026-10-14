@@ -534,7 +534,7 @@ in any post-mortem.
 
 Dense-sweep headline numbers are locked to radia >= 4.67.0.
 Performance timings are validation host-order estimates (Windows, MKL, NGSolve)
-and production deploys (development host, mdx) match within 10%.
+and production deploys (development host, historical_cpu_worker) match within 10%.
 
 ---
 

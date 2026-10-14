@@ -92,7 +92,7 @@
   "limitations": [
     "Dense near-rule diagnostic; no adaptive high-order HACApK acceptance",
     "No images, constrained spaces, nonlinear materials or internal interfaces accepted",
-    "First payload times are 100 diagnostics; no warm ABBA or idle-mdx acceptance",
+    "First payload times are 100 diagnostics; no warm ABBA or idle-historical_cpu_worker acceptance",
     "Owned buffers accounted; cuBLAS, host and global peaks not measured"
   ],
   "durable_evidence": "<private-runtime>00_CAE/Radia/release-evidence/hmatrix-cuda-20261012/high-order-curved-20261013",
@@ -293,7 +293,7 @@
   ],
   "a100_status": "Same-artifact four-case numerical and warm diagnostic accepted; see hdiv-elements-a100-20261013.json",
   "host": "runtime",
-  "timing_classification": "100 diagnostic only, not idle-mdx acceptance",
+  "timing_classification": "100 diagnostic only, not idle-historical_cpu_worker acceptance",
   "build_sources": {
     "projection": "fb71b3386",
     "hmatrix": "1d42ca51b"

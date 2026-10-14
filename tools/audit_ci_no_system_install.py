@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Audit: self-hosted CI jobs must NOT pip-install Radia packages into system Python.
 
-The self-hosted runner executes on mdx and shares its service-account Python.
+The self-hosted runner executes on development/build host and shares its service-account Python.
 In a job on that runner, any of:
 
   * ``pip install -e .``            (radia editable)

@@ -209,7 +209,7 @@
       "warm_median_whole_seconds": 86.29889295000001
     }
   ],
-  "timing_classification": "Exact host diagnostic, not idle-mdx performance acceptance",
+  "timing_classification": "Exact host diagnostic, not idle-historical_cpu_worker performance acceptance",
   "memory_limitations": "Exact owned buffers and available-memory samples; no cuBLAS, host or global allocation peak",
   "sha256": {
     "cases.json": "42b23b7866dbafa0af875cd38632329669b3af12a119f955e06ec672bec3e8e3",

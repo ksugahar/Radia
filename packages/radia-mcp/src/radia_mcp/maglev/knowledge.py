@@ -650,7 +650,7 @@ modes (0.596%).  This is the topology-preserving a priori plan.  The final
 Modal-bulk SIBC/EVRS response basis for the three TEAM excitation ports has
 rank 3.
 
-The epsilon-free fixed-position 3-D HCurl-VIM force gate passes on mdx.  The
+The epsilon-free fixed-position 3-D HCurl-VIM force gate passes on historical_cpu_worker.  The
 analytic affine-tetrahedron self interaction (reference moments through degree
 6) gives physical Fz = 1.101889, 1.098167, and 1.092733 N on 25, 20, and 15 mm
 meshes, versus 1.096266 N; the maximum error is 0.513%.  Projection residuals

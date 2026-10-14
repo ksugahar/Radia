@@ -45,7 +45,7 @@ Use the official MATLAB MCP Server for MATLAB checks:
    `radia_ih_eddy_sfun` and `radia_ih_thermal_sfun` native blocks, closed
    temperature feedback, and no Python fallback.
 5. For an IH preview release, run the extracted-package verifier through
-   `release_quad simulink-candidate --target all` on 102号機 and 100号機. mdx is reserved for idle timing; mdx1/mdx2/hibino are retired.
+   `release_quad simulink-candidate --target all` on 102号機 and 100号機. CPU validation stays on the development/build host; optional GPU evaluation is separate. Retired execution targets are excluded.
 
 ## Artifact Contract
 

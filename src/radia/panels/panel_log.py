@@ -25,7 +25,7 @@ Every line is tagged with:
 
   - millisecond timestamp
   - source component (cubit / ih-window / inductance / fem_kelvin / ...)
-  - **user@host** so logs from multiple machines (validation runtime, runtime host, mdx)
+  - **user@host** so logs from multiple machines (validation runtime, runtime host, historical_cpu_worker)
     or multiple users on the same machine can be told apart
 
 Example::

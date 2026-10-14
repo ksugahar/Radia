@@ -103,7 +103,7 @@ and boundary-element object model, not in duplicating that plumbing.
 ## Measured performance
 
 The committed validation driver compares the same shared C++ kernel on an idle
-`mdx` compute host. It uses 20,000 scattering points, 28 partial-wave terms,
+`historical_cpu_worker` compute host. It uses 20,000 scattering points, 28 partial-wave terms,
 five warmups, and 31 measured repetitions. Process startup is reported
 separately from warm calls.
 

@@ -9,8 +9,7 @@ mass-Riesz PARDISO factor are paid once (t_setup_s / charge_gram_wall_s),
 after which every quasi-static step costs only CG applies + the batched
 material update (per-step t_step_s ~ flat across the loop).
 
-Benchmark Policy: publication timings run on hibino first, or on mdx only when
-hibino is unavailable and the mdx CI queue is idle; LAB runs are correctness
+Benchmark Policy: publication timings run on the development/build host with isolated workloads; classify local timing as diagnostic; LAB runs are correctness
 smoke only. Each case runs in its OWN subprocess so peak memory
 (psutil peak working set) is per-case accurate.
 
@@ -33,7 +32,7 @@ from pathlib import Path
 
 _HERE = Path(__file__).resolve()
 # In-repo runs resolve radia from the source tree; a copied script (e.g. the
-# C:\temp\ mdx deployment) falls back to the installed package.
+# C:\temp\ historical_cpu_worker deployment) falls back to the installed package.
 if len(_HERE.parents) > 2:
     _SRC = _HERE.parents[2] / "src"
     if _SRC.is_dir() and str(_SRC) not in sys.path:

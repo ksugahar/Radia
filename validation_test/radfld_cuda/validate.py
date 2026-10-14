@@ -108,7 +108,7 @@ def main():
     if digest(binary) != receipt['binary_sha256'] or digest(oracle.__file__) != reference_receipt['binary_sha256']:
         raise RuntimeError('Build artifact hash mismatch')
     record = dict(schema='radia.radfld-cuda-validation.v1', accepted=False,
-                  timing_classification='100 RTX 5000 diagnostic; not idle-mdx performance acceptance',
+                  timing_classification='100 RTX 5000 diagnostic; not idle-development/build host performance acceptance',
                   scope=args.representation+' numeric sources; no generic RadFld object dispatch',
                   build=receipt, cpu_reference=reference_receipt, threads=args.threads,
                   script_sha256=digest(__file__),

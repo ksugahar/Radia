@@ -1,6 +1,6 @@
 {
   "generated_at_utc": "2026-07-08T02:48:45+00:00",
-  "description": "mdx A/B for wedge RT1 HDiv-VIM translation block cache. scope=1 caches the proven cell-cell subset; face-bearing all-cache remains diagnostic only.",
+  "description": "historical_cpu_worker A/B for wedge RT1 HDiv-VIM translation block cache. scope=1 caches the proven cell-cell subset; face-bearing all-cache remains diagnostic only.",
   "off_payload": {
     "generated_at_utc": "2026-07-08T02:46:18+00:00",
     "driver": "<private-path>/radia_wedge_trans_scope\\validation_test\\cube_uniform_field\\hdiv\\bench_hdiv_cube.py",

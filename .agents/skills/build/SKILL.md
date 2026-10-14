@@ -7,12 +7,10 @@ description: Build Radia Python or standalone MATLAB MEX artifacts from the sele
 
 ## Select the source and environment
 
-- 100号機 owns candidate and release artifact builds (2026-10-06).
-  Transfer the reviewed commit to an isolated local checkout on that host;
-  return artifacts and provenance to LAB, then deploy identical wheel bytes
-  to the compute hosts. Keep numerical validation on the selected compute
-  host. Do not build artifacts on LAB/mdx/hibino. CI/preflight numerical
-  tests stay on mdx; artifact-building steps belong to 100号機.
+- The development/build host owns candidate/release builds and isolated heavy
+  CPU numerical validation. Transfer reviewed source to an isolated checkout;
+  recover artifacts/provenance to durable storage. Optional GPU evaluation uses
+  hash-verified artifacts on the on-demand GPU worker; never replace user runtimes.
 - Read the selected checkout's AGENTS.md, Build.ps1 parameters, and relevant
   CMake targets. Do not redirect a clean worktree build into the shared WIP tree.
 - Use PowerShell 7 (`pwsh`), not Windows PowerShell 5. Scratch belongs in

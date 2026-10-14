@@ -64,7 +64,7 @@ JSON records exact simultaneously owned CUDA bytes, sampled CUDA free memory,
 MATLAB available/host memory, and Python process working-set/private bytes.
 These are not a whole-process native allocation peak; Python's reported peak
 is process-lifetime, not per-case. 100/RTX 5000 timing is diagnostic provenance,
-never formal idle-mdx performance acceptance. Raw MAT files, inputs, logs,
+never formal idle-historical_cpu_worker performance acceptance. Raw MAT files, inputs, logs,
 compiler receipts and operational identities remain in private durable storage;
 only reviewed public JSON belongs in Git.
 
@@ -203,7 +203,7 @@ independent numerical gates.
 point. Its continuous timer includes source construction/upload, projection
 target capture, evaluation, projection, result recovery and release. Exact
 owned device buffer sizes and sampled CUDA free memory are distinguished from
-unmeasured process/host peaks. Timings on 100 are diagnostic, never formal mdx
+unmeasured process/host peaks. Timings on 100 are diagnostic, never formal historical_cpu_worker
 acceptance. Current timing and memory results remain pending due to host load.
 
 The projection validator now accepts `--representation` for each of the five
@@ -242,7 +242,7 @@ construction, transfers, evaluation, SetValues projection, result recovery
 and release. Both algorithms were called once before two ABBA rounds.
 Independent CPU precision input hashes match these inputs. All cases use
 24 actual mapped targets: 256 point sources or 16 volume plus 16 surface
-records. These are small diagnostics, not scaling or mdx performance gates.
+records. These are small diagnostics, not scaling or historical_cpu_worker performance gates.
 
 | Representation | FP64 median ms | Mixed32 median ms |
 |---|---:|---:|
@@ -262,7 +262,7 @@ The earlier socket CIM average near 50 percent conflicted with all-104-CPU
 samples (3.02 percent mean), process CPU deltas and empty queues. The latter
 established the idle diagnostic window; socket CIM alone must not govern
 future waits. `measure_projection_precision.py` repeats the queue/process/GPU
-guards outside timed intervals. Formal performance acceptance remains mdx-only.
+guards outside timed intervals. Formal performance acceptance remains development/build host-only.
 
 ## Larger projection and reuse numerical checkpoint (2026-10-12)
 

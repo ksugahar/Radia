@@ -64,6 +64,6 @@
     "passed": true,
     "requirement": "Identical seeded proposal checksum and best value; warmed batch-parallel median no slower than sequential."
   },
-  "environment_note": "mdx release-candidate run; measured_jointconvex_ridge.py PID 9772 active on one core; pre-run total CPU sampled",
+  "environment_note": "historical_cpu_worker release-candidate run; measured_jointconvex_ridge.py PID 9772 active on one core; pre-run total CPU sampled",
   "claim_boundary": "Synthetic calibrated scalar objective used to measure radia.optuna.optimize scheduling and worker throughput. It does not predict a specific CAE model's solver speedup."
 }

@@ -55,7 +55,7 @@ verified wheels; only 100 has a dedicated local editable development venv.
 Keep its release runtime separate from in-progress development. `verify-editable`
 checks LAB's wheel and 100's editable; `repoint` permits only 100.
 100号機 owns CI/builds and isolated heavy numerical validation. 102号機 owns wheel acceptance.
-The consolidated mdx host is reserved for idle timing evaluations; mdx1/mdx2/hibino are retired.
+CPU development and validation stay on the development/build host; GPU evaluation is optional. Retired execution targets are excluded.
 
 
 | Machine | Solver install tier | Solver release route |
@@ -64,8 +64,8 @@ The consolidated mdx host is reserved for idle timing evaluations; mdx1/mdx2/hib
 | 100号機 | release runtime (machine-default Python): exact accepted Radia wheel; dedicated editable development venv `W:\00_CAE\Radia\environments\development` | `phase8 --target 100`: wheel into the release runtime, then editable into that venv only; `done`/`phase9` verify both separately |
 
 100号機 owns isolated CI/builds and a separate editable development runtime.
-102号機 tests fixed wheels with job-owned scratch. Formal timing belongs only
-to otherwise idle mdx; compute timing is not a release deployment gate.
+102号機 tests fixed wheels with job-owned scratch. Local timings are diagnostic;
+optional formal GPU evaluation uses an idle GPU worker and is not a release gate.
 
 
 `phase9` compares only the solver version and the declared tracked solver-file
@@ -102,11 +102,11 @@ non-mutating and leaves both runtimes unchanged. Later advance the development
 venv's explicitly intended source to current `main` and verify it; do not use an
 old-path restore operation.
 
-## Optional mdx refresh
+## Retired compute refresh
 
-`phase8e` refreshes the installed Radia on SSH alias `mdx` only when explicitly
-requested, using the controller's chosen released version. It is not called
-by `all`, `phase9` or `done`, and is not a release acceptance target.
+`phase8e` and retired compute deployment routes always reject before runtime
+or network changes. GPU evaluation is an independently requested operation,
+never part of `all`, `phase9` or `done` and never a required release target.
 
 ## Independent radia-optuna lane
 

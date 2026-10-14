@@ -1,4 +1,4 @@
-"""Validate true Cubit order-2 curved HEX BDM2 on compute-host first or idle-CI mdx.
+"""Validate true Cubit order-2 curved HEX BDM2 on the development/build host in an isolated job.
 
 Generate the temporary mesh on a Cubit host first::
 

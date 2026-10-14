@@ -2730,7 +2730,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -OptunaMexOnly
 
 ### NGSolve for CI Runner
 
-The mdx native runner creates a run-local virtual environment and installs the
+The development/build host native runner creates a run-local virtual environment and installs the
 exact `ngsolve`, `netgen-mesher`, `mkl-devel`, pybind11, and Ninja versions for
 that job. It derives `NGSOLVE_DIR`, `Netgen_DIR`, and `MKLROOT` from that venv.
 Do not maintain a copied `C:\\NGSolve` tree and do not build against shared
@@ -2742,7 +2742,7 @@ Routine source CI and native release CI are deliberately separate:
 
 | Lane | Trigger | Scope |
 |------|---------|-------|
-| `radia-fast.yml` | affected pushes/PRs | mdx fast policy and regression gates |
+| `radia-fast.yml` | affected pushes/PRs | development/build host fast policy and regression gates |
 | `policy-lint.yml` | non-MCP pushes/PRs | portable source-policy checks |
 | `radia-mcp-matrix.yml` | MCP changes | impact-selected MCP tests/selftests |
 | `build-test.yml` | `v*` tag or manual dispatch | isolated native build, bounded tests, wheel candidate |

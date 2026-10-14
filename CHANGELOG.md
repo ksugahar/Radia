@@ -864,8 +864,8 @@ Released 2026-08-29.
   in durable table/MAT artifacts.
 - The standalone Optuna package includes the student-facing Simulink workflow,
   a 150-test MATLAB suite, executable upstream evidence for every required
-  shared API entry, installed-wheel isolation checks, and public mdx performance
-  evidence. On the checked mdx workload MATLAB was faster than upstream Python
+  shared API entry, installed-wheel isolation checks, and public historical_cpu_worker performance
+  evidence. On the checked historical_cpu_worker workload MATLAB was faster than upstream Python
   for scalar, grouped-conditional, and trial-table operations; four-worker
   objective batching achieved 2.36x speedup while preserving seeded proposals.
 - Completed the previously named MATLAB Optuna sampler gaps against the pinned
@@ -1024,7 +1024,7 @@ Released 2026-08-26.
   the official Optuna MCP ownership and license boundary, bundles checked
   upstream notices, emits its MEX-bearing Windows platform wheel directly, and
   releases only the exact successful main-CI wheel after that wheel passes the
-  standalone validation host / 100-machine / mdx / compute-host QUAD gate.
+  standalone validation host / 100-machine / historical_cpu_worker / compute-host QUAD gate.
 
 ## 4.95.62 - Standalone MATLAB Optuna 4.9.0 distribution
 
@@ -2179,7 +2179,7 @@ The fix replaces both `register_associations()` and
 no cmd.exe involvement, no quoting ambiguity).  `winreg` is stdlib;
 no new dependency.
 
-Discovered 2026-05-24 during the Stage 2 deploy to development host + mdx,
+Discovered 2026-05-24 during the Stage 2 deploy to development host + historical_cpu_worker,
 worked around at the time with a manual `reg add` per-machine.
 
 ## 4.76.1 — .sol viewer: colour-mapped field (scalfunction/vecfunction)
@@ -3230,7 +3230,7 @@ the worst possible failure mode (silently wrong "OK" output).
 ## 4.48.1 — STEP centerline classification dispatch + path_points_m removal
 
 Released 2026-05-15.  Hot-fix for keiko's `1turn_coil_loft_outsideline.step`
-on mdx (4 PEEC runs FAIL with "Filament path does not match the
+on historical_cpu_worker (4 PEEC runs FAIL with "Filament path does not match the
 conductor solid bbox").
 
 ### Why
@@ -3278,7 +3278,7 @@ upstream branch that was wrong.
 
 ## 4.28.1 — radia_ih Run button stays disabled after Browse... fix
 
-Released 2026-05-08.  Hot-fix for kubota's report on mdx + development host.
+Released 2026-05-08.  Hot-fix for kubota's report on historical_cpu_worker + development host.
 
 ### Why
 
