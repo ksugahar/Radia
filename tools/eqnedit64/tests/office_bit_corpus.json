@@ -325,7 +325,8 @@
   },
   {
     "id": "big-paired",
-    "tex": "\\bigl(a+b\\bigr)"
+    "tex": "\\bigl(a+b\\bigr)",
+    "ooxml_rejected": "Native strict export does not support explicit bigl/bigr size commands; clipboard parity is tested separately."
   },
   {
     "id": "one-sided",

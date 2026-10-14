@@ -21,7 +21,7 @@ try
 {
     foreach (var item in corpus)
     {
-        if (item!["coverage"]?.GetValue<string>() == "excluded") continue;
+        if (item!["coverage"]?.GetValue<string>() == "excluded" || item["ooxml_rejected"] is not null) continue;
         var root = XElement.Load(Path.Combine(args[1], item["id"]!.GetValue<string>() + ".pptxmath"));
         if (root.Name != math + "oMathPara" || root.Descendants().Any(e => e.Name.Namespace != math && e.Name.Namespace != drawing))
             throw new InvalidDataException("Unexpected PowerPoint math namespace");

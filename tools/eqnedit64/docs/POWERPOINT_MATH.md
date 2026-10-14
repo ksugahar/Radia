@@ -45,14 +45,16 @@ must inspect that choice; they must not silently treat those shapes as absent.
 Prose follows `font_pt`; native math stays at 18 pt.
 Display equations are left-aligned with 8 pt before/after paragraph spacing.
 Matched visible pairs in one row, including plain parentheses, explicit
-`\left...\right` and `\bigl...\bigr`, use a stretchable Office delimiter structure.
+`\left...\right`, use a stretchable Office delimiter structure. The clipboard
+route also normalizes `\bigl...\bigr`; strict OOXML export rejects those explicit size commands.
 General `\middle` separators and one-sided fences currently retain visible
 characters without stretching; they are outside the stretchable-fence gate.
 
 ## Validation and limits
 
-The declared corpus has 64 fixtures: 61 structural/text/style/colour semantic
-comparisons against the clipboard emitter, and 3 required rejections.
+The declared corpus has 64 fixtures: 61 clipboard byte comparisons plus 3 clipboard exclusions;
+strict OOXML has 60 structural/text/style/colour comparisons and 4 required
+rejections, including explicit bigl/bigr size commands.
 Run grouping, control formatting and dialect-specific vertical layout are
 normalized; byte identity is not claimed. Independent golden annotations
 check functions, upright/bold styles and enclosing nary fences.

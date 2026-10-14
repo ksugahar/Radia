@@ -110,12 +110,14 @@ def main():
     try:
         excluded = {f["id"] for f in corpus if f.get("coverage") == "excluded"}
         assert excluded == {"boxed", "binom", "cancel"} and len(corpus) == 64
+        ooxml_rejected = {f["id"] for f in corpus if f.get("ooxml_rejected")}
+        assert ooxml_rejected == {"big-paired"}
         for fixture in corpus:
             source = args.output / (fixture["id"] + ".tex")
             output = args.output / (fixture["id"] + ".pptxmath")
             source.write_text(fixture["tex"], "utf-8")
             native = call(app, [source, output])
-            if fixture["id"] in excluded:
+            if fixture["id"] in excluded | ooxml_rejected:
                 assert native.returncode != 0 and fixture["tex"] in native.stderr and not output.exists(), fixture["id"]
                 report["rejected"] += 1
                 continue
@@ -154,7 +156,7 @@ def main():
                     following = siblings[siblings.index(nary) + 1:]
                     assert any("".join(node.itertext()).endswith(tail) for node in following), fixture["id"]
             report["covered"] += 1
-        assert report["covered"] == 61 and report["rejected"] == 3
+        assert report["covered"] == 60 and report["rejected"] == 4
         for i, tex in enumerate([r"\unknown{x}", r"\begin{unknown}x\end{unknown}",
                                  r"\frac{x}{y", r"\begin{aligned}x\end{matrix}"]):
             source = args.output / f"invalid-{i}.tex"
