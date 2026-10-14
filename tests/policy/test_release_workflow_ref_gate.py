@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[2]
 RELEASE_WORKFLOWS=(
     ROOT/".github"/"workflows"/"release.yml",
 )
@@ -241,7 +241,7 @@ def test_eqnedit64_ci_is_separate_from_radia_mcp_ci():
 
 
 def test_eqnedit64_release_order_is_handtest_fable_main_o_drive_then_tag():
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     skill = (root / ".agents/skills/release-eqnedit64/SKILL.md").read_text(
         encoding="utf-8")
     sync = (
