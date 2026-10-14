@@ -1,0 +1,269 @@
+{
+  "accepted": true,
+  "release_accepted": false,
+  "samples": [
+    {
+      "case": "curved2-host-cache",
+      "backend": "cpu",
+      "phase": "first_payload",
+      "whole_seconds": 5.1782164000014745,
+      "coefficient_error": 0.0,
+      "mean_error": 3.2577858271086104e-16,
+      "true_relative_residual": 1.3011194301562965e-12,
+      "exact_accounted_owned_peak_bytes": null,
+      "idle_before": {
+        "cpu_percent": 5.879732739420939,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 40645, 40960",
+        "free_host_bytes": 55721558016,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "idle_after": {
+        "cpu_percent": 6.6147859922178975,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 40645, 40960",
+        "free_host_bytes": 55711514624,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      }
+    },
+    {
+      "case": "curved2-host-cache",
+      "backend": "gpu",
+      "phase": "first_payload",
+      "whole_seconds": 0.6488778999992064,
+      "coefficient_error": 5.015281377765097e-10,
+      "mean_error": 1.4898305998267207e-12,
+      "true_relative_residual": 7.9536576703176e-12,
+      "exact_accounted_owned_peak_bytes": 2286980.0,
+      "idle_before": {
+        "cpu_percent": 5.233069481090591,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 40645, 40960",
+        "free_host_bytes": 55725547520,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "idle_after": {
+        "cpu_percent": 3.666521169794845,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55408463872,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      }
+    },
+    {
+      "case": "curved2-host-cache",
+      "backend": "cpu",
+      "phase": "warm",
+      "whole_seconds": 5.0928445999998075,
+      "coefficient_error": 0.0,
+      "mean_error": 3.2577858271086104e-16,
+      "true_relative_residual": 1.3011194301562965e-12,
+      "exact_accounted_owned_peak_bytes": null,
+      "idle_before": {
+        "cpu_percent": 4.372540445999129,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55362170880,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "idle_after": {
+        "cpu_percent": 6.074967686342092,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55023525888,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      }
+    },
+    {
+      "case": "curved2-host-cache",
+      "backend": "gpu",
+      "phase": "warm",
+      "whole_seconds": 0.25966630000039004,
+      "coefficient_error": 5.015281377765097e-10,
+      "mean_error": 1.4898305998267207e-12,
+      "true_relative_residual": 7.9536576703176e-12,
+      "exact_accounted_owned_peak_bytes": 2286980.0,
+      "idle_before": {
+        "cpu_percent": 9.708315193730954,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55026028544,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "idle_after": {
+        "cpu_percent": 5.879790940766549,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55063560192,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      }
+    },
+    {
+      "case": "curved2-host-cache",
+      "backend": "gpu",
+      "phase": "warm",
+      "whole_seconds": 0.2727504000013141,
+      "coefficient_error": 5.015281377765097e-10,
+      "mean_error": 1.4898305998267207e-12,
+      "true_relative_residual": 7.9536576703176e-12,
+      "exact_accounted_owned_peak_bytes": 2286980.0,
+      "idle_before": {
+        "cpu_percent": 4.267487901451828,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55270621184,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "idle_after": {
+        "cpu_percent": 1.2227074235807822,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55339356160,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      }
+    },
+    {
+      "case": "curved2-host-cache",
+      "backend": "cpu",
+      "phase": "warm",
+      "whole_seconds": 5.170982100000401,
+      "coefficient_error": 0.0,
+      "mean_error": 3.2577858271086104e-16,
+      "true_relative_residual": 1.3011194301562965e-12,
+      "exact_accounted_owned_peak_bytes": null,
+      "idle_before": {
+        "cpu_percent": 0.3054101221640515,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55341125632,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "idle_after": {
+        "cpu_percent": 6.82218309859155,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55031730176,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      }
+    },
+    {
+      "case": "curved2-host-cache",
+      "backend": "cpu",
+      "phase": "warm",
+      "whole_seconds": 5.164987899999687,
+      "coefficient_error": 0.0,
+      "mean_error": 3.2577858271086104e-16,
+      "true_relative_residual": 1.3011194301562965e-12,
+      "exact_accounted_owned_peak_bytes": null,
+      "idle_before": {
+        "cpu_percent": 6.3078958976621085,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55034396672,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "idle_after": {
+        "cpu_percent": 4.918032786885251,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55300812800,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      }
+    },
+    {
+      "case": "curved2-host-cache",
+      "backend": "gpu",
+      "phase": "warm",
+      "whole_seconds": 0.2733187999983784,
+      "coefficient_error": 5.015281377765097e-10,
+      "mean_error": 1.4898305998267207e-12,
+      "true_relative_residual": 7.9536576703176e-12,
+      "exact_accounted_owned_peak_bytes": 2286980.0,
+      "idle_before": {
+        "cpu_percent": 5.026223776223782,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55312166912,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "idle_after": {
+        "cpu_percent": 6.701253782965844,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55199772672,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      }
+    },
+    {
+      "case": "curved2-host-cache",
+      "backend": "gpu",
+      "phase": "warm",
+      "whole_seconds": 0.3209874000003765,
+      "coefficient_error": 5.015281377765097e-10,
+      "mean_error": 1.4898305998267207e-12,
+      "true_relative_residual": 7.9536576703176e-12,
+      "exact_accounted_owned_peak_bytes": 2286980.0,
+      "idle_before": {
+        "cpu_percent": 0.8745080891998214,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55321890816,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "idle_after": {
+        "cpu_percent": 6.192760575665068,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55378280448,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      }
+    },
+    {
+      "case": "curved2-host-cache",
+      "backend": "cpu",
+      "phase": "warm",
+      "whole_seconds": 5.156186799998977,
+      "coefficient_error": 0.0,
+      "mean_error": 3.2577858271086104e-16,
+      "true_relative_residual": 1.3011194301562965e-12,
+      "exact_accounted_owned_peak_bytes": null,
+      "idle_before": {
+        "cpu_percent": 5.0372317126587856,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 55255539712,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "idle_after": {
+        "cpu_percent": 5.647263249348389,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+        "free_host_bytes": 54991831040,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      }
+    }
+  ],
+  "classification": "Formal same-host CPU/GPU measurement",
+  "memory_limitations": "Exact GPU owned buffers and available-memory samples only; host/global/CUDA runtime allocation peaks unmeasured",
+  "cold_limitations": "Fresh owned Engine startup and first payload separately; CPU interpreter/import startup excluded",
+  "reference": {
+    "native_sha256": "9020a4f700d381fe5388870ef3b77a43b67506f9f1610f9ef8b94906bdfc4996",
+    "frontend_sha256": "e03cdf61cd845984017c0a73f87f321db58bae9513f60d82a3d8c361c89b7dd5",
+    "ngsolve": "6.2.2607",
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "limitation": "Loaded file identity; independent native build receipt must accompany release evidence"
+  },
+  "cpu_reference_sha256": {
+    "radia/vim/_vim.py": "e03cdf61cd845984017c0a73f87f321db58bae9513f60d82a3d8c361c89b7dd5",
+    "radia/vim/_capabilities.py": "00e63ab4ac9a56d642a6ee666cabf53ecc9ff974bb068f5ba91f152776d82ec7",
+    "radia/_radia_pybind.pyd": "9020a4f700d381fe5388870ef3b77a43b67506f9f1610f9ef8b94906bdfc4996"
+  },
+  "idle_before": {
+    "cpu_percent": 0.43591979075849885,
+    "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 40645, 40960",
+    "free_host_bytes": 56846622720,
+    "limitation": "System samples do not exclude every instantaneous external load"
+  },
+  "engine_start_seconds": 6.064973000000464,
+  "matlab": "26.1.0.3203278 (R2026a)",
+  "idle_after": {
+    "cpu_percent": 6.453009961022083,
+    "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39455, 40960",
+    "free_host_bytes": 55031861248,
+    "limitation": "System samples do not exclude every instantaneous external load"
+  },
+  "warm_medians": {
+    "cpu": 5.160587349999332,
+    "gpu": 0.27303459999984625
+  },
+  "scope": "Independent elementary public 13-tetrahedron P2 sphere, HDiv order 2, linear isotropic material, host-cache",
+  "artifact_commit": "a33c88c4cef68114f54c9a626d5f340d7e67e479",
+  "host": "runtime",
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "warm_speedup": 18.900854873346596,
+  "cpu_reference_native_source_provenance_verified": false,
+  "installed_wheel_accepted": false,
+  "general_hdiv_validation_complete": false,
+  "sha256_manifest_scope": "Hash-verified private job manifest retained with raw evidence",
+  "public_runtime_metadata": "Identifying execution metadata omitted; original hash-verified record retained privately. Numerical values unchanged."
+}

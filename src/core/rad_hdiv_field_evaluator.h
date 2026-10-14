@@ -1,0 +1,161 @@
+/* rad_hdiv_field_evaluator.h -- persistent BDM1 HDiv-VIM field evaluator.
+ *
+ * The solve owns one immutable evaluator.  Source packing and the source tree
+ * are therefore paid once, while arbitrary observation batches can be applied
+ * without rebuilding Python lists or charge geometry.
+ */
+#ifndef RAD_HDIV_FIELD_EVALUATOR_H
+#define RAD_HDIV_FIELD_EVALUATOR_H
+
+#include <cstddef>
+#include <memory>
+#include <string>
+#include <vector>
+#include "rad_field_cloud_kernel.h"
+
+namespace rad_hdiv {
+
+struct FieldEvaluatorOptions {
+    int leaf_size = 32;
+    double theta = 0.05;
+    std::size_t tree_min_sources = 256;
+    std::size_t auto_min_work = 500000000;
+    double tree_relative_tolerance = 1.0e-5;
+    int probe_count = 16;
+};
+
+class HDivFieldEvaluator {
+public:
+    enum class Algorithm { Auto, Direct, Tree };
+
+    // Polynomial sources (this and the factories below) may carry one
+    // expansion origin per volume/surface record, 3 values each.  Their
+    // coefficients are then monomials of (x - origin): expanding a cell's
+    // density about a distant global origin cancels (|origin|/size)^degree.
+    // Empty origin vectors keep global-coordinate coefficients.
+    static std::shared_ptr<HDivFieldEvaluator> FromTet(
+        std::vector<double> volume,
+        std::vector<double> surface,
+        std::vector<int> image_masks,
+        std::vector<double> image_signs,
+        const FieldEvaluatorOptions& options = {},
+        std::vector<double> volume_origins = {},
+        std::vector<double> surface_origins = {});
+    static std::shared_ptr<HDivFieldEvaluator> FromPolynomialTet(
+        std::vector<double> volume,
+        std::vector<double> surface,
+        std::vector<int> image_masks,
+        std::vector<double> image_signs,
+        const FieldEvaluatorOptions& options = {},
+        std::vector<double> volume_origins = {},
+        std::vector<double> surface_origins = {});
+    // Affine BDM3 path. Both volume and surface densities are retained as
+    // total-degree <= 3 physical polynomials. The BDM3 volume charge only
+    // reaches degree two, but sharing the 20-coefficient record keeps one
+    // exact polynomial source representation.
+    // volume: [12 vertex coordinates, 20 coefficients]
+    // surface: [9 vertex coordinates, 20 coefficients]
+    static std::shared_ptr<HDivFieldEvaluator> FromCubicPolynomialTet(
+        std::vector<double> volume,
+        std::vector<double> surface,
+        std::vector<int> image_masks,
+        std::vector<double> image_signs,
+        const FieldEvaluatorOptions& options = {},
+        std::vector<double> volume_origins = {},
+        std::vector<double> surface_origins = {});
+    // Affine HEX BDM2 path after the canonical 6-TET / 2-TRI split.
+    // volume: [12 vertex coordinates, 84 total-degree <= 6 coefficients]
+    // surface: [9 vertex coordinates, 35 total-degree <= 4 coefficients]
+    static std::shared_ptr<HDivFieldEvaluator> FromSexticQuarticPolynomialTet(
+        std::vector<double> volume,
+        std::vector<double> surface,
+        std::vector<int> image_masks,
+        std::vector<double> image_signs,
+        const FieldEvaluatorOptions& options = {},
+        std::vector<double> volume_origins = {},
+        std::vector<double> surface_origins = {});
+
+    static std::shared_ptr<HDivFieldEvaluator> FromCloud(
+        std::vector<double> xyz,
+        std::vector<double> strength,
+        std::vector<int> image_masks,
+        std::vector<double> image_signs,
+        const FieldEvaluatorOptions& options = {});
+
+    // Curved P2 tetrahedra retain their geometry and BDM1/BDM2 reference-charge
+    // polynomials.  Direct leaves integrate the actual element instead of a
+    // permanently sampled point cloud; tree nodes use moments built once.
+    // volume: [30 P2-node coordinates, 4 coefficients (1,xi,eta,zeta)]
+    // surface: [18 P2-node coordinates, 6 coefficients
+    //           (1,eta,eta^2,xi,xi*eta,xi^2)]
+    static std::shared_ptr<HDivFieldEvaluator> FromCurvedTet(
+        std::vector<double> volume,
+        std::vector<double> surface,
+        std::vector<double> gauss_points,
+        std::vector<double> gauss_weights,
+        std::vector<int> image_masks,
+        std::vector<double> image_signs,
+        const FieldEvaluatorOptions& options = {});
+
+    // Attach per-image rotation angles about +z (radians), one per image mask, matching the charge Gram's
+    // SetImageRotations.  Empty (the default) keeps the pure-mirror path byte-identical.  The image transform
+    // is T_i = M_i o R_{theta_i}; a field image contributes E_{T(sigma)}(x) = T E_sigma(T^-1 x).
+    void SetImageRotations(std::vector<double> angles);
+
+    ~HDivFieldEvaluator();
+    HDivFieldEvaluator(const HDivFieldEvaluator&) = delete;
+    HDivFieldEvaluator& operator=(const HDivFieldEvaluator&) = delete;
+
+    void Evaluate(const double* observations, std::size_t n_observations,
+                  double* output, Algorithm algorithm = Algorithm::Auto) const;
+
+    // Evaluate without opening a TaskManager region.  NGSolve calls
+    // CoefficientFunction::Evaluate from its existing worker threads, so the
+    // coefficient-function adapter must not create a nested parallel region.
+    void EvaluateSerial(const double* observations, std::size_t n_observations,
+                        double* output, Algorithm algorithm = Algorithm::Auto) const;
+
+    // Exact spatial Jacobian dH_i/dx_j of the flat analytic TET/TRI or point
+    // source representation.  The result is row-major (n,3,3).  Curved and
+    // retained-cloud element representations fail loudly: their gradient
+    // kernel is not yet an optimizer contract.  The direct analytic source
+    // sum is always used; ``algorithm`` is intentionally absent.
+    void EvaluateGradient(const double* observations,
+                          std::size_t n_observations,
+                          double* gradient_out) const;
+    void EvaluateGradientSerial(const double* observations,
+                                std::size_t n_observations,
+                                double* gradient_out) const;
+
+    Algorithm AlgorithmFor(std::size_t n_observations) const;
+    static Algorithm ParseAlgorithm(const std::string& name);
+    static const char* AlgorithmName(Algorithm algorithm);
+
+    // Numeric CUDA boundary for the existing retained-cloud representation.
+    // Analytic/curved element sources are rejected, never sampled implicitly.
+    FieldCloudSnapshot ExportCloudSnapshot() const;
+    // Preserve analytic/high-order/curved sources and the exact CPU tree ordering.
+    FieldCloudSnapshot ExportSnapshot() const;
+
+    std::size_t SourceCount() const;
+    std::size_t ImageCount() const;
+    std::size_t TreeNodeCount() const;
+    int LeafSize() const;
+    double Theta() const;
+    std::size_t TreeMinSources() const;
+    std::size_t AutoMinWork() const;
+    double TreeRelativeTolerance() const;
+    int ProbeCount() const;
+    const char* SourceRepresentation() const;
+    Algorithm LastAlgorithm() const;
+    void Bounds(double lower[3], double upper[3]) const;
+
+private:
+    struct Impl;
+    explicit HDivFieldEvaluator(std::unique_ptr<Impl> impl);
+    std::unique_ptr<Impl> m_impl;
+};
+
+} // namespace rad_hdiv
+
+#endif

@@ -1,0 +1,2269 @@
+{
+  "parity": {
+    "schema": "radia.ams-matlab-native-validation.v1",
+    "accepted": true,
+    "timing_classification": "diagnostic; not formal performance acceptance",
+    "a100_started": false,
+    "python_role": "independent CPU oracle and validation orchestration only",
+    "gpu_runtime_python_adapter_required": false,
+    "taskmanager_regions_enabled": false,
+    "source_commit": "1ee5b065ebf20f9eefc0a5ca78fe21f5ddfad20f",
+    "cases": [
+      {
+        "maxh": 0.12,
+        "dofs": 5326,
+        "cycle": 1,
+        "cpu_true_residual": 2.1964112481761066e-10,
+        "cpu_reference_solve_seconds": 0.024918499999785126,
+        "cpu_reference_setup_seconds": 0.0310174,
+        "cpu_reference_setup_and_solve_seconds": 0.05593589999978513,
+        "samples": [
+          {
+            "setup_threads": 1,
+            "native_setup_seconds": 0.0372268,
+            "transfer_solve_download_seconds": 0.0350973,
+            "setup_transfer_solve_download_seconds": 0.0723241,
+            "warmed_solve_median_seconds": 0.0289485,
+            "cold_solve_seconds": 0.0304381,
+            "upload_seconds": 0.0062057,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 8.13232734723103e-14,
+            "gpu_true_residual": 2.1964111620629784e-10,
+            "probe_relative_difference": 3.296986149516625e-14,
+            "gpu_live_allocation_delta_bytes": 5503148.0,
+            "memory_plan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15989727560.0,
+              "budgetBytes": 12553819259.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.0300739,
+              "export_seconds": 0.0032092,
+              "setup_threads": 1,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0008883000000000001,
+                0.0005711,
+                0.0017814,
+                0.0001862,
+                0.004494999999999999,
+                3.85e-05,
+                0.008125700000000001
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 4,
+            "native_setup_seconds": 0.0691618,
+            "transfer_solve_download_seconds": 0.0350074,
+            "setup_transfer_solve_download_seconds": 0.10416919999999999,
+            "warmed_solve_median_seconds": 0.0295768,
+            "cold_solve_seconds": 0.0294418,
+            "upload_seconds": 0.0056907,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 8.13232734723103e-14,
+            "gpu_true_residual": 2.1964111620629784e-10,
+            "probe_relative_difference": 3.296986149516625e-14,
+            "gpu_live_allocation_delta_bytes": 5669384.0,
+            "memory_plan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15989894432.0,
+              "budgetBytes": 12553986131.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.0295675,
+              "export_seconds": 0.0019253,
+              "setup_threads": 4,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0008551,
+                0.0005054,
+                0.0017919,
+                0.0002089,
+                0.004681,
+                3.9899999999999994e-05,
+                0.0081359
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 4,
+            "native_setup_seconds": 0.0605741,
+            "transfer_solve_download_seconds": 0.0375635,
+            "setup_transfer_solve_download_seconds": 0.09813759999999999,
+            "warmed_solve_median_seconds": 0.0292759,
+            "cold_solve_seconds": 0.0298422,
+            "upload_seconds": 0.0056432,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 8.13232734723103e-14,
+            "gpu_true_residual": 2.1964111620629784e-10,
+            "probe_relative_difference": 3.296986149516625e-14,
+            "gpu_live_allocation_delta_bytes": 5669948.0,
+            "memory_plan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15989894432.0,
+              "budgetBytes": 12553986131.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.0291896,
+              "export_seconds": 0.0018114,
+              "setup_threads": 4,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0008565,
+                0.0005065,
+                0.0018158,
+                0.00020040000000000002,
+                0.0045465,
+                3.9200000000000004e-05,
+                0.008157900000000001
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 1,
+            "native_setup_seconds": 0.0391812,
+            "transfer_solve_download_seconds": 0.0353992,
+            "setup_transfer_solve_download_seconds": 0.07458039999999999,
+            "warmed_solve_median_seconds": 0.0294627,
+            "cold_solve_seconds": 0.0297493,
+            "upload_seconds": 0.00629,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 8.13232734723103e-14,
+            "gpu_true_residual": 2.1964111620629784e-10,
+            "probe_relative_difference": 3.296986149516625e-14,
+            "gpu_live_allocation_delta_bytes": 5669384.0,
+            "memory_plan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15989894432.0,
+              "budgetBytes": 12553986131.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.029419,
+              "export_seconds": 0.0024248,
+              "setup_threads": 1,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0008541,
+                0.0004997,
+                0.0017956,
+                0.0002109,
+                0.0045055,
+                3.8499999999999994e-05,
+                0.0081417
+              ],
+              "upload_seconds": 0
+            }
+          }
+        ],
+        "input_sha256": "72123320d14022b7993dafe295e32af9da6325532e01cb368fe6c9f7a185ca91",
+        "first_call": {
+          "native_setup_seconds": 0.2425841,
+          "gpu_solve_seconds": 0.0715002,
+          "setup_transfer_solve_download_seconds": 0.2828545
+        },
+        "before_after": {
+          "before_seconds": 0.07345225,
+          "after_seconds": 0.10115339999999999,
+          "speedup": 0.7261471191279779,
+          "comparison": "same shared native AMS: serial host setup vs OpenMP host setup; same CUDA solve"
+        }
+      },
+      {
+        "maxh": 0.12,
+        "dofs": 5326,
+        "cycle": 7,
+        "cpu_true_residual": 1.662794644843843e-10,
+        "cpu_reference_solve_seconds": 0.025596299999961047,
+        "cpu_reference_setup_seconds": 0.0403734,
+        "cpu_reference_setup_and_solve_seconds": 0.06596969999996105,
+        "samples": [
+          {
+            "setup_threads": 1,
+            "native_setup_seconds": 0.0343933,
+            "transfer_solve_download_seconds": 0.0308743,
+            "setup_transfer_solve_download_seconds": 0.06526760000000001,
+            "warmed_solve_median_seconds": 0.0255455,
+            "cold_solve_seconds": 0.0258766,
+            "upload_seconds": 0.0056133,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 7.74038730165968e-14,
+            "gpu_true_residual": 1.6627946759049816e-10,
+            "probe_relative_difference": 3.407296961938099e-14,
+            "gpu_live_allocation_delta_bytes": 5669312.0,
+            "memory_plan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15989894432.0,
+              "budgetBytes": 12553986131.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.0296871,
+              "export_seconds": 0.0021866,
+              "setup_threads": 1,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0008690000000000001,
+                0.0005021,
+                0.0017852,
+                0.00019590000000000002,
+                0.004497299999999999,
+                4.4e-05,
+                0.0081501
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 4,
+            "native_setup_seconds": 0.0718441,
+            "transfer_solve_download_seconds": 0.030935,
+            "setup_transfer_solve_download_seconds": 0.1027791,
+            "warmed_solve_median_seconds": 0.0256605,
+            "cold_solve_seconds": 0.02699,
+            "upload_seconds": 0.0055581,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 7.74038730165968e-14,
+            "gpu_true_residual": 1.6627946759049816e-10,
+            "probe_relative_difference": 3.407296961938099e-14,
+            "gpu_live_allocation_delta_bytes": 5670020.0,
+            "memory_plan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15989894432.0,
+              "budgetBytes": 12553986131.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.0292554,
+              "export_seconds": 0.0016469,
+              "setup_threads": 4,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0008593,
+                0.0005044,
+                0.0017973000000000002,
+                0.0002116,
+                0.0045473,
+                3.9599999999999994e-05,
+                0.0081449
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 4,
+            "native_setup_seconds": 0.0728857,
+            "transfer_solve_download_seconds": 0.030882,
+            "setup_transfer_solve_download_seconds": 0.10376769999999999,
+            "warmed_solve_median_seconds": 0.0253102,
+            "cold_solve_seconds": 0.0248227,
+            "upload_seconds": 0.0054738,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 7.74038730165968e-14,
+            "gpu_true_residual": 1.6627946759049816e-10,
+            "probe_relative_difference": 3.407296961938099e-14,
+            "gpu_live_allocation_delta_bytes": 5669384.0,
+            "memory_plan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15989894432.0,
+              "budgetBytes": 12553986131.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.029094,
+              "export_seconds": 0.0016906,
+              "setup_threads": 4,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0008527,
+                0.0005057999999999999,
+                0.0018104,
+                0.0001911,
+                0.0045553,
+                3.98e-05,
+                0.008131900000000001
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 1,
+            "native_setup_seconds": 0.0556728,
+            "transfer_solve_download_seconds": 0.0310191,
+            "setup_transfer_solve_download_seconds": 0.0866919,
+            "warmed_solve_median_seconds": 0.0248533,
+            "cold_solve_seconds": 0.0259555,
+            "upload_seconds": 0.0054291,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 7.74038730165968e-14,
+            "gpu_true_residual": 1.6627946759049816e-10,
+            "probe_relative_difference": 3.407296961938099e-14,
+            "gpu_live_allocation_delta_bytes": 5669948.0,
+            "memory_plan": {
+              "inputBytes": 3739252,
+              "workspaceEstimateBytes": 793064,
+              "estimatedAdditionalBytes": 280701924,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15989894432.0,
+              "budgetBytes": 12553986131.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.0500653,
+              "export_seconds": 0.0027937,
+              "setup_threads": 1,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0014823,
+                0.0008922,
+                0.0030756000000000004,
+                0.0003549,
+                0.007816700000000001,
+                6.720000000000001e-05,
+                0.0145288
+              ],
+              "upload_seconds": 0
+            }
+          }
+        ],
+        "input_sha256": "3daa8b97b398246d41c86c7d02f41d31984c29921c0ccead9fbd949d4c85a942",
+        "first_call": {
+          "native_setup_seconds": 0.0344955,
+          "gpu_solve_seconds": 0.0260526,
+          "setup_transfer_solve_download_seconds": 0.0655423
+        },
+        "before_after": {
+          "before_seconds": 0.07597975000000001,
+          "after_seconds": 0.10327339999999999,
+          "speedup": 0.735714617704075,
+          "comparison": "same shared native AMS: serial host setup vs OpenMP host setup; same CUDA solve"
+        }
+      },
+      {
+        "maxh": 0.04,
+        "dofs": 86735,
+        "cycle": 1,
+        "cpu_true_residual": 3.269602664017901e-10,
+        "cpu_reference_solve_seconds": 0.42253149999987727,
+        "cpu_reference_setup_seconds": 0.4888683,
+        "cpu_reference_setup_and_solve_seconds": 0.9113997999998773,
+        "samples": [
+          {
+            "setup_threads": 1,
+            "native_setup_seconds": 0.5684802,
+            "transfer_solve_download_seconds": 0.0873733,
+            "setup_transfer_solve_download_seconds": 0.6558535,
+            "warmed_solve_median_seconds": 0.0620589,
+            "cold_solve_seconds": 0.062067,
+            "upload_seconds": 0.0276175,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 6.66459279432704e-13,
+            "gpu_true_residual": 3.2696026794640113e-10,
+            "probe_relative_difference": 2.2449689910738127e-13,
+            "gpu_live_allocation_delta_bytes": 113866660.0,
+            "memory_plan": {
+              "inputBytes": 57498700,
+              "workspaceEstimateBytes": 12589720,
+              "estimatedAdditionalBytes": 457684556,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15973925908.0,
+              "budgetBytes": 12538017607.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.5032862,
+              "export_seconds": 0.0364531,
+              "setup_threads": 1,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0193891,
+                0.0091386,
+                0.041214799999999996,
+                0.0039656000000000005,
+                0.12485370000000001,
+                0.0008004,
+                0.0138292
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 4,
+            "native_setup_seconds": 0.544967,
+            "transfer_solve_download_seconds": 0.0877142,
+            "setup_transfer_solve_download_seconds": 0.6326811999999999,
+            "warmed_solve_median_seconds": 0.0613968,
+            "cold_solve_seconds": 0.0608901,
+            "upload_seconds": 0.0267262,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 6.66459279432704e-13,
+            "gpu_true_residual": 3.2696026794640113e-10,
+            "probe_relative_difference": 2.2449689910738127e-13,
+            "gpu_live_allocation_delta_bytes": 114192180.0,
+            "memory_plan": {
+              "inputBytes": 57498700,
+              "workspaceEstimateBytes": 12589720,
+              "estimatedAdditionalBytes": 457684556,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15974250164.0,
+              "budgetBytes": 12538341863.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.4591774,
+              "export_seconds": 0.0220815,
+              "setup_threads": 4,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.009110799999999999,
+                0.0102527,
+                0.0185208,
+                0.0039791,
+                0.13311240000000002,
+                0.0004655,
+                0.015081899999999999
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 4,
+            "native_setup_seconds": 0.5324575,
+            "transfer_solve_download_seconds": 0.0877048,
+            "setup_transfer_solve_download_seconds": 0.6201623,
+            "warmed_solve_median_seconds": 0.0598871,
+            "cold_solve_seconds": 0.0610304,
+            "upload_seconds": 0.0266131,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 6.66459279432704e-13,
+            "gpu_true_residual": 3.2696026794640113e-10,
+            "probe_relative_difference": 2.2449689910738127e-13,
+            "gpu_live_allocation_delta_bytes": 114188356.0,
+            "memory_plan": {
+              "inputBytes": 57498700,
+              "workspaceEstimateBytes": 12589720,
+              "estimatedAdditionalBytes": 457684556,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15974250164.0,
+              "budgetBytes": 12538341863.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.4442699,
+              "export_seconds": 0.0220371,
+              "setup_threads": 4,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0081285,
+                0.0096058,
+                0.0172445,
+                0.0040187,
+                0.12529379999999998,
+                0.0004376,
+                0.013949900000000001
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 1,
+            "native_setup_seconds": 0.5681766,
+            "transfer_solve_download_seconds": 0.0887012,
+            "setup_transfer_solve_download_seconds": 0.6568778000000001,
+            "warmed_solve_median_seconds": 0.0604396,
+            "cold_solve_seconds": 0.062299,
+            "upload_seconds": 0.0266818,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 6.66459279432704e-13,
+            "gpu_true_residual": 3.2696026794640113e-10,
+            "probe_relative_difference": 2.2449689910738127e-13,
+            "gpu_live_allocation_delta_bytes": 114190484.0,
+            "memory_plan": {
+              "inputBytes": 57498700,
+              "workspaceEstimateBytes": 12589720,
+              "estimatedAdditionalBytes": 457684556,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15974250164.0,
+              "budgetBytes": 12538341863.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.5006793,
+              "export_seconds": 0.0372745,
+              "setup_threads": 1,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0195686,
+                0.0098881,
+                0.0413959,
+                0.0042002,
+                0.12765710000000002,
+                0.0008511,
+                0.0140792
+              ],
+              "upload_seconds": 0
+            }
+          }
+        ],
+        "input_sha256": "6fe27edd15ac1cecaa960bf320b84d8f5d5498233c45124df5f9c659e5de3bbb",
+        "first_call": {
+          "native_setup_seconds": 0.5536236,
+          "gpu_solve_seconds": 0.25201,
+          "setup_transfer_solve_download_seconds": 0.6474155
+        },
+        "before_after": {
+          "before_seconds": 0.65636565,
+          "after_seconds": 0.62642175,
+          "speedup": 1.0478015011451949,
+          "comparison": "same shared native AMS: serial host setup vs OpenMP host setup; same CUDA solve"
+        }
+      },
+      {
+        "maxh": 0.04,
+        "dofs": 86735,
+        "cycle": 7,
+        "cpu_true_residual": 4.5857933628407395e-10,
+        "cpu_reference_solve_seconds": 0.45828949999986435,
+        "cpu_reference_setup_seconds": 0.5076543,
+        "cpu_reference_setup_and_solve_seconds": 0.9659437999998643,
+        "samples": [
+          {
+            "setup_threads": 1,
+            "native_setup_seconds": 0.5559897,
+            "transfer_solve_download_seconds": 0.0838323,
+            "setup_transfer_solve_download_seconds": 0.639822,
+            "warmed_solve_median_seconds": 0.0560636,
+            "cold_solve_seconds": 0.0574665,
+            "upload_seconds": 0.0272863,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 6.684090615923293e-13,
+            "gpu_true_residual": 4.585793388275845e-10,
+            "probe_relative_difference": 2.2283596683560983e-13,
+            "gpu_live_allocation_delta_bytes": 114187924.0,
+            "memory_plan": {
+              "inputBytes": 57498700,
+              "workspaceEstimateBytes": 12589720,
+              "estimatedAdditionalBytes": 457684556,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15974250164.0,
+              "budgetBytes": 12538341863.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.4954497,
+              "export_seconds": 0.0352342,
+              "setup_threads": 1,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0192164,
+                0.0092016,
+                0.041191,
+                0.0049927999999999995,
+                0.13499060000000002,
+                0.0007858,
+                0.013886099999999998
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 4,
+            "native_setup_seconds": 0.522563,
+            "transfer_solve_download_seconds": 0.0840882,
+            "setup_transfer_solve_download_seconds": 0.6066512,
+            "warmed_solve_median_seconds": 0.0556745,
+            "cold_solve_seconds": 0.0566889,
+            "upload_seconds": 0.0344085,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 6.684090615923293e-13,
+            "gpu_true_residual": 4.585793388275845e-10,
+            "probe_relative_difference": 2.2283596683560983e-13,
+            "gpu_live_allocation_delta_bytes": 114190916.0,
+            "memory_plan": {
+              "inputBytes": 57498700,
+              "workspaceEstimateBytes": 12589720,
+              "estimatedAdditionalBytes": 457684556,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15974250164.0,
+              "budgetBytes": 12538341863.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.4402024,
+              "export_seconds": 0.0192226,
+              "setup_threads": 4,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0090493,
+                0.0091394,
+                0.019632600000000004,
+                0.0040330999999999995,
+                0.13232439999999998,
+                0.0004971,
+                0.0138462
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 4,
+            "native_setup_seconds": 0.5549963,
+            "transfer_solve_download_seconds": 0.0834473,
+            "setup_transfer_solve_download_seconds": 0.6384436,
+            "warmed_solve_median_seconds": 0.0575271,
+            "cold_solve_seconds": 0.057205,
+            "upload_seconds": 0.0268987,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 6.684090615923293e-13,
+            "gpu_true_residual": 4.585793388275845e-10,
+            "probe_relative_difference": 2.2283596683560983e-13,
+            "gpu_live_allocation_delta_bytes": 114192180.0,
+            "memory_plan": {
+              "inputBytes": 57498700,
+              "workspaceEstimateBytes": 12589720,
+              "estimatedAdditionalBytes": 457684556,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15974250164.0,
+              "budgetBytes": 12538341863.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.4687047,
+              "export_seconds": 0.0229956,
+              "setup_threads": 4,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0083154,
+                0.011306700000000001,
+                0.018922300000000003,
+                0.0054053999999999994,
+                0.1342702,
+                0.0004342,
+                0.013916699999999999
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 1,
+            "native_setup_seconds": 0.5705251,
+            "transfer_solve_download_seconds": 0.0837442,
+            "setup_transfer_solve_download_seconds": 0.6542693,
+            "warmed_solve_median_seconds": 0.0561506,
+            "cold_solve_seconds": 0.0560464,
+            "upload_seconds": 0.0258982,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 6.684090615923293e-13,
+            "gpu_true_residual": 4.585793388275845e-10,
+            "probe_relative_difference": 2.2283596683560983e-13,
+            "gpu_live_allocation_delta_bytes": 114188356.0,
+            "memory_plan": {
+              "inputBytes": 57498700,
+              "workspaceEstimateBytes": 12589720,
+              "estimatedAdditionalBytes": 457684556,
+              "headroomBytes": 268435456,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15974250164.0,
+              "budgetBytes": 12538341863.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 0.508436,
+              "export_seconds": 0.0337106,
+              "setup_threads": 1,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0206218,
+                0.0093814,
+                0.040698,
+                0.0039302,
+                0.12277690000000001,
+                0.0007792000000000001,
+                0.0139055
+              ],
+              "upload_seconds": 0
+            }
+          }
+        ],
+        "input_sha256": "86652219987a62d5b211e1f0f3cc57f3322850d5e6bc205adc327c9fbc092868",
+        "first_call": {
+          "native_setup_seconds": 0.5581643,
+          "gpu_solve_seconds": 0.224505,
+          "setup_transfer_solve_download_seconds": 0.6413720999999999
+        },
+        "before_after": {
+          "before_seconds": 0.64704565,
+          "after_seconds": 0.6225474,
+          "speedup": 1.0393516220612278,
+          "comparison": "same shared native AMS: serial host setup vs OpenMP host setup; same CUDA solve"
+        }
+      },
+      {
+        "maxh": 0.02,
+        "dofs": 702073,
+        "cycle": 1,
+        "cpu_true_residual": 2.7922010114666364e-10,
+        "cpu_reference_solve_seconds": 4.848227599999973,
+        "cpu_reference_setup_seconds": 4.517398,
+        "cpu_reference_setup_and_solve_seconds": 9.365625599999973,
+        "samples": [
+          {
+            "setup_threads": 1,
+            "native_setup_seconds": 5.0868053,
+            "transfer_solve_download_seconds": 0.381067,
+            "setup_transfer_solve_download_seconds": 5.4678723,
+            "warmed_solve_median_seconds": 0.2262674,
+            "cold_solve_seconds": 0.4753858,
+            "upload_seconds": 0.2704738,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 2.363145204401143e-08,
+            "gpu_true_residual": 6.403305656516525e-10,
+            "probe_relative_difference": 9.559818447791458e-13,
+            "gpu_live_allocation_delta_bytes": 948168976.0,
+            "memory_plan": {
+              "inputBytes": 466720876,
+              "workspaceEstimateBytes": 100295332,
+              "estimatedAdditionalBytes": 1917696830,
+              "headroomBytes": 383539366,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15881892916.0,
+              "budgetBytes": 12445984615.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 4.6351498,
+              "export_seconds": 0.2384701,
+              "setup_threads": 1,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.1871557,
+                0.08596619999999999,
+                0.3661077,
+                0.0470642,
+                1.2276262,
+                0.006731,
+                0.0120009
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 4,
+            "native_setup_seconds": 4.3684678,
+            "transfer_solve_download_seconds": 0.3875991,
+            "setup_transfer_solve_download_seconds": 4.7560669,
+            "warmed_solve_median_seconds": 0.2264876,
+            "cold_solve_seconds": 0.416898,
+            "upload_seconds": 0.1863257,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 2.363145204401143e-08,
+            "gpu_true_residual": 6.403305656516525e-10,
+            "probe_relative_difference": 9.559818447791458e-13,
+            "gpu_live_allocation_delta_bytes": 946532652.0,
+            "memory_plan": {
+              "inputBytes": 466720876,
+              "workspaceEstimateBytes": 100295332,
+              "estimatedAdditionalBytes": 1917696830,
+              "headroomBytes": 383539366,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15880937792.0,
+              "budgetBytes": 12445029491.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 4.0668505,
+              "export_seconds": 0.0993962,
+              "setup_threads": 4,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0752287,
+                0.08315230000000001,
+                0.1325882,
+                0.0519627,
+                1.1773628,
+                0.0042045,
+                0.011981799999999999
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 4,
+            "native_setup_seconds": 4.439633,
+            "transfer_solve_download_seconds": 0.3833756,
+            "setup_transfer_solve_download_seconds": 4.8230086,
+            "warmed_solve_median_seconds": 0.2327241,
+            "cold_solve_seconds": 0.3605789,
+            "upload_seconds": 0.2572723,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 2.363145204401143e-08,
+            "gpu_true_residual": 6.403305656516525e-10,
+            "probe_relative_difference": 9.559818447791458e-13,
+            "gpu_live_allocation_delta_bytes": 947149624.0,
+            "memory_plan": {
+              "inputBytes": 466720876,
+              "workspaceEstimateBytes": 100295332,
+              "estimatedAdditionalBytes": 1917696830,
+              "headroomBytes": 383539366,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15881618872.0,
+              "budgetBytes": 12445710571.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 4.1390911,
+              "export_seconds": 0.0996113,
+              "setup_threads": 4,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.07772670000000001,
+                0.0813588,
+                0.14254719999999999,
+                0.0439072,
+                1.2117095,
+                0.0042717,
+                0.0120837
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 1,
+            "native_setup_seconds": 5.0810135,
+            "transfer_solve_download_seconds": 0.3820235,
+            "setup_transfer_solve_download_seconds": 5.463037,
+            "warmed_solve_median_seconds": 0.2293312,
+            "cold_solve_seconds": 0.4282689,
+            "upload_seconds": 0.2639363,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 2.363145204401143e-08,
+            "gpu_true_residual": 6.403305656516525e-10,
+            "probe_relative_difference": 9.559818447791458e-13,
+            "gpu_live_allocation_delta_bytes": 947213124.0,
+            "memory_plan": {
+              "inputBytes": 466720876,
+              "workspaceEstimateBytes": 100295332,
+              "estimatedAdditionalBytes": 1917696830,
+              "headroomBytes": 383539366,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15881681992.0,
+              "budgetBytes": 12445773691.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 4.6000549,
+              "export_seconds": 0.2403423,
+              "setup_threads": 1,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.16820540000000003,
+                0.0956366,
+                0.3706702,
+                0.045133,
+                1.2267251000000001,
+                0.006939,
+                0.012075800000000001
+              ],
+              "upload_seconds": 0
+            }
+          }
+        ],
+        "input_sha256": "699bc4c5811277483085639286536d0d11b4a31a541f3878384123959968818a",
+        "first_call": {
+          "native_setup_seconds": 5.1156697,
+          "gpu_solve_seconds": 0.358812,
+          "setup_transfer_solve_download_seconds": 5.5241038
+        },
+        "before_after": {
+          "before_seconds": 5.46545465,
+          "after_seconds": 4.78953775,
+          "speedup": 1.141123618871153,
+          "comparison": "same shared native AMS: serial host setup vs OpenMP host setup; same CUDA solve"
+        }
+      },
+      {
+        "maxh": 0.02,
+        "dofs": 702073,
+        "cycle": 7,
+        "cpu_true_residual": 3.3185246283056144e-10,
+        "cpu_reference_solve_seconds": 5.266951499999777,
+        "cpu_reference_setup_seconds": 4.5394451,
+        "cpu_reference_setup_and_solve_seconds": 9.806396599999777,
+        "samples": [
+          {
+            "setup_threads": 1,
+            "native_setup_seconds": 5.0649914,
+            "transfer_solve_download_seconds": 0.3934616,
+            "setup_transfer_solve_download_seconds": 5.458453,
+            "warmed_solve_median_seconds": 0.2338841,
+            "cold_solve_seconds": 0.43222,
+            "upload_seconds": 0.258601,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 4.111186516195496e-08,
+            "gpu_true_residual": 7.633983644282901e-10,
+            "probe_relative_difference": 9.521881666424484e-13,
+            "gpu_live_allocation_delta_bytes": 947212624.0,
+            "memory_plan": {
+              "inputBytes": 466720876,
+              "workspaceEstimateBytes": 100295332,
+              "estimatedAdditionalBytes": 1917696830,
+              "headroomBytes": 383539366,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15881681992.0,
+              "budgetBytes": 12445773691.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 4.5941156,
+              "export_seconds": 0.2398599,
+              "setup_threads": 1,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.1670511,
+                0.08407890000000001,
+                0.3652147,
+                0.0466185,
+                1.2282995,
+                0.007347899999999999,
+                0.0119692
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 4,
+            "native_setup_seconds": 4.5098445,
+            "transfer_solve_download_seconds": 0.3991967,
+            "setup_transfer_solve_download_seconds": 4.9090412,
+            "warmed_solve_median_seconds": 0.2344878,
+            "cold_solve_seconds": 0.362943,
+            "upload_seconds": 0.2589707,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 4.111186516195496e-08,
+            "gpu_true_residual": 7.633983644282901e-10,
+            "probe_relative_difference": 9.521881666424484e-13,
+            "gpu_live_allocation_delta_bytes": 947213916.0,
+            "memory_plan": {
+              "inputBytes": 466720876,
+              "workspaceEstimateBytes": 100295332,
+              "estimatedAdditionalBytes": 1917696830,
+              "headroomBytes": 383539366,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15881681992.0,
+              "budgetBytes": 12445773691.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 4.1932053,
+              "export_seconds": 0.1086347,
+              "setup_threads": 4,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0779398,
+                0.08074410000000001,
+                0.143597,
+                0.0491614,
+                1.2072263,
+                0.0041738,
+                0.011978699999999998
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 4,
+            "native_setup_seconds": 4.4109798,
+            "transfer_solve_download_seconds": 0.3881223,
+            "setup_transfer_solve_download_seconds": 4.7991021,
+            "warmed_solve_median_seconds": 0.2343242,
+            "cold_solve_seconds": 0.4294952,
+            "upload_seconds": 0.249177,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 4.111186516195496e-08,
+            "gpu_true_residual": 7.633983644282901e-10,
+            "probe_relative_difference": 9.521881666424484e-13,
+            "gpu_live_allocation_delta_bytes": 947214180.0,
+            "memory_plan": {
+              "inputBytes": 466720876,
+              "workspaceEstimateBytes": 100295332,
+              "estimatedAdditionalBytes": 1917696830,
+              "headroomBytes": 383539366,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15881681992.0,
+              "budgetBytes": 12445773691.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 4.0989298,
+              "export_seconds": 0.1033788,
+              "setup_threads": 4,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.0778335,
+                0.08210599999999998,
+                0.1424299,
+                0.044309299999999996,
+                1.2301095000000002,
+                0.0045917,
+                0.0122073
+              ],
+              "upload_seconds": 0
+            }
+          },
+          {
+            "setup_threads": 1,
+            "native_setup_seconds": 5.058477,
+            "transfer_solve_download_seconds": 0.3983793,
+            "setup_transfer_solve_download_seconds": 5.4568563,
+            "warmed_solve_median_seconds": 0.2371484,
+            "cold_solve_seconds": 0.3418406,
+            "upload_seconds": 0.2657095,
+            "hierarchy_relative_difference": 0.0,
+            "hierarchy_bitwise_identical": true,
+            "cpu_relative_difference": 4.111186516195496e-08,
+            "gpu_true_residual": 7.633983644282901e-10,
+            "probe_relative_difference": 9.521881666424484e-13,
+            "gpu_live_allocation_delta_bytes": 947213352.0,
+            "memory_plan": {
+              "inputBytes": 466720876,
+              "workspaceEstimateBytes": 100295332,
+              "estimatedAdditionalBytes": 1917696830,
+              "headroomBytes": 383539366,
+              "reservedFreeBytes": 3435908300.8,
+              "availableBeforeBytes": 15881681992.0,
+              "budgetBytes": 12445773691.2,
+              "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "rejection_checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "apply_overflow": 1,
+              "apply_status": 1,
+              "invalid_coarse_order": 1,
+              "invalid_coarse_rowptr": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1,
+              "native_setup": {
+                "invalid_csr": 1,
+                "invalid_mask": 1,
+                "nonfinite_coordinates": 1,
+                "invalid_cycle": 1,
+                "invalid_schema": 1,
+                "invalid_threads": 1,
+                "wrong_gradient_shape": 1
+              },
+              "memory_budget_rejection": 1
+            },
+            "native_setup": {
+              "schema": "radia.ams-matlab-setup.v1",
+              "setup_seconds": 4.6026521,
+              "export_seconds": 0.2375685,
+              "setup_threads": 1,
+              "python_adapter_used": 0,
+              "coarse_backend": "ngsolve_sparsecholesky",
+              "amg_phase_seconds": [
+                0.16418529999999998,
+                0.0837957,
+                0.3558452999999999,
+                0.0454965,
+                1.2136761,
+                0.0067567,
+                0.0120136
+              ],
+              "upload_seconds": 0
+            }
+          }
+        ],
+        "input_sha256": "4b3913cbda8eee5830c31179f6c4670c9e1a66854ee9165f1dfb8b0a975b82b1",
+        "first_call": {
+          "native_setup_seconds": 5.091286,
+          "gpu_solve_seconds": 0.3456919,
+          "setup_transfer_solve_download_seconds": 5.4873404
+        },
+        "before_after": {
+          "before_seconds": 5.45765465,
+          "after_seconds": 4.85407165,
+          "speedup": 1.1243457129438954,
+          "comparison": "same shared native AMS: serial host setup vs OpenMP host setup; same CUDA solve"
+        }
+      }
+    ],
+    "build": {
+      "schema": "radia.ams-cuda-build.v1",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "source_commit": "1ee5b065ebf20f9eefc0a5ca78fe21f5ddfad20f",
+      "source_dirty": true,
+      "sha256": {
+        "build-ams-cuda/_radia_ams_snapshot.pyd": "cb8ad02b6d2893bcf2ebbe15d70a851910556c2c97116a77628c2e941eec398a",
+        "build-ams-cuda/radia_cuda_ams.mexw64": "b0ab94df93b9b3beaad2517e17996a49e9ce9665f26d5f886f1e577b7b4925c3"
+      },
+      "source_sha256": {
+        "packages/radia-gpu/native/ams_snapshot_module.cpp": "cce1561d96b01b538e50862270f7bab44735155de2da70ca47a82702762979ec",
+        "packages/radia-gpu/native/radia_cuda_ams.cu": "6d434e546d95bdaf7fb5cbd3471b983ab83e823abfee016ac050f375c721161a",
+        "packages/radia-gpu/native/ams_matlab_setup.cpp": "2ada6de6b387d5213ad79bf56addb11a9e9e841502de3d0ea383fd96be72f6f7",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "131bc8219ce57ac5d5ca30ca0193a8b9d8c95b04bc30cb8162807db0a562fc7a",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "6bd1d0d35d1f641eec1eff8a3b9b3f9776b3fb8c41252f8a04c83d54cd1095db",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp": "35f3cd197930e3ce99e4a73a0fc9d568e453a267a3a6520bad0d4edc41173a6c",
+        "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "a285fe6ca8448e7548365000e71e21e0ad8cd71769ae5e9792024398442709cb",
+        "packages/radia-gpu/tools/build_ams_cuda.py": "dab7dd4493d219cecc7c44096a61331be7daa6c85da7c42ccfda1d4a0e532095",
+        "Build.ps1": "a5dbd62a7ba18f6fd8fcfc6e1ca4724be3fb879ba3d85ca81cf8cdb0817dfefa"
+      },
+      "no_cpu_solver_fallback": true,
+      "snapshot_setup_backend": "OpenMP row/chunk dispatch; default one thread; serial coarse factorization",
+      "matlab_setup_backend": "Shared native AMS in mexcuda host; serial NGSolve sparsecholesky; no TaskManager regions",
+      "python_runtime_adapter_required": false,
+      "python_dll_indirect_dependency_permitted": true
+    }
+  },
+  "direct_vs_graph": {
+    "schema": "radia.ams-cuda-graph-comparison.v1",
+    "accepted": true,
+    "timing_classification": "diagnostic; not formal performance acceptance",
+    "a100_started": false,
+    "comparison": "direct CUDA kernels versus CUDA Graph; same host setup threads and GPU arithmetic",
+    "setup_threads": 4,
+    "cases": [
+      {
+        "input": "h0.12-c1.hdf5",
+        "samples": [
+          {
+            "graph": false,
+            "setup_seconds": 0.3191035,
+            "transfer_solve_download_seconds": 0.038167,
+            "total_seconds": 0.3572705,
+            "warmed_solve_median_seconds": 0.0320358,
+            "direct_solution_relative_difference": 0.0,
+            "probe_relative_difference": 3.296986149516625e-14,
+            "hierarchy_relative_difference": 0.0,
+            "true_relative_residual": 2.1964112080862013e-10,
+            "preconditioner_execution": "direct CUDA kernels",
+            "gpu_live_allocation_delta_bytes": 12582912.0
+          },
+          {
+            "graph": true,
+            "setup_seconds": 0.073706,
+            "transfer_solve_download_seconds": 0.0345166,
+            "total_seconds": 0.1082226,
+            "warmed_solve_median_seconds": 0.0281697,
+            "direct_solution_relative_difference": 0.0,
+            "probe_relative_difference": 3.296986149516625e-14,
+            "hierarchy_relative_difference": 0.0,
+            "true_relative_residual": 2.1964112080862013e-10,
+            "preconditioner_execution": "CUDA Graph replay of the unchanged AMS cycle",
+            "gpu_live_allocation_delta_bytes": 5503148.0
+          },
+          {
+            "graph": true,
+            "setup_seconds": 0.0742152,
+            "transfer_solve_download_seconds": 0.0343999,
+            "total_seconds": 0.10861509999999999,
+            "warmed_solve_median_seconds": 0.0280358,
+            "direct_solution_relative_difference": 0.0,
+            "probe_relative_difference": 3.296986149516625e-14,
+            "hierarchy_relative_difference": 0.0,
+            "true_relative_residual": 2.1964112080862013e-10,
+            "preconditioner_execution": "CUDA Graph replay of the unchanged AMS cycle",
+            "gpu_live_allocation_delta_bytes": 5669384.0
+          },
+          {
+            "graph": false,
+            "setup_seconds": 0.0713978,
+            "transfer_solve_download_seconds": 0.0350799,
+            "total_seconds": 0.1064777,
+            "warmed_solve_median_seconds": 0.0287157,
+            "direct_solution_relative_difference": 0.0,
+            "probe_relative_difference": 3.296986149516625e-14,
+            "hierarchy_relative_difference": 0.0,
+            "true_relative_residual": 2.1964112080862013e-10,
+            "preconditioner_execution": "direct CUDA kernels",
+            "gpu_live_allocation_delta_bytes": 5669948.0
+          }
+        ],
+        "before_after": {
+          "transfer_solve_download_seconds": {
+            "before": 0.03662345,
+            "after": 0.034458249999999996,
+            "speedup": 1.062835460303411
+          },
+          "total_seconds": {
+            "before": 0.2318741,
+            "after": 0.10841885,
+            "speedup": 2.138688060240447
+          },
+          "warmed_solve_median_seconds": {
+            "before": 0.03037575,
+            "after": 0.02810275,
+            "speedup": 1.0808817642401545
+          }
+        }
+      },
+      {
+        "input": "h0.04-c7.hdf5",
+        "samples": [
+          {
+            "graph": false,
+            "setup_seconds": 0.5262555,
+            "transfer_solve_download_seconds": 0.0898597,
+            "total_seconds": 0.6161152,
+            "warmed_solve_median_seconds": 0.057022,
+            "direct_solution_relative_difference": 0.0,
+            "probe_relative_difference": 2.2283596683560983e-13,
+            "hierarchy_relative_difference": 0.0,
+            "true_relative_residual": 4.5857933808533443e-10,
+            "preconditioner_execution": "direct CUDA kernels",
+            "gpu_live_allocation_delta_bytes": 121887052.0
+          },
+          {
+            "graph": true,
+            "setup_seconds": 0.5087873,
+            "transfer_solve_download_seconds": 0.0825639,
+            "total_seconds": 0.5913512000000001,
+            "warmed_solve_median_seconds": 0.0553146,
+            "direct_solution_relative_difference": 0.0,
+            "probe_relative_difference": 2.2283596683560983e-13,
+            "hierarchy_relative_difference": 0.0,
+            "true_relative_residual": 4.5857933808533443e-10,
+            "preconditioner_execution": "CUDA Graph replay of the unchanged AMS cycle",
+            "gpu_live_allocation_delta_bytes": 113866660.0
+          },
+          {
+            "graph": true,
+            "setup_seconds": 0.5203148,
+            "transfer_solve_download_seconds": 0.0822739,
+            "total_seconds": 0.6025887,
+            "warmed_solve_median_seconds": 0.0552391,
+            "direct_solution_relative_difference": 0.0,
+            "probe_relative_difference": 2.2283596683560983e-13,
+            "hierarchy_relative_difference": 0.0,
+            "true_relative_residual": 4.5857933808533443e-10,
+            "preconditioner_execution": "CUDA Graph replay of the unchanged AMS cycle",
+            "gpu_live_allocation_delta_bytes": 114192180.0
+          },
+          {
+            "graph": false,
+            "setup_seconds": 0.5233611,
+            "transfer_solve_download_seconds": 0.0828433,
+            "total_seconds": 0.6062044,
+            "warmed_solve_median_seconds": 0.0559932,
+            "direct_solution_relative_difference": 0.0,
+            "probe_relative_difference": 2.2283596683560983e-13,
+            "hierarchy_relative_difference": 0.0,
+            "true_relative_residual": 4.5857933808533443e-10,
+            "preconditioner_execution": "direct CUDA kernels",
+            "gpu_live_allocation_delta_bytes": 114188356.0
+          }
+        ],
+        "before_after": {
+          "transfer_solve_download_seconds": {
+            "before": 0.0863515,
+            "after": 0.08241889999999999,
+            "speedup": 1.047714783866322
+          },
+          "total_seconds": {
+            "before": 0.6111598,
+            "after": 0.5969699500000001,
+            "speedup": 1.0237697894173734
+          },
+          "warmed_solve_median_seconds": {
+            "before": 0.056507600000000005,
+            "after": 0.05527685,
+            "speedup": 1.0222651978178932
+          }
+        }
+      },
+      {
+        "input": "h0.02-c7.hdf5",
+        "samples": [
+          {
+            "graph": false,
+            "setup_seconds": 4.3396656,
+            "transfer_solve_download_seconds": 0.4216082,
+            "total_seconds": 4.7612738,
+            "warmed_solve_median_seconds": 0.2337652,
+            "direct_solution_relative_difference": 0.0,
+            "probe_relative_difference": 9.521881666424484e-13,
+            "hierarchy_relative_difference": 0.0,
+            "true_relative_residual": 7.633983643165345e-10,
+            "preconditioner_execution": "direct CUDA kernels",
+            "gpu_live_allocation_delta_bytes": 1032316900.0
+          },
+          {
+            "graph": true,
+            "setup_seconds": 4.3651683,
+            "transfer_solve_download_seconds": 0.3853377,
+            "total_seconds": 4.750506,
+            "warmed_solve_median_seconds": 0.2329552,
+            "direct_solution_relative_difference": 0.0,
+            "probe_relative_difference": 9.521881666424484e-13,
+            "hierarchy_relative_difference": 0.0,
+            "true_relative_residual": 7.633983643165345e-10,
+            "preconditioner_execution": "CUDA Graph replay of the unchanged AMS cycle",
+            "gpu_live_allocation_delta_bytes": 948168976.0
+          },
+          {
+            "graph": true,
+            "setup_seconds": 4.357313,
+            "transfer_solve_download_seconds": 0.3841105,
+            "total_seconds": 4.741423500000001,
+            "warmed_solve_median_seconds": 0.2328411,
+            "direct_solution_relative_difference": 0.0,
+            "probe_relative_difference": 9.521881666424484e-13,
+            "hierarchy_relative_difference": 0.0,
+            "true_relative_residual": 7.633983643165345e-10,
+            "preconditioner_execution": "CUDA Graph replay of the unchanged AMS cycle",
+            "gpu_live_allocation_delta_bytes": 946532652.0
+          },
+          {
+            "graph": false,
+            "setup_seconds": 4.3417457,
+            "transfer_solve_download_seconds": 0.3848656,
+            "total_seconds": 4.7266113,
+            "warmed_solve_median_seconds": 0.2342125,
+            "direct_solution_relative_difference": 0.0,
+            "probe_relative_difference": 9.521881666424484e-13,
+            "hierarchy_relative_difference": 0.0,
+            "true_relative_residual": 7.633983643165345e-10,
+            "preconditioner_execution": "direct CUDA kernels",
+            "gpu_live_allocation_delta_bytes": 947150296.0
+          }
+        ],
+        "before_after": {
+          "transfer_solve_download_seconds": {
+            "before": 0.4032369,
+            "after": 0.3847241,
+            "speedup": 1.0481196784916775
+          },
+          "total_seconds": {
+            "before": 4.74394255,
+            "after": 4.745964750000001,
+            "speedup": 0.999573911710996
+          },
+          "warmed_solve_median_seconds": {
+            "before": 0.23398885,
+            "after": 0.23289815,
+            "speedup": 1.0046831630049444
+          }
+        }
+      }
+    ],
+    "build": {
+      "schema": "radia.ams-cuda-build.v1",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "source_commit": "1ee5b065ebf20f9eefc0a5ca78fe21f5ddfad20f",
+      "source_dirty": true,
+      "sha256": {
+        "build-ams-cuda/_radia_ams_snapshot.pyd": "3ef64d4c9e5667fabe372bb000e5a44384d4f21ab81c48c4e7884ee6664a72ae",
+        "build-ams-cuda/radia_cuda_ams.mexw64": "bc7ecbe6553a06592221058bc42ffa79c61bafeee08614cc46608126b7c35e6b"
+      },
+      "source_sha256": {
+        "packages/radia-gpu/native/ams_snapshot_module.cpp": "cce1561d96b01b538e50862270f7bab44735155de2da70ca47a82702762979ec",
+        "packages/radia-gpu/native/radia_cuda_ams.cu": "ebb91f281a424ab1272702ff501cd2104f3669083e9f7ecc78d762334a8a94bf",
+        "packages/radia-gpu/native/ams_matlab_setup.cpp": "2ada6de6b387d5213ad79bf56addb11a9e9e841502de3d0ea383fd96be72f6f7",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "131bc8219ce57ac5d5ca30ca0193a8b9d8c95b04bc30cb8162807db0a562fc7a",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "6bd1d0d35d1f641eec1eff8a3b9b3f9776b3fb8c41252f8a04c83d54cd1095db",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp": "35f3cd197930e3ce99e4a73a0fc9d568e453a267a3a6520bad0d4edc41173a6c",
+        "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "a285fe6ca8448e7548365000e71e21e0ad8cd71769ae5e9792024398442709cb",
+        "packages/radia-gpu/tools/build_ams_cuda.py": "dab7dd4493d219cecc7c44096a61331be7daa6c85da7c42ccfda1d4a0e532095",
+        "Build.ps1": "a5dbd62a7ba18f6fd8fcfc6e1ca4724be3fb879ba3d85ca81cf8cdb0817dfefa"
+      },
+      "no_cpu_solver_fallback": true,
+      "snapshot_setup_backend": "OpenMP row/chunk dispatch; default one thread; serial coarse factorization",
+      "matlab_setup_backend": "Shared native AMS in mexcuda host; serial NGSolve sparsecholesky; no TaskManager regions",
+      "python_runtime_adapter_required": false,
+      "python_dll_indirect_dependency_permitted": true
+    }
+  },
+  "implementation_commit": "dfeec57af",
+  "limitations": [
+    "Diagnostic RTX 5000 measurements; not idle-mdx performance acceptance.",
+    "CPU parity reference solve was single-shot; these results do not certify repeated end-to-end CPU versus GPU speedup.",
+    "First case total includes cold native setup in its first direct sample; do not use its total speedup as acceptance.",
+    "Graph capture and instantiation costs are included in each solve. Graph remains opt-in.",
+    "GPU memory is live allocation delta, not measured peak.",
+    "Build receipts retain pre-commit dirty source provenance; source hashes identify tested development artifacts. No release deployment."
+  ]
+}

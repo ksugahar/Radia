@@ -1,0 +1,232 @@
+{
+  "audit": {
+    "bbox_overlap_pair_count": 1,
+    "clearance_tolerance": 1e-12,
+    "max_bbox_intersection_volume": 0.6,
+    "min_positive_gap": 0.6,
+    "missing_bbox_names": [],
+    "n_complete_bbox_rows": 3,
+    "n_pairs": 3,
+    "n_shapes": 3,
+    "ok_for_bbox_clearance": false,
+    "pair_rows": [
+      {
+        "axis_gaps": {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "axis_overlaps": {
+          "x": 0.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "bbox_intersection_size": [
+          0.0,
+          1.0,
+          1.0
+        ],
+        "bbox_intersection_volume": 0.0,
+        "bbox_intersects_or_touches": false,
+        "bbox_separated": true,
+        "center_distance": 2.0,
+        "name_a": "left",
+        "name_b": "right",
+        "pair": "left::right",
+        "separated_axes": [
+          "x"
+        ],
+        "separation_distance": 1.0,
+        "status": "separated",
+        "touching_axes": []
+      },
+      {
+        "axis_gaps": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "axis_overlaps": {
+          "x": 0.6,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "bbox_intersection_size": [
+          0.6,
+          1.0,
+          1.0
+        ],
+        "bbox_intersection_volume": 0.6,
+        "bbox_intersects_or_touches": true,
+        "bbox_separated": false,
+        "center_distance": 0.4,
+        "name_a": "left",
+        "name_b": "overlap",
+        "pair": "left::overlap",
+        "separated_axes": [],
+        "separation_distance": 0.0,
+        "status": "bbox_overlap_needs_precise_check",
+        "touching_axes": []
+      },
+      {
+        "axis_gaps": {
+          "x": 0.6,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "axis_overlaps": {
+          "x": 0.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "bbox_intersection_size": [
+          0.0,
+          1.0,
+          1.0
+        ],
+        "bbox_intersection_volume": 0.0,
+        "bbox_intersects_or_touches": false,
+        "bbox_separated": true,
+        "center_distance": 1.6,
+        "name_a": "right",
+        "name_b": "overlap",
+        "pair": "right::overlap",
+        "separated_axes": [
+          "x"
+        ],
+        "separation_distance": 0.6,
+        "status": "separated",
+        "touching_axes": []
+      }
+    ],
+    "policy": "build123d_bbox_pair_clearance_pre_mesh_audit",
+    "separated_pair_count": 2,
+    "status": "needs_attention",
+    "touching_pair_count": 0
+  },
+  "checks": {
+    "bbox_overlap_pair_count": 1,
+    "left_overlap_intersection_volume": 0.6,
+    "left_right_x_gap": 1.0,
+    "min_positive_gap": 0.6,
+    "n_pairs": 3,
+    "n_shapes": 3,
+    "right_overlap_x_gap": 0.6,
+    "separated_pair_count": 2,
+    "status": "needs_attention",
+    "touching_pair_count": 0
+  },
+  "kind": "build123d_bbox_clearance_audit_validation",
+  "learning_theme": "A bounding-box gap on one axis proves separation; all-axis bbox overlap only requests a precise geometry check",
+  "measurement_rows": [
+    {
+      "area": 6.0,
+      "bounding_box": {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "diagonal": 1.7320508075688772,
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "size": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "characteristic_length": 1.0,
+      "edges": 12,
+      "faces": 6,
+      "index": 1,
+      "is_valid": true,
+      "name": "left",
+      "solids": 1,
+      "type": "Solid",
+      "vertices": 8,
+      "volume": 0.9999999999999998
+    },
+    {
+      "area": 6.0,
+      "bounding_box": {
+        "center": [
+          2.0,
+          0.0,
+          0.0
+        ],
+        "diagonal": 1.7320508075688772,
+        "max": [
+          2.5,
+          0.5,
+          0.5
+        ],
+        "min": [
+          1.5,
+          -0.5,
+          -0.5
+        ],
+        "size": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "characteristic_length": 1.0,
+      "edges": 12,
+      "faces": 6,
+      "index": 2,
+      "is_valid": true,
+      "name": "right",
+      "solids": 1,
+      "type": "Solid",
+      "vertices": 8,
+      "volume": 0.9999999999999998
+    },
+    {
+      "area": 6.0,
+      "bounding_box": {
+        "center": [
+          0.4,
+          0.0,
+          0.0
+        ],
+        "diagonal": 1.7320508075688772,
+        "max": [
+          0.9,
+          0.5,
+          0.5
+        ],
+        "min": [
+          -0.09999999999999998,
+          -0.5,
+          -0.5
+        ],
+        "size": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "characteristic_length": 1.0,
+      "edges": 12,
+      "faces": 6,
+      "index": 3,
+      "is_valid": true,
+      "name": "overlap",
+      "solids": 1,
+      "type": "Solid",
+      "vertices": 8,
+      "volume": 0.9999999999999998
+    }
+  ],
+  "validation_class": true
+}

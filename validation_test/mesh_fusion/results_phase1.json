@@ -1,0 +1,44 @@
+{
+  "schema": "radia.validation.mesh_fusion.phase1.v1",
+  "source_notebook": "docs/mesh_fusion/mesh_fusion.ipynb",
+  "checks": {
+    "l2_error_decreases": true,
+    "finest_l2_error_lt_1e_6": true
+  },
+  "phase": 1,
+  "description": "Nitsche/heterogeneous-mesh-density Poisson baseline",
+  "ngsolve_version": "6.2.2603+",
+  "order": 2,
+  "mu": 1.0,
+  "exact_solution": "u = sin(pi x) sin(pi y) / (2 pi^2)",
+  "results": [
+    {
+      "maxh_left": 0.2,
+      "maxh_right": 0.30000000000000004,
+      "n_dof": 59,
+      "l2_err": 0.0004062010984030772,
+      "t_solve_sec": 0.21243071556091309
+    },
+    {
+      "maxh_left": 0.1,
+      "maxh_right": 0.15000000000000002,
+      "n_dof": 227,
+      "l2_err": 3.7811432937162846e-05,
+      "t_solve_sec": 0.46076536178588867
+    },
+    {
+      "maxh_left": 0.05,
+      "maxh_right": 0.07500000000000001,
+      "n_dof": 859,
+      "l2_err": 3.9363792689352505e-06,
+      "t_solve_sec": 4.2868218421936035
+    },
+    {
+      "maxh_left": 0.025,
+      "maxh_right": 0.037500000000000006,
+      "n_dof": 3391,
+      "l2_err": 4.5644816558566754e-07,
+      "t_solve_sec": 6.247675180435181
+    }
+  ]
+}

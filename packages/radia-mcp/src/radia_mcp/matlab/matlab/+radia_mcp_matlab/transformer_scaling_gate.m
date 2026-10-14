@@ -1,0 +1,29 @@
+function report = transformer_scaling_gate(seed)
+arguments
+    seed (1,1) double {mustBeInteger,mustBeNonnegative} = 109
+end
+rng(seed,"twister"); sizes=10.^linspace(3,7,12)'; alphaTrue=.18; floorLoss=1.1;
+loss=floorLoss+4*sizes.^(-alphaTrue).*(1+.005*randn(size(sizes)));
+p=polyfit(log(sizes),log(loss-floorLoss),1); alphaFit=-p(1); predicted=polyval(p,log(sizes));
+r2=1-sum((log(loss-floorLoss)-predicted).^2)/sum((log(loss-floorLoss)-mean(log(loss-floorLoss))).^2);
+n=64; window=6; denseCount=n*n; sparse=false(n);
+for i=1:n, sparse(i,max(1,i-window+1):i)=true; end
+sparseCount=nnz(sparse); futureLeak=nnz(triu(sparse,1));
+extrapolationSize=1e10; extrapolatedLoss=floorLoss+exp(polyval(p,log(extrapolationSize)));
+extrapolationVerified=false; unsafePromotion=extrapolationVerified;
+checks=struct("scaling_exponent_recovered",abs(alphaFit-alphaTrue)<.01, ...
+    "power_law_fit",r2>.99,"sparse_reduces_attention",sparseCount<denseCount/4, ...
+    "causal_no_future_leak",futureLeak==0,"extrapolation_finite",isfinite(extrapolatedLoss), ...
+    "unverified_extrapolation_withheld",~unsafePromotion);
+ids=["szY-gk3ANdU","-rI5n5M8oSg","hMQG-oF9pgw","CBZWzQVcXE4","n1QYofU3_hY"];
+topics=["gpt3_social_impact","gpt3_limits","gpt3_in_context","gpt3_sparse_transformer","scaling_law"];
+lessons=repmat(struct("video_id","","topic","","public_url",""),numel(ids),1);
+for k=1:numel(ids), lessons(k)=struct("video_id",ids(k),"topic",topics(k),"public_url","https://www.youtube.com/watch?v="+ids(k)); end
+report=struct("schema","radia-mcp.matlab.transformer-scaling.v1","lessons",lessons, ...
+    "seed",seed,"units",struct("model_size","parameter","loss","1"), ...
+    "alpha_true",alphaTrue,"alpha_fit",alphaFit,"fit_r2",r2, ...
+    "dense_attention_entries",denseCount,"sparse_attention_entries",sparseCount, ...
+    "extrapolation_size",extrapolationSize,"extrapolated_loss",extrapolatedLoss, ...
+    "extrapolation_verified",extrapolationVerified,"model_output_is_ground_truth",false, ...
+    "promotion_requires_forward_solver",true,"checks",checks,"ok",all(structfun(@logical,checks)));
+end

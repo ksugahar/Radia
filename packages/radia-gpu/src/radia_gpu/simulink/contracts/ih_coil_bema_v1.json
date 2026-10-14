@@ -1,0 +1,13 @@
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "radia-ih-coil-bem-a",
+  "strict_labels": true,
+  "required": {
+    "materials": ["coil"],
+    "boundaries": ["body", "source", "sink"]
+  },
+  "allowed": {
+    "materials": ["coil"],
+    "boundaries": ["body", "source", "sink"]
+  }
+}

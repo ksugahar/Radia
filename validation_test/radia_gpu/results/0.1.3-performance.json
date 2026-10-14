@@ -1,0 +1,640 @@
+{
+  "schema": "radia.gpu.common-wheel-performance.v1",
+  "accepted": true,
+  "release_accepted": false,
+  "source_commit": "88049e80944ab3c9de38d4a320d74a1b14f051bf",
+  "wheel_sha256": "76a1b64ed290194a95aba755eb83ad6781538839012948c5adee1495259554ba",
+  "manifest_sha256": "40526ea1eeccfd1ad4399e8925b04e3f2fb71ed417a7051d1c9229ec0c2284c6",
+  "gpu_model": "NVIDIA A100-SXM4-40GB",
+  "same_machine_cpu_gpu": true,
+  "idle_checks_passed": true,
+  "cycles": 2,
+  "limitations": [
+    "Bounded public workloads only; no general scaling claim",
+    "First payload, MATLAB Engine and GPU initialization are separate; no complete process-cold solver claim",
+    "HDiv host/global/CUDA runtime peaks unmeasured; exact owned bytes and available-memory samples only",
+    "FMM 50 ms process samples include baseline and runtimes and may miss short allocation spikes",
+    "FMM speedup compares CPU direct sum, not CPU FMM",
+    "HDiv reference loaded native SHA is verified but its original build-source receipt is unverified"
+  ],
+  "hdiv": [
+    {
+      "cpu_threads": {
+        "cpu_ngsolve": 1,
+        "cpu_blas": 1,
+        "matlab_single_comp_thread": true
+      },
+      "warm_medians_seconds": {
+        "cpu": 5.178114950000236,
+        "gpu": 0.26822975
+      },
+      "cpu_over_gpu_speedup": 19.304774917771933,
+      "timing_boundary": "Public CPU whole solve and MATLAB solveHDivElements through result recovery and destruction; GPU Engine transport/report collection excluded",
+      "cpu_native_sha256": "9020a4f700d381fe5388870ef3b77a43b67506f9f1610f9ef8b94906bdfc4996",
+      "cpu_frontend_sha256": "e03cdf61cd845984017c0a73f87f321db58bae9513f60d82a3d8c361c89b7dd5",
+      "samples": [
+        {
+          "backend": "cpu",
+          "phase": "first_payload",
+          "whole_seconds": 5.206556400000409,
+          "coefficient_error": 0.0,
+          "mean_error": 3.2577858271086104e-16,
+          "true_relative_residual": 1.3011194301562965e-12,
+          "exact_accounted_owned_peak_bytes": null
+        },
+        {
+          "backend": "gpu",
+          "phase": "first_payload",
+          "whole_seconds": 0.6352907,
+          "coefficient_error": 5.015281377765097e-10,
+          "mean_error": 1.4898305998267207e-12,
+          "true_relative_residual": 7.9536576703176e-12,
+          "exact_accounted_owned_peak_bytes": 2286980.0
+        },
+        {
+          "backend": "cpu",
+          "phase": "warm",
+          "whole_seconds": 5.2108206000011705,
+          "coefficient_error": 0.0,
+          "mean_error": 3.2577858271086104e-16,
+          "true_relative_residual": 1.3011194301562965e-12,
+          "exact_accounted_owned_peak_bytes": null
+        },
+        {
+          "backend": "gpu",
+          "phase": "warm",
+          "whole_seconds": 0.2561266,
+          "coefficient_error": 5.015281377765097e-10,
+          "mean_error": 1.4898305998267207e-12,
+          "true_relative_residual": 7.9536576703176e-12,
+          "exact_accounted_owned_peak_bytes": 2286980.0
+        },
+        {
+          "backend": "gpu",
+          "phase": "warm",
+          "whole_seconds": 0.2701764,
+          "coefficient_error": 5.015281377765097e-10,
+          "mean_error": 1.4898305998267207e-12,
+          "true_relative_residual": 7.9536576703176e-12,
+          "exact_accounted_owned_peak_bytes": 2286980.0
+        },
+        {
+          "backend": "cpu",
+          "phase": "warm",
+          "whole_seconds": 5.172420200000488,
+          "coefficient_error": 0.0,
+          "mean_error": 3.2577858271086104e-16,
+          "true_relative_residual": 1.3011194301562965e-12,
+          "exact_accounted_owned_peak_bytes": null
+        },
+        {
+          "backend": "cpu",
+          "phase": "warm",
+          "whole_seconds": 5.176249600001029,
+          "coefficient_error": 0.0,
+          "mean_error": 3.2577858271086104e-16,
+          "true_relative_residual": 1.3011194301562965e-12,
+          "exact_accounted_owned_peak_bytes": null
+        },
+        {
+          "backend": "gpu",
+          "phase": "warm",
+          "whole_seconds": 0.2662831,
+          "coefficient_error": 5.015281377765097e-10,
+          "mean_error": 1.4898305998267207e-12,
+          "true_relative_residual": 7.9536576703176e-12,
+          "exact_accounted_owned_peak_bytes": 2286980.0
+        },
+        {
+          "backend": "gpu",
+          "phase": "warm",
+          "whole_seconds": 0.2924025,
+          "coefficient_error": 5.015281377765097e-10,
+          "mean_error": 1.4898305998267207e-12,
+          "true_relative_residual": 7.9536576703176e-12,
+          "exact_accounted_owned_peak_bytes": 2286980.0
+        },
+        {
+          "backend": "cpu",
+          "phase": "warm",
+          "whole_seconds": 5.179980299999443,
+          "coefficient_error": 0.0,
+          "mean_error": 3.2577858271086104e-16,
+          "true_relative_residual": 1.3011194301562965e-12,
+          "exact_accounted_owned_peak_bytes": null
+        }
+      ]
+    },
+    {
+      "cpu_threads": {
+        "cpu_ngsolve": 16,
+        "cpu_blas": 1,
+        "matlab_single_comp_thread": true
+      },
+      "warm_medians_seconds": {
+        "cpu": 0.4345640999999887,
+        "gpu": 0.2584543
+      },
+      "cpu_over_gpu_speedup": 1.6813962855328337,
+      "timing_boundary": "Public CPU whole solve and MATLAB solveHDivElements through result recovery and destruction; GPU Engine transport/report collection excluded",
+      "cpu_native_sha256": "9020a4f700d381fe5388870ef3b77a43b67506f9f1610f9ef8b94906bdfc4996",
+      "cpu_frontend_sha256": "e03cdf61cd845984017c0a73f87f321db58bae9513f60d82a3d8c361c89b7dd5",
+      "samples": [
+        {
+          "backend": "cpu",
+          "phase": "first_payload",
+          "whole_seconds": 0.46676730000035604,
+          "coefficient_error": 2.436375871753005e-14,
+          "mean_error": 1.9576856406866595e-16,
+          "true_relative_residual": 1.301248250220623e-12,
+          "exact_accounted_owned_peak_bytes": null
+        },
+        {
+          "backend": "gpu",
+          "phase": "first_payload",
+          "whole_seconds": 0.615979,
+          "coefficient_error": 5.015281377765097e-10,
+          "mean_error": 1.4898305998267207e-12,
+          "true_relative_residual": 7.9536576703176e-12,
+          "exact_accounted_owned_peak_bytes": 2286980.0
+        },
+        {
+          "backend": "cpu",
+          "phase": "warm",
+          "whole_seconds": 0.4348602000027313,
+          "coefficient_error": 2.5718206659938432e-14,
+          "mean_error": 3.544895810694964e-16,
+          "true_relative_residual": 1.3012012239810256e-12,
+          "exact_accounted_owned_peak_bytes": null
+        },
+        {
+          "backend": "gpu",
+          "phase": "warm",
+          "whole_seconds": 0.2498873,
+          "coefficient_error": 5.015281377765097e-10,
+          "mean_error": 1.4898305998267207e-12,
+          "true_relative_residual": 7.9536576703176e-12,
+          "exact_accounted_owned_peak_bytes": 2286980.0
+        },
+        {
+          "backend": "gpu",
+          "phase": "warm",
+          "whole_seconds": 0.2530779,
+          "coefficient_error": 5.015281377765097e-10,
+          "mean_error": 1.4898305998267207e-12,
+          "true_relative_residual": 7.9536576703176e-12,
+          "exact_accounted_owned_peak_bytes": 2286980.0
+        },
+        {
+          "backend": "cpu",
+          "phase": "warm",
+          "whole_seconds": 0.4342679999972461,
+          "coefficient_error": 2.465158348226914e-14,
+          "mean_error": 2.3432542852074084e-16,
+          "true_relative_residual": 1.3010517044927327e-12,
+          "exact_accounted_owned_peak_bytes": null
+        },
+        {
+          "backend": "cpu",
+          "phase": "warm",
+          "whole_seconds": 0.42817270000159624,
+          "coefficient_error": 2.3248424662254e-14,
+          "mean_error": 1.7594054330365903e-16,
+          "true_relative_residual": 1.301010617524299e-12,
+          "exact_accounted_owned_peak_bytes": null
+        },
+        {
+          "backend": "gpu",
+          "phase": "warm",
+          "whole_seconds": 0.2638307,
+          "coefficient_error": 5.015281377765097e-10,
+          "mean_error": 1.4898305998267207e-12,
+          "true_relative_residual": 7.9536576703176e-12,
+          "exact_accounted_owned_peak_bytes": 2286980.0
+        },
+        {
+          "backend": "gpu",
+          "phase": "warm",
+          "whole_seconds": 0.2851407,
+          "coefficient_error": 5.015281377765097e-10,
+          "mean_error": 1.4898305998267207e-12,
+          "true_relative_residual": 7.9536576703176e-12,
+          "exact_accounted_owned_peak_bytes": 2286980.0
+        },
+        {
+          "backend": "cpu",
+          "phase": "warm",
+          "whole_seconds": 0.45076289999997243,
+          "coefficient_error": 2.2331146822606885e-14,
+          "mean_error": 3.1891931803104207e-16,
+          "true_relative_residual": 1.3009726184457429e-12,
+          "exact_accounted_owned_peak_bytes": null
+        }
+      ]
+    }
+  ],
+  "fmm": {
+    "order": 8,
+    "separation": 2,
+    "cpu_threads": 1,
+    "cpu_algorithm": "Independent NumPy direct sum, not CPU FMM",
+    "summary": {
+      "cpu_median_seconds": 4.474437699998816,
+      "gpu_transfer_inclusive_median_seconds": 0.9941568000000001,
+      "cpu_direct_over_gpu_speedup": 4.500736402948525
+    },
+    "timing_boundary": "Context construction, all uploads, apply, result download and context destruction; input-file read and output serialization excluded for both routes",
+    "cold_definition": "First numerical call; interpreter/imports, MATLAB startup and GPU initialization are separate, not process-cold solver samples",
+    "memory_limitations": "50ms process samples may miss short spikes; lifetime RSS peak includes earlier work; native reported components do not certify global device, CUDA runtime or all MATLAB temporaries",
+    "binary_sha256": "e8cae3dd56fb8a44d4c8c58197a18e731949bd1a2495bdd393f83e1d7d85242b",
+    "numpy_native_sha256": {
+      "fft\\_pocketfft_umath.cp312-win_amd64.pyd": "440a855aba8838cd5c4e22b2618cd9f691aea11130261a9318cc48050e76720e",
+      "linalg\\lapack_lite.cp312-win_amd64.pyd": "2aa76852c25a37f22009db5415eec9eaf393743036cc0aee6ea81807869edfdd",
+      "linalg\\_umath_linalg.cp312-win_amd64.pyd": "26315b00a500ebfa5723776853ba651e3cae05c22144f41305ba0cf3b29b9542",
+      "random\\bit_generator.cp312-win_amd64.pyd": "1c05dbf7c50d6a885e8f35fe360377368d12f4718ec0feb6125c71b8d16c20ea",
+      "random\\mtrand.cp312-win_amd64.pyd": "fa7cbd1e1aa591b3b7ea291d63aa5c49ed37383ea7655d96a2ff44c4f2e90fc3",
+      "random\\_bounded_integers.cp312-win_amd64.pyd": "b15875ad2ded03fc5f555bf8d4781b526a070e9aed72b775499b875a9a6d4965",
+      "random\\_common.cp312-win_amd64.pyd": "eaf315793a49b211515951203a1a0e2d511af930e024b6c93dee7b3e5ab2aed3",
+      "random\\_generator.cp312-win_amd64.pyd": "f39f29e88e2aacc3b280d4c8a44a189a48722b1c7414de516d6d1c4d13b13495",
+      "random\\_mt19937.cp312-win_amd64.pyd": "d202ea26fd003eb916a640b2e931b20512f65aad0315f4f31d4e65c9d0e5f58e",
+      "random\\_pcg64.cp312-win_amd64.pyd": "c21833f36728e5aa2db7b5c2fb290f6e62143c0167a317126b4c7a31380d4917",
+      "random\\_philox.cp312-win_amd64.pyd": "e482e082620a583b6a0d01171147f6ff7cdee3b1d8f6d15e277ad6efbf14ee40",
+      "random\\_sfc64.cp312-win_amd64.pyd": "ebf00341da63fc784cc5e71e1497293cd3be45e921c88d002ed7340c019ebada",
+      "_core\\_multiarray_tests.cp312-win_amd64.pyd": "47ff40012ce4bbb2c2b4f698fa60f0551d35d817a39316d022aefaaa48e1987e",
+      "_core\\_multiarray_umath.cp312-win_amd64.pyd": "63169915c2d78aba0984bd5e235a92936c319d228c35919a41758b20cd8683c1",
+      "_core\\_operand_flag_tests.cp312-win_amd64.pyd": "6b119484cd0b5a4826482188f4944e2fe8d8404ba1f3290844a3d940af2a5248",
+      "_core\\_rational_tests.cp312-win_amd64.pyd": "1eadf92ea62f7358295bc62eb699ce7e9947420abf137eebebad59bd42a4f070",
+      "_core\\_simd.cp312-win_amd64.pyd": "44820458e000860abe932a0f7d5b89b6eb4f865fbe9fc1f23c95644a28fb3f98",
+      "_core\\_struct_ufunc_tests.cp312-win_amd64.pyd": "5339fd149bce6dddab4b03b224c2ffcb8b3ebe32e0b9d234cd222b645c235bac",
+      "_core\\_umath_tests.cp312-win_amd64.pyd": "9b454dfe53b73490e91260a8b8d07ee9a915804430accd7b7a526f5a28d9f92e"
+    },
+    "samples": [
+      {
+        "backend": "cpu",
+        "phase": "first",
+        "whole_seconds": 4.456000299996958,
+        "independent_relative_errors": [
+          0.0,
+          0.0
+        ],
+        "host_process_memory": {
+          "before": {
+            "rss": 177319936,
+            "private": 137265152,
+            "lifetime_peak_rss": 185389056
+          },
+          "after": {
+            "rss": 177598464,
+            "private": 137453568,
+            "lifetime_peak_rss": 248942592
+          },
+          "sampled_peak_rss": 248180736,
+          "sampled_peak_private": 208961536,
+          "sample_count": 73,
+          "period_seconds": 0.05,
+          "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+        },
+        "native": {}
+      },
+      {
+        "backend": "gpu",
+        "phase": "first",
+        "whole_seconds": 1.1382057,
+        "independent_relative_errors": [
+          1.6990488872720618e-09,
+          7.359898514286786e-10
+        ],
+        "host_process_memory": {
+          "before": {
+            "rss": 1303437312,
+            "private": 1620172800,
+            "lifetime_peak_rss": 1313771520
+          },
+          "after": {
+            "rss": 1333182464,
+            "private": 1693880320,
+            "lifetime_peak_rss": 1345126400
+          },
+          "sampled_peak_rss": 1345110016,
+          "sampled_peak_private": 1707663360,
+          "sample_count": 20,
+          "period_seconds": 0.05,
+          "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+        },
+        "native": {
+          "whole_seconds": 1.1382057,
+          "native": {
+            "apply_seconds": 0.977995,
+            "persistent_geometry_bytes": 17361508,
+            "workspace_bytes": 8085504,
+            "output_bytes": 196608,
+            "nodes": 329,
+            "levels": 4,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 35409,
+            "near_pairs": 30098,
+            "nonleaf_far_pairs": 200
+          },
+          "device_free_before": 42181853184.0,
+          "device_free_after": 42174251008.0,
+          "available_memory_delta": 7602176
+        }
+      },
+      {
+        "backend": "cpu",
+        "phase": "ABBA",
+        "whole_seconds": 4.500954199997068,
+        "independent_relative_errors": [
+          0.0,
+          0.0
+        ],
+        "host_process_memory": {
+          "before": {
+            "rss": 178147328,
+            "private": 138002432,
+            "lifetime_peak_rss": 248942592
+          },
+          "after": {
+            "rss": 178315264,
+            "private": 138231808,
+            "lifetime_peak_rss": 249659392
+          },
+          "sampled_peak_rss": 248930304,
+          "sampled_peak_private": 209743872,
+          "sample_count": 73,
+          "period_seconds": 0.05,
+          "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+        },
+        "native": {}
+      },
+      {
+        "backend": "gpu",
+        "phase": "ABBA",
+        "whole_seconds": 1.0219514,
+        "independent_relative_errors": [
+          1.6990488872720618e-09,
+          7.359898514286786e-10
+        ],
+        "host_process_memory": {
+          "before": {
+            "rss": 1340784640,
+            "private": 1699807232,
+            "lifetime_peak_rss": 1345126400
+          },
+          "after": {
+            "rss": 1342373888,
+            "private": 1701158912,
+            "lifetime_peak_rss": 1358999552
+          },
+          "sampled_peak_rss": 1342373888,
+          "sampled_peak_private": 1701158912,
+          "sample_count": 18,
+          "period_seconds": 0.05,
+          "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+        },
+        "native": {
+          "whole_seconds": 1.0219514,
+          "native": {
+            "apply_seconds": 0.9851083,
+            "persistent_geometry_bytes": 17361508,
+            "workspace_bytes": 8085504,
+            "output_bytes": 196608,
+            "nodes": 329,
+            "levels": 4,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 35409,
+            "near_pairs": 30098,
+            "nonleaf_far_pairs": 200
+          },
+          "device_free_before": 42174398464.0,
+          "device_free_after": 42174251008.0,
+          "available_memory_delta": 147456
+        }
+      },
+      {
+        "backend": "gpu",
+        "phase": "ABBA",
+        "whole_seconds": 0.9605044,
+        "independent_relative_errors": [
+          1.6990488872720618e-09,
+          7.359898514286786e-10
+        ],
+        "host_process_memory": {
+          "before": {
+            "rss": 1342418944,
+            "private": 1701158912,
+            "lifetime_peak_rss": 1358999552
+          },
+          "after": {
+            "rss": 1342783488,
+            "private": 1701466112,
+            "lifetime_peak_rss": 1359695872
+          },
+          "sampled_peak_rss": 1342914560,
+          "sampled_peak_private": 1701666816,
+          "sample_count": 17,
+          "period_seconds": 0.05,
+          "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+        },
+        "native": {
+          "whole_seconds": 0.9605044,
+          "native": {
+            "apply_seconds": 0.9287284,
+            "persistent_geometry_bytes": 17361508,
+            "workspace_bytes": 8085504,
+            "output_bytes": 196608,
+            "nodes": 329,
+            "levels": 4,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 35409,
+            "near_pairs": 30098,
+            "nonleaf_far_pairs": 200
+          },
+          "device_free_before": 42174398464.0,
+          "device_free_after": 42174251008.0,
+          "available_memory_delta": 147456
+        }
+      },
+      {
+        "backend": "cpu",
+        "phase": "ABBA",
+        "whole_seconds": 4.447921200000565,
+        "independent_relative_errors": [
+          0.0,
+          0.0
+        ],
+        "host_process_memory": {
+          "before": {
+            "rss": 178827264,
+            "private": 138641408,
+            "lifetime_peak_rss": 249659392
+          },
+          "after": {
+            "rss": 178851840,
+            "private": 138682368,
+            "lifetime_peak_rss": 250195968
+          },
+          "sampled_peak_rss": 250019840,
+          "sampled_peak_private": 210194432,
+          "sample_count": 72,
+          "period_seconds": 0.05,
+          "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+        },
+        "native": {}
+      },
+      {
+        "backend": "cpu",
+        "phase": "ABBA",
+        "whole_seconds": 4.5775063000000955,
+        "independent_relative_errors": [
+          0.0,
+          0.0
+        ],
+        "host_process_memory": {
+          "before": {
+            "rss": 178839552,
+            "private": 138641408,
+            "lifetime_peak_rss": 250195968
+          },
+          "after": {
+            "rss": 178860032,
+            "private": 138678272,
+            "lifetime_peak_rss": 250204160
+          },
+          "sampled_peak_rss": 249528320,
+          "sampled_peak_private": 210186240,
+          "sample_count": 75,
+          "period_seconds": 0.05,
+          "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+        },
+        "native": {}
+      },
+      {
+        "backend": "gpu",
+        "phase": "ABBA",
+        "whole_seconds": 1.0180852,
+        "independent_relative_errors": [
+          1.6990488872720618e-09,
+          7.359898514286786e-10
+        ],
+        "host_process_memory": {
+          "before": {
+            "rss": 1342857216,
+            "private": 1701466112,
+            "lifetime_peak_rss": 1359695872
+          },
+          "after": {
+            "rss": 1342939136,
+            "private": 1701466112,
+            "lifetime_peak_rss": 1359716352
+          },
+          "sampled_peak_rss": 1342939136,
+          "sampled_peak_private": 1701466112,
+          "sample_count": 18,
+          "period_seconds": 0.05,
+          "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+        },
+        "native": {
+          "whole_seconds": 1.0180852,
+          "native": {
+            "apply_seconds": 0.9888052,
+            "persistent_geometry_bytes": 17361508,
+            "workspace_bytes": 8085504,
+            "output_bytes": 196608,
+            "nodes": 329,
+            "levels": 4,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 35409,
+            "near_pairs": 30098,
+            "nonleaf_far_pairs": 200
+          },
+          "device_free_before": 42174398464.0,
+          "device_free_after": 42174251008.0,
+          "available_memory_delta": 147456
+        }
+      },
+      {
+        "backend": "gpu",
+        "phase": "ABBA",
+        "whole_seconds": 0.9702284,
+        "independent_relative_errors": [
+          1.6990488872720618e-09,
+          7.359898514286786e-10
+        ],
+        "host_process_memory": {
+          "before": {
+            "rss": 1342939136,
+            "private": 1701466112,
+            "lifetime_peak_rss": 1359716352
+          },
+          "after": {
+            "rss": 1343479808,
+            "private": 1701404672,
+            "lifetime_peak_rss": 1360015360
+          },
+          "sampled_peak_rss": 1343479808,
+          "sampled_peak_private": 1701466112,
+          "sample_count": 17,
+          "period_seconds": 0.05,
+          "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+        },
+        "native": {
+          "whole_seconds": 0.9702284,
+          "native": {
+            "apply_seconds": 0.9265395,
+            "persistent_geometry_bytes": 17361508,
+            "workspace_bytes": 8085504,
+            "output_bytes": 196608,
+            "nodes": 329,
+            "levels": 4,
+            "order": 8,
+            "python_adapter_used": 0,
+            "far_pairs": 35409,
+            "near_pairs": 30098,
+            "nonleaf_far_pairs": 200
+          },
+          "device_free_before": 42174398464.0,
+          "device_free_after": 42174251008.0,
+          "available_memory_delta": 147456
+        }
+      },
+      {
+        "backend": "cpu",
+        "phase": "ABBA",
+        "whole_seconds": 4.435781700001826,
+        "independent_relative_errors": [
+          0.0,
+          0.0
+        ],
+        "host_process_memory": {
+          "before": {
+            "rss": 178905088,
+            "private": 138641408,
+            "lifetime_peak_rss": 250204160
+          },
+          "after": {
+            "rss": 178925568,
+            "private": 138678272,
+            "lifetime_peak_rss": 250269696
+          },
+          "sampled_peak_rss": 250155008,
+          "sampled_peak_private": 210190336,
+          "sample_count": 72,
+          "period_seconds": 0.05,
+          "definition": "50ms process samples include baseline/imported runtimes; lifetime peak is not a phase peak; short allocation spikes may be missed"
+        },
+        "native": {}
+      }
+    ],
+    "thread_limit": "The NumPy direct reference uses single-threaded elementwise sums; it is not a parallel CPU FMM baseline"
+  },
+  "input_sha256": {
+    "hdiv_mesh": "a339966a361391ad2b64e7f57645336b3ac70fa549c7f08b2007875523d02236",
+    "hdiv_reference_fixture": "89cadb5f65e3dde41352abcec1f168bea623c8498a37310272e18892c5e48916",
+    "fmm_input": "9df55ac47d1d28d4bf5c02a4e7160f78731b963fcee71e0ef2bc245a70ed0051"
+  }
+}

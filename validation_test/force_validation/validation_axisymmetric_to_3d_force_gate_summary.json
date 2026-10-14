@@ -1,0 +1,190 @@
+{
+  "case_parameters": {
+    "current1_A": 1.0,
+    "current2_A": 1.0,
+    "loop_radius_m": 1.0,
+    "loop_separation_m": 1.5,
+    "n_segments": 128
+  },
+  "checks": {
+    "full_revolution_gate_ok": true,
+    "passed": true,
+    "sector_axial_scaling_gate_ok": true,
+    "sector_transverse_is_not_overclaimed": true,
+    "transverse_components_checked_for_full_revolution": true
+  },
+  "force_learning": "a full 2*pi*r axisymmetric axial force can validate a 3D full-revolution force vector by axial agreement and transverse cancellation",
+  "gates": [
+    {
+      "axisymmetric_reference": {
+        "axial_axis": "z",
+        "axial_force_N": -3.133402760284764e-07,
+        "quantity_basis": "full_3d_revolution_from_2pi_r_weight"
+      },
+      "case_id": "coaxial_loop_full_revolution",
+      "checks": {
+        "axial_component_matches_axisymmetric_reference": true,
+        "axisymmetric_reference_finite": true,
+        "sector_angle_valid": true,
+        "transverse_components_cancel": true
+      },
+      "errors": {
+        "axial_abs_error_N": 6.072379198866079e-18,
+        "axial_allowed_error_N": 3.133402760284764e-15,
+        "axial_rel_error": 1.937950421130739e-11,
+        "transverse_allowed_magnitude_N": 3.1334027602847646e-17,
+        "transverse_magnitude_N": 4.0567214708778714e-23
+      },
+      "metadata": {
+        "n_segments": 128,
+        "producer": "3d_biot_savart_loop_quadrature"
+      },
+      "policy": "axisymmetric_to_3d_force_gate",
+      "required_result_contract": [
+        "axisymmetric result must state that it is full 3D, not per-radian",
+        "3D result must state full_revolution or symmetry_sector basis",
+        "force vector must be global Cartesian components",
+        "axis direction and sign convention must be recorded",
+        "mesh/order/solver versions and timing should be saved with the result JSON"
+      ],
+      "status": "ok",
+      "three_d_result": {
+        "axial_component_N": -3.1334027602240404e-07,
+        "full_revolution_force_vector_N": [
+          -1.3234889800848443e-23,
+          3.834757621007552e-23,
+          -3.1334027602240404e-07
+        ],
+        "input_force_vector_N": [
+          -1.3234889800848443e-23,
+          3.834757621007552e-23,
+          -3.1334027602240404e-07
+        ],
+        "result_basis": "full_revolution",
+        "scale_to_full_revolution": 1.0,
+        "sector_angle_deg": 360.0,
+        "transverse_components_N": [
+          -1.3234889800848443e-23,
+          3.834757621007552e-23
+        ],
+        "transverse_magnitude_N": 4.0567214708778714e-23
+      },
+      "tolerances": {
+        "axial_atol_N": 0.0,
+        "axial_rtol": 1e-08,
+        "transverse_atol_N": 0.0,
+        "transverse_rtol": 1e-10
+      }
+    },
+    {
+      "axisymmetric_reference": {
+        "axial_axis": "z",
+        "axial_force_N": -3.133402760284764e-07,
+        "quantity_basis": "full_3d_revolution_from_2pi_r_weight"
+      },
+      "case_id": "coaxial_loop_quarter_sector_axial_scaling",
+      "checks": {
+        "axial_component_matches_axisymmetric_reference": true,
+        "axisymmetric_reference_finite": true,
+        "sector_angle_valid": true,
+        "transverse_components_cancel": "not_checked_for_symmetry_sector"
+      },
+      "errors": {
+        "axial_abs_error_N": 6.072379198866079e-18,
+        "axial_allowed_error_N": 3.133402760284764e-15,
+        "axial_rel_error": 1.937950421130739e-11,
+        "transverse_allowed_magnitude_N": 6.2668055205695284e-09,
+        "transverse_magnitude_N": 4.0567214708778714e-23
+      },
+      "metadata": {
+        "producer": "scaled_from_full_3d_quadrature",
+        "sector_angle_deg": 90.0
+      },
+      "policy": "axisymmetric_to_3d_force_gate",
+      "required_result_contract": [
+        "axisymmetric result must state that it is full 3D, not per-radian",
+        "3D result must state full_revolution or symmetry_sector basis",
+        "force vector must be global Cartesian components",
+        "axis direction and sign convention must be recorded",
+        "mesh/order/solver versions and timing should be saved with the result JSON"
+      ],
+      "status": "ok",
+      "three_d_result": {
+        "axial_component_N": -3.1334027602240404e-07,
+        "full_revolution_force_vector_N": [
+          -1.3234889800848443e-23,
+          3.834757621007552e-23,
+          -3.1334027602240404e-07
+        ],
+        "input_force_vector_N": [
+          -3.308722450212111e-24,
+          9.58689405251888e-24,
+          -7.833506900560101e-08
+        ],
+        "result_basis": "symmetry_sector",
+        "scale_to_full_revolution": 4.0,
+        "sector_angle_deg": 90.0,
+        "transverse_components_N": [
+          -1.3234889800848443e-23,
+          3.834757621007552e-23
+        ],
+        "transverse_magnitude_N": 4.0567214708778714e-23
+      },
+      "tolerances": {
+        "axial_atol_N": 0.0,
+        "axial_rtol": 1e-08,
+        "transverse_atol_N": 0.0,
+        "transverse_rtol": 0.02
+      }
+    }
+  ],
+  "generated_at_utc": "2026-07-05T02:38:52Z",
+  "kind": "axisymmetric_to_3d_force_gate_validation",
+  "plan": {
+    "case_id": "coaxial_loop_force",
+    "policy": "axisymmetric_to_3d_validation_plan",
+    "recommended_tolerances": {
+      "axial_rtol": 0.03,
+      "mesh_refinement_target_rtol": 0.02,
+      "transverse_rtol": 0.02
+    },
+    "reference_quantity": {
+      "basis": "full_3d_revolution_from_2pi_r_weight",
+      "name": "axisymmetric_axial_force_N",
+      "recommended_extractor": "radia_mcp.radia_ngsolve.force.eggshell_force_axi"
+    },
+    "required_artifacts": [
+      "validation_test/force_validation/validation_axisymmetric_to_3d_force_gate_summary.json",
+      "axisymmetric mesh/result artifact with solver version and 2*pi*r convention",
+      "3D mesh/result artifact with force-vector basis, sector angle, and timing",
+      "material/current convention manifest shared by the axisymmetric and 3D runs"
+    ],
+    "required_checks": [
+      "axial 3D force matches the axisymmetric full-revolution reference",
+      "full-revolution transverse force components cancel",
+      "3D sector outputs record sector angle before any scaling",
+      "mesh refinement or shell-band sweep is recorded for the 3D force extractor"
+    ],
+    "route": "revolved_vol_or_occ_3d_model",
+    "three_d_quantity": {
+      "axial_axis": "z",
+      "basis": "full_revolution preferred; symmetry_sector allowed for axial check",
+      "name": "force_vector_N",
+      "recommended_extractor": "radia_mcp.radia_ngsolve.force.eggshell_force"
+    }
+  },
+  "run_duration_s": 0.018241,
+  "schema": "radia.validation.force_validation.validation_axisymmetric_to_3d_force_gate.v1",
+  "timing_breakdown_s": {
+    "axisymmetric_reference": 3.8e-05,
+    "gate_and_plan_build": 3.9e-05,
+    "three_d_biot_savart_quadrature": 0.018164
+  },
+  "validation_class": true,
+  "versions": {
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "python_version": "3.12.10",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.5"
+  }
+}

@@ -1,0 +1,14 @@
+# ESRF Example 5 iron -- Cubit mesh + Netgen .vol export.
+#
+# The caller defines the APREPRO variable "msize" (element size, metres)
+# before playing this file; the CAD itself lives in example5_iron.jou.
+#
+# NOTE: Cubit's APREPRO evaluates brace expressions even inside "#" comment
+# lines, so never write a brace expression in a comment here.
+imprint volume all
+merge volume all
+block 1 add volume all
+block 1 name "iron"
+volume all scheme auto
+volume all size {msize}
+mesh volume all

@@ -1,0 +1,142 @@
+{
+  "accepted": true,
+  "scope": "Retained point cloud through actual NGSolve SetValues: FP32 far multipoles and FP64 exact leaves",
+  "timing_acceptance": false,
+  "a100_used": false,
+  "ngsolve": "6.2.2607",
+  "binary_sha256": "b6e2a6bea57a987f36380d25651733d7b9aa84518305dabad80a3d87bb5934e0",
+  "field_build": {
+    "schema": "radia.field-cuda-build.v1",
+    "source_commit": "76e9bb885b67a97271789656b68a049e07e1a20c",
+    "source_dirty": false,
+    "source_sha256": {
+      "src/core/rad_hdiv_field_evaluator.cpp": "3abe79905362bb4c943aace95e62f7b87315c7d8eaf792fa1c8db3f14999a32f",
+      "src/core/rad_hdiv_vim.cpp": "397d692d21210d49e9389b8a9313260375fe0dbb055bfe7815d8f78fc5a87a06",
+      "src/core/rad_hdiv_field_evaluator.h": "69295403af30540232b966508866b731b4a24ba29ee7ee2498bb1aa85449e562",
+      "src/core/rad_hdiv_vim.h": "bcc63c34546f21ab8fd65e39e6b6668fe687b217d62c1d61229653b5cad19308",
+      "src/core/rad_field_cloud_kernel.h": "af0fc87f58921c6368e5fbb448b372bea7fe40eef2bcff77f9508e09de374834",
+      "src/core/rad_field_sources.h": "28bbbd100a2bcdc01c71cedfff2756548427226ead2dcd7aae5b5510dafd4029",
+      "src/core/rad_field_source_kernel.inc": "cb8bec501a06ad1d80712371fb4b7c97d4edcb7cb14a8aa67e22ea0cf4919fb8",
+      "src/core/rad_hdiv_field_math.inc": "082adedb5c9a80d222bea026f4756aa4ea14d1e127774a4a7aff7867f8e8205e",
+      "src/core/rad_hdiv_field_kernel_api.inc": "18eb7b6468488c92a6e84a0be6ca7a97ddc6ab5eb4d0342b3453f210d024d589",
+      "packages/radia-gpu/native/radia_cuda_field.cu": "dcb63c5ec244044f3eb330d16e033e7c5801f6780b1e8c30142e96a0ea852f7e",
+      "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127",
+      "packages/radia-gpu/tools/build_field_cuda.py": "b843345462848eec25d299fe789b0a43291bfbe6057850c8fd023bd52adff9e8",
+      "Build.ps1": "506fc6e1d4f5889e51d858f00cbb7404081c86946c00abaf923c05c76c3f8218"
+    },
+    "binary_sha256": "54bd6cc7c95e41ccce2c5b6524cb9e6cb163cb267983c2ac602d0c40563e7f68",
+    "matlab": "26.1.0.3346908 (R2026a) Update 5",
+    "cuda_targets": [
+      "sm_75",
+      "sm_80",
+      "compute_80 PTX"
+    ],
+    "source_representation": "existing retained point cloud only",
+    "cpu_fallback": false,
+    "python_runtime_required": false,
+    "taskmanager_regions": false
+  },
+  "cpu_field_reference": {
+    "schema": "radia.field-cpu-reference.v1",
+    "source_commit": "69301918ac79deae6deab652e0a68b633c3ee0c6",
+    "source_sha256": {
+      "rad_hdiv_field_evaluator.cpp": "db4912925731c3b41a04bdfda44622c55ff85634bc0062a3b5f65a6c91a7b8be",
+      "rad_hdiv_field_evaluator.h": "c9a821ad8d52a312e3f1a4f3b0681ae1fbee0144f55206cfee09c72573e6c56e",
+      "rad_hdiv_vim.cpp": "a6bc36adc49fda5e5ae494a14db4189b5bdc8eb1162b00c6ceb220359bd57a46",
+      "rad_hdiv_vim.h": "171b9ee542ec6bc752826e10fd80377b8d4d5019e78b2d219f4b987944af154a",
+      "rad_parallel.h": "0ad545213c48b7a0f5df1c59d46e33a4c7e85fca62eab0637c0154d940110ed5"
+    },
+    "adapter_sha256": "b3e5e9b93d20988d345f028d2dfef7b60e7293f698664e4eb540eee608aa7521",
+    "binary_sha256": "ac6e1dda3ad0b49eafd59e8aaa5929de7ace4dbaed9eeafe7cddbbddcf6e1396",
+    "ngsolve": "6.2.2607",
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]"
+  },
+  "cases": [
+    {
+      "space": "hdiv",
+      "relative_coefficient_error": 8.829747361436512e-16,
+      "repeat_equal": true,
+      "targets": 24,
+      "algorithm": "tree_mixed32",
+      "source_count": 256,
+      "relative_FE_L2_error": 9.753292642116561e-08,
+      "retained_cloud_gpu_projection_relative_error": 3.1521250617175924e-07,
+      "gpu_reuse_passed": true
+    },
+    {
+      "space": "hcurl",
+      "relative_coefficient_error": 1.8429889837511003e-16,
+      "repeat_equal": true,
+      "targets": 24,
+      "algorithm": "tree_mixed32",
+      "source_count": 256,
+      "relative_FE_L2_error": 9.829320883515097e-08,
+      "retained_cloud_gpu_projection_relative_error": 1.9901837353927376e-07,
+      "gpu_reuse_passed": true
+    },
+    {
+      "space": "vectorh1",
+      "relative_coefficient_error": 1.6346262894039253e-16,
+      "repeat_equal": true,
+      "targets": 24,
+      "algorithm": "tree_mixed32",
+      "source_count": 256,
+      "relative_FE_L2_error": 6.756967792022101e-08,
+      "retained_cloud_gpu_projection_relative_error": 1.2188120265664953e-07,
+      "gpu_reuse_passed": true
+    }
+  ],
+  "contexts_released": true,
+  "schema": "radia.radfld-mixed32-projection.v1",
+  "relative_limit": 0.0001,
+  "transfer_inclusive_whole_seconds": null,
+  "memory_usage": null,
+  "timing_status": "Pending idle-host check; current observed CPU load 70.5 percent",
+  "limitations": [
+    "256-source positive cloud and 24 mapped targets; not general geometry acceptance",
+    "Analytic/high-order/curved exact kernels compile but remain FP64 and require numerical acceptance",
+    "Persistent sources and moments remain FP64; no storage reduction claimed",
+    "100 timings are diagnostic only"
+  ],
+  "validator_sha256": "e3c752c2ec702fdbf902626313fb0009c138fb78658b7abd0ff00d9705171d7d",
+  "FP64_tree_baseline_cases": [
+    {
+      "space": "hdiv",
+      "relative_coefficient_error": 8.829747361436512e-16,
+      "repeat_equal": true,
+      "targets": 24,
+      "algorithm": "tree",
+      "source_count": 256,
+      "relative_FE_L2_error": 1.787951143443324e-08,
+      "retained_cloud_gpu_projection_relative_error": 2.89078253259348e-08,
+      "gpu_reuse_passed": true
+    },
+    {
+      "space": "hcurl",
+      "relative_coefficient_error": 1.743461430138706e-16,
+      "repeat_equal": true,
+      "targets": 24,
+      "algorithm": "tree",
+      "source_count": 256,
+      "relative_FE_L2_error": 1.7854145109974263e-08,
+      "retained_cloud_gpu_projection_relative_error": 1.2568098129091105e-08,
+      "gpu_reuse_passed": true
+    },
+    {
+      "space": "vectorh1",
+      "relative_coefficient_error": 1.5037081003997537e-16,
+      "repeat_equal": true,
+      "targets": 24,
+      "algorithm": "tree",
+      "source_count": 256,
+      "relative_FE_L2_error": 1.7879869744480752e-08,
+      "retained_cloud_gpu_projection_relative_error": 1.790969619455706e-08,
+      "gpu_reuse_passed": true
+    }
+  ],
+  "input_sha256": {
+    "xyz_float64_row_major": "9b476e2e49980c3ad4c97255d36adc43571a7c1e12e0be0c7d4a6c8da520ea0e",
+    "strength_float64": "a3cb2939e99d480a91359446da4927a56886e10bafbca1029054555a6e65d694",
+    "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+  }
+}

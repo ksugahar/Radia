@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="background" x1="28" y1="20" x2="228" y2="236" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#087f8c"/>
+      <stop offset="1" stop-color="#164e78"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="50" fill="url(#background)"/>
+  <rect x="20" y="20" width="216" height="216" rx="40" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="4"/>
+  <!-- Bootstrap Icons "superscript", MIT license; scaled from its 16x16 path. -->
+  <g transform="translate(32 32) scale(12)" fill="#ffffff">
+    <path d="m4.266 12.496.96-2.853H8.76l.96 2.853H11L7.62 3H6.38L3 12.496zm2.748-8.063 1.419 4.23h-2.88l1.426-4.23zm5.132-1.797v-.075c0-.332.234-.618.619-.618.354 0 .618.256.618.58 0 .362-.271.649-.52.898l-1.788 1.832V6h3.59v-.958h-1.923v-.045l.973-1.04c.415-.438.867-.845.867-1.547 0-.8-.701-1.41-1.787-1.41C11.565 1 11 1.8 11 2.576v.06z"/>
+  </g>
+</svg>

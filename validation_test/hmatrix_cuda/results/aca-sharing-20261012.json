@@ -1,0 +1,8 @@
+{
+  "schema": "radia.hacapk-aca-sharing.v1",
+  "accepted": true,
+  "source_commit": "7f974b03d",
+  "extraction_sha256": "8110c4db0e1b46ac016b64158c2370bbb1443b78cf6e29c8d79765dc8b117092",
+  "text_identical": true,
+  "scope": "Existing calc_vec/aca/acaplus bodies shared without mathematical edits; native numerical acceptance separate"
+}

@@ -1,0 +1,95 @@
+{
+  "kind": "air_gap_maxwell_force_validation",
+  "validation_class": true,
+  "iron_path_m": 0.0156,
+  "pole_area_m2": 0.00025,
+  "active_faces": 2,
+  "mmf_A_turn": 96.0,
+  "gap_sweep_m": [
+    0.0,
+    0.0001,
+    0.0002,
+    0.0005,
+    0.001,
+    0.002
+  ],
+  "rows": [
+    {
+      "gap_m": 0.0,
+      "B_T": 1.6814120418726857,
+      "H_iron_A_per_m": 6153.846153846154,
+      "incremental_mu_r": 14.68627854093769,
+      "gap_mmf_fraction": 0.0,
+      "pressure_Pa": 1124885.8327176773,
+      "force_N": 562.4429163588387,
+      "pressure_identity_abs_error": 0.0,
+      "force_identity_abs_error": 0.0
+    },
+    {
+      "gap_m": 0.0001,
+      "B_T": 1.1880000510485522,
+      "H_iron_A_per_m": 93.71536801919657,
+      "incremental_mu_r": 1695.754212780143,
+      "gap_mmf_fraction": 0.9847712526968807,
+      "pressure_Pa": 561555.9832680196,
+      "force_N": 280.7779916340098,
+      "pressure_identity_abs_error": 0.0,
+      "force_identity_abs_error": 0.0
+    },
+    {
+      "gap_m": 0.0002,
+      "B_T": 0.6001854055753453,
+      "H_iron_A_per_m": 30.61063660703751,
+      "incremental_mu_r": 15594.40123771277,
+      "gap_mmf_fraction": 0.9950257715513563,
+      "pressure_Pa": 143327.98710155318,
+      "force_N": 71.6639935507766,
+      "pressure_identity_abs_error": 0.0,
+      "force_identity_abs_error": 0.0
+    },
+    {
+      "gap_m": 0.0005,
+      "B_T": 0.24079283585795103,
+      "H_iron_A_per_m": 12.280434630081654,
+      "incremental_mu_r": 15603.425768048086,
+      "gap_mmf_fraction": 0.9980044293726117,
+      "pressure_Pa": 23069.98240775303,
+      "force_N": 11.534991203876514,
+      "pressure_identity_abs_error": 0.0,
+      "force_identity_abs_error": 0.0
+    },
+    {
+      "gap_m": 0.001,
+      "B_T": 0.120516667690065,
+      "H_iron_A_per_m": 6.146350052193355,
+      "incremental_mu_r": 15603.425793321507,
+      "gap_mmf_fraction": 0.9990012181165185,
+      "pressure_Pa": 5779.022295634493,
+      "force_N": 2.8895111478172466,
+      "pressure_identity_abs_error": 0.0,
+      "force_identity_abs_error": 0.0
+    },
+    {
+      "gap_m": 0.002,
+      "B_T": 0.060288441346532634,
+      "H_iron_A_per_m": 3.0747105086731645,
+      "incremental_mu_r": 15603.425793323071,
+      "gap_mmf_fraction": 0.9995003595423407,
+      "pressure_Pa": 1446.1996512505607,
+      "force_N": 0.7230998256252804,
+      "pressure_identity_abs_error": 0.0,
+      "force_identity_abs_error": 0.0
+    }
+  ],
+  "checks": {
+    "B_monotone_decreasing_with_gap": true,
+    "pressure_monotone_decreasing_with_gap": true,
+    "force_monotone_decreasing_with_gap": true,
+    "gap_mmf_fraction_monotone_increasing": true,
+    "max_pressure_identity_abs_error": 0.0,
+    "max_force_identity_abs_error": 0.0,
+    "force_2mm_over_closed": 0.0012856412705959702,
+    "pressure_at_1T_Pa": 397887.35772973835,
+    "force_at_1T_for_case_N": 198.94367886486918
+  }
+}

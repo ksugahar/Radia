@@ -1,0 +1,196 @@
+{
+  "kind": "time_harmonic_maxwell_stress_validation",
+  "validation_class": true,
+  "convention": "peak phasors use 1/2 time-average factor; RMS phasors use factor 1",
+  "area_m2": 0.25,
+  "peak_summary": {
+    "E": [
+      [
+        1000.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "H": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        2.6544187294380723,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "normal": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "eps": 8.8541878128e-12,
+    "mu": 1.2566370614359173e-06,
+    "amplitude": "peak",
+    "area_m2": 0.25,
+    "stress_tensor_Pa": [
+      [
+        -1.2050974909812162e-15,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.205096643948269e-15,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        -4.427093907605098e-06
+      ]
+    ],
+    "traction_Pa": [
+      0.0,
+      0.0,
+      -4.427093907605098e-06
+    ],
+    "normal_traction_Pa": -4.427093907605098e-06,
+    "tangential_traction_Pa": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "tangential_traction_magnitude_Pa": 0.0,
+    "force_N": [
+      0.0,
+      0.0,
+      -1.1067734769012745e-06
+    ],
+    "average_energy_density_J_per_m3": 4.427093907605098e-06
+  },
+  "rms_summary": {
+    "E": [
+      [
+        707.1067811865474,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "H": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        1.8769574836942402,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "normal": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "eps": 8.8541878128e-12,
+    "mu": 1.2566370614359173e-06,
+    "amplitude": "rms",
+    "area_m2": 0.25,
+    "stress_tensor_Pa": [
+      [
+        -1.205096643948269e-15,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.2050974909812162e-15,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        -4.427093907605096e-06
+      ]
+    ],
+    "traction_Pa": [
+      0.0,
+      0.0,
+      -4.427093907605096e-06
+    ],
+    "normal_traction_Pa": -4.427093907605096e-06,
+    "tangential_traction_Pa": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "tangential_traction_magnitude_Pa": 0.0,
+    "force_N": [
+      0.0,
+      0.0,
+      -1.106773476901274e-06
+    ],
+    "average_energy_density_J_per_m3": 4.427093907605096e-06
+  },
+  "circular_stress_tensor_Pa": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      -4.427093907605097e-06
+    ]
+  ],
+  "checks": {
+    "E_peak_V_per_m": 1000.0,
+    "E_rms_V_per_m": 707.1067811865474,
+    "intensity_W_per_m2": 1327.209364719036,
+    "radiation_pressure_Pa": 4.4270939088101945e-06,
+    "momentum_flux_I_over_c_Pa": 4.4270939088101945e-06,
+    "peak_Tzz_Pa": -4.427093907605098e-06,
+    "rms_Tzz_Pa": -4.427093907605096e-06,
+    "circular_Tzz_Pa": -4.427093907605097e-06,
+    "peak_normal_traction_Pa": -4.427093907605098e-06,
+    "receiving_surface_force_N": 1.1067734769012745e-06,
+    "peak_rms_tensor_max_abs_delta": 1.6940658945086007e-21,
+    "peak_pressure_abs_error": 1.205096643948269e-15,
+    "rms_pressure_abs_error": 1.2050983380141635e-15,
+    "circular_pressure_abs_error": 1.2050974909812162e-15,
+    "force_pressure_identity_abs_error": 3.0127416098706724e-16
+  },
+  "schema": "radia.validation.rf_waveguide.validation_time_harmonic_maxwell_stress.v1",
+  "generated_at_utc": "2026-06-27T09:44:16Z",
+  "versions": {
+    "python_version": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  }
+}

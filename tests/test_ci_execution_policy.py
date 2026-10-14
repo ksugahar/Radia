@@ -1,0 +1,475 @@
+"""Keep the 100-host CI split and remote pre-push contract explicit."""
+
+import importlib.util
+from pathlib import Path
+from types import SimpleNamespace
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _preflight_module():
+    source = ROOT / "tools" / "ci_preflight.py"
+    spec = importlib.util.spec_from_file_location("ci_preflight", source)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
+    fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(encoding="utf-8")
+    native = (ROOT / ".github" / "workflows" / "build-test.yml").read_text(encoding="utf-8")
+    optuna = (ROOT / ".github" / "workflows" / "radia-optuna.yml").read_text(encoding="utf-8")
+    release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+
+    assert "name: Radia\n" in fast
+    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in fast
+    assert "Build with MSVC" not in fast
+    assert "validation_test/" not in fast
+    assert "name: Radia Native Release" in native
+    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in native
+    assert "mkl-devel" in native
+    assert "pybind11==3.0.2" in native
+    assert "ninja" in native
+    assert '"trimesh>=4.0"' in native
+    assert "twine==6.2.0" in native
+    assert "pytest-rerunfailures" not in native
+    assert "--reruns" not in native
+    assert "tools/run_test_tier.py --profile native-smoke" in native
+    assert "'tests/'" not in native
+    assert '"MKLROOT=$mklRoot"' in native
+    assert "MKLROOT=C:\\Program Files\\Python312\\Library" not in native
+    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in optuna
+    assert "windows-radia" not in optuna
+    optuna_self_hosted = optuna.split("  installed-wheel-matlab-e2e:", 1)[0]
+    assert "actions/setup-python" not in optuna_self_hosted
+    assert "RADIA_OPTUNA_CI_PYTHON" in optuna_self_hosted
+    assert "-m venv" in optuna_self_hosted
+    assert "pip install pybind11" not in optuna_self_hosted
+    assert "Build Optuna CUDA kernels with mexcuda" in optuna_self_hosted
+    assert optuna.count("'.github/workflows/radia-optuna.yml'") == 2
+    assert 'workflows: ["Radia Native Release"]' in release
+
+
+def test_fast_ci_declares_bh_and_wheel_contract_dependencies():
+    import yaml
+
+    workflow = yaml.safe_load((ROOT / '.github/workflows/radia-fast.yml').read_text(encoding='utf-8'))
+    steps = workflow['jobs']['fast-contracts']['steps']
+    setup = next(step['run'] for step in steps
+                 if step.get('name') == 'Create isolated fast-CI environment')
+    installs = [line.split() for line in setup.splitlines() if '-m pip install ' in line]
+    assert any({'numpy', 'scipy', 'pytest', 'wheel'}.issubset(tokens) for tokens in installs)
+    assert 'python -m venv' in setup
+    assert 'ngsolve' not in setup.lower()
+
+
+def test_no_workflow_selects_a_lab_runner():
+    """No lane may ask for a LAB runner, the signing release included.
+
+    The signing job used to be the documented exception, and it could never
+    run: a runner service executes as NETWORK SERVICE, which sees no per-user
+    mapped drive, and these machines form a workgroup rather than a domain, so
+    the laboratory share refuses the machine account.  The label it asked for
+    was never registered either, so a tag push queued forever instead of
+    failing.  The signed executable now arrives as a staging release asset and
+    the whole lane is GitHub-hosted.
+    """
+    workflows = ROOT / ".github" / "workflows"
+    signing_release = "release-eqnedit64-pypi.yml"
+
+    for path in sorted(workflows.glob("*.yml")):
+        runner_lines = [
+            line.strip()
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip().startswith("runs-on:")
+        ]
+        for line in runner_lines:
+            normalized = line.lower()
+            assert "windows-radia" not in normalized, f"{path.name}: {line}"
+            assert "lab" not in normalized, f"{path.name}: {line}"
+
+    signing = (workflows / signing_release).read_text(encoding="utf-8")
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    deploy = (
+        ROOT / ".agents" / "skills" / "deploy" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    assert "runs-on: windows-2022" in signing
+    assert "--tag eqnedit64-staging" in signing
+    assert "No workflow selects a LAB runner." in agents
+    assert "No workflow selects a LAB runner." in claude
+    assert "No workflow selects a LAB runner." in " ".join(deploy.split())
+
+
+def test_policy_lint_enforces_the_retired_examples_boundary():
+    policy = (ROOT / "tools" / "policy_lint.py").read_text(encoding="utf-8")
+
+    assert '"src/radia/*.py", "src/radia/**/*.py"' in policy
+    # Policy 7 lists the retired tier through the failing-loud ls-files
+    # helper, so a broken git fails the check instead of passing it.
+    assert '_git_ls_files("examples")' in policy
+    assert "README.md in every example dir" not in policy
+
+
+def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
+    fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(
+        encoding="utf-8"
+    )
+    mcp = (ROOT / ".github" / "workflows" / "radia-mcp-matrix.yml").read_text(
+        encoding="utf-8"
+    )
+
+    for independent_path in (
+        "packages/radia-mcp/**",
+        "packages/cubit-mesh-export/**",
+        "packages/radia-optuna/**",
+        "packages/eqnedit64/**",
+    ):
+        assert independent_path in fast
+
+    # Universal Policy Lint triggers are owned by the workflow-owner contract
+    # in tests/policy/test_workflow_owner_scope.py.
+    assert "Classify radia-mcp change scope" in mcp
+    assert 'git diff --name-only "$BASE_SHA...$GITHUB_SHA"' in mcp
+    assert "mode=targeted" in mcp
+    assert "python_versions='[\"3.10\",\"3.11\",\"3.12\"]'" in mcp
+    assert "python_versions='[\"3.12\"]'" in mcp
+    assert "python-version: ${{ fromJSON(needs.scope.outputs.python_versions) }}" in mcp
+    assert "Prepare impact-scoped test plan" in mcp
+    assert "packages/radia-mcp/tools/select_ci_tests.py" in mcp
+    assert '--changed-files-json "$CHANGED_FILES_JSON"' in mcp
+    assert "Fetch impact comparison base" in mcp
+    assert 'base_args=(--base "$CI_BASE_SHA")' in mcp
+    assert "--full --output radia-mcp-ci-selection.json" in mcp
+    assert 'plan["package_tests"]' in mcp
+    assert 'env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"' in mcp
+    assert 'env["RADIA_MCP_CI_SELECTION_JSON"]' in mcp
+    # Directory discovery must run optional-dependency collection hooks;
+    # RADIA_MCP_CI_SELECTION_JSON still restricts the collected test items.
+    # The package's workflow-execution test checks exact file/node selection.
+    assert 'targets = ["tests"]' in mcp
+    assert '"-m", "not xval and not slow", *targets,' in mcp
+    assert '"--confcutdir=tests/mcp_integration", *targets' in mcp
+    assert 'metadata["project"]["optional-dependencies"]["md2html"]' in mcp
+    assert 'check_package_test_boundary.py' in mcp
+    assert 'plan["server_selftests"]' in mcp
+    assert 'plan["run_mcp_response_tests"]' in mcp
+    assert "Meta health (all cataloged subpackages must import)" not in mcp
+    assert "radia_mcp_health" not in mcp
+    assert "pytest-rerunfailures" not in mcp
+    assert "--reruns" not in mcp
+    assert "check_tools_doc" not in mcp
+    assert "TOOLS.md drift gate" not in mcp
+    assert "mode=release" in mcp
+    assert "needs.scope.outputs.build_wheel == 'true'" in mcp
+
+
+def test_preflight_uses_live_mcp_contracts_without_generated_inventory_gate():
+    preflight = _preflight_module()
+
+    source_keys = {
+        key
+        for key, _, _ in preflight._gates_for_changes(
+            ["packages/radia-mcp/src/radia_mcp/matlab/runtime.py"]
+        )
+    }
+    assert source_keys == {"policy", "publish-boundary", "version", "radia-mcp"}
+
+    docs_keys = {
+        key
+        for key, _, _ in preflight._gates_for_changes(
+            ["packages/radia-mcp/docs/architecture.md"]
+        )
+    }
+    assert docs_keys == {"policy", "version"}
+
+    generator_keys = {
+        key
+        for key, _, _ in preflight._gates_for_changes(
+            ["packages/radia-mcp/scripts/gen_tools_doc.py"]
+        )
+    }
+    assert generator_keys == {
+        "policy",
+        "publish-boundary",
+        "version",
+        "radia-mcp",
+    }
+
+    assert not hasattr(preflight, "gate_tools_md")
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "/packages/radia-mcp/docs/TOOLS.md" in gitignore
+    assert not (ROOT / "packages" / "radia-mcp" / ".gitattributes").exists()
+
+
+def test_preflight_catches_taskmanager_failures_before_fast_tests(monkeypatch):
+    preflight = _preflight_module()
+    for path in (
+        "tests/test_panel_impedance_file.py",
+        "validation_test/induction_heating/test_panel_esim_workflow.py",
+        "src/radia/surface_impedance.py",
+        "docs/solver_probe.py",
+        "tools/audit_taskmanager.py",
+    ):
+        keys = {key for key, _, _ in preflight._gates_for_changes([path])}
+        assert "taskmanager" in keys, path
+
+    calls = []
+
+    def failed_audit(command):
+        calls.append(command)
+        return 1, "tests/test_panel_impedance_file.py: caller lacks TaskManager"
+
+    monkeypatch.setattr(preflight, "_sh", failed_audit)
+    ok, detail = preflight.gate_taskmanager_audit()
+    assert not ok
+    assert "caller lacks TaskManager" in detail
+    assert Path(calls[0][-1]).name == "audit_taskmanager.py"
+    monkeypatch.setattr(preflight, "_changed_since", lambda ref: ["tests/test_panel_impedance_file.py"])
+    assert preflight.main(["--only", "taskmanager"]) == 1
+
+
+def test_active_docs_do_not_restore_generated_catalog_or_old_release_name():
+    active_docs = [
+        ROOT / "README.md",
+        ROOT / "AGENTS.md",
+        ROOT / "CLAUDE.md",
+        ROOT / ".agents" / "skills" / "release-quad" / "SKILL.md",
+        ROOT / ".agents" / "skills" / "verify-deploy" / "SKILL.md",
+    ]
+
+    for path in active_docs:
+        text = path.read_text(encoding="utf-8")
+        assert "[Generated MCP tool catalog]" not in text, path
+        assert "`release-qud`" not in text, path
+
+    release_skill = active_docs[3].read_text(encoding="utf-8")
+    assert "do not restore a tracked generated `docs/TOOLS.md` gate" in release_skill
+
+
+def test_solver_release_quad_excludes_cubit_generation():
+    release_quad = (ROOT / "tools" / "release_quad.py").read_text(
+        encoding="utf-8"
+    )
+    release_skill = (ROOT / ".agents" / "skills" / "release-quad" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "cubit-dual" not in release_skill
+    assert "cubit-dual" not in release_quad
+    assert "phase0" not in release_quad
+    assert "cubit-plugin-install" not in release_quad
+    assert "Stop-Process" not in release_quad
+    assert "Never change radia-mcp or" in release_quad
+
+
+def test_preflight_git_scope_is_safe_in_an_isolated_worktree(monkeypatch):
+    preflight = _preflight_module()
+    commands = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        return SimpleNamespace(returncode=0, stdout="README.md\n", stderr="")
+
+    monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+
+    assert preflight._changed_since("HEAD^") == ["README.md"]
+    assert len(commands) == 4
+    for command in commands:
+        assert command[:3] == [
+            "git",
+            "-c",
+            f"safe.directory={preflight.REPO}",
+        ]
+
+
+def test_pre_push_runs_the_unpushed_candidate_on_lab():
+    hook = (ROOT / "tools" / "git-hooks" / "pre-push").read_text(encoding="utf-8")
+    helper = (ROOT / "tools" / "ci_preflight_lab.py").read_text(encoding="utf-8")
+
+    assert "ci_preflight_lab.py --base \"$remote_sha\" --head \"$local_sha\"" in hook
+    assert '"bundle", "create"' in helper
+    assert 'git_output("merge-base", head, main_ref)' in helper
+    assert "$base = '{effective_base}'" in helper
+    assert "scp" in helper
+    assert "tools/ci_preflight.py --since $base" in helper
+    assert "'mcp>=1.0,<2'" in helper
+    assert "numpy scipy pytest pyyaml setuptools wheel 'mcp>=1.0,<2'" in helper
+    assert 'import mcp, numpy, pytest, scipy, setuptools, wheel, yaml' in helper
+    assert "tools/run_test_tier.py --profile fast-contracts" in helper
+    assert "LAB preflight helper missing" in hook
+    assert '&& [ -f tools/ci_preflight_lab.py ]' not in hook
+    assert "upload_release_asset.py" not in hook
+    assert "developer push must never upload mutable" in hook
+
+
+def test_policy_twins_define_the_same_ci_notebook_contract():
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    heading = "### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)"
+
+    def section(text: str) -> str:
+        start = text.index(heading)
+        return text[start:text.index("### ", start + len(heading))]
+
+    policy = section(agents)
+    assert policy == section(claude)
+    normalized = " ".join(policy.split())
+    assert "with the `100` runner label" in normalized
+    assert "LAB/102 tests radia and radia-mcp wheels without radia-gpu" in normalized
+    assert "Start SSH host `NGSolve` (mdx A100) on demand only for mexcuda GPU work" in normalized
+    assert "mdx/mdx1/mdx2/hibino are retired execution targets" in normalized
+    assert "`NGSolve` A100 validation runs without Cubit" in normalized
+    assert "NGSolve hosts start from checked exported .vol files, without Cubit" in normalized
+    assert "CI scope begins at the independently released distribution boundary" in normalized
+    assert "each server's live `tools/list` response are the tool-discovery source of truth" in normalized
+    assert "Generated tool inventory snapshots are local diagnostics" in normalized
+    assert "not committed artifacts or CI oracles" in normalized
+    assert "normal pull-request and main-push CI runs a stable compact contract set" in normalized
+    assert "tests selected from the changed source/test paths" in normalized
+    assert "only the affected server selftests" in normalized
+    assert "complete package pytest suite, all-server selftests" in normalized
+    assert "explicit full-audit workflow" in normalized
+    assert "normal CI optimizes for fast, high-signal feedback" in normalized
+    assert "does not automatically rerun a failed deterministic test" in normalized
+    assert "run only the relevant validation lane and retain its result JSON" in normalized
+    assert "Do not keep two tests whose purpose and failure signal are the same" in normalized
+    assert "an adjacent JSON and a runtime gate are not required" in normalized
+    assert "A docs-only contract lane parses changed notebooks" in normalized
+    assert "Developer pre-push hooks run only the impact-scoped LAB preflight" in normalized
+
+
+def test_policy_twins_define_the_same_compute_host_routing():
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    # Anchor on the heading, not on a dated POLICY line: the routing rule is
+    # revised whenever the host fleet changes and the marker should survive it.
+    start_marker = "### Compute Host Routing"
+    end_marker = "**POLICY**: 全てのベンチマークスクリプト"
+
+    def routing_policy(text: str) -> str:
+        start = text.index(start_marker)
+        return text[start:text.index(end_marker, start)]
+
+    policy = routing_policy(agents)
+    assert policy == routing_policy(claude)
+    normalized = " ".join(policy.split())
+    assert "Start SSH host `NGSolve` (mdx A100) on demand only for mexcuda GPU work" in normalized
+    assert "mdx/mdx1/mdx2/hibino are retired execution targets" in normalized
+    assert "BatchMode=yes NGSolve hostname" in normalized
+    assert "Compare CPU/GPU on the same host" in normalized
+    assert "A100 is optional for development/publication" in normalized
+    assert "100/LAB timings are diagnostic" in normalized
+    assert "one heavy job at a time" in normalized
+    assert "running jobs and available memory" in normalized
+    assert "preserve active timing jobs" in normalized
+    assert "Never stop another session's jobs" in normalized
+    assert "ConnectTimeout" in normalized
+    assert "Measure speed" in normalized
+    assert "remain valid provenance" in normalized
+
+
+def test_agent_policies_stay_compact_and_share_one_policy_body():
+    agents_path = ROOT / "AGENTS.md"
+    claude_path = ROOT / "CLAUDE.md"
+    agents = agents_path.read_text(encoding="utf-8").splitlines()
+    claude = claude_path.read_text(encoding="utf-8").splitlines()
+
+    assert agents[0] == "# Codex - Radia Project Policy"
+    assert claude[0] == "# Claude Code - Radia Project Policy"
+    assert agents[1:] == claude[1:]
+    assert len(agents) < 300
+    # Independent GPU ownership and exchange policy add required guidance;
+    # retain the line bound and a bounded document size for both agents.
+    assert len("\n".join(agents).encode("utf-8")) < 24_000
+    assert len("\n".join(claude).encode("utf-8")) < 24_000
+
+    policy = "\n".join(agents)
+    assert "Investigations remain in Git" in policy
+    assert "Never include, link, or use NGSolve TaskManager in mexcuda builds" in policy
+    assert "Keep management, sequential RNG" in policy
+    assert "Do not expand this file into a second manual" in policy
+    assert "packages/radia-mcp/src/radia_mcp/**/knowledge/" in policy
+
+    # Runtime ownership must survive both agents' policy updates. This checks
+    # the documentation contract, not an unimplemented deployment mutex.
+    assert "### Shared MCP Runtime Ownership" in policy
+    normalized = " ".join(policy.split())
+    assert "Developers may edit live MCP source and change its editable source" in normalized
+    assert "no dedicated branch, frozen snapshot or separate deployment approval" in normalized
+    assert "live loaded source separately" in normalized
+    assert "Unknown or mixed evidence must stay unverified" in normalized
+    assert "Manuscript folders contain generated `.bbl` only, never local `.bib` copies" in normalized
+    assert "bibliography/data/references.bib" in normalized
+    assert "commit-pinned source snapshot" not in normalized
+    contract_path = "packages/radia-mcp/docs/operations/mcp-runtime-policy.md"
+    assert contract_path in policy
+    contract = (ROOT / contract_path).read_text(encoding="utf-8")
+    for required in (
+        "change its editable installation source",
+        "no dedicated branch, immutable snapshot or separate",
+        "mixed-generation",
+        "registration-time",
+        "Never mass-kill",
+    ):
+        assert required in contract
+
+
+def test_ngsolve_mcp_install_guidance_matches_native_dependency_pin():
+    knowledge = (
+        ROOT
+        / "packages"
+        / "radia-mcp"
+        / "src"
+        / "radia_mcp"
+        / "radia_ngsolve"
+        / "knowledge"
+        / "ngsolve.py"
+    ).read_text(encoding="utf-8")
+
+    assert "ngsolve==6.2.2607 netgen-mesher==6.2.2607" in knowledge
+    assert "NGSolve 6.2.2607 uses ngsolve-openblas" in knowledge
+    assert "Version 6.2.2604 includes: MKL" not in knowledge
+
+
+def test_workflow_discovers_directory_and_preserves_exact_selectors(monkeypatch, tmp_path):
+    import json
+    import subprocess
+    import textwrap
+    from types import SimpleNamespace
+    import pytest
+
+    workflow = (ROOT / '.github/workflows/radia-mcp-matrix.yml').read_text(encoding='utf-8')
+    step = workflow.split('      - name: Pytest (compact contracts plus affected package tests)', 1)[1]
+    script = textwrap.dedent(step.split("          python - <<'PY'\n", 1)[1].split('          PY\n', 1)[0])
+    selectors = ['tests/test_ac_internal_inductance.py', 'tests/test_meta_health.py::test_meta_catalog_has_at_least_30_servers']
+    (tmp_path / 'radia-mcp-ci-selection.json').write_text(json.dumps({'package_tests': selectors}), encoding='utf-8')
+    monkeypatch.chdir(tmp_path)
+    calls = []
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(subprocess, 'run', run)
+    with pytest.raises(SystemExit) as stopped:
+        exec(compile(script, '<workflow pytest step>', 'exec'), {})
+    assert stopped.value.code == 0
+    command, kwargs = calls[0]
+    assert command[-1] == 'tests'
+    assert not any(selector in command for selector in selectors)
+    assert json.loads(kwargs['env']['RADIA_MCP_CI_SELECTION_JSON']) == selectors
+
+
+def test_host_roles_agree_across_deployment_skills():
+    root = ROOT
+    verify = " ".join((root / ".agents/skills/verify-deploy/SKILL.md").read_text(encoding="utf-8").split())
+    cubit = " ".join((root / ".agents/skills/release-cubit-mesh-export/SKILL.md").read_text(encoding="utf-8").split())
+    build = " ".join((root / ".agents/skills/build/SKILL.md").read_text(encoding="utf-8").split())
+    assert "On LAB, they must resolve to the verified wheel" in verify
+    assert "Only 100号機 uses an editable install" in verify
+    assert "LAB/100 editable sources" not in build
+    assert "LAB/100 must remain verified editable" not in build
+    assert "LAB uses verified wheels and only 100号機 uses an editable development install" in build
+    assert "test host with verified wheels" in cubit
+    assert "LAB `wheel`, 100 `editable`" in cubit
+    assert "release-quad must not install, repoint or gate it" in cubit

@@ -1,0 +1,86 @@
+{
+  "checks": {
+    "coenergy_amplitude_J": 0.75,
+    "computed_torque_peak_abs_Nm": 2.249935745313676,
+    "expected_torque_peak_abs_Nm": 2.25,
+    "harmonic_order": 3,
+    "max_torque_abs_error_Nm": 6.42546865785576e-05,
+    "samples": 1440,
+    "torque_mean_Nm": 3.878358753339691e-18,
+    "torque_peak_rel_error": 2.8557638366264212e-05
+  },
+  "coenergy_model": {
+    "amplitude_J": 0.75,
+    "formula": "Wprime(theta) = offset - amplitude*cos(harmonic*theta)",
+    "harmonic_order": 3,
+    "offset_J": 2.0
+  },
+  "force_learning": "fixed-current virtual work: torque is d(coenergy)/d(theta)",
+  "kind": "coenergy_torque_angle_sweep",
+  "sample_rows": [
+    {
+      "angle_minus_rad": -0.0043633231299864406,
+      "angle_plus_rad": 0.004363323129985824,
+      "angle_rad": 0.0,
+      "coenergy_J": 1.25,
+      "index": 1,
+      "stencil": "central_periodic",
+      "torque_Nm": 0.0
+    },
+    {
+      "angle_minus_rad": 0.519235452468313,
+      "angle_plus_rad": 0.5279620987282847,
+      "angle_rad": 0.5235987755982988,
+      "coenergy_J": 2.0,
+      "index": 121,
+      "stencil": "central_periodic",
+      "torque_Nm": 2.2499357453135325
+    },
+    {
+      "angle_minus_rad": 1.0428342280666119,
+      "angle_plus_rad": 1.0515608743265836,
+      "angle_rad": 1.0471975511965976,
+      "coenergy_J": 2.75,
+      "index": 241,
+      "stencil": "central_periodic",
+      "torque_Nm": 0.0
+    },
+    {
+      "angle_minus_rad": 1.5664330036649106,
+      "angle_plus_rad": 1.5751596499248823,
+      "angle_rad": 1.5707963267948966,
+      "coenergy_J": 2.0,
+      "index": 361,
+      "stencil": "central_periodic",
+      "torque_Nm": -2.249935745313504
+    },
+    {
+      "angle_minus_rad": 2.0900317792632097,
+      "angle_plus_rad": 2.0987584255231813,
+      "angle_rad": 2.0943951023931953,
+      "coenergy_J": 1.25,
+      "index": 481,
+      "stencil": "central_periodic",
+      "torque_Nm": 0.0
+    },
+    {
+      "angle_minus_rad": 3.1372293304598076,
+      "angle_plus_rad": 3.1459559767197787,
+      "angle_rad": 3.141592653589793,
+      "coenergy_J": 2.75,
+      "index": 721,
+      "stencil": "central_periodic",
+      "torque_Nm": 5.0888874903419436e-14
+    }
+  ],
+  "summary": {
+    "n_samples": 1440,
+    "period_rad": 6.283185307179586,
+    "periodic": true,
+    "torque_max_Nm": 2.2499357453135995,
+    "torque_mean_Nm": 3.878358753339691e-18,
+    "torque_min_Nm": -2.249935745313676,
+    "torque_peak_abs_Nm": 2.249935745313676
+  },
+  "validation_class": true
+}

@@ -1,0 +1,86 @@
+\begin{thebibliography}{10}
+
+\bibitem{ieej2002integrals1}
+Shinji Wakao, Hajime Igarashi, Koji Fujiwara, and Akihisa Kameari.
+\newblock Useful formulas of analytical integration in electromagnetic field
+  computations ({Part 1}).
+\newblock Technical Report SA-02-28 / RM-02-64, The Institute of Electrical
+  Engineers of Japan, 2002.
+
+\bibitem{ieej2003integrals2}
+Shinji Wakao, Hajime Igarashi, Koji Fujiwara, and Akihisa Kameari.
+\newblock Useful formulas of analytical integration in electromagnetic field
+  computations ({Part 2}).
+\newblock Technical Report SA-03-8 / RM-03-8, The Institute of Electrical
+  Engineers of Japan, 2003.
+
+\bibitem{ieej2003integrals3}
+Shinji Wakao, Koji Fujiwara, and Akihisa Kameari.
+\newblock Useful formulas of analytical integration in electromagnetic field
+  computations ({Part 3}).
+\newblock Technical Report SA-03-52 / RM-03-54, The Institute of Electrical
+  Engineers of Japan, 2003.
+
+\bibitem{ieej2004integrals4}
+Shinji Wakao, Koji Fujiwara, So~Noguchi, Tetsuji Matsuo, and Akihisa Kameari.
+\newblock Useful formulas of analytical integration in electromagnetic field
+  computations ({Part 4}).
+\newblock Technical Report SA-04-1 / RM-04-1, The Institute of Electrical
+  Engineers of Japan, 2004.
+
+\bibitem{ieej2004integrals5}
+Shinji Wakao, Koji Fujiwara, and Akihisa Kameari.
+\newblock Useful formulas of analytical integration in electromagnetic field
+  computations ({Part 5}).
+\newblock Technical Report SA-04-44 / RM-04-68, The Institute of Electrical
+  Engineers of Japan, 2004.
+
+\bibitem{ieej2005integrals6}
+Shinji Wakao, Koji Fujiwara, Tadashi Tokumasu, and Akihisa Kameari.
+\newblock Useful formulas of analytical integration in electromagnetic field
+  computations ({Part 6}).
+\newblock Technical Report SA-05-15 / RM-05-15, The Institute of Electrical
+  Engineers of Japan, 2005.
+
+\bibitem{ieej2006integrals7}
+Tetsuji Matsuo, Koji Fujiwara, Shoji Hamada, Akihisa Kameari, and Shinji Wakao.
+\newblock Useful formulas of analytical integration in electromagnetic field
+  computations ({Part 7}).
+\newblock Technical Report SA-06-1 / RM-06-1, The Institute of Electrical
+  Engineers of Japan, 2006.
+
+\bibitem{ieej2006integrals8}
+Tetsuji Matsuo.
+\newblock Useful formulas of analytical integration in electromagnetic field
+  computations ({Part 8}).
+\newblock Technical Report SA-06-76 / RM-06-78, The Institute of Electrical
+  Engineers of Japan, 2006.
+
+\bibitem{ieej2007integrals9}
+Tetsuji Matsuo, Akihisa Kameari, and Tadashi Tokumasu.
+\newblock Useful formulas of analytical integration in electromagnetic field
+  computations ({Part 9}).
+\newblock Technical Report SA-07-1 / RM-07-1, The Institute of Electrical
+  Engineers of Japan, 2007.
+
+\bibitem{weissenburger1979eddy}
+D.~W. Weissenburger and U.~R. Christensen.
+\newblock Transient eddy currents on finite plane and toroidal conducting
+  surfaces.
+\newblock Technical Report PPPL-1517, Princeton Plasma Physics Laboratory,
+  1979.
+
+\bibitem{montgomery1969solenoid}
+Donald~Bruce Montgomery.
+\newblock {\em Solenoid Magnet Design: The Magnetic and Mechanical Aspects of
+  Resistive and Superconducting Systems}.
+\newblock Wiley-Interscience, 1969.
+
+\bibitem{ortner2023currentloop}
+Michael Ortner, Peter Leitner, and Florian Slanovc.
+\newblock Numerically stable and computationally efficient expression for the
+  magnetic field of a current loop.
+\newblock {\em Magnetism}, 3(1):11--31, 2023.
+\newblock Published online 30 December 2022.
+
+\end{thebibliography}

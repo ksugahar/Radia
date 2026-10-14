@@ -1,0 +1,189 @@
+{
+  "schema": "radia.beak_fin.bema_refinement.v1",
+  "generated_at_utc": "2026-09-21T05:22:37.423151+00:00",
+  "git_head": "c4029753909615a11458615e0e70f8bef33eac6d",
+
+  "question": "the delivery gate is held at accepted=false by a 3.24% beak-loss-fraction difference between BEM-A and PEEC. Against the independent 2-D n=1024 reference PEEC is 1.5% low and BEM-A 4.6% low, so the difference looked like BEM-A's own discretisation error. Refine BEM-A and see",
+  "fixture": "24 mm straight beak fin, 150 kHz, copper",
+  "peec": {
+    "n_peri": 256,
+    "n_stations": 17
+  },
+  "reference_2d_beak_loss_fraction": 0.3416716228,
+  "rows": [
+    {
+      "maxh_mm": 0.75,
+      "n_surface_faces": 5990,
+      "bema_beak_loss_fraction": 0.325490925546603,
+      "peec_beak_loss_fraction": 0.33525197238257876,
+      "bema_error_vs_2d": -0.047357451346986656,
+      "peec_error_vs_2d": -0.018788948186016174,
+      "beak_loss_fraction_relative": 0.029988691142721846,
+      "beak_current_fraction_relative": 0.007533855232735975,
+      "beak_current_centroid_absolute_m": 1.538170762022898e-05,
+      "centroid_limit_m": 8.93804627214884e-05,
+      "probe_H_relative_L2": 0.007220863950966414,
+      "accepted": true,
+      "status": "accepted"
+    },
+    {
+      "maxh_mm": 0.55,
+      "n_surface_faces": 7828,
+      "bema_beak_loss_fraction": 0.323364439751408,
+      "peec_beak_loss_fraction": 0.33525197238257876,
+      "bema_error_vs_2d": -0.0535812219304741,
+      "peec_error_vs_2d": -0.018788948186016174,
+      "beak_loss_fraction_relative": 0.03676202813243634,
+      "beak_current_fraction_relative": 0.009099869864395815,
+      "beak_current_centroid_absolute_m": 1.5198899395826165e-05,
+      "centroid_limit_m": 8.93804627214884e-05,
+      "probe_H_relative_L2": 0.007789339676918447,
+      "accepted": false,
+      "status": "rejected: integral fin-delivery metrics mismatch"
+    },
+    {
+      "maxh_mm": 0.45,
+      "n_surface_faces": 9820,
+      "bema_beak_loss_fraction": 0.3246775347291626,
+      "peec_beak_loss_fraction": 0.33525197238257876,
+      "bema_error_vs_2d": -0.04973807286531673,
+      "peec_error_vs_2d": -0.018788948186016174,
+      "beak_loss_fraction_relative": 0.03256904627613699,
+      "beak_current_fraction_relative": 0.009258255353998157,
+      "beak_current_centroid_absolute_m": 1.3566205625154502e-05,
+      "centroid_limit_m": 8.93804627214884e-05,
+      "probe_H_relative_L2": 0.007927300341462969,
+      "accepted": false,
+      "status": "rejected: integral fin-delivery metrics mismatch"
+    }
+  ],
+  "finding": "BEM-A does not converge in this metric under maxh refinement. Over maxh 0.75 -> 0.55 -> 0.45 mm its beak loss fraction moves 0.325491 -> 0.323364 -> 0.324678, i.e. -4.74%, -5.36%, -4.97% against the 2-D reference: non-monotone and flat at about -5%. The surface face count only grows 5990 -> 7828 -> 9820 while the linear mesh size falls by 1.67x, because the 0.25 mm tip radius already drives the local refinement; reducing maxh therefore adds faces on the flat body rather than on the fin where this metric lives.",
+  "consequence": "the pairwise 3% criterion is not a decidable gate on this fixture. It moves 3.00% -> 3.68% -> 3.26% with BEM-A's mesh and crosses the threshold in both directions without either route changing physically. The implementation ledger already requires acceptance 'after both discretizations have independently converged'; that precondition is measured here to be unmet on the BEM-A side, so the gate cannot be closed by refining what is exposed.",
+  "what_would_close_it": "score each route against the independent 2-D reference instead of against the other, which is the rule the mixed-Omega work already adopted, or give the BEM-A surface mesh a fin-local refinement control so its perimeter sampling can be converged independently of maxh. Neither is done here.",
+  "not_claimed": "this says nothing about which route is more accurate at a converged discretisation, and it does not change the delivery-metric definitions",
+  "cause": {
+    "statement": "the BEM-A side of this comparison is geometrically first order. compare_beak_fin_bema.py builds its surface through _extract_surface_mesh_filtered, which returns a flat P1 surface mesh and never calls mesh.Curve, so the 0.25 mm rounded tip is a polygon at every maxh. The repository does have a curvature-aware extractor, extract_surface_curved with geom_order >= 2, but it returns raw P2 node arrays for the SIBC-HACApK kernel and does not feed compute_inductance_source_sink, which this comparison uses",
+    "evidence": [
+      {
+        "maxh_mm": 0.75,
+        "n_surface_faces": 5990,
+        "tip_absK_ratio_peec_over_bema": 1.0261225060524648,
+        "tip_loss_ratio_peec_over_bema": 1.0608930313640776,
+        "bema_tip_loss_fraction": 0.18563701122758341,
+        "peec_tip_loss_fraction": 0.19416769541605744
+      },
+      {
+        "maxh_mm": 0.55,
+        "n_surface_faces": 7828,
+        "tip_absK_ratio_peec_over_bema": 1.0263629538154517,
+        "tip_loss_ratio_peec_over_bema": 1.0610865137436392,
+        "bema_tip_loss_fraction": 0.1842417427960782,
+        "peec_tip_loss_fraction": 0.19416769541605744
+      },
+      {
+        "maxh_mm": 0.45,
+        "n_surface_faces": 9820,
+        "tip_absK_ratio_peec_over_bema": 1.0242155214678543,
+        "tip_loss_ratio_peec_over_bema": 1.0568248883935845,
+        "bema_tip_loss_fraction": 0.18471294976314534,
+        "peec_tip_loss_fraction": 0.19416769541605744
+      }
+    ],
+    "why_this_is_geometric_not_algebraic": "the PEEC-over-BEM-A tip ratios are constant -- 1.026, 1.026, 1.024 in |K| and 1.061, 1.061, 1.057 in loss -- across a 1.6x change in face count. A discretisation error shrinks under refinement; this does not, because the tip's element size is already set by its own curvature and maxh cannot reach it. BEM-A's tip loss fraction sits at 0.1846 +/- 0.0007 against the 2-D reference 0.2023, i.e. -8.7% and flat, while PEEC is -4.0%",
+    "not_the_sibc_model": "the 2-D SIBC reference converges to the continuum value and PEEC, which uses the same SIBC sheet, lands within 4% of it. The disagreement tracks the tip geometry, not the impedance model. The BEM-A solve is algebraically sound on its own mesh: R partition closure -4.3e-15 and current continuity about 3.2e-16",
+    "fix": "give compute_inductance_source_sink a curved surface, or route this comparison through the curved SIBC path. Until then BEM-A cannot serve as the converged reference this gate assumes",
+    "superseded": "the statement above named geometry order as the cause. Measurement does not support it and the entry below replaces it. The code fact is correct -- the coil BEM-A is geometrically first order while the workpiece BEM-A is curve-aware -- but its size is wrong"
+  },
+  "cause_measured": {
+    "geometry_order": {
+      "test": "HDivSurface also lives on the boundary of a curved volume mesh with the same DOF count, so the same solve was run with the tip as an arc instead of a polygon",
+      "tip_boundary_area_m2": {
+        "Curve(1)": 3.14395e-05,
+        "Curve(2)": 3.1588e-05,
+        "Curve(3)": 3.15909e-05
+      },
+      "R_uOhm": {
+        "flat": 125.8121,
+        "Curve(1)": 125.8121,
+        "Curve(2)": 125.89625
+      },
+      "effect_on_R": 0.00067,
+      "verdict": "curving raises the tip area by 0.47% and R by 0.067%. Real, converged by order 2, and far too small to explain an 8.7% tip-loss deficit"
+    },
+    "basis_order": {
+      "test": "compute_inductance_source_sink defaults to fes_order=0, RT0/RWG, the lowest order. One order step, on maxh 1.8 mm with the dense cocr solver",
+      "maxh_mm": 1.8,
+      "R_uOhm": {
+        "fes_order=0": 123.68237,
+        "fes_order=1": 125.77627
+      },
+      "ndof": {
+        "fes_order=0": 6816,
+        "fes_order=1": 13632
+      },
+      "effect_on_R": 0.01693,
+      "verdict": "+1.69% from one order step, about 25x the geometry-order effect. fes_order=1 at maxh 1.8 mm (125.776) nearly reproduces fes_order=0 at maxh 0.75 mm (125.812), so one order is worth roughly a 2.4x mesh refinement here, and R is still rising"
+    },
+    "conclusion": "the BEM-A side of this comparison was never p-converged. It is driven at RT0 and the comparison only ever varied maxh, which saturates because the tip element size is set by its own curvature. Basis order is the control that moves this quantity. Geometry order is a real asymmetry in the code but a 0.067% effect here, and nothing in these measurements indicts the SIBC model: the 2-D SIBC reference converges to the continuum value and PEEC, on the same SIBC sheet, lands within 4% of it",
+    "next": "converge BEM-A in fes_order before using it as the reference this gate assumes. hacapk_cocr is RT0-only, so an order-1 run at the fine mesh needs either the dense cocr path or higher-order support in the compressed solver"
+  },
+  "gate_metric_under_every_control": {
+    "fixture": "24 mm straight beak fin, 150 kHz, PEEC n_peri=256/17 stations",
+    "rows": [
+      {
+        "control": "RT0, flat, maxh 0.75",
+        "R_uOhm": 125.8121,
+        "beak_loss": 0.325491,
+        "tip_loss": 0.185637,
+        "gap_vs_peec": 0.03
+      },
+      {
+        "control": "RT0, flat, maxh 0.55",
+        "beak_loss": 0.323364,
+        "gap_vs_peec": 0.0368
+      },
+      {
+        "control": "RT0, flat, maxh 0.45",
+        "beak_loss": 0.324678,
+        "gap_vs_peec": 0.0326
+      },
+      {
+        "control": "RT0, Curve(2), maxh 0.75",
+        "R_uOhm": 125.89625
+      },
+      {
+        "control": "fes_order 1, Curve(2), maxh 0.75, hacapk_cocr",
+        "R_uOhm": 126.44934696877068,
+        "n_J": 17970,
+        "beak_loss": 0.32483710193850207,
+        "tip_loss": 0.18490914975328926,
+        "gap_vs_peec": 0.03206182539471247,
+        "tip_absK_ratio_peec_over_bema": 1.0303339123811104,
+        "accepted": false
+      }
+    ],
+    "peec_side": {
+      "beak_loss": 0.335252,
+      "tip_loss": 0.194168,
+      "error_vs_2d": {
+        "beak": -0.0188,
+        "tip": -0.0403
+      }
+    },
+    "reference_2d_infinite_length": {
+      "beak_loss": 0.3416716,
+      "tip_loss": 0.2023115
+    },
+    "tip_resolution_of_the_observable": {
+      "bnd_triangles_in_axial_window": 1729,
+      "on_beak": 1311,
+      "on_tip": 977,
+      "tip_triangle_edge_mm": 0.139,
+      "peec_lane_width_on_tip_mm": 0.098,
+      "triangles_per_lane_per_station": 2.3,
+      "verdict": "the triangle-averaged observable is not starved at the tip"
+    },
+    "reading": "R responds to the basis order (+1.69% one step at maxh 1.8, +0.51% at maxh 0.75 with curving) and to geometry order (+0.067%); the delivery fractions respond to neither, nor to maxh 0.75 -> 0.45.  With every exposed control moved and the observable not resolution-starved, BEM-A is converged on this fixture at beak 0.3248 / tip 0.1849, about 3% under PEEC and about 5% / 8.6% under the infinite-length 2-D reference; PEEC sits 1.9% / 4.0% under it.  The pairwise 3% gate therefore straddles a converged model difference, not a discretisation error.  Candidates: end effects of the 24 mm fixture against an infinite-length reference (both routes below it, in the same order), and the impedance-EFIE versus thin-sheet PEEC current models themselves.  The ledger's required gate 3 -- an independent 3-D reference -- is what separates them; a length sweep of the fractions is the cheap discriminator for the first candidate.",
+    "supersedes": "the two earlier 'cause' entries: geometry order was measured too small, and basis order moves R but not the gate metric"
+  }
+}

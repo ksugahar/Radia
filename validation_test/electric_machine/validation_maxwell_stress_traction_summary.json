@@ -1,0 +1,235 @@
+{
+  "checks": {
+    "max_normal_identity_abs_error": 0.0,
+    "max_tangential_identity_abs_error": 0.0,
+    "max_tensor_symmetry_abs_error": 0.0,
+    "max_trace_identity_abs_error": 0.0,
+    "normal_1T_force_N": [
+      0.0,
+      0.0,
+      99.47183943243459
+    ],
+    "normal_1T_normal_traction_Pa": 397887.35772973835,
+    "oblique_normal_traction_Pa": -2785211.504108168,
+    "oblique_tangential_traction_magnitude_Pa": 9549296.58551372,
+    "pressure_at_1T_Pa": 397887.35772973835,
+    "tangential_1T_normal_traction_Pa": -397887.35772973835
+  },
+  "kind": "maxwell_stress_traction_identities",
+  "rows": [
+    {
+      "B": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "area_m2": 0.00025,
+      "force_magnitude_N": 99.47183943243459,
+      "name": "normal_1T",
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "normal_identity_abs_error": 0.0,
+      "stress_tensor_Pa": [
+        [
+          -397887.35772973835,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          -397887.35772973835,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          397887.35772973835
+        ]
+      ],
+      "tangential_force_magnitude_N": 0.0,
+      "tangential_identity_abs_error": 0.0,
+      "tensor_symmetry_abs_error": 0.0,
+      "trace_identity_abs_error": 0.0,
+      "traction": {
+        "B": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "B_normal_T": 1.0,
+        "B_tangent_T": 0.0,
+        "area_m2": 0.00025,
+        "force_N": [
+          0.0,
+          0.0,
+          99.47183943243459
+        ],
+        "mu": 1.2566370614359173e-06,
+        "normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "normal_traction_Pa": 397887.35772973835,
+        "normal_traction_identity_Pa": 397887.35772973835,
+        "tangential_traction_Pa": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tangential_traction_magnitude_Pa": 0.0,
+        "traction_Pa": [
+          0.0,
+          0.0,
+          397887.35772973835
+        ]
+      }
+    },
+    {
+      "B": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "area_m2": 0.00025,
+      "force_magnitude_N": 99.47183943243459,
+      "name": "tangential_1T",
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "normal_identity_abs_error": 0.0,
+      "stress_tensor_Pa": [
+        [
+          397887.35772973835,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          -397887.35772973835,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          -397887.35772973835
+        ]
+      ],
+      "tangential_force_magnitude_N": 0.0,
+      "tangential_identity_abs_error": 0.0,
+      "tensor_symmetry_abs_error": 0.0,
+      "trace_identity_abs_error": 0.0,
+      "traction": {
+        "B": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "B_normal_T": 0.0,
+        "B_tangent_T": 1.0,
+        "area_m2": 0.00025,
+        "force_N": [
+          0.0,
+          0.0,
+          -99.47183943243459
+        ],
+        "mu": 1.2566370614359173e-06,
+        "normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "normal_traction_Pa": -397887.35772973835,
+        "normal_traction_identity_Pa": -397887.35772973835,
+        "tangential_traction_Pa": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tangential_traction_magnitude_Pa": 0.0,
+        "traction_Pa": [
+          0.0,
+          0.0,
+          -397887.35772973835
+        ]
+      }
+    },
+    {
+      "B": [
+        3.0,
+        4.0,
+        0.0
+      ],
+      "area_m2": 1e-06,
+      "force_magnitude_N": 9.947183943243457,
+      "name": "oblique_3_4T",
+      "normal": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "normal_identity_abs_error": 0.0,
+      "stress_tensor_Pa": [
+        [
+          -2785211.504108168,
+          9549296.58551372,
+          0.0
+        ],
+        [
+          9549296.58551372,
+          2785211.504108168,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          -9947183.943243459
+        ]
+      ],
+      "tangential_force_magnitude_N": 9.54929658551372,
+      "tangential_identity_abs_error": 0.0,
+      "tensor_symmetry_abs_error": 0.0,
+      "trace_identity_abs_error": 0.0,
+      "traction": {
+        "B": [
+          3.0,
+          4.0,
+          0.0
+        ],
+        "B_normal_T": 3.0,
+        "B_tangent_T": 4.0,
+        "area_m2": 1e-06,
+        "force_N": [
+          -2.785211504108168,
+          9.54929658551372,
+          0.0
+        ],
+        "mu": 1.2566370614359173e-06,
+        "normal": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal_traction_Pa": -2785211.504108168,
+        "normal_traction_identity_Pa": -2785211.504108168,
+        "tangential_traction_Pa": [
+          0.0,
+          9549296.58551372,
+          0.0
+        ],
+        "tangential_traction_magnitude_Pa": 9549296.58551372,
+        "traction_Pa": [
+          -2785211.504108168,
+          9549296.58551372,
+          0.0
+        ]
+      }
+    }
+  ],
+  "validation_class": true
+}

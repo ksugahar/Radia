@@ -1,0 +1,3193 @@
+"""calc_inductance.py -- unified coil inductance (vacuum + weak-coupled).
+
+Layer 4 subprocess for the IH "Inductance" panel.  Replaces three
+scoped CLIs that overlapped on workflow but differed on coil solver:
+
+  * calc_peec_inductance.py        -> --coil-solver peec, --vol omitted
+  * calc_peec_bem.py               -> --coil-solver peec, --vol present
+  * calc_coil_bem_a_workpiece.py   -> --coil-solver bem-a, --vol present
+
+Coil-input format (one per solver):
+  * PEEC   -> --coil-step (CAD STEP; perimeter filaments derived from
+              centerline)
+  * BEM-A  -> --coil-vol  (pre-meshed surface .vol from Cubit / Netgen;
+              must contain 'source'/'sink' boundary labels on the cap
+              faces)
+
+Coil solver (``--coil-solver``):
+  * ``peec`` : PEEC perimeter filaments + Loop-bundle solve.
+               Fast (~10x BEM-A); n_peri-discretisation-limited (~3% under
+               on rect cross-section at n_peri=16 vs converged BEM-A).
+  * ``bem-a``: intree Weggler stabilized EFIE on HDivSurface RWG
+               (Phase C.1-C.5).  Surface-current physics, n_peri-free.
+               Reads a pre-meshed coil .vol; no on-the-fly OCC re-mesh.
+
+Workpiece is OPTIONAL.  Without ``--vol`` the script returns only the
+vacuum coil L_coil + R_coil.  With ``--vol`` it adds weak-coupled BEM-SIBC:
+complete SIBC reciprocity (magnetic and electric boundary terms) captures the workpiece's
+back-reaction at the port level (coil current distribution is NOT
+recomputed — that is "strong coupling", available via FEM A-V in
+calc_fem_coilmesh.py).
+
+Coupling terminology (corrected 2026-05-02):
+  * **weak coupling** = back-reacted Telegen ΔL is computed; coil source
+    distribution FIXED.  Default and only mode here.
+  * **one-way (forward)** = only P_wp; no ΔL.  Not exposed: weak is a
+    strict superset at no extra cost.
+  * **strong coupling** = coil source recomputed iteratively in response
+    to workpiece reflection.  Use calc_fem_coilmesh.py.
+
+Output: JSON to stdout (calc_main contract).
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import hashlib
+import math
+import os
+import sys
+import time
+
+import numpy as np
+
+
+def _detect_vol_curving_order(vol_path: str) -> int:
+    """Read companion ``<vol_path>.json`` (written by Cubit's
+    ``export netgen``) to find the curving order baked into the
+    .vol.  Returns the integer ``order`` field, or 1 if the companion
+    JSON is missing / malformed (= flat, safe default).
+
+    This is the SOURCE OF TRUTH for the workpiece BEM basis order in
+    ``calc_inductance.py``: the .vol's ``curvedelements`` is fixed at
+    Cubit-export time, and trying to upgrade via ``mesh.Curve(p)``
+    after-the-fact silently falls back to flat without a CAD callback.
+    """
+    json_path = vol_path + ".json"
+    if not os.path.isfile(json_path):
+        return 1
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        order = int(data.get("order", 1))
+        return max(1, order)
+    except (OSError, ValueError, KeyError):
+        return 1
+
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SRC_RADIA = os.path.abspath(os.path.join(HERE, ".."))
+for p in (SRC_RADIA, HERE):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+from calc_common import calc_main, progress  # noqa: E402
+
+
+MU_0 = 4.0e-7 * math.pi
+INV_4PI = 1.0 / (4.0 * math.pi)
+
+
+# ======================================================================
+# Coil solver: PEEC
+# ======================================================================
+def _equivalent_wire_radius_m(topo, n_peri):
+    """Derive an equivalent-circle wire radius [m] from the PEEC topology.
+
+    Priority:
+      1. ``cross_section_radius_m_mean`` (circle-edge / round-wire path)
+      2. ``cross_section_area_m2_mean`` -> sqrt(A / pi)
+      3. ``cell_wh`` mean (last resort): each filament's (w, h) area
+         times n_peri gives the bundle area, then sqrt(A_bundle / pi).
+    Returns 0.0 if none of the above are available -- the caller falls
+    back to the R_DC-only behaviour.
+    """
+    r = float(topo.get("cross_section_radius_m_mean") or 0.0)
+    if r > 0:
+        return r
+    A = float(topo.get("cross_section_area_m2_mean") or 0.0)
+    if A > 0:
+        return math.sqrt(A / math.pi)
+    cell_wh = topo.get("cell_wh") or []
+    if cell_wh:
+        areas = [float(w) * float(h)
+                 for fil in cell_wh for (w, h) in fil]
+        if areas:
+            A_bundle = (sum(areas) / len(areas)) * int(n_peri)
+            return math.sqrt(A_bundle / math.pi)
+    return 0.0
+
+
+def _peec_cross_section_model(topo, sigma, omega, n_peri):
+    """Resolve the physical internal-impedance model from CAD metadata."""
+    from radia.analytical_formulas.conductor_impedance import (
+        cylinder_ac_impedance,
+        cylinder_dc_resistance,
+        dowell_rectangular_ac_impedance,
+    )
+
+    kind = str(topo.get("cross_section_kind") or "unknown").lower()
+    perimeter_m = float(
+        topo.get("cross_section_perimeter_m_mean") or 0.0)
+
+    if kind == "rect":
+        width_m = float(topo.get("cross_section_width_m_mean") or 0.0)
+        thickness_m = float(
+            topo.get("cross_section_thickness_m_mean") or 0.0)
+        if width_m <= 0.0 or thickness_m <= 0.0:
+            raise ValueError(
+                "rectangular PEEC topology is missing width/thickness metadata")
+        width_m, thickness_m = max(width_m, thickness_m), min(
+            width_m, thickness_m)
+        if perimeter_m <= 0.0:
+            perimeter_m = 2.0 * (width_m + thickness_m)
+        return {
+            "name": "rectangular-dowell",
+            "cross_section_kind": kind,
+            "impedance_per_m": dowell_rectangular_ac_impedance(
+                width_m, thickness_m, sigma, omega),
+            "dc_resistance_per_m": 1.0 / (sigma * width_m * thickness_m),
+            "perimeter_m": perimeter_m,
+            "width_m": width_m,
+            "thickness_m": thickness_m,
+        }
+
+    if kind in ("circle", "equivalent-circle"):
+        radius_m = float(topo.get("cross_section_radius_m_mean") or
+                         topo.get("cross_section_radius_m") or 0.0)
+    else:
+        # Unknown/polygon profiles retain the historical, explicitly named
+        # equivalent-area approximation.  Only a strict CAD rectangle reaches
+        # the Dowell branch above.
+        radius_m = _equivalent_wire_radius_m(topo, n_peri)
+    if radius_m <= 0.0:
+        return None
+    if perimeter_m <= 0.0:
+        perimeter_m = 2.0 * math.pi * radius_m
+    return {
+        "name": ("round-bessel" if kind == "circle"
+                 else "equivalent-round-bessel"),
+        "cross_section_kind": kind,
+        "impedance_per_m": cylinder_ac_impedance(
+            a=radius_m, sigma=sigma, omega=omega),
+        "dc_resistance_per_m": cylinder_dc_resistance(
+            a=radius_m, sigma=sigma),
+        "perimeter_m": perimeter_m,
+        "radius_m": radius_m,
+    }
+
+
+def _peec_internal_impedance_per_filament(paths, model, n_peri):
+    """Return the internal-impedance excess for each PEEC filament.
+
+    ``model`` supplies the full per-unit-length conductor impedance and
+    its DC resistance.  The parallel perimeter bundle already contains
+    the DC resistance, so only their difference is injected.
+    """
+    import numpy as np
+
+    if model is None:
+        return None
+    dZ_per_m = (complex(model["impedance_per_m"])
+                - complex(model["dc_resistance_per_m"], 0.0))
+    Zs_fil = []
+    for path_k in paths:
+        # filament length = sum of |p2 - p1| over polyline tuples
+        L_k = 0.0
+        for (p1, p2) in path_k:
+            d = np.asarray(p2, dtype=float) - np.asarray(p1, dtype=float)
+            L_k += float(np.linalg.norm(d))
+        Zs_fil.append(int(n_peri) * dZ_per_m * L_k)
+    return np.asarray(Zs_fil, dtype=complex)
+
+
+def _solve_coil_peec(args):
+    """PEEC coil layer.
+
+    Returns a dict with:
+      * L_coil [H], R_coil [Ω] at unit terminal current.
+        Rectangular conductors use the one-dimensional Dowell solution;
+        physical round conductors use the Bessel solution.  Unknown shapes
+        retain an explicitly reported equivalent-area round approximation.
+      * source_type = "filament"
+      * paths : list of filament polylines (m)
+      * I_fil : (K,) complex per-filament current at args.current
+      * t_coil_s, n_filaments
+    """
+    progress("PEEC", f"STEP -> perimeter filaments (n_peri={args.peec_n_peri})")
+    from radia.coil_from_cad import filaments_from_step
+    from radia.peec_bundle import build_loop_bundle_impedance, solve_loop_bundle
+
+    omega = 2.0 * math.pi * args.frequency
+    t0 = time.perf_counter()
+    topo = filaments_from_step(args.coil_step,
+                               sigma=args.coil_sigma,
+                               n_peri=args.peec_n_peri,
+                               use_coil_builder=True)
+    paths = topo["filament_paths"]
+    seg_of_fil = topo["seg_of_filament"]
+    solver = topo["solver"]
+    t_topo = time.perf_counter() - t0
+    progress("PEEC", f"{len(paths)} filaments ({t_topo:.1f}s)")
+
+    model = _peec_cross_section_model(
+        topo, args.coil_sigma, omega, args.peec_n_peri)
+    Zs_fil = _peec_internal_impedance_per_filament(
+        paths, model, args.peec_n_peri) if omega > 0.0 else None
+    if Zs_fil is None:
+        progress("PEEC", "WARNING: cross-section model unavailable -- "
+                          "returning R_DC without skin correction.")
+    else:
+        from radia.analytical_formulas.conductor_impedance import (
+            skin_depth as _skin_depth,
+        )
+        delta_m = _skin_depth(args.coil_sigma, omega)
+        if model["name"] == "rectangular-dowell":
+            progress("PEEC",
+                f"Dowell skin: {model['width_m'] * 1e3:.3f} x "
+                f"{model['thickness_m'] * 1e3:.3f} mm, "
+                f"delta={delta_m * 1e3:.3f} mm, "
+                f"t/(2 delta)={model['thickness_m'] / (2 * delta_m):.2f}")
+        else:
+            progress("PEEC",
+                f"Bessel skin: a={model['radius_m'] * 1e3:.3f} mm, "
+                f"delta={delta_m * 1e3:.3f} mm, "
+                f"a/delta={model['radius_m'] / delta_m:.2f}")
+
+    use_prox = bool(getattr(args, "peec_proximity", True)) \
+        and model is not None and model["perimeter_m"] > 0.0 and omega > 0
+    progress("PEEC",
+        f"Loop-bundle solve @ {args.frequency:.0f} Hz "
+        f"({'proximity-iterative' if use_prox else 'self-only'}; "
+        f"{model['name'] if model is not None else 'dc-only'})")
+    t0 = time.perf_counter()
+    R_f, L_f = build_loop_bundle_impedance(solver, seg_of_fil)
+
+    proximity_info = None
+    if use_prox:
+        from radia.peec_proximity import solve_proximity_iterative
+        prox = solve_proximity_iterative(
+            R_f=R_f, L_f=L_f, filament_paths=paths,
+            frequency=args.frequency,
+            sigma=args.coil_sigma,
+            wire_radius_m=float(model.get("radius_m") or 0.0),
+            n_peri=int(args.peec_n_peri),
+            I_port=args.current,
+            max_iter=int(args.peec_proximity_max_iter),
+            tol=float(args.peec_proximity_tol),
+            relax=float(args.peec_proximity_relax),
+            self_impedance_per_m=model["impedance_per_m"],
+            dc_resistance_per_m=model["dc_resistance_per_m"],
+            perimeter_m=model["perimeter_m"],
+            internal_impedance_model=model["name"],
+        )
+        I_fil = prox["I_fil"]; V_port = prox["V_port"]
+        proximity_info = {
+            "n_iter": int(prox["n_iter"]),
+            "converged": bool(prox["converged"]),
+        }
+    else:
+        I_fil, V_port = solve_loop_bundle(R_f, L_f, args.frequency,
+                                           I_port=args.current,
+                                           Zs_fil=Zs_fil)
+    t_peec = time.perf_counter() - t0
+    Z_coil = V_port / args.current
+    L_coil = Z_coil.imag / omega if omega > 0 else 0.0
+    R_coil = Z_coil.real
+    if use_prox and proximity_info is not None:
+        progress("PEEC",
+            f"L_coil={L_coil * 1e9:.3f} nH, "
+            f"R_coil={R_coil * 1e3:.4f} mΩ "
+            f"(proximity {proximity_info['n_iter']} iter, "
+            f"{'conv' if proximity_info['converged'] else 'NO-conv'}, "
+            f"{t_peec:.1f}s)")
+    else:
+        progress("PEEC", f"L_coil={L_coil * 1e9:.3f} nH, "
+                          f"R_coil={R_coil * 1e3:.4f} mΩ ({t_peec:.1f}s)")
+
+    out = {
+        "source_type": "filament",
+        "L_coil": L_coil, "R_coil": R_coil,
+        "paths": paths, "I_fil": I_fil,
+        "n_filaments": len(paths),
+        "t_coil_topology_s": t_topo,
+        "t_coil_solve_s": t_peec,
+        "cross_section_kind": str(
+            topo.get("cross_section_kind") or "unknown"),
+        "internal_impedance_model": (
+            model["name"] if model is not None else "dc-only"),
+    }
+    if proximity_info is not None:
+        out["proximity"] = proximity_info
+    return out
+
+
+# ======================================================================
+# Coil solver: fin-surface (fin-graded surface PEEC from STEP)
+# ======================================================================
+def _solve_coil_fin_surface(args):
+    """Fin-capable surface PEEC coil layer (see docs/induction_heating/
+    FIN_PEEC_PRODUCTION_BOUNDARY.md).
+
+    Returns the same coil_data contract as ``_solve_coil_peec`` with
+    ``source_type = "filament"`` where every PEEC surface branch (axial
+    lane piece or circumferential ring piece) is one two-point polyline
+    carrying its own complex current.  Downstream consumers (A / B / phi_inc
+    from filaments, msh export, weak BEM-SIBC coupling) integrate paths and
+    currents independently, so no lane-level assumption is needed.  Strong
+    coupling is rejected in ``run_inductance`` (the coupled PEEC solver
+    needs the K x K lane bundle).
+    """
+    from radia.fin_surface_solver import solve_fin_surface
+
+    progress("FIN", f"STEP -> fin-graded surface PEEC "
+                    f"(n_lanes={args.fin_n_lanes or 'auto'}, "
+                    f"n_stations={args.fin_n_stations or 'auto'}, "
+                    f"grading={args.fin_lane_grading or 'auto'}, "
+                    f"route={args.fin_route})")
+    t0 = time.perf_counter()
+    sol = solve_fin_surface(
+        args.coil_step, frequency=float(args.frequency),
+        sigma=float(args.coil_sigma), n_lanes=args.fin_n_lanes,
+        n_stations=args.fin_n_stations, n_outline=args.fin_n_outline,
+        lane_grading=args.fin_lane_grading, tip_lanes=args.fin_tip_lanes,
+        route=str(args.fin_route), current_A=float(args.current))
+    t_fin = time.perf_counter() - t0
+    meta = dict(sol["sweep"].meta)
+    fin_stations = meta.get("fin_stations", [])
+    chosen = sol["resolution"]
+    origin = "measured" if sol["auto_resolution"] else "given"
+    progress("FIN", f"discretisation {origin}: n_lanes={chosen['n_lanes']}, "
+                    f"n_stations={chosen['n_stations']}, "
+                    f"n_outline={chosen['n_outline']}, "
+                    f"tip_lanes={chosen['tip_lanes']}")
+    progress("FIN", f"L_coil={sol['L_external_H'] * 1e9:.3f} nH, "
+                    f"R_coil={sol['R_ohm'] * 1e3:.4f} mΩ, "
+                    f"{sol['n_branches']} branches, fin on "
+                    f"{len(fin_stations)}/{meta.get('n_stations', '?')} stations "
+                    f"({t_fin:.1f}s)")
+    if not fin_stations:
+        progress("FIN", "WARNING: no fin detected on any station -- the "
+                        "fin-surface solver then reduces to a uniform-lane "
+                        "surface PEEC; --coil-solver peec is the cheaper "
+                        "choice for this geometry.")
+    return {
+        "source_type": "filament",
+        "L_coil": sol["L_external_H"], "R_coil": sol["R_ohm"],
+        "paths": sol["paths"], "I_fil": sol["I_fil"],
+        "n_filaments": len(sol["paths"]),
+        "t_coil_topology_s": t_fin, "t_coil_solve_s": 0.0,
+        "cross_section_kind": "fin-surface",
+        "internal_impedance_model": "leontovich-sheet",
+        "fin_sweep": meta,
+        "fin_metrics": sol["stations"],
+        "fin_n_branches": sol["n_branches"],
+    }
+
+
+# ======================================================================
+# Coil solver: BEM-A (intree Weggler EFIE saddle on RWG)
+# ======================================================================
+def _build_bema_coil_mesh(args):
+    """Load pre-meshed coil surface from --coil-vol.
+
+    BEM-A operates on a Cubit-/Netgen-meshed .vol whose 2D boundary
+    elements form the coil surface.  The .vol must already contain
+    boundary labels matching args.coil_source_name / args.coil_sink_name
+    on the two cap faces (Layer-1 Cubit responsibility); no on-the-fly
+    OCC re-mesh and no auto-detection -- fail-fast per CLAUDE.md
+    "No Fallbacks" policy if the labels are missing.
+    """
+    from ngsolve import Mesh
+
+    if not args.coil_vol:
+        raise ValueError(
+            "--coil-vol is required for --coil-solver bem-a.  PEEC consumes "
+            "STEP (--coil-step); BEM-A consumes a pre-meshed surface .vol.")
+    if not os.path.isfile(args.coil_vol):
+        raise FileNotFoundError(f"--coil-vol not found: {args.coil_vol}")
+
+    mesh = Mesh(args.coil_vol)
+    bnd_names = list(mesh.GetBoundaries())
+    mat_names = list(mesh.GetMaterials())
+    src_name = args.coil_source_name
+    snk_name = args.coil_sink_name
+    if src_name not in bnd_names or snk_name not in bnd_names:
+        # Diagnostic hint for Block-vs-Sideset confusion:
+        # in Cubit, source/sink may have been assigned to a BLOCK
+        # (volume material) instead of a SIDESET (surface boundary),
+        # which puts the names into mesh.GetMaterials() but NOT
+        # GetBoundaries().  Surface the materials list too so the
+        # user can spot the mistake without re-running anything.
+        in_mats = [n for n in (src_name, snk_name) if n in mat_names]
+        hint = ""
+        if in_mats:
+            hint = (f"  HINT: {in_mats!r} appear in the .vol's "
+                    f"MATERIAL labels (mesh.GetMaterials() -> "
+                    f"{mat_names}) but NOT the boundary labels.  "
+                    f"In Cubit, assign source/sink as SIDESETS, not "
+                    f"BLOCKS, and re-export.  See CLAUDE.md "
+                    f"\"Cubit Block/Sideset Label Convention\".")
+        # Case-insensitive near-match hint (e.g. user wrote "Source"
+        # in Cubit but the panel default is "source"):
+        bnd_lower = {n.lower(): n for n in bnd_names}
+        near = [bnd_lower[n.lower()] for n in (src_name, snk_name)
+                if n.lower() in bnd_lower and bnd_lower[n.lower()] != n]
+        if near:
+            hint += (f"  CASE HINT: case-insensitive matches found: "
+                      f"{near!r}.  Either rename the Cubit sideset to "
+                      f"match {src_name!r}/{snk_name!r}, or pass "
+                      f"--coil-source-name / --coil-sink-name with the "
+                      f"actual case as it appears in the .vol.")
+        # Fuzzy / typo hint (e.g. user wrote "sorce" instead of
+        # "source").  Use difflib.get_close_matches at cutoff=0.7 so
+        # 1-2 char edits count but unrelated names don't.  This is the
+        # actual kubota / mdx 2026-05-11 case (sideset name typo).
+        try:
+            import difflib
+            typos = []
+            for required in (src_name, snk_name):
+                if required in bnd_names:
+                    continue
+                matches = difflib.get_close_matches(
+                    required, bnd_names, n=3, cutoff=0.7)
+                # Skip matches already covered by the case hint above
+                # so we don't double-report.
+                matches = [m for m in matches if m.lower() != required.lower()]
+                if matches:
+                    typos.append((required, matches))
+            if typos:
+                lines = [f"{r!r} ~~ {m!r}" for r, m in typos]
+                hint += (f"  TYPO HINT: similar names in the .vol "
+                          f"(possible typo): {'; '.join(lines)}.  Fix "
+                          f"the sideset name in the Cubit .jou or pass "
+                          f"--coil-source-name / --coil-sink-name with "
+                          f"the actual spelling.")
+        except Exception:
+            pass
+        raise ValueError(
+            f"--coil-vol {args.coil_vol!r} is missing the required boundary "
+            f"labels {src_name!r}/{snk_name!r}.  Available boundaries: "
+            f"{bnd_names}.{hint}  Set the source/sink sidesets in the "
+            f"Cubit .jou before exporting the coil .vol.")
+
+    # The volume .vol is returned as-is.  Its boundary is the coil surface,
+    # and compute_inductance_source_sink now wraps HDivSurface in Compress,
+    # which removes the interior-edge DOFs whose null modes made the dense
+    # saddle singular on 2026-05-12 (Keiko mdx + validation runtime gapped_torus_2port).
+    # The workaround then was to extract a flat surface here; that also threw
+    # away the curving order baked into the .vol at export, so the coil BEM-A
+    # ran on a polygonised surface while the workpiece BEM honoured
+    # vol_curve_order.  Both paths now consume the same curved boundary.
+    return mesh
+
+
+def _arrays_from_bema_coil_mesh(mesh, source_name="source", sink_name="sink"):
+    """Extract verts / tris / source-mask / sink-mask arrays.
+
+    The source/sink boundary names default to "source" / "sink" but
+    callers MUST pass ``source_name`` / ``sink_name`` from
+    ``args.coil_source_name`` / ``args.coil_sink_name`` so the array
+    extraction stays in lockstep with the .vol-validation step in
+    ``_build_bema_coil_mesh``.  Hardcoding the strings here was a
+    silent failure mode: validation passed (using the user's name) but
+    the masks were empty (using "source"/"sink"), giving a misleading
+    "coil source/sink mesh empty after labelling" runtime error
+    (kubota / mdx, 2026-05-11).
+    """
+    from ngsolve import BND
+    n_v = mesh.nv
+    verts = np.empty((n_v, 3), dtype=np.float64)
+    for i in range(n_v):
+        verts[i] = [mesh.vertices[i].point[k] for k in range(3)]
+    bnd_names = list(mesh.GetBoundaries())
+    src_idx = {i for i, n in enumerate(bnd_names) if n == source_name}
+    snk_idx = {i for i, n in enumerate(bnd_names) if n == sink_name}
+    tris, src_mask, snk_mask = [], [], []
+    for el in mesh.Elements(BND):
+        tris.append([int(v.nr) for v in el.vertices])
+        src_mask.append(el.index in src_idx)
+        snk_mask.append(el.index in snk_idx)
+    return (verts, np.array(tris, dtype=np.int64),
+            np.array(src_mask, dtype=bool),
+            np.array(snk_mask, dtype=bool))
+
+
+def _solve_coil_bem_a(args):
+    """BEM-A coil layer via ngsolve.bem (Weggler EFIE saddle on HDivSurface RT0).
+
+    Replaced the intree pure-Python assembler 2026-05-03 after benchmarks
+    showed ngsolve.bem was 50-60x faster across all tested sizes.  See
+    ``src/radia/bem/coil_inductance_ngsolve.py`` docstring for the full
+    rationale.
+
+    Returns a dict with:
+      * L_coil [H] (external inductance), R_coil [Ω] at unit terminal
+        current.  R comes from the impedance-EFIE (Z_s inside the
+        saddle, J = finite-impedance current) -- the sole formulation
+        since 2026-07-02; the PEC post-hoc R was removed (it
+        over-estimated ~3x on tightly-wound coils).
+      * source_type = "surface"
+      * coil_centroids (n_t, 3), coil_areas (n_t,) -- real;
+        coil_J_per_tri (n_t, 3) -- COMPLEX per-triangle surface current
+        at unit terminal current (Im is all-zero for frequency=0).
+        Multiply by complex args.current downstream as needed.
+      * coil_residual, coil_mesh_nv, coil_mesh_n_tris
+    """
+    from radia.bem.coil_inductance_ngsolve import (
+        compute_inductance_source_sink, compute_centroids_areas_J,
+        check_source_sink_current_path)
+
+    omega = 2.0 * math.pi * args.frequency
+    # Programmatic callers (the IH assembler's argv path goes through argparse,
+    # but tests and panels build a Namespace by hand) may predate the option;
+    # RT0 is the historical default.
+    coil_fes_order = int(getattr(args, "coil_fes_order", 0))
+    progress("BEMA", f"loading pre-meshed coil .vol: "
+                       f"{os.path.basename(args.coil_vol)}")
+    t0 = time.perf_counter()
+    coil_mesh = _build_bema_coil_mesh(args)
+    # Same source of truth as the workpiece BEM: the curving order baked into
+    # the .vol at export time (companion .json).  HDivSurface on the loaded
+    # volume mesh already honours whatever curvature the file carries; this
+    # only records it, because mesh.Curve() cannot upgrade a loaded .vol
+    # (no CAD callback -> silently flat).  Recorded so a BEM-A result states
+    # its geometry order the way the workpiece result does.
+    coil_vol_curve_order = _detect_vol_curving_order(args.coil_vol)
+    progress("BEMA", f"coil .vol curve_order={coil_vol_curve_order} "
+                       f"(from {os.path.basename(args.coil_vol)}.json; "
+                       f"1 = flat)")
+    # We still extract verts/tris/masks for diagnostics + N_tris reporting.
+    # Pass user-supplied source/sink names so the array masks stay in
+    # sync with the .vol-validation step inside _build_bema_coil_mesh.
+    coil_verts, coil_tris, src_mask, snk_mask = \
+        _arrays_from_bema_coil_mesh(
+            coil_mesh,
+            source_name=args.coil_source_name,
+            sink_name=args.coil_sink_name)
+    t_mesh = time.perf_counter() - t0
+    progress("BEMA",
+        f"coil nv={coil_mesh.nv} n_tris={len(coil_tris)} "
+        f"src/snk={int(src_mask.sum())}/{int(snk_mask.sum())} "
+        f"({t_mesh:.1f}s)")
+    if int(src_mask.sum()) == 0 or int(snk_mask.sum()) == 0:
+        raise RuntimeError(
+            f"coil source/sink mesh empty after labelling "
+            f"(src={int(src_mask.sum())}, snk={int(snk_mask.sum())}).  "
+            f"Check that the {args.coil_source_name!r}/"
+            f"{args.coil_sink_name!r} sidesets in --coil-vol contain "
+            f"surface elements (not just labelled but empty).")
+
+    # Fail loud BEFORE the expensive EFIE solve when the source/sink labels
+    # let the current shortcut across the conductor instead of running
+    # around the coil (silently returns a tiny, meaningless L -- see the
+    # ih_fem_kelvin 0.28 nH vs 90 nH incident, 2026-07-15).
+    path_info = check_source_sink_current_path(
+        coil_verts, coil_tris, src_mask, snk_mask,
+        source_label=args.coil_source_name,
+        sink_label=args.coil_sink_name)
+    if path_info:
+        progress("BEMA",
+            f"source->sink current path {path_info['geodesic_m'] * 1e3:.1f} mm "
+            f"({path_info['ratio']:.1f}x coil extent) -- OK")
+
+    # Complex Leontovich surface impedance for the impedance-EFIE
+    # (the sole AC formulation).  omega == 0 -> DC vacuum-L solve.
+    delta_skin = math.sqrt(2.0 / (omega * MU_0 * args.coil_sigma)) \
+                  if omega > 0 else 1.0
+    Z_s_coil_complex = (1.0 + 1.0j) / (args.coil_sigma * delta_skin) \
+                        if omega > 0 else None
+
+    # Saddle-point solver selection.
+    #   "auto" (default):  LU below a tri-count threshold, Krylov above.
+    #       The AC impedance-EFIE saddle is COMPLEX (16 B/entry, 2x the
+    #       old real PEC saddle the historical 10k threshold was
+    #       calibrated on), so the AC LU cutoff is halved to 5000 tris;
+    #       the omega=0 real vacuum solve keeps 10000.  Above the
+    #       cutoff: cocr (div-free loop reduction + complex-symmetric
+    #       COCR, ~24 mesh-independent iters, exact vs LU) for both AC
+    #       and DC -- it replaces the historical GMRES-for-AC /
+    #       MINRES-for-DC branch (GMRES stalled unpreconditioned on the
+    #       indefinite AC saddle at ~1e5 matvecs).
+    #   "lu"          dense LAPACK direct (overwrite_a=True, smallest
+    #                 memory for direct solve)
+    #   "cocr"        div-free loop reduction + COCR, dense SL matvec --
+    #                 SCALABLE large-N
+    #   "hacapk_cocr" same, HACApKBEMManager-compressed O(N log N) SL
+    #                 matvec (accuracy ~3e-7)
+    #   "minres"      Krylov for REAL symmetric indefinite -- omega=0 ONLY
+    #   "gmres"       Generic complex-capable Krylov -- unpreconditioned,
+    #                 stalls on large saddles (kept for comparison)
+    saddle = args.coil_saddle_solver
+    if saddle == "auto":
+        lu_cutoff = 5000 if omega > 0 else 10000
+        # Large systems -> COCR (div-free loop reduction + complex-symmetric
+        # COCR, ~24 mesh-independent iters, exact vs LU) instead of the O(N^3)
+        # LU or the unpreconditioned GMRES that stalled (~1e5 matvecs) on the
+        # indefinite AC saddle.  Dense SL matvec; hacapk_cocr is the HACApK
+        # opt-in.  Valid for AC and DC.
+        saddle = "lu" if len(coil_tris) < lu_cutoff else "cocr"
+    # cocr / hacapk_cocr are passed straight through: the library solver
+    # values are the same two names (dense vs HACApK-compressed SL matvec).
+    progress("BEMA",
+        f"ngsolve.bem impedance-EFIE solve (n_tris={len(coil_tris)}, "
+        f"fes_order={coil_fes_order}, "
+        f"Z_s={Z_s_coil_complex if omega > 0 else 'DC (vacuum L)'}, "
+        f"saddle={saddle})")
+    t0 = time.perf_counter()
+    res = compute_inductance_source_sink(
+        coil_mesh,
+        source_label=args.coil_source_name,
+        sink_label=args.coil_sink_name,
+        fes_order=coil_fes_order,
+        solver=saddle,
+        omega=omega,
+        Z_s_complex=Z_s_coil_complex,
+        log_fn=progress,
+    )
+    t_solve = time.perf_counter() - t0
+    if "error" in res:
+        raise RuntimeError(f"BEM-A solve failed: {res['error']}")
+    L_coil = float(res["L"])
+    R_coil = float(res["R"])
+    residual = float(res["residual"])
+    # DoF breakdown of the BEM-A saddle system (HDivSurface RT0 J + SurfaceL2
+    # divergence multiplier f).  Total saddle size = n_J + n_f - 1 (the -1
+    # comes from the Lagrange constraint reduction inside the solver, where
+    # one row of the divergence multiplier is dropped to fix the gauge).
+    coil_n_J = int(res.get("n_J", 0))
+    coil_n_f = int(res.get("n_f", 0))
+    coil_saddle_ndof = coil_n_J + coil_n_f - 1 if coil_n_J and coil_n_f else 0
+    progress("BEMA",
+        f"L_coil={L_coil * 1e9:.3f} nH, R_coil(SIBC)={R_coil * 1e3:.4f} mΩ "
+        f"residual={residual:.2e} ({t_solve:.1f}s)")
+    progress("BEMA",
+        f"coil DoF: n_J={coil_n_J} (HDivSurface RT{coil_fes_order}, "
+        f"compressed to the boundary), n_f={coil_n_f} "
+        f"(SurfaceL2 P{max(0, coil_fes_order - 1)}), "
+        f"saddle_ndof={coil_saddle_ndof} "
+        f"on {len(coil_tris)} triangles / {coil_mesh.nv} vertices")
+
+    # Per-triangle COMPLEX J_s vectors at centroids (workpiece bridge
+    # prep).  The impedance-EFIE current is complex; sample Re and Im
+    # GridFunctions separately and combine so the phi_inc / Telegen /
+    # qsurf bridges downstream see the full phasor (they already split
+    # Re/Im before calling the real-only compute_phi_inc_from_surface_J).
+    coil_centroids, coil_areas, coil_J_re = compute_centroids_areas_J(
+        coil_mesh, res["gf_J"])
+    _, _, coil_J_im = compute_centroids_areas_J(
+        coil_mesh, res["gf_J_im"])
+    coil_J_per_tri = coil_J_re + 1j * coil_J_im
+
+    return {
+        "source_type": "surface",
+        "L_coil": L_coil, "R_coil": R_coil,
+        "coil_centroids": coil_centroids,
+        "coil_areas": coil_areas,
+        "coil_J_per_tri": coil_J_per_tri,
+        "coil_mesh_nv": int(coil_mesh.nv),
+        "coil_mesh_n_tris": int(len(coil_tris)),
+        "coil_mesh_n_src_tris": int(src_mask.sum()),
+        "coil_mesh_n_snk_tris": int(snk_mask.sum()),
+        "coil_n_J": coil_n_J,
+        "coil_n_f": coil_n_f,
+        "coil_saddle_ndof": coil_saddle_ndof,
+        "coil_fes_order": coil_fes_order,
+        "coil_vol_curve_order": int(coil_vol_curve_order),
+        "bem_a_residual": residual,
+        "t_coil_topology_s": t_mesh,
+        "t_coil_solve_s": t_solve,
+    }
+
+
+# ======================================================================
+# Surface-current Biot-Savart helper: complex H from complex panel J,
+# for Telegen ΔL evaluation and the poisson phi_inc (BEM-A coil case).
+# Single canonical kernel in radia.bem_sibc_solver -- do not duplicate.
+# ======================================================================
+def _H_from_surface_J_complex(eval_pts, src_centroids, src_areas,
+                              src_J_complex):
+    from radia.bem_sibc_solver import H_from_surface_J_complex
+    return H_from_surface_J_complex(
+        eval_pts, src_centroids, src_areas, src_J_complex)
+
+
+def _delta_L_telegen_phiB_from_surface_J(
+        coil_centroids, coil_areas, coil_J_complex,
+        wp_centroids, wp_areas, wp_norms, wp_phi_avg, I_port):
+    """Gauge-invariant Δ L_port via ∫_S φ (n · B_inc) dS, surface-J source.
+
+    Parallel to ``radia.workpiece_surface.delta_L_telegen_phiB`` but for
+    BEM-A surface-current coil.  1-point centroid quadrature for B_inc.
+    """
+    H_inc = _H_from_surface_J_complex(
+        wp_centroids, coil_centroids, coil_areas, coil_J_complex)
+    B_inc = MU_0 * H_inc
+    n_dot_B = np.sum(wp_norms * B_inc, axis=1)
+    integ = np.sum(wp_phi_avg * n_dot_B * wp_areas)
+    Ip = complex(I_port)
+    if abs(Ip) < 1e-30:
+        return 0.0 + 0.0j
+    return integ / (Ip * Ip)
+
+
+# ======================================================================
+# Workpiece weak-coupled BEM-SIBC block (shared by both coil solvers)
+# ======================================================================
+def _resolve_workpiece_backend(args, genus, surface_vertices):
+    """Resolve the explicitly topology-aware auto backend before assembly."""
+    requested = args.wp_bem_backend
+    if genus > 1:
+        raise ValueError("Absolute heating cannot omit multiple holes; genus-0/1 only is validated")
+    if requested == 'auto':
+        if genus >= 1:
+            if genus != 1 or (args.impedance_model != 'sibc' and not getattr(args, 'esim_per_panel', False)):
+                raise ValueError('Automatic hole treatment supports one handle and SIBC or per-panel ESIM; multiple holes/scalar nonlinear ESIM are not supported')
+            if int(args.h1_order) != 1:
+                raise ValueError('Automatic hole treatment requires --h1-order 1 (surface BEM basis only)')
+            requested = 'intree-dense'
+        else:
+            requested = 'hacapk'
+        progress('BEM', f'workpiece backend auto: genus={genus}, selected {requested}; cohomology={genus == 1}')
+    if genus == 1 and surface_vertices > 7000:
+        if requested != 'hacapk' or getattr(args, 'coupling_mode', 'weak') != 'weak':
+            raise ValueError('Dense and strong genus-1 routes retain the 7000-vertex limit; larger weak surfaces require explicit HACApK')
+        if int(args.h1_order) != 1:
+            raise ValueError('Large weak genus-1 HACApK requires P1 nodal basis')
+        if surface_vertices > 10000:
+            raise ValueError('Large weak genus-1 HACApK exceeds the 10000-surface-vertex limit')
+        if getattr(args, 'wp_loop_work_backend', 'auto') == 'dense':
+            raise ValueError('Large weak genus-1 HACApK requires FMM loop work; dense P0 keeps its 14000-face limit')
+    args.wp_bem_backend = requested
+    return requested
+
+
+def _resolve_weak_loop_mode(args, wp_genus, basis_order):
+    """Refuse unrepresented handle currents before assembly or qsurf export."""
+    mode = getattr(args, "wp_loop_dof", "auto")
+    if mode not in ("auto", "on"):
+        raise ValueError("wp-loop-dof must be auto or on")
+    if wp_genus == 0 and mode == "auto":
+        return mode, False, "genus-0 needs no loop DOF"
+    reason = None
+    if wp_genus != 1:
+        reason = f"loop DOF requires genus-1 (got genus-{wp_genus})"
+    elif args.impedance_model != "sibc" and not getattr(args, 'esim_per_panel', False):
+        reason = "nonlinear loop ESIM requires --esim-per-panel"
+    elif args.impedance_model == 'esim' and int(getattr(args, 'esim_anderson_m', 0)) != 0:
+        reason = 'genus-1 ESIM requires damped Picard (--esim-anderson-m 0)'
+    elif args.wp_bem_backend not in ("intree-dense", "hacapk"):
+        reason = "loop DOF requires an in-tree P1 body backend"
+    elif basis_order != 1:
+        reason = "loop DOF requires the P1 nodal path"
+    if reason:
+        raise ValueError(
+            f"Unsupported weak-coupled absolute heating: {reason}. "
+            "Refusing an uncorrected P_wp or qsurf. No model/backend fallback "
+            "is performed. The implemented loop path is genus-1, SIBC or per-panel ESIM, "
+            "intree-dense, P1; changing to it changes the requested model and "
+            "requires separate validation.")
+    return mode, True, None
+
+def _wp_genus_check(wp_mesh, tag="BEM"):
+    """Classify the extracted surface; loop-mode support is resolved by the caller."""
+    from radia.bem_sibc_solver import surface_euler_characteristic
+    chi = surface_euler_characteristic(wp_mesh)
+    genus = (2 - chi) // 2
+    if chi != 2:
+        progress(tag, f"workpiece surface genus={genus} (Euler chi={chi}); "
+                      "the body solve resolves the circulating-current mode")
+    return chi, genus
+
+
+_GENUS_P_WP_CAVEAT = (
+    "The circulating handle-current mode is omitted. Flux-linked genus-1 "
+    "reaction and heating require the validated loop extension: flat P1, "
+    "dense body operators, linear SIBC with scalar or fixed panel impedance. "
+    "The sign of the resulting heating change is not prescribed.")
+
+
+def _solved_panel_tangential_field(bem, result):
+    """Peak face amplitudes from the total solved field, including the loop."""
+    from ngsolve import BND
+    from radia.surface_impedance import panel_tangential_field_rms
+    if "loop_H_t_tri" not in result:
+        return panel_tangential_field_rms(bem.fes, result["phi_vec"])
+    field = np.asarray(result["loop_H_t_tri"], dtype=complex)
+    if field.shape != (bem.mesh.GetNE(BND), 3) or not np.all(np.isfinite(field)):
+        raise ValueError("Loop total tangential field must match finite BND face order")
+    return np.sqrt(np.sum(abs(field)**2, axis=1))
+
+
+def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
+                       res_bem, wp_genus, wp_chi):
+    """Apply the genus-1 loop extension at this held SIBC/ESIM impedance.
+
+    Uses the loop-extended field consistently for power, spatial heating,
+    and reciprocal reaction. The single-valued phi_u alone is insufficient
+    for either local heating or reaction on a flux-linked handle.
+    Returns ``(res_bem_updated, loop_meta)``.
+    """
+    import cmath
+
+    if wp_genus != 1:
+        raise ValueError(
+            f"--wp-loop-dof requires a genus-1 workpiece surface "
+            f"(got genus={wp_genus}, Euler chi={wp_chi}).  A genus-0 "
+            f"workpiece needs no loop DOF (the sphere benchmark validates "
+            f"the plain solver to 0.3%); genus >= 2 is not implemented.")
+    from radia.bem_loop_extension import (solve_loop_extended,
+                                          A_from_filaments)
+    if coil_data["source_type"] == "filament":
+        def A_inc_fn(points):
+            return A_from_filaments(points, coil_data["paths"],
+                                    coil_data["I_fil"])
+    elif coil_data["source_type"] == "surface":
+        from radia.bem_sibc_solver import A_from_surface_J
+        coil_Jc = (complex(args.current)
+                   * coil_data["coil_J_per_tri"]).astype(complex)
+
+        def A_inc_fn(points):
+            A_re = A_from_surface_J(points, coil_data["coil_centroids"],
+                                    coil_data["coil_areas"],
+                                    np.real(coil_Jc))
+            A_im = A_from_surface_J(points, coil_data["coil_centroids"],
+                                    coil_data["coil_areas"],
+                                    np.imag(coil_Jc))
+            return A_re + 1j * A_im
+    else:
+        raise RuntimeError(
+            f"unknown coil source_type {coil_data['source_type']!r}")
+
+    t0 = time.perf_counter()
+    loop_out = solve_loop_extended(bem, phi_inc, Z_s_wp, omega, A_inc_fn,
+        _reuse_prepared=getattr(args, 'impedance_model', 'sibc') == 'esim'
+            and getattr(args, 'esim_per_panel', False),
+        hacapk=args.wp_bem_backend == 'hacapk',
+        gmres=dict(tol=args.wp_gmres_tol,maxiter=500,restart=100))
+    t_loop = time.perf_counter() - t0
+
+    # sanity: the frozen sub-solve must reproduce the plain solve
+    P_plain = float(res_bem["P_density"]) * float(res_bem["area"])
+    frz_rel = abs(loop_out["P_frozen"] - P_plain) / max(P_plain, 1e-30)
+    if frz_rel > 1e-3:
+        raise RuntimeError(
+            f"loop-DOF frozen sub-solve disagrees with the plain BIE solve "
+            f"by {frz_rel:.2e} (P {loop_out['P_frozen']:.4e} vs "
+            f"{P_plain:.4e} W) -- operator mismatch, refusing to report "
+            f"loop-extended numbers.")
+
+    alpha = loop_out["alpha"]
+    alpha_deg = float(math.degrees(cmath.phase(alpha)))
+    screening = float(loop_out["P_total"]
+                      / max(float(loop_out["P_frozen"]), 1e-300))
+    regime = _loop_regime(alpha_deg)
+    progress("BEM",
+        f"loop-DOF: alpha={abs(alpha):.4g} A "
+        f"(phase {alpha_deg:+.1f} deg, {regime}), "
+        f"P_wp {P_plain:.4e} -> {loop_out['P_total']:.4e} W "
+        f"(screening P/P_frozen={screening:.3f}), "
+        f"H_t {res_bem['H_t_rms']:.4g} -> {loop_out['H_t_rms']:.4g} A/m "
+        f"({t_loop:.1f}s)")
+    res_bem = dict(res_bem)
+    res_bem["P_density"] = loop_out["P_total"] / float(res_bem["area"])
+    res_bem["H_t_rms"] = loop_out["H_t_rms"]
+    res_bem["phi_vec"] = loop_out["phi_u"]
+    res_bem["loop_q_tri"] = loop_out["q_tri"]
+    res_bem["loop_H_t_tri"] = loop_out["H_t_tri"]
+    res_bem["loop_reaction_integral"] = loop_out["reaction_integral"]
+    loop_meta = {
+        "wp_loop_impedance_assembly": loop_out["loop_impedance_assembly"],
+        "wp_loop_work_diagnostics": loop_out["loop_work_diagnostics"],
+        "wp_loop_dof": True,
+        "wp_loop_body_backend": loop_out["loop_body_backend"],
+        "wp_loop_linear_solver": loop_out["loop_linear_solver"],
+        "wp_loop_automatic_carrier": bool(loop_out["automatic_carrier"]),
+        "wp_loop_section_anchor_m": list(loop_out["section_anchor"]),
+        "wp_loop_linear_residual_rel": float(loop_out["linear_residual_rel"]),
+        "wp_loop_faraday_residual_rel": float(loop_out["faraday_residual_rel"]),
+        "wp_loop_alpha_A": float(abs(alpha)),
+        "wp_loop_alpha_deg": alpha_deg,
+        "wp_loop_theta_jump": float(loop_out["theta_jump"]),
+        "wp_loop_cut_n_vertices": int(loop_out["cut_n_vertices"]),
+        # Screening diagnostics: the frozen (alpha = 0) sub-solve is the
+        # no-mode ("slitted tube") physics, so P/P_frozen exposes what
+        # the shorted-turn mode does to the heating in THIS run, and the
+        # alpha phase classifies the regime (see _loop_regime).
+        "wp_loop_P_frozen_W": float(loop_out["P_frozen"]),
+        "wp_loop_H_t_frozen_A_per_m": float(loop_out["Ht_frozen"]),
+        "wp_loop_screening_ratio": screening,
+        "wp_loop_regime": regime,
+        "t_loop_dof_s": float(t_loop),
+    }
+    return res_bem, loop_meta
+
+
+def _loop_regime(alpha_deg):
+    """Screening-regime label from the loop-current phase vs the drive.
+
+    A passive R-L shorted turn driven by ``-j omega Phi`` sits between
+    quadrature and anti-phase: ``I_2 = -j omega M I_1 / (R + j omega L)``
+    has phase in (-180, -90) deg.  Near anti-phase (|phase| -> 180,
+    omega L >> R) the turn is a nearly lossless FLUX CANCELLER -- Lenz
+    screening REDUCES the total surface |H_t|^2 and hence P_wp.
+    In the inductive-screening regime, P/P_frozen is below one and
+    follows the corresponding squared H_t ratio.
+    Near quadrature (|phase| -> 90, omega L << R) the screening is weak
+    and the turn mostly ADDS its own dissipation -- the classic
+    "shorted turn overheats" regime.  Thresholds split the continuum at
+    135 / 105 deg.
+    """
+    a = abs(float(alpha_deg))
+    if a >= 135.0:
+        return "inductive-screening"
+    if a >= 105.0:
+        return "mixed"
+    return "resistive-dissipative"
+
+
+# Fail-loud bound on the surface-Poisson tangential-gradient residual
+# ||grad_S psi + H_t,inc|| / ||H_t,inc||.  A coil current piercing the
+# workpiece surface (psi does not exist) or a broken incident-H evaluation
+# produces an O(1) residual; 10% is the fail-loud contract.
+_PHI_INC_POISSON_MAX_RESIDUAL = 0.10
+
+
+def _phi_inc_poisson(args, coil_data, wp_mesh, obs):
+    """phi_inc via surface-Poisson projection of the exact vertex H_inc.
+
+    Evaluates the incident H at the workpiece vertices with the coil
+    source's EXACT kernel (finite-segment Biot-Savart for filaments,
+    centroid-quadrature panel Biot-Savart for the BEM-A surface J --
+    the same helpers the Telegen bridge uses), then reconstructs the
+    mean-zero psi with ``radia.bem_sibc_solver.
+    compute_phi_inc_surface_poisson`` (fails loud when H_t,inc is not a
+    surface gradient).  Wall-free replacement for the axis-ray +
+    horizontal-ray path integration, selected by ``--wp-phi-inc
+    poisson``.  Returns ``(psi, grad_residual)``.
+    """
+    from ngsolve import BND
+    from radia.bem_sibc_solver import compute_phi_inc_surface_poisson
+
+    if len(obs) != wp_mesh.nv:
+        raise RuntimeError(
+            f"--wp-phi-inc poisson expects the P1 vertex-nodal DOF path "
+            f"(len(obs)={len(obs)} != wp_mesh.nv={wp_mesh.nv}).")
+
+    if coil_data["source_type"] == "filament":
+        from radia.biot_savart import h_segments_batch
+        H = np.zeros((len(obs), 3), dtype=complex)
+        for fil_segs, Ik in zip(coil_data["paths"], coil_data["I_fil"]):
+            H += complex(Ik) * h_segments_batch(fil_segs, obs)
+    elif coil_data["source_type"] == "surface":
+        coil_Jc = (complex(args.current)
+                   * coil_data["coil_J_per_tri"]).astype(complex)
+        H = _H_from_surface_J_complex(
+            obs, coil_data["coil_centroids"], coil_data["coil_areas"],
+            coil_Jc)
+    else:
+        raise RuntimeError(
+            f"unknown coil source_type {coil_data['source_type']!r}")
+
+    tris = np.array([[v.nr for v in el.vertices]
+                     for el in wp_mesh.Elements(BND)], dtype=np.int64)
+    return compute_phi_inc_surface_poisson(
+        obs, tris, H, max_grad_residual=_PHI_INC_POISSON_MAX_RESIDUAL)
+
+
+def _solve_workpiece_weak_coupled(args, coil_data):
+    """Workpiece BEM-SIBC + Telegen ΔL using whichever coil source exists.
+
+    Branches on coil_data["source_type"] for both phi_inc bridge and
+    Telegen evaluation:
+      * "filament" -> compute_phi_inc_from_filaments + delta_L_telegen_phiB
+      * "surface"  -> compute_phi_inc_from_surface_J + _delta_L_telegen_phiB_from_surface_J
+    """
+    from ngsolve import (Mesh, BND, Integrate, CF, GridFunction,
+                          InnerProduct, grad)
+    from ngsolve import (specialcf as _scf, BND as _BND,
+                          Integrate as _Int, CF as _CF, GridFunction as _GF)
+    from surface_mesh_extract import _extract_surface_mesh_filtered
+    from radia.bem_sibc_solver import (
+        ScalarBIESIBCSolver, compute_phi_inc_from_filaments,
+        compute_phi_inc_from_surface_J)
+    from em_material import EMMaterial
+    # Hole-extractor for wp-as-hole geometry (closed-torus convention).
+    # Inlined from the deleted calc_peec_bem.py.
+    _extract_bnd_only = _extract_bnd_only_inline
+
+    omega = 2.0 * math.pi * args.frequency
+
+    # 1. Workpiece mesh
+    progress("BEM", f"load wp surface from {os.path.basename(args.vol)}")
+    t0 = time.perf_counter()
+    vol_mesh = Mesh(args.vol)
+    mats = set(vol_mesh.GetMaterials())
+    bnds = set(vol_mesh.GetBoundaries())
+
+    # Detect the .vol's baked-in curving order from companion .vol.json
+    # (written by Cubit ``export netgen``).  The .vol's
+    # ``curvedelements`` section is loaded automatically by Mesh(); a
+    # post-load ``mesh.Curve(p)`` would try to UPGRADE and, without a
+    # CAD callback, silently fall back to flat -- so we never call it.
+    # The curve order is FIXED at Cubit-export time and is not a panel
+    # knob.  Capped at 2 for the Lagrange-P2 in-tree assembler (the C++
+    # Tri6 geometry kernel takes 6 nodes / tri, so a curve_order=3 .vol
+    # is treated as Tri6 here -- the extra mid-face / interior nodes
+    # are not currently used by the SS BIE assembler).
+    vol_curve_order = min(_detect_vol_curving_order(args.vol), 2)
+    # Basis order is a separate, user-selectable knob (--h1-order), not
+    # tied to the geometry order.  P1 + P2 supported.
+    basis_order = int(args.h1_order)
+    if basis_order not in (1, 2):
+        raise ValueError(
+            f"--h1-order must be 1 or 2 (got {basis_order}).  P3+ "
+            f"basis is not implemented in the in-tree Lagrange "
+            f"assembler.")
+    progress("BEM",
+        f"vol curve_order={vol_curve_order} "
+        f"(from {os.path.basename(args.vol)}.json), "
+        f"basis_order={basis_order} (--h1-order)")
+    # The Lagrange-P2 path (basis_order=2) builds M, K, SL, DL all in the
+    # in-tree P2 basis directly off the parent vol_mesh's curved Tri6
+    # nodes; it requires a sideset bnd_label so it can filter the parent
+    # mesh's BND.
+    if basis_order >= 2 and args.wp_label not in bnds:
+        raise ValueError(
+            f"--h1-order=2 requires --wp-label to name a boundary "
+            f"sideset (got {args.wp_label!r}, available BND labels: "
+            f"{sorted(bnds)}).  Material-adjacency wp_label is only "
+            f"supported with basis_order=1 (flat-FES path).")
+
+    if args.wp_label in mats:
+        progress("BEM", f"wp_label {args.wp_label!r} as material")
+        wp_mesh, _wp_new_to_old = _extract_surface_mesh_filtered(
+            vol_mesh, keep_label=args.wp_label, return_vertex_map=True)
+    elif args.wp_label in bnds:
+        progress("BEM", f"wp_label {args.wp_label!r} as boundary sideset")
+        wp_mesh = _extract_bnd_only(vol_mesh, args.wp_label)
+        _wp_new_to_old = None
+    else:
+        raise ValueError(
+            f"wp_label {args.wp_label!r} not found in materials "
+            f"({sorted(mats)}) or boundaries ({sorted(bnds)})")
+    t_wp_mesh = time.perf_counter() - t0
+    progress("BEM",
+        f"wp nv={wp_mesh.nv} ne(BND)={wp_mesh.GetNE(BND)} ({t_wp_mesh:.1f}s)")
+    wp_chi, wp_genus = _wp_genus_check(wp_mesh)
+    panel_zs_file = getattr(args, 'panel_zs_file', '')
+    if panel_zs_file and wp_genus not in (0, 1):
+        raise ValueError('Specified panel Zs supports genus-0 or one supported flux-linked handle')
+    _resolve_workpiece_backend(args, wp_genus, wp_mesh.nv)
+
+    # Resolve the loop-DOF mode (see --wp-loop-dof).  "on" was already
+    # early-guarded in run_inductance and _apply_wp_loop_dof enforces
+    # genus-1; "auto" applies exactly when the supported mathematical and
+    # solver prerequisites hold; unsupported handle-current paths fail
+    # before assembly instead of emitting uncorrected absolute heating.
+    wp_loop_req, wp_loop_apply, wp_loop_skip = _resolve_weak_loop_mode(
+        args, wp_genus, basis_order)
+    if basis_order != 1:
+        raise ValueError(
+            "Verified weak SIBC heat/reaction postprocessing requires P1 "
+            "surface elements. Higher-order BEM "
+            "needs a mapped weighted surface form; no incident-field "
+            "heat-pattern fallback is permitted. This does not restrict "
+            "the thermal FEM order.")
+
+    # 2. ESIM prerequisite check (Karl iteration needs a BH curve).
+    if args.impedance_model == "esim" and not args.bh_file:
+        raise ValueError(
+            "--impedance-model esim requires --bh-file with a 2-column "
+            "BH curve (H[A/m], B[T]).  Linear SIBC is the default.")
+
+    # 3. ScalarBIESIBCSolver assembly.
+    #
+    # Two independent knobs feed the solver:
+    #   * vol_curve_order : geometry order (auto-detected from .vol.json).
+    #     Forwarded as ``intree_geom_order``.
+    #   * basis_order     : Lagrange basis order (user-selectable, --h1-order).
+    #     Forwarded as ``order``.
+    #
+    # When basis_order=2 the in-tree Lagrange-P2 path bypasses NGSolve's
+    # H1 hierarchical FES entirely and routes through the parent
+    # ``vol_mesh`` (whose ``curvedelements`` is already loaded) plus the
+    # ``bnd_label`` filter; the extracted flat ``wp_mesh`` is used only
+    # for post-processing (Telegen per-element ΔL averaging).
+    # When basis_order=1 we keep the existing flat-extracted wp_mesh
+    # path; H1+ngsolve.bem trace integration runs on flat triangles
+    # consistent with the P1 hat (curving has no benefit at P1 since the
+    # basis cannot resolve geometric curvature).
+    use_curved_p2 = (basis_order >= 2)
+    bem_input_mesh = vol_mesh if use_curved_p2 else wp_mesh
+    bem_bnd_label = args.wp_label if use_curved_p2 else None
+    progress("BEM",
+        f"assembly (basis_order={basis_order}, "
+        f"vol_curve_order={vol_curve_order}, "
+        f"backend={args.wp_bem_backend}, "
+        f"input_mesh={'vol_mesh+bnd_label' if use_curved_p2 else 'wp_mesh'})")
+    t0 = time.perf_counter()
+    if args.wp_bem_backend == "intree-dense":
+        bem = ScalarBIESIBCSolver(
+            bem_input_mesh, order=basis_order, assemble_dense=True,
+            use_intree_bem=True, intree_geom_order=vol_curve_order,
+            intree_singular_n_q=6, intree_regular_quad_degree=7,
+            bnd_label=bem_bnd_label, log_fn=progress,
+            loop_work_backend=getattr(args, "wp_loop_work_backend", "auto"))
+    elif args.wp_bem_backend == "hacapk":
+        bem = ScalarBIESIBCSolver(
+            bem_input_mesh, order=basis_order, assemble_dense=False,
+            use_intree_bem=True, intree_geom_order=vol_curve_order,
+            intree_singular_n_q=6, intree_regular_quad_degree=7,
+            use_intree_hacapk=True,
+            hacapk_aca_eps=args.wp_aca_eps,
+            hacapk_leaf=64, hacapk_eta=2.0,
+            bnd_label=bem_bnd_label, log_fn=progress,
+            loop_work_backend=getattr(args, "wp_loop_work_backend", "auto"))
+    else:
+        raise ValueError(
+            f"unknown --wp-bem-backend {args.wp_bem_backend!r}; "
+            f"supported: 'hacapk' (production), 'intree-dense' (debug).")
+    t_asm = time.perf_counter() - t0
+    # wp DoF context: at P1 the in-tree H1 hat assembler uses one DoF per
+    # vertex of the EXTRACTED wp_mesh, at P2 the in-tree Lagrange-P2 path
+    # consumes the parent vol_mesh's curved Tri6 nodes (vertex + edge DoFs
+    # on the wp_label sideset).  Printing the triangle count alongside
+    # ndof makes the basis-vs-mesh density relationship visible in the
+    # log (no need to grep both upstream "wp nv=..." and "ndof=...").
+    wp_ne_bnd = int(wp_mesh.GetNE(BND))
+    progress("BEM",
+        f"ndof={bem.ndof} (P{basis_order} on {wp_ne_bnd} BND triangles, "
+        f"{wp_mesh.nv} wp_mesh vertices) ({t_asm:.1f}s)")
+
+    # Consolidated DoF summary -- one line that shows the full problem
+    # size so users grepping logs after the fact can see coil + wp +
+    # total in one place (instead of stitching together upstream
+    # "BEMA" lines from _solve_coil_bem_a + this "BEM" line).
+    coil_src = coil_data.get("source_type", "?")
+    if coil_src == "filament":
+        coil_dof_str = (f"PEEC filament n={coil_data.get('n_filaments', 0)}")
+        total_dof = int(coil_data.get("n_filaments", 0)) + int(bem.ndof)
+    elif coil_src == "surface":
+        c_saddle = int(coil_data.get("coil_saddle_ndof", 0))
+        c_tris = int(coil_data.get("coil_mesh_n_tris", 0))
+        coil_dof_str = f"BEM-A saddle_ndof={c_saddle} on {c_tris} tri"
+        total_dof = c_saddle + int(bem.ndof)
+    else:
+        coil_dof_str = f"{coil_src}"
+        total_dof = int(bem.ndof)
+    progress("BEM",
+        f"SUMMARY: coil[{coil_dof_str}] + wp[ndof={bem.ndof} "
+        f"P{basis_order} {wp_ne_bnd}tri] => total_DoF={total_dof}")
+
+    # 4. phi_inc on workpiece — branch on coil source type
+    if getattr(bem, "_intree_lagrange_p2", False):
+        obs = np.ascontiguousarray(bem.dof_coords)
+    else:
+        obs = np.array([[wp_mesh.vertices[i].point[j] for j in range(3)]
+                         for i in range(wp_mesh.nv)])
+    # Incident-potential reconstruction is basis-determined, NOT a knob:
+    # P1 -> surface-Poisson psi from the exact vertex H_inc (wall-free,
+    # fails loud if H_t,inc is not a surface gradient); Lagrange-P2 ->
+    # path integration (the sole implementation for edge-node DOFs; it
+    # carries the branch-cut-wall limitation documented on
+    # compute_phi_inc_from_filaments).  The legacy P1 path-integration
+    # route was REMOVED 2026-07-17 once the surface-Poisson
+    # reconstruction was covered by analytic goldens and integration
+    # contracts: a superseded twin with a known wall bias must not stay
+    # selectable.
+    phi_inc_mode = "poisson" if basis_order == 1 else "path"
+    progress("BEM", f"phi_inc from coil ({coil_data['source_type']}, "
+                    f"mode={phi_inc_mode})")
+    t0 = time.perf_counter()
+    phi_inc_grad_residual = None
+    if phi_inc_mode == "poisson":
+        # Surface-Poisson reconstruction from the exact vertex H_inc
+        # (wall-free; fails loud when H_t,inc is not a surface
+        # gradient).  Early guards in run_inductance restrict this to
+        # the weak-coupled P1 nodal path.
+        phi_inc, phi_inc_grad_residual = _phi_inc_poisson(
+            args, coil_data, wp_mesh, obs)
+        progress("BEM",
+            f"surface-Poisson psi: grad-consistency residual "
+            f"{phi_inc_grad_residual:.1%} "
+            f"(gate {_PHI_INC_POISSON_MAX_RESIDUAL:.0%})")
+    elif coil_data["source_type"] == "filament":
+        # Reverted 2026-05-21: surface-path phi_inc gave P_wp = 1.92 W
+        # which is below the weak-coupling lower bound (5.26 W) -- the
+        # different gauge convention (phi(ref_vertex on wp) = 0 vs
+        # axis-ray's phi(infty) = 0 with dipole tail) altered the BIE
+        # solve in a non-physical way.  The actual spatial-peak fix
+        # was in the per-vertex |H_t|^2 reconstruction (triangle-wise
+        # gradient instead of Galerkin phi*K@phi localization).
+        phi_inc = compute_phi_inc_from_filaments(
+            obs, coil_data["paths"], coil_data["I_fil"])
+    elif coil_data["source_type"] == "surface":
+        # Multiply the COMPLEX per-triangle surface J (impedance-EFIE
+        # phasor at unit current) by the terminal current; Re/Im are
+        # then bridged separately (compute_phi_inc_from_surface_J is
+        # real-only and raises on complex input).
+        coil_J_complex = (complex(args.current)
+                           * coil_data["coil_J_per_tri"]).astype(complex)
+        phi_re = compute_phi_inc_from_surface_J(
+            obs, coil_data["coil_centroids"], coil_data["coil_areas"],
+            np.real(coil_J_complex))
+        phi_im = compute_phi_inc_from_surface_J(
+            obs, coil_data["coil_centroids"], coil_data["coil_areas"],
+            np.imag(coil_J_complex))
+        phi_inc = phi_re + 1j * phi_im
+    else:
+        raise RuntimeError(
+            f"unknown coil source_type {coil_data['source_type']!r}")
+    t_phi = time.perf_counter() - t0
+    progress("BEM", f"phi_inc ({t_phi:.1f}s)")
+
+    # 5. Workpiece SIBC: BIE solve (optionally Karl-iterated for ESIM)
+    bh_curve = None
+    if args.bh_file:
+        from em_material import load_bh_file
+        bh_curve = load_bh_file(args.bh_file)
+    mat_wp = EMMaterial(name="wp", sigma=args.sigma, mu_r=args.mu_r,
+                         bh_curve=bh_curve)
+    delta_wp = mat_wp.skin_depth(args.frequency)
+
+    esim_seed_seconds = 0.0
+    if panel_zs_file:
+        from radia.surface_impedance import read_panel_impedance
+        Z_s_wp = read_panel_impedance(panel_zs_file, wp_mesh,
+                                      frequency_hz=args.frequency).values
+        esim_solver = None
+        max_iter = 1
+    elif args.impedance_model == "esim":
+        # ESIM cell solver: 1D nonlinear B-H(H) Karl iteration on a
+        # cylindrical workpiece slice of radius `half_thickness`.
+        # The converged H0=5 A/m seed initializes the outer Karl loop.
+        esim_solver = mat_wp.create_esim_solver(
+            args.frequency, args.half_thickness, geometry='cylinder')
+        from radia.esim_cell_problem import require_esim_converged
+        seed_started = time.perf_counter()
+        seed_result = require_esim_converged(
+            esim_solver.solve(5.0), "BEM ESIM seed cell solve")
+        esim_seed_seconds = time.perf_counter() - seed_started
+        Z_s_seed = complex(seed_result['Z'])
+        if args.esim_per_panel:
+            # One constant impedance per BND panel, not per vertex.
+            Z_s_wp = np.full(wp_ne_bnd, Z_s_seed, dtype=complex)
+        else:
+            Z_s_wp = Z_s_seed
+        max_iter = max(int(args.esim_max_iter), 1)
+        # Optional Anderson acceleration on the outer Karl loop.
+        # m = 0 falls back to plain damped Picard.
+        from esim_anderson import AndersonAccelerator
+        anderson = AndersonAccelerator(m=int(args.esim_anderson_m),
+                                        alpha=float(args.esim_relax))
+    else:
+        # Linear SIBC (standard Leontovich): Z_s = (1+j) * rho/delta.
+        # delta_wp = mat_wp.skin_depth ALREADY includes mu_r
+        # (= sqrt(2*rho/(omega*mu0*mu_r))), so rho/delta_wp already equals
+        # sqrt(omega*mu0*mu_r/(2*sigma)), i.e. the correct Z_s proportional to
+        # sqrt(mu_r) -- matching analytical_formulas.planar_surface_impedance
+        # and COMSOL.  A prior `* math.sqrt(args.mu_r)` here double-counted
+        # mu_r (Z_s came out proportional to mu_r, sqrt(mu_r)x too large for
+        # magnetic workpieces); removed 2026-05-31 after keiko's COMSOL
+        # cross-check.  Cu/Al (mu_r=1) were unaffected.
+        rho_wp = 1.0 / args.sigma
+        Z_s_wp = (1.0 + 1j) * rho_wp / delta_wp
+        esim_solver = None
+        max_iter = 1
+
+    if isinstance(Z_s_wp, np.ndarray):
+        progress("BEM",
+            f"BIE solve Z_s=ndarray[{Z_s_wp.shape[0]}] "
+            f"(mean|Z_s|={abs(np.mean(Z_s_wp)):.3e}, "
+            f"model={'specified-panel' if panel_zs_file else 'esim per-panel'})")
+    else:
+        progress("BEM",
+            f"BIE solve Z_s={Z_s_wp:.3e} (model={args.impedance_model})")
+    from radia.surface_impedance import PanelSurfaceImpedance, panel_tangential_field_rms
+    panel_evaluator = None
+    if esim_solver is not None and args.esim_per_panel:
+        from radia.esim_panel_evaluator import PanelESIMEvaluator
+        panel_evaluator = PanelESIMEvaluator(
+            esim_solver, mode=getattr(args, 'esim_panel_evaluator', 'table'),
+            interpolation_tol=float(args.esim_tol) / 10,
+            max_table_cells=getattr(args, 'esim_table_max_cells', 4096))
+    def surface_z():
+        return PanelSurfaceImpedance(Z_s_wp) if isinstance(Z_s_wp, np.ndarray) else Z_s_wp
+    res_bem = None
+    loop_meta = None
+    esim_history = []
+    esim_converged = (esim_solver is None)
+    H_t_rms_iter = 0.0
+    t_bie = 0.0
+    n_iter_done = 0
+    dZ = float("inf")
+    esim_fixed_point_error = None
+    for iteration in range(max_iter):
+        n_iter_done = iteration + 1
+        t0 = time.perf_counter()
+        if args.wp_bem_backend == "intree-dense":
+            res_bem = bem.solve(phi_inc, Z_s=surface_z(), omega=omega)
+        else:
+            res_bem = bem.solve_hacapk(
+                phi_inc, Z_s=surface_z(), omega=omega,
+                tol=args.wp_gmres_tol, maxiter=500, restart=80)
+        t_iter = time.perf_counter() - t0
+        t_bie += t_iter
+        if wp_loop_apply:
+            res_bem, loop_meta = _apply_wp_loop_dof(
+                args, bem, phi_inc, surface_z(), omega, coil_data,
+                res_bem, wp_genus, wp_chi)
+        H_t_rms_iter = float(res_bem["H_t_rms"])
+
+        if esim_solver is None:
+            progress("BEM", f"BIE ({t_iter:.1f}s)")
+            break
+
+        # Karl update.
+        Z_s_old = Z_s_wp
+        if args.esim_per_panel:
+            H_t_per = _solved_panel_tangential_field(bem, res_bem)
+            Z_s_new = panel_evaluator.evaluate(H_t_per)
+            Z_s_wp = anderson.step(Z_s_old, Z_s_new)
+            dZ_per_dof = (np.abs(Z_s_new - Z_s_old)
+                          / np.maximum(np.abs(Z_s_old), 1e-30))
+            dZ = float(np.max(dZ_per_dof))
+            Zabs_mean = float(np.mean(np.abs(Z_s_wp)))
+            Ht_mean = float(np.mean(H_t_per))
+            Ht_max = float(np.max(H_t_per))
+            esim_history.append({
+                "iteration": iteration,
+                "held_Z_sha256": hashlib.sha256(np.asarray(Z_s_old, dtype='<c16').tobytes()).hexdigest(),
+                "H_t_per_panel_min": float(np.min(H_t_per)),
+                "relaxation": float(args.esim_relax),
+                "anderson_m": int(args.esim_anderson_m),
+                "loop_faraday_residual": (loop_meta or {}).get('wp_loop_faraday_residual_rel'),
+                "loop_linear_residual": (loop_meta or {}).get('wp_loop_linear_residual_rel'),
+                "Z_s_abs_mean": Zabs_mean,
+                "Z_s_abs_max": float(np.max(np.abs(Z_s_wp))),
+                "Z_s_abs_min": float(np.min(np.abs(Z_s_wp))),
+                "H_t_per_panel_mean": Ht_mean,
+                "H_t_per_panel_max": Ht_max,
+                "dZ_max": dZ,
+                "t_solve": float(t_iter),
+            })
+            progress("BEM",
+                f"ESIM:ITER {iteration} per-panel "
+                f"<|Z_s|>={Zabs_mean:.4e} "
+                f"<H_t>={Ht_mean:.2f} max(H_t)={Ht_max:.2f} "
+                f"max(dZ)={dZ:.4e} t={t_iter:.1f}s")
+        else:
+            sol_new = esim_solver.solve(max(H_t_rms_iter, 1e-3))
+            require_esim_converged(sol_new, "BEM scalar ESIM cell solve")
+            Z_s_new = complex(sol_new['Z'])
+            Z_s_wp = anderson.step(Z_s_old, Z_s_new)
+            dZ = abs(Z_s_new - Z_s_old) / max(abs(Z_s_old), 1e-30)
+            esim_history.append({
+                "iteration": iteration,
+                "Z_s_abs": float(abs(Z_s_wp)),
+                "H_t_rms": H_t_rms_iter,
+                "dZ": float(dZ),
+                "t_solve": float(t_iter),
+            })
+            progress("BEM",
+                f"ESIM:ITER {iteration} |Z_s|={abs(Z_s_wp):.4e} "
+                f"H_t={H_t_rms_iter:.2f} dZ={dZ:.4e} t={t_iter:.1f}s")
+        # Require iteration > 0 to avoid spurious convergence on the
+        # seed Z_s (= esim.solve(5.0)), EXCEPT when max_iter <= 1:
+        # the user explicitly asked for one iteration so the dZ we
+        # just computed is the only result available.
+        if dZ < args.esim_tol and (iteration > 0 or max_iter <= 1):
+            progress("BEM", f"ESIM:CONVERGED iter={iteration}")
+            esim_converged = True
+            break
+    else:
+        # Loop exhausted max_iter without convergence (ESIM only).
+        if esim_solver is not None:
+            esim_converged = False
+            progress("BEM",
+                f"ESIM:NOT-CONVERGED after {max_iter} iter "
+                f"(dZ={dZ:.4e} > tol={args.esim_tol:.1e})")
+    if esim_solver is not None and not esim_converged:
+        raise RuntimeError("BEM ESIM did not converge; refusing heat/reaction output")
+    if esim_solver is not None:
+        # Re-solve once at the final Z_s so res_bem reflects the
+        # converged impedance (the last iter computed H_t_rms with the
+        # PREVIOUS Z_s, not the updated one).
+        t0 = time.perf_counter()
+        if args.wp_bem_backend == "intree-dense":
+            res_bem = bem.solve(phi_inc, Z_s=surface_z(), omega=omega)
+        else:
+            res_bem = bem.solve_hacapk(
+                phi_inc, Z_s=surface_z(), omega=omega,
+                tol=args.wp_gmres_tol, maxiter=500, restart=80)
+        if wp_loop_apply:
+            res_bem, loop_meta = _apply_wp_loop_dof(
+                args, bem, phi_inc, surface_z(), omega, coil_data,
+                res_bem, wp_genus, wp_chi)
+        t_bie += time.perf_counter() - t0
+        # Final per-panel |H_t| via triangle-gradient (matches Karl loop
+        # interior; see extract_H_t_per_dof_grad in bem_sibc_solver.py).
+        # Used for the Z_s vs H_t scatter / spatial map in publications.
+        if isinstance(Z_s_wp, np.ndarray):
+            H_t_per_final = _solved_panel_tangential_field(bem, res_bem)
+        else:
+            H_t_per_final = None
+        # Certify the constitutive mismatch on the final re-solved field,
+        # not only on the field before the last damped/Anderson update.
+        if isinstance(Z_s_wp, np.ndarray):
+            target = panel_evaluator.certify(H_t_per_final)
+        else:
+            target = complex(require_esim_converged(
+                esim_solver.solve(max(float(res_bem["H_t_rms"]), 1e-3)),
+                "BEM final scalar ESIM cell solve")['Z'])
+        esim_fixed_point_error = float(np.max(np.abs(target-Z_s_wp)
+                                               / np.maximum(np.abs(Z_s_wp), 1e-30)))
+        if not np.isfinite(esim_fixed_point_error) or esim_fixed_point_error > args.esim_tol:
+            raise RuntimeError("BEM final ESIM constitutive mismatch exceeds tolerance")
+    info = res_bem.get("gmres_info", 0)
+    progress("BEM",
+        f"BIE total ({t_bie:.1f}s over {n_iter_done} iter, gmres info={info})")
+
+    # Spatial heat is the solved total surface field, never a rescaled
+    # incident Biot-Savart pattern.  The loop path supplies its full field.
+    from radia.bem_sibc_solver import _project_sibc_surface_heat
+    gf_q_wp, projected_power = _project_sibc_surface_heat(
+        bem.fes, res_bem["phi_vec"], surface_z(),
+        element_heat=res_bem.get("loop_q_tri"))
+    q_per_dof = gf_q_wp.vec.FV().NumPy().copy()
+    expected_power = float(res_bem["P_density"]) * float(res_bem["area"])
+    if abs(projected_power - expected_power) > 1e-8 * max(expected_power, 1e-30):
+        raise RuntimeError("Solved qsurf projection does not conserve BEM surface loss")
+    progress("BEM", f"qsurf: solved-field projection, P={projected_power:.6g} W")
+
+    # 6. Workpiece scalar outputs
+    A_wp = float(Integrate(CF(1), wp_mesh, VOL_or_BND=BND).real)
+    P_wp = float(res_bem["P_density"] * A_wp)
+    H_t_rms = float(res_bem["H_t_rms"])
+    wp_dissipation_R_mOhm = 2.0 * P_wp / (args.current ** 2) * 1e3
+
+    # 7. Telegen ΔL via φ·B form -- aggregate per-triangle wp data first.
+    # Two post-proc paths:
+    #   * P1 (basis_order=1): phi_vec is indexed by wp_mesh vertices;
+    #     bem.fes is the wp_mesh H1 FES; use NGSolve element_wise integrals.
+    #   * P2 (basis_order>=2): phi_vec is indexed by Lagrange P2 DOFs on
+    #     the parent vol_mesh BND; bem.fes is None.  Build phi-at-wp-
+    #     vertices by matching wp_mesh.vertices coords to solver vertex
+    #     DOFs (the first n_v entries of dof_coords), then average over
+    #     each flat wp_mesh triangle (corner-mean = area-weighted P1 mean).
+    n_cf = _scf.normal(3)
+    elem_A_int = _Int(_CF(1), wp_mesh, VOL_or_BND=_BND, element_wise=True)
+    n_int = [_Int(n_cf[i], wp_mesh, VOL_or_BND=_BND, element_wise=True)
+              for i in range(3)]
+
+    if basis_order >= 2:
+        # Build phi-at-wp-vertices via coordinate match.
+        n_v_solver = len(bem._intree_v_global)
+        solver_vert_coords = np.asarray(bem.dof_coords[:n_v_solver])
+        coord_to_dof = {}
+        for i in range(n_v_solver):
+            key = (round(solver_vert_coords[i, 0], 12),
+                   round(solver_vert_coords[i, 1], 12),
+                   round(solver_vert_coords[i, 2], 12))
+            coord_to_dof[key] = i
+        phi_at_wp = np.zeros(wp_mesh.nv, dtype=complex)
+        n_missed = 0
+        for i in range(wp_mesh.nv):
+            p = wp_mesh.vertices[i].point
+            key = (round(p[0], 12), round(p[1], 12), round(p[2], 12))
+            j = coord_to_dof.get(key)
+            if j is None:
+                n_missed += 1
+                continue
+            phi_at_wp[i] = res_bem["phi_vec"][j]
+        if n_missed > 0:
+            raise RuntimeError(
+                f"P2 post-proc: {n_missed}/{wp_mesh.nv} wp vertices did "
+                f"not match any solver vertex DOF coord.  This indicates "
+                f"the extracted wp_mesh vertices and the parent vol_mesh "
+                f"BND={args.wp_label!r} vertices are not coincident.")
+        wp_phi_re_at_v = phi_at_wp.real
+        wp_phi_im_at_v = phi_at_wp.imag
+        phi_re_int = None  # not used in this branch
+        phi_im_int = None
+    else:
+        gf_phi_re = _GF(bem.fes)
+        gf_phi_re.vec.FV().NumPy()[:] = res_bem["phi_vec"].real
+        gf_phi_im = _GF(bem.fes)
+        gf_phi_im.vec.FV().NumPy()[:] = res_bem["phi_vec"].imag
+        phi_re_int = _Int(gf_phi_re, wp_mesh, VOL_or_BND=_BND,
+                           element_wise=True)
+        phi_im_int = _Int(gf_phi_im, wp_mesh, VOL_or_BND=_BND,
+                           element_wise=True)
+        wp_phi_re_at_v = wp_phi_im_at_v = None
+
+    wp_centroids_l, wp_areas_l, wp_norms_l, wp_phi_avg_l = [], [], [], []
+    for el in wp_mesh.Elements(_BND):
+        a = abs(elem_A_int[el.nr])
+        if a < 1e-30:
+            continue
+        pts = [wp_mesh.vertices[v.nr].point for v in el.vertices]
+        c = np.mean([(p[0], p[1], p[2]) for p in pts], axis=0)
+        n_at_el = np.array([n_int[i][el.nr] / a for i in range(3)])
+        if basis_order >= 2:
+            corner_phi_re = np.array(
+                [wp_phi_re_at_v[v.nr] for v in el.vertices])
+            corner_phi_im = np.array(
+                [wp_phi_im_at_v[v.nr] for v in el.vertices])
+            phi_avg = corner_phi_re.mean() + 1j * corner_phi_im.mean()
+        else:
+            phi_avg = (phi_re_int[el.nr] + 1j * phi_im_int[el.nr]) / a
+        wp_centroids_l.append(c); wp_areas_l.append(a)
+        wp_norms_l.append(n_at_el); wp_phi_avg_l.append(phi_avg)
+    wp_centroids_arr = np.asarray(wp_centroids_l, dtype=float)
+    wp_areas_arr = np.asarray(wp_areas_l, dtype=float)
+    wp_norms_arr = np.asarray(wp_norms_l, dtype=float)
+    wp_phi_avg_arr = np.asarray(wp_phi_avg_l, dtype=complex)
+
+    # 8. Telegen ΔL — branch again on coil source type
+    if coil_data["source_type"] == "filament":
+        from radia.workpiece_surface import delta_L_telegen_phiB
+        delta_L_complex = delta_L_telegen_phiB(
+            coil_data["paths"], coil_data["I_fil"],
+            wp_centroids_arr, wp_areas_arr, wp_norms_arr, wp_phi_avg_arr,
+            I_port=args.current)
+    else:  # surface
+        coil_J_complex = (complex(args.current)
+                           * coil_data["coil_J_per_tri"]).astype(complex)
+        delta_L_complex = _delta_L_telegen_phiB_from_surface_J(
+            coil_data["coil_centroids"], coil_data["coil_areas"],
+            coil_J_complex,
+            wp_centroids_arr, wp_areas_arr, wp_norms_arr, wp_phi_avg_arr,
+            I_port=args.current)
+    if wp_loop_apply:
+        delta_L_complex = res_bem["loop_reaction_integral"] / args.current**2
+    else:
+        from radia.workpiece_surface import _complete_sibc_reaction
+        delta_L_complex = _complete_sibc_reaction(
+            delta_L_complex, phi_inc, res_bem["phi_vec"], bem.K,
+            surface_z(), omega, args.current,
+            weighted_stiffness=bem.impedance_stiffness(surface_z())
+            if isinstance(Z_s_wp, np.ndarray) else None)
+    reaction_power = -0.5 * omega * delta_L_complex.imag * args.current**2
+    from radia.workpiece_surface import _check_sibc_reaction_power
+    power_balance_error = _check_sibc_reaction_power(P_wp, reaction_power)
+    delta_L_nH = float(delta_L_complex.real) * 1e9
+    delta_R_mOhm = -float(delta_L_complex.imag) * omega * 1e3
+    progress("BEM",
+        f"P_wp={P_wp:.4e} W ΔL={delta_L_nH:+.3f} nH ΔR={delta_R_mOhm:+.4f} mΩ")
+
+    # 9. Optional .msh output
+    msh_file = ""
+    if args.msh_output:
+        try:
+            from radia.gmsh_post_export import GmshPostExport
+            post = GmshPostExport(wp_mesh, boundary=True)
+            post.add_scalar_field("q_surf_W_per_m2", q_per_dof)
+            post.write(args.msh_output)
+            msh_file = args.msh_output
+            progress("BEM", f"wp .msh written: {args.msh_output}")
+        except Exception as exc:
+            progress("BEM", f"msh export failed: {exc}")
+            raise RuntimeError("Failed to export solved SIBC GMSH field") from exc
+
+    # Z_s_wp may be scalar (default) or ndarray (--esim-per-panel).
+    # Report mean Re/Im for the array case to keep the JSON schema
+    # backward-compatible; full array goes under esim_per_panel_Zs.
+    if isinstance(Z_s_wp, np.ndarray):
+        panel_areas = np.array([
+            .5*np.linalg.norm(np.cross(
+                np.array(wp_mesh.vertices[el.vertices[1].nr].point)-np.array(wp_mesh.vertices[el.vertices[0].nr].point),
+                np.array(wp_mesh.vertices[el.vertices[2].nr].point)-np.array(wp_mesh.vertices[el.vertices[0].nr].point)))
+            for el in wp_mesh.Elements(_BND)])
+        Z_s_mean = complex(np.average(Z_s_wp, weights=panel_areas))
+        Z_s_real_out = float(Z_s_mean.real)
+        Z_s_imag_out = float(Z_s_mean.imag)
+        per_panel_block = {
+            "esim_per_panel": esim_solver is not None,
+            "panel_zs_file": str(panel_zs_file),
+            "esim_impedance_layout": "BND-element-order",
+            "esim_per_panel_centroids": [
+                np.mean([wp_mesh.vertices[v.nr].point for v in el.vertices], axis=0).tolist()
+                for el in wp_mesh.Elements(_BND)],
+            "esim_per_panel_Z_s_real": Z_s_wp.real.tolist(),
+            "esim_per_panel_Z_s_imag": Z_s_wp.imag.tolist(),
+        }
+        per_panel_block["esim_per_panel_H_t"] = _solved_panel_tangential_field(
+            bem, res_bem).tolist()
+        per_panel_block["Z_s_mean_weighting"] = "surface-area"
+        if panel_zs_file:
+            per_panel_block["material_metadata_role"] = "reference-inputs-only"
+
+    else:
+        Z_s_real_out = float(Z_s_wp.real)
+        Z_s_imag_out = float(Z_s_wp.imag)
+        per_panel_block = {"esim_per_panel": False}
+
+    # ---- Spatial q_surf .sol output (consumed by calc_heat.py) -------
+    # Save q_surf as an H1 GridFunction ON THE PARENT vol_mesh (not on
+    # the extracted wp surface mesh).  Why this matters for the
+    # downstream cross-mesh transfer:
+    #
+    #   * wp_mesh is a 2D SURFACE mesh.  If we naively save the GF on
+    #     bem.fes (= H1(wp_mesh, order=1)) and ship the wp_mesh as
+    #     em_vol, calc_heat's ``em_mesh(xw, yw, zb)`` runs against a
+    #     2D mesh embedded in 3D.  NGSolve's mesh-point search on a
+    #     thin surface mesh is not robust: a wp_thermal_mesh vertex
+    #     that lies on the COIL-NEAR side of the workpiece can match
+    #     a surface element on the COIL-FAR side (closest-distance
+    #     ambiguity for a wrap-around surface), so the q_surf
+    #     distribution applied to the thermal solve is mirror-flipped
+    #     vs. the actual EM solution.  Symptom: temperature high on
+    #     the coil-far face, low under the coil (2026-05-21 kubota
+    #     bug report).
+    #
+    #   * Saving on H1(vol_mesh, order=1) -- the FULL 3D parent mesh
+    #     used by the EM solve -- matches calc_fem_kelvin.py /
+    #     calc_fem_coilmesh.py.  The em_vol the thermal panel
+    #     consumes is ``args.vol`` (the same input .vol), and
+    #     calc_heat's 3D mesh-point search is robust because every
+    #     wp_thermal vertex maps to a real volumetric MIP in the EM
+    #     mesh.
+    #
+    # Mapping bem.fes DOFs (wp_mesh vertex indices) to vol_mesh
+    # vertex indices uses ``_wp_new_to_old`` returned from
+    # ``_extract_surface_mesh_filtered`` for the material-extracted
+    # case.  For ``_extract_bnd_only`` (boundary-sideset case) the
+    # function does not return a vertex map, so we build one inline
+    # via coordinate matching against the parent vol_mesh.
+    qsurf_sol_path = ""
+    qsurf_vol_path = ""
+    ht_sol_path = ""
+    if gf_q_wp is not None:
+        try:
+            from ngsolve import H1 as _H1
+            # Build full-3D H1 GridFunction for the qsurf .sol.
+            fes_q_vol = _H1(vol_mesh, order=1)
+            gf_q_vol = _GF(fes_q_vol)
+            gf_q_vol.vec[:] = 0
+            vol_vec_np = gf_q_vol.vec.FV().NumPy()
+
+            # Resolve wp_mesh vertex -> vol_mesh vertex mapping.
+            vol_of_wp = np.full(wp_mesh.nv, -1, dtype=int)
+            if _wp_new_to_old is not None:
+                # Material-extracted path: map provided.
+                for wp_v_idx in range(wp_mesh.nv):
+                    vol_v_idx = _wp_new_to_old.get(wp_v_idx)
+                    if vol_v_idx is not None:
+                        vol_vec_np[vol_v_idx] = float(q_per_dof[wp_v_idx])
+                        vol_of_wp[wp_v_idx] = int(vol_v_idx)
+                n_matched = len(_wp_new_to_old)
+            else:
+                # Boundary-extracted path: build mapping by coord
+                # matching against the parent vol_mesh.  Round to
+                # 12 sig figs (NGSolve's Save/Load tolerance for
+                # vertex coordinates).
+                vol_coord_to_idx = {}
+                for vol_v_idx in range(vol_mesh.nv):
+                    p = vol_mesh.vertices[vol_v_idx].point
+                    key = (round(p[0], 12), round(p[1], 12),
+                           round(p[2], 12))
+                    vol_coord_to_idx[key] = vol_v_idx
+                n_matched = 0
+                for wp_v_idx in range(wp_mesh.nv):
+                    p = wp_mesh.vertices[wp_v_idx].point
+                    key = (round(p[0], 12), round(p[1], 12),
+                           round(p[2], 12))
+                    vol_v_idx = vol_coord_to_idx.get(key)
+                    if vol_v_idx is not None:
+                        vol_vec_np[vol_v_idx] = float(q_per_dof[wp_v_idx])
+                        vol_of_wp[wp_v_idx] = int(vol_v_idx)
+                        n_matched += 1
+
+            if n_matched != wp_mesh.nv:
+                raise RuntimeError(f"qsurf mapping incomplete: {n_matched}/{wp_mesh.nv} vertices")
+            # Output paths: prefer args.msh_output's basename when
+            # the user requested an .msh, else args.vol's basename.
+            if args.msh_output:
+                base_dir = os.path.dirname(
+                    os.path.abspath(args.msh_output)) or "."
+                stem = os.path.splitext(
+                    os.path.basename(args.msh_output))[0]
+            else:
+                base_dir = os.path.dirname(
+                    os.path.abspath(args.vol)) or "."
+                stem = os.path.splitext(
+                    os.path.basename(args.vol))[0]
+            os.makedirs(base_dir, exist_ok=True)
+            sol_Q = os.path.join(base_dir,
+                                  f"{stem}_qsurf.sol").replace("\\", "/")
+            gf_q_vol.Save(sol_Q)
+            qsurf_sol_path = sol_Q
+            # em_vol pair is the input .vol itself -- the same mesh
+            # the EM solve was on.  No separate _bem.vol needed.
+            qsurf_vol_path = os.path.abspath(args.vol).replace("\\", "/")
+            # Sidecar: the boundaries whose every vertex is a workpiece
+            # vertex are the heated surface; the thermal step verifies the
+            # mesh digest and integrates q over exactly these against P_wp.
+            from radia import ih_thermal
+            from ngsolve import BND as _BND_q
+            wp_vertices = set(int(v) for v in vol_of_wp if v >= 0)
+            heated = sorted({
+                el.mat for el in vol_mesh.Elements(_BND_q)
+                if all(v.nr in wp_vertices for v in el.vertices)})
+            common = {"frequency_Hz": float(args.frequency),
+                      "current_A": float(getattr(args, "current", 0.0)
+                                         or 0.0),
+                      "impedance_model": str(args.impedance_model),
+                      "producer": "calc_inductance"}
+            ih_thermal.write_field_sidecar(
+                sol_Q, mesh_path=args.vol, mesh=vol_mesh, fes_order=1,
+                quantity=ih_thermal.QSURF_QUANTITY,
+                unit=ih_thermal.QSURF_UNIT, boundaries=heated,
+                extra={"P_wp_W": float(P_wp), **common,
+                       "qsurf_method": "solved-total-field-lumped-P1"})
+            # Export sqrt(lumped mean |H_t|^2) for thermal re-evaluation.
+            # With panel Zs, projected q and Ht do not obey a nodal q/Z identity.
+            # Project the solved |H_t|^2 separately: dividing projected heat
+            # by a local Z is incorrect across panels with different impedances.
+            if isinstance(Z_s_wp, np.ndarray) or "loop_H_t_tri" in res_bem:
+                half_h2 = (.5*_solved_panel_tangential_field(bem, res_bem)**2
+                           if "loop_H_t_tri" in res_bem else None)
+                gf_h2, _ = _project_sibc_surface_heat(
+                    bem.fes, res_bem["phi_vec"], 1.0, element_heat=half_h2)
+                h_per_dof = np.sqrt(np.maximum(2*gf_h2.vec.FV().NumPy(), 0))
+            else:
+                h_per_dof = np.sqrt(np.maximum(
+                    2*np.asarray(q_per_dof, float)/max(Z_s_wp.real, 1e-300), 0))
+            gf_h_vol = _GF(fes_q_vol)
+            gf_h_vol.vec[:] = 0
+            h_vec = gf_h_vol.vec.FV().NumPy()
+            ok = vol_of_wp >= 0
+            h_vec[vol_of_wp[ok]] = h_per_dof[ok]
+            sol_H = os.path.join(base_dir,
+                                 f"{stem}_Ht.sol").replace("\\", "/")
+            gf_h_vol.Save(sol_H)
+            ih_thermal.write_field_sidecar(
+                sol_H, mesh_path=args.vol, mesh=vol_mesh, fes_order=1,
+                quantity=ih_thermal.HT_QUANTITY, unit=ih_thermal.HT_UNIT,
+                boundaries=heated,
+                extra={**common, "convention": "peak phasor amplitude, "
+                       "q = Re(Z_s) |H_t|^2 / 2",
+                       "Z_s_per_dof": False,
+                       "surface_impedance_layout": "BND-element-order" if isinstance(Z_s_wp, np.ndarray) else "uniform"})
+            ht_sol_path = sol_H
+            progress("BEM",
+                f"wrote qsurf.sol on parent vol_mesh: "
+                f"{os.path.basename(sol_Q)} "
+                f"({n_matched}/{wp_mesh.nv} wp vertices mapped, "
+                f"em_vol={os.path.basename(qsurf_vol_path)})")
+        except Exception as e:
+            import traceback
+            progress("BEM",
+                f"qsurf.sol save failed: {type(e).__name__}: {e}")
+            for line in traceback.format_exc().splitlines()[-4:]:
+                progress("BEM", f"  {line}")
+            raise RuntimeError("Failed to export solved SIBC heating field") from e
+
+    panel_evaluation = None
+    if panel_evaluator is not None:
+        panel_evaluation = panel_evaluator.diagnostics()
+        panel_evaluation.update(seed_cell_calls=1, seed_seconds=esim_seed_seconds,
+            total_direct_cell_calls=panel_evaluation["direct_cell_calls"] + 1)
+    return {
+        "P_wp": P_wp, "H_t_rms": H_t_rms, "A_wp": A_wp,
+        "delta_L_nH": delta_L_nH, "delta_R_mOhm": delta_R_mOhm,
+        "wp_reaction_power_W": float(reaction_power),
+        "wp_power_balance_relative_error": float(power_balance_error),
+        "wp_power_balance_tolerance": 0.1,
+        "qsurf_method": "solved-total-field-lumped-P1",
+        "wp_dissipation_R_mOhm": wp_dissipation_R_mOhm,
+        "wp_mesh_nv": int(wp_mesh.nv),
+        "wp_euler_chi": int(wp_chi),
+        "wp_genus": int(wp_genus),
+        "wp_loop_dof_mode": wp_loop_req,
+        "wp_loop_dof_skip_reason": wp_loop_skip,
+        **(loop_meta or {}),
+        "wp_mesh_n_tris": int(wp_mesh.GetNE(BND)),
+        "wp_ndof": int(bem.ndof),
+        "wp_basis_order": int(basis_order),
+        "wp_vol_curve_order": int(vol_curve_order),
+        "wp_gmres_info": int(info),
+        "Z_s_wp_real": Z_s_real_out,
+        "Z_s_wp_imag": Z_s_imag_out,
+        "skin_depth_wp_mm": None if panel_zs_file else float(delta_wp * 1e3),
+        "impedance_model": "specified-panel" if panel_zs_file else args.impedance_model,
+        "esim_seed_Z_real": float(Z_s_seed.real) if esim_solver is not None else None,
+        "esim_seed_Z_imag": float(Z_s_seed.imag) if esim_solver is not None else None,
+        "esim_iterations": int(n_iter_done),
+        "esim_converged": bool(esim_converged),
+        "esim_fixed_point_relative_error": esim_fixed_point_error,
+        "esim_anderson_m": int(getattr(args, "esim_anderson_m", 0)),
+        "esim_anderson_restarts": int(anderson.n_restarts) if esim_solver is not None else 0,
+        "esim_anderson_clips": int(anderson.n_clips) if esim_solver is not None else 0,
+        "esim_history": esim_history,
+        "esim_panel_evaluation": panel_evaluation,
+        **per_panel_block,
+        "msh_file": msh_file,
+        "qsurf_sol": qsurf_sol_path,
+        "qsurf_em_vol": qsurf_vol_path,
+        "ht_sol": ht_sol_path,
+        "wp_phi_inc": phi_inc_mode,
+        "wp_phi_inc_grad_residual": (
+            float(phi_inc_grad_residual)
+            if phi_inc_grad_residual is not None else None),
+        "t_wp_mesh_s": t_wp_mesh,
+        "t_bem_assembly_s": t_asm,
+        "t_phi_inc_s": t_phi,
+        "t_bem_solve_s": t_bie,
+    }
+
+
+def _extract_bnd_only_inline(vol_mesh, bnd_label):
+    """Hole-extractor for wp-as-hole geometry (closed-torus convention).
+
+    Walks the .vol mesh, collects BND elements whose ``el.index``
+    matches a FaceDescriptor with name ``bnd_label``, and emits a
+    closed surface mesh with outward-oriented triangles (centroid-
+    aligned outward).  Multiple FDs may share the same name after
+    webcut (e.g. air_top + air_bot halves) and the per-FD winding can
+    flip relative to its own domin -- a blanket flip would be wrong.
+
+    Originally lived in ``calc_peec_bem.py``; inlined here when the
+    three legacy CLIs were unified into ``calc_inductance.py``.
+    """
+    from ngsolve import Mesh, BND
+    import netgen.meshing as ngm
+
+    bnd_labels = list(vol_mesh.GetBoundaries())
+    target_indices = {i for i, n in enumerate(bnd_labels) if n == bnd_label}
+    if not target_indices:
+        raise ValueError(
+            f"Boundary label {bnd_label!r} not found in .vol.  "
+            f"Available: {sorted(set(bnd_labels))}")
+
+    ngmesh_new = ngm.Mesh(dim=3)
+    ngmesh_new.Add(ngm.FaceDescriptor(bc=1, domin=1))
+    ngmesh_new.SetBCName(0, bnd_label)
+
+    used_vtx = set()
+    for el in vol_mesh.Elements(BND):
+        if el.index in target_indices:
+            for v in el.vertices:
+                used_vtx.add(v.nr)
+    if not used_vtx:
+        raise ValueError(
+            f"No BND elements found with label {bnd_label!r}")
+
+    old_to_new = {}
+    for old in sorted(used_vtx):
+        p = vol_mesh.vertices[old].point
+        old_to_new[old] = ngmesh_new.Add(
+            ngm.MeshPoint(ngm.Pnt(p[0], p[1], p[2])))
+
+    # Collect triangles, then make the winding GLOBALLY consistent +
+    # outward via face-BFS + per-component signed volume.  The old
+    # per-triangle centroid test breaks genus-1 workpieces: the
+    # bore-wall outward normal points TOWARD the centroid, so the whole
+    # inner wall is flipped and the double-layer operator is corrupted.
+    from surface_mesh_extract import orient_surface_triangles
+    order_vtx = sorted(used_vtx)
+    compact = {v: i for i, v in enumerate(order_vtx)}
+    tri_rows = []
+    for el in vol_mesh.Elements(BND):
+        if el.index not in target_indices:
+            continue
+        tri_rows.append([compact[v.nr] for v in el.vertices])
+    pts_used = np.array([vol_mesh.vertices[v].point for v in order_vtx])
+    tri_oriented, stats = orient_surface_triangles(pts_used, tri_rows)
+    for t in tri_oriented:
+        ngmesh_new.Add(ngm.Element2D(
+            1, [old_to_new[order_vtx[int(c)]] for c in t]))
+    progress("BEM",
+        f"winding: {stats['n_flips']} flips, "
+        f"{stats['components_flipped']}/{stats['n_components']} components "
+        f"reversed, conflicts {stats['conflicts_before']} -> "
+        f"{stats['conflicts_after']}")
+    return Mesh(ngmesh_new)
+
+
+# ======================================================================
+# Output assembly
+# ======================================================================
+def _assemble_vacuum_output(args, coil_data):
+    """L_coil + R_coil only (no workpiece)."""
+    out = {
+        "status": "ok",
+        "method": f"{args.coil_solver}-vacuum",
+        "coil_solver_used": args.coil_solver,
+        "frequency_hz": float(args.frequency),
+        "current_A": float(args.current),
+        "L_coil_nH": float(coil_data["L_coil"] * 1e9),
+        "R_coil_mOhm": float(coil_data["R_coil"] * 1e3),
+        "t_coil_topology_s": float(coil_data["t_coil_topology_s"]),
+        "t_coil_solve_s": float(coil_data["t_coil_solve_s"]),
+    }
+    if args.coil_solver == "peec":
+        out["n_filaments"] = int(coil_data["n_filaments"])
+    elif args.coil_solver == "fin-surface":
+        out["n_filaments"] = int(coil_data["n_filaments"])
+        out["fin_n_branches"] = int(coil_data["fin_n_branches"])
+        out["fin_sweep"] = coil_data["fin_sweep"]
+        out["fin_metrics"] = coil_data["fin_metrics"]
+    else:
+        out["coil_mesh_nv"] = int(coil_data["coil_mesh_nv"])
+        out["coil_mesh_n_tris"] = int(coil_data["coil_mesh_n_tris"])
+        out["coil_mesh_n_src_tris"] = int(coil_data["coil_mesh_n_src_tris"])
+        out["coil_mesh_n_snk_tris"] = int(coil_data["coil_mesh_n_snk_tris"])
+        # BEM-A saddle DoF breakdown (matched to the "BEMA coil DoF" log
+        # line so users grepping the JSON have the same numbers).
+        out["coil_n_J"] = int(coil_data.get("coil_n_J", 0))
+        out["coil_n_f"] = int(coil_data.get("coil_n_f", 0))
+        out["coil_saddle_ndof"] = int(coil_data.get("coil_saddle_ndof", 0))
+        out["bem_a_residual"] = float(coil_data["bem_a_residual"])
+    return out
+
+
+def _assemble_full_output(args, coil_data, wp_data):
+    """L_coil + R_coil + workpiece weak-coupled outputs."""
+    out = _assemble_vacuum_output(args, coil_data)
+    out["method"] = f"{args.coil_solver}-bem-weak"
+    out["coupling_mode"] = "weak"
+    out["telegen_form"] = "complete-SIBC-reciprocity"
+    for key in ("wp_reaction_power_W", "wp_power_balance_relative_error",
+                "wp_power_balance_tolerance", "qsurf_method"):
+        out[key] = wp_data[key]
+    out["L_total_nH"] = (float(coil_data["L_coil"] * 1e9)
+                          + wp_data["delta_L_nH"])
+    out["R_total_mOhm"] = (float(coil_data["R_coil"] * 1e3)
+                            + wp_data["delta_R_mOhm"])
+    out["delta_L_nH"] = wp_data["delta_L_nH"]
+    out["delta_R_mOhm"] = wp_data["delta_R_mOhm"]
+    out["P_wp_W"] = wp_data["P_wp"]
+    out["H_t_rms_A_per_m"] = wp_data["H_t_rms"]
+    out["wp_area_m2"] = wp_data["A_wp"]
+    # Spatial q_surf .sol pair for downstream thermal analysis.  Empty
+    # strings when basis_order>=2 (qsurf save skipped: phi_vec on parent
+    # vol_mesh P2 needs explicit coord matching; out of scope for now).
+    out["qsurf_sol"] = wp_data.get("qsurf_sol", "")
+    out["qsurf_em_vol"] = wp_data.get("qsurf_em_vol", "")
+    out["ht_sol"] = wp_data.get("ht_sol", "")
+    out["wp_dissipation_R_mOhm"] = wp_data["wp_dissipation_R_mOhm"]
+    out["wp_mesh_nv"] = wp_data["wp_mesh_nv"]
+    out["wp_mesh_n_tris"] = wp_data["wp_mesh_n_tris"]
+    # Topology context + genus caveat (see _wp_genus_check): on a genus>=1
+    # workpiece the scalar BIE drops the shorted-turn eddy current, so the
+    # absolute P_wp / H_t carry a known over-estimate -- UNLESS the loop
+    # DOF is active (--wp-loop-dof), which solves that current explicitly.
+    out["wp_euler_chi"] = int(wp_data.get("wp_euler_chi", 2))
+    out["wp_genus"] = int(wp_data.get("wp_genus", 0))
+    out["wp_loop_dof_mode"] = wp_data.get("wp_loop_dof_mode", "auto")
+    if wp_data.get("wp_loop_dof_skip_reason"):
+        out["wp_loop_dof_skip_reason"] = wp_data["wp_loop_dof_skip_reason"]
+    if wp_data.get("wp_loop_dof"):
+        out["wp_loop_dof"] = True
+        for key in ("wp_loop_automatic_carrier", "wp_loop_section_anchor_m", "wp_loop_linear_residual_rel", "wp_loop_faraday_residual_rel", "wp_loop_impedance_assembly", "wp_loop_work_diagnostics", "wp_loop_body_backend", "wp_loop_linear_solver"):
+            if key in wp_data: out[key] = wp_data[key]
+        out["wp_loop_alpha_A"] = float(wp_data["wp_loop_alpha_A"])
+        out["wp_loop_alpha_deg"] = float(wp_data["wp_loop_alpha_deg"])
+        out["wp_loop_theta_jump"] = float(wp_data["wp_loop_theta_jump"])
+        out["wp_loop_cut_n_vertices"] = int(
+            wp_data["wp_loop_cut_n_vertices"])
+        out["wp_loop_P_frozen_W"] = float(wp_data["wp_loop_P_frozen_W"])
+        out["wp_loop_H_t_frozen_A_per_m"] = float(
+            wp_data["wp_loop_H_t_frozen_A_per_m"])
+        out["wp_loop_screening_ratio"] = float(
+            wp_data["wp_loop_screening_ratio"])
+        out["wp_loop_regime"] = str(wp_data["wp_loop_regime"])
+        out["t_loop_dof_s"] = float(wp_data["t_loop_dof_s"])
+        out["P_wp_note"] = (
+            "genus-1 loop DOF active: the net shorted-turn eddy current "
+            "(wp_loop_alpha_A) is solved and its Lenz screening is included "
+            "in P_wp / H_t (wp_loop_screening_ratio = P_wp / P_frozen; "
+            "wp_loop_regime classifies the alpha phase -- anti-phase = "
+            "inductance-dominated screening, quadrature = resistive "
+            "self-heating). Heating and reaction use the full loop field "
+            "and complete SIBC reciprocity, including the cut contribution.")
+    elif out["wp_genus"] != 0:
+        out["P_wp_caveat"] = _GENUS_P_WP_CAVEAT
+    # workpiece BIE DoF context -- mirror of the "BEM ndof=..." log line
+    # so the JSON retains the same numbers users see in the console log.
+    out["wp_ndof"] = int(wp_data.get("wp_ndof", 0))
+    out["wp_basis_order"] = int(wp_data.get("wp_basis_order", 1))
+    out["wp_vol_curve_order"] = int(wp_data.get("wp_vol_curve_order", 1))
+    out["wp_gmres_info"] = wp_data["wp_gmres_info"]
+    out["Z_s_wp_real"] = wp_data["Z_s_wp_real"]
+    out["Z_s_wp_imag"] = wp_data["Z_s_wp_imag"]
+    out["skin_depth_wp_mm"] = wp_data["skin_depth_wp_mm"]
+    out["impedance_model"] = wp_data["impedance_model"]
+    out["esim_iterations"] = wp_data["esim_iterations"]
+    out["esim_converged"] = wp_data["esim_converged"]
+    out["esim_fixed_point_relative_error"] = wp_data["esim_fixed_point_relative_error"]
+    out["esim_anderson_m"] = wp_data.get("esim_anderson_m", 0)
+    out["esim_anderson_restarts"] = wp_data.get("esim_anderson_restarts", 0)
+    out["esim_anderson_clips"] = wp_data.get("esim_anderson_clips", 0)
+    out["esim_seed_Z_real"] = wp_data.get("esim_seed_Z_real")
+    out["esim_seed_Z_imag"] = wp_data.get("esim_seed_Z_imag")
+    out["esim_history"] = wp_data["esim_history"]
+    out["esim_panel_evaluation"] = wp_data.get("esim_panel_evaluation")
+    out["msh_file"] = wp_data["msh_file"]
+    out["t_wp_mesh_s"] = wp_data["t_wp_mesh_s"]
+    out["t_bem_assembly_s"] = wp_data["t_bem_assembly_s"]
+    out["t_phi_inc_s"] = wp_data["t_phi_inc_s"]
+    out["wp_phi_inc"] = wp_data.get("wp_phi_inc", "path")
+    if wp_data.get("wp_phi_inc_grad_residual") is not None:
+        out["wp_phi_inc_grad_residual"] = float(
+            wp_data["wp_phi_inc_grad_residual"])
+    out["t_bem_solve_s"] = wp_data["t_bem_solve_s"]
+    # Propagate per-panel block (esim_per_panel, esim_per_panel_Z_s_real/imag,
+    # esim_per_panel_H_t) — emitted by _solve_workpiece_weak_coupled when
+    # --esim-per-panel is set.
+    for key in ("Z_s_mean_weighting", "material_metadata_role", "esim_per_panel", "panel_zs_file", "esim_impedance_layout", "esim_per_panel_centroids",
+                "esim_per_panel_Z_s_real",
+                "esim_per_panel_Z_s_imag",
+                "esim_per_panel_H_t"):
+        if key in wp_data:
+            out[key] = wp_data[key]
+    return out
+
+
+# ======================================================================
+# Strong-coupled workpiece block (iterative CoupledBEMSolver)
+#
+# Re-exposes the validated per-DOF back-reaction solver
+# (radia.bem_coupled_solver.CoupledBEMSolver) as the --coupling-mode
+# Strong coupling uses complete total-field body reaction in each current
+# iterate. The coupled port has its own air baseline and coil-loss model;
+# body heat is checked independently against complete reaction power.
+# ======================================================================
+def _strong_workpiece_impedance(args, mesh, scalar_impedance, genus):
+    """Read the exact body face order once, never replace it by a mean."""
+    path = getattr(args, 'panel_zs_file', '')
+    if not path and getattr(args, 'impedance_model', 'sibc') != 'esim':
+        return scalar_impedance
+    if genus not in (0, 1) or mesh.nv > 7000:
+        raise ValueError("Strong panel Zs requires genus-0/1 and at most 7000 body vertices")
+    if args.wp_bem_backend not in ('intree-dense', 'hacapk'):
+        raise ValueError("Strong panel Zs requires an in-tree P1 body backend")
+    if not path:
+        return scalar_impedance
+    from radia.surface_impedance import read_panel_impedance
+    return read_panel_impedance(path, mesh, frequency_hz=args.frequency)
+
+
+def _strong_panel_esim(args, mesh, solve_em, *, field_scale):
+    """Reuse the finite-cell law at the actual terminal operating current."""
+    from em_material import EMMaterial, load_bh_file
+    from radia.esim_cell_problem import require_esim_converged
+    from radia.esim_panel_evaluator import PanelESIMEvaluator, solve_panel_esim
+    from ngsolve import BND
+    material = EMMaterial(name='wp', sigma=args.sigma, mu_r=args.mu_r,
+                          bh_curve=load_bh_file(args.bh_file))
+    cell = material.create_esim_solver(args.frequency, args.half_thickness,
+                                      geometry='cylinder')
+    seed = complex(require_esim_converged(cell.solve(5.), 'Strong ESIM seed')['Z'])
+    evaluator = PanelESIMEvaluator(cell, mode=getattr(args, 'esim_panel_evaluator', 'table'),
+        interpolation_tol=float(args.esim_tol)/10,
+        max_table_cells=getattr(args, 'esim_table_max_cells', 4096))
+    z, state, diagnostics = solve_panel_esim(evaluator, solve_em,
+        np.full(mesh.GetNE(BND), seed, dtype=complex), tolerance=float(args.esim_tol),
+        max_iter=int(args.esim_max_iter), relaxation=float(args.esim_relax),
+        field_scale=field_scale, inner_tolerance=min(float(args.coupling_tol), float(args.esim_tol)/10))
+    diagnostics['esim_panel_evaluation'].update(seed_cell_calls=1,
+        total_direct_cell_calls=diagnostics['esim_panel_evaluation']['direct_cell_calls']+1)
+    state.update(diagnostics)
+    return z, state
+
+
+def _solve_workpiece_strong_coupled(args):
+    """Iterative coil<->workpiece BEM coupling via CoupledBEMSolver.
+
+    Requires ``--coil-solver bem-a`` (the coupled solver needs a coil
+    SURFACE mesh with source/sink labels to drive the coil EFIE; PEEC
+    filaments cannot).  Returns a dict with the coupled quantities
+    (L_air, L_total, Delta_L, P_total, H_t_rms, iterations, ...) plus mesh
+    and timing context, ready for ``_assemble_strong_output``.
+    """
+    from ngsolve import Mesh, BND
+    from surface_mesh_extract import _extract_surface_mesh_filtered
+    from radia.bem_coupled_solver import CoupledBEMSolver
+    from em_material import EMMaterial
+
+    omega = 2.0 * math.pi * args.frequency
+
+    # --- coil surface mesh (CoupledBEMSolver re-assembles the coil EFIE
+    #     saddle internally; we only hand it the mesh + source/sink names) ---
+    t0 = time.perf_counter()
+    progress("COUPLED", f"load coil surface from {os.path.basename(args.coil_vol)}")
+    # Use the SAME loader as the vacuum BEM-A path: it validates the
+    # source/sink labels AND converts a volume .vol to the pure surface
+    # mesh HDivSurface needs.  Loading Mesh(args.coil_vol) directly here
+    # reproduces a singular coupled saddle on volume-tet inputs because
+    # HDivSurface also sees the volume modes.
+    coil_mesh = _build_bema_coil_mesh(args)
+    # Same fail-loud source/sink check as the vacuum BEM-A path: the coupled
+    # solver drives the coil EFIE from these labels, so a shortcut placement
+    # would silently poison L_air / Delta_L / P_wp too.
+    from radia.bem.coil_inductance_ngsolve import check_source_sink_current_path
+    _cv, _ct, _sm, _km = _arrays_from_bema_coil_mesh(
+        coil_mesh, source_name=args.coil_source_name,
+        sink_name=args.coil_sink_name)
+    check_source_sink_current_path(
+        _cv, _ct, _sm, _km, source_label=args.coil_source_name,
+        sink_label=args.coil_sink_name)
+
+    # --- workpiece surface mesh (same extraction convention as the weak
+    #     path: --wp-label may name a material or a boundary sideset) ---
+    progress("COUPLED", f"load wp surface from {os.path.basename(args.vol)}")
+    vol_mesh = Mesh(args.vol)
+    mats = set(vol_mesh.GetMaterials())
+    bnds = set(vol_mesh.GetBoundaries())
+    if args.wp_label in mats:
+        wp_mesh, _ = _extract_surface_mesh_filtered(
+            vol_mesh, keep_label=args.wp_label, return_vertex_map=True)
+    elif args.wp_label in bnds:
+        wp_mesh = _extract_bnd_only_inline(vol_mesh, args.wp_label)
+    else:
+        raise ValueError(
+            f"wp_label {args.wp_label!r} not found in materials "
+            f"({sorted(mats)}) or boundaries ({sorted(bnds)})")
+    t_wp_mesh = time.perf_counter() - t0
+    wp_chi, wp_genus = _wp_genus_check(wp_mesh, tag="COUPLED")
+    _resolve_workpiece_backend(args, wp_genus, wp_mesh.nv)
+
+    # --- global Leontovich Z_s (delta includes mu_r), same convention as
+    #     the linear weak path: Z_s = (1+j) * rho / delta ---
+    mat_wp = EMMaterial(name="wp", sigma=args.sigma, mu_r=args.mu_r)
+    delta_wp = mat_wp.skin_depth(args.frequency)
+    Z_s_scalar = (1.0 + 1j) * (1.0 / args.sigma) / delta_wp
+    Z_s = _strong_workpiece_impedance(args, wp_mesh, Z_s_scalar, wp_genus)
+    z_description = ('per-panel ESIM (finite-cell seed)' if args.impedance_model == 'esim' else
+                     f'{Z_s:.3e}' if not getattr(args, 'panel_zs_file', '')
+                     else f'face-ordered ({len(Z_s.values)} panels)')
+
+    # HACApK compresses the body maps and uses a bordered operator for one
+    # handle. Construction still uses dense entry tables; guards remain.
+    # The explicit dense route retains its existing LU solve.
+    wp_hacapk = (args.wp_bem_backend == "hacapk")
+    # Coil EFIE backend: dense-LU by default (fastest below ~12k n_J);
+    # --coil-saddle-solver hacapk_cocr compresses the coil SL to an O(N log N)
+    # H-matrix + loop-COCR saddle solve (O(N r) storage, for large coils).
+    coil_hacapk = (args.coil_saddle_solver == "hacapk_cocr")
+
+    # Resolve the loop-DOF mode (see --wp-loop-dof): the strong path
+    # applies the extension inside every Picard state (the
+    # solver's ``loop_dof`` arg).  "on" was early-guarded in
+    # run_inductance (intree-dense required; solve_loop_extended enforces
+    # genus-1); "auto" applies exactly when it can and records why not.
+    wp_loop_req = getattr(args, "wp_loop_dof", "auto")
+    wp_loop_skip = None
+    if wp_loop_req == "on":
+        wp_loop_apply = True
+    elif wp_genus != 1:
+        wp_loop_apply = False
+        wp_loop_skip = (f"genus-{wp_genus} surface (the loop DOF applies "
+                        f"to genus-1 only; genus-0 needs none)")
+    else:
+        wp_loop_apply = True
+    if wp_loop_req == "auto" and wp_loop_skip is not None and wp_genus >= 1:
+        progress("COUPLED",
+            f"loop-DOF auto: SKIPPED on a genus-{wp_genus} workpiece -- "
+            f"{wp_loop_skip}.  The genus P_wp_caveat applies.")
+
+    progress("COUPLED",
+        f"strong coupling: coil {coil_mesh.nv}v / wp {wp_mesh.nv}v, "
+        f"f={args.frequency:g} Hz, Z_s={z_description}, "
+        f"coil_backend={'hacapk' if coil_hacapk else 'dense-lu'}, "
+        f"wp_backend={'hacapk' if wp_hacapk else 'dense'}, "
+        f"loop_dof={'on' if wp_loop_apply else 'off'}, "
+        f"max_iter={args.coupling_max_iter} tol={args.coupling_tol:g} "
+        f"relax={args.coupling_relax:g}")
+    t0 = time.perf_counter()
+    solver = CoupledBEMSolver(
+        coil_mesh, wp_mesh,
+        source_label=args.coil_source_name,
+        sink_label=args.coil_sink_name,
+        fes_order=0,
+        wp_hacapk=wp_hacapk, wp_aca_eps=args.wp_aca_eps,
+        wp_gmres_tol=args.wp_gmres_tol,
+        coil_hacapk=coil_hacapk, coil_aca_eps=args.coil_aca_eps,
+        wp_loop_work_backend=getattr(args, "wp_loop_work_backend", "auto"))
+    def solve_em(z):
+        return solver.solve(Z_s=z, omega=omega,
+            max_iter=int(args.coupling_max_iter),
+            tol=min(float(args.coupling_tol), float(args.esim_tol)/10)
+                if args.impedance_model == 'esim' else float(args.coupling_tol),
+            relax=float(args.coupling_relax), loop_dof=wp_loop_apply)
+    if args.impedance_model == 'esim':
+        Z_s, sol = _strong_panel_esim(args, wp_mesh, solve_em,
+                                      field_scale=abs(float(args.current)))
+    else:
+        sol = solve_em(Z_s)
+    t_solve = time.perf_counter() - t0
+
+    # CoupledBEMSolver drives the coil EFIE at UNIT terminal current (its
+    # g_red constraint is normalised; solve() takes no current).  The
+    # held-Z electromagnetic problem is linear, so scale its outputs to
+    # --current here: fields ~ I, dissipation ~ I^2. Nonlinear ESIM has
+    # already selected Z using this actual current; another drive needs a
+    # new material solve. The following scaling is only at this held Z.
+    # Inductances
+    # (L_air / L_total / Delta_L) are per-unit-current energies and stay.
+    # Missing this scale was the Kubota 2026-07-16 incident: at 6700 A the
+    # panel reported P_wp = 8.3e-4 W / H_t = 9.84 A/m -- 1 A-drive values,
+    # I^2 = 4.5e7x low -- while Delta_L came out sane, masking the bug.
+    # (The PEEC strong driver passes I_port to its solver, so both drivers
+    # now return REAL-current-scaled P_total / H_t_rms / J arrays to the
+    # shared _assemble_strong_output.)
+    I_term = float(args.current)
+    sol["P_total"] = float(sol["P_total"]) * I_term * I_term
+    for key in ("body_reaction_power_W", "port_power_W", "coil_loss_W",
+                "coil_loss_air_W", "coil_loss_change_W", "wp_q_tri"):
+        if key in sol:
+            sol[key] = sol[key] * I_term * I_term
+    sol["H_t_rms"] = float(sol["H_t_rms"]) * abs(I_term)
+    for key in ("wp_J_re", "wp_J_im", "J_coil_re", "J_coil_im", "body_emf", "wp_H_t_tri"):
+        if sol.get(key) is not None:
+            sol[key] = sol[key] * I_term
+    # The loop current scales like the fields (alpha ~ I); the frozen
+    # diagnostics scale like their production counterparts (P ~ I^2,
+    # H_t ~ I; the screening RATIO is scale-invariant and stays).
+    if sol.get("wp_loop_alpha") is not None:
+        sol["wp_loop_alpha"] = complex(sol["wp_loop_alpha"]) * I_term
+        sol["wp_loop_P_frozen"] = (float(sol["wp_loop_P_frozen"])
+                                   * I_term * I_term)
+        sol["wp_loop_H_t_frozen"] = (float(sol["wp_loop_H_t_frozen"])
+                                     * abs(I_term))
+
+    progress("COUPLED",
+        f"converged in {int(sol['iterations'])} iter: "
+        f"L_total={sol['L_total'] * 1e9:.2f} nH "
+        f"dL={sol['Delta_L'] * 1e9:+.2f} nH "
+        f"P_wp={sol['P_total']:.4e} W H_t={sol['H_t_rms']:.2f} A/m "
+        f"@ I={I_term:g} A ({t_solve:.1f}s)")
+    if sol.get("wp_loop_alpha") is not None:
+        import cmath as _cmath
+        progress("COUPLED",
+            f"loop-DOF (converged state): alpha="
+            f"{abs(sol['wp_loop_alpha']):.4g} A (phase "
+            f"{math.degrees(_cmath.phase(sol['wp_loop_alpha'])):+.1f} "
+            f"deg, {sol.get('t_loop_dof_s', 0.0):.1f}s)")
+
+    sol["wp_mesh_nv"] = int(wp_mesh.nv)
+    sol["wp_mesh_n_tris"] = int(wp_mesh.GetNE(BND))
+    sol["wp_euler_chi"] = int(wp_chi)
+    sol["wp_genus"] = int(wp_genus)
+    sol["wp_loop_dof_mode"] = wp_loop_req
+    sol["wp_loop_dof_skip_reason"] = wp_loop_skip
+    sol["wp_loop_dof"] = bool(wp_loop_apply)
+    sol["delta_wp_mm"] = float(delta_wp * 1e3)
+    sol["t_wp_mesh_s"] = float(t_wp_mesh)
+    sol["t_coupled_solve_s"] = float(t_solve)
+    sol["wp_hacapk"] = bool(wp_hacapk)
+    sol["coil_hacapk"] = bool(coil_hacapk)
+    return sol
+
+
+def _solve_workpiece_strong_coupled_peec(args, coil_data):
+    """Iterative PEEC filament coil <-> workpiece BEM coupling.
+
+    The PEEC analogue of ``_solve_workpiece_strong_coupled``: rebuilds the
+    filament loop-bundle from ``--coil-step`` and drives
+    ``CoupledPEECBEMSolver`` (back-EMF from the workpiece reaction field
+    redistributes the filament currents self-consistently).  Returns the
+    same key set as the BEM-A strong path so ``_assemble_strong_output``
+    renders both uniformly. Port R/L and their air baselines come from the
+    same coupled coil model. Port loss change includes body reaction and
+    the change in coil self loss; body heat is checked independently.
+
+    Experimental qualification remains for discretization and the SIBC
+    approximation; self-authored circuit/body checks do not certify every
+    physical coil geometry or nonlinear material.
+    """
+    from ngsolve import Mesh, BND
+    from surface_mesh_extract import _extract_surface_mesh_filtered
+    from radia.coil_from_cad import filaments_from_step
+    from radia.peec_bundle import build_loop_bundle_impedance
+    from radia.peec_coupled_bem_solver import CoupledPEECBEMSolver
+    from em_material import EMMaterial
+
+    omega = 2.0 * math.pi * args.frequency
+
+    # --- PEEC coil loop-bundle (same construction as _solve_coil_peec, but
+    #     proximity-iterative is OFF for the coupled solve: the workpiece
+    #     back-reaction is the coupling of interest here) ---
+    progress("COUPLED", f"PEEC bundle from {os.path.basename(args.coil_step)} "
+                        f"(n_peri={args.peec_n_peri})")
+    t0 = time.perf_counter()
+    topo = filaments_from_step(args.coil_step, sigma=args.coil_sigma,
+                               n_peri=args.peec_n_peri, use_coil_builder=True)
+    paths = topo["filament_paths"]
+    R_f, L_f = build_loop_bundle_impedance(topo["solver"],
+                                           topo["seg_of_filament"])
+    internal_model = _peec_cross_section_model(
+        topo, args.coil_sigma, omega, args.peec_n_peri)
+    Zs_fil = _peec_internal_impedance_per_filament(
+        paths, internal_model, args.peec_n_peri) if omega > 0.0 else None
+
+    # --- workpiece surface mesh (same convention as the BEM-A strong path) ---
+    vol_mesh = Mesh(args.vol)
+    mats = set(vol_mesh.GetMaterials())
+    bnds = set(vol_mesh.GetBoundaries())
+    if args.wp_label in mats:
+        wp_mesh, _ = _extract_surface_mesh_filtered(
+            vol_mesh, keep_label=args.wp_label, return_vertex_map=True)
+    elif args.wp_label in bnds:
+        wp_mesh = _extract_bnd_only_inline(vol_mesh, args.wp_label)
+    else:
+        raise ValueError(
+            f"wp_label {args.wp_label!r} not found in materials "
+            f"({sorted(mats)}) or boundaries ({sorted(bnds)})")
+    t_wp_mesh = time.perf_counter() - t0
+    wp_chi, wp_genus = _wp_genus_check(wp_mesh, tag="COUPLED")
+    _resolve_workpiece_backend(args, wp_genus, wp_mesh.nv)
+
+    mat_wp = EMMaterial(name="wp", sigma=args.sigma, mu_r=args.mu_r)
+    delta_wp = mat_wp.skin_depth(args.frequency)
+    Z_s_scalar = (1.0 + 1j) * (1.0 / args.sigma) / delta_wp
+    Z_s = _strong_workpiece_impedance(args, wp_mesh, Z_s_scalar, wp_genus)
+    z_description = ('per-panel ESIM (finite-cell seed)' if args.impedance_model == 'esim' else
+                     f'{Z_s:.3e}' if not getattr(args, 'panel_zs_file', '')
+                     else f'face-ordered ({len(Z_s.values)} panels)')
+    wp_hacapk = (args.wp_bem_backend == "hacapk")
+
+    # Loop-DOF resolution (same contract as the BEM-A strong driver).
+    wp_loop_req = getattr(args, "wp_loop_dof", "auto")
+    wp_loop_skip = None
+    if wp_loop_req == "on":
+        wp_loop_apply = True
+    elif wp_genus != 1:
+        wp_loop_apply = False
+        wp_loop_skip = (f"genus-{wp_genus} surface (the loop DOF applies "
+                        f"to genus-1 only; genus-0 needs none)")
+    else:
+        wp_loop_apply = True
+    if wp_loop_req == "auto" and wp_loop_skip is not None and wp_genus >= 1:
+        progress("COUPLED",
+            f"loop-DOF auto: SKIPPED on a genus-{wp_genus} workpiece -- "
+            f"{wp_loop_skip}.  The genus P_wp_caveat applies.")
+
+    progress("COUPLED",
+        f"strong PEEC coupling [EXPERIMENTAL]: {len(paths)} filaments / "
+        f"wp {wp_mesh.nv}v, f={args.frequency:g} Hz, Z_s={z_description}, "
+        f"wp_backend={'hacapk' if wp_hacapk else 'dense'}, "
+        f"loop_dof={'on' if wp_loop_apply else 'off'}, "
+        f"max_iter={args.coupling_max_iter} tol={args.coupling_tol:g} "
+        f"relax={args.coupling_relax:g}")
+    t0 = time.perf_counter()
+    solver = CoupledPEECBEMSolver(
+        paths, R_f, L_f, wp_mesh, Zs_fil=Zs_fil, wp_order=1,
+        wp_hacapk=wp_hacapk, wp_aca_eps=args.wp_aca_eps,
+        wp_gmres_tol=args.wp_gmres_tol,
+        wp_loop_work_backend=getattr(args, "wp_loop_work_backend", "auto"))
+    def solve_em(z):
+        return solver.solve(Z_s=z, omega=omega, I_port=float(args.current),
+            max_iter=int(args.coupling_max_iter),
+            tol=min(float(args.coupling_tol), float(args.esim_tol)/10)
+                if args.impedance_model == 'esim' else float(args.coupling_tol),
+            relax=float(args.coupling_relax), loop_dof=wp_loop_apply)
+    if args.impedance_model == 'esim':
+        Z_s, sol = _strong_panel_esim(args, wp_mesh, solve_em, field_scale=1.)
+    else:
+        sol = solve_em(Z_s)
+    t_solve = time.perf_counter() - t0
+    progress("COUPLED",
+        f"converged in {int(sol['iterations'])} iter: "
+        f"L_total={sol['L_total'] * 1e9:.2f} nH "
+        f"dL={sol['Delta_L'] * 1e9:+.2f} nH "
+        f"P_wp={sol['P_total']:.4e} W H_t={sol['H_t_rms']:.2f} A/m "
+        f"({t_solve:.1f}s)")
+    if sol.get("wp_loop_alpha") is not None:
+        import cmath as _cmath
+        progress("COUPLED",
+            f"loop-DOF (converged state): alpha="
+            f"{abs(sol['wp_loop_alpha']):.4g} A (phase "
+            f"{math.degrees(_cmath.phase(sol['wp_loop_alpha'])):+.1f} "
+            f"deg, {sol.get('t_loop_dof_s', 0.0):.1f}s)")
+
+    # Context keys expected by _assemble_strong_output (mirror the BEM-A
+    # driver).  n_J_coil -> filament count; the coil backend is the PEEC
+    # loop-bundle (no H-matrix coil), so coil_hacapk is always False.
+    # (The PEEC solver already runs at the real I_port, so its loop
+    # alpha needs NO current rescale, unlike the BEM-A driver.)
+    sol["n_J_coil"] = int(sol["n_filaments"])
+    sol["wp_mesh_nv"] = int(wp_mesh.nv)
+    sol["wp_mesh_n_tris"] = int(wp_mesh.GetNE(BND))
+    sol["wp_euler_chi"] = int(wp_chi)
+    sol["wp_genus"] = int(wp_genus)
+    sol["wp_loop_dof_mode"] = wp_loop_req
+    sol["wp_loop_dof_skip_reason"] = wp_loop_skip
+    sol["wp_loop_dof"] = bool(wp_loop_apply)
+    sol["delta_wp_mm"] = float(delta_wp * 1e3)
+    sol["t_wp_mesh_s"] = float(t_wp_mesh)
+    sol["t_coupled_solve_s"] = float(t_solve)
+    sol["wp_hacapk"] = bool(wp_hacapk)
+    sol["coil_hacapk"] = False
+    return sol
+
+
+def _assemble_strong_output(args, coil_data, strong):
+    """Coupled port quantities, their air baseline, and independent body heat.
+
+    Mirrors the key names of ``_assemble_full_output`` (L_total_nH,
+    R_total_mOhm, delta_L_nH, delta_R_mOhm, P_wp_W, H_t_rms_A_per_m) so the
+    application summary renders strong-coupling runs the same way as weak ones,
+    with ``coupling_mode = "strong"``.
+    """
+    out = _assemble_vacuum_output(args, coil_data)
+    out["method"] = f"{args.coil_solver}-bem-strong"
+    out["coupling_mode"] = "strong"
+    I = float(args.current)
+    P_wp = float(strong["P_total"])
+    dL_nH = float(strong["Delta_L"] * 1e9)
+    # Use the coupled port and its own air baseline. Coil loss can change
+    # under redistribution, so reflected port R is not 2*body_heat/I^2.
+    dR_mOhm = float(strong["Delta_R"] * 1e3)
+    out["L_coil_nH"] = float(strong["L_air"] * 1e9)
+    out["R_coil_mOhm"] = float(strong["R_air"] * 1e3)
+    out["L_total_nH"] = float(strong["L_total"] * 1e9)
+    out["R_total_mOhm"] = float(strong["R_total"] * 1e3)
+    out["delta_L_nH"] = dL_nH
+    out["delta_R_mOhm"] = dR_mOhm
+    out["P_wp_W"] = P_wp
+    out["H_t_rms_A_per_m"] = float(strong["H_t_rms"])
+    for key in ("body_reaction_power_W", "body_power_balance_relative_error",
+                "body_residual", "port_power_W", "coil_loss_W",
+                "coil_loss_air_W", "coil_loss_change_W"):
+        out[key] = float(strong[key])
+    for key in ('body_impedance_value_hash', 'body_operator_reused',
+                'body_factorization_reused', 'body_geometry_reused', 'wp_loop_faraday_residual'):
+        if key in strong:
+            out[key] = strong[key]
+    out["coupling_converged"] = bool(strong["converged"])
+    out["coupling_residual"] = float(strong["coupling_residual"])
+    out["coil_resistance_model"] = ("filament-loop-resistance"
+                                    if coil_data.get("source_type") == "filament"
+                                    else "ideal-surface-coil")
+    # Coupled-solver-native quantities (PEC-coil vacuum L + self-consistent
+    # total L) for cross-checking against the impedance-EFIE coil L_coil.
+    out["coupled_L_air_nH"] = float(strong["L_air"] * 1e9)
+    out["coupled_L_total_nH"] = float(strong["L_total"] * 1e9)
+    out["coupling_iterations"] = int(strong["iterations"])
+    out["wp_ndof"] = int(strong["n_phi_wp"])
+    out["coupled_n_J_coil"] = int(strong["n_J_coil"])
+    out["wp_mesh_nv"] = int(strong["wp_mesh_nv"])
+    out["wp_mesh_n_tris"] = int(strong["wp_mesh_n_tris"])
+    out["Z_s_wp_real"] = float(strong["Z_s"].real)
+    out["Z_s_wp_imag"] = float(strong["Z_s"].imag)
+    out["skin_depth_wp_mm"] = float(strong["delta_wp_mm"])
+    out["impedance_model"] = "sibc"
+    if 'Z_s_per_panel' in strong:
+        values = np.asarray(strong['Z_s_per_panel'], dtype=complex)
+        field = np.asarray(strong['wp_H_t_tri'], dtype=complex)
+        out.update(impedance_model='specified-panel', esim_per_panel=True,
+            esim_impedance_layout='BND-element-order',
+            esim_per_panel_Z_s_real=values.real.tolist(),
+            esim_per_panel_Z_s_imag=values.imag.tolist(),
+            esim_per_panel_H_t=np.linalg.norm(field, axis=1).tolist(),
+            esim_per_panel_centroids=np.asarray(strong['wp_c']).tolist(),
+            panel_zs_file=str(getattr(args, 'panel_zs_file', '')),
+            Z_s_mean_weighting='area', material_metadata_role='report-only',
+            skin_depth_wp_mm=None)
+    if getattr(args, 'impedance_model', 'sibc') == 'esim':
+        out['impedance_model'] = 'esim'
+        for key in ('esim_iterations', 'esim_converged', 'esim_fixed_point_relative_error',
+                    'esim_history', 'esim_inner_history', 'esim_inner_iterations_total',
+                    'esim_inner_tolerance', 'esim_tolerance', 'esim_seed_Z_real',
+                    'esim_seed_Z_imag', 'esim_field_scale', 'esim_anderson_m',
+                    'esim_panel_evaluation', 'port_quantity_kind'):
+            out[key] = strong[key]
+        out['esim_operating_current_A'] = float(args.current)
+    out["wp_bem_backend"] = "hacapk" if strong.get("wp_hacapk") else "intree-dense"
+    out["coil_bem_backend"] = "hacapk_cocr" if strong.get("coil_hacapk") else "dense-lu"
+    out["t_wp_mesh_s"] = float(strong["t_wp_mesh_s"])
+    out["t_coupled_solve_s"] = float(strong["t_coupled_solve_s"])
+    # Topology context + genus-conditional P_wp caveat: the scalar BIE is
+    # locked by the analytic genus-0 sphere; on a genus>=1 workpiece the
+    # net shorted-turn eddy current needs the loop-DOF extension, which
+    # the strong drivers apply within every Picard state
+    # (auto/on, dense wp backend) -- mirroring the weak path's caveat /
+    # note split.
+    out["wp_euler_chi"] = int(strong.get("wp_euler_chi", 2))
+    out["wp_genus"] = int(strong.get("wp_genus", 0))
+    out["wp_loop_dof_mode"] = strong.get("wp_loop_dof_mode", "auto")
+    if strong.get("wp_loop_dof_skip_reason"):
+        out["wp_loop_dof_skip_reason"] = strong["wp_loop_dof_skip_reason"]
+    if strong.get("wp_loop_dof") and strong.get("wp_loop_alpha") is not None:
+        import cmath as _cmath
+        alpha = complex(strong["wp_loop_alpha"])
+        out["wp_loop_dof"] = True
+        out["wp_loop_alpha_A"] = float(abs(alpha))
+        out["wp_loop_alpha_deg"] = float(math.degrees(_cmath.phase(alpha)))
+        out["wp_loop_theta_jump"] = float(strong["wp_loop_theta_jump"])
+        out["wp_loop_cut_n_vertices"] = int(
+            strong["wp_loop_cut_n_vertices"])
+        out["wp_loop_P_frozen_W"] = float(strong["wp_loop_P_frozen"])
+        out["wp_loop_H_t_frozen_A_per_m"] = float(
+            strong["wp_loop_H_t_frozen"])
+        out["wp_loop_screening_ratio"] = float(
+            strong["wp_loop_screening_ratio"])
+        for key in ('wp_loop_body_backend','wp_loop_linear_solver','wp_loop_gmres_iterations'):
+            if key in strong: out[key] = strong[key]
+        if 'wp_loop_work_diagnostics' in strong:
+            out['wp_loop_work_diagnostics'] = strong['wp_loop_work_diagnostics']
+        if 'wp_loop_impedance_assembly' in strong:
+            out['wp_loop_impedance_assembly'] = strong['wp_loop_impedance_assembly']
+        out["wp_loop_regime"] = _loop_regime(out["wp_loop_alpha_deg"])
+        out["t_loop_dof_s"] = float(strong.get("t_loop_dof_s", 0.0))
+        out["P_wp_note"] = (
+            "genus-1 loop DOF active on the converged strong-coupling "
+            "state: the net shorted-turn eddy current (wp_loop_alpha_A) "
+            "is solved and its Lenz screening is included in P_wp / H_t; "
+            "the same loop field contributes to the coil reaction in every iteration.")
+    elif out["wp_genus"] != 0:
+        out["P_wp_caveat"] = _GENUS_P_WP_CAVEAT
+    # PEEC terminal resistance includes changed filament self losses.
+    if coil_data.get("source_type") == "filament":
+        out["coil_bem_backend"] = "peec-loop-bundle"
+        out["coupled_n_filaments"] = int(strong.get("n_filaments", 0))
+        out["coupling_converged"] = bool(strong.get("converged", False))
+        out["coupling_residual"] = float(strong.get(
+            "coupling_residual", float("inf")))
+        if "Delta_R" in strong:
+            out["coupled_delta_R_reaction_mOhm"] = float(strong["Delta_R"] * 1e3)
+        out["experimental"] = True
+        out["experimental_note"] = (
+            "Strong PEEC uses complete body reaction with checked current and body residuals. "
+            "Accuracy depends on the surface discretization and SIBC assumptions.")
+    return out
+
+
+# ======================================================================
+# Coil viz: filament .msh + B-on-bbox / B-on-air-volume .msh
+#
+# Restored 2026-05-08 -- v4.25.0 unification refactor (commit 16e7e6e7)
+# accidentally dropped the visualization branch from the deleted
+# calc_peec_inductance.py.  The panel passes --coil-msh-output but the
+# unified script silently ignored it.  open_gmsh.py auto-merges any
+# sibling <stem>_filaments.msh so we just need to emit the files.
+# ======================================================================
+def _build_coil_bbox_mesh(filament_paths, expand=2.5, n_cells=18):
+    """Generate an OCC Box mesh enclosing the coil bbox * ``expand``.
+
+    Used for the auto-field-domain visualisation when no air-volume
+    .vol is available (vacuum case) OR when the user wants a clean
+    Box-shaped overlay on top of the workpiece air domain.
+    """
+    from netgen.occ import Box, Pnt, OCCGeometry
+    from ngsolve import Mesh, TaskManager
+
+    pts_list = []
+    for path in filament_paths:
+        arr = np.asarray(path, dtype=float)
+        if arr.ndim != 3 or arr.shape[-1] != 3:
+            continue
+        pts_list.append(arr.reshape(-1, 3))
+    if not pts_list:
+        raise ValueError("_build_coil_bbox_mesh: no valid filament paths.")
+    pts = np.concatenate(pts_list, axis=0)
+    pmin = pts.min(axis=0)
+    pmax = pts.max(axis=0)
+    centre = 0.5 * (pmin + pmax)
+    half = 0.5 * (pmax - pmin)
+    half_exp = np.maximum(half * expand, half.max() * 0.3)
+    p_lo = centre - half_exp
+    p_hi = centre + half_exp
+    box = Box(Pnt(float(p_lo[0]), float(p_lo[1]), float(p_lo[2])),
+              Pnt(float(p_hi[0]), float(p_hi[1]), float(p_hi[2])))
+    box.faces.name = "outer"
+    box.solids.name = "field_domain"
+    geo = OCCGeometry(box)
+    maxh = float(np.max(p_hi - p_lo)) / max(n_cells, 4)
+    with TaskManager():
+        return Mesh(geo.GenerateMesh(maxh=maxh))
+
+
+def _biot_savart_B_on_vertices(mesh, filament_paths, fil_currents):
+    """Vectorised Biot-Savart B at every vertex of ``mesh``.
+
+    Returns (n_verts, 3) numpy array of B [T] using |I| (peak amplitude
+    of the complex phasor) so the magnitude pattern matches the physical
+    AC peak field.
+    """
+    from biot_savart import h_segments_batch, MU0
+    verts = np.asarray([list(v.point) for v in mesh.vertices], dtype=float)
+    if verts.shape[1] != 3:
+        raise ValueError("_biot_savart_B_on_vertices: 3D mesh required")
+    H_total = np.zeros_like(verts)
+    for path, I in zip(filament_paths, fil_currents):
+        segments = np.asarray(path, dtype=float)
+        if segments.ndim != 3 or segments.shape[1:] != (2, 3):
+            continue
+        Im = float(abs(complex(I)))
+        if Im < 1e-30:
+            continue
+        H_total += h_segments_batch(segments, verts, current=Im)
+    return MU0 * H_total
+
+
+def _resolve_coil_msh_path(args):
+    """Decide where to write the coil viz .msh.
+
+    Priority:
+      1. ``--coil-msh-output`` (explicit)
+      2. ``--msh-output`` if vacuum / coil-only (no workpiece — the wp
+         surface output is NOT competing for that path)
+      3. ``<msh_output_stem>_coil.msh`` sibling (with-wp case — keeps
+         the wp surface at ``args.msh_output``; the application result action opens
+         the coil viz via gmsh_file priority and open_gmsh.py auto-
+         merges the ``_filaments.msh`` sibling)
+
+    Returns "" if no viz path can be derived (no msh-output flags).
+    """
+    if args.coil_msh_output:
+        return args.coil_msh_output
+    if not args.msh_output:
+        return ""
+    if args.coil_only or not args.vol:
+        return args.msh_output
+    base, ext = os.path.splitext(args.msh_output)
+    return base + "_coil" + (ext or ".msh")
+
+
+def _export_coil_msh_viz(args, coil_data):
+    """Write the PEEC/coil visualization .msh files.
+
+    Writes (when a coil viz path can be derived from ``--coil-msh-output``
+    or ``--msh-output``, see ``_resolve_coil_msh_path``):
+      * ``<coil_msh_path>``         : auto-bbox volume mesh + B vector
+      * ``<stem>_filaments.msh``    : 1D filament polylines + |I|
+        (auto-merged by open_gmsh.py as a sibling)
+
+    Returns ``{"coil_field_msh": ..., "filament_msh": ..., "field_n_vertices": ...}``
+    or empty dict on failure.  Errors are logged via ``progress`` and do
+    NOT abort the inductance solve.
+
+    PEEC-only.  The BEM-A coil path returns surface current density on
+    a triangle mesh; that has its own viz route (TODO, not in scope).
+    """
+    if coil_data.get("source_type") != "filament":
+        return {}
+
+    out_msh = _resolve_coil_msh_path(args)
+    if not out_msh:
+        return {}
+
+    paths = coil_data["paths"]
+    I_fil = coil_data["I_fil"]
+    base_dir = os.path.dirname(os.path.abspath(out_msh)) or "."
+    stem = os.path.splitext(os.path.basename(out_msh))[0]
+    os.makedirs(base_dir, exist_ok=True)
+
+    # ---- B field on auto-bbox mesh -----------------------------------
+    coil_field_msh = ""
+    field_n_vertices = 0
+    try:
+        from ngsolve import H1, GridFunction
+        from ngsolve import TaskManager
+        from gmsh_post_export import save_vol_sol_pair, vol2msh
+
+        t0 = time.perf_counter()
+        field_mesh = _build_coil_bbox_mesh(paths)
+        field_n_vertices = field_mesh.nv
+        B_arr = _biot_savart_B_on_vertices(field_mesh, paths, I_fil)
+        fes_B = H1(field_mesh, order=1, dim=3)
+        gf_B = GridFunction(fes_B)
+        gf_B.vec.FV().NumPy()[:] = B_arr.reshape(-1)
+
+        sol_B = os.path.join(base_dir, f"{stem}_B.sol").replace("\\", "/")
+        vol_B = os.path.join(base_dir, f"{stem}_field.vol").replace("\\", "/")
+        save_vol_sol_pair(vol_B, sol_B, field_mesh.ngmesh, gf_B)
+        vol2msh(out_msh, vol_B, [
+            {"sol": sol_B, "fes": "H1", "fes_order": 1, "fes_dim": 3,
+             "name": "B", "ncomp": 3},
+        ])
+        coil_field_msh = out_msh
+        progress("VIZ", f"wrote {os.path.basename(out_msh)} "
+                         f"(B field on {field_n_vertices} verts, "
+                         f"{time.perf_counter()-t0:.1f}s)")
+    except Exception as e:
+        progress("VIZ", f"BBOX_ERROR:{type(e).__name__}: {e}")
+
+    # ---- 1D filament polylines + |I| ---------------------------------
+    filament_msh = ""
+    try:
+        from radia.gmsh_post_export import export_filaments_msh
+        fil_msh_path = os.path.join(base_dir,
+                                     f"{stem}_filaments.msh").replace("\\", "/")
+        export_filaments_msh(paths, fil_msh_path, currents=I_fil,
+                              label="filament")
+        filament_msh = fil_msh_path
+        progress("VIZ", f"wrote {os.path.basename(fil_msh_path)} "
+                         f"({len(paths)} filaments + |I|)")
+    except Exception as e:
+        progress("VIZ", f"FIL_ERROR:{type(e).__name__}: {e}")
+
+    return {
+        "coil_field_msh": coil_field_msh,
+        "filament_msh": filament_msh,
+        "field_n_vertices": int(field_n_vertices),
+    }
+
+
+# ======================================================================
+# Top-level dispatch
+# ======================================================================
+def run_inductance(args):
+    """Top-level orchestrator.  Returns dict; calc_main wraps to JSON."""
+    import radia  # noqa: F401  (DLL path setup for subprocess context)
+    from ngsolve import TaskManager
+
+    # A sign typo in --frequency must not silently select the DC
+    # vacuum-L branch (R=0, Zs ignored) -- fail fast with the flag name.
+    if args.frequency < 0.0 or args.frequency != args.frequency:
+        return {"status": "error",
+                "error": f"--frequency must be >= 0 Hz (0 selects the "
+                          f"DC vacuum-L solve); got {args.frequency!r}"}
+
+    # Validate workpiece args if --vol given
+    if args.vol:
+        if args.sigma <= 0.0:
+            return {"status": "error",
+                    "error": "--sigma must be > 0 when --vol is provided"}
+    if args.coil_only and args.vol:
+        progress("INDUCT", "--coil-only: skipping workpiece despite --vol")
+
+    # Coil-input format must match coil-solver:
+    #   peec  -> --coil-step (CAD geometry, filaments derived)
+    #   bem-a -> --coil-vol  (pre-meshed surface, no on-the-fly OCC re-mesh)
+    if args.coil_solver in ("peec", "fin-surface") and not args.coil_step:
+        return {"status": "error",
+                "error": f"--coil-step is required for --coil-solver {args.coil_solver}"}
+    if args.coil_solver == "bem-a" and not args.coil_vol:
+        return {"status": "error",
+                "error": "--coil-vol is required for --coil-solver bem-a"}
+
+    # Strong coupling (iterative CoupledBEMSolver) needs a coil SURFACE mesh
+    # to drive the coil EFIE and a workpiece to couple to -- fail fast on a
+    # bad contract before the expensive coil solve.
+    if args.coupling_mode == "strong":
+        if args.impedance_model == 'esim' and not args.esim_per_panel:
+            return {'status': 'error', 'error': 'Strong nonlinear ESIM requires --esim-per-panel.'}
+        if args.impedance_model == 'esim' and (not args.bh_file or int(args.h1_order) != 1
+                or int(getattr(args, 'esim_anderson_m', 0)) != 0):
+            return {'status': 'error', 'error': 'Strong per-panel ESIM requires a B-H file, P1 and damped Picard (--esim-anderson-m 0).'}
+        if args.coil_solver not in ("bem-a", "peec"):
+            return {"status": "error",
+                    "error": f"--coupling-mode strong supports --coil-solver "
+                             f"bem-a (CoupledBEMSolver, EFIE coil) or peec "
+                             f"(CoupledPEECBEMSolver, filament coil); got "
+                             f"{args.coil_solver!r}.  fin-surface is weak-only "
+                             f"until the per-branch workpiece EMF (gate 4) "
+                             f"exists."}
+        if args.coil_only or not args.vol:
+            return {"status": "error",
+                    "error": "--coupling-mode strong requires a workpiece "
+                             "--vol (there is nothing to couple to)."}
+        if args.coil_solver == "peec" and args.peec_proximity:
+            return {
+                "status": "error",
+                "error": "--coupling-mode strong with --coil-solver peec "
+                         "currently uses the isolated-wire Bessel bundle and "
+                         "cannot be combined consistently with "
+                         "--peec-proximity.  Pass --no-peec-proximity; "
+                         "proximity-aware strong coupling remains unsupported.",
+            }
+
+    if getattr(args, 'panel_zs_file', ''):
+        if (args.coupling_mode not in ('weak', 'strong') or args.impedance_model != 'sibc'
+                or args.esim_per_panel or args.coil_only or not args.vol
+                or int(args.h1_order) != 1):
+            return {'status': 'error', 'error':
+                    'Specified panel Zs requires P1 SIBC, a workpiece, '
+                    'no ESIM iteration; one supported handle uses its loop DOF.'}
+
+    if args.coupling_mode == 'strong' and (getattr(args, 'panel_zs_file', '') or args.impedance_model == 'esim'):
+        if args.wp_bem_backend == 'auto':
+            args.wp_bem_backend = 'intree-dense'
+        elif args.wp_bem_backend not in ('intree-dense','hacapk'):
+            return {'status': 'error', 'error':
+                    'Strong panel Zs requires an in-tree P1 body backend (intree-dense or hacapk).'}
+
+    # --esim-per-panel names the per-panel ESIM iteration; with linear SIBC it
+    # would otherwise be dropped and a uniform-Zs result reported.
+    if args.esim_per_panel and args.impedance_model != 'esim':
+        return {'status': 'error', 'error':
+                '--esim-per-panel requires --impedance-model esim; '
+                'use --panel-zs-file for specified panel Zs.'}
+    if args.esim_per_panel and getattr(args, 'esim_panel_evaluator', 'table') != 'direct' and (
+            args.impedance_model != 'esim'
+            or int(args.h1_order) != 1
+            or args.coil_only or not args.vol):
+        return {'status': 'error', 'error':
+                '--esim-panel-evaluator acceleration requires P1 per-panel ESIM with a workpiece'}
+
+    # Loop-DOF extension: an EXPLICIT "on" fails fast on unsupported
+    # combinations BEFORE the expensive coil solve (the genus check itself
+    # needs the wp mesh and lives in the workpiece drivers).  The default
+    # "auto" never errors here -- it resolves inside the weak/strong
+    # drivers (apply when genus-1 + prerequisites hold, else skip with
+    # wp_loop_dof_skip_reason).  Both coupling modes take the extension
+    # (strong applies it inside every coil-current iterate).
+    if args.wp_loop_dof == "on":
+        if args.coil_only or not args.vol:
+            return {"status": "error",
+                    "error": "--wp-loop-dof requires a workpiece --vol."}
+        if args.impedance_model != 'sibc' and not args.esim_per_panel:
+            return {'status': 'error', 'error': '--wp-loop-dof nonlinear ESIM requires --esim-per-panel.'}
+        if args.wp_bem_backend not in ("auto", "intree-dense", "hacapk"):
+            return {"status": "error",
+                    "error": "--wp-loop-dof requires intree-dense or hacapk P1 body operators."}
+        if args.coupling_mode == "weak" and int(args.h1_order) != 1:
+            return {"status": "error",
+                    "error": "--wp-loop-dof supports the P1 nodal path only "
+                             "(--h1-order 1)."}
+
+    # Coil layer.  Wrap the NGSolve work (BEM-A LaplaceSL dense assembly
+    # / PEEC) in TaskManager so it runs in parallel: the helpers were
+    # de-wrapped under the "caller wraps, helper does NOT" policy
+    # (2026-05-27) and this orchestrator is the caller.  Missing this
+    # wrap left BEM-A's LaplaceSL single-threaded (kubota 2026-05-29:
+    # "BEM-A BEM is slower than before").
+    with TaskManager():
+        if args.coil_solver == "peec":
+            coil_data = _solve_coil_peec(args)
+        elif args.coil_solver == "fin-surface":
+            coil_data = _solve_coil_fin_surface(args)
+        elif args.coil_solver == "bem-a":
+            coil_data = _solve_coil_bem_a(args)
+        else:
+            return {"status": "error",
+                    "error": f"unknown --coil-solver {args.coil_solver!r}"}
+
+    # Coil viz (filament .msh + bbox B .msh).  PEEC only; BEM-A surface
+    # current viz is TODO.  Failures here are non-fatal.
+    viz = _export_coil_msh_viz(args, coil_data)
+
+    # Vacuum-only branch
+    if args.coil_only or not args.vol:
+        out = _assemble_vacuum_output(args, coil_data)
+        if viz.get("coil_field_msh"):
+            out["gmsh_file"] = viz["coil_field_msh"]
+            out["coil_field_msh"] = viz["coil_field_msh"]
+            out["field_n_vertices"] = viz["field_n_vertices"]
+        if viz.get("filament_msh"):
+            out["filament_msh"] = viz["filament_msh"]
+        return out
+
+    # Coupled workpiece branch (workpiece BEM-SIBC; parallel under
+    # TaskManager).  --coupling-mode strong routes to the iterative
+    # CoupledBEMSolver (per-DOF back-reaction: the coil current is
+    # recomputed against the workpiece reaction field); weak keeps the
+    # one-way Telegen ΔL path.
+    with TaskManager():
+        if args.coupling_mode == "strong":
+            if args.coil_solver == "peec":
+                strong = _solve_workpiece_strong_coupled_peec(args, coil_data)
+            else:
+                strong = _solve_workpiece_strong_coupled(args)
+            out = _assemble_strong_output(args, coil_data, strong)
+        else:
+            wp_data = _solve_workpiece_weak_coupled(args, coil_data)
+            out = _assemble_full_output(args, coil_data, wp_data)
+    if viz.get("coil_field_msh"):
+        # Promote bbox B msh to gmsh_file -- it has volumetric B vectors
+        # (Air-volume B viz the user can merge interactively).  The wp
+        # surface .msh remains in `msh_file` for compatibility.
+        out["gmsh_file"] = viz["coil_field_msh"]
+        out["coil_field_msh"] = viz["coil_field_msh"]
+        out["field_n_vertices"] = viz["field_n_vertices"]
+    if viz.get("filament_msh"):
+        out["filament_msh"] = viz["filament_msh"]
+    return out
+
+
+def build_argparser():
+    """argparse factory shared by main() and notebook DesignSpec callers."""
+    parser = argparse.ArgumentParser(
+        description="Coil inductance (vacuum + weak-coupled BEM-SIBC). "
+                    "Replaces calc_peec_inductance / calc_peec_bem / "
+                    "calc_coil_bem_a_workpiece.")
+
+    # ----- Coil geometry & solver switch -----
+    # PEEC consumes a CAD .step (filaments derived from centerline);
+    # BEM-A consumes a pre-meshed surface .vol (no on-the-fly OCC re-mesh).
+    # Each solver requires its own input format -- no cross-feeding.
+    parser.add_argument("--coil-step", default="",
+                        help="Coil CAD STEP file (required for --coil-solver peec)")
+    parser.add_argument("--coil-vol", default="",
+                        help="Coil pre-meshed surface .vol (required for "
+                             "--coil-solver bem-a; must contain "
+                             "'source'/'sink' boundary labels)")
+    parser.add_argument("--coil-solver", required=True,
+                        choices=["peec", "bem-a", "fin-surface"],
+                        help="peec: PEEC perimeter filaments from STEP (fast). "
+                             "bem-a: Weggler EFIE on RWG, reads pre-meshed .vol. "
+                             "fin-surface: fin-graded surface PEEC from STEP "
+                             "(radia.fin_sweep; weak coupling only).")
+
+    # ----- fin-surface-specific args -----
+    parser.add_argument("--fin-n-lanes", type=int, default=None,
+                        help="fin-surface: longitudinal lanes per station "
+                             "(default: measured from the fin tip radius)")
+    parser.add_argument("--fin-n-stations", type=int, default=None,
+                        help="fin-surface: spine stations (rings at every "
+                             "interior station; default: measured from the "
+                             "sweep length and section size)")
+    parser.add_argument("--fin-n-outline", type=int, default=None,
+                        help="fin-surface: dense outline samples per station "
+                             "used for fin detection (default: measured from "
+                             "the lane count)")
+    parser.add_argument("--fin-lane-grading", choices=("auto", "uniform"),
+                        default=None,
+                        help="fin-surface: grade lanes toward detected fin "
+                             "tips (default: measured -- graded when a fin "
+                             "is found)")
+    parser.add_argument("--fin-tip-lanes", type=int, default=None,
+                        help="fin-surface: cells requested on each tip arc "
+                             "(default: measured)")
+    parser.add_argument("--fin-route", choices=("auto", "straight_prism",
+                                                "section_planes"),
+                        default="auto",
+                        help="fin-surface: STEP sectioning route")
+
+    # ----- PEEC-specific args -----
+    parser.add_argument("--peec-n-peri", type=int, default=16,
+                        help="PEEC perimeter filament count (peec only)")
+    parser.add_argument("--peec-proximity", action=argparse.BooleanOptionalAction,
+                        default=True,
+                        help="Use proximity-aware iterative PEEC (default ON; "
+                             "augments the Bessel self-skin Zs_fil with the "
+                             "Leontovich surface dissipation evaluated from "
+                             "the actual Biot-Savart H field at each "
+                             "filament's wire-surface position).  Pass "
+                             "--no-peec-proximity to fall back to the "
+                             "isolated-wire Bessel self-skin only.")
+    parser.add_argument("--peec-proximity-max-iter", type=int, default=60,
+                        help="Maximum proximity outer iterations.  On the "
+                             "3-turn pancake at 150 kHz the iteration "
+                             "exhibits a transient hump near iter 30 then "
+                             "settles by iter 50 (relax=0.3).  Default 60 "
+                             "gives ~10 iter margin.")
+    parser.add_argument("--peec-proximity-tol", type=float, default=1.0e-3,
+                        help="Proximity outer-iteration convergence tolerance "
+                             "on ||dZ|| / ||Z||.")
+    parser.add_argument("--peec-proximity-relax", type=float, default=0.3,
+                        help="Proximity outer-iteration under-relaxation "
+                             "factor (0 < relax <= 1; 0.3 is conservative).")
+
+    # ----- BEM-A-specific args -----
+    parser.add_argument("--coil-maxh", type=float, default=0.012,
+                        help="DEPRECATED (kept for back-compat); BEM-A "
+                             "now reads pre-meshed --coil-vol instead of "
+                             "re-meshing CAD on-the-fly.")
+    parser.add_argument("--coil-source-name", default="source",
+                        help="Coil source-cap face name (bem-a; falls back "
+                             "to area-based detection if absent)")
+    parser.add_argument("--coil-sink-name", default="sink",
+                        help="Coil sink-cap face name (bem-a; same fallback)")
+    parser.add_argument("--coil-rwg-quad-degree", type=int, default=5,
+                        help="RWG regular-pair quadrature degree (bem-a)")
+    parser.add_argument("--coil-rwg-singular-nq", type=int, default=6,
+                        help="RWG Sauter-Schwab Duffy n_q (bem-a)")
+    parser.add_argument("--coil-bem-solver", default="auto",
+                        choices=["dense-lu", "hacapk-gmres", "auto"],
+                        help="dense-lu (current) / hacapk-gmres (Phase C.7 future)")
+    parser.add_argument("--coil-aca-eps", type=float, default=1e-10,
+                        help="HACApK ACA eps for coil (bem-a, future)")
+    parser.add_argument("--coil-gmres-tol", type=float, default=1e-10,
+                        help="HACApK GMRES tol for coil (bem-a, future)")
+    parser.add_argument("--coil-saddle-solver", default="auto",
+                        choices=["auto", "lu", "minres", "gmres",
+                                 "cocr", "hacapk_cocr"],
+                        help="Saddle-point solver for the BEM-A "
+                             "impedance-EFIE: auto (LU below 5000 tris for "
+                             "AC / 10000 for frequency=0; above that cocr), "
+                             "lu (dense LAPACK, overwrite_a=True), cocr "
+                             "(SCALABLE: div-free loop reduction + complex-"
+                             "symmetric COCR, ~24 mesh-independent iters, "
+                             "exact vs LU, dense SL matvec -- the recommended "
+                             "large-N solver), hacapk_cocr (the same COCR "
+                             "with the HACApKBEMManager-compressed O(N log N) "
+                             "SL matvec, accuracy ~3e-7, any --coil-fes-order; identical "
+                             "R/L), gmres (complex-capable Krylov -- "
+                             "unpreconditioned, stalls on large saddles), "
+                             "minres (REAL symmetric Krylov -- VALID ONLY for "
+                             "the frequency=0 vacuum-L solve; scipy MINRES "
+                             "assumes a Hermitian operator and silently "
+                             "returns a wrong solution on the complex-"
+                             "symmetric AC saddle, so it is rejected there). "
+                             "Defaults to auto.")
+    parser.add_argument("--coil-fes-order", type=int, default=0,
+                        help="HDivSurface polynomial order of the BEM-A coil "
+                             "current (bem-a).  0 = RT0/RWG, the historical "
+                             "default; 1 or 2 add edge/face DOFs so the "
+                             "surface current can p-converge on strongly "
+                             "curved conductors (a rounded fin tip at RT0 "
+                             "under-resolves its current crowding no matter "
+                             "how small --maxh is, because the tip element "
+                             "size is set by its own curvature).  Any "
+                             "--coil-saddle-solver accepts it.")
+    # NOTE (2026-07-02): the --bema-impedance-efie flag was REMOVED --
+    # BEM-A is unified on the impedance-EFIE (Zs inside the saddle,
+    # J = finite-impedance current).  The legacy post-hoc PEC integral
+    # R=Re(Zs) integral|J|^2 dS over-estimated R ~3x on tightly-wound /
+    # near-contact coils (kubota 3-turn: 15.1 mOhm vs the physical 4.63)
+    # and was deleted per the Discard-the-PoC / No-Fallbacks policies.
+    # Recover from git history if ever needed for a comparison study.
+
+    # ----- Coil material -----
+    parser.add_argument("--coil-sigma", type=float, default=5.8e7,
+                        help="Coil conductivity [S/m] (Cu default; mu_r=1)")
+
+    # ----- Workpiece (optional) -----
+    parser.add_argument("--vol", default="",
+                        help="Workpiece .vol file (omit for vacuum L only)")
+    parser.add_argument("--wp-label", default="sibc",
+                        help="Workpiece label (volume material OR sideset)")
+    parser.add_argument("--sigma", type=float, default=0.0,
+                        help="Workpiece conductivity [S/m] (REQUIRED if --vol)")
+    parser.add_argument("--mu-r", type=float, default=1.0,
+                        help="Workpiece relative permeability")
+    parser.add_argument("--half-thickness", type=float, default=0.01,
+                        help="ESIM half-thickness [m] (unused in linear)")
+    parser.add_argument("--bh-file", default="", help="ESIM BH table (WIP)")
+
+    # ----- Workpiece BEM-SIBC solver -----
+    parser.add_argument("--impedance-model", default="sibc",
+                        choices=["sibc", "esim"],
+                        help="sibc: linear Dowell tanh formula. "
+                             "esim: nonlinear Karl iteration; requires "
+                             "--bh-file.")
+    parser.add_argument('--panel-zs-file', default='',
+                        help='Mesh-bound per-triangle Zs JSON [ohm], weak P1 SIBC; genus-0 or one supported flux-linked handle with dense flat-triangle loop work')
+    parser.add_argument("--esim-max-iter", type=int, default=15)
+    parser.add_argument("--esim-tol", type=float, default=1e-3)
+    parser.add_argument("--esim-relax", type=float, default=0.5,
+                        help="Karl under-relaxation (0,1]; 1.0 = full "
+                             "step, 0.5 = half-step (default, matches "
+                             "calc_fem_kelvin).  Lower if Karl "
+                             "oscillates near saturation.")
+    parser.add_argument("--esim-per-panel", action="store_true",
+                        help="P1 per-BND-triangle ESIM iteration with source-weighted "
+                             "surface stiffness and local heat integration. Uses "
+                             "the solved per-panel peak H_t; supports intree-dense "
+                             "and HACApK on genus-0 workpieces. Adaptive table evaluation "
+                             "is the default. Genus-1 and strong coupling require a supported P1 body path.")
+    parser.add_argument('--esim-panel-evaluator', choices=['direct', 'table'], default='table',
+                        help='Per-panel outer ESIM evaluation: adaptive log-H linear table (default) or direct reference. '
+                             'All panels are still directly certified at the final accepted field.')
+    parser.add_argument('--esim-table-max-cells', type=int, default=4096,
+                        help='Maximum direct cells used to construct the adaptive table; fail loud on exhaustion.')
+    parser.add_argument("--esim-anderson-m", type=int, default=0,
+                        help="Anderson-acceleration memory depth for "
+                             "the outer Karl iteration.  0 (default) = "
+                             "plain damped Picard.  3-5 closes the "
+                             "per-panel dZ_max noise floor when --esim-"
+                             "per-panel is used.  See "
+                             "src/radia/esim_anderson.py.")
+    parser.add_argument("--h1-order", type=int, default=1,
+                        choices=[1, 2],
+                        help="Workpiece BEM Lagrange basis order "
+                             "(NOT the geometry curving order, which is "
+                             "auto-detected from the .vol's companion "
+                             ".vol.json -- the .vol's curvedelements is "
+                             "fixed at Cubit-export time and a post-load "
+                             "mesh.Curve(p) silently falls back to flat). "
+                             "1 = P1 hat (flat-friendly default).  "
+                             "2 = Lagrange-P2 (uses curved Tri6 geometry "
+                             "if the .vol has curve order >= 2, otherwise "
+                             "P2 basis on flat Tri3 geometry). Weak heat/"
+                             "reaction postprocessing currently requires P1; "
+                             "this does not restrict thermal FEM order.")
+    parser.add_argument("--wp-bem-backend", default="auto",
+                        choices=["auto", "hacapk", "intree-dense"],
+                        help="auto: HACApK for simply connected workpieces; dense cohomology for one z-axis through-hole with linear SIBC/P1. Explicit backends are never overridden.")
+    parser.add_argument("--wp-loop-work-backend", default="auto",
+                        choices=["auto", "dense", "fmm"],
+                        help="Genus-1 P0 loop work only: auto uses native Galerkin FMM at >=512 faces, native direct below; dense keeps direct products; fmm always compresses separated interactions. Near/singular quadrature is unchanged. The result records the route and controls.")
+    parser.add_argument("--wp-aca-eps", type=float, default=1e-10)
+    parser.add_argument("--wp-gmres-tol", type=float, default=1e-10,
+                        help="GMRES stopping tolerance; HACApK loop solves also require the unscaled physical residual <=1e-6 and fail if it is not met.")
+    parser.add_argument("--wp-loop-dof", nargs="?", const="on",
+                        default="auto", choices=["auto", "on"],
+                        help="Genus-1 loop DOF (net shorted-turn eddy "
+                             "current) for the workpiece scalar BIE "
+                             "(radia.bem_loop_extension).  Recovers the "
+                             "Lenz screening a single-valued potential "
+                             "cannot represent on a ring/tube workpiece "
+                             "whose bore links the coil flux.  "
+                             "auto (default): apply on a genus-1 workpiece "
+                             "when the prerequisites hold (weak coupling, "
+                             "linear SIBC, auto or intree-dense backend, "
+                             "--h1-order 1); unsupported weak handle "
+                             "combinations fail before BEM assembly. "
+                             "The loop path requires flat undeformed "
+                             "triangles and a P0 Galerkin single layer "
+                             "(up to 20000 faces for weak on-demand HACApK; otherwise 14000; auto compresses far "
+                             "interactions, dense remains selectable). "
+                             "on (= bare --wp-loop-dof): require it -- "
+                             "unmet prerequisites or genus != 1 fail "
+                             "loud.  There is deliberately NO 'off': the "
+                             "legacy un-extended genus-1 solve is a known "
+                             "+25-30%% over-estimate and must not be "
+                             "selectable. Weak reaction and heating use "
+                             "the full loop field and complete reciprocity.")
+
+    # ----- Excitation -----
+    parser.add_argument("--frequency", type=float, required=True,
+                        help="Frequency [Hz]")
+    parser.add_argument("--current", type=float, default=1.0,
+                        help="Port current [A]")
+
+    # ----- Coupling -----
+    parser.add_argument("--coupling-mode", default="weak",
+                        choices=["weak", "strong"],
+                        help="weak: one-way coil->wp with back-reacted Telegen "
+                             "ΔL (coil current NOT recomputed).  strong: "
+                             "iterative CoupledBEMSolver (per-DOF back-reaction; "
+                             "coil current recomputed against the workpiece "
+                             "reaction field, so ΔL includes the wp magnetic-"
+                             "energy term and P_wp is self-consistent.  Supports "
+                             "bem-a, or experimental peec with "
+                             "--no-peec-proximity).")
+    parser.add_argument("--coupling-max-iter", type=int, default=10,
+                        help="strong: max Picard iterations for the coupled "
+                             "coil<->wp back-reaction solve.")
+    parser.add_argument("--coupling-tol", type=float, default=1e-3,
+                        help="strong: relative coupled-state convergence "
+                             "tolerance for the Picard loop (L_total for BEM-A, "
+                             "terminal impedance for PEEC).")
+    parser.add_argument("--coupling-relax", type=float, default=0.5,
+                        help="strong: under-relaxation factor (0<relax<=1) on "
+                             "the coupled back-reaction RHS.")
+    parser.add_argument("--telegen-form", default="phi-B",
+                        choices=["phi-B"],
+                        help="Telegen form (only phi.B currently)")
+
+    # ----- Output -----
+    parser.add_argument("--msh-output", default="",
+                        help="Workpiece .msh viz output path")
+    parser.add_argument("--coil-msh-output", default="",
+                        help="Coil .msh viz output path. PEEC: writes "
+                             "<this>=B-on-bbox + <stem>_filaments.msh "
+                             "(1D polylines + |I|).  open_gmsh.py auto-"
+                             "merges the filament sibling.")
+    parser.add_argument("--write-summary", action="store_true",
+                        help="Add extra diagnostics in JSON")
+    parser.add_argument("--coil-only", action="store_true",
+                        help="Skip workpiece even if --vol given")
+
+    # ----- Performance -----
+    parser.add_argument("--n-threads", type=int, default=0,
+                        help="0 = auto (TaskManager)")
+    return parser
+
+
+def main():
+    parser = build_argparser()
+    return calc_main(run_inductance, parser)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

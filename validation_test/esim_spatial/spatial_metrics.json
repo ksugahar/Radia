@@ -1,0 +1,32 @@
+[
+  {
+    "frequency_hz": 10000,
+    "current_A": 100.0,
+    "converged": true,
+    "iterations": 8,
+    "P_BIE_W": 1.9907067864733772,
+    "P_local_W": 1.7178471020056572,
+    "P_transfer_W": 1.9907067864733834,
+    "transfer_relative_gap": 3.1086244689504383e-15
+  },
+  {
+    "frequency_hz": 50000,
+    "current_A": 100.0,
+    "converged": true,
+    "iterations": 7,
+    "P_BIE_W": 18.676803483753456,
+    "P_local_W": 15.935240766480389,
+    "P_transfer_W": 18.676803483753556,
+    "transfer_relative_gap": 5.329070518200751e-15
+  },
+  {
+    "frequency_hz": 100000,
+    "current_A": 100.0,
+    "converged": true,
+    "iterations": 7,
+    "P_BIE_W": 29.351172547154544,
+    "P_local_W": 28.569172551636736,
+    "P_transfer_W": 29.351172547154604,
+    "transfer_relative_gap": 1.9984014443252818e-15
+  }
+]

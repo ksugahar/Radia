@@ -1,0 +1,132 @@
+## Induction Heating sample: gapped torus coil + cylindrical workpiece + air
+##
+## Required labels:
+##   block 1 = "coil"      (the swept gapped torus)
+##   block 2 = "workpiece" (the cylindrical workpiece)
+##   block 3 = "air"       (the surrounding air sphere)
+##   sideset 1 = "source"  (one gap face on the coil)
+##   sideset 2 = "sink"    (other gap face on the coil)
+##   sideset 3 = "sibc"    (the workpiece surface, for SIBC Robin BC)
+##   sideset 4 = "coil_surface" (coil wall excluding the two terminals)
+##   sideset 5 = "outer"    (exterior surface of the air sphere)
+##
+## Geometry (matched to the BEM reference test, L_analytical = 88.55 nH):
+##   Coil:      gapped torus, R_major = 0.030 m, R_minor = 0.003 m, gap = 5 deg
+##              L = mu_0 * R * (ln(8R/a) - 2) * (1 - gap/360) = 88.55 nH
+##   Workpiece: CYLINDER, R = 0.025 m, H = 0.025 m (centered in coil)
+##   Air:       sphere, R = 0.080 m  (~2.7x coil radius for open-BC headroom)
+##
+## Usage: Solve -> Radia-NGSolve -> Induction Heating
+##
+## Build policy (matches the sweep + subtract pattern documented in
+## CLAUDE.md / cubit_scripting_knowledge):
+##   1. Build the gapped torus by SWEEP (NOT `create torus + webcut + delete`,
+##      which silently produces a HALF coil)
+##   2. SUBTRACT coil and workpiece from the air sphere BEFORE imprint+merge,
+##      otherwise nested-volume merge does nothing and the resulting .vol has
+##      wrong FaceDescriptors
+##   3. Identify gap faces by area pi*a_minor^2, NOT by hardcoded surface IDs
+##      (IDs change between Cubit versions and after any imprint/merge)
+
+reset
+
+# === 1. Coil: gapped torus by sweep (vertices 1, 2, 3 → curve → surface → sweep) ===
+# R_major = 0.030, R_minor = 0.003 (matches L_analytical = 88.55 nH).
+create vertex 0.030000 0 0
+create vertex 0.033000 0 0
+create vertex 0.030000 0 0.003000
+create curve arc center vertex 1 vertex 2 vertex 3 normal 0 1 0 full
+create surface curve 1
+sweep surface 1 axis 0 0 0 0 0 1 angle 355
+# Volume 1 = coil
+
+# === 2. Workpiece cylinder (volume 2) ===
+# R = 0.025 m, H = 0.025 m -- fits inside the coil bore (inner R = 0.027 m).
+# Centered at origin so the cylinder extends from z = -0.0125 to z = +0.0125.
+create cylinder radius 0.025000 height 0.025000
+
+# === 3. Air sphere (volume 3) ===
+# R = 0.080 m -- ~2.7x coil radius gives ~80% headroom for the open BC.
+create sphere radius 0.080000
+
+# === 4. Subtract coil and workpiece from the air sphere (REQUIRED) ===
+# `imprint+merge` alone does NOT consolidate surfaces between fully nested
+# volumes; the export then sees the coil/workpiece walls as exterior boundary
+# (domout=0) instead of internal interfaces. Subtract first, then merge.
+subtract volume 1 2 from volume 3 keep_tool
+# Subtract reassigns the carved air to a new volume id (4 in this script).
+
+imprint volume all
+merge volume all
+
+# === 5. Mesh ===
+# BEM cost is O(N^2) in coil surface elements. Cubit's curvature-based
+# auto-sizing forces ~4000 surface tris on the small torus tube which
+# gives ~120 s BEM assembly. We override by setting interval per curve
+# kind:
+#   - tube circles (length 2*pi*a ~= 0.019 m)             -> interval 12
+#   - toroidal arcs (length 2*pi*R*355/360 ~= 0.186 m)    -> interval 48
+# yielding ~1900 surface tris, ~12 s BEM solve, -0.84% L error
+# vs the analytical 88.55 nH (verified 2026-04-11).
+# This 12/48 resolution is the validated order-2 production setting. At export
+# order 3, check-vol detects 13 local Jacobian orientation flips even though
+# the total-volume error is only 0.0349%. For an order-3 .vol, use at least
+# 16/64 intervals and volume size 0.00225; that refinement was measured with
+# zero invalid/flipped samples. Always run check-vol before solver use.
+curve in volume 1 with length < 0.05 interval 12
+curve in volume 1 with length > 0.05 interval 48
+volume 1 scheme tetmesh
+volume 1 size 0.003
+mesh volume 1
+
+volume 2 scheme tetmesh
+volume 2 size 0.003
+mesh volume 2
+
+volume 4 scheme tetmesh
+volume 4 size 0.030
+mesh volume 4
+
+# === 6. Blocks ===
+block 1 add volume 1
+block 1 name "coil"
+block 2 add volume 2
+block 2 name "workpiece"
+block 3 add volume 4
+block 3 name "air"
+
+# === 7. Source/sink sidesets ===
+# After sweep, the two flat circular gap faces have area
+# pi * a_minor^2 = pi * 0.003^2 ≈ 2.83e-5. Cubit assigns the source surface
+# at the start of the sweep (id 1) and the sink surface at the end (id 3) for
+# this exact geometry. If you change the parameters, identify them by their
+# centroid (one near y=0, the other shifted by ~R_major*sin(5 deg) in -y).
+sideset 1 add surface 1
+sideset 1 name "source"
+sideset 2 add surface 3
+sideset 2 name "sink"
+
+# Workpiece outer surface (for BEM+SIBC and FEM+SIBC impedance models).
+# After subtract, the workpiece cylinder surfaces are shared with the
+# carved air volume. The sideset name MUST be "sibc".
+# Total area = 2*pi*R*H + 2*pi*R^2 = 2*pi*0.025*(0.025 + 0.025)
+#            = 7.854e-3 m^2.
+sideset 3 add surface in volume 2
+sideset 3 name "sibc"
+
+# Name every remaining exported boundary. Strict solver preflight rejects
+# Cubit's fallback Surface_N labels because they are unstable after CAD edits.
+group "coil_gap_faces" add surface 1 3
+group "coil_outer" add surface in volume 1
+group "coil_outer" remove surface in coil_gap_faces
+sideset 4 add surface in coil_outer
+sideset 4 name "coil_surface"
+
+# The air sphere is the only surface in volume 4 with area greater than
+# 0.05 m^2. Select it geometrically instead of relying on the current ID 7.
+group "air_outer" add surface in volume 4 with area > 0.05
+sideset 5 add surface in air_outer
+sideset 5 name "outer"
+
+# Hide air for visibility
+volume 4 visibility off

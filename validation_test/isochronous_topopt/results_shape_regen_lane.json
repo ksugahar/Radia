@@ -1,0 +1,173 @@
+{
+ "schema": "radia.isochronous-topopt-shape-regen/v4",
+ "executed_at_utc": "2026-08-09T15:48:10.599804+00:00",
+ "radia_version": "4.95.50",
+ "ngsolve_version": "6.2.2604",
+ "cubit_runtime": "Coreform Cubit 2025.12 headless batch",
+ "timing_breakdown_s": {
+  "physics_hex_fine": 107.8012080999979,
+  "physics_tet_reference": 38.33375679999881,
+  "physics_hex_coarse": 13.969719400003669,
+  "density_design": 11.12141910000355
+ },
+ "stl": {
+  "n_faces": 1500,
+  "n_vertices": 752,
+  "volume": 0.00011708133340798138,
+  "volume_before_smoothing": 0.00011760696070146285,
+  "smoothing_volume_drift": -0.0013656415616142877,
+  "decimation_volume_drift": -0.003107958098142003,
+  "grid_resolution": 96,
+  "median_edge_length": 0.025882774660573954,
+  "cutoff": 0.031059329592688742,
+  "watertight": true
+ },
+ "coarse_stl": {
+  "n_faces": 300,
+  "n_vertices": 152,
+  "volume": 0.0001158774212353298,
+  "watertight": true
+ },
+ "meshes": {
+  "tet_reference": {
+   "scheme": "tet",
+   "size": 0.01,
+   "stl_volume": 0.0001158774223927337,
+   "mesh_volume": 0.00011533243196992138,
+   "closure": 0.004703163149118234,
+   "closure_tolerance": 0.05,
+   "total_negative": 0,
+   "min_jacobian_det": 1.7035544130000002e-10,
+   "vol_boundary_faces": 1710,
+   "msh_skin_faces": 1710,
+   "by_type": [
+    {
+     "element": "Tetrahedron 4",
+     "n": 6247,
+     "min": 0.039711814318196176,
+     "mean": 0.8560692026957466
+    }
+   ],
+   "dof_estimate": {
+    "h1_p1": 1518,
+    "hcurl_lowest": 8619,
+    "hdiv_lowest": 13349,
+    "l2_p0": 6247
+   },
+   "gates": {
+    "closure_ok": true,
+    "no_inverted_elements": true,
+    "boundary_faces_ok": true
+   }
+  },
+  "hex_coarse": {
+   "scheme": "hex",
+   "size": 0.01,
+   "stl_volume": 0.0001158774223927337,
+   "mesh_volume": 0.00010419391689218317,
+   "closure": 0.10082641863531093,
+   "closure_tolerance": 0.12,
+   "total_negative": 0,
+   "min_jacobian_det": 3.2419348378935315e-09,
+   "vol_boundary_faces": 172,
+   "msh_skin_faces": 172,
+   "by_type": [
+    {
+     "element": "Hexahedron 8",
+     "n": 257,
+     "min": 0.3526080599419553,
+     "mean": 0.7206532437719875
+    }
+   ],
+   "dof_estimate": {
+    "h1_p1": 369,
+    "hcurl_lowest": 968,
+    "hdiv_lowest": 857,
+    "l2_p0": 257
+   },
+   "gates": {
+    "closure_ok": true,
+    "no_inverted_elements": true,
+    "boundary_faces_ok": true
+   }
+  },
+  "hex_fine": {
+   "scheme": "hex",
+   "size": 0.005253726264768843,
+   "stl_volume": 0.00011708133129449445,
+   "mesh_volume": 0.0001146232584580722,
+   "closure": 0.020994575388278373,
+   "closure_tolerance": 0.03,
+   "total_negative": 0,
+   "min_jacobian_det": 6.781825156080089e-10,
+   "vol_boundary_faces": 724,
+   "msh_skin_faces": 724,
+   "by_type": [
+    {
+     "element": "Hexahedron 8",
+     "n": 1462,
+     "min": 0.36413183007953154,
+     "mean": 0.8153536749099575
+    }
+   ],
+   "dof_estimate": {
+    "h1_p1": 1873,
+    "hcurl_lowest": 5158,
+    "hdiv_lowest": 4748,
+    "l2_p0": 1462
+   },
+   "gates": {
+    "closure_ok": true,
+    "no_inverted_elements": true,
+    "boundary_faces_ok": true
+   }
+  }
+ },
+ "evaluations": {
+  "tet_reference": {
+   "ne": 6247,
+   "ndof": 40047,
+   "native_iterations": 53,
+   "ngsolve_iterations": 53,
+   "J_native": 0.7600408559063725,
+   "J_ngsolve": 0.7600408555494564,
+   "J_direct_field": 0.7600408559060722,
+   "solver_parity_relative": 4.696011400738509e-10,
+   "reciprocity_relative": 3.9513050624507296e-13,
+   "elapsed_s": 38.33375679999881
+  },
+  "hex_coarse": {
+   "ne": 257,
+   "ndof": 6512,
+   "native_iterations": 20,
+   "ngsolve_iterations": 21,
+   "J_native": 0.6664262212796909,
+   "J_ngsolve": 0.6664262212796909,
+   "J_direct_field": 0.6664262716263248,
+   "solver_parity_relative": 0.0,
+   "reciprocity_relative": 7.554719271510688e-08,
+   "elapsed_s": 13.969719400003669
+  },
+  "hex_fine": {
+   "ne": 1462,
+   "ndof": 36536,
+   "native_iterations": 21,
+   "ngsolve_iterations": 22,
+   "J_native": 0.7420516484676788,
+   "J_ngsolve": 0.7420516484676783,
+   "J_direct_field": 0.7420516484433926,
+   "solver_parity_relative": 5.984613210779841e-16,
+   "reciprocity_relative": 3.272850311285366e-11,
+   "elapsed_s": 107.8012080999979
+  }
+ },
+ "ne_staircase": 66,
+ "chi_eval": 100.0,
+ "demag_factor_z_fine_hex": 0.4615657741853939,
+ "J_staircase": 0.7609099622795523,
+ "staircase_iterations": 31,
+ "fine_hex_vs_staircase_relative": -0.02478389658005967,
+ "fine_hex_vs_tet_relative": 0.02366873740917652,
+ "coarse_hex_vs_tet_relative": 0.12317052945139804,
+ "boundary_face_incident": "fixed: direct/free Sculpt sideset faces are exported to .vol; all three meshes now require vol_boundary_faces == msh_skin_faces"
+}

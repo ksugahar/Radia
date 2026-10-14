@@ -1,0 +1,58 @@
+{
+  "accepted": true,
+  "release_accepted": false,
+  "scope": "Installed common wheel bounded HDiv/FEM/AMS/FMM acceptance",
+  "wheel": {
+    "passed": true,
+    "version": "0.1.4",
+    "source_commit": "91868346a9bafaf29abec6207a02780357a30137",
+    "wheel_sha256": "6b6cc5034365a1aebd6dc26c1d17b423ac509e874e021f70549905ed6f8ec154",
+    "files": 138,
+    "manifest_sha256": "32330627d628cef716fef9ac9e059903791dfb48f8a3daa05d2b6f53bda47380",
+    "cuda_solvers": [
+      "ams",
+      "csr_pcg",
+      "fmm",
+      "hmatrix",
+      "projection"
+    ]
+  },
+  "csr_pcg_independent_cpu_relative": 0.0,
+  "csr_pcg_independent_true_residual": 0.0,
+  "hdiv": {
+    "coefficient_error": 5.015281377765097e-10,
+    "physical_error": 1.4897781899323295e-12,
+    "true_residual": 7.953788482773285e-12,
+    "projection_error": 2.2746676655798596e-14
+  },
+  "projection_individual_relative": [
+    1.476382627369113e-16,
+    2.2746676655798596e-14,
+    2.828595643112391e-16
+  ],
+  "prior_independently_validated_reference_relative": {
+    "hcurl:solution": 1.4137168804055394e-14,
+    "physics:slPotential": 0.0,
+    "physics:dlPotential": 0.0,
+    "physics:B": 0.0,
+    "physics:A": 0.0,
+    "physics:cloudField": 0.0,
+    "boundary:slResult": 6.730123983332964e-17,
+    "boundary:dlResult": 1.141851978826818e-16
+  },
+  "fmm_independent_cpu_relative": {
+    "potential": 7.667127535681754e-10,
+    "field": 1.6377016841204107e-09
+  },
+  "ams_independent_true_residual": 4.357484899166927e-12,
+  "ams_independent_cpu_relative": 2.397054365989615e-13,
+  "ams_cpu_true_residual": 4.668910486615201e-15,
+  "ams_cpu_route": "NGSolve NewtonSolver, caller-owned TaskManager, sparsecholesky",
+  "raw_evidence_sha256": "6567aa17fae9a176a53002d0a6c6593bf23a37a56b60b84b47fe247a6132c2a9",
+  "protocol_sha256": {
+    "ams_tuning.py": "3cffba3279c54098dd211fcdcaea628ed60eed5e19ee8ad3e17a97265321a9c5",
+    "ams_tuning_sample.m": "08a6dbfefd5f1ad7104f3d07bb30193c014018795baf547d15a40d79ff44c40a",
+    "measure_installed_cpu_gpu.py": "ba71c2bc4701af65ab54f9773042b0e105454b780e32b6cc48372e93ce7a1dcf",
+    "measure_installed_cpu_gpu.m": "88baa6788b8339c36f1f69a04efe47c22f2b9473eecc60357cdc7f694cc0c017"
+  }
+}

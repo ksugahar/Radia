@@ -1,0 +1,34 @@
+{
+  "passed": true,
+  "scope": "IH preassembled operator MEX parity; see per-case scope for source and geometry",
+  "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
+  "cases": [
+    {
+      "name": "axisymmetric",
+      "nodes": 100,
+      "steps": 100,
+      "unit_power_W": 0.98174770424681057,
+      "assembled_power_W": 0.98174770424681057,
+      "max_temperature_difference_K": 9.7274828831163074E-9,
+      "max_relative_temperature_rise_error": 4.3113375950448949E-7,
+      "heat_vector_relative_error": 0,
+      "source_sha256": {
+        "ih_operator_assembly": "57166fdda1a6404d24f43a466ce73f1c7cbcf9b678ce3444c64c4d46885d9c77",
+        "driver": "dc29d46d8d40c9f913f7b7b4426c744816366baaae5687a211668ed93197b177"
+      },
+      "scope": "axisymmetric production thermal operators; uniform input; in-memory boundary relabeling, not production VOL gate"
+    }
+  ],
+  "native_build": {
+    "schema": "radia.native-build-provenance.v1",
+    "source_commit": "c4953557b9b1a8e8025b193fb15b336718fa0877",
+    "source_dirty": false,
+    "source_change_fingerprint_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+    "binary_name": "radia_mex.mexw64",
+    "binary_bytes": 3.879936E+6,
+    "binary_sha256": "8528afeacacc310cec5aa099a64823df2d53839370fd92618497eb60b5b79d62",
+    "generated_at_utc": "2026-09-15T13:43:42.3296991+00:00"
+  },
+  "handles_before": 0,
+  "handles_after": 0
+}

@@ -1,0 +1,470 @@
+# Resident Matrix Build and HDiv-MMM CUDA subgates
+
+The experimental mexcuda runtime retains symmetric HACApK leaf coefficients,
+permutation, physical charge normalization and vector state on the GPU. It
+applies a Gram operator or the charge-map composition `B^T G B` without vector
+transfer or a host reduction between applications. Dense and low-rank upper
+leaves mirror their transposes; diagonal leaves apply once. Deterministic row
+reduction avoids cross-block atomics. General Gram application has four CUDA
+launches, and the charge-map composition has six, independent of leaf count.
+
+`fromHacapk` consumes native HACApK storage directly inside C++. MATLAB's numeric
+leaf schema exercises the same packing adapter; native pointers never cross
+that interface. MATLAB uses `radia.gpu.HMatrixOperator` for checked ownership.
+The native module has no Python runtime or NGSolve TaskManager requirement.
+
+## Bounded native Matrix Build
+
+`assembly='analytic_constant_block'` constructs a block from flat row-major
+coordinate column vectors `cells` (12 coordinates per linear tetrahedron) and
+`faces` (9 per linear triangle). The prototype accepts at most 128 charges and
+uses the existing all-analytic constant-density route: shared exact `PhiTet` /
+`TriPotential`, the unchanged 64-point Gauss-Duffy volume rule and 7-point
+Dunavant surface rule, symmetric off-diagonal evaluation, and charge
+normalization. Coefficients remain on the GPU after generation. No CPU-generated
+matrix or Python snapshot is needed for this entry point. Images, high-order,
+curved geometry, alternative near/far choices and larger blocks are unsupported
+and must not be substituted by centroid or point-cloud approximations.
+
+This is a bounded block-generation frontend, not a replacement for HACApK's
+cluster construction and ACA+ compression. Connecting these generated blocks
+to full adaptive assembly, real NGSolve charge maps, constitutive terms,
+preconditioners and the nonlinear HDiv-MMM solve remains required. FE direct
+subsolves retain `sparsecholesky`; linear true-residual and physics gates remain
+unchanged. Repeated operator application is not a linear solver and therefore
+has no solver residual to certify.
+
+## Reproduce
+
+Build only on 100 from clean reviewed source:
+
+```powershell
+pwsh -NoProfile -File ./Build.ps1 -HMatrixCudaOnly -RequireNativeProvenance
+python validation_test/hmatrix_cuda/validate_resident.py --artifact <artifact-dir> --out <new-job-dir>
+python validation_test/hmatrix_cuda/measure_resident.py --artifact <artifact-dir> --inputs <numeric-job-dir>/inputs.mat --out <new-idle-job-dir>
+```
+
+Numerical checks run one below-normal MATLAB session and a one-thread,
+caller-owned NGSolve TaskManager CPU reference. Synthetic dense/low-rank leaves,
+uniform and unequal block sizes, permutations, normalization, dense/sparse
+charge maps, real public pybind integrated-tetrahedron Gram evaluation and
+native CUDA tetrahedron/triangle assembly are distinguished. Relative vector
+differences must be <=1e-12. Invalid input, wrong/stale handles, reload, repeated
+execution, wrapper cleanup and final live count are checked. Device reset
+acceptance remains pending; do not reset a shared GPU to test it.
+
+Timing checks queued/running CI, other computation, GPU and host budgets before
+and after measurements. After warmup, two ABBA rounds compare rebuilding and
+transferring on every application against one resident context for three
+applications. Each continuous interval includes numeric leaf packing, context
+construction, transfers, apply, recovery and release. It excludes geometry/FE
+assembly and is an operator-residency diagnostic only. The first-payload labels
+are after MATLAB/MEX initialization, not cold process/module startup.
+
+100 timing is diagnostic, not formal idle-mdx performance acceptance. Exact
+owned CUDA buffers, setup scratch and sampled free memory are distinguished;
+no host/process/global allocation peak is claimed. Allocation checks leave
+max(2 GiB, 20% device memory) free. A100 is never started or connected. The gateway rejects direct payloads over 2 GiB. The required HDF5 frontend is
+not connected yet; these bounded fixtures are small.
+The experimental class/module remain excluded from published wheel payloads
+until their physical and release acceptance is complete.
+
+## Recorded checkpoint (2026-10-12)
+
+`results/resident-numerical-20261012.json` accepts ten small cases against
+independent NumPy algebra and the installed public Python/pybind CPU route.
+The latest native artifact is built from `0863b258a`; maximum relative vector
+difference is 7.223e-16. Native geometry-to-CUDA constant-charge assembly passes
+for tetrahedra and tetrahedron/triangle combinations. This is not full adaptive
+Matrix Build or complete HDiv-MMM physical acceptance.
+
+`results/residency-diagnostic-20261012.json` retains an earlier `b7be1da75`
+artifact's guarded idle-100 diagnostic: a 275-dimensional synthetic mixed-leaf
+operator, three applications, continuous packing/setup/transfers/recovery/release
+median 7.718 ms rebuilding versus 3.696 ms resident (2.09x). Exact owned device
+buffers are 573312 bytes in both modes; no buffer-memory reduction is claimed.
+These times do not certify the latest artifact, a large physical problem, cold
+process startup or mdx performance. A later timing attempt was rejected by the
+other-computation guard, so latest-artifact timing remains pending.
+
+`results/quadrature-sharing-20261012.json` verifies that the extracted shared
+quadrature helper is textually identical to the previous CPU implementation.
+The full CPU solver build remains a separate CI gate.
+
+## Indexed assembly checkpoint
+
+`hmatrix_entry_oracle.cuh` retains linear constant-charge geometry and its exact
+quadrature on the GPU. It evaluates bounded indexed row/column requests without
+allocating the global dense matrix. The native caller supplies a stream and
+reuses one workspace; shared host callers serialize that workspace. Values are
+raw physical entries, so the existing HACApK normalization remains the caller's
+responsibility. The diagnostic `analytic_entry_batch` command uploads geometry
+once per command and exercises three 256-entry-capacity batches; it is not a
+persistent MATLAB assembly handle or an adaptive compression implementation.
+
+`results/indexed-entry-20261012.json` records the clean `712fa3960` build,
+600 requested entries with CPU relative difference 5.924e-16, and the ten
+existing numerical/lifecycle cases. Full adaptive ACA+ callback wiring,
+OpenMP leaf scheduling, real NGSolve charge-map assembly, material mass,
+constraints, iterative solver and true residual remain required. Large-scale
+assembly, whole-solve timing and peak-memory acceptance are pending. CI was
+running and queued, so this checkpoint contains no new performance comparison.
+
+The shared ACA active-vector extraction now has an opt-in compile-time
+`RAD_HACAPK_BATCH_ENTRIES` boundary. Default CPU builds still call the scalar
+entry function in the same order. Opt-in builds request active entries in
+chunks of at most 256, scatter to their original positions, and then execute
+the existing ACA subtraction/pivot logic. No global callback setter was added.
+`check_entry_batch.py` builds and executes both C paths on 100;
+`results/aca-entry-contract-20261012.json` records 36 cases per path covering
+both directions, masks, permutation and chunk boundaries. This tests extraction
+only: the CUDA callback definition, complete native HACApK build and compression
+parity remain pending. The GPU build must not enable the macro before that
+definition and its physical-entry normalization/error handling are connected.
+
+## CUDA ACA connection: numerical stop
+
+The module now defines the C batch callback with a scoped thread-local binding
+to the resident analytic oracle, captures exceptions at the C ABI, and rethrows
+before accepting factors. `analytic_aca_vector` passes eight masked/permuted
+row/column cases with CPU relative difference 9.688e-16. The original
+`calc_vec`, `aca` and `acaplus` bodies are shared verbatim through
+`cHACApK_aca.inc`; the narrow native C host unit needs no TaskManager or Python.
+Host ACA arithmetic uses the existing non-BLAS implementation intentionally.
+
+Compression is **not accepted**. Clean build `8a3885533` compiles and links the
+existing ACA+ to CUDA entries, with charge-diagonal normalization and the
+standard 1e-3 threshold multiplier. The two-by-two offdiagonal test returns
+rank one and relative error 0.0594196. Independent scalar C execution of the
+same shared ACA+ reproduces that rank/error (`check_aca_cpu.c` consumes the
+public toy Gram values from the validation MAT). This isolates the failure
+from CUDA entry parity; it does not certify compression or justify changing
+the mathematical route. See `results/aca-cuda-connection-20261012.json`.
+Large assembly and solve tests stop here. Next check actual admissible-leaf
+selection and small-block ACA+ behavior, and complete the shared CPU native
+build gate. No new whole-time comparison was performed with CI queued.
+
+## Cyclic-search correction
+
+The original reference searches stopped before the final cyclic row/column.
+For the two-by-two fixture that skipped the only remaining active candidate,
+leaving zero reference residuals and accepting rank one too early. Bounded
+full-cycle scans now include that candidate; retry limits, masks, ACA updates
+and tolerances are preserved in the shared CPU/CUDA body. Twelve scalar and
+twelve batched C regression cases cover square/rectangular full-rank and
+rank-one matrices (`check_entry_batch.py --compression`).
+
+Clean CUDA build `af2f12ad6` returns rank two for the physical tiny fixture,
+CPU relative difference 1.403e-16; independent scalar C gives 1.235e-16.
+`validate_resident.py --aca-block-size 66` also checks a separated 66-by-66
+constant-tet block against independent pybind physical entries. The actual
+CPU builder reports two low-rank and eight dense leaves for 132 charges.
+Physical block error is 2.046e-9, but rank reaches the diagnostic cap of 32.
+That is not convergence to requested 1e-10. The full builder must retain its
+existing exact-dense promotion when a cap is exhausted below both dimensions.
+`results/aca-cyclic-search-fix-20261012.json` distinguishes these gates.
+
+In the uniform one-charge-per-element path, leaf_size=64 yields threshold 65;
+both dimensions must reach it and support-box gap admissibility must pass.
+The earlier forced 2-by-2 ACA test is normally a dense leaf, but still exposed
+a shared algorithm defect worth fixing. Variable-DOF leaf rules require their
+own acceptance. Full adaptive assembly, full CPU native build, HDiv-MMM solves,
+true residuals and whole-run performance remain pending. This supersedes the
+cyclic-search failure, without deleting its original evidence.
+
+## Exact rank-budget promotion bridge
+
+`analytic_aca_leaf` retains the existing ACA+ diagnostic inputs and CPU
+rank-budget promotion condition. A saturated rank below both dimensions
+is discarded and the physical dense block is evaluated on CUDA in bounded
+256-entry batches. The MATLAB result uses column-major dense storage; native
+resident dense leaves still use row-major storage. Non-saturated results retain
+the factor response. This is a leaf bridge, not adaptive whole-matrix assembly.
+Generated dense payloads above 2 GiB are rejected before allocation; HDF5
+remains pending. The larger check compares promotion against direct CUDA entries at 1e-12
+and against independent CPU physical entries at the existing 1e-8 block
+limit. A first attempt requiring 1e-12 CPU physical parity failed at
+1.726e-9; the direct-entry comparison isolates promotion from integration
+roundoff. This does not certify CPU physical parity at 1e-12. `results/dense-promotion-20261012.json` records direct CUDA difference zero
+and CPU physical difference 1.726e-9. Full adaptive assembly remains pending.
+
+## MATLAB host scheduling boundary
+
+`hmatrix_serial_host.c` implements the existing HACApK C scheduling API on
+the owning MATLAB thread. It replaces, rather than links alongside, the
+TaskManager implementation in a future full native assembly target. CUDA
+entry bindings are thread-local, so serial control preserves ownership without
+requiring worker binding or oversubscribing CI. `check_entry_batch.py
+--serial-host` checks empty work, 257 ordered iterations, one job and thread
+identity. `results/serial-host-20261012.json` records that C contract only.
+The current narrow CUDA target still does not build the full cluster/leaf
+implementation; PCA/LAPACK integration and full physical acceptance remain
+pending. No speedup is inferred from serial host control.
+
+## Same-artifact A100 subgate
+
+The user authorized tests on the already running NGSolve A100 host.
+`validate_same_artifact.py` verifies every staged input/module/wrapper hash,
+uses an owned MATLAB Engine session and releases it on success or failure.
+Python transports CPU validation inputs only; it is not a GPU user adapter.
+The 100-built `15e2bef2a` binary passed the same numerical/lifecycle suite on
+A100-SXM4-40GB, including exact dense promotion and CPU physical parity.
+The optional profile uses Windows system CPU/memory samples and GPU utilization
+before/after; these samples do not exclude transient external load or measure
+process/global peaks. The small 275-dimensional, three-apply ABBA diagnostic
+records 4.292 ms rebuild versus 2.481 ms resident (1.73x), with 573312 owned
+device bytes in both modes. See `results/a100-same-artifact-20261012.json`.
+This is not full HACApK assembly, an HDiv-MMM solve, true-residual acceptance
+or full-solver performance. The initial profile attempt failed on absent
+psutil and is retained separately; no host package was installed.
+
+## MATLAB-native RT0 material path
+
+`radia.gpu.solveHDivRT0` loads a checked affine-tetra mesh through NGSolve,
+constructs RT0 mapped divergence/normal charges, mass and applied-field RHS
+inside the mexcuda host bridge, then constructs the constant-charge Gram on
+CUDA. No Python FE snapshot is required by this MATLAB entry point. The
+current bounded path rejects curved/non-tetra meshes and more than 16 cells;
+it uses exact dense Gram, not adaptive whole HACApK assembly. The projection
+module now contains sm75/sm80/PTX and links supported nglib mesh access.
+
+The FP64 material PCG keeps mass, vectors and the demagnetization operator on
+GPU. It uses an explicitly selected inv_chi mass-diagonal preconditioner;
+CPU reference uses NGSolve mass-Riesz sparsecholesky. cuBLAS scalar reductions
+synchronize host control; no synchronization-free solver claim is made.
+Convergence is checked by recomputing the original equation residual, with
+restart on recursive/true-residual disagreement and loud failure at limits.
+
+One and eight tetra physical subgates passed on 100 and the same hashes on
+the authorized A100. The eight-tetra A100 coefficient/mean-magnetization
+relative differences are 1.126e-11/3.663e-12; independent true residual is
+9.729e-12. Accounted owned peak is 31852 bytes. The recorded first solve
+0.291 s follows a separate FE parity check and is not warmed performance.
+See `results/hdiv-native-rt0-a100-20261012.json`. Experimental MATLAB entry
+points remain excluded from the wheel until full release acceptance.
+
+The first live-refined CPU reference exposed four zero mass diagonals in
+28 DOFs (24 free). Saving/reloading the same mesh produces 24 DOFs with
+positive minimum mass eigenvalue 0.0287241. Validation now reloads its mesh
+artifact, matching the native mesh-file entry point; no alternate direct
+solver or weakened SPD check was introduced. The initial A100 load failed
+on the isolated dependency bin path and was corrected without changing
+global installations. Failure evidence is retained. General HDiv-MMM and
+adaptive HACApK validation remain incomplete.
+
+## Full native host assembly dependency gate
+
+`check_full_host.py --mkl-root <isolated-venv>/Library --out <new-job>`
+builds the existing complete C cluster/leaf/fill implementation, including
+MKL PCA/LAPACK dependencies, with `hmatrix_serial_host.c` instead of
+TaskManager scheduling. The original production ACA dispatch (`param[60]=1`)
+is preserved. Both BBOX and PCA strategies on an independently authored
+132-point smooth synthetic kernel pass scalar and batch dispatch against
+direct matrix multiplication (maximum relative difference 3.353e-13).
+`results/full-host-assembly-20261013.json` records source and executable hashes.
+This closes the host dependency/assembly subgate; the batch callback in this
+test evaluates the synthetic CPU kernel, not CUDA. The following section
+records the subsequent CUDA connection. No timing was measured in this gate.
+
+## Complete constant-charge CUDA hierarchy path
+
+`Build.ps1 -HMatrixCudaOnly -HMatrixMklRoot <isolated-venv>/Library
+-RequireNativeProvenance` links the complete existing C cluster/leaf/ACA
+implementation with supported MKL and the serial MATLAB host scheduler.
+The new `create_analytic_hacapk` command accepts constant affine tetra/triangle
+charges, explicitly bounded to 4096 sources. It preserves BBOX support radii,
+production ACA dispatch, diagonal normalization and rank-cap dense promotion.
+CUDA computes both compressed-entry requests and exact dense leaves. Dense
+leaves use contiguous batches of at most 256 entries; CPU default builds retain
+the scalar order. Scoped callbacks capture C ABI failures and owners reject
+failed builds before creating a resident handle. Symmetric fill, geometry-radius
+and cluster-strategy state is reset on exit.
+
+The 132-tetra direct-CPU parity subgate passes at 1.440e-11 relative error,
+with 14272 evaluated entries in 113 batches, 7 stored upper leaves and 99688
+owned resident device bytes (292324 accounted setup peak). At this tolerance,
+all selected low-rank leaves exhausted the rank budget and were promoted to
+dense: this is full hierarchy assembly, **not** successful compression.
+`solveHDivRT0(...,'hacapk')` connects that builder to native NGSolve FE setup
+and the resident material solver. The eight-tetra physical path retains CPU
+coefficient difference 1.126e-11 and independent true residual 9.729e-12.
+
+`measure_hdiv_assembly.py` compares the previous scalar-dense CUDA assembly
+with batched CUDA assembly using the same physical mesh and CPU reference.
+Its guarded ABBA timer includes FE setup, assembly, transfers, solve, result
+recovery and destruction. It is an idle-100 diagnostic, not formal mdx
+performance acceptance. First payloads are distinguished from cold processes;
+available-memory samples are not global peaks. General high-order/curved FE,
+images, constraints, nonlinear physics, large compressed-leaf validation and
+release acceptance remain pending.
+
+`results/full-cuda-assembly-20261013.json` records the latest checked build
+(`984875630`, `job-fop0ay52`) and same-hash A100 numerical subgates. The
+idle-100 eight-tetra ABBA whole-solve medians are 1.30363 s before batching
+and 0.0480764 s after batching (27.12x). CPU coefficient difference remains
+1.126e-11, independent true residual 9.729e-12, 21 iterations, and accounted
+owned peak 28996 bytes in both modes. These are CUDA-before/CUDA-after
+diagnostics on this bounded physical case, not CPU-vs-GPU or general-solver
+performance acceptance. A100 validation here uses independent CPU FE fixtures;
+native FE initialization on A100 was not reaccepted for this latest artifact.
+
+## Compression tolerance diagnostic on 256 constant charges
+
+`validate_resident.py --aca-block-size 128 --full-assembly --full-max-rank 64
+--full-epsilon 1e-6` keeps the production defaults and the existing independent
+CPU parity limit (1e-8) unchanged. One low-rank upper leaf survives; matvec
+relative difference is 5.815e-10 and owned resident bytes decrease from 336392
+to 217704 (35.3%). No timing improvement is established. The direct CPU
+128-by-128 offdiagonal block has optimal rank-64 relative Frobenius tail
+4.472e-10, above the stricter 1e-10 assembly tolerance. Thus dense promotion
+in the strict case is not evidence of a CUDA-only failure. The origin of the
+small singular-value floor still needs isolation. A single matvec comparison
+is not an operator norm certificate. See `results/epsilon-sensitivity-20261013.json`.
+
+`results/full-operator-20261013.json` strengthens this diagnostic by comparing
+all 256 basis-vector GPU applications with the complete independent CPU direct
+matrix: relative Frobenius error 9.960e-10 (unchanged limit 1e-8), symmetry
+error 2.536e-17. This certifies the bounded constant-charge operator comparison,
+not general HDiv-MMM physical or release acceptance. No timing is measured.
+
+## Native RT0 physical scaling to 64 tetrahedra
+
+The bounded native FE setup now admits up to 128 affine tetrahedra, 1024 DOFs
+and 1024 charges, rejecting over-budget or unsupported geometry before the
+corresponding dense allocation. A fresh `ProjectionCudaOnly` build from
+`7bf728b70` passes the twice-refined public tetra fixture with the existing
+full-HACApK artifact. Native mass/RHS/mean operators agree with independent
+NGSolve assembly; material coefficients differ by 9.680e-12, mean magnetization
+by 4.611e-13, and independent true residual is 8.674e-12 (32 iterations).
+Accounted owned setup/solver peak is 166916 bytes. Initial payload whole time
+is diagnostic only, not a warm comparison. See `results/hdiv-64tet-20261013.json`.
+General high-order/curved/constraint/nonlinear and release gates remain pending;
+the new projection binary has not yet been reaccepted on A100.
+
+## High-order and curved FE staging boundary
+
+`inspect_hdiv_elements` in the experimental projection mexcuda module stages
+NGSolve-owned mapped HDiv mass and P2 reference-node samples. Orders 1..3 are
+admitted for affine tetrahedra, orders 1..2 for curved tetrahedra, with explicit
+128-cell/1024-DOF budgets. It starts no TaskManager and requires no Python
+fixture for MATLAB use. `validate_element_setup.py` independently assembles
+the NGSolve mass in a caller-owned Python TaskManager and compares the native
+mapped nodes on an affine public tetrahedron and an original unit sphere.
+This diagnostic command is not a charge-map constructor or a GPU material solve.
+
+Remaining integration must preserve these existing mathematical contracts:
+
+- `_charge_basis` uses local L2/SurfaceL2 mass inverses and an orientation-aware
+  change of monomial basis for **each** element, not one reused element basis.
+- `_charge_basis_curved` uses reference-frame monomials, mapped P2 nodes and
+  the existing structural-zero floor. Its supported curved orders are 1 and 2.
+- `PhiInnerHOHostVec` uses analytic moment contractions, including the distinct
+  reference-moment branch for higher degree. RadFld scalar kernels alone do
+  not replace this host-block contract.
+- `QuadBlockHOTet` uses the existing singular host-vector Duffy path on touching
+  curved pairs; only non-touching curved pairs use the existing direct tensor
+  rule. Symmetrization, image transforms and near/far selection must survive.
+- The resulting charge map and Gram must feed the resident material equation;
+  compare coefficients and physical quantities with independent CPU assembly
+  and check the true residual before any whole-workflow timing acceptance.
+
+FE staging parity alone leaves general HDiv and release acceptance pending.
+The NGSolve A100 is offline and is not started or contacted for this gate.
+
+### Bounded curved whole solve (2026-10-13)
+
+`results/curved-hdiv-solve-20261013.json` records native NGSolve charge-map setup,
+existing curved singular integration, resident material PCG and physical recovery
+for the original public 13-cell P2 sphere. HDiv orders 1 and 2 pass independent
+CPU coefficient, mean magnetization and true-residual gates. The earlier volume
+normalization failure is retained in durable evidence. This dense near-rule
+subgate does not certify general adaptive/high-order HDiv, constraints, images,
+nonlinear materials, performance, packaging or release. A100 was not used.
+
+The latest same-artifact cases additionally cover the public affine tetrahedron
+at HDiv orders 1 and 2 through `solveHDivElements`. The wrapper preserves the
+existing CPU capability limit of order 2. Native charge-map staging at order 3
+is not whole-solver acceptance. Affine analytic reference moments and curved
+touching Duffy rules feed the same resident material solve. Latest curved order 2
+coefficient disagreement is 5.02e-10 and independent true residual 7.95e-12.
+`validate_hdiv_artifact.py` evaluates the same native setup and built artifacts
+on an independently staged host; Python supplies independent validation fixtures
+and Engine orchestration only, with no GPU-user Python adapter.
+
+### Same-artifact A100 evaluation
+
+`results/hdiv-elements-a100-20261013.json` records all four native FE whole
+solves on the user-started NGSolve A100. Warm medians (two samples) are
+12.73 ms / 34.34 ms for affine orders 1 / 2 and 1.752 s / 86.30 s for curved
+orders 1 / 2. Independent true residuals remain below 7.96e-12. These are
+A100 diagnostics with exact owned-buffer counters and available-memory samples,
+not CPU speedup, global memory peaks or idle-mdx acceptance. Initial idle/DLL
+failures were retained privately. All 40 recovered job files were verified
+before deleting the isolated remote job; the host remains running. General
+adaptive high-order assembly, images, constraints, nonlinear material, broad
+physics, IH Simulink and release/distribution gates remain pending.
+
+### Bounded host-vector cache numerical acceptance
+
+`host-vector-cache-stage-20261013.json` tracks an opt-in `host-cache` assembly
+mode. It reuses source potential at identical mapped target-host quadrature
+points across target monomials. Charge weights, inner integral math, ordered
+outer sums and symmetric assembly stay unchanged. Reused hosts must have identical
+geometry and topology; inconsistent input fails. Temporary workspace increases
+setup owned memory and is budget checked. Default `direct` stays selected.
+Clean native source `57a3dda15`, HMatrix artifact `job-6c403wdx`, now passes
+direct/cache whole-solve parity for affine order 2 and P2 curved orders 1 and 2.
+`results/cache-curved2-20261013.json` records identical direct/cache coefficients
+on both 100 and the already-running NGSolve A100. Independent Python CPU
+coefficient error is 5.02e-10, physical mean error 1.49e-12 and original-equation
+true residual 7.95e-12 for curved order 2 (288 DOFs, 160 charges).
+
+A100 transfer-inclusive whole-solve warm diagnostics are 86.4778011 s direct
+and 0.2696088 s cached, with one warm sample per mode, sequential rather than
+ABBA. These establish neither formal idle-mdx performance acceptance nor CPU
+speedup. Exact accounted setup/combined peak rises from 450288 to 2286980 bytes;
+cache does not reduce memory. Available-memory samples exclude CUDA/cuBLAS,
+host and global peaks. First payloads share initialized modules, with owned
+Engine startup reported separately. All 581 remote non-environment files were
+hash-recovered before guarded job deletion; environment freeze and DLL hashes
+are retained privately. The A100 host remains running.
+
+Default `direct` remains unchanged. Affine order 1 cache, broader operator and
+error/lifecycle coverage, general adaptive FE semantics, formal timing and exact
+release-wheel distribution acceptance remain pending. The wheel currently
+excludes these experimental HDiv wrappers; staged A100 acceptance is not wheel
+acceptance. AMS and FEM matrix-build work belong to the separate AMS session.
+
+For a release candidate containing bounded HDiv, explicitly set
+`RADIA_HDIV_HMATRIX_BUILD` and `RADIA_HDIV_PROJECTION_BUILD` to clean accepted
+build directories before building the wheel. Both receipts must name the exact
+wheel source commit and match every source and binary hash. Staging includes
+the two MEX files, the three standalone MATLAB wrappers and `hdiv-build.json`;
+the wheel verifier rejects a partial or mismatched payload. User-installed
+compatible native dependencies remain required and are not bundled. This
+packaging path has contract coverage but still needs fresh same-commit native
+builds and actual installed-wheel acceptance on 100/A100. The earlier staged
+artifacts deliberately cannot satisfy the new release-commit check.
+
+### Formal A100 same-host comparison (2026-10-13)
+
+The user designated NGSolve A100 as the official CPU/GPU measurement host.
+`measure_hdiv_cpu_gpu.py` verifies the staged GPU payload and independent
+Python/pybind11 reference hashes, then performs two CPU/GPU/GPU/CPU cycles
+under before/after idle guards. Python CPU setup, assembly, solve and mean
+recovery are compared with MATLAB GPU setup, transfer, solve and recovery.
+Each sample checks independent coefficient/mean agreement and original-system
+true residual. Python does not execute GPU numerical kernels.
+
+For the independently authored public 13-tetrahedron P2 sphere, HDiv order 2,
+linear isotropic material and opt-in host-cache, warmed medians are CPU
+5.16058735 s and GPU 0.27303460 s (18.90x). Maximum true residual across ten
+first/warm samples is 7.96e-12. Exact accounted GPU owned peak is 2286980 bytes;
+available host/device samples do not measure host/global/CUDA runtime peaks.
+Engine startup and first payload are separate; this is not a complete
+process-cold CPU/GPU comparison. The loaded CPU native hash is recorded, but
+its native build-source receipt has not been independently established.
+See `results/formal-a100-curved2-20261013.json`. This bounded measurement
+does not certify other geometries, nonlinear materials, general adaptive
+HDiv, an installed wheel or release completion. Prior diagnostics retain
+their original classification.

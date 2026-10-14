@@ -1,0 +1,381 @@
+{
+  "kind": "build123d_box_pressure_moment_validation",
+  "validation_class": true,
+  "size": [
+    2.0,
+    3.0,
+    5.0
+  ],
+  "pivot_m": [
+    -1.0,
+    -1.5,
+    0.0
+  ],
+  "pressure_by_face_Pa": {
+    "zmax": 2.0
+  },
+  "reference_rows": [
+    {
+      "index": 1,
+      "name": "xmin",
+      "surface_area": 15.0,
+      "vector_area": [
+        -15.0,
+        0.0,
+        0.0
+      ],
+      "vector_area_norm": 15.0,
+      "vector_area_norm_over_area": 1.0,
+      "unit_normal": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "face_center": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "box_center": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "box_size": [
+        2.0,
+        3.0,
+        5.0
+      ],
+      "pressure_Pa": 0.0,
+      "pressure_source": "default",
+      "force_N": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "force_magnitude_N": 0.0,
+      "pivot_m": [
+        -1.0,
+        -1.5,
+        0.0
+      ],
+      "lever_arm_m": [
+        0.0,
+        1.5,
+        0.0
+      ],
+      "moment_about_pivot_Nm": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "moment_magnitude_Nm": 0.0
+    },
+    {
+      "index": 2,
+      "name": "xmax",
+      "surface_area": 15.0,
+      "vector_area": [
+        15.0,
+        0.0,
+        0.0
+      ],
+      "vector_area_norm": 15.0,
+      "vector_area_norm_over_area": 1.0,
+      "unit_normal": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "face_center": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "box_center": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "box_size": [
+        2.0,
+        3.0,
+        5.0
+      ],
+      "pressure_Pa": 0.0,
+      "pressure_source": "default",
+      "force_N": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "force_magnitude_N": 0.0,
+      "pivot_m": [
+        -1.0,
+        -1.5,
+        0.0
+      ],
+      "lever_arm_m": [
+        2.0,
+        1.5,
+        0.0
+      ],
+      "moment_about_pivot_Nm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "moment_magnitude_Nm": 0.0
+    },
+    {
+      "index": 3,
+      "name": "ymin",
+      "surface_area": 10.0,
+      "vector_area": [
+        0.0,
+        -10.0,
+        0.0
+      ],
+      "vector_area_norm": 10.0,
+      "vector_area_norm_over_area": 1.0,
+      "unit_normal": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "face_center": [
+        0.0,
+        -1.5,
+        0.0
+      ],
+      "box_center": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "box_size": [
+        2.0,
+        3.0,
+        5.0
+      ],
+      "pressure_Pa": 0.0,
+      "pressure_source": "default",
+      "force_N": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "force_magnitude_N": 0.0,
+      "pivot_m": [
+        -1.0,
+        -1.5,
+        0.0
+      ],
+      "lever_arm_m": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "moment_about_pivot_Nm": [
+        0.0,
+        0.0,
+        -0.0
+      ],
+      "moment_magnitude_Nm": 0.0
+    },
+    {
+      "index": 4,
+      "name": "ymax",
+      "surface_area": 10.0,
+      "vector_area": [
+        0.0,
+        10.0,
+        0.0
+      ],
+      "vector_area_norm": 10.0,
+      "vector_area_norm_over_area": 1.0,
+      "unit_normal": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "face_center": [
+        0.0,
+        1.5,
+        0.0
+      ],
+      "box_center": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "box_size": [
+        2.0,
+        3.0,
+        5.0
+      ],
+      "pressure_Pa": 0.0,
+      "pressure_source": "default",
+      "force_N": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "force_magnitude_N": 0.0,
+      "pivot_m": [
+        -1.0,
+        -1.5,
+        0.0
+      ],
+      "lever_arm_m": [
+        1.0,
+        3.0,
+        0.0
+      ],
+      "moment_about_pivot_Nm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "moment_magnitude_Nm": 0.0
+    },
+    {
+      "index": 5,
+      "name": "zmin",
+      "surface_area": 6.0,
+      "vector_area": [
+        0.0,
+        0.0,
+        -6.0
+      ],
+      "vector_area_norm": 6.0,
+      "vector_area_norm_over_area": 1.0,
+      "unit_normal": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "face_center": [
+        0.0,
+        0.0,
+        -2.5
+      ],
+      "box_center": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "box_size": [
+        2.0,
+        3.0,
+        5.0
+      ],
+      "pressure_Pa": 0.0,
+      "pressure_source": "default",
+      "force_N": [
+        0.0,
+        0.0,
+        -0.0
+      ],
+      "force_magnitude_N": 0.0,
+      "pivot_m": [
+        -1.0,
+        -1.5,
+        0.0
+      ],
+      "lever_arm_m": [
+        1.0,
+        1.5,
+        -2.5
+      ],
+      "moment_about_pivot_Nm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "moment_magnitude_Nm": 0.0
+    },
+    {
+      "index": 6,
+      "name": "zmax",
+      "surface_area": 6.0,
+      "vector_area": [
+        0.0,
+        0.0,
+        6.0
+      ],
+      "vector_area_norm": 6.0,
+      "vector_area_norm_over_area": 1.0,
+      "unit_normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "face_center": [
+        0.0,
+        0.0,
+        2.5
+      ],
+      "box_center": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "box_size": [
+        2.0,
+        3.0,
+        5.0
+      ],
+      "pressure_Pa": 2.0,
+      "pressure_source": "name",
+      "force_N": [
+        0.0,
+        0.0,
+        12.0
+      ],
+      "force_magnitude_N": 12.0,
+      "pivot_m": [
+        -1.0,
+        -1.5,
+        0.0
+      ],
+      "lever_arm_m": [
+        1.0,
+        1.5,
+        2.5
+      ],
+      "moment_about_pivot_Nm": [
+        18.0,
+        -12.0,
+        0.0
+      ],
+      "moment_magnitude_Nm": 21.633307652783937
+    }
+  ],
+  "checks": {
+    "reference_uniform_total_force_N": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "reference_uniform_total_moment_Nm": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "reference_zmax_force_N": [
+      0.0,
+      0.0,
+      12.0
+    ],
+    "reference_zmax_moment_Nm": [
+      18.0,
+      -12.0,
+      0.0
+    ]
+  },
+  "vol": {
+    "provided": false,
+    "path": null
+  }
+}

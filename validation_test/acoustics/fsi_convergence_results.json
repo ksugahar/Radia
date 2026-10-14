@@ -1,0 +1,47 @@
+{
+  "schema": "radia.acoustics.fsi-convergence.v1",
+  "generated_at_utc": "2026-07-08T03:54:54Z",
+  "problem": {
+    "radius": 1.0,
+    "wavenumber": 2.0,
+    "exterior": "spherical_dtn",
+    "cL": 2.0,
+    "cT": 1.0,
+    "rho_s": 1.5
+  },
+  "maxh": [
+    0.4,
+    0.28,
+    0.2
+  ],
+  "rel_error_vs_faran": {
+    "P1": [
+      0.5833741839413107,
+      0.4262806449206438,
+      0.24974331911661457
+    ],
+    "P2": [
+      0.1543021350888119,
+      0.08563662668640874,
+      0.036791373176284
+    ]
+  },
+  "ndof_interior": {
+    "P1": [
+      297,
+      594,
+      1491
+    ],
+    "P2": [
+      1518,
+      3273,
+      9189
+    ]
+  },
+  "versions": {
+    "radia": "4.95.6",
+    "ngsolve": "6.2.2604",
+    "python": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0"
+  }
+}

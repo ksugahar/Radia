@@ -1,0 +1,62 @@
+{
+  "schema": "radia.validation.sparsesolv-bddc-coarse-cases.v1",
+  "generated_at_utc": "2026-09-28T03:59:19.779470+00:00",
+
+  "label": "p3s_plate_1e3_direct_edgewb",
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606",
+    "cpu_count": 38
+  },
+  "argv": [
+    "plate",
+    "--freq",
+    "1000",
+    "--hcond",
+    "5e-4",
+    "--coarse",
+    "direct",
+    "--edge-wirebasket",
+    "--order",
+    "3",
+    "--threads",
+    "8",
+    "--label",
+    "p3s_plate_1e3_direct_edgewb",
+    "--output",
+    "results\\p3s_plate_1e3_direct_edgewb.json"
+  ],
+  "result": {
+    "case": "plate",
+    "freq_hz": 1000.0,
+    "ne": 20888,
+    "nv": 5317,
+    "nedge": 29696,
+    "order": 3,
+    "ndof": 318700,
+    "coarse": "direct",
+    "inverse": "sparsecholesky",
+    "cycles": 4,
+    "lean_coarse": 1,
+    "system_eps": 1e-06,
+    "edge_wirebasket": true,
+    "face_dofs_returned_to_interface": 40,
+    "threads": 8,
+    "iterations": 77,
+    "converged": true,
+    "true_residual": 9.579689692248261e-09,
+    "t_mesh": 1.161,
+    "t_assemble_and_bddc_setup": 9.585,
+    "t_solve": 8.814,
+    "t_total_wall": 21.012,
+    "peak_memory_mb": 2813.4,
+    "conductor_loss_w": 9216.73688338149,
+    "reduced_field_energy": 0.3557379529612192,
+    "reference": {
+      "source": "direct wirebasket run of the same system"
+    },
+    "coarse_stats": {}
+  },
+  "binary_sha256": "126CB410B063E05D9DD8BE180398E7C5CF93291D04D1E759F995A7AFA8B30386"
+}

@@ -1,0 +1,10 @@
+reset
+#{radius = 1.0}
+create sphere radius {radius}
+volume all scheme tetmesh
+volume all size 0.3
+mesh volume all
+block 1 volume all
+block 1 name "body"
+sideset 1 surface all
+sideset 1 name "outer"

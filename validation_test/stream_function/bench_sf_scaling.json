@@ -1,0 +1,75 @@
+{
+  "timestamp": "2026-06-03T09:59:35",
+
+  "benchmark": "sf_design_scaling",
+  "problem": {
+    "geometry": "cylinder lateral surface r=0.15 L=0.5",
+    "target": "Gx (Bz=x)",
+    "order": 1,
+    "regularize": "h1",
+    "confine": "abe"
+  },
+  "note": "post-sparse-seminorm fix (2026-06-03); t_build is mesh-load + Biot-Savart assemble + sparse R^T S R fold + ACA+TSVD factorise; the dense seminorm wall (13.3s/3.75GB at ndof=15260) is gone -> ACA fold ~0.3s, peak ~0.2GB.",
+  "results": [
+    {
+      "maxh": 0.04,
+      "nv": 355,
+      "ndof": 355,
+      "n_free": 308,
+      "M": 58,
+      "t_assemble_s": 0.0233,
+      "t_build_s": 0.0766,
+      "peak_memory_mb": 130.5
+    },
+    {
+      "maxh": 0.022,
+      "nv": 1179,
+      "ndof": 1179,
+      "n_free": 1094,
+      "M": 58,
+      "t_assemble_s": 0.0564,
+      "t_build_s": 0.1878,
+      "peak_memory_mb": 141.3
+    },
+    {
+      "maxh": 0.014,
+      "nv": 2842,
+      "ndof": 2842,
+      "n_free": 2709,
+      "M": 58,
+      "t_assemble_s": 0.1092,
+      "t_build_s": 0.4257,
+      "peak_memory_mb": 159.9
+    },
+    {
+      "maxh": 0.009,
+      "nv": 6861,
+      "ndof": 6861,
+      "n_free": 6652,
+      "M": 58,
+      "t_assemble_s": 0.3779,
+      "t_build_s": 0.9974,
+      "peak_memory_mb": 200.2
+    },
+    {
+      "maxh": 0.006,
+      "nv": 15260,
+      "ndof": 15260,
+      "n_free": 14947,
+      "M": 58,
+      "t_assemble_s": 0.59,
+      "t_build_s": 2.2116,
+      "peak_memory_mb": 281.5
+    },
+    {
+      "maxh": 0.0045,
+      "nv": 26920,
+      "ndof": 26920,
+      "n_free": 26503,
+      "M": 58,
+      "t_assemble_s": 1.007,
+      "t_build_s": 3.9798,
+      "peak_memory_mb": 406.6
+    }
+  ]
+}

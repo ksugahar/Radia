@@ -1,0 +1,28 @@
+{
+  "coil": {
+    "radius_m": 0.15,
+    "length_m": 0.5,
+    "ndof": 1372,
+    "order": 2
+  },
+  "design": {
+    "target_cf": "z",
+    "homogeneity_rms": 0.00022349397463338957,
+    "t_build_s": 8.98
+  },
+  "n_eval_dsv": 30,
+  "n_eval_ext": 30,
+  "ext_radius_m": 0.6,
+  "n_dipoles": 662,
+  "expansion_rad_m": 0.4285283412000211,
+  "t_mesh_s": 2.98,
+  "t_build_dipoles_s": 0.066,
+  "t_linear_form_dsv_s": 0.14,
+  "t_linear_form_ext_s": 0.183,
+  "t_bem_exterior_s": 1.041,
+  "Bz_rms_dsv_A": 0.028041019373253012,
+  "Bz_rms_ext_A": 0.0018847507878170904,
+  "Bz_rms_ext_B": 0.0018634022154115175,
+  "rel_err_ext_A_vs_B": 0.04984291659116905,
+  "note": "Path A uses continuous surface K = n x grad(psi) via LinearForm. Path B uses per-triangle elemental K-dipoles (same source, different discretisation) via BiotSavartCF multipole expansion. Relative error measures the dipole discretisation error vs the continuous-K LinearForm reference."
+}

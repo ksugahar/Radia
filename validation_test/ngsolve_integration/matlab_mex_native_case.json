@@ -1,0 +1,49 @@
+{
+  "schema": "radia.ngsolve-matlab-native-validation-case.v1",
+  "status": "configured",
+  "purpose": "Persistent cross-boundary validation for native NGSolve calculations from MATLAB.",
+  "mesh": {
+    "kind": "Netgen .vol",
+    "fixture": "single affine tetrahedron",
+    "dimension": 3
+  },
+  "python_oracle": {
+    "entry_point": "tests/matlab/ngsolve_mex_python_reference.py",
+    "boundary": "public NGSolve Python API",
+    "must_not_use": ["radia_mex", "handwritten MATLAB expected values"]
+  },
+  "matlab_boundary": {
+    "entry_point": "tests/matlab/test_ngsolve_mex_pybind_parity.m",
+    "backend": "radia_mex through radia.ngsolve handles",
+    "matrix_interchange": "MATLAB sparse only when explicitly requested; native Matrix and Vector handles retain NGSolve storage for iterative solves."
+  },
+  "coverage": {
+    "spaces": ["H1(p=2)", "HCurl(p=2, nograds=true)", "HDiv(p=2)"],
+    "forms": [
+      "H1 mass and stiffness",
+      "HCurl mass and curl-curl",
+      "HDiv mass and div-div"
+    ],
+    "operations": [
+      "mesh metadata",
+      "CoefficientFunction evaluation",
+      "GridFunction vector and field evaluation",
+      "sparse matrix numerical equality",
+      "native Matrix matvec",
+      "native CG solve",
+      "native LinearForm assembly"
+    ]
+  },
+  "acceptance": {
+    "matrix_relative_tolerance": 4e-13,
+    "matrix_absolute_tolerance": 4e-14,
+    "solver_relative_tolerance": 2e-10,
+    "solver_absolute_tolerance": 2e-11,
+    "persistent_result_json_required_for_large_case": true
+  },
+  "next_scale": {
+    "target": "MPI-distributed NGSolve/HPDDM execution on Wisteria",
+    "partitioner": "METIS or ParMETIS",
+    "matlab_role": "submit, monitor, and consume artifacts; do not gather a distributed operator into one MATLAB sparse matrix by default."
+  }
+}

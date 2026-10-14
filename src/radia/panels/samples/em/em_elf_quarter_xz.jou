@@ -1,0 +1,63 @@
+# C-type dipole yoke -- ELF CEFC 2020 reference, quarter-xz model.
+#
+# Reproduces the EXACT 13-hex ELF mesh from
+# S:/ELF_MAGIC/2020_03_07_CEFC_2020/model_C-Type/mu=1000/
+#   ELF_MMB8T_EIEM2_1x1x1/quater/ELF_magic.meg
+#
+# The yoke has BEVELED pole tip (slanted faces between z=5 and z=13
+# in the y in [-20, 20] region).  Building this in Cubit requires
+# CAD with slanted surfaces -- defined here via vertex/curve/surface
+# /volume primitives.  Each ELF hex element corresponds to one Cubit
+# CAD volume meshed with `volume size <max_edge>` to produce 1 hex.
+#
+# Coordinates (mm, scaled to m by Cubit when in meters):
+#   x = depth/thickness (symmetry at x=0)
+#   y = gap direction  (gap face at y=0; pole tip starts at y=-20)
+#   z = beam direction (symmetry at z=0)
+#
+# The .jou delegates the heavy work to a Python helper that walks
+# the 91-node + 13-hex ELF list and emits CAD commands.  Run via:
+#   play em_elf_quarter_xz.jou
+# from a Cubit session that has src/radia/panels on its sys.path.
+reset
+
+# Build ELF yoke geometry from .meg-derived node + element data.
+# em_elf_yoke_builder.py builds 13 CAD volumes (1 per ELF hex) with
+# slanted faces matching the bevel; assigns them to block "yoke";
+# meshes each with size = max-edge so each becomes 1 mesh hex.
+play "S:/Radia/01_GitHub/src/radia/panels/samples/em/em_elf_yoke_builder.py"
+
+# === Air sphere (full + z=0 mesh seam, x=0 reduction handled later) ===
+# For quarter-xz we want air at x>=0 and z>=0.  Build a full sphere
+# and intersect with an octant brick (x>=0, z>=0, full y).  The
+# sym_bn=0_x and sym_ht=0_z sidesets are added via auto-Kelvin
+# reduction mode at export time.
+create sphere radius 0.40
+${sphere_id = Id("volume")}
+create brick x 0.80 y 0.80 z 0.80
+${brick_id = Id("volume")}
+move volume {brick_id} x 0.40 y 0 z 0.40
+intersect volume {sphere_id} {brick_id} keep
+delete volume {sphere_id} {brick_id}
+${air_id = Id("volume")}
+
+# Subtract yoke from air (use yoke block volumes).
+subtract volume in block 1 from volume {air_id} keep
+imprint volume all
+merge volume all
+
+# Mesh air domain.
+volume {air_id} scheme tetmesh
+volume {air_id} size 0.020
+mesh volume {air_id}
+
+# === Blocks ===
+# Yoke block 1 was assigned by the Python helper.
+# Air block 2: assign current air volume.
+block 2 add volume {air_id}
+block 2 name "air"
+
+# Kelvin (FEM only): from the Export Mesh dialog set "Symmetry
+# reduction" x = bn0, z = ht0 (matches ELF IMA='+x-z' convention).
+# Auto-Kelvin then writes kelvin_reduction = {x: bn=0, z: ht=0}
+# in launcher_config.json and add_kelvin_cubit handles the rest.

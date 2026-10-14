@@ -1,0 +1,456 @@
+"""Fast structural checks for the public, result-bearing notebook corpus."""
+
+from __future__ import annotations
+
+import json
+import hashlib
+import subprocess
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_declared_notebook_bibliographies_keep_generated_bbl_and_display(monkeypatch):
+    """Migrated notebooks fail on stale/missing artifacts; unclaimed ones stay unclaimed."""
+    from functools import lru_cache
+    from radia_mcp.bibliography.plans import T14_canonical
+    from radia_mcp.bibliography.plans.T14_canonical import _citation_source_sha256, _generated_keys
+    # Every notebook refers to one immutable source during this test. Run the
+    # real parser once per distinct text; retain every per-notebook fingerprint,
+    # dependency, generated-key and display assertion below.
+    monkeypatch.setattr(T14_canonical, "parse_bib", lru_cache(maxsize=1)(T14_canonical.parse_bib))
+    canonical = ROOT / "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib"
+    canonical_bytes = canonical.read_bytes()
+    for path in (ROOT / "docs").rglob("*.ipynb"):
+        notebook = json.loads(path.read_text(encoding="utf-8"))
+        declaration = notebook.get("metadata", {}).get("radia", {}).get("bibliography")
+        if declaration is None:
+            continue
+        keys = declaration["keys"]
+        assert keys and len(keys) == len(set(keys)), path
+        bbl = path.with_suffix(".bbl")
+        raw = bbl.read_bytes()
+        generated = _generated_keys(raw)
+        assert len(generated) == len(keys) and set(generated) == set(keys), path
+        cells = [cell for cell in notebook["cells"] if "radia_bibliography" in cell.get("metadata", {})]
+        assert len(cells) == 1, path
+        display = cells[0]
+        provenance = display["metadata"]["radia_bibliography"]
+        assert provenance["style"] == declaration.get("style", "IEEEtran"), path
+        assert provenance["selected_source_sha256"] == _citation_source_sha256(keys, canonical_bytes), path
+        assert provenance["bbl"] == bbl.name, path
+        assert provenance["bbl_sha256_lf"] == hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest(), path
+        rendered = "".join(display["source"])
+        assert provenance["display_sha256_lf"] == hashlib.sha256(rendered.replace("\r\n", "\n").encode("utf-8")).hexdigest(), path
+        assert "doc-bibliography" in rendered, path
+        assert all(f"id='X{key}'" in rendered for key in keys), path
+
+
+def test_docs_notebooks_are_parseable_and_free_of_replacement_glyphs():
+    notebooks = sorted((ROOT / "docs").rglob("*.ipynb"))
+    assert notebooks
+
+    for path in notebooks:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert data.get("nbformat", 0) >= 4, path
+        assert data.get("cells"), path
+        assert "\ufffd" not in json.dumps(data, ensure_ascii=False), path
+
+
+def test_public_example_notebooks_keep_their_saved_scene_contract():
+    for path in sorted((ROOT / "docs").rglob("*.ipynb")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        radia = data.get("metadata", {}).get("radia", {})
+        if radia.get("notebook_role") != "example":
+            continue
+
+        assert radia.get("webgui_required") is True, path
+        if radia.get("webgui_field_required"):
+            assert radia.get("webgui_required") is True, path
+        assert any(
+            cell.get("outputs")
+            for cell in data.get("cells", [])
+            if cell.get("cell_type") == "code"
+        ), path
+
+
+def test_docs_do_not_own_validation_or_benchmark_json():
+    offenders = [
+        path.relative_to(ROOT)
+        for path in (ROOT / "docs").rglob("*.json")
+        if "validation" in path.name.lower() or "benchmark" in path.name.lower()
+    ]
+    assert not offenders, (
+        "Move validation and benchmark JSON records to validation_test/: "
+        + ", ".join(map(str, offenders))
+    )
+
+
+def test_urn_docs_use_the_packaged_implementation():
+    urn_docs = ROOT / "docs" / "universal_relaxation_network"
+    duplicate_modules = {
+        urn_docs / "relaxation_basis_library.py",
+        urn_docs / "universal_relaxation_network.py",
+    }
+    assert not any(path.exists() for path in duplicate_modules)
+
+    stale_imports = (
+        "from universal_relaxation_network import",
+        "from relaxation_basis_library import",
+    )
+    offenders = [
+        path.relative_to(ROOT)
+        for path in urn_docs.rglob("*.py")
+        if any(token in path.read_text(encoding="utf-8") for token in stale_imports)
+    ]
+    assert not offenders, (
+        "URN docs must import the canonical radia.urn package: "
+        + ", ".join(map(str, offenders))
+    )
+
+
+def test_urn_docs_do_not_own_generated_validation_artifacts():
+    urn_docs = ROOT / "docs" / "universal_relaxation_network"
+    offenders = [
+        path.relative_to(ROOT)
+        for directory in (urn_docs / "results", urn_docs / "validation_output")
+        if directory.exists()
+        for path in directory.rglob("*")
+        if path.is_file()
+    ]
+    assert not offenders, (
+        "URN runtime and validation artifacts belong under validation_test/: "
+        + ", ".join(map(str, offenders))
+    )
+
+
+def test_docs_do_not_track_notebook_checksum_sidecars():
+    offenders = []
+    tracked = subprocess.check_output(
+        ["git", "-c", f"safe.directory={ROOT.as_posix()}",
+         "ls-files", "-z", "--", "docs/*_result.json"], cwd=ROOT).decode("utf-8")
+    for name in filter(None, tracked.split("\0")):
+        path = ROOT / name
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if payload.get("schema") == "radia.notebook_result.v1":
+            offenders.append(path.relative_to(ROOT))
+    assert not offenders, (
+        "Executed notebooks own their saved outputs; remove checksum sidecars: "
+        + ", ".join(map(str, offenders))
+    )
+
+
+def test_docs_indexes_use_demo_or_workflow_names():
+    offenders = sorted(
+        path.relative_to(ROOT)
+        for name in ("examples.md", "EXAMPLES.md")
+        for path in (ROOT / "docs").rglob(name)
+    )
+    assert not offenders, (
+        "The examples tier is retired; name public indexes demos or workflows: "
+        + ", ".join(map(str, offenders))
+    )
+
+
+def test_docs_do_not_restore_completed_migration_ledgers():
+    retired = {
+        ROOT / "docs" / "clebsch_hodograph": {
+            "examples_catalog",
+            "examples_migration",
+        },
+        ROOT / "docs" / "induction_heating": {
+            "induction_heating_examples_catalog",
+            "public_demo",
+        },
+        ROOT / "docs" / "kelvin": {
+            "kelvin_classic_demos",
+            "kelvin_examples_migration",
+        },
+        ROOT / "docs" / "peec_integration": {
+            "cleanup_routing",
+            "examples_catalog",
+            "post_examples_migration",
+            "public_demo",
+            "verification_migration",
+        },
+        ROOT / "docs" / "stream_function": {
+            "demo_gallery",
+            "examples_catalog",
+        },
+    }
+    offenders = [
+        path.relative_to(ROOT)
+        for directory, retired_stems in retired.items()
+        for path in directory.iterdir()
+        if path.is_file()
+        and path.suffix.lower() in {".ipynb", ".json"}
+        and path.stem.removesuffix("_results") in retired_stems
+    ]
+    assert not offenders, (
+        "Git history owns completed migration bookkeeping; remove docs ledgers: "
+        + ", ".join(map(str, offenders))
+    )
+
+
+def test_docs_do_not_restore_retired_result_bookkeeping():
+    retired = {
+        ROOT / "docs" / "axifem" / "axifem_element_evidence.json",
+        ROOT / "docs" / "cubit_mesh_export" / "cubit_mesh_export_showcase_results.json",
+        ROOT / "docs" / "cubit_mesh_export" / "netgen" / "p_convergence_demo_results.json",
+        ROOT / "docs" / "electric_machine" / "cogging_skew_demo_results.json",
+        ROOT / "docs" / "clebsch_hodograph" / "excitation_invariant_field.json",
+        ROOT / "docs" / "clebsch_hodograph" / "hodograph_bending_sy.json",
+        ROOT / "docs" / "clebsch_hodograph" / "hodograph_feasibility_2d.json",
+        ROOT / "docs" / "clebsch_hodograph" / "edge_focusing_tracking.json",
+        ROOT / "docs" / "clebsch_hodograph" / "edge_focusing_fem_results.json",
+        ROOT / "docs" / "gmsh_post" / "em_fieldlines_results.json",
+        ROOT / "docs" / "gmsh_post" / "em_particle_orbits_results.json",
+        ROOT / "docs" / "gmsh_post" / "em_post_gallery_results.json",
+        ROOT / "docs" / "nodal_force" / "nodal_force_results.json",
+        *(ROOT / "docs" / "mesh_fusion" / f"results_phase{i}.json" for i in range(1, 6)),
+        ROOT / "docs" / "gmsh_animation" / "gmsh_animation_export_results.json",
+        ROOT / "docs" / "gmsh_animation" / "gmsh_animation_results.json",
+        ROOT / "docs" / "kelvin" / "kelvin_exterior_source_and_aphi_results.json",
+        ROOT / "docs" / "hdiv_vim" / "compare_curved_vs_radia_field.json",
+        ROOT / "docs" / "hdiv_vim" / "hdiv_curved_nonlinear_field.json",
+        ROOT / "docs" / "hdiv_vim" / "hdiv_demag_curved.json",
+        ROOT / "docs" / "hdiv_vim" / "c_type_three_formulation_mixed_omega_iron.vol-check.json",
+        ROOT / "docs" / "section_optics" / "section_optics_design_results.json",
+        ROOT / "docs" / "section_optics" / "stamp_notebook_hash.py",
+        ROOT / "docs" / "universal_relaxation_network" / "cq_urn_bridge_results.json",
+        ROOT / "docs" / "universal_relaxation_network" / "urn_vs_vf_comparison.json",
+    }
+    retired.update((ROOT / "docs" / "clebsch_hodograph" / "demos").glob("*.json"))
+    retired.update((ROOT / "docs" / "maglev" / "demos").rglob("*.json"))
+    offenders = sorted(path.relative_to(ROOT) for path in retired if path.exists())
+    assert not offenders, (
+        "Docs notebooks embed display results; validation_test owns checked evidence: "
+        + ", ".join(map(str, offenders))
+    )
+
+
+def test_urn_validation_drivers_stay_out_of_docs():
+    docs_dir = ROOT / "docs" / "universal_relaxation_network"
+    validation_only = {
+        "ablation_study.py",
+        "benchmark_urn_vs_skrf_vf.py",
+        "run_ltspice_verification.py",
+        "urn_benchmark_improved.py",
+        "urn_benchmark_suite.py",
+        "urn_vs_vf_comparison.py",
+        "urn_vs_vf_quick.py",
+        "validate_all_datasets.py",
+        "validate_real_data.py",
+        "validate_real_world.py",
+        "validate_tdk_ferrite.py",
+        "validate_urn_vs_vf.py",
+        "verify_timedomain_stability.py",
+        "vf_benchmark_same_data.py",
+    }
+    offenders = sorted(path.name for path in docs_dir.iterdir() if path.name in validation_only)
+    assert not offenders, (
+        "Move URN validation and benchmark drivers to validation_test: "
+        + ", ".join(offenders)
+    )
+
+
+def test_stream_function_docs_use_installed_radia_package():
+    docs_dir = ROOT / "docs" / "stream_function"
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace")
+        if "sys.path.insert" in source and (
+            '"src"' in source or '"src", "radia"' in source
+        ):
+            offenders.append(path.name)
+    assert not offenders, (
+        "Stream-function docs must import installed/editable radia: "
+        + ", ".join(sorted(offenders))
+    )
+
+
+def test_peec_wpt_docs_use_installed_radia_package():
+    docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "wpt"
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace")
+        if "build-msvc" in source or "src/radia" in source:
+            offenders.append(path.name)
+    assert not offenders, (
+        "PEEC WPT docs must not inject repository build/source paths: "
+        + ", ".join(sorted(offenders))
+    )
+
+    quickstart = docs_dir.parent / "QUICKSTART_WPT.md"
+    source = quickstart.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+    assert "sys.path.insert" not in source
+    assert "from peec_matrices import" not in source
+
+
+def test_basic_peec_docs_use_installed_radia_package():
+    docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "basic_peec"
+    forbidden = (
+        "build-msvc",
+        "src/radia",
+        '_repo / "src"',
+        "from analysis import",
+        "from peec_matrices import",
+    )
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if any(token in source for token in forbidden):
+            offenders.append(path.name)
+    assert not offenders, (
+        "Basic PEEC docs must import installed/editable radia: "
+        + ", ".join(sorted(offenders))
+    )
+
+
+def test_peec_application_docs_use_installed_radia_package():
+    docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "applications"
+    forbidden = ("build-msvc", "src/radia", "from dielectric_solver import")
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if any(token in source for token in forbidden):
+            offenders.append(path.name)
+    assert not offenders, (
+        "PEEC application docs must import installed/editable radia: "
+        + ", ".join(sorted(offenders))
+    )
+
+
+def test_peec_filament_docs_use_installed_radia_package():
+    docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "filament_coil"
+    forbidden = (
+        "src/radia",
+        "SRC_RADIA",
+        "from coil_builder import",
+        "from peec_bundle import",
+    )
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if any(token in source for token in forbidden):
+            offenders.append(path.name)
+    assert not offenders, (
+        "PEEC filament docs must import installed/editable radia: "
+        + ", ".join(sorted(offenders))
+    )
+
+
+def test_peec_gmsh_docs_use_installed_radia_package():
+    docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "gmsh_models"
+    forbidden = ('_repo / "src"', "src/radia", "from install_panels import")
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if any(token in source for token in forbidden):
+            offenders.append(path.name)
+    assert not offenders, (
+        "PEEC GMSH docs must import installed/editable radia: "
+        + ", ".join(sorted(offenders))
+    )
+
+
+def test_peec_spice_docs_use_installed_radia_package():
+    docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "spice"
+    forbidden = (
+        "src/radia",
+        # Internal lab research trees under private-runtime-path must never be imported.
+        "W:/30_",
+        "from peec_matrices import",
+        "from lanczos_reduction import",
+        "from veriloga_generator import",
+    )
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if any(token in source for token in forbidden):
+            offenders.append(path.name)
+    assert not offenders, (
+        "PEEC SPICE docs must import installed/editable radia: "
+        + ", ".join(sorted(offenders))
+    )
+
+
+def test_peec_spiral_docs_use_installed_radia_package():
+    docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "spiral_inductor"
+    forbidden = (
+        "S:/Radia/01_GitHub",
+        "src/radia",
+        "from install_panels import",
+        "from peec_matrices import",
+        "from peec_topology import",
+    )
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if any(token in source for token in forbidden):
+            offenders.append(path.name)
+    assert not offenders, (
+        "PEEC spiral docs must import installed/editable radia: "
+        + ", ".join(sorted(offenders))
+    )
+
+
+def test_ngbem_docs_do_not_duplicate_validation_drivers():
+    docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "ngbem"
+    scripts = sorted(path.name for path in docs_dir.glob("*.py"))
+    assert not scripts, (
+        "Keep ngbem numerical drivers in validation_test and publish results "
+        "through the PEEC notebooks: " + ", ".join(scripts)
+    )
+
+
+def test_reduced_model_and_axifem_docs_do_not_publish_lab_drive_paths():
+    paths = [
+        ROOT / "docs" / "solver" / "REDUCED_EDDY_MODELS.md",
+        ROOT / "docs" / "axifem" / "AXIFEM.md",
+    ]
+    offenders = []
+    for path in paths:
+        source = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if "W:/" in source or "S:/" in source:
+            offenders.append(path.relative_to(ROOT).as_posix())
+    assert not offenders, "Use tracked validation paths in public docs: " + ", ".join(offenders)
+
+
+def test_migrated_docs_use_installed_dependencies():
+    paths = [
+        ROOT / "docs" / "electric_machine" / "cogging_skew_demo.py",
+        ROOT / "docs" / "gmsh_animation" / "moving_body_demo.py",
+        ROOT / "docs" / "kelvin" / "dtn_spectrum_coarse_mesh_demo.py",
+        ROOT / "docs" / "kelvin" / "Supplement" / "experiment_cg_smoother_equilibration.py",
+        ROOT / "docs" / "cubit_mesh_export" / "gmsh" / "gmsh_export_example.py",
+        ROOT / "docs" / "cubit_mesh_export" / "nastran" / "nastran_export_example.py",
+    ]
+    forbidden = ("build-msvc", "install_ngsolve", "packages/radia-mcp/src", "src/radia")
+    offenders = []
+    for path in paths:
+        source = "\n".join(
+            line
+            for line in path.read_text(encoding="utf-8", errors="replace").splitlines()
+            if not line.lstrip().startswith("#")
+        ).replace("\\", "/")
+        if any(token in source for token in forbidden):
+            offenders.append(path.relative_to(ROOT).as_posix())
+    assert not offenders, "Docs must resolve installed dependencies: " + ", ".join(offenders)
+
+
+def test_clebsch_docs_do_not_inject_radia_source():
+    docs_dir = ROOT / "docs" / "clebsch_hodograph" / "demos"
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if "src/radia" in source and "sys.path" in source:
+            offenders.append(path.name)
+    assert not offenders, (
+        "Clebsch docs must import installed/editable radia: "
+        + ", ".join(sorted(offenders))
+    )

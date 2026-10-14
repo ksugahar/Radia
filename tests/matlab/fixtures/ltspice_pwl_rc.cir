@@ -1,0 +1,9 @@
+* Radia Simulink-to-LTspice PWL fixture
+.param Rval=1000
+.param Tstop=20u
+V1 in 0 PWL FILE="${gate_PWL}"
+R1 in out {Rval}
+C1 out 0 1u
+.tran 0 {Tstop} 0 0.1u
+.save V(in) V(out)
+.end

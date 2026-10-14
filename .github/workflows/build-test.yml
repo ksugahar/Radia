@@ -1,0 +1,585 @@
+name: Radia Native Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      run_validation_test:
+        description: 'Run validation_test/ (manual heavy validation gate)'
+        required: false
+        default: false
+        type: boolean
+      full_slow:
+        description: 'Run @pytest.mark.slow validation tests too'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: write
+
+# Native packaging is a named release gate. Fast source/contract CI lives in
+# radia-fast.yml; package workflows own their separate distribution lanes.
+concurrency:
+  group: radia-native-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build-test:
+    name: radia-native-release-build
+    runs-on: [self-hosted, Windows, X64, "100"]
+    # No timeout-minutes -- per 2026-05-25 user decision after
+    # 45-min cap (sha 357da370 cancelled) and 70-min cap (sha
+    # c1ed3dc9 in flight) kept slicing different steps. Self-
+    # hosted runner has no hard limit; GitHub Actions default
+    # is 6h, far more than needed. Letting every step complete
+    # to its natural end is the only way to capture full stderr
+    # for diagnosis without chasing the next cliff.
+
+    env:
+      # Was hardcoded 'Cubit 2025.3\bin' until 2026-05-25. Build.ps1 and
+      # cubit_plugin scripts now auto-discover the available installation
+      # via tools/find_cubit.ps1, so this env var is informational. Set
+      # CUBIT_INSTALL_DIR to pin a specific install on the self-hosted
+      # runner if needed.
+      CUBIT_PATH: ''
+      # Heavy validation tests are an explicit manual gate. Release-tag CI
+      # does not spend hours revalidating numerical evidence by default.
+      RUN_SLOW_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.full_slow == true }}
+      RUN_VALIDATION_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_validation_test == true || inputs.full_slow == true) }}
+      RADIA_CI_OUTPUT_DIR: 'C:\temp\radia-ci-output-${{ github.run_id }}-${{ github.run_attempt }}'
+      # This CI lane (including opt-in tests) is not a scaling benchmark.
+      # Bound nested pools; use dedicated validation runs for performance claims.
+      OMP_NUM_THREADS: '8'
+      NGS_NUM_THREADS: '8'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Release workflows consume this artifact from the exact triggering CI
+      # run.  Looking up tags by SHA alone is racy: a successful main CI can
+      # finish, then tags can be added to that SHA before workflow_run inspects
+      # the repository.  The immutable per-run context proves whether CI itself
+      # was launched from a tag ref.
+      - name: Record exact CI ref context
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $patterns = @('refs/tags/v*')
+          $releaseTags = @()
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $repoUrl = "https://x-access-token:$env:GITHUB_TOKEN@github.com/${{ github.repository }}.git"
+            $env:GIT_TERMINAL_PROMPT = '0'
+            foreach ($line in (git -c credential.helper= ls-remote --tags $repoUrl @patterns)) {
+              $parts = $line -split '\s+'
+              if ($parts.Count -lt 2 -or $parts[0] -ne $env:GITHUB_SHA) {
+                continue
+              }
+              $ref = $parts[1] -replace '\^\{\}$', ''
+              if ($ref -like 'refs/tags/*') {
+                $releaseTags += $ref.Substring('refs/tags/'.Length)
+              }
+            }
+          }
+          $context = [ordered]@{
+            schema = 'radia.ci-release-context.v1'
+            ref = $env:GITHUB_REF
+            ref_name = $env:GITHUB_REF_NAME
+            ref_type = $env:GITHUB_REF_TYPE
+            sha = $env:GITHUB_SHA
+            run_id = [string]$env:GITHUB_RUN_ID
+            event_name = $env:GITHUB_EVENT_NAME
+            release_tags = @($releaseTags | Sort-Object -Unique)
+          }
+          $json = $context | ConvertTo-Json
+          New-Item -ItemType Directory -Force -Path $env:RADIA_CI_OUTPUT_DIR | Out-Null
+          [IO.File]::WriteAllText(
+            (Join-Path $env:RADIA_CI_OUTPUT_DIR 'ci-release-context.json'),
+            $json,
+            [Text.UTF8Encoding]::new($false))
+          Write-Host $json
+
+      - name: Upload exact CI ref context
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-release-context
+          path: ${{ env.RADIA_CI_OUTPUT_DIR }}/ci-release-context.json
+          retention-days: 30
+
+      # ----------------------------------------------------------------
+      # Guard: a self-hosted job must NOT pip-install a Radia package into its
+      # persistent system Python. The static audit keeps the source checkout
+      # isolated from the mdx service host.
+      # ----------------------------------------------------------------
+      - name: Audit -- no Radia installs into persistent system Python
+        shell: pwsh
+        run: python tools/audit_ci_no_system_install.py
+
+      # ----------------------------------------------------------------
+      # Isolate NGSolve/Netgen from the mdx service Python. Other development
+      # tasks may legitimately install an older Radia release and therefore
+      # change the shared NGSolve ABI while CI is queued. Building
+      # against one header set and testing against another produces a valid-
+      # looking .pyd that fails to load in subprocesses. A run-local venv keeps
+      # the exact pyproject pins stable for the complete build/test/package job.
+      # ----------------------------------------------------------------
+      - name: Create isolated NGSolve environment
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "radia-ci-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $basePython = (Get-Command python).Source
+          $gitDir = Split-Path -Parent (Get-Command git -ErrorAction Stop).Source
+          & $basePython -m venv --system-site-packages $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $ciPython = Join-Path $venv 'Scripts\python.exe'
+          $pins = @(& $basePython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x for x in d['project']['dependencies'] if x.startswith(('ngsolve==','netgen-mesher=='))], sep='\n')")
+          if ($pins.Count -ne 2) {
+            Write-Host "::error::Expected exact ngsolve and netgen-mesher pins in pyproject.toml; got $($pins -join ', ')"
+            exit 1
+          }
+          # The native release lane owns its MKL headers/import libraries in
+          # the run-local venv. Do not assume a developer-machine install.
+          & $ciPython -m pip install --upgrade --force-reinstall --no-cache-dir @pins mkl-devel pybind11==3.0.2 ninja
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $ngsolveRoot = (& $ciPython -c "import ngsolve,pathlib; print(pathlib.Path(ngsolve.__file__).parent)").Trim()
+          $netgenRoot = (& $ciPython -c "import netgen,pathlib; print(pathlib.Path(netgen.__file__).parent)").Trim()
+          $mklRoot = Join-Path $venv 'Library'
+          if (-not (Test-Path (Join-Path $mklRoot 'lib\\mkl_rt.lib'))) {
+            Write-Host "::error::mkl-devel did not provide mkl_rt.lib under $mklRoot"
+            exit 1
+          }
+          $scripts = Join-Path $venv 'Scripts'
+          [IO.File]::AppendAllText(
+            $env:GITHUB_PATH,
+            "$gitDir`n$scripts`n",
+            [Text.UTF8Encoding]::new($false))
+          "RADIA_CI_GIT_DIR=$gitDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RADIA_CI_VENV=$venv" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "NGSOLVE_ROOT=$ngsolveRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "NGSOLVE_DIR=$(Join-Path $ngsolveRoot 'cmake')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "Netgen_DIR=$(Join-Path $netgenRoot 'cmake')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "MKLROOT=$mklRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          & $ciPython -c "import importlib.metadata as m,ngsolve,tomllib,pathlib; deps=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['dependencies']; want={x.split('==',1)[0]:x.split('==',1)[1] for x in deps if x.startswith(('ngsolve==','netgen-mesher=='))}; assert ngsolve.__version__==want['ngsolve']; assert m.version('netgen-mesher')==want['netgen-mesher']; print('isolated ABI',ngsolve.__version__,m.version('netgen-mesher'))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # ----------------------------------------------------------------
+      # Install dependencies for the Radia distribution tests. Package-level
+      # dependencies and tests live in their own workflows.
+      # ----------------------------------------------------------------
+      - name: Install test dependencies
+        shell: pwsh
+        run: |
+          # This job owns only its fresh venv, never host MCP processes or
+          # persistent site-packages. A failed venv setup must fail closed.
+          if (-not $env:RADIA_CI_VENV) { throw "RADIA_CI_VENV is required" }
+          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts\python.exe'
+          if (-not (Test-Path -LiteralPath $ciPython -PathType Leaf)) {
+            throw "Isolated CI Python is missing: $ciPython"
+          }
+          & $ciPython -c "import os,sys; assert sys.prefix != sys.base_prefix and os.path.samefile(sys.prefix, os.environ['RADIA_CI_VENV']), 'CI Python must belong to RADIA_CI_VENV'"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $ciPython -m pip install build wheel pytest mcp "trimesh>=4.0" twine==6.2.0 --quiet
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Import every dependency here, at the top of the run. `pip install`
+          # succeeding is not the same as the module being importable, and a
+          # name missing from the line above otherwise surfaces only in the
+          # step that needs it -- which is how 4.95.86..4.95.89 spent four
+          # release tags discovering `pytest`, then `build`, then `wheel` one
+          # at a time. Fail here instead, before the tag is worth anything.
+          & $ciPython -c "import build, wheel, pytest, mcp, trimesh, twine; print('isolated env imports OK')"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Isolated CI environment is missing a dependency listed above."
+            exit $LASTEXITCODE
+          }
+          Write-Host "build + wheel + pytest + mcp + trimesh + twine installed and importable (radia_mcp via PYTHONPATH, not pip-installed)"
+
+      # ----------------------------------------------------------------
+      # Verify NGSolve: exact pyproject-pinned version in the run-local venv.
+      # ----------------------------------------------------------------
+      - name: Verify NGSolve
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
+            Write-Host "::error::NGSolve not found at $env:NGSOLVE_DIR"
+            Write-Host "Install: pip install ngsolve"
+            exit 1
+          }
+          Write-Host "NGSolve: $env:NGSOLVE_ROOT"
+          git --version
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::git is unavailable after activating the isolated test environment"
+            exit $LASTEXITCODE
+          }
+          python -c "import shutil,subprocess; p=shutil.which('git'); assert p, 'git is absent from subprocess PATH'; subprocess.run([p,'--version'],check=True)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # ----------------------------------------------------------------
+      # Build: MSVC + MKL + NGSolve TaskManager
+      # ----------------------------------------------------------------
+      - name: Build with MSVC + MKL
+        shell: pwsh
+        # No step-level timeout-minutes -- see job-level note above.
+        # Build.ps1 cold-cache on the self-hosted runner has been
+        # observed at 20:04 (sha 0c0ef5d), 26 min (sha 357da370),
+        # and the natural full rebuild on the native runner is ~25-35 min.
+        run: |
+          Write-Host "Starting Radia build..."
+          # 2026-05-25: capture full stdout+stderr to file so we can upload
+          # as artifact on failure. Tee-Object keeps the live console log
+          # too. The embedded batch file's cmd.exe child output goes through
+          # PowerShell stdout because we pipe via the *>&1 merge.
+          New-Item -ItemType Directory -Force -Path $env:RADIA_CI_OUTPUT_DIR | Out-Null
+          @{
+            schema = 'radia.ci-output-context.v1'
+            sha = $env:GITHUB_SHA
+            run_id = '${{ github.run_id }}'
+            run_attempt = '${{ github.run_attempt }}'
+          } | ConvertTo-Json | Set-Content -Path (Join-Path $env:RADIA_CI_OUTPUT_DIR 'ci-context.json') -Encoding utf8
+          $buildLog = Join-Path $env:RADIA_CI_OUTPUT_DIR 'build-msvc-stdout.log'
+
+          # 2026-05-28: tag pushes get -Rebuild to force clean build.
+          # Reason: Build.ps1 line 140-141 documents that ninja "records
+          # #deps 0 for all .obj files and misses header changes".  On
+          # the persistent self-hosted runner, CMakeLists.txt edits (e.g.
+          # the v4.80.0 `BEFORE PRIVATE NGSOLVE_BUNDLED_INC` pybind11 ABI
+          # override) do NOT trigger _radia_pybind.pyd rebuild because
+          # ninja's cached .obj commands look unchanged.  Result: the
+          # stale pre-fix .pyd is shipped and tests fail with
+          # `ImportError: generic_type: type "RadiaField" referenced
+          # unknown base type "ngfem::CoefficientFunction"` (the v4.80.0
+          # CI failure that motivated this gate).
+          #
+          # 2026-05-30: EXTENDED to main + PR pushes too.  Motivation:
+          # 2026-05-27 the ngsolve install was upgraded (bundled pybind11
+          # 3.0.2 -> 3.1.0a0).  3 main-push CI runs on 2026-05-30
+          # (e7bae1db / 0f8c3528 / a91e0a5b) failed at the `Run basic
+          # tests` step with 0 artifacts (junit XML never written), a
+          # symptom consistent with mixed-ABI .pyd files built from a
+          # ninja .obj cache predating the ngsolve upgrade.  138da784's
+          # CI happened to coincide with a clean rebuild and passed.
+          # User-confirmed hypothesis: "src changes are too large, CI
+          # can't keep up" -- the persistent runner's ninja cache lets
+          # ABI drift survive across pushes when only main-push
+          # incremental builds are used.  Forcing -Rebuild on every push
+          # eliminates the entire stale-.obj class of bugs.  Cost: ~10-15
+          # min extra per main push (full rebuild vs incremental); ~25
+          # min total Build step.  Acceptable trade-off for correctness.
+          $isTag = $env:GITHUB_REF -like 'refs/tags/*'
+          if ($isTag) {
+              Write-Host "Tag push detected ($env:GITHUB_REF) -- forcing -Rebuild for clean build"
+          } else {
+              Write-Host "Non-tag push -- forcing -Rebuild to defeat ninja #deps 0 stale-.obj bug"
+          }
+          Get-CimInstance Win32_OperatingSystem |
+            Select-Object TotalVisibleMemorySize,FreePhysicalMemory,TotalVirtualMemorySize,FreeVirtualMemory |
+            ConvertTo-Json | Set-Content (Join-Path $env:RADIA_CI_OUTPUT_DIR 'memory-before-build.json')
+          & "${{ github.workspace }}\Build.ps1" -Rebuild -RequireNativeProvenance *>&1 | Tee-Object -FilePath $buildLog
+          $rc = $LASTEXITCODE
+          Get-CimInstance Win32_OperatingSystem |
+            Select-Object TotalVisibleMemorySize,FreePhysicalMemory,TotalVirtualMemorySize,FreeVirtualMemory |
+            ConvertTo-Json | Set-Content (Join-Path $env:RADIA_CI_OUTPUT_DIR 'memory-after-build.json')
+          Write-Host "Build.ps1 exit=$rc"
+          Write-Host "Captured log size: $((Get-Item $buildLog -EA SilentlyContinue).Length) bytes"
+          if ($rc -ne 0) {
+            Write-Host "::error::Build failed with exit code $rc"
+            Write-Host "=== first 5 error/Error/FAILED lines in build log ==="
+            Select-String -Path $buildLog -Pattern 'error|Error|FAILED|fatal' -EA SilentlyContinue |
+              Select-Object -First 5 |
+              ForEach-Object { Write-Host "  $($_.LineNumber): $($_.Line)" }
+            exit $rc
+          }
+          Write-Host "Build completed successfully."
+
+      - name: Upload build memory diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-memory-${{ github.sha }}
+          path: '${{ env.RADIA_CI_OUTPUT_DIR }}/memory-*-build.json'
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.sha }}
+          path: '${{ env.RADIA_CI_OUTPUT_DIR }}\build-msvc-stdout.log'
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # ----------------------------------------------------------------
+      # Verify: Check that Python and standalone C ABI binaries were produced
+      # ----------------------------------------------------------------
+      - name: Verify .pyd output
+        shell: pwsh
+        run: |
+          $pyd = "${{ github.workspace }}\src\radia\_radia_pybind.pyd"
+          if (-not (Test-Path $pyd)) {
+            Write-Host "::error::_radia_pybind.pyd not found at $pyd"
+            exit 1
+          }
+          $sz = [math]::Round((Get-Item $pyd).Length / 1MB, 2)
+          Write-Host "_radia_pybind.pyd: ${sz} MB"
+          $motorDll = "${{ github.workspace }}\src\radia\radia_motor_rom.dll"
+          if (-not (Test-Path $motorDll)) {
+            Write-Host "::error::radia_motor_rom.dll not found at $motorDll"
+            exit 1
+          }
+          $motorSz = [math]::Round((Get-Item $motorDll).Length / 1KB, 1)
+          Write-Host "radia_motor_rom.dll: ${motorSz} KB"
+
+      # ----------------------------------------------------------------
+      # Test: Run the bounded native Windows smoke tier.
+      # ----------------------------------------------------------------
+      - name: Run native smoke tests
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
+        run: |
+          if (-not $env:RADIA_CI_GIT_DIR -or
+              -not (Test-Path (Join-Path $env:RADIA_CI_GIT_DIR 'git.exe'))) {
+            Write-Host "::error::The run-local Git directory is unavailable: $env:RADIA_CI_GIT_DIR"
+            exit 1
+          }
+          $env:PATH = "$env:RADIA_CI_GIT_DIR;$env:PATH"
+          python -c "import shutil,subprocess; p=shutil.which('git'); assert p, 'git is absent from pytest PATH'; subprocess.run([p,'--version'],check=True)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-CimInstance Win32_OperatingSystem |
+            Select-Object TotalVisibleMemorySize,FreePhysicalMemory,TotalVirtualMemorySize,FreeVirtualMemory |
+            ConvertTo-Json | Set-Content (Join-Path $env:RADIA_CI_OUTPUT_DIR 'memory-before-native-smoke.json')
+          Write-Host "Running checked native-smoke tier..."
+          # Tee pytest stdout so a hard crash that prevents JUnit creation
+          # still leaves a diagnostic log. Deterministic failures are not
+          # retried; one failure is evidence that the release is not ready.
+          python tools/run_test_tier.py --profile native-smoke --verbose `
+            --junitxml "$env:RADIA_CI_OUTPUT_DIR\test-results.xml" `
+            2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-stdout.log"
+          $rc = $LASTEXITCODE
+          Write-Host "pytest simple exit=$rc"
+          if ($rc -ne 0) {
+            Write-Host "::error::Simple tests failed (rc=$rc) -- see Annotate step for the test list"
+            # Record the exit code; the Annotate step below re-exits
+            # so that failures surface as ::error annotations BEFORE
+            # the job is marked failed (otherwise GitHub UI shows no
+            # failed-test names without an artifact download).
+            "$rc" | Out-File -Encoding ascii "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-exit.txt"
+            exit $rc
+          }
+
+      - name: Capture memory after native smoke
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:RADIA_CI_OUTPUT_DIR | Out-Null
+          Get-CimInstance Win32_OperatingSystem |
+            Select-Object TotalVisibleMemorySize,FreePhysicalMemory,TotalVirtualMemorySize,FreeVirtualMemory |
+            ConvertTo-Json | Set-Content (Join-Path $env:RADIA_CI_OUTPUT_DIR 'memory-after-native-smoke.json')
+
+      - name: Upload native smoke memory diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-smoke-memory-${{ github.sha }}
+          path: '${{ env.RADIA_CI_OUTPUT_DIR }}/memory-*-native-smoke.json'
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Run validation tests
+        if: success() && env.RUN_VALIDATION_TESTS == 'true'
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia;${{ github.workspace }}\packages\cubit-mesh-export\src'
+        run: |
+          $cadPins = @(python -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*d['project']['optional-dependencies']['build123d'], sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $cadPins.Count -eq 0) { throw 'Expected declared STEP CAD dependencies' }
+          python -m pip install @cadPins
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "Running validation_test pytest gate..."
+          Write-Host "Solver distribution only; MCP and Cubit validation belong to their independent release lanes."
+          $pytestArgs = @(
+            'validation_test/',
+            '--ignore=validation_test/radia_mcp',
+            '--ignore=validation_test/cubit_mesh_export',
+            '-v',
+            '--tb=short',
+            '-r', 'aR',
+            "--junitxml=$env:RADIA_CI_OUTPUT_DIR\golden-test-results.xml",
+            '--durations=50',
+            '--durations-min=1.0'
+          )
+          $markerExpr = 'not slow and not compute_host'
+          if ($env:RUN_SLOW_TESTS -ne 'true') {
+            Write-Host "Manual validation gate -- excluding @pytest.mark.slow tests. Use full_slow=true for the full validation set."
+          } else {
+            $markerExpr = 'not compute_host'
+            Write-Host "Manual full validation gate -- running validation_test including slow tests; compute_host tests remain mdx/hibino-only."
+          }
+          if ($markerExpr) { $pytestArgs += @('-m', $markerExpr) }
+          python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log"
+          $rc = $LASTEXITCODE
+          Write-Host "pytest validation exit=$rc"
+          if ($rc -ne 0) {
+            Write-Host "::error::Validation tests failed (rc=$rc) -- see Annotate step for the test list"
+            "$rc" | Out-File -Encoding ascii "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-exit.txt"
+            exit $rc
+          }
+
+      # ----------------------------------------------------------------
+      # Surface failed tests as GitHub annotations without requiring an
+      # artifact download. Stdout remains the fallback for a pytest crash
+      # before JUnit creation.
+      #
+      # Output:
+      #   ::error::tests/foo.py::test_bar -- <message>      (failed)
+      #   ::warning::FLAKY tests/foo.py::test_bar           (passed after rerun)
+      #   ::error::pytest crashed without writing junit XML -- see stdout log
+      # ----------------------------------------------------------------
+      - name: Annotate test failures
+        if: always()
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          $found = $false
+          foreach ($pair in @(
+            @{ xml = "$env:RADIA_CI_OUTPUT_DIR\test-results.xml";              log = "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-stdout.log";        label = 'simple' },
+            @{ xml = "$env:RADIA_CI_OUTPUT_DIR\golden-test-results.xml";       log = "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log";       label = 'validation' }
+          )) {
+            $xmlPath = $pair.xml
+            $logPath = $pair.log
+            $label   = $pair.label
+            if (Test-Path $xmlPath) {
+              $found = $true
+              Write-Host "=== Annotating from $xmlPath ($label) ==="
+              try {
+                $xml = [xml](Get-Content $xmlPath -Encoding utf8 -Raw)
+                $fails = 0; $errors = 0
+                foreach ($tc in $xml.SelectNodes('//testcase')) {
+                  $cn = $tc.classname; $nm = $tc.name
+                  $f = $tc.SelectSingleNode('failure')
+                  $e = $tc.SelectSingleNode('error')
+                  if ($f) {
+                    $fails++
+                    $msg = ($f.message -replace "`r?`n", ' ').Substring(0, [Math]::Min(200, $f.message.Length))
+                    Write-Host "::error::[$label FAIL] ${cn}::${nm} -- $msg"
+                  }
+                  if ($e) {
+                    $errors++
+                    $msg = ($e.message -replace "`r?`n", ' ').Substring(0, [Math]::Min(200, $e.message.Length))
+                    Write-Host "::error::[$label ERROR] ${cn}::${nm} -- $msg"
+                  }
+                }
+                Write-Host "  $label summary: $fails fail, $errors error"
+              } catch {
+                Write-Host "::error::Failed to parse ${xmlPath}: $($_.Exception.Message)"
+              }
+            } elseif (Test-Path $logPath) {
+              # No junit XML -- pytest likely crashed.  Surface the
+              # tail of the stdout log so the failing test is at least
+              # in the workflow log (the mdx worker log is a fallback).
+              Write-Host "::error::[$label] pytest crashed without writing junit XML -- last 30 stdout lines:"
+              Get-Content $logPath -Tail 30 | ForEach-Object { Write-Host "  $_" }
+            }
+          }
+          if (-not $found) {
+            Write-Host "::warning::No junit XML found (test step may have been skipped)"
+          }
+
+      # ----------------------------------------------------------------
+      # L2 (2026-05-30): Archive junit + stdout to a per-SHA folder on
+      # the self-hosted runner.  This makes historical CI data live on
+      # mdx disk (not just GitHub artifact storage), so we can later
+      # `grep` C:\actions-runner\test-history\<sha>\ without hitting
+      # the 60-req/hour unauthenticated GitHub API rate limit.
+      # ----------------------------------------------------------------
+      - name: Archive junit on self-hosted runner
+        if: always() && runner.environment == 'self-hosted'
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        continue-on-error: true
+        run: |
+          $dst = "C:\actions-runner\test-history\${{ github.sha }}_${{ github.run_id }}_${{ github.run_attempt }}"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          foreach ($f in @(
+            "$env:RADIA_CI_OUTPUT_DIR\test-results.xml",
+            "$env:RADIA_CI_OUTPUT_DIR\golden-test-results.xml",
+            "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-stdout.log",
+            "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log",
+            "$env:RADIA_CI_OUTPUT_DIR\ci-context.json"
+          )) {
+            if (Test-Path $f) {
+              Copy-Item $f -Destination $dst -Force
+              Write-Host "  archived $f"
+            }
+          }
+          Write-Host "Archived under: $dst"
+
+      # ----------------------------------------------------------------
+      # Upload test results for GitHub Actions summary
+      # ----------------------------------------------------------------
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\test-results.xml
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\golden-test-results.xml
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-basic-stdout.log
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-golden-stdout.log
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\ci-context.json
+          retention-days: 30
+
+      # ----------------------------------------------------------------
+      # Build wheel (DryRun: build + verify only, no upload)
+      # ----------------------------------------------------------------
+      - name: Build wheel
+        if: success()
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          & "${{ github.workspace }}\Build_Wheel.ps1" -DryRun
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Wheel build failed"
+            exit $LASTEXITCODE
+          }
+
+      # ----------------------------------------------------------------
+      # Upload native binaries as an artifact for the CD workflow to consume
+      # ----------------------------------------------------------------
+      - name: Upload native binary artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-pyd
+          path: |
+            src/radia/*.pyd
+            src/radia/*.pyd.build.json
+            src/radia/*.dll
+            src/radia/*.so
+            src/radia/*.dylib
+            !src/radia/*.locked-old.*
+            !src/radia/*.lockedold.*
+            !src/radia/*.pre_*.*
+            !src/radia/*.backup*.*
+          retention-days: 7
+
+      # ----------------------------------------------------------------
+      # Upload wheel as artifact for PyPI publishing
+      # ----------------------------------------------------------------
+      - name: Upload wheel artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-wheel
+          path: dist/*.whl
+          retention-days: 7

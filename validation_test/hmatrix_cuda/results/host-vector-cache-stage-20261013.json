@@ -1,0 +1,27 @@
+{
+  "accepted": false,
+  "implemented": true,
+  "cuda_build_accepted": false,
+  "numerical_accepted": false,
+  "timing_accepted": false,
+  "release_accepted": false,
+  "scope": "Opt-in host-target source-potential reuse for bounded dense HDiv element assembly",
+  "preserved_contracts": [
+    "Existing affine analytic moments",
+    "Existing touching curved Duffy rule and non-touching direct rule",
+    "Charge-specific monomial weights",
+    "Original ordered outer quadrature sum",
+    "Upper triangle and symmetric arithmetic",
+    "Existing CPU order 1/2 whole-solve capability"
+  ],
+  "memory_contract": "Additional temporary GPU cache is counted in setup owned peak; same 2 GiB/20 percent reserve and 2 GiB workspace cap. No memory reduction claimed.",
+  "validation_pending": [
+    "Clean 100 native build",
+    "Direct versus cache operator and full material solve parity",
+    "Independent CPU coefficient/physical/true residual gates",
+    "Invalid same-host geometry rejection",
+    "Idle same-artifact whole timing/memory comparison"
+  ],
+  "deferred_reason": "Another numerical review process is actively computing on 100; implementation only, no build/GPU validation/timing started.",
+  "baseline_results": "hdiv-elements-a100-20261013.json"
+}

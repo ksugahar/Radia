@@ -1,0 +1,399 @@
+"""Constitutive-law helpers for the production HDiv-VIM nonlinear solver.
+
+The public nonlinear entry point is :func:`radia.vim.Solve`.  This module
+contains the constitutive curves and consistent tangent helpers consumed by
+``radia.vim._solve``; it contains constitutive helpers only.
+"""
+import warnings
+from math import pi
+
+import numpy as np
+import ngsolve as ng
+
+from radia.bh_law import monotone_bh_pchip
+
+
+def _bh_curve(chi0, Msat):
+    """Saturating M(H) = chi0 H / (1 + chi0|H|/Msat): slope chi0 at H=0, asymptote +-Msat."""
+    return lambda H: chi0 * H / (1.0 + chi0 * abs(H) / Msat)
+
+
+def _scalar_fixed_point(Mof, D, H0):
+    """Correct analytic uniform-sphere root: solve M = M(H0 - D M) by bisection on f(M)=M-M(H0-DM)."""
+    lo, hi = -1.0, 1.0
+    f = lambda M: M - Mof(H0 - D * M)
+    # widen until sign change (cap 1e12 so a REAL-table Msat ~ 1.5e6 is reachable, not just the
+    # analytic curve's Msat=1)
+    while f(lo) * f(hi) > 0 and hi < 1e12:
+        lo *= 2; hi *= 2
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if f(lo) * f(mid) <= 0:
+            hi = mid
+        else:
+            lo = mid
+    return 0.5 * (lo + hi)
+
+
+
+
+def _tensor_tangent_cfs(gfH, chi0, Msat, Id):
+    """Constitutive M(H) field + the CONSISTENT TENSOR tangent dM/dH for the saturating curve.
+
+    For the isotropic vector law M(H) = chi_sec(|H|) H, the consistent tangent is the rank-1 + scalar
+    split (slope along H, secant perpendicular):
+
+        dM/dH = chi_diff Hhat(x)Hhat + chi_sec (I - Hhat(x)Hhat),
+        chi_sec  = chi0 / (1 + chi0|H|/Msat)        (M = chi_sec H),
+        chi_diff = chi0 / (1 + chi0|H|/Msat)^2       (d|M|/d|H|).
+
+    The naive scalar tangent chi_diff*I FAILS at moderate drive (where chi_sec != chi_diff): e.g. at
+    |H|~4e-4 here chi_sec=725 but chi_diff=510, so omitting the perpendicular secant term gives a
+    badly wrong Jacobian and Newton crawls / stalls.
+    """
+    H2 = ng.InnerProduct(gfH, gfH) + 1e-30
+    Hm = ng.sqrt(H2)
+    sec = chi0 / (1.0 + chi0 * Hm / Msat)
+    dif = chi0 / (1.0 + chi0 * Hm / Msat) ** 2
+    par = ng.OuterProduct(gfH, gfH) / H2                 # Hhat (x) Hhat
+    return sec * gfH, dif * par + sec * (Id - par)
+
+
+_MU0 = 4e-7 * pi
+
+
+def _validate_bh_table(table, *, context="vim.Solve"):
+    """Validate the public soft-iron ``[[H, B], ...]`` contract.
+
+    The nonlinear HDiv law is an origin-anchored, single-valued soft-iron
+    curve in SI units. A negative-H recoil line can be interpolated
+    syntactically, but it belongs to the separate ``mu_r + B_r`` permanent-
+    magnet route and must fail loudly here.
+    """
+    tables = table if isinstance(table, dict) else {None: table}
+    for region, values in tables.items():
+        label = f"{context}: bh_table" if region is None else f"{context}: bh_table[{region!r}]"
+        arr = np.asarray(values, dtype=float)
+        if arr.ndim != 2 or arr.shape[1] != 2 or arr.shape[0] < 2:
+            raise ValueError(f"{label} must be [[H,B], ...] with at least two rows (A/m, T)")
+        if not np.isfinite(arr).all():
+            raise ValueError(f"{label} must contain only finite values (A/m, T)")
+        scale_h = max(1.0, float(np.max(np.abs(arr[:, 0]))))
+        scale_b = max(1.0, float(np.max(np.abs(arr[:, 1]))))
+        if not np.isclose(arr[0, 0], 0.0, rtol=0.0, atol=1e-12 * scale_h):
+            raise ValueError(f"{label} must start at H=0 for soft iron; use mu_r+B_r for recoil PM")
+        if not np.isclose(arr[0, 1], 0.0, rtol=0.0, atol=1e-12 * scale_b):
+            raise ValueError(f"{label} must start at B=0 for soft iron")
+        if np.any(np.diff(arr[:, 0]) <= 0.0):
+            raise ValueError(f"{label} H values must be strictly increasing")
+        if np.any(np.diff(arr[:, 1]) < -1e-12 * scale_b):
+            raise ValueError(f"{label} B values must be non-decreasing")
+
+
+def _bh_table_falling_magnetization(table, *, context="vim.Solve", inverse=True):
+    """Warn about, and return, table rows where M = B/mu0 - H falls.
+
+    Soft iron has dB/dH >= mu0.  Where a table's slope drops below mu0 the
+    inverse (energy) law keeps only the rising part of M(H) and caps M at the
+    last row, so the solve saturates at a lower H than the table states.  Such
+    tables stay accepted -- the saturation audit keeps one as a deliberate
+    stress fixture -- but the cap is reported instead of applied silently.
+    Returns ``{region: [H_low, H_high]}`` for the first falling interval of
+    each affected table (region ``None`` for a single table), or ``None``.
+    """
+    tables = table if isinstance(table, dict) else {None: table}
+    falling = {}
+    for region, values in tables.items():
+        arr = np.asarray(values, dtype=float)
+        magnetization = arr[:, 1] / _MU0 - arr[:, 0]
+        scale_m = max(1.0, float(np.max(np.abs(magnetization))))
+        rows = np.flatnonzero(np.diff(magnetization) < -1e-9 * scale_m)
+        if rows.size:
+            row = int(rows[0])
+            interval = [float(arr[row, 0]), float(arr[row + 1, 0])]
+            falling[region] = interval
+            label = f"{context}: bh_table" if region is None else f"{context}: bh_table[{region!r}]"
+            warnings.warn(
+                f"{label} magnetization M=B/mu0-H falls between H={interval[0]:g} and "
+                f"H={interval[1]:g} A/m (dB/dH < mu0); " +
+                ("the nonlinear law caps M at the last row, below the interpolated peak"
+                 if inverse else "forward-newton retains the original B(H) without an inverse-M cap"),
+                RuntimeWarning, stacklevel=3)
+    return falling or None
+
+
+def _bh_table_funcs(Harr, Barr):
+    """Build M(H) + the production B(H)/B'(H) from a REAL [[H,B]] table (the same data Radia's MatSatIsoTab
+    consumes): monotone C1 interpolation of M (radia.bh_law) -> smooth dM/dH >= 0 for Newton when the
+    tabulated M rises.  M(H) = B(|H|)/mu0 - |H|.
+
+    BEYOND the table (|H| > H_max) the curve SATURATES: B extends with slope mu0 (mu_r -> 1), so
+    M -> M(H_max) = const and dM/dH -> 0 -- the physical saturation, matching Radia's MatSatIsoTab
+    linear-B extension.  (Without this, PCHIP polynomial extrapolation blows up: M >> M_sat.)
+    Returns (Mof, Bpch, Bder, Hmax, Mmax)."""
+    Harr = np.asarray(Harr, float)
+    Barr = np.asarray(Barr, float)
+    Bpch = monotone_bh_pchip(Harr, Barr)
+    Bder = Bpch.derivative()
+    Hmax = float(Harr[-1])
+    Mmax = float(Bpch(Hmax) / _MU0 - Hmax)
+
+    def Mof(H):
+        a = abs(H)
+        m = (float(Bpch(a)) / _MU0 - a) if a <= Hmax else Mmax
+        return float(np.sign(H) * m)
+
+    return Mof, Bpch, Bder, Hmax, Mmax
+
+
+def _table_tensor_tangent(gfH, mesh, Bpch, Bder, Hmax, Mmax, Id):
+    """Table version of _tensor_tangent_cfs: per-element chi_sec / chi_diff from the PCHIP BH table,
+    set as L2(0) element-constant fields (chi_sec = M(|H|)/|H|, chi_diff = dM/d|H| = B'(|H|)/mu0 - 1).
+    Beyond the table (|H| > Hmax) M saturates to Mmax (chi_diff = 0)."""
+    l2 = ng.L2(mesh, order=0)
+    gfm = ng.GridFunction(l2)
+    gfm.Set(ng.sqrt(ng.InnerProduct(gfH, gfH) + 1e-30))
+    Hmag = np.maximum(gfm.vec.FV().NumPy(), 1e-30)         # per-element |H|
+    sat = Hmag > Hmax
+    a_cl = np.minimum(Hmag, Hmax)
+    m_e = np.where(sat, Mmax, Bpch(a_cl) / _MU0 - a_cl)    # M(|H|), saturated beyond table
+    sec_e = m_e / Hmag                                     # chi_sec = M/|H| (decreases beyond sat)
+    dif_e = np.where(sat, 0.0, Bder(a_cl) / _MU0 - 1.0)    # chi_diff = dM/d|H| (0 beyond sat)
+    gf_sec = ng.GridFunction(l2)
+    gf_sec.vec.FV().NumPy()[:] = sec_e
+    gf_dif = ng.GridFunction(l2)
+    gf_dif.vec.FV().NumPy()[:] = dif_e
+    H2 = ng.InnerProduct(gfH, gfH) + 1e-30
+    par = ng.OuterProduct(gfH, gfH) / H2
+    return gf_sec * gfH, gf_dif * par + gf_sec * (Id - par)
+
+
+def _table_tensor_tangent_multi(gfH, mesh, region_funcs, elem_region, Id):
+    """PER-REGION version of _table_tensor_tangent: each element uses ITS OWN region's PCHIP BH table.
+
+    `region_funcs` is a list (indexed by region-id) of (Bpch, Bder, Hmax, Mmax) tuples (one per soft-iron
+    grade); `elem_region` is the per-element region-id array in mesh element order (== L2(0) DOF order, so
+    element i <-> DOF i).  N = B^T G B is geometry-only, so per-region nonlinear iron enters ONLY here:
+    each element's chi_sec / chi_diff is read from the BH table of the material it belongs to.  Returns
+    the same (M(H) CF, consistent tensor-tangent CF) pair as the single-region helper."""
+    l2 = ng.L2(mesh, order=0)
+    gfm = ng.GridFunction(l2)
+    gfm.Set(ng.sqrt(ng.InnerProduct(gfH, gfH) + 1e-30))
+    Hmag = np.maximum(gfm.vec.FV().NumPy(), 1e-30)            # per-element |H| (DOF == element order)
+    sec_e = np.empty_like(Hmag)
+    dif_e = np.empty_like(Hmag)
+    for ridx, (Bpch, Bder, Hmax, Mmax) in enumerate(region_funcs):
+        sel = elem_region == ridx
+        if not np.any(sel):
+            continue
+        h = Hmag[sel]
+        sat = h > Hmax
+        a_cl = np.minimum(h, Hmax)
+        m_e = np.where(sat, Mmax, Bpch(a_cl) / _MU0 - a_cl)   # M(|H|), saturated beyond this region's table
+        sec_e[sel] = m_e / h                                  # chi_sec = M/|H|
+        dif_e[sel] = np.where(sat, 0.0, Bder(a_cl) / _MU0 - 1.0)   # chi_diff = dM/d|H| (0 beyond sat)
+    gf_sec = ng.GridFunction(l2)
+    gf_sec.vec.FV().NumPy()[:] = sec_e
+    gf_dif = ng.GridFunction(l2)
+    gf_dif.vec.FV().NumPy()[:] = dif_e
+    H2 = ng.InnerProduct(gfH, gfH) + 1e-30
+    par = ng.OuterProduct(gfH, gfH) / H2
+    return gf_sec * gfH, gf_dif * par + gf_sec * (Id - par)
+
+
+# --------------------------------------------------------------------- INVERSE BH (energy / reluctivity form)
+# The SYMMETRIC energy-Newton (the all-C++ nonlinear path, _solve._solve_nonlinear_energy_cpp) linearises the
+# residual R(m) = INT H(M).v dx + N m - M_mass h_ext (M = the flux field of m, H(M) the INVERSE BH reluctance
+# field) -> Jacobian J = W_tan + N, W_tan = INT nu_d u.v dx, nu_d = dH/dM = (dM/dH)^-1 (differential
+# reluctivity tensor).  Symmetric (N + the SPD reluctivity mass) -> solved by the existing C++ W-CG
+# (solve_configured_linear_material_mass_riesz), with no explicit M_mass^-1.  It reduces to the linear
+# (M_{1/chi}+N)m = M_mass h_ext when chi is constant.
+_CHI_DIFF_FLOOR = 1e-3     # nu_diff = 1/max(chi_diff, floor): cap the differential reluctivity in deep saturation
+                           # (chi_diff = dM/d|H| -> 0).  Also the barrier slope Kbar = 1/floor for |M| > Mmax.
+
+
+def _bh_inverse_funcs(Harr, Barr):
+    """Inverse of `_bh_table_funcs`: from the forward monotone M(|H|) table build the vectorized per-element
+    reluctivity fields + co-energy of |M|.  Returns (fields, wco, Mmax):
+      fields(Mmag) -> (nu_sec, nu_diff):  nu_sec = |H|/|M| (secant reluctivity, H(M) = nu_sec M);
+                      nu_diff = 1/chi_diff (differential reluctivity along M, chi_diff = B'(|H|)/mu0 - 1).
+      wco(Mmag)   -> the co-energy density INT_0^|M| H(s) ds  (the line-search merit -- E is convex, R is
+                      its gradient, so an Armijo line search on E is robust where ||R|| stalls in saturation).
+    HARD-SATURATION BARRIER: the table saturates M at Mmax (M cannot exceed Msat); for |M| > Mmax the inverse
+    is undefined, so H(M) is extended continuously with a steep linear barrier (slope Kbar = 1/_CHI_DIFF_FLOOR).
+    Its energy is C1; the tangent can jump at the barrier -> the energy form is repelled from the unphysical |M| > Mmax region (without
+    it, the M-iterates overshoot Msat and the Newton wanders / limit-cycles)."""
+    from scipy.interpolate import PchipInterpolator
+    Mof, _, _, Hmax, Mmax = _bh_table_funcs(Harr, Barr)
+    Hs = np.concatenate([[0.0], np.logspace(-2, np.log10(max(Hmax, 1.0)), 800)])
+    Ms = np.array([Mof(h) for h in Hs])                       # should be monotone 0..Mmax
+    # Saturating BH tables can produce tiny PCHIP ripples in M(H).  PCHIP for the
+    # inverse H(M) requires the whole retained sequence to be strictly increasing,
+    # not just adjacent positive differences in the unfiltered samples.
+    keep = []
+    last = -np.inf
+    for k, mval in enumerate(Ms):
+        if mval > last + 1e-12 * max(1.0, Mmax):
+            keep.append(k)
+            last = mval
+    Hgrid, Mgrid = Hs[keep], Ms[keep]
+    if len(Mgrid) < 2:
+        raise ValueError("vim.Solve: inverse BH table did not produce a monotone M(H) curve")
+    Hof = PchipInterpolator(Mgrid, Hgrid)                     # |H| given |M|
+    Wco = Hof.antiderivative()
+    Hder = Hof.derivative()
+    Kbar = 1.0 / _CHI_DIFF_FLOOR
+    Mcap = Mmax * (1.0 - 1e-9)
+    Hlast = float(Hof(Mcap))
+    Wzero = float(Wco(0.0))
+
+    def fields(Mmag):
+        Mmag = np.asarray(Mmag, float)
+        Mm = np.minimum(Mmag, Mcap)
+        h = Hof(Mm)
+        nu_diff = Hder(Mm)
+        nu_sec = np.divide(h, Mmag, out=np.full_like(Mmag, float(Hder(0.0))),
+                           where=Mmag > 0)
+        over = Mmag > Mcap
+        if np.any(over):                                      # continuous H, C1 energy beyond Mcap
+            nu_sec[over] = (Hlast + Kbar * (Mmag[over] - Mcap)) / Mmag[over]
+            nu_diff[over] = Kbar
+        return nu_sec, nu_diff
+
+    def wco(Mmag):
+        Mmag = np.asarray(Mmag, float)
+        Mm = np.minimum(Mmag, Mcap)
+        d = np.maximum(Mmag - Mcap, 0.0)
+        return Wco(Mm) - Wzero + Hlast * d + 0.5 * Kbar * d * d
+
+    return fields, wco, Mmax
+
+
+class _EnergyMaterialQuadrature:
+    """One NGSolve quadrature rule for material energy, gradient and Hessian."""
+
+    # Bound NumPy temporaries independently of mesh quadrature size. The
+    # persistent NGSolve coefficient fields retain the complete rule.
+    _chunk_size = 65536
+
+    def __init__(self, fes, bh_table):
+        from ngsolve.comp import IntegrationRuleSpace
+
+        self.mesh = fes.mesh
+        self.m_field = ng.GridFunction(fes)
+        self.order = max(6, 2 * int(fes.globalorder) + 2)
+        self.space = IntegrationRuleSpace(self.mesh, order=self.order)
+        self.measure = ng.dx(intrules=self.space.GetIntegrationRules())
+        self.vector_space = ng.VectorValued(self.space, dim=3)
+        self.samples = ng.GridFunction(self.vector_space)
+        self.secant = ng.GridFunction(self.space)
+        self.differential = ng.GridFunction(self.space)
+        self.tensor_samples = ng.GridFunction(ng.VectorValued(self.space, dim=9))
+        weights = ng.LinearForm(self.space)
+        weights += self.space.TestFunction() * self.measure
+        weights.Assemble()
+        self.weights = weights.vec.FV().NumPy().copy()
+        self.npoints = int(self.space.ndof)
+        tables = bh_table if isinstance(bh_table, dict) else {
+            name: bh_table for name in self.mesh.GetMaterials()}
+        missing = set(self.mesh.GetMaterials()) - set(tables)
+        if missing:
+            raise ValueError("vim.Solve: bh_table missing regions %s" % sorted(missing))
+        names = list(tables)
+        self.curves = []
+        for name in names:
+            arr = np.asarray(tables[name], dtype=float)
+            if arr.ndim != 2 or arr.shape[1] != 2:
+                raise ValueError("vim.Solve: bh_table must contain [[H,B], ...]")
+            self.curves.append(_bh_inverse_funcs(arr[:, 0], arr[:, 1]))
+        region = ng.GridFunction(self.space)
+        region.Interpolate(self.mesh.MaterialCF({name: i for i, name in enumerate(names)}))
+        self.regions = np.rint(region.vec.FV().NumPy()).astype(int)
+        initial_slopes = {name: float(curve[0](np.array([0.0]))[1][0])
+                          for name, curve in zip(names, self.curves)}
+        if any(not np.isfinite(value) or value <= 0 for value in initial_slopes.values()):
+            raise ValueError("vim.Solve: inverse BH needs a positive finite zero-field tangent")
+        self.initial_reluctivity = self.mesh.MaterialCF(initial_slopes)
+        self.field = self.secant * self.m_field
+        # Keep one grid-function evaluation per quadrature point. Extracting
+        # nine components separately evaluates the same tensor nine times.
+        self.tangent = self.tensor_samples.Reshape((3, 3))
+
+    def bilinear_integrator(self, form):
+        # NGSolve 6.2.2606 tensor IntegrationRuleSpace evaluation needs the
+        # scalar evaluator; its SIMD path terminates the process on this form.
+        integrator = ng.SymbolicBFI(form, simd_evaluate=False)
+        for element_type, rule in self.space.GetIntegrationRules().items():
+            integrator.SetIntegrationRule(element_type, rule)
+        return integrator
+
+    def update(self, coefficients):
+        self.m_field.vec.FV().NumPy()[:] = coefficients
+        self.samples.Interpolate(self.m_field)
+        values = self.samples.vec.FV().NumPy().reshape(3, self.npoints).T
+        secant = self.secant.vec.FV().NumPy()
+        differential = self.differential.vec.FV().NumPy()
+        target = self.tensor_samples.vec.FV().NumPy().reshape(9, self.npoints)
+        total_energy = 0.0
+        for start in range(0, self.npoints, self._chunk_size):
+            stop = min(start + self._chunk_size, self.npoints)
+            local = values[start:stop]
+            magnitude = np.linalg.norm(local, axis=1)
+            energy = np.empty(stop - start)
+            local_secant = secant[start:stop]
+            local_differential = differential[start:stop]
+            regions = self.regions[start:stop]
+            for i, (fields, wco, _) in enumerate(self.curves):
+                selected = regions == i
+                if not np.any(selected):
+                    continue
+                local_secant[selected], local_differential[selected] = fields(magnitude[selected])
+                energy[selected] = wco(magnitude[selected])
+            if not (np.isfinite(energy).all() and np.isfinite(local_secant).all()
+                    and np.isfinite(local_differential).all()):
+                raise RuntimeError("vim.Solve: non-finite material quadrature state")
+            unit = np.divide(local, magnitude[:, None], out=np.zeros_like(local),
+                             where=magnitude[:, None] > 0)
+            tensor = (local_secant[:, None, None] * np.eye(3)
+                      + (local_differential-local_secant)[:, None, None]
+                      * unit[:, :, None] * unit[:, None, :])
+            target[:, start:stop] = tensor.reshape(stop-start, 9).T
+            total_energy += float(self.weights[start:stop] @ energy)
+        return total_energy
+
+
+def _reluctivity_tangent(gfM, mesh, fields, Id):
+    """Inverse analogue of `_table_tensor_tangent`: from the M field gfM, per-element nu_sec / nu_diff via the
+    inverse BH `fields`, returns (H(M) CF = nu_sec M, nu_d tensor CF = nu_diff Mhat(x)Mhat + nu_sec (I - Mhat(x)Mhat))."""
+    l2 = ng.L2(mesh, order=0)
+    gfm = ng.GridFunction(l2)
+    gfm.Set(ng.sqrt(ng.InnerProduct(gfM, gfM) + 1e-30))
+    Mmag = np.maximum(gfm.vec.FV().NumPy(), 1e-30)
+    nu_sec, nu_diff = fields(Mmag)
+    gs = ng.GridFunction(l2); gs.vec.FV().NumPy()[:] = nu_sec
+    gd = ng.GridFunction(l2); gd.vec.FV().NumPy()[:] = nu_diff
+    M2 = ng.InnerProduct(gfM, gfM) + 1e-30
+    par = ng.OuterProduct(gfM, gfM) / M2                      # Mhat (x) Mhat
+    return gs * gfM, gd * par + gs * (Id - par)
+
+
+def _reluctivity_tangent_multi(gfM, mesh, region_fields, elem_region, Id):
+    """PER-REGION inverse analogue of `_table_tensor_tangent_multi`: each element uses ITS region's inverse BH
+    `fields`.  `region_fields` = list (by region-id) of the `fields` callables; `elem_region` = per-element
+    region-id (== L2(0) DOF order)."""
+    l2 = ng.L2(mesh, order=0)
+    gfm = ng.GridFunction(l2)
+    gfm.Set(ng.sqrt(ng.InnerProduct(gfM, gfM) + 1e-30))
+    Mmag = np.maximum(gfm.vec.FV().NumPy(), 1e-30)
+    nu_sec = np.empty_like(Mmag); nu_diff = np.empty_like(Mmag)
+    for ridx, fields in enumerate(region_fields):
+        sel = elem_region == ridx
+        if not np.any(sel):
+            continue
+        s, d = fields(Mmag[sel])
+        nu_sec[sel] = s; nu_diff[sel] = d
+    gs = ng.GridFunction(l2); gs.vec.FV().NumPy()[:] = nu_sec
+    gd = ng.GridFunction(l2); gd.vec.FV().NumPy()[:] = nu_diff
+    M2 = ng.InnerProduct(gfM, gfM) + 1e-30
+    par = ng.OuterProduct(gfM, gfM) / M2
+    return gs * gfM, gd * par + gs * (Id - par)

@@ -1,0 +1,37 @@
+{
+  "schema": "radia.frozen-cg-diagnostic.v1",
+  "system_sha256": "f4a679c782663e5bf0d3ead5ea0c2295517fea673915e4191aad03a5f7967758",
+  "tolerance": 0.0002744577167396936,
+  "maxiter": 4000,
+  "restart_period": 1000,
+  "uninterrupted": {
+    "info": 0,
+    "iterations": 1860,
+    "true_relative_residual": 0.0001516979512155885
+  },
+  "restarted": [
+    {
+      "iterations": 1000,
+      "info": 1000,
+      "true_relative_residual": 0.07681643240449762
+    },
+    {
+      "iterations": 2000,
+      "info": 1000,
+      "true_relative_residual": 0.01967073929324779
+    },
+    {
+      "iterations": 3000,
+      "info": 1000,
+      "true_relative_residual": 0.012743286186198185
+    },
+    {
+      "iterations": 4000,
+      "info": 1000,
+      "true_relative_residual": 0.012541751037784784
+    }
+  ],
+  "native_iterate_dense_residual": 0.006268861240571024,
+  "direct_true_residual": 2.4159300200156864e-11,
+  "scope": "Saved dense system diagnostic; not native solver acceptance."
+}

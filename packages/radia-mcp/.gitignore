@@ -1,0 +1,2 @@
+# Persistent advisory-lock identities; do not delete while writers may be active.
+*.radia-write-lock

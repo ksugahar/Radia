@@ -1,0 +1,163 @@
+"""Golden test: radia.vim.Solve -- the production linear/nonlinear HDiv-VIM
+soft-iron applied-field demag solve used by rad.Solve.
+
+Locks:
+  (1) PHYSICS: on a uniform-field sphere the volume-average M matches the analytic linear
+      magnetization  M = chi/(1 + chi D) H_applied  (D = demag factor ~ 1/3) across mu_r 10..1000;
+  (2) per-element M is ~uniform and +z-aligned (uniform applied field on a sphere);
+  (3) exactly one of mu_r (linear) / bh_table (nonlinear) must be given -- else RAISE;
+  (4) fail-loud: mu_r <= 1 RAISES (CLAUDE.md No-Fallbacks);
+  (5) NONLINEAR: a saturating BH table reproduces the analytic uniform-sphere fixed point
+      M = Mof(H0 - D M), via the C++ charge-Gram matrix-free Newton.
+"""
+import numpy as np
+import pytest
+
+pytest.importorskip("ngsolve")
+pytest.importorskip("netgen.csg")
+import ngsolve as ng  # noqa: E402
+from netgen.csg import CSGeometry, Sphere, Pnt  # noqa: E402
+
+from radia.vim import Solve  # noqa: E402
+
+
+def _sphere(h=0.45):
+    g = CSGeometry(); g.Add(Sphere(Pnt(0, 0, 0), 1.0))
+    with ng.TaskManager():
+        return ng.Mesh(g.GenerateMesh(maxh=h))
+
+
+H0 = 1000.0  # uniform applied field, +z (A/m)
+_HEXT = ng.CoefficientFunction((0, 0, H0))
+
+
+@pytest.mark.parametrize("mu_r", [10.0, 100.0, 1000.0])
+def test_sphere_linear_matches_analytic(mu_r):
+    """Volume-average M == analytic chi/(1+chi D) H on the uniform-field sphere (dense path)."""
+    mesh = _sphere()
+    with ng.TaskManager():
+        res = Solve(mesh, mu_r, _HEXT)
+    assert res["linear_solver"] == "mass-riesz-cg"
+    assert "hmat_stats" in res
+    chi = mu_r - 1.0
+    D = res["demag"]
+    M_analytic = chi / (1.0 + chi * D) * H0
+    assert abs(D - 1.0 / 3.0) < 5e-3, f"demag factor off: {D}"
+    rel = abs(res["M_avg"][2] - M_analytic) / M_analytic
+    assert rel < 2e-3, f"mu_r={mu_r}: Mz_avg {res['M_avg'][2]:.2f} vs analytic {M_analytic:.2f} (rel {rel:.2e})"
+    # transverse average components are ~0 (no transverse drive)
+    assert abs(res["M_avg"][0]) < 1e-3 * M_analytic and abs(res["M_avg"][1]) < 1e-3 * M_analytic
+
+
+def test_per_element_M_uniform_and_aligned():
+    """Per-element M on the uniform-field sphere is ~uniform and dominated by +z."""
+    mesh = _sphere()
+    with ng.TaskManager():
+        res = Solve(mesh, 100.0, _HEXT)
+    M = res["M"]
+    assert M.shape == (res["n_el"], 3)
+    mz = M[:, 2]
+    # +z dominant, low relative spread on the coarse sphere
+    assert mz.mean() > 0 and np.std(mz) / abs(mz.mean()) < 0.1, \
+        f"per-element Mz not uniform: mean {mz.mean():.1f}, std {np.std(mz):.1f}"
+    assert np.abs(M[:, :2]).mean() < 0.05 * abs(mz.mean()), "spurious transverse per-element M"
+
+
+@pytest.mark.parametrize("mu_r", [1e2, 1e5])
+def test_default_symmetric_cg_matches_explicit_name(mu_r):
+    """The default and explicit names select the same all-C++ symmetric mass-Riesz CG."""
+    mesh = _sphere(h=0.5)
+    with ng.TaskManager():
+        auto = Solve(mesh, mu_r, _HEXT)                          # default -> symmetric C++ CG
+        cg = Solve(mesh, mu_r, _HEXT, linear_solver="cpp-cg")    # explicit alias
+    assert auto["linear_solver"] == "mass-riesz-cg"
+    assert cg["linear_solver"] == "mass-riesz-cg"
+    # Independent TaskManager/sparsecholesky/CG runs can differ by last-bit reduction order.
+    assert abs(auto["M_avg"][2] - cg["M_avg"][2]) < 5e-9, "auto must equal the explicit cpp-cg alias"
+
+
+def test_jacobi_preconditioner_matches_mass_riesz():
+    """Diagnostic preconditioner switch: Jacobi-CG solves the same SPD +N system as mass-Riesz-CG.
+
+    The default remains mass-Riesz; Jacobi is kept as a hex/H-matrix benchmark probe so we can tell whether
+    a slowdown is Krylov/preconditioner driven or H-matrix build/matvec driven.
+    """
+    mesh = _sphere(h=0.7)
+    with ng.TaskManager():
+        mr = Solve(mesh, 100.0, _HEXT)
+        ja = Solve(mesh, 100.0, _HEXT, preconditioner="jacobi")
+    assert mr["linear_solver"] == "mass-riesz-cg"
+    assert ja["linear_solver"] == "jacobi-cg"
+    assert ja["preconditioner"] == "jacobi"
+    rel = abs(mr["M_avg"][2] - ja["M_avg"][2]) / abs(mr["M_avg"][2])
+    assert rel < 1e-6, f"Jacobi-CG and mass-Riesz-CG solve different systems: rel {rel:.2e}"
+
+
+def test_fail_loud_on_nonmagnetic():
+    """mu_r <= 1 is not a soft-iron demag problem -> RAISE (no silent fallback)."""
+    mesh = _sphere()
+    with pytest.raises(ValueError):
+        with ng.TaskManager():
+            Solve(mesh, 1.0, _HEXT)
+
+
+def test_rt1_linear_solve_is_physically_sane():
+    """The RT1 LINEAR material solve on the uniform-field sphere gives the sphere demag ~1/3 and a +z M_avg
+    (no ~2-4x blow-up -- the per-element change-of-basis fix, 2026-06-28).  Order 1 is the demag
+    spectrum reference (eig in [0,1] locked by test_hdiv_vim_demag_spectrum_psd)."""
+    mesh = _sphere(h=0.5)
+    with ng.TaskManager():
+        r = Solve(mesh, 100.0, _HEXT, order=1)
+    assert r["order"] == 1
+    assert abs(r["demag"] - 1.0 / 3.0) < 1e-2, f"RT1 demag {r['demag']:.4f} not ~1/3"
+    assert r["M_avg"][2] > 0, f"RT1 M_avg_z {r['M_avg'][2]:.0f} should respond +z to the applied field"
+
+
+def test_public_rt2_linear_solve():
+    """The public pure-TET RT2 solve is a production material path."""
+    mesh = _sphere(h=0.7)
+    with ng.TaskManager():
+        result = Solve(mesh, 100.0, _HEXT, order=2)
+    assert result["order"] == 2
+    assert abs(result["demag"] - 1.0 / 3.0) < 1e-2
+    assert result["M_avg"][2] > 0
+
+
+def test_requires_exactly_one_material_spec():
+    """Exactly one of mu_r (linear) / bh_table (nonlinear) -> else RAISE."""
+    mesh = _sphere()
+    with ng.TaskManager():
+        with pytest.raises(ValueError):                       # neither
+            Solve(mesh, H_ext=_HEXT)
+        with pytest.raises(ValueError):                       # both
+            Solve(mesh, 100.0, _HEXT, bh_table=[[0.0, 0.0], [1e6, 2.0]])
+
+
+def test_nonlinear_sphere_vs_analytic_fixed_point():
+    """NONLINEAR vim.Solve (uniform field + a real BH table) reproduces the analytic uniform-sphere
+    fixed point M = Mof(H0 - D M) (D = demag factor ~ 1/3) on the saturating sphere."""
+    chi0, Msat, H0 = 1000.0, 1.0e6, 2.0e5
+    Hs = np.concatenate([[0.0], np.logspace(-1, 7, 60)])
+    Ms = chi0 * Hs / (1.0 + chi0 * Hs / Msat)
+    Bs = (4e-7 * np.pi) * (Hs + Ms)
+    BH = [[float(h), float(b)] for h, b in zip(Hs, Bs)]
+    Mof = lambda H: chi0 * H / (1.0 + chi0 * abs(H) / Msat)   # noqa: E731 (the table's M(H))
+    mesh = _sphere()
+    with ng.TaskManager():
+        res = Solve(mesh, bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)))
+    assert res["nonlinear"] is True
+    # analytic uniform-sphere fixed point with the solved demag factor D
+    D = res["demag"]
+    lo, hi = -Msat, Msat
+    f = lambda M: M - Mof(H0 - D * M)                          # noqa: E731
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if f(lo) * f(mid) <= 0:
+            hi = mid
+        else:
+            lo = mid
+    M_fp = 0.5 * (lo + hi)
+    rel = abs(res["M_avg"][2] - M_fp) / abs(M_fp)
+    assert rel < 2e-2, f"nonlinear Mz {res['M_avg'][2]:.1f} vs analytic fixed point {M_fp:.1f} rel {rel:.2e}"
+    # the nonlinear solver is the damped matrix-free Newton (C++ charge Gram); bounded well inside nl_maxit.
+    assert res["iters"] < 300, f"nonlinear Newton outer iters {res['iters']}"

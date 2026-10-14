@@ -1,0 +1,25 @@
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "sparsesolv-hiruma-benchmark",
+  "strict_labels": true,
+  "required": {
+    "materials": ["core", "cond", "air"],
+    "boundaries": [
+      "dirichlet",
+      "gamma_in",
+      "gamma_out",
+      "interface_1_3",
+      "interface_2_3"
+    ]
+  },
+  "allowed": {
+    "materials": ["core", "cond", "air"],
+    "boundaries": [
+      "dirichlet",
+      "gamma_in",
+      "gamma_out",
+      "interface_1_3",
+      "interface_2_3"
+    ]
+  }
+}

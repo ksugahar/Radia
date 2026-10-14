@@ -1,0 +1,386 @@
+{
+  "schema": "radia.panel-loop-ring-evidence.v1",
+  "model": {
+    "radius_m": 0.03,
+    "wire_radius_m": 0.003,
+    "frequency_hz": 50000,
+    "conductivity_s_per_m": 58000000.0,
+    "axial_field_a_per_m": 1
+  },
+  "law": "Minor theta in [pi/2,3pi/2): .25 Zref; other half 3 Zref. Face-aligned.",
+  "rows": [
+    {
+      "triangles": 512,
+      "vertices": 256,
+      "cases": [
+        {
+          "carrier_offset_m": 0.0,
+          "constant_panel_field_relative": 0.0,
+          "panel": {
+            "alpha": [
+              -0.036509047714400215,
+              -0.0010882809355532031
+            ],
+            "power_w": 1.0539220516945207e-06,
+            "reaction": [
+              -1.3272709342769393e-10,
+              -6.7516166958008245e-12
+            ],
+            "power_balance": 0.0062807480533684235,
+            "residual": 2.875421200060997e-16,
+            "faraday_residual": 1.9526540931638406e-16,
+            "seam_jump_deviation": 5.164899701703973e-06
+          },
+          "uniform_mean": {
+            "alpha": [
+              -0.03659120450550512,
+              -0.0011562160703602452
+            ],
+            "power_w": 8.141464088933772e-07,
+            "reaction": [
+              -1.353106012888872e-10,
+              -5.196679253194167e-12
+            ],
+            "power_balance": 0.0026359624362946033
+          },
+          "delta_power_w": 2.397756428011435e-07,
+          "g1b_field_relative": 0.0010802746803604429,
+          "g1a": {
+            "identical_block_relative_error": 4.2240372526854086e-17,
+            "physical_field_relative_error": 1.0515466862921984e-12
+          },
+          "assembly_route": "weighted-panel",
+          "constant_panel_assembly_route": "scalar-equal-faces",
+          "jump_diagnostic": null
+        },
+        {
+          "carrier_offset_m": 0.00075,
+          "constant_panel_field_relative": 0.0,
+          "panel": {
+            "alpha": [
+              -0.03655098127405237,
+              -0.0010715171293208814
+            ],
+            "power_w": 1.0295114224300117e-06,
+            "reaction": [
+              -1.326474623949365e-10,
+              -6.634045472423002e-12
+            ],
+            "power_balance": 0.012201907898771847,
+            "residual": 7.78544341363026e-17,
+            "faraday_residual": 8.741387985880698e-18,
+            "seam_jump_deviation": 8.693150231886548e-06
+          },
+          "uniform_mean": {
+            "alpha": [
+              -0.036611799690647304,
+              -0.0011586121774144484
+            ],
+            "power_w": 8.054538039125041e-07,
+            "reaction": [
+              -1.3514015075003858e-10,
+              -5.1515386925541815e-12
+            ],
+            "power_balance": 0.0046532794678963985
+          },
+          "delta_power_w": 2.240576185175076e-07,
+          "g1b_field_relative": 0.001954076333412953,
+          "g1a": {
+            "identical_block_relative_error": 5.282832164575088e-17,
+            "physical_field_relative_error": 4.558682961441032e-13
+          },
+          "assembly_route": "weighted-panel",
+          "constant_panel_assembly_route": "scalar-equal-faces",
+          "jump_diagnostic": null
+        }
+      ]
+    },
+    {
+      "triangles": 2048,
+      "vertices": 1024,
+      "cases": [
+        {
+          "carrier_offset_m": 0.0,
+          "constant_panel_field_relative": 0.0,
+          "panel": {
+            "alpha": [
+              -0.03711126751292666,
+              -0.0011028131952905158
+            ],
+            "power_w": 1.08725554599028e-06,
+            "reaction": [
+              -1.3637510788681927e-10,
+              -6.932122016641784e-12
+            ],
+            "power_balance": 0.0015080484797354021,
+            "residual": 7.993442704239018e-16,
+            "faraday_residual": 1.9461669720682004e-16,
+            "seam_jump_deviation": 3.848029184183588e-08
+          },
+          "uniform_mean": {
+            "alpha": [
+              -0.03720780585067533,
+              -0.0011677720336548758
+            ],
+            "power_w": 8.414465716010881e-07,
+            "reaction": [
+              -1.3902444055995597e-10,
+              -5.360363036575953e-12
+            ],
+            "power_balance": 0.0006622942344585159
+          },
+          "delta_power_w": 2.458089743891918e-07,
+          "g1b_field_relative": 0.00027072178217287646,
+          "g1a": {
+            "identical_block_relative_error": 2.5804673784785967e-16,
+            "physical_field_relative_error": 1.1464197338849739e-11
+          },
+          "assembly_route": "weighted-panel",
+          "constant_panel_assembly_route": "scalar-equal-faces",
+          "jump_diagnostic": null
+        },
+        {
+          "carrier_offset_m": 0.00075,
+          "constant_panel_field_relative": 0.0,
+          "panel": {
+            "alpha": [
+              -0.03712286058154938,
+              -0.0010980536083350775
+            ],
+            "power_w": 1.0804209681330707e-06,
+            "reaction": [
+              -1.36351128043829e-10,
+              -6.89918857466963e-12
+            ],
+            "power_balance": 0.003055326636496769,
+            "residual": 1.7406081434957268e-16,
+            "faraday_residual": 1.01391358318735e-17,
+            "seam_jump_deviation": 4.962583574075197e-07
+          },
+          "uniform_mean": {
+            "alpha": [
+              -0.03721356716805513,
+              -0.0011681968237660077
+            ],
+            "power_w": 8.388968151925221e-07,
+            "reaction": [
+              -1.3897534672281723e-10,
+              -5.347382955935448e-12
+            ],
+            "power_balance": 0.0012732618637210091
+          },
+          "delta_power_w": 2.4152415294054854e-07,
+          "g1b_field_relative": 0.0005058502667908331,
+          "g1a": {
+            "identical_block_relative_error": 2.6526954087979345e-16,
+            "physical_field_relative_error": 3.613922878911089e-12
+          },
+          "assembly_route": "weighted-panel",
+          "constant_panel_assembly_route": "scalar-equal-faces",
+          "jump_diagnostic": null
+        }
+      ]
+    },
+    {
+      "triangles": 8192,
+      "vertices": 4096,
+      "cases": [
+        {
+          "carrier_offset_m": 0.0,
+          "constant_panel_field_relative": 0.0,
+          "panel": {
+            "alpha": [
+              -0.037272895195031894,
+              -0.0011013939647890308
+            ],
+            "power_w": 1.0919011583939568e-06,
+            "reaction": [
+              -1.3733651452120788e-10,
+              -6.953828526270312e-12
+            ],
+            "power_balance": 0.0003696966759649811,
+            "residual": 1.0060046656796767e-16,
+            "faraday_residual": 2.658539095430189e-18,
+            "seam_jump_deviation": 1.0686651563673877e-10
+          },
+          "uniform_mean": {
+            "alpha": [
+              -0.0373670564297894,
+              -0.0011711305672594992
+            ],
+            "power_w": 8.482632206658861e-07,
+            "reaction": [
+              -1.399787876589174e-10,
+              -5.401095266618479e-12
+            ],
+            "power_balance": 0.0001636754701750398
+          },
+          "delta_power_w": 2.436379377280706e-07,
+          "g1b_field_relative": 6.761270557829589e-05,
+          "g1a": {
+            "identical_block_relative_error": 4.626729512596235e-16,
+            "physical_field_relative_error": 1.1515930139686183e-11
+          },
+          "assembly_route": "weighted-panel",
+          "constant_panel_assembly_route": "scalar-equal-faces",
+          "jump_diagnostic": {
+            "jump_edges": 256,
+            "maximum_adjacent_face_difference_a_per_m": 1.8196873705748235,
+            "qualification": "Adjacent face averages; no carrier line trace or continuity assertion."
+          }
+        },
+        {
+          "carrier_offset_m": 0.00075,
+          "constant_panel_field_relative": 0.0,
+          "panel": {
+            "alpha": [
+              -0.037275838849711015,
+              -0.0011002023138238
+            ],
+            "power_w": 1.0901819044880362e-06,
+            "reaction": [
+              -1.373306870891431e-10,
+              -6.94557940731237e-12
+            ],
+            "power_balance": 0.0007587335245733406,
+            "residual": 8.203538776997263e-16,
+            "faraday_residual": 1.4462925313640541e-18,
+            "seam_jump_deviation": 2.7441735550581825e-09
+          },
+          "uniform_mean": {
+            "alpha": [
+              -0.03736854756619738,
+              -0.0011712286901764412
+            ],
+            "power_w": 8.476218955657825e-07,
+            "reaction": [
+              -1.3996665279600967e-10,
+              -5.39785808849585e-12
+            ],
+            "power_balance": 0.0003205087463866718
+          },
+          "delta_power_w": 2.425600089222537e-07,
+          "g1b_field_relative": 0.0001256517528381315,
+          "g1a": {
+            "identical_block_relative_error": 4.664341164113005e-16,
+            "physical_field_relative_error": 2.972130003424519e-11
+          },
+          "assembly_route": "weighted-panel",
+          "constant_panel_assembly_route": "scalar-equal-faces",
+          "jump_diagnostic": {
+            "jump_edges": 256,
+            "maximum_adjacent_face_difference_a_per_m": 1.8225591297035373,
+            "qualification": "Adjacent face averages; no carrier line trace or continuity assertion."
+          }
+        }
+      ]
+    }
+  ],
+  "richardson_individual_powers": [
+    {
+      "carrier_offset_m": 0.0,
+      "formulations": {
+        "panel": {
+          "observed_order": 2.8430318645070414,
+          "power_w": 1.0926534521564026e-06
+        },
+        "uniform_mean": {
+          "observed_order": 2.0017749324256497,
+          "power_w": 8.505317135271531e-07
+        }
+      },
+      "delta_last_relative_change": 0.00891091379842635,
+      "delta_extrapolation": "not reported: centered sequence nonmonotone; offset leading-error cancellation"
+    },
+    {
+      "carrier_offset_m": 0.00075,
+      "formulations": {
+        "panel": {
+          "observed_order": 2.3828447360596563,
+          "power_w": 1.0924973139279934e-06
+        },
+        "uniform_mean": {
+          "observed_order": 1.9384644303616725,
+          "power_w": 8.507017256618785e-07
+        }
+      },
+      "delta_last_relative_change": 0.004270514279364084,
+      "delta_extrapolation": "not reported: centered sequence nonmonotone; offset leading-error cancellation"
+    }
+  ],
+  "quadrature": {
+    "triangles": 2048,
+    "bonus4_to6_panel_power_relative": 1.3589559988425037e-07
+  },
+  "accepted_scalar_reduction": {
+    "rows": [
+      {
+        "triangles": 8192,
+        "cases": [
+          {
+            "offset": 0.0,
+            "field_relative": 0.0,
+            "quantities_relative": {
+              "alpha": 0.0,
+              "P_total": 4.757938101314928e-15,
+              "reaction_integral": 0.0
+            },
+            "constant_panel_field_bitwise_equal": true,
+            "nearly_constant_field_relative": 1.4499797271205714e-10,
+            "nearly_constant_assembly": "weighted-panel"
+          },
+          {
+            "offset": 0.00075,
+            "field_relative": 0.0,
+            "quantities_relative": {
+              "alpha": 0.0,
+              "P_total": 1.2421882378254758e-15,
+              "reaction_integral": 2.8359938967493496e-18
+            },
+            "constant_panel_field_bitwise_equal": true,
+            "nearly_constant_field_relative": 4.5427080845744064e-11,
+            "nearly_constant_assembly": "weighted-panel"
+          }
+        ]
+      }
+    ],
+    "accepted_scalar_sha": "0c18f450c1b34716dcc2dbf7895568662a832080"
+  },
+  "validation": {
+    "contracts_passed": 59,
+    "knowledge_contracts_passed": 7
+  },
+  "qualification": "Numerical wiring evidence from self-authored prescribed linear weak-coupling cases. G1a/G1b used a study-only changed lift and known-genus search bound 4; production retains search bound 24. No general error bound. Observed orders and extrapolations describe these three meshes only.",
+  "production_cli_workflow": {
+    "check_vol_passed": true,
+    "triangles": 2266,
+    "rows": [
+      {
+        "case": "panel",
+        "power_w": 6.053404384956341e-05,
+        "alpha_amplitude_a": 0.3429537216279505,
+        "power_balance": 9.212332767553356e-07,
+        "solver_used_written_panel_values": true,
+        "ht_export_includes_loop": true,
+        "assembly_route": "weighted-panel"
+      },
+      {
+        "case": "rewrite",
+        "power_w": 6.505458503626695e-05,
+        "alpha_amplitude_a": 0.34197766270775565,
+        "power_balance": 7.6009312221619725e-06,
+        "solver_used_written_panel_values": true,
+        "ht_export_includes_loop": true,
+        "assembly_route": "weighted-panel"
+      },
+      {
+        "case": "uniform",
+        "power_w": 4.632067784176148e-05,
+        "alpha_amplitude_a": 0.3467521201027399,
+        "power_balance": 0.000163781053400666,
+        "assembly_route": "scalar-equal-faces"
+      }
+    ],
+    "qualification": "Prescribed circular-filament source; coil CAD/PEEC construction bypassed. Production weak EM, mesh-bound file loading, loop, heat/Ht export exercised."
+  }
+}

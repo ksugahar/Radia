@@ -1,0 +1,21 @@
+{
+  "schema": "radia.hacapk-entry-batch-contract.v1",
+  "accepted": true,
+  "a100_used": false,
+  "scope": "C active entry extraction only; no CUDA callback/ACA compression/physics acceptance",
+  "cases": {
+    "scalar": {
+      "accepted": true,
+      "cases": 36
+    },
+    "batch": {
+      "accepted": true,
+      "cases": 36
+    }
+  },
+  "source_sha256": {
+    "validation_test/hmatrix_cuda/check_entry_batch.c": "f497005402953d8932be5dfadd3ec04195a62bc98b1149ddcbc3508771467865",
+    "src/ext/HACApK/cHACApK_calc_entry_ij.h": "fad71d96a59e5c4ec7096224ae7e41ac45febe9e033ced29a3bff30c2dc7dc65",
+    "validation_test/hmatrix_cuda/check_entry_batch.py": "eff40a31d8f447c41ce2352ba8a19a9485b9b0f384da74f75627f584893ea867"
+  }
+}

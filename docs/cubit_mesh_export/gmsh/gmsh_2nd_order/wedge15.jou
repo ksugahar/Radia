@@ -1,0 +1,18 @@
+reset
+create Prism height 1 sides 3 radius 2 
+
+curve all interval 1
+curve all scheme equal
+mesh curve all
+
+surface 1 scheme trimesh
+mesh surface 1
+volume 1  redistribute nodes off 
+volume 1  scheme Sweep  source surface 1    target surface 2   sweep transform least squares 
+volume 1  autosmooth target on  fixed imprints off  smart smooth off 
+mesh volume 1
+
+block 1 add wedge all in volume 1
+block 1 name "work_wedge"
+block 1 element type wedge15
+

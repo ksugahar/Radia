@@ -1,0 +1,279 @@
+{
+  "checks": {
+    "all_evanescent_dtn_real_negative": true,
+    "all_evanescent_zero_active_power": true,
+    "frequency_hz": 1000.0,
+    "max_evanescent_reactance_error": 3.1086244689504383e-15,
+    "max_propagating_impedance_error": 4.440892098500626e-15,
+    "max_symbol_identity_residual": 9.094947017729282e-13,
+    "normal_incidence_impedance_error": 1.1102230246251565e-16,
+    "wavenumber_per_m": 18.318324510727656
+  },
+  "evanescent": [
+    {
+      "dtn_eigenvalue": {
+        "abs": 5.864725383190031,
+        "imag": 0.0,
+        "phase_rad": 3.141592653589793,
+        "real": -5.864725383190031
+      },
+      "expected_reactance_ratio": 3.1234752377721207,
+      "kt_over_k": 1.05,
+      "normal_wavenumber": {
+        "abs": 5.864725383190031,
+        "imag": -5.864725383190031,
+        "phase_rad": -1.5707963267948966,
+        "real": -0.0
+      },
+      "normalized_impedance": {
+        "abs": 3.1234752377721176,
+        "imag": 3.1234752377721176,
+        "phase_rad": 1.5707963267948966,
+        "real": 0.0
+      },
+      "radiation_efficiency": -0.0,
+      "reactance_abs_error": 3.1086244689504383e-15
+    },
+    {
+      "dtn_eigenvalue": {
+        "abs": 20.480509419943807,
+        "imag": 0.0,
+        "phase_rad": 3.141592653589793,
+        "real": -20.480509419943807
+      },
+      "expected_reactance_ratio": 0.8944271909999159,
+      "kt_over_k": 1.5,
+      "normal_wavenumber": {
+        "abs": 20.480509419943807,
+        "imag": -20.480509419943807,
+        "phase_rad": -1.5707963267948966,
+        "real": -0.0
+      },
+      "normalized_impedance": {
+        "abs": 0.8944271909999157,
+        "imag": 0.8944271909999157,
+        "phase_rad": 1.5707963267948966,
+        "real": 0.0
+      },
+      "radiation_efficiency": -0.0,
+      "reactance_abs_error": 1.1102230246251565e-16
+    },
+    {
+      "dtn_eigenvalue": {
+        "abs": 51.81204592604509,
+        "imag": 0.0,
+        "phase_rad": 3.141592653589793,
+        "real": -51.81204592604509
+      },
+      "expected_reactance_ratio": 0.35355339059327373,
+      "kt_over_k": 3.0,
+      "normal_wavenumber": {
+        "abs": 51.81204592604509,
+        "imag": -51.81204592604509,
+        "phase_rad": -1.5707963267948966,
+        "real": -0.0
+      },
+      "normalized_impedance": {
+        "abs": 0.35355339059327373,
+        "imag": 0.35355339059327373,
+        "phase_rad": 1.5707963267948966,
+        "real": 0.0
+      },
+      "radiation_efficiency": -0.0,
+      "reactance_abs_error": 0.0
+    }
+  ],
+  "kind": "planar_helmholtz_dtn_symbol_validation",
+  "propagating": [
+    {
+      "dtn_eigenvalue": {
+        "abs": 18.318324510727656,
+        "imag": -18.318324510727656,
+        "phase_rad": -1.5707963267948966,
+        "real": 0.0
+      },
+      "expected_normalized_impedance": 1.0,
+      "incidence_degrees": 0.0,
+      "kt_over_k": 0.0,
+      "normal_wavenumber": {
+        "abs": 18.318324510727656,
+        "imag": 0.0,
+        "phase_rad": 0.0,
+        "real": 18.318324510727656
+      },
+      "normalized_impedance": {
+        "abs": 0.9999999999999999,
+        "imag": 0.0,
+        "phase_rad": 0.0,
+        "real": 0.9999999999999999
+      },
+      "normalized_impedance_abs_error": 1.1102230246251565e-16
+    },
+    {
+      "dtn_eigenvalue": {
+        "abs": 17.694142739255906,
+        "imag": -17.694142739255906,
+        "phase_rad": -1.5707963267948966,
+        "real": 0.0
+      },
+      "expected_normalized_impedance": 1.035276180410083,
+      "incidence_degrees": 15.0,
+      "kt_over_k": 0.25881904510252074,
+      "normal_wavenumber": {
+        "abs": 17.694142739255906,
+        "imag": 0.0,
+        "phase_rad": 0.0,
+        "real": 17.694142739255906
+      },
+      "normalized_impedance": {
+        "abs": 1.0352761804100827,
+        "imag": 0.0,
+        "phase_rad": 0.0,
+        "real": 1.0352761804100827
+      },
+      "normalized_impedance_abs_error": 2.220446049250313e-16
+    },
+    {
+      "dtn_eigenvalue": {
+        "abs": 15.8641343810573,
+        "imag": -15.8641343810573,
+        "phase_rad": -1.5707963267948966,
+        "real": 0.0
+      },
+      "expected_normalized_impedance": 1.1547005383792515,
+      "incidence_degrees": 30.0,
+      "kt_over_k": 0.49999999999999994,
+      "normal_wavenumber": {
+        "abs": 15.8641343810573,
+        "imag": 0.0,
+        "phase_rad": 0.0,
+        "real": 15.8641343810573
+      },
+      "normalized_impedance": {
+        "abs": 1.1547005383792512,
+        "imag": 0.0,
+        "phase_rad": 0.0,
+        "real": 1.1547005383792512
+      },
+      "normalized_impedance_abs_error": 2.220446049250313e-16
+    },
+    {
+      "dtn_eigenvalue": {
+        "abs": 9.159162255363828,
+        "imag": -9.159162255363828,
+        "phase_rad": -1.5707963267948966,
+        "real": 0.0
+      },
+      "expected_normalized_impedance": 1.9999999999999996,
+      "incidence_degrees": 60.0,
+      "kt_over_k": 0.8660254037844386,
+      "normal_wavenumber": {
+        "abs": 9.159162255363828,
+        "imag": 0.0,
+        "phase_rad": 0.0,
+        "real": 9.159162255363828
+      },
+      "normalized_impedance": {
+        "abs": 1.9999999999999998,
+        "imag": 0.0,
+        "phase_rad": 0.0,
+        "real": 1.9999999999999998
+      },
+      "normalized_impedance_abs_error": 2.220446049250313e-16
+    },
+    {
+      "dtn_eigenvalue": {
+        "abs": 3.1809436691993196,
+        "imag": -3.1809436691993196,
+        "phase_rad": -1.5707963267948966,
+        "real": 0.0
+      },
+      "expected_normalized_impedance": 5.758770483143631,
+      "incidence_degrees": 80.0,
+      "kt_over_k": 0.984807753012208,
+      "normal_wavenumber": {
+        "abs": 3.1809436691993196,
+        "imag": 0.0,
+        "phase_rad": 0.0,
+        "real": 3.1809436691993196
+      },
+      "normalized_impedance": {
+        "abs": 5.7587704831436355,
+        "imag": 0.0,
+        "phase_rad": 0.0,
+        "real": 5.7587704831436355
+      },
+      "normalized_impedance_abs_error": 4.440892098500626e-15
+    }
+  ],
+  "symbol_rows": [
+    {
+      "dtn_eigenvalue": {
+        "abs": 18.318324510727656,
+        "imag": -18.318324510727656,
+        "phase_rad": -1.5707963267948966,
+        "real": 0.0
+      },
+      "identity_residual_abs": 0.0,
+      "kt_over_k": 0.0,
+      "regime": "propagating"
+    },
+    {
+      "dtn_eigenvalue": {
+        "abs": 17.736641440117836,
+        "imag": -17.736641440117836,
+        "phase_rad": -1.5707963267948966,
+        "real": 0.0
+      },
+      "identity_residual_abs": 5.684341886080802e-14,
+      "kt_over_k": 0.25,
+      "regime": "propagating"
+    },
+    {
+      "dtn_eigenvalue": {
+        "abs": 12.11643277269108,
+        "imag": -12.11643277269108,
+        "phase_rad": -1.5707963267948966,
+        "real": 0.0
+      },
+      "identity_residual_abs": 0.0,
+      "kt_over_k": 0.75,
+      "regime": "propagating"
+    },
+    {
+      "dtn_eigenvalue": {
+        "abs": 5.864725383190031,
+        "imag": 0.0,
+        "phase_rad": 3.141592653589793,
+        "real": -5.864725383190031
+      },
+      "identity_residual_abs": 0.0,
+      "kt_over_k": 1.05,
+      "regime": "evanescent"
+    },
+    {
+      "dtn_eigenvalue": {
+        "abs": 31.728268762114595,
+        "imag": 0.0,
+        "phase_rad": 3.141592653589793,
+        "real": -31.728268762114595
+      },
+      "identity_residual_abs": 0.0,
+      "kt_over_k": 2.0,
+      "regime": "evanescent"
+    },
+    {
+      "dtn_eigenvalue": {
+        "abs": 70.94656576047134,
+        "imag": 0.0,
+        "phase_rad": 3.141592653589793,
+        "real": -70.94656576047134
+      },
+      "identity_residual_abs": 9.094947017729282e-13,
+      "kt_over_k": 4.0,
+      "regime": "evanescent"
+    }
+  ],
+  "time_convention": "peak phasors with exp(+i omega t); outgoing exp(-i q n)",
+  "validation_class": true
+}

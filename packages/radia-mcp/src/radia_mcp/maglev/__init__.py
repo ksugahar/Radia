@@ -1,0 +1,24 @@
+"""radia_mcp.maglev: Magnetic levitation knowledge (UNIFIED).
+
+Covers both halves of magnetic levitation in one server (the former
+separate radia_mcp.levitation server was consolidated into this one):
+
+- maglev SYSTEMS: EMS attraction, EDS repulsion, superconducting,
+  Halbach/Inductrack, magnetic wheels, passive PM axial bearings.
+- levitation FORCE physics: induction/eddy-current lift, EML melting,
+  active magnetic bearings (AMB), superconducting Meissner/pinning,
+  diamagnetic, Earnshaw + loopholes, force computation, benchmarks.
+- The lab's Radia-based maglev research line (CAE-AI Lab, Yano + Sugahara):
+  * radia_iem_fem   -- Radia IEM (HDiv-VIM) <-> reduced-potential FEM weak
+    coupling for moving-magnet eddy-current levitation force
+  * team28_dynamic_scope -- TEAM 28 reduced models (Krylov/PRIMA
+    projection, HCurl Eddy Bubble + Foster modal form) and the
+    cycle-averaged motion scope
+
+The former linear-drive (LIM/LSM, end-effect) material was removed.
+"""
+
+from .knowledge import get_knowledge
+from .team28_dynamic_gate import team28_cycle_averaged_motion_gate
+
+__all__ = ["get_knowledge", "team28_cycle_averaged_motion_gate"]

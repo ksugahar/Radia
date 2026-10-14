@@ -1,0 +1,150 @@
+"""Every decoration must draw as itself, and none may draw as another.
+
+The renderer chose its accent with an if-chain that fell through to the hat,
+and it listed five of nineteen embellishments. So the Decoration palette's
+prime, double prime, triple prime, double dot, triple dot, cancel, frown and
+smile all drew a hat -- while the LaTeX and the Office MathML they produced
+were correct. A wrong picture beside a right paste is the worst shape for a
+defect: nothing downstream disagrees, so only a person looking at the screen
+can catch it, and one did, after 3.0.15 shipped.
+
+The compiler now refuses an unmapped embellishment (a switch with no default
+under /W4 /WX /w14062), which stops the class at its source. These checks
+cover what a compiler cannot: that the marks are actually DIFFERENT, and that
+a prime lands beside the letter rather than on top of it.
+
+Run:  python tests\\test_embellishments.py
+"""
+from __future__ import annotations
+
+import os
+import re
+import sys
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_HERE)
+sys.path.insert(0, os.path.join(_ROOT, "build"))
+
+from eqnedit_core import Equation, math_font_loaded  # noqa: E402
+
+# The Decoration palette, in the order palettes.cpp declares it.
+DECORATIONS = (
+    "hat", "tilde", "bar", "vec", "dot", "ddot", "dddot",
+    "prime", "dprime", "tprime", "strike", "frown", "smile",
+)
+
+# The over/under family is a second node type with the same defect: the
+# renderer tested for the underline and drew a plain overline for the rest,
+# so a vector written \overrightarrow{AB} appeared as a bare line.
+OVER_UNDER = (
+    "overline", "underline", "overrightarrow", "overleftarrow",
+    "overleftrightarrow",
+)
+
+
+def render(kind: str | None) -> str:
+    """Put one decoration around the same base and return its SVG."""
+    equation = Equation()
+    if kind is not None:
+        equation.insert_template(kind)
+    equation.insert_text("a")
+    return equation.svg()
+
+
+def svg_width(svg: str) -> float:
+    match = re.search(r'width="([0-9.]+)', svg)
+    return float(match.group(1)) if match else -1.0
+
+
+def main() -> int:
+    failures: list[str] = []
+    if not math_font_loaded():
+        print("FAIL  embedded math font unavailable")
+        return 1
+
+    drawn = {kind: render(kind) for kind in DECORATIONS}
+    for kind, svg in drawn.items():
+        if not svg.strip():
+            failures.append(f"{kind} rendered nothing")
+
+    # The fall-through made eight of these identical to the hat.
+    seen: dict[str, str] = {}
+    for kind, svg in drawn.items():
+        if svg in seen:
+            failures.append(f"{kind} renders exactly like {seen[svg]}")
+        else:
+            seen[svg] = kind
+
+    # A prime is a superscript suffix: it advances the line where a centred
+    # accent does not. Comparing against the bare base keeps this independent
+    # of the font's own advance widths.
+    plain = svg_width(render(None))
+    for kind in ("prime", "dprime", "tprime"):
+        got = svg_width(drawn[kind])
+        if got <= plain:
+            failures.append(
+                f"{kind} did not advance past the base ({got} <= {plain}); "
+                "it was drawn as an accent instead of a suffix")
+
+    # More primes must take more room than fewer.
+    if not (svg_width(drawn["prime"]) < svg_width(drawn["dprime"])
+            < svg_width(drawn["tprime"])):
+        failures.append(
+            "prime widths do not increase with the number of primes: "
+            f"{svg_width(drawn['prime'])}, {svg_width(drawn['dprime'])}, "
+            f"{svg_width(drawn['tprime'])}")
+
+    # The over/under family, checked the same way and for the same reason.
+    over_under = {kind: render(kind) for kind in OVER_UNDER}
+    seen_ou: dict[str, str] = {}
+    for kind, svg in over_under.items():
+        if not svg.strip():
+            failures.append(f"{kind} rendered nothing")
+        elif svg in seen_ou:
+            failures.append(f"{kind} renders exactly like {seen_ou[svg]}")
+        else:
+            seen_ou[svg] = kind
+
+    # Width must not change a brace into an overline/underline. The former
+    # stretch>=1.8 fallback removed the actual glyph for a two-letter base.
+    for kind, glyph in (("overbrace", "\u23de"), ("underbrace", "\u23df")):
+        for body in ("x", "xy", "abcdefgh"):
+            source = Equation()
+            assert source.load_latex("\\" + kind + "{" + body + "}")
+            if glyph not in source.svg():
+                failures.append(f"{kind} lost its brace glyph over {body!r}")
+
+    # A decoration must survive a round trip through the TeX the editor emits.
+    # emitDecoration drops an unmapped selector silently, so the equation would
+    # come back without it and the next load would rebuild something else.
+    for kind in OVER_UNDER + ("prime", "dprime", "hat", "strike"):
+        source = Equation()
+        source.insert_template(kind)
+        source.insert_text("a")
+        tex = source.latex()
+        again = Equation()
+        if not again.load_latex(tex):
+            failures.append(f"{kind}: emitted TeX does not load back: {tex!r}")
+            continue
+        if again.latex() != tex:
+            failures.append(
+                f"{kind}: not a fixed point: {tex!r} -> {again.latex()!r}")
+
+    # A template the palette offers must be one the model accepts.
+    known = set(Equation.templates())
+    missing = [kind for kind in DECORATIONS + OVER_UNDER if kind not in known]
+    if missing:
+        failures.append(f"palette offers templates the model rejects: {missing}")
+
+    if failures:
+        print(f"FAIL  {len(failures)}")
+        for failure in failures:
+            print("  " + failure)
+        return 1
+    print(f"ok    {len(DECORATIONS)} decorations and {len(OVER_UNDER)} "
+          "over/under marks draw distinctly; primes are suffixes")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

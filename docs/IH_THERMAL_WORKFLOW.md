@@ -1,0 +1,190 @@
+# IH Eddy-Thermal Simulink Workflow
+
+Radia couples distributed electromagnetic loss to transient temperature fields.
+The **Radia IH MCP tool family** owns live instructions, supported inputs and
+constraints; this page explains architecture and numerical evidence.
+
+## Axisymmetric P2/Q2 and acceptance status
+
+Heat uses standard NGSolve H1, not the magnetic Henrotte basis. A separate
+2D meridian thermal mesh uses `2*pi*r` in both volume and boundary integrals;
+a 3D electromagnetic source does not require a 3D thermal solve when the
+thermal assumptions are axisymmetric. The true `r=0` axis has zero revolved
+surface area. A finite-radius inner wall is different and may carry heat
+input or cooling. Higher order cannot correct a wrong source selection.
+
+Thermal order 2 means P2 on triangles/tetrahedra and Q2 on quadrilaterals,
+not post-load geometry curving. The P1 heat source is integrated against the
+higher-order test space. For `T=sum(t_i*phi_i)` and constant-function vector
+`c`, initialization is `T0*c` and ambient convection uses `C*c`.
+Signed or zero higher-order coefficients are not physical temperatures.
+The mean uses FE integration; extrema use mapped quadrature samples and are
+not certified global bounds. Periodic transport of this representation is
+unsupported and fails explicitly; the nodal rotation tests do not certify it.
+
+The executed [axisymmetric demonstration](induction_heating/axisymmetric_p2_thermal.ipynb)
+and [numerical report](../validation_test/eddy_current_analytical_validation/IH_REACTION_POWER_2026-09-15.md)
+separate these checks:
+
+| Check | Recorded result | Scope |
+|---|---|---|
+| Workpiece FEM/SIBC versus BEM | Within IH 2% bound | Declared linear-material cases |
+| Axis-touching Q2, 100 steps | Native/reference maximum difference 9.27e-9 K | Manufactured in-memory fixture |
+| Tracked SLX, 361 DOFs, 101 samples | Maximum difference 9.73e-9 K | Preassembled diagnostic operators |
+| MATLAB integration/geometry/coefficient tests | 34 passed | State, errors and lifecycle |
+
+These checks and main integration do not certify arbitrary production
+CAD/VOL-to-EM-to-thermal coupling or publication. Strict-label real-input
+acceptance, source coverage/power checks without mocks, spatial artifacts,
+full-window UI inspection and all four release-host gates remain required.
+The saved one-DOF default is an installation diagnostic, not a physical design.
+
+Radia's production induction-heating interface is the masked **Induction
+Heating** block in `packages/radia-gpu/matlab/radia_simulink_library.slx`. The retired `radia-ih`
+PySide panel and notebook workbench are not supported interfaces.
+
+## Runtime Structure
+
+The block exposes the coupled field state explicitly:
+
+```text
+coil_current_A ---------> Eddy ---------> heat_density_W_per_m3
+workpiece_angle_rad ----> Eddy                    |
+temperature_K ----------> Eddy                    v
+                                               Thermal ----> temperature_K
+ambient_temperature_K --------------------------> |
+workpiece_angle_rad -----------------------------> |
+```
+
+- `radia.simulink.ihEddySFunction` is a readable Level-2 MATLAB S-Function.
+  It owns three input ports, one distributed heat output, sample time, and the
+  native Eddy handle lifecycle.
+- `radia.simulink.ihThermalSFunction` is a separate Level-2 MATLAB S-Function.
+  It publishes the accepted temperature in `Outputs` and advances the thermal
+  state in `Update`, giving the feedback loop an explicit one-step delay.
+- `radia_mex('ih.*', ...)` owns the numerical objects behind checked `uint64`
+  handles. Python is not called once per simulation step.
+
+The fixed update order is:
+
+```text
+Eddy source-to-material heat mapping -> Thermal material-frame update
+```
+
+Temperature is stored in the workpiece coordinate system. In
+`periodic-uniform` mode, rotation transports the accepted temperature field
+conservatively before the implicit thermal solve. Eddy maps the source-frame
+heating into workpiece coordinates.
+
+## Geometry And Operators
+
+Use `radia.simulink.assembleIHOperatorsFromGeometry` or the
+`radia-ih-assemble` CLI at the explicit model-update boundary. The runtime
+does not mesh or assemble finite-element operators during a time step.
+
+```powershell
+python -m pip install "radia[cubit]"
+radia-ih-assemble workpiece.vol coil.step
+radia-ih-assemble workpiece.vol coil.vol -o native_ih.json
+```
+
+- Workpiece geometry is a checked Netgen `.vol` or `.vol.gz` mesh.
+- A coil `.step` selects PEEC assembly.
+- A coil `.vol` selects BEM-A assembly.
+- Physical method selection may also name FEM or BIM when the supplied
+  configuration contains the corresponding validated operators.
+- Every solver-bound mesh must pass its versioned
+  `radia.vol-label-contract.v1` contract before initialization.
+- The `cubit-mesh-export.vol-check.v1` reports, `run.log`, `result.json`, and
+  GMSH `.msh v4.1` post-processing fields stay in the run directory.
+
+The shape-only assembler supports fixed linear material operators. It declares
+rotation disabled when a conservative transport operator is unavailable; it
+does not guess a node ordering or silently substitute a lumped/LUT model.
+
+## Configuration
+
+`radia.simulink.makeIHNativeConfig` validates and converts assembled operators
+to the row-major numeric ABI consumed by `radia_mex`. A production
+configuration includes:
+
+- complex Eddy matrix and right-hand side;
+- distributed heat projection and heat-cell weights;
+- thermal mass and stiffness matrices in CSR form;
+- heat-to-temperature projection and temperature-cell weights;
+- initial temperature, sample time, and rotation convention;
+- physical method, linear solver, thermal solver, and checked `.vol` reports.
+
+The native preview currently accepts `bh_mode="linear"`. If validated
+temperature-dependent real and imaginary Eddy-matrix slopes are supplied, a
+temperature change rebuilds the Eddy operator. For a fixed linear operator,
+changing current scales the unit-current solution and heat quadratically
+without rebuilding the operator.
+
+Configuration is loaded from a MAT or JSON file by
+`radia.simulink.configureIHNativeModel`. The model stores the validated config
+in its model workspace, not in a process-global GUI object.
+
+## Open And Run
+
+From MATLAB:
+
+```matlab
+addpath("matlab");
+install_radia_ih();
+```
+
+The installer opens the tracked `packages/radia-gpu/matlab/radia_ih.slx`. Use its Geometry Update
+block to replace the workpiece and coil paths and rebuild the checked operator
+artifact. Current and angle remain ordinary Simulink source signals.
+
+## Verification
+
+The release gates cover these contracts separately:
+
+- standalone MEX commands: ABI, numerical behavior, errors, stale handles;
+- Level-2 S-Functions: initialization, Outputs/Update ordering, termination,
+  repeated runs, and closed-loop wiring;
+- rotation: integer and half-cell full-turn uniform heating, and passive material-frame temperature invariance (native regression);
+- geometry update: `.vol`, `.vol.gz`, `.step`, role normalization, label
+  contracts, and persistent artifacts;
+- application model: clean open, compile, simulation, and full-window visual QA.
+
+Numerical evidence and benchmarks belong under `validation_test/` with JSON
+results. Public demonstrations belong in executed `docs/**/*.ipynb` notebooks
+with saved, parameterized WebGUI scenes. Neither replaces the Simulink
+production interface.
+
+## Label-specific convection in the Python thermal chain
+
+The `calc_heat.py`, `calc_heat_axisym.py`, and `calc_heat_with_em_table.py`
+command lines accept `--convection-map cooling.json`. The JSON maps exact
+mesh boundary labels to a heat-transfer coefficient and ambient temperature:
+
+```json
+{
+  "air_cooling": {"h_W_m2K": 10, "ambient_C": 20},
+  "water_cooling": {"h_W_m2K": 500, "ambient_C": 25}
+}
+```
+
+Name the faces of the thermal solid mesh during mesh export. These boundary
+labels are separate from the volume material name such as `workpiece`. The
+map checks existing mesh labels; it does not create or rename them. Use the
+Python thermal chain with a custom mesh-label contract for these multiple
+labels. The existing native Simulink presets `ih_workpiece_v1` and its
+axisymmetric variant allow only their declared `sibc` (and axis) labels; this
+feature does not relax those presets.
+
+Set `IHDesignSpec(convection_map="cooling.json", ...)` to pass the file path
+through the Python design command builder. Use the boundary labels stored in
+the thermal mesh; unknown labels and ambiguous mixtures with the old uniform
+convection selector are errors. In map mode, `h_conv` is ignored; `t_ext`
+remains available independently for radiation. Each listed face receives its own Robin term
+`h * (T - T_ambient)`. Unlisted faces receive no convection term, and `h=0`
+is adiabatic **with respect to convection only**. Heat-flux and radiation
+selections remain independent and can still act on those faces. This feature
+does not model thermal contact resistance.
+
+This map is a Python thermal-chain input. The native Simulink scalar cooling
+interface has not been extended to accept this map.

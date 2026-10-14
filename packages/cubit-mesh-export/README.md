@@ -1,0 +1,528 @@
+# cubit-mesh-export
+
+`cubit-plugin-install` automatically registers the official Coreform
+WorkflowToolbar for each selected profile. No manual toolbar package import is
+required. Existing user toolbars and unrelated preferences are preserved;
+the toolbar becomes available at the next Cubit start. MCP remains batch-only.
+
+Solver-neutral mesh export from [Coreform Cubit](https://coreform.com/products/coreform-cubit/) to [NGSolve](https://ngsolve.org)/[Netgen](https://github.com/NGSolve/netgen).
+
+`cubit-mesh-export` is an independent Cubit tooling distribution. It ships
+its own MCP server, mesh export, the Kelvin open-boundary
+transformation, symmetry helpers, and the Dirichlet label conventions
+consumed by Radia's Simulink applications, Python/MCP workflows, and
+result-bearing documentation notebooks.
+
+## Features
+
+The standalone GUI, installer, and `cubit-toolbar-smoke-test` release check are
+owned by this distribution and require no Radia installation. The former
+`radia.install_panels` and Radia GUI paths are removed, with no compatibility
+shims. Existing deployments must regenerate their startup registration using
+`cubit-plugin-install` from the selected Python environment. See the owning MCP
+`cubit_toolbar_guide` for the operating contract and
+`validation_test/cubit_mesh_export/STANDALONE_GUI.md` for acceptance evidence.
+
+This GUI and MCP are published independently of Radia. Installation
+and deployment verification never import Radia. validation host/100 acceptance
+uses `python tools/release_cubit_dual.py`, not the Radia solver's release-quad
+commands.
+
+The supported binary runtime is 64-bit Windows, CPython 3.12, Coreform Cubit
+2026.8, and Netgen/NGSolve 6.2.2607.  These solver versions are exact pins in
+package metadata because `cubit_mesh_curver.pyd` links against the Netgen C++
+ABI.  The separately loaded `cubit_mesh_export.ccm` plugin embeds Compact
+Netgen and does not link against the Python solver wheels.
+For LLM operation, the canonical manual is the included `cubit_mesh_export.mcp` server:
+start with `cubit_status` and `cubit_docs`; use APREPRO through its headless
+execution tools and `cubit_check_vol` before handing a mesh to a solver.
+Standalone wheel acceptance is recorded under
+`validation_test/cubit_mesh_export/standalone_1_0_0_lab_result.json`.
+Combined Radia installations must also pass Radia's declared exporter
+compatibility check; standalone operation does not import Radia.
+
+- **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2026.8+):
+  - `export {netgen|gmsh|vtk|femeem|meg|nastran_bdf}` APREPRO commands
+  - Cubit-owned **Export** menu plus the Cubit Mesh Export WorkflowToolbar
+- **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
+- **Kelvin open-boundary** transformation built into `export netgen`
+  (auto-add an exterior sphere with copy-mesh + periodic identification)
+- **Per-axis symmetry-plane BC labels** (`bn`/`ht`) for 1/2 and 1/4 reduced
+  domains
+- **Dirichlet / Neumann label conventions** at three levels
+  (BND / BBND / BBBND -- see table below)
+- **Companion JSON** beside every `.vol` with CAD reference values for
+  Volume / Area / Length consistency checking
+- **Free-mesh sideset preservation**: direct tri/quad faces from Sculpt and
+  imported Exodus sidesets are exported even when they have no parent CAD
+  surface, with duplicate geometry-owned faces removed
+- **Standalone checker** that does NOT require Cubit (`check-vol` CLI)
+
+## Install
+
+`cubit-mesh-export` is standalone: it needs Coreform Cubit 2026.8, but it does
+**not** need `radia` or `radia-mcp`. MCP and its private runtime support are included by default in this wheel.
+
+```bash
+pip install cubit-mesh-export
+cubit-plugin-install
+mcp-server-cubit
+```
+
+Optional features have independent installation extras:
+`pip install "cubit-mesh-export[sculpt]"` adds Exodus/volume-fraction support;
+`pip install "cubit-mesh-export[mesh-quality]"` adds the Gmsh quality referee.
+These install Python dependencies, not Coreform Cubit or a Sculpt license.
+The included MCP manual owns the operating workflow.
+
+Cubit MCP uses `CUBIT_MCP_*` settings, not `RADIA_MCP_*`. Historical Radia
+logs and caches are neither automatically migrated nor deleted. Runtime support
+is intentionally maintained independently; see its [ownership and license](src/cubit_mesh_export/mcp/_support/OWNERSHIP.md).
+
+For an MCP client, use the installed `mcp-server-cubit` command, or the selected
+Python interpreter with `-m cubit_mesh_export.mcp.server`. See the
+[Cubit MCP manual](src/cubit_mesh_export/mcp/README.md) for capabilities and
+headless operation. Old `radia_mcp.cubit` module commands must be updated;
+no compatibility forwarding package is shipped. Radia topology optimization
+may depend on Cubit, but Cubit users do not install Radia to use MCP.
+
+`cubit-plugin-install` deploys the plugin binaries, the Netgen DLLs, and the
+Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
+`cubit_helpers/auto_kelvin_entry.py`) into your Coreform Cubit 2026.8 profile.
+Use `cubit-plugin-install --all-users` for a shared lab machine.
+The generated Cubit startup script finds the installed package at every Cubit
+start through the recorded Python, so a versioned checkout it was installed
+from can be removed after the next release is installed.
+
+For a standalone round-trip check, supply your own Cubit journal:
+
+```bash
+cubit-smoke-test --jou path/to/sample.jou
+```
+
+The journal must produce the expected material and boundary labels; adjust
+`--expect` and `--expect-materials` for its label contract. The check exports a
+`.vol` and runs the solver-ready validation gate, including NGSolve reload.
+The no-argument `cubit-smoke-test` uses the package-owned
+`solver_ready_sample.jou`; no Radia installation or source tree is required.
+
+What you get depends on whether `radia` is installed alongside it:
+
+|                                                             | standalone | with `radia` |
+|-------------------------------------------------------------|:----------:|:------------:|
+| `export {netgen,gmsh,vtk,femeem,meg}` / `export nastran_bdf` |     yes    |      yes     |
+| `check-vol` CLI (no Cubit required)                           |     yes    |      yes     |
+| Kelvin transformation and symmetry labels                     |     yes    |      yes     |
+| **Export menu inside Cubit's GUI**                            |     yes    |      yes     |
+| **Cubit MCP server and API reference**                        |     yes    |      yes     |
+
+The menu is registered through Cubit's own Claro API and runs in Cubit's
+embedded Python; normal Radia Python/MCP workflows and Simulink applications do
+not need PySide6.  To get the whole Radia toolchain in one step:
+
+```bash
+pip install "radia[cubit]"
+cubit-plugin-install
+```
+
+> **If Cubit exits with code 2 while the export itself succeeded**, check for a
+> machine-wide `CUBIT_PLUGIN_DIR` environment variable. On validation host this caused Cubit
+> to receive a `-commandplugindir` argument and report both the flag and its
+> value as files it could not open. This is a diagnosed environment issue, not
+> a reason to accept every exit code 2. Inspect the log and correct the stale
+> setting, then rerun. An exported `.vol` must still pass `check-vol`; a valid
+> output alone does not prove the entire Cubit command completed successfully.
+
+### Upgrade
+
+```bash
+pip install --upgrade cubit-mesh-export
+cubit-plugin-install
+```
+
+Always re-run `cubit-plugin-install` after upgrading.
+`cubit-plugin-install --verify-only` checks both the deployed binary
+hashes and, when `radia` is installed, the Cubit toolbar startup
+registration. If the official WorkflowToolbar was imported previously, the
+installer refreshes its scripts and toolbar definition automatically and the
+verification step rejects any stale deployed copy.
+
+### Native developer rebuild
+
+Rebuild and propagate both mandatory native payloads from the current
+worktree with:
+
+```powershell
+pwsh -File src/cubit_plugin/cubit_build.ps1 -Rebuild
+```
+
+The command fails unless both artifacts are produced and their copied
+SHA-256 hashes match, then records the source-tree digest, source commit, and
+both payload hashes in `native_payloads.json`. Wheel creation independently
+recomputes that content evidence; checkout timestamps are irrelevant. It emits
+a native `cp312-cp312-win_amd64` wheel for CPython 3.12 on 64-bit Windows.
+Because `.pyd` files are intentionally gitignored, upload the newly named,
+content-addressed curver to the `binaries` GitHub release before pushing a
+manifest change. Release CI downloads it and checks both native payloads.
+Building a wheel from an sdist still verifies the manifest and both payloads;
+only source-tree comparison is omitted when the C++ tree is not included.
+
+For a complete deployed-export check, close the interactive Cubit process and
+run:
+
+```bash
+cubit-smoke-test --order 2
+```
+
+This launches Cubit in batch mode, exports the bundled solver-ready model, and applies
+the production `check-vol` gate. Success requires strict boundary/material
+labels, matching companion-JSON metadata, successful NGSolve reload,
+tetrahedral topology, complete boundary-domain ownership, positive required
+volumes and areas, and valid sampled Jacobians for the curved map. A failed run
+retains its temporary work directory together with `vol-check.json` (or
+`vol-check-error.json`) for diagnosis.
+
+## Cubit commands
+
+```
+export netgen "model.vol" order 3 overwrite                 # NGSolve FEM (.vol)
+export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.1 raw data + .geo launch
+export nastran_bdf "model.bdf" order 2 overwrite             # Nastran BDF
+export vtk    "model.vtk" order 2 overwrite                 # VTK Legacy
+```
+
+`export nastran_bdf` is the only supported Nastran command. Nastran output is
+a mesh-interchange deck: blocks become PSOLID or
+PSHELL properties, sidesets become collision-free PSHELL properties, and
+nodesets become SET1 cards.  The exporter does not invent MAT cards; assign
+physical material data in the receiving solver.
+
+For Radia post-processing, `.geo` is the standard launch artifact. The Gmsh
+export writes:
+
+- `model.msh`: raw GMSH v4.1 mesh/data container
+- `model.geo`: normal review entry point; it merges `model.msh`
+- `model.geo.opt`: exact Gmsh sidecar auto-loaded when `model.geo` opens
+- `model.msh.opt`: raw mesh/data inspection sidecar when `model.msh` opens
+
+Associate/open `.geo` for normal review; treat `.msh` as optional raw
+mesh/data inspection.
+
+The `export netgen` command additionally accepts Kelvin / symmetry
+options (see below). The other formats do not consume Kelvin.
+
+### Free Sculpt meshes
+
+Sculpt places its hexes and boundary faces in free mesh groups.  Use
+`gen_sidesets 2` and put the hexes in a material block before export:
+
+```text
+sculpt volume all processors 1 size 0.01 gen_sidesets 2
+block 1 add hex all
+block 1 name "iron"
+export netgen "model.vol" order 1 overwrite
+```
+
+The Netgen exporter reads both geometry-owned surfaces and direct/free
+sideset tri/quads, deduplicates equal connectivity, and emits a synthetic
+boundary descriptor for the latter.  It recovers `DomainIn`/`DomainOut` from
+the adjacent block elements and splits one sideset into multiple descriptors
+when it spans more than one material pair.  This is essential for disconnected
+free bodies and mixed-material interfaces: assigning every free face to domain
+1 silently removes the other materials from boundary-based operators.
+`check-vol` audits that every volume domain appears in a valid boundary or
+interface descriptor.  Also verify that the `.vol` surface-element count equals
+an independent topological-skin count before a surface-charge formulation uses
+the mesh.  Sculpt material blocks can exist without an owning CAD volume.  The
+companion JSON records these under `mesh_only_materials`, rather than inventing
+a zero CAD volume in `materials`; `check-vol` then treats the label as valid but
+reports that no CAD-volume reference is available.
+
+For a free-mesh material interface created after Sculpt, materialize the skin
+of one block as a sideset:
+
+```text
+skin block 1 make sideset 3
+sideset 3 name "left_right_interface"
+```
+
+The exporter removes connectivity already owned by the exterior sideset,
+emits the remaining interface once with both nonzero domains, and computes the
+sidecar area from the faces actually exported under that label.  `check-vol`
+reports exterior and internal-interface counts separately and rejects duplicate
+surface connectivity.
+
+## Workflow
+
+```
+   ┌────────────┐    export netgen        ┌──────────┐
+   │  Cubit     │   ─────────────────────────▶  │  .vol    │
+   │  geometry  │   (+add_kelvin, +sym)         │          │
+   └────────────┘                                └──────────┘
+                                                      │
+                                                      ▼
+                       user opens a Radia Simulink application block;
+                       docs notebooks retain reproducible field evidence
+```
+
+`cubit-mesh-export` produces the `.vol` and the label conventions; the
+domain block/headless tool reads the `.vol` and applies the physics. There is no
+"pick your analysis" launcher in this plugin -- end-user tools split by
+analysis target (IH designer / electromagnet designer / ...), not by
+solver type.
+
+## Kelvin open-boundary transformation
+
+Idempotent helper: skipped if a `kelvin` block already exists; needs an
+`air` block in the current Cubit model.
+
+```
+export netgen "model.vol" order 3 overwrite \
+    add_kelvin                       # auto-create the exterior Kelvin sphere
+    [kelvin_air "air"]               # name of the air block (default "air")
+    [kelvin_block "kelvin"]          # name to give the Kelvin block (default "kelvin")
+    [kelvin_mesh 0.03]               # tet size [m] on the Kelvin shell
+                                     # (omit to inherit from air outer surface)
+    [kelvin_sym_x {off|bn|ht}]       # per-axis symmetry-plane BC
+    [kelvin_sym_y {off|bn|ht}]       # off = no reduction (default)
+    [kelvin_sym_z {off|bn|ht}]       # bn  = B.n=0    (flux parallel)
+                                     # ht  = HxN=0    (flux perpendicular)
+```
+
+In the Export Mesh GUI, the same options appear as widgets on the
+Netgen Vol export dialog (only there -- Kelvin is `.vol`-specific).
+
+The Kelvin step runs **before** the mesh extract / .vol write, so the
+new `kelvin` block, the `kelvin_int` / `kelvin_ext` sidesets, and the
+optional `sym_<bc>_<axis>` sidesets all end up in the `.vol`.
+
+### Symmetry semantics
+
+| `kelvin_sym_<axis>` | Sideset name produced  | B/H constraint    | Radia image | A formulation | Omega formulation |
+|--------------------|------------------------|-------------------|-------------|---------------|-------------------|
+| `off`              | (none)                 | (full domain)     | n/a         | n/a           | n/a               |
+| `bn`               | `sym_bn=0_<axis>`      | B·n = 0           | `+`         | Dirichlet (A×n=0) | natural          |
+| `ht`               | `sym_ht=0_<axis>`      | H×n = 0           | `-`         | natural          | Dirichlet (Ω=const) |
+
+The convention is **physics-named, formulation-agnostic**: the same
+`sym_bn=0_x` sideset means "B.n = 0 on x = 0 plane" regardless of
+whether the domain panel solves A or Omega. Each domain tool decides
+which BC type to apply per its formulation.
+
+1/8 reduction (all three axes set to `bn` or `ht`) is supported when at
+least one axis is `ht`. Three `bn` axes are physically impossible (B
+parallel to three mutually perpendicular planes forces B = 0
+everywhere) and rejected.
+
+## Label conventions
+
+`cubit-mesh-export` reserves a small set of label names and prefixes
+across all three NGSolve dimension levels (BND / BBND / BBBND). The
+domain tools rely on these to wire up Dirichlet / Kelvin / symmetry
+without having to inspect geometry.
+
+### BND -- surface labels (NGSolve `mesh.GetBoundaries()`)
+
+Source: Cubit **sidesets** on surfaces.
+
+| Cubit sideset name  | NGSolve BND name    | Meaning                                                     |
+|---------------------|---------------------|-------------------------------------------------------------|
+| `kelvin_int`        | `kelvin_int`        | Inner Kelvin face (auto-paired with outer via copy-mesh)    |
+| `kelvin_ext`        | `kelvin_ext`        | Outer Kelvin face                                           |
+| `sym_bn=0_<axis>`   | `sym_bn=0_<axis>`   | B.n = 0 (flux parallel) symmetry plane                      |
+| `sym_ht=0_<axis>`   | `sym_ht=0_<axis>`   | H×n = 0 (flux perpendicular) symmetry plane                 |
+| `dir_<name>`        | `dir_<name>`        | **Dirichlet** surface (variable = 0; physics is solver-side)|
+| `neu_<name>`        | `neu_<name>`        | Explicit Neumann (= no-op; documentation only)              |
+| anything else       | (passes through)    | Free-form name; meaning is up to the domain tool            |
+
+`kelvin_int` / `kelvin_ext` are auto-detected from the air ↔ kelvin
+block topology when the user does not name them explicitly, so .jou
+files using a plain "concentric Kelvin" pattern need no manual sideset
+work.
+
+### BBND -- edge / curve labels (NGSolve `mesh.GetBBoundaries()`)
+
+Source: Cubit **named curves** + Cubit **sidesets-on-curves**.
+
+The exporter writes CD2 segments only for curves that own actual 1-D mesh edges
+and whose parent surfaces both have exported Netgen descriptors.  Imported STL
+or Sculpt geometry can retain CAD curves while producing no BBND mesh segment;
+those stale curves are intentionally omitted from the companion edge-length
+references.  For a point-only anchor, put the curve or vertices in a Cubit
+**nodeset**; the exporter expands the nodeset to BBBND points (next table).
+
+The BBND label-name convention to be respected once segment
+generation lands:
+
+| Cubit name on a curve | NGSolve BBND name | Meaning                                       |
+|-----------------------|-------------------|-----------------------------------------------|
+| `dir_<name>`          | `dir_<name>`      | Dirichlet edge (e.g. ground line in 2D)       |
+| `neu_<name>`          | `neu_<name>`      | Explicit Neumann edge                         |
+| anything else         | (passes through)  | Free-form; meaning is solver-side             |
+
+### BBBND -- vertex / point labels (NGSolve `mesh.GetBBBoundaries()`)
+
+Source: Cubit **nodesets**. Free-floating vertices (not merged into any
+meshed volume, e.g. the bare vertex `add_kelvin_cubit` creates at the
+Kelvin sphere centre) are anchored to the nearest mesh node so the
+BBBND point is always usable as a Dirichlet anchor.
+
+| Cubit nodeset name | NGSolve BBBND name | Meaning                                                    |
+|--------------------|--------------------|------------------------------------------------------------|
+| `GND`              | `GND`              | Special: Omega-reduced anchor at Kelvin sphere centre      |
+| `dir_<name>`       | `dir_<name>`       | Dirichlet point (e.g. PEEC port gnd, source / sink reference) |
+| anything else      | (passes through)   | Free-form name; meaning is solver-side                     |
+
+`GND` is automatically created by the Auto-Kelvin helper at the
+Kelvin sphere centre (the image of physical infinity) for use by
+Omega-reduced FEM formulations.
+
+## Python API
+
+```python
+import netgen          # must import before cubit (DLL load order)
+import cubit
+
+cubit.init(['cubit', '-nojournal', '-batch'])
+cubit.cmd('open "model.cub5"')
+cubit.cmd('mesh volume all')
+cubit.cmd('block 1 add hex all')                          # elements must be in a block to export
+cubit.cmd('export netgen "model.vol" order 3 overwrite')  # high-order CURVED .vol (order 1-5)
+
+# Load it in NGSolve.  A high-order .vol already carries its curved mid-side nodes:
+# load AS-IS and do NOT call mesh.Curve() -- mesh.Curve() re-curves from CAD geometry
+# (absent in a loaded .vol) and would RESET every element to straight-sided.
+from ngsolve import Mesh
+mesh = Mesh("model.vol")
+```
+
+See `docs/cubit_mesh_export/hex_sphere_highorder/` for a runnable demo (a curved
+hex sphere whose NGSolve volume converges to 4/3 pi r^3 as the order rises: order 1
+-23 % -> order 2 -0.2 % -> order 3 +0.1 %).
+
+The Cubit-side Python helpers (Kelvin transformation, etc.) live in
+`cubit_mesh_export.cubit_helpers`:
+
+```python
+from cubit_mesh_export.cubit_helpers.add_kelvin import (
+    add_kelvin_cubit,        # 3D Cubit path
+    add_kelvin_occ,          # 3D OCC path
+    add_kelvin_2d_axisym,    # 2D axisymmetric (r, z) path
+    sym_sideset_name,        # canonical sym_<bc>_<axis> string
+    parse_sym_label,         # inverse
+)
+```
+
+In Cubit-embedded Python (where `cubit_mesh_export` itself is not
+importable), the same helpers are available directly after
+`cubit-plugin-install` deploys them to `<Cubit>/bin/plugins/cubit_helpers/`:
+
+```python
+# Inside a .jou or panel script, after add_kelvin is on sys.path:
+python "import sys; sys.path.insert(0, r'<Cubit>/bin/plugins/cubit_helpers')"
+python "from add_kelvin import add_kelvin_cubit"
+python "add_kelvin_cubit(R=0.06, symmetry=['z'])"
+```
+
+The `export netgen ... add_kelvin` flow handles `sys.path`
+itself, so users invoking Kelvin via the new APREPRO args do not need
+to set anything by hand.
+
+## Mesh consistency check (does NOT require Cubit)
+
+```bash
+check-vol model.vol                          # labels + curved-map quality
+check-vol model.vol --strict-labels          # enforce canonical label names
+check-vol model.vol --contract ih_labels.json --strict-labels
+check-vol model.vol --json model.vol.json    # require this CAD reference
+check-vol model.vol --tet-only --min-scaled-jacobian 0.05
+check-vol model.vol --conductors copper,magnet \
+  --sibc-boundaries conductor_air,conductor_exterior
+check-vol model.vol --format json --report-json run/vol_check.json
+```
+
+The sibling `model.vol.json` written by `export netgen` is auto-discovered when
+present. It is optional for a standalone `.vol`: mesh loading, label checks,
+and the curved NGSolve mapping gate still run without Cubit or CAD data. Passing
+`--json` makes that specific sidecar mandatory. Curved-map sampling is enabled
+by default; `--no-quality` is available only for a quick label/CAD inspection.
+`materials` contains only labels with a real CAD-volume reference;
+`mesh_only_materials` contains free-mesh block labels that cannot supply one.
+The checker rejects a label appearing in both sets, so a true CAD zero is not
+confused with the absence of CAD ownership.
+
+```python
+from cubit_mesh_export.check import (
+    check_consistency,
+    check_label_contract,
+    check_mesh_quality,
+)
+
+results = check_consistency(
+    "model.vol",
+    contract="ih_labels.json",
+    strict_labels=True,
+)
+quality = check_mesh_quality(
+    "model.vol",
+    conductors=("copper", "magnet"),
+    sibc_boundaries=("conductor_air", "conductor_exterior"),
+    tet_only=True,
+)
+```
+
+An application label contract is a versioned JSON object. `required` catches
+missing solver labels; optional `allowed` lists reject labels that do not belong
+to the selected application/mode.
+
+```json
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "radia-ih/fem-kelvin",
+  "strict_labels": true,
+  "required": {
+    "materials": ["coil", "air", "kelvin"],
+    "boundaries": ["source", "sink", "sibc", "kelvin_int", "kelvin_ext"],
+    "bbboundaries": ["GND"]
+  },
+  "allowed": {
+    "materials": ["coil", "air", "kelvin"],
+    "boundaries": [
+      "source", "sink", "sibc", "coil_surface", "air_seam",
+      "kelvin_int", "kelvin_ext"
+    ]
+  }
+}
+```
+
+Strict mode requires descriptive lower snake-case material/boundary names,
+while preserving Radia's `sym_bn=0_x` / `sym_ht=0_x` convention and the reserved
+`GND` point label. It rejects generated fallbacks such as `volume_1` and
+`Surface_7`, case-insensitive collisions, incomplete `source`/`sink` or
+`kelvin_int`/`kelvin_ext` pairs, invalid Kelvin anchors, and contradictory
+symmetry labels.
+
+The quality gate samples the actual curved NGSolve element mapping; it does not
+infer quality from straight corner nodes. A consistently positive or negative
+element orientation is valid, while a sign change inside one element fails;
+scaled quality uses `abs(det(J))`. It checks mapping magnitude, geometry order,
+tetrahedron-only contracts, required labels, and material-aware face roles.
+Only conductor-air or conductor-exterior faces may
+be classified as SIBC.  Conductor-insulator faces retain a trace role, while
+conductor-conductor faces retain the interface/loop-bridge role needed by the
+reduced HCurl cycle space.
+
+`check-vol` returns 0 for pass, 1 for a validation finding, and 2 for an input or
+configuration error. JSON reports use schema
+`cubit-mesh-export.vol-check.v1`. Run the checker after `.vol` export and before
+solver or Simulink initialization. Material constants are not inferred from
+mesh labels; the application's checked DesignSpec/configuration owns those
+values and validates them separately.
+
+## Part of the Radia project
+
+Source: [github.com/ksugahar/Radia](https://github.com/ksugahar/Radia)
+
+Coreform Cubit 2026.8 is the supported native SDK/runtime. The installer rejects
+older runtimes and SDK mismatches. Distribution acceptance runs on the licensed validation host; computation-time
+evaluation hosts do not install Cubit.

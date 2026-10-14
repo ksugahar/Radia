@@ -1,0 +1,1310 @@
+{
+  "schema": "radia.projection-precision-timing.v1",
+  "accepted": true,
+  "timing_acceptance": false,
+  "classification": "100 RTX 5000 idle diagnostic; not mdx performance acceptance",
+  "a100_used": false,
+  "field_build": {
+    "schema": "radia.field-cuda-build.v1",
+    "source_commit": "76e9bb885b67a97271789656b68a049e07e1a20c",
+    "source_dirty": false,
+    "source_sha256": {
+      "src/core/rad_hdiv_field_evaluator.cpp": "3abe79905362bb4c943aace95e62f7b87315c7d8eaf792fa1c8db3f14999a32f",
+      "src/core/rad_hdiv_vim.cpp": "397d692d21210d49e9389b8a9313260375fe0dbb055bfe7815d8f78fc5a87a06",
+      "src/core/rad_hdiv_field_evaluator.h": "69295403af30540232b966508866b731b4a24ba29ee7ee2498bb1aa85449e562",
+      "src/core/rad_hdiv_vim.h": "bcc63c34546f21ab8fd65e39e6b6668fe687b217d62c1d61229653b5cad19308",
+      "src/core/rad_field_cloud_kernel.h": "af0fc87f58921c6368e5fbb448b372bea7fe40eef2bcff77f9508e09de374834",
+      "src/core/rad_field_sources.h": "28bbbd100a2bcdc01c71cedfff2756548427226ead2dcd7aae5b5510dafd4029",
+      "src/core/rad_field_source_kernel.inc": "cb8bec501a06ad1d80712371fb4b7c97d4edcb7cb14a8aa67e22ea0cf4919fb8",
+      "src/core/rad_hdiv_field_math.inc": "082adedb5c9a80d222bea026f4756aa4ea14d1e127774a4a7aff7867f8e8205e",
+      "src/core/rad_hdiv_field_kernel_api.inc": "18eb7b6468488c92a6e84a0be6ca7a97ddc6ab5eb4d0342b3453f210d024d589",
+      "packages/radia-gpu/native/radia_cuda_field.cu": "dcb63c5ec244044f3eb330d16e033e7c5801f6780b1e8c30142e96a0ea852f7e",
+      "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127",
+      "packages/radia-gpu/tools/build_field_cuda.py": "b843345462848eec25d299fe789b0a43291bfbe6057850c8fd023bd52adff9e8",
+      "Build.ps1": "506fc6e1d4f5889e51d858f00cbb7404081c86946c00abaf923c05c76c3f8218"
+    },
+    "binary_sha256": "54bd6cc7c95e41ccce2c5b6524cb9e6cb163cb267983c2ac602d0c40563e7f68",
+    "matlab": "26.1.0.3346908 (R2026a) Update 5",
+    "cuda_targets": [
+      "sm_75",
+      "sm_80",
+      "compute_80 PTX"
+    ],
+    "source_representation": "existing retained point cloud only",
+    "cpu_fallback": false,
+    "python_runtime_required": false,
+    "taskmanager_regions": false
+  },
+  "projection_build": {
+    "accepted": true,
+    "a100_used": false,
+    "scope": "Experimental native mapped-target replay, not full RadFld migration",
+    "source_commit": "4b654001e230ee49b1936da232eea8e0f0a5ab06",
+    "source_sha256": {
+      "packages/radia-gpu/native/radia_cuda_projection.cu": "ac45a8be1f5a960a69c280524a1f4cada67f526cdc34d095f403fa8b06121bbb",
+      "packages/radia-gpu/native/radia_projection_host.cpp": "0eb0de23860730b33c0ba97796e27d14e00cfb115c66732d6625234a121558c8",
+      "packages/radia-gpu/native/radia_projection_host.cuh": "7593b7b8288f4664c6d975b000e852c9334fc00e71a93694d0233cdbc54a1564",
+      "packages/radia-gpu/tools/build_projection_cuda.py": "63ef93907fe361f30b7eec5d51493e982a00ef5af902b575513907c0315267a3",
+      "Build.ps1": "506fc6e1d4f5889e51d858f00cbb7404081c86946c00abaf923c05c76c3f8218"
+    },
+    "taskmanager_started": false,
+    "source_dirty": false,
+    "binary_sha256": "b6e2a6bea57a987f36380d25651733d7b9aa84518305dabad80a3d87bb5934e0",
+    "matlab": "26.1.0.3346908 (R2026a) Update 5"
+  },
+  "cpu_precision_evidence_sha256": "77fba2b0542b248ed707f0503265337b543828dc666625452b1b90b819c48f3c",
+  "source_sha256": {
+    "validation_test\\radfld_cuda\\measure_projection_precision.py": "2e6ec3433db2cf27d88efa3aa4454caff6e74a41fe8630ca00a98de68200e26a",
+    "validation_test\\radfld_cuda\\compareProjectionPrecision.m": "a11c1530e5798058427cbf525563332ecaedac7138349ac6f69b6219ed836f55",
+    "validation_test\\radfld_cuda\\check_projection_bridge.py": "f437682bd2b98816bac5590b7ce4f739ded0d4427324a7a67f1d0151e50a88be",
+    "validation_test\\radfld_cuda\\element_cases.py": "8bb679fd2a02e2b456faae7a19af7cb11bf6efa8a7397719774da83742879920"
+  },
+  "cases": [
+    {
+      "accepted": true,
+      "timing_acceptance": false,
+      "scope": "Point-cloud actual NGSolve projection, FP32 far / FP64 near",
+      "a100_used": false,
+      "relative_limit": 0.0001,
+      "samples": [
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0129361,
+          "memory": {
+            "owned_peak_bytes": 25568,
+            "persistent_owned_bytes": 24416,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 256,
+            "tree_nodes": 63,
+            "image_count": 0,
+            "total_seconds": 0.0003554,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0079373,
+          "memory": {
+            "owned_peak_bytes": 25568,
+            "persistent_owned_bytes": 24416,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 256,
+            "tree_nodes": 63,
+            "image_count": 0,
+            "total_seconds": 0.0004289,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 3.1128790981176664e-07
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0297811,
+          "memory": {
+            "owned_peak_bytes": 25568,
+            "persistent_owned_bytes": 24416,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 256,
+            "tree_nodes": 63,
+            "image_count": 0,
+            "total_seconds": 0.0014512,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 3.1128790981176664e-07
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0038528,
+          "memory": {
+            "owned_peak_bytes": 25568,
+            "persistent_owned_bytes": 24416,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 256,
+            "tree_nodes": 63,
+            "image_count": 0,
+            "total_seconds": 0.0002475,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0031229,
+          "memory": {
+            "owned_peak_bytes": 25568,
+            "persistent_owned_bytes": 24416,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 256,
+            "tree_nodes": 63,
+            "image_count": 0,
+            "total_seconds": 0.0002231,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0028474,
+          "memory": {
+            "owned_peak_bytes": 25568,
+            "persistent_owned_bytes": 24416,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 256,
+            "tree_nodes": 63,
+            "image_count": 0,
+            "total_seconds": 0.0002908,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 3.1128790981176664e-07
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0033651,
+          "memory": {
+            "owned_peak_bytes": 25568,
+            "persistent_owned_bytes": 24416,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 256,
+            "tree_nodes": 63,
+            "image_count": 0,
+            "total_seconds": 0.0002375,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 3.1128790981176664e-07
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0028898,
+          "memory": {
+            "owned_peak_bytes": 25568,
+            "persistent_owned_bytes": 24416,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 256,
+            "tree_nodes": 63,
+            "image_count": 0,
+            "total_seconds": 0.0002536,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        }
+      ],
+      "cold_samples": [
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.1966,
+          "memory": {
+            "owned_peak_bytes": 25568,
+            "persistent_owned_bytes": 24416,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 16000221184.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 256,
+            "tree_nodes": 63,
+            "image_count": 0,
+            "total_seconds": 0.0522564,
+            "algorithm": "tree"
+          },
+          "target_count": 24
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0115624,
+          "memory": {
+            "owned_peak_bytes": 25568,
+            "persistent_owned_bytes": 24416,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 256,
+            "tree_nodes": 63,
+            "image_count": 0,
+            "total_seconds": 0.0003916,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24
+        }
+      ],
+      "memory_limitations": "Owned device buffers are exact; cudaMemGetInfo samples do not measure process/device peak or host peak.",
+      "precision_limitations": "This comparison does not replace independent CPU physical FE L2 acceptance.",
+      "representation": "cloud",
+      "input_sha256": {
+        "xyz": "9b476e2e49980c3ad4c97255d36adc43571a7c1e12e0be0c7d4a6c8da520ea0e",
+        "strength": "a3cb2939e99d480a91359446da4927a56886e10bafbca1029054555a6e65d694"
+      },
+      "median_whole_seconds": {
+        "tree": 0.00348785,
+        "tree_mixed32": 0.0056512
+      },
+      "FP64_over_mixed32_ratio": 0.6171874999999999
+    },
+    {
+      "accepted": true,
+      "timing_acceptance": false,
+      "scope": "Retained tet actual NGSolve projection, FP32 far / FP64 near",
+      "a100_used": false,
+      "relative_limit": 0.0001,
+      "samples": [
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0060554,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0003118,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0060868,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0003285,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.7791586875213014e-07
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0178985,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0011469,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.7791586875213014e-07
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0033277,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002314,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0029813,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002191,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0029951,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002139,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.7791586875213014e-07
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0030636,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002246,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.7791586875213014e-07
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0029486,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002204,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        }
+      ],
+      "cold_samples": [
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0366748,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0004528,
+            "algorithm": "tree"
+          },
+          "target_count": 24
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0084376,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0004364,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24
+        }
+      ],
+      "memory_limitations": "Owned device buffers are exact; cudaMemGetInfo samples do not measure process/device peak or host peak.",
+      "precision_limitations": "This comparison does not replace independent CPU physical FE L2 acceptance.",
+      "representation": "tet",
+      "input_sha256": {
+        "volume_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "surface_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "volume": "86eb696274dd40061ed529e80e6566f9a4428d7df7c9cd63743840ea786d2b79",
+        "surface": "d4cf919ed1b221c8d97406377985e3583ef4bc970eabba80c993175c7fcae24f"
+      },
+      "median_whole_seconds": {
+        "tree": 0.0031545,
+        "tree_mixed32": 0.0045752
+      },
+      "FP64_over_mixed32_ratio": 0.6894780556041267
+    },
+    {
+      "accepted": true,
+      "timing_acceptance": false,
+      "scope": "Retained polynomial_tet actual NGSolve projection, FP32 far / FP64 near",
+      "a100_used": false,
+      "relative_limit": 0.0001,
+      "samples": [
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0074807,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0003355,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0031629,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002487,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.796848176473854e-07
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0038428,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002618,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.796848176473854e-07
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0029963,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002451,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.003806,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0003149,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0038528,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002575,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.796848176473854e-07
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0029469,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002316,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.796848176473854e-07
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0029483,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002396,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        }
+      ],
+      "cold_samples": [
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0095572,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0016198,
+            "algorithm": "tree"
+          },
+          "target_count": 24
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0048783,
+          "memory": {
+            "owned_peak_bytes": 19040,
+            "persistent_owned_bytes": 17888,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.000295,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24
+        }
+      ],
+      "memory_limitations": "Owned device buffers are exact; cudaMemGetInfo samples do not measure process/device peak or host peak.",
+      "precision_limitations": "This comparison does not replace independent CPU physical FE L2 acceptance.",
+      "representation": "polynomial_tet",
+      "input_sha256": {
+        "volume_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "surface_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "volume": "bdb257d3918d418a305afeee10763436ea7a71dc541b891af2254acbaf0841d6",
+        "surface": "12d5172255868a721c934310beed09c3ebe96290a6fe559e146b0c2020af54a1"
+      },
+      "median_whole_seconds": {
+        "tree": 0.00340115,
+        "tree_mixed32": 0.00350285
+      },
+      "FP64_over_mixed32_ratio": 0.9709664987081947
+    },
+    {
+      "accepted": true,
+      "timing_acceptance": false,
+      "scope": "Retained cubic_tet actual NGSolve projection, FP32 far / FP64 near",
+      "a100_used": false,
+      "relative_limit": 0.0001,
+      "samples": [
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0042628,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002655,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0047947,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0003174,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.8912737148937465e-07
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0039163,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002311,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.8912737148937465e-07
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0030886,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0003243,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0031723,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002828,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0033568,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002283,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.8912737148937465e-07
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.005731,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0003387,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.8912737148937465e-07
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0030762,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0003099,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        }
+      ],
+      "cold_samples": [
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0073401,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0004871,
+            "algorithm": "tree"
+          },
+          "target_count": 24
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0049801,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0003064,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24
+        }
+      ],
+      "memory_limitations": "Owned device buffers are exact; cudaMemGetInfo samples do not measure process/device peak or host peak.",
+      "precision_limitations": "This comparison does not replace independent CPU physical FE L2 acceptance.",
+      "representation": "cubic_tet",
+      "input_sha256": {
+        "volume_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "surface_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "volume": "bdb257d3918d418a305afeee10763436ea7a71dc541b891af2254acbaf0841d6",
+        "surface": "ab743adf4900460b51beda6f5babd4f757576e1ae2b9d9dcf98d2c349d25f9a9"
+      },
+      "median_whole_seconds": {
+        "tree": 0.00313045,
+        "tree_mixed32": 0.0043555
+      },
+      "FP64_over_mixed32_ratio": 0.7187349328435312
+    },
+    {
+      "accepted": true,
+      "timing_acceptance": false,
+      "scope": "Retained sextic_quartic_tet actual NGSolve projection, FP32 far / FP64 near",
+      "a100_used": false,
+      "relative_limit": 0.0001,
+      "samples": [
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0047498,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.000238,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0046831,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.000229,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.648579641834084e-07
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0048098,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002285,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.648579641834084e-07
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0047125,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002389,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0058192,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0003196,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0050183,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.000233,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.648579641834084e-07
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0047204,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002326,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.648579641834084e-07
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.004756,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002388,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        }
+      ],
+      "cold_samples": [
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0089416,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.000484,
+            "algorithm": "tree"
+          },
+          "target_count": 24
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0058761,
+          "memory": {
+            "owned_peak_bytes": 21984,
+            "persistent_owned_bytes": 20832,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002712,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24
+        }
+      ],
+      "memory_limitations": "Owned device buffers are exact; cudaMemGetInfo samples do not measure process/device peak or host peak.",
+      "precision_limitations": "This comparison does not replace independent CPU physical FE L2 acceptance.",
+      "representation": "sextic_quartic_tet",
+      "input_sha256": {
+        "volume_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "surface_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "volume": "899b06a4e653ffaa1f75b0cac96e42929bba40ac2bce4bf5d1dc5ea002fe7c2f",
+        "surface": "9f909a3bb910b3f7a440353be755bb6180c057e924f8b7cf423c4e19053f4447"
+      },
+      "median_whole_seconds": {
+        "tree": 0.0047529,
+        "tree_mixed32": 0.0047650999999999995
+      },
+      "FP64_over_mixed32_ratio": 0.9974397179492561
+    },
+    {
+      "accepted": true,
+      "timing_acceptance": false,
+      "scope": "Retained curved_tet actual NGSolve projection, FP32 far / FP64 near",
+      "a100_used": false,
+      "relative_limit": 0.0001,
+      "samples": [
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.005737,
+          "memory": {
+            "owned_peak_bytes": 10592,
+            "persistent_owned_bytes": 9440,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0003679,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0037192,
+          "memory": {
+            "owned_peak_bytes": 10592,
+            "persistent_owned_bytes": 9440,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.000275,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.424789146735514e-07
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0037349,
+          "memory": {
+            "owned_peak_bytes": 10592,
+            "persistent_owned_bytes": 9440,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002742,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.424789146735514e-07
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0031883,
+          "memory": {
+            "owned_peak_bytes": 10592,
+            "persistent_owned_bytes": 9440,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002781,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0033957,
+          "memory": {
+            "owned_peak_bytes": 10592,
+            "persistent_owned_bytes": 9440,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002493,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0032244,
+          "memory": {
+            "owned_peak_bytes": 10592,
+            "persistent_owned_bytes": 9440,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002409,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.424789146735514e-07
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.0029184,
+          "memory": {
+            "owned_peak_bytes": 10592,
+            "persistent_owned_bytes": 9440,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0002821,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 2.424789146735514e-07
+        },
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0056646,
+          "memory": {
+            "owned_peak_bytes": 10592,
+            "persistent_owned_bytes": 9440,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0014828,
+            "algorithm": "tree"
+          },
+          "target_count": 24,
+          "relative_coefficient_error": 0
+        }
+      ],
+      "cold_samples": [
+        {
+          "algorithm": "tree",
+          "whole_seconds": 0.0067337,
+          "memory": {
+            "owned_peak_bytes": 10592,
+            "persistent_owned_bytes": 9440,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.000376,
+            "algorithm": "tree"
+          },
+          "target_count": 24
+        },
+        {
+          "algorithm": "tree_mixed32",
+          "whole_seconds": 0.004162,
+          "memory": {
+            "owned_peak_bytes": 10592,
+            "persistent_owned_bytes": 9440,
+            "temporary_owned_bytes": 1152,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32,
+            "tree_nodes": 7,
+            "image_count": 0,
+            "total_seconds": 0.0003174,
+            "algorithm": "tree_mixed32"
+          },
+          "target_count": 24
+        }
+      ],
+      "memory_limitations": "Owned device buffers are exact; cudaMemGetInfo samples do not measure process/device peak or host peak.",
+      "precision_limitations": "This comparison does not replace independent CPU physical FE L2 acceptance.",
+      "representation": "curved_tet",
+      "input_sha256": {
+        "gauss_points": "0f6e7e85d965e1a32c6c8730695142f439b300d0fdbfe9f27b6c4b5212306f59",
+        "gauss_weights": "126849b533c1507dea6b499a6e140ef3f527a2991ccb1d53ed1072a4c4097155",
+        "volume": "78fbb26dbbe0939478130c51a32eee4bdc0f4f1339da4619b3a40bc9da124250",
+        "surface": "a2c2f992ee5bab0c795e90115e890fcbd01d82227ae2c23d2be713713f265bfc"
+      },
+      "median_whole_seconds": {
+        "tree": 0.00453015,
+        "tree_mixed32": 0.0034718
+      },
+      "FP64_over_mixed32_ratio": 1.3048418687712426
+    }
+  ],
+  "validation_commit": "6880900156dd42f16f1dbd9ba50cd211863e7d6c",
+  "validation_dirty": true,
+  "idle_probe": {
+    "logical_processors": 104,
+    "mean_cpu_percent": 3.0182692307692305,
+    "max_cpu_percent": 40.6,
+    "available_host_bytes": 141737062400,
+    "processor_load_caveat": "Socket CIM reports conflicted with per-logical-CPU samples; do not use the socket average alone."
+  },
+  "matlab_startup_seconds": 10.230659699998796,
+  "code_analysis": [],
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "gpu": {
+    "name": "Quadro RTX 5000",
+    "total_memory": 17179541504.0,
+    "available_memory": 16004415488.0
+  },
+  "mesh_sha256": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32",
+  "contexts_released": true,
+  "limitations": [
+    "Small fixed source and projection cases; not scaling or broad performance acceptance.",
+    "Memory: exact owned device buffers plus CUDA free-memory samples, not process/global peak; host peak unmeasured.",
+    "Cold samples are first calls per algorithm in one MATLAB session; second algorithm shares initialized CUDA runtime.",
+    "Historical field build representation label is cloud-only; actual tested representation is explicit in each case.",
+    "Socket CIM load of approximately 50 percent is unreliable here: per-logical-CPU samples, process deltas and queue probes established the idle diagnostic window.",
+    "FP32 stores no smaller buffers in this implementation; sample device ownership is identical to FP64."
+  ],
+  "independent_CPU_precision_inputs_verified": true,
+  "cloud_CPU_precision_evidence_sha256": "416a3fba067654e1c19b57c067f1f30460e25685523896d767562081d3af29b4",
+  "idle_guard_sha256": "656d7f6d1fd49fbdb9b24e52072c302c626d31f5b2a203a6a6fbfe87bb7fd9d6"
+}

@@ -1,0 +1,275 @@
+{
+  "schema": "radia.ngsolve-cuda-poisson.v1",
+  "passed": true,
+  "versions": {
+    "ngsolve": "6.2.2607",
+    "netgen-mesher": "6.2.2607",
+    "numpy": "2.5.4",
+    "scipy": "1.18.1",
+    "matlabengine": "26.1"
+  },
+  "ngsolve_upstream_cuda_enabled": false,
+  "cpu_threads": 8,
+  "matlab_startup_seconds": 9.15696460000072,
+  "gateway_checks": {
+    "passed": true,
+    "cases": 10.0,
+    "repeat_solves": 10.0,
+    "clear_and_reload": true
+  },
+  "python_peak_rss_bytes": 253513728,
+  "source_commit": "00f6b25b4666d79fbba287252fa29cf726aab841",
+  "build": {
+    "schema": "radia.cuda-mex-build.v1",
+    "source_sha256": "9c441d1e64a5e65d8c1e8e653db506a6adccddaba60244c1d9c1b8e57fc97232",
+    "binary_sha256": "dad728a360ee7f550e6788b6834a6febe413682201f8446c535003e5cc168091",
+    "source_commit": "00f6b25b4666d79fbba287252fa29cf726aab841",
+    "source_dirty": false,
+    "matlab": "26.1.0.3346908 (R2026a) Update 5",
+    "release": "2026a",
+    "gpu": {
+      "name": "Quadro RTX 5000",
+      "compute_capability": "7.5",
+      "total_memory": 17179541504.0,
+      "available_memory": 16004415488.0,
+      "toolkit": 12.8,
+      "driver": "582.78"
+    },
+    "python_version": "3.12.10",
+    "operation_route": "official MATLAB Engine for Python; task-owned session",
+    "no_cpu_solver_fallback": true,
+    "cuda_targets": [
+      "sm_75",
+      "sm_80",
+      "compute_80 PTX"
+    ],
+    "compiler": "MSVC 19.44 / MATLAB nvcc_msvcpp2022"
+  },
+  "limitations": [
+    "Assembled CSR bridge, not an upstream NGSolve matrix-free CUDA backend",
+    "Jacobi PCG only; IC/AMS/HDiv-MMM not implemented by this experiment",
+    "CPU/GPU CG stopping norms differ; true residual and direct-reference parity are checked",
+    "Small installation acceptance on 100, not an A100 scalability study"
+  ],
+  "cases": [
+    {
+      "maxh": 0.24,
+      "order": 2,
+      "ndof": 881,
+      "free_dofs": 455,
+      "nnz": 8883,
+      "assembly_seconds": 0.07391680000000633,
+      "cpu_sparsecholesky_factor_seconds": 0.009572699998898315,
+      "cpu_sparsecholesky_warm_seconds": [
+        0.0003797999997914303,
+        0.00023809999947843608,
+        0.00022779999926569872,
+        0.00023570000121253543,
+        0.00022920000083104242
+      ],
+      "cpu_cg_cold_seconds": 0.007128899998861016,
+      "cpu_cg_warm_seconds": [
+        0.0064533999993727775,
+        0.005975899999612011,
+        0.005780600000434788,
+        0.005723600001147133,
+        0.005753900000854628
+      ],
+      "cpu_cg_warm_median_seconds": 0.005780600000434788,
+      "cpu_cg_iterations": [
+        48,
+        48,
+        48,
+        48,
+        48,
+        48
+      ],
+      "cpu_true_relative_residual": 4.9222005180393674e-11,
+      "gpu_true_relative_residual": 9.986162449223189e-11,
+      "gpu_vs_cpu_direct_relative_l2": 3.519925943382939e-10,
+      "analytic_solution_l2_error": 0.003541952501161506,
+      "input_sha256": "78606c183f7e2e42426c75edea4adf97ee3e6d3e2ec66d84c59927bac72274dc",
+      "gpu": {
+        "passed": 1,
+        "schema": "radia.cuda-poisson-gpu.v1",
+        "backend": "custom CUDA CSR PCG; NGSolve CPU assembly; not upstream ngscuda",
+        "device": "Quadro RTX 5000",
+        "compute_capability": "7.5",
+        "total_memory_bytes": 17179541504.0,
+        "available_memory_before": 16000221184.0,
+        "available_memory_after": 16000221184.0,
+        "precision": "float64",
+        "upload_seconds": 0.0024143,
+        "cold_solve_seconds": 0.0032223,
+        "warm_seconds": [
+          0.003191,
+          0.0027727,
+          0.0031682,
+          0.0033895,
+          0.0041775
+        ],
+        "warm_median_seconds": 0.003191,
+        "download_seconds": 0.0004628,
+        "warm_with_transfers_seconds": 0.0060681,
+        "info": {
+          "iterations": 46,
+          "true_relative_residual": 9.986165765580368e-11,
+          "precision": "float64",
+          "backend": "CUDA custom CSR kernels; NGSolve CPU assembly",
+          "preconditioner": "Jacobi; not IC or AMS"
+        }
+      },
+      "gpu_resident_speedup_vs_cpu_cg": 1.8115324351096171,
+      "gpu_transfer_inclusive_speedup_vs_cpu_cg": 0.9526210841012488
+    },
+    {
+      "maxh": 0.16,
+      "order": 2,
+      "ndof": 1928,
+      "free_dofs": 938,
+      "nnz": 18470,
+      "assembly_seconds": 0.0944891999988613,
+      "cpu_sparsecholesky_factor_seconds": 0.011669400000755559,
+      "cpu_sparsecholesky_warm_seconds": [
+        0.0003488000002107583,
+        0.0003214999996998813,
+        0.00031820000003790483,
+        0.0003206000001227949,
+        0.0003169999999954598
+      ],
+      "cpu_cg_cold_seconds": 0.007863199998610071,
+      "cpu_cg_warm_seconds": [
+        0.007915399999546935,
+        0.007602300000144169,
+        0.007359100000030594,
+        0.007612100000187638,
+        0.0076563000002352055
+      ],
+      "cpu_cg_warm_median_seconds": 0.007612100000187638,
+      "cpu_cg_iterations": [
+        57,
+        57,
+        57,
+        57,
+        57,
+        57
+      ],
+      "cpu_true_relative_residual": 3.474510006055336e-11,
+      "gpu_true_relative_residual": 9.959108649074768e-11,
+      "gpu_vs_cpu_direct_relative_l2": 3.6454791182038516e-10,
+      "analytic_solution_l2_error": 0.0017211156897923275,
+      "input_sha256": "e96bb8c20718824a8aee14e946d8392cff0aed47fd4406ec4e5ed45c9f4d27ab",
+      "gpu": {
+        "passed": 1,
+        "schema": "radia.cuda-poisson-gpu.v1",
+        "backend": "custom CUDA CSR PCG; NGSolve CPU assembly; not upstream ngscuda",
+        "device": "Quadro RTX 5000",
+        "compute_capability": "7.5",
+        "total_memory_bytes": 17179541504.0,
+        "available_memory_before": 16000292248.0,
+        "available_memory_after": 16000292248.0,
+        "precision": "float64",
+        "upload_seconds": 0.0010466,
+        "cold_solve_seconds": 0.0036268,
+        "warm_seconds": [
+          0.003526,
+          0.0032584,
+          0.0031697,
+          0.0030742,
+          0.0030235
+        ],
+        "warm_median_seconds": 0.0031697,
+        "download_seconds": 0.0001604,
+        "warm_with_transfers_seconds": 0.0043767,
+        "info": {
+          "iterations": 54,
+          "true_relative_residual": 9.959108916404025e-11,
+          "precision": "float64",
+          "backend": "CUDA custom CSR kernels; NGSolve CPU assembly",
+          "preconditioner": "Jacobi; not IC or AMS"
+        }
+      },
+      "gpu_resident_speedup_vs_cpu_cg": 2.4015206487010246,
+      "gpu_transfer_inclusive_speedup_vs_cpu_cg": 1.7392327553151092
+    },
+    {
+      "maxh": 0.11,
+      "order": 2,
+      "ndof": 7293,
+      "free_dofs": 5003,
+      "nnz": 117147,
+      "assembly_seconds": 0.2262310999994952,
+      "cpu_sparsecholesky_factor_seconds": 0.07640539999920293,
+      "cpu_sparsecholesky_warm_seconds": [
+        0.001313099999606493,
+        0.0012021999991702614,
+        0.0012153999996371567,
+        0.0011825999990833225,
+        0.0011972000011155615
+      ],
+      "cpu_cg_cold_seconds": 0.008907200000976445,
+      "cpu_cg_warm_seconds": [
+        0.008728099999643746,
+        0.008689199999935227,
+        0.008827099998597987,
+        0.008738600001379382,
+        0.008846300001096097
+      ],
+      "cpu_cg_warm_median_seconds": 0.008738600001379382,
+      "cpu_cg_iterations": [
+        67,
+        67,
+        67,
+        67,
+        67,
+        67
+      ],
+      "cpu_true_relative_residual": 4.954836218159136e-11,
+      "gpu_true_relative_residual": 9.336646319274216e-11,
+      "gpu_vs_cpu_direct_relative_l2": 2.9767215263965625e-10,
+      "analytic_solution_l2_error": 0.0004082047579468187,
+      "input_sha256": "dc8a8c95fa194503e426ae5a1b3ee8830c47ad3d58e478fb7e7f64aa84051e52",
+      "gpu": {
+        "passed": 1,
+        "schema": "radia.cuda-poisson-gpu.v1",
+        "backend": "custom CUDA CSR PCG; NGSolve CPU assembly; not upstream ngscuda",
+        "device": "Quadro RTX 5000",
+        "compute_capability": "7.5",
+        "total_memory_bytes": 17179541504.0,
+        "available_memory_before": 16000513888.0,
+        "available_memory_after": 15998416736.0,
+        "precision": "float64",
+        "upload_seconds": 0.0016969,
+        "cold_solve_seconds": 0.0048086,
+        "warm_seconds": [
+          0.0046469,
+          0.0047405,
+          0.0046813,
+          0.0043827,
+          0.0045782
+        ],
+        "warm_median_seconds": 0.0046469,
+        "download_seconds": 0.0001018,
+        "warm_with_transfers_seconds": 0.0064456,
+        "info": {
+          "iterations": 64,
+          "true_relative_residual": 9.336633341770596e-11,
+          "precision": "float64",
+          "backend": "CUDA custom CSR kernels; NGSolve CPU assembly",
+          "preconditioner": "Jacobi; not IC or AMS"
+        }
+      },
+      "gpu_resident_speedup_vs_cpu_cg": 1.8805224991670537,
+      "gpu_transfer_inclusive_speedup_vs_cpu_cg": 1.3557465560039998
+    }
+  ],
+  "validation_source_commit": "aa7b3dc35634991e84a61e7268b8c7e7c5ae269f",
+  "validation_source_identity_note": "Measurement used the BaseVector construction correction subsequently committed in validation_source_commit; native build source is recorded separately.",
+  "validation_sources_sha256": {
+    "validation_test/ngsolve_cuda_mex/run_poisson.py": "903cad04804b32235675553f761c4a167fcc726eac8e3b86ca8337c865a4170f",
+    "validation_test/ngsolve_cuda_mex/benchmark_gpu.m": "60b5b98e99f81ba6c9ed644c56954d276f20b4fea4e2198be12abdc91301fe50",
+    "validation_test/ngsolve_cuda_mex/check_gateway.m": "8cae9088dbc0a51e422d4bf4424ab46935a91652fcd3bb73a173e0b7e0905ac5"
+  },
+  "platform_class": "Windows",
+  "provenance_scope": "Public numerical evidence; full host/path provenance retained in private operational storage."
+}

@@ -1,0 +1,21 @@
+{
+  "fraction / denominator below bar": 0.9125,
+  "fraction / numerator above bar": 0.405,
+  "fraction / rule thickness": 0.0398,
+  "fraction / rule width": 0.5121,
+  "function then argument / space after the name": 0.7083,
+  "integral limits / limit vertical span": 1.9925,
+  "integral limits / lower limit from sign": 0.5534,
+  "integral limits / upper limit from sign": 0.9963,
+  "integral limits / upper right of lower": 0.4428,
+  "radical / bar above baseline": 0.8061,
+  "radical / bar thickness": 0.0398,
+  "subscript / subscript drop": 0.1494,
+  "sum limits / limit vertical span": 2.3911,
+  "superscript / script size ratio": 0.6642,
+  "superscript / superscript raise": -0.4113,
+  "superscript on V / superscript offset": 0.7854,
+  "superscript on f / superscript offset": 0.5872,
+  "superscript on x / superscript offset": 0.5543,
+  "tall radical / bar thickness": 0.0398
+}

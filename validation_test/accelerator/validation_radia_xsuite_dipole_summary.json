@@ -1,0 +1,53 @@
+{
+  "schema": "radia-validation-xsuite-dipole/v1",
+  "executed_at_utc": "2026-08-02T03:29:06.603618+00:00",
+  "execution_version": {
+    "producer": "validation_radia_xsuite_dipole.py",
+    "radia": "4.95.32",
+    "radia_git_head": "e66648879c50779c2bcd3c43ba946447ce7d2872",
+    "xtrack": "0.109.1"
+  },
+  "case": "fixed_magnet_external_field_to_xsuite_spatial_boris",
+  "units": {
+    "position": "m",
+    "magnetic_flux_density": "T",
+    "momentum": "eV/c"
+  },
+  "particle_count": 3,
+  "step_counts": {
+    "coarse": 600,
+    "fine": 1200
+  },
+  "field_probe_t": [
+    -6.400266596793824e-17,
+    0.12276463139493703,
+    -9.143237995419748e-18
+  ],
+  "endpoint_deflection_m": [
+    0.00035716680067931713,
+    0.0003599965588238796,
+    0.0003570507765015875
+  ],
+  "coarse_fine_endpoint_difference_m": [
+    6.308023673250462e-12,
+    6.166298339908925e-12,
+    8.726922586941152e-12
+  ],
+  "maximum_relative_momentum_drift": 0.0,
+  "boundary_exit_events": [],
+  "checks": {
+    "radia_field_nonzero": true,
+    "zero_field_is_straight": true,
+    "magnetic_field_deflects_every_trajectory": true,
+    "boris_step_refinement_closes": true,
+    "magnetic_tracking_preserves_momentum": true,
+    "tracking_boundary_has_no_exit": true,
+    "particle_count_closes": true
+  },
+  "limitations": [
+    "magnetic_field_only",
+    "electrostatic_acceleration_not_yet_in_this_bridge",
+    "particle_matter_interactions_require_xcoll"
+  ],
+  "pass": true
+}

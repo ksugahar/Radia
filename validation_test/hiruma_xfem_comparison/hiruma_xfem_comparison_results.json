@@ -1,0 +1,18 @@
+{
+  "schema": "radia.validation.hiruma-xfem-comparison.v1",
+  "generated_at_utc": "2026-09-03T06:40:25Z",
+  "versions": {
+    "python_version": "3.12.10",
+    "ngsolve_version": "unrecorded-historical-run"
+  },
+  "source_notebook": "validation_test/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb",
+  "notebook_sha256": "678d2abd8993e1fb01f9ce65bac325cab03c4de98be5396c167b2c6c7e0435ec",
+  "canonical_records": [
+    "results_phase1.json",
+    "phase4_xfem_hankel_results.json"
+  ],
+  "figures": [
+    "phase4_xfem_hankel_conditioning.pdf",
+    "phase4_xfem_hankel_conditioning.png"
+  ]
+}

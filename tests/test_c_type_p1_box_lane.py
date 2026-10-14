@@ -1,0 +1,643 @@
+"""Contracts of the first-order finite-box lane (validation_test/c_type_p1_ams_box).
+
+The lane's reduced-A engine is exercised on a small synthetic mesh with the
+same label contract as the C-type box mesh: an iron cube and a dummy coil
+block inside an air box, ``outer`` faces, ``iron_air_interface`` faces and a
+``GND`` vertex.  The tests pin what the benchmark relies on:
+
+* the tabulated flux-side law equals the production inverse of the PCHIP
+  B(H) law and is positive and monotone;
+* the compiled AMS + CG linear solve reaches the same field as the direct
+  solve and honours its true-residual contract;
+* Newton on a linear law is one exact step, and on the sample B-H table it
+  converges with full steps;
+* the mesh contract rejects a mesh that does not carry the lane's labels.
+"""
+from __future__ import annotations
+
+import importlib.util
+import json
+import math
+import os
+import sys
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+ng = pytest.importorskip("ngsolve")
+
+LANE = Path(__file__).resolve().parents[1] / "validation_test" / "c_type_p1_ams_box"
+MU0 = 4.0e-7 * math.pi
+_MODULE = None
+
+
+def lane():
+    global _MODULE
+    if _MODULE is None:
+        spec = importlib.util.spec_from_file_location("c_type_p1_box_lane", LANE / "run_p1_box.py")
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        _MODULE = module
+    return _MODULE
+
+
+def _bh_table():
+    return [[0.0, 0.0], [100.0, 0.6], [400.0, 1.2], [2000.0, 1.6], [20000.0, 1.9]]
+
+
+def test_piecewise_linear_h_of_b_contract():
+    law = lane().PiecewiseLinearIronLaw([[0,0],[100,1],[400,2]])
+    b = np.array([0,.5,1.,1.5,2.,3.])
+    h = np.array([0,50,100,250,400,400+1/MU0])
+    np.testing.assert_allclose(law.reluctivity(b)*b,h)
+    np.testing.assert_allclose(law.differential_reluctivity(np.array([.5,1.5,3.])),
+                              [100,300,1/MU0])
+    for invalid in ([[1,1],[2,2]], [[0,0],[1,0]], [[0,0],[float('nan'),1]]):
+        with pytest.raises(ValueError):
+            lane().PiecewiseLinearIronLaw(invalid)
+    with pytest.raises(ValueError):
+        law.reluctivity(np.array([-1.]))
+
+
+def test_total_a_current_sign_zero_and_newton(box_mesh):
+    module = lane()
+    x, y = ng.x, ng.y
+    current = 1e7 * ng.CF((-2*y*(x-.5)*(.7-x), -(1.2-2*x)*(.01-y*y), 0))
+    settings = dict(linear_solver="direct", cg_tolerance=1e-9,
+                    cg_max_iterations=1000, ams_num_smooth=1, source_projection_order=0)
+    def engine(sign):
+        return module.TotalAP1Box(box_mesh, sign*current, **settings)
+    points = _points()
+    positive, _, _ = engine(1).run_linear(500., points)
+    negative, _, _ = engine(-1).run_linear(500., points)
+    zero, _, _ = engine(0).run_linear(500., points)
+    assert np.linalg.norm(positive) > 1e-6
+    np.testing.assert_allclose(negative, -positive, atol=1e-10)
+    np.testing.assert_allclose(zero, 0, atol=1e-15)
+    law = module.SoftIronLaw([[0, 0], [10, 10*MU0*500], [1e6, 1e6*MU0*500]])
+    actual, stats, _ = engine(1).run_newton(law, newton_tolerance=1e-8,
+        tolerance=1e-6, max_iterations=10, max_halvings=4, observation=points)
+    assert stats['converged']
+    np.testing.assert_allclose(actual, positive, rtol=1e-5, atol=1e-10)
+
+
+def test_total_natural_boundary_cancels_curl_free_source(box_mesh):
+    points = np.array([[0.03, 0.02, 0.01], [0.3, 0.2, 0.1]])
+    natural = _engine(box_mesh, "direct", outer_boundary="natural_total")
+    field, _, _ = natural.run_linear(1.0, points)
+    assert np.linalg.norm(field) < 1e-6
+    fixed = _engine(box_mesh, "direct")
+    retained, _, _ = fixed.run_linear(1.0, points)
+    np.testing.assert_allclose(retained, [[0, 0, .8]] * 2, atol=1e-9)
+
+
+def test_total_natural_residual_matches_load(box_mesh):
+    engine = _engine(box_mesh, "direct", outer_boundary="natural_total")
+    engine._set_material(np.full(len(engine.iron), 1 / MU0))
+    zero = ng.GridFunction(engine.fes)
+    _, load = engine._picard_forms()
+    with ng.TaskManager():
+        load.Assemble()
+    residual, _ = engine._residual(zero)
+    np.testing.assert_allclose(residual.FV().NumPy(), -load.vec.FV().NumPy(), atol=1e-8)
+    assert np.linalg.norm(load.vec.FV().NumPy()) > 1
+
+
+@pytest.fixture(scope="module")
+def box_mesh():
+    from netgen.occ import Box, Glue, OCCGeometry, Pnt
+
+    iron = Box(Pnt(-0.2, -0.2, -0.2), Pnt(0.2, 0.2, 0.2))
+    iron.mat("iron")
+    iron.faces.name = "iron_air_interface"
+    coil = Box(Pnt(0.5, -0.1, -0.1), Pnt(0.7, 0.1, 0.1))
+    coil.mat("coil")
+    coil.faces.name = "coil_air_interface"
+    outer = Box(Pnt(-1, -1, -1), Pnt(1, 1, 1))
+    outer.faces.name = "outer"
+    outer.mat("air")
+    air = outer - iron - coil
+    for vertex in air.vertices:
+        if all(abs(vertex.p[k] + 1.0) < 1e-9 for k in range(3)):
+            vertex.name = "GND"
+    mesh = ng.Mesh(OCCGeometry(Glue([iron, coil, air])).GenerateMesh(maxh=0.35))
+    assert "GND" in set(mesh.GetBBBoundaries())
+    return mesh
+
+
+def _engine(mesh, solver, source=(0.0, 0.0, 0.8), **overrides):
+    module = lane()
+    settings = dict(linear_solver=solver, cg_tolerance=1.0e-9, cg_max_iterations=1000,
+                    ams_num_smooth=1, source_projection_order=2)
+    settings.update(overrides)
+    return module.ReducedAP1Box(mesh, ng.CoefficientFunction(tuple(source)), **settings)
+
+
+def _points():
+    return np.asarray([[0.0, 0.0, 0.0], [0.05, 0.0, 0.0], [0.0, 0.0, 0.3], [0.5, 0.5, 0.5]])
+
+
+def test_the_flux_side_law_matches_the_production_inverse():
+    from radia.vector_potential_solver import _build_nu_of_b_interpolator
+
+    law = lane().SoftIronLaw(_bh_table())
+    nu_of_b, b_sat = _build_nu_of_b_interpolator(_bh_table())
+    assert law.b_saturation == b_sat
+    samples = np.array([0.05, 0.3, 0.9, 1.3, 1.7, 2.5])
+    expected = np.array([nu_of_b(b) for b in samples])
+    np.testing.assert_allclose(law.reluctivity(samples), expected, rtol=1.0e-4)
+    assert np.all(law.differential_reluctivity(samples) > 0.0)
+    # Beyond the table the law continues with the vacuum slope.
+    assert law.differential_reluctivity(np.array([5.0]))[0] == pytest.approx(1.0 / MU0, rel=0.05)
+    with pytest.raises(ValueError):
+        lane().SoftIronLaw([[0.0, 0.0]])
+
+
+@pytest.mark.parametrize("smoothing_sweeps", [1, 2])
+def test_ams_and_direct_linear_solves_agree(box_mesh, smoothing_sweeps):
+    ams = _engine(box_mesh, "ams", ams_num_smooth=smoothing_sweeps)
+    direct = _engine(box_mesh, "direct")
+    with ng.TaskManager():
+        pass
+    field_ams, stats_ams, _ = ams.run_linear(1000.0, _points())
+    field_direct, _, _ = direct.run_linear(1000.0, _points())
+    assert np.all(np.isfinite(field_ams))
+    scale = float(np.max(np.linalg.norm(field_direct, axis=1)))
+    assert np.max(np.linalg.norm(field_ams - field_direct, axis=1)) / scale < 1.0e-6
+    row = stats_ams["history"][0]
+    assert row["relative_residual"] <= 1.0e-9
+    assert row["cg_iterations"] > 0
+    # Iron with mu_r = 1000 concentrates the flux: the centre field exceeds the source.
+    assert field_direct[0, 2] > 0.8
+
+
+def test_ungauged_shifted_iccg_matches_the_gauged_ams_field(box_mesh):
+    """The singular curl-curl system with a consistent right-hand side, solved by
+    Radia's shifted incomplete-Cholesky CG, gives the same B as the gauged AMS
+    solve (A differs by a gradient, B does not)."""
+    module = lane()
+    with pytest.raises(ValueError, match="requires linear_solver='iccg'"):
+        _engine(box_mesh, "ams", gauge_epsilon=0.0)
+    iccg = _engine(box_mesh, "iccg", gauge_epsilon=0.0, cg_tolerance=1.0e-9)
+    field_iccg, stats, _ = iccg.run_linear(1000.0, _points())
+    field_ams, _, _ = _engine(box_mesh, "ams").run_linear(1000.0, _points())
+    row = stats["history"][0]
+    assert row["relative_residual"] <= 1.0e-9
+    assert row["cg_iterations"] > 0
+    scale = float(np.max(np.linalg.norm(field_ams, axis=1)))
+    assert np.max(np.linalg.norm(field_iccg - field_ams, axis=1)) / scale < 1.0e-5
+    assert iccg.describe()["gauge"].startswith("nograds space only")
+    assert module.GAUGE_EPSILON > 0.0
+
+
+def test_newton_on_a_linear_law_is_one_exact_step(box_mesh):
+    module = lane()
+    engine = _engine(box_mesh, "ams")
+    mu_r = 500.0
+    # A "table" that is exactly linear up to far beyond the fields reached here.
+    table = [[0.0, 0.0], [10.0, 10.0 * MU0 * mu_r], [1.0e4, 1.0e4 * MU0 * mu_r]]
+    law = module.SoftIronLaw(table)
+    field_newton, stats, _ = engine.run_newton(
+        law, newton_tolerance=1.0e-8, tolerance=1.0e-6, max_iterations=10,
+        max_halvings=4, observation=_points())
+    assert stats["converged"]
+    assert stats["iterations"] <= 2
+    assert all(row["step_length"] == 1.0 for row in stats["history"])
+    field_linear, _, _ = _engine(box_mesh, "ams").run_linear(mu_r, _points())
+    scale = float(np.max(np.linalg.norm(field_linear, axis=1)))
+    assert np.max(np.linalg.norm(field_newton - field_linear, axis=1)) / scale < 1.0e-5
+
+
+@pytest.mark.parametrize("shift", [1e-2, 1e-6])
+@pytest.mark.parametrize("project", [False, True])
+def test_shifted_ams_preserves_the_ungauged_operator_and_field(box_mesh, shift, project):
+    ams = _engine(box_mesh, "ams", gauge_epsilon=0., ams_preconditioner_shift=shift,
+                  cg_tolerance=1e-7, ams_project_gradients=project)
+    reference = _engine(box_mesh, "iccg", gauge_epsilon=0., cg_tolerance=1e-7)
+    field, stats, _ = ams.run_linear(1000., _points())
+    expected, _, _ = reference.run_linear(1000., _points())
+    np.testing.assert_allclose(field, expected, rtol=1e-5, atol=1e-7)
+    row = stats['history'][0]
+    assert row['relative_residual'] <= 1e-7
+    assert row['cg_restarts'] == 0
+    # Matrix setup must not overwrite the operator that CG actually solves.
+    a, _ = ams._picard_forms()
+    with ng.TaskManager():
+        a.Assemble()
+    original = a.mat.AsVector().FV().NumPy().copy()
+    ams._ams_prepare(a.mat)
+    np.testing.assert_array_equal(a.mat.AsVector().FV().NumPy(), original)
+    assert not np.array_equal(ams._ams_shift_form.mat.AsVector().FV().NumPy(), original)
+    if project:
+        pre = ams._ams_prepare(a.mat)
+        gradient, _ = ams._gradient_projection
+        x = np.random.default_rng(18).normal(size=ams.fes.ndof)
+        projected = pre.project(x)
+        assert np.linalg.norm(gradient.T @ projected) < 1e-10 * np.linalg.norm(x)
+        np.testing.assert_allclose(pre.project(projected), projected, atol=1e-10)
+
+
+def test_shifted_ams_fails_closed_on_invalid_shift_and_iteration_limit(box_mesh):
+    for shift in (-1., float('nan'), float('inf')):
+        with pytest.raises(ValueError, match='ams_preconditioner_shift'):
+            _engine(box_mesh, 'ams', gauge_epsilon=0., ams_preconditioner_shift=shift)
+    with pytest.raises(ValueError, match='requires AMS'):
+        _engine(box_mesh, 'iccg', gauge_epsilon=0., ams_preconditioner_shift=.01)
+    with pytest.raises(RuntimeError, match='true relative residual'):
+        _engine(box_mesh, 'ams', gauge_epsilon=0., ams_preconditioner_shift=.01,
+                cg_max_iterations=1).run_linear(1000., _points())
+
+
+def test_newton_accepts_an_initially_zero_residual(box_mesh):
+    engine = _engine(box_mesh, "ams", source=(0.0, 0.0, 0.0))
+    field, stats, _ = engine.run_newton(
+        lane().SoftIronLaw(_bh_table()), newton_tolerance=1e-8,
+        tolerance=1e-6, max_iterations=10, max_halvings=4, observation=_points())
+    assert stats["converged"] and stats["iterations"] == 0
+    assert stats["final_residual_relative"] == 0.0
+    np.testing.assert_array_equal(field, 0.0)
+
+
+def test_beta_zero_ams_preserves_the_ungauged_field(box_mesh):
+    ams = _engine(box_mesh, "ams", gauge_epsilon=0., ams_beta_zero=True,
+                  cg_tolerance=1e-7)
+    reference = _engine(box_mesh, "iccg", gauge_epsilon=0., cg_tolerance=1e-7)
+    field, stats, _ = ams.run_linear(1000., _points())
+    expected, _, _ = reference.run_linear(1000., _points())
+    assert ams._ams.beta_zero is True
+    assert ams._ams_shift_form is None and ams._gradient_projection is None
+    assert stats['history'][0]['relative_residual'] <= 1e-7
+    np.testing.assert_allclose(field, expected, rtol=1e-5, atol=1e-7)
+    for kwargs in ({"gauge_epsilon": 1e-6}, {"ams_preconditioner_shift": .01}):
+        with pytest.raises(ValueError, match="ams_beta_zero"):
+            _engine(box_mesh, "ams", ams_beta_zero=True,
+                    **{"gauge_epsilon": 0., **kwargs})
+
+
+def test_cli_preserves_runtime_failure_as_json(tmp_path, monkeypatch):
+    module = lane()
+    output = tmp_path / "failure.json"
+    monkeypatch.setattr(sys, "argv", ["run_p1_box.py", "--vol", str(tmp_path / "missing.vol"),
+                                     "--output", str(output)])
+    def fail(options):
+        raise RuntimeError("native backend unavailable")
+    monkeypatch.setattr(module, "run", fail)
+    with pytest.raises(RuntimeError, match="native backend unavailable"):
+        module.main()
+    report = json.loads(output.read_text())
+    assert not report["completed"] and not report["passed"]
+    assert report["error"]["message"] == "native backend unavailable"
+
+
+def test_cli_returns_failure_for_nonconvergence(tmp_path, monkeypatch):
+    module = lane()
+    monkeypatch.setattr(sys, "argv", ["run_p1_box.py", "--vol", "unused.vol",
+                                     "--output", str(tmp_path / "result.json")])
+    monkeypatch.setattr(module, "run", lambda options: {"completed": True, "passed": False})
+    with pytest.raises(SystemExit) as exc:
+        module.main()
+    assert exc.value.code == 1
+
+
+def test_newton_converges_on_the_sample_table_with_full_steps(box_mesh):
+    module = lane()
+    engine = _engine(box_mesh, "ams")
+    law = module.SoftIronLaw(_bh_table())
+    field, stats, _ = engine.run_newton(
+        law, newton_tolerance=1.0e-8, tolerance=1.0e-5, max_iterations=30,
+        max_halvings=6, observation=_points())
+    assert stats["converged"]
+    assert stats["final_residual_relative"] <= 1.0e-8
+    assert stats["history"][-1]["step_length"] == 1.0
+    assert not any(row.get("line_search_failed") for row in stats["history"])
+    assert np.all(np.isfinite(field))
+    # The 0.8 T source drives the cube past the knee: part of the iron carries a
+    # reluctivity well above the initial one, so the converged material state is
+    # genuinely nonlinear rather than the initial linear guess.
+    assert stats["history"][-1]["nu_max"] > 5.0 * law.nu_initial
+    mu_r_initial = 1.0 / (MU0 * law.nu_initial)
+    field_linear, _, _ = _engine(box_mesh, "ams").run_linear(mu_r_initial, _points())
+    assert not np.allclose(field, field_linear, rtol=1.0e-4, atol=0.0)
+
+
+def test_picard_and_newton_agree_on_a_mildly_saturated_cube(box_mesh):
+    """A 0.1 T source keeps the cube on the shoulder of the table, where the
+    damped Picard map contracts; both loops must then land on one field."""
+    module = lane()
+    law = module.SoftIronLaw(_bh_table())
+    source = (0.0, 0.0, 0.1)
+    field_newton, newton_stats, _ = _engine(box_mesh, "ams", source).run_newton(
+        law, newton_tolerance=1.0e-9, tolerance=1.0e-6, max_iterations=30,
+        max_halvings=6, observation=_points())
+    assert newton_stats["converged"]
+    field_picard, picard_stats, _ = _engine(box_mesh, "ams", source).run_picard(
+        law, relax=0.3, anderson_depth=3, tolerance=1.0e-6, max_iterations=120,
+        observation=_points())
+    assert picard_stats["converged"]
+    assert picard_stats["iterations"] > newton_stats["iterations"]
+    scale = float(np.max(np.linalg.norm(field_newton, axis=1)))
+    assert np.max(np.linalg.norm(field_picard - field_newton, axis=1)) / scale < 1.0e-4
+
+
+def test_the_mesh_contract_rejects_a_mesh_without_the_lane_labels(tmp_path, box_mesh):
+    module = lane()
+    from netgen.occ import Box, OCCGeometry, Pnt
+
+    plain = ng.Mesh(OCCGeometry(Box(Pnt(0, 0, 0), Pnt(1, 1, 1))).GenerateMesh(maxh=0.5))
+    vol = tmp_path / "plain.vol"
+    plain.ngmesh.Save(str(vol))
+    with pytest.raises(FileNotFoundError):
+        module.check_mesh_contract(vol, plain)
+    vol.with_suffix(".json").write_text(json.dumps({"vol_sha256": module.sha256(vol)}))
+    with pytest.raises(RuntimeError, match="materials"):
+        module.check_mesh_contract(vol, plain)
+    good = tmp_path / "box.vol"
+    box_mesh.ngmesh.Save(str(good))
+    good.with_suffix(".json").write_text(json.dumps({"vol_sha256": "0" * 64}))
+    with pytest.raises(RuntimeError, match="differs"):
+        module.check_mesh_contract(good, box_mesh)
+    good.with_suffix(".json").write_text(json.dumps({"vol_sha256": module.sha256(good)}))
+    contract = module.check_mesh_contract(good, box_mesh)
+    assert contract["vol_sha256"] == module.sha256(good)
+
+
+def test_inexact_newton_preserves_field_and_outer_gates(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-5, max_iterations=30,
+                   max_halvings=6, observation=_points())
+    reference, fixed_stats, _ = _engine(box_mesh, "ams").run_newton(law, linear_floor=False, **options)
+    engine = _engine(box_mesh, "ams", ams_update_every=2)
+    field, stats, _ = engine.run_newton(law, inexact_linear=True, linear_floor=False, **options)
+    assert fixed_stats["converged"] and stats["converged"]
+    assert stats["final_residual_relative"] <= options["newton_tolerance"]
+    assert stats["final_relative_change"] <= options["tolerance"]
+    assert engine.cg_tolerance == 1e-9
+    assert stats["inexact_linear"] is True
+    for row in stats["history"]:
+        assert 1e-9 <= row["linear_tolerance"] <= 0.01
+        assert row["relative_residual"] <= row["linear_tolerance"]
+    assert stats["history"][-1]["linear_tolerance"] < stats["history"][0]["linear_tolerance"]
+    np.testing.assert_allclose(field, reference, rtol=1e-6, atol=1e-8)
+
+
+def _random_solution(engine, seed):
+    solution = ng.GridFunction(engine.fes)
+    solution.vec.FV().NumPy()[:] = np.random.default_rng(seed).normal(size=engine.fes.ndof) * 1e-3
+    return solution
+
+
+@pytest.mark.parametrize("overrides", [{}, {"outer_boundary": "natural_total"},
+                                       {"gauge_epsilon": 0.0, "linear_solver": "iccg"}])
+def test_algebraic_residual_and_flux_match_form_assembly(box_mesh, overrides):
+    law = lane().SoftIronLaw(_bh_table())
+    settings = dict(overrides)
+    solver = settings.pop("linear_solver", "ams")
+    fast = _engine(box_mesh, solver, **settings)
+    slow = _engine(box_mesh, solver, algebraic_residual=False, **settings)
+    solution = _random_solution(fast, 7)
+    for engine in (fast, slow):
+        b, magnitude = engine._element_flux(solution)
+        engine._set_material(law.reluctivity(magnitude), law=law, b_iron=b, magnitude=magnitude)
+    b_fast, _ = fast._element_flux(solution)
+    b_slow, _ = slow._element_flux(solution)
+    np.testing.assert_allclose(b_fast, b_slow, rtol=1e-11, atol=1e-13 * np.max(np.abs(b_slow)))
+    r_fast, n_fast = fast._residual(solution)
+    r_slow, n_slow = slow._residual(solution)
+    difference = r_fast.FV().NumPy() - r_slow.FV().NumPy()
+    assert np.linalg.norm(difference[fast.free]) <= 1e-11 * n_slow
+    assert n_fast == pytest.approx(n_slow, rel=1e-11)
+
+
+def test_algebraic_total_a_residual_matches_form_assembly(box_mesh):
+    module = lane()
+    x, y = ng.x, ng.y
+    current = 1e7 * ng.CF((-2*y*(x-.5)*(.7-x), -(1.2-2*x)*(.01-y*y), 0))
+    settings = dict(linear_solver="ams", cg_tolerance=1e-10, cg_max_iterations=1000,
+                    ams_num_smooth=1, source_projection_order=2)
+    fast = module.TotalAP1Box(box_mesh, current, **settings)
+    slow = module.TotalAP1Box(box_mesh, current, algebraic_residual=False, **settings)
+    solution = _random_solution(fast, 11)
+    r_fast, n_fast = fast._residual(solution)
+    r_slow, n_slow = slow._residual(solution)
+    difference = r_fast.FV().NumPy() - r_slow.FV().NumPy()
+    assert np.linalg.norm(difference[fast.free]) <= 1e-11 * n_slow
+    law = module.SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-9, tolerance=1e-7, max_iterations=30,
+                   max_halvings=4, observation=_points())
+    field_fast, stats_fast, _ = fast.run_newton(law, **options)
+    field_slow, stats_slow, _ = slow.run_newton(law, **options)
+    assert stats_fast["converged"] and stats_slow["converged"]
+    np.testing.assert_allclose(field_fast, field_slow, rtol=1e-8, atol=1e-12)
+
+
+@pytest.mark.parametrize("overrides", [{}, {"gauge_epsilon": 0.0, "linear_solver": "iccg"}])
+def test_split_jacobian_matches_full_assembly(box_mesh, overrides):
+    law = lane().SoftIronLaw(_bh_table())
+    settings = dict(overrides)
+    solver = settings.pop("linear_solver", "ams")
+    engine = _engine(box_mesh, solver, **settings)
+    solution = _random_solution(engine, 3)
+    b, magnitude = engine._element_flux(solution)
+    engine._set_material(law.reluctivity(magnitude), law=law, b_iron=b, magnitude=magnitude)
+    split, refresh = engine._split_jacobian()
+    refresh()
+    full = engine._jacobian()
+    with ng.TaskManager():
+        full.Assemble()
+    s_values, s_columns, s_offsets = (np.asarray(x) for x in split.mat.CSR())
+    f_values, f_columns, f_offsets = (np.asarray(x) for x in full.mat.CSR())
+    np.testing.assert_array_equal(s_columns, f_columns)
+    np.testing.assert_array_equal(s_offsets, f_offsets)
+    np.testing.assert_allclose(s_values, f_values, rtol=0, atol=1e-12 * np.max(np.abs(f_values)))
+    # A second state: refresh must follow the in-place coefficient update.
+    solution.vec.data *= 3.0
+    b, magnitude = engine._element_flux(solution)
+    engine._set_material(law.reluctivity(magnitude), law=law, b_iron=b, magnitude=magnitude)
+    refresh()
+    with ng.TaskManager():
+        full.Assemble()
+    np.testing.assert_allclose(np.asarray(split.mat.CSR()[0]), np.asarray(full.mat.CSR()[0]),
+                               rtol=0, atol=1e-12 * np.max(np.abs(f_values)))
+
+
+def test_split_jacobian_keeps_the_newton_field(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-6, max_iterations=30,
+                   max_halvings=4, observation=_points(), inexact_linear=True)
+    split, split_stats, _ = _engine(box_mesh, "ams").run_newton(law, **options)
+    full, full_stats, _ = _engine(box_mesh, "ams", split_jacobian=False).run_newton(law, **options)
+    assert split_stats["converged"] and full_stats["converged"]
+    np.testing.assert_allclose(split, full, rtol=1e-6, atol=1e-9)
+
+
+def test_reused_ams_hierarchy_keeps_the_newton_field(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-6, max_iterations=30,
+                   max_halvings=4, observation=_points(), inexact_linear=True)
+    fresh, fresh_stats, _ = _engine(box_mesh, "ams").run_newton(law, **options)
+    engine = _engine(box_mesh, "ams", ams_reuse_hierarchy=True)
+    reused, stats, _ = engine.run_newton(law, **options)
+    assert fresh_stats["converged"] and stats["converged"]
+    refreshes = [row["hierarchy_refreshes"] for row in stats["history"]]
+    assert refreshes == list(range(len(refreshes)))  # first step builds, later steps refresh
+    np.testing.assert_allclose(reused, fresh, rtol=1e-6, atol=1e-9)
+    with pytest.raises(ValueError, match="ams_reuse_hierarchy"):
+        _engine(box_mesh, "iccg", gauge_epsilon=0.0, ams_reuse_hierarchy=True)
+
+
+def test_vectorised_iron_centroids_match_the_element_loop(box_mesh):
+    numbers, centroids = lane().iron_elements_with_centroids(box_mesh)
+    expected_numbers, expected = [], []
+    for element in box_mesh.Elements(ng.VOL):
+        if str(element.mat) != "iron":
+            continue
+        pts = [box_mesh.vertices[v.nr].point for v in element.vertices]
+        expected_numbers.append(int(element.nr))
+        expected.append([sum(float(p[k]) for p in pts) / len(pts) for k in range(3)])
+    np.testing.assert_array_equal(numbers, np.asarray(expected_numbers))
+    np.testing.assert_array_equal(centroids, np.asarray(expected))
+
+
+def test_total_a_zero_source_shortcut_is_bit_identical(box_mesh):
+    module = lane()
+    x, y = ng.x, ng.y
+    current = 1e7 * ng.CF((-2*y*(x-.5)*(.7-x), -(1.2-2*x)*(.01-y*y), 0))
+    settings = dict(linear_solver="direct", cg_tolerance=1e-9, cg_max_iterations=1000,
+                    ams_num_smooth=1, source_projection_order=2)
+    law = module.SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-6, max_iterations=20,
+                   max_halvings=4, observation=_points())
+    # Form-assembled residual on both sides: this pins the zero-source shortcut
+    # alone (the direct SPD factorisation of the eps=1e-6 gauged Jacobian is
+    # round-off sensitive, so both runs must follow the same arithmetic).
+    # One thread: the parallel sparsecholesky factorisation reorders its sums
+    # run to run, so even two identical runs differ by 1e-13 with TaskManager.
+    fast = module.TotalAP1Box(box_mesh, current, algebraic_residual=False, **settings)
+    generic = module.TotalAP1Box(box_mesh, current, zero_source=False,
+                                 algebraic_residual=False, **settings)
+    assert fast.zero_source and not generic.zero_source
+    np.testing.assert_array_equal(fast.source_at_centroids, generic.source_at_centroids)
+    ng.SetNumThreads(1)
+    try:
+        field_fast, stats_fast, _ = fast.run_newton(law, **options)
+        field_generic, stats_generic, _ = generic.run_newton(law, **options)
+    finally:
+        ng.SetNumThreads(int(os.environ.get("RADIA_TEST_NGSOLVE_THREADS", os.cpu_count() or 1)))
+    assert stats_fast["converged"] and stats_generic["converged"]
+    np.testing.assert_array_equal(field_fast, field_generic)
+
+
+def test_linear_floor_follows_the_nonlinear_target_and_keeps_the_field(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-5, max_iterations=30,
+                   max_halvings=6, observation=_points(), inexact_linear=True)
+    reference, _, _ = _engine(box_mesh, "ams").run_newton(law, linear_floor=False, **options)
+    engine = _engine(box_mesh, "ams")
+    field, stats, _ = engine.run_newton(law, **options)
+    assert stats["converged"] and stats["linear_floor"] is True
+    assert stats["final_residual_relative"] <= options["newton_tolerance"]
+    first = stats["history"][0]
+    for row in stats["history"]:
+        # floor = 0.1 * newton_tolerance * |R_0| / |R_k|; relative residual_relative is |R_k|/|R_0|
+        assert row["linear_floor"] == pytest.approx(0.1 * 1e-8 / row["residual_relative"], rel=1e-12)
+        forcing = max(1e-9, min(0.01, 0.1 * row["residual_relative"]))
+        assert row["linear_tolerance"] == pytest.approx(min(0.5, max(forcing, row["linear_floor"])))
+        assert row["relative_residual"] <= row["linear_tolerance"]
+    assert first["linear_floor"] == pytest.approx(1e-9)
+    assert engine.cg_tolerance == 1e-9
+    np.testing.assert_allclose(field, reference, rtol=1e-6, atol=1e-8)
+
+
+def test_ungauged_iccg_newton_reaches_a_tight_rule_with_the_floor(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    engine = _engine(box_mesh, "iccg", gauge_epsilon=0.0, cg_tolerance=1e-8,
+                     cg_max_iterations=5000)
+    field, stats, _ = engine.run_newton(law, newton_tolerance=1e-9, tolerance=2e-6,
+                                        max_iterations=40, max_halvings=6,
+                                        observation=_points(), inexact_linear=True)
+    assert stats["converged"]
+    assert stats["final_residual_relative"] <= 1e-9
+    assert stats["final_relative_change"] <= 2e-6
+    assert all(row["relative_residual"] <= row["linear_tolerance"] for row in stats["history"])
+    gauged, _, _ = _engine(box_mesh, "ams").run_newton(
+        law, newton_tolerance=1e-9, tolerance=2e-6, max_iterations=40, max_halvings=6,
+        observation=_points(), inexact_linear=True)
+    np.testing.assert_allclose(field, gauged, rtol=2e-5, atol=1e-8)
+
+
+def test_inexact_newton_restores_tolerance_after_linear_failure(box_mesh, monkeypatch):
+    engine = _engine(box_mesh, "ams")
+    def fail(*args, **kwargs):
+        assert engine.cg_tolerance == 0.01
+        raise RuntimeError("injected linear failure")
+    monkeypatch.setattr(engine, "_solve_linear", fail)
+    with pytest.raises(RuntimeError, match="injected linear failure"):
+        engine.run_newton(lane().SoftIronLaw(_bh_table()), inexact_linear=True,
+                          newton_tolerance=1e-8, tolerance=1e-5,
+                          max_iterations=30, max_halvings=6, observation=_points())
+    assert engine.cg_tolerance == 1e-9
+
+
+def test_periodic_true_residual_checks_preserve_linear_field(box_mesh):
+    engine = _engine(box_mesh, "ams", cg_check_interval=4)
+    field, stats, _ = engine.run_linear(1000., _points())
+    expected, _, _ = _engine(box_mesh, "direct").run_linear(1000., _points())
+    np.testing.assert_allclose(field, expected, rtol=1e-6, atol=1e-8)
+    row = stats["history"][0]
+    assert row["relative_residual"] <= engine.cg_tolerance
+    assert row["true_residual_checks"] < row["cg_iterations"]
+    for interval in (0, -1, 1.5, True):
+        with pytest.raises(ValueError, match="positive integer"):
+            _engine(box_mesh, "ams", cg_check_interval=interval)
+    with pytest.raises(ValueError, match="requires AMS"):
+        _engine(box_mesh, "direct", cg_check_interval=4)
+    with pytest.raises(RuntimeError, match="true relative residual"):
+        _engine(box_mesh, "ams", cg_check_interval=100,
+                cg_max_iterations=2).run_linear(1000., _points())
+
+
+def test_native_ams_diagnostics_preserve_the_linear_solution(box_mesh):
+    engine = _engine(box_mesh, "ams", ams_print_level=1)
+    field, stats, _ = engine.run_linear(1000., _points())
+    expected, _, _ = _engine(box_mesh, "ams").run_linear(1000., _points())
+    np.testing.assert_allclose(field, expected, rtol=1e-8, atol=1e-9)
+    assert stats["history"][0]["relative_residual"] <= engine.cg_tolerance
+    assert engine.describe()["ams_print_level"] == 1
+    with pytest.raises(ValueError, match="ams_print_level"):
+        _engine(box_mesh, "ams", ams_print_level=2)
+
+
+@pytest.mark.parametrize("sweeps", [1, 2])
+def test_scalar_amg_reinitializes_every_cycle(box_mesh, sweeps):
+    import radia.sparsesolv_ngsolve as native
+    fes = ng.H1(box_mesh, order=1, dirichlet="outer")
+    u, v = fes.TnT()
+    a = ng.BilinearForm(fes, symmetric=True)
+    a += (ng.grad(u) * ng.grad(v) + u * v) * ng.dx
+    with ng.TaskManager():
+        a.Assemble()
+    pre = native.CompactAMGPreconditioner(a.mat, fes.FreeDofs(),
+                                         min_coarse=10, num_smooth=sweeps)
+    rng = np.random.default_rng(731)
+    b, c, pb, pc = [a.mat.CreateRowVector() for _ in range(4)]
+    free = np.array(list(fes.FreeDofs()), dtype=bool)
+    b.FV().NumPy()[:] = rng.normal(size=fes.ndof) * free
+    c.FV().NumPy()[:] = rng.normal(size=fes.ndof) * free
+    with ng.TaskManager():
+        pre.Mult(b, pb)
+        pre.Mult(c, pc)
+    expected = pb.FV().NumPy().copy()
+    assert np.dot(b.FV().NumPy(), expected) > 0.
+    assert np.dot(b.FV().NumPy(), pc.FV().NumPy()) == pytest.approx(
+        np.dot(c.FV().NumPy(), expected), rel=1e-10, abs=1e-10)
+    pb[:] = 123.
+    with ng.TaskManager():
+        pre.Mult(b, pb)
+    np.testing.assert_allclose(pb.FV().NumPy(), expected, rtol=1e-12, atol=1e-12)
+    b[:] = 0.
+    with ng.TaskManager():
+        pre.Mult(b, pb)
+    np.testing.assert_array_equal(pb.FV().NumPy(), 0.)

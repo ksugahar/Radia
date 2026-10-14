@@ -1,0 +1,3917 @@
+{
+  "schema": "radia.ams-sparse-resident-study.v1",
+  "accepted": true,
+  "a100_used": false,
+  "timing_classification": "Windows build-host diagnostics; not formal performance acceptance",
+  "cases": [
+    {
+      "schema": "radia.ams-nonlinear-sparse-resident.v2",
+      "accepted": true,
+      "host": "Windows",
+      "source_commit": "325a6a1bad4ff504326e46a90fd51981a28802e8",
+      "timing_classification": "build-host diagnostic; not formal performance acceptance",
+      "a100_used": false,
+      "material": "SI: H=(1+4*|B|^2)B; positive unit gauge mass",
+      "excitation": "manufactured FE interpolation of 0.3*(sin(pi*y)*sin(pi*z),sin(pi*x)*sin(pi*z),sin(pi*x)*sin(pi*y))",
+      "gpu_runtime_python_adapter_required": false,
+      "python_role": "independent FE oracle and validation input generation",
+      "routes": [
+        1,
+        2,
+        3,
+        3,
+        2,
+        1
+      ],
+      "cpu_threads": 8,
+      "gpu_host_setup_threads": 8,
+      "assembly_storage": "sparse CSR plus 6 mapped curl vectors and 36 CSR slots per tetrahedron",
+      "gpu_residency": "nonlinear CSR buffers and cached AMS/PCG workspace; explicit tangent download only for hierarchy rebuild",
+      "timing_boundary": "numeric FE input to final solution; shared FE preparation and MATLAB startup separately; GPU total includes upload",
+      "nonlinear_tolerance": 1e-09,
+      "linear_true_tolerance": 1e-10,
+      "cpu_cg_internal_tolerance": 1e-12,
+      "independent_parity_limit": 1e-07,
+      "gpu_binary_sha256": "dd3b1e3af1a07115359610fc28d050c4034791a9223d0cb7481cc32fbf9aa4d1",
+      "versions": {
+        "ngsolve": "6.2.2607",
+        "numpy": "2.5.4",
+        "scipy": "1.18.1",
+        "matlabengine": "26.1"
+      },
+      "mesh_sha256": "aef4d403e3ed7ac7632db3c48a65719db7f0a0c843d3cd227b2a01ea886b8a8f",
+      "mesh_route": "explicit Netgen alternative -> checked six-boundary .vol -> NGSolve reload",
+      "dofs": 260,
+      "free_dofs": 110,
+      "elements": 151,
+      "csr_nonzeros": 3278,
+      "map_assembly_relative_error": 1.1581799803642405e-16,
+      "shared_fe_setup_seconds": 0.1739707999950042,
+      "cpu_samples": [
+        {
+          "route": 1,
+          "total_seconds": 0.5170987000019522,
+          "setup_seconds": 0.3477567999798339,
+          "assembly_seconds": 0.04913099999248516,
+          "solve_seconds": 0.04952209998737089,
+          "builds": 7,
+          "history": [
+            [
+              0,
+              1.0,
+              14,
+              1.0091057707479454e-12,
+              0.125
+            ],
+            [
+              1,
+              2.931431134583224,
+              18,
+              1.0206184129326738e-13,
+              1.0
+            ],
+            [
+              2,
+              0.7492117525701034,
+              17,
+              4.162730479338447e-13,
+              1.0
+            ],
+            [
+              3,
+              0.1280919528935725,
+              18,
+              1.2500230032801178e-13,
+              1.0
+            ],
+            [
+              4,
+              0.013940669581430568,
+              17,
+              9.70422719334535e-13,
+              1.0
+            ],
+            [
+              5,
+              0.0005987205150625029,
+              18,
+              2.1801006165212665e-13,
+              1.0
+            ],
+            [
+              6,
+              1.7535346629567804e-06,
+              17,
+              6.032566799013764e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6931651284378752e-11,
+          "threads": 8
+        },
+        {
+          "route": 2,
+          "total_seconds": 0.2747765999956755,
+          "setup_seconds": 0.052226299987523817,
+          "assembly_seconds": 0.04715319997922052,
+          "solve_seconds": 0.1021405999927083,
+          "builds": 1,
+          "history": [
+            [
+              0,
+              1.0,
+              14,
+              1.0089615560616483e-12,
+              0.125
+            ],
+            [
+              1,
+              2.9314311345832254,
+              82,
+              1.0663867641005434e-12,
+              1.0
+            ],
+            [
+              2,
+              0.7492117525697086,
+              49,
+              1.2991436338718064e-12,
+              1.0
+            ],
+            [
+              3,
+              0.1280919528934229,
+              52,
+              1.1100464350444777e-12,
+              1.0
+            ],
+            [
+              4,
+              0.013940669581407501,
+              55,
+              9.22115530300675e-13,
+              1.0
+            ],
+            [
+              5,
+              0.0005987205150583771,
+              56,
+              7.70941789514716e-13,
+              1.0
+            ],
+            [
+              6,
+              1.7535346631363986e-06,
+              56,
+              4.1859139579914436e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6931532917752003e-11,
+          "threads": 8
+        },
+        {
+          "route": 3,
+          "total_seconds": 0.27453960001002997,
+          "setup_seconds": 0.09747590000915807,
+          "assembly_seconds": 0.045889200031524524,
+          "solve_seconds": 0.060978499983320944,
+          "builds": 2,
+          "history": [
+            [
+              0,
+              1.0,
+              14,
+              1.0091230720662806e-12,
+              0.125
+            ],
+            [
+              1,
+              2.9314311345832254,
+              82,
+              1.0388100994154615e-12,
+              1.0
+            ],
+            [
+              2,
+              0.7492117525696762,
+              17,
+              4.1625216349048134e-13,
+              1.0
+            ],
+            [
+              3,
+              0.12809195289343403,
+              21,
+              2.1378629706274084e-13,
+              1.0
+            ],
+            [
+              4,
+              0.013940669581391686,
+              23,
+              6.439280770431901e-13,
+              1.0
+            ],
+            [
+              5,
+              0.0005987205150540338,
+              24,
+              2.624330953179917e-13,
+              1.0
+            ],
+            [
+              6,
+              1.7535346629185672e-06,
+              24,
+              1.8819600955414104e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6931711972844836e-11,
+          "threads": 8
+        },
+        {
+          "route": 3,
+          "total_seconds": 0.2762596999964444,
+          "setup_seconds": 0.10538760000781622,
+          "assembly_seconds": 0.04589529997610953,
+          "solve_seconds": 0.0568823000357952,
+          "builds": 2,
+          "history": [
+            [
+              0,
+              1.0,
+              14,
+              1.0092420326735671e-12,
+              0.125
+            ],
+            [
+              1,
+              2.931431134583225,
+              83,
+              9.485110609179555e-13,
+              1.0
+            ],
+            [
+              2,
+              0.7492117525698128,
+              17,
+              4.162604706954424e-13,
+              1.0
+            ],
+            [
+              3,
+              0.12809195289346992,
+              21,
+              2.1373768588586743e-13,
+              1.0
+            ],
+            [
+              4,
+              0.0139406695814062,
+              23,
+              6.439907855447677e-13,
+              1.0
+            ],
+            [
+              5,
+              0.0005987205150562838,
+              24,
+              2.624041892008922e-13,
+              1.0
+            ],
+            [
+              6,
+              1.7535346629970797e-06,
+              24,
+              1.882105468412441e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6931749701636614e-11,
+          "threads": 8
+        },
+        {
+          "route": 2,
+          "total_seconds": 0.2648371999966912,
+          "setup_seconds": 0.048132299998542294,
+          "assembly_seconds": 0.04563439998310059,
+          "solve_seconds": 0.10155210002267268,
+          "builds": 1,
+          "history": [
+            [
+              0,
+              1.0,
+              14,
+              1.0089968738430084e-12,
+              0.125
+            ],
+            [
+              1,
+              2.931431134583225,
+              82,
+              1.3873285962888906e-12,
+              1.0
+            ],
+            [
+              2,
+              0.7492117525697183,
+              49,
+              1.3015441335217753e-12,
+              1.0
+            ],
+            [
+              3,
+              0.1280919528934251,
+              53,
+              5.699705394137264e-13,
+              1.0
+            ],
+            [
+              4,
+              0.013940669581406856,
+              55,
+              8.417888157729008e-13,
+              1.0
+            ],
+            [
+              5,
+              0.0005987205150579319,
+              56,
+              7.583662003749033e-13,
+              1.0
+            ],
+            [
+              6,
+              1.7535346630985337e-06,
+              56,
+              7.753254461752012e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6931649513351896e-11,
+          "threads": 8
+        },
+        {
+          "route": 1,
+          "total_seconds": 0.5260683999949833,
+          "setup_seconds": 0.3508546000084607,
+          "assembly_seconds": 0.050112299984903075,
+          "solve_seconds": 0.04282150001381524,
+          "builds": 7,
+          "history": [
+            [
+              0,
+              1.0,
+              14,
+              1.008988057686943e-12,
+              0.125
+            ],
+            [
+              1,
+              2.931431134583224,
+              18,
+              1.0200378899373068e-13,
+              1.0
+            ],
+            [
+              2,
+              0.7492117525701032,
+              17,
+              4.163331604302991e-13,
+              1.0
+            ],
+            [
+              3,
+              0.1280919528935722,
+              18,
+              1.2497296228511966e-13,
+              1.0
+            ],
+            [
+              4,
+              0.013940669581430457,
+              17,
+              9.704370054537215e-13,
+              1.0
+            ],
+            [
+              5,
+              0.0005987205150624436,
+              18,
+              2.180137321416952e-13,
+              1.0
+            ],
+            [
+              6,
+              1.753534663132167e-06,
+              17,
+              6.032090220327604e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6931465288894004e-11,
+          "threads": 8
+        }
+      ],
+      "input_sha256": "10ed9dcc56ed362e44b1877ac2688db3c38683d28e4dafe136e36ad8f63d9b9e",
+      "matlab_startup_seconds": 10.544297100001131,
+      "resident_contract": {
+        "accepted": 1,
+        "stale_handle_rejected": 1,
+        "wrong_type_rejected": 1,
+        "failed_update_preserves_context": 1,
+        "caller_source_release_safe": 1,
+        "workspace_survives_update": 1,
+        "native_buffer_allocations_during_solve": 0
+      },
+      "gpu": [
+        {
+          "route": 1,
+          "sample": 1,
+          "total_seconds": 0.49711399999999994,
+          "compute_seconds": 0.4236154,
+          "upload_seconds": 0.0734986,
+          "input_owned_bytes": 91820,
+          "device_memory_sample_delta_bytes": 16777216,
+          "setup_seconds": 0.1908794,
+          "assembly_seconds": 0.038984899999999996,
+          "solve_seconds": 0.0862422,
+          "builds": 7,
+          "history": [
+            [
+              1.0,
+              1.0,
+              11.0,
+              9.808680889646385e-11,
+              0.125
+            ],
+            [
+              2.0,
+              2.9314311346814783,
+              14.0,
+              3.522374830050354e-11,
+              1.0
+            ],
+            [
+              3.0,
+              0.7492117526622581,
+              14.0,
+              2.028014530044419e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.1280919529197386,
+              14.0,
+              2.786815150918063e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.013940669586792473,
+              14.0,
+              4.532515430246394e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0005987205153595534,
+              14.0,
+              5.259865911780315e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.7535346656064882e-06,
+              14.0,
+              3.4575407096912626e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6931652001898086e-11,
+          "workspace_bytes": 10424,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 7,
+          "resident_hierarchy_builds": 7,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 1.5732838142172217e-14,
+          "independent_nonlinear_residual": 1.6931781359956617e-11,
+          "B_relative_RMS_error": 2.769201138936579e-16
+        },
+        {
+          "route": 2,
+          "sample": 2,
+          "total_seconds": 0.30814810000000004,
+          "compute_seconds": 0.2346495,
+          "upload_seconds": 0.0734986,
+          "input_owned_bytes": 91820,
+          "device_memory_sample_delta_bytes": 8388608,
+          "setup_seconds": 0.0165494,
+          "assembly_seconds": 0.0057962000000000005,
+          "solve_seconds": 0.1913719,
+          "builds": 1,
+          "history": [
+            [
+              1.0,
+              1.0,
+              11.0,
+              9.808679330818913e-11,
+              0.125
+            ],
+            [
+              2.0,
+              2.9314311346814805,
+              68.0,
+              8.024609920616356e-11,
+              1.0
+            ],
+            [
+              3.0,
+              0.7492117526055476,
+              40.0,
+              9.675547232533235e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.1280919528806183,
+              41.0,
+              9.90311312043116e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.013940669576647495,
+              44.0,
+              7.016233192779492e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0005987205142160463,
+              44.0,
+              9.448261991720338e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.7535346540693046e-06,
+              45.0,
+              5.997868567553946e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 1.69316765518071e-11,
+          "workspace_bytes": 10424,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 7,
+          "resident_hierarchy_builds": 1,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 9.07688388601402e-15,
+          "independent_nonlinear_residual": 1.6931743058906602e-11,
+          "B_relative_RMS_error": 2.8134671012699347e-16
+        },
+        {
+          "route": 3,
+          "sample": 3,
+          "total_seconds": 0.2355808,
+          "compute_seconds": 0.1620822,
+          "upload_seconds": 0.0734986,
+          "input_owned_bytes": 91820,
+          "device_memory_sample_delta_bytes": 8388608,
+          "setup_seconds": 0.034786399999999995,
+          "assembly_seconds": 0.006196899999999999,
+          "solve_seconds": 0.1039065,
+          "builds": 2,
+          "history": [
+            [
+              1.0,
+              1.0,
+              11.0,
+              9.808688413589788e-11,
+              0.125
+            ],
+            [
+              2.0,
+              2.931431134681479,
+              68.0,
+              7.721453057399399e-11,
+              1.0
+            ],
+            [
+              3.0,
+              0.7492117526000124,
+              14.0,
+              2.0280117925417215e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.12809195289129985,
+              17.0,
+              2.479164410117723e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.013940669576202595,
+              19.0,
+              3.238415890739672e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0005987205142471279,
+              19.0,
+              5.0886230255858156e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.753534653767404e-06,
+              19.0,
+              3.927400255075656e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6931710240985444e-11,
+          "workspace_bytes": 10424,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 7,
+          "resident_hierarchy_builds": 2,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 1.6282796145491424e-14,
+          "independent_nonlinear_residual": 1.6931637544237172e-11,
+          "B_relative_RMS_error": 2.6639403661609973e-16
+        },
+        {
+          "route": 3,
+          "sample": 4,
+          "total_seconds": 0.2257615,
+          "compute_seconds": 0.1522629,
+          "upload_seconds": 0.0734986,
+          "input_owned_bytes": 91820,
+          "device_memory_sample_delta_bytes": 8388608,
+          "setup_seconds": 0.0298758,
+          "assembly_seconds": 0.005429799999999999,
+          "solve_seconds": 0.1012623,
+          "builds": 2,
+          "history": [
+            [
+              1.0,
+              1.0,
+              11.0,
+              9.808688413589788e-11,
+              0.125
+            ],
+            [
+              2.0,
+              2.931431134681479,
+              67.0,
+              9.959009154183787e-11,
+              1.0
+            ],
+            [
+              3.0,
+              0.7492117526099269,
+              14.0,
+              2.028012276467791e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.12809195289366254,
+              17.0,
+              2.4791731789783176e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.013940669575557472,
+              19.0,
+              3.238406821089193e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0005987205140863595,
+              19.0,
+              5.0886182505590443e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.7535346527945221e-06,
+              19.0,
+              3.927397456715996e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6931544676146974e-11,
+          "workspace_bytes": 10424,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 7,
+          "resident_hierarchy_builds": 2,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 1.1084626205837268e-14,
+          "independent_nonlinear_residual": 1.6931472003382668e-11,
+          "B_relative_RMS_error": 2.648491061292807e-16
+        },
+        {
+          "route": 2,
+          "sample": 5,
+          "total_seconds": 0.2947284,
+          "compute_seconds": 0.2212298,
+          "upload_seconds": 0.0734986,
+          "input_owned_bytes": 91820,
+          "device_memory_sample_delta_bytes": 8388608,
+          "setup_seconds": 0.0183944,
+          "assembly_seconds": 0.0056602000000000015,
+          "solve_seconds": 0.1786234,
+          "builds": 1,
+          "history": [
+            [
+              1.0,
+              1.0,
+              11.0,
+              9.808680407749409e-11,
+              0.125
+            ],
+            [
+              2.0,
+              2.931431134681479,
+              68.0,
+              7.86890230260082e-11,
+              1.0
+            ],
+            [
+              3.0,
+              0.7492117526058317,
+              40.0,
+              9.829313806505169e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.12809195287921793,
+              41.0,
+              9.903450852517575e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.013940669576617921,
+              44.0,
+              7.015415159945613e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.000598720514223694,
+              44.0,
+              9.447729109837698e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.7535346539497023e-06,
+              45.0,
+              5.997701762909362e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6931655445760296e-11,
+          "workspace_bytes": 10424,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 7,
+          "resident_hierarchy_builds": 1,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 1.2779838737840819e-14,
+          "independent_nonlinear_residual": 1.6931687608176052e-11,
+          "B_relative_RMS_error": 2.643746375106979e-16
+        },
+        {
+          "route": 1,
+          "sample": 6,
+          "total_seconds": 0.2876824,
+          "compute_seconds": 0.2141838,
+          "upload_seconds": 0.0734986,
+          "input_owned_bytes": 91820,
+          "device_memory_sample_delta_bytes": 8388608,
+          "setup_seconds": 0.1290281,
+          "assembly_seconds": 0.0056787,
+          "solve_seconds": 0.06255490000000001,
+          "builds": 7,
+          "history": [
+            [
+              1.0,
+              1.0,
+              11.0,
+              9.808688413589788e-11,
+              0.125
+            ],
+            [
+              2.0,
+              2.931431134681479,
+              14.0,
+              3.522383698262035e-11,
+              1.0
+            ],
+            [
+              3.0,
+              0.7492117526622581,
+              14.0,
+              2.028013202267195e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.12809195291973877,
+              14.0,
+              2.7868217714060663e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.01394066958679254,
+              14.0,
+              4.532515096562298e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0005987205153595139,
+              14.0,
+              5.259869104086032e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.7535346655818755e-06,
+              14.0,
+              3.4575389783613054e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 1.693161090850654e-11,
+          "workspace_bytes": 10424,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 7,
+          "resident_hierarchy_builds": 7,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 1.143980961728777e-14,
+          "independent_nonlinear_residual": 1.6931638818644243e-11,
+          "B_relative_RMS_error": 2.568016973474917e-16
+        }
+      ],
+      "gpu_device": {
+        "name": "Quadro RTX 5000",
+        "compute_capability": "7.5",
+        "total_memory": 17179541504.0
+      },
+      "native_build": {
+        "matlab": "26.1.0.3346908 (R2026a) Update 5",
+        "source_commit": "70b77979151cf69c57b815bce62145d5ee7e93fd",
+        "source_dirty": false,
+        "sha256": {
+          "build-ams-cuda/_radia_ams_snapshot.pyd": "77985406de196f26233a83de0363b321b8dbddf31ee4c33b414498d0e52f4020",
+          "build-ams-cuda/_radia_ams_cpu_reference.pyd": "594963180e5316e32209e46d72206e507978a0a57b9c6f746557e8b74dd1072b",
+          "build-ams-cuda/radia_cuda_ams.mexw64": "dd3b1e3af1a07115359610fc28d050c4034791a9223d0cb7481cc32fbf9aa4d1"
+        },
+        "source_sha256": {
+          "packages/radia-gpu/native/ams_snapshot_module.cpp": "cce1561d96b01b538e50862270f7bab44735155de2da70ca47a82702762979ec",
+          "packages/radia-gpu/native/ams_cpu_reference.cpp": "16916da7e5f0eedfd515bad959d3d207d7507083a932d937bc5ccc7411b014f5",
+          "packages/radia-gpu/native/ams_resident.cuh": "e99fc27edcc235d828bb67742a795fd88ab249dc9968557f0cafdcb17e372421",
+          "packages/radia-gpu/native/ams_nonlinear.cuh": "076e6d61259572594ac32a0e1fd05d471ac8e0341e51cff83d124eb96e7cecd1",
+          "packages/radia-gpu/native/radia_cuda_ams.cu": "26cd99c367228186e0ed83429fd7854b9634eefbbdea91e6e2c0e135308c8f81",
+          "packages/radia-gpu/native/ams_matlab_setup.cpp": "52e1d4c4697b47721826423d66503b895a15d9700e48337f9e6bcacc57c92960",
+          "packages/radia-gpu/native/ams_setup_gpu.hpp": "37ae39c14fcfae623acc879106a41f5983e2b4cc1248eeec9f5d9c061dac2439",
+          "packages/radia-gpu/native/ams_setup_gpu.cuh": "333ef9ce8329c502891e41eb1d6d12c8cb96f2dfa3fa7c07d0e83b872718b13d",
+          "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "fca70b5fd962aeac93aaf8b226c1d072848317f411a7de16a6fc2035d2c9e80a",
+          "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "a76fa599ae308b33370f8ee088dac7582ac3d706cace8975a895e63e48a60b4e",
+          "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp": "c78d9ef2596f95cd3c85f9d0e801c567622aa232c168bbce72de6e857646a121",
+          "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "a285fe6ca8448e7548365000e71e21e0ad8cd71769ae5e9792024398442709cb",
+          "packages/radia-gpu/tools/build_ams_cuda.py": "2cdf79227986813603a91b30b5bfd4afa9a7d0c5b93fcb3cdff6c22c80f8cc41",
+          "Build.ps1": "d07bc37be18b411066c7779a585da4a16b488bc5343ab6cffb0c6758fb945de5"
+        },
+        "no_cpu_solver_fallback": true,
+        "python_runtime_adapter_required": false,
+        "python_dll_indirect_dependency_permitted": true
+      },
+      "summary": [
+        {
+          "route": 1,
+          "cpu_total_median_seconds": 0.5215835499984678,
+          "gpu_total_median_seconds": 0.3923982,
+          "cpu_over_gpu": 1.329220037193004,
+          "gpu_hierarchy_builds": [
+            7,
+            7
+          ]
+        },
+        {
+          "route": 2,
+          "cpu_total_median_seconds": 0.26980689999618335,
+          "gpu_total_median_seconds": 0.30143825,
+          "cpu_over_gpu": 0.8950652413759147,
+          "gpu_hierarchy_builds": [
+            1,
+            1
+          ]
+        },
+        {
+          "route": 3,
+          "cpu_total_median_seconds": 0.2753996500032372,
+          "gpu_total_median_seconds": 0.23067115,
+          "cpu_over_gpu": 1.193905913258928,
+          "gpu_hierarchy_builds": [
+            2,
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "schema": "radia.ams-nonlinear-sparse-resident.v2",
+      "accepted": true,
+      "host": "Windows",
+      "source_commit": "325a6a1bad4ff504326e46a90fd51981a28802e8",
+      "timing_classification": "build-host diagnostic; not formal performance acceptance",
+      "a100_used": false,
+      "material": "SI: H=(1+4*|B|^2)B; positive unit gauge mass",
+      "excitation": "manufactured FE interpolation of 0.3*(sin(pi*y)*sin(pi*z),sin(pi*x)*sin(pi*z),sin(pi*x)*sin(pi*y))",
+      "gpu_runtime_python_adapter_required": false,
+      "python_role": "independent FE oracle and validation input generation",
+      "routes": [
+        1,
+        2,
+        3,
+        3,
+        2,
+        1
+      ],
+      "cpu_threads": 8,
+      "gpu_host_setup_threads": 8,
+      "assembly_storage": "sparse CSR plus 6 mapped curl vectors and 36 CSR slots per tetrahedron",
+      "gpu_residency": "nonlinear CSR buffers and cached AMS/PCG workspace; explicit tangent download only for hierarchy rebuild",
+      "timing_boundary": "numeric FE input to final solution; shared FE preparation and MATLAB startup separately; GPU total includes upload",
+      "nonlinear_tolerance": 1e-09,
+      "linear_true_tolerance": 1e-10,
+      "cpu_cg_internal_tolerance": 1e-12,
+      "independent_parity_limit": 1e-07,
+      "gpu_binary_sha256": "dd3b1e3af1a07115359610fc28d050c4034791a9223d0cb7481cc32fbf9aa4d1",
+      "versions": {
+        "ngsolve": "6.2.2607",
+        "numpy": "2.5.4",
+        "scipy": "1.18.1",
+        "matlabengine": "26.1"
+      },
+      "mesh_sha256": "c229bd75ddd0ecbd51830bb93fc12d5ce13e88b07c1052bfd9c87282e28e46ff",
+      "mesh_route": "explicit Netgen alternative -> checked six-boundary .vol -> NGSolve reload",
+      "dofs": 5326,
+      "free_dofs": 3919,
+      "elements": 3937,
+      "csr_nonzeros": 79006,
+      "map_assembly_relative_error": 1.2390216509652421e-16,
+      "shared_fe_setup_seconds": 1.108626599991112,
+      "cpu_samples": [
+        {
+          "route": 1,
+          "total_seconds": 0.9578500000061467,
+          "setup_seconds": 0.4870821999938926,
+          "assembly_seconds": 0.1707557000190718,
+          "solve_seconds": 0.19988210003066342,
+          "builds": 7,
+          "history": [
+            [
+              0,
+              1.0,
+              19,
+              1.0669787665857343e-12,
+              0.125
+            ],
+            [
+              1,
+              3.3836960779801433,
+              27,
+              4.333128060402875e-13,
+              1.0
+            ],
+            [
+              2,
+              1.0726555414657353,
+              26,
+              4.310943313026081e-13,
+              1.0
+            ],
+            [
+              3,
+              0.21430111542989513,
+              25,
+              6.78916943691884e-13,
+              1.0
+            ],
+            [
+              4,
+              0.03084620802796979,
+              25,
+              7.445743609200632e-13,
+              1.0
+            ],
+            [
+              5,
+              0.0018489912137733594,
+              25,
+              8.452599997101611e-13,
+              1.0
+            ],
+            [
+              6,
+              1.1120969647514573e-05,
+              25,
+              6.056841925033277e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 7.023576888641786e-10,
+          "threads": 8
+        },
+        {
+          "route": 2,
+          "total_seconds": 0.9196149000053992,
+          "setup_seconds": 0.07104959999560378,
+          "assembly_seconds": 0.16970269999001175,
+          "solve_seconds": 0.5775419999845326,
+          "builds": 1,
+          "history": [
+            [
+              0,
+              1.0,
+              19,
+              1.066821516788364e-12,
+              0.125
+            ],
+            [
+              1,
+              3.3836960779801464,
+              150,
+              2.3654065355781417e-12,
+              1.0
+            ],
+            [
+              2,
+              1.0726555414659769,
+              107,
+              2.094113578981448e-12,
+              1.0
+            ],
+            [
+              3,
+              0.21430111543011912,
+              97,
+              1.6316752117179777e-12,
+              1.0
+            ],
+            [
+              4,
+              0.0308462080280258,
+              97,
+              1.3247437694922797e-12,
+              1.0
+            ],
+            [
+              5,
+              0.0018489912137826814,
+              96,
+              1.3457358396007099e-12,
+              1.0
+            ],
+            [
+              6,
+              1.1120969647801656e-05,
+              96,
+              9.23645553265278e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 7.02357727096175e-10,
+          "threads": 8
+        },
+        {
+          "route": 3,
+          "total_seconds": 0.7210742000024766,
+          "setup_seconds": 0.137409300004947,
+          "assembly_seconds": 0.16834879999805707,
+          "solve_seconds": 0.3134245999972336,
+          "builds": 2,
+          "history": [
+            [
+              0,
+              1.0,
+              19,
+              1.0668717339867403e-12,
+              0.125
+            ],
+            [
+              1,
+              3.383696077980147,
+              150,
+              2.365204465226835e-12,
+              1.0
+            ],
+            [
+              2,
+              1.0726555414659757,
+              26,
+              4.3112201590702495e-13,
+              1.0
+            ],
+            [
+              3,
+              0.2143011154300273,
+              29,
+              7.07726465318306e-13,
+              1.0
+            ],
+            [
+              4,
+              0.030846208028019975,
+              32,
+              8.835947445562547e-13,
+              1.0
+            ],
+            [
+              5,
+              0.0018489912137830053,
+              33,
+              5.481143914242249e-13,
+              1.0
+            ],
+            [
+              6,
+              1.1120969647764885e-05,
+              33,
+              3.9396699932326854e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 7.023576700385783e-10,
+          "threads": 8
+        },
+        {
+          "route": 3,
+          "total_seconds": 0.725750199999311,
+          "setup_seconds": 0.14095000000088476,
+          "assembly_seconds": 0.17029339997679926,
+          "solve_seconds": 0.3129581999965012,
+          "builds": 2,
+          "history": [
+            [
+              0,
+              1.0,
+              19,
+              1.066785075006143e-12,
+              0.125
+            ],
+            [
+              1,
+              3.3836960779801437,
+              150,
+              2.3654026200031218e-12,
+              1.0
+            ],
+            [
+              2,
+              1.0726555414659733,
+              26,
+              4.3109818637288333e-13,
+              1.0
+            ],
+            [
+              3,
+              0.21430111543002672,
+              29,
+              7.078326458044981e-13,
+              1.0
+            ],
+            [
+              4,
+              0.03084620802801987,
+              32,
+              8.836380574044154e-13,
+              1.0
+            ],
+            [
+              5,
+              0.0018489912137830524,
+              33,
+              5.481437855652032e-13,
+              1.0
+            ],
+            [
+              6,
+              1.1120969647697186e-05,
+              33,
+              3.9391029140750514e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 7.023576625978882e-10,
+          "threads": 8
+        },
+        {
+          "route": 2,
+          "total_seconds": 0.9158032999985153,
+          "setup_seconds": 0.06727689999388531,
+          "assembly_seconds": 0.17283399998268578,
+          "solve_seconds": 0.5734523000137415,
+          "builds": 1,
+          "history": [
+            [
+              0,
+              1.0,
+              19,
+              1.0669335228679208e-12,
+              0.125
+            ],
+            [
+              1,
+              3.3836960779801437,
+              150,
+              2.364832112929474e-12,
+              1.0
+            ],
+            [
+              2,
+              1.0726555414659702,
+              107,
+              2.093403806660674e-12,
+              1.0
+            ],
+            [
+              3,
+              0.21430111543011973,
+              97,
+              1.6384204691269868e-12,
+              1.0
+            ],
+            [
+              4,
+              0.03084620802802633,
+              97,
+              1.3246914896579508e-12,
+              1.0
+            ],
+            [
+              5,
+              0.0018489912137826196,
+              96,
+              1.345660390726134e-12,
+              1.0
+            ],
+            [
+              6,
+              1.1120969647793535e-05,
+              96,
+              9.256452365780994e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 7.023576610749646e-10,
+          "threads": 8
+        },
+        {
+          "route": 1,
+          "total_seconds": 0.951140299992403,
+          "setup_seconds": 0.482766699991771,
+          "assembly_seconds": 0.17016820001299493,
+          "solve_seconds": 0.19799799998872913,
+          "builds": 7,
+          "history": [
+            [
+              0,
+              1.0,
+              19,
+              1.0669656300072192e-12,
+              0.125
+            ],
+            [
+              1,
+              3.383696077980146,
+              27,
+              4.3334067206776634e-13,
+              1.0
+            ],
+            [
+              2,
+              1.0726555414657382,
+              26,
+              4.3106228392748705e-13,
+              1.0
+            ],
+            [
+              3,
+              0.21430111542989555,
+              25,
+              6.789473407878708e-13,
+              1.0
+            ],
+            [
+              4,
+              0.030846208027970144,
+              25,
+              7.445927256202202e-13,
+              1.0
+            ],
+            [
+              5,
+              0.001848991213773414,
+              25,
+              8.452762972705705e-13,
+              1.0
+            ],
+            [
+              6,
+              1.1120969647372956e-05,
+              25,
+              6.05660449946805e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 7.023577145807304e-10,
+          "threads": 8
+        }
+      ],
+      "input_sha256": "a9d84d51f15827411cb2a770679f83aceeaf0b3d4df7161715197cd4036991bd",
+      "matlab_startup_seconds": 10.418464900008985,
+      "gpu": [
+        {
+          "route": 1,
+          "sample": 1,
+          "total_seconds": 1.0742193,
+          "compute_seconds": 0.9977764,
+          "upload_seconds": 0.0764429,
+          "input_owned_bytes": 2293132,
+          "device_memory_sample_delta_bytes": 23099160,
+          "setup_seconds": 0.5581170999999999,
+          "assembly_seconds": 0.0093906,
+          "solve_seconds": 0.3511432,
+          "builds": 7,
+          "history": [
+            [
+              1.0,
+              1.0,
+              16.0,
+              2.6603497428437788e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.3836960779833,
+              22.0,
+              3.683678456982681e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.0726555414703656,
+              21.0,
+              4.524103498287932e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.21430111542981642,
+              20.0,
+              7.840329552758518e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.030846208028868418,
+              20.0,
+              8.464709800756479e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0018489912139233657,
+              20.0,
+              7.91524110040359e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.1120969656688606e-05,
+              20.0,
+              5.50799770022845e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 7.023576241579795e-10,
+          "workspace_bytes": 213064,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 7,
+          "resident_hierarchy_builds": 7,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 3.950452560333722e-14,
+          "independent_nonlinear_residual": 7.023576393552276e-10,
+          "B_relative_RMS_error": 6.952730159234795e-16
+        },
+        {
+          "route": 2,
+          "sample": 2,
+          "total_seconds": 1.2989758,
+          "compute_seconds": 1.2225329,
+          "upload_seconds": 0.0764429,
+          "input_owned_bytes": 2293132,
+          "device_memory_sample_delta_bytes": 10920064,
+          "setup_seconds": 0.056527,
+          "assembly_seconds": 0.0063349,
+          "solve_seconds": 1.1375164,
+          "builds": 1,
+          "history": [
+            [
+              1.0,
+              1.0,
+              16.0,
+              2.6603522818152584e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.3836960779833016,
+              128.0,
+              9.303112493791203e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.0726555414624752,
+              90.0,
+              8.393936702992676e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.21430111542627117,
+              81.0,
+              7.997569745201581e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.03084620802632463,
+              80.0,
+              8.341759600286803e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0018489912135297231,
+              79.0,
+              8.764352204188859e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.1120969640963127e-05,
+              78.0,
+              8.268138510795848e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 7.023577092220883e-10,
+          "workspace_bytes": 213064,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 7,
+          "resident_hierarchy_builds": 1,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 3.801843902020047e-14,
+          "independent_nonlinear_residual": 7.023576863970406e-10,
+          "B_relative_RMS_error": 7.690216955498062e-16
+        },
+        {
+          "route": 3,
+          "sample": 3,
+          "total_seconds": 0.7910524999999999,
+          "compute_seconds": 0.7146096,
+          "upload_seconds": 0.0764429,
+          "input_owned_bytes": 2293132,
+          "device_memory_sample_delta_bytes": 13483040,
+          "setup_seconds": 0.11474480000000001,
+          "assembly_seconds": 0.0058709,
+          "solve_seconds": 0.577117,
+          "builds": 2,
+          "history": [
+            [
+              1.0,
+              1.0,
+              16.0,
+              2.6603655559184738e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.383696077983299,
+              128.0,
+              8.643854876159662e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.0726555414635592,
+              21.0,
+              4.524105751644744e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.21430111542481406,
+              24.0,
+              4.70185302778564e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.030846208026109295,
+              26.0,
+              8.077294152602238e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0018489912134209026,
+              27.0,
+              4.475420626895043e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.1120969640334558e-05,
+              26.0,
+              7.920874911935121e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 7.023576604866955e-10,
+          "workspace_bytes": 213064,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 7,
+          "resident_hierarchy_builds": 2,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 3.790208455588567e-14,
+          "independent_nonlinear_residual": 7.02357675189198e-10,
+          "B_relative_RMS_error": 7.343384782615538e-16
+        },
+        {
+          "route": 3,
+          "sample": 4,
+          "total_seconds": 0.8529622,
+          "compute_seconds": 0.7765193,
+          "upload_seconds": 0.0764429,
+          "input_owned_bytes": 2293132,
+          "device_memory_sample_delta_bytes": 11652676,
+          "setup_seconds": 0.1052504,
+          "assembly_seconds": 0.011144999999999999,
+          "solve_seconds": 0.6356963,
+          "builds": 2,
+          "history": [
+            [
+              1.0,
+              1.0,
+              16.0,
+              2.660346792830577e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.3836960779833,
+              128.0,
+              8.547248482954705e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.0726555414632388,
+              21.0,
+              4.5241085524965035e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.2143011154247472,
+              24.0,
+              4.701851810982056e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.030846208026108966,
+              26.0,
+              8.07729547835534e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.001848991213421068,
+              27.0,
+              4.475419686345373e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.1120969640318476e-05,
+              26.0,
+              7.920877144198678e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 7.023576835908032e-10,
+          "workspace_bytes": 213064,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 7,
+          "resident_hierarchy_builds": 2,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 3.656571944069658e-14,
+          "independent_nonlinear_residual": 7.02357692353699e-10,
+          "B_relative_RMS_error": 7.388027387723041e-16
+        },
+        {
+          "route": 2,
+          "sample": 5,
+          "total_seconds": 1.3431884,
+          "compute_seconds": 1.2667455,
+          "upload_seconds": 0.0764429,
+          "input_owned_bytes": 2293132,
+          "device_memory_sample_delta_bytes": 10968632,
+          "setup_seconds": 0.073547,
+          "assembly_seconds": 0.008394599999999999,
+          "solve_seconds": 1.1635611,
+          "builds": 1,
+          "history": [
+            [
+              1.0,
+              1.0,
+              16.0,
+              2.6603590099120573e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.3836960779833016,
+              128.0,
+              9.034562365692954e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.0726555414560912,
+              90.0,
+              8.579425844913674e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.21430111542309693,
+              81.0,
+              7.997517995682606e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.030846208026335115,
+              80.0,
+              8.329361333030048e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0018489912135326897,
+              79.0,
+              8.764111222897478e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.1120969640952532e-05,
+              78.0,
+              8.268535934845383e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 7.023576570119028e-10,
+          "workspace_bytes": 213064,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 7,
+          "resident_hierarchy_builds": 1,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 3.676674214342908e-14,
+          "independent_nonlinear_residual": 7.023576769672117e-10,
+          "B_relative_RMS_error": 7.663530409055174e-16
+        },
+        {
+          "route": 1,
+          "sample": 6,
+          "total_seconds": 0.9359388,
+          "compute_seconds": 0.8594959,
+          "upload_seconds": 0.0764429,
+          "input_owned_bytes": 2293132,
+          "device_memory_sample_delta_bytes": 11610568,
+          "setup_seconds": 0.4751622,
+          "assembly_seconds": 0.011535499999999999,
+          "solve_seconds": 0.3428246,
+          "builds": 7,
+          "history": [
+            [
+              1.0,
+              1.0,
+              16.0,
+              2.6603512238848737e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.3836960779833003,
+              22.0,
+              3.683680617848044e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.0726555414703671,
+              21.0,
+              4.5241094902788444e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.2143011154298169,
+              20.0,
+              7.840327810523423e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.03084620802886864,
+              20.0,
+              8.464712684062832e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0018489912139233306,
+              20.0,
+              7.915243785105855e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.112096965668528e-05,
+              20.0,
+              5.507997145860268e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 7.023577214877023e-10,
+          "workspace_bytes": 213064,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 7,
+          "resident_hierarchy_builds": 7,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 3.506862531834856e-14,
+          "independent_nonlinear_residual": 7.023577297163741e-10,
+          "B_relative_RMS_error": 7.119543987832828e-16
+        }
+      ],
+      "gpu_device": {
+        "name": "Quadro RTX 5000",
+        "compute_capability": "7.5",
+        "total_memory": 17179541504.0
+      },
+      "native_build": {
+        "matlab": "26.1.0.3346908 (R2026a) Update 5",
+        "source_commit": "70b77979151cf69c57b815bce62145d5ee7e93fd",
+        "source_dirty": false,
+        "sha256": {
+          "build-ams-cuda/_radia_ams_snapshot.pyd": "77985406de196f26233a83de0363b321b8dbddf31ee4c33b414498d0e52f4020",
+          "build-ams-cuda/_radia_ams_cpu_reference.pyd": "594963180e5316e32209e46d72206e507978a0a57b9c6f746557e8b74dd1072b",
+          "build-ams-cuda/radia_cuda_ams.mexw64": "dd3b1e3af1a07115359610fc28d050c4034791a9223d0cb7481cc32fbf9aa4d1"
+        },
+        "source_sha256": {
+          "packages/radia-gpu/native/ams_snapshot_module.cpp": "cce1561d96b01b538e50862270f7bab44735155de2da70ca47a82702762979ec",
+          "packages/radia-gpu/native/ams_cpu_reference.cpp": "16916da7e5f0eedfd515bad959d3d207d7507083a932d937bc5ccc7411b014f5",
+          "packages/radia-gpu/native/ams_resident.cuh": "e99fc27edcc235d828bb67742a795fd88ab249dc9968557f0cafdcb17e372421",
+          "packages/radia-gpu/native/ams_nonlinear.cuh": "076e6d61259572594ac32a0e1fd05d471ac8e0341e51cff83d124eb96e7cecd1",
+          "packages/radia-gpu/native/radia_cuda_ams.cu": "26cd99c367228186e0ed83429fd7854b9634eefbbdea91e6e2c0e135308c8f81",
+          "packages/radia-gpu/native/ams_matlab_setup.cpp": "52e1d4c4697b47721826423d66503b895a15d9700e48337f9e6bcacc57c92960",
+          "packages/radia-gpu/native/ams_setup_gpu.hpp": "37ae39c14fcfae623acc879106a41f5983e2b4cc1248eeec9f5d9c061dac2439",
+          "packages/radia-gpu/native/ams_setup_gpu.cuh": "333ef9ce8329c502891e41eb1d6d12c8cb96f2dfa3fa7c07d0e83b872718b13d",
+          "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "fca70b5fd962aeac93aaf8b226c1d072848317f411a7de16a6fc2035d2c9e80a",
+          "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "a76fa599ae308b33370f8ee088dac7582ac3d706cace8975a895e63e48a60b4e",
+          "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp": "c78d9ef2596f95cd3c85f9d0e801c567622aa232c168bbce72de6e857646a121",
+          "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "a285fe6ca8448e7548365000e71e21e0ad8cd71769ae5e9792024398442709cb",
+          "packages/radia-gpu/tools/build_ams_cuda.py": "2cdf79227986813603a91b30b5bfd4afa9a7d0c5b93fcb3cdff6c22c80f8cc41",
+          "Build.ps1": "d07bc37be18b411066c7779a585da4a16b488bc5343ab6cffb0c6758fb945de5"
+        },
+        "no_cpu_solver_fallback": true,
+        "python_runtime_adapter_required": false,
+        "python_dll_indirect_dependency_permitted": true
+      },
+      "summary": [
+        {
+          "route": 1,
+          "cpu_total_median_seconds": 0.9544951499992749,
+          "gpu_total_median_seconds": 1.00507905,
+          "cpu_over_gpu": 0.9496717198505679,
+          "gpu_hierarchy_builds": [
+            7,
+            7
+          ]
+        },
+        {
+          "route": 2,
+          "cpu_total_median_seconds": 0.9177091000019573,
+          "gpu_total_median_seconds": 1.3210821,
+          "cpu_over_gpu": 0.6946646994929061,
+          "gpu_hierarchy_builds": [
+            1,
+            1
+          ]
+        },
+        {
+          "route": 3,
+          "cpu_total_median_seconds": 0.7234122000008938,
+          "gpu_total_median_seconds": 0.82200735,
+          "cpu_over_gpu": 0.8800556345401215,
+          "gpu_hierarchy_builds": [
+            2,
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "schema": "radia.ams-nonlinear-sparse-resident.v2",
+      "accepted": true,
+      "host": "Windows",
+      "source_commit": "0eba5e3c4431bb8d59fe152d4481c03037cbdb67",
+      "timing_classification": "build-host diagnostic; not formal performance acceptance",
+      "a100_used": false,
+      "material": "SI: H=(1+4*|B|^2)B; positive unit gauge mass",
+      "excitation": "manufactured FE interpolation of 0.3*(sin(pi*y)*sin(pi*z),sin(pi*x)*sin(pi*z),sin(pi*x)*sin(pi*y))",
+      "gpu_runtime_python_adapter_required": false,
+      "python_role": "independent FE oracle and validation input generation",
+      "routes": [
+        1,
+        2,
+        3,
+        3,
+        2,
+        1
+      ],
+      "cpu_threads": 8,
+      "gpu_host_setup_threads": 8,
+      "assembly_storage": "sparse CSR plus 6 mapped curl vectors and 36 CSR slots per tetrahedron",
+      "gpu_residency": "nonlinear CSR buffers and cached AMS/PCG workspace; explicit tangent download only for hierarchy rebuild",
+      "near_roundoff_line_search": "energy decrement <=64*eps*max(1,abs(E)): require 10 percent residual decrease or final nonlinear gate",
+      "timing_boundary": "numeric FE input to final solution; shared FE preparation and MATLAB startup separately; GPU total includes upload",
+      "nonlinear_tolerance": 1e-09,
+      "linear_true_tolerance": 1e-10,
+      "cpu_cg_internal_tolerance": 1e-12,
+      "independent_parity_limit": 1e-07,
+      "gpu_binary_sha256": "dd3b1e3af1a07115359610fc28d050c4034791a9223d0cb7481cc32fbf9aa4d1",
+      "versions": {
+        "ngsolve": "6.2.2607",
+        "numpy": "2.5.4",
+        "scipy": "1.18.1",
+        "matlabengine": "26.1"
+      },
+      "mesh_sha256": "76cb4c23209da9284b8b44c1b130fe2b5305864c3e917093fbe15dfdcc33ed5d",
+      "mesh_route": "explicit Netgen alternative -> checked six-boundary .vol -> NGSolve reload",
+      "dofs": 86735,
+      "free_dofs": 73847,
+      "elements": 68765,
+      "csr_nonzeros": 1350281,
+      "map_assembly_relative_error": 1.231274613805774e-16,
+      "shared_fe_setup_seconds": 16.625256600003922,
+      "cpu_samples": [
+        {
+          "route": 1,
+          "total_seconds": 5.614607999988948,
+          "setup_seconds": 1.7367907000007108,
+          "assembly_seconds": 1.7310702000104357,
+          "solve_seconds": 1.4373618000099668,
+          "builds": 8,
+          "history": [
+            [
+              0,
+              1.0,
+              25,
+              1.7179157402555262e-12,
+              0.125
+            ],
+            [
+              1,
+              3.070752934432589,
+              35,
+              1.2327425567168684e-12,
+              1.0
+            ],
+            [
+              2,
+              1.1197327257522778,
+              34,
+              1.0373619578742819e-12,
+              1.0
+            ],
+            [
+              3,
+              0.23614098133649805,
+              33,
+              1.0462385453650338e-12,
+              1.0
+            ],
+            [
+              4,
+              0.03590817466434455,
+              33,
+              7.293174161047593e-13,
+              1.0
+            ],
+            [
+              5,
+              0.0021665420772195394,
+              33,
+              7.658018879904838e-13,
+              1.0
+            ],
+            [
+              6,
+              1.3560773642798669e-05,
+              33,
+              5.202612728594775e-13,
+              1.0
+            ],
+            [
+              7,
+              1.2323676402052216e-09,
+              32,
+              6.385982853589805e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6176231968597688e-14,
+          "threads": 8
+        },
+        {
+          "route": 2,
+          "total_seconds": 7.768636199994944,
+          "setup_seconds": 0.22947440001007635,
+          "assembly_seconds": 1.6564937999937683,
+          "solve_seconds": 5.242152200022247,
+          "builds": 1,
+          "history": [
+            [
+              0,
+              1.0,
+              25,
+              1.7181524119626108e-12,
+              0.125
+            ],
+            [
+              1,
+              3.070752934432592,
+              196,
+              2.9540102782612654e-12,
+              1.0
+            ],
+            [
+              2,
+              1.1197327257525325,
+              140,
+              2.255344022863054e-12,
+              1.0
+            ],
+            [
+              3,
+              0.23614098133653197,
+              129,
+              1.6002616445945559e-12,
+              1.0
+            ],
+            [
+              4,
+              0.03590817466432686,
+              128,
+              1.417857030098514e-12,
+              1.0
+            ],
+            [
+              5,
+              0.002166542077214432,
+              127,
+              1.274142165582745e-12,
+              1.0
+            ],
+            [
+              6,
+              1.3560773642586287e-05,
+              126,
+              9.708696369123266e-13,
+              1.0
+            ],
+            [
+              7,
+              1.2323677050613373e-09,
+              122,
+              9.228584764740826e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6267066904057305e-14,
+          "threads": 8
+        },
+        {
+          "route": 3,
+          "total_seconds": 5.153781599990907,
+          "setup_seconds": 0.42682919999060687,
+          "assembly_seconds": 1.652121699997224,
+          "solve_seconds": 2.427942600043025,
+          "builds": 2,
+          "history": [
+            [
+              0,
+              1.0,
+              25,
+              1.7180548868544804e-12,
+              0.125
+            ],
+            [
+              1,
+              3.07075293443259,
+              196,
+              3.064433129043419e-12,
+              1.0
+            ],
+            [
+              2,
+              1.1197327257525644,
+              34,
+              1.0373596043623257e-12,
+              1.0
+            ],
+            [
+              3,
+              0.2361409813365412,
+              38,
+              1.3340845898830418e-12,
+              1.0
+            ],
+            [
+              4,
+              0.03590817466433098,
+              42,
+              8.059199609802831e-13,
+              1.0
+            ],
+            [
+              5,
+              0.0021665420772158024,
+              43,
+              6.073256193915468e-13,
+              1.0
+            ],
+            [
+              6,
+              1.35607736428244e-05,
+              42,
+              8.256682788559313e-13,
+              1.0
+            ],
+            [
+              7,
+              1.232367522525545e-09,
+              42,
+              4.2607935922898215e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6456352444421234e-14,
+          "threads": 8
+        },
+        {
+          "route": 3,
+          "total_seconds": 5.166527299996233,
+          "setup_seconds": 0.41854590000002645,
+          "assembly_seconds": 1.6631623999855947,
+          "solve_seconds": 2.449686700012535,
+          "builds": 2,
+          "history": [
+            [
+              0,
+              1.0,
+              25,
+              1.7179392301047168e-12,
+              0.125
+            ],
+            [
+              1,
+              3.07075293443259,
+              196,
+              2.879149042465908e-12,
+              1.0
+            ],
+            [
+              2,
+              1.1197327257524585,
+              34,
+              1.0373603345728499e-12,
+              1.0
+            ],
+            [
+              3,
+              0.23614098133651998,
+              38,
+              1.334063486740546e-12,
+              1.0
+            ],
+            [
+              4,
+              0.03590817466433068,
+              42,
+              8.059474913546587e-13,
+              1.0
+            ],
+            [
+              5,
+              0.002166542077215953,
+              43,
+              6.073299972702531e-13,
+              1.0
+            ],
+            [
+              6,
+              1.3560773642680528e-05,
+              42,
+              8.256528429001141e-13,
+              1.0
+            ],
+            [
+              7,
+              1.232367599492102e-09,
+              42,
+              4.261055439767149e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6131355788233517e-14,
+          "threads": 8
+        },
+        {
+          "route": 2,
+          "total_seconds": 7.658653100006632,
+          "setup_seconds": 0.21683829999528825,
+          "assembly_seconds": 1.6741889000259107,
+          "solve_seconds": 5.146747600010713,
+          "builds": 1,
+          "history": [
+            [
+              0,
+              1.0,
+              25,
+              1.7180380985654763e-12,
+              0.125
+            ],
+            [
+              1,
+              3.07075293443259,
+              196,
+              2.901739155810147e-12,
+              1.0
+            ],
+            [
+              2,
+              1.1197327257524434,
+              140,
+              2.254884558993257e-12,
+              1.0
+            ],
+            [
+              3,
+              0.23614098133651396,
+              129,
+              1.6002775213327167e-12,
+              1.0
+            ],
+            [
+              4,
+              0.035908174664326865,
+              128,
+              1.3580509549386833e-12,
+              1.0
+            ],
+            [
+              5,
+              0.0021665420772144957,
+              127,
+              1.2730488740840135e-12,
+              1.0
+            ],
+            [
+              6,
+              1.3560773642662969e-05,
+              126,
+              9.70331765590828e-13,
+              1.0
+            ],
+            [
+              7,
+              1.2323675319238913e-09,
+              122,
+              9.232528943106101e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 1.625171781012567e-14,
+          "threads": 8
+        },
+        {
+          "route": 1,
+          "total_seconds": 5.4845211999927415,
+          "setup_seconds": 1.7313674000179162,
+          "assembly_seconds": 1.6514600999944378,
+          "solve_seconds": 1.4207730000198353,
+          "builds": 8,
+          "history": [
+            [
+              0,
+              1.0,
+              25,
+              1.7179682127433734e-12,
+              0.125
+            ],
+            [
+              1,
+              3.0707529344325892,
+              35,
+              1.232755848626509e-12,
+              1.0
+            ],
+            [
+              2,
+              1.1197327257522776,
+              34,
+              1.0373690861050994e-12,
+              1.0
+            ],
+            [
+              3,
+              0.2361409813364981,
+              33,
+              1.0461685778002973e-12,
+              1.0
+            ],
+            [
+              4,
+              0.03590817466434466,
+              33,
+              7.293182344439434e-13,
+              1.0
+            ],
+            [
+              5,
+              0.002166542077219537,
+              33,
+              7.657760097964861e-13,
+              1.0
+            ],
+            [
+              6,
+              1.3560773642792485e-05,
+              33,
+              5.202597460293109e-13,
+              1.0
+            ],
+            [
+              7,
+              1.2323675800875016e-09,
+              32,
+              6.385691181079619e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 1.6078847348122035e-14,
+          "threads": 8
+        }
+      ],
+      "input_sha256": "a1ec41a83dca2af5b3f257dc72a3e2371c853e33ce1bf47df3d0b07a4d046b17",
+      "matlab_startup_seconds": 10.582714100004523,
+      "gpu": [
+        {
+          "route": 1,
+          "sample": 1,
+          "total_seconds": 3.9362689,
+          "compute_seconds": 3.8407866,
+          "upload_seconds": 0.0954823,
+          "input_owned_bytes": 39595936,
+          "device_memory_sample_delta_bytes": 113534284,
+          "setup_seconds": 2.9074775000000006,
+          "assembly_seconds": 0.056347,
+          "solve_seconds": 0.7877738000000001,
+          "builds": 8,
+          "history": [
+            [
+              1.0,
+              1.0,
+              21.0,
+              5.863499003924708e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.0707529344155664,
+              28.0,
+              9.279837859269869e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.1197327257523473,
+              28.0,
+              5.855263114619045e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.23614098133690706,
+              27.0,
+              5.3851876164637626e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.03590817466474315,
+              26.0,
+              9.928788748460526e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0021665420774324195,
+              27.0,
+              6.040126376437297e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.3560773638759323e-05,
+              26.0,
+              6.609398213023495e-11,
+              1.0
+            ],
+            [
+              8.0,
+              1.2323676071908763e-09,
+              25.0,
+              8.291287182982907e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 1.4062036140252636e-14,
+          "workspace_bytes": 3469424,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 8,
+          "resident_hierarchy_builds": 8,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 9.384784830385369e-14,
+          "independent_nonlinear_residual": 1.5256319427858335e-14,
+          "B_relative_RMS_error": 1.8511513847154147e-15
+        },
+        {
+          "route": 2,
+          "sample": 2,
+          "total_seconds": 3.4772108,
+          "compute_seconds": 3.3817285,
+          "upload_seconds": 0.0954823,
+          "input_owned_bytes": 39595936,
+          "device_memory_sample_delta_bytes": 69939440,
+          "setup_seconds": 0.3460746,
+          "assembly_seconds": 0.04897510000000001,
+          "solve_seconds": 2.9475898,
+          "builds": 1,
+          "history": [
+            [
+              1.0,
+              1.0,
+              21.0,
+              5.863497548592374e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.070752934415565,
+              169.0,
+              9.088491871205286e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.1197327257580316,
+              118.0,
+              9.2410113297383e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.23614098133975778,
+              108.0,
+              8.50865389618758e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.03590817466551641,
+              106.0,
+              9.780720174753828e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.002166542077358401,
+              105.0,
+              9.081331188494335e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.3560773642006603e-05,
+              103.0,
+              8.380210873463276e-11,
+              1.0
+            ],
+            [
+              8.0,
+              1.2323676380983889e-09,
+              98.0,
+              9.995921848735367e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 1.4177222795705414e-14,
+          "workspace_bytes": 3469424,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 8,
+          "resident_hierarchy_builds": 1,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 9.345723864682315e-14,
+          "independent_nonlinear_residual": 1.5257475311114378e-14,
+          "B_relative_RMS_error": 1.8565693077469764e-15
+        },
+        {
+          "route": 3,
+          "sample": 3,
+          "total_seconds": 2.2336409,
+          "compute_seconds": 2.1381586,
+          "upload_seconds": 0.0954823,
+          "input_owned_bytes": 39595936,
+          "device_memory_sample_delta_bytes": 80733344,
+          "setup_seconds": 0.6724504,
+          "assembly_seconds": 0.051080799999999996,
+          "solve_seconds": 1.3875247,
+          "builds": 2,
+          "history": [
+            [
+              1.0,
+              1.0,
+              21.0,
+              5.863513790870471e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.0707529344155637,
+              169.0,
+              9.081293450257587e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.1197327257590308,
+              28.0,
+              5.855267912222248e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.23614098133753458,
+              31.0,
+              9.982025401138224e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.035908174665437026,
+              34.0,
+              9.768968438226911e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0021665420773816363,
+              35.0,
+              6.707315700745075e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.356077364198515e-05,
+              34.0,
+              8.69066909051501e-11,
+              1.0
+            ],
+            [
+              8.0,
+              1.2323676570123405e-09,
+              33.0,
+              9.016289458460852e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 1.4036943137992122e-14,
+          "workspace_bytes": 3469424,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 8,
+          "resident_hierarchy_builds": 2,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 9.652479980070954e-14,
+          "independent_nonlinear_residual": 1.5229182966164652e-14,
+          "B_relative_RMS_error": 1.834918133097354e-15
+        },
+        {
+          "route": 3,
+          "sample": 4,
+          "total_seconds": 2.2276329,
+          "compute_seconds": 2.1321506,
+          "upload_seconds": 0.0954823,
+          "input_owned_bytes": 39595936,
+          "device_memory_sample_delta_bytes": 79402728,
+          "setup_seconds": 0.6690467,
+          "assembly_seconds": 0.0482608,
+          "solve_seconds": 1.38958,
+          "builds": 2,
+          "history": [
+            [
+              1.0,
+              1.0,
+              21.0,
+              5.863519936435697e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.0707529344155655,
+              169.0,
+              9.37360399486056e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.11973272575723,
+              28.0,
+              5.855266097105183e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.2361409813372766,
+              31.0,
+              9.982022862869934e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.035908174665480984,
+              34.0,
+              9.768970349891305e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.002166542077388487,
+              35.0,
+              6.707316395726587e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.356077364201277e-05,
+              34.0,
+              8.690664860133296e-11,
+              1.0
+            ],
+            [
+              8.0,
+              1.2323676250102831e-09,
+              33.0,
+              9.016253064959029e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 1.4030812967216452e-14,
+          "workspace_bytes": 3469424,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 8,
+          "resident_hierarchy_builds": 2,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 9.537168451693444e-14,
+          "independent_nonlinear_residual": 1.5222967896908684e-14,
+          "B_relative_RMS_error": 1.842393687874364e-15
+        },
+        {
+          "route": 2,
+          "sample": 5,
+          "total_seconds": 3.4590778,
+          "compute_seconds": 3.3635955,
+          "upload_seconds": 0.0954823,
+          "input_owned_bytes": 39595936,
+          "device_memory_sample_delta_bytes": 67392044,
+          "setup_seconds": 0.3269429,
+          "assembly_seconds": 0.0493626,
+          "solve_seconds": 2.9590222000000006,
+          "builds": 1,
+          "history": [
+            [
+              1.0,
+              1.0,
+              21.0,
+              5.863509780469241e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.0707529344155655,
+              169.0,
+              9.265739995561246e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.1197327257587635,
+              118.0,
+              9.242543346883567e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.23614098134040581,
+              108.0,
+              8.63219498274944e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.03590817466557215,
+              106.0,
+              9.77172877234311e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0021665420773617243,
+              105.0,
+              9.080452413517817e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.3560773642022771e-05,
+              103.0,
+              8.380317629838334e-11,
+              1.0
+            ],
+            [
+              8.0,
+              1.2323676047405117e-09,
+              99.0,
+              8.095584671224481e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 1.4064155467409435e-14,
+          "workspace_bytes": 3469424,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 8,
+          "resident_hierarchy_builds": 1,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 9.308904427552703e-14,
+          "independent_nonlinear_residual": 1.5253024805490042e-14,
+          "B_relative_RMS_error": 1.836754536551512e-15
+        },
+        {
+          "route": 1,
+          "sample": 6,
+          "total_seconds": 3.5649621,
+          "compute_seconds": 3.4694798,
+          "upload_seconds": 0.0954823,
+          "input_owned_bytes": 39595936,
+          "device_memory_sample_delta_bytes": 76976108,
+          "setup_seconds": 2.6303602,
+          "assembly_seconds": 0.04840939999999999,
+          "solve_seconds": 0.7650129000000001,
+          "builds": 8,
+          "history": [
+            [
+              1.0,
+              1.0,
+              21.0,
+              5.863511350789652e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.0707529344155637,
+              28.0,
+              9.279841514764722e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.1197327257523464,
+              28.0,
+              5.855268244352063e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.23614098133690675,
+              27.0,
+              5.3851888173898146e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.035908174664743,
+              26.0,
+              9.928788263027843e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0021665420774323735,
+              27.0,
+              6.040127183399033e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.3560773638727486e-05,
+              26.0,
+              6.609399352600175e-11,
+              1.0
+            ],
+            [
+              8.0,
+              1.232367645609344e-09,
+              25.0,
+              8.291222237722288e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 1.3872331869134818e-14,
+          "workspace_bytes": 3469424,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 8,
+          "resident_hierarchy_builds": 8,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 9.460499952389548e-14,
+          "independent_nonlinear_residual": 1.4863867896575413e-14,
+          "B_relative_RMS_error": 1.8553490241299462e-15
+        }
+      ],
+      "gpu_device": {
+        "name": "Quadro RTX 5000",
+        "compute_capability": "7.5",
+        "total_memory": 17179541504.0
+      },
+      "native_build": {
+        "matlab": "26.1.0.3346908 (R2026a) Update 5",
+        "source_commit": "70b77979151cf69c57b815bce62145d5ee7e93fd",
+        "source_dirty": false,
+        "sha256": {
+          "build-ams-cuda/_radia_ams_snapshot.pyd": "77985406de196f26233a83de0363b321b8dbddf31ee4c33b414498d0e52f4020",
+          "build-ams-cuda/_radia_ams_cpu_reference.pyd": "594963180e5316e32209e46d72206e507978a0a57b9c6f746557e8b74dd1072b",
+          "build-ams-cuda/radia_cuda_ams.mexw64": "dd3b1e3af1a07115359610fc28d050c4034791a9223d0cb7481cc32fbf9aa4d1"
+        },
+        "source_sha256": {
+          "packages/radia-gpu/native/ams_snapshot_module.cpp": "cce1561d96b01b538e50862270f7bab44735155de2da70ca47a82702762979ec",
+          "packages/radia-gpu/native/ams_cpu_reference.cpp": "16916da7e5f0eedfd515bad959d3d207d7507083a932d937bc5ccc7411b014f5",
+          "packages/radia-gpu/native/ams_resident.cuh": "e99fc27edcc235d828bb67742a795fd88ab249dc9968557f0cafdcb17e372421",
+          "packages/radia-gpu/native/ams_nonlinear.cuh": "076e6d61259572594ac32a0e1fd05d471ac8e0341e51cff83d124eb96e7cecd1",
+          "packages/radia-gpu/native/radia_cuda_ams.cu": "26cd99c367228186e0ed83429fd7854b9634eefbbdea91e6e2c0e135308c8f81",
+          "packages/radia-gpu/native/ams_matlab_setup.cpp": "52e1d4c4697b47721826423d66503b895a15d9700e48337f9e6bcacc57c92960",
+          "packages/radia-gpu/native/ams_setup_gpu.hpp": "37ae39c14fcfae623acc879106a41f5983e2b4cc1248eeec9f5d9c061dac2439",
+          "packages/radia-gpu/native/ams_setup_gpu.cuh": "333ef9ce8329c502891e41eb1d6d12c8cb96f2dfa3fa7c07d0e83b872718b13d",
+          "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "fca70b5fd962aeac93aaf8b226c1d072848317f411a7de16a6fc2035d2c9e80a",
+          "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "a76fa599ae308b33370f8ee088dac7582ac3d706cace8975a895e63e48a60b4e",
+          "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp": "c78d9ef2596f95cd3c85f9d0e801c567622aa232c168bbce72de6e857646a121",
+          "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "a285fe6ca8448e7548365000e71e21e0ad8cd71769ae5e9792024398442709cb",
+          "packages/radia-gpu/tools/build_ams_cuda.py": "2cdf79227986813603a91b30b5bfd4afa9a7d0c5b93fcb3cdff6c22c80f8cc41",
+          "Build.ps1": "d07bc37be18b411066c7779a585da4a16b488bc5343ab6cffb0c6758fb945de5"
+        },
+        "no_cpu_solver_fallback": true,
+        "python_runtime_adapter_required": false,
+        "python_dll_indirect_dependency_permitted": true
+      },
+      "summary": [
+        {
+          "route": 1,
+          "cpu_total_median_seconds": 5.549564599990845,
+          "gpu_total_median_seconds": 3.7506155,
+          "cpu_over_gpu": 1.4796410349156945,
+          "gpu_hierarchy_builds": [
+            8,
+            8
+          ]
+        },
+        {
+          "route": 2,
+          "cpu_total_median_seconds": 7.713644650000788,
+          "gpu_total_median_seconds": 3.4681443,
+          "cpu_over_gpu": 2.2241417838354614,
+          "gpu_hierarchy_builds": [
+            1,
+            1
+          ]
+        },
+        {
+          "route": 3,
+          "cpu_total_median_seconds": 5.16015444999357,
+          "gpu_total_median_seconds": 2.2306369000000004,
+          "cpu_over_gpu": 2.313309911619219,
+          "gpu_hierarchy_builds": [
+            2,
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "schema": "radia.ams-nonlinear-sparse-resident.v2",
+      "accepted": true,
+      "host": "Windows",
+      "source_commit": "0eba5e3c4431bb8d59fe152d4481c03037cbdb67",
+      "timing_classification": "build-host diagnostic; not formal performance acceptance",
+      "a100_used": false,
+      "material": "SI: H=(1+4*|B|^2)B; positive unit gauge mass",
+      "excitation": "manufactured FE interpolation of 0.3*(sin(pi*y)*sin(pi*z),sin(pi*x)*sin(pi*z),sin(pi*x)*sin(pi*y))",
+      "gpu_runtime_python_adapter_required": false,
+      "python_role": "independent FE oracle and validation input generation",
+      "routes": [
+        1,
+        2,
+        3,
+        3,
+        2,
+        1
+      ],
+      "cpu_threads": 8,
+      "gpu_host_setup_threads": 8,
+      "assembly_storage": "sparse CSR plus 6 mapped curl vectors and 36 CSR slots per tetrahedron",
+      "gpu_residency": "nonlinear CSR buffers and cached AMS/PCG workspace; explicit tangent download only for hierarchy rebuild",
+      "near_roundoff_line_search": "energy decrement <=64*eps*max(1,abs(E)): require 10 percent residual decrease or final nonlinear gate",
+      "timing_boundary": "numeric FE input to final solution; shared FE preparation and MATLAB startup separately; GPU total includes upload",
+      "nonlinear_tolerance": 1e-09,
+      "linear_true_tolerance": 1e-10,
+      "cpu_cg_internal_tolerance": 1e-12,
+      "independent_parity_limit": 1e-07,
+      "gpu_binary_sha256": "dd3b1e3af1a07115359610fc28d050c4034791a9223d0cb7481cc32fbf9aa4d1",
+      "versions": {
+        "ngsolve": "6.2.2607",
+        "numpy": "2.5.4",
+        "scipy": "1.18.1",
+        "matlabengine": "26.1"
+      },
+      "mesh_sha256": "f68b37ab36054ed71b16e6e3153d9c1455d2127c645ccf6cc2d29bc3a16d08bd",
+      "mesh_route": "explicit Netgen alternative -> checked six-boundary .vol -> NGSolve reload",
+      "dofs": 251896,
+      "free_dofs": 229045,
+      "elements": 205728,
+      "csr_nonzeros": 4000702,
+      "map_assembly_relative_error": 1.234822336885029e-16,
+      "shared_fe_setup_seconds": 48.474448299995856,
+      "cpu_samples": [
+        {
+          "route": 1,
+          "total_seconds": 14.203498899994884,
+          "setup_seconds": 3.7678166999830864,
+          "assembly_seconds": 4.895573899979354,
+          "solve_seconds": 3.9654464999912307,
+          "builds": 8,
+          "history": [
+            [
+              0,
+              1.0,
+              28,
+              2.328776413321975e-12,
+              0.125
+            ],
+            [
+              1,
+              3.23960176505615,
+              39,
+              1.7731415389936086e-12,
+              1.0
+            ],
+            [
+              2,
+              1.1999413301744926,
+              39,
+              9.302946563075788e-13,
+              1.0
+            ],
+            [
+              3,
+              0.26001333913715236,
+              38,
+              1.5568284005337502e-12,
+              1.0
+            ],
+            [
+              4,
+              0.041959340568706226,
+              38,
+              1.485782894652464e-12,
+              1.0
+            ],
+            [
+              5,
+              0.002764658061876525,
+              38,
+              1.2915379199058348e-12,
+              1.0
+            ],
+            [
+              6,
+              1.874897340067178e-05,
+              39,
+              5.023812192997122e-13,
+              1.0
+            ],
+            [
+              7,
+              1.4227473544429408e-09,
+              38,
+              4.554089370241698e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 2.95160440578954e-14,
+          "threads": 8
+        },
+        {
+          "route": 2,
+          "total_seconds": 21.434121900005266,
+          "setup_seconds": 0.4686760000040522,
+          "assembly_seconds": 4.835395100002643,
+          "solve_seconds": 14.685124000010546,
+          "builds": 1,
+          "history": [
+            [
+              0,
+              1.0,
+              28,
+              2.3290059780435134e-12,
+              0.125
+            ],
+            [
+              1,
+              3.2396017650561495,
+              217,
+              3.645314558823208e-12,
+              1.0
+            ],
+            [
+              2,
+              1.1999413301744795,
+              156,
+              2.5852639993832913e-12,
+              1.0
+            ],
+            [
+              3,
+              0.2600133391371454,
+              142,
+              2.2795347630415327e-12,
+              1.0
+            ],
+            [
+              4,
+              0.04195934056872275,
+              141,
+              1.9367921718346616e-12,
+              1.0
+            ],
+            [
+              5,
+              0.0027646580618781863,
+              141,
+              1.443379857845109e-12,
+              1.0
+            ],
+            [
+              6,
+              1.874897340063066e-05,
+              140,
+              1.0981200317507738e-12,
+              1.0
+            ],
+            [
+              7,
+              1.422747376143053e-09,
+              137,
+              9.245637283666126e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 2.9439268465057104e-14,
+          "threads": 8
+        },
+        {
+          "route": 3,
+          "total_seconds": 14.155914400005713,
+          "setup_seconds": 0.95240440001362,
+          "assembly_seconds": 4.830325099945185,
+          "solve_seconds": 6.918063099990832,
+          "builds": 2,
+          "history": [
+            [
+              0,
+              1.0,
+              28,
+              2.3289084275503355e-12,
+              0.125
+            ],
+            [
+              1,
+              3.2396017650561486,
+              217,
+              3.645161911237889e-12,
+              1.0
+            ],
+            [
+              2,
+              1.1999413301744752,
+              39,
+              9.302815376952021e-13,
+              1.0
+            ],
+            [
+              3,
+              0.2600133391371945,
+              43,
+              1.0968809528243236e-12,
+              1.0
+            ],
+            [
+              4,
+              0.041959340568724496,
+              46,
+              1.0842762500580254e-12,
+              1.0
+            ],
+            [
+              5,
+              0.002764658061878915,
+              47,
+              9.113344084131888e-13,
+              1.0
+            ],
+            [
+              6,
+              1.8748973400725123e-05,
+              47,
+              6.204978840227048e-13,
+              1.0
+            ],
+            [
+              7,
+              1.4227473706626305e-09,
+              47,
+              4.224154123289232e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 2.960435553388767e-14,
+          "threads": 8
+        },
+        {
+          "route": 3,
+          "total_seconds": 14.020146000009845,
+          "setup_seconds": 0.9003416999912588,
+          "assembly_seconds": 4.793447700008983,
+          "solve_seconds": 6.8750541000044905,
+          "builds": 2,
+          "history": [
+            [
+              0,
+              1.0,
+              28,
+              2.3290563412493154e-12,
+              0.125
+            ],
+            [
+              1,
+              3.2396017650561455,
+              217,
+              3.644918081133096e-12,
+              1.0
+            ],
+            [
+              2,
+              1.19994133017448,
+              39,
+              9.302121618130325e-13,
+              1.0
+            ],
+            [
+              3,
+              0.26001333913719615,
+              43,
+              1.0968681070269604e-12,
+              1.0
+            ],
+            [
+              4,
+              0.041959340568724954,
+              46,
+              1.0843209975979791e-12,
+              1.0
+            ],
+            [
+              5,
+              0.002764658061879027,
+              47,
+              9.113090708011314e-13,
+              1.0
+            ],
+            [
+              6,
+              1.874897340077351e-05,
+              47,
+              6.205085614124751e-13,
+              1.0
+            ],
+            [
+              7,
+              1.4227472776946486e-09,
+              47,
+              4.224233037449602e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 2.9476970858601113e-14,
+          "threads": 8
+        },
+        {
+          "route": 2,
+          "total_seconds": 20.988953399995808,
+          "setup_seconds": 0.48165259999223053,
+          "assembly_seconds": 4.799110599982669,
+          "solve_seconds": 14.254894400015473,
+          "builds": 1,
+          "history": [
+            [
+              0,
+              1.0,
+              28,
+              2.329095800058252e-12,
+              0.125
+            ],
+            [
+              1,
+              3.239601765056149,
+              217,
+              3.6454989199652274e-12,
+              1.0
+            ],
+            [
+              2,
+              1.1999413301744775,
+              156,
+              2.47771449369239e-12,
+              1.0
+            ],
+            [
+              3,
+              0.2600133391371348,
+              142,
+              2.2806743488535865e-12,
+              1.0
+            ],
+            [
+              4,
+              0.04195934056872252,
+              141,
+              1.936731188044911e-12,
+              1.0
+            ],
+            [
+              5,
+              0.002764658061878175,
+              141,
+              1.443423557387996e-12,
+              1.0
+            ],
+            [
+              6,
+              1.8748973400687857e-05,
+              140,
+              1.098101737010023e-12,
+              1.0
+            ],
+            [
+              7,
+              1.42274732302161e-09,
+              137,
+              9.252032943143507e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 2.9599574139992975e-14,
+          "threads": 8
+        },
+        {
+          "route": 1,
+          "total_seconds": 14.206271600007312,
+          "setup_seconds": 3.8220799999689916,
+          "assembly_seconds": 4.832431999995606,
+          "solve_seconds": 3.996290399998543,
+          "builds": 8,
+          "history": [
+            [
+              0,
+              1.0,
+              28,
+              2.3288141193514817e-12,
+              0.125
+            ],
+            [
+              1,
+              3.239601765056147,
+              39,
+              1.7732422547636002e-12,
+              1.0
+            ],
+            [
+              2,
+              1.1999413301745008,
+              39,
+              9.302888551730076e-13,
+              1.0
+            ],
+            [
+              3,
+              0.2600133391371551,
+              38,
+              1.5568274152736992e-12,
+              1.0
+            ],
+            [
+              4,
+              0.0419593405687072,
+              38,
+              1.485757390349572e-12,
+              1.0
+            ],
+            [
+              5,
+              0.0027646580618767127,
+              38,
+              1.2915149350338804e-12,
+              1.0
+            ],
+            [
+              6,
+              1.8748973400729196e-05,
+              39,
+              5.02380570009904e-13,
+              1.0
+            ],
+            [
+              7,
+              1.4227472686289296e-09,
+              38,
+              4.554246524246919e-13,
+              1.0
+            ]
+          ],
+          "final_residual": 2.949245575536053e-14,
+          "threads": 8
+        }
+      ],
+      "input_sha256": "84d4c4c41709b1c72d7f3fcbf701e054f2220f000c007a2779b8fe6817097fdb",
+      "matlab_startup_seconds": 11.089658199998667,
+      "resident_contract": {
+        "accepted": 1,
+        "stale_handle_rejected": 1,
+        "wrong_type_rejected": 1,
+        "failed_update_preserves_context": 1,
+        "caller_source_release_safe": 1,
+        "workspace_survives_update": 1,
+        "native_buffer_allocations_during_solve": 0
+      },
+      "gpu": [
+        {
+          "route": 1,
+          "sample": 1,
+          "total_seconds": 9.115988600000001,
+          "compute_seconds": 8.9913345,
+          "upload_seconds": 0.1246541,
+          "input_owned_bytes": 117871724,
+          "device_memory_sample_delta_bytes": 364908972,
+          "setup_seconds": 7.248671000000001,
+          "assembly_seconds": 0.15884709999999996,
+          "solve_seconds": 1.4838466000000001,
+          "builds": 8,
+          "history": [
+            [
+              1.0,
+              1.0,
+              24.0,
+              5.777739790869771e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.2396017650409683,
+              33.0,
+              9.874913728976788e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.199941330163277,
+              32.0,
+              7.27308894709714e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.26001333913935354,
+              32.0,
+              5.568491909871703e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.04195934056940989,
+              31.0,
+              8.841627308204269e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.002764658061955013,
+              31.0,
+              7.03661337415925e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.87489734050262e-05,
+              30.0,
+              9.710579397130506e-11,
+              1.0
+            ],
+            [
+              8.0,
+              1.4227472316277524e-09,
+              30.0,
+              4.782309766790665e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.5611184173157035e-14,
+          "workspace_bytes": 10075864,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 8,
+          "resident_hierarchy_builds": 8,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 1.4894541624466942e-13,
+          "independent_nonlinear_residual": 2.7627628223515047e-14,
+          "B_relative_RMS_error": 2.4397462115963982e-15
+        },
+        {
+          "route": 2,
+          "sample": 2,
+          "total_seconds": 6.4680200999999995,
+          "compute_seconds": 6.343366,
+          "upload_seconds": 0.1246541,
+          "input_owned_bytes": 117871724,
+          "device_memory_sample_delta_bytes": 186435224,
+          "setup_seconds": 0.8772696,
+          "assembly_seconds": 0.1536851,
+          "solve_seconds": 5.2705131000000005,
+          "builds": 1,
+          "history": [
+            [
+              1.0,
+              1.0,
+              24.0,
+              5.7777299812324977e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.239601765040968,
+              189.0,
+              8.828687724297469e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.199941330166397,
+              133.0,
+              8.838121588470029e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.2600133391366974,
+              120.0,
+              9.701574552271035e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.041959340568314,
+              119.0,
+              8.710602582819896e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0027646580618813526,
+              117.0,
+              9.225556914683805e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.874897339936657e-05,
+              114.0,
+              9.920303350867405e-11,
+              1.0
+            ],
+            [
+              8.0,
+              1.4227472871096878e-09,
+              110.0,
+              9.798810009511466e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.5632258485715765e-14,
+          "workspace_bytes": 10075864,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 8,
+          "resident_hierarchy_builds": 1,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 1.4929787164734193e-13,
+          "independent_nonlinear_residual": 2.758030243561168e-14,
+          "B_relative_RMS_error": 2.445128879099884e-15
+        },
+        {
+          "route": 3,
+          "sample": 3,
+          "total_seconds": 4.648654,
+          "compute_seconds": 4.5239999,
+          "upload_seconds": 0.1246541,
+          "input_owned_bytes": 117871724,
+          "device_memory_sample_delta_bytes": 213921136,
+          "setup_seconds": 1.7682834,
+          "assembly_seconds": 0.15427659999999999,
+          "solve_seconds": 2.5669839000000003,
+          "builds": 2,
+          "history": [
+            [
+              1.0,
+              1.0,
+              24.0,
+              5.7777275520669564e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.2396017650409688,
+              189.0,
+              8.828477844437037e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.199941330166398,
+              32.0,
+              7.273087560681416e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.26001333913844615,
+              35.0,
+              8.9361302272622e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.04195934056903679,
+              38.0,
+              8.396939648740146e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.002764658061921105,
+              39.0,
+              6.130770164849787e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.8748973400260116e-05,
+              38.0,
+              8.131439125403076e-11,
+              1.0
+            ],
+            [
+              8.0,
+              1.4227473003911744e-09,
+              37.0,
+              8.054906850258074e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.5616451533187066e-14,
+          "workspace_bytes": 10075864,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 8,
+          "resident_hierarchy_builds": 2,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 1.5123913322651498e-13,
+          "independent_nonlinear_residual": 2.7709703333760428e-14,
+          "B_relative_RMS_error": 2.4382695529439892e-15
+        },
+        {
+          "route": 3,
+          "sample": 4,
+          "total_seconds": 4.6361669,
+          "compute_seconds": 4.5115128,
+          "upload_seconds": 0.1246541,
+          "input_owned_bytes": 117871724,
+          "device_memory_sample_delta_bytes": 210065948,
+          "setup_seconds": 1.7626499999999998,
+          "assembly_seconds": 0.15781019999999998,
+          "solve_seconds": 2.5539302999999998,
+          "builds": 2,
+          "history": [
+            [
+              1.0,
+              1.0,
+              24.0,
+              5.777717210862532e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.2396017650409665,
+              189.0,
+              8.828636840491081e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.1999413301663968,
+              32.0,
+              7.273088426701349e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.2600133391384462,
+              35.0,
+              8.936130519894154e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.04195934056903703,
+              38.0,
+              8.396939317146882e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0027646580619211177,
+              39.0,
+              6.13077028574914e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.874897340018995e-05,
+              38.0,
+              8.131440990087865e-11,
+              1.0
+            ],
+            [
+              8.0,
+              1.4227472696722106e-09,
+              37.0,
+              8.054935509917476e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.5551566266647918e-14,
+          "workspace_bytes": 10075864,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 8,
+          "resident_hierarchy_builds": 2,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 1.4865160508301736e-13,
+          "independent_nonlinear_residual": 2.763796373699135e-14,
+          "B_relative_RMS_error": 2.4302356783535864e-15
+        },
+        {
+          "route": 2,
+          "sample": 5,
+          "total_seconds": 6.5411661,
+          "compute_seconds": 6.416512,
+          "upload_seconds": 0.1246541,
+          "input_owned_bytes": 117871724,
+          "device_memory_sample_delta_bytes": 184420436,
+          "setup_seconds": 0.8588789,
+          "assembly_seconds": 0.1534347,
+          "solve_seconds": 5.346307800000001,
+          "builds": 1,
+          "history": [
+            [
+              1.0,
+              1.0,
+              24.0,
+              5.777726468212485e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.2396017650409723,
+              189.0,
+              8.828408038342561e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.1999413301663993,
+              133.0,
+              9.540835300809021e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.2600133391383071,
+              120.0,
+              9.701503625268365e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.04195934056839953,
+              119.0,
+              8.710559714984599e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0027646580618810954,
+              117.0,
+              9.224930639057987e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.8748973399332937e-05,
+              114.0,
+              9.920272176752801e-11,
+              1.0
+            ],
+            [
+              8.0,
+              1.4227473609479086e-09,
+              110.0,
+              9.804552394181374e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.5604578408061147e-14,
+          "workspace_bytes": 10075864,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 8,
+          "resident_hierarchy_builds": 1,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 1.4960873518371746e-13,
+          "independent_nonlinear_residual": 2.7595230551157097e-14,
+          "B_relative_RMS_error": 2.4525844763385846e-15
+        },
+        {
+          "route": 1,
+          "sample": 6,
+          "total_seconds": 8.867260400000001,
+          "compute_seconds": 8.7426063,
+          "upload_seconds": 0.1246541,
+          "input_owned_bytes": 117871724,
+          "device_memory_sample_delta_bytes": 209952524,
+          "setup_seconds": 7.0762789999999995,
+          "assembly_seconds": 0.15370400000000004,
+          "solve_seconds": 1.4784905,
+          "builds": 8,
+          "history": [
+            [
+              1.0,
+              1.0,
+              24.0,
+              5.777738225881548e-11,
+              0.125
+            ],
+            [
+              2.0,
+              3.2396017650409683,
+              33.0,
+              9.87491181478555e-11,
+              1.0
+            ],
+            [
+              3.0,
+              1.199941330163278,
+              32.0,
+              7.273084477886414e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.26001333913935404,
+              32.0,
+              5.5684933260466004e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.04195934056941013,
+              31.0,
+              8.841624950222691e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0027646580619549816,
+              31.0,
+              7.036610987466001e-11,
+              1.0
+            ],
+            [
+              7.0,
+              1.874897340501507e-05,
+              30.0,
+              9.71057752183404e-11,
+              1.0
+            ],
+            [
+              8.0,
+              1.4227472113724914e-09,
+              30.0,
+              4.782314309572693e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.5667394658581525e-14,
+          "workspace_bytes": 10075864,
+          "workspace_allocations": 1,
+          "native_buffer_allocations_during_solve": 0,
+          "resident_solve_count": 8,
+          "resident_hierarchy_builds": 8,
+          "graph_cached": 1,
+          "cpu_solution_relative_error": 1.4963177848100188e-13,
+          "independent_nonlinear_residual": 2.770775560148182e-14,
+          "B_relative_RMS_error": 2.448081822763448e-15
+        }
+      ],
+      "gpu_device": {
+        "name": "Quadro RTX 5000",
+        "compute_capability": "7.5",
+        "total_memory": 17179541504.0
+      },
+      "native_build": {
+        "matlab": "26.1.0.3346908 (R2026a) Update 5",
+        "source_commit": "70b77979151cf69c57b815bce62145d5ee7e93fd",
+        "source_dirty": false,
+        "sha256": {
+          "build-ams-cuda/_radia_ams_snapshot.pyd": "77985406de196f26233a83de0363b321b8dbddf31ee4c33b414498d0e52f4020",
+          "build-ams-cuda/_radia_ams_cpu_reference.pyd": "594963180e5316e32209e46d72206e507978a0a57b9c6f746557e8b74dd1072b",
+          "build-ams-cuda/radia_cuda_ams.mexw64": "dd3b1e3af1a07115359610fc28d050c4034791a9223d0cb7481cc32fbf9aa4d1"
+        },
+        "source_sha256": {
+          "packages/radia-gpu/native/ams_snapshot_module.cpp": "cce1561d96b01b538e50862270f7bab44735155de2da70ca47a82702762979ec",
+          "packages/radia-gpu/native/ams_cpu_reference.cpp": "16916da7e5f0eedfd515bad959d3d207d7507083a932d937bc5ccc7411b014f5",
+          "packages/radia-gpu/native/ams_resident.cuh": "e99fc27edcc235d828bb67742a795fd88ab249dc9968557f0cafdcb17e372421",
+          "packages/radia-gpu/native/ams_nonlinear.cuh": "076e6d61259572594ac32a0e1fd05d471ac8e0341e51cff83d124eb96e7cecd1",
+          "packages/radia-gpu/native/radia_cuda_ams.cu": "26cd99c367228186e0ed83429fd7854b9634eefbbdea91e6e2c0e135308c8f81",
+          "packages/radia-gpu/native/ams_matlab_setup.cpp": "52e1d4c4697b47721826423d66503b895a15d9700e48337f9e6bcacc57c92960",
+          "packages/radia-gpu/native/ams_setup_gpu.hpp": "37ae39c14fcfae623acc879106a41f5983e2b4cc1248eeec9f5d9c061dac2439",
+          "packages/radia-gpu/native/ams_setup_gpu.cuh": "333ef9ce8329c502891e41eb1d6d12c8cb96f2dfa3fa7c07d0e83b872718b13d",
+          "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "fca70b5fd962aeac93aaf8b226c1d072848317f411a7de16a6fc2035d2c9e80a",
+          "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "a76fa599ae308b33370f8ee088dac7582ac3d706cace8975a895e63e48a60b4e",
+          "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp": "c78d9ef2596f95cd3c85f9d0e801c567622aa232c168bbce72de6e857646a121",
+          "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "a285fe6ca8448e7548365000e71e21e0ad8cd71769ae5e9792024398442709cb",
+          "packages/radia-gpu/tools/build_ams_cuda.py": "2cdf79227986813603a91b30b5bfd4afa9a7d0c5b93fcb3cdff6c22c80f8cc41",
+          "Build.ps1": "d07bc37be18b411066c7779a585da4a16b488bc5343ab6cffb0c6758fb945de5"
+        },
+        "no_cpu_solver_fallback": true,
+        "python_runtime_adapter_required": false,
+        "python_dll_indirect_dependency_permitted": true
+      },
+      "summary": [
+        {
+          "route": 1,
+          "cpu_total_median_seconds": 14.204885250001098,
+          "gpu_total_median_seconds": 8.9916245,
+          "cpu_over_gpu": 1.5797907541625096,
+          "gpu_hierarchy_builds": [
+            8,
+            8
+          ]
+        },
+        {
+          "route": 2,
+          "cpu_total_median_seconds": 21.211537650000537,
+          "gpu_total_median_seconds": 6.504593099999999,
+          "cpu_over_gpu": 3.2610091552076548,
+          "gpu_hierarchy_builds": [
+            1,
+            1
+          ]
+        },
+        {
+          "route": 3,
+          "cpu_total_median_seconds": 14.088030200007779,
+          "gpu_total_median_seconds": 4.64241045,
+          "cpu_over_gpu": 3.0346369309089805,
+          "gpu_hierarchy_builds": [
+            2,
+            2
+          ]
+        }
+      ]
+    }
+  ],
+  "failed_attempt": {
+    "dofs": 86735,
+    "stage": "CPU nonlinear line search",
+    "reason": "energy roundoff before final nonlinear gate",
+    "resolution_commit": "0eba5e3c4431bb8d59fe152d4481c03037cbdb67",
+    "tolerances_relaxed": false,
+    "raw_evidence_retained": true
+  },
+  "linear_regression": {
+    "accepted": true,
+    "cycles": [
+      1,
+      7
+    ],
+    "result_sha256": "03937bdc2f290a2d1baa6e06d4a17ccfa16dbb8743b47662108cf144a01703ce",
+    "raw_evidence_retained": true
+  }
+}

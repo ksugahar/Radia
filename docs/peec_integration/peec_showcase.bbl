@@ -1,0 +1,27 @@
+\begin{thebibliography}{1}
+
+\bibitem{dowell1966eddy}
+P.~L. {Dowell}.
+\newblock Effects of eddy currents in transformer windings.
+\newblock {\em Proceedings of the Institution of Electrical Engineers},
+  113(8):1387--1394, 1966.
+
+\bibitem{Kamon1994}
+Mattan {Kamon}, M.~J. {Tsuk}, and Jacob~K. {White}.
+\newblock {FASTHENRY}: A multipole-accelerated 3-d inductance extraction
+  program.
+\newblock {\em IEEE Trans. Microw. Theory Techn.}, 42(9):1750--1758, 1994.
+
+\bibitem{grover2004inductance}
+Frederick~W. Grover.
+\newblock {\em Inductance Calculations: Working Formulas and Tables}.
+\newblock Dover Publications, 2004.
+\newblock Reprint of the 1946 edition.
+
+\bibitem{odabasioglu1998prima}
+Altan {Odabasioglu}, Mustafa {Celik}, and Lawrence~T. {Pileggi}.
+\newblock {PRIMA}: Passive reduced-order interconnect macromodeling algorithm.
+\newblock {\em IEEE Trans. Computer-Aided Design of Integrated Circuits and
+  Systems}, 17(8):645--654, 1998.
+
+\end{thebibliography}
