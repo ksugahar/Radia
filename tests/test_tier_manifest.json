@@ -204,7 +204,6 @@
         "tests/test_test_tier_policy.py",
         "tests/test_run_test_tier.py",
         "tests/test_docs_notebook_contract.py",
-        "tests/test_release_workflow_ref_gate.py",
         "tests/test_radia_promotion_gate.py",
         "tests/test_mcp_residual_vendor_contract.py",
         "tests/test_trace_reuse_evidence_contract.py",

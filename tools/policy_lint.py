@@ -250,6 +250,7 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     'tools/audit_application_block_contract.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/audit_pyside6_only.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/ci_preflight.py': 'Existing operational build/runtime scratch routing; phase 2.',
+    'tools/compute_runtime.py': 'Compute-job scratch ownership checks required by the scratch cleanup policy.',
     'tools/ci_preflight_lab.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/download_release_asset.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/editable_intent.py': 'Existing operational build/runtime scratch routing; phase 2.',
