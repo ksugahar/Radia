@@ -104,7 +104,7 @@ def main():
                               text=True, encoding="utf-8", errors="replace", timeout=30)
     try:
         excluded = {f["id"] for f in corpus if f.get("coverage") == "excluded"}
-        assert excluded == {"boxed", "binom", "cancel"} and len(corpus) == 59
+        assert excluded == {"boxed", "binom", "cancel"} and len(corpus) == 63
         for fixture in corpus:
             source = args.output / (fixture["id"] + ".tex")
             output = args.output / (fixture["id"] + ".pptxmath")
@@ -125,6 +125,11 @@ def main():
             assert normalized(semantic_tree(ET.fromstring(primary))) == normalized(semantic), fixture["id"]
             if r"\left" in fixture["tex"] and fixture["id"] not in {"one-sided", "brace-cases"}:
                 assert root.find(f".//{{{M}}}d/{{{M}}}dPr/{{{M}}}grow").get(f"{{{M}}}val") == "1", fixture["id"]
+            for run in root.iter(f"{{{M}}}r"):
+                text = "".join(run.itertext())
+                cjk = any(0x3000 <= ord(c) <= 0x9FFF or 0xF900 <= ord(c) <= 0xFAFF or
+                          0xFF00 <= ord(c) <= 0xFFEF or 0x20000 <= ord(c) <= 0x3134F for c in text)
+                assert run.find(f"{{{A}}}rPr").get("lang") == ("ja-JP" if cjk else "en-US"), fixture["id"]
             for expected in fixture.get("run_styles", []):
                 matching = "".join("".join(n.itertext()) for n in root.iter(f"{{{M}}}r")
                     if ((n.find(f"{{{M}}}rPr/{{{M}}}sty").get(f"{{{M}}}val")
@@ -144,7 +149,7 @@ def main():
                     following = siblings[siblings.index(nary) + 1:]
                     assert any("".join(node.itertext()).endswith(tail) for node in following), fixture["id"]
             report["covered"] += 1
-        assert report["covered"] == 56 and report["rejected"] == 3
+        assert report["covered"] == 60 and report["rejected"] == 3
         for i, tex in enumerate([r"\unknown{x}", r"\begin{unknown}x\end{unknown}",
                                  r"\frac{x}{y", r"\begin{aligned}x\end{matrix}"]):
             source = args.output / f"invalid-{i}.tex"

@@ -272,8 +272,8 @@ public:
         "\"/></m:eqArrPr>";
   }
   std::string runProperties(const std::string &colour = "", bool normal = true,
-                            bool bold = false) {
-    return "<a:rPr sz=\"1800\" i=\"" + std::string(normal ? "0" : "1") +
+                            bool bold = false, const std::string &language = "en-US") {
+    return "<a:rPr lang=\"" + language + "\" sz=\"1800\" i=\"" + std::string(normal ? "0" : "1") +
            "\" b=\"" + (bold ? "1" : "0") + "\"><a:solidFill><a:srgbClr val=\"" +
            (colour.empty() ? std::string("000000") : colour.substr(1)) +
            "\"/></a:solidFill><a:latin typeface=\"Cambria Math\"/></a:rPr>";
@@ -319,7 +319,7 @@ std::string run(const Xml &n) {
   }
   if (dialect_ != OfficeDialect::RichEdit) {
     const std::string tag = "a:t";
-    return "<m:r>" + properties + runProperties(colour, normal, bold) + "<" + tag +
+    return "<m:r>" + properties + runProperties(colour, normal, bold, office_language(content(n))) + "<" + tag +
            " xml:space=\"preserve\">" + escape(alphabet(content(n), variant)) +
            "</" + tag + "></m:r>";
   }
@@ -383,6 +383,14 @@ void advanceFence(const Xml &node, std::vector<std::string> &stack) {
     if (!close.empty())
       stack.push_back(close);
   }
+}
+bool singleDelimiterPair(const Xml &row) {
+  std::vector<std::string> stack;
+  for (size_t i = 0; i < row.children.size(); ++i) {
+    advanceFence(*row.children[i], stack);
+    if (stack.empty() && i + 1 < row.children.size()) return false;
+  }
+  return stack.empty();
 }
 bool operandBoundary(const Xml &node, const std::vector<std::string> &inside,
                      const std::vector<std::string> &outside) {
@@ -470,7 +478,8 @@ std::string emit(const Xml &n) {
   if ((name == "mrow" || name == "math") && n.children.size() >= 2 &&
       n.children.front()->name == "mo" && n.children.back()->name == "mo" &&
       !fenceClose(content(*n.children.front())).empty() &&
-      fenceClose(content(*n.children.front())) == content(*n.children.back())) {
+      fenceClose(content(*n.children.front())) == content(*n.children.back()) &&
+      singleDelimiterPair(n)) {
     std::string body;
     for (size_t i = 1; i + 1 < n.children.size(); ++i) body += child(i);
     return wrapped("d", wrapped("dPr",

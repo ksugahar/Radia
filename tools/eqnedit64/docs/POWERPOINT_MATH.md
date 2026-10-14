@@ -51,7 +51,7 @@ characters without stretching; they are outside the stretchable-fence gate.
 
 ## Validation and limits
 
-The declared corpus has 59 fixtures: 56 structural/text/style/colour semantic
+The declared corpus has 63 fixtures: 60 structural/text/style/colour semantic
 comparisons against the clipboard emitter, and 3 required rejections.
 Run grouping, control formatting and dialect-specific vertical layout are
 normalized; byte identity is not claimed. Independent golden annotations
@@ -75,3 +75,7 @@ Primary format reference: [Microsoft DrawingML math extension](https://learn.mic
 Clipboard HTML explicitly declares English for mathematical/control runs and
 Japanese for runs containing Japanese kana, CJK ideographs or full-width text.
 This prevents inherited unrelated proofing languages without changing Office settings.
+
+Native array column specifications (`\begin{array}{...}`) are unsupported;
+use the supported `cases` or `matrix` environments. A single stretchable
+delimiter encloses only one balanced group; adjacent groups remain separate.

@@ -3310,6 +3310,14 @@
     }
   }
 
+  function officeSingleDelimiterPair(children) {
+    var stack = [];
+    for (var i = 0; i < children.length; i++) {
+      officeAdvanceFence(children[i], stack);
+      if (!stack.length && i + 1 < children.length) return false;
+    }
+    return !stack.length;
+  }
   function officeOperandBoundary(node, inside, outside) {
     node = officeUnwrapped(node);
     if (node.localName !== "mo") return false;
@@ -3415,7 +3423,8 @@
     if ((name === "mrow" || name === "math" || name === "mstyle") && children.length >= 2 &&
         officeUnwrapped(children[0]).localName === "mo" && officeUnwrapped(children[children.length - 1]).localName === "mo" &&
         officeFenceClose(officeUnwrapped(children[0]).textContent) &&
-        officeFenceClose(officeUnwrapped(children[0]).textContent) === officeUnwrapped(children[children.length - 1]).textContent) {
+        officeFenceClose(officeUnwrapped(children[0]).textContent) === officeUnwrapped(children[children.length - 1]).textContent &&
+        officeSingleDelimiterPair(children)) {
       var inner = node.cloneNode(true);
       inner.removeChild(inner.firstElementChild);
       inner.removeChild(inner.lastElementChild);
