@@ -88,6 +88,14 @@ def test_native_impact_uses_complete_event_range(event, base):
     assert calls[0][3] == base
 
 
+def test_markdown_only_change_skips_native_ams():
+    docs = "README.md\0src/ext/sparsesolv/docs/algorithms.md\0"
+    assert IMPACT.native_required("pull_request", {}, lambda *args: docs) == (
+        False, "documentation-only change")
+    mixed = "README.md\0src/ext/sparsesolv/test.cpp\0"
+    assert IMPACT.native_required("pull_request", {}, lambda *args: mixed)[0]
+
+
 @pytest.mark.parametrize("paths", ["", "pyproject.toml\0Build.ps1\0", "src/ext/sparsesolv/test.cpp\0"])
 def test_native_impact_does_not_exempt_other_files(paths):
     assert IMPACT.native_required("push", {"before": "a" * 40}, lambda *args: paths)[0]
@@ -119,7 +127,8 @@ def test_native_impact_gates_expensive_steps_and_watches_itself():
     for event in ("push", "pull_request"):
         assert "tools/sparsesolv_ci_impact.py" in triggers[event]["paths"]
         assert set(triggers[event]["paths"]) == set(IMPACT.NATIVE_PATHS) | {
-            "pyproject.toml", "tests/test_tier_manifest.json"}
+            "pyproject.toml", "tests/test_tier_manifest.json", "!**/*.md"}
+        assert triggers[event]["paths"][-1] == "!**/*.md"
     steps = workflow["jobs"]["ams-regression"]["steps"]
     selector = next(s for s in steps if s.get("id") == "native-impact")
     assert "python tools/sparsesolv_ci_impact.py" in selector["run"]

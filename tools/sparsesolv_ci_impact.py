@@ -235,6 +235,10 @@ def native_required(event_name, event, git):
         return True, "no comparison base"
     changed = git("diff", "--name-only", "-z", base, "HEAD", "--").split("\0")
     changed = set(filter(None, changed))
+    # No NATIVE_PATHS build or AMS test reads Markdown; the trigger excludes it too.
+    if changed and all(path.endswith(".md") for path in changed):
+        return False, "documentation-only change"
+    changed = {path for path in changed if not path.endswith(".md")}
     if any(fnmatchcase(path, pattern) for path in changed for pattern in NATIVE_PATHS):
         return True, "native source, runtime boundary, or CI contract changed"
     checks = {"pyproject.toml": test_dependencies_only,
