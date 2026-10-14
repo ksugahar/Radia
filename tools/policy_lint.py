@@ -672,6 +672,15 @@ def check_all():
 
     identity_hits = check_public_runtime_privacy()
     results.append(("Policy 11: public runtime privacy", not identity_hits, "\n".join(identity_hits[:20]) if identity_hits else "ok"))
+
+    # 12: notebook images and WebGUI buffers are bytes; text edits must not touch them.
+    payload_hits = []
+    for path in _git_ls_files():
+        if path.endswith(".ipynb"):
+            with open(os.path.join(REPO, path), encoding="utf-8") as source:
+                payload_hits.extend(check_notebook_binary_integrity(path, source.read()))
+    results.append(("Policy 12: notebook binary payloads decode", not payload_hits,
+                    "\n".join(payload_hits[:20]) if payload_hits else "ok"))
     return results
 
 
