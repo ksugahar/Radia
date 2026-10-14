@@ -34,11 +34,23 @@ try
         }
         foreach (var props in root.Descendants(drawing + "rPr"))
         {
-            if ((string?)props.Attribute("sz") != "1800" ||
+            var size = (string?)props.Attribute("sz");
+            var run = props.Parent;
+            var argument = run?.Parent;
+            var box = argument?.Parent;
+            bool fixedToken = run?.Name == math + "r" && argument?.Name == math + "e" &&
+                box?.Name == math + "box" && argument.Elements().Count() == 1 &&
+                (string?)box.Element(math + "boxPr")?.Element(math + "ctrlPr")?.Element(drawing + "rPr")?.Attribute("sz") == "1800";
+            if ((size != "1800" && !(fixedToken && new[] {"2160", "3240", "4320", "5400"}.Contains(size))) ||
                 (string?)props.Element(drawing + "latin")?.Attribute("typeface") != "Cambria Math" ||
                 !Regex.IsMatch((string?)props.Element(drawing + "solidFill")?.Element(drawing + "srgbClr")?.Attribute("val") ?? "", "^[0-9a-fA-F]{6}$"))
                 throw new InvalidDataException("Unexpected native math font/size/colour profile");
         }
+        var actualSizes = root.Descendants(drawing + "rPr").Select(p => (string?)p.Attribute("sz"))
+            .Where(s => s != "1800").Select(s => int.Parse(s!)).ToArray();
+        var expectedSizes = item["fixed_delimiter_sizes"]?.AsArray().Select(s => s!.GetValue<int>()).ToArray() ?? Array.Empty<int>();
+        if (!actualSizes.SequenceEqual(expectedSizes))
+            throw new InvalidDataException("Fixed delimiter sizes differ from the independent corpus profile");
         // Validation-only copy: remove DrawingML run formatting and normalize
         // text tags so the independent ISO math-structure schema can check
         // fractions/scripts/nary/matrices/functions. This is not a production

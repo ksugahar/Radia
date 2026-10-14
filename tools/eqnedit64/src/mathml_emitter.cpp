@@ -107,6 +107,12 @@ private:
             return "<mspace width=\"" + width.str() + "em\"/>";
         }
         const std::string value = xml_text(utf8_of(ch.charCode));
+        if (ch.delimiterScale > 0) {
+            std::ostringstream size;
+            size << std::fixed << std::setprecision(1) << ch.delimiterScale << "em";
+            return element("mo", value, ("fence=\"true\" stretchy=\"true\" minsize=\"" +
+                size.str() + "\" maxsize=\"" + size.str() + "\"").c_str());
+        }
         std::string result;
         if (ch.typeface == TF_TEXT) {
             result = element("mtext", value);
