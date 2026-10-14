@@ -37,9 +37,13 @@ def test_disjoint_declared_source_and_contract():
     assert result['source_support_completeness'].startswith('caller-owned')
 
 
-def test_ring_rejects_source_free_claim():
+@pytest.mark.parametrize('box',[
+    [[[4.,4.,4.],[5.,5.,5.]]],
+    [[[1.2,1.2,-1.],[1.8,1.8,2.]]],
+])
+def test_ring_rejects_source_free_claim(box):
     with pytest.raises(ValueError,match='first homology'):
-        certify(blocks(True),('core',),[[[4.,4.,4.],[5.,5.,5.]]])
+        certify(blocks(True),('core',),box)
 
 
 @pytest.mark.parametrize('box',[

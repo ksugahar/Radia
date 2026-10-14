@@ -69,6 +69,18 @@ def test_newton_linear_law_agrees_with_linear_mixed_solver(case):
         np.testing.assert_allclose(result['B_cf'](mesh(*p)), reference['B_cf'](mesh(*p)), rtol=1e-7, atol=1e-13)
 
 
+def test_current_free_certificate_survives_newton_linear_options(case):
+    # Use an independently curl-free manufactured source, not the fixture's
+    # additional rotational field in the total region.
+    r=ng.CoefficientFunction((ng.x-2.5,ng.y,ng.z))
+    r2=ng.InnerProduct(r,r)
+    manufactured=(case[0],r/r2**1.5,1/ng.sqrt(r2),case[3])
+    result=run(manufactured,current_free_total_source_boxes=[[[2.,-.1,-.1],[3.,.1,.1]]])
+    assert result['current_free_total_certificate']['passed']
+    assert result['current_free_total_certificate']['betti_1_GF2']==0
+    assert result['nonlinear_stats']['converged']
+
+
 def test_material_quadrature_is_set_apart_from_the_assembly_bonus(case):
     mesh = case[0]
     default = run(case, order=2, bonus_intorder=6)
