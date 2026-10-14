@@ -40,3 +40,10 @@ def test_policy_contracts_run_in_policy_lane():
     assert "python -m pytest tests/policy/ -q" in workflow
     manifest = (ROOT / "tests/test_tier_manifest.json").read_text()
     assert "test_release_workflow_ref_gate.py" not in manifest
+
+
+def test_policy_lane_runs_for_every_distribution():
+    workflow = yaml.load((ROOT / ".github/workflows/policy-lint.yml").read_text(), Loader=yaml.BaseLoader)
+    for event in ("push", "pull_request"):
+        assert "paths-ignore" not in workflow["on"][event]
+        assert "paths" not in workflow["on"][event]

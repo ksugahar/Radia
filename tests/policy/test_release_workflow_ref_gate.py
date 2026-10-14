@@ -237,7 +237,7 @@ def test_eqnedit64_ci_is_separate_from_radia_mcp_ci():
     for path in ("packages/eqnedit64/**", "tools/eqnedit64/**"):
         assert path in ci
         assert path in radia_fast
-        assert path in policy
+    assert "paths-ignore:" not in policy
 
 
 def test_eqnedit64_release_order_is_handtest_fable_main_o_drive_then_tag():
