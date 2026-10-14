@@ -564,16 +564,6 @@ if errorlevel 1 (
 
 echo.
 echo ========================================
-echo   Building _equation (LaTeX equations)
-echo ========================================
-"$CMAKE_EXE" --build . --config Release --target _equation -j $BuildJobs
-if errorlevel 1 (
-    echo ERROR: _equation build failed
-    exit /b 1
-)
-
-echo.
-echo ========================================
 echo   Building cubit_mesh_curver (Cubit plugin .pyd)
 echo ========================================
 set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"

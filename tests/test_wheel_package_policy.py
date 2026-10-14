@@ -15,8 +15,10 @@ ROOT = Path(__file__).resolve().parents[1]
     'radia/kernel.mexw64.build.json', 'radia/kernel.cu',
     'radia/panels/application_interface_manifest.json',
     'Requires-Dist: radia-gpu>=0.1.0', 'Requires-Dist: matlabengine; extra == "matlab"',
+    'radia/equation/__init__.py', 'radia/_equation.cp312-win_amd64.pyd',
+    'radia/_equation.cpython-312-x86_64-linux-gnu.so',
 ])
-def test_cpu_wheel_rejects_gpu_product_payloads(tmp_path, foreign):
+def test_cpu_wheel_rejects_foreign_product_payloads(tmp_path, foreign):
     import importlib.util
     import zipfile
 
@@ -37,7 +39,9 @@ def test_cpu_wheel_rejects_gpu_product_payloads(tmp_path, foreign):
     write()
     assert guard.verify(wheel)['gpu_integration_absent'] is True
     write(foreign)
-    with pytest.raises(ValueError, match='radia-gpu integration payload'):
+    expected = ('retired equation payload' if foreign.startswith(('radia/equation/', 'radia/_equation'))
+                else 'radia-gpu integration payload')
+    with pytest.raises(ValueError, match=expected):
         guard.verify(wheel)
 
 
@@ -69,6 +73,9 @@ def test_sdist_manifest_excludes_retired_and_backup_payloads():
     }
     excluded = {
         str(Path("src/radia/cubit_mesh_curver.pyd")),
+        str(Path("src/radia/_equation.pyd")),
+        str(Path("src/radia/_equation.cpython-312-x86_64-linux-gnu.so")),
+        str(Path("src/radia/equation/__init__.py")),
         str(Path("src/radia/_radia_pybind.locked-old.pyd")),
         str(Path("src/radia/_radia_pybind.lockedold.pyd")),
         str(Path("src/radia/_radia_pybind.pre_release.pyd")),
