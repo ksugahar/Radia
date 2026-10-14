@@ -702,7 +702,6 @@ this section. No code-level compat shim will be added. Users and AI coders
 discover the change by querying this MCP tool.
 """
 
-
 RADIA_MESH_IMPORT = """
 # NGSolve Mesh Import
 
@@ -936,7 +935,6 @@ Folder hygiene (the cleanup half of the rule):
 The validation schema and its focused tests, not copied numbers in MCP
 knowledge, define the required metadata.
 """
-
 
 RADIA_PEEC = """
 # PEEC (Partial Element Equivalent Circuit)
@@ -1434,9 +1432,8 @@ the Laplace SL eigenvalue for l=1 on a sphere is R/3 (not R).  This gives denomi
 of 0.35-1.0 depending on Z_s. Only correct for PEC (Z_s -> 0).
 
 Fix requires MFIE `n x curl(SL)` (not available in ngsolve.bem).
-**Use FEM-SIBC (fem_esim_3d.py) for finite Z_s problems.**
-
-See: `validation_test/induction_heating/cubit_panels_legacy/efie_sibc.py`
+**Use the maintained FEM-SIBC workflow for finite Z_s problems**
+(`docs/esim/WORKFLOWS.md`).
 
 ## Loop-Star Solver Modes (FIXED 2026-02-22)
 
@@ -2402,7 +2399,6 @@ Read `result["linear_solver"]`, `result["preconditioner"]`, and the current
 validation JSON before reporting which backend or threshold is fastest.
 """
 
-
 RADIA_HYSTERESIS = """
 # Magnetic Hysteresis: Mesh-Backed HDiv-VIM Contract
 
@@ -2678,8 +2674,6 @@ ESIM verified against NGSolve H1 FEM (p=4) as independent method:
 | Linear Z_s vs NGSolve FEM | 0.04% |
 | Nonlinear Z_s vs NGSolve FEM + Picard | 0.78% |
 
-Run: `python validation_test/induction_heating/cubit_panels_legacy/verify_esim.py`
-
 ## Key Files
 
 | File | Class/Function | Purpose |
@@ -2691,8 +2685,6 @@ Run: `python validation_test/induction_heating/cubit_panels_legacy/verify_esim.p
 | `esim_coupled_solver.py` | `ESIMCoupledSolver` | PEEC + ESIM coupled solver |
 | `esim_workpiece.py` | `ESIMWorkpiece` | 3D workpiece with ESI tables |
 | `panels/calc_inductance.py` | `_compute_workpiece_impedance()` | Panel ESIM/Dowell backend |
-| `validation_test/induction_heating/cubit_panels_legacy/impedance_esim.py` | `run()` | Retained BEM+ESIM validation analysis |
-| `validation_test/induction_heating/cubit_panels_legacy/verify_esim.py` | `test1..4()` | ESIM vs NGSolve FEM validation |
 """
 
 RADIA_BUILD_AND_RELEASE = """
@@ -2823,7 +2815,6 @@ src/radia/
 - **Release artifact mismatch**: rerun the exact-SHA candidate gate; never
   substitute a locally rebuilt wheel or Simulink ZIP.
 """
-
 
 RADIA_MULTILEVEL_SIMULATOR = """
 # Multi-Level Simulator
@@ -2997,7 +2988,6 @@ nonlinear iteration metadata, and image-symmetry materialization.  For truly
 symmetric meshes, a reduced image model and an explicit full model should agree
 to near roundoff at field probes.
 """
-
 
 RADIA_FEM_KELVIN_CUBIT = """
 # Kelvin Transform: Periodic Kelvin for All Formulations
@@ -3264,7 +3254,7 @@ Condition (SIBC) in the MQS regime, most BEM formulations fail or are limited.
 
 - **PEC conductors**: BEM EFIE or MFIE tangential (ngsolve.bem)
 - **Copper at high frequency** (Z_s/(jw*mu0*R) < 0.1): BEM EFIE-SIBC
-- **Steel, ferrite, any finite Z_s**: FEM-SIBC (`fem_esim_3d.py`)
+- **Steel, ferrite, any finite Z_s**: FEM-SIBC (see `docs/esim/WORKFLOWS.md`)
 - **Circuit extraction (L, R)**: Radia PEEC pipeline (not affected by this limitation)
 
 ### Impact on Radia Multi-Level Simulator
@@ -3273,10 +3263,10 @@ Level 1 (PEEC) and Level 2 (ngsolve.bem inductance extraction for PEC/low-Z_s)
 are unaffected. The limitation only affects eddy current SIBC problems at Level 2
 with high-Z_s materials. Use FEM-SIBC (Level 3) for these cases.
 
-### Verification
+### Current Workflows
 
-- `validation_test/induction_heating/cubit_panels_legacy/verify_sphere_sibc.py` -- Sphere benchmark
-- `validation_test/induction_heating/cubit_panels_legacy/fem_esim_3d.py` -- FEM-SIBC reference
+See `docs/esim/WORKFLOWS.md` for maintained entry points; panel research drivers
+have been retired.
 """
 
 RADIA_MATLAB_MEX = """
@@ -3348,7 +3338,6 @@ The MCP contract audits retired unsafe constructors and fails if
 `ObjMltExtPgn`, `ObjMltExtRtg`, or `ObjMltExtTri` reappears in pybind11, MEX, or
 the legacy C ABI source and export table.
 """
-
 
 def get_radia_documentation(topic: str = "all") -> str:
     """Return Radia usage documentation by topic."""
