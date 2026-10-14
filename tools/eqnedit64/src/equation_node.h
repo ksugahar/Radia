@@ -91,6 +91,8 @@ public:
     uint32_t charCode = 0;
     char ch = 0;            /* for ND_CHAR: ASCII char */
     std::string latex;      /* for ND_SYMBOL: LaTeX command (e.g. "\\nabla") */
+    double delimiterScale = 0; /* fixed big-family height in em; zero is ordinary */
+    std::string delimiterCommand; /* preserve big/Big/bigg/Bigg and l/r/m */
     std::vector<Embellishment> embells; /* chained embellishment types */
 
     CharNode() : Node(kChar) {}

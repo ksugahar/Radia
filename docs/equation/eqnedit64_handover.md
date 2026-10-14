@@ -250,9 +250,10 @@ Eqnedit64.exe clipboard clipboard-png
 
 `office`はPowerPoint/Word用、`slides`はGoogle Slides用、`clipboard-png`は画像だけの
 クリップボードを表す。最後の例はクリップボード上のTeXを読み、同じクリップボードを
-PNGへ置き換える。旧出力名`png`と旧`--copy-*`、`--render-*`、`--texclip`は既存連携の互換入力として
-内部に残すが、公開ヘルプ、教材、Python package、`radia-mcp.presentation`は必ず
-単一の入力／出力構文を使う。CLI/APIはPowerPoint自動生成や
+PNGへ置き換える。旧出力名`png`と旧`--copy-*`、`--render-*`、`--texclip`、
+`--clipboard-tex-to-png`は3.1.4で廃止し、GUIや変換の開始前に移行案内と終了コード94で拒否する。
+`powerpoint` / `word` / `google-slides`は現行の説明的な出力先名として残す。
+公開ヘルプ、教材、Python package、`radia-mcp.presentation`は単一の入力／出力構文を使う。CLI/APIはPowerPoint自動生成や
 `radia-mcp.presentation`から呼べる安定した変換境界とする。
 Python packageのconsole launcher、`copy_equation()`、`render_equation()`は同じEXEを
 subprocessで呼ぶ任意の薄い利用者に限る。CLI dispatcherをpybind11へ複製しない。
@@ -619,7 +620,8 @@ source stampの両方を表示する。
   未知命令名が表示される、二つの`.tex`が無言94になる、native `--help` / `--version`が
   redirectできない、clipboard出力`png`と`.png`ファイルの区別が名称だけでは弱い。
 - resolution contract: 末尾空行を`{}`で保持し、貼り付け規則を一般化する。CLIは
-  `clipboard-png`を正規名、`png`を互換別名とし、二つの`.tex`は先頭をGUIで開く。
+  当時は`clipboard-png`を正規名、`png`を互換別名とした（3.1.4で旧別名を廃止）。
+  二つの`.tex`は先頭をGUIで開く。
   help/version/errorの標準streamを自動試験する。未知命令抑制で露見した`\\flat` / `\\sharp`
   の退行は正式サポートと全パレット実行試験で閉じた。これは最初のFableレビュー範囲を
   越えるため、修正後の最終候補に対して正式公開前Fableレビューをもう一度行う。

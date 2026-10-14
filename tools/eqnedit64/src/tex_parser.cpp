@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace eqnedit {
@@ -526,6 +527,31 @@ private:
             return make_char(tf, cp);
         }
         std::string cmd = read_command();
+        for (const auto& size : {std::pair<const char*, double>{"\\big", 1.2},
+                                {"\\Big", 1.8}, {"\\bigg", 2.4}, {"\\Bigg", 3.0}}) {
+            const std::string base = size.first;
+            if (cmd != base && cmd != base + "l" && cmd != base + "r" && cmd != base + "m")
+                continue;
+            const std::string token = read_delimiter();
+            auto node = delimiter_char(token);
+            if (!node || (fence_selector(token) < 0 && token != "\\lvert" &&
+                          token != "\\rvert" && token != "\\vert" &&
+                          token != "\\lVert" && token != "\\rVert")) {
+                if (rejectUnsupported_) {
+                    error_ = "Fixed delimiter command requires a supported delimiter";
+                    return nullptr;
+                }
+                // Interactive partial TeX remains editable: ignore the size
+                // command and retain any ordinary token already read.
+                return node;
+            }
+            auto& ch = static_cast<CharNode&>(*node);
+            ch.typeface = TF_SYMBOL;
+            ch.delimiterScale = size.second;
+            ch.delimiterCommand = cmd;
+            ch.latex = token;
+            return node;
+        }
         if (cmd == "\\color") {
             error_ = "Colour switch requires an enclosing sequence/group";
             return nullptr;

@@ -1823,8 +1823,7 @@ ConversionDestination conversion_destination(const std::wstring& output) {
     if (wide_equal_ci(output, L"slides") ||
         wide_equal_ci(output, L"google-slides"))
         return ConversionDestination::SlidesClipboard;
-    if (wide_equal_ci(output, L"clipboard-png") ||
-        wide_equal_ci(output, L"png"))
+    if (wide_equal_ci(output, L"clipboard-png"))
         return ConversionDestination::PngClipboard;
     if (wide_ends_with_ci(output, L".png"))
         return ConversionDestination::PngFile;
@@ -1864,16 +1863,6 @@ int copy_tex_cli(const std::string& input, ClipboardCliTarget target) {
     else
         copied = clipboard_set_png(latex);
     return copied ? 0 : 84;
-}
-
-int copy_tex_argument(const std::wstring& input, ClipboardCliTarget target) {
-    return copy_tex_cli(utf8_wide(input), target);
-}
-
-int copy_tex_file(const std::wstring& path, ClipboardCliTarget target) {
-    std::string input;
-    if (!read_file(path, input)) return 82;
-    return copy_tex_cli(input, target);
 }
 
 std::string clipboard_get() {
@@ -4510,7 +4499,7 @@ int self_test() {
         conversion_destination(L"clipboard-png") !=
             ConversionDestination::PngClipboard ||
         conversion_destination(L"png") !=
-            ConversionDestination::PngClipboard ||
+            ConversionDestination::Invalid ||
         conversion_destination(L"result.PNG") !=
             ConversionDestination::PngFile ||
         conversion_destination(L"result.emf") !=
@@ -4751,20 +4740,11 @@ int render_png(const std::wstring& tex, const std::wstring& path) {
     return status;
 }
 
-int render_file(const std::wstring& inputPath, const std::wstring& outputPath,
-                bool png) {
-    std::string input;
-    if (!read_file(inputPath, input)) return 82;
-    const std::wstring tex = wide_utf8(input);
-    return png ? render_png(tex, outputPath) : render_emf(tex, outputPath);
-}
-
 /* Public automation is deliberately one source and one destination.  Earlier
  * releases exposed a separate switch for every combination of literal/file,
  * clipboard target, and image format.  That made the command spelling harder
  * to remember than the conversion itself and leaked implementation choices
- * into radia-mcp.  Keep those switches below as compatibility inputs, while
- * new callers use `Eqnedit64.exe INPUT OUTPUT` and let OUTPUT name the format. */
+ * into radia-mcp. All callers now use `Eqnedit64.exe INPUT OUTPUT` and let OUTPUT name the format. */
 int convert_source(const std::wstring& source, const std::wstring& output) {
     const ConversionDestination destination = conversion_destination(output);
     if (destination == ConversionDestination::Invalid) return 94;
@@ -6716,7 +6696,7 @@ int show_cli_help() {
         L"例: Eqnedit64.exe equation.tex equation.png\r\n"
         L"例: Eqnedit64.exe clipboard clipboard-png\r\n\r\n"
         L"引数なしでGUIを起動し、.tex一つならGUIで開きます。\r\n"
-        L"png は clipboard-png の旧名として引き続き使えます。\r\n";
+        L"旧オプションと出力名 png は廃止されました（終了コード94）。\r\n";
     if (!write_standard_text(STD_OUTPUT_HANDLE, help))
         MessageBoxW(nullptr, help, L"Eqnedit64 コマンドライン", MB_OK);
     return 0;
@@ -6737,6 +6717,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
      * names the culprit and one that names a victim. */
     HeapSetInformation(nullptr, HeapEnableTerminationOnCorruption, nullptr, 0);
     const std::vector<std::wstring> args = process_arguments();
+    for (const auto& argument : args) {
+        if (argument == L"--texclip" || argument == L"--clipboard-tex-to-png" ||
+            argument.compare(0, 7, L"--copy-") == 0 || argument.compare(0, 9, L"--render-") == 0)
+            return report_cli_error(L"Removed compatibility option. Use Eqnedit64.exe INPUT OUTPUT; "
+                L"OUTPUT: office, slides, clipboard-png, output.png, output.emf, output.pptxmath.", 94);
+    }
+    if (args.size() == 2 && wide_equal_ci(args[1], L"png"))
+        return report_cli_error(L"Removed output alias png. Use clipboard-png for the clipboard or output.png for a file.", 94);
     if (args.size() == 1 &&
         (args[0] == L"--help" || args[0] == L"-h" || args[0] == L"/?"))
         return show_cli_help();
@@ -6769,7 +6757,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     bool uiTestRequested = false;
     bool clipboardPublishTestRequested = false;
     bool googleSlidesClipboardTestRequested = false;
-    bool texclipRequested = false;
     std::wstring openPath = openFirstOfMultiple;
     for (size_t i = 0; i < args.size() && openFirstOfMultiple.empty(); ++i) {
         if (args[i] == L"--version") {
@@ -6788,38 +6775,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
         if (args[i] == L"--operation-log-test")
             return i + 1 < args.size() ? operation_log_test(args[i + 1]) : 30;
         if (args[i] == L"--paint-bench") paintBenchRequested = true;
-        if (args[i] == L"--copy-tex")
-            return i + 1 < args.size()
-                ? copy_tex_argument(args[i + 1], ClipboardCliTarget::Office) : 94;
-        if (args[i] == L"--copy-tex-file")
-            return i + 1 < args.size()
-                ? copy_tex_file(args[i + 1], ClipboardCliTarget::Office) : 94;
-        if (args[i] == L"--copy-google-slides")
-            return i + 1 < args.size()
-                ? copy_tex_argument(args[i + 1],
-                                    ClipboardCliTarget::GoogleSlides) : 94;
-        if (args[i] == L"--copy-google-slides-file")
-            return i + 1 < args.size()
-                ? copy_tex_file(args[i + 1],
-                                ClipboardCliTarget::GoogleSlides) : 94;
-        if (args[i] == L"--copy-png")
-            return i + 1 < args.size()
-                ? copy_tex_argument(args[i + 1], ClipboardCliTarget::Png) : 94;
-        if (args[i] == L"--copy-png-file")
-            return i + 1 < args.size()
-                ? copy_tex_file(args[i + 1], ClipboardCliTarget::Png) : 94;
-        if (args[i] == L"--render-png")
-            return i + 2 < args.size()
-                ? render_png(args[i + 1], args[i + 2]) : 94;
-        if (args[i] == L"--render-emf")
-            return i + 2 < args.size()
-                ? render_emf(args[i + 1], args[i + 2]) : 94;
-        if (args[i] == L"--render-png-file")
-            return i + 2 < args.size()
-                ? render_file(args[i + 1], args[i + 2], true) : 94;
-        if (args[i] == L"--render-emf-file")
-            return i + 2 < args.size()
-                ? render_file(args[i + 1], args[i + 2], false) : 94;
         if (args[i] == L"--debug-colors") g.debugColors = true;
         if (args[i] == L"--menu-audit") menuAuditRequested = true;
         if (args[i] == L"--menu-list") menuListRequested = true;
@@ -6842,9 +6797,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
             clipboardPublishTestRequested = true;
         if (args[i] == L"--google-slides-clipboard-test")
             googleSlidesClipboardTestRequested = true;
-        if (args[i] == L"--texclip" ||
-            args[i] == L"--clipboard-tex-to-png")
-            texclipRequested = true;
         if (args[i] == L"--debug-operations") debugRequested = true;
         else if (args[i].compare(0, 2, L"--") != 0) openPath = args[i];
     }
@@ -6956,14 +6908,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     if (googleSlidesClipboardTestRequested) {
         const int result = clipboard_set_google_slides(
             "\\frac{x_{1}+\\alpha}{\\sqrt{y}}") ? 0 : 82;
-        DestroyWindow(hwnd);
-        return result;
-    }
-    if (texclipRequested) {
-        const std::string latex = clipboard_get();
-        const int result = latex.find_first_not_of(" \t\r\n") ==
-                std::string::npos
-            ? 83 : (clipboard_set_png(latex) ? 0 : 84);
         DestroyWindow(hwnd);
         return result;
     }

@@ -1724,6 +1724,8 @@ private:
                 }
                 uint32_t cp = c.charCode ? c.charCode : uint32_t(uint8_t(c.ch));
                 if (!cp) return Layout();
+                if (c.delimiterScale > 0)
+                    return sized_delimiter(cp, sizePt, c.delimiterScale * sizePt);
                 if (c.typeface == TF_VECTOR ||
                     c.typeface == TF_BOLD_SYMBOL) {
                     if (const uint32_t mathBold = math_bold_of(cp))

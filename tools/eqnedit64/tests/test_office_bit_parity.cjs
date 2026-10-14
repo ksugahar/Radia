@@ -184,6 +184,9 @@ function officeBytes(html) {
                fixture.id +
                    ": browser read differs from raw Windows clipboard");
       }
+      fs.writeFileSync(path.join(scratch, fixture.id + ".native.html"), native);
+      fs.writeFileSync(path.join(scratch, fixture.id + ".web.html"),
+                       copied.html);
       const n = officeBytes(native), w = officeBytes(copied.html);
       for (const bytes of [n, w]) {
         const languageAndDelimiter = await page.evaluate(({html, id}) => {
@@ -192,7 +195,18 @@ function officeBytes(html) {
           const spans = Array.from(doc.getElementsByTagName("span"));
           if (!spans.length || !spans.every(span => span.getAttribute("lang") ===
               (/[\u3000-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u{20000}-\u{3134F}]/u.test(span.textContent) ? "ja-JP" : "en-US"))) return false;
-          const expected = ["plain-paired", "fraction-paired", "big-paired", "angle-paired", "nested-paired"].includes(id);
+          if (id === "big-paired") {
+            const sizes = spans.map(span => /font-size:([0-9.]+)pt/.exec(span.getAttribute("style")))
+              .filter(Boolean).map(match => Math.round(Number(match[1]) * 100)).filter(size => size !== 1800);
+            const boxes = Array.from(doc.getElementsByTagNameNS(ns, "box"));
+            const scoped = boxes.length === 16 && boxes.every(box => {
+              const body = Array.from(box.children).find(node => node.localName === "e");
+              return body && body.children.length === 1 && body.children[0].localName === "r";
+            });
+            return scoped && JSON.stringify(sizes) === JSON.stringify([2160,3240,4320,5400].flatMap(size => [size,size,size,size])) &&
+              !doc.getElementsByTagNameNS(ns, "d").length;
+          }
+          const expected = ["plain-paired", "fraction-paired", "angle-paired", "nested-paired"].includes(id);
           if (["separate-parentheses", "separate-brackets", "function-parentheses", "separate-absolute"].includes(id))
             return !doc.getElementsByTagNameNS(ns, "d").length;
           if (id === "separate-explicit") return doc.getElementsByTagNameNS(ns, "d").length === 2;
@@ -252,9 +266,6 @@ function officeBytes(html) {
           assert(structureOk, fixture.id + ": enclosing closing fence not outside m:e");
         }
       }
-      fs.writeFileSync(path.join(scratch, fixture.id + ".native.html"), native);
-      fs.writeFileSync(path.join(scratch, fixture.id + ".web.html"),
-                       copied.html);
       const equal = n.equals(w);
       results.push({
         id : fixture.id,

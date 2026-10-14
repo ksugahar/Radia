@@ -101,13 +101,12 @@ Eqnedit64.exe clipboard clipboard-png
 
 `clipboard`入力は登録 `LaTeX` を優先し、なければUnicode文字列を読みます。
 外側の `$...$`、`\[...\]`、`equation` 等はGUI貼り付けと同じ規則で除きます。
-`png`は`clipboard-png`の旧名として受理しますが、新規スクリプトでは使いません。
+旧出力名`png`は終了コード94で拒否します。クリップボードは`clipboard-png`、ファイルは`.png`パスを指定します。
 `.tex`を二つ渡した場合はExplorerの複数選択とみなし、変換せず先頭文書をGUIで開きます。
 `--help` / `--version`はコンソールまたはredirect時に標準出力へ書きます。詳しい契約は
 [`docs/COMMAND_LINE.md`](docs/COMMAND_LINE.md) を参照してください。成功0、入力読込み失敗82、
 空入力83、クリップボード失敗84、出力指定不正94です。
-3.0.12より前の長いオプションも既存連携の互換入力として受けますが、新しいスクリプトや
-教材では使用しません。`Eqnedit64.exe --help` で同じ短い形式を確認できます。
+旧`--copy-*`、`--render-*`、`--texclip`、`--clipboard-tex-to-png`も終了コード94で拒否します。`Eqnedit64.exe --help` で同じ短い形式を確認できます。
 
 ## 操作デバッグ
 

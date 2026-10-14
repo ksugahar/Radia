@@ -67,5 +67,10 @@ Eqnedit64.exe clipboard clipboard-png
 
 Exit codes are 0 for success, 82 for input read failure, 83 for empty input, 84
 for clipboard publication failure, and 94 for an invalid output destination.
-The pre-3.0.13 `--copy-*`, `--render-*`, and `--texclip` spellings remain
-compatibility inputs only and are not part of the public command-line API.
+The removed `--copy-*`, `--render-*`, `--texclip`, `--clipboard-tex-to-png`
+inputs and the ambiguous output word `png` are rejected with exit code 94 and
+a migration diagnostic before the GUI, clipboard or image conversion starts.
+Use `clipboard-png` for clipboard PNG and a `.png` path for a file.
+`powerpoint` / `word` and `google-slides` remain current descriptive names for
+`office` and `slides`. The Python helper target `png` describes an image format
+and invokes the current `clipboard-png` destination; it is not the removed CLI spelling.

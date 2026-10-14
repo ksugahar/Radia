@@ -159,3 +159,10 @@ Eqnedit64と同じく、`Ctrl+Shift++`（`+` が出るキー）は数学、`Ctrl
 | `Ctrl+1` / `Ctrl+2` / `Ctrl+4` | 100% / 200% / 400% |
 | `Ctrl+Alt++` / `Ctrl+Shift+-` / `Ctrl+Shift+0` | 拡大 / 縮小 / ズームリセット |
 | `F12` | 操作ログに問題箇所の目印 |
+
+## コマンドラインからの変換
+
+`Eqnedit64.exe INPUT OUTPUT`を使います。PNGクリップボードは`clipboard-png`、
+PNGファイルは`.png`パスです。旧`--copy-*` / `--render-*` / `--texclip` /
+`--clipboard-tex-to-png`と出力名`png`は終了コード94で拒否します。
+`powerpoint` / `word` / `google-slides`は現行の説明的な出力先名です。

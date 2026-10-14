@@ -75,6 +75,11 @@ competing registered MathML. Web H5/H6 hand tests passed for 3.1.2, and the
 Browser payload tests alone are not Office acceptance. Published candidate
 BUILD labels are retained in the immutable 3.1.3 artifacts.
 
+Keep the editor tab and browser open until the Office paste completes. On
+Windows Chromium, closing the browser before pasting can discard its Office
+HTML clipboard data. Copy again from the open editor if this happens; copying
+successfully does not guarantee clipboard persistence after browser shutdown.
+
 The exporter handles token runs, normal/italic/bold/bold-italic,
 colour inheritance, Unicode mathematical alphanumerics (including script,
 fraktur, double-struck, sans-serif and monospace), fractions and binomials, roots, sub/sup scripts and

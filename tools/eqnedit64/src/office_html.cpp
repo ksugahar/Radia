@@ -6,9 +6,11 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <iomanip>
 #include <map>
 #include <memory>
 #include <regex>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -272,8 +274,8 @@ public:
         "\"/></m:eqArrPr>";
   }
   std::string runProperties(const std::string &colour = "", bool normal = true,
-                            bool bold = false, const std::string &language = "en-US") {
-    return "<a:rPr lang=\"" + language + "\" sz=\"1800\" i=\"" + std::string(normal ? "0" : "1") +
+                            bool bold = false, const std::string &language = "en-US", int size = 1800) {
+    return "<a:rPr lang=\"" + language + "\" sz=\"" + std::to_string(size) + "\" i=\"" + std::string(normal ? "0" : "1") +
            "\" b=\"" + (bold ? "1" : "0") + "\"><a:solidFill><a:srgbClr val=\"" +
            (colour.empty() ? std::string("000000") : colour.substr(1)) +
            "\"/></a:solidFill><a:latin typeface=\"Cambria Math\"/></a:rPr>";
@@ -283,6 +285,15 @@ std::string control() {
     return "<m:ctrlPr>" + runProperties() + "</m:ctrlPr>";
   return "<span style=\"" + style +
          ";font-style:normal\" lang=\"en-US\"><m:ctrlPr></m:ctrlPr></span>";
+}
+double fixedDelimiterScale(const Xml &n) {
+  if (n.name != "mo" || n.attr("minsize").empty() || n.attr("minsize") != n.attr("maxsize")) return 0;
+  const auto size = n.attr("minsize");
+  if (size == "1.2em") return 1.2;
+  if (size == "1.8em") return 1.8;
+  if (size == "2.4em") return 2.4;
+  if (size == "3em" || size == "3.0em") return 3;
+  throw std::runtime_error("unsupported fixed delimiter size");
 }
 std::string run(const Xml &n) {
   if (content(n).empty())
@@ -303,6 +314,14 @@ std::string run(const Xml &n) {
                                                     return (ch & 0xC0) != 0x80;
                                                   }) > 1));
   const bool bold = !mapped && variant.find("bold") != std::string::npos;
+  const double scale = fixedDelimiterScale(n);
+  const int size = scale > 0 ? int(1800 * scale + 0.5) : 1800;
+  auto scoped = [&](const std::string &body) {
+    // Keep the sized glyph's font from becoming the neighbouring fraction's
+    // layout size in PowerPoint. The box argument owns only this token.
+    return scale > 0 ? "<m:box><m:boxPr>" + control() +
+        "</m:boxPr><m:e>" + body + "</m:e></m:box>" : body;
+  };
   const std::string properties =
       normal || bold
           ? "<m:rPr><m:sty m:val=\"" +
@@ -319,17 +338,23 @@ std::string run(const Xml &n) {
   }
   if (dialect_ != OfficeDialect::RichEdit) {
     const std::string tag = "a:t";
-    return "<m:r>" + properties + runProperties(colour, normal, bold, office_language(content(n))) + "<" + tag +
+    return scoped("<m:r>" + properties + runProperties(colour, normal, bold, office_language(content(n)), size) + "<" + tag +
            " xml:space=\"preserve\">" + escape(alphabet(content(n), variant)) +
-           "</" + tag + "></m:r>";
+           "</" + tag + "></m:r>");
   }
-  return "<m:r>" + properties + "<span style=\"" + style +
+  std::string runStyle = style;
+  if (scale > 0) {
+    std::ostringstream points;
+    points << std::fixed << std::setprecision(1) << size / 100.0;
+    runStyle.replace(runStyle.find("18.0pt"), 6, points.str() + "pt");
+  }
+  return scoped("<m:r>" + properties + "<span style=\"" + runStyle +
          (colour.empty() ? "" : ";color:" + escape(colour)) +
          ";font-style:" + (normal ? "normal" : "italic") +
          (!mapped && variant.find("bold") != std::string::npos
               ? ";font-weight:bold"
               : "") +
-         ";mso-fareast-language:" + office_language(content(n)) + "\" lang=\"" + office_language(content(n)) + "\">" + escape(alphabet(content(n), variant)) + "</span></m:r>";
+         ";mso-fareast-language:" + office_language(content(n)) + "\" lang=\"" + office_language(content(n)) + "\">" + escape(alphabet(content(n), variant)) + "</span></m:r>");
 }
 bool scripted(const Xml &n) {
   return n.name == "msub" || n.name == "msup" || n.name == "msubsup" ||
@@ -477,6 +502,7 @@ std::string emit(const Xml &n) {
   auto child = [&](size_t i) { return emit(*n.children.at(i)); };
   if ((name == "mrow" || name == "math") && n.children.size() >= 2 &&
       n.children.front()->name == "mo" && n.children.back()->name == "mo" &&
+      !fixedDelimiterScale(*n.children.front()) && !fixedDelimiterScale(*n.children.back()) &&
       !fenceClose(content(*n.children.front())).empty() &&
       fenceClose(content(*n.children.front())) == content(*n.children.back()) &&
       singleDelimiterPair(n)) {
