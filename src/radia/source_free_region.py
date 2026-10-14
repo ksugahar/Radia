@@ -4,8 +4,8 @@ import hashlib
 import numpy as np
 
 
-def _box_separated(tetrahedron, lower, upper, tolerance):
-    """Separating-axis certificate for a tetrahedron and an axis-aligned box."""
+def _box_separation(tetrahedron, lower, upper):
+    """Largest unit-axis separation, a conservative Euclidean distance bound."""
     center = (lower + upper) / 2
     half = (upper - lower) / 2
     edges = [tetrahedron[j] - tetrahedron[i] for i, j in combinations(range(4), 2)]
@@ -13,6 +13,7 @@ def _box_separated(tetrahedron, lower, upper, tolerance):
     axes += [np.cross(tetrahedron[j] - tetrahedron[i], tetrahedron[k] - tetrahedron[i])
              for i, j, k in combinations(range(4), 3)]
     axes += [np.cross(edge, axis) for edge in edges for axis in np.eye(3)]
+    gap = -float('inf')
     for axis in axes:
         length = np.linalg.norm(axis)
         if length == 0:
@@ -20,9 +21,12 @@ def _box_separated(tetrahedron, lower, upper, tolerance):
         axis = axis / length
         projected = (tetrahedron - center) @ axis
         radius = half @ np.abs(axis)
-        if projected.min() > radius + tolerance or projected.max() < -radius - tolerance:
-            return True
-    return False
+        gap = max(gap, float(projected.min()-radius), float(-radius-projected.max()))
+    return gap
+
+
+def _box_separated(tetrahedron, lower, upper, tolerance):
+    return _box_separation(tetrahedron, lower, upper) > tolerance
 
 
 def certify_current_free_total_region(mesh, materials, source_support_boxes, *, tolerance=1e-10):
@@ -57,16 +61,19 @@ def certify_current_free_total_region(mesh, materials, source_support_boxes, *, 
         while parent[v] != v:
             parent[v] = parent[parent[v]]; v = parent[v]
         return v
+    minimum_clearance = float('inf')
     for element in cells:
         cell = sorted(v.nr for v in element.vertices)
         xyz = np.asarray([mesh[v].point for v in element.vertices], dtype=float)
         if np.linalg.matrix_rank(xyz[1:] - xyz[0]) != 3:
             raise ValueError("degenerate total tetrahedron")
-        candidates = np.all(boxes[:, 1] >= xyz.min(axis=0)-tolerance, axis=1) & np.all(
-            boxes[:, 0] <= xyz.max(axis=0)+tolerance, axis=1)
-        for lower, upper in boxes[candidates]:
-            if not _box_separated(xyz, lower, upper, tolerance):
+        gaps = np.maximum(xyz.min(axis=0)-boxes[:, 1], boxes[:, 0]-xyz.max(axis=0)).max(axis=1)
+        for index in np.flatnonzero(gaps <= tolerance):
+            lower, upper = boxes[index]
+            gaps[index] = _box_separation(xyz, lower, upper)
+            if gaps[index] <= tolerance:
                 raise ValueError("source support intersects or touches total region; current-free mode rejected")
+        minimum_clearance = min(minimum_clearance, float(gaps.min()))
         vertices.update(cell)
         for vertex in cell:
             links.setdefault(vertex, []).append(tuple(v for v in cell if v != vertex))
@@ -121,5 +128,6 @@ def certify_current_free_total_region(mesh, materials, source_support_boxes, *, 
                 betti_1_GF2=b1, connected_components=components,
                 rank_boundary_1_GF2=len(vertices)-components, rank_boundary_2_GF2=len(pivots),
                 source_support_box_count=len(boxes), tolerance_m=float(tolerance),
+                minimum_source_clearance_lower_bound_m=minimum_clearance,
                 source_support_sha256=hashlib.sha256(boxes.astype('<f8').tobytes()).hexdigest(),
                 source_support_completeness="caller-owned conservative cover of all currents")
