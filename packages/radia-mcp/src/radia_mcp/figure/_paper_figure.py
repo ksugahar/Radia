@@ -2059,6 +2059,29 @@ def emit_paper_figure(
                 f"got {on_fail!r}"
             )
 
+    # --- Pre-save: refuse a non-TrueType PDF font mode ---
+    # With pdf.fonttype=3, matplotlib may fail inside its own Type-3 subsetter
+    # (for example on glyph indices above 255) before the post-save byte check
+    # can run, so the publisher-facing font-embedding error is raised first.
+    if check_font_embedding and save_pdf:
+        plt, matplotlib = _get_mpl()
+        fonttype = matplotlib.rcParams.get("pdf.fonttype")
+        if fonttype != 42:
+            msg = (
+                "emit_paper_figure: font-embedding issue that publishers "
+                f"reject: rcParams['pdf.fonttype'] is {fonttype!r}, which "
+                "embeds Type-3 fonts.\n"
+                "Fix:\n"
+                "  - Ensure plt.rcParams['pdf.fonttype'] == 42 BEFORE\n"
+                "    savefig().  paper_figure() sets this; do not\n"
+                "    override."
+            )
+            if on_fail == "warn":
+                import warnings
+                warnings.warn(msg)
+            else:
+                raise ValueError(msg)
+
     # --- Save ---
     wrote = []
     if save_pdf:
