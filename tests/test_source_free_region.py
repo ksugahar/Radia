@@ -26,7 +26,9 @@ def blocks(hole=False):
                     if key not in points:points[key]=mesh.Add(MeshPoint(Pnt(*map(float,key))))
                     cell.append(points[key])
                 mesh.Add(Element3D(1,cell))
-    result=ng.Mesh(mesh);result.Curve(1)
+    result=ng.Mesh(mesh)
+    with ng.TaskManager():
+        result.Curve(1)
     return result
 
 
@@ -69,7 +71,9 @@ def test_separating_axis_beyond_coordinate_boxes():
 
 
 def test_curved_geometry_is_not_certified_as_straight():
-    mesh=blocks();mesh.Curve(2)
+    mesh=blocks()
+    with ng.TaskManager():
+        mesh.Curve(2)
     with pytest.raises(ValueError,match='straight tetrahedra'):
         certify(mesh,('core',),[[[2.,2.,2.],[3.,3.,3.]]])
 
@@ -80,6 +84,8 @@ def test_vertex_touching_components_are_not_a_volume_manifold():
         [(0,0,0),(1,0,0),(0,1,0),(0,0,1),(-1,0,0),(0,-1,0),(0,0,-1)]]
     mesh.Add(Element3D(1,[points[i] for i in (0,1,2,3)]))
     mesh.Add(Element3D(1,[points[i] for i in (0,4,5,6)]))
-    mesh=ng.Mesh(mesh);mesh.Curve(1)
+    mesh=ng.Mesh(mesh)
+    with ng.TaskManager():
+        mesh.Curve(1)
     with pytest.raises(ValueError,match='vertex link'):
         certify(mesh,('core',),[[[2.,2.,2.],[3.,3.,3.]]])
