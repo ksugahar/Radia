@@ -25,13 +25,16 @@ OUTPUT:
   clipboard-png  PNG clipboard data (does not create a file)
   equation.png   PNG image file
   equation.emf   EMF image file
+  equation.pptxmath  strict native PowerPoint math
 
 Examples:
   eqnedit64 equation.tex office
   eqnedit64 equation.tex equation.png
   eqnedit64 clipboard clipboard-png
 
-The old OUTPUT name "png" remains accepted as an alias for clipboard-png.
+Removed compatibility inputs (--copy-*, --render-*, --texclip,
+--clipboard-tex-to-png and OUTPUT png) exit with code 94.
+Descriptive destinations powerpoint/word and google-slides remain supported.
 """
 
 

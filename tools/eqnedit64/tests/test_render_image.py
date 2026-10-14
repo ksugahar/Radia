@@ -8,7 +8,7 @@ canvas -- it goes through different code, and a viewer that lacks Cambria Math
 substitutes a differently shaped radical, which is how one "fixed" render was
 read as still broken.
 
-So this renders through the real GDI path, via `Eqnedit64.exe --render-png`,
+So this renders through the real GDI path, via `Eqnedit64.exe INPUT.tex OUTPUT.png`,
 and asserts properties of the ink that do not depend on the font: a rule that
 continues a glyph must not have a gap in it, a fraction bar must reach across
 both of its parts, and nothing may be clipped at the edge of the image.
@@ -56,7 +56,10 @@ class Render:
         png = os.path.join(workdir, "render.png")
         if os.path.exists(png):
             os.remove(png)
-        result = subprocess.run([exe, "--render-png", latex, png],
+        source = os.path.join(workdir, "render.tex")
+        with open(source, "w", encoding="utf-8") as stream:
+            stream.write(latex)
+        result = subprocess.run([exe, source, png],
                                 capture_output=True, text=True)
         if result.returncode != 0 or not os.path.exists(png):
             raise RuntimeError("render failed for %r (exit %d)"
