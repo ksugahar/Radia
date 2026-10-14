@@ -18,7 +18,7 @@ or the MCP and Cubit/Simulink operating routes.
 | Is a force or torque calculation consistent? | Lorentz force, coenergy/virtual work, Maxwell-stress balance and symmetry | [Force and torque corpus](../validation_test/force_validation/README.md) |
 | Is the thermal discretization and source transfer correct? | Manufactured transient solution and conservative transfer | [Thermal verification notebook](induction_heating/axisymmetric_p2_thermal.ipynb) and [scope](induction_heating/README.md) |
 | Does a motor reduced model generalize beyond its sampled angles? | Interlaced holdout angles and independent torque evaluations | [Motor-ROM study](electric_machine/angle_periodic_motor_rom.ipynb) and [qualification notes](electric_machine/README.md) |
-| Do Python and MATLAB perform the same supported operation? | Explicit interface comparison cases | [Parity record](../validation_test/ngsolve_matlab_parity/README.md) and [backend classifications](../matlab/python_api_parity_manifest.json) |
+| Do Python and MATLAB perform the same supported operation? | Explicit interface comparison cases | [Parity record](../validation_test/ngsolve_matlab_parity/README.md) and [backend classifications](../packages/radia-gpu/matlab/python_api_parity_manifest.json) |
 
 These links point to existing evidence, not a claim that every check was rerun
 for this guide. Read the artifact's date, source/runtime identity, inputs,

@@ -420,7 +420,7 @@ triangle-wise P1 surface-gradient extractor.
 via the BH-curve ESIM path: σ = 2 × 10⁶ S/m, μ_r(linear) = 100, BH curve
 [`em_sample_bh.txt`](../../src/radia/panels/samples/em_sample_bh.txt),
 half_thickness = 5 mm.  Coil: PEEC filament from
-[`ih_fem_kelvin_demo_coil.step`](../../src/radia/panels/samples/ih_fem_kelvin_demo_coil.step).
+[`ih_fem_kelvin_demo_coil.step`](../../validation_test/esim_spatial/inputs/ih_fem_kelvin_demo_coil.step).
 Frequency: 50 kHz.  **I_port = 100 A** (chosen to push surface H_t
 through the BH knee at ~1000 A/m).  Both modes:
 `--esim-max-iter 30 --esim-anderson-m 5 --esim-relax 0.5`.
@@ -758,7 +758,7 @@ All numbers below are **real** — they are the values stored in
 
 | Coil | Workpiece |
 |---|---|
-| PEEC filament (16 perimeter filaments), STEP geometry [`ih_fem_kelvin_demo_coil.step`](../../src/radia/panels/samples/ih_fem_kelvin_demo_coil.step) | Mesh from [`ih_fem_kelvin_demo.vol`](../../src/radia/panels/samples/ih_fem_kelvin_demo.vol) |
+| PEEC filament (16 perimeter filaments), STEP geometry [`ih_fem_kelvin_demo_coil.step`](../../validation_test/esim_spatial/inputs/ih_fem_kelvin_demo_coil.step) | Mesh from `ih_fem_kelvin_demo.vol` |
 | σ_coil = 5.8 × 10⁷ S/m (Cu) | σ_wp = 2 × 10⁶ S/m |
 | I_port = 1 A peak | half_thickness = 5 mm (cylinder radius), μ_r(linear) = 100, BH curve [`em_sample_bh.txt`](../../src/radia/panels/samples/em_sample_bh.txt) |
 | | wp_area_m2 = 1.847 × 10⁻³ m² (from result), wp_mesh_nv = 73, wp_mesh_n_tris = 142 |
@@ -768,6 +768,9 @@ At 50 kHz:
 - `δ_coil = 0.296 mm` (Cu) — well-resolved on the PEEC filament side
 
 ### 11.2 CLI invocation
+
+> Historical record: the `src/radia/panels` CLI and its samples are retired.
+> The demo coil STEP now lives in `validation_test/esim_spatial/inputs/`.
 
 ```bash
 python src/radia/panels/calc_inductance.py \

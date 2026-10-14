@@ -1504,9 +1504,9 @@ classified as `native-mex`, `matlab-native`, `python-fallback`, or
 that every high-level Python composition API has already become native MATLAB.
 `radia.python.p1Linear` is the explicit batch adapter for the linear total-A
 AMS-PCG API. It uses the checked in-process Python fallback; mesh and field
-objects remain Python-owned. See [linear total-A usage](../docs/api/P1_LINEAR.md).
+objects remain Python-owned. See [linear total-A usage](../../../docs/api/P1_LINEAR.md).
 The current gaps and measured backend comparison are recorded in the
-[MATLAB/Python API parity audit](../docs/api/MATLAB_PYTHON_API_PARITY.md).
+[MATLAB/Python API parity audit](../../../docs/api/MATLAB_PYTHON_API_PARITY.md).
 
 This is deliberately not a mechanical one-MEX-file-per-`.def` translation.
 One Radia gateway avoids duplicating the Radia/NGSolve runtime and gives every

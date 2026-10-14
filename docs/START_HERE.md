@@ -50,13 +50,13 @@ For detailed numerical work, continue to the
 | Study physics and application samples | [validation_test/](../validation_test/README.md) | Model setup, numerical checks and scoped evidence |
 | Inspect results before installing | [Visual application gallery](APPLICATION_GUIDE.md#browse-results) | A geometry or response plot, its conditions and the saved notebook |
 | Write a small Python calculation | [Analytical quick start](../README.md#quick-start) | A magnetic-field value in tesla, without CAD or mesh setup |
-| Use NGSolve objects from MATLAB | [Mesh, space and matrix walkthrough](../matlab/README.md#persistent-mesh-space-form-and-matrix-handles) | Selected native objects and operations available from MATLAB |
-| Connect an application to Simulink | [Radia library guide](../matlab/README.md) | The application block's inputs, outputs and execution contract |
+| Use NGSolve objects from MATLAB | [Mesh, space and matrix walkthrough](../packages/radia-gpu/matlab/README.md#persistent-mesh-space-form-and-matrix-handles) | Selected native objects and operations available from MATLAB |
+| Connect an application to Simulink | [Radia library guide](../packages/radia-gpu/matlab/README.md) | The application block's inputs, outputs and execution contract |
 | Ask an AI assistant to operate CAE tools | [Python and MCP setup](../README.md#python-and-mcp) | Your analysis task carried out through supported tools, with inspectable artifacts |
 
 Follow the linked setup for the chosen interface. A MATLAB MEX operation, a
 triggered batch application and a native Simulink time-step block have different
-execution requirements; see the [backend map](../matlab/python_api_parity_manifest.json).
+execution requirements; see the [backend map](../packages/radia-gpu/matlab/python_api_parity_manifest.json).
 These links do not imply that every workflow is available as a standalone
 MATLAB Runtime application.
 
@@ -80,7 +80,7 @@ MATLAB Runtime application.
    interactive views may require a compatible notebook frontend.
 2. **Choose an operating route.** Use [MCP](../README.md#python-and-mcp), or
    collaborate with AI using [Cubit](cubit_mesh_export/README.md) and
-   [Simulink](../matlab/README.md). Notebook execution serves the demonstration;
+   [Simulink](../packages/radia-gpu/matlab/README.md). Notebook execution serves the demonstration;
    it is not a required step in operating your model. AI Cubit execution is
    headless; geometry, journals, meshes and checks support the handoff to human work.
 3. **Check the inputs.** Record geometry, SI units, material law, excitation,
@@ -95,7 +95,7 @@ MATLAB Runtime application.
 The [installation guide](../README.md#installation) owns supported platforms,
 dependencies and package choices. Radia, radia-mcp and the other distributions
 have separate release histories; installing one does not install every interface.
-The [MATLAB backend map](../matlab/python_api_parity_manifest.json) identifies
+The [MATLAB backend map](../packages/radia-gpu/matlab/python_api_parity_manifest.json) identifies
 native operations and explicit Python batch fallbacks.
 
 ## Common questions

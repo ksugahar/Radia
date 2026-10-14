@@ -15,7 +15,7 @@ design run or a recorded MCP session.
 
 These pages introduce what Radia can do. For actual operation, use
 [MCP tools](../packages/radia-mcp/README.md) or collaborate with AI through
-[Cubit](cubit_mesh_export/README.md) and [Simulink](../matlab/README.md).
+[Cubit](cubit_mesh_export/README.md) and [Simulink](../packages/radia-gpu/matlab/README.md).
 For executable samples, begin with [small test cases](../tests/README.md) or
 [physics and application validation cases](../validation_test/README.md).
 Each case retains its dependencies, assertions and demonstrated scope.
@@ -187,8 +187,8 @@ measured over the intended operating range.
 **Question:** How do geometry, mesh, field and numerical operators fit together?
 
 Start with the [NGSolve integration notebook](ngsolve_integration/integration_basics.ipynb).
-For MATLAB, follow the [persistent mesh, space, form and matrix walkthrough](../matlab/README.md#persistent-mesh-space-form-and-matrix-handles).
-The [backend map](../matlab/python_api_parity_manifest.json) distinguishes native
+For MATLAB, follow the [persistent mesh, space, form and matrix walkthrough](../packages/radia-gpu/matlab/README.md#persistent-mesh-space-form-and-matrix-handles).
+The [backend map](../packages/radia-gpu/matlab/python_api_parity_manifest.json) distinguishes native
 operations from explicit Python batch fallbacks. Interface availability is not
 complete API parity.
 

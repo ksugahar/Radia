@@ -614,7 +614,7 @@ public:
 
 #### 4.7.3 NB02トロイダルコイルでの比較
 
-[02_performance_comparison.ipynb](02_performance_comparison.ipynb)のトロイダルコイル問題 (148K自由度) において:
+02_performance_comparison.ipynbのトロイダルコイル問題 (148K自由度) において:
 
 | ソルバー | 反復回数 | 実行時間 | 高速化率 |
 |--------|-----------|-----------|---------|

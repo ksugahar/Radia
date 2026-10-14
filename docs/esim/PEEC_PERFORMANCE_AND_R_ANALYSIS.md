@@ -163,7 +163,7 @@ topology class, then applies the appropriate centerline-recovery
 algorithm.
 
 For the canonical IGTE-benchmark coil
-([`ih_fem_kelvin_demo_coil.step`](../../src/radia/panels/samples/ih_fem_kelvin_demo_coil.step)),
+([`ih_fem_kelvin_demo_coil.step`](../../validation_test/esim_spatial/inputs/ih_fem_kelvin_demo_coil.step)),
 the dispatch lands on Path 1 (lateral surface UV sampling), which
 samples the BSPLINE lateral face at `n_stations × n_peri` (u, v) grid
 points.  For 50 stations × 16 perimeter points = 800 OCC surface

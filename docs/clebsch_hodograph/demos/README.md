@@ -7,7 +7,7 @@ hodograph"** mode shipped in the `radia-electromagnet` panel
 
 > The design methodology these examples support (accelerator magnet design
 > via the A–φ duality + reduced potential) is in
-> [`docs/clebsch_hodograph/DESIGN_METHODOLOGY.md`](../../docs/clebsch_hodograph/DESIGN_METHODOLOGY.md).
+> [`docs/clebsch_hodograph/DESIGN_METHODOLOGY.md`](../DESIGN_METHODOLOGY.md).
 
 The maintained theory surfaces are the Markdown documents in
 `docs/clebsch_hodograph/`. The scripts remain protected for now because

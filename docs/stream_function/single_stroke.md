@@ -16,7 +16,7 @@ All are in
 selectable via
 `--chain-method {field_aware, kuijpers, lobe, greedy, nn_blend}`.
 
-> **Use the [`single-stroke-chain`](../../.claude/skills/single-stroke-chain/SKILL.md)
+> **Use the `single-stroke-chain`
 > skill** when joining a new coil's contours.  The single-stroke
 > connection has no clean closed-form optimum — it is a reason-and-verify
 > task (pick a method that respects the current-sign order → build the

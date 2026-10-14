@@ -74,8 +74,8 @@ The MCP server `mcp-server-ih` exposes this knowledge via the
 
 ## Cross-references outside docs/esim/
 
-- [`docs/research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.ipynb`](../research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.ipynb) — research WIP (validation host-only, gitignored).
-- [`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb) — wide-band nonlocal extension roadmap (deferred).
+- `docs/research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.ipynb` — research WIP (validation host-only, gitignored).
+- `docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb` — wide-band nonlocal extension roadmap (deferred).
 - [`docs/induction_heating/induction_heating_demo_showcase.ipynb`](../induction_heating/induction_heating_demo_showcase.ipynb) — executed ESIM/Bessel public showcase backed by the checked validation corpus.
 - [`validation_test/ih_esim_benchmark/`](../../validation_test/ih_esim_benchmark/) — benchmark scripts producing `results.json`.
 - [`src/radia/esim_cell_problem.py`](../../src/radia/esim_cell_problem.py) — cell-problem solver source.

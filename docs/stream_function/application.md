@@ -12,7 +12,7 @@ supported calculation and geometry tools.
 | Inspect surface currents and winding results | [Saved feature notebook](theory.ipynb) |
 | Operate supported tools with AI | [MCP setup and tools](../../packages/radia-mcp/README.md) |
 | Prepare coil and evaluation meshes | [Cubit workflow](../cubit_mesh_export/README.md) |
-| Collaborate on an application model | [Radia Simulink library](../../matlab/README.md) |
+| Collaborate on an application model | [Radia Simulink library](../../packages/radia-gpu/matlab/README.md) |
 | Read a small coil construction/field sample | [Finite-section coil axis test](../../tests/test_coil_axis_closed_form.py) |
 | Inspect winding verification and benchmarks | [Stream-function validation](../../validation_test/stream_function/README.md) |
 
