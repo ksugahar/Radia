@@ -3196,7 +3196,7 @@
   }
 
   var OFFICE_MATH_RUN_STYLE =
-    "font-size:18.0pt;font-family:'Cambria Math';" +
+    "mso-ansi-language:EN-US;mso-bidi-language:EN-US;font-size:18.0pt;font-family:'Cambria Math';" +
     "mso-ascii-font-family:'Cambria Math';mso-font-kerning:12.0pt;" +
     "color:black";
 
@@ -3251,6 +3251,9 @@
     }).join("");
   }
 
+  function officeLanguage(text) {
+    return /[\u3000-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u{20000}-\u{3134F}]/u.test(text) ? "ja-JP" : "en-US";
+  }
   function officeOmmlRun(node, forceNormal) {
     if (!node.textContent) return "";
     // Native FunctionNode has no nonprinting MathJax function-application mark.
@@ -3276,13 +3279,13 @@
       ";font-weight:bold" : "";
     return "<m:r>" + properties + "<span style=\"" + OFFICE_MATH_RUN_STYLE +
       (colour ? ";color:" + officeHtmlEscape(colour) : "") +
-      ";font-style:" + (normal ? "normal" : "italic") + weight + "\">" +
+      ";font-style:" + (normal ? "normal" : "italic") + weight + ";mso-fareast-language:" + officeLanguage(node.textContent) + "\" lang=\"" + officeLanguage(node.textContent) + "\">" +
       officeHtmlEscape(officeMathAlphabet(node.textContent, variant)) + "</span></m:r>";
   }
 
   function officeOmmlControl() {
     return "<span style=\"" + OFFICE_MATH_RUN_STYLE +
-      ";font-style:normal\"><m:ctrlPr></m:ctrlPr></span>";
+      ";font-style:normal\" lang=\"en-US\"><m:ctrlPr></m:ctrlPr></span>";
   }
 
   function officeUnwrapped(node) {
@@ -3409,6 +3412,20 @@
         function (attribute) { return node.hasAttribute(attribute); })) {
       throw new Error("unsupported Office padding dimensions");
     }
+    if ((name === "mrow" || name === "math" || name === "mstyle") && children.length >= 2 &&
+        officeUnwrapped(children[0]).localName === "mo" && officeUnwrapped(children[children.length - 1]).localName === "mo" &&
+        officeFenceClose(officeUnwrapped(children[0]).textContent) &&
+        officeFenceClose(officeUnwrapped(children[0]).textContent) === officeUnwrapped(children[children.length - 1]).textContent) {
+      var inner = node.cloneNode(true);
+      inner.removeChild(inner.firstElementChild);
+      inner.removeChild(inner.lastElementChild);
+      return '<m:d><m:dPr><m:begChr m:val="' +
+        officeHtmlEscape(officeUnwrapped(children[0]).textContent) + '"/><m:endChr m:val="' +
+        officeHtmlEscape(officeUnwrapped(children[children.length - 1]).textContent) +
+        '"/><m:grow m:val="1"/>' + officeOmmlControl() +
+        '</m:dPr><m:e>' + officeOmmlChildren(inner) +
+        '</m:e></m:d>';
+    }
     if (name === "math" || name === "mrow" || name === "mstyle" ||
         name === "semantics" || name === "mpadded") {
       return officeOmmlChildren(node);
@@ -3420,7 +3437,7 @@
     if (name === "mspace") {
       if (parseFloat(node.getAttribute("width")) === 0) return "";
       return "<m:r><m:rPr><m:sty m:val=\"p\"/></m:rPr><span style=\"" + OFFICE_MATH_RUN_STYLE +
-        ";font-style:normal\">&#160;</span></m:r>";
+        ";font-style:normal;mso-fareast-language:en-US\" lang=\"en-US\">&#160;</span></m:r>";
     }
     if (name === "mfrac") {
       return "<m:f><m:fPr>" + (node.getAttribute("linethickness") === "0" ?
@@ -3579,7 +3596,7 @@
     var math = "<m:oMathPara xmlns:m=\"http://schemas.microsoft.com/office/" +
       "2004/12/omml\"><m:oMathParaPr><m:jc m:val=\"left\"/>" +
       "</m:oMathParaPr><m:oMath>" + body + "</m:oMath></m:oMathPara>";
-    return '<p style="margin:0;font-size:18pt;font-family:Cambria Math">' +
+    return '<p lang="en-US" style="margin:0;font-size:18pt;font-family:Cambria Math">' +
       "<!--[if gte msEquation 12]>" + math + "<![endif]-->" +
       "<![if !msEquation]>" + mml + "<![endif]></p>";
   }
@@ -3590,7 +3607,7 @@
     var previous;
     do {
       previous = body;
-      body = body.replace(/<m:r>((?:<m:rPr><m:sty m:val="(?:p|b|bi)"\/><\/m:rPr>)?)<span style="([^"]*)">([^<]*)<\/span><\/m:r><m:r>\1<span style="\2">([^<]*)<\/span><\/m:r>/g,
+      body = body.replace(/<m:r>((?:<m:rPr><m:sty m:val="(?:p|b|bi)"\/><\/m:rPr>)?)<span style="([^"]*" lang="[^"]*)">([^<]*)<\/span><\/m:r><m:r>\1<span style="\2">([^<]*)<\/span><\/m:r>/g,
         '<m:r>$1<span style="$2">$3$4</span></m:r>');
     } while (body !== previous);
     return body;
