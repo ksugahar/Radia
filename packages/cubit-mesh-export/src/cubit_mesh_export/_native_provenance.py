@@ -151,17 +151,20 @@ def record_manifest(repo_root: Path, package_dir: Path) -> dict:
         payload.setdefault("platform", "win_amd64")
         build_dir = "build-pyd" if name.endswith(".pyd") else "build-ccm"
         cache_path = repo_root / "src/cubit_plugin" / build_dir / "CMakeCache.txt"
-        if cache_path.is_file():
-            cache = cache_path.read_text(encoding="utf-8")
-            sdk = re.search(r"^Cubit_DIR:[^=]+=(.+)$", cache, re.MULTILINE)
-            if sdk:
-                build_info = Path(sdk[1].strip()).parent / "BUILD_INFO"
-                if build_info.is_file():
-                    info = build_info.read_text(encoding="utf-8")
-                    version = re.search(r"^short=(.+)$", info, re.MULTILINE)
-                    if not version:
-                        raise ValueError(f"Missing short version in {build_info}")
-                    payload["cubit_version"] = version[1].strip()
+        if not cache_path.is_file():
+            raise ValueError(f"Missing Cubit SDK cache: {cache_path}")
+        cache = cache_path.read_text(encoding="utf-8")
+        sdk = re.search(r"^Cubit_DIR:[^=]+=([^\r\n]*)$", cache, re.MULTILINE)
+        if not sdk or not sdk[1].strip():
+            raise ValueError(f"Missing Cubit_DIR entry in {cache_path}")
+        build_info = Path(sdk[1].strip()).parent / "BUILD_INFO"
+        if not build_info.is_file():
+            raise ValueError(f"Missing Cubit SDK version file: {build_info}")
+        info = build_info.read_text(encoding="utf-8")
+        version = re.search(r"^short=([^\r\n]*)$", info, re.MULTILINE)
+        if not version or not version[1].strip():
+            raise ValueError(f"Missing short version in {build_info}")
+        payload["cubit_version"] = version[1].strip()
         configs = sorted((repo_root / "src/cubit_plugin" / build_dir / "CMakeFiles").glob(
             "*/CMakeCXXCompiler.cmake"), key=lambda item: item.stat().st_mtime)
         if configs:

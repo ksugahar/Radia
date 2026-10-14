@@ -63,6 +63,7 @@ def test_standalone_registration_in_scratch_profile(monkeypatch, tmp_path):
     cubit.mkdir(parents=True)
     (cubit / 'cubit').mkdir()
     (cubit / 'cubit/__init__.py').write_text('')
+    (cubit / 'cubit/_cubit3.pyd').touch()
     (cubit / 'cubitx.exe').touch()
     (cubit.parent / 'plugins').mkdir()
     monkeypatch.setenv('CUBIT_PATH', str(cubit))

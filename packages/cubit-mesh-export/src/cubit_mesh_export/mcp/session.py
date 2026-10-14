@@ -10,6 +10,7 @@ import glob
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -320,7 +321,15 @@ def run_headless_journal(
         if plugin_dir is not None:
             argv.append("-noinitfile")
             if console.name.lower() == "cubitx.exe":
-                env["CUBIT_PLUGIN_DIR"] = str(plugin_dir)
+                staged = Path(scratch) / "plugins"
+                staged.mkdir()
+                for source in plugin_dir.iterdir():
+                    if source.is_file() and source.suffix.lower() in {".ccm", ".dll"}:
+                        destination = staged / source.with_suffix(".dll").name
+                        if destination.exists():
+                            raise ValueError(f"Conflicting candidate plugin DLL: {destination.name}")
+                        shutil.copy2(source, destination)
+                env["CUBIT_PLUGIN_DIR"] = str(staged)
             else:
                 argv.extend(["-commandplugindir", str(plugin_dir)])
         argv.append(str(driver))

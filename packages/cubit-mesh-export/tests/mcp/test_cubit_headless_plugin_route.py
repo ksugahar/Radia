@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from pathlib import Path
 
 import pytest
 from cubit_mesh_export.mcp import session
@@ -61,3 +62,56 @@ def test_headless_journal_rejects_missing_command_plugin_directory(
     assert result["kind"] == "input"
     assert result["gui_started"] is False
     assert "command plugin directory not found" in result["error"]
+
+
+def test_modern_console_stages_candidate_plugins_without_modifying_sources(tmp_path, monkeypatch):
+    scratch = tmp_path / "scratch"
+    monkeypatch.setenv("CUBIT_MCP_TEMP", str(scratch))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "cubitx.exe").touch()
+    acis = tmp_path / "acis/code/bin"
+    acis.mkdir(parents=True)
+    plugins = tmp_path / "candidate"
+    plugins.mkdir()
+    files = {"cubit_mesh_export.ccm": b"exporter", "dependency.dll": b"dependency",
+             "ignored.txt": b"not a plugin"}
+    for name, data in files.items():
+        (plugins / name).write_bytes(data)
+    staged_paths = []
+
+    def fake_run(argv, **kwargs):
+        staged = Path(kwargs["env"]["CUBIT_PLUGIN_DIR"])
+        staged_paths.append(staged)
+        assert staged.is_relative_to(scratch)
+        assert staged.parent == Path(argv[-1]).parent
+        assert {p.name: p.read_bytes() for p in staged.iterdir()} == {
+            "cubit_mesh_export.dll": b"exporter", "dependency.dll": b"dependency"}
+        assert kwargs["env"]["PATH"].startswith(str(acis))
+        assert "-noinitfile" in argv and "-commandplugindir" not in argv
+        assert {p.name: p.read_bytes() for p in plugins.iterdir()} == files
+        return SimpleNamespace(returncode=0, stdout="exported", stderr="")
+
+    monkeypatch.setattr(session, "get_cubit_bin_dir", lambda: bin_dir)
+    monkeypatch.setattr(session.subprocess, "run", fake_run)
+    result = session.run_headless_journal(["reset"], command_plugin_directory=plugins)
+    assert result["status"] == "completed"
+    assert result["gui_started"] is False
+    assert "-commandplugindir" not in result["headless_flags"]
+    assert {p.name: p.read_bytes() for p in plugins.iterdir()} == files
+    assert not staged_paths[0].exists()
+
+
+def test_modern_console_rejects_colliding_candidate_plugin_names(tmp_path, monkeypatch):
+    monkeypatch.setenv("CUBIT_MCP_TEMP", str(tmp_path / "scratch"))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "cubitx.exe").touch()
+    plugins = tmp_path / "candidate"
+    plugins.mkdir()
+    (plugins / "exporter.ccm").write_bytes(b"one")
+    (plugins / "exporter.dll").write_bytes(b"two")
+    monkeypatch.setattr(session, "get_cubit_bin_dir", lambda: bin_dir)
+    monkeypatch.setattr(session.subprocess, "run", lambda *a, **k: pytest.fail("must not launch"))
+    with pytest.raises(ValueError, match="Conflicting candidate plugin DLL: exporter.dll"):
+        session.run_headless_journal(["reset"], command_plugin_directory=plugins)
