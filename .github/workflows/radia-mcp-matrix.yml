@@ -315,8 +315,17 @@ jobs:
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ttf-mscorefonts-installer
           fc-list | grep -qi "Times New Roman"
-          python -c "import shutil, matplotlib; shutil.rmtree(matplotlib.get_cachedir(), ignore_errors=True)"
-          python -c "import matplotlib.font_manager as fm; print(fm.findfont('Times New Roman', fallback_to_default=False))"
+          # matplotlib may be installed later by the impact plan; a later
+          # install builds its font cache with the new font. Refresh only an
+          # existing cache.
+          python - <<'PY'
+          import importlib.util, shutil
+          if importlib.util.find_spec("matplotlib"):
+              import matplotlib
+              shutil.rmtree(matplotlib.get_cachedir(), ignore_errors=True)
+              import matplotlib.font_manager as fm
+              print(fm.findfont("Times New Roman", fallback_to_default=False))
+          PY
 
       - name: Pytest (compact contracts plus affected package tests)
         if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
