@@ -52,6 +52,11 @@ def normalized(node):
 def semantic_tree(root):
     """Compare delimiter content independent of its stretchable layout form."""
     root = ET.fromstring(ET.tostring(root))
+    # Validation copy only: RichEdit and ISO serializers use different namespaces.
+    for node in root.iter():
+        node.tag = node.tag.replace("{" + OLD + "}", "{" + M + "}")
+        node.attrib = {key.replace("{" + OLD + "}", "{" + M + "}"): value
+                       for key, value in node.attrib.items()}
     for parent in list(root.iter())[::-1]:
         for node in list(parent):
             if node.tag != f"{{{M}}}d":
