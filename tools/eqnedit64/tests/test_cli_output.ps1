@@ -53,6 +53,29 @@ if ($invalid.ExitCode -ne 94 -or $invalid.Stdout -or
 }
 
 Write-Host '[OK] Eqnedit64 CLI help, version, and errors are redirectable.'
+foreach ($removed in @('--texclip', '--clipboard-tex-to-png',
+    '--copy-tex', '--copy-tex-file', '--copy-google-slides', '--copy-google-slides-file',
+    '--copy-png', '--copy-png-file', '--render-png', '--render-emf',
+    '--render-png-file', '--render-emf-file', '--copy-unknown', '--render-unknown')) {
+    $result = Invoke-EqneditCaptured @($removed, 'input.tex', 'output.png')
+    if ($result.ExitCode -ne 94 -or $result.Stdout -or
+        -not $result.Stderr.Contains('Removed compatibility option') -or
+        -not $result.Stderr.Contains('clipboard-png')) {
+        throw "Removed option was not rejected with a migration diagnostic: $removed"
+    }
+}
+$removedPng = Invoke-EqneditCaptured @('input.tex', 'png')
+if ($removedPng.ExitCode -ne 94 -or -not $removedPng.Stderr.Contains('Removed output alias png')) {
+    throw 'Ambiguous png clipboard alias was not rejected.'
+}
+foreach ($destination in @('office', 'powerpoint', 'word', 'slides', 'google-slides',
+    'clipboard-png', 'output.png', 'output.emf', 'output.pptxmath')) {
+    $missing = Invoke-EqneditCaptured @('missing-cli-contract-input.tex', $destination)
+    if ($missing.ExitCode -ne 82) {
+        throw "Current destination no longer reaches the checked input reader: $destination"
+    }
+}
+Write-Host '[OK] Removed compatibility inputs reject; current destinations remain supported.'
 New-Item -ItemType Directory -Path 'C:\temp' -Force | Out-Null
 $invalidColorPath = Join-Path 'C:\temp' ('eqnedit64-invalid-color-' + [guid]::NewGuid().ToString('N') + '.tex')
 try {

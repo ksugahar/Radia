@@ -24,9 +24,9 @@ The direct native command-line converter always takes one input and one output:
 optional launcher for the bundled copy of that same EXE, not another CLI and
 not a pybind11 surface. The input is
 a UTF-8 TeX file or `clipboard`; the output is `office`, `slides`,
-`clipboard-png`, or a `.png` / `.emf` file path. The legacy word `png` remains
-accepted as a clipboard alias, but a path ending in `.png` always creates a
-file.
+`clipboard-png`, or a `.png` / `.emf` file path. The old CLI output word `png` and the compatibility switches are rejected
+with exit code 94. Use `clipboard-png` for clipboard PNG or a `.png` file path.
+The descriptive destinations `powerpoint` / `word` and `google-slides` remain supported.
 
 ```powershell
 Eqnedit64.exe equation.tex office
