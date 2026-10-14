@@ -51,3 +51,35 @@ H and B under the same boundary, source lift, material law and gauge convention,
 not the raw total and reduced potential values. Those potentials generally
 differ by the source lift. If a harmonic source remainder is retained in the
 total region, reconstruct H with that remainder as well.
+
+The total-source Hodge projection fixes its additive constant by setting one
+actual mesh vertex DOF to zero in each connected projection component. It
+does not add a mass penalty. `gauge_vertices` can select those zero-based
+mesh vertex numbers explicitly; otherwise the smallest vertex number in
+each component is used. The retired `gauge_epsilon` argument is no longer
+accepted by `project_source_total_hodge`. A different gauge must preserve
+the projected gradient and the final physical field. The strict true-residual
+gate applies to the free rows. Returned gauge diagnostics also retain fixed-row
+reactions and the full residual, so a flux compatibility defect cannot be
+mistaken for a healthy unconstrained Neumann solve.
+
+Surface-flux Hodge loads enforce Neumann compatibility on the actual assembled
+H1 load, separately for every connected component, even when components share
+a material name. The constant test is represented by its FE coefficient vector;
+summing all hierarchical H1 coefficients does not represent a constant test.
+A NumberSpace flux integral generally uses a different quadrature order and
+cannot balance this load.
+
+Before removing the component boundary mean, the absolute net flux divided by
+the absolute boundary flux must be at most `RELATIVE_LIMIT` (1e-6). Both are
+computed with the H1 load's assembly rule. Larger defects raise
+`SurfaceFluxCompatibilityFailed`; they do not trigger an automatic volume-load
+fallback. Resolve source quadrature or source closure explicitly. Diagnostics
+retain raw/corrected compatibility, removed means, and fixed-row reactions.
+The mixed-system source boundary loads use the same component compatibility
+treatment in their scalar source H1 space. Interface constraints still leave
+a common constant mode, so they do not justify absorbing raw flux defects at
+the global point gauge. Prescribed physical flux boundary terms are separate
+and are not changed by this source correction.
+Compatibility, the tangential source gate, and physical-field accuracy are
+independent requirements.

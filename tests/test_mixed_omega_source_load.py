@@ -50,6 +50,41 @@ def _divergence_free_source():
     return gradient + ng.CF((a * db_dy * c, -da_dx * b * c, 0.0))
 
 
+def test_mixed_point_gauge_does_not_absorb_source_flux():
+    from netgen.meshing import Element0D, PointId
+    from radia.kelvin_solver import (
+        project_source_total_hodge, solve_magnetostatic_mixed_total_reduced_omega_kelvin)
+    mesh = _mesh(0.7)
+    candidates = [v.nr for v in mesh.vertices if v.point[0] < -0.99]
+    first = len(mesh.GetBBBoundaries()) + 1
+    for index, vertex in enumerate((min(candidates), max(candidates)), first):
+        mesh.ngmesh.Add(Element0D(PointId(vertex+1), index=index))
+        mesh.ngmesh.SetCD3Name(index, f'gauge_{index}')
+    mesh = ng.Mesh(mesh.ngmesh)
+    source = ng.CF((ng.exp(.5*ng.x)*ng.cos(.5*ng.y),
+                    -ng.exp(.5*ng.x)*ng.sin(.5*ng.y), 0.0))
+    with ng.TaskManager():
+        hodge = project_source_total_hodge(
+            mesh, source, ('total',), order=2, bonus_intorder=0,
+            source_load='surface_flux', tangential_tolerance=.2)
+        results = [solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh, source, hodge['potential'], 1., (3., 0., 0.),
+            mu_r_by_material={'reduced': 1., 'total': 50.},
+            reduced_materials=('reduced',), total_materials=('total',),
+            interface_boundary='source_total_interface', order=2, bonus_intorder=0,
+            dirichlet_bbbnd=f'gauge_{index}', return_system=True,
+            total_source_materials=('total',), total_source_h=source,
+            total_source_potential=hodge['potential'],
+            reduced_source_load='surface_flux', total_source_load='surface_flux')
+            for index in (first, first+1)]
+        for result in results:
+            assert result['linear_residual']['all_dofs']['relative'] < 1e-8
+        delta = results[0]['B_cf']-results[1]['B_cf']
+        error = ng.Integrate(ng.InnerProduct(delta, delta), mesh)
+        norm = ng.Integrate(ng.InnerProduct(results[0]['B_cf'], results[0]['B_cf']), mesh)
+        assert np.sqrt(error/norm) < 1e-10
+
+
 def test_boundary_normal_points_from_domin_to_domout():
     from radia.kelvin_solver import material_set_boundary_signs
 
