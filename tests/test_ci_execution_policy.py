@@ -117,9 +117,6 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
     fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(
         encoding="utf-8"
     )
-    policy = (ROOT / ".github" / "workflows" / "policy-lint.yml").read_text(
-        encoding="utf-8"
-    )
     mcp = (ROOT / ".github" / "workflows" / "radia-mcp-matrix.yml").read_text(
         encoding="utf-8"
     )
@@ -132,8 +129,8 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
     ):
         assert independent_path in fast
 
-    assert 'paths-ignore:' in policy
-    assert '"packages/radia-mcp/**"' in policy
+    # Universal Policy Lint triggers are owned by the workflow-owner contract
+    # in tests/policy/test_workflow_owner_scope.py.
     assert "Classify radia-mcp change scope" in mcp
     assert 'git diff --name-only "$BASE_SHA...$GITHUB_SHA"' in mcp
     assert "mode=targeted" in mcp
