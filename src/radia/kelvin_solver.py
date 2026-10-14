@@ -1491,8 +1491,6 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     total_materials = tuple(total_materials)
     current_free_total_certificate = None
     if current_free_total_source_boxes is not None:
-        from .kelvin_material import _is_kelvin_material
-
         if any(
             _is_kelvin_material(name, kelvin_mats, exact=kelvin_match_exact)
             for name in total_materials
