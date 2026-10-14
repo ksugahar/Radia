@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-FORBIDDEN = re.compile(r"eqn(?:edit|edt)32|eqn" + r"edt64|mt" + r"ef|math" + r"type", re.I)
+FORBIDDEN = re.compile(r"eqn(?:edit|edt)32|eqn" + r"edt64|mt" + r"ef|math" + r"type|数式" + r"3\.0", re.I)
 
 
 def notebook_text(document):

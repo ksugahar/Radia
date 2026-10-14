@@ -3308,7 +3308,7 @@ LRESULT canvas_keydown(WPARAM key) {
                                              "matrix.remove_column");
             return 0;
         }
-        /* the editor used VkKeyScanA for punctuation shortcuts.  Resolve them
+        /* Punctuation shortcuts use VkKeyScanA for punctuation shortcuts.  Resolve them
          * through the active Windows keyboard layout as well, then retain the
          * OEM-key cases below as a fallback for unusual layouts. */
         if (layout_key_matches(key, L'/', shift)) {
@@ -3826,7 +3826,7 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             /* Compose offscreen and blit.  Painting the fill and then every
              * glyph straight onto the window makes the canvas flash white on
              * each keystroke, which is most of what reads as sluggishness.
-             * the editor composes through a compatible bitmap; so does this
+             * Canvas painting composes through a compatible bitmap; this
              * now.  A failed allocation falls back to drawing direct. */
             const int cw = std::max<int>(1, rc.right - rc.left);
             const int chh = std::max<int>(1, rc.bottom - rc.top);
@@ -4781,7 +4781,7 @@ int convert_source(const std::wstring& source, const std::wstring& output) {
                 const auto parent = target.substr(0, slash + 1);
                 if (!GetTempFileNameW(parent.c_str(), L"eqm", 0, temporary))
                     throw std::runtime_error("Cannot create atomic output temporary file");
-                const bool written = write_file(temporary, math);
+                const bool written = write_stream(temporary, math);
                 const bool moved = written && MoveFileExW(temporary, target.c_str(),
                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
                 if (!moved) {

@@ -1204,7 +1204,7 @@ try {
 
     Set-ClipboardTexInput -UnicodeText '\[x^{1000}\]' -RawLatex $expectedRaw
     $texclip = Start-Process -FilePath $app `
-        -ArgumentList '--clipboard-tex-to-png' `
+        -ArgumentList 'clipboard clipboard-png' `
         -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
     if ($texclip.ExitCode -ne 0) {
         throw "Eqnedit64 --texclip registered LaTeX conversion failed: $($texclip.ExitCode)"

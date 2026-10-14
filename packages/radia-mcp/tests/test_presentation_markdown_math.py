@@ -24,7 +24,7 @@ def backend(monkeypatch):
         root = etree.Element(f"{{{assembly.MATH_NS}}}oMathPara", nsmap={"m": assembly.MATH_NS, "a": assembly.DRAWING_NS})
         math = etree.SubElement(root, f"{{{assembly.MATH_NS}}}oMath")
         run = etree.SubElement(math, f"{{{assembly.MATH_NS}}}r")
-        etree.SubElement(run, f"{{{assembly.DRAWING_NS}}}t").text = tex
+        etree.SubElement(run, f"{{{assembly.MATH_NS}}}t").text = tex
         Path(output).write_bytes(etree.tostring(root))
         return Path(output)
     fake = types.SimpleNamespace(__version__="3.1.4", export_powerpoint_math=export)
