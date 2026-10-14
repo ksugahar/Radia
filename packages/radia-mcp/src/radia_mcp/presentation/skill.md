@@ -48,7 +48,6 @@
   `presentation_render_equation` を使う。
 - 数十式を一式ずつ短命なEqnedit64プロセスで変換しない。デッキ一括生成は
   Eqnedit64のnative OOXML出力と一括PPTXアダプタを使い、フォント登録・解除の連続を避ける。
-- 入出力の正本は常にTeX。MTEFや`.eqn`をMCPワークフローへ導入しない。
 
 ---
 

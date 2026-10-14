@@ -2407,19 +2407,7 @@ Catalog evolution:
   v0.81.0   39 (+ chart2d)
   v0.82.0  *40* (+ md2html)  ← this release
 
-Survey verdict (4 candidates from the lab document server, 2 chosen):
-  ✅ MOVED: md2html (393 LOC, generic utility, low dep)
-  ✅ STALE COPY DELETED: mathematica (already in radia-mcp)
-  ⏸  DEFERRED: pdf (1055 LOC PDF toolkit) -- still recommended for
-                v0.83+, would absorb the Type-42 verifier we built
-                in v0.80.0 into a richer toolkit
-  ❌ KEPT IN mcp-server-document (validation host-private, scope mismatch):
-     grant_writing, paper_writing, presentation, poster, circuit,
-     bibliography, doc_convert, ocr, document_meta, research_project,
-     graph (already migrated, OLD source intentionally kept as
-     backward-compat shim for now), eqnedt32, eqnedt32_native
-  ❌ DELETED outright (per user "捨てよう"):
-     mcp_server_document/diagram/ + sibling excalidraw/ Node.js tree
+
 
 ## 0.81.0 — chart2d: 22 paper-quality 2D chart MCP tools
 

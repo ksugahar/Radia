@@ -47,8 +47,7 @@ The wheel provides:
 - the Radia-owned browser editor assets through `web_asset()`;
 - the bundled standalone application through the `eqnedit64` console command.
 
-Only UTF-8 TeX is a source format. MTEF and `.eqn` are intentionally not
-supported. Current wheels target 64-bit Windows and Python 3.10 or newer.
+Only UTF-8 TeX is a source format. Current wheels target 64-bit Windows and Python 3.10 or newer.
 
 The wheel embeds the signed executable produced for the matching
 `eqnedit64-v3.1.3` GitHub Release; it does not build a second application
@@ -72,7 +71,7 @@ its Web side used the headless browser clipboard, not the OS clipboard.
 This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
 corpus; it does not prove every TeX input or every Office/browser environment.
 Changed payload behaviour requires renewed qualification. The completed 3.1.3
-publication record is in the [canonical handover](../../docs/equation/eqnedt64_handover.md).
+publication record is in the [canonical handover](../../docs/equation/eqnedit64_handover.md).
 
 
 ## 3.1.3 release and coverage limits

@@ -70,7 +70,5 @@ Use Build.ps1's current propagation paths, not historical .ccl/plugin recipes.
   Use bounded OpenMP for suitable parallel host work and retain serial
   state management and ordered random consumption.
 - Eqnedit64 uses the tracked release-eqnedit64 skill and current build scripts.
-  Do not run historical EQNEDT32 patchers or font tests on the LAB desktop.
 - For sparsesolv inspect the current in-repository CMake integration. Do not
   use the retired standalone repository or copy DLLs into global site-packages.
-

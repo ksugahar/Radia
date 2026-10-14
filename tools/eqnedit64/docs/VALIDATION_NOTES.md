@@ -532,9 +532,6 @@
   - `E=mc^2`: 0.158 / 0.090 ms
   - 代表複合式: 0.403 / 0.280 ms
   - 20分数: 0.819 / 0.612 ms
-- Eqnedit32参照原本: SHA-256
-  `3C4A68070F3D7F14E488AE4F7EDE8E7ADD0F8029995DC800833126CA062A2C6C`、
-  Microsoft署名`Valid`、変更・削除なし
 - 残留`Eqnedit64` / `Eqnedit64_asan`プロセス: なし
 - 機械可読な実行報告:
   `private-runtime-path`
@@ -570,9 +567,6 @@
   - 代表複合式: 0.385 / 0.274 ms
   - 20分数: 0.824 / 0.633 ms
 - ビルド前の実行中リポジトリ版終了: 解決済み絶対パスだけを対象にする試験が合格
-- Eqnedit32参照原本: SHA-256
-  `3C4A68070F3D7F14E488AE4F7EDE8E7ADD0F8029995DC800833126CA062A2C6C`、
-  Microsoft署名`Valid`、変更・削除なし
 - 機械可読な実行報告: `private-runtime-path`
 
 この記録追加は署名済み配布バイナリを変更しない。

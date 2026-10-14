@@ -503,23 +503,7 @@
 
 ### Canonical Eqnedit64 operation
 
-- Eqnedit64 and UTF-8 `.tex` are now the laboratory's canonical equation
-  workflow. `build\accept_release.ps1 -Deploy` runs the normal suite, external
-  paste APIs, ASan, 500,000 hidden real-window operations, release identity,
-  and preserved Eqnedit32 checksum/signature gates before updating registered
-  operational copies.
-- A new offscreen visual-scale gate renders a representative research equation
-  at 96, 120, 144, and 192 dpi equivalents and checks real pixels for equation
-  ink, the structural caret, selection feedback, and palette/source fonts.
-  The hidden interaction suite also proves that the shortcut coach returns
-  focus and does not interrupt a 64-character typing burst.
-- The final gate records the real offscreen GDI paint benchmark and rejects a
-  cached representative-equation repaint at 5 ms or slower, keeping the
-  keystroke path well inside a 60 Hz frame budget.
-- Eqnedit32 remains an unchanged, Microsoft-signed comparison oracle under
-  `reference`; it is no longer an operational editor and can neither be a
-  deployment target nor a fallback document format. `.tex` is the asset of
-  record; new `.eqn`/MTEF assets are outside the product contract.
+
 
 ### Live TeX source
 
@@ -738,34 +722,11 @@
   a destination held open by a running instance instead of reporting a copy
   that did not happen.
 
-### Kept from the Eqnedt32 review
 
-(The counts below are as first shipped; the sections above have since grown
-them to 165 symbols and 222 cells, and removed the two esint templates.)
-Reviewed Eqnedt32's own implementation -- its menus, accelerators, dialogs,
-string table and toolbar art, read statically out of the binary -- and adopted
-the one design decision that mattered most.
 
-- **The toolbar is now the catalogue, not a shortcut duplicate.** Eqnedt32 has
-  no Insert menu at all: nineteen wide toolbar buttons, symbols on the top row
-  and templates on the bottom, each dropping a small grid, and every one of its
-  ~300 items is two clicks away.  Eqnedit64 had flat menus of 27 templates and
-  24 hand-picked symbols, and the toolbar had been trimmed to three buttons on
-  the reasoning that a command with a chord does not need a button.  Measured,
-  that left **117 of 160 symbols reachable only by knowing and typing the
-  command** -- neither a shortcut nor a mouse route.  There are now 18 palettes
-  (10 symbol, 8 template) covering all 160 symbols and all 53 templates, and
-  the Template and Symbol menus present the same catalogue as submenus so the
-  keyboard route is complete too.  `tests/test_palettes.py` holds the rule:
-  every symbol and every template must have exactly one palette home, and
-  `--ui-interaction-test` inserts all 220 cells through the real WM_COMMAND
-  path.
-- Added 24 template kinds whose nodes the engine already rendered and emitted
-  but which no menu, button, or shortcut could reach: `norm`, `floor`, `ceil`,
-  `dirac`, `iiint`, `oiint`, `oiiint`, `coprod`, `bigcup`, `bigcap`,
-  `overbrace`, `underbrace`, `overrightarrow`, `overleftarrow`,
-  `overleftrightarrow`, `over`, `ddot`, `dddot`, `prime`, `dprime`, `tprime`,
-  `strike`, `frown`, `smile`.
+
+
+
 
 Five round-trip defects that the palettes would otherwise have exposed to a
 user's mouse, all found by round-tripping every palette command before shipping
@@ -790,51 +751,11 @@ the buttons:
   now characters with TeX's own widths (3mu, 4mu, 5mu, 18mu), round-trip, and
   render as `<mspace>` in MathML.
 
-Not yet matched from Eqnedt32, and why: left-hand pre-scripts and labelled
-arrows (`\xrightarrow`) have no node type; long division has no renderer; the
-Spacing dialog's 19 named parameters and the Style/Size definition dialogs are
-a settings model this build does not have.
+
 
 ## 3.0.0 — 2026-08-22
 
-- A new document starts empty.  The sample equation meant the first thing
-  anyone did was delete it.
-- Fixed Backspace destroying a whole template in one press: `E = mc^{2}` with
-  the caret after it lost the `c` together with the `2`, and `\sqrt{x^{2}}`
-  lost its `x` and its `2`.  One press now removes one thing the reader can
-  see, descending to the innermost slot that still holds something; the
-  template itself goes only once every slot is empty.
-  This is stated as a rule in `docs/GUI_SPEC.md` and checked as a rule:
-  `tests/test_edit.py` counts glyphs in the rendered SVG across scripts,
-  fractions, fences, radicals, big operators and `cases`, so no template can
-  fall outside it.  The earlier fix here addressed the one reported state and
-  its regression was written to that same state, which is why the neighbouring
-  state stayed broken and undetected; recorded as UXP-0010.
-- Derived the layout constants from TeX instead of by eye, and checked them
-  against pdfLaTeX.  The fraction rule was 0.39 em wider than TeX's and the
-  numerator 0.24 em too close to it; scripts were set at 7/12 and 5/12 where
-  TeX uses 8/12 and 6/12; superscripts rode 0.04 em high and subscripts sat
-  0.07 em low.  Fractions now follow tex.web 704 (`num1`, `denom1`,
-  `axis_height`, a 3-rule-thickness clearance, and a rule exactly as wide as
-  the fraction).
-- Added `tools/tex_geometry.py` and `tests/test_tex_geometry.py`: the same
-  equation is typeset by pdflatex and by the canvas, glyph origins and rules
-  are compared in em, and `tests/tex_reference.json` carries the pdfLaTeX
-  side so the check runs without a TeX installation.  Remaining differences
-  are listed with their cause and the test fails if one silently starts
-  matching.  Nothing before this compared the canvas with anything but
-  itself.
-- Joined the radical's vinculum to the glyph rather than to its advance
-  width.  Cambria Math's flag is a 0.065 em plateau ending 0.06 em past the
-  advance, so a bar drawn at the nominal rule thickness from the advance came
-  out thinner than the flag and started past its end.  Thickness and start
-  are now measured from the glyph.
-- Made the canvas repaint the way Eqnedit32 does.  The draw loop created and
-  destroyed an HFONT for every glyph on every keystroke, and `WM_PAINT`
-  painted straight onto the window after filling the whole client area.
-  Fonts are cached, `WM_PAINT` composes offscreen and blits, and the thirteen
-  whole-window invalidations no longer ask for an erase.  `--paint-bench`
-  times both paths in one binary: 1.4x to 1.8x.
+
 
 - Fixed `\rangle` serializing without its trailing space, which turned
   `\langle a \rangle x` into `\langle a\ranglex` and brought it back from the
@@ -955,65 +876,3 @@ a settings model this build does not have.
 - Moved integral upper/lower limits to the measured TeX display-integral
   positions. At 12 pt the Eqnedit64 offsets are -13.200/+10.800 pt with a
   +5.280 pt upper italic correction versus TeX -13.117/+10.793/+5.313 pt.
-
-- Rebuilt the editor as a native 64-bit Windows application.
-- Made UTF-8 TeX the source of truth for opening, editing, copying, pasting,
-  and saving equations.
-- Added structural caret movement, drag selection, selection replacement,
-  undo/redo, and familiar template shortcuts.
-- Added multiline equations with `aligned`, Enter, alignment tabs, and
-  vertical row movement.
-- Made the editing canvas left-aligned by default so the equation does not
-  shift while typing; saved `equation` TeX remains normally centred.
-- Replaced the space-padded static status text with a native partitioned
-  Windows status bar, including hidden layout/font/simple-mode regression tests.
-- Prevented Cut from deleting a selection when clipboard publication fails.
-- Added structural paste for Unicode text and common TeX math wrappers.
-- Added multi-format clipboard copy: Office-recognisable delimited LaTeX for
-  native PowerPoint/Word/Excel equations, scalable EMF, 32-bit DIBV5, and a
-  raw registered LaTeX payload from the same copy command.
-- Replaced the installer release with one statically linked portable
-  `Eqnedit64.exe`; it performs no registry or Start-menu registration.
-- Added GDI canvas rendering, SVG export, hit testing, and scale-aware layout.
-- Restored Eqnedit32's structural double-click rule: select the current input
-  slot, and select the whole equation only from the outermost slot.
-- Added a licensed application icon and Windows version resources.
-- Added background-only interaction tests that do not control the desktop.
-- Added API-driven external paste regression: hidden PowerPoint COM verifies
-  editable Office Math XML, IrfanView CLI verifies a nonblank pasted image,
-  and the test snapshots and restores the user's clipboard formats.
-- Added a separate Google Slides copy command (`Ctrl+Alt+C`) that publishes a
-  300 dpi PNG rendered from a 24 pt base style plus point-sized clipboard HTML,
-  without changing PowerPoint's normal native-equation paste selection.
-- Added a hidden `--texclip` command that replaces clipboard TeX with a
-  standalone 300 dpi PNG rendered from the same 24 pt base style, preferring
-  the registered raw `LaTeX` format and falling back to Unicode text; the same
-  raster is also published as DIBV5 for Windows image-editor paste support.
-- Added deterministic raw-TeX fuzzing (3,072 generated and damaged inputs)
-  covering normalization fixed points, finite layout metrics, and valid SVG.
-- Fixed UTF-8 byte splitting, supplementary-plane character loss, nested-script
-  reassociation, malformed escaped-literal instability, and empty-root-index
-  two-pass normalization found by that fuzzer.
-- Added hidden Win32 message-path tests for character/surrogate input, caret
-  keys, undo, templates, source editing, view commands, and status updates.
-- Preserved text, function, and vector input styles inside structural slots
-  such as fraction numerators, with save/reopen regression coverage.
-- Added automatic Function styling in Math input for legacy names such as
-  `sin`, `log`, and `exp`.
-- Restored the documented prime and double-prime chords to the shortcut guide.
-- Added opt-in operation logging, F12 problem markers, a guided manual test,
-  and a dedicated operation-debug shortcut.
-- Upgraded operation logs to semantic v2 traces with monotonic event timing,
-  focus, style, alignment, zoom, equation mode, and shortcut
-  prefix state while retaining v1 analysis compatibility.
-- Added a privacy-aware LLM usability-review pipeline that detects evidence
-  windows around explicit markers, invalid shortcuts, no-ops, immediate undo,
-  navigation reversals, and correction bursts; human decisions are retained in
-  a machine-readable preference ledger and require background regressions.
-- Restored Eqnedit32's documented Ctrl+T, Ctrl+K, Ctrl+G, and Ctrl+B key
-  families, then added non-conflicting Eqnedit64 shortcuts.
-- Added an optional shortcut coach that teaches the chord after a menu or
-  toolbar action.
-- Removed MTEF/.eqn compatibility readers, writers, datasets, and all installer
-  paths.  The signed Eqnedit32 original and help remain as a staged-retirement
-  compatibility reference until Eqnedit64 is accepted.

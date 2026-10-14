@@ -88,9 +88,9 @@ if ($SkipBuild) {
     Step 'skipping the build on request; verifying the existing dist binary'
 } else {
     Step 'compiling and signing on INTEL11 (100号機)'
-    & cmd.exe /d /c (Join-Path $eqnedit 'build\build_eqnedt64.bat')
+    & cmd.exe /d /c (Join-Path $eqnedit 'build\build_eqnedit64.bat')
     if ($LASTEXITCODE -ne 0) {
-        throw "build_eqnedt64.bat failed with exit code $LASTEXITCODE."
+        throw "build_eqnedit64.bat failed with exit code $LASTEXITCODE."
     }
 }
 if (-not (Test-Path -LiteralPath $dist -PathType Leaf)) {

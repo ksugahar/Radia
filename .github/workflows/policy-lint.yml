@@ -24,7 +24,9 @@ jobs:
       #     rad_relaxation_methods / rad_hacapk / rad_stream_function .cpp)
       #   8 central HDiv geometry/order capability table
       - name: Policy lint (8 policies)
-        run: python tools/policy_lint.py
+        run: |
+          python tools/policy_lint.py
+          python tools/eqnedit64/tests/check_public_names.py
 
       - name: Distribution CI contract
         run: |

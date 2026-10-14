@@ -1,5 +1,5 @@
 # Convenience build for IDE navigation and the C++ unit test.  It is NOT the
-# release path: `build\build_eqnedt64.bat` produces dist\Eqnedit64.exe and
+# release path: `build\build_eqnedit64.bat` produces dist\Eqnedit64.exe and
 # `build\build_pymodule.bat` the headless module the Python tests import, and
 # `build\build_tests.bat` runs the required checks.  Nothing here writes to
 # dist, so a build from this file can never become the shipped executable.
@@ -32,7 +32,7 @@ endif()
 
 if(WIN32)
     add_executable(Eqnedit64 WIN32
-        src/eqnedt64_app.cpp
+        src/eqnedit64_app.cpp
         src/eqnedit64.rc
     )
     target_include_directories(Eqnedit64 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -40,6 +40,7 @@ if(WIN32)
         _CRT_SECURE_NO_WARNINGS UNICODE _UNICODE
     )
     target_compile_options(Eqnedit64 PRIVATE /W4 /utf-8)
+    target_link_options(Eqnedit64 PRIVATE /DEBUG:FULL /OPT:REF /OPT:ICF /PDBALTPATH:Eqnedit64.pdb)
     target_link_libraries(Eqnedit64 PRIVATE
         eqnedit_core user32 gdi32 comctl32 comdlg32 shell32 ole32 imm32
         windowscodecs

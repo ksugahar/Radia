@@ -16,8 +16,6 @@ Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bi
 
 公開ソースはRadiaリポジトリの`tools/eqnedit64`、署名済み単体EXEは
 [Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.1.3)
-で配布します。旧Eqnedit32バイナリ、MTEF変換コード、逆アセンブリ資料は
-Eqnedit64のソース・ビルド・配布物に含めません。
 
 ブラウザ版も [`web/`](web/) を正本として同じディレクトリで保守します。
 研究室ホームページは現在の公開先ですが、ホームページ側のコピーを正本には
@@ -236,7 +234,7 @@ cmd /c build\build_tests.bat
 
 リリース候補の通常回帰、ASan、拡張GUI耐久、署名・単体配布を一括判定する
 最終ゲートは次です。公開配布EXEは、その合格したソースから100号機で
-`build_eqnedt64.bat` により別途ビルド・署名し、証明書とSHA-256を検査します。
+`build_eqnedit64.bat` により別途ビルド・署名し、証明書とSHA-256を検査します。
 
 ```powershell
 $env:EQNEDIT64_ISOLATED_TEST_SESSION = '1'
@@ -258,7 +256,7 @@ pwsh -NoProfile -File build\accept_release.ps1
 個別に実行する場合:
 
 ```powershell
-cmd /c build\build_eqnedt64.bat
+cmd /c build\build_eqnedit64.bat
 cmd /c build\build_pymodule.bat
 build\test_tex_document.exe
 python tests\run_model_tests.py
@@ -349,7 +347,7 @@ its Web side used the headless browser clipboard, not the OS clipboard.
 This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
 corpus; it does not prove every TeX input or every Office/browser environment.
 Changed payload behaviour requires renewed qualification. The completed 3.1.3
-publication record is in the [canonical handover](../../docs/equation/eqnedt64_handover.md).
+publication record is in the [canonical handover](../../docs/equation/eqnedit64_handover.md).
 
 
 ## 3.1.3 release and coverage limits

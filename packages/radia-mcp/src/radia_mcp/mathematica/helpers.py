@@ -118,7 +118,7 @@ def mathematica_check_identity(
 ) -> dict:
     """式 LHS == RHS が常に成り立つかを FullSimplify で判定。
 
-    eqnedt32 数式 DB に登録された式の Mathematica 検証用。
+    the editor 数式 DB に登録された式の Mathematica 検証用。
 
     Args:
         lhs, rhs: Wolfram 式 (str)。

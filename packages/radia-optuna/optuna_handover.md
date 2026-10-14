@@ -1,7 +1,7 @@
 # radia-optuna Simulink optimization — implementation handover
 
 Rewritten 2026-08-29 and revised 2026-09-08 for the Optuna 5 migration. This is
-the canonical product and migration handover; the unrelated EQNEDT64 document
+the canonical product and migration handover; the unrelated EQNEDIT64 document
 is not an Optuna authority.
 
 ## Release hold: evidence identity review (2026-09-11)

@@ -263,7 +263,7 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     'tools/eqnedit64/build/test_font_session.ps1': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/eqnedit64/docs/CANONICAL_OPERATION.md': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/eqnedit64/docs/PALETTE_INTENT.md': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/eqnedit64/src/eqnedt64_app.cpp': 'Existing operational build/runtime scratch routing; phase 2.',
+    'tools/eqnedit64/src/eqnedit64_app.cpp': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/eqnedit64/tests/font_lifecycle_probe.cpp': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tools/eqnedit64/tests/read_office_wire.ps1': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tools/eqnedit64/tests/test_office_bit_parity.cjs': 'Existing operational scratch/route fixtures; phase 2, no result publication.',

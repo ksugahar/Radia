@@ -9,10 +9,10 @@ $operationLogOutput = 'C:\temp\Eqnedit64-operation-log-test.log'
 $usabilityBundleOutput = 'C:\temp\Eqnedit64-usability-bundle-test.json'
 
 if (-not (Test-Path -LiteralPath $app)) {
-    throw "Eqnedit64.exe is missing. Run build_eqnedt64.bat first."
+    throw "Eqnedit64.exe is missing. Run build_eqnedit64.bat first."
 }
 if (-not (Test-Path -LiteralPath $portableApp)) {
-    throw "Portable Eqnedit64.exe is missing. Run build_eqnedt64.bat first."
+    throw "Portable Eqnedit64.exe is missing. Run build_eqnedit64.bat first."
 }
 $releaseFiles = @(Get-ChildItem -LiteralPath (Split-Path -Parent $portableApp) -File)
 if ($releaseFiles.Count -ne 1 -or $releaseFiles[0].Name -ne 'Eqnedit64.exe') {

@@ -41,7 +41,7 @@ def main() -> int:
                     f"{name} guard cannot distinguish ambient font-host churn: "
                     f"missing {required!r}"
                 )
-    app = (ROOT / "src/eqnedt64_app.cpp").read_text(encoding="utf-8")
+    app = (ROOT / "src/eqnedit64_app.cpp").read_text(encoding="utf-8")
     for required in (
         "HFONT pick_source_font(int heightPx)",
         "font_resolves_to_face(font, face)",

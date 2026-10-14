@@ -7,15 +7,14 @@
 - リポジトリ: `ksugahar/Radia`
 
 この文書は、Eqnedit64を修正、試験、配布するときに最初に読む引き継ぎ正本である。
-過去の `src/ext/equation`、MTEF変換、旧Radiaバージョン、旧インストーラーを前提にした
-引き継ぎ文書は廃止する。詳細な画面契約は
+詳細な画面契約は
 `tools/eqnedit64/docs/GUI_SPEC.md`、キー一覧は
 `tools/eqnedit64/docs/SHORTCUTS.md`、native/Webの対応方針は
 `tools/eqnedit64/docs/PRODUCT_PARITY.md` を参照する。
 
 ## 1. 製品の目的と正本
 
-Eqnedit64は、Microsoft 数式3.0（Eqnedit32）の軽さと構造入力の手癖を、標準TeX、
+Eqnedit64は、軽快な構造入力を、標準TeX、
 64-bit Windows、Officeの編集可能な数式貼り付けへ移行する数式入力専用ツールである。
 長い文書を組むTeXエディタではなく、数式を止まらず入力し、他の文書へ安全に渡すことに
 集中する。
@@ -24,9 +23,6 @@ Eqnedit64は、Microsoft 数式3.0（Eqnedit32）の軽さと構造入力の手�
 
 - 新規保存は `.tex` の `equation` 環境とする。
 - 複数行は `equation` 内の `aligned` で表す。
-- `.eqn` とMTEFは新規作成、保存、受け渡しの対象にしない。
-- 既存MTEF資産が必要なら、一回限りの移行作業でTeXへ変換し、以後はTeXを正とする。
-- Eqnedit32のバイナリや逆アセンブリ資料は調査済み資料であり、Eqnedit64の実行依存にしない。
 
 Eqnedit64が正となった後、旧「数式3.0」は日常運用、関連付け、配布から退役させる。
 旧資産をEqnedit64の公開ソースや配布物へ混ぜてはならない。
@@ -159,7 +155,7 @@ Latin Modern Mathでも確実に読める短いASCII主体の `+R`、`−R`、`+
 
 ### 4.3 ショートカットとスロット移動
 
-Eqnedit32から回収した操作系列は互換層として維持する。追加キーは拡張層とし、
+Eqnedit64の構造入力系列を基本層として維持する。追加キーは拡張層とし、
 既存キーを理由なく変更しない。完全な一覧は`SHORTCUTS.md`を正とする。
 
 重要な契約は次のとおり。
@@ -201,7 +197,6 @@ Backspace/Deleteが`&`を削除して左右セルを結合する。複数行の�
 - 既存の `equation*` を開いた場合だけ、その外枠を保存時に維持する。
 - 「番号あり／番号なし」を通常操作で切り替えるメニューは設けない。
 - 表示の左／中央／右寄せは保存TeXを変えない。
-- `.eqn`、MTEF、MathType固有形式を保存候補に復活させない。
 - 論文由来の`align` / `align*` / `eqnarray`は`aligned`へ正規化し、`&`列を保持する。
 - 裸の`~`は非改行空白であり`\sim`ではない。`%`コメント、`\label`、`\nonumber`、
   `\notag`、`\tag`は表示内容から除く。未知命令の名前を本文の文字列へ変えず、その引数だけを
@@ -426,7 +421,7 @@ Eqnedit64の非自明なコミットは、要約行、空行、英語本文の�
 canonical scriptsは次のとおり。
 
 ```text
-tools/eqnedit64/build/build_eqnedt64.bat
+tools/eqnedit64/build/build_eqnedit64.bat
 tools/eqnedit64/build/build_pymodule.bat
 tools/eqnedit64/build/accept_release.ps1
 ```
@@ -707,7 +702,7 @@ O:の正式配布物は`Eqnedit64.release.json`を正とし、候補専用の
 |---|---|
 | `tools/eqnedit64/src/equation_edit.cpp` | 構造編集、キャレット、選択、Backspace、行列編集 |
 | `tools/eqnedit64/src/equation_render.cpp` | nativeレイアウト、display list、文字と構造の描画 |
-| `tools/eqnedit64/src/eqnedt64_app.cpp` | Win32 GUI、フォント、クリップボード、CLI、hidden UI tests |
+| `tools/eqnedit64/src/eqnedit64_app.cpp` | Win32 GUI、フォント、クリップボード、CLI、hidden UI tests |
 | `tools/eqnedit64/src/palettes.cpp` | パレット分類、face、挿入payloadの単一出典 |
 | `tools/eqnedit64/src/*_emitter.cpp` | TeX、MathML、SVG等の出力 |
 | `tools/eqnedit64/tests` | native/model/Web/clipboard/visual regression tests |
@@ -722,7 +717,6 @@ O:の正式配布物は`Eqnedit64.release.json`を正とし、候補専用の
 次を完成条件や互換目標へ戻さない。
 
 - `.eqn`入力または保存。
-- MTEFの継続解読、MTEFを研究室資産として残すこと。
 - Equation Editor 3.0のOLE/ActiveX互換。
 - Inno Setupまたは別のGUIインストーラー。
 - standalone EXEにPythonを要求すること。
