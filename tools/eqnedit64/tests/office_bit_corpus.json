@@ -358,5 +358,9 @@
   {
     "id": "function-parentheses",
     "tex": "f(x)g(y)"
+  },
+  {
+    "id": "separate-absolute",
+    "tex": "|a|+|b|"
   }
 ]

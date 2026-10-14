@@ -51,7 +51,7 @@ characters without stretching; they are outside the stretchable-fence gate.
 
 ## Validation and limits
 
-The declared corpus has 63 fixtures: 60 structural/text/style/colour semantic
+The declared corpus has 64 fixtures: 61 structural/text/style/colour semantic
 comparisons against the clipboard emitter, and 3 required rejections.
 Run grouping, control formatting and dialect-specific vertical layout are
 normalized; byte identity is not claimed. Independent golden annotations

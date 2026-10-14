@@ -104,7 +104,7 @@ def main():
                               text=True, encoding="utf-8", errors="replace", timeout=30)
     try:
         excluded = {f["id"] for f in corpus if f.get("coverage") == "excluded"}
-        assert excluded == {"boxed", "binom", "cancel"} and len(corpus) == 63
+        assert excluded == {"boxed", "binom", "cancel"} and len(corpus) == 64
         for fixture in corpus:
             source = args.output / (fixture["id"] + ".tex")
             output = args.output / (fixture["id"] + ".pptxmath")
@@ -149,7 +149,7 @@ def main():
                     following = siblings[siblings.index(nary) + 1:]
                     assert any("".join(node.itertext()).endswith(tail) for node in following), fixture["id"]
             report["covered"] += 1
-        assert report["covered"] == 60 and report["rejected"] == 3
+        assert report["covered"] == 61 and report["rejected"] == 3
         for i, tex in enumerate([r"\unknown{x}", r"\begin{unknown}x\end{unknown}",
                                  r"\frac{x}{y", r"\begin{aligned}x\end{matrix}"]):
             source = args.output / f"invalid-{i}.tex"

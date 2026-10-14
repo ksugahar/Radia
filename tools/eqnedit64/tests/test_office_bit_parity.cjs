@@ -193,7 +193,7 @@ function officeBytes(html) {
           if (!spans.length || !spans.every(span => span.getAttribute("lang") ===
               (/[\u3000-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u{20000}-\u{3134F}]/u.test(span.textContent) ? "ja-JP" : "en-US"))) return false;
           const expected = ["plain-paired", "fraction-paired", "big-paired", "angle-paired", "nested-paired"].includes(id);
-          if (["separate-parentheses", "separate-brackets", "function-parentheses"].includes(id))
+          if (["separate-parentheses", "separate-brackets", "function-parentheses", "separate-absolute"].includes(id))
             return !doc.getElementsByTagNameNS(ns, "d").length;
           if (id === "separate-explicit") return doc.getElementsByTagNameNS(ns, "d").length === 2;
           if (!expected) return true;
