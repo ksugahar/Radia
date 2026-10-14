@@ -88,7 +88,8 @@ NodePtr delimiter_char(const std::string& tok) {
 
 class TexParser {
 public:
-    explicit TexParser(std::string s) : s_(std::move(s)), p_(0) {}
+    explicit TexParser(std::string s, bool strict = false)
+        : s_(std::move(s)), p_(0), rejectUnsupported_(strict) {}
 
     std::unique_ptr<LineNode> parse() {
         auto root = std::make_unique<LineNode>();
@@ -107,6 +108,7 @@ private:
 
     const std::string s_;    /* owned: the caller passes a stripped temporary */
     size_t p_;
+    bool rejectUnsupported_;
     int depth_ = 0;          /* recursion depth, to bound pathological nesting */
     bool depthExceeded_ = false;
     std::string error_;
@@ -299,11 +301,16 @@ private:
     /* A braced argument, or a single atom when the argument is unbraced. */
     NodeList parse_arg() {
         skip_space();
+        if (rejectUnsupported_ && eof()) {
+            error_ = "Missing TeX argument";
+            return {};
+        }
         if (peek() == '{') {
             ++p_;
             NodeList l = parse_seq(kBrace);
             skip_space();
             if (peek() == '}') ++p_;
+            else if (rejectUnsupported_) error_ = "Unclosed TeX group";
             return l;
         }
         NodeList l;
@@ -441,9 +448,13 @@ private:
             line->children = parse_seq(kBrace);
             skip_space();
             if (peek() == '}') ++p_;
+            else if (rejectUnsupported_) error_ = "Unclosed TeX group";
             return line;
         }
-        if (c == '}' || c == '&') return nullptr;
+        if (c == '}' || c == '&') {
+            if (rejectUnsupported_) error_ = "Unexpected TeX delimiter";
+            return nullptr;
+        }
         if (c == '\\') return parse_command();
         if (c == '_' || c == '^') return nullptr;   /* handled by the caller */
 
@@ -632,6 +643,10 @@ private:
         /* The strike-through embellishment emits \cancel; with no reader it
          * came back as the text "cancel" followed by its own content. */
         if (cmd == "\\cancel") {
+            if (rejectUnsupported_) {
+                error_ = "Unsupported OOXML decoration: cancel";
+                return nullptr;
+            }
             auto e = std::make_unique<EmbellNode>();
             e->embellType = EM_MBAR;
             e->content = parse_arg();
@@ -736,6 +751,7 @@ private:
             return make_char(TF_SYMBOL, uint32_t(uint8_t(cmd[1])), cmd[1]);
         }
 
+        if (rejectUnsupported_) error_ = "Unsupported TeX command: " + cmd;
         /* Unknown control words are not prose.  Rendering their names as
          * letters silently invents mathematical content (`\\foo{x}` became
          * "foox").  Ignore the unsupported operator itself; any following
@@ -855,6 +871,7 @@ private:
 
         std::string close = ".";
         if (eat_command("\\right")) close = read_delimiter();
+        else if (rejectUnsupported_) error_ = "Unclosed TeX fence";
 
         /* \left\langle a \middle| b \right\rangle is a bra-ket, and the tree
          * has a node for it whose bar stretches to the taller side. */
@@ -947,6 +964,7 @@ private:
         std::vector<std::vector<NodeList>> rows;
         rows.emplace_back();
         bool cellExpectedAfterAmpersand = false;
+        bool closed = false;
 
         for (;;) {
             skip_space();
@@ -954,7 +972,11 @@ private:
             if (peek_command() == "\\end") {
                 if (cellExpectedAfterAmpersand)
                     rows.back().emplace_back();
-                eat_command("\\end"); read_env_name(); break;
+                eat_command("\\end");
+                if (read_env_name() != env && rejectUnsupported_)
+                    error_ = "Mismatched TeX environment";
+                closed = true;
+                break;
             }
 
             rows.back().push_back(parse_seq(kCell));
@@ -967,11 +989,18 @@ private:
                 continue;
             }
             if (peek() == '\\' && peek(1) == '\\') { p_ += 2; rows.emplace_back(); continue; }
-            if (peek_command() == "\\end") { eat_command("\\end"); read_env_name(); break; }
+            if (peek_command() == "\\end") {
+                eat_command("\\end");
+                if (read_env_name() != env && rejectUnsupported_)
+                    error_ = "Mismatched TeX environment";
+                closed = true;
+                break;
+            }
             if (eof()) break;
             ++p_;                                   /* never spin */
         }
         while (!rows.empty() && rows.back().empty()) rows.pop_back();
+        if (rejectUnsupported_ && !closed) error_ = "Unclosed TeX environment";
 
         size_t cols = 0;
         for (const auto& r : rows) cols = std::max(cols, r.size());
@@ -1008,6 +1037,8 @@ private:
             return f;
         }
 
+        if (rejectUnsupported_ && env != "gather" && env != "gather*")
+            error_ = "Unsupported TeX environment: " + env;
         /* gather/gather* and unknown environments -- one stacked line per
          * row.  Unknown wrappers are discarded rather than printed. */
         auto pile = std::make_unique<PileNode>();
@@ -1097,11 +1128,25 @@ bool has_top_level_row_break(const std::string& source) {
 }  // namespace
 
 std::unique_ptr<LineNode> parse_latex(const std::string& latex,
-                                      bool* depthExceeded, std::string* error) {
+                                      bool* depthExceeded, std::string* error,
+                                      bool rejectUnsupported) {
     std::string source = strip_delimiters(latex);
+    if (rejectUnsupported) {
+        int braces = 0;
+        for (size_t i = 0; i < source.size(); ++i) {
+            if (source[i] == '\\' && i + 1 < source.size()) { ++i; continue; }
+            if (source[i] == '{') ++braces;
+            if (source[i] == '}' && --braces < 0) break;
+        }
+        if (braces != 0) {
+            if (error) *error = "Unbalanced TeX braces";
+            if (depthExceeded) *depthExceeded = false;
+            return nullptr;
+        }
+    }
     if (has_top_level_row_break(source))
         source = "\\begin{aligned}" + source + "\\end{aligned}";
-    TexParser p(std::move(source));
+    TexParser p(std::move(source), rejectUnsupported);
     std::unique_ptr<LineNode> root = p.parse();
     if (depthExceeded) *depthExceeded = p.depth_exceeded();
     if (error) *error = p.error();

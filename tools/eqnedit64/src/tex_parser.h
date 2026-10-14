@@ -15,7 +15,8 @@ namespace eqnedit {
  * the historical permissive fallback; do not assume strict TeX validation. */
 std::unique_ptr<LineNode> parse_latex(const std::string& latex,
                                       bool* depthExceeded = nullptr,
-                                      std::string* error = nullptr);
+                                      std::string* error = nullptr,
+                                      bool rejectUnsupported = false);
 
 }  // namespace eqnedit
 
