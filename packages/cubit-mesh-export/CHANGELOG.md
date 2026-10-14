@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Reject incomplete packaged Cubit Python bindings and missing configured SDK provenance.
+- Stage candidate command plugins as DLLs in owned scratch for the Cubit 2026.8 headless console, preserving source files.
+
 ## 2.2.2 - 2026-10-12
 
 - Restore package availability with a new release version. Export algorithms, supported runtime and toolbar behavior are unchanged.
