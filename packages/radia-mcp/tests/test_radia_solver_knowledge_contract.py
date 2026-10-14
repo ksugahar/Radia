@@ -109,7 +109,10 @@ def test_radia_guidance_uses_current_demo_and_validation_ownership():
     assert "docs/background_fields/background_fields_results.json" not in geometry
     assert "results are embedded in the notebook" in geometry
     assert "docs/esim/WORKFLOWS.md" in esim
-    assert "validation_test/induction_heating/cubit_panels_legacy" in esim
+    from radia_mcp.radia_ngsolve.knowledge.ngsbem_inductance import get_ngsbem_inductance_documentation
+    retired_directory = "_".join(("cubit", "panels", "legacy"))
+    assert retired_directory not in get_radia_documentation("all")
+    assert retired_directory not in get_ngsbem_inductance_documentation("all")
     assert "examples/.../" not in esim
 
 

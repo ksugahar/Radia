@@ -592,7 +592,6 @@ Mesh refinement (more DOFs) is more effective for L accuracy.
 `export netgen "mesh.vol" order 2` provides quadratic-accurate surfaces
 via ACIS CallbackGeometry. order=2 is the recommended default for BEM.
 
-
 ## Tri and Quad Surface Meshes
 
 BEM supports both tri (from tet mesh) and quad (from hex mesh) surfaces.
@@ -689,11 +688,10 @@ A = 4 * pi^2 * R * a
 V = 2 * pi^2 * R * a^2
 ```
 
-## Full Example Script
+## Historical Cubit Workflow
 
-See: `validation_test/induction_heating/cubit_panels_legacy/inductance_torus.py`
+The former standalone driver has been retired. Its workflow was:
 
-This script:
 1. Creates a torus in Cubit
 2. Tet meshes, defines blocks
 3. Uses export netgen "mesh.vol" order N for each order
@@ -1175,7 +1173,6 @@ Higher R/a ratios mean thinner wires -> more accurate Neumann formula.
 For R/a < 5, mutual inductance corrections become significant.
 """
 
-
 NGBEM_HODGE_DECOMPOSITION = """
 # Hodge Decomposition for Closed Conductor Inductance
 
@@ -1312,7 +1309,6 @@ L = MU_0 * eigvals[1] * R / a
    is needed (e.g., integrate the toroidal mode to get total current).
 """
 
-
 NGBEM_ESIM_WORKPIECE = """
 # EFIE-SIBC: Two-Way Eddy Current BEM Solver
 
@@ -1321,9 +1317,6 @@ NGBEM_ESIM_WORKPIECE = """
 EFIE-SIBC provides **two-way coupled** eddy current analysis for induction heating.
 The workpiece surface currents are solved self-consistently with the coil excitation,
 capturing the screening effect that one-way models miss.
-
-**File**: `validation_test/induction_heating/cubit_panels_legacy/efie_sibc.py`
-**Verification**: `validation_test/induction_heating/cubit_panels_legacy/verify_laplace_bem.py`
 
 ## Formulation (Saddle-Point EFIE + SIBC)
 
@@ -1354,7 +1347,7 @@ The MFIE K operator is not available in current ngsolve.bem.
 incorrect because `LaplaceDL != MFIE K`. The correct formulation is the EFIE above.
 
 **Validation snapshot (2026-06-25)**:
-`validation_test/induction_heating/cubit_panels_legacy/verify_laplace_bem.py` on a unit sphere
+Historical verification on a unit sphere
 (`maxh=0.25`, 456 surface elements, 684 HDivSurface DOFs) confirms:
 
 - scalar `LaplaceDL` l=1 eigenvalue: `-0.166384` vs exact `-1/6`
@@ -1385,9 +1378,6 @@ effective denominator of `(3*Z_s + jw*mu0*R)` instead of `(Z_s + jw*mu0*R)`.
 **Fix requires MFIE** (not available in ngsolve.bem) or a Stratton-Chu formulation
 with both SL and DL operators. Until MFIE is available, use **FEM-SIBC** instead
 for finite Z_s problems.
-
-**Diagnostic script**: `validation_test/induction_heating/cubit_panels_legacy/efie_sibc.py`
-**Verification script**: `validation_test/induction_heating/cubit_panels_legacy/verify_sphere_sibc.py`
 
 ## FIX: Scalar Potential BIE + SIBC (2026-03-29)
 
@@ -1571,9 +1561,6 @@ falls back to one-way uncoupled estimator with R reported only.
 - `src/radia/bem_coupled_solver.py`: CoupledBEMSolver (per-DOF f_back, sign correct)
 - `src/radia/bem_coupled_solver_v1_buggy.py.bak`: archived buggy v1 (scalar rescale)
 - `src/radia/panels/calc_inductance.py::_run_coupled_bem`: headless application wrapper
-- `validation_test/induction_heating/cubit_panels_legacy/scalar_bie_sibc.py`: sphere validation
-- `validation_test/induction_heating/cubit_panels_legacy/bem_sibc_workpiece.py`: coil + workpiece demo
-- `validation_test/induction_heating/cubit_panels_legacy/experiment_coupled_bem.py`: FEM-ESIM cross-check (still uses old API)
 
 ## Screening Physics
 
@@ -1647,8 +1634,6 @@ EFIE-SIBC saddle point + Karl iteration
 ```
 
 ## FEM-SIBC: Two-Way FEM with Surface Impedance
-
-**File**: `validation_test/induction_heating/cubit_panels_legacy/fem_esim_3d.py`
 
 FEM-SIBC solves `curl(nu*curl(A)) = J_source` with SIBC penalty on an internal
 interface.
@@ -1771,7 +1756,6 @@ valid only for PEC (Z_s -> 0) or as a quick estimate with known SL bias.
 For scattered-field FEM, ensure both RHS terms are included (see above).
 """
 
-
 NGBEM_MQS_FORMULATION_LIMITS = """
 # BEM Formulation Selection for MQS-SIBC (2026-03-28)
 
@@ -1793,7 +1777,6 @@ All operators are existing ngsolve.bem: LaplaceSL (scalar H1) + LaplaceDL (scala
 No new C++ code needed.
 
 **Module**: `src/radia/scalar_bie_sibc.py` (ScalarBIE_SIBC class)
-**Verification**: `validation_test/induction_heating/cubit_panels_legacy/scalar_bie_sibc.py`
 
 ### Sphere Benchmark (R=10mm, maxh=R/5, 363 DOFs)
 
@@ -1849,12 +1832,7 @@ Workpiece eddy current problem:
 
 ## Verification Scripts
 
-- `validation_test/induction_heating/cubit_panels_legacy/scalar_bie_sibc.py` -- Scalar BIE verification (RECOMMENDED)
-- `validation_test/induction_heating/cubit_panels_legacy/verify_sphere_sibc.py` -- Analytical vs BEM vs FEM on sphere
-- `validation_test/induction_heating/cubit_panels_legacy/efie_sibc.py` -- EFIE eigenvalue analysis
-- `validation_test/induction_heating/cubit_panels_legacy/fem_esim_3d.py` -- FEM-SIBC reference implementation
 """
-
 
 NGBEM_KNOWN_LIMITATIONS = """
 # ngsolve.bem Known Limitations and Workarounds (2026-03-29)
@@ -1963,7 +1941,6 @@ optimized quadrature and singularity handling.
 Cross-mesh LaplaceSL/DL assembly already works (verified). Only the full
 gradient kernel is missing.
 """
-
 
 def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
     """Return ngsolve.bem inductance extraction documentation by topic."""

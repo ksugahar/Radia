@@ -1009,14 +1009,10 @@ the Cubit/NGSolve interface is `.vol`-only per CLAUDE.md.
 | **FEM-ESIM** (panel) | Design, steel induction heating | Good (xi>10) | Lowest (auto mesh) |
 | **BEM-ESIM** | Quick L+P, xi>10 | Good (no feedback) | Low (surface DOFs) |
 
-### Scripts
+### Current Workflows
 
-| Script | Method | Location |
-|--------|--------|----------|
-| `impedance_esim.py` | BEM-ESIM | `validation_test/induction_heating/cubit_panels_legacy/` |
-| `fem_esim_kelvin.py --mode esim` | FEM-SIBC (Karl) | `validation_test/induction_heating/cubit_panels_legacy/` |
-| `fem_esim_kelvin.py --mode full` | FEM-full | `validation_test/induction_heating/cubit_panels_legacy/` |
-| `verify_esim.py` | ESIM vs NGSolve FEM 1D | `validation_test/induction_heating/cubit_panels_legacy/` |
+See [ESIM workflows](../esim/WORKFLOWS.md) for maintained production entry points.
+The retired panel research drivers are no longer distributed.
 
 ### ESIM 1D Cell Problem Verification
 
@@ -1064,7 +1060,6 @@ Only correct for PEC (Z_s -> 0).
 **SOLVED**: Use the **Scalar Potential BIE + SIBC** formulation (Section 6 below),
 which achieves <0.1% error for all Z_s using existing ngsolve.bem operators.
 
-See: `validation_test/induction_heating/cubit_panels_legacy/scalar_bie_sibc.py`
 
 ### Literature
 
@@ -1324,7 +1319,6 @@ results = solver.frequency_sweep(H_inc_cf, freqs=[1e3, 10e3, 100e3],
 | File | Purpose |
 |------|---------|
 | `src/radia/scalar_bie_sibc.py` | Core solver module (ScalarBIE_SIBC class) |
-| `validation_test/induction_heating/cubit_panels_legacy/scalar_bie_sibc.py` | Sphere verification script |
 
 ---
 

@@ -6,8 +6,9 @@ the induction-heating BEM coupling route. Numerical implementation remains in
 
 - `calc_inductance.py` is a compatibility launcher for
   `radia.panels.calc_inductance`.
-- `sweep_bem_coupled_maxh.py` generates `sweep_results.json` for the workpiece
-  mesh-convergence study.
+- `sweep_results.json` is a historical workpiece mesh-convergence record.
+  Its driver depended on retired panel research solvers and is no longer distributed;
+  this record does not certify the current solver.
 - Generated `.msh` and `.geo` visualization files belong to the run directory
   and are not repository evidence.
 
