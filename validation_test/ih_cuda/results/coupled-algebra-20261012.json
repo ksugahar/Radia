@@ -1,0 +1,51 @@
+{
+  "schema": "radia.ih-cuda-algebra.v1",
+  "accepted": true,
+  "scope": "Resident complex solve, coherent quadratic loss and backward-Euler thermal algebra; not physical PEEC-BEM or Simulink acceptance",
+  "timing_acceptance": false,
+  "a100_used": false,
+  "source_dirty": false,
+  "source_commit": "00791a556abefc0243e5df7cfafa9f822542b731",
+  "source_sha256": {
+    "validation_test/ih_cuda/resident_smoke.cu": "81041e74f868cb8a6d21bbc62efff95be2b0ffad4640d5aeb4aa8e02c423790e",
+    "packages/radia-gpu/native/ih_resident_kernels.cuh": "fbf2c80017687fb309f4f5aa965f70d74fe93f0a7b22f6430335e0cbc342d5dc",
+    "packages/radia-gpu/native/ih_bicgstab_kernels.cuh": "75ee48e211fc17261a39e656c7726584dee8808ffe3d403c4875978f969b618c",
+    "packages/radia-gpu/native/ih_complex_solver.cuh": "c2d03b8e754d94782e1a61b3bc51a78fc023a7d1a3347cabc0ba2ddf82505404",
+    "packages/radia-gpu/native/ih_thermal_kernels.cuh": "ddbe7e8a030a7092576d7f3edc0a217ad5c08ffae042bb5a625bcc1479bc0d29",
+    "validation_test/ih_cuda/run_resident_smoke.py": "f9d4d091fae195ba85be90c3af66122c5f5f5ec8a4c5036eca79ac0796c61f72"
+  },
+  "cases": [
+    {
+      "current_A": 0.0,
+      "complex_operator_relative": 0.0,
+      "quadratic_loss_relative": 0.0,
+      "resident_repeats": 10,
+      "bicgstab_identity_first_correction_checked": true,
+      "thermal_relative": 0.0,
+      "eddy_true_residual": 0.0,
+      "thermal_true_residual": 2.4323509676865724e-18
+    },
+    {
+      "current_A": 1.0,
+      "complex_operator_relative": 5.113104105558066e-16,
+      "quadratic_loss_relative": 8.887086115607503e-16,
+      "resident_repeats": 10,
+      "bicgstab_identity_first_correction_checked": true,
+      "thermal_relative": 0.0,
+      "eddy_true_residual": 2.8753866212157635e-16,
+      "thermal_true_residual": 1.592351515037632e-16
+    },
+    {
+      "current_A": -2.5,
+      "complex_operator_relative": 4.2132343119502575e-16,
+      "quadratic_loss_relative": 5.220646860056162e-16,
+      "resident_repeats": 10,
+      "bicgstab_identity_first_correction_checked": true,
+      "thermal_relative": 0.0,
+      "eddy_true_residual": 3.3732104010056935e-16,
+      "thermal_true_residual": 8.622054556013114e-17
+    }
+  ],
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "binary_sha256": "52bf5093c75debf142b6a2d7b9b10dee8b58d575c6c04b3bf764a9a929e4cdbd"
+}

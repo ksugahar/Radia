@@ -1,0 +1,1287 @@
+{
+  "schema": "radia.loop-work-compression-summary.v1",
+  "source": {
+    "base": "dd16ee491b356a046f2fa331453bef87b5cc2a11",
+    "exact": "f4c4451a89a03db106f4e0ac8a38a192986fee7c",
+    "compressed": "e99403f25cda66718c395376a5bcda06ffdbc8aa"
+  },
+  "runtime": {
+    "platform": "Windows",
+    "python": "3.12.10",
+    "radia_native_wheel": "5.2.3",
+    "ngsolve": "6.2.2607",
+    "threads": 1
+  },
+  "model": {
+    "major_radius_m": 0.03,
+    "wire_radius_m": 0.003,
+    "frequency_hz": 50000.0,
+    "conductivity_s_per_m": 58000000.0,
+    "axial_field_a_per_m": 1
+  },
+  "qualification": "Self-authored ring; same-mesh implementation comparisons, not a physical-accuracy bound. Shared-host timings are diagnostic.",
+  "levels": [
+    {
+      "level": 16,
+      "vertices": 64,
+      "faces": 128,
+      "cases": 12,
+      "comparisons": {
+        "exact": {
+          "max_reference_relative_errors": {
+            "heat": 5.995204332975845e-15,
+            "alpha": 1.2222838244036317e-15,
+            "reaction": 6.439293542825908e-15,
+            "field": 1.6327855464319877e-13
+          },
+          "max_magnetic_work_asymmetry": 1.3610606463607177e-08,
+          "max_linear_residual": 2.1321043528876233e-16,
+          "max_faraday_residual": 1.9784476442517573e-16,
+          "max_seam_jump_deviation": 0.0022682818758572587,
+          "max_power_balance_relative": 0.010291118301090085
+        },
+        "fmm": {
+          "max_reference_relative_errors": {
+            "heat": 2.4088776529040956e-09,
+            "alpha": 1.4333264688675916e-09,
+            "reaction": 2.405502574909235e-09,
+            "field": 1.4656874326549357e-09
+          },
+          "max_magnetic_work_asymmetry": 1.3610606442290448e-08,
+          "max_linear_residual": 2.272057646151268e-16,
+          "max_faraday_residual": 1.9784891492818489e-16,
+          "max_seam_jump_deviation": 0.0022682818758572587,
+          "max_power_balance_relative": 0.010291118274265099
+        }
+      },
+      "lift_changes": [
+        {
+          "carrier_offset_m": 0.0,
+          "law": "scalar",
+          "by_backend": {
+            "old": {
+              "field_relative": [
+                8.314922302243154e-07,
+                0.0019849486897708696
+              ],
+              "heat_relative": [
+                1.3485281016301087e-06,
+                0.003222166264631232
+              ]
+            },
+            "exact": {
+              "field_relative": [
+                8.314922277081715e-07,
+                0.0019849486897677866
+              ],
+              "heat_relative": [
+                1.3485281045166886e-06,
+                0.003222166264635673
+              ]
+            },
+            "fmm": {
+              "field_relative": [
+                8.315116306441284e-07,
+                0.0019849484986562606
+              ],
+              "heat_relative": [
+                1.3485595675710726e-06,
+                0.0032221659524998003
+              ]
+            }
+          }
+        },
+        {
+          "carrier_offset_m": 0.0,
+          "law": "jump",
+          "by_backend": {
+            "old": {
+              "field_relative": [
+                8.167721550302046e-07,
+                0.001941619017153317
+              ],
+              "heat_relative": [
+                1.3647402903327333e-06,
+                0.0032463189167142303
+              ]
+            },
+            "exact": {
+              "field_relative": [
+                8.167721569105858e-07,
+                0.0019416190171517586
+              ],
+              "heat_relative": [
+                1.364740302323142e-06,
+                0.003246318916717561
+              ]
+            },
+            "fmm": {
+              "field_relative": [
+                8.167912283568116e-07,
+                0.0019416188292750618
+              ],
+              "heat_relative": [
+                1.3647722032494869e-06,
+                0.0032463186009290546
+              ]
+            }
+          }
+        },
+        {
+          "carrier_offset_m": 0.00015,
+          "law": "scalar",
+          "by_backend": {
+            "old": {
+              "field_relative": [
+                1.5731201617197855e-06,
+                0.0021747773557509024
+              ],
+              "heat_relative": [
+                2.5514360615375153e-06,
+                0.003530858141494564
+              ]
+            },
+            "exact": {
+              "field_relative": [
+                1.5731201566223853e-06,
+                0.0021747773557467824
+              ],
+              "heat_relative": [
+                2.5514360688649873e-06,
+                0.0035308581414983387
+              ]
+            },
+            "fmm": {
+              "field_relative": [
+                1.5731396697596423e-06,
+                0.002174777163762892
+              ],
+              "heat_relative": [
+                2.5514677071125647e-06,
+                0.003530857827630962
+              ]
+            }
+          }
+        },
+        {
+          "carrier_offset_m": 0.00015,
+          "law": "jump",
+          "by_backend": {
+            "old": {
+              "field_relative": [
+                1.5472694181552252e-06,
+                0.002128123708163267
+              ],
+              "heat_relative": [
+                2.584295242025192e-06,
+                0.0035570251908090267
+              ]
+            },
+            "exact": {
+              "field_relative": [
+                1.5472694269450224e-06,
+                0.0021281237081623226
+              ],
+              "heat_relative": [
+                2.584295236252032e-06,
+                0.0035570251908079165
+              ]
+            },
+            "fmm": {
+              "field_relative": [
+                1.5472886071755714e-06,
+                0.002128123519482906
+              ],
+              "heat_relative": [
+                2.5843272926096006e-06,
+                0.0035570248735832255
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "level": 32,
+      "vertices": 256,
+      "faces": 512,
+      "cases": 12,
+      "comparisons": {
+        "exact": {
+          "max_reference_relative_errors": {
+            "heat": 1.3988810110276972e-14,
+            "alpha": 1.3335483229693831e-15,
+            "reaction": 1.5987211554602254e-14,
+            "field": 1.7569462620740391e-12
+          },
+          "max_magnetic_work_asymmetry": 1.7739597487942203e-09,
+          "max_linear_residual": 4.090965404964626e-16,
+          "max_faraday_residual": 3.8688486102967973e-16,
+          "max_seam_jump_deviation": 6.116828849100919e-06,
+          "max_power_balance_relative": 0.0033238125789207817
+        },
+        "fmm": {
+          "max_reference_relative_errors": {
+            "heat": 1.33439348459774e-09,
+            "alpha": 8.518605458525495e-10,
+            "reaction": 1.826534479221209e-09,
+            "field": 8.286805627844042e-10
+          },
+          "max_magnetic_work_asymmetry": 1.7739597437915983e-09,
+          "max_linear_residual": 2.785623375889781e-16,
+          "max_faraday_residual": 1.952430671833449e-16,
+          "max_seam_jump_deviation": 6.116828849100919e-06,
+          "max_power_balance_relative": 0.0033238131395509907
+        }
+      },
+      "lift_changes": [
+        {
+          "carrier_offset_m": 0.0,
+          "law": "scalar",
+          "by_backend": {
+            "old": {
+              "field_relative": [
+                3.5071634505637935e-09,
+                0.0005469219801239502
+              ],
+              "heat_relative": [
+                5.444199979720565e-09,
+                0.0008491730374740047
+              ]
+            },
+            "exact": {
+              "field_relative": [
+                3.50716228227578e-09,
+                0.0005469219801258339
+              ],
+              "heat_relative": [
+                5.44420064585438e-09,
+                0.0008491730374706741
+              ]
+            },
+            "fmm": {
+              "field_relative": [
+                3.5064639811060652e-09,
+                0.0005469220997595566
+              ],
+              "heat_relative": [
+                5.443107298219729e-09,
+                0.0008491732234483518
+              ]
+            }
+          }
+        },
+        {
+          "carrier_offset_m": 0.0,
+          "law": "jump",
+          "by_backend": {
+            "old": {
+              "field_relative": [
+                3.2663534363293327e-09,
+                0.0005375206255734078
+              ],
+              "heat_relative": [
+                5.245064826908674e-09,
+                0.0008654898413260614
+              ]
+            },
+            "exact": {
+              "field_relative": [
+                3.266348632303432e-09,
+                0.0005375206255771962
+              ],
+              "heat_relative": [
+                5.24507681731734e-09,
+                0.000865489841318734
+              ]
+            },
+            "fmm": {
+              "field_relative": [
+                3.2657267835081323e-09,
+                0.000537520747313659
+              ],
+              "heat_relative": [
+                5.244093603806732e-09,
+                0.0008654900377624841
+              ]
+            }
+          }
+        },
+        {
+          "carrier_offset_m": 0.00015,
+          "law": "scalar",
+          "by_backend": {
+            "old": {
+              "field_relative": [
+                3.874988463768201e-09,
+                0.0006329753080091799
+              ],
+              "heat_relative": [
+                6.013630482470944e-09,
+                0.0009825910305827357
+              ]
+            },
+            "exact": {
+              "field_relative": [
+                3.874991353240731e-09,
+                0.0006329753080034211
+              ],
+              "heat_relative": [
+                6.01362715180187e-09,
+                0.0009825910305931718
+              ]
+            },
+            "fmm": {
+              "field_relative": [
+                3.874239200193753e-09,
+                0.0006329754292779305
+              ],
+              "heat_relative": [
+                6.012444320191435e-09,
+                0.0009825912191696595
+              ]
+            }
+          }
+        },
+        {
+          "carrier_offset_m": 0.00015,
+          "law": "jump",
+          "by_backend": {
+            "old": {
+              "field_relative": [
+                3.630213048997098e-09,
+                0.0006223357099996568
+              ],
+              "heat_relative": [
+                5.8295217542081446e-09,
+                0.0010017692113746257
+              ]
+            },
+            "exact": {
+              "field_relative": [
+                3.6302123911758345e-09,
+                0.0006223357099964969
+              ],
+              "heat_relative": [
+                5.829525751011033e-09,
+                0.0010017692113795107
+              ]
+            },
+            "fmm": {
+              "field_relative": [
+                3.6295201462996817e-09,
+                0.00062233583348429
+              ],
+              "heat_relative": [
+                5.828475702074343e-09,
+                0.0010017694106632113
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "level": 64,
+      "vertices": 1024,
+      "faces": 2048,
+      "cases": 12,
+      "comparisons": {
+        "exact": {
+          "max_reference_relative_errors": {
+            "heat": 6.905587213168474e-14,
+            "alpha": 9.222845949989165e-15,
+            "reaction": 1.425526363618701e-13,
+            "field": 1.7659036593045314e-11
+          },
+          "max_magnetic_work_asymmetry": 5.3828935277864795e-11,
+          "max_linear_residual": 7.171190826246673e-16,
+          "max_faraday_residual": 1.9461669720682e-16,
+          "max_seam_jump_deviation": 5.880235864896832e-08,
+          "max_power_balance_relative": 0.0008316633047662503
+        },
+        "fmm": {
+          "max_reference_relative_errors": {
+            "heat": 1.5580403633919104e-09,
+            "alpha": 1.0285002781170848e-09,
+            "reaction": 1.6209649178478003e-09,
+            "field": 9.898409193771315e-10
+          },
+          "max_magnetic_work_asymmetry": 5.382893528474383e-11,
+          "max_linear_residual": 9.19048282762777e-16,
+          "max_faraday_residual": 1.927206588117486e-16,
+          "max_seam_jump_deviation": 5.880235864896832e-08,
+          "max_power_balance_relative": 0.0008316633483829161
+        }
+      },
+      "lift_changes": [
+        {
+          "carrier_offset_m": 0.0,
+          "law": "scalar",
+          "by_backend": {
+            "old": {
+              "field_relative": [
+                2.852501306212676e-11,
+                0.0001362935902540233
+              ],
+              "heat_relative": [
+                3.554001537509066e-11,
+                0.00021022560643557675
+              ]
+            },
+            "exact": {
+              "field_relative": [
+                2.990226614071603e-11,
+                0.0001362935902238569
+              ],
+              "heat_relative": [
+                3.556732686149644e-11,
+                0.00021022560651040578
+              ]
+            },
+            "fmm": {
+              "field_relative": [
+                2.95862711226233e-11,
+                0.00013629375702985986
+              ],
+              "heat_relative": [
+                3.078826082969499e-11,
+                0.00021022586382368758
+              ]
+            }
+          }
+        },
+        {
+          "carrier_offset_m": 0.0,
+          "law": "jump",
+          "by_backend": {
+            "old": {
+              "field_relative": [
+                4.5409672535675753e-11,
+                0.0001342150810491143
+              ],
+              "heat_relative": [
+                3.655320490736358e-11,
+                0.0002146807553864427
+              ]
+            },
+            "exact": {
+              "field_relative": [
+                4.487265651498143e-11,
+                0.00013421508104934137
+              ],
+              "heat_relative": [
+                3.657940617074473e-11,
+                0.00021468075537467435
+              ]
+            },
+            "fmm": {
+              "field_relative": [
+                5.027691740642756e-11,
+                0.00013421524531027063
+              ],
+              "heat_relative": [
+                4.1075809420476617e-11,
+                0.00021468101823018948
+              ]
+            }
+          }
+        },
+        {
+          "carrier_offset_m": 0.00015,
+          "law": "scalar",
+          "by_backend": {
+            "old": {
+              "field_relative": [
+                3.3363890521650046e-11,
+                0.00015981615262377423
+              ],
+              "heat_relative": [
+                4.4608983174043715e-11,
+                0.0002464913005204572
+              ]
+            },
+            "exact": {
+              "field_relative": [
+                3.17827956853803e-11,
+                0.0001598161526177066
+              ],
+              "heat_relative": [
+                4.452616053640668e-11,
+                0.0002464913005213454
+              ]
+            },
+            "fmm": {
+              "field_relative": [
+                2.950235054220694e-11,
+                0.00015981631977430525
+              ],
+              "heat_relative": [
+                3.983102736526689e-11,
+                0.00024649155841638404
+              ]
+            }
+          }
+        },
+        {
+          "carrier_offset_m": 0.00015,
+          "law": "jump",
+          "by_backend": {
+            "old": {
+              "field_relative": [
+                4.196090220274577e-11,
+                0.00015741884606231492
+              ],
+              "heat_relative": [
+                2.7197466501149847e-11,
+                0.0002517760350266851
+              ]
+            },
+            "exact": {
+              "field_relative": [
+                4.131022252619363e-11,
+                0.00015741884606961637
+              ],
+              "heat_relative": [
+                2.7207125441464086e-11,
+                0.00025177603503689916
+              ]
+            },
+            "fmm": {
+              "field_relative": [
+                4.2655838021293296e-11,
+                0.00015741901070877296
+              ],
+              "heat_relative": [
+                3.1752711571186865e-11,
+                0.0002517762984619587
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "product_profiles": [
+    {
+      "level": 16,
+      "profiles": [
+        {
+          "mode": "old",
+          "faces": 128,
+          "total_seconds": 0.716443099983735,
+          "peak_working_set_bytes": 116813824,
+          "peak_commit_bytes": 462340096,
+          "phases": [
+            {
+              "name": "mesh_space",
+              "seconds": 0.004320500011090189,
+              "peak_working_set_bytes": 116285440,
+              "working_set_bytes": 112463872,
+              "peak_commit_bytes": 381763584
+            },
+            {
+              "name": "native_single_layer",
+              "seconds": 0.7116647999791894,
+              "peak_working_set_bytes": 116682752,
+              "working_set_bytes": 116629504,
+              "peak_commit_bytes": 462340096
+            },
+            {
+              "name": "coo_export",
+              "seconds": 5.1300012273713946e-05,
+              "peak_working_set_bytes": 116682752,
+              "working_set_bytes": 116666368,
+              "peak_commit_bytes": 462340096
+            },
+            {
+              "name": "coo_dense_conversion",
+              "seconds": 0.0002652999828569591,
+              "peak_working_set_bytes": 116731904,
+              "working_set_bytes": 116731904,
+              "peak_commit_bytes": 462340096
+            },
+            {
+              "name": "face_order_copy",
+              "seconds": 8.399999933317304e-05,
+              "peak_working_set_bytes": 116756480,
+              "working_set_bytes": 116756480,
+              "peak_commit_bytes": 462340096
+            },
+            {
+              "name": "six_products",
+              "seconds": 5.7199998991563916e-05,
+              "peak_working_set_bytes": 116797440,
+              "working_set_bytes": 116797440,
+              "peak_commit_bytes": 462340096
+            }
+          ]
+        },
+        {
+          "mode": "exact",
+          "faces": 128,
+          "total_seconds": 0.8275036999839358,
+          "peak_working_set_bytes": 116301824,
+          "peak_commit_bytes": 460959744,
+          "phases": [
+            {
+              "name": "mesh_space",
+              "seconds": 0.004619200015440583,
+              "peak_working_set_bytes": 116301824,
+              "working_set_bytes": 110571520,
+              "peak_commit_bytes": 382160896
+            },
+            {
+              "name": "native_single_layer",
+              "seconds": 0.8223248999856878,
+              "peak_working_set_bytes": 116301824,
+              "working_set_bytes": 114966528,
+              "peak_commit_bytes": 460959744
+            },
+            {
+              "name": "six_products",
+              "seconds": 0.0005595999828074127,
+              "peak_working_set_bytes": 116301824,
+              "working_set_bytes": 115154944,
+              "peak_commit_bytes": 460959744
+            }
+          ],
+          "reference_relative_errors": {
+            "forward": 4.602329157798196e-16,
+            "reverse": 4.789326538062877e-16
+          }
+        },
+        {
+          "mode": "fmm",
+          "faces": 128,
+          "total_seconds": 1.0147158000036143,
+          "peak_working_set_bytes": 121278464,
+          "peak_commit_bytes": 459980800,
+          "phases": [
+            {
+              "name": "mesh_space",
+              "seconds": 0.005411500023910776,
+              "peak_working_set_bytes": 116088832,
+              "working_set_bytes": 110333952,
+              "peak_commit_bytes": 383188992
+            },
+            {
+              "name": "native_single_layer",
+              "seconds": 0.29683989999466576,
+              "peak_working_set_bytes": 116088832,
+              "working_set_bytes": 114020352,
+              "peak_commit_bytes": 459980800
+            },
+            {
+              "name": "six_products",
+              "seconds": 0.7124643999850377,
+              "peak_working_set_bytes": 121278464,
+              "working_set_bytes": 115646464,
+              "peak_commit_bytes": 459980800
+            }
+          ],
+          "reference_relative_errors": {
+            "forward": 5.0416114031611795e-08,
+            "reverse": 5.0416109259144e-08
+          }
+        }
+      ]
+    },
+    {
+      "level": 32,
+      "profiles": [
+        {
+          "mode": "old",
+          "faces": 512,
+          "total_seconds": 11.971357300004456,
+          "peak_working_set_bytes": 133734400,
+          "peak_commit_bytes": 480718848,
+          "phases": [
+            {
+              "name": "mesh_space",
+              "seconds": 0.015738699992652982,
+              "peak_working_set_bytes": 115859456,
+              "working_set_bytes": 110174208,
+              "peak_commit_bytes": 380907520
+            },
+            {
+              "name": "native_single_layer",
+              "seconds": 11.95156180000049,
+              "peak_working_set_bytes": 133734400,
+              "working_set_bytes": 117596160,
+              "peak_commit_bytes": 480718848
+            },
+            {
+              "name": "coo_export",
+              "seconds": 0.0011724000214599073,
+              "peak_working_set_bytes": 133734400,
+              "working_set_bytes": 121839616,
+              "peak_commit_bytes": 480718848
+            },
+            {
+              "name": "coo_dense_conversion",
+              "seconds": 0.0012070999946445227,
+              "peak_working_set_bytes": 133734400,
+              "working_set_bytes": 124006400,
+              "peak_commit_bytes": 480718848
+            },
+            {
+              "name": "face_order_copy",
+              "seconds": 0.0013058999902568758,
+              "peak_working_set_bytes": 133734400,
+              "working_set_bytes": 124096512,
+              "peak_commit_bytes": 480718848
+            },
+            {
+              "name": "six_products",
+              "seconds": 0.00037140000495128334,
+              "peak_working_set_bytes": 133734400,
+              "working_set_bytes": 124145664,
+              "peak_commit_bytes": 480718848
+            }
+          ]
+        },
+        {
+          "mode": "exact",
+          "faces": 512,
+          "total_seconds": 9.153751700010616,
+          "peak_working_set_bytes": 133754880,
+          "peak_commit_bytes": 480927744,
+          "phases": [
+            {
+              "name": "mesh_space",
+              "seconds": 0.013340200006496161,
+              "peak_working_set_bytes": 115830784,
+              "working_set_bytes": 110202880,
+              "peak_commit_bytes": 381120512
+            },
+            {
+              "name": "native_single_layer",
+              "seconds": 9.138781299989205,
+              "peak_working_set_bytes": 133754880,
+              "working_set_bytes": 117952512,
+              "peak_commit_bytes": 480927744
+            },
+            {
+              "name": "six_products",
+              "seconds": 0.0016302000149153173,
+              "peak_working_set_bytes": 133754880,
+              "working_set_bytes": 118145024,
+              "peak_commit_bytes": 480927744
+            }
+          ],
+          "reference_relative_errors": {
+            "forward": 8.599459864706793e-16,
+            "reverse": 9.173703407951305e-16
+          }
+        },
+        {
+          "mode": "fmm",
+          "faces": 512,
+          "total_seconds": 4.690415600023698,
+          "peak_working_set_bytes": 136826880,
+          "peak_commit_bytes": 463634432,
+          "phases": [
+            {
+              "name": "mesh_space",
+              "seconds": 0.01264699999592267,
+              "peak_working_set_bytes": 116199424,
+              "working_set_bytes": 110469120,
+              "peak_commit_bytes": 381308928
+            },
+            {
+              "name": "native_single_layer",
+              "seconds": 1.0563793000183068,
+              "peak_working_set_bytes": 116445184,
+              "working_set_bytes": 116391936,
+              "peak_commit_bytes": 463634432
+            },
+            {
+              "name": "six_products",
+              "seconds": 3.6213893000094686,
+              "peak_working_set_bytes": 136826880,
+              "working_set_bytes": 118632448,
+              "peak_commit_bytes": 463634432
+            }
+          ],
+          "reference_relative_errors": {
+            "forward": 1.5360893929748154e-07,
+            "reverse": 1.5360893201526703e-07
+          }
+        }
+      ]
+    },
+    {
+      "level": 64,
+      "profiles": [
+        {
+          "mode": "old",
+          "faces": 2048,
+          "total_seconds": 138.81302359999972,
+          "peak_working_set_bytes": 392822784,
+          "peak_commit_bytes": 745373696,
+          "phases": [
+            {
+              "name": "mesh_space",
+              "seconds": 0.046862599992891774,
+              "peak_working_set_bytes": 116105216,
+              "working_set_bytes": 111177728,
+              "peak_commit_bytes": 383307776
+            },
+            {
+              "name": "native_single_layer",
+              "seconds": 138.7142456000147,
+              "peak_working_set_bytes": 392822784,
+              "working_set_bytes": 165650432,
+              "peak_commit_bytes": 745373696
+            },
+            {
+              "name": "coo_export",
+              "seconds": 0.012771600013365969,
+              "peak_working_set_bytes": 392822784,
+              "working_set_bytes": 232808448,
+              "peak_commit_bytes": 745373696
+            },
+            {
+              "name": "coo_dense_conversion",
+              "seconds": 0.013995599991176277,
+              "peak_working_set_bytes": 392822784,
+              "working_set_bytes": 266432512,
+              "peak_commit_bytes": 745373696
+            },
+            {
+              "name": "face_order_copy",
+              "seconds": 0.017039199999999255,
+              "peak_working_set_bytes": 392822784,
+              "working_set_bytes": 266457088,
+              "peak_commit_bytes": 745373696
+            },
+            {
+              "name": "six_products",
+              "seconds": 0.008108999987598509,
+              "peak_working_set_bytes": 392822784,
+              "working_set_bytes": 266539008,
+              "peak_commit_bytes": 745373696
+            }
+          ]
+        },
+        {
+          "mode": "exact",
+          "faces": 2048,
+          "total_seconds": 138.17143970003235,
+          "peak_working_set_bytes": 393404416,
+          "peak_commit_bytes": 745959424,
+          "phases": [
+            {
+              "name": "mesh_space",
+              "seconds": 0.047041600017109886,
+              "peak_working_set_bytes": 116031488,
+              "working_set_bytes": 111644672,
+              "peak_commit_bytes": 378646528
+            },
+            {
+              "name": "native_single_layer",
+              "seconds": 138.0991628000047,
+              "peak_working_set_bytes": 393404416,
+              "working_set_bytes": 166203392,
+              "peak_commit_bytes": 745959424
+            },
+            {
+              "name": "six_products",
+              "seconds": 0.025235300010535866,
+              "peak_working_set_bytes": 393404416,
+              "working_set_bytes": 166387712,
+              "peak_commit_bytes": 745959424
+            }
+          ],
+          "reference_relative_errors": {
+            "forward": 1.860934761616723e-15,
+            "reverse": 2.023166416166484e-15
+          }
+        },
+        {
+          "mode": "fmm",
+          "faces": 2048,
+          "total_seconds": 21.898851699981606,
+          "peak_working_set_bytes": 190926848,
+          "peak_commit_bytes": 478982144,
+          "phases": [
+            {
+              "name": "mesh_space",
+              "seconds": 0.047563400003127754,
+              "peak_working_set_bytes": 116178944,
+              "working_set_bytes": 111321088,
+              "peak_commit_bytes": 379236352
+            },
+            {
+              "name": "native_single_layer",
+              "seconds": 3.9312158999964595,
+              "peak_working_set_bytes": 126423040,
+              "working_set_bytes": 126423040,
+              "peak_commit_bytes": 478982144
+            },
+            {
+              "name": "six_products",
+              "seconds": 17.92007239998202,
+              "peak_working_set_bytes": 190926848,
+              "working_set_bytes": 129978368,
+              "peak_commit_bytes": 478982144
+            }
+          ],
+          "reference_relative_errors": {
+            "forward": 5.324177887369408e-07,
+            "reverse": 5.324177849284915e-07
+          }
+        }
+      ]
+    }
+  ],
+  "production_cost": [
+    {
+      "level": 64,
+      "faces": 2048,
+      "vertices": 1024,
+      "backends": {
+        "dense": {
+          "first_em_seconds": 155.49073789999238,
+          "two_law_seconds": 156.0026725999778,
+          "peak_working_set_bytes": 461676544,
+          "peak_commit_bytes": 977248256,
+          "body_assembly_seconds": 8.01073819998419,
+          "records": [
+            {
+              "impedance_law": "scalar",
+              "heat_power_w": 5.079551564516065e-07,
+              "reaction_power_w": 5.083047010450493e-07,
+              "alpha": [
+                -0.0377204848454147,
+                -0.0006986211721794959
+              ],
+              "power_balance_relative": 0.0006881406537628809,
+              "linear_residual": 5.337756168412297e-16,
+              "faraday_residual": 3.800991372039475e-18,
+              "seam_jump_deviation": 3.848029184183588e-08,
+              "work": {
+                "magnetic_work_symmetry": 5.218571261728519e-11,
+                "gradient_work_residual": 1.2464083041322329e-08,
+                "conormal_flux_relative_mismatch": 1.1885726820678105e-07,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": 50348040,
+                "single_layer_native_storage_bytes": 50348040,
+                "single_layer_dense_array_bytes": 0,
+                "single_layer_dense_equivalent_bytes": 33554432,
+                "single_layer_backend": "native-exact",
+                "single_layer_requested_backend": "dense",
+                "single_layer_auto_face_threshold": 512,
+                "single_layer_fmm_parameters": null,
+                "ngsolve_version": "6.2.2607",
+                "single_layer_assembly_seconds": 145.9718692000024
+              },
+              "seconds": 147.4799997000082
+            },
+            {
+              "impedance_law": "jump",
+              "heat_power_w": 7.882166482701923e-07,
+              "reaction_power_w": 7.886778646082491e-07,
+              "alpha": [
+                -0.03726748302595959,
+                -0.0011224691572292518
+              ],
+              "power_balance_relative": 0.0005851390465667627,
+              "linear_residual": 5.16848043926466e-16,
+              "faraday_residual": 2.2805948232236854e-18,
+              "seam_jump_deviation": 3.848029184183588e-08,
+              "work": {
+                "magnetic_work_symmetry": 5.218571261728519e-11,
+                "gradient_work_residual": 1.2464083041322329e-08,
+                "conormal_flux_relative_mismatch": 1.1885726820678105e-07,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": 50348040,
+                "single_layer_native_storage_bytes": 50348040,
+                "single_layer_dense_array_bytes": 0,
+                "single_layer_dense_equivalent_bytes": 33554432,
+                "single_layer_backend": "native-exact",
+                "single_layer_requested_backend": "dense",
+                "single_layer_auto_face_threshold": 512,
+                "single_layer_fmm_parameters": null,
+                "ngsolve_version": "6.2.2607",
+                "single_layer_assembly_seconds": 145.9718692000024
+              },
+              "seconds": 0.5119346999854315
+            }
+          ]
+        },
+        "fmm": {
+          "first_em_seconds": 27.785442599997623,
+          "two_law_seconds": 28.29450730001554,
+          "peak_working_set_bytes": 372162560,
+          "peak_commit_bytes": 779481088,
+          "body_assembly_seconds": 7.656991199997719,
+          "records": [
+            {
+              "impedance_law": "scalar",
+              "heat_power_w": 5.079551570604832e-07,
+              "reaction_power_w": 5.083047016764196e-07,
+              "alpha": [
+                -0.03772048487586892,
+                -0.0006986211734320573
+              ],
+              "power_balance_relative": 0.0006881406972205628,
+              "linear_residual": 5.965774687365354e-16,
+              "faraday_residual": 0.0,
+              "seam_jump_deviation": 3.848029184183588e-08,
+              "work": {
+                "magnetic_work_symmetry": 5.21857200040494e-11,
+                "gradient_work_residual": 1.2464083041322329e-08,
+                "conormal_flux_relative_mismatch": 1.1885726820678105e-07,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": null,
+                "single_layer_native_storage_bytes": null,
+                "single_layer_dense_array_bytes": 0,
+                "single_layer_dense_equivalent_bytes": 33554432,
+                "single_layer_backend": "ngsolve-galerkin-fmm",
+                "single_layer_requested_backend": "fmm",
+                "single_layer_auto_face_threshold": 512,
+                "single_layer_fmm_parameters": {
+                  "fmm_minorder": 20,
+                  "fmm_maxdirect": 100,
+                  "fmm_separation": 2,
+                  "fmm_eval_separation": 3,
+                  "fmm_maxlevel": 20,
+                  "fmm_split_kr": 5,
+                  "fmm_order_factor": 2
+                },
+                "ngsolve_version": "6.2.2607",
+                "single_layer_assembly_seconds": 3.9937616999959573
+              },
+              "seconds": 20.128451399999904
+            },
+            {
+              "impedance_law": "jump",
+              "heat_power_w": 7.882166492341291e-07,
+              "reaction_power_w": 7.886778656209724e-07,
+              "alpha": [
+                -0.03726748305552849,
+                -0.00112246915921286
+              ],
+              "power_balance_relative": 0.0005851391077458246,
+              "linear_residual": 8.86054378859607e-16,
+              "faraday_residual": 1.5203965488776809e-18,
+              "seam_jump_deviation": 3.848029184183588e-08,
+              "work": {
+                "magnetic_work_symmetry": 5.21857200040494e-11,
+                "gradient_work_residual": 1.2464083041322329e-08,
+                "conormal_flux_relative_mismatch": 1.1885726820678105e-07,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": null,
+                "single_layer_native_storage_bytes": null,
+                "single_layer_dense_array_bytes": 0,
+                "single_layer_dense_equivalent_bytes": 33554432,
+                "single_layer_backend": "ngsolve-galerkin-fmm",
+                "single_layer_requested_backend": "fmm",
+                "single_layer_auto_face_threshold": 512,
+                "single_layer_fmm_parameters": {
+                  "fmm_minorder": 20,
+                  "fmm_maxdirect": 100,
+                  "fmm_separation": 2,
+                  "fmm_eval_separation": 3,
+                  "fmm_maxlevel": 20,
+                  "fmm_split_kr": 5,
+                  "fmm_order_factor": 2
+                },
+                "ngsolve_version": "6.2.2607",
+                "single_layer_assembly_seconds": 3.9937616999959573
+              },
+              "seconds": 0.509064700017916
+            }
+          ]
+        }
+      },
+      "max_reference_heat_relative": 1.222933976308127e-09,
+      "max_reference_alpha_relative": 8.079093205220756e-10,
+      "max_reference_reaction_relative": 1.2840772889433083e-09,
+      "max_reference_field_relative": 7.772725107038334e-10
+    },
+    {
+      "level": 152,
+      "faces": 11552,
+      "vertices": 5776,
+      "backends": {
+        "dense": {
+          "first_em_seconds": 4952.3430927999725,
+          "two_law_seconds": 4999.415438499971,
+          "peak_working_set_bytes": 10625908736,
+          "peak_commit_bytes": 11066720256,
+          "body_assembly_seconds": 61.34242799997446,
+          "records": [
+            {
+              "impedance_law": "scalar",
+              "heat_power_w": 5.121939820395467e-07,
+              "reaction_power_w": 5.122548951059797e-07,
+              "alpha": [
+                -0.037897378278829115,
+                -0.0007004829610928924
+              ],
+              "power_balance_relative": 0.00011892577532912618,
+              "linear_residual": 1.8279553808422623e-15,
+              "faraday_residual": 3.8901082203289183e-16,
+              "seam_jump_deviation": 1.4170664641710573e-11,
+              "work": {
+                "magnetic_work_symmetry": 6.383009104324134e-13,
+                "gradient_work_residual": 5.827911923781183e-12,
+                "conormal_flux_relative_mismatch": 2.336086495479842e-10,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": 1601476872,
+                "single_layer_native_storage_bytes": 1601476872,
+                "single_layer_dense_array_bytes": 0,
+                "single_layer_dense_equivalent_bytes": 1067589632,
+                "single_layer_backend": "native-exact",
+                "single_layer_requested_backend": "dense",
+                "single_layer_auto_face_threshold": 512,
+                "single_layer_fmm_parameters": null,
+                "ngsolve_version": "6.2.2607",
+                "single_layer_assembly_seconds": 4852.847436100012
+              },
+              "seconds": 4891.000664799998
+            },
+            {
+              "impedance_law": "jump",
+              "heat_power_w": 7.946797945136644e-07,
+              "reaction_power_w": 7.94760334961527e-07,
+              "alpha": [
+                -0.03744323526860603,
+                -0.0011253709588962125
+              ],
+              "power_balance_relative": 0.00010134956043761356,
+              "linear_residual": 1.389975997738254e-15,
+              "faraday_residual": 3.797613933414078e-18,
+              "seam_jump_deviation": 1.4170664641710573e-11,
+              "work": {
+                "magnetic_work_symmetry": 6.383009104324134e-13,
+                "gradient_work_residual": 5.827911923781183e-12,
+                "conormal_flux_relative_mismatch": 2.336086495479842e-10,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": 1601476872,
+                "single_layer_native_storage_bytes": 1601476872,
+                "single_layer_dense_array_bytes": 0,
+                "single_layer_dense_equivalent_bytes": 1067589632,
+                "single_layer_backend": "native-exact",
+                "single_layer_requested_backend": "dense",
+                "single_layer_auto_face_threshold": 512,
+                "single_layer_fmm_parameters": null,
+                "ngsolve_version": "6.2.2607",
+                "single_layer_assembly_seconds": 4852.847436100012
+              },
+              "seconds": 47.07234569999855
+            }
+          ]
+        },
+        "fmm": {
+          "first_em_seconds": 221.44761040000594,
+          "two_law_seconds": 268.6511650000175,
+          "peak_working_set_bytes": 7470600192,
+          "peak_commit_bytes": 7818809344,
+          "body_assembly_seconds": 60.93317289999686,
+          "records": [
+            {
+              "impedance_law": "scalar",
+              "heat_power_w": 5.121939822971069e-07,
+              "reaction_power_w": 5.122548953908751e-07,
+              "alpha": [
+                -0.03789737829171258,
+                -0.0007004829616543266
+              ],
+              "power_balance_relative": 0.00011892582863826107,
+              "linear_residual": 1.1302272005784107e-15,
+              "faraday_residual": 1.9503030790600635e-16,
+              "seam_jump_deviation": 1.4170664641710573e-11,
+              "work": {
+                "magnetic_work_symmetry": 6.382996002421125e-13,
+                "gradient_work_residual": 5.827911923781183e-12,
+                "conormal_flux_relative_mismatch": 2.336086495479842e-10,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": null,
+                "single_layer_native_storage_bytes": null,
+                "single_layer_dense_array_bytes": 0,
+                "single_layer_dense_equivalent_bytes": 1067589632,
+                "single_layer_backend": "ngsolve-galerkin-fmm",
+                "single_layer_requested_backend": "fmm",
+                "single_layer_auto_face_threshold": 512,
+                "single_layer_fmm_parameters": {
+                  "fmm_minorder": 20,
+                  "fmm_maxdirect": 100,
+                  "fmm_separation": 2,
+                  "fmm_eval_separation": 3,
+                  "fmm_maxlevel": 20,
+                  "fmm_split_kr": 5,
+                  "fmm_order_factor": 2
+                },
+                "ngsolve_version": "6.2.2607",
+                "single_layer_assembly_seconds": 23.100040900026215
+              },
+              "seconds": 160.51443750000908
+            },
+            {
+              "impedance_law": "jump",
+              "heat_power_w": 7.946797949216382e-07,
+              "reaction_power_w": 7.94760335404196e-07,
+              "alpha": [
+                -0.03744323528112465,
+                -0.0011253709597599058
+              ],
+              "power_balance_relative": 0.00010134960404495352,
+              "linear_residual": 1.4124254214668044e-15,
+              "faraday_residual": 3.797613933554187e-19,
+              "seam_jump_deviation": 1.4170664641710573e-11,
+              "work": {
+                "magnetic_work_symmetry": 6.382996002421125e-13,
+                "gradient_work_residual": 5.827911923781183e-12,
+                "conormal_flux_relative_mismatch": 2.336086495479842e-10,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": null,
+                "single_layer_native_storage_bytes": null,
+                "single_layer_dense_array_bytes": 0,
+                "single_layer_dense_equivalent_bytes": 1067589632,
+                "single_layer_backend": "ngsolve-galerkin-fmm",
+                "single_layer_requested_backend": "fmm",
+                "single_layer_auto_face_threshold": 512,
+                "single_layer_fmm_parameters": {
+                  "fmm_minorder": 20,
+                  "fmm_maxdirect": 100,
+                  "fmm_separation": 2,
+                  "fmm_eval_separation": 3,
+                  "fmm_maxlevel": 20,
+                  "fmm_split_kr": 5,
+                  "fmm_order_factor": 2
+                },
+                "ngsolve_version": "6.2.2607",
+                "single_layer_assembly_seconds": 23.100040900026215
+              },
+              "seconds": 47.20355460001156
+            }
+          ]
+        }
+      },
+      "max_reference_heat_relative": 5.133813374413876e-10,
+      "max_reference_alpha_relative": 3.4022128018180743e-10,
+      "max_reference_reaction_relative": 5.56984236510516e-10,
+      "max_reference_field_relative": 4.1581496251830707e-10
+    }
+  ],
+  "same_thread_repeat": {
+    "faces": 2048,
+    "alpha_relative": 0.0,
+    "heat_relative": 0.0,
+    "reaction_relative": 0.0
+  },
+  "contracts": {
+    "native_cases": 97,
+    "skips": 0,
+    "G1a": "unchanged zero/nonzero-mean basis/gauge contract, tested on dense and FMM",
+    "work_asymmetry_limit": 1e-06,
+    "linear_residual_limit": 1e-06,
+    "reaction_heat_limit": 0.1,
+    "compression_heat_budget": 0.001,
+    "fast_contracts": 281
+  }
+}

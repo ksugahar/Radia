@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows: ["Radia Native Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: Successful exact-tag native build run ID (no rebuild)
+        required: true
+        type: string
+      wheel_sha256:
+        description: SHA-256 of the wheel accepted on 102 and 100
+        required: true
+        type: string
+      acceptance_commit:
+        description: Full main-reachable commit containing both required host acceptance records
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  upload-binaries:
+    needs: verify-promotion
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      needs.verify-promotion.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: radia-pyd
+          path: pyd-files
+          run-id: ${{ inputs.ci_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload native binaries to GitHub Releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FILES=$(find pyd-files -type f \( -name '*.pyd' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' \))
+          if [ -z "$FILES" ]; then exit 0; fi
+          python tools/upload_release_asset.py --repo "$GITHUB_REPOSITORY" \
+            --tag binaries --create-if-missing $FILES
+
+  publication-hold:
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'PyPI publication is held. Accept the exact tag artifact on 102 and 100, commit evidence to main, then dispatch Release with run ID, wheel SHA-256 and acceptance commit.'
+
+  verify-promotion:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      artifact_id: ${{ steps.accepted.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: radia-wheel
+          path: dist
+          run-id: ${{ inputs.ci_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-release-context
+          path: ci-release-context
+          run-id: ${{ inputs.ci_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify exact artifact and main-reachable acceptance data
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          WHEEL_SHA256: ${{ inputs.wheel_sha256 }}
+          ACCEPTANCE_COMMIT: ${{ inputs.acceptance_commit }}
+        run: |
+          python tools/verify_radia_promotion.py --repo "$GITHUB_REPOSITORY" \
+            --run-id "$CI_RUN_ID" --wheel-sha256 "$WHEEL_SHA256" \
+            --acceptance-commit "$ACCEPTANCE_COMMIT" --wheel-dir dist \
+            --context-dir ci-release-context --output promotion.json
+      - uses: actions/upload-artifact@v4
+        id: accepted
+        with:
+          name: accepted-radia-wheel
+          path: dist/*.whl
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: radia-promotion-evidence
+          path: promotion.json
+          if-no-files-found: error
+
+  publish-pypi:
+    needs: verify-promotion
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.verify-promotion.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: pypi
+    permissions:
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.verify-promotion.outputs.artifact_id }}
+          path: dist
+          merge-multiple: true
+      - name: Recheck promoted bytes before publication
+        env:
+          WHEEL_SHA256: ${{ inputs.wheel_sha256 }}
+        run: |
+          python - <<'PY'
+          import hashlib, os, pathlib
+          wheels = list(pathlib.Path('dist').rglob('*.whl'))
+          if len(wheels) != 1 or hashlib.sha256(wheels[0].read_bytes()).hexdigest() != os.environ['WHEEL_SHA256']:
+              raise SystemExit('Promoted artifact hash mismatch')
+          PY
+      - name: Publish the accepted wheel without rebuilding
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: false

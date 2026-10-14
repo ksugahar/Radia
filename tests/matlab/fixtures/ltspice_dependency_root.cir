@@ -1,0 +1,6 @@
+Dependency staging
+.include "models\stage1.inc"
+V1 in 0 1
+X1 in out rc_stage R=1k C=1u
+.tran 0 1m
+.end

@@ -1,0 +1,951 @@
+"""
+Cubit toolbar installer for Coreform Cubit 2026.8+.
+
+Registers the Cubit Mesh Export toolbar and menu at Cubit startup.
+
+The startup shim is generated outside the Python package:
+  - current-user: %LOCALAPPDATA%/cubit-mesh-export/Cubit/startup.py
+  - all-users:   %ProgramData%/cubit-mesh-export/Cubit/startup.py
+
+This avoids mutating the package or editable source tree during install,
+while still baking in the absolute
+``register_toolbar.py`` path Cubit needs.
+"""
+
+from __future__ import annotations
+
+import glob
+import os
+import re
+import shutil
+import sys
+import tarfile
+import tempfile
+import uuid
+from pathlib import Path
+
+
+from cubit_mesh_export._layout import has_python_binding, plugin_directory
+
+_MARKER_BEGIN = "## BEGIN cubit-mesh-export toolbar"
+_MARKER_END = "## END cubit-mesh-export toolbar"
+
+_LEGACY_MARKERS = [
+    ("## BEGIN radia toolbar", "## END radia toolbar"),
+    ("## BEGIN cubit_mesh_export toolbar", "## END cubit_mesh_export toolbar"),
+]
+
+_MIN_CUBIT_VERSION = (2026, 8)
+_MIN_CUBIT_VERSION_TEXT = "2026.8"
+
+
+def _parse_cubit_version(path: str | os.PathLike[str]) -> tuple[int, ...]:
+    """Return the Cubit version tuple encoded in an install path."""
+    p = Path(path)
+    parts = [p.name]
+    if p.name.lower() == "bin":
+        parts.append(p.parent.name)
+    text = " ".join(parts)
+    match = re.search(r"(\d{4})[.\-_ ](\d+)", text)
+    if not match:
+        return (0,)
+    return tuple(int(g) for g in match.groups())
+
+
+def _version_key(path: str | os.PathLike[str]) -> tuple[int, ...]:
+    version = _parse_cubit_version(path)
+    return version if version else (0,)
+
+
+def _is_supported_cubit_bin(path: str | os.PathLike[str]) -> bool:
+    cubit_bin = Path(path)
+    return (
+        has_python_binding(cubit_bin)
+        and _parse_cubit_version(cubit_bin) >= _MIN_CUBIT_VERSION
+    )
+
+
+def find_cubit_bin():
+    """Find the Coreform Cubit 2026.8+ bin directory.
+
+    Search order:
+      1. CUBIT_PATH environment variable
+      2. Platform-specific common install locations, newest version first
+
+    Returns:
+      Path to Cubit ``bin/`` directory, or None if no supported Cubit is found.
+    """
+    cubit_path = os.environ.get("CUBIT_PATH") or os.environ.get("CUBIT_INSTALL_DIR")
+    if cubit_path:
+        candidates = [Path(cubit_path)]
+        if (Path(cubit_path) / "bin").is_dir():
+            candidates.insert(0, Path(cubit_path) / "bin")
+        for candidate in candidates:
+            if _is_supported_cubit_bin(candidate):
+                return str(candidate)
+        return None
+
+    search_patterns = []
+    if sys.platform == "win32":
+        for base in [os.environ.get("ProgramFiles", ""),
+                     os.environ.get("ProgramFiles(x86)", "")]:
+            if base:
+                search_patterns.append(os.path.join(base, "Coreform Cubit *", "bin"))
+    elif sys.platform == "darwin":
+        search_patterns += [
+            "/Applications/Coreform-Cubit-*/Coreform Cubit.app/Contents/MacOS",
+            "/Applications/Coreform Cubit */bin",
+        ]
+    else:
+        search_patterns += [
+            "/opt/Coreform-Cubit-*/bin",
+            "/opt/coreform/cubit-*/bin",
+            "/usr/local/Coreform-Cubit-*/bin",
+        ]
+
+    for pattern in search_patterns:
+        candidates = sorted(glob.glob(pattern), key=_version_key, reverse=True)
+        for candidate in candidates:
+            if _is_supported_cubit_bin(candidate):
+                return candidate
+    return None
+
+
+def find_cubit_site_packages(cubit_bin=None):
+    """Find Cubit's bundled Python site-packages directory."""
+    if cubit_bin is None:
+        cubit_bin = find_cubit_bin()
+    if not cubit_bin:
+        return None
+
+    candidates = glob.glob(os.path.join(cubit_bin, "python*", "lib", "site-packages"))
+    candidates += glob.glob(
+        os.path.join(cubit_bin, "python*", "lib", "python*", "site-packages")
+    )
+    return candidates[0] if candidates else None
+
+
+def _windows_users_dir() -> str:
+    return os.path.join(os.environ.get("SystemDrive", "C:") + os.sep, "Users")
+
+
+def _iter_windows_user_dirs(include_default: bool):
+    users_dir = _windows_users_dir()
+    if not os.path.isdir(users_dir):
+        return
+
+    skip = {"All Users", "Default User", "Public"}
+    if include_default:
+        default_dir = os.path.join(users_dir, "Default")
+        if os.path.isdir(default_dir):
+            yield default_dir
+
+    for entry in sorted(os.listdir(users_dir)):
+        if entry in skip or (entry == "Default" and include_default):
+            continue
+        user_dir = os.path.join(users_dir, entry)
+        if os.path.isdir(user_dir):
+            yield user_dir
+
+
+def _get_cubit_startup_files(all_users=False):
+    """Return .cubit startup files targeted by this install."""
+    paths = [os.path.join(os.path.expanduser("~"), ".cubit")]
+
+    if sys.platform == "win32" and all_users:
+        for user_dir in _iter_windows_user_dirs(include_default=True):
+            cubit_file = os.path.join(user_dir, ".cubit")
+            if cubit_file not in paths:
+                paths.append(cubit_file)
+    return paths
+
+
+def _get_panels_dir():
+    """Get the absolute path to the panels/ directory."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "cubit_gui")
+
+
+def _startup_dir(all_users=False):
+    if sys.platform == "win32":
+        if all_users:
+            base = os.environ.get("ProgramData", r"C:\ProgramData")
+        else:
+            base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "cubit-mesh-export", "Cubit")
+    return os.path.join(os.path.expanduser("~"), ".cubit-mesh-export", "cubit")
+
+
+def _legacy_artifacts(all_users=False):
+    """Return exact obsolete exporter-owned paths; never whole Radia trees."""
+    local_roots = []
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        local_roots.append(Path(local))
+    if sys.platform == "win32" and all_users:
+        local_roots.extend(
+            Path(user) / "AppData" / "Local"
+            for user in _iter_windows_user_dirs(include_default=True)
+        )
+    startup_roots = [root / "Radia" / "Cubit" for root in local_roots]
+    if sys.platform == "win32" and all_users:
+        startup_roots.append(
+            Path(os.environ.get("ProgramData", r"C:\ProgramData"))
+            / "Radia" / "Cubit"
+        )
+
+    roaming_roots = []
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        roaming_roots.append(Path(appdata))
+    if sys.platform == "win32" and all_users:
+        roaming_roots.extend(
+            Path(user) / "AppData" / "Roaming"
+            for user in _iter_windows_user_dirs(include_default=True)
+        )
+
+    files = []
+    directories = []
+    for root in startup_roots:
+        files.extend((
+            root / "radia_startup.py",
+            root / "radia_export_toolbar.tar.gz",
+        ))
+        directories.extend((
+            root / "Toolbars" / "radia_export_toolbar",
+            root / "imported" / "radia_export_toolbar",
+        ))
+    files.extend(root / "Radia" / "export_settings.json"
+                 for root in roaming_roots)
+    return files, directories
+
+
+def _remove_legacy_artifacts(all_users=False):
+    """Delete only obsolete files/directories owned by the old exporter UI."""
+    removed, errors = [], []
+    files, directories = _legacy_artifacts(all_users=all_users)
+    for path in files:
+        if not path.exists():
+            continue
+        try:
+            path.unlink()
+            removed.append(path)
+        except OSError as exc:
+            errors.append(f"could not remove legacy file {path}: {exc}")
+    for path in directories:
+        if not path.exists():
+            continue
+        try:
+            shutil.rmtree(path)
+            removed.append(path)
+        except OSError as exc:
+            errors.append(f"could not remove legacy directory {path}: {exc}")
+    return removed, errors
+
+
+def build_official_toolbar_package(output_dir=None):
+    """Build Coreform's supported ``WorkflowToolbar`` import package.
+
+    The archive layout and ``.mappings`` contract match Coreform's official
+    ``tire_cross_section_tool`` and ``cubit-dagmc-toolbar`` examples.  The
+    export implementation is copied into the package so a Cubit toolbar never
+    follows a stale editable-install or release-worktree path.
+    """
+    panels_dir = Path(_get_panels_dir())
+    source = panels_dir / "cubit_toolbar"
+    template = source / "toolbars" / "cubit_mesh_export_toolbar.ttb.tmpl"
+    menu_source = panels_dir / "cubit_export_menu.py"
+    if not template.is_file():
+        raise FileNotFoundError(f"official toolbar template missing: {template}")
+    if not menu_source.is_file():
+        raise FileNotFoundError(f"export implementation missing: {menu_source}")
+
+    destination = Path(output_dir or _startup_dir(all_users=False))
+    destination.mkdir(parents=True, exist_ok=True)
+    package_path = destination / "cubit_mesh_export_toolbar.tar.gz"
+
+    with tempfile.TemporaryDirectory(
+            prefix="cubit-mesh-export-toolbar-", dir=str(destination)) as temp_dir:
+        staging = Path(temp_dir)
+        shutil.copytree(
+            source / "scripts",
+            staging / "scripts",
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
+        shutil.copytree(source / "icons", staging / "icons")
+        (staging / "toolbars").mkdir()
+        shutil.copy2(menu_source, staging / "scripts" / "cubit_export_menu.py")
+
+        # WorkflowToolbar's .mappings file relocates these package-relative
+        # source names during import. Never bake this short-lived staging
+        # directory into the archive: it is deleted when this block exits.
+        install_dir = "."
+        toolbar_text = template.read_text(encoding="utf-8").replace(
+            "@TOOLBAR_INSTALL_DIR@", install_dir)
+        toolbar_rel = Path("toolbars") / "cubit_mesh_export_toolbar.ttb"
+        (staging / toolbar_rel).write_text(toolbar_text, encoding="utf-8")
+
+        mapped_files = sorted(
+            path.relative_to(staging).as_posix()
+            for path in staging.rglob("*")
+            if path.is_file()
+        )
+        mappings = "\n".join(
+            f"{install_dir}/{relative} => {relative}"
+            for relative in mapped_files
+        ) + "\n"
+        (staging / ".mappings").write_text(mappings, encoding="utf-8")
+
+        with tarfile.open(package_path, "w:gz") as archive:
+            for relative in ("scripts", "toolbars", "icons", ".mappings"):
+                archive.add(staging / relative, arcname=relative)
+
+    return str(package_path)
+
+
+def _existing_toolbar_install_dirs(all_users=False):
+    """Return automatic and previously imported WorkflowToolbar directories."""
+    roots = []
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        roots.append(Path(local_appdata))
+    else:
+        roots.append(Path(os.path.expanduser("~")) / "AppData" / "Local")
+
+    if sys.platform == "win32" and all_users:
+        for user_dir in _iter_windows_user_dirs(include_default=False):
+            roots.append(Path(user_dir) / "AppData" / "Local")
+
+    result = []
+    for root in roots:
+        product_root = root / "cubit-mesh-export" / "Cubit"
+        for candidate in (
+            product_root / "Toolbars" / "cubit_mesh_export_toolbar",
+            product_root / "imported" / "cubit_mesh_export_toolbar",
+        ):
+            if candidate.is_dir() and candidate not in result:
+                result.append(candidate.resolve())
+    for ini in _get_cubit_ini_paths(all_users=all_users):
+        candidate = _profile_toolbar_dir(ini)
+        if candidate.is_dir() and candidate not in result:
+            result.append(candidate.resolve())
+    return result
+
+
+def _toolbar_expected_files(install_dir):
+    """Return ``(source, destination)`` pairs for an imported toolbar."""
+    install_dir = Path(install_dir)
+    panels_dir = Path(_get_panels_dir())
+    source = panels_dir / "cubit_toolbar"
+    pairs = []
+    for relative in (
+        "scripts/export_netgen.py",
+        "scripts/export_gmsh.py",
+        "scripts/export_nastran.py",
+        "scripts/export_vtk.py",
+        "scripts/export_femeem.py",
+        "scripts/export_meg.py",
+        "icons/cubit_mesh_export.svg",
+    ):
+        pairs.append((source / relative, install_dir / relative))
+    pairs.append((
+        panels_dir / "cubit_export_menu.py",
+        install_dir / "scripts" / "cubit_export_menu.py",
+    ))
+    return pairs
+
+
+def _render_installed_toolbar(install_dir):
+    install_dir = Path(install_dir).resolve()
+    template = (Path(_get_panels_dir()) / "cubit_toolbar" / "toolbars"
+                / "cubit_mesh_export_toolbar.ttb.tmpl")
+    return template.read_text(encoding="utf-8").replace(
+        "@TOOLBAR_INSTALL_DIR@", install_dir.as_posix())
+
+
+def _sync_existing_toolbar_installations(all_users=False):
+    """Refresh official WorkflowToolbar payloads that Cubit imported before."""
+    synced = []
+    for install_dir in _existing_toolbar_install_dirs(all_users=all_users):
+        for source, destination in _toolbar_expected_files(install_dir):
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+        toolbar = install_dir / "toolbars" / "cubit_mesh_export_toolbar.ttb"
+        toolbar.parent.mkdir(parents=True, exist_ok=True)
+        toolbar.write_text(
+            _render_installed_toolbar(install_dir), encoding="utf-8")
+        synced.append(install_dir)
+    return synced
+
+
+def _verify_existing_toolbar_installations(all_users=False):
+    """Report source drift in already-imported WorkflowToolbar packages."""
+    issues = []
+    for install_dir in _existing_toolbar_install_dirs(all_users=all_users):
+        for source, destination in _toolbar_expected_files(install_dir):
+            if not source.is_file():
+                issues.append(f"toolbar source missing: {source}")
+            elif not destination.is_file():
+                issues.append(f"toolbar payload missing: {destination}")
+            elif source.read_bytes() != destination.read_bytes():
+                issues.append(f"toolbar payload is stale: {destination}")
+        toolbar = install_dir / "toolbars" / "cubit_mesh_export_toolbar.ttb"
+        if not toolbar.is_file():
+            issues.append(f"toolbar definition missing: {toolbar}")
+        elif (toolbar.read_text(encoding="utf-8", errors="replace") !=
+              _render_installed_toolbar(install_dir)):
+            issues.append(f"toolbar definition is stale: {toolbar}")
+    return issues
+
+
+STARTUP_RESOLVER_MARKER = "# cubit-mesh-export: resolve the installed package at startup"
+
+
+def _generate_startup_script(panels_dir, *, all_users=False):
+    """Generate the Cubit-played Python shim outside the package tree.
+
+    The shim must not depend on the directory the package was installed
+    from: release checkouts are versioned and removed after an upgrade, and
+    a baked path then breaks every profile's Cubit start with
+    FileNotFoundError.  At each start it asks the recorded interpreter where
+    ``cubit_mesh_export`` is installed now (``find_spec`` does not import the
+    package) and falls back to the install-time path only if that fails.
+    """
+    register_path = os.path.join(panels_dir, "register_toolbar.py").replace("\\", "/")
+    startup_root = _startup_dir(all_users=all_users)
+    os.makedirs(startup_root, exist_ok=True)
+    startup_path = os.path.join(startup_root, "startup.py")
+
+    # Cubit plays this file line by line, so every statement is one line;
+    # the resolver is one exec() of a multi-line string.
+    body = (
+        "import subprocess\n"
+        "def _cme_register_path():\n"
+        "    py = os.environ.get('CUBIT_MESH_EXPORT_PYTHON', '')\n"
+        "    probe = ('import importlib.util as u, os; s = u.find_spec(\"cubit_mesh_export\"); '\n"
+        "             'print(os.path.join(os.path.dirname(s.origin), \"cubit_gui\", \"register_toolbar.py\") '\n"
+        "             'if s and s.origin else \"\")')\n"
+        "    try:\n"
+        "        out = subprocess.run([py, '-c', probe], capture_output=True, text=True, timeout=60,\n"
+        "                             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)).stdout.strip()\n"
+        "    except Exception:\n"
+        "        out = ''\n"
+        "    if out and os.path.isfile(out):\n"
+        "        return out\n"
+        f"    if os.path.isfile(r'{register_path}'):\n"
+        f"        return r'{register_path}'\n"
+        "    return None\n"
+        "_cme_path = _cme_register_path()\n"
+        "if _cme_path is None:\n"
+        "    print('[cubit-mesh-export] toolbar not registered: cubit_mesh_export was not found '\n"
+        "          'through ' + repr(os.environ.get('CUBIT_MESH_EXPORT_PYTHON')) + '; run '\n"
+        "          'cubit-plugin-install --all-users from the Python environment that has it')\n"
+        "else:\n"
+        "    __file__ = _cme_path\n"
+        "    try:\n"
+        "        with open(_cme_path, encoding='utf-8') as _cme_file:\n"
+        "            _cme_source = _cme_file.read()\n"
+        "        exec(compile(_cme_source, _cme_path, 'exec'))\n"
+        "    except Exception:\n"
+        "        import traceback; traceback.print_exc()\n"
+    )
+    content = (
+        "#!python\n"
+        f"{STARTUP_RESOLVER_MARKER}\n"
+        f"import os; os.environ.setdefault('CUBIT_MESH_EXPORT_PYTHON', {sys.executable!r})\n"
+        "import sys, os, glob; "
+        "_cb = os.path.dirname(os.path.abspath(os.path.join("
+        "os.path.dirname(sys.executable), \"cubit.py\"))) "
+        "if not hasattr(sys, \"_cubit_bin\") else sys._cubit_bin; "
+        "_sp = glob.glob(os.path.join(_cb, \"python*\", \"lib\", "
+        "\"site-packages\")) + glob.glob(os.path.join(_cb, \"python*\", "
+        "\"lib\", \"python*\", \"site-packages\")); "
+        "sys.path.insert(0, _sp[0]) if _sp and _sp[0] not in sys.path else None\n"
+        f"exec({body!r})\n"
+    )
+
+    with open(startup_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return startup_path
+
+
+def _build_startup_block(startup_script_path):
+    """Build the block to insert into a .cubit startup file."""
+    startup_script_path = startup_script_path.replace("\\", "/")
+    return (
+        f"{_MARKER_BEGIN}\n"
+        "set journal off\n"
+        f"play \"{startup_script_path}\"\n"
+        f"{_MARKER_END}\n"
+    )
+
+
+def _remove_existing_block(lines):
+    """Remove complete owned toolbar blocks from a ``.cubit`` file.
+
+    An unmatched marker is corruption, not permission to discard the rest of
+    the user's startup file.  Fail before writing so the original is preserved.
+    """
+    markers = [(_MARKER_BEGIN, _MARKER_END)] + _LEGACY_MARKERS
+    result = []
+    active_end = None
+    for line in lines:
+        starts = [(begin, end) for begin, end in markers if begin in line]
+        ends = [end for _, end in markers if end in line]
+        if starts:
+            if active_end is not None:
+                raise ValueError("nested Cubit toolbar BEGIN marker")
+            _, active_end = starts[0]
+            continue
+        if ends:
+            if active_end is None or active_end not in line:
+                raise ValueError("orphan or mismatched Cubit toolbar END marker")
+            active_end = None
+            continue
+        if active_end is None:
+            result.append(line)
+    if active_end is not None:
+        raise ValueError("unterminated Cubit toolbar BEGIN marker")
+    return result
+
+
+def _read_startup_for_edit(path: Path):
+    """Validate a user's startup file without replacing undecodable bytes."""
+    if not path.is_file():
+        return [], "utf-8", "\n"
+    raw = path.read_bytes()
+    encoding = "utf-8-sig" if raw.startswith(b"\xef\xbb\xbf") else "utf-8"
+    try:
+        content = raw.decode(encoding)
+    except UnicodeDecodeError:
+        encoding = "cp932"
+        content = raw.decode(encoding)
+    newline = "\r\n" if b"\r\n" in raw else "\n"
+    return _remove_existing_block(content.splitlines(keepends=True)), encoding, newline
+
+
+def _get_cubit_ini_paths(all_users=False):
+    """Return Cubit.ini paths targeted by this install."""
+    paths = []
+    if sys.platform != "win32":
+        return paths
+
+    appdata = os.environ.get("APPDATA", "")
+    if appdata:
+        paths.append(os.path.join(appdata, "Coreform", "Cubit.ini"))
+
+    if all_users:
+        for user_dir in _iter_windows_user_dirs(include_default=True):
+            ini = os.path.join(user_dir, "AppData", "Roaming", "Coreform", "Cubit.ini")
+            if ini not in paths:
+                paths.append(ini)
+    return paths
+
+
+def _read_text(path):
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
+def _ensure_plugin_path_in_ini(ini_path, plugin_dir):
+    """Ensure ``plugin_dir`` is registered in Cubit.ini plugin\\paths."""
+    plugin_dir = plugin_dir.replace("\\", "/")
+
+    if not os.path.isfile(ini_path):
+        os.makedirs(os.path.dirname(ini_path), exist_ok=True)
+        with open(ini_path, "w", encoding="utf-8") as f:
+            f.write("[clarofw]\n")
+            f.write(f"plugin\\paths={plugin_dir}\n")
+        return True
+
+    content = _read_text(ini_path)
+    lines = content.splitlines(keepends=True)
+
+    found = False
+    updated = False
+    for i, line in enumerate(lines):
+        if line.startswith("plugin\\paths="):
+            found = True
+            current = line.split("=", 1)[1].strip()
+            existing = [p.strip() for p in current.split(",") if p.strip()]
+            normalized = [p.replace("\\", "/") for p in existing]
+            if plugin_dir not in normalized:
+                if current:
+                    lines[i] = f"plugin\\paths={current}, {plugin_dir}\n"
+                else:
+                    lines[i] = f"plugin\\paths={plugin_dir}\n"
+                updated = True
+            break
+
+    if not found:
+        for i, line in enumerate(lines):
+            if line.strip() == "[clarofw]":
+                lines.insert(i + 1, f"plugin\\paths={plugin_dir}\n")
+                updated = True
+                break
+        else:
+            lines.append("\n[clarofw]\n")
+            lines.append(f"plugin\\paths={plugin_dir}\n")
+            updated = True
+
+    if updated:
+        with open(ini_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    return updated
+
+
+def _profile_toolbar_dir(ini_path):
+    """Use the same self-contained payload layout as Coreform's importer."""
+    return (Path(ini_path).parent.parent.parent / 'Local' / 'cubit-mesh-export'
+            / 'Cubit' / 'Toolbars' / 'cubit_mesh_export_toolbar').resolve()
+
+
+def _workflow_toolbar_entries(content):
+    section = re.search(r'(?ms)^\[workflow\]\s*\n(.*?)(?=^\[|\Z)', content)
+    if section is None:
+        return None, []
+    entries = []
+    for match in re.finditer(r'(?m)^toolbars\\(\d+)=(.*?)\r?$', section.group(1)):
+        value = match.group(2).strip().strip('"').replace('\\', '/')
+        entries.append((int(match.group(1)), value, match.group(0)))
+    return section, entries
+
+
+def _register_official_toolbar(ini_path):
+    """Register only our toolbar in Coreform's persisted workflow list.
+
+    Cubit 2026.8's official importer writes workflow/toolbars/<index> to its
+    QSettings INI. Reproduce that registration without starting a GUI, keeping
+    every unrelated toolbar and preference. Cubit owns the WorkflowToolbar.
+    """
+    directory = _profile_toolbar_dir(ini_path)
+    for source, destination in _toolbar_expected_files(directory):
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+    toolbar = directory / 'toolbars/cubit_mesh_export_toolbar.ttb'
+    toolbar.parent.mkdir(parents=True, exist_ok=True)
+    toolbar.write_text(_render_installed_toolbar(directory), encoding='utf-8')
+    path = Path(ini_path)
+    content = path.read_text(encoding='utf-8') if path.exists() else ''
+    section, entries = _workflow_toolbar_entries(content)
+    owned = [e for e in entries if e[1].endswith('/cubit_mesh_export_toolbar.ttb')]
+    target = toolbar.as_posix()
+    if len(owned) == 1 and owned[0][1] == target:
+        return False
+    index = owned[0][0] if owned else max((e[0] for e in entries), default=-1) + 1
+    # QSettings quotes string values containing commas.
+    value = '"' + target + '"' if ',' in target else target
+    line = f'toolbars\\{index}={value}\n'
+    if section is None:
+        updated = content.rstrip('\n') + '\n\n[workflow]\nconverted_old=true\n' + line
+    else:
+        body = section.group(1)
+        old_lines = {old_line for _, _, old_line in owned}
+        body = ''.join(line for line in body.splitlines(keepends=True)
+                       if line.rstrip('\r\n') not in old_lines)
+        body = body.rstrip('\n') + '\n' + line + '\n'
+        updated = content[:section.start(1)] + body + content[section.end(1):]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        shutil.copy2(path, path.with_name(path.name + '.cme-backup-' + uuid.uuid4().hex[:12]))
+    pending = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
+                                         prefix='.cme-ini-', delete=False) as stream:
+            pending = Path(stream.name)
+            stream.write(updated)
+        os.replace(pending, path)
+        pending = None
+    finally:
+        if pending is not None:
+            pending.unlink(missing_ok=True)
+    return True
+
+
+def _ini_has_official_toolbar(ini_path):
+    if not Path(ini_path).is_file():
+        return False
+    _, entries = _workflow_toolbar_entries(Path(ini_path).read_text(encoding='utf-8'))
+    target = (_profile_toolbar_dir(ini_path) / 'toolbars/cubit_mesh_export_toolbar.ttb').as_posix()
+    owned = [value for _, value, _ in entries if value.endswith('/cubit_mesh_export_toolbar.ttb')]
+    return owned == [target] and Path(target).is_file()
+
+
+def _unregister_official_toolbar(ini_path):
+    path = Path(ini_path)
+    if not path.is_file():
+        return
+    content = path.read_text(encoding='utf-8')
+    section, entries = _workflow_toolbar_entries(content)
+    owned = {line for _, value, line in entries
+             if value.endswith('/cubit_mesh_export_toolbar.ttb')}
+    if not owned:
+        return
+    body = ''.join(line for line in section.group(1).splitlines(keepends=True)
+                   if line.rstrip('\r\n') not in owned)
+    shutil.copy2(path, path.with_name(path.name + '.cme-backup-' + uuid.uuid4().hex[:12]))
+    path.write_text(content[:section.start(1)] + body + content[section.end(1):], encoding='utf-8')
+
+
+def _startup_play_path(cubit_file):
+    if not os.path.isfile(cubit_file):
+        return None
+    content = _read_text(cubit_file)
+    begin = content.find(_MARKER_BEGIN)
+    end = content.find(_MARKER_END)
+    if begin < 0 or end < begin:
+        return None
+    block = content[begin:end]
+    match = re.search(r'play\s+"([^"]+)"', block)
+    if not match:
+        return None
+    return match.group(1).replace("/", os.sep)
+
+
+def _ini_has_plugin_path(ini_path, plugin_dir):
+    if not os.path.isfile(ini_path):
+        return False
+    content = _read_text(ini_path)
+    plugin_dir = plugin_dir.replace("\\", "/")
+    for line in content.splitlines():
+        if not line.startswith("plugin\\paths="):
+            continue
+        current = line.split("=", 1)[1].strip()
+        existing = [p.strip().replace("\\", "/") for p in current.split(",")]
+        if plugin_dir in existing:
+            return True
+    return False
+
+
+def verify_panel_installation(all_users=False, verbose=True):
+    """Verify that Cubit startup and plugin path registration are in place."""
+    issues = []
+    panels_dir = _get_panels_dir()
+    register_script = os.path.join(panels_dir, "register_toolbar.py")
+    register_norm = register_script.replace("\\", "/")
+
+    if not os.path.isfile(register_script):
+        issues.append(f"toolbar script missing: {register_script}")
+
+    cubit_bin = find_cubit_bin()
+    if not cubit_bin:
+        issues.append(
+            f"Coreform Cubit {_MIN_CUBIT_VERSION_TEXT}+ not found; "
+            "set CUBIT_PATH to the selected Cubit bin directory"
+        )
+
+    for cubit_file in _get_cubit_startup_files(all_users=all_users):
+        play_path = _startup_play_path(cubit_file)
+        if not play_path:
+            issues.append(f"startup block missing from {cubit_file}")
+            continue
+        if not os.path.isfile(play_path):
+            issues.append(f"startup script missing: {play_path}")
+            continue
+        startup_text = _read_text(play_path)
+        if register_norm not in startup_text.replace("\\", "/"):
+            issues.append(
+                f"startup script {play_path} does not load {register_norm}"
+            )
+        cubit_text = _read_text(cubit_file)
+        for begin, end in _LEGACY_MARKERS:
+            if begin in cubit_text or end in cubit_text:
+                issues.append(f"legacy toolbar marker remains in {cubit_file}")
+
+    if cubit_bin:
+        plugin_dir = str(plugin_directory(Path(cubit_bin)))
+        for ini_path in _get_cubit_ini_paths(all_users=all_users):
+            if not _ini_has_plugin_path(ini_path, plugin_dir):
+                issues.append(f"plugin path missing from {ini_path}: {plugin_dir}")
+            if not _ini_has_official_toolbar(ini_path):
+                issues.append(f"official toolbar registration missing from {ini_path}")
+
+    issues.extend(_verify_existing_toolbar_installations(
+        all_users=all_users))
+
+    if verbose:
+        print("Panel registration verification:")
+        if issues:
+            for issue in issues:
+                print(f"  [FAIL] {issue}")
+        else:
+            print("  [OK] startup, plugin paths, and imported toolbar payloads are current")
+
+    return (not issues), issues
+
+
+def install_panels(all_users=False):
+    """Register the Cubit Mesh Export toolbar for Cubit 2026.8+."""
+    print("=== Coreform Cubit - Panel Installer ===\n")
+
+    panels_dir = _get_panels_dir()
+    register_script = os.path.join(panels_dir, "register_toolbar.py")
+    if not os.path.isfile(register_script):
+        print(f"ERROR: Toolbar script not found: {register_script}")
+        return False
+
+    cubit_bin = find_cubit_bin()
+    if not cubit_bin:
+        print(f"ERROR: Coreform Cubit {_MIN_CUBIT_VERSION_TEXT}+ not found.")
+        print("       Set CUBIT_PATH to the selected Cubit bin directory.")
+        return False
+
+    startup_edits = []
+    for cubit_file in _get_cubit_startup_files(all_users=all_users):
+        path = Path(cubit_file)
+        try:
+            lines, encoding, newline = _read_startup_for_edit(path)
+        except (OSError, UnicodeError, ValueError) as exc:
+            print(f"ERROR: refusing to edit {path}: {exc}")
+            return False
+        startup_edits.append((path, lines, encoding, newline))
+
+    try:
+        startup_script = _generate_startup_script(panels_dir, all_users=all_users)
+        toolbar_package = build_official_toolbar_package(
+            output_dir=_startup_dir(all_users=all_users))
+        synced_toolbars = _sync_existing_toolbar_installations(
+            all_users=all_users)
+    except OSError as exc:
+        print(f"ERROR: could not create Cubit startup assets: {exc}")
+        return False
+
+    print(f"Toolbar script: {register_script}")
+    print(f"Startup script: {startup_script}")
+    print(f"Official toolbar package: {toolbar_package}")
+    for toolbar_dir in synced_toolbars:
+        print(f"Updated imported toolbar: {toolbar_dir}")
+
+    print(f"Cubit bin:      {cubit_bin}")
+
+    if all_users:
+        print("Mode:           --all-users (all existing profiles + Default)")
+
+    errors = []
+    block = _build_startup_block(startup_script)
+    for path, lines, encoding, newline in startup_edits:
+        pending = None
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            content = "".join(lines)
+            if content:
+                if not content.endswith(("\r", "\n")):
+                    content += newline
+                content += newline
+            content += block.replace("\n", newline)
+            if path.is_file():
+                backup = path.with_name(path.name + ".bak-" + uuid.uuid4().hex[:12])
+                shutil.copy2(path, backup)
+                print(f"Backup:  {backup}")
+            with tempfile.NamedTemporaryFile(mode="wb", dir=path.parent,
+                                             prefix=".cubit-new-", delete=False) as stream:
+                pending = Path(stream.name)
+                stream.write(content.encode(encoding))
+            os.replace(pending, path)
+            pending = None
+            print(f"Updated: {path}")
+        except OSError as exc:
+            msg = f"could not update {path}: {exc}"
+            errors.append(msg)
+            print(f"ERROR: {msg}")
+        finally:
+            if pending is not None:
+                pending.unlink(missing_ok=True)
+
+    if errors:
+        print("=== Installation FAILED; backups above preserve original startup files ===")
+        return False
+
+    removed_legacy, cleanup_errors = _remove_legacy_artifacts(
+        all_users=all_users)
+    for path in removed_legacy:
+        print(f"Removed obsolete exporter asset: {path}")
+    errors.extend(cleanup_errors)
+
+    plugin_dir = str(plugin_directory(Path(cubit_bin)))
+    for ini_path in _get_cubit_ini_paths(all_users=all_users):
+        try:
+            if _ensure_plugin_path_in_ini(ini_path, plugin_dir):
+                print(f"Plugin path registered: {ini_path}")
+            else:
+                print(f"Plugin path OK: {ini_path}")
+            _register_official_toolbar(ini_path)
+            print(f"Official toolbar registered automatically: {ini_path}")
+        except OSError as exc:
+            msg = f"could not update {ini_path}: {exc}"
+            errors.append(msg)
+            print(f"ERROR: {msg}")
+
+    ok, issues = verify_panel_installation(all_users=all_users, verbose=True)
+    if errors or not ok:
+        print()
+        print("=== Installation FAILED ===")
+        for err in errors:
+            print(f"  - {err}")
+        for issue in issues:
+            print(f"  - {issue}")
+        return False
+
+    print()
+    print("=== Installation Complete ===")
+    print("Official WorkflowToolbar registered; no manual package import is required.")
+    print("Then restart Cubit to verify persistent loading.")
+    return True
+
+
+def uninstall_panels(all_users=False):
+    """Remove the Cubit Mesh Export toolbar registration and old assets."""
+    print("=== Coreform Cubit - Panel Uninstaller ===\n")
+    for ini_path in _get_cubit_ini_paths(all_users=all_users):
+        _unregister_official_toolbar(ini_path)
+
+    for cubit_file in _get_cubit_startup_files(all_users=all_users):
+        if not os.path.isfile(cubit_file):
+            continue
+        with open(cubit_file, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+        new_lines = _remove_existing_block(lines)
+        if len(new_lines) < len(lines):
+            try:
+                with open(cubit_file, "w", encoding="utf-8") as f:
+                    f.writelines(new_lines)
+                print(f"Removed toolbar from: {cubit_file}")
+            except OSError as exc:
+                print(f"ERROR: could not update {cubit_file}: {exc}")
+
+    startup_script = os.path.join(_startup_dir(all_users=all_users), "startup.py")
+    if os.path.isfile(startup_script):
+        try:
+            os.remove(startup_script)
+            print(f"Removed startup script: {startup_script}")
+        except OSError as exc:
+            print(f"ERROR: could not remove {startup_script}: {exc}")
+
+    removed_legacy, cleanup_errors = _remove_legacy_artifacts(
+        all_users=all_users)
+    for path in removed_legacy:
+        print(f"Removed obsolete exporter asset: {path}")
+    for error in cleanup_errors:
+        print(f"ERROR: {error}")
+
+    print("Restart Cubit to apply changes.")
+    return True
+
+
+def main():
+    """Console script entry point."""
+    all_users = "--all-users" in sys.argv
+    if "--build-toolbar-only" in sys.argv:
+        package = build_official_toolbar_package()
+        print(package)
+        success = True
+    elif "--uninstall" in sys.argv:
+        success = uninstall_panels(all_users=all_users)
+    elif "--verify-only" in sys.argv:
+        success, _ = verify_panel_installation(all_users=all_users, verbose=True)
+    else:
+        success = install_panels(all_users=all_users)
+    sys.exit(0 if success else 1)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,211 @@
+{
+  "kind": "pm_emf_constant_table_validation",
+  "validation_class": true,
+  "omega_mech_rad_per_s": [
+    50.0,
+    150.0,
+    300.0
+  ],
+  "rows": [
+    {
+      "label": "baseline_4pp",
+      "case": {
+        "label": "baseline_4pp",
+        "lambda_m": 0.1,
+        "pole_pairs": 4,
+        "iq_peak": 12.0
+      },
+      "constants": {
+        "lambda_m_Wb": 0.1,
+        "pole_pairs": 4,
+        "back_emf_constant_phase_peak_V_per_rad_per_s_mech": 0.4,
+        "back_emf_constant_phase_rms_V_per_rad_per_s_mech": 0.282842712474619,
+        "back_emf_constant_line_line_rms_V_per_rad_per_s_mech": 0.4898979485566356,
+        "torque_constant_Nm_per_Aq_peak": 0.6000000000000001,
+        "torque_constant_Nm_per_Aq_rms": 0.8485281374238572,
+        "Kt_peak_over_phase_peak_Ke": 1.5000000000000002,
+        "Kt_rms_over_line_line_rms_Ke": 1.7320508075688779
+      },
+      "speed_rows": [
+        {
+          "omega_mech_rad_per_s": 50.0,
+          "omega_e_rad_per_s": 200.0,
+          "phase_peak_V": 20.0,
+          "phase_rms_V": 14.14213562373095,
+          "line_line_rms_V": 24.494897427831777,
+          "dq_vd_no_load": 0.0,
+          "dq_vq_no_load": 20.0,
+          "torque_Nm": 7.200000000000001,
+          "mechanical_power_W": 360.00000000000006,
+          "electrical_power_W": 360.0,
+          "dq_emf_abs_error_V": 0.0,
+          "power_abs_error_W": 5.684341886080802e-14
+        },
+        {
+          "omega_mech_rad_per_s": 150.0,
+          "omega_e_rad_per_s": 600.0,
+          "phase_peak_V": 60.0,
+          "phase_rms_V": 42.426406871192846,
+          "line_line_rms_V": 73.48469228349533,
+          "dq_vd_no_load": 0.0,
+          "dq_vq_no_load": 60.0,
+          "torque_Nm": 7.200000000000001,
+          "mechanical_power_W": 1080.0000000000002,
+          "electrical_power_W": 1080.0,
+          "dq_emf_abs_error_V": 0.0,
+          "power_abs_error_W": 2.2737367544323206e-13
+        },
+        {
+          "omega_mech_rad_per_s": 300.0,
+          "omega_e_rad_per_s": 1200.0,
+          "phase_peak_V": 120.0,
+          "phase_rms_V": 84.85281374238569,
+          "line_line_rms_V": 146.96938456699067,
+          "dq_vd_no_load": 0.0,
+          "dq_vq_no_load": 120.0,
+          "torque_Nm": 7.200000000000001,
+          "mechanical_power_W": 2160.0000000000005,
+          "electrical_power_W": 2160.0,
+          "dq_emf_abs_error_V": 0.0,
+          "power_abs_error_W": 4.547473508864641e-13
+        }
+      ]
+    },
+    {
+      "label": "compact_3pp",
+      "case": {
+        "label": "compact_3pp",
+        "lambda_m": 0.045,
+        "pole_pairs": 3,
+        "iq_peak": 18.0
+      },
+      "constants": {
+        "lambda_m_Wb": 0.045,
+        "pole_pairs": 3,
+        "back_emf_constant_phase_peak_V_per_rad_per_s_mech": 0.135,
+        "back_emf_constant_phase_rms_V_per_rad_per_s_mech": 0.09545941546018391,
+        "back_emf_constant_line_line_rms_V_per_rad_per_s_mech": 0.1653405576378645,
+        "torque_constant_Nm_per_Aq_peak": 0.20249999999999999,
+        "torque_constant_Nm_per_Aq_rms": 0.28637824638055176,
+        "Kt_peak_over_phase_peak_Ke": 1.4999999999999998,
+        "Kt_rms_over_line_line_rms_Ke": 1.7320508075688774
+      },
+      "speed_rows": [
+        {
+          "omega_mech_rad_per_s": 50.0,
+          "omega_e_rad_per_s": 150.0,
+          "phase_peak_V": 6.75,
+          "phase_rms_V": 4.772970773009195,
+          "line_line_rms_V": 8.267027881893224,
+          "dq_vd_no_load": 0.0,
+          "dq_vq_no_load": 6.75,
+          "torque_Nm": 3.6449999999999996,
+          "mechanical_power_W": 182.24999999999997,
+          "electrical_power_W": 182.25,
+          "dq_emf_abs_error_V": 0.0,
+          "power_abs_error_W": 2.842170943040401e-14
+        },
+        {
+          "omega_mech_rad_per_s": 150.0,
+          "omega_e_rad_per_s": 450.0,
+          "phase_peak_V": 20.25,
+          "phase_rms_V": 14.318912319027586,
+          "line_line_rms_V": 24.801083645679675,
+          "dq_vd_no_load": 0.0,
+          "dq_vq_no_load": 20.25,
+          "torque_Nm": 3.6449999999999996,
+          "mechanical_power_W": 546.7499999999999,
+          "electrical_power_W": 546.75,
+          "dq_emf_abs_error_V": 0.0,
+          "power_abs_error_W": 1.1368683772161603e-13
+        },
+        {
+          "omega_mech_rad_per_s": 300.0,
+          "omega_e_rad_per_s": 900.0,
+          "phase_peak_V": 40.5,
+          "phase_rms_V": 28.63782463805517,
+          "line_line_rms_V": 49.60216729135935,
+          "dq_vd_no_load": 0.0,
+          "dq_vq_no_load": 40.5,
+          "torque_Nm": 3.6449999999999996,
+          "mechanical_power_W": 1093.4999999999998,
+          "electrical_power_W": 1093.5,
+          "dq_emf_abs_error_V": 0.0,
+          "power_abs_error_W": 2.2737367544323206e-13
+        }
+      ]
+    },
+    {
+      "label": "high_flux_5pp",
+      "case": {
+        "label": "high_flux_5pp",
+        "lambda_m": 0.075,
+        "pole_pairs": 5,
+        "iq_peak": 10.0
+      },
+      "constants": {
+        "lambda_m_Wb": 0.075,
+        "pole_pairs": 5,
+        "back_emf_constant_phase_peak_V_per_rad_per_s_mech": 0.375,
+        "back_emf_constant_phase_rms_V_per_rad_per_s_mech": 0.2651650429449553,
+        "back_emf_constant_line_line_rms_V_per_rad_per_s_mech": 0.45927932677184585,
+        "torque_constant_Nm_per_Aq_peak": 0.5625,
+        "torque_constant_Nm_per_Aq_rms": 0.7954951288348661,
+        "Kt_peak_over_phase_peak_Ke": 1.5,
+        "Kt_rms_over_line_line_rms_Ke": 1.7320508075688776
+      },
+      "speed_rows": [
+        {
+          "omega_mech_rad_per_s": 50.0,
+          "omega_e_rad_per_s": 250.0,
+          "phase_peak_V": 18.75,
+          "phase_rms_V": 13.258252147247765,
+          "line_line_rms_V": 22.96396633859229,
+          "dq_vd_no_load": 0.0,
+          "dq_vq_no_load": 18.75,
+          "torque_Nm": 5.625,
+          "mechanical_power_W": 281.25,
+          "electrical_power_W": 281.25,
+          "dq_emf_abs_error_V": 0.0,
+          "power_abs_error_W": 0.0
+        },
+        {
+          "omega_mech_rad_per_s": 150.0,
+          "omega_e_rad_per_s": 750.0,
+          "phase_peak_V": 56.25,
+          "phase_rms_V": 39.77475644174329,
+          "line_line_rms_V": 68.89189901577687,
+          "dq_vd_no_load": 0.0,
+          "dq_vq_no_load": 56.25,
+          "torque_Nm": 5.625,
+          "mechanical_power_W": 843.75,
+          "electrical_power_W": 843.75,
+          "dq_emf_abs_error_V": 0.0,
+          "power_abs_error_W": 0.0
+        },
+        {
+          "omega_mech_rad_per_s": 300.0,
+          "omega_e_rad_per_s": 1500.0,
+          "phase_peak_V": 112.5,
+          "phase_rms_V": 79.54951288348659,
+          "line_line_rms_V": 137.78379803155374,
+          "dq_vd_no_load": 0.0,
+          "dq_vq_no_load": 112.5,
+          "torque_Nm": 5.625,
+          "mechanical_power_W": 1687.5,
+          "electrical_power_W": 1687.5,
+          "dq_emf_abs_error_V": 0.0,
+          "power_abs_error_W": 0.0
+        }
+      ]
+    }
+  ],
+  "checks": {
+    "max_dq_emf_abs_error_V": 0.0,
+    "max_power_abs_error_W": 4.547473508864641e-13,
+    "max_Kt_rms_over_Ke_ll_rms_error": 6.661338147750939e-16,
+    "max_Kt_peak_over_phase_peak_Ke_error": 2.220446049250313e-16,
+    "baseline_line_line_rms_Ke": 0.4898979485566356,
+    "baseline_Kt_peak": 0.6000000000000001
+  }
+}

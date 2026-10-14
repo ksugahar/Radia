@@ -1,0 +1,36 @@
+{
+  "schema": "radia.ih-cuda-algebra.v1",
+  "accepted": true,
+  "scope": "Resident algebra only; not a coupled IH/Simulink solver acceptance",
+  "timing_acceptance": false,
+  "a100_used": false,
+  "source_dirty": false,
+  "source_commit": "e9e3a0e88cb16b0fe7574959c5f25e97ac9b6a2c",
+  "source_sha256": {
+    "validation_test/ih_cuda/resident_smoke.cu": "2840708b94a6acc0df5a93a5a1e431fd28e7ce9f57fef71fea9d5ac6eede8921",
+    "packages/radia-gpu/native/ih_resident_kernels.cuh": "fbf2c80017687fb309f4f5aa965f70d74fe93f0a7b22f6430335e0cbc342d5dc",
+    "validation_test/ih_cuda/run_resident_smoke.py": "9445555454112ee2b052c07264c2e5341a56a9c677286022959d273f1f409e2b"
+  },
+  "cases": [
+    {
+      "current_A": 0.0,
+      "complex_operator_relative": 0.0,
+      "quadratic_loss_relative": 0.0,
+      "resident_repeats": 10
+    },
+    {
+      "current_A": 1.0,
+      "complex_operator_relative": 4.986552810984927e-17,
+      "quadratic_loss_relative": 2.0291559590571803e-16,
+      "resident_repeats": 10
+    },
+    {
+      "current_A": -2.5,
+      "complex_operator_relative": 5.983863373181912e-17,
+      "quadratic_loss_relative": 0.0,
+      "resident_repeats": 10
+    }
+  ],
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "binary_sha256": "f10b33f2f85567e6478a0a716dac206fcd8bfe305a6f8c064eb26c42da39ddac"
+}

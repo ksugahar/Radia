@@ -1,0 +1,47 @@
+{
+  "schema": "radia.validation.nonlinear-magnetostatic-newton.v1",
+  "generated_at_utc": "2026-09-03T20:35:54.284398+00:00",
+  "provenance": {
+    "command": "python validation_test/magnetostatics/generate_nonlinear_newton_results.py",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606"
+  },
+  "configuration": {
+    "mesh_subdivisions": 16,
+    "polynomial_order": 3,
+    "saturation_alpha": 0.6,
+    "loose_newton_tolerance": 1e-06,
+    "tight_newton_tolerance": 1e-11
+  },
+  "runtime_seconds": 0.3436800000054063,
+  "thresholds": {
+    "maximum_l2_error": 1e-05,
+    "minimum_saturation_relative_spread": 0.1,
+    "maximum_iterations": 6,
+    "maximum_final_residual": 1e-10,
+    "minimum_quadratic_drop_ratio": 1000.0
+  },
+  "observed": {
+    "default_l2_error": 5.312961884485222e-07,
+    "loose_tolerance_l2_error": 5.312961884485338e-07,
+    "tight_tolerance_l2_error": 5.312961884485117e-07,
+    "saturation_relative_spread": 0.37376635538224107,
+    "residual_history": [
+      2.0133315137514365,
+      0.37496295484558667,
+      0.016149571032139372,
+      4.622967904482677e-05,
+      4.76796512418835e-10,
+      1.061658054949381e-14
+    ],
+    "residual_drop_ratios": [
+      5.369414465438448,
+      23.21813713190092,
+      349.33340152502217,
+      96958.9286848998,
+      44910.55384509547
+    ],
+    "recovered_root_l2_error": 5.312961884483584e-07
+  },
+  "passed": true
+}

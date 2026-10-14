@@ -1,0 +1,111 @@
+{
+  "schema": "radia.gpu.stable-qualification.v1",
+  "version": "0.1.3",
+  "source_commit": "88049e80944ab3c9de38d4a320d74a1b14f051bf",
+  "wheel_sha256": "76a1b64ed290194a95aba755eb83ad6781538839012948c5adee1495259554ba",
+  "independent_review": {
+    "source_commit": "88049e80944ab3c9de38d4a320d74a1b14f051bf",
+    "outcome": "accepted",
+    "unresolved_findings": [],
+    "reviewer": "Independent read-only Codex reviewer",
+    "report": "validation_test/radia_gpu/releases/0.1.3-review.json"
+  },
+  "build_host_acceptance": {
+    "schema": "radia.gpu.installed-acceptance.v1",
+    "passed": true,
+    "device": "Quadro RTX 5000",
+    "compute_capability": "7.5",
+    "gpu_total_memory_bytes": 17179541504.0,
+    "matlab_release": "2026a",
+    "cuda_residual": 0,
+    "simulink_repeated_runs": 2,
+    "simulink_failure_cleanup": true,
+    "ltspice_checked": true,
+    "source_commit": "88049e80944ab3c9de38d4a320d74a1b14f051bf",
+    "wheel_sha256": "76a1b64ed290194a95aba755eb83ad6781538839012948c5adee1495259554ba",
+    "manifest_sha256": "40526ea1eeccfd1ad4399e8925b04e3f2fb71ed417a7051d1c9229ec0c2284c6",
+    "distribution_version": "0.1.3",
+    "execution_role": "cuda-build-host",
+    "cpu_parity_checked": true,
+    "cpu_parity": {
+      "csr_pcg": {
+        "relative_l2": 3.519930674787334e-10,
+        "true_relative_residual": 9.98616206327886e-11,
+        "reference": "Independent NGSolve sparsecholesky in exact main CI; installed native gateway rechecked"
+      },
+      "ams": {
+        "relative_l2": 2.3971262611308445e-13,
+        "true_relative_residual": 4.357351285871121e-12,
+        "reference": "Fresh independent NGSolve NewtonSolver with sparsecholesky"
+      },
+      "hmatrix": {
+        "relative_l2": 5.015281377765097e-10,
+        "true_relative_residual": 7.953788482773285e-12,
+        "reference": "Independent Python/pybind11 HDiv linear material solve"
+      },
+      "projection": {
+        "operation_kind": "operator",
+        "residual_applicability": "not_applicable_operator",
+        "true_relative_residual": null,
+        "relative_l2": 2.2746676655798596e-14,
+        "reference": "Independent NGSolve mass, charge map and RHS"
+      },
+      "fmm": {
+        "operation_kind": "operator",
+        "residual_applicability": "not_applicable_operator",
+        "true_relative_residual": null,
+        "relative_l2": 1.6377016841204107e-09,
+        "reference": "Independent NumPy direct sum; order 8, separation 2"
+      }
+    }
+  },
+  "main_ci_run": 38351875078,
+  "native_release_run": 38351930875,
+  "toolkit_model_check": "healthy",
+  "accepted_scope": "Bounded declared public cases; unsupported geometry and state fail explicitly",
+  "limitations": [
+    "IH preview excluded",
+    "General adaptive high-order HDiv, images, internal interfaces, constraints and nonlinear HDiv are not accepted",
+    "HDiv CPU native file identity is verified; its original build-source receipt remains unverified",
+    "Process-cold and global CUDA/runtime allocation peaks are not certified"
+  ],
+  "additional_gpu_acceptance": {
+    "passed": true,
+    "source_commit": "88049e80944ab3c9de38d4a320d74a1b14f051bf",
+    "wheel_sha256": "76a1b64ed290194a95aba755eb83ad6781538839012948c5adee1495259554ba",
+    "manifest_sha256": "40526ea1eeccfd1ad4399e8925b04e3f2fb71ed417a7051d1c9229ec0c2284c6",
+    "device": "NVIDIA A100-SXM4-40GB",
+    "hdiv": {
+      "coefficient_error": 5.015281377765097e-10,
+      "physical_error": 1.4897781899323295e-12,
+      "true_residual": 7.953788482773285e-12,
+      "projection_error": 2.2746676655798596e-14
+    },
+    "ams_cpu_relative": 2.3967047530798306e-13,
+    "ams_true_relative_residual": 4.357396751210232e-12,
+    "fmm_cpu_relative": {
+      "potential": 7.667127535681754e-10,
+      "field": 1.6377016841204107e-09
+    },
+    "projection_individual_relative": [
+      1.476382627369113e-16,
+      2.2746676655798596e-14,
+      2.828595643112391e-16
+    ],
+    "direct_cache_coefficient_difference": 0.0,
+    "direct_cache_true_residuals": {
+      "a": 7.9536576703176e-12,
+      "b": 7.9536576703176e-12
+    },
+    "simulink_repeated_runs": 2,
+    "simulink_failure_cleanup": true,
+    "ltspice_checked": false,
+    "loaded_mex_sha256": {
+      "csr_pcg": "a8c82be64cddd43ddb72d9767a3d34c031ed0f1d19c6ef802f5e58eeaf7f73d6",
+      "ams": "b3842fcd12f4daa6c339598f8032e0d4d71812dbac92b347580d03df0d0881fd",
+      "hmatrix": "66ab9d7a6ceae1f5b28c2fa36c337a7b0e2d15396742e7317c882709939c1ce8",
+      "projection": "bc6ed709580f071337d428053bd9409268b1db89b0ccedd5202f162a5eef3ae0",
+      "fmm": "e8cae3dd56fb8a44d4c8c58197a18e731949bd1a2495bdd393f83e1d7d85242b"
+    }
+  }
+}

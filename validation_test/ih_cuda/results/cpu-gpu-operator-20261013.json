@@ -1,0 +1,17 @@
+{
+  "scope": "Same candidate assembled operator CPU/GPU solver diagnostic, not independent physics",
+  "gpu_error": "IH complex solve did not converge or broke down",
+  "cpu_bicgstab_flag": 4,
+  "cpu_reported_residual": 1,
+  "cpu_true_residual": 1,
+  "cpu_iterations": 0,
+  "cpu_direct_diagnostic_true_residual": 2.2854204125337127e-17,
+  "condition_2": 6536956.173390994,
+  "dimension": 21,
+  "release_accepted": false,
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "source_commit": "57a3dda15d50ae13e8bf56e627d834228246141f",
+  "binary_sha256": "7dd290fe43302f92923920f51a024160eb18100e8e6ab8c0c2dccaeba9639cf4",
+  "accepted": false,
+  "independent_physics": false
+}

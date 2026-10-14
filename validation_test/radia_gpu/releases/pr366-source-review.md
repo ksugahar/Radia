@@ -1,0 +1,44 @@
+# PR 366 independent source review
+
+An independent read-only Codex reviewer examined the AMS/FEM changes against
+main source `88049e80944ab3c9de38d4a320d74a1b14f051bf`. Scope included GPU
+curvature control and small coarse actions, factor/index validation, CUDA
+stream and graph use, fixed affine HCurlSystem ownership and lifecycle,
+independent numerical validation and exact-wheel release requirements.
+
+One P2 finding was confirmed: NaN values in the independent numerical
+validation could bypass tolerance comparisons. Commit `a102a8d00` adds
+finite checks for solution, reference, applied operator, RHS, norms and
+computed metrics. Fifteen direct regression cases cover NaN/Inf in each
+input, overflowing reference norms, zero RHS and original-equation residual
+failure. All passed. The independent reviewer re-read the fix and reported
+no unresolved actionable findings. No additional concrete CUDA cache,
+synchronization or HCurlSystem lifecycle defect was identified.
+
+The reviewed fixed validation source SHA256 is
+`3cffba3279c54098dd211fcdcaea628ed60eed5e19ee8ad3e17a97265321a9c5`;
+the regression source SHA256 is
+`fe94a2ad98c3d0085dc360133a33c708b8c7be5d06567414ddb7b1449a27e8dc`.
+The reviewer performed source review only; GPU execution and independent
+CPU numerical acceptance are recorded separately. This report does not
+qualify a stable release by itself. A stable source/version and its exact
+main CI wheel need fresh installed acceptance and final-source review.
+
+
+The post-merge fast contract run identified an outdated exact GPU feature
+list in `tests/test_matlab_python_parity_manifest.py`. Its expectation now
+includes the already-declared `reusable-linear-hcurl-ams` capability. The
+independent reviewer accepted this one-line contract update; both focused
+parity-manifest tests pass. Production numerical code is unchanged. The
+obsolete candidate build was canceled before qualification; the final
+source receives a fresh main CI build and exact-wheel acceptance.
+
+
+A final storage-policy review found a second P2 issue: the Radia-owned dense
+coarse-action cache used column-major storage without an external API owner.
+The cache now stores `inverse[row*used+column]` and applies it with the same
+row-major indexing. Per-column factor solves retain the original dependency
+and arithmetic order, with no additional temporary matrix or memory change.
+The independent reviewer confirmed that the external NGSolve factor layout
+does not own this derived cache. This correction requires a fresh build and
+exact-wheel numerical acceptance; earlier candidates remain historical.

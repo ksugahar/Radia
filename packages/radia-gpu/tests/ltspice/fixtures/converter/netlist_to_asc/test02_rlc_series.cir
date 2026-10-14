@@ -1,0 +1,7 @@
+* RLC Series Circuit
+I1 0 in AC 1
+R1 in mid 100
+L1 mid out 10m
+C1 out 0 1u
+.ac dec 100 10 100k
+.end

@@ -1,0 +1,24 @@
+Eqnedit Math: modified Latin Modern Math derivative
+Maintainer of this derivative: Eqnedit64 / ksugahar
+License: GUST Font License / LPPL, see GUST-FONT-LICENSE.txt.
+Upstream work: Latin Modern Math (GUST); original notices remain in the font.
+
+Original source file: latinmodern-math.otf
+SHA256: 6075562b771f8b82f0c179e363389684f2dd09de30038269e2628e504bd7be0f
+Modified file: eqnedit-math.ttf
+SHA256: e6a371a1e7be3dfce9f047580cf9888a00cbc4b94c723d746a341ec46145ee3b
+Derived family: Eqnedit Math
+
+Regenerate from tools/eqnedit64 with fontTools 4.60.1:
+python build/make_diagnostic_truetype.py assets/latinmodern-math.otf NEW.ttf --family-name "Eqnedit Math"
+
+Changes: CFF cubic outlines converted to glyf quadratic outlines (cu2qu error
+0.5 design units plus integer rounding); winding reversed for TrueType;
+LSBs set to TrueType control-point xMin while retaining advance widths;
+name records renamed, glyf/loca/maxp/post rebuilt, obsolete CFF/VORG removed.
+cmap/MATH/GSUB/GPOS and glyph order are preserved. This is not the unmodified
+upstream font. The family and file names distinguish the derived work.
+
+The converter report is diagnostic evidence, not release approval. Acceptance
+requires native rendering tests and external font-host monitoring for the
+exact executable and module, independently of this reproducibility manifest.

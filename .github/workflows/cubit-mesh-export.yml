@@ -1,0 +1,272 @@
+name: cubit-mesh-export
+
+on:
+  push:
+    branches: [main]
+    tags: ['cubit-mesh-export-v*']
+    paths:
+      - 'packages/cubit-mesh-export/**'
+      - 'src/cubit_plugin/**'
+      - 'tests/test_cubit_standalone_gui.py'
+      - 'tools/check_cubit_standalone.py'
+      - 'tools/release_cubit_dual.py'
+      - 'tests/test_release_cubit_dual.py'
+      - 'tests/test_cubit_installers.py'
+      - 'tests/test_cubit_mesh_quality.py'
+      - 'tests/test_cubit_menu_startup.py'
+      - 'tests/test_cubit_auto_kelvin_entry.py'
+      - 'tools/audit_pyside6_only.py'
+      - 'validation_test/cubit_mesh_export/**'
+      - '.github/workflows/cubit-mesh-export.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/cubit-mesh-export/**'
+      - 'src/cubit_plugin/**'
+      - 'tests/test_cubit_standalone_gui.py'
+      - 'tools/check_cubit_standalone.py'
+      - 'tools/release_cubit_dual.py'
+      - 'tests/test_release_cubit_dual.py'
+      - 'tests/test_cubit_installers.py'
+      - 'tests/test_cubit_mesh_quality.py'
+      - 'tests/test_cubit_menu_startup.py'
+      - 'tests/test_cubit_auto_kelvin_entry.py'
+      - 'tools/audit_pyside6_only.py'
+      - 'validation_test/cubit_mesh_export/**'
+      - '.github/workflows/cubit-mesh-export.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cubit-mesh-export-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-test:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fetch the hash-pinned native curver
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $destination = 'packages\cubit-mesh-export\src\cubit_mesh_export'
+          $manifestPath = Join-Path $destination 'native_payloads.json'
+          $payload = (Get-Content -LiteralPath $manifestPath -Raw |
+            ConvertFrom-Json).payloads.'cubit_mesh_curver.pyd'
+          python tools\download_release_asset.py `
+            --repo ${{ github.repository }} `
+            --tag $payload.github_release_tag `
+            --name $payload.asset_name `
+            --dest $destination
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $downloaded = Join-Path $destination $payload.asset_name
+          $actualHash = (Get-FileHash -LiteralPath $downloaded `
+            -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $payload.sha256 -or
+              (Get-Item -LiteralPath $downloaded).Length -ne $payload.size) {
+            throw "native curver does not match native_payloads.json"
+          }
+          Move-Item -LiteralPath $downloaded `
+            -Destination (Join-Path $destination 'cubit_mesh_curver.pyd') `
+            -Force
+          python packages\cubit-mesh-export\src\cubit_mesh_export\_native_provenance.py `
+            verify --repo-root . --package-dir $destination
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and verify cubit-mesh-export wheel
+        shell: pwsh
+        run: |
+          python -m pip install build wheel
+          python -m build --wheel packages\cubit-mesh-export
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $wheel = Get-ChildItem packages\cubit-mesh-export\dist\*.whl |
+            Select-Object -First 1
+          @'
+          import hashlib, json, re, sys, zipfile
+          wheel = sys.argv[1]
+          with zipfile.ZipFile(wheel) as archive:
+              names = archive.namelist()
+              required = ('cubit_mesh_export/cubit_mesh_export.ccm',
+                          'cubit_mesh_export/cubit_mesh_curver.pyd',
+                          'cubit_mesh_export/cubit_gui/solver_ready_sample.jou',
+                          'cubit_mesh_export/cubit_gui/cubit_export_menu.py',
+                          'cubit_mesh_export/cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',
+                          'cubit_mesh_export/native_payloads.json')
+              missing = [name for name in required if name not in names]
+              if missing:
+                  raise SystemExit(f'missing required wheel payloads: {missing}')
+              retired = (
+                  'cubit_mesh_export/cubit_gui/radia_export_menu.py',
+                  'cubit_mesh_export/cubit_gui/cubit_toolbar/icons/radia_export.svg',
+                  'cubit_mesh_export/cubit_gui/cubit_toolbar/toolbars/radia_export_toolbar.ttb.tmpl',
+                  'cubit_mesh_export/cubit_gui/ih_bem_sample.jou',
+                  'cubit_mesh_export/mcp/bootstrap.py',
+              )
+              leaked = [name for name in retired if name in names]
+              if leaked:
+                  raise SystemExit(f'retired GUI payloads leaked into wheel: {leaked}')
+              init = archive.read('cubit_mesh_export/__init__.py').decode()
+              native_manifest = json.loads(archive.read(
+                  'cubit_mesh_export/native_payloads.json'))
+              payload_contents = {
+                  name: archive.read(f'cubit_mesh_export/{name}')
+                  for name in ('cubit_mesh_export.ccm',
+                               'cubit_mesh_curver.pyd')
+              }
+              wheel_meta_path = next(
+                  name for name in names
+                  if name.endswith('.dist-info/WHEEL'))
+              wheel_meta = archive.read(wheel_meta_path).decode()
+          package_version = re.search(r'^__version__\s*=\s*"([^"]+)"', init, re.M).group(1)
+          wheel_version = re.match(r'[^-]+-([^-]+)-', wheel.rsplit('\\', 1)[-1]).group(1)
+          if package_version != wheel_version:
+              raise SystemExit(f'version mismatch: {package_version} != {wheel_version}')
+          if not wheel.endswith('-cp312-cp312-win_amd64.whl'):
+              raise SystemExit(f'wheel is not natively tagged: {wheel}')
+          if 'Root-Is-Purelib: false' not in wheel_meta:
+              raise SystemExit('native wheel incorrectly declares purelib root')
+          for name in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd'):
+              content = payload_contents[name]
+              expected = native_manifest['payloads'][name]
+              if (len(content) != expected['size'] or
+                      hashlib.sha256(content).hexdigest() != expected['sha256']):
+                  raise SystemExit(
+                      f'wheel payload {name} does not match native_payloads.json')
+          ccm = payload_contents['cubit_mesh_export.ccm']
+          for retired_token in (b'CoilCommand', b'export jmag_nastran',
+                                b'RadiaPlugin', b'RADIA_LAUNCHER_CONFIG'):
+              if retired_token in ccm:
+                  raise SystemExit(
+                      f'retired native token leaked into wheel: {retired_token!r}')
+          print(f'PASS cubit-mesh-export {package_version}: mandatory payloads present')
+          '@ | python - $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Check standalone Python sources
+        shell: pwsh
+        run: |
+          python -m compileall -q packages\cubit-mesh-export\src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip install setuptools pytest psutil numpy `
+            "netgen-mesher==6.2.2607" "ngsolve==6.2.2607"
+          $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
+          python -m pytest tests\test_cubit_installers.py `
+            tests\test_cubit_mesh_quality.py `
+            tests\test_cubit_menu_startup.py tests\test_cubit_standalone_gui.py `
+            tests\test_cubit_auto_kelvin_entry.py `
+            packages\cubit-mesh-export\tests\test_toolbar_smoke.py `
+            packages\cubit-mesh-export\tests\test_smoke_command.py `
+            packages\cubit-mesh-export\tests\test_native_plugin_registry.py `
+            tests\test_release_cubit_dual.py -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools\audit_pyside6_only.py
+
+      - name: Verify installed standalone GUI assets without Radia
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem packages\cubit-mesh-export\dist\*.whl |
+            Select-Object -First 1
+          # Resolve declared public dependencies normally; absence probes reject
+          # Radia/private foundations. Feature tests use the wheel's extras.
+          python -m pip install "$($wheel.FullName)[mesh-quality,sculpt,youtube]"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -I tools\check_cubit_standalone.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m cubit_mesh_export.mcp.server --selftest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -I packages\cubit-mesh-export\tools\check_mcp_standalone.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest packages\cubit-mesh-export\tests\mcp --confcutdir=packages\cubit-mesh-export\tests\mcp -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload cubit-mesh-export wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: cubit-mesh-export-wheel
+          path: packages/cubit-mesh-export/dist/*.whl
+          if-no-files-found: error
+
+  publish:
+    needs: build-test
+    if: >-
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'cubit-mesh-export-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download wheel built by this tag CI
+        uses: actions/download-artifact@v4
+        with:
+          name: cubit-mesh-export-wheel
+          path: dist
+
+      - name: Verify wheel version matches the triggering tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t wheels < <(find dist -maxdepth 1 -name 'cubit_mesh_export-*.whl')
+          if [[ "${#wheels[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one cubit-mesh-export wheel, found ${#wheels[@]}"
+            exit 1
+          fi
+          expected="${GITHUB_REF_NAME#cubit-mesh-export-v}"
+          python3 - "${wheels[0]}" "$expected" <<'PY'
+          import email
+          import pathlib
+          import sys
+          import zipfile
+
+          wheel = pathlib.Path(sys.argv[1])
+          expected = sys.argv[2]
+          with zipfile.ZipFile(wheel) as archive:
+              names = archive.namelist()
+              metadata_name = next(
+                  name for name in names if name.endswith(".dist-info/METADATA")
+              )
+              metadata = email.message_from_bytes(archive.read(metadata_name))
+              ccm = archive.read("cubit_mesh_export/cubit_mesh_export.ccm")
+          actual = metadata["Version"]
+          if actual != expected:
+              raise SystemExit(
+                  f"wheel/tag version mismatch: wheel={actual}, tag={expected}"
+              )
+          required = ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd",
+                      "cubit_gui/solver_ready_sample.jou",
+                      "cubit_gui/cubit_export_menu.py",
+                      "cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl",
+                      "native_payloads.json")
+          missing = [item for item in required if not any(name.endswith(item) for name in names)]
+          if missing:
+              raise SystemExit(f"release wheel lacks mandatory payloads: {missing}")
+          retired = ("radia_export_menu.py", "radia_export.svg",
+                     "radia_export_toolbar.ttb.tmpl", "ih_bem_sample.jou",
+                     "mcp/bootstrap.py")
+          leaked = [item for item in retired if any(name.endswith(item) for name in names)]
+          if leaked:
+              raise SystemExit(f"release wheel contains retired GUI payloads: {leaked}")
+          for retired_token in (b"CoilCommand", b"export jmag_nastran",
+                                b"RadiaPlugin", b"RADIA_LAUNCHER_CONFIG"):
+              if retired_token in ccm:
+                  raise SystemExit(
+                      f"release wheel contains retired native token: {retired_token!r}"
+                  )
+          print(f"release wheel verified: {wheel.name} ({actual})")
+          PY
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true

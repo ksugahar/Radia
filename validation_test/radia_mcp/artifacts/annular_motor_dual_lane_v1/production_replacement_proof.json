@@ -1,0 +1,52 @@
+{
+  "radia_version": "4.95.30",
+  "schema": "radia.validation.production-replacement-proof.v1",
+  "executed_at_utc": "2026-10-04T03:04:34.015809+00:00",
+  "execution_version": {
+    "radia": "4.95.30",
+    "matlab": "2026a",
+    "simulink": "2026a"
+  },
+  "proofs": {
+    "motor_dual_lane": {
+      "status": "pass",
+      "radia_version": "4.95.30",
+      "shared_model_identity_sha256": "64b0c69d55ae9b802759b5cfd774e2c67174a5cd2cecb04e6e5c5f70b97304e9",
+      "artifact_sha256_by_role": {
+        "manifest": "4c5eb534fa365e05f102654e1df94b5d4861b1d44ba0641f34edb1a88254872f",
+        "gate": "2c805e9d28923b1056e2bb714b3cfd7228d5198e16b941f848dc7a8dd890bc5b",
+        "ngsolve_age": "f56c7d2f8dd230d1bd7fa333129c1149c4c16674080377c7b60414d8fb1be710",
+        "hdiv_mmm_hcurl_eddy_bubble": "650a922b0a9f1a6b0f9d99345c21943a46a178f19567f1ba1cbf7dc2c93a5f36",
+        "dual_lane": "d68e8cc185c2466039f51b85a290ff6ed2897ae3128ba8daedb42b753debe1d2"
+      },
+      "checks": {
+        "both_lanes_solved": true,
+        "shared_identity_matches": true,
+        "angle_grids_complete": true,
+        "torque_waveforms_nonconstant": true,
+        "correlation_gate_pass": true,
+        "dual_mcp_gate_pass": true
+      }
+    },
+    "native_motor_angle_family": {
+      "status": "pass",
+      "radia_version": "5.2.3",
+      "executed_at_utc": "2026-10-04T03:03:28.916Z",
+      "test_count": 86,
+      "artifact_sha256_by_role": {
+        "matlab": "17d85cf9fed18f7754b5974d211934a96aebdd4e56523f4eb05424342424f46b"
+      },
+      "checks": {
+        "standalone_batch": true,
+        "all_tests_passed": true,
+        "mex_and_sources_hashed": true,
+        "periodic_motor_handle_tested": true,
+        "simulink_compile_tested": true,
+        "foreign_openmp_runtime_isolated": true
+      }
+    }
+  },
+  "status": "pass",
+  "pass": true,
+  "proof_payload_sha256": "38ebf059f742a12eabd8b4cfe252f1756b072eda2ac075e0f72ba4b7e136d4bc"
+}

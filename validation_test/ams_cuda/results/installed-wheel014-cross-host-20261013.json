@@ -1,0 +1,35 @@
+{
+  "schema": "radia.ams-installed-wheel-cross-host.v1",
+  "accepted": true,
+  "version": "0.1.4.dev0",
+  "wheel_sha256": "a222c0bba97cdcaf4a784557180dd2208d888d78000993fa26aeba9c5526fcad",
+  "manifest_sha256": "bbc670b0a45ecbd316d18c1a7360e2453c228b38569f593ea944f6f3567ce059",
+  "mex_sha256": "3aa67d31af98997b00817b175dfb6b0cf26f9bae8a50fc5543a04d649a4846d4",
+  "cross_host_relative_coefficient_difference": {
+    "nonlinear": 1.420492603096601e-14,
+    "linear": 3.904510238490097e-14,
+    "reuse": 2.1154408008478552e-14
+  },
+  "independent_cpu_parity": true,
+  "true_residual_checks": true,
+  "a100_summary": {
+    "baseline": {
+      "nonlinear_seconds": 0.5764619,
+      "linear_fresh_seconds": 0.142117,
+      "prepared_setup_seconds": 0.12259790000000001,
+      "reused_warm_seconds": 0.03274555
+    },
+    "tuned": {
+      "nonlinear_seconds": 0.3220313,
+      "linear_fresh_seconds": 0.12575555,
+      "prepared_setup_seconds": 0.11750065000000001,
+      "reused_warm_seconds": 0.01223935
+    }
+  },
+  "limitations": [
+    "Public affine first-order unit cube, 5326 DOF; no large winding or frequency-domain HX certification",
+    "Memory endpoints and 50ms host samples are not global transient GPU peaks",
+    "Development candidate; stable publication remains separately owned"
+  ],
+  "runner_process_policy_fix": "A100 module identity helper explicitly selects a process-scoped PowerShell execution policy; wheel unchanged. First failed probe evidence retained."
+}

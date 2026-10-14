@@ -1,0 +1,33 @@
+{
+  "schema": "radia.motor.c_abi_validation.v1",
+  "generated_at_utc": "2026-07-17T07:05:44.172927+00:00",
+  "python_version": "3.12.10",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "library_name": "radia_motor_rom.dll",
+  "abi_version": 1,
+  "steps": 1000,
+  "dt_s": 2e-06,
+  "max_abs_errors": {
+    "rotor_angle_rad": 0.0,
+    "rotor_speed_rad_s": 0.0,
+    "generalized_currents_A": 9.325873406851315e-15,
+    "electromagnetic_torque_Nm": 6.487865800153259e-16,
+    "resistive_loss_W": 9.2148511043888e-15,
+    "energy_balance_residual_W_difference": 3.552722116495488e-09,
+    "python_energy_balance_residual_W": 9.608404738514764e-09,
+    "c_energy_balance_residual_W": 1.0565011088203846e-08
+  },
+  "fail_loud_gate": {
+    "nonpositive_temperature_scale_status": 6,
+    "expected_status": 6,
+    "error": "temperature-dependent resistance scale must remain positive",
+    "nonfinite_state_status": 1,
+    "expected_nonfinite_state_status": 1,
+    "nonfinite_state_error": "motor ROM state and inputs must contain only finite values"
+  },
+  "tolerances": {
+    "state_and_output": 2e-10,
+    "energy_balance_residual_W": 2e-07
+  },
+  "passed": true
+}

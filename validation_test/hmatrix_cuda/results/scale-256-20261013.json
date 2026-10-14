@@ -1,0 +1,38 @@
+{
+  "schema": "radia.hacapk-scale-numerical.v1",
+  "accepted": true,
+  "sources": 256,
+  "epsilon": 1e-10,
+  "rank_budget": 64,
+  "timing_acceptance": false,
+  "general_hdiv_validation_complete": false,
+  "release_accepted": false,
+  "full_assembly": {
+    "relative_difference": 1.8877739286618826e-11,
+    "stats": {
+      "owned_device_bytes": 336392,
+      "applications": 1,
+      "kernel_launches": 4,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 561156,
+      "assembly_entry_batches": 287,
+      "assembly_entry_count": 51416,
+      "assembly_leaf_count": 11,
+      "assembly_lowrank_count": 0
+    },
+    "scope": "Constant affine tetra charges; full native hierarchy and CUDA entries; not general HDiv physics"
+  },
+  "binary_sha256": "c2c5819bbf3b45cee75e14ad656eba9816335d311b2175deff08dbacc3ffc1c0",
+  "input_sha256": "9f8b326193d02c69b9bdc0b3ad84d3a3d35780ed868084bde01604f2f8ebe2dd",
+  "executed_validation_source_sha256": {
+    "validation_test\\hmatrix_cuda\\validate_resident.py": "414b5797cd68662adcb8c327dc366b3a79bec3f425337230b1be73b14e7cb999",
+    "validation_test\\hmatrix_cuda\\checkResidentHMatrix.m": "6e9e7864b3adfcc33622588dc1f745350c27a7f05250cd8e7b8fc44afc85387e",
+    "packages\\radia-gpu\\matlab\\+radia\\+gpu\\HMatrixOperator.m": "d98a77641d51eea484cefc8d9ee5b12d03395725b3ac7ccda8150e242933052a"
+  },
+  "limitations": [
+    "All selected low-rank leaves promoted to dense; successful compression not established.",
+    "Constant affine charges only, not a full 256-cell native FE solve.",
+    "Owned buffer accounting excludes runtime, global and host peaks.",
+    "No timing comparison measured."
+  ]
+}

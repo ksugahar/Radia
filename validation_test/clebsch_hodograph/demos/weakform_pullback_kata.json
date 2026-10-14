@@ -1,0 +1,60 @@
+{
+  "line_element": {
+    "W_diag": [
+      "mu",
+      "1/mu"
+    ],
+    "q_cancels": true
+  },
+  "cases": [
+    {
+      "F": "z",
+      "W_diag": [
+        "mu",
+        "1/mu"
+      ],
+      "W_offdiag": [
+        "0",
+        "0"
+      ],
+      "is_diag_mu_invmu": true
+    },
+    {
+      "F": "z^2",
+      "W_diag": [
+        "mu",
+        "1/mu"
+      ],
+      "W_offdiag": [
+        "0",
+        "0"
+      ],
+      "is_diag_mu_invmu": true
+    },
+    {
+      "F": "z^3",
+      "W_diag": [
+        "mu",
+        "1/mu"
+      ],
+      "W_offdiag": [
+        "0",
+        "0"
+      ],
+      "is_diag_mu_invmu": true
+    },
+    {
+      "F": "1/z",
+      "W_diag": [
+        "mu",
+        "1/mu"
+      ],
+      "W_offdiag": [
+        "0",
+        "0"
+      ],
+      "is_diag_mu_invmu": true
+    }
+  ],
+  "all_diag_mu_invmu": true
+}

@@ -1,0 +1,58 @@
+{
+  "schema": "radia.beam-transfer-pybind-mex-validation-summary/v1",
+  "executed_at_utc": "2026-09-12T05:57:44.037112+00:00",
+  "case": {
+    "id": "nonlinear-three-region-transfer-map",
+    "path": "validation_test/accelerator/beam_transfer_benchmark_case.json",
+    "sha256": "6d64b2a30f0ae7e901b6e50c6256830b2438f10eebf9a7c45c702ee5aa14afc0"
+  },
+  "source": {
+    "commit": "7715bfe992d634333c217ecf2c47c941c0093150",
+    "radia_version": "4.95.91"
+  },
+  "environment": {
+    "python": "3.12.10",
+    "matlab": "26.1.0.3276743 (R2026a) Update 3",
+    "repeats_per_backend": 31
+  },
+  "backends": {
+    "python_pybind11": {
+      "binary": "src/radia/_radia_pybind.pyd",
+      "bytes": 3842048,
+      "sha256": "f506fdf68649c538aaa2004b56ca94952a9e31a2e7c61f4414345c2fe96ebf8e",
+      "build_manifest": "src/radia/_radia_pybind.pyd.build.json",
+      "median_s": 0.0009172999998554587
+    },
+    "matlab_mex": {
+      "binary": "matlab/radia_mex.mexw64",
+      "bytes": 3876864,
+      "sha256": "7840e8863209c107fdd594e935b484863389daea584fd7fdf7f3cebb4cddf399",
+      "build_manifest": "matlab/radia_mex.mexw64.build.json",
+      "api_version": 1,
+      "median_s": 0.0015917
+    }
+  },
+  "comparison": {
+    "rtol": 1e-11,
+    "atol": 1e-12,
+    "maximum_relative_error": 2.220446049250313e-16,
+    "maximum_relative_error_observable": "T_fro",
+    "mex_over_pybind_median_ratio": 1.735201134035548,
+    "pass": true
+  },
+  "observables": {
+    "R_fro": 2.449489742783178,
+    "T_fro": {
+      "python": 1.0392304845413265,
+      "matlab": 1.0392304845413263
+    },
+    "U_fro": 1.0890362712049584,
+    "R_11": 1.0,
+    "T_211": 0.6,
+    "U_3111": 1.0799999999999998,
+    "U_4111": -0.13999999999999999,
+    "R_composition_error": 0.0,
+    "T_reconstruction_error": 0.0,
+    "U_reconstruction_error": 0.0
+  }
+}

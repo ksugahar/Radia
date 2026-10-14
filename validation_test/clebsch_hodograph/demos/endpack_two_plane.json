@@ -1,0 +1,61 @@
+{
+  "plane1_xy": {
+    "pole_half_width_m": 0.06,
+    "b3_over_b1_flat_body": -3.562331686286059e-05,
+    "shim_delta_opt_m": 0.00040555397745518793,
+    "spurious_at_shim_opt": 0.00010549434016283868
+  },
+  "plane2_sy": {
+    "ne": 7792,
+    "ndof": 35574,
+    "end_lift_m": 0.0210000001036413,
+    "z_ref_m": 0.011000000000000001,
+    "L_eff_2d_m": 0.15119221887761664,
+    "L_eff_excess_2d": 0.259935157313472,
+    "chamfer_len_m": 0.03
+  },
+  "reflect_3d": {
+    "ne": 18911,
+    "ndof": 28799,
+    "depth_sweep": [
+      {
+        "depth_frac": 0.0,
+        "chamfer_depth_m": 0.0,
+        "tip_enhancement": 1.1049268165357544,
+        "integrated_spurious_rel": 0.00257444454729533,
+        "L_eff_m": 0.14674813089207325
+      },
+      {
+        "depth_frac": 0.12,
+        "chamfer_depth_m": 0.0024,
+        "tip_enhancement": 0.982865279015886,
+        "integrated_spurious_rel": 0.0010190598762509922,
+        "L_eff_m": 0.14196309651932262
+      },
+      {
+        "depth_frac": 0.25,
+        "chamfer_depth_m": 0.005,
+        "tip_enhancement": 0.8317991448697126,
+        "integrated_spurious_rel": 0.003115142717370484,
+        "L_eff_m": 0.13797554506948373
+      },
+      {
+        "depth_frac": 0.4,
+        "chamfer_depth_m": 0.008,
+        "tip_enhancement": 0.7395525688075142,
+        "integrated_spurious_rel": 0.0032454382011283143,
+        "L_eff_m": 0.1344768481533066
+      }
+    ],
+    "flat_tip_enhancement": 1.1049268165357544,
+    "designed_depth_frac_zero": 0.10315467296355345,
+    "designed_chamfer_depth_m": 0.002063093459271069,
+    "tip_enhancement_reduction": 0.36537424772824023,
+    "integrated_spurious_flat": 0.00257444454729533
+  },
+  "crosscheck_2d_vs_3d_contour_rms_rel": 0.07072901876175494,
+  "transverse_lever_consistency": {
+    "xy_2d_b3_body": 3.562331686286059e-05,
+    "3d_integrated_spurious_flat": 0.00257444454729533
+  }
+}

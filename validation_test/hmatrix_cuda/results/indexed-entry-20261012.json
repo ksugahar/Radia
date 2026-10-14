@@ -1,0 +1,173 @@
+{
+  "schema": "radia.hmatrix-indexed-entry.v1",
+  "accepted": true,
+  "source_commit": "712fa39606245bc743a6198df325a027680aca2a",
+  "binary_sha256": "7968995a3adbb483b9e6ab1c471989675c168c7569fbe2e5fa00f48f77ff1025",
+  "a100_used": false,
+  "scope": "Bounded native constant-charge analytic entry oracle; not adaptive HACApK assembly or full HDiv-MMM acceptance",
+  "indexed_entries": {
+    "count": 600,
+    "relative_error": 5.923942688463094e-16,
+    "workspace_capacity": 256
+  },
+  "existing_cases": [
+    {
+      "name": "dense",
+      "first_relative_error": 2.0842277492356747e-16,
+      "third_relative_error": 2.429505540148151e-16,
+      "stats": {
+        "owned_device_bytes": 1952,
+        "applications": 3,
+        "kernel_launches": 12,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 1952
+      },
+      "invalid_input_preserved_state": true
+    },
+    {
+      "name": "lowrank",
+      "first_relative_error": 1.1054564207825698e-16,
+      "third_relative_error": 3.084379830382407e-16,
+      "stats": {
+        "owned_device_bytes": 2312,
+        "applications": 3,
+        "kernel_launches": 12,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 2312
+      },
+      "invalid_input_preserved_state": true
+    },
+    {
+      "name": "mixed",
+      "first_relative_error": 1.6254035190650066e-16,
+      "third_relative_error": 2.860820257816377e-16,
+      "stats": {
+        "owned_device_bytes": 2192,
+        "applications": 3,
+        "kernel_launches": 12,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 2192
+      },
+      "invalid_input_preserved_state": true
+    },
+    {
+      "name": "mixed-uneven",
+      "first_relative_error": 4.703128312253036e-16,
+      "third_relative_error": 7.222706075575992e-16,
+      "stats": {
+        "owned_device_bytes": 573312,
+        "applications": 3,
+        "kernel_launches": 12,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 573312
+      },
+      "invalid_input_preserved_state": true
+    },
+    {
+      "name": "public-pybind-sampled-Gram",
+      "first_relative_error": 1.4578813943781033e-16,
+      "third_relative_error": 1.5765945442104818e-16,
+      "stats": {
+        "owned_device_bytes": 1048,
+        "applications": 3,
+        "kernel_launches": 12,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 1048
+      },
+      "invalid_input_preserved_state": true
+    },
+    {
+      "name": "demag-dense-map",
+      "first_relative_error": 3.12819723385529e-16,
+      "third_relative_error": 2.7186949784278837e-16,
+      "stats": {
+        "owned_device_bytes": 2488,
+        "applications": 3,
+        "kernel_launches": 18,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 2488
+      },
+      "invalid_input_preserved_state": true
+    },
+    {
+      "name": "demag-sparse-map",
+      "first_relative_error": 3.854557465143725e-17,
+      "third_relative_error": 1.1317479058154843e-16,
+      "stats": {
+        "owned_device_bytes": 1752,
+        "applications": 3,
+        "kernel_launches": 18,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 1752
+      },
+      "invalid_input_preserved_state": true
+    },
+    {
+      "name": "public-pybind-analytic-tet-Gram",
+      "first_relative_error": 1.2026215981623038e-16,
+      "third_relative_error": 5.448692995994837e-16,
+      "stats": {
+        "owned_device_bytes": 232,
+        "applications": 3,
+        "kernel_launches": 12,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 232
+      },
+      "invalid_input_preserved_state": true
+    },
+    {
+      "name": "native-CUDA-analytic-tet-block",
+      "first_relative_error": 1.2575220168118067e-16,
+      "third_relative_error": 1.8474802763860587e-16,
+      "stats": {
+        "owned_device_bytes": 232,
+        "applications": 3,
+        "kernel_launches": 12,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 4572
+      },
+      "invalid_input_preserved_state": true
+    },
+    {
+      "name": "native-CUDA-analytic-tet-triangle-block",
+      "first_relative_error": 2.0935959282232402e-16,
+      "third_relative_error": 2.0028905896328281e-16,
+      "stats": {
+        "owned_device_bytes": 440,
+        "applications": 3,
+        "kernel_launches": 12,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 5468
+      },
+      "invalid_input_preserved_state": true
+    }
+  ],
+  "timing": {
+    "status": "pending",
+    "reason": "CI running and queued",
+    "host_class": "100 diagnostic only"
+  },
+  "limits": [
+    "Linear constant-density tet/triangle only",
+    "ACA+ callback and OpenMP ownership not connected",
+    "Real NGSolve charge-map and material/constraints/solver connection pending",
+    "No large-scale or global peak-memory acceptance"
+  ],
+  "source_sha256": {
+    "packages/radia-gpu/native/radia_cuda_hmatrix.cu": "1a3eb533f7deab7349942d899216b372501b571ecbc9e3f42b418611f4f009e4",
+    "packages/radia-gpu/native/hmatrix_resident.cuh": "d9d77afaabc3ad09229d1e2bd0afa95a35c38fbaa44270f2e42a7e326b2a87a2",
+    "packages/radia-gpu/native/hmatrix_hacapk_pack.cuh": "6504faf096219b420dbb0d796187411e2398eda405872c0fd99d3bd626d5dc7a",
+    "packages/radia-gpu/native/hmatrix_entry_oracle.cuh": "f001674a50a599333cea7ace17da712fcef59ce7b226842b875fa23a3531542d",
+    "src/ext/HACApK/cHACApK_base.h": "0feb4603a640d028ff0cfc44ca1d0240552c3633f3fc4a3f33658ac7cac255c5",
+    "packages/radia-gpu/native/analytic_matrix_build.cuh": "31df893ee5007867455d4236a794a2e19caaed1118c59a412d457116de59e2e1",
+    "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127",
+    "src/core/rad_charge_quadrature.h": "f96cf5b92c6b4c26555cb4413e9efbe5e89754dc16ad9d502afecd09f1ee4989",
+    "src/core/rad_hdiv_vim.h": "bcc63c34546f21ab8fd65e39e6b6668fe687b217d62c1d61229653b5cad19308",
+    "src/core/rad_field_cloud_kernel.h": "af0fc87f58921c6368e5fbb448b372bea7fe40eef2bcff77f9508e09de374834",
+    "src/core/rad_hdiv_field_math.inc": "082adedb5c9a80d222bea026f4756aa4ea14d1e127774a4a7aff7867f8e8205e",
+    "src/core/rad_hdiv_field_kernel_api.inc": "18eb7b6468488c92a6e84a0be6ca7a97ddc6ab5eb4d0342b3453f210d024d589",
+    "src/core/rad_field_source_kernel.inc": "cb8bec501a06ad1d80712371fb4b7c97d4edcb7cb14a8aa67e22ea0cf4919fb8",
+    "packages/radia-gpu/tools/build_hmatrix_cuda.py": "8deacd368a1fec97a8b7ef50f44393df0905fba25916b6fc6f89735fb735ea04",
+    "Build.ps1": "b86553480773a18726b5031e92bd1bfb63c5d1ca04f1055c098dda30ad0cef2a"
+  }
+}

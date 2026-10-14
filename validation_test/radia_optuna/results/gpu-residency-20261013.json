@@ -1,0 +1,39 @@
+{
+  "schema": "radia.validation.optuna-gpu-residency.v1",
+  "date": "2026-10-13",
+  "host_role": "100-build-correctness",
+  "implementation_commit": "429309576dbe30b2946120201fe2b2def402294e",
+  "binary_sha256": "9a27656de4b7ff2ae41d97bdfdefede478b3bd2b40f788b19b110c03f9fbb991",
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "gpu": "Quadro RTX 5000",
+  "oracle": "Optuna 5.0.0",
+  "focused_tests_passed": 36,
+  "cpu_upstream_tests_passed": 15,
+  "gpu_suite_tests_passed": 20,
+  "history_index_tests_passed": 1,
+  "checks": [
+    "Repeated identical density calls add no device allocations or host-to-device bytes.",
+    "CPU mode releases all retained GPU workspace bytes.",
+    "Invalid numerical input fails and subsequent valid calls retain correct results.",
+    "Dedicated owned MATLAB session reset GPU, allocated an unrelated GPU array, and recovered the exact density result with a new workspace allocation.",
+    "Clearing and reloading the module leaves zero cached device bytes.",
+    "Sequential ask/suggest/objective/tell benchmark smoke passed for Branin and a 40-dimensional correlated quadratic valley, with batch size 8."
+  ],
+  "formal_timing": false,
+  "limitations": [
+    "Focused compatibility evidence only; broader Optuna API coverage is unchanged.",
+    "GPU reset acceptance ran in a dedicated owned session to preserve caller-owned device data.",
+    "An earlier incorrectly broad run used a partial test snapshot and the existing Optuna 4.9.0 Python environment; its failures are retained privately and do not certify broader Python integrations. The dedicated density-oracle manifest check was corrected and passed."
+  ],
+  "a100_acceptance": {
+    "host_role": "on-demand-a100-correctness",
+    "same_binary_sha256": "9a27656de4b7ff2ae41d97bdfdefede478b3bd2b40f788b19b110c03f9fbb991",
+    "focused_tests_passed": 52,
+    "failed": 0,
+    "cpu_upstream_passed": 15,
+    "gpu_upstream_density_and_history_passed": 37,
+    "oracle_manifest_check_passed": 1,
+    "oracle_manifest_test_source_sha256": "63f66b9a92fa51523b2a333c399e61f99dca58b586423f5e7137f56289a4b99a",
+    "total_passed": 53
+  }
+}

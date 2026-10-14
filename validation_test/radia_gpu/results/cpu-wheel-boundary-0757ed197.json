@@ -1,0 +1,14 @@
+{
+  "schema": "radia.cpu-wheel-boundary-e2e.v1",
+  "passed": true,
+  "source_commit": "0757ed19797a2819916ec42be7ddffee08594e4b",
+  "wheel_sha256": "baa073b9e8928f1a167ecd0d0008dfdf52ecd00617eb96fa3d4181f743a4e0a8",
+  "valid_exit": 0,
+  "foreign_exit": 1,
+  "foreign_payload_rejected": true,
+  "original_copy_restored": true,
+  "published": false,
+  "cpu_wheel_source_commit": "3f4807a83d202745b45e0f9190b27c9ccdf7c01e",
+  "command": "Build_Wheel.ps1 -SkipBuild -DryRun",
+  "scope": "Packaging boundary verification only; wheel copied into isolated checkout, one forbidden LTspice file injected, rejection verified, original copy restored. No runtime install or publication."
+}

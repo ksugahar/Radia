@@ -1,0 +1,4 @@
+# Downloaded measurements and local derivatives are private inputs.
+*.csv
+*.mat
+*.zip

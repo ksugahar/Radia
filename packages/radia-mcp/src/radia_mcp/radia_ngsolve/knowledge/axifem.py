@@ -1,0 +1,924 @@
+"""
+radia-core axifem knowledge base for the Radia + NGSolve MCP server.
+
+`radia.axifem` in radia-core is an NGSolve add-on (registered FESpace
+`axihenrotte`) that adds a Henrotte axisymmetric finite-element family which
+NGSolve does not ship out of the box: polynomial basis in `s = r²` (not `r`)
+representing the flux function `ψ = 2π r A_φ` (not `A_φ` itself). It ships
+P1/P2 triangles, Q1/Q2 axis-aligned quads, curved P2 triangles via
+`mesh.Curve(2)`, and opt-in curved Q2 quads via
+`H1Henrotte(mesh, order=2, curvedquad=True)`. On the Cu-disk eddy-current
+benchmark the `p=2` Q-element matches BEM-Foster to 0.27 % with ~6× fewer
+DOFs than NGSolve `H1 order=3`.
+
+Read this when:
+* Setting up an axisymmetric eddy-current / magnetostatic FEM problem with
+  axis-touching elements.
+* Comparing `axihenrotte p=k` to NGSolve `H1 order=k` and wondering why
+  the latter loses 5–10 % accuracy near the symmetry axis.
+* Implementing a new FEM panel that needs the `1/r`-weighted axisymmetric
+  weak form integrated in closed form rather than by Gauss quadrature.
+
+The MCP server exposes this via axifem_documentation(topic=...). Topics:
+overview, support_matrix, api, hodge_geometry, basis_p1, basis_p2,
+curved_geometry, taskmanager, vs_standard_h1, validation, kelvin, file_layout,
+why_dropped_p3.
+"""
+
+AXIFEM_OVERVIEW = """\
+# radia-core axifem — Henrotte Axisymmetric FE for NGSolve
+
+## Status
+
+| Order | DOFs / quad | Cu disk τ₁ vs BEM 224.31 µs (gap) |
+|-------|-------------|------------------------------------|
+| `p=1` Q-element | 4 (vertex only)            | 223.06 µs (0.55 %, fine mesh) |
+| `p=2` Q-element | 9 (4 vertex + 4 edge + 1 face) | 223.69 µs (0.27 %, ~6× fewer DOFs than `p=1` for higher accuracy) |
+| `p=3` Q-element | dropped — raw-monomial Vandermonde cond ≈ 10³⁰ exceeds double precision; would require shifted-Legendre basis to ship safely. Not on the roadmap. |
+
+The same FESpace also supports P1/P2 triangles.  The P2 triangle path is
+curved-mesh aware after `mesh.Curve(2)` and is the production choice for
+curved OCC/Kelvin boundaries.  The default Q2 quad path is straight and
+axis-aligned; opt into the 9-node curved Q2 quad with
+`H1Henrotte(mesh, order=2, curvedquad=True)` when the quadrilateral geometry
+is genuinely skewed or curved.
+
+## Key idea (why this is "an NGSolve feature NGSolve does not have")
+
+NGSolve `H1(mesh, order=k)` represents `A_φ(r, z)` as a polynomial in `(r, z)`.
+For the axisymmetric Maxwell weak form the volume element brings a factor of
+`r dr dz` (toroidal Jacobian); the strong form contains `1/r` from
+`B_z = (1/r) ∂(r A_φ)/∂r`. Result: the integrand mixes polynomials in `r`
+with `1/r` weights, and Gauss quadrature loses 5–10 % accuracy near the
+symmetry axis.
+
+The Henrotte / Meeker trick:
+
+* Substitute the **flux function** `ψ = 2π r A_φ`. Then
+  `B_z = (1/(2π r)) ∂ψ/∂r = (1/π) ∂ψ/∂s` where `s = r²`.
+  Pure polynomial in `(s, z)` — no `1/r` in the field formula.
+* Choose the basis of `ψ` to be polynomial in `(s, z)`:
+    p=1 (Q-element):  ψ ∈ span{1, s, z, s·z}             (4 DOFs)
+    p=2 (Q-element):  ψ ∈ span{1, s, s², z, s·z, s²·z, z², s·z², s²·z²}  (9 DOFs)
+* The `1/r`-weighted axisymmetric integrals become integrals of
+  polynomials in `(s, z)` divided by `s` — closed-form integrable
+  (Mathematica), with `log(s_b/s_a)` showing up for the truly
+  log-singular components.
+* After per-node `T = diag(2π r_node)` rescaling the assembled DOF
+  vector stores `A_φ` directly, so user-facing eigenvalues
+  (`τ_n = 1/λ_n`) come out in physical units with no extra factors.
+
+NGSolve's standard FE library does not contain this basis (no FE family
+polynomial in `s = r²`, no representation of `ψ` rather than `A_φ`).
+`radia-core`'s `radia.axifem` module adds it via the public NGSolve add-on
+pattern (custom `FESpace`, `DiffOp`, and `BilinearFormIntegrator`s), without
+modifying NGSolve itself.
+"""
+
+AXIFEM_SUPPORT_MATRIX = """\
+# Implementation support matrix
+
+| Mesh element | API order | Geometry support | Local DOFs | Status |
+|--------------|-----------|------------------|------------|--------|
+| Triangle P1 | `order=1` | straight triangle | 3 vertex | shipping; FEMM `prob3big.cpp` direct port |
+| Triangle P2 | `order=2` | straight or `mesh.Curve(2)` curved triangle | 3 vertex + 3 edge | shipping; NGSolve element transformation supplies the curved mid-edge coordinates |
+| Quad Q1 | `order=1` | straight axis-aligned rectangle in `(r, z)` | 4 vertex | shipping; closed-form matrices |
+| Quad Q2 | `order=2` | straight axis-aligned rectangle in `(r, z)` | 4 vertex + 4 edge + 1 face | shipping; closed-form matrices with the `s`-midpoint convention |
+| Quad Q2 curved | `order=2, curvedquad=True` | true 9-node biquadratic curved quad | 9 | shipping opt-in; curved `ElementTransformation` + quadrature BFI |
+
+Dispatch rule:
+`H1Henrotte(mesh, order=1)` returns P1 triangles or Q1 quads by mesh element
+type.  `H1Henrotte(mesh, order=2)` returns P2 triangles or Q2 quads by mesh
+element type.
+
+Important boundary:
+Calling `mesh.Curve(2)` on a triangular OCC mesh is supported by the P2
+triangle path.  Calling `mesh.Curve(2)` on a quadrilateral mesh keeps the
+default straight axis-aligned Q2 path unless the caller also passes
+`curvedquad=True`.
+
+This matrix describes the electromagnetic `A_phi` space.  Axisymmetric heat
+uses standard `ngsolve.H1(mesh, order=2)` with the `2*pi*r` weak-form weight:
+Q2 on quadrilateral meshes, P2 on triangular meshes.  Do not reuse
+`H1Henrotte` for the production temperature field.  The optional Henrotte heat
+BFIs support Q1 and off-axis Q2 research comparisons and fail fast for
+axis-touching Q2.
+"""
+
+AXIFEM_API = """\
+# Canonical API
+
+```python
+from ngsolve import Mesh, FESpace, BilinearForm, CoefficientFunction, TaskManager
+from radia.axifem import AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI
+import radia.axifem   # import once to register the FESpace
+
+mesh = Mesh(...)                                    # axis-aligned quad mesh
+fes  = FESpace("axihenrotte", mesh, order=2,
+               dirichlet="axis|right|top|bot")      # p=2 Q-element
+
+mu_cf    = CoefficientFunction(4 * 3.14159e-7)
+sigma_cf = mesh.MaterialCF({"conductor": 5.8e7}, default=0.0)
+
+a = BilinearForm(fes, symmetric=True)
+a += AxiHenrotteStiffnessBFI(mu_cf)
+
+m = BilinearForm(fes, symmetric=True)
+m += AxiHenrotteSigmaMassBFI(sigma_cf)
+
+with TaskManager():
+    a.Assemble()
+    m.Assemble()
+
+# Solve K v = λ M v as you would with any NGSolve eigenproblem.
+```
+
+`FESpace("axihenrotte", mesh, order=k)` is the canonical entry point — it
+follows the same pattern as `FESpace("h1ho", ...)`, `FESpace("hcurlho", ...)`,
+etc. A back-compat helper `H1Henrotte(mesh, order=k, **flags)` is also
+exported.
+
+## Constraints
+
+* **Mesh dispatch:** `order=1` supports P1 triangles and Q1 axis-aligned
+  quads. `order=2` supports P2 triangles and Q2 axis-aligned quads.  P2
+  triangles are curved-mesh aware after `mesh.Curve(2)`.
+* **Q2 quad geometry:** the default production Q2 quad is straight and
+  axis-aligned.  Use `curvedquad=True` for the production 9-node curved Q2
+  quadrature path on curved or skewed quadrilateral maps.
+* **Dirichlet:** users MUST set `dirichlet="axis|..."` for any axis-touching
+  geometry. The axis-restricted basis already produces zero rows / columns
+  on the axis-side DOFs, so without an explicit Dirichlet flag the global
+  matrix is singular.
+* **Boundary 1D segments:** in `order=2` mode, a boundary segment exposes
+  2 vertex DOFs and 1 edge midnode DOF, so `dirichlet="…"` on a boundary
+  marks all three.
+* **Thermal scope:** reserve this space and its magnetic BFIs for `A_phi`.
+  Production temperature uses standard `ngsolve.H1(order=2)` plus the
+  `2*pi*r` weight.  The optional `AxiHenrotteHeatStiffnessBFI` and
+  `AxiHenrotteHeatMassBFI` reject axis-touching Q2 rather than mixing the
+  magnetic six-function FE with a full nine-function heat matrix.
+"""
+
+AXIFEM_HODGE_GEOMETRY = """\
+# Differential-geometry / Hodge view of Henrotte axisymmetry
+
+Henrotte / Meeker axisymmetry is best understood as a **dimensionally reduced
+Hodge problem**, not as an arbitrary special basis.
+
+Start from the 3D cylindrical metric
+
+```text
+g = dr^2 + dz^2 + r^2 dphi^2
+```
+
+and restrict to rotationally symmetric fields with toroidal vector potential
+`A = A_phi e_phi`.  The natural reduced unknown is not the point value
+`A_phi`; it is the S1-fiber circulation of the magnetic vector-potential
+1-form:
+
+```text
+psi(r,z) = integral_{S1_r} A_flat = 2*pi*r*A_phi(r,z)
+```
+
+So `psi` is a scalar 0-form on the meridional base `(r,z)`, while `dpsi` is
+the metric-free exterior derivative on that base.  The poloidal magnetic flux
+is the Hodge-rotated gradient with the fiber radius in the Hodge weight:
+
+```text
+B_z =  (1/(2*pi*r)) * dpsi/dr
+B_r = -(1/(2*pi*r)) * dpsi/dz
+```
+
+Equivalently, up to the conventional `2*pi` factor, `B` is the base Hodge
+dual of `dpsi` with the `1/r` fiber metric included.  This is the reason the
+singular-looking axisymmetric factors should be treated as **metric/Hodge
+weights**, while the differential part remains the ordinary exterior
+derivative `d`.
+
+The Henrotte basis then chooses `psi` to be polynomial in
+
+```text
+s = r^2
+```
+
+instead of polynomial in `r`.  In Hodge language this makes the reduced
+0-form regular at the axis and moves the cylindrical metric singularity into
+closed-form weighted integrals.  That is why `{1, s, z}` and
+`{1, s, z, s^2, s*z, z^2}` behave better near `r=0` than standard H1
+polynomials in `(r,z)`.
+
+Practical translation for MCP/code review:
+
+* `H1Henrotte` is a reduced scalar 0-form space for `psi = 2*pi*r*A_phi`.
+* `AxiHenrotteStiffnessBFI` is the constitutive Hodge/stiffness operator for
+  the reduced magnetic energy; the awkward `r` and `1/r` factors belong here.
+* `AxiHenrotteSigmaMassBFI` is the conductive/storage Hodge/mass operator in
+  the same reduced coordinates.
+* Boundary conditions on the symmetry axis are not cosmetic: `psi=0`
+  follows from the collapsed S1 fiber, and the user-facing `A_phi` DOF must
+  be constrained consistently.
+
+This is the same mental model used elsewhere in radia-ngsolve: topology and
+exterior derivative are metric-free; material coefficients, Kelvin warps,
+axisymmetric Jacobians, and `1/r` factors live in the Hodge operator.
+"""
+
+AXIFEM_TASKMANAGER = """\
+# TaskManager contract
+
+`radia.axifem` follows NGSolve's native parallel model:
+
+* Python callers wrap heavy FE work in `with TaskManager():`.
+* The custom C++ FESpace, DiffOps, and BFIs do not create a private thread
+  pool and do not use OpenMP.
+* `AxiHenrotteFESpace::GetFE` placement-news element objects from NGSolve's
+  per-thread `Allocator`.
+* The closed-form BFIs are `const` element integrators; per-call scratch lives
+  in `LocalHeap`, and quadrature tables are immutable.
+
+This covers the shipping paths: P1/P2 triangles, curved P2 triangles,
+Q1/Q2 straight axis-aligned quads, and opt-in curved Q2 quads.
+The regression gate is `tests/axifem/test_taskmanager_race.py`, which assembles
+both the order-1 V-DOF custom-BFI path and the order-2 symbolic DiffOp/GetFE
+path at `SetNumThreads(1)` and `SetNumThreads(4)` and compares a deterministic
+matrix checksum.
+
+When writing docs, examples, panels, or tests, show assembly and FE-heavy solves
+inside `with TaskManager():` so the code follows the same execution contract as
+stock NGSolve examples.
+"""
+
+AXIFEM_BASIS_P1 = """\
+# `order=1`: P1 triangle and Q1 quad
+
+## Triangle P1 (3 DOFs / triangle)
+
+Basis on each triangle:
+
+```
+{1, s, z},  s = r²
+```
+
+DOFs are the 3 vertices.  This is the FEMM `prob3big.cpp`
+`StaticAxisymmetric()` direct-port path and is useful for unstructured
+triangle meshes.  Axis-touching cases use the same special-case formulas as
+FEMM.
+
+## Q1 quad (4 DOFs / axis-aligned quad)
+
+Shape monomials in `(s = r², z)`:
+
+```
+{1, s, z, s·z}                    (interior)
+{s, s·z}                          (axis-touching, sa = 0; the 2 axis-side
+                                   nodes get zero shape functions)
+```
+
+DOFs: one per vertex. Lagrange-interpolatory at the 4 corners
+`(s_a, z_a), (s_b, z_a), (s_b, z_b), (s_a, z_b)`.
+
+The closed-form element matrices are derived in
+`axifem_quad.py:_element_matrices_quad_closed_form` and
+`axifem_quad.py:element_sigma_mass_quad`, validated against BEM v3 to
+0.55 % on the Cu disk benchmark (τ₁ = 223.06 µs, ne = 15170, very-fine
+mesh).
+"""
+
+AXIFEM_BASIS_P2 = """\
+# `order=2`: P2 triangle and Q2 quad
+
+## Triangle P2 (6 DOFs / triangle)
+
+Basis on each triangle:
+
+```
+{1, s, z, s², s·z, z²},  s = r²
+```
+
+DOFs are 3 vertices + 3 edge midnodes.  The production C++ FESpace obtains all
+6 physical node coordinates through NGSolve's element transformation:
+
+* straight mesh: edge nodes are chord midpoints;
+* after `mesh.Curve(2)`: edge nodes follow the curved geometry.
+
+The stiffness and sigma-mass BFIs use the same 6-node geometric map at each
+Duffy-Gauss quadrature point, so **P2 curved triangles are shipped**.
+
+## Q2 quad (9 DOFs / straight axis-aligned quad)
+
+Shape monomials in `(s = r², z)`:
+
+```
+interior (9): {1, s, s², z, s·z, s²·z, z², s·z², s²·z²}
+axis     (6): {s, s², s·z, s²·z, s·z², s²·z²}
+```
+
+DOFs: 4 vertex + 4 edge midnode + 1 face center = 9 per quad.
+
+## s-midpoint convention
+
+Edge midnode positions use the **s-midpoint**, not the geometric
+r-midpoint:
+
+```
+sm = (s_a + s_b) / 2            # arithmetic mean of s = r²
+zm = (z_a + z_b) / 2
+edge midnode at (sm, z_a)       # NOT at ((r_a + r_b)/2, z_a)
+=> physical r_mid = √((r_a² + r_b²)/2)   ≠ (r_a + r_b)/2
+```
+
+Two adjacent elements with the same r-extent automatically agree on
+edge-midnode placement and basis traces; no orientation flips are needed
+for assembly continuity.
+
+## Local DOF order (cyclic, with NGSolve edge permutation)
+
+```
+0..3:  4 corners (NGSolve QUAD vertex order: (sa,za),(sb,za),(sb,zb),(sa,zb))
+4:     bottom edge midnode  (sm, za)    <- NGSolve edges[0]
+5:     right  edge midnode  (sb, zm)    <- NGSolve edges[3]
+6:     top    edge midnode  (sm, zb)    <- NGSolve edges[1]
+7:     left   edge midnode  (sa, zm)    <- NGSolve edges[2]
+8:     face center          (sm, zm)
+```
+
+NGSolve's QUAD local edge order is the *tensor-product* convention
+(`bottom, top, left, right` = edges[0..3]); our Q-element local node
+order is *cyclic CCW* (`bottom, right, top, left`). The FESpace's
+`GetDofNrs` permutes accordingly. (Anyone refactoring the FESpace must
+preserve this permutation, or assembly will silently produce wrong
+edge-coupling and the eigenvalue spectrum collapses by a factor that
+looks coincidentally like π — see project history.)
+
+## Closed-form integration
+
+```
+K_phi[i,j]       = ∫ ∂m_i/∂s · ∂m_j/∂s / (π μ_Z) ds dz
+                 + ∫ ∂m_i/∂z · ∂m_j/∂z / (4 π μ_R s) ds dz
+M_sigma_phi[i,j] = σ / (4 π) · ∫ m_i · m_j / s ds dz
+```
+
+(Hessian-of-W convention. The 1/s integrand in M_sigma and in the W_r
+component of K_phi produces `log(s_b/s_a)` for the constant component
+and pure polynomials elsewhere; the axis case has all monomials carrying
+an `s` factor so 1/s is integrable as polynomial.)
+
+Per-element transformation to V-DOF (= A_φ at node):
+
+```
+K_V = T · V⁻ᵀ · K_phi · V⁻¹ · T,    T = diag(2 π r_node)
+M_V = T · V⁻ᵀ · M_sigma_phi · V⁻¹ · T
+```
+
+with `V⁻¹` the (cached) per-element inverse Vandermonde of the
+monomial basis at the 9 nodes (6 for axis case).
+
+## Curved Q2 opt-in
+
+The default Q2 path is still `AxiHenrotteFE_Q2_AxisAligned`: it reads the four
+corner coordinates and assumes an axis-aligned rectangle.  The production
+curved path is `AxiHenrotteFE_Q2_Curved`, selected by
+`H1Henrotte(mesh, order=2, curvedquad=True)`.  It samples 9 curved node
+positions from the curved `ElementTransformation` and uses quadrature over the
+biquadratic map.
+"""
+
+AXIFEM_CURVED_GEOMETRY = """\
+# Curved-geometry support
+
+## Production
+
+**P2 triangles are curved-mesh aware.**  When the user calls `mesh.Curve(2)` on
+an OCC/Netgen triangular mesh, NGSolve's element transformation returns the
+curved mid-edge coordinates. `AxiHenrotteFESpace::GetFE` samples those 6 node
+positions and constructs `AxiHenrotteFE_P2_Triangle`; the magnetic BFIs then
+integrate over the same 6-node map.
+
+Use this for:
+* spheres and spheroids in 2D axisymmetric cross-section,
+* z-offset Kelvin half-discs,
+* any OCC-generated curved boundary where a triangular mesh is natural.
+
+## Production default: straight quads
+
+**Q1/Q2 quads are axis-aligned straight rectangles.**  They are the fast
+closed-form path for structured disks, cylinders, and rectangular workpieces.
+The Q2 edge midnodes use the `s`-midpoint convention:
+
+```
+s_m = (s_a + s_b) / 2
+r_m = sqrt((r_a^2 + r_b^2) / 2)
+```
+
+## Production opt-in: curved Q2 quads
+
+**Curved Q2 quads are production C++ behind an explicit flag.**
+`H1Henrotte(mesh, order=2, curvedquad=True)` dispatches to
+`AxiHenrotteFE_Q2_Curved`, using 9 curved node positions from
+`mesh.Curve(2)` and a quadrature BFI.  Use this for annular-sector or mapped
+quad studies.  Without `curvedquad=True`, quads intentionally keep the
+straight closed-form path for backward-compatible disk/cylinder benchmarks.
+"""
+
+AXIFEM_VS_STANDARD_H1 = """\
+# `axihenrotte p=2` vs NGSolve `H1 order=2` — the deeper differences
+
+Beyond the obvious "the basis is in `r²`":
+
+| Property | NGSolve `H1(mesh, order=2)` | `axihenrotte p=2` |
+|---|---|---|
+| Polynomial variable | `(r, z)` | `(s = r², z)` ⇒ degree 4 in `r` |
+| Represented field | `A_φ` directly | `ψ = 2π r A_φ` (flux function); `A_φ` recovered via `/(2π r)` |
+| Axis (`r = 0`) behaviour | `A_φ(0) ≠ 0` in general — must be Dirichlet'd explicitly. The `1/r` weight in axisymmetric integrals spoils Gauss-quadrature convergence near the axis (FEMM tradition reports 5–10 % loss). | `ψ` carries an `s = r²` factor in the axis-restricted basis, so `A_φ = ψ/(2π r) → 0` automatically as `r → 0`. No `1/r`-weighted Gauss quadrature; integrals are closed form. |
+| Field formula | `B_z = (1/r) ∂(r A_φ)/∂r` (contains `1/r`) | `B_z = (1/π) ∂ψ/∂s` — pure derivative, no singularity |
+| Element-matrix integration | NGSolve Gauss quadrature with `1/r` weight | Closed-form (Mathematica-derived per-monomial integrals, machine precision) |
+| Effective convergence rate | Often `p_eff = 1` near the axis owing to weight singularity | Full `p = 2` in `(s, z)` |
+
+Empirical comparison on the Cu disk eddy-current benchmark
+(R = 10 mm, t = 2 mm, σ = 5.8 × 10⁷ S/m, BEM-Foster reference τ₁ = 224.31 µs):
+
+| FE                                  | DOFs   | τ₁ (µs)   | Gap to BEM |
+|-------------------------------------|--------|-----------|------------|
+| NGSolve `H1 order=3` (v23 reference)| —      | 218.62    | 2.5 %      |
+| `axihenrotte p=1` (Q1, fine mesh)   | 14904  | 223.06    | 0.55 %     |
+| **`axihenrotte p=2` (Q2)**          | **9919** | **223.69** | **0.27 %** |
+
+`axihenrotte p=2` outperforms NGSolve `H1 order=3` with fewer DOFs — that is
+the value of the axisymmetric-specific basis.
+"""
+
+AXIFEM_VALIDATION = """\
+# Cross-validation references (per-element, machine precision)
+
+* `axifem/axifem_quad.py` — validated Python prototype for `p=1`, gives
+  τ₁ = 223.06 µs on the Cu disk (matches BEM v3 to 0.55 %).
+* `axifem/axifem_quad_q2.py` — Python `p=2` Gauss-8×8 prototype; agrees
+  with the Mathematica closed form to ~ 3.4 × 10⁻⁸ relative.
+* `validation_test/axifem/research/validate_q2_codegen.py` — runs both at the
+  per-entry level after every `derive_quad_q2_henrotte.wls` re-run.
+* `validation_test/axifem/research/verification/test_q2_single_element.py` — end-to-end
+  per-element BFI eigenvalue match (closed-form vs Gauss prototype, 1e-7
+  tolerance).
+
+## Henrotte + Kelvin + reduced model -- workflow composition
+
+The full eddy-current workflow on axisymmetric problems composes three pieces;
+each is documented in its own knowledge file but the *combination* is the
+intended canonical use:
+
+  Henrotte axisym FE basis  +  z-offset Kelvin (or finite air box)  +  reduced model
+
+* **Henrotte basis** (this file): polynomial in `s = r^2` for `psi = 2 pi r A_phi`.
+  Produces `K`, `M` matrices in axisym geometry without `1/r`-Gauss errors
+  near the axis.
+
+* **Open-domain truncation: Kelvin works (Phase B3, 2026-05-12)**.
+  The canonical 2D axisym z-offset Kelvin transformation now works
+  end-to-end with `axihenrotte`. The historical blocker was that the
+  `AxiHenrotteFESpace` did not expose enough `GetDofNrs(...)` overloads
+  for `ngsolve.Periodic` to identify the `kelvin_int <-> kelvin_ext` DOF
+  pairs; that gap was closed by adding the `NodeId` /
+  `GetVertexDofNrs` / `GetEdgeDofNrs` / `GetFaceDofNrs` overloads, after
+  which the same recipe used for `H1` axisym Kelvin works for
+  `H1Henrotte` (= `FESpace("axihenrotte", ...)`):
+
+      fes = Periodic(H1Henrotte(mesh, order=2,
+                                dirichlet="axis|axis_ext",
+                                dirichlet_bbnd="GND"))
+      mu_factor = kelvin_mu_factor_axisym_cf(z_offset=z_off, R=R_K)
+      mu_cf     = build_material_cf(mesh, MU0, mu_factor,
+                                    outer_keyword="kelvin")
+
+  Verified on Cu sphere R=10 mm (Stoll Bessel ground truth):
+
+  | mesh / curve            | tau_1 (us) | gap to Stoll |
+  |-------------------------|------------|--------------|
+  | Stoll analytical        | 738.48     | --           |
+  | axifem p=2 + Kelvin     | 738.47     | -0.001 %     |
+  | + Curve(2)              | 738.69     | +0.028 %     |
+
+  This is the canonical configuration for sphere/disk/cuboid axisym
+  eddy-current decay-time validation -- see `kelvin` topic for the full
+  recipe and the documented `Periodic`-wrapping caveats.
+
+  The finite air-box truncation (`A_phi = 0` on outer rectangle) remains
+  valid and is still useful when you want to avoid building the Kelvin
+  half-disc; convergence is just much slower (need R_air, Z_air ~
+  25x-50x the conductor extent for < 1 %).
+
+* **Reduced model**: once you have `K, M, b` from the Henrotte assembly,
+  reduce with a Krylov projection (the PRIMA congruence projection in
+  `radia.lanczos_reduction`) or the Foster modal form (generalized
+  eigenproblem on `K, M`), and state which transfer function the moments
+  are taken from (impedance or susceptibility form) explicitly.
+
+Reference (citation):
+  Nagamine, Yamaguchi, Sugahara, Hiruma, Mifune, Matsuo, "Verified
+  Numerical Computations of the Cauer Network Representation of a Square
+  Prism Conductor", manuscript 2026-05-04 (Japan J. Industrial Appl.
+  Math. submission).
+
+
+## Hessian-of-W convention (load-bearing)
+
+Both `K_phi` and `M_sigma_phi` are emitted in the **Hessian-of-W**
+convention (matches `axifem_quad.py:274`). The original
+`derive_quad_q2_henrotte.wls` shipped with a coefficient-of-W convention
+that was 2× too small for `K` and 2π× too small for `M`; this combined
+multiplicatively to make the disk τ₁ off by ~ π and was diagnosed during
+Phase A2 (commit 077e7b03). Anyone re-deriving the wls must keep the
+Hessian convention, or every assembled quantity rescales by these
+factors silently.
+"""
+
+AXIFEM_FILE_LAYOUT = """\
+# File layout
+
+(the former standalone axifem add-on was dissolved into radia-core on
+2026-06-14: the C++ ships in the radia-core wheel as `radia.axifem`;
+scripts/tests moved into the repo tree.)
+
+```
+src/ext/axifem/                          # C++ source (built into the radia wheel)
+  axi_henrotte_fe.{hpp,cpp}               # P1/P2 triangle + Q1/Q2 quad FE classes
+  axi_henrotte_fespace.{hpp,cpp}          # FESpace with order=1 / order=2 dispatch
+  axi_henrotte_diffop.hpp                 # DifferentialOperators (value, gradient)
+  axi_henrotte_integrators.{hpp,cpp}      # closed-form K and σ-mass BFI
+  q2_henrotte_generated.hpp               # auto-generated, do not edit
+  axifem.cpp                       # pybind11 entry -> radia.axifem
+validation_test/axifem/research/          # runnable research verification assets
+  validate_q2_codegen.py                  # closed-form vs Gauss prototype
+  q2_henrotte_test_values.json            # numerical reference values
+validation_test/axifem/research/verification/   # standalone __main__ verification scripts
+  test_q2_single_element.py               # per-element BFI sanity check
+  test_q2_assembly_diag.py                # 2-quad assembly diagnostic
+tests/axifem/                            # pytest golden tests (CI-collected)
+  test_element_matrices.py, test_heat_*.py, test_python_reference_consistency.py
+                                            # Q1 reference + P2 curved smoke
+  test_taskmanager_race.py                # 1-vs-4 thread race-free assembly gate
+```
+
+The Mathematica derivation lives upstream at
+`public-safe curated corpus`
+(`derive_quad_q2_henrotte.wls` and `quad_q2_henrotte_matrices.json`).
+
+Comprehensive design + theory documentation: `docs/axifem/AXIFEM.md`.
+
+`validation_test/documentation_maintenance/axifem/README.ipynb` is the public capability notebook. The executed
+P1/Q1/P2/Q2/P2-curved/Q2-curved proof is regression-gated under
+`validation_test/documentation_maintenance/axifem/`.
+"""
+
+AXIFEM_KELVIN = """\
+# `axihenrotte` + z-offset Kelvin transformation (Phase B3, 2026-05-12)
+
+The 2D axisymmetric z-offset Kelvin transformation works end-to-end with
+the Henrotte basis as of the radia-core axifem Phase B3 work (commits 81f6415f /
+6e963ab9). Same boilerplate as the canonical `H1` axisym Kelvin recipe
+(`kelvin.a_formulation` topic) — substitute `H1Henrotte` for `H1` and
+add a `Periodic(...)` wrap.
+
+## Why this was blocked before Phase B3
+
+`ngsolve.Periodic` traverses the `FESpace::GetDofNrs(NodeId, ...)` API
+to identify the slave/master DOFs across the `kelvin_int ↔ kelvin_ext`
+boundary. The original `AxiHenrotteFESpace` only implemented the
+ElementId overload, so wrapping it in `Periodic` raised
+`NotImplementedError` from the C++ side. Phase B3 added:
+
+```
+GetDofNrs(NodeId node, Array<DofId>& dnums)
+GetVertexDofNrs(int vnr, Array<DofId>& dnums)
+GetEdgeDofNrs(int enr, Array<DofId>& dnums)
+GetFaceDofNrs(int fnr, Array<DofId>& dnums)
+```
+
+After this the same `Periodic` mechanism that works on stock `H1` works
+on `H1Henrotte`, and the canonical Kelvin recipe carries over verbatim.
+
+## Canonical recipe
+
+```python
+from ngsolve import Mesh, BilinearForm, Periodic, TaskManager
+from netgen.occ import OCCGeometry, WorkPlane, Glue, MoveTo
+from radia.axifem import (
+    H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
+)
+from radia.panels.add_kelvin import add_kelvin_2d_axisym
+from radia.kelvin_source import (
+    kelvin_mu_factor_axisym_cf, build_material_cf,
+)
+
+# 1. Build interior half-disc on x >= 0:
+#    - conductor face (material "conductor"), bnd named "axis"
+#      on x=0, anything else on the conductor boundary
+#    - air_inner annulus (material "air_inner")
+#    - outer arc edge of air_inner MUST be named "kelvin_int" before
+#      passing to add_kelvin_2d_axisym
+interior = build_my_interior_half_disk(...)   # user-defined
+
+# 2. Append the Kelvin half-disc with z_offset.  Returns a Glue'd shape +
+#    info dict with axis_labels = "axis|axis_ext" and the periodic pair
+#    table already wired up.  GND vertex is at (0, z_offset).
+shape, info = add_kelvin_2d_axisym(
+    interior,
+    R=R_K,                # Kelvin inversion radius
+    z_offset=5 * R_K,     # see "z_offset = 5·R_K" rationale below
+    maxh_kelvin=5e-3,
+)
+mesh = Mesh(OCCGeometry(shape, dim=2).GenerateMesh(maxh=maxh_kelvin))
+# Optional: mesh.Curve(2)  -- see "Curve(2) trade-off" below
+
+# 3. FESpace: H1Henrotte + Periodic.  Dirichlet on both axes + GND vertex.
+fes = Periodic(H1Henrotte(
+    mesh, order=2,
+    dirichlet="axis|axis_ext",
+    dirichlet_bbnd="GND",
+))
+
+# 4. Material coefficient: mu_0 inside, mu_0 * (rho'/R_K)^2 in the
+#    "kelvin" region (NOTE the helper returns mu_factor, not nu_factor;
+#    AxiHenrotteStiffnessBFI multiplies by mu, not nu).
+mu_factor = kelvin_mu_factor_axisym_cf(z_offset=5 * R_K, R=R_K)
+mu_cf = build_material_cf(mesh, MU0, mu_factor, outer_keyword="kelvin")
+sigma_cf = mesh.MaterialCF({"conductor": SIGMA_CU}, default=0.0)
+
+# 5. Assemble K and M.  check_unused=False is required because the
+#    Periodic wrap introduces master DOFs that have no "owning" element.
+a = BilinearForm(fes, symmetric=True, check_unused=False)
+a += AxiHenrotteStiffnessBFI(mu_cf)
+m_bf = BilinearForm(fes, symmetric=True, check_unused=False)
+m_bf += AxiHenrotteSigmaMassBFI(sigma_cf)
+with TaskManager():
+    a.Assemble()
+    m_bf.Assemble()
+
+# 6. Extract the conductor subblock via Schur complement (air DOFs have
+#    diag(M) = 0; they are eliminated to give S = K_cc - K_ca K_aa^-1 K_ac).
+#    Solve generalised eigenproblem S v = lambda M_cc v, take tau = 1/lambda_min.
+```
+
+## Verified results (Cu sphere R = 10 mm, σ = 5.8×10⁷ S/m)
+
+```
+Stoll analytical                       τ₁ = 738.48 µs   (ref)
+axihenrotte p=2 + Kelvin               τ₁ = 738.47 µs   -0.001 %
+axihenrotte p=2 + Kelvin + Curve(2)    τ₁ = 738.69 µs   +0.028 %
+```
+
+Test: `validation_test/axifem/research/prototypes/test_p2_kelvin_sphere.py`.
+
+## Critical gotchas
+
+### `check_unused=False` on both BilinearForms
+With `Periodic(fes)` wrapped around `H1Henrotte`, slave DOFs appear in
+the FESpace ordering but are not owned by any element of the inner
+space; without `check_unused=False` NGSolve raises "unused DOF" errors
+during assembly. Both `a` (stiffness) and `m_bf` (mass) need the flag.
+
+### `mu_factor` (not `nu_factor`) — convention difference vs `H1` recipe
+The standard `H1` axisym Kelvin recipe in `kelvin.a_formulation` uses
+`nu_kelvin = nu_0 * (rho'/R)^2` (reluctivity). `AxiHenrotteStiffnessBFI`
+multiplies the integrand by `mu`, not `nu`, so the *correct* factor for
+the Kelvin region is `mu_kelvin = mu_0 * (R/rho')^2` —
+`kelvin_mu_factor_axisym_cf` returns exactly this (note `(R/rho')^2`,
+NOT `(rho'/R)^2`). If you accidentally pass `kelvin_nu_factor_axisym_cf`
+you get `(rho'/R)^2` and τ blows up by orders of magnitude near rho'=0.
+
+### Element-centroid `mu` sampling — pick `z_offset = 5·R_K`
+`AxiHenrotteStiffnessBFI` samples `mu` at the *element centroid*
+(`axi_henrotte_integrators.cpp:710`), not per quadrature point. Since
+`mu(rho')` diverges as `rho' → 0` near the GND vertex `(0, z_offset)`,
+fine mesh near GND can over-sample large values. Putting the Kelvin
+center at `z_offset = 5·R_K` keeps the GND vertex 4 Kelvin radii away
+from the conductor and bounds the centroid sampling error well below
+0.1 %. Smaller offsets (e.g. `2·R_K`) degrade results to the percent
+level; larger offsets work but waste mesh on a region with vanishing
+field. The Phase B3.2 follow-up would be a per-quadpt `mu` integrator
+overload, but the centroid path already hits machine precision on the
+sphere benchmark, so this is low priority.
+
+### `Curve(2)` trade-off
+NGSolve `mesh.Curve(2)` on a triangular spherical conductor boundary engages
+the shipped **P2 triangle curved** path.  It improves geometric accuracy 30×
+on coarse meshes (gap 0.867 % → 0.028 % on a typical mesh), but on a *finer*
+mesh `Curve(2)` can slightly *increase* the gap (0.001 % straight → 0.028 %
+curved) because the biquadratic Lagrange geometric map in `(r, z)` does not
+match the Henrotte basis's even-power-of-r structure exactly. Use `Curve(0)`
+(= straight edges, default) for sphere/disk benchmarks at typical mesh
+resolution; reserve `Curve(2)` for coarse-mesh production runs where the
+geometric error dominates the FE-basis error.
+
+A true **curved Q2 quad** element (basis space still in even powers of r, but
+on a biquadratic isoparametric mapping) is production C++ behind the explicit
+`curvedquad=True` flag.  Keep the default straight axis-aligned Q2 path for
+structured disk/cylinder benchmarks; use the curved path for annular-sector
+or mapped-quad studies.
+
+### Geometry pre-requisites for `add_kelvin_2d_axisym`
+Before calling the helper, the user-built interior must have:
+
+  - all conductor edges on `x = 0` named exactly `"axis"`
+  - all `air_inner` edges on `x = 0` named exactly `"axis"`
+  - the outer arc of `air_inner` named exactly `"kelvin_int"`
+  - no other edges named `"kelvin_int"` or starting with `"axis_"`
+
+The helper then appends a mirror half-disc at `(0, z_offset)`, names its
+arc `"kelvin_ext"`, identifies `kelvin_int ↔ kelvin_ext` as Periodic
+pairs, names the new x=0 edges `"axis_ext"`, and registers the
+`(0, z_offset)` vertex as `"GND"`. Mis-naming any of these breaks
+either the Periodic identification (most common) or the Dirichlet trace
+(silent — eigenvalues come out finite but wrong).
+
+## What changed in radia-core axifem source
+
+```
+src/axi_henrotte_fespace.{hpp,cpp}
+    + GetDofNrs(NodeId, Array<DofId>&)
+    + GetVertexDofNrs / GetEdgeDofNrs / GetFaceDofNrs
+src/axifem.cpp
+    + pybind exports of the new overloads
+```
+
+Test: `validation_test/axifem/research/verification/test_magnetized_sphere.py`
+(the sphere verification; passes against Stoll to -0.001 %, replaces the
+prior expected-failure xfail in Phase B2).
+"""
+
+
+AXIFEM_WHY_DROPPED_P3 = """\
+# Why `p=3` was attempted and dropped
+
+`p=3` Q-element would have 16 DOFs / quad (4 corner + 8 edge + 4 face) and
+in principle drive the Cu-disk gap below 0.1 %.
+
+## Implementation status
+
+The wls Mathematica derivation (256 + 256 + 144 + 144 = 800 entries) was
+written, run, and codegen'd successfully (Phase A3, commit a84d53f1; later
+reverted in 56f451fd). C++ FE class, BFI dispatch, and FESpace order=3
+topology were all wired up cleanly — the implementation was structurally
+correct.
+
+## Why it was reverted
+
+The 16×16 Vandermonde of the raw `{s^a z^b}` (a, b ∈ {0..3}) basis at
+typical disk-mesh elements (s ≈ 10⁻⁷–10⁻⁶) has condition number ≈ 10³⁰,
+which exceeds double precision (~10¹⁶). Gauss-Jordan inversion produces
+noise that contaminates assembled K_V and M_V on every refinement: the
+*coarse* Cu-disk mesh happened to give τ₁ = 223.67 µs (looks right
+because the dominant mode is robust to noise), but mesh refinement made
+results worse, eventually completely garbage at fine.
+
+Empirically:
+
+```
+cond(V_4x4)  on p=1 mesh = 1e+2    ← Q-element p=1 fully OK
+cond(V_9x9)  on p=2 mesh = 1e+8    ← p=2 borderline but persistent for typical meshes
+cond(V_16x16) on p=3 mesh = 1e+30  ← p=3 broken before the BFI even runs
+```
+
+## What would un-block `p=3`
+
+Switch the basis from raw monomials `{s^a z^b}` to a normalized /
+orthogonal form. Three options, in increasing implementation cost:
+
+1. **Normalised monomials** — substitute `ξ = (s − s_a)/(s_b − s_a)`,
+   `η = (z − z_a)/(z_b − z_a)`, then redo the wls in `(ξ, η)`. Vandermonde
+   condition drops to ~100. Same code structure, only the Mathematica
+   integrals change shape (`1/(s_a + (s_b − s_a) ξ)` for the 1/s factor).
+2. **Tensor-product 1D Lagrange** (recommended) — bypass Vandermonde
+   inversion entirely. Compute four 4×4 Mathematica matrices `K_s, N_s,
+   M_z, K_z`, then assemble `K_phi[(a,b),(a',b')] = K_s[a,a'] M_z[b,b'] /
+   (πμ_Z) + N_s[a,a'] K_z[b,b'] / (4πμ_R)`. The 1D matrices come from
+   integrating products of explicit 1D Lagrange polynomials (no inversion
+   anywhere). Generalises trivially to `p=4..k`.
+3. **Shifted Legendre on `[s_a, s_b] × [z_a, z_b]`** — orthogonal basis,
+   most robust, and already standard in NGSolve's hierarchical FE
+   internals; full re-derivation needed.
+
+The pipeline (wls + codegen + FE class + BFI dispatch + FESpace topology)
+is in place; only the *basis choice* needs replacing.
+
+## Decision: `p=2` is the sweet spot
+
+Given that `axihenrotte p=2` already beats NGSolve `H1 order=3` per DOF
+on the canonical benchmark and reaches 0.27 % gap to BEM, `p=3` is not
+on the roadmap. The relevant trade-off is "more accuracy per DOF" not
+"more polynomial order"; for the latter, switching to BEM-Foster (already
+shipped in `ngsolve_validation/bem_disk_axisym_*.wls`) is the appropriate
+escape hatch.
+"""
+
+
+AXIFEM_MAGNET = """\
+# Permanent-magnet source term (axisymmetric magnetization edge-loop)
+
+axihenrotte solves linear/eddy-current problems; a **permanent magnet** is
+added purely as a `LinearForm` RHS — no FESpace/C++ change needed. This is the
+standard axisymmetric magnetization edge-loop
+(`H_c * (cos t * dr + sin t * dz)`) written as a continuous Galerkin form.
+
+## Weak form
+
+Magnetostatics with remanence: `curl(nu*B - nu*B_rem) = J`, so the magnet
+contributes `RHS += int nu*B_rem . (curl v) dV`. In the A_phi convention
+(DOFs store A_phi; `B_z = grad(u)[0] + u/r`, `B_r = -grad(u)[1]`), with
+`nu*B_rem = H_c*(cos th, sin th)` and `th` measured from the r-axis
+(`th = 90 deg` => axial magnetization):
+
+    f += [ H_c*sin(th)*(r*grad(v)[0] + v) - H_c*cos(th)*r*grad(v)[1] ] dx_magnet
+
+Stiffness (static, sigma=0):
+    a += nu*(1/r)*(r*grad(u)[0]+u)*(r*grad(v)[0]+v)*dx + nu*r*grad(u)[1]*grad(v)[1]*dx
+
+```python
+th = math.radians(theta_deg)
+reg = mesh.MaterialCF({"magnet": 1.0}, default=0.0)
+f += reg * Hc * math.sin(th) * (x * grad(v)[0] + v) * dx
+f += -reg * Hc * math.cos(th) * (x * grad(v)[1]) * dx
+```
+
+## Validation (uniformly-magnetized linear sphere, analytical)
+
+Sphere radius a, rel. perm. mu_r, coercivity Hc, axial mag.:
+    B_in = 2*mu0*mu_r*Hc/(mu_r+2)   (uniform inside)   ;  external = dipole.
+For mu_r=2, Hc=3e5 -> B_in = 0.376991 T. The verified test
+(`tests/test_magnetized_sphere.py`) gives, on H1Henrotte p=2:
+    <B_z>_magnet (vol-avg)  = 0.376802 T   (-0.050 %)
+    interior |B_r|          < 1.1e-4 T     (purely axial, as expected)
+    external equator r=5a   = -1.497e-3 T  vs dipole -1.508e-3 (0.73 %)
+Cross-checks: standard NGSolve H1 gives -0.010 % (same source term);
+a stored axisymmetric Kelvin reference uses the same a/mu_r/Hc.
+
+## Gotchas
+
+* **Axis MUST be Dirichlet** (`dirichlet="axis|outer"`). A_phi=0 on r=0 is
+  physical; without it the Henrotte {1,r²,z} basis leaves A_phi(0)!=0 and
+  `B_z = grad(u)[0]+u/r` blows up at the axis. Name the FULL r=0 line
+  (both magnet and air faces' `edges.Min(X)`) "axis".
+* **On-axis B recovery** (r->0) via the `grad(gfu)` CoefficientFunction is
+  unreliable for H1Henrotte (the `AxiHenrotteDiffOpGradient::Apply/ApplyTrans`
+  fall back to the base-class stub — see the runtime "called base class
+  apply" message). Sample interior fields OFF-axis (r>=0.3a) or use the
+  volume-averaged metric; the SOLVE itself is correct on-axis.
+* For an OPEN domain use the Kelvin reluctivity warp (see the "kelvin"
+  topic): `nu_ext = (rho'/R)^2 * nu_0`. Truncation (Dirichlet far box)
+  distorts the external dipole by O((a/R_far)^3)+mesh error.
+"""
+
+def get_axifem_documentation(topic: str = "all") -> str:
+    """
+    Return radia-core axifem documentation for the requested topic.
+
+    Topics:
+      "all"             - All sections concatenated
+      "overview"        - What it is and why NGSolve doesn't already have it
+      "support_matrix"  - Exact implementation status for P1/P2/P2 curved/Q1/Q2/Q2 curved
+      "api"             - FESpace("axihenrotte", mesh, order=k) canonical usage
+      "hodge_geometry"  - Differential-geometry/Hodge interpretation of the
+                          Henrotte reduced axisymmetric space
+      "taskmanager"     - NGSolve-native parallel execution contract
+      "basis_p1"        - order=1 P1 triangle + Q1 quad basis details
+      "basis_p2"        - order=2 P2 triangle + Q2 quad basis details
+      "curved_geometry" - P2 curved triangle and opt-in Q2 curved quad support
+      "vs_standard_h1"  - 6-property table comparing axihenrotte p=2 vs NGSolve H1 order=2
+      "validation"      - Cross-validation references and Hessian-of-W convention
+      "kelvin"          - Phase B3 z-offset Kelvin recipe (Periodic + H1Henrotte,
+                          sphere -0.001 % vs Stoll, with gotchas: mu vs nu factor,
+                          element-centroid mu sampling, Curve(2) trade-off)
+      "magnet"          - Permanent-magnet source term (axisym magnetization edge-loop):
+                          weak-form RHS, magnetized-sphere validation, axis-BC gotcha
+      "file_layout"     - Where to find each piece (C++, Mathematica, tests)
+      "why_dropped_p3"  - Why `p=3` was attempted, completed, and reverted
+    """
+    sections = {
+        "overview":       AXIFEM_OVERVIEW,
+        "support_matrix": AXIFEM_SUPPORT_MATRIX,
+        "api":            AXIFEM_API,
+        "hodge_geometry": AXIFEM_HODGE_GEOMETRY,
+        "taskmanager":    AXIFEM_TASKMANAGER,
+        "basis_p1":       AXIFEM_BASIS_P1,
+        "basis_p2":       AXIFEM_BASIS_P2,
+        "curved_geometry": AXIFEM_CURVED_GEOMETRY,
+        "vs_standard_h1": AXIFEM_VS_STANDARD_H1,
+        "validation":     AXIFEM_VALIDATION,
+        "kelvin":         AXIFEM_KELVIN,
+        "magnet":         AXIFEM_MAGNET,
+        "file_layout":    AXIFEM_FILE_LAYOUT,
+        "why_dropped_p3": AXIFEM_WHY_DROPPED_P3,
+    }
+    if topic == "all":
+        return "\n\n".join(sections[k] for k in [
+            "overview", "support_matrix", "api", "taskmanager",
+            "hodge_geometry", "basis_p1", "basis_p2", "curved_geometry",
+            "vs_standard_h1", "validation", "kelvin", "magnet",
+            "file_layout", "why_dropped_p3"
+        ])
+    if topic in sections:
+        return sections[topic]
+    available = ", ".join(sections.keys())
+    raise ValueError(
+        f"Unknown axifem topic '{topic}'. Available: {available}, all"
+    )

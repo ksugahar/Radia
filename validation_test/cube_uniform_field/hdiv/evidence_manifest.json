@@ -1,0 +1,55 @@
+{
+  "schema": "radia.validation.hdiv-cube-evidence.v1",
+  "imported_at_utc": "2026-09-03T09:33:23Z",
+  "policy": {
+    "validation_json_required": true,
+    "routine_ci": false,
+    "raw_measurements_preserved": true
+  },
+  "files": [
+    {
+      "path": "hdiv_cube_reference_scaling_20260708.json",
+      "sha256": "8c0feda5702e9c9e6b569fbe09a3866ce77d497fd2e4ca34a9d5ed2463d1631a"
+    },
+    {
+      "path": "hdiv_tet_cube_reference_scaling_20260708.json",
+      "sha256": "642c8c0633774dfa6d77a51e9b7f5ee6bee75f437d3ed13cce88963d832a0f77"
+    },
+    {
+      "path": "hdiv_tet_ho_oneside_reference_ab_20260708.json",
+      "sha256": "947526a0baeed463ce69d731f431274aa195d1b6cfb7c688d6e3da7e1cdb6955"
+    },
+    {
+      "path": "hdiv_wedge_all_fastbasis_applysolve_reference_scaling_20260708.json",
+      "sha256": "b064d7d229d0af86310f06a49cf36fbf2ab2b937c0a13e55185c3c3a22d464e7"
+    },
+    {
+      "path": "hdiv_wedge_all_fastbasis_reference_scaling_20260708.json",
+      "sha256": "86e634d236452714ae15b9d2334ffe12faeb149df944f9d779b3434c2e18d188"
+    },
+    {
+      "path": "hdiv_wedge_cube_reference_scaling_20260708.json",
+      "sha256": "2ef6e0b8a9cccfb600fcf247bf90722b114244e9704b8d00786f9e14f8d4d061"
+    },
+    {
+      "path": "hdiv_wedge_oneside_reference_ab_20260708.json",
+      "sha256": "7a88e2273545cf4d8840c283e271e77cecd83d155c364defd607df44f003cf0e"
+    },
+    {
+      "path": "hdiv_wedge_trans_cache_all_reference_ab_20260708.json",
+      "sha256": "a682fc8451e9e0d771f4b8445a07d6942074fb3f2bb4db0de00c0506d7d75579"
+    },
+    {
+      "path": "hdiv_wedge_trans_cache_fastbasis_reference_ab_20260708.json",
+      "sha256": "6fd89acdaa7ca5b024b6183b055fa66b4993830bd892bd9e8bae23e3b52566a2"
+    },
+    {
+      "path": "hdiv_wedge_trans_cache_reference_ab_20260708.json",
+      "sha256": "9c6a650e4c4079e476b9b7a03bd867e7779514124cd41b1d3dfc84dc7578d514"
+    },
+    {
+      "path": "results_hex_nonlattice.json",
+      "sha256": "da073b2fdb7d8c7d9c04d94983d8381b14e9053fae82653ac1fb124ec7ef16df"
+    }
+  ]
+}

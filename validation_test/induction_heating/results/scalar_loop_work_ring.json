@@ -1,0 +1,793 @@
+{
+  "mesh_triangles": [
+    512,
+    2048,
+    8192
+  ],
+  "carriers": [
+    {
+      "offset_m": 0.0,
+      "odd": {
+        "field_change": [
+          0.0010679084834852083,
+          0.0002652504094882182,
+          6.647471497501679e-05
+        ],
+        "orders": [
+          2.009361134280008,
+          1.9964773870091252
+        ],
+        "calderon_defect": [
+          null,
+          null,
+          0.00011344400926772487
+        ]
+      },
+      "asymmetric": {
+        "field_change": [
+          0.0010679359426854335,
+          0.0002652505315580025,
+          6.647471570012815e-05
+        ],
+        "orders": [
+          2.0093975659779044,
+          1.9964780352086082
+        ],
+        "calderon_defect": [
+          0.0031414397758991745,
+          0.00038549640768876945,
+          0.00011800211082836843
+        ]
+      },
+      "old_new": [
+        {
+          "alpha": 0.02101466548490716,
+          "power": 0.029800083935629607,
+          "reaction": 0.01941347552016725,
+          "old_analytic_error": 0.024075938158899815,
+          "new_analytic_error": 0.04267004473983836,
+          "old_power_balance": 0.2800300103210982,
+          "new_power_balance": 0.002744165375934582
+        },
+        {
+          "alpha": 0.008204003285733397,
+          "power": 0.0009495880116537903,
+          "reaction": 0.007521375231512326,
+          "old_analytic_error": 0.02673954494824867,
+          "new_analytic_error": 0.0266237957850588,
+          "old_power_balance": 0.32814863672193617,
+          "new_power_balance": 0.0006881406537657675
+        },
+        {
+          "alpha": 0.00997943364111167,
+          "power": 0.007890532086733737,
+          "reaction": 0.009130870889094233,
+          "old_analytic_error": 0.028390528606357816,
+          "new_analytic_error": 0.022480705714568155,
+          "old_power_balance": 0.34123105734496706,
+          "new_power_balance": 0.00016995409133357953
+        }
+      ],
+      "richardson": {
+        "old": {
+          "alpha": {
+            "order": 0.6763412590257607,
+            "estimate": [
+              -0.037564494736439476,
+              -0.0010207969758700892
+            ]
+          },
+          "power": {
+            "order": 0.5997083443023952,
+            "estimate": 5.06607955905283e-07
+          },
+          "reaction": {
+            "order": 2.7193181885825273,
+            "estimate": [
+              -1.4171243606871602e-10,
+              -4.3426341897084685e-12
+            ]
+          }
+        },
+        "new": {
+          "alpha": {
+            "order": 1.9513794212306692,
+            "estimate": [
+              -0.03793773647871418,
+              -0.0007008946965520886
+            ]
+          },
+          "power": {
+            "order": 2.010634722833709,
+            "estimate": 5.130990076566753e-07
+          },
+          "reaction": {
+            "order": 1.961479692946329,
+            "estimate": [
+              -1.4273106947024967e-10,
+              -3.266845015869687e-12
+            ]
+          }
+        }
+      },
+      "middle_quad_relative": {
+        "alpha": 9.098930697372423e-08,
+        "power": 1.3475916699860684e-07,
+        "reaction": 8.341835521567325e-08
+      }
+    },
+    {
+      "offset_m": 0.00075,
+      "odd": {
+        "field_change": [
+          0.0019121961154202143,
+          0.0004928080233669863,
+          0.00012271642446174403
+        ],
+        "orders": [
+          1.95613284441651,
+          2.0056973912729323
+        ],
+        "calderon_defect": [
+          null,
+          null,
+          0.00011344400926772487
+        ]
+      },
+      "asymmetric": {
+        "field_change": [
+          0.0019121328735397878,
+          0.0004928075109776338,
+          0.00012271642730535279
+        ],
+        "orders": [
+          1.9560866295316133,
+          2.00569585782238
+        ],
+        "calderon_defect": [
+          0.0031414397758991745,
+          0.00038549640768876945,
+          0.00011800211082836843
+        ]
+      },
+      "old_new": [
+        {
+          "alpha": 0.02934794919703229,
+          "power": 0.04345041313474707,
+          "reaction": 0.02712728316085238,
+          "old_analytic_error": 0.015037458530653237,
+          "new_analytic_error": 0.042104593322338145,
+          "old_power_balance": 0.26584048582399644,
+          "new_power_balance": 0.004813531988244302
+        },
+        {
+          "alpha": 0.008764937790898186,
+          "power": 0.005131825562840198,
+          "reaction": 0.008037238093748877,
+          "old_analytic_error": 0.02390887656365398,
+          "new_analytic_error": 0.02646950319159086,
+          "old_power_balance": 0.32277993675174144,
+          "new_power_balance": 0.0013216921664995773
+        },
+        {
+          "alpha": 0.009576581002119767,
+          "power": 0.006813077140761958,
+          "reaction": 0.008762739249932424,
+          "old_analytic_error": 0.02765713306261078,
+          "new_analytic_error": 0.022440993587829576,
+          "old_power_balance": 0.3396839548567354,
+          "new_power_balance": 0.0003328620831810625
+        }
+      ],
+      "richardson": {
+        "old": {
+          "alpha": {
+            "order": 1.2561748352417474,
+            "estimate": [
+              -0.037594677328015226,
+              -0.0010160996900892667
+            ]
+          },
+          "power": {
+            "order": -5.05715024343375,
+            "estimate": null
+          },
+          "reaction": {
+            "order": 3.601215900324071,
+            "estimate": [
+              -1.4175500076325635e-10,
+              -4.3363491592424425e-12
+            ]
+          }
+        },
+        "new": {
+          "alpha": {
+            "order": 1.9544169459562506,
+            "estimate": [
+              -0.03793757437083498,
+              -0.0007008820997094923
+            ]
+          },
+          "power": {
+            "order": 1.9393194533749114,
+            "estimate": 5.13206682575595e-07
+          },
+          "reaction": {
+            "order": 1.9521123367664424,
+            "estimate": [
+              -1.4273484730737925e-10,
+              -3.2670161238750163e-12
+            ]
+          }
+        }
+      },
+      "middle_quad_relative": {
+        "alpha": 1.1186365947889085e-08,
+        "power": 1.249637590887496e-08,
+        "reaction": 1.0255219940397496e-08
+      }
+    }
+  ],
+  "qualification": "Three-level estimates, not rigorous bounds; finite-thickness analytic circuit is approximate; no FEM comparison. Mixed-row lift defect converges with h, not a claim of roundoff G1b.",
+  "schema": "radia.scalar-loop-work-study.v1",
+  "model": {
+    "radius_m": 0.03,
+    "wire_radius_m": 0.003,
+    "frequency_hz": 50000,
+    "conductivity_s_per_m": 58000000,
+    "axial_field_a_per_m": 1
+  },
+  "formulations": {
+    "old": "Historical cut-line closure (data only, not a supported solver path)",
+    "new": "Distributed current plus normal-flux magnetic work in loop row; ordinary scalar rows unchanged"
+  },
+  "lift_definitions": {
+    "odd": ".2*(z/b)*exp(-((x-R)^2+y^2+z^2)/R^2)",
+    "asymmetric": ".2*(z/b+.7*y/R+.3*y*z/(R*b))*exp(-((x-R)^2+y^2+z^2)/R^2)"
+  },
+  "protocol": {
+    "ordinary_singular_quadrature": 6,
+    "ordinary_regular_degree": 7,
+    "p0_bonus": 4,
+    "higher_p0_bonus": 6,
+    "cohomology_maxgen": 4,
+    "scope": "Independent dense assembly study; production helper separately compared against its rows. Not a final production run of each lift."
+  },
+  "values": [
+    {
+      "triangles": 512,
+      "cases": [
+        {
+          "carrier_offset_m": 0.0,
+          "old": {
+            "alpha": [
+              -0.0378373341613304,
+              -0.0009852314845948187
+            ],
+            "power": 5.074947587367052e-07,
+            "reaction": [
+              -1.4016196027576013e-10,
+              -4.135536289349048e-12
+            ],
+            "analytic_alpha_relative_error": 0.024075938158899815,
+            "residual": 1.0723728471902485e-17,
+            "faraday_residual": 2.524741798828333e-18
+          },
+          "new": {
+            "alpha": [
+              -0.03709751898989658,
+              -0.0006930875422410227
+            ],
+            "power": 4.923713723294592e-07,
+            "reaction": [
+              -1.3762708467964402e-10,
+              -3.1431351880540397e-12
+            ],
+            "analytic_alpha_relative_error": 0.04267004473983836,
+            "residual": 2.5310774544287706e-16,
+            "faraday_residual": 1.9526540931638414e-16
+          },
+          "lifted_new": {
+            "alpha": [
+              -0.03713988689624187,
+              -0.0006950231065064041
+            ],
+            "power": 4.932203110461156e-07,
+            "reaction": [
+              -1.3777210390708873e-10,
+              -3.149333875093453e-12
+            ],
+            "analytic_alpha_relative_error": 0.04157578303982249,
+            "residual": 5.996150278594993e-16,
+            "faraday_residual": 1.8260653096780708e-16,
+            "study": {
+              "g1a_full_transform": {
+                "physical_field_relative_error": 1.3119226139522923e-12,
+                "identical_block_relative_error": 4.730944105738301e-17,
+                "physical_coeff_relative_error": 9.979713826803084e-13,
+                "alpha_relative_error": 1.9972896091039236e-16
+              },
+              "jump_max_deviation": 5.164899701814996e-06,
+              "gradient_work_residual": 1.6756996961823982e-06,
+              "conormal_flux_relative_mismatch": 4.942327495880288e-06,
+              "magnetic_work_symmetry": 2.517538932142044e-09,
+              "electric_work_symmetry": 0.0,
+              "lift_column_relative_error": 1.046636080296926e-15
+            }
+          },
+          "baseline_work": {
+            "g1a_full_transform": null,
+            "jump_max_deviation": 5.164899701814996e-06,
+            "gradient_work_residual": 1.7626509305451963e-06,
+            "conormal_flux_relative_mismatch": 7.878059496511855e-06,
+            "magnetic_work_symmetry": 1.7739597500727047e-09,
+            "electric_work_symmetry": 0.0,
+            "lift_column_relative_error": 0.0
+          }
+        },
+        {
+          "carrier_offset_m": 0.00075,
+          "old": {
+            "alpha": [
+              -0.038202088769087886,
+              -0.0009871878928037064
+            ],
+            "power": 5.089799946918313e-07,
+            "reaction": [
+              -1.411351823283326e-10,
+              -4.101661512476464e-12
+            ],
+            "analytic_alpha_relative_error": 0.015037458530653237,
+            "residual": 1.6216338112967977e-16,
+            "faraday_residual": 1.61614291788424e-16
+          },
+          "new": {
+            "alpha": [
+              -0.03711937963807488,
+              -0.0006946741810146216
+            ],
+            "power": 4.868646036451498e-07,
+            "reaction": [
+              -1.374343753560252e-10,
+              -3.1143957599323887e-12
+            ],
+            "analytic_alpha_relative_error": 0.042104593322338145,
+            "residual": 1.9675451988011473e-16,
+            "faraday_residual": 1.8651175220057616e-16
+          },
+          "lifted_new": {
+            "alpha": [
+              -0.0371945511818809,
+              -0.0006979312870280476
+            ],
+            "power": 4.883669256981748e-07,
+            "reaction": [
+              -1.3769113455734945e-10,
+              -3.1247056613397906e-12
+            ],
+            "analytic_alpha_relative_error": 0.040163345135771564,
+            "residual": 5.679635256057183e-16,
+            "faraday_residual": 3.4162311031085706e-19,
+            "study": {
+              "g1a_full_transform": {
+                "physical_field_relative_error": 5.076353937546071e-13,
+                "identical_block_relative_error": 5.470063984092887e-17,
+                "physical_coeff_relative_error": 5.015140106498463e-13,
+                "alpha_relative_error": 7.494529742423089e-16
+              },
+              "jump_max_deviation": 8.693150231886548e-06,
+              "gradient_work_residual": 6.6409337493944714e-06,
+              "conormal_flux_relative_mismatch": 2.908231492635165e-05,
+              "magnetic_work_symmetry": 2.4318652351013426e-09,
+              "electric_work_symmetry": 0.0,
+              "lift_column_relative_error": 1.1259485153288268e-15
+            }
+          },
+          "baseline_work": {
+            "g1a_full_transform": null,
+            "jump_max_deviation": 8.693150231886548e-06,
+            "gradient_work_residual": 7.2666502676589446e-06,
+            "conormal_flux_relative_mismatch": 5.954713776427742e-05,
+            "magnetic_work_symmetry": 1.2194714684713246e-09,
+            "electric_work_symmetry": 0.0,
+            "lift_column_relative_error": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "triangles": 2048,
+      "cases": [
+        {
+          "carrier_offset_m": 0.0,
+          "old": {
+            "alpha": [
+              -0.03773662049988996,
+              -0.00100790231219909
+            ],
+            "power": 5.084379630460122e-07,
+            "reaction": [
+              -1.4147890010327195e-10,
+              -4.2989735585587015e-12
+            ],
+            "analytic_alpha_relative_error": 0.02673954494824867,
+            "residual": 3.2423187774495344e-16,
+            "faraday_residual": 3.2381160918493993e-16
+          },
+          "new": {
+            "alpha": [
+              -0.037720484845414654,
+              -0.000698621172179472
+            ],
+            "power": 5.079551564516341e-07,
+            "reaction": [
+              -1.4142052364325024e-10,
+              -3.2359682307268935e-12
+            ],
+            "analytic_alpha_relative_error": 0.0266237957850588,
+            "residual": 5.85822492690856e-16,
+            "faraday_residual": 1.946345129947102e-16
+          },
+          "lifted_new": {
+            "alpha": [
+              -0.037731318317466324,
+              -0.000699084913871912
+            ],
+            "power": 5.081717825259219e-07,
+            "reaction": [
+              -1.4145776817973665e-10,
+              -3.237460417135194e-12
+            ],
+            "analytic_alpha_relative_error": 0.026344252794677697,
+            "residual": 1.8223034974709234e-16,
+            "faraday_residual": 1.8109576277366862e-16,
+            "study": {
+              "g1a_full_transform": {
+                "physical_field_relative_error": 1.3764951886947321e-11,
+                "identical_block_relative_error": 2.5083284493996966e-16,
+                "physical_coeff_relative_error": 6.1565590615846964e-12,
+                "alpha_relative_error": 2.768423455878716e-16
+              },
+              "jump_max_deviation": 3.848029184183588e-08,
+              "gradient_work_residual": 1.1818032460616044e-08,
+              "conormal_flux_relative_mismatch": 7.284413409969728e-08,
+              "magnetic_work_symmetry": 9.538190949007271e-11,
+              "electric_work_symmetry": 0.0,
+              "lift_column_relative_error": 1.876032176575842e-15
+            }
+          },
+          "baseline_work": {
+            "g1a_full_transform": null,
+            "jump_max_deviation": 3.848029184183588e-08,
+            "gradient_work_residual": 1.2464083027749625e-08,
+            "conormal_flux_relative_mismatch": 1.1885726820771087e-07,
+            "magnetic_work_symmetry": 5.2185721331320656e-11,
+            "electric_work_symmetry": 0.0,
+            "lift_column_relative_error": 0.0
+          }
+        },
+        {
+          "carrier_offset_m": 0.00075,
+          "old": {
+            "alpha": [
+              -0.0378491210750712,
+              -0.0010072583041832543
+            ],
+            "power": 5.089501077109086e-07,
+            "reaction": [
+              -1.4178935824636855e-10,
+              -4.2859088718478595e-12
+            ],
+            "analytic_alpha_relative_error": 0.02390887656365398,
+            "residual": 3.226739825616385e-16,
+            "faraday_residual": 3.2236138155573253e-16
+          },
+          "new": {
+            "alpha": [
+              -0.03772646278224603,
+              -0.0006988952733242917
+            ],
+            "power": 5.063382645379475e-07,
+            "reaction": [
+              -1.4136500234095335e-10,
+              -3.2277099150741e-12
+            ],
+            "analytic_alpha_relative_error": 0.02646950319159086,
+            "residual": 2.5084738662956713e-16,
+            "faraday_residual": 1.8540169455034377e-16
+          },
+          "lifted_new": {
+            "alpha": [
+              -0.03774654329105642,
+              -0.0006997272230258771
+            ],
+            "power": 5.067393573889637e-07,
+            "reaction": [
+              -1.4143399673034654e-10,
+              -3.230375019980031e-12
+            ],
+            "analytic_alpha_relative_error": 0.025951422381884703,
+            "residual": 3.044385240214736e-17,
+            "faraday_residual": 0.0,
+            "study": {
+              "g1a_full_transform": {
+                "physical_field_relative_error": 3.910467277945498e-12,
+                "identical_block_relative_error": 2.5745460127340524e-16,
+                "physical_coeff_relative_error": 2.440629538106395e-12,
+                "alpha_relative_error": 3.8319215612039166e-16
+              },
+              "jump_max_deviation": 4.96258357518542e-07,
+              "gradient_work_residual": 1.3353120837534578e-07,
+              "conormal_flux_relative_mismatch": 1.0546597695703788e-06,
+              "magnetic_work_symmetry": 1.015635726008135e-10,
+              "electric_work_symmetry": 0.0,
+              "lift_column_relative_error": 2.1872802485111716e-15
+            }
+          },
+          "baseline_work": {
+            "g1a_full_transform": null,
+            "jump_max_deviation": 4.96258357518542e-07,
+            "gradient_work_residual": 1.4667733427998656e-07,
+            "conormal_flux_relative_mismatch": 2.2208354872732775e-06,
+            "magnetic_work_symmetry": 3.597778159668576e-11,
+            "electric_work_symmetry": 0.0,
+            "lift_column_relative_error": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "triangles": 8192,
+      "cases": [
+        {
+          "carrier_offset_m": 0.0,
+          "old": {
+            "alpha": [
+              -0.03767220246651052,
+              -0.001012728137561451
+            ],
+            "power": 5.07815554458605e-07,
+            "reaction": [
+              -1.416769745418912e-10,
+              -4.336004492908828e-12
+            ],
+            "analytic_alpha_relative_error": 0.028390528606357816,
+            "residual": 1.6248904644612714e-16,
+            "faraday_residual": 1.6061170937242326e-16
+          },
+          "new": {
+            "alpha": [
+              -0.03788156196630647,
+              -0.0007003068338919138
+            ],
+            "power": 5.118224893852031e-07,
+            "reaction": [
+              -1.4239456720786128e-10,
+              -3.258916939001426e-12
+            ],
+            "analytic_alpha_relative_error": 0.022480705714568155,
+            "residual": 1.9616216380516364e-15,
+            "faraday_residual": 1.9451581556673576e-16
+          },
+          "lifted_new": {
+            "alpha": [
+              -0.037884296184916025,
+              -0.0007004248398135801
+            ],
+            "power": 5.118771552629008e-07,
+            "reaction": [
+              -1.4240397771446395e-10,
+              -3.2592977676276288e-12
+            ],
+            "analytic_alpha_relative_error": 0.022410195986281422,
+            "residual": 8.438520401061058e-17,
+            "faraday_residual": 2.823557850332117e-18,
+            "study": {
+              "calderon_lift_row_relative_defect": 0.00011344400926772487,
+              "g1a_full_transform": {
+                "physical_field_relative_error": 1.329631483615317e-10,
+                "identical_block_relative_error": 2.3359386006619644e-16,
+                "physical_coeff_relative_error": 3.192526656300493e-11,
+                "alpha_relative_error": 1.895577325788561e-15
+              },
+              "jump_max_deviation": 1.0686651563673877e-10,
+              "gradient_work_residual": 4.821131389301035e-11,
+              "conormal_flux_relative_mismatch": 5.616754667099254e-10,
+              "magnetic_work_symmetry": 3.2617264111173672e-12,
+              "electric_work_symmetry": 0.0,
+              "lift_column_relative_error": 2.1633936886141303e-15
+            }
+          },
+          "baseline_work": {
+            "calderon_lift_row_relative_defect": null,
+            "g1a_full_transform": null,
+            "jump_max_deviation": 1.0686651563673877e-10,
+            "gradient_work_residual": 5.088111357460281e-11,
+            "conormal_flux_relative_mismatch": 9.217383588700106e-10,
+            "magnetic_work_symmetry": 1.5244727613182536e-12,
+            "electric_work_symmetry": 0.0,
+            "lift_column_relative_error": 0.0
+          }
+        },
+        {
+          "carrier_offset_m": 0.00075,
+          "old": {
+            "alpha": [
+              -0.03770120084026083,
+              -0.0010123982217265168
+            ],
+            "power": 5.079550781981008e-07,
+            "reaction": [
+              -1.4175783181192133e-10,
+              -4.332192891222929e-12
+            ],
+            "analytic_alpha_relative_error": 0.02765713306261078,
+            "residual": 1.620599467325614e-16,
+            "faraday_residual": 1.6069011392157558e-16
+          },
+          "new": {
+            "alpha": [
+              -0.0378831022920878,
+              -0.0007003694487269717
+            ],
+            "power": 5.114158153299063e-07,
+            "reaction": [
+              -1.4238082791694912e-10,
+              -3.256857923187441e-12
+            ],
+            "analytic_alpha_relative_error": 0.022440993587829576,
+            "residual": 5.74438858074555e-16,
+            "faraday_residual": 1.8512765086871102e-16
+          },
+          "lifted_new": {
+            "alpha": [
+              -0.037888147220933165,
+              -0.0007005791464976353
+            ],
+            "power": 5.115166479245359e-07,
+            "reaction": [
+              -1.423981887146292e-10,
+              -3.2575325791217715e-12
+            ],
+            "analytic_alpha_relative_error": 0.022310917001162195,
+            "residual": 5.857768891993527e-17,
+            "faraday_residual": 0.0,
+            "study": {
+              "calderon_lift_row_relative_defect": 0.00011344400926772487,
+              "g1a_full_transform": {
+                "physical_field_relative_error": 4.441523424752434e-11,
+                "identical_block_relative_error": 2.394871345455646e-16,
+                "physical_coeff_relative_error": 1.555901637527109e-11,
+                "alpha_relative_error": 4.43397471109655e-15
+              },
+              "jump_max_deviation": 2.7441735550581825e-09,
+              "gradient_work_residual": 1.2591341399561468e-09,
+              "conormal_flux_relative_mismatch": 1.5654747679180656e-08,
+              "magnetic_work_symmetry": 3.34625277961712e-12,
+              "electric_work_symmetry": 0.0,
+              "lift_column_relative_error": 2.2122826984542377e-15
+            }
+          },
+          "baseline_work": {
+            "calderon_lift_row_relative_defect": null,
+            "g1a_full_transform": null,
+            "jump_max_deviation": 2.7441735550581825e-09,
+            "gradient_work_residual": 1.384451557771408e-09,
+            "conormal_flux_relative_mismatch": 3.3168502616651286e-08,
+            "magnetic_work_symmetry": 1.0636209650518744e-12,
+            "electric_work_symmetry": 0.0,
+            "lift_column_relative_error": 0.0
+          }
+        }
+      ]
+    }
+  ],
+  "matrix_storage_bytes": [
+    2097152,
+    33554432,
+    536870912
+  ],
+  "cost_qualification": "Matrix storage only; not peak memory. No exclusive timing benchmark was performed.",
+  "production_helper_dense_comparison": [
+    {
+      "carrier_offset_m": 0.0,
+      "baseline": {
+        "electric": 2.1246354998642427e-15,
+        "electric_diagonal": 3.606896595870119e-16,
+        "magnetic": 9.734529759121815e-17,
+        "magnetic_diagonal": 1.45463101507423e-16,
+        "forcing": 0.0,
+        "max_entry_absolute": {
+          "electric": 1.090824357984078e-20,
+          "electric_diagonal": 3.0665868333667484e-19,
+          "magnetic": 2.5849394142282115e-26,
+          "magnetic_diagonal": 1.3234889800848443e-23,
+          "forcing": 0.0
+        }
+      },
+      "shifted": {
+        "electric": 5.475905360749058e-16,
+        "electric_diagonal": 0.0,
+        "magnetic": 8.234531748467407e-17,
+        "magnetic_diagonal": 3.984339260850873e-16,
+        "forcing": 0.0,
+        "max_entry_absolute": {
+          "electric": 1.8155451833287024e-20,
+          "electric_diagonal": 0.0,
+          "magnetic": 2.0679515313825692e-25,
+          "magnetic_diagonal": 3.970466940254533e-23,
+          "forcing": 0.0
+        }
+      }
+    },
+    {
+      "carrier_offset_m": 0.00075,
+      "baseline": {
+        "electric": 1.5921759651999022e-15,
+        "electric_diagonal": 0.0,
+        "magnetic": 9.215054721848334e-17,
+        "magnetic_diagonal": 2.8182357018882467e-16,
+        "forcing": 0.0,
+        "max_entry_absolute": {
+          "electric": 1.0506279675555287e-20,
+          "electric_diagonal": 0.0,
+          "magnetic": 5.169878828456423e-26,
+          "magnetic_diagonal": 2.6469779601696886e-23,
+          "forcing": 0.0
+        }
+      },
+      "shifted": {
+        "electric": 4.335172533213642e-16,
+        "electric_diagonal": 4.498426700248996e-16,
+        "magnetic": 9.495102042687023e-17,
+        "magnetic_diagonal": 8.735520532349909e-16,
+        "forcing": 0.0,
+        "max_entry_absolute": {
+          "electric": 1.377568304051469e-20,
+          "electric_diagonal": 4.599880250050122e-19,
+          "magnetic": 4.1359030627651384e-25,
+          "magnetic_diagonal": 9.26442286059391e-23,
+          "forcing": 0.0
+        }
+      }
+    }
+  ],
+  "observed_coarse_p0_cost": {
+    "magnetic_work_symmetry": 1.773959750072705e-09,
+    "gradient_work_residual": 1.762650930505072e-06,
+    "conormal_flux_relative_mismatch": 7.878059496521899e-06,
+    "quadrature_bonus": 4,
+    "single_layer_matrix_bytes": 2097152,
+    "single_layer_assembly_seconds": 9.034883000000264
+  },
+  "production_power_gate": "The historical study called the low-level solver. Its old powers fail the existing CLI 0.1 gate; corrected powers pass the same gate. No accepted historical CLI result is implied.",
+  "observed_p0_cost": {
+    "rows": [
+      {
+        "triangles": 512,
+        "matrix_bytes": 2097152,
+        "assembly_seconds": 9.137452700000722,
+        "process_peak_working_set_bytes": 135868416
+      },
+      {
+        "triangles": 2048,
+        "matrix_bytes": 33554432,
+        "assembly_seconds": 145.04402459999255,
+        "process_peak_working_set_bytes": 396750848
+      },
+      {
+        "triangles": 8192,
+        "matrix_bytes": 536870912,
+        "assembly_seconds": 2337.9680506999866,
+        "process_peak_working_set_bytes": 4455305216
+      }
+    ],
+    "qualification": "Shared-host wall time, not speed comparison; process peak includes P0 assembly only plus runtime, not full loop solver peak."
+  },
+  "dense_limit_storage": {
+    "vertices_limit": 7000,
+    "faces_guard": 14000,
+    "p0_matrix_bytes_at_guard": 1568000000,
+    "qualification": "Matrix alone; assembled COO, native operator, dense copies and ordinary BIE operators add memory. Measured peak is P0-only assembly plus runtime, not complete solver peak."
+  }
+}

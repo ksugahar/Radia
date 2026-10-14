@@ -1,0 +1,1068 @@
+import hashlib,json,os,re,shutil,subprocess
+from collections import Counter
+from pathlib import Path
+from .optuna_boundary import matlab_optuna_mcp_route
+from .optuna_quality import matlab_optuna_health, _optuna_source_commands
+HERE=Path(__file__).parent; EXT=HERE/"extensions/radia-matlab-tools.json"; MATLAB=HERE/"matlab"
+PROFILES={"existing":("existing","desktop"),"auto_nodesktop":("auto","nodesktop"),"new_nodesktop":("new","nodesktop")}
+def matlab_extension_path():
+    if not EXT.is_file(): raise FileNotFoundError(EXT)
+    return EXT
+def matlab_extension_contract():
+    raw=matlab_extension_path().read_bytes(); data=json.loads(raw); tools=data.get("tools",[]); sig=data.get("signatures",{}); files=list((MATLAB/"+radia_mcp_matlab").glob("*.m")); names={p.stem for p in files}; errors=[]
+    if len(tools)!=43 or len(sig)!=43: errors.append("expected 43 tools/signatures")
+    if len(files)!=86: errors.append("expected 86 MATLAB functions")
+    if any(not t["name"].startswith("matlab_") for t in tools): errors.append("invalid tool prefix")
+    for p in files:
+        text=p.read_text(encoding="utf-8")
+        if "acoustic" in text.lower() or "fembem" in text.lower(): errors.append(f"{p.name}: namespace leak")
+        errors += [f"{p.name}: missing {d}" for d in re.findall(r"radia_mcp_matlab\.([A-Za-z]\w*)",text) if d not in names]
+    return {"schema":"radia-mcp.matlab-extension/v1","ok":not errors,"status":"ok" if not errors else "error","runtime_owner":"MathWorks MATLAB MCP Server","extension_file":str(EXT),"matlab_root":str(MATLAB),"sha256":hashlib.sha256(raw).hexdigest(),"tool_count":len(tools),"tool_names":[t["name"] for t in tools],"signature_count":len(sig),"matlab_function_count":len(files),"errors":errors}
+def _official_server_candidates():
+    toolkit_bin = Path.home()/".matlab"/"agentic-toolkits"/"bin"
+    candidates = [toolkit_bin/"matlab-mcp-server.exe",
+                  toolkit_bin/"matlab-mcp-server-windows-x64.exe"]
+    candidates += [Path(found) for name in (
+        "matlab-mcp-server", "matlab-mcp-server-windows-x64.exe",
+        "matlab-mcp-core-server", "matlab-mcp-core-server-win64.exe",
+    ) if (found := shutil.which(name))]
+    return candidates
+
+
+def matlab_official_server_config(profile="existing",*,include_generic_extension=False):
+    if profile not in PROFILES: raise ValueError(profile)
+    session,display=PROFILES[profile]; args=[f"--matlab-session-mode={session}"]; files=[]; setup=""
+    if include_generic_extension:
+        c=matlab_extension_contract()
+        if not c["ok"]: raise RuntimeError(c["errors"])
+        files=[c["extension_file"]]; args += [f"--extension-file={c['extension_file']}"]; setup=f"addpath('{c['matlab_root']}');"
+    if display=="nodesktop": args.append("--matlab-display-mode=nodesktop")
+    candidates = _official_server_candidates()
+    cmd=os.getenv("RADIA_MATLAB_MCP_SERVER") or next((str(x) for x in candidates if x.is_file()),"matlab-mcp-server")
+    return {"schema":"radia-mcp.matlab-server-config/v1","status":"ok","runtime_owner":"MathWorks MATLAB MCP Server","integration_owner":"radia-mcp.matlab","command_id":"matlab-mcp-server","command":cmd,"profile":profile,"args":args,"extension_files":files,"matlab_setup_code":setup}
+def matlab_radia_acoustic_interface_contract(): return {"runtime_owner":"MathWorks MATLAB MCP Server","matlab_workflow_owner":"MathWorks MATLAB Agentic Toolkit","simulink_workflow_owner":"MathWorks Simulink Agentic Toolkit","generic_operations_owner":"radia_mcp.matlab","generic_matlab_package":"radia_mcp_matlab","production_owner":"radia.acoustics","education_solver_owner":"radia_mcp.acoustic_fembem","radia_extension_scope":["Radia MATLAB/MEX domain APIs","LTspice orchestration and result import","MATLAB Optuna 5.0.0 differential subset"]}
+
+
+def _agentic_toolkit_status():
+    config_path = Path.home()/".matlab"/"agentic-toolkits"/"config.json"
+    result = {"available": False, "path": str(config_path), "toolkits": {}}
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8-sig"))
+        if not isinstance(payload, dict) or not isinstance(payload.get("matlab", {}), dict):
+            raise ValueError("Toolkit configuration must contain an object and a MATLAB object")
+    except FileNotFoundError:
+        return result
+    except (OSError, UnicodeError, ValueError) as exception:
+        return {**result, "error": str(exception)}
+    return {
+        **result, "available": True,
+        "mcp_server_version": str(payload.get("mcpServerVersion", "")),
+        "matlab_version": str(payload.get("matlab", {}).get("version", "")),
+        "last_updated": str(payload.get("lastUpdated", "")),
+        "session_mode": str(payload.get("sessionMode", "")),
+        "toolkits": payload.get("toolkits", {}),
+    }
+
+
+def matlab_official_server_status():
+    """Inventory the installed MathWorks foundation without starting MATLAB."""
+    command = str(matlab_official_server_config()["command"])
+    resolved = Path(command)
+    if not resolved.is_file():
+        located = shutil.which(command)
+        resolved = Path(located) if located else resolved
+    available = resolved.is_file()
+    version = ""
+    error = ""
+    if available:
+        try:
+            probe = subprocess.run(
+                [str(resolved), "--version"], capture_output=True, check=False,
+                text=True, encoding="utf-8", errors="replace", timeout=15,
+            )
+            version = (probe.stdout or probe.stderr).strip()
+            if probe.returncode != 0:
+                error = f"version probe returned {probe.returncode}"
+            elif not version:
+                error = "version probe returned no version text"
+        except (OSError, subprocess.SubprocessError) as exception:
+            error = str(exception)
+    toolkit = _agentic_toolkit_status()
+    return {
+        "schema": "radia-mcp.matlab-official-server-status/v1",
+        "status": "ready" if available and not error and not toolkit.get("error") else "needs_attention",
+        "runtime_owner": "MathWorks MATLAB MCP Server",
+        "command": str(resolved) if available else command,
+        "available": available, "version": version, "version_probe_error": error,
+        "agentic_toolkits": toolkit,
+        "generic_operations_owner": "MathWorks MATLAB MCP Server and Simulink Agentic Toolkit",
+        "generic_operations": ["model_read", "model_edit", "model_check", "model_test"],
+        "radia_role": "domain-specific MEX, artifact, and CAE workflow extension",
+        "update_policy": "Report installed versions; check official release notes and focused regressions before upgrading. This inventory does not claim upstream currency.",
+    }
+
+
+def _radia_repo_root():
+    configured = os.environ.get("RADIA_REPO_ROOT", "").strip()
+    candidates = [Path(configured)] if configured else []
+    candidates.extend(HERE.resolve().parents)
+    for candidate in candidates:
+        source = candidate / "packages/radia-optuna/native/optuna_mex.cpp"
+        if source.is_file():
+            return candidate, source
+    return None, None
+
+
+def _mex_command_branches():
+    """The CPU Radia MEX is retired; Optuna owns its independent command table."""
+    _root, source = _radia_repo_root()
+    if source is None:
+        return [], []
+    return [], _optuna_source_commands(source)
+
+
+def _radia_mex_commands():
+    """Read commands compiled into the general Radia MEX gateway."""
+    return _mex_command_branches()[0]
+
+
+def _optuna_mex_commands():
+    """Read commands compiled only into the lightweight Optuna gateway."""
+    return _mex_command_branches()[1]
+
+
+def _optuna_native_kernels(optuna_commands):
+    """Return the optimizer kernels, excluding the api.* gateway commands.
+
+    Selected by namespace rather than by a positional slice: a slice silently
+    reports the wrong kernel list the moment another non-kernel command is
+    added ahead of them.
+    """
+    return [name for name in optuna_commands if name.startswith("optuna.")]
+
+
+def _pybind_public_names():
+    root, _source = _radia_repo_root()
+    if root is None:
+        return []
+    source = root / "src" / "lib" / "radia_pybind.cpp"
+    if not source.is_file():
+        return []
+    text = source.read_text(encoding="utf-8")
+    return [
+        name for name in re.findall(r'\bm\.def\s*\(\s*"([^"]+)"', text)
+        if not name.startswith("_")
+    ]
+
+
+def _pybind_all_top_level_names():
+    root, _source = _radia_repo_root()
+    if root is None:
+        return []
+    source = root / "src" / "lib" / "radia_pybind.cpp"
+    if not source.is_file():
+        return []
+    text = source.read_text(encoding="utf-8")
+    return re.findall(r'(?m)^\s{4}m\.def\s*\(\s*"([^"]+)"', text)
+
+
+def _pybind_class_surface():
+    """Return class/member names declared by the Radia pybind translation unit."""
+    root, _source = _radia_repo_root()
+    if root is None:
+        return []
+    source = root / "src" / "lib" / "radia_pybind.cpp"
+    if not source.is_file():
+        return []
+    text = source.read_text(encoding="utf-8")
+    starts = list(re.finditer(r'(?m)^\s{4}(?=py::class_|m\.def\s*\()', text))
+    surface = []
+    for index, start in enumerate(starts):
+        end = starts[index + 1].start() if index + 1 < len(starts) else len(text)
+        chunk = text[start.start():end]
+        if not chunk.lstrip().startswith("py::class_"):
+            continue
+        match = re.search(r'\bm\s*,\s*"([^"]+)"', chunk)
+        if match is None:
+            continue
+        class_name = match.group(1)
+        surface.append(f"{class_name}.__binding__")
+        if re.search(r'\.def\s*\(\s*py::init', chunk):
+            surface.append(f"{class_name}.__init__")
+        for pattern in (
+            r'\.def\s*\(\s*"([^"]+)"',
+            r'\.def_static\s*\(\s*"([^"]+)"',
+            r'\.def_property(?:_readonly)?\s*\(\s*"([^"]+)"',
+            r'\.def_read(?:only|write)?\s*\(\s*"([^"]+)"',
+        ):
+            surface.extend(
+                f"{class_name}.{member}" for member in re.findall(pattern, chunk)
+            )
+    return sorted(set(surface))
+
+
+_PYBIND_INTERNAL_NUMERICAL_COMMANDS = {
+    "_EVRSTMethodAlgebra": ("evrs.tmethod",),
+    "_HybridVIMSchurComplement": ("hybrid_vim.schur",),
+    "_HybridVIMSolve": ("hybrid_vim.solve",),
+    "_SkinImpedance": ("hybrid_vim.skin_impedance",),
+    "_SIBCAdmittanceTail": ("hybrid_vim.sibc_admittance_tail",),
+    "_SIBCSchurTerminationImpedance": ("hybrid_vim.sibc_termination_impedance",),
+    "_SIBCSchurTerminationAdmittance": ("hybrid_vim.sibc_termination_admittance",),
+    "_TetHCurlReducedGram": ("hcurl.tet_reduced_gram",),
+    "_AffineCellSelfEnergyShapeDerivative": ("hdiv.affine_cell_self_energy_shape_derivative",),
+    "_AssembleSLDL_Galerkin": ("bem.assemble_sldl",),
+    "_AssembleSLDL_Galerkin_P2": ("bem.assemble_sldl_p2",),
+    "_HFromSegmentsComplex": ("biot_savart.h_segments_complex",),
+    "_AFromSegmentsComplex": ("biot_savart.a_segments_complex",),
+    "_AFromTrianglesComplex": ("biot_savart.a_triangles_complex",),
+    "_BFromTrianglesComplex": ("biot_savart.b_triangles_complex",),
+    "_EquivalenceSourceStaticH": ("equivalence.static_h",),
+    "_EquivalenceSourceHarmonic": ("equivalence.harmonic",),
+    "_average_B_in_box": ("radia.AverageBInBox",),
+    "_average_demag_tensor": ("radia.AverageDemagTensor",),
+    "_evaluate_ngsolve_coefficient_at_point": (
+        "ngsolve.coefficient_function.evaluate",
+    ),
+    "_stream_aca_tsvd": ("stream.aca_tsvd",),
+}
+
+_PYBIND_INTERNAL_EXCLUSIONS = {
+    "_CreateP1HACApKGeometry": (
+        "private Python scalar-P1 assembly boundary; MATLAB IH consumes its frozen "
+        "operator artifact through the existing assembly workflow; native MATLAB "
+        "dense-entry hacapk.bem handles retain their declared interface"),
+    "_periodic_h1_single_interface": (
+        "NGSolve-owned periodic H1 space construction; MATLAB uses "
+        "radia.python.periodicH1 under the periodic-h1-space Python fallback "
+        "contract, not a standalone numerical MEX kernel"
+    ),
+    "_compute_ho_bnd_nodes": "NGSolve-owned mesh/high-order boundary plumbing",
+    "_volume_element_vertex_counts": "NGSolve-owned mesh inspection plumbing",
+    "_TestPEECHACApKSanity": "Python regression-test helper, not a user API",
+}
+
+_RETIRED_UNSAFE_CONSTRUCTORS = (
+    "radia.ObjMltExtPgn",
+    "radia.ObjMltExtRtg",
+    "radia.ObjMltExtTri",
+)
+
+_RETIRED_UNSAFE_C_ABI_SYMBOLS = (
+    "RadObjMltExtPgn",
+    "RadObjMltExtRtg",
+    "RadObjMltExtTri",
+)
+
+_PYBIND_CLASS_EXCLUSIONS = {
+    **{
+        f"{name}.{member}": (
+            "NGSolve CoefficientFunction adapter for Kelvin-transformed Radia "
+            "fields; MATLAB owns this batch-only NGSolve composition through "
+            "radia.python.openBoundary and the declared open-boundary "
+            "python-fallback contract"
+        )
+        for name in (
+            "KelvinRadiaVectorPotential",
+            "KelvinRadiaFluxDensity",
+            "KelvinRadiaFieldStrength",
+            "KelvinRadiaScalarPotential",
+        )
+        for member in ("__binding__", "__init__")
+    },
+    "_PEECBuilderInternal.__binding__": "implementation holder",
+    "_HACApKPEECManagerInternal.__binding__": "implementation holder",
+    "_HACApKBEMManagerInternal.__binding__": "implementation holder",
+    **{f"_P1EntryProvider.{member}": (
+        "private Python on-demand quadrature holder and validation introspection; "
+        "MATLAB IH consumes the assembled frozen artifact")
+       for member in ("__binding__", "Entry", "GetStats")},
+    "HACApKBEMManager.ReleaseDenseEntries": (
+        "drops the pybind11 reference to the Python-owned NumPy entry table "
+        "after compression; MATLAB hacapk.bem handles hold no Python arrays"),
+    "_HDivVectorPotentialCoefficient.__binding__": (
+        "private radia.vim adapter that materializes an NGSolve-owned Python "
+        "CoefficientFunction; MATLAB uses the declared vim-public Python "
+        "boundary for construction and the projected HCurl .sol beam MEX "
+        "contract for native tracking"),
+    "_HDivVectorPotentialCoefficient.__init__": (
+        "private radia.vim adapter that materializes an NGSolve-owned Python "
+        "CoefficientFunction; MATLAB uses the declared vim-public Python "
+        "boundary for construction and the projected HCurl .sol beam MEX "
+        "contract for native tracking"),
+    "_HDivVectorPotentialCoefficient.source_count": (
+        "diagnostic on the private NGSolve CoefficientFunction adapter; source "
+        "construction remains in the declared vim-public Python boundary"),
+    "_HDivExactVectorPotentialCoefficient.__binding__": (
+        "private radia.vim adapter for the analytic equivalent-current A "
+        "source (construction=\"exact\"); it materializes an NGSolve-owned "
+        "Python CoefficientFunction, so MATLAB uses the declared vim-public "
+        "Python boundary for construction and the projected HCurl .sol beam "
+        "MEX contract for native tracking"),
+    "_HDivExactVectorPotentialCoefficient.__init__": (
+        "private radia.vim adapter for the analytic equivalent-current A "
+        "source; same vim-public Python / projected-HCurl MEX boundary as "
+        "_HDivVectorPotentialCoefficient"),
+    "_HDivExactVectorPotentialCoefficient.tetrahedron_count": (
+        "diagnostic on the private analytic equivalent-current adapter; the "
+        "source statistics are already reported through the vim-public "
+        "vector_potential_coefficient_stats result entry"),
+    "_HDivExactVectorPotentialCoefficient.triangle_count": (
+        "diagnostic on the private analytic equivalent-current adapter; the "
+        "source statistics are already reported through the vim-public "
+        "vector_potential_coefficient_stats result entry"),
+    "_HDivFieldCoefficient.reflection_normal": (
+        "introspection-only mirror of the FieldCoefficientFromSolution "
+        "reflection_normal argument on the private NGSolve adapter; the "
+        "physical field MATLAB consumes flows through the projected .sol "
+        "beam MEX contract"),
+    "_HDivFieldCoefficient.reflection_symmetrized": (
+        "introspection-only flag on the private NGSolve adapter; same "
+        "projected-.sol MEX boundary as reflection_normal"),
+    "_ChargeGramHMatrix.charge_sigma": (
+        "sigma-normalization diagnostic for the roundoff-amplification "
+        "regression tests (empty before BuildHMatrix; every public apply "
+        "already wraps S back, so MATLAB sees the physical Gram)"),
+    "_ChargeGramHMatrix.raw_symmetric_quadratic_form": (
+        "diagnostic-only O(n^2) exact-entry Rayleigh form used to localize "
+        "H-matrix roundoff and positive-semidefinite failures; it is not a "
+        "user-facing solver operation"),
+    "_ChargeGramHMatrix.symmetric_leaf_quadratics": (
+        "diagnostic-only H-matrix leaf decomposition used by regression and "
+        "validation tooling; MATLAB consumes the checked physical Gram apply"),
+    "_ChargeGramHMatrix.build_exact_dense_normalized_gram": (
+        "private bounded-memory Python VIM safety fallback for validation-sized "
+        "meshes; it changes internal Gram storage but adds no MATLAB solver "
+        "semantics beyond the existing entry and matvec contracts"),
+    "_ChargeGramHMatrix.uses_exact_dense_normalized_gram": (
+        "introspection-only flag for the private exact-dense validation "
+        "fallback; backend diagnostics are reported through public result "
+        "artifacts rather than a separate MEX property"),
+    "_ChargeGramHMatrix._reduce_configured_candidate_directional_schur": (
+        "private proposal-only acceleration used by the Python topology "
+        "optimizer; it is not a public pybind capability, and MATLAB uses "
+        "the public reduce_configured_candidate_schur MEX contract"),
+}
+
+
+def _class_commands(prefix, members, info_command):
+    return {f"{prefix}.{member}": (info_command,) for member in members}
+
+
+_PYBIND_CLASS_COMMANDS = {
+    "_EnergyStopMaterial.__binding__": ("energy_stop.create",),
+    "_EnergyStopMaterial.__init__": ("energy_stop.create",),
+    "_EnergyStopMaterial.state0": ("energy_stop.state0",),
+    "_EnergyStopMaterial.forward_batch": ("energy_stop.forward",),
+    "_EnergyStopMaterial.commit_batch": ("energy_stop.commit",),
+    "_EnergyStopMaterial.stored_energy_batch": ("energy_stop.stored_energy",),
+    **_class_commands("_EnergyStopMaterial", (
+        "branch_count", "state_size", "alpha", "b_max", "nu_bound", "eta", "gamma"),
+        "energy_stop.info"),
+    "_HDivFieldEvaluator.__binding__": ("hdiv.field_evaluator.from_tet",),
+    "_HDivFieldEvaluator.from_tet": ("hdiv.field_evaluator.from_tet",),
+    "_HDivFieldEvaluator.from_cloud": ("hdiv.field_evaluator.from_cloud",),
+    "_HDivFieldEvaluator.field": ("hdiv.field_evaluator.field",),
+    "_HDivFieldEvaluator.field_gradient": ("hdiv.field_evaluator.field_gradient",),
+    "_HDivFieldEvaluator.candidate_algorithm_for": ("hdiv.field_evaluator.candidate_algorithm",),
+    "_HDivFieldEvaluator.last_algorithm": ("hdiv.field_evaluator.last_algorithm",),
+    "_HDivFieldEvaluator.stats": ("hdiv.field_evaluator.stats",),
+    "_PlanarHDivFieldEvaluator.__binding__": ("hdiv.planar_evaluator.create",),
+    "_PlanarHDivFieldEvaluator.field": ("hdiv.planar_evaluator.field",),
+    "_PlanarHDivFieldEvaluator.az": ("hdiv.planar_evaluator.az",),
+    "_PlanarHDivFieldEvaluator.stats": ("hdiv.planar_evaluator.stats",),
+    "_HDivFieldCoefficient.__binding__": ("hdiv.field_evaluator.as_coefficient",),
+    "_HDivFieldCoefficient.__init__": ("hdiv.field_evaluator.as_coefficient",),
+    "_HDivFieldCoefficient.algorithm": ("ngsolve.coefficient_function.info",),
+    "_PlanarHDivFieldCoefficient.__binding__": ("hdiv.planar_evaluator.as_coefficient",),
+    "_PlanarHDivFieldCoefficient.__init__": ("hdiv.planar_evaluator.as_coefficient",),
+    "_PlanarHDivFieldCoefficient.source_angle": ("ngsolve.coefficient_function.info",),
+    "_PlanarHDivFieldCoefficient.target_angle": ("ngsolve.coefficient_function.info",),
+    "_HDivDemagMatrix.__binding__": ("hacapk.charge_gram.demag_matrix",),
+    "_ComplexDiagonalInverseMatrix.__binding__": ("ngsolve.matrix.diagonal_preconditioner",),
+    "_ProjectedBaseMatrix.__binding__": ("ngsolve.matrix.projected_create",),
+    "_ProjectedBaseMatrix.__init__": ("ngsolve.matrix.projected_create",),
+    "_ReducedBlockMatrix.__binding__": ("ngsolve.matrix.reduced_block_create",),
+    "_ReducedBlockMatrix.__init__": ("ngsolve.matrix.reduced_block_create",),
+    "_ReducedBlockMatrix.diagonal_preconditioner": ("ngsolve.matrix.diagonal_preconditioner",),
+    "_ReducedBlockMatrix.term_count": ("ngsolve.matrix.term_count",),
+    "_ChargeGramHMatrix.__binding__": ("hacapk.charge_gram.create_monopole",),
+    "_ChargeGramHMatrix.__init__": (
+        "hacapk.charge_gram.create_monopole", "hacapk.charge_gram.create_analytic_tet",
+        "hacapk.charge_gram.create_analytic_polytope", "hacapk.charge_gram.create_high_order_tet",
+        "hacapk.charge_gram.create_curved_high_order_tet", "hacapk.charge_gram.create_curved_polytope",
+        "hacapk.charge_gram.create_hex", "hacapk.charge_gram.create_wedge",
+        "hacapk.charge_gram.create_planar_2d"),
+    "_ChargeGramHMatrix.ndof": ("hacapk.charge_gram.info",),
+    "_ChargeGramHMatrix.set_image_rotations": ("hacapk.charge_gram.set_image_rotations",),
+    "_ChargeGramHMatrix.build_hmatrix": ("hacapk.charge_gram.build",),
+    "_ChargeGramHMatrix.matvec": ("hacapk.charge_gram.matvec",),
+    "_ChargeGramHMatrix.matvec_transpose": ("hacapk.charge_gram.matvec_transpose",),
+    "_ChargeGramHMatrix.matvec_sym": ("hacapk.charge_gram.matvec_sym",),
+    "_ChargeGramHMatrix.entry": ("hacapk.charge_gram.entry",),
+    "_ChargeGramHMatrix.hex_volume_self_block_directional_derivative": ("hacapk.charge_gram.hex_volume_self_block_directional_derivative",),
+    "_ChargeGramHMatrix.hex_face_self_block_directional_derivative": ("hacapk.charge_gram.hex_face_self_block_directional_derivative",),
+    "_ChargeGramHMatrix.hex_charge_gram_directional_derivative": ("hacapk.charge_gram.hex_directional_derivative",),
+    "_ChargeGramHMatrix.tet_volume_self_block_directional_derivative": ("hacapk.charge_gram.tet_volume_self_block_directional_derivative",),
+    "_ChargeGramHMatrix.tet_face_self_block_directional_derivative": ("hacapk.charge_gram.tet_face_self_block_directional_derivative",),
+    "_ChargeGramHMatrix.tet_charge_gram_directional_derivative": ("hacapk.charge_gram.tet_directional_derivative",),
+    "_ChargeGramHMatrix.tet_charge_map_row_directional_rates": ("hacapk.charge_gram.tet_charge_map_row_directional_rates",),
+    "_ChargeGramHMatrix.wedge_volume_self_block_directional_derivative": ("hacapk.charge_gram.wedge_volume_self_block_directional_derivative",),
+    "_ChargeGramHMatrix.wedge_face_self_block_directional_derivative": ("hacapk.charge_gram.wedge_face_self_block_directional_derivative",),
+    "_ChargeGramHMatrix.wedge_charge_gram_directional_derivative": ("hacapk.charge_gram.wedge_directional_derivative",),
+    "_ChargeGramHMatrix.directional_derivative_operator": ("hacapk.charge_gram.directional_derivative_operator",),
+    "_ChargeGramHMatrix.directional_derivative_contractions": ("hacapk.charge_gram.directional_derivative_contractions",),
+    "_ChargeGramHMatrix.directional_derivative_contractions_many": ("hacapk.charge_gram.directional_derivative_contractions_many",),
+    "_ChargeGramHMatrix.hex_state_check": ("hacapk.charge_gram.hex_state_check",),
+    "_ChargeGramHMatrix.hex_stored_nodes": ("hacapk.charge_gram.hex_stored_nodes",),
+    "_ChargeGramHMatrix.hex_state_breakdown": ("hacapk.charge_gram.hex_state_breakdown",),
+    "_ChargeGramHMatrix.configure_charge_map": ("hacapk.charge_gram.configure_charge_map",),
+    "_ChargeGramHMatrix.configure_vector_charge_map": ("hacapk.charge_gram.configure_vector_charge_map",),
+    "_ChargeGramHMatrix.configure_mass_matrix": ("hacapk.charge_gram.configure_mass_matrix",),
+    "_ChargeGramHMatrix.configure_mass_matrix_ngsolve": ("hacapk.charge_gram.configure_mass_matrix_ngsolve",),
+    "_ChargeGramHMatrix.configure_geometry_mass_matrix": ("hacapk.charge_gram.configure_geometry_mass_matrix",),
+    "_ChargeGramHMatrix.configure_geometry_mass_matrix_ngsolve": ("hacapk.charge_gram.configure_geometry_mass_matrix_ngsolve",),
+    "_ChargeGramHMatrix.restore_geometry_mass_matrix": ("hacapk.charge_gram.restore_geometry_mass_matrix",),
+    "_ChargeGramHMatrix.set_configured_constraints": ("hacapk.charge_gram.set_configured_constraints",),
+    "_ChargeGramHMatrix.configured_active_hmatrix_stats": ("hacapk.charge_gram.configured_active_hmatrix_stats",),
+    "_ChargeGramHMatrix.demag_matrix": ("hacapk.charge_gram.demag_matrix",),
+    "_ChargeGramHMatrix.apply_configured_demag": ("hacapk.charge_gram.demag_apply",),
+    "_ChargeGramHMatrix.apply_configured_geometry_mass": ("hacapk.charge_gram.geometry_mass_apply",),
+    "_ChargeGramHMatrix.apply_configured_linear_material_operator": ("hacapk.charge_gram.apply_configured_linear_material_operator",),
+    "_ChargeGramHMatrix.apply_configured_linear_material_operator_many": ("hacapk.charge_gram.apply_configured_linear_material_operator_many",),
+    "_ChargeGramHMatrix.configured_linear_material_element_blocks": ("hacapk.charge_gram.configured_linear_material_element_blocks",),
+    "_ChargeGramHMatrix.configured_linear_material_candidate_clusters": ("hacapk.charge_gram.configured_linear_material_candidate_clusters",),
+    "_ChargeGramHMatrix.reduce_configured_candidate_schur": ("hacapk.charge_gram.reduce_configured_candidate_schur",),
+    "_ChargeGramHMatrix._reduce_configured_candidate_directional_schur": ("hacapk.charge_gram.reduce_configured_candidate_directional_schur",),
+    "_ChargeGramHMatrix.apply_configured_mass_riesz": ("hacapk.charge_gram.mass_riesz",),
+    "_ChargeGramHMatrix.solve_configured_linear_material_mass_riesz": ("hacapk.charge_gram.solve_configured_linear_material",),
+    "_ChargeGramHMatrix.solve_configured_linear_material_auto_prec": ("hacapk.charge_gram.solve_configured_linear_material_auto_prec",),
+    "_ChargeGramHMatrix.solve_configured_linear_material_auto_prec_many": ("hacapk.charge_gram.solve_configured_linear_material_auto_prec_many",),
+    "_ChargeGramHMatrix.configured_field_functional_rows": ("hacapk.charge_gram.configured_field_functional_rows",),
+    "_ChargeGramHMatrix.configured_field_functional_rows_directional_derivative": ("hacapk.charge_gram.configured_field_functional_rows_directional_derivative",),
+    "_ChargeGramHMatrix.configured_field_values_shape_derivative": ("hacapk.charge_gram.configured_field_values_shape_derivative",),
+    "_ChargeGramHMatrix.create_field_evaluator": ("hacapk.charge_gram.create_field_evaluator",),
+    "_ChargeGramHMatrix.create_planar_field_evaluator": ("hacapk.charge_gram.create_planar_field_evaluator",),
+    "_ChargeGramHMatrix.stats": ("hacapk.charge_gram.stats",),
+    "_ChargeGramHMatrix.from_sampled_laplace": ("hacapk.charge_gram.create_sampled_laplace",),
+    "_ChargeGramHMatrix.from_sampled_planar_log": ("hacapk.charge_gram.create_sampled_planar_log",),
+    "_ChargeGramHMatrix.from_local_polynomials": ("hacapk.charge_gram.create_local_polynomials",),
+    "_ChargeGramHMatrix.operator_configured": ("hacapk.charge_gram.operator_info",),
+    "_ChargeGramHMatrix.constraint_count": ("hacapk.charge_gram.operator_info",),
+    "HACApKChargeGramDerivative.__binding__": ("hacapk.charge_gram.directional_derivative_operator",),
+    "HACApKChargeGramDerivative.ndof": ("hacapk.charge_gram_derivative.info",),
+    "HACApKChargeGramDerivative.entry": ("hacapk.charge_gram_derivative.entry",),
+    "HACApKChargeGramDerivative.matvec_sym": ("hacapk.charge_gram_derivative.matvec_sym",),
+    "HACApKChargeGramDerivative.stats": ("hacapk.charge_gram_derivative.info",),
+    "RadiaField.__binding__": ("ngsolve.radia_field.create",),
+    "RadiaField.__init__": ("ngsolve.radia_field.create",),
+    "RadiaField.PrepareCache": ("ngsolve.radia_field.prepare_cache",),
+    "RadiaField.ClearCache": ("ngsolve.radia_field.clear_cache",),
+    "RadiaField.SetMemoize": ("ngsolve.radia_field.set_memoize",),
+    "RadiaField.GetCacheStats": ("ngsolve.radia_field.cache_stats",),
+    "RadiaField.as_voxel_cf": ("ngsolve.radia_field.as_voxel_coefficient",),
+    **_class_commands("RadiaField", (
+        "radia_obj", "field_type", "use_transform", "precision", "memoize"),
+        "ngsolve.radia_field.info"),
+    "HACApKPEECManager.__binding__": ("hacapk.peec.create",),
+    "HACApKPEECManager.__init__": ("hacapk.peec.create",),
+    "HACApKPEECManager.BuildHMatrix": ("hacapk.peec.build",),
+    "HACApKPEECManager.MatVec": ("hacapk.peec.matvec",),
+    **_class_commands("HACApKPEECManager", ("GetNDOF", "IsValid", "GetStats"),
+        "hacapk.peec.info"),
+    "HACApKBEMManager.__binding__": ("hacapk.bem.create",),
+    "HACApKBEMManager.__init__": ("hacapk.bem.create",),
+    "HACApKBEMManager.BuildHMatrix": ("hacapk.bem.build",),
+    "HACApKBEMManager.MatVec": ("hacapk.bem.matvec",),
+    **_class_commands("HACApKBEMManager", ("GetNDOF", "IsValid", "GetStats"),
+        "hacapk.bem.info"),
+}
+
+
+def _pybind_command_name(name):
+    # The beam Lie-map / reference-orbit surface groups its MEX commands
+    # under beam.* rather than the default radia.<name>, so the audit needs
+    # the mapping explicitly. Each pair below shares one C++ kernel
+    # (rad_lie::LieMapTensorsFromSpolyArrays, DragtFinnFactorizeFourthOrder,
+    # ApplyDragtFinnMapBatch, rad_orbit::TrackReferenceOrbit3D, and
+    # rad_orbit::TrackReferenceOrbit3DToPlane), which is what makes the
+    # coverage claim true rather than name-level.
+    beam_names = {
+        "lie_map_tensors_spoly": "beam.lie.map_tensors_spoly",
+        "lie_dragt_finn_factorize": "beam.lie.dragt_finn_factorize",
+        "lie_apply_dragt_finn_batch": "beam.lie.apply_dragt_finn_batch",
+        "track_reference_orbit_native": "beam.orbit.track_reference_3d",
+        "track_reference_orbit_to_plane_native": "beam.orbit.track_reference_to_plane",
+    }
+    if name in beam_names:
+        return beam_names[name]
+    hlu_names = {
+        "HLUSetTruncTol": "hlu.set_trunc_tol",
+        "HLUGetTruncTol": "hlu.get_trunc_tol",
+        "HLULastTimings": "hlu.last_timings",
+        "HLUMaterializeStats": "hlu.materialize_stats",
+        "HLUSetParallel": "hlu.set_parallel",
+        "HLUGetParallel": "hlu.get_parallel",
+        "HLUSetParCutoff": "hlu.set_par_cutoff",
+        "HLUMaxThreads": "hlu.max_threads",
+        "HLUSetAccumCap": "hlu.set_accum_cap",
+        "HLUGetAccumCap": "hlu.get_accum_cap",
+        "HLUMixedBreakdown": "hlu.mixed_breakdown",
+        "HLUSelfTest": "hlu.self_test",
+        "HLUSelfTestRk": "hlu.self_test_rk",
+        "HLUSelfTestAddmulRkRk": "hlu.self_test_addmul_rkrk",
+        "HLUSelfTestRadiaExactWithMatrix": "hlu.self_test_radia_exact_with_matrix",
+        "HLUSelfTestRadiaExactDiag": "hlu.self_test_radia_exact_diag",
+        "HLUSelfTestRadiaExact": "hlu.self_test_radia_exact",
+        "HLUSelfTestDepth3Asymmetric": "hlu.self_test_depth3_asymmetric",
+        "HLUSelfTestMixedSiblingViaConversion": "hlu.self_test_mixed_sibling_via_conversion",
+        "HLUSelfTestMixedSiblingNonUniform": "hlu.self_test_mixed_sibling_nonuniform",
+        "HLUSelfTestMixedSibling": "hlu.self_test_mixed_sibling",
+        "HLUSelfTestRkDeep": "hlu.self_test_rk_deep",
+    }
+    return hlu_names.get(name, f"radia.{name}")
+
+
+def _radia_mex_group(command):
+    prefix = command.split(".", 1)[0]
+    if prefix == "radia":
+        return "radia-core"
+    if prefix == "hlu":
+        return "hacapk-hlu"
+    return prefix
+
+
+def matlab_radia_mex_contract(topic="all"):
+    """Describe supported GPU execution and the retired CPU MEX boundary."""
+    topic = str(topic).lower().strip()
+    allowed = {"all", "mex", "ngsolve", "optimization", "simulink", "limitations"}
+    if topic not in allowed:
+        raise ValueError(f"unknown topic: {topic}; available: {', '.join(sorted(allowed))}")
+    root, _ = _radia_repo_root()
+    source = root / "packages/radia-gpu/native/radia_cuda_csr_pcg.cu" if root else None
+    optuna_commands = _optuna_mex_commands()
+    sections = {
+        "mex": {"owner": "radia-gpu", "entrypoint": "radia_cuda_csr_pcg",
+                "matlab_entrypoint": "radia.gpu.csrPCG", "kernel": "CUDA FP64 CSR Jacobi-PCG",
+                "argument_contract": "GPU int32 CSR indices, GPU FP64 values/RHS/inverse diagonal, host tolerance/max iterations",
+                "native_build": "Build.ps1 -CudaMexOnly -RequireNativeProvenance"},
+        "ngsolve": {"owner": "NGSolve", "distribution": "radia", "cpu_execution": "Python/pybind11/NGSolve",
+                    "gpu_boundary": "Caller-assembled CSR operators; NGSolve retains FE ownership",
+                    "true_relative_residual_limit": 1e-6},
+        "optimization": {"owner": "radia-optuna", "entrypoint": "optuna_mex",
+                         "native_build": "Build.ps1 -OptunaMexOnly",
+                         "health_tool": "matlab_optuna_health"},
+        "simulink": {"owner": "radia-gpu", "builder": "radia.simulink.buildCudaPCGBlock",
+                     "adapter": "readable Level-2 MATLAB S-Function",
+                     "legacy_models": "Source-only until ported and validated; no CPU MEX support"},
+        "limitations": {"items": ["No CPU Radia MEX support or implicit CPU/Python solver fallback.",
+                                   "Poisson acceptance does not certify GPU AMS, ICCG or HDiv-MMM.",
+                                   "External MATLAB, Simulink, LTspice and NVIDIA products are not bundled.",
+                                   "Deploy radia-gpu to 100 and A100, never 102; unavailable A100 remains pending."]},
+    }
+    return {"schema": "radia-mcp.matlab-radia-mex/v2", "topic": topic,
+            "status": "source_available" if source and source.is_file() else "source_unavailable",
+            "runtime_checked": False, "cpu_mex_supported": False,
+            "parity_status": "unverified" if source and source.is_file() else "incomplete",
+            "source_of_truth": "packages/radia-gpu/native/radia_cuda_csr_pcg.cu",
+            "mex_entrypoint": "radia_cuda_csr_pcg", "command_count": 0, "command_names": [],
+            "optuna_mex_entrypoint": "optuna_mex", "optuna_mex_command_count": len(optuna_commands),
+            "optuna_mex_command_names": optuna_commands,
+            "topic_data": {"sections": sections} if topic == "all" else sections[topic]}
+
+
+def matlab_optuna_simulink_contract():
+    """Return the MATLAB-native Optuna and Simulink difference contract."""
+    health = matlab_optuna_health()
+    from .optuna_oracle import matlab_optuna_compatibility_contract
+
+    upstream = matlab_optuna_compatibility_contract()
+    result = {
+        "schema": "radia-mcp.matlab-optuna-simulink/v5",
+        "status": "ready",
+        "package": "radia.optuna",
+        "distribution": "radia-optuna",
+        "upstream_oracle": upstream,
+        "upstream_oracle_version": "optuna==5.0.0",
+        "mcp_ownership": matlab_optuna_mcp_route(),
+        "distribution_health": health,
+        "seed_semantics": {
+            "explicit": "equal explicit uint32 seeds consume the checked NumPy RandomState-compatible stream",
+            "unseeded": "seed=None draws fresh private entropy per sampler without mutating MATLAB's global RNG; exact proposal sequences are intentionally nondeterministic",
+        },
+        "classes": {
+            "OptimizationParameter": "sdo-style Name/Value/Minimum/Maximum/Free parameter plus Optuna type, transform, step, and categorical choices",
+            "OptimizeOptions": "validated MATLAB options for sampler, pruner, seed, directions, callbacks, persistence, and named parallel mode",
+            "OptimizationSession": "persistent configured/running/paused/completed/cancelled lifecycle with one-trial stepping, checkpoint restore, stale-RUNNING recovery, trial selection, and model application",
+            "ObjectiveContext": "model-shaped objective services for intermediate reporting, pruning, and trial user attributes",
+            "Study": "ask/tell, scalar or vector objectives, normalized ObjectiveTable, MAT persistence, bestTrial/bestValue/bestParams/bestSolution or paretoFront",
+            "Trial": "suggestFloat/suggestInteger/suggestCategorical, report, shouldPrune, user attributes",
+            "FixedTrial": "objective evaluation against supplied parameters with upstream-oracled suggestions, warnings, attributes, and compatibility errors",
+            "TrialPruned": "throw(radia.optuna.TrialPruned()) is caught by Study.optimize and matches upstream PRUNED state, last intermediate value, and callback behavior",
+            "RandomSampler": "explicitly seeded proposals match the checked Optuna 5.0.0 oracle",
+            "TPESampler": "seeded scalar, mixed, automatic/grouped multivariate, multi-objective, constrained, and callable gamma/weights proposals match the checked Optuna 5.0.0 oracle",
+            "CmaEsSampler": "seeded numeric proposals, restart, margin, separable, source-trial warm-start, learning-rate adaptation, pruned-trial consideration, warnings, and invalid option behavior are upstream-oracled",
+            "GPSampler": "Backend='upstream-python' delegates startup, constrained PyTorch/SciPy LogEI acquisition, and deterministic persisted-history replay to pinned Optuna 5.0.0; Backend='matlab-native' is integration-only",
+            "NSGAIISampler": "seeded population behavior and all six built-in crossover proposal sequences match Optuna 5.0.0",
+            "NSGAIIISampler": "seeded reference-line population behavior matches Optuna 5.0.0",
+            "QMCSampler": "seeded scrambled and deterministic unscrambled Sobol/Halton proposals match Optuna/SciPy within the documented dimension boundary",
+            "GridSampler": "finite Cartesian-grid exhaustion matches Optuna 5.0.0",
+            "BruteForceSampler": "fixed and conditional define-by-run tree exhaustion matches Optuna 5.0.0",
+            "PartialFixedSampler": "fixed and delegated proposal sequences match Optuna 5.0.0",
+            "Pruners": "Percentile, threshold, patient, no-op, successive-halving, Hyperband, and Wilcoxon decisions are upstream-oracled",
+            "Importance": "get_param_importances delegates fANOVA, mean-decrease-impurity, and PED-ANOVA evaluation to pinned Optuna 5.0.0",
+            "Termination": "MaxTrialsCallback, BestValueStagnationEvaluator, Terminator, and TerminatorCallback provide upstream-oracled stopping behavior",
+            "LiveMonitor": "trial progress, objective history, duration, parameter history, and live two-objective Pareto display",
+            "SimulinkRunner": "CAE-aware SimulationInput configuration, adaptive-batch sim/parsim, c <= 0 constraints, validation, typed failures, artifact manifests, model SHA-256, and four-part timing",
+            "LTspiceRunner": "serial or parfeval LTspice trials with isolated output directories, complex RAW, and client-owned Study updates",
+            "SheetMetalRunner": "Optuna outer trials over the native HEX-sheet or HCurl sheet-metal two-level drivers, with isolated NGSolve/Cubit work directories and result.json provenance",
+        },
+        "simulink_blocks": [
+            "Radia/Applications/Induction Heating uses readable Level-2 MATLAB S-Functions backed by separate native Eddy and Thermal object handles for the distributed-field kernels; Eddy receives current, angle, and temperature distribution, while Thermal receives heat distribution, ambient temperature, and angle. Raw q/T fields remain available and a masked IH Monitor subsystem encapsulates the reduction and Bus Creators that publish fixed cell-weighted IHMonitorBusV1 telemetry under RadiaMonitorHeaderV1.",
+            "makeIHNativeConfig plus validateIHNativeConfig enforce native matrix dimensions, shared thermal CSR sparsity, positive cell weights, preassembled FEM/PEEC/BEM-A/BIM method metadata, and .vol preflight before initialization.",
+            "IH Thermal publishes its previous accepted field in the Level-2 Outputs callback, feeds it directly to Eddy, and advances only in Update. Linear current changes use current-squared heat scaling; temperature-dependent operator data trigger a new field solve. Nonlinear BH fails fast in the preview. LUT and lumped IH builders are removed.",
+            "buildTeam28LiftModel uses the validated 50 Hz full-FEM force-height LUT; makeTeam28CoilBuilderPlant and radia_team28_coilbuilder_dynamic.slx advance only the slower mechanical motion, so the cycle-averaged lane must not be called a full electromagnetic transient.",
+            "ExportHCurlEddyFosterJSON plus loadHCurlEddyFosterModel maps the Foster decay rates and modal input of a reduced HCurl-VIM model into a passive diagonal discrete state-space block; solveHCurlEddyFosterHarmonic is the diagonal modal solve. radia.ngsolve.hcurl_eddy_foster_model additionally assembles a Python-free local HCurl diffusion projection directly from a VOL mesh.",
+            "buildHCurlEddyFosterModel(..., Block=\"radia-mex\") uses the Python-free native state-space handle for fixed reduced HCurl models; makeMotorAngleFamily plus buildMotorAngleFamilyModel use the same persistent MEX handle for periodic angle interpolation and quadratic torque output.",
+            "ExportHCurlEddyFosterFamilyJSON plus loadHCurlEddyFosterFamily/interpolateHCurlEddyFosterFamily provides a height-indexed family with one shared Foster mode set; buildHCurlEddyFosterFamilyModel exposes height, derivative-current, and coil-current ports and outputs the instantaneous force K*z(t)*i(t).",
+            "Optimization/Optuna Study is the compact two-input/five-output facade: start/cancel, four scalar convenience signals, and fixed-schema OptunaMonitorBusV1 under RadiaMonitorHeaderV1. Variable-length history and Pareto data remain in normalized MAT tables. radia.simulink.buildOptunaBlock retains the advanced six-input/eighteen-output ABI for wired pause/resume/select/apply and complete telemetry.",
+            "Optimization/Sheet Metal Optimization evaluates a radia.optuna.SheetMetalRunner and uses the same best-update and Pareto monitor contract.",
+            "radia_optuna_teaching.slx and buildOptunaTeachingModel provide known-optimum, Pareto-selection, and deterministic pruned/failed student exercises without requiring Global Optimization Toolbox or Simulink Design Optimization.",
+        ],
+        "team28": {
+            "package": "radia.simulink",
+            "workflow": "makeTeam28LiftLUT -> evaluateTeam28LiftForce -> buildTeam28LiftModel",
+            "coilbuilder_dynamic_workflow": "makeTeam28CoilBuilderLUT -> makeTeam28CoilBuilderPlant -> radia_team28_coilbuilder_dynamic.slx",
+            "frequency_hz": 50,
+            "force_convention": "force_N is the physical signed force; upward_lift_N is positive upward.",
+            "high_fidelity_boundary": "numeric p=6 HCurl-VIM and shared-mode Foster height-family export are supported; the 25-height family is validated against the full-FEM force-height sweep.",
+            "validated_dynamic_scope": "cycle_averaged_mechanical_motion",
+            "electromagnetic_model_class": "fixed_frequency_cycle_averaged_force_height_lut",
+            "height_coupling": "quasi_steady_interpolation",
+            "electromagnetic_state_transient_included": False,
+            "motional_emf_included": False,
+            "damping_identified_from_measurement": False,
+            "artifact_gate": "mcp-server-maglev:team28_cycle_averaged_motion_gate",
+            "unsupported_claims": [
+                "full_electromagnetic_transient",
+                "carrier_resolved_electromagnetic_waveform",
+                "motion_induced_emf",
+                "experimentally_identified_damping",
+            ],
+            "full_transient_next_step": "Advance position-dependent electromagnetic states and the mechanical state together, including motion derivative terms of the modal input and force operators, then close current-force-energy-motion histories.",
+        },
+        "hcurl_eddy_foster": {
+            "package": "radia.simulink",
+            "workflow": "NGSolve radia_gpu.vim.ExportHCurlEddyFosterJSON -> MATLAB loadHCurlEddyFosterModel -> solveHCurlEddyFosterHarmonic/buildHCurlEddyFosterModel",
+            "equation": "(R+sL)c=-sPi diagonalised by R v = lambda L v (V'LV=I): z_dot=-diag(lambda)z+Bm u, y=Bm'z, Bm=V'P, u=-di/dt.",
+            "harmonic_solve": "diagonal modal solve z_j=-s(Bm i)_j/(s+lambda_j); no MEX kernel is required",
+            "force": "Optional modal K(k,j,b) force operator: evaluateHCurlEddyFosterForce gives the phasor time average 0.5*real(K z conj(i)); the Simulink block outputs the instantaneous K*z(t)*i(t).",
+            "moving_family": "ExportHCurlEddyFosterFamilyJSON -> loadHCurlEddyFosterFamily -> interpolateHCurlEddyFosterFamily -> buildHCurlEddyFosterFamilyModel; one shared Foster mode set and discrete state matrix, with only the modal input and force operators interpolated in height.",
+            "native_motor_angle_family": {
+                "matlab_factory": "radia.simulink.makeMotorAngleFamily",
+                "simulink_builder": "radia.simulink.buildMotorAngleFamilyModel",
+                "s_function": "radia_motor_angle_family_mex_sfunction",
+                "state": "persistent C++ handle with separated output/update, CustomSimState snapshot/restore, reset, and destroy lifecycle",
+                "interpolation": "periodic linear interpolation over one mechanical-angle period",
+                "torque": "0.5*x'*Q*x + x'*R*u + 0.5*u'*S*u",
+                "validation_artifact": "validation_test/radia_mcp/artifacts/annular_motor_dual_lane_v1/native_motor_angle_family.json",
+                "recorded_tests": 86,
+                "evidence_status": "recorded 2026-10-03 (MATLAB R2026a Update 5) by native_motor_family_gate with the clean ad4d1c8f9 radia_mex build; 86 of 86 tests passed, and the source hashes in the artifact match this source tree.",
+            },
+            "sibc": "SIBC termination must be rationalized before state-space export; the current numeric bridge records this boundary explicitly.",
+        },
+        "tables": ["TrialTable", "ObjectiveTable", "ParamTable", "IntermediateTable", "UserAttrTable", "ConstraintTable", "SamplerStateTable"],
+        "native_acceleration": {
+            "status_api": "radia.optuna.nativeStatus",
+            "gateway": "optuna_mex",
+            "command_count": health.get("native", {}).get("command_count"),
+            "required": True,
+            "commands": [
+                "optuna.pareto.rank_crowding",
+                "optuna.parzen.log_pdf_numerical",
+                "optuna.parzen.log_pdf_categorical",
+                "optuna.sobol.points",
+            ],
+            "policy": "Require the exact independent optuna_mex command contract for checked optimizer kernels; keep Study/Trial, persistence, callbacks, and unsupported fused-option orchestration in readable MATLAB. A missing or incompatible optuna_mex is an error and never redirects through radia_mex or a silent substitute.",
+            "missing_mex_fallback": False,
+            "full_optimizer_in_cpp": False,
+            "python_per_trial": "false for MATLAB-native samplers; GPSampler Backend='upstream-python' and scrambled QMCSampler use Python and are excluded from the step-time block",
+            "upstream_python_gp_python_per_trial": True,
+        },
+        "cae_trial_contract": {
+            "success_schema": "radia.optuna.cae-trial.v1",
+            "failure_schema": "radia.optuna.cae-failure.v1",
+            "identity": ["model path", "model SHA-256", "MATLAB version", "Simulink version", "geometry/mesh/material/excitation context"],
+            "constraints": "c <= 0",
+            "timing": ["configuration", "simulation", "postprocess", "total"],
+            "failure_policy": "Classify mesh, convergence, license/resource, timeout, configuration, and observable failures; preserve the failed trial and continue when requested.",
+        },
+        "multi_objective": {
+            "directions": "one minimize/maximize entry per returned objective",
+            "storage": "ObjectiveTable has one row per trial and objective index; TrialTable.Value retains objective 1 for compatibility",
+            "selection": "bestTrial, bestValue, bestParams, and bestSolution are single-objective only; paretoFront returns non-dominated trials",
+            "visualization": "LiveMonitor plots objective history for one objective and a live Pareto scatter for two or more objectives",
+            "samplers": ["RandomSampler", "TPESampler", "NSGAIISampler"],
+        },
+        "sampler_quality": {
+            "intended_scale": "expensive CAE trials where field-solver time dominates MATLAB table-backed ask/tell overhead",
+            "tpe_boundary": "seeded scalar, mixed, automatic/grouped multivariate, multi-objective, constrained, and callable gamma/weights behavior is checked against Optuna 5.0.0",
+            "correlated_continuous": "CmaEsSampler has checked seeded numeric and independent-fallback parity; GPSampler Backend='upstream-python' owns exact checked LogEI behavior",
+            "multi_objective": "use TPESampler or NSGAIISampler and inspect front error plus coverage, not Pareto point count alone",
+            "validation": "validation_test/optimization/validate_matlab_optuna_quality.m",
+            "python_parity_claim": "Only behavior mapped to pinned optuna==5.0.0 fixtures is parity evidence; API coverage must close before a complete-compatibility claim.",
+            "simulink_auto": "Use the declared search space and budget: small fixed-numeric budgets use native TPE instead of batch GP; larger eligible cases use CMA-ES or NSGA-II/III. Explicit GP and scrambled QMC are batch-only and rejected at step time, including resumed studies.",
+        },
+        "parallel_trials": {
+            "simulink": "SimulinkRunner.optimizeParallel asks adaptive client-side batches and evaluates each SimulationInput batch with parsim so completed trials influence later proposals",
+            "ltspice": "LTspiceRunner.optimizeParallel suggests parameters on the client and runs isolated LTspice jobs with parfeval",
+            "state_safety": "Study, sampler, and table mutations stay on the client; workers return numerical results only",
+            "requirement": "Parallel Computing Toolbox; absence is an explicit error, never a silent serial fallback",
+        },
+        "ltspice_integrated_workflow": {
+            "raw": "readRaw/RawRead normalize ASCII or binary, real or complex results under radia.ltspice.raw.v2 while preserving source schema",
+            "parallel": "LTspiceRunner.optimizeParallel uses isolated parfeval runs and returns numerical results to the client-owned Study",
+            "pareto": "vector ScoreFcn -> ObjectiveTable -> TPE/NSGA-II -> LiveMonitor Pareto scatter",
+        },
+        "cad_topology_optimization": {
+            "cad_owner": "Cubit design cells, element IDs, material blocks, and final CAD reconstruction",
+            "physics": "Radia-VIM analytic system linearization A*dm_i=db_i-dA_i*m",
+            "sensitivity_policy": "No cell-wise finite differences: factor/solve the VIM tangent system with all design perturbations as multiple right-hand sides",
+            "subproblem": "bounded linear programming with volume, field inequality, and move-limit constraints",
+            "matlab_api": ["radia.topopt.linearizeVIM", "radia.topopt.solveLPUpdate", "radia.topopt.optimizeVIMLP", "radia.topopt.writeCubitJournal"],
+            "abe_element_fill": {
+                "status": "native-mex-ready",
+                "mex_command": "topopt.abe_element_fill_plan",
+                "matlab_api": [
+                    "radia.topopt.solveAbeElementFillPlan",
+                    "radia.topopt.contractHDivElementFillResponse",
+                    "radia.topopt.composeSpecificationFillResponse",
+                    "radia.topopt.binElementFillToInterfaceHeight",
+                    "radia.topopt.blendedInterfaceDisplacement",
+                ],
+                "variables": "one signed fill fraction per design element; existing iron [-1,0], addable air [0,1]",
+                "factorization": "HACApK ACA+ followed by QR-TSVD, factored once and reused through bounded residual corrections",
+                "ngsolve_boundary": "local/global HDiv DOF transforms, GetTrafo deformation, complete field re-solves, and exact transfer-map acceptance remain caller-owned",
+            },
+            "adjoint_optimization": {
+                "status": "ready",
+                "contract": "Evaluator returns scalar objective, design gradient, c <= 0 inequalities with design-by-constraint Jacobian, and optional SQP equalities/Jacobian",
+                "matlab_api": [
+                    "radia.topopt.checkAdjointGradient",
+                    "radia.topopt.optimizeAdjoint",
+                    "radia.topopt.optimizeHCurlActivationAdjoint",
+                ],
+                "mma": "Finite-bound moving-asymptote iterations with analytic convex-subproblem Jacobians; inequalities only",
+                "sqp": "fmincon SQP with supplied objective and constraint gradients; inequalities and equalities",
+                "finite_difference_policy": "Directional finite differences are explicit QA only and are never an optimizer fallback",
+                "hybrid_role": "TPE/CMA-ES outer global or discrete search followed by MMA/SQP continuous field-sensitive refinement",
+            },
+            "mcp_tool": "matlab_cad_topology_build",
+            "implemented_surface": "mesh-cell material optimization and deterministic Cubit solid/void block journal",
+            "cad_reconstruction_route": "density field -> level set -> Coreform Cubit Sculpt -> Exodus mesh import",
+            "cubit_validation_gates": [
+                "cubit_ato_levelset_sculpt_source_replay_gate",
+                "cubit_levelset_sculpt_hex_validation_gate",
+            ],
+            "boundary": "The generic journal classifies an existing hex mesh; density-to-level-set/Sculpt reconstruction is design-domain-specific and must pass the Cubit gates before being called CAD-complete",
+            "sheet_metal": {
+                "variables": ["neutral-surface normal displacement", "thickness", "material activation"],
+                "constraints": ["linearized volume", "thickness bounds", "discrete curvature", "move limits", "user field inequalities"],
+                "routing": "Jacobian determinant, condition number, relative displacement, and topology change select ngsolve_deform, ngsolve_refine, or cubit_rebuild",
+                "python_executor": "radia.sheet_metal_optimization.apply_ngsolve_mesh_route uses Mesh.SetDeformation or SetRefinementFlag+Refine; Cubit rebuild remains an explicit external gated action",
+                "matlab_api": ["radia.topopt.localTrustRegion", "radia.topopt.solveSheetMetalLP", "radia.topopt.backtrackTrafoDeformation", "radia.topopt.optimizeHexSheetTopology", "radia.topopt.CubitHexRemeshBackend", "radia.topopt.routeMeshUpdate"],
+                "optuna_runner": "radia.optuna.SheetMetalRunner",
+                "simulink_block": "Optimization/Sheet Metal Optimization",
+                "simulink_builder": "radia.simulink.buildSheetMetalOptimizationBlock",
+                "trial_artifact": "radia.optuna.sheet-metal-trial.v1 result.json in an isolated trial directory",
+                "mcp_tool": "matlab_sheet_metal_topology_build",
+                "two_level_loop": {"inner": "5-20 NGSolve GetTrafo iterations with continuous activation and no H-matrix rebuild", "outer": "0.35/0.65 activation hysteresis accumulates pending topology changes until their fraction or age reaches the Cubit batch threshold", "post_cubit": "rebuild the H-matrix exactly once, then start the next inner batch"},
+                "continuity_policy": "Activation stays continuous through the complete inner batch; threshold classification is committed only at the outer Cubit boundary",
+                "analytic_shape_tangent": {
+                    "operator": "A=inv_chi*M+B^T*G*B differentiated by the full product rule",
+                    "laplace_pairs": "distance and quadrature-weight derivatives are analytic; no optimization finite differences",
+                    "matlab_api": ["radia.topopt.linearizeLaplacePairGram", "radia.topopt.linearizeVIMOperator", "radia.topopt.linearizeVIM"],
+                    "self_panel_boundary": "singular self-panel values and their shape derivatives must come from the topology-specific analytic moment kernel; the generic pair helper intentionally leaves its diagonal zero",
+                },
+                "hcurl_eddy_bubble": {
+                    "status": "native-mex-ready",
+                    "numerical_owner": "C++ MEX with NGSolve-owned HCurl assembly and HACApK scalar Gram",
+                    "matlab_api": [
+                        "radia.topopt.HCurlTopologyOperator",
+                        "radia.topopt.assembleHCurlResistanceShapeTangents",
+                        "radia.topopt.assembleHCurlCellCurlGrams",
+                        "radia.topopt.sampleHCurlSubtetVelocities",
+                        "radia.topopt.linearizeHCurlMultifrequencyJoule",
+                        "radia.topopt.linearizeHCurlActivationMultifrequencyJoule",
+                        "radia.topopt.optimizeAdjoint",
+                        "radia.topopt.optimizeHCurlActivationAdjoint",
+                        "radia.topopt.linearizeAndSolveHCurlSheetJouleLP",
+                        "radia.topopt.linearizeAndSolveHCurlActivationSheetJouleLP",
+                        "radia.topopt.optimizeHCurlEddyBubbleHexSheet",
+                        "radia.topopt.optimizeHCurlEddyBubbleActivationHexSheet",
+                    ],
+                    "mex_commands": [
+                        "hcurl.topopt.operator.*",
+                        "hcurl.topopt.resistance_shape_tangents",
+                        "hcurl.topopt.cell_curl_grams",
+                        "hcurl.topopt.multifrequency_joule",
+                        "hcurl.topopt.activation_multifrequency_joule",
+                    ],
+                    "shape_gradient": "analytic HCurl Piola dR plus HACApK dG and dB contractions; no directional dL matrix is materialized",
+                    "activation_gradient": "cell-local NGSolve curl Grams plus SIMP conductivity and matrix-free HACApK activation contractions",
+                    "load_cases": "weighted complex adjoints over multiple frequencies and excitations in one MEX call",
+                    "python_boundary": "none in the MATLAB optimization loop",
+                },
+            },
+        },
+        "persistence": "MAT-file via Study.save or AutoSave; tables remain inspectable in MATLAB, while SimulinkRunner records versioned CAE trial/failure structs and artifact manifests. bestSolution derives a reloadable best snapshot from the tables.",
+        "simulink_workflow": [
+            "Create a radia.optuna.Study.",
+            "Configure each Trial into Simulink.SimulationInput.",
+            "Run sim/parsim and return finite objectives, c <= 0 constraints, validation, artifacts, and timing through the configured callbacks.",
+            "Record COMPLETE, PRUNED, or typed FAIL state and persist both readable tables and versioned CAE evidence.",
+        ],
+        "reinforcement_learning_workflow": [
+            "Create radia.rl.Environment for a native numerical step contract, or place a Simulink RL Agent around a production application block.",
+            "Call reset and step around Radia/NGSolve MEX numerical kernels.",
+            "Optionally adapt the environment to rlFunctionEnv.",
+            "For IH, train against the native distributed Eddy/Thermal block; do not substitute a LUT or lumped thermal environment.",
+        ],
+        "python_relation": "The official optuna/optuna-mcp server owns every shared operation in its live tools/list. radia-mcp owns only MATLAB/Simulink differences and never performs a Python-to-MATLAB-Engine call per trial; exact GPSampler Backend='upstream-python' intentionally uses pinned Optuna 5.0.0 in-process.",
+        "mcp_route": "matlab_optuna_mcp_route",
+    }
+
+    # Historical domain models are not supported CPU MEX implementations.
+    # Preserve their descriptions as provenance, separate from the active surface.
+    historical = result["simulink_blocks"][:7]
+    result["simulink_blocks"] = result["simulink_blocks"][7:]
+    result["integration_owner"] = "radia-gpu"
+    result["runtime_checked"] = False
+    result["cpu_radia_mex_supported"] = False
+    result["legacy_domain_models"] = {
+        "status": "source-only; unsupported CPU Radia MEX",
+        "distribution": "radia-gpu",
+        "descriptions": historical,
+    }
+    for key in ("team28", "hcurl_eddy_foster", "cad_topology_optimization"):
+        result[key]["distribution"] = "radia-gpu"
+        result[key]["support_status"] = "historical source; not accepted by radia-gpu release"
+    native_family = result["hcurl_eddy_foster"]["native_motor_angle_family"]
+    native_family["status"] = "unsupported-cpu-mex"
+    native_family["evidence_status"] = (
+        "recorded historical CPU MEX result; source relocation and old results "
+        "do not certify current CUDA support or current source hashes"
+    )
+    topology = result["cad_topology_optimization"]
+    topology["abe_element_fill"]["status"] = "unsupported-cpu-mex"
+    topology["adjoint_optimization"]["status"] = "source-only; CUDA acceptance pending"
+    topology["sheet_metal"]["hcurl_eddy_bubble"]["status"] = "unsupported-cpu-mex"
+    return result
+
+
+def matlab_simulink_library_contract():
+    """Return the installation and compatibility contract for Radia blocks."""
+    result = {
+        "schema": "radia-mcp.matlab-simulink-library/v4",
+        "status": "ready",
+        "library": "radia_simulink_library",
+        "browser_name": "Radia",
+        "registration_code": [
+            "radia.simulink.buildLibrary",
+            "sl_refresh_customizations",
+        ],
+        "registration_timing": "Run once after installation or after replacing the packaged library.",
+        "blocks": [
+            "Applications/Electromagnet",
+            "Applications/PCB PEEC",
+            "Applications/Motor",
+            "Applications/Stream Function",
+            "Applications/Induction Heating",
+            "Applications/Magnetic Levitation",
+            "Applications/Field Study",
+            "Material Models/Material Dictionary",
+            "Coupling/Winding Dictionary",
+            "Coupling/Field Study Configuration",
+            "LTspice/LTspice Circuit",
+            "LTspice/Hysteretic LTspice Plant",
+            "Optimization/Optuna Study",
+            "Optimization/Sheet Metal Optimization",
+            "Optimization/Optuna Monitor",
+        ],
+        "applications": {
+            "runner": "radia_gpu.simulink.application",
+            "matlab_entry_point": "radia.simulink.runApplication",
+            "config_writer": "radia.simulink.writeApplicationConfig",
+            "config_schema": "radia.simulink.application_config.v1",
+            "result_schema": "radia.simulink.application_run.v1",
+            "trigger": "one batch solve on a Boolean rising edge",
+            "initial_backend": "python-headless-cli",
+            "per_step_python": "forbidden",
+            "mex_policy": (
+                "optional only after numerical parity, error propagation, "
+                "state lifecycle, repeated-run, and long-run stability tests"
+            ),
+            "notebook_policy": (
+                "notebook workbenches are retired for every application, "
+                "including IH; docs notebooks are result-bearing examples "
+                "whose field scenes use Draw(field, mesh, name=..., ...)"
+            ),
+            "spatial_artifact": {
+                "format": "GMSH .msh v4.1",
+                "location": "application run directory",
+                "required_when": "the selected mode computes a spatial field",
+                "result_index": "radia_result.artifacts.gmsh",
+                "scalar_only": "not-applicable",
+                "purpose": "visualization and post-processing only",
+            },
+            "mesh_preflight": {
+                "input_format": "Netgen .vol",
+                "checker": "check-vol",
+                "timing": "after export and before solver initialization",
+                "required_when": "the selected mode consumes a .vol mesh",
+                "label_contract_schema": "radia.vol-label-contract.v1",
+                "report_schema": "cubit-mesh-export.vol-check.v1",
+                "material_constants": (
+                    "validated by DesignSpec/configuration and never inferred "
+                    "from labels"
+                ),
+            },
+        },
+        "material_dictionary": {
+            "setup_type": "MATLAB dictionary with scalar-cell material structs",
+            "material_constructor": "radia.simulink.makeMaterialSpec",
+            "compiler": "radia.simulink.compileMaterialDictionary",
+            "mesh_inventory": "radia.simulink.inspectVolMaterials",
+            "mesh_format": "Netgen .vol",
+            "region_policy": "exact named coverage; no guessed material constants",
+            "runtime_bus": "RadiaMaterialBus",
+            "runtime_shape": "fixed-width numeric and logical fields",
+            "per_step_dictionary_lookup": False,
+            "per_step_strings": False,
+            "per_step_python": False,
+            "supported_properties": [
+                "linear and tabulated nonlinear magnetic",
+                "conductivity",
+                "relative permittivity",
+                "remanence vector",
+                "density, specific heat, and thermal conductivity",
+                "B-input energy hysteresis parameters",
+            ],
+        },
+        "field_study": {
+            "application_block": "Applications/Field Study",
+            "configuration_block": "Coupling/Field Study Configuration",
+            "study_constructor": "radia.simulink.makeFieldStudySpec",
+            "study_compiler": "radia.simulink.compileFieldStudy",
+            "request_writer": "radia.simulink.writeFieldStudyRequest",
+            "runtime_bus": "RadiaStudyBus",
+            "mesh_format": "Netgen .vol",
+            "physics": [
+                "electrostatic",
+                "current_flow (DC or harmonic lossy dielectric)",
+                "steady_heat",
+                "harmonic_eddy",
+            ],
+            "formulations": ["planar", "axisymmetric"],
+            "harmonic_eddy_operator": "(K + j*omega*M_sigma) a = S i",
+            "harmonic_eddy_gates": [
+                "frequency_hz > 0",
+                "linear non-hysteretic permeability",
+                "one nonzero current per compiled winding identity",
+                "branch real power closes 0.5*omega^2*a^H*M_sigma*a",
+            ],
+            "scalar_gates": [
+                "complete material-region coverage",
+                "Dirichlet or positive thermal Robin constraint",
+                "terminal reaction and energy/power balance",
+            ],
+            "execution": "one owned Python/NGSolve batch worker per rising trigger",
+            "per_step_python": False,
+            "artifacts": ["versioned JSON", "timing breakdown", "Gmsh .msh v4.1", ".geo/.opt companions"],
+            "retirement_claim": (
+                "FEMM physics are exposed through the default Simulink interface; "
+                "full retirement still requires frozen live solver artifacts for every lane"
+            ),
+        },
+        "circuit_field_coupling": {
+            "native_backend": "exact-ZOH reduced field/circuit MEX S-Function",
+            "detailed_circuit_backend": "LTspice interval coupling",
+            "shared_identity": [
+                "winding terminal names",
+                "turn count and polarity",
+                "series/parallel connection",
+                "voltage/current sign convention",
+                "mechanical position and speed state",
+            ],
+            "purpose": "control, power circuit, motor, loss, and thermal co-simulation",
+            "winding_constructor": "radia.simulink.makeWindingSpec",
+            "winding_compiler": "radia.simulink.compileWindingDictionary",
+            "winding_bus": "RadiaWindingBus",
+            "coil_side_sign": "one RegionPolarity value per .vol winding region",
+            "command_bus": "RadiaMachineCommandBus",
+            "response_bus": "RadiaMachineResponseBus",
+            "mechanical_owner": "Simulink or Simscape",
+            "motion_coordinates": [
+                "rotor angle and angular speed",
+                "3-D translation position and velocity",
+                "load torque and force",
+            ],
+            "field_outputs": [
+                "terminal current",
+                "flux linkage",
+                "back EMF",
+                "electromagnetic torque and force",
+                "copper, iron, and eddy-current losses",
+            ],
+        },
+        "ltspice": {
+            "supported_distribution": "Current Analog Devices LTspice only",
+            "executable": "LTspice.exe",
+            "simulink_runtime": "Level-2 MATLAB S-Function: radia_ltspice_sfun",
+            "native_boundary": "Standalone MEX function ABI only when a measured hot path requires it",
+            "automatic_locations": [
+                r"C:\Program Files\ADI\LTspice\LTspice.exe",
+                r"%LOCALAPPDATA%\Programs\ADI\LTspice\LTspice.exe",
+            ],
+            "explicit_override": "Pass Executable=... or set the block executable parameter.",
+            "legacy_ltc_versions": "not supported",
+            "browser_dependency": "Registration does not require LTspice; circuit execution does.",
+        },
+        "kicad_ltspice": {
+            "source_of_truth": "KiCad .kicad_sch remains the editable PCB-design source; generated CIR/ASC files are analysis artifacts.",
+            "workflow": [
+                "radia.kicad.exportSpiceNetlist",
+                "radia.kicad.prepareLTspice",
+                "radia.kicad.buildLTspiceBlock",
+            ],
+            "pipeline": ".kicad_sch -> kicad-cli SPICE CIR -> editable LTspice ASC and/or Simulink LTspice Circuit block",
+            "reverse_sync": "LTspice ASC edits are not written back to KiCad schematic or PCB metadata.",
+        },
+        "optimization": {
+            "execution": "one complete Optuna trial per Simulink sample after a rising start trigger",
+            "monitor": "standard Simulink Scope and XY Graph; no web browser",
+            "best_update": "one-sample pulse only when the primary-objective incumbent changes",
+            "pareto": "fixed-size X/Y arrays, active point count, and revision counter",
+            "sheet_metal_runner": "radia.optuna.SheetMetalRunner over native MATLAB/MEX plus NGSolve/Cubit drivers",
+            "quality_validation": "validation_test/optimization/validate_matlab_optuna_quality.m",
+            "sampler_mask": "auto, random, tpe, cmaes, nsgaii, nsgaiii, or bruteforce; auto selects native samplers from the declared search space and budget. GP and scrambled QMC require Python per trial and remain batch-only.",
+        },
+        "execute_with": "official MATLAB MCP evaluate_matlab_code",
+    }
+    result["status"] = "source-only"
+    result["distribution"] = "radia-gpu"
+    result["runtime_checked"] = False
+    result["cpu_radia_mex_supported"] = False
+    result["historical_library"] = {
+        "library": result.pop("library"),
+        "registration_code": result.pop("registration_code"),
+        "blocks": result.pop("blocks"),
+        "status": "source-only; not shipped as an accepted GPU application library",
+    }
+    result["blocks"] = ["CUDA CSR PCG", "LTspice Circuit"]
+    result["registration_code"] = []
+    result["builders"] = ["radia.simulink.buildCudaPCGBlock", "radia.simulink.buildLTspiceBlock"]
+    result["applications"]["support_status"] = "historical source; migration/acceptance pending"
+    result["applications"]["mex_policy"] = "CPU Radia MEX unsupported; require explicit validated CUDA kernels"
+    result["circuit_field_coupling"]["support_status"] = "historical source; CPU MEX unsupported"
+    return result

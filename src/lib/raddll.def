@@ -1,0 +1,78 @@
+EXPORTS
+
+RadErrGet
+RadErrGetSize
+RadErrGetText
+RadWarGet
+RadWarGetSize
+RadWarGetText
+
+RadObjRecMag
+RadObjThckPgn
+RadObjPolyhdr
+RadObjArcPgnMag
+RadObjCylMag
+RadObjRecCur
+RadObjArcCur
+RadObjRaceTrk
+RadObjFlmCur
+RadObjBckg
+RadObjCnt
+RadObjAddToCnt
+RadObjCntSize
+RadObjCntStuf
+RadObjFullMag
+
+RadObjDpl
+RadObjM
+RadObjGeoVol
+
+RadTrfCmbL
+RadTrfCmbR
+RadTrfInv
+; RadTrfMlt REMOVED (2026-01-31) - Use Image symmetry instead
+RadTrfOrnt
+; RadTrfPlSym REMOVED (2026-01-31) - Use Image symmetry instead
+RadTrfRot
+RadTrfTrsl
+
+RadMatApl
+RadMatLin
+RadMatMvsH
+RadMatHysSaveState
+RadMatHysRestoreState
+RadMatHysCommitState
+RadMatSatIsoFrm
+RadMatSatIsoTab
+RadMatSatLamFrm
+RadMatSatLamTab
+RadMatSatAniso
+RadMatPlayHysteresis
+RadMatEnergyHysteresis
+
+; RadRlxPre REMOVED (2026-01-31) - Use RadBuildMatrix instead
+RadRlxMan
+RadRlxAuto
+RadFld
+RadFldLst
+RadFldCmpCrt
+RadFldCmpPrc
+RadFldFrcShpRtg
+RadFldLenRndSw
+RadFldLenTol
+; RadFldEnr / RadFldEnrFrc / RadFldEnrTrq REMOVED (Phase C, 2026-04-16)
+RadFldFrc
+RadFldInt
+RadFldPtcTrj
+RadFldShimSig
+
+RadUtiDel
+RadUtiDelAll
+RadUtiIntrptTim
+RadUtiVer
+; RadUtiDmp / RadUtiDmpSize REMOVED (Phase B1, 2026-04-15) - .rad save/load no longer supported
+RadUtiYeldFuncSet
+
+; RadTrfZerPara REMOVED (2026-01-31) - Use Image symmetry instead
+; RadTrfZerPerp REMOVED (2026-01-31) - Use Image symmetry instead
+RadSolve

@@ -1,0 +1,28 @@
+{
+  "schema": "radia.ih.complete-assembly.v1",
+  "accepted": false,
+  "build_accepted": true,
+  "source_commit": "312e46669ad2a88e34946ab17a3a518b31045a5c",
+  "binary_sha256": "e9cfb3e4901a6ccc4db5ecbfed5423969e0f399a0e8fb9d689b0df5d15928ac2",
+  "scope": "Bounded flat P1 genus-zero geometry, existing SL/DL singular rules and finite-filament H/A, complete augmented reaction equations",
+  "failure": "Complex GPU iterative solver did not converge or broke down on first update",
+  "true_residual": null,
+  "iterations_accepted": 0,
+  "live_handles_after_failure": 0,
+  "base_matrix_dimension": 21,
+  "base_matrix_rank": 21,
+  "base_matrix_condition_2": 325560.0,
+  "condition_value_rounded": true,
+  "a100_evaluated": false,
+  "timing_accepted": false,
+  "independent_physics_certified": false,
+  "release_accepted": false,
+  "limitations": [
+    "No accepted complete reaction solve yet",
+    "No GPU preconditioner construction for augmented block yet",
+    "Flat P1 genus zero only",
+    "User supplied lumped coil impedance",
+    "Surface Poisson validity gate pending",
+    "Shared CPU full compile regression pending"
+  ]
+}

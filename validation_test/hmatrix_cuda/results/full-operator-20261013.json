@@ -1,0 +1,42 @@
+{
+  "schema": "radia.hacapk-full-operator-numerical.v1",
+  "accepted": true,
+  "sources": 256,
+  "assembly_epsilon": 1e-06,
+  "rank_budget": 64,
+  "cpu_operator_frobenius_limit": 1e-08,
+  "full_assembly": {
+    "relative_difference": 5.814922503369669e-10,
+    "stats": {
+      "owned_device_bytes": 217704,
+      "applications": 1,
+      "kernel_launches": 4,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 561156,
+      "assembly_entry_batches": 229,
+      "assembly_entry_count": 39070,
+      "assembly_leaf_count": 11,
+      "assembly_lowrank_count": 1
+    },
+    "scope": "Constant affine tetra charges; full native hierarchy and CUDA entries; not general HDiv physics",
+    "operator_frobenius_relative_error": 9.959637317824725e-10,
+    "operator_columns_checked": 256,
+    "symmetry_relative_error": 2.535769476313656e-17
+  },
+  "input_sha256": "70c7f6bf6793ec93fa6983375601f43f2256a74f3c42a5e7d906f0541fbba4b9",
+  "binary_sha256": "c2c5819bbf3b45cee75e14ad656eba9816335d311b2175deff08dbacc3ffc1c0",
+  "source_sha256": {
+    "validation_test\\hmatrix_cuda\\validate_resident.py": "dcb29b5bddce00280435f09c8912348ab1eccd9106bb1c7929e99c352841bc7d",
+    "validation_test\\hmatrix_cuda\\checkResidentHMatrix.m": "22bc51b852121e36bb3a645ef0a32419de11300b07365bb100abe487a6e5415c",
+    "packages\\radia-gpu\\matlab\\+radia\\+gpu\\HMatrixOperator.m": "d98a77641d51eea484cefc8d9ee5b12d03395725b3ac7ccda8150e242933052a"
+  },
+  "timing_acceptance": false,
+  "general_hdiv_validation_complete": false,
+  "release_accepted": false,
+  "limitations": [
+    "Constant affine tetra charge operator only, not general FE HDiv-MMM.",
+    "Explicit diagnostic assembly epsilon; production defaults unchanged.",
+    "Full operator norm comparison is Frobenius, not a nonlinear physical validation.",
+    "Exact owned bytes exclude runtime/global/host peaks; no timing comparison."
+  ]
+}

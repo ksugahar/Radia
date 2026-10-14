@@ -1,0 +1,17 @@
+---
+name: pyside6-health
+description: Guard the boundary between retired Radia desktop panels and Coreform Cubit's private PySide6 runtime. Current Radia application interfaces are Simulink blocks; use simulink-app-health. Never uninstall Cubit's bundled PySide6.
+---
+
+# PySide6 Boundary Guard
+
+Radia's production application interface is Simulink. Normal Radia Python on
+LAB, 100号機, mdx1, mdx2, and hibino must not gain a PySide6 dependency.
+
+Coreform Cubit's embedded Python owns its bundled PySide6 and the in-Cubit
+export toolbar may use it. Never remove or alter that private runtime as part
+of Radia cleanup.
+
+Use `simulink-app-health` for the five application blocks,
+`ipynb-gui-health` for result-bearing docs notebooks only, and
+`cubit-plugin-install --verify-only` plus `cubit-smoke-test` for Cubit.

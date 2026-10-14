@@ -1,0 +1,172 @@
+"""End-to-end test for `calc_heat_axisym.py` (FEMM-canonical standard
+H1 + 2 pi r weighting; matches FEMM 4.2 hsolv/prob1big.cpp).  Runs the
+production CLI as a subprocess on the structured-grid cylinder fixture
+and checks the temperature rise and near-axis gradient against the
+analytical reference.
+
+Geometry: Cu-disk-style steel cylinder R = 25 mm, H = 25 mm, structured
+9x9 quad grid (NR x NZ = 9 x 9 = 81 quads, 100 nodes).
+Source: uniform q_surf = 1e5 W/m^2 on the outer (r = R) edge.
+Time: backward-euler, dt = 1 s, t_end = 10 s.
+Material: steel (rho * cp = 3.64e6 J/(m^3 K), k = 46.6 W/(m K)).
+
+Analytical expectation:
+  Heat input rate    = q * 2 pi R H = 1e5 * 2 pi * 0.025 * 0.025 ~ 392.7 W
+  Heat capacity      = rho cp * pi R^2 H = 3.64e6 * pi * 0.025^2 * 0.025 ~ 178.8 J/K
+  Average dT/dt      = 392.7 / 178.8 ~ 2.20 K/s
+  After 10 s, T_avg  ~ 25 + 22 ~ 47 C
+  T_max (outer surf) > T_avg; T_min (axis) < T_avg.
+  Bessel-series reference at 10 s: surface 60.03 C, axis 34.46 C.
+"""
+import json
+import os
+import subprocess
+import sys
+
+import pytest
+
+ng = pytest.importorskip("ngsolve")
+
+
+REPO = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", ".."))
+FIXTURE_DIR = os.path.join(REPO, "validation_test", "panels", "fixtures")
+SCRIPT = os.path.join(REPO, "src", "radia", "panels",
+                       "calc_heat_axisym.py")
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
+@pytest.fixture
+def regenerate_fixture(tmp_path):
+    """Generate the structured-grid .vol without modifying tracked fixtures."""
+    gen = os.path.join(FIXTURE_DIR, "generate_heat_cylinder_axisym.py")
+    output = tmp_path / "heat_workpiece_cylinder_R25_H25_axisym.vol"
+    subprocess.run(
+        [sys.executable, gen, "--output", str(output)], check=True,
+    )
+    return str(output)
+
+
+def test_calc_heat_axisym_temperature_band(regenerate_fixture, tmp_path):
+    """Run calc_heat_axisym.py end-to-end at EXPLICIT --fes-order 1 and
+    check T_max / T_min are in the analytically-expected band (legacy
+    order-1 path; the default is order 2 -- see the test below)."""
+    cmd = [sys.executable, SCRIPT,
+           "--wp-vol", regenerate_fixture,
+           "--heat-flux-boundaries", "outer",
+           "--convection-boundaries", "outer",
+           "--q-uniform", "1e5",
+           "--material", "steel",
+           "--t-end", "10",
+           "--dt", "1",
+           "--t-initial", "25",
+           "--t-ext", "25",
+           "--h-conv", "0",
+           # sparsecholesky (ngsolve built-in, no MKL): identical direct-solver
+           # solution to pardiso (temperature band unchanged), but immune to the
+           # MKL PARDISO threading-layer load that FATALs under the pytest
+           # subprocess on this machine.  Verified standalone: pardiso gives the
+           # same T_max=59.8 C / T_min=34.6 C.  Production keeps pardiso default.
+           "--linear-solver", "sparsecholesky",
+           "--fes-order", "1",
+           "--msh-output", str(tmp_path / "heat_axisym_T.msh")]
+    proc = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=120, check=False
+    )
+    assert proc.returncode == 0, (
+        f"calc_heat_axisym exited {proc.returncode}\n"
+        f"STDERR:\n{proc.stderr}\nSTDOUT tail:\n{proc.stdout[-500:]}")
+    # Last line of stdout is the JSON summary
+    json_line = proc.stdout.strip().splitlines()[-1]
+    result = json.loads(json_line)
+    assert "T_max_C" in result, f"missing T_max_C in result: {result}"
+
+    T_max = float(result["T_max_C"])
+    T_min = float(result["T_min_C"])
+    assert 55.0 <= T_max <= 65.0, (
+        f"T_max_C = {T_max} outside expected band [55, 65] for "
+        f"q=1e5 W/m^2 * 10 s on steel cylinder R=25mm")
+    assert 30.0 <= T_min <= 40.0, (
+        f"T_min_C = {T_min} outside expected band [30, 40] for "
+        f"q=1e5 W/m^2 * 10 s on steel cylinder R=25mm")
+    # Heat input + surface area check (geometry parity)
+    Q_input = float(result["Q_input_J"])
+    expected_Q = 1e5 * 2 * 3.14159265 * 0.025 * 0.025 * 10  # q*A*t
+    assert abs(Q_input - expected_Q) / expected_Q < 0.01, (
+        f"Q_input = {Q_input} J vs expected {expected_Q} J")
+
+    # Confirm we're using the standard H1 FESpace (FEMM-canonical;
+    # matches FEMM 4.2 hsolv/prob1big.cpp).
+    assert "FES:H1" in proc.stderr, (
+        f"calc_heat_axisym did not log H1 FESpace usage; current stderr "
+        f"shows: {proc.stderr[:500]}")
+
+    # Order 1 keeps the near-axis cusp -- that is a property of the
+    # P1/Q1 space, not a fixable bug -- so choosing it MUST warn at
+    # run time, not only in --help.  A silently plausible cusped
+    # profile is what the original field report was about.
+    assert "FES:WARNING order=1" in proc.stderr, (
+        f"order 1 must warn about the near-axis cusp; stderr shows: "
+        f"{proc.stderr[:800]}")
+
+
+def test_calc_heat_axisym_default_order2_band(regenerate_fixture, tmp_path):
+    """DEFAULT run (no --fes-order): must use order 2 (near-axis cusp
+    fix, 2026-09-03) and stay in the same physical band.  Also guards
+    the two order>=2 bugs fixed with the default change: T_min must be
+    the physical axis temperature (~34.9 C), not ~0 (the old raw
+    coefficient-vector min), and the initial state must be a true
+    constant (Set(), not vec[:] = T0)."""
+    cmd = [sys.executable, SCRIPT,
+           "--wp-vol", regenerate_fixture,
+           "--heat-flux-boundaries", "outer",
+           "--convection-boundaries", "outer",
+           "--q-uniform", "1e5",
+           "--material", "steel",
+           "--t-end", "10",
+           "--dt", "1",
+           "--t-initial", "25",
+           "--t-ext", "25",
+           "--h-conv", "0",
+           "--linear-solver", "sparsecholesky",
+           "--msh-output", str(tmp_path / "heat_axisym_T_o2.msh")]
+    proc = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=120, check=False
+    )
+    assert proc.returncode == 0, (
+        f"calc_heat_axisym exited {proc.returncode}\n"
+        f"STDERR:\n{proc.stderr}\nSTDOUT tail:\n{proc.stdout[-500:]}")
+    result = json.loads(proc.stdout.strip().splitlines()[-1])
+
+    assert "FES:H1 order=2" in proc.stderr, (
+        f"default --fes-order is expected to be 2; stderr shows: "
+        f"{proc.stderr[:500]}")
+    assert int(result["fes_order"]) == 2
+    assert "FES:WARNING order=1" not in proc.stderr, (
+        "the order-1 cusp warning must not fire on the order-2 default")
+
+    T_max = float(result["T_max_C"])
+    T_min = float(result["T_min_C"])
+    # Verified 2026-09-03 against the Bessel-series reference: surface
+    # 60.03 C and axis 34.46 C at t = 10 s.
+    assert T_max == pytest.approx(60.03, abs=0.5)
+    assert T_min == pytest.approx(34.46, abs=0.6)
+    assert result["T_extrema"]["method"] == (
+        "vertices-and-volume-boundary-integration-points"
+    )
+
+    # The order-2 field strongly suppresses the spurious P1 near-axis
+    # slope (about 139 C/m on this mesh).  Evaluate the saved physical
+    # GridFunction instead of interpreting hierarchical coefficients.
+    from ngsolve import H1, GridFunction, Mesh, grad
+
+    result_mesh = Mesh(result["heat_vol_file"])
+    temperature = GridFunction(H1(result_mesh, order=2))
+    temperature.Load(result["T_sol_file"])
+    radial_gradient = float(grad(temperature)(result_mesh(0.0, 0.0))[0])
+    assert abs(radial_gradient) < 1.0

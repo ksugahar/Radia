@@ -1,0 +1,138 @@
+"""Contract tests: the --wp-loop-dof CLI surface of calc_inductance.
+
+The numeric physics is locked by the analytic shorted-ring golden
+(validation_test/bem/test_loop_extension_ring.py); here we pin the CLI
+wiring: argparse accepts the flag, the unsupported combinations fail
+fast BEFORE any expensive solve, and a genus-0 workpiece raises with an
+actionable message.
+"""
+from __future__ import annotations
+
+import sys
+from types import SimpleNamespace
+from pathlib import Path
+
+import pytest
+
+_REPO = Path(__file__).resolve().parents[1]
+_PANELS = _REPO / "src" / "radia" / "panels"
+for p in (_PANELS, _REPO / "validation_test" / "panels"):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
+
+import calc_inductance as ci
+
+_SAMPLES = _PANELS / "samples"
+_DEMO_COIL_STEP = _SAMPLES / "ih_fem_kelvin_demo_coil.step"
+_DEMO_VOL = _SAMPLES / "ih_fem_kelvin_demo.vol"
+
+
+@pytest.mark.parametrize('mode', ['auto', 'on'])
+@pytest.mark.parametrize('genus,model,backend,order,fragment', [
+    (1, 'esim', 'hacapk', 1, 'ESIM'),
+    (1, 'esim', 'intree-dense', 1, 'ESIM'),
+    (1, 'sibc', 'intree-dense', 2, 'P1'),
+    (2, 'sibc', 'intree-dense', 1, 'genus-1'),
+])
+def test_weak_heating_rejects_missing_handle_mode(mode, genus, model, backend, order, fragment):
+    args = SimpleNamespace(wp_loop_dof=mode, impedance_model=model, wp_bem_backend=backend)
+    with pytest.raises(ValueError, match=fragment):
+        ci._resolve_weak_loop_mode(args, genus, order)
+
+
+def test_weak_loop_supported_and_simply_connected_routes():
+    args = SimpleNamespace(wp_loop_dof='auto', impedance_model='esim', wp_bem_backend='hacapk')
+    assert ci._resolve_weak_loop_mode(args, 0, 2)[1] is False
+    args.impedance_model = 'sibc'
+    args.wp_bem_backend = 'intree-dense'
+    assert ci._resolve_weak_loop_mode(args, 1, 1) == ('auto', True, None)
+    args.wp_loop_dof = 'on'
+    with pytest.raises(ValueError, match='genus-1'):
+        ci._resolve_weak_loop_mode(args, 0, 1)
+
+
+def _args(extra):
+    p = ci.build_argparser()
+    return p.parse_args([
+        "--coil-solver", "peec", "--coil-step", "c.step",
+        "--vol", "w.vol", "--wp-label", "sibc",
+        "--frequency", "7000", "--sigma", "5.8e6",
+        "--wp-loop-dof",
+    ] + extra)
+
+
+def test_argparse_accepts_flag():
+    # bare --wp-loop-dof (the original store_true spelling) == "on"
+    ns = _args(["--wp-bem-backend", "intree-dense"])
+    assert ns.wp_loop_dof == "on"
+    # default is auto (apply when genus-1 + prerequisites hold)
+    p = ci.build_argparser()
+    ns0 = p.parse_args(["--coil-solver", "peec", "--coil-step", "c.step",
+                        "--frequency", "7000"])
+    assert ns0.wp_loop_dof == "auto"
+    # 'off' (the legacy +25-30% genus-1 solve) is deliberately NOT a mode
+    with pytest.raises(SystemExit):
+        _args(["off", "--wp-bem-backend", "intree-dense"])
+
+
+@pytest.mark.parametrize("extra,frag", [
+    (["--impedance-model", "esim", "--wp-bem-backend", "intree-dense"],
+     "--esim-per-panel"),
+    (["--wp-bem-backend", "intree-dense", "--h1-order", "2"], "P1"),
+])
+def test_early_guards_fail_fast(extra, frag):
+    """Unsupported combinations return an error dict BEFORE the coil
+    solve -- the dummy 'c.step' would raise IOError if the guard were
+    placed after it."""
+    out = ci.run_inductance(_args(extra))
+    assert out.get("status") == "error", out
+    assert frag in out["error"], out["error"]
+
+
+@pytest.mark.parametrize("backend",["intree-dense","hacapk"])
+def test_strong_with_validated_backend_passes_early_guards(backend):
+    """--coupling-mode strong + --wp-loop-dof (on) + intree-dense is a
+    SUPPORTED combination now: the early guards must NOT reject it (the
+    run proceeds to the coil solve, which fails on the dummy c.step --
+    proving the guard block was passed)."""
+    with pytest.raises(Exception) as exc:
+        ci.run_inductance(_args([
+            "--coupling-mode", "strong", "--no-peec-proximity",
+            "--wp-bem-backend", backend]))
+    assert "wp-loop-dof" not in str(exc.value)
+
+
+@pytest.mark.skipif(
+    not (_DEMO_COIL_STEP.is_file() and _DEMO_VOL.is_file()),
+    reason="demo fixtures not present")
+def test_genus0_workpiece_raises():
+    """The demo workpiece is genus 0 (sphere-like): the loop DOF must
+    refuse with an actionable message instead of silently no-op'ing."""
+    p = ci.build_argparser()
+    ns = p.parse_args([
+        "--coil-solver", "peec", "--coil-step", str(_DEMO_COIL_STEP),
+        "--vol", str(_DEMO_VOL), "--wp-label", "sibc",
+        "--frequency", "7000", "--current", "1",
+        "--sigma", "5.8e6", "--mu-r", "100", "--half-thickness", "0.005",
+        "--wp-bem-backend", "intree-dense", "--wp-loop-dof",
+    ])
+    with pytest.raises(ValueError, match="genus-1"):
+        ci.run_inductance(ns)
+
+
+def test_auto_workpiece_backend_uses_topology_and_preserves_explicit_request():
+    args = SimpleNamespace(wp_bem_backend='auto', impedance_model='sibc', h1_order=1)
+    assert ci._resolve_workpiece_backend(args, 0, 100) == 'hacapk'
+    args.wp_bem_backend='auto'
+    assert ci._resolve_workpiece_backend(args, 1, 100) == 'intree-dense'
+    assert ci._resolve_weak_loop_mode(args, 1, 1)[1]
+    args.wp_bem_backend='hacapk'
+    assert ci._resolve_workpiece_backend(args, 1, 100) == 'hacapk'
+    assert ci._resolve_weak_loop_mode(args, 1, 1)[1]
+
+
+def test_auto_holes_reject_unsupported_physics_and_dense_capacity():
+    for genus,model,nv,fragment in [(2,'sibc',100,'multiple holes'),(1,'esim',100,'nonlinear'),(1,'sibc',7001,'7000')]:
+        args=SimpleNamespace(wp_bem_backend='auto',impedance_model=model,h1_order=1)
+        with pytest.raises(ValueError,match=fragment):
+            ci._resolve_workpiece_backend(args,genus,nv)

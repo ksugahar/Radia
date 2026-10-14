@@ -1,0 +1,527 @@
+function tests = test_ih_geometry_update
+%TEST_IH_GEOMETRY_UPDATE Geometry watch/rebuild block and engine.
+%   Mechanics under test: content-fingerprint staleness detection, the
+%   assemble command running exactly when needed, configuration reload
+%   into the model workspace, crossed .vol/.step repair, and the
+%   fail-loud paths (stale with auto off, two STEP inputs).
+tests = functiontests(localfunctions);
+end
+
+function [model, closer] = freshModel()
+model = "geom_upd_" + erase(string(java.util.UUID.randomUUID), "-");
+new_system(model);
+closer = onCleanup(@() close_system(model, 0));
+end
+
+function [work, cleanupDir, wp, coil, golden, configFile, runsFile, command] = fixture()
+work = string(tempname("C:\temp"));
+mkdir(work);
+cleanupDir = onCleanup(@() rmdir(work, "s"));
+wp = fullfile(work, "wp.vol");
+writelines("mesh v1", wp);
+coil = fullfile(work, "coil.step");
+writelines("step v1", coil);
+golden = fullfile(work, "golden.mat");
+config = radia.simulink.makeIHNativeSmokeConfig();
+save(golden, "config");
+configFile = fullfile(work, "config.mat");
+runsFile = fullfile(work, "runs.txt");
+command = sprintf('copy /y "%s" "%s" >nul && echo run>> "%s"', ...
+    golden, configFile, runsFile);
+end
+
+function count = runCount(runsFile)
+count = 0;
+if isfile(runsFile)
+    count = numel(readlines(runsFile)) - 1;  % trailing newline
+end
+end
+
+function configureBlock(model, wp, coil, command, configFile, auto)
+block = model + "/Geometry Update";
+set_param(block, "wp_vol", char(wp), "coil_file", char(coil), ...
+    "assemble_command", char(command), "config_file", char(configFile), ...
+    "auto_rebuild", auto);
+end
+
+function testRebuildOnFirstRunSkipWhenFreshRebuildOnChange(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, runsFile, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "on");
+
+first = radia.simulink.updateIHGeometry(model);
+verifyTrue(testCase, first.rebuilt);
+verifyEqual(testCase, first.revision, 1);
+verifyTrue(testCase, isfile(configFile));
+verifyTrue(testCase, isfile(configFile + ".fingerprint.json"));
+verifyEqual(testCase, runCount(runsFile), 1);
+workspace = get_param(model, "ModelWorkspace");
+verifyTrue(testCase, workspace.hasVariable("radia_ih_config"));
+
+second = radia.simulink.updateIHGeometry(model);
+verifyFalse(testCase, second.rebuilt);
+verifyEqual(testCase, string(second.reason), "up-to-date");
+verifyEqual(testCase, runCount(runsFile), 1);
+
+writelines("mesh v2 -- user edited", wp);
+third = radia.simulink.updateIHGeometry(model);
+verifyTrue(testCase, third.rebuilt);
+verifyEqual(testCase, third.revision, 2);
+verifyEqual(testCase, runCount(runsFile), 2);
+end
+
+function testCrossedBoxesRepairedAndInitFcnInstalled(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+verifyTrue(testCase, contains( ...
+    string(get_param(model, "InitFcn")), ...
+    "radia.simulink.updateIHGeometry"));
+% The coil STEP typed into the workpiece box and vice versa.
+configureBlock(model, coil, wp, command, configFile, "on");
+warned = warning("off", "radia:simulink:IHGeometryRolesReassigned");
+restore = onCleanup(@() warning(warned));
+status = radia.simulink.updateIHGeometry(model);
+verifyTrue(testCase, status.rebuilt);
+verifyEqual(testCase, string(status.files(1)), string(wp));
+verifyEqual(testCase, string(status.files(2)), string(coil));
+verifyNotEmpty(testCase, status.notes);
+end
+
+function testBrowseButtonsAreRegisteredBesideGeometryFields(testCase)
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+mask = Simulink.Mask.get(block);
+wpButton = mask.getDialogControl("browse_wp_vol");
+coilButton = mask.getDialogControl("browse_coil_file");
+verifyNotEmpty(testCase, wpButton);
+verifyNotEmpty(testCase, coilButton);
+verifyEqual(testCase, string(wpButton.Prompt), "Browse...");
+verifyEqual(testCase, string(coilButton.Prompt), "Browse...");
+verifyEqual(testCase, string(wpButton.Row), "current");
+verifyEqual(testCase, string(coilButton.Row), "current");
+verifyTrue(testCase, contains(string(wpButton.Callback), "workpiece"));
+verifyTrue(testCase, contains(string(coilButton.Callback), "coil"));
+end
+
+function testMaskPublishesBuiltInAssemblySettings(testCase)
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+mask = Simulink.Mask.get(block);
+names = ["frequency_hz", "coil_sigma", "workpiece_sigma", ...
+    "workpiece_mu_r", "density", "heat_capacity", ...
+    "thermal_conductivity", "convection", "initial_temperature_K", ...
+    "sample_time_s", "workpiece_label", "coil_source_label", ...
+    "coil_body_label", "coil_sink_label", "peec_n_peri", ...
+    "coil_step_solver", "fin_n_lanes", "fin_n_stations", ...
+    "fin_lane_grading", "fin_tip_lanes", ...
+    "peec_proximity", ...
+    "coupling_mode", "workpiece_bem_backend", "python_executable"];
+for name = names
+    verifyNotEmpty(testCase, mask.getParameter(name));
+end
+verifyEqual(testCase, string(get_param(block, "frequency_hz")), "7000");
+verifyEqual(testCase, string(get_param(block, "workpiece_label")), "sibc");
+verifyEqual(testCase, string(get_param(block, "coil_step_solver")), "peec");
+verifyEqual(testCase, string(get_param(block, "fin_lane_grading")), "auto");
+verifyEqual(testCase, string(get_param(block, "python_executable")), "");
+verifyEqual(testCase, string(mask.getParameter("workpiece_label").Enabled), ...
+    "off");
+verifyEqual(testCase, string(mask.getParameter("coil_body_label").Enabled), ...
+    "off");
+verifyEqual(testCase, string(mask.getParameter("coil_source_label").Enabled), ...
+    "off");
+verifyEqual(testCase, string(mask.getParameter("coil_sink_label").Enabled), ...
+    "off");
+verifyEqual(testCase, string(get_param(block, "assemble_fcn")), "");
+verifyTrue(testCase, contains(string(mask.Description), "built-in"));
+end
+
+function testAssemblerRejectsUnknownStepSolverBeforeLaunch(testCase)
+[work, cleanupDir, wp, coil] = fixture(); %#ok<ASGLU>
+configFile = fullfile(work, "operators.json");
+options = struct("python_executable", "C:\temp\explicit-python.exe", ...
+    "coil_step_solver", "unknown");
+testCase.verifyError(@() radia.simulink.assembleIHOperatorsFromGeometry( ...
+    wp, coil, configFile, options), "radia:simulink:IHAssemblyOption");
+end
+
+function testBrowseAssignsAbsoluteWorkpieceAndCoilPaths(testCase)
+[~, cleanupDir, wp, coil] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+
+selectedWp = radia.simulink.browseIHGeometryFile( ...
+    block, "workpiece", DialogFcn=@(~, ~, ~) selectPath(wp));
+selectedCoil = radia.simulink.browseIHGeometryFile( ...
+    block, "coil", DialogFcn=@(~, ~, ~) selectPath(coil));
+
+verifyEqual(testCase, string(get_param(block, "wp_vol")), selectedWp);
+verifyEqual(testCase, string(get_param(block, "coil_file")), selectedCoil);
+verifyTrue(testCase, isfile(selectedWp));
+verifyTrue(testCase, isfile(selectedCoil));
+verifyTrue(testCase, isAbsolutePath(selectedWp));
+verifyTrue(testCase, isAbsolutePath(selectedCoil));
+end
+
+function testBrowseCancelLeavesPathUnchanged(testCase)
+[~, cleanupDir, wp] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+set_param(block, "wp_vol", char(wp));
+selected = radia.simulink.browseIHGeometryFile( ...
+    block, "workpiece", DialogFcn=@(~, ~, ~) deal(0, 0));
+verifyEqual(testCase, selected, "");
+verifyEqual(testCase, string(get_param(block, "wp_vol")), string(wp));
+end
+
+function testBrowseAcceptsCompressedWorkpieceAndMeshedCoil(testCase)
+[work, cleanupDir] = fixture(); %#ok<ASGLU>
+wp = fullfile(work, "wp.vol.gz");
+coil = fullfile(work, "coil.vol");
+writelines("compressed mesh placeholder", wp);
+writelines("coil mesh", coil);
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+
+selectedWp = radia.simulink.browseIHGeometryFile( ...
+    block, "workpiece", DialogFcn=@(~, ~, ~) selectPath(wp));
+selectedCoil = radia.simulink.browseIHGeometryFile( ...
+    block, "coil", DialogFcn=@(~, ~, ~) selectPath(coil));
+
+verifyTrue(testCase, endsWith(lower(selectedWp), ".vol.gz"));
+verifyTrue(testCase, endsWith(lower(selectedCoil), ".vol"));
+verifyEqual(testCase, string(get_param(block, "wp_vol")), selectedWp);
+verifyEqual(testCase, string(get_param(block, "coil_file")), selectedCoil);
+end
+
+function testBrowseRejectsWrongExtension(testCase)
+[work, cleanupDir] = fixture(); %#ok<ASGLU>
+wrong = fullfile(work, "workpiece.msh");
+writelines("mesh", wrong);
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+verifyError(testCase, @() radia.simulink.browseIHGeometryFile( ...
+    block, "workpiece", DialogFcn=@(~, ~, ~) selectPath(wrong)), ...
+    "radia:simulink:IHGeometryBrowseExtension");
+end
+
+function testBrowseRejectsMissingFile(testCase)
+[work, cleanupDir] = fixture(); %#ok<ASGLU>
+missing = fullfile(work, "missing.step");
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+verifyError(testCase, @() radia.simulink.browseIHGeometryFile( ...
+    block, "coil", DialogFcn=@(~, ~, ~) selectPath(missing)), ...
+    "radia:simulink:IHGeometryBrowseMissing");
+end
+
+function testBrowseRejectsUnknownRole(testCase)
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+verifyError(testCase, ...
+    @() radia.simulink.browseIHGeometryFile(block, "rotor"), ...
+    "radia:simulink:IHGeometryBrowseRole");
+end
+
+function testStaleWithAutoOffErrors(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "off");
+verifyError(testCase, ...
+    @() radia.simulink.updateIHGeometry(model), ...
+    "radia:simulink:IHGeometryUpdateStale");
+end
+
+function testForceRebuildOverridesAutoOff(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, runsFile, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "off");
+status=radia.simulink.updateIHGeometry(model,Force=true);
+verifyTrue(testCase,status.rebuilt);
+verifyEqual(testCase,status.revision,1);
+verifyEqual(testCase,runCount(runsFile),1);
+end
+
+function testSameContentAtNewPathRebuildsForProvenance(testCase)
+[work, cleanupDir, wp, coil, ~, configFile, runsFile, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model,wp,coil,command,configFile,"on");
+radia.simulink.updateIHGeometry(model);
+replacement=fullfile(work,"wp_repointed.vol");copyfile(wp,replacement);
+configureBlock(model,replacement,coil,command,configFile,"on");
+status=radia.simulink.updateIHGeometry(model);
+verifyTrue(testCase,status.rebuilt);
+verifyEqual(testCase,status.revision,2);
+verifyEqual(testCase,runCount(runsFile),2);
+end
+
+function testMatlabAssembleFcnRebuilds(testCase)
+[work, cleanupDir, wp, coil, ~, configFile] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+% A MATLAB assembler on the path (preferred over a shell command:
+% in-process, errors propagate with their own stack).
+fcnDir = fullfile(work, "fcn");
+mkdir(fcnDir);
+writelines([ ...
+    "function test_geometry_assemble(wpVol, coilFile, configFile) %#ok<INUSL>"; ...
+    "config = radia.simulink.makeIHNativeSmokeConfig(); %#ok<NASGU>"; ...
+    "save(configFile, ""config"");"; ...
+    "end"], fullfile(fcnDir, "test_geometry_assemble.m"));
+addpath(fcnDir);
+restorePath = onCleanup(@() rmpath(fcnDir));
+block = model + "/Geometry Update";
+set_param(block, "wp_vol", char(wp), "coil_file", char(coil), ...
+    "assemble_fcn", "test_geometry_assemble", ...
+    "config_file", char(configFile), "auto_rebuild", "on");
+
+status = radia.simulink.updateIHGeometry(model);
+verifyTrue(testCase, status.rebuilt);
+verifyEqual(testCase, string(status.assembler), "matlab-function");
+verifyTrue(testCase, isfile(configFile));
+workspace = get_param(model, "ModelWorkspace");
+verifyTrue(testCase, workspace.hasVariable("radia_ih_config"));
+
+status = radia.simulink.updateIHGeometry(model);
+verifyEqual(testCase, string(status.reason), "up-to-date");
+end
+
+function testBlankConfigIsDerivedAndPhysicalChangeRebuilds(testCase)
+[work, cleanupDir, wp, coil] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+fcnDir = fullfile(work, "derived-fcn");
+mkdir(fcnDir);
+writelines([ ...
+    "function test_geometry_json_assemble(wpVol, coilFile, configFile) %#ok<INUSD>"; ...
+    "config = radia.simulink.makeIHNativeSmokeConfig();"; ...
+    "fid = fopen(configFile, 'w');"; ...
+    "closer = onCleanup(@() fclose(fid)); %#ok<NASGU>"; ...
+    "fwrite(fid, jsonencode(config), 'char');"; ...
+    "end"], fullfile(fcnDir, "test_geometry_json_assemble.m"));
+addpath(fcnDir);
+restorePath = onCleanup(@() rmpath(fcnDir));
+block = model + "/Geometry Update";
+set_param(block, "wp_vol", char(wp), "coil_file", char(coil), ...
+    "assemble_fcn", "test_geometry_json_assemble", ...
+    "config_file", "", "auto_rebuild", "on");
+
+first = radia.simulink.updateIHGeometry(model);
+derived = string(first.config_file);
+verifyTrue(testCase, first.rebuilt);
+verifyTrue(testCase, isfile(derived));
+verifyTrue(testCase, endsWith(derived, "wp_coil_ih_native.json"));
+verifyEqual(testCase, string(get_param(block, "config_file")), derived);
+
+set_param(block, "frequency_hz", "8000");
+second = radia.simulink.updateIHGeometry(model);
+verifyTrue(testCase, second.rebuilt);
+verifyEqual(testCase, second.revision, 2);
+sidecar = jsondecode(fileread(derived + ".fingerprint.json"));
+verifyEqual(testCase, string(sidecar.schema), ...
+    "radia.ih.simulink.geometry_fingerprint.v2");
+verifyEqual(testCase, string(sidecar.assembly_options.frequency_hz), "8000");
+end
+
+function testAmbiguousAssemblerErrors(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+block = model + "/Geometry Update";
+set_param(block, "wp_vol", char(wp), "coil_file", char(coil), ...
+    "assemble_fcn", "some_assembler", ...
+    "assemble_command", char(command), ...
+    "config_file", char(configFile), "auto_rebuild", "on");
+verifyError(testCase, ...
+    @() radia.simulink.updateIHGeometry(model), ...
+    "radia:simulink:IHGeometryUpdateAmbiguousAssemble");
+end
+
+function testRelativePathsError(testCase)
+[~, cleanupDir, ~, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+% The InitFcn hook runs from an arbitrary working directory, so a
+% relative path would silently resolve differently between sessions.
+configureBlock(model, "wp.vol", coil, command, configFile, "on");
+verifyError(testCase, ...
+    @() radia.simulink.updateIHGeometry(model), ...
+    "radia:simulink:IHGeometryUpdateRelativePath");
+end
+
+function testRelativeAxisymmetricMeshPathErrors(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "on");
+set_param(model + "/Geometry Update", "axisymmetric_thermal_vol", "thermal.vol");
+verifyError(testCase, @() radia.simulink.updateIHGeometry(model), ...
+    "radia:simulink:IHGeometryUpdateRelativePath");
+end
+
+function testCorruptSidecarRecoversByRebuilding(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, runsFile, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "on");
+radia.simulink.updateIHGeometry(model);
+% A crash mid-write must not brick every later diagram update: the
+% unreadable sidecar degrades to "no record" (with a warning) and the
+% next update rebuilds from the real sources.  The revision counter
+% restarts because the record was lost.
+writelines("{this is not json", configFile + ".fingerprint.json");
+warned = warning("off", "radia:simulink:IHGeometryUpdateSidecarCorrupt");
+restore = onCleanup(@() warning(warned));
+status = radia.simulink.updateIHGeometry(model);
+verifyTrue(testCase, status.rebuilt);
+verifyEqual(testCase, status.revision, 1);
+verifyEqual(testCase, runCount(runsFile), 2);
+end
+
+function testFreshSkipsReloadUntilConfigContentChanges(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, runsFile, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "on");
+radia.simulink.updateIHGeometry(model);
+workspace = get_param(model, "ModelWorkspace");
+% Plant a sentinel: a skipped reload must leave the workspace variable
+% untouched (a real configuration carries dense operator matrices, so
+% reloading on every diagram update costs seconds for nothing).
+workspace.assignin("radia_ih_config", "SENTINEL");
+status = radia.simulink.updateIHGeometry(model);
+verifyEqual(testCase, string(status.reason), "up-to-date");
+verifyEqual(testCase, string(workspace.getVariable("radia_ih_config")), ...
+    "SENTINEL");
+% Hand-editing the configuration file must reload it (no rebuild).
+config = radia.simulink.makeIHNativeSmokeConfig(SampleTime_s=0.05);
+save(configFile, "config");
+status = radia.simulink.updateIHGeometry(model);
+verifyEqual(testCase, string(status.reason), "reloaded");
+verifyFalse(testCase, status.rebuilt);
+verifyEqual(testCase, runCount(runsFile), 1);
+verifyTrue(testCase, isstruct(workspace.getVariable("radia_ih_config")));
+verifyEqual(testCase, string(get_param(model, "FixedStep")), ...
+    string(compose("%.17g", 0.05)));
+% And the refreshed artifact hash makes the next update skip again.
+status = radia.simulink.updateIHGeometry(model);
+verifyEqual(testCase, string(status.reason), "up-to-date");
+end
+
+function testDirectConfigureInvalidatesGeometryRevision(testCase)
+[work, cleanupDir, wp, coil, ~, configFile, runsFile, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "on");
+radia.simulink.updateIHGeometry(model);
+original = load(configFile, "config");
+
+alternateFile = fullfile(work, "alternate.mat");
+config = radia.simulink.makeIHNativeSmokeConfig(SampleTime_s=0.037);
+save(alternateFile, "config");
+radia.simulink.configureIHNativeModel(model, alternateFile);
+workspace = get_param(model, "ModelWorkspace");
+verifyTrue(testCase, isnan(workspace.getVariable( ...
+    "radia_ih_geometry_revision")));
+
+% A direct API load must invalidate the old geometry-owned marker.  The
+% next update reloads the configured artifact without rebuilding it.
+status = radia.simulink.updateIHGeometry(model);
+verifyEqual(testCase, string(status.reason), "reloaded");
+verifyFalse(testCase, status.rebuilt);
+verifyEqual(testCase, runCount(runsFile), 1);
+loaded = workspace.getVariable("radia_ih_config");
+verifyEqual(testCase, loaded.sample_time_s, original.config.sample_time_s);
+verifyEqual(testCase, workspace.getVariable( ...
+    "radia_ih_geometry_revision"), status.revision);
+end
+
+function testUnconfiguredBlockIsInert(testCase)
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+status = radia.simulink.updateIHGeometry(model);
+verifyFalse(testCase, status.engaged);
+verifyEqual(testCase, string(status.reason), "unconfigured");
+end
+
+function testTwoStepInputsError(testCase)
+[work, cleanupDir, ~, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
+other = fullfile(work, "second.step");
+writelines("step v1", other);
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, other, coil, command, configFile, "on");
+verifyError(testCase, ...
+    @() radia.simulink.updateIHGeometry(model), ...
+    "radia:simulink:IHGeometryUpdateTwoSteps");
+end
+
+function [fileName, folderName] = selectPath(path)
+[folderName, stem, extension] = fileparts(path);
+fileName = stem + extension;
+folderName = folderName + filesep;
+end
+
+function tf = isAbsolutePath(path)
+tf = ~isempty(regexp(char(path), '^[A-Za-z]:[\\/]', 'once')) || ...
+    startsWith(path, "\\");
+end
+
+function testPanelZsRejectsRelativeMissingAndCustomAssembler(testCase)
+[work, cleanupDir, wp, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "on");
+block = model + "/Geometry Update";
+set_param(block, "panel_zs_file", "relative.json");
+verifyError(testCase, @() radia.simulink.updateIHGeometry(model), "radia:simulink:IHPanelZsFile");
+zs = fullfile(work, "zs.json");
+set_param(block, "panel_zs_file", zs);
+verifyError(testCase, @() radia.simulink.updateIHGeometry(model), "radia:simulink:IHPanelZsFile");
+writelines("{}", zs);
+verifyError(testCase, @() radia.simulink.updateIHGeometry(model), "radia:simulink:IHPanelZsAssembler");
+set_param(block, "assemble_command", "", "assemble_fcn", "fixture_assembler");
+verifyError(testCase, @() radia.simulink.updateIHGeometry(model), "radia:simulink:IHPanelZsAssembler");
+end
+
+function testPanelZsProvenanceChecksSnapshotAndClearedInput(testCase)
+work = string(tempname("C:\temp")); mkdir(work);
+cleanup = onCleanup(@() rmdir(work, "s")); %#ok<NASGU>
+file = fullfile(work, "config.json");
+source = fullfile(work, "zs.json");
+config.surface_impedance = struct("mode","specified-panel", ...
+    "file_sha256","snapshot-hash","source_file",source);
+writelines(jsonencode(config), file);
+radia.simulink.verifyIHPanelImpedanceProvenance(file,source,"snapshot-hash");
+verifyError(testCase, @() radia.simulink.verifyIHPanelImpedanceProvenance(file,source,"different-hash"), ...
+    "radia:simulink:IHPanelZsProvenance");
+verifyError(testCase, @() radia.simulink.verifyIHPanelImpedanceProvenance(file,"",""), ...
+    "radia:simulink:IHPanelZsProvenance");
+config.surface_impedance.mode = "uniform-linear";
+writelines(jsonencode(config), file);
+radia.simulink.verifyIHPanelImpedanceProvenance(file,"","");
+end
+
+function testPanelZsPathSpellingsShareTheResolvedProvenance(testCase)
+work = string(tempname("C:\temp")); mkdir(work); mkdir(fullfile(work, "sub"));
+cleanup = onCleanup(@() rmdir(work, "s")); %#ok<NASGU>
+source = fullfile(work, "zs.json");
+writelines("{}", source);
+resolved = string(java.io.File(char(source)).getCanonicalPath());
+spellings = [replace(source, "\", "/"), fullfile(work, "sub", "..", "zs.json")];
+file = fullfile(work, "config.json");
+config.surface_impedance = struct("mode","specified-panel", ...
+    "file_sha256","snapshot-hash","source_file",resolved);
+writelines(jsonencode(config), file);
+for spelling = spellings
+    canonical = radia.simulink.canonicalInputPath(spelling);
+    verifyEqual(testCase, canonical, resolved);
+    radia.simulink.verifyIHPanelImpedanceProvenance(file, canonical, "snapshot-hash");
+end
+verifyError(testCase, @() radia.simulink.canonicalInputPath("relative.json"), "radia:simulink:IHInputPath");
+end

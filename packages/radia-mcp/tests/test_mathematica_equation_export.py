@@ -1,0 +1,213 @@
+import json
+
+import pytest
+
+from radia_mcp.mathematica import tools
+from radia_mcp.presentation import _equation_cli
+
+
+@pytest.fixture
+def evaluation(monkeypatch):
+    calls = []
+
+    def evaluate(code, timeout):
+        calls.append((code, timeout))
+        return {
+            "exit_code": 0,
+            "timed_out": False,
+            "stderr": "",
+            "result": json.dumps({"ok": True, "tex": r"\frac{1}{2}", "input_form": "1/2"}),
+        }
+
+    monkeypatch.setattr(tools, "mathematica_evaluate", evaluate)
+    return calls
+
+
+def test_result_evaluated_once_and_preserves_tex(evaluation):
+    result = tools.mathematica_export_equation("Integrate[x, {x, 0, 1}]")
+    assert result["ok"] and result["tex"] == r"\frac{1}{2}"
+    assert result["input_form"] == "1/2"
+    assert len(evaluation) == 1
+    assert "MatrixForm[result]" in evaluation[0][0]
+
+
+def test_save_creates_editor_input(evaluation, tmp_path):
+    output = tmp_path / "equations" / "integral.tex"
+    result = tools.mathematica_export_equation("1/2", action="save", output_path=str(output))
+    assert result["ok"]
+    assert output.read_text(encoding="utf-8") == "\\frac{1}{2}\n"
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"action": "unknown"},
+        {"action": "save"},
+        {"action": "render", "output_path": "bad.pdf"},
+        {"action": "copy", "target": "unknown"},
+        {"timeout": float("nan")},
+        {"timeout": True},
+    ],
+)
+def test_bad_input_does_not_start_kernel(evaluation, arguments):
+    result = tools.mathematica_export_equation("1/2", **arguments)
+    assert not result["ok"] and result["stage"] == "input"
+    assert evaluation == []
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    ['{"ok":false}', '"not an equation"', '{"ok":true,"tex":"","input_form":"x"}', "invalid JSON"],
+)
+def test_failed_evaluation_never_copies(monkeypatch, stdout):
+    monkeypatch.setattr(
+        tools,
+        "mathematica_evaluate",
+        lambda *a, **k: {"exit_code": 0, "timed_out": False, "result": stdout},
+    )
+    monkeypatch.setattr(
+        _equation_cli,
+        "presentation_copy_equation",
+        lambda *a, **k: pytest.fail("editor called after failed evaluation"),
+    )
+    result = tools.mathematica_export_equation("x", action="copy")
+    assert not result["ok"] and result["stage"] == "evaluation"
+
+
+def test_clipboard_uses_calculated_result(evaluation, monkeypatch):
+    calls = []
+
+    def copy(tex, **kwargs):
+        calls.append((tex, kwargs))
+        return {"ok": True}
+
+    monkeypatch.setattr(_equation_cli, "presentation_copy_equation", copy)
+    result = tools.mathematica_export_equation("1/2", action="copy")
+    assert result["ok"]
+    assert calls == [(r"\frac{1}{2}", {"target": "office", "executable": None})]
+
+
+def test_editor_failure_keeps_tex(evaluation, monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        _equation_cli,
+        "presentation_render_equation",
+        lambda *a, **k: {"ok": False, "error": "unsupported notation"},
+    )
+    result = tools.mathematica_export_equation(
+        "1/2", action="render", output_path=str(tmp_path / "eq.png")
+    )
+    assert not result["ok"] and result["stage"] == "editor"
+    assert result["tex"] == r"\frac{1}{2}"
+
+
+def test_new_tool_registered_without_kernel(monkeypatch):
+    def mathematica_evaluate(*a, **k):
+        pytest.fail("discovery launched kernel")
+
+    monkeypatch.setattr(tools, "mathematica_evaluate", mathematica_evaluate)
+    from radia_mcp.mathematica import server
+
+    assert "mathematica_export_equation" in server._REGISTERED
+
+
+def test_wolframscript_trailing_null_preserves_matrix_lines(monkeypatch):
+    tex = "\\begin{array}{cc}\n1 & 2 \\\\\n3 & 4\n\\end{array}"
+    payload = json.dumps({"ok": True, "tex": tex, "input_form": "{{1,2},{3,4}}"})
+
+    def evaluate(code, timeout):
+        assert '"Compact"->True' in code
+        return {"exit_code": 0, "timed_out": False, "result": payload + "\nNull"}
+
+    monkeypatch.setattr(tools, "mathematica_evaluate", evaluate)
+    result = tools.mathematica_export_equation("{{1,2},{3,4}}")
+    assert result["ok"] and result["wolfram_tex"] == tex
+    assert result["tex"] == tex.replace(r"\begin{array}{cc}", r"\begin{matrix}").replace(
+        r"\end{array}", r"\end{matrix}"
+    )
+
+
+def test_noncentered_array_is_not_silently_changed(monkeypatch):
+    tex = r"\begin{array}{lr}1 & 2\end{array}"
+    monkeypatch.setattr(
+        tools,
+        "mathematica_evaluate",
+        lambda *a, **k: {
+            "exit_code": 0,
+            "timed_out": False,
+            "result": json.dumps({"ok": True, "tex": tex, "input_form": "matrix"}),
+        },
+    )
+    result = tools.mathematica_export_equation("matrix")
+    assert not result["ok"] and result["stage"] == "conversion"
+    assert result["tex"] == tex
+
+
+def test_save_has_lf_bytes(evaluation, tmp_path):
+    output = tmp_path / "equation.tex"
+    assert tools.mathematica_export_equation("1/2", action="save", output_path=str(output))["ok"]
+    assert output.read_bytes() == b"\\frac{1}{2}\n"
+
+
+def test_evaluation_error_surfaces_messages(monkeypatch):
+    monkeypatch.setattr(
+        tools,
+        "mathematica_evaluate",
+        lambda *a, **k: {"exit_code": 0, "result": '{"ok":false,"error":"Power::infy"}'},
+    )
+    result = tools.mathematica_export_equation("1/0")
+    assert not result["ok"] and result["error"] == "Power::infy"
+
+
+@pytest.mark.parametrize(
+    "tex,ok",
+    [
+        (r"\begin{array}{c}1\\2\end{array}", True),
+        (r"\begin{array}{c}1\end{array}\begin{array}{l}2\end{array}", False),
+        (r"\begin{array}{c}\begin{array}{c}1\end{array}\end{array}", True),
+    ],
+)
+def test_array_shapes(monkeypatch, tex, ok):
+    monkeypatch.setattr(
+        tools,
+        "mathematica_evaluate",
+        lambda *a, **k: {
+            "exit_code": 0,
+            "result": json.dumps({"ok": True, "tex": tex, "input_form": "matrix"}),
+        },
+    )
+    result = tools.mathematica_export_equation("matrix")
+    assert result["ok"] is ok
+    if ok:
+        assert r"\begin{array}" not in result["tex"]
+
+
+@pytest.mark.parametrize("control", ["\x00", "\x7f", "\x80", "\x85", "\x9f"])
+def test_control_characters_rejected_before_kernel(evaluation, control):
+    result = tools.mathematica_export_equation(f"x{control}")
+    assert not result["ok"] and result["stage"] == "input"
+    assert evaluation == []
+
+
+def test_multiple_expressions_report_actionable_error(monkeypatch):
+    def evaluate(code, timeout):
+        assert "Length[held] != 1" in code
+        return {
+            "exit_code": 0,
+            "result": json.dumps(
+                {
+                    "ok": False,
+                    "error": "Use one expression; join statements with semicolons or wrap them in Module",
+                }
+            ),
+        }
+
+    monkeypatch.setattr(tools, "mathematica_evaluate", evaluate)
+    result = tools.mathematica_export_equation("a=1\na+1")
+    assert not result["ok"] and result["stage"] == "evaluation"
+    assert "Use one expression" in result["error"]
+
+
+def test_pasted_expression_trailing_blank_lines_are_stripped(evaluation):
+    result = tools.mathematica_export_equation(" x\n\n")
+    assert result["ok"]
+    assert 'ToExpression["x", InputForm, HoldComplete]' in evaluation[0][0]

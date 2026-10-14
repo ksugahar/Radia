@@ -1,0 +1,233 @@
+{
+  "schema": "radia.gpu.stable-qualification.v1",
+  "version": "0.1.4",
+  "source_commit": "91868346a9bafaf29abec6207a02780357a30137",
+  "wheel_sha256": "6b6cc5034365a1aebd6dc26c1d17b423ac509e874e021f70549905ed6f8ec154",
+  "manifest_sha256": "32330627d628cef716fef9ac9e059903791dfb48f8a3daa05d2b6f53bda47380",
+  "ci_run_id": 38362559002,
+  "independent_review": {
+    "source_commit": "91868346a9bafaf29abec6207a02780357a30137",
+    "source_tree": "a48ca4c3a1b34e1c9fff4d8f8acb24d24598b357",
+    "outcome": "accepted",
+    "unresolved_findings": [],
+    "reviewer": "Independent read-only Codex pr366_review agent",
+    "report": "Independent read-only review accepted the exact source 91868346a9bafaf29abec6207a02780357a30137, tree a48ca4c3a1b34e1c9fff4d8f8acb24d24598b357. Scope covered GPU PCG curvature control, bounded coarse actions, factor and index validation, CUDA streams/graphs, HCurlSystem fixed-input ownership and release, numerical validators and stable packaging. Two P2 findings were resolved and independently re-reviewed: nonfinite CPU/true-residual acceptance data now fail explicitly, with 15 regression cases; Radia-owned coarse actions now use row-major storage at every construction/application access, retaining factor arithmetic and synchronization order and memory size. The repository GPU-feature expectation was corrected and contract tests passed. No unresolved actionable source findings remain. Runtime, same-wheel and CPU accuracy evidence are separate. Detailed review is retained in validation_test/radia_gpu/releases/pr366-source-review.md."
+  },
+  "build_host_acceptance": {
+    "schema": "radia.gpu.installed-acceptance.v1",
+    "passed": true,
+    "device": "Quadro RTX 5000",
+    "compute_capability": "7.5",
+    "gpu_total_memory_bytes": 17179541504.0,
+    "matlab_release": "2026a",
+    "cuda_residual": 0,
+    "simulink_repeated_runs": 2,
+    "simulink_failure_cleanup": true,
+    "ltspice_checked": true,
+    "source_commit": "91868346a9bafaf29abec6207a02780357a30137",
+    "distribution_version": "0.1.4",
+    "manifest_sha256": "32330627d628cef716fef9ac9e059903791dfb48f8a3daa05d2b6f53bda47380",
+    "wheel_sha256": "6b6cc5034365a1aebd6dc26c1d17b423ac509e874e021f70549905ed6f8ec154",
+    "execution_role": "cuda-build-host",
+    "cpu_parity_checked": true,
+    "cpu_parity": {
+      "csr_pcg": {
+        "relative_l2": 0.0,
+        "true_relative_residual": 0.0
+      },
+      "ams": {
+        "relative_l2": 2.39681816436054e-13,
+        "true_relative_residual": 4.357124753638985e-12
+      },
+      "hmatrix": {
+        "relative_l2": 5.015281377765097e-10,
+        "true_relative_residual": 7.953788482773285e-12
+      },
+      "fmm": {
+        "operation_kind": "operator",
+        "relative_l2": 1.6377016841204107e-09,
+        "residual_applicability": "not_applicable_operator",
+        "true_relative_residual": null
+      },
+      "projection": {
+        "operation_kind": "operator",
+        "relative_l2": 2.2746676655798596e-14,
+        "residual_applicability": "not_applicable_operator",
+        "true_relative_residual": null
+      }
+    }
+  },
+  "numerical_acceptance": {
+    "accepted": true,
+    "release_accepted": false,
+    "scope": "Installed common wheel bounded HDiv/FEM/AMS/FMM acceptance",
+    "wheel": {
+      "passed": true,
+      "version": "0.1.4",
+      "source_commit": "91868346a9bafaf29abec6207a02780357a30137",
+      "wheel_sha256": "6b6cc5034365a1aebd6dc26c1d17b423ac509e874e021f70549905ed6f8ec154",
+      "files": 138,
+      "manifest_sha256": "32330627d628cef716fef9ac9e059903791dfb48f8a3daa05d2b6f53bda47380",
+      "cuda_solvers": [
+        "ams",
+        "csr_pcg",
+        "fmm",
+        "hmatrix",
+        "projection"
+      ]
+    },
+    "installed": {
+      "passed": true,
+      "runtime_checked": false,
+      "version": "0.1.4",
+      "matlab_path": "<private runtime provenance>",
+      "source_commit": "91868346a9bafaf29abec6207a02780357a30137",
+      "capabilities": [
+        "CUDA FP64 CSR Jacobi-PCG",
+        "Experimental CUDA FP64 AMS",
+        "Reusable affine linear HCurl matrix and AMS hierarchy",
+        "AMS HDF5 exchange",
+        "Simulink CUDA PCG block",
+        "LTspice sampled-data integration",
+        "Bounded affine/P2 HDiv orders 1/2",
+        "Experimental Laplace FMM and flat P1 boundary maps"
+      ],
+      "manifest_sha256": "32330627d628cef716fef9ac9e059903791dfb48f8a3daa05d2b6f53bda47380",
+      "runtime_requirements": [
+        "Windows x64",
+        "MATLAB R2026a",
+        "Parallel Computing Toolbox",
+        "NVIDIA GPU/driver",
+        "Simulink for blocks",
+        "User-installed LTspice for circuit execution"
+      ]
+    },
+    "csr_pcg_independent_cpu_relative": 0.0,
+    "csr_pcg_independent_true_residual": 0.0,
+    "hdiv": {
+      "coefficient_error": 5.015281377765097e-10,
+      "physical_error": 1.4897781899323295e-12,
+      "true_residual": 7.953788482773285e-12,
+      "projection_error": 2.2746676655798596e-14
+    },
+    "projection_individual_relative": [
+      1.476382627369113e-16,
+      2.2746676655798596e-14,
+      2.828595643112391e-16
+    ],
+    "prior_independently_validated_reference_relative": {
+      "hcurl:solution": 1.3659195044336296e-14,
+      "physics:slPotential": 0.0,
+      "physics:dlPotential": 0.0,
+      "physics:B": 0.0,
+      "physics:A": 0.0,
+      "physics:cloudField": 0.0,
+      "boundary:slResult": 0.0,
+      "boundary:dlResult": 3.6895173638761435e-17
+    },
+    "fmm_independent_cpu_relative": {
+      "potential": 7.667127535681754e-10,
+      "field": 1.6377016841204107e-09
+    },
+    "ams_independent_true_residual": 4.357124753638985e-12,
+    "ams_independent_cpu_relative": 2.39681816436054e-13,
+    "ams_cpu_true_residual": 4.668910486615201e-15,
+    "ams_cpu_route": "NGSolve NewtonSolver, caller-owned TaskManager, sparsecholesky",
+    "loaded_mex_identity": {
+      "csr_pcg": {
+        "name": "radia_cuda_csr_pcg.mexw64",
+        "path": "<private runtime provenance>",
+        "sha256": "5577118289d7f02501f5e43742b1adaa05d71e593e154a801d5f8f5676ddfd71"
+      },
+      "ams": {
+        "name": "radia_cuda_ams.mexw64",
+        "path": "<private runtime provenance>",
+        "sha256": "d04132b9c37817e93dc21e27dac3a1d8ab62cb1af2766e582dde61340d7a9a5f"
+      },
+      "hmatrix": {
+        "name": "radia_cuda_hmatrix.mexw64",
+        "path": "<private runtime provenance>",
+        "sha256": "4b79def448f47268fd9df739245083a384820c89791c8496255a477d5c19be2b"
+      },
+      "projection": {
+        "name": "radia_cuda_projection.mexw64",
+        "path": "<private runtime provenance>",
+        "sha256": "3859746cabc454840e3565627b0b6431453d7565d66b25696df465fa975ef12b"
+      },
+      "fmm": {
+        "name": "radia_cuda_fmm.mexw64",
+        "path": "<private runtime provenance>",
+        "sha256": "4b90237ebc29f465314e32610005351d51037592edb5e89fdbe5b7bd29b6ee8c"
+      }
+    },
+    "native_dependency_sha256": {
+      "libngsolve.dll": "e70a3384994a6bb0c3b93b92dcfd83a208c129e7b883398dec48dad3a8a0b7c3",
+      "mkl_rt.3.dll": "0ade2b44b4786fa3e4ed19c1e81fa2e2ac975093e373674db52f5db57d6e54b2",
+      "ngcore.dll": "5fffd984723eb74f701aef154227845cf4a3bdd63cdbb334a0d1c36480011a80",
+      "nglib.dll": "252e4c60e03f1f59eff98c2f2b54edc8026d322230215ffaf438a3138743445c",
+      "openblas.dll": "ea5706aaa7e88ea76f350faf4181c5e3393817a1ce1cd800501bf3ee21f205e8",
+      "python312.dll": "9a0e3435aaa680d868150f87ab3e388ad2eebc22f87e036155c7b4eda8cd2120",
+      "TKBO.dll": "d3b2713325bab8827d8cd8b941deca860c9f5b00ebba9fff0cdf1253fe025dac",
+      "TKBool.dll": "414145c8151059ffaf3e889fec5c71b79ab4cabbd68d8e9c7a5f36fdc363c8e1",
+      "TKBRep.dll": "4eeb8ac5448f05964f471149968ac085be93b9d7f031f0cd8848405bc6268d05",
+      "TKCAF.dll": "4c165333b0f95c4f4d3cdc5693f6ccfbde16057467ace5d911c495a866fd4727",
+      "TKCDF.dll": "c58882f366c25b5294c0bbdb56dad564a9974bc483bbf4f1a4d8f6104cdd8bb0",
+      "TKDE.dll": "7ffa031b9c98e7cdc364219bea7db1a8ae506b6cb60324df8afcdb0f8339be00",
+      "TKDEIGES.dll": "814ef5299bdbc1112f31f67b61ba41d455b75fbe7c1655231d5e8fff4a12a2f2",
+      "TKDESTEP.dll": "e1cc9208425a6fc30e6ab244a64e1a3b79721e6f49e8349e536bedab2115ced8",
+      "TKDESTL.dll": "a1c88b435c96d15ef57ded825afdbcbd5692523d76375464e707cf6701c34007",
+      "TKernel.dll": "883e7284a53c0da7c1e2dcf37f1a6596288c3e31ec82410d679d481e11c4a763",
+      "TKFillet.dll": "af109276a343f33c4551e0133ea7a99b68aa4b968bf257de9a60907405f5eece",
+      "TKG2d.dll": "75cb2397903008448394aac721cff43dad9d67dc0009c6a72a8b434600795331",
+      "TKG3d.dll": "95209d4993bd5727b174e423dcc037ea517022c54a6279b2ced91925552d6330",
+      "TKGeomAlgo.dll": "e9dd26ec6510708fde73488745b3349ff6cc0c4f68f5e7f8cf8b7efd3e680db0",
+      "TKGeomBase.dll": "8d005218401bc716654ef24cc8e48044c751ed893a45119fe838553d771c2389",
+      "TKHLR.dll": "a180c642e8e0274f4501090afd70ad5db05a968de7c9a3a2325ad5c2b2e83fa1",
+      "TKLCAF.dll": "f5e9395b130f4e3e8c868111729974f7dcc99da2486fff6c6fa05c4a67cbfde8",
+      "TKMath.dll": "8af896aa885d801adb5bf1755057bcb541696c7c2b50052d5b7f4c5d5e2ed7be",
+      "TKMesh.dll": "e08a33f2d41ea94940b5cae487c5550639960ec297c1bde6a6f058d5ff53ee7e",
+      "TKOffset.dll": "8a3e18af1f11dde245d45dfb12828a92e4fecc19b47d217483edfb6d40526b57",
+      "TKPrim.dll": "e8fbb1afbb9ba17797002ebd12b237f35f68202a805764e67b5edae2b6bf123b",
+      "TKService.dll": "adb8d475290c870a774ccad795fc9198540ee63cee06db6fb1bddc912026155b",
+      "TKShHealing.dll": "f482f534c7ed5fc5454a7ce45486eba9d5c3e727bb4ee1d76420c51c2b2975a5",
+      "TKTopAlgo.dll": "b3dae3787871b46f01e50f4da4f3f8a7fb1892f11918dfdd47950c1c50d8d86c",
+      "TKV3d.dll": "ded61f09e1acfae836eef4058c674f720f342176d7fe350fd25418876c18c419",
+      "TKVCAF.dll": "a4253ef4a77dcd466770376147365c9890ddebf1e2e48a229e455e642881fcb5",
+      "TKXCAF.dll": "b1a070316c131a808dbd5301f3c97507f9c81d639673a5d4978e038708e01ef0",
+      "TKXSBase.dll": "942f807c6b8b11872ffe05443af7bfbab96d93bcf6dc0c132a6923e0d55fc1e0"
+    },
+    "staged_but_not_loaded_dependencies": [
+      "mkl_core.3.dll",
+      "mkl_sequential.3.dll"
+    ]
+  },
+  "limitations": [
+    "Bounded independently authored affine HCurl and curved P2 HDiv cases; no large winding or frequency-domain HX certification",
+    "Build-host timing is diagnostic; memory samples do not certify global transient GPU peaks"
+  ],
+  "a100_acceptance": {
+    "accepted": true,
+    "wheel_sha256": "6b6cc5034365a1aebd6dc26c1d17b423ac509e874e021f70549905ed6f8ec154",
+    "manifest_sha256": "32330627d628cef716fef9ac9e059903791dfb48f8a3daa05d2b6f53bda47380",
+    "source_commit": "91868346a9bafaf29abec6207a02780357a30137",
+    "numerical_evidence": "validation_test/ams_cuda/results/stable014-a100-numerical-20261013.json",
+    "same_binary_basis": "Installed wheel/manifest and actual loaded MEX hashes verified on both hosts; full module paths and hashes recovered privately"
+  },
+  "measurement_evidence": [
+    "validation_test/ams_cuda/results/stable014-100-numerical-20261013.json",
+    "validation_test/ams_cuda/results/stable014-100-ams-reuse-20261013.json",
+    "validation_test/ams_cuda/results/stable014-a100-numerical-20261013.json",
+    "validation_test/ams_cuda/results/stable014-a100-ams-reuse-20261013.json",
+    "validation_test/ams_cuda/results/stable014-a100-cpu-gpu-20261013.json"
+  ],
+  "measurement_protocol_review": {
+    "outcome": "accepted",
+    "unresolved_findings": [],
+    "reviewer": "Independent read-only Codex pr366_review agent",
+    "scope": "Same-host independent CPU1/16 and installed GPU whole-API ABBA, finite/true-residual checks, initialization boundaries, broader memory sample scope, exact loaded binary and owned Engine cleanup",
+    "protocol_sha256": {
+      "measure_installed_cpu_gpu.py": "ba71c2bc4701af65ab54f9773042b0e105454b780e32b6cc48372e93ce7a1dcf",
+      "measure_installed_cpu_gpu.m": "88baa6788b8339c36f1f69a04efe47c22f2b9473eecc60357cdc7f694cc0c017"
+    }
+  }
+}

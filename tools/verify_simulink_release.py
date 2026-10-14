@@ -1,0 +1,621 @@
+#!/usr/bin/env python
+"""Read historical Radia Simulink archives; this tool does not publish CPU MEX."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import io
+import json
+import re
+import subprocess
+import sys
+import tempfile
+import time
+import zipfile
+from pathlib import Path, PurePosixPath
+
+
+REQUIRED_MEMBERS = {
+    "manifest.json",
+    "matlab/IH_VERSION",
+    "matlab/install_radia_ih.m",
+    "matlab/radia_ih.slx",
+    "matlab/radia_ih_eddy_sfun.m",
+    "matlab/radia_ih_thermal_sfun.m",
+    "matlab/radia_ih_monitor_sfun.m",
+    "matlab/verify_radia_ih_release.m",
+    "matlab/+radia/setup.m",
+    "matlab/+radia/+internal/expectedNGSolveVersion.m",
+    "matlab/+radia/+internal/pythonProcessPath.m",
+    "matlab/+radia/+simulink/ihEddySFunction.m",
+    "matlab/+radia/+simulink/ihThermalSFunction.m",
+    "matlab/+radia/+simulink/ihMonitorSFunction.m",
+    "matlab/+radia/+simulink/addIHMonitorBus.m",
+    "matlab/+radia/+simulink/addIHMonitorDashboard.m",
+    "matlab/+radia/+simulink/makeMonitorHeaderBusObject.m",
+    "matlab/+radia/+simulink/makeIHMonitorBusObject.m",
+    "matlab/+radia/+simulink/validateIHNativeConfig.m",
+    "matlab/radia_mex.mexw64",
+    "matlab/radia_mex.mexw64.build.json",
+    "matlab/verify_radia_mex_provenance.py",
+    "matlab/mkl_avx2.3.dll",
+    "matlab/mkl_core.3.dll",
+    "matlab/mkl_def.3.dll",
+    "matlab/mkl_sequential.3.dll",
+    "matlab/mkl_rt.3.dll",
+}
+PREVIEW_V2_REQUIRED_MEMBERS = (
+    REQUIRED_MEMBERS
+    - {
+        "matlab/+radia/+internal/expectedNGSolveVersion.m",
+        "matlab/mkl_sequential.3.dll",
+        "matlab/radia_mex.mexw64.build.json",
+        "matlab/verify_radia_mex_provenance.py",
+    }
+    | {"matlab/mkl_intel_thread.3.dll"}
+)
+LEGACY_REQUIRED_MEMBERS = {
+    "manifest.json",
+    "matlab/IH_VERSION",
+    "matlab/install_radia_ih.m",
+    "matlab/radia_ih.slx",
+    "matlab/verify_radia_ih_release.m",
+    "matlab/+radia/+simulink/validateIHNativeConfig.m",
+    "matlab/radia_ih_eddy_sfun.mexw64",
+    "matlab/radia_ih_thermal_sfun.mexw64",
+}
+FULL_REQUIRED_MEMBERS_V2 = {
+    "manifest.json",
+    "matlab/install_radia_simulink.m",
+    "matlab/verify_radia_simulink_release.m",
+    "matlab/radia_simulink_library.slx",
+    "matlab/radia_electromagnet.slx",
+    "matlab/radia_ih.slx",
+    "matlab/radia_maglev.slx",
+    "matlab/radia_nonlinear_reactor.slx",
+    "matlab/radia_streamfunction_optimization.slx",
+    "matlab/radia_mex.mexw64",
+    "matlab/radia_ih_eddy_sfun.m",
+    "matlab/radia_ih_thermal_sfun.m",
+    "matlab/radia_ih_monitor_sfun.m",
+    "matlab/radia_nonlinear_reactor_sfun.m",
+    "matlab/radia_streamfunction_optuna_sfun.m",
+    "matlab/+radia/+simulink/ihEddySFunction.m",
+    "matlab/+radia/+simulink/ihThermalSFunction.m",
+    "matlab/+radia/+simulink/ihMonitorSFunction.m",
+    "matlab/+radia/+simulink/addIHMonitorBus.m",
+    "matlab/+radia/+simulink/addIHMonitorDashboard.m",
+    "matlab/+radia/+simulink/makeMonitorHeaderBusObject.m",
+    "matlab/+radia/+simulink/makeIHMonitorBusObject.m",
+    "matlab/+radia/+simulink/makeOptunaMonitorBusObject.m",
+    "matlab/+radia/+simulink/nonlinearReactorSFunction.m",
+    "matlab/+radia/+simulink/streamFunctionOptunaSFunction.m",
+    "matlab/+radia/+simulink/resolveStreamFunctionOptunaObjects.m",
+    "matlab/+radia/+stream/OptunaRunner.m",
+    "matlab/+radia/+simulink/makeNonlinearReactorConfig.m",
+    "matlab/+radia/+simulink/makeNonlinearReactorDemoConfig.m",
+    "matlab/+radia/+simulink/validateNonlinearReactorConfig.m",
+    "matlab/mkl_avx2.3.dll",
+    "matlab/mkl_core.3.dll",
+    "matlab/mkl_def.3.dll",
+    "matlab/mkl_intel_thread.3.dll",
+    "matlab/mkl_rt.3.dll",
+}
+FULL_REQUIRED_MEMBERS_V3 = FULL_REQUIRED_MEMBERS_V2 | {
+    "matlab/optuna_mex.mexw64",
+}
+FULL_REQUIRED_MEMBERS = (
+    FULL_REQUIRED_MEMBERS_V3
+    - {"matlab/mkl_intel_thread.3.dll"}
+    | {
+        "matlab/+radia/+internal/expectedNGSolveVersion.m",
+        "matlab/mkl_sequential.3.dll",
+        "matlab/radia_mex.mexw64.build.json",
+        "matlab/verify_radia_mex_provenance.py",
+    }
+)
+LEGACY_FULL_REQUIRED_MEMBERS = {
+    "manifest.json",
+    "matlab/install_radia_simulink.m",
+    "matlab/verify_radia_simulink_release.m",
+    "matlab/radia_simulink_library.slx",
+    "matlab/radia_ih.slx",
+    "matlab/radia_streamfunction_optimization.slx",
+    "matlab/radia_mex.mexw64",
+    "matlab/radia_ih_eddy_sfun.mexw64",
+    "matlab/radia_ih_thermal_sfun.mexw64",
+    "matlab/mkl_avx2.3.dll",
+    "matlab/mkl_core.3.dll",
+    "matlab/mkl_def.3.dll",
+    "matlab/mkl_intel_thread.3.dll",
+    "matlab/mkl_rt.3.dll",
+}
+
+
+def digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _console_safe(value: str, encoding: str | None = None) -> str:
+    target = encoding or sys.stdout.encoding or "utf-8"
+    return value.encode(target, errors="backslashreplace").decode(target)
+
+
+def _safe_member(name: str) -> bool:
+    path = PurePosixPath(name)
+    return not path.is_absolute() and ".." not in path.parts and "\\" not in name
+
+
+def _verify_slx_text_integrity(payload: bytes, member: str) -> None:
+    """Reject damaged public text embedded in a native SLX archive."""
+    try:
+        model = zipfile.ZipFile(io.BytesIO(payload))
+    except zipfile.BadZipFile as error:
+        raise RuntimeError(f"Invalid SLX archive: {member}") from error
+    with model:
+        for nested_name in model.namelist():
+            if PurePosixPath(nested_name).suffix.lower() not in {
+                    ".xml", ".rels", ".json"}:
+                continue
+            try:
+                text = model.read(nested_name).decode("utf-8")
+            except UnicodeDecodeError as error:
+                raise RuntimeError(
+                    f"Invalid UTF-8 in {member}!/{nested_name}"
+                ) from error
+            if "\ufffd" in text:
+                raise RuntimeError(
+                    f"Replacement glyph in {member}!/{nested_name}"
+                )
+            if re.search(r"\?{3,}", text):
+                raise RuntimeError(
+                    f"Suspicious question-mark run in "
+                    f"{member}!/{nested_name}"
+                )
+
+
+def verify_archive(archive: Path) -> dict:
+    if not archive.is_file():
+        raise FileNotFoundError(f"Simulink release archive does not exist: {archive}")
+    with zipfile.ZipFile(archive) as bundle:
+        names = set(bundle.namelist())
+        unsafe = sorted(name for name in names if not _safe_member(name))
+        if unsafe:
+            raise RuntimeError(f"Unsafe ZIP members: {', '.join(unsafe)}")
+        manifest = json.loads(bundle.read("manifest.json"))
+        schema = manifest.get("schema")
+        preview_v1 = schema == "radia.simulink.ih-release-manifest.v1"
+        preview_v2 = schema == "radia.simulink.ih-release-manifest.v2"
+        preview_v3 = schema == "radia.simulink.ih-release-manifest.v3"
+        full_v1 = schema == "radia.simulink.library-release-manifest.v1"
+        full_v2 = schema == "radia.simulink.library-release-manifest.v2"
+        full_v3 = schema == "radia.simulink.library-release-manifest.v3"
+        full_v4 = schema == "radia.simulink.library-release-manifest.v4"
+        if preview_v1:
+            required_members = LEGACY_REQUIRED_MEMBERS
+        elif preview_v2:
+            required_members = PREVIEW_V2_REQUIRED_MEMBERS
+        elif preview_v3:
+            required_members = REQUIRED_MEMBERS
+        elif full_v1:
+            required_members = LEGACY_FULL_REQUIRED_MEMBERS
+        elif full_v2:
+            required_members = FULL_REQUIRED_MEMBERS_V2
+        elif full_v3:
+            required_members = FULL_REQUIRED_MEMBERS_V3
+        elif full_v4:
+            required_members = FULL_REQUIRED_MEMBERS
+        else:
+            raise RuntimeError("Unsupported Simulink release manifest schema")
+        if not re.fullmatch(r"[0-9a-f]{40}", str(manifest.get("commit", ""))):
+            raise RuntimeError("Simulink release manifest commit is invalid")
+        missing = sorted(required_members - names)
+        if missing:
+            raise RuntimeError(
+                f"Simulink release archive is incomplete: {', '.join(missing)}"
+            )
+        if (preview_v3 or full_v4) and any(
+                name.casefold() == "matlab/mkl_intel_thread.3.dll"
+                for name in names):
+            raise RuntimeError(
+                "Current MATLAB releases must not bundle the threaded MKL runtime"
+            )
+        for name in sorted(item for item in names if item.lower().endswith(".slx")):
+            _verify_slx_text_integrity(bundle.read(name), name)
+        if manifest.get("matlab_release") != "R2026a" or \
+                manifest.get("platform") != "win64" or \
+                manifest.get("mex_extension") != "mexw64":
+            raise RuntimeError("Simulink release runtime compatibility is invalid")
+        if manifest.get("required_matlab_products") != ["MATLAB", "Simulink"]:
+            raise RuntimeError("Simulink release product requirements are invalid")
+        if preview_v1 or preview_v2 or preview_v3:
+            if manifest.get("release_channel") != "preview":
+                raise RuntimeError("The first IH release must declare preview channel")
+            expected_backend = (
+                "native-mex-sfunction"
+                if preview_v1
+                else "matlab-level2+radia-mex-handles"
+            )
+            if manifest.get("backend") != expected_backend or \
+                    manifest.get("python_fallback") is not False:
+                raise RuntimeError("IH release backend contract is invalid")
+            if manifest.get("operator_assembly") != "preassembled":
+                raise RuntimeError("IH release must declare its assembly boundary")
+            if preview_v2 or preview_v3:
+                _verify_level2_ih_contract(manifest)
+        else:
+            if manifest.get("release_channel") != "production":
+                raise RuntimeError("The full library must declare production channel")
+            if manifest.get("package") != "radia-simulink-library" or \
+                    manifest.get("entry_model") != \
+                    "matlab/radia_simulink_library.slx":
+                raise RuntimeError("The full library entry contract is invalid")
+            expected_backend = (
+                "native-mex-sfunction-and-mex-handle"
+                if full_v1 else "application-specific"
+            )
+            if manifest.get("backend") != expected_backend or \
+                    manifest.get("python_per_step") is not False or \
+                    manifest.get("python_fallback_per_step") is not False:
+                raise RuntimeError("The full library backend contract is invalid")
+            if full_v2 or full_v3 or full_v4:
+                _verify_level2_ih_contract(manifest)
+            elif set(manifest.get("required_mex", [])) != {
+                    "matlab/radia_mex.mexw64",
+                    "matlab/radia_ih_eddy_sfun.mexw64",
+                    "matlab/radia_ih_thermal_sfun.mexw64",
+                }:
+                    raise RuntimeError("The full library MEX inventory is invalid")
+            expected_toolboxes = {
+                "adjoint_topology_optimization": ["Optimization Toolbox"],
+                "stream_function_topology_optimization": [
+                    "Optimization Toolbox"
+                ],
+            }
+            if full_v2 or full_v3 or full_v4:
+                expected_toolboxes["electromagnet_topology_optimization"] = [
+                    "Optimization Toolbox"
+                ]
+            toolbox_requirements = manifest.get("feature_toolbox_requirements", {})
+            if toolbox_requirements != expected_toolboxes:
+                raise RuntimeError("The full library toolbox contract is invalid")
+
+        declared = set()
+        for item in manifest.get("files", []):
+            name = item.get("path", "")
+            if name in declared or name not in names or not _safe_member(name):
+                raise RuntimeError(f"Invalid manifest member: {name}")
+            payload = bundle.read(name)
+            if len(payload) != item.get("size") or digest(payload) != item.get("sha256"):
+                raise RuntimeError(f"Manifest hash or size mismatch: {name}")
+            declared.add(name)
+        payload_members = names - {"manifest.json"}
+        if declared != payload_members:
+            drift = sorted(declared ^ payload_members)
+            raise RuntimeError(f"Manifest file inventory drift: {', '.join(drift)}")
+    return manifest
+
+
+def _verify_level2_ih_contract(manifest: dict) -> None:
+    if manifest.get("ih_backend") != "matlab-level2+radia-mex-handles":
+        raise RuntimeError("The IH Level-2 backend declaration is invalid")
+    expected_mex = {"matlab/radia_mex.mexw64"}
+    if manifest.get("schema") in {
+            "radia.simulink.library-release-manifest.v3",
+            "radia.simulink.library-release-manifest.v4",
+    }:
+        expected_mex.add("matlab/optuna_mex.mexw64")
+    if set(manifest.get("required_mex", [])) != expected_mex:
+        raise RuntimeError("The Simulink standalone MEX inventory is invalid")
+    expected_sfunctions = {
+        "matlab/radia_ih_eddy_sfun.m",
+        "matlab/radia_ih_thermal_sfun.m",
+        "matlab/radia_ih_monitor_sfun.m",
+        "matlab/+radia/+simulink/ihEddySFunction.m",
+        "matlab/+radia/+simulink/ihThermalSFunction.m",
+        "matlab/+radia/+simulink/ihMonitorSFunction.m",
+    }
+    if manifest.get("schema") in {
+            "radia.simulink.library-release-manifest.v2",
+            "radia.simulink.library-release-manifest.v3",
+            "radia.simulink.library-release-manifest.v4",
+    }:
+        expected_sfunctions.update({
+            "matlab/radia_nonlinear_reactor_sfun.m",
+            "matlab/+radia/+simulink/nonlinearReactorSFunction.m",
+            "matlab/radia_streamfunction_optuna_sfun.m",
+            "matlab/+radia/+simulink/streamFunctionOptunaSFunction.m",
+        })
+        if manifest.get("reactor_backend") != \
+                "matlab-level2+radia-mex-handle" or \
+                manifest.get("reactor_surrogate") is not False:
+            raise RuntimeError(
+                "The nonlinear reactor production backend contract is invalid"
+            )
+    if set(manifest.get("required_matlab_sfunctions", [])) != \
+            expected_sfunctions:
+        raise RuntimeError("The Level-2 S-Function inventory is invalid")
+    if manifest.get("standalone_mex_debug_api") is not True:
+        raise RuntimeError("The IH standalone MEX debug contract is invalid")
+    if manifest.get("python_runtime_required_for_native_mex") is not True or \
+            manifest.get("python_per_step") is not False:
+        raise RuntimeError("The IH native runtime dependency contract is invalid")
+
+
+def _run_matlab_process(command: list[str], timeout: int):
+    # The Engine worker owns MATLAB children that may inherit stdout. Avoid
+    # pipes that keep communicate() blocked after only the worker is killed.
+    with tempfile.TemporaryFile() as output:
+        process = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT)
+        try:
+            returncode = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired as error:
+            if sys.platform == "win32":
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    capture_output=True, timeout=30, check=True,
+                )
+            else:
+                process.kill()
+            process.wait(timeout=30)
+            output.seek(0)
+            details = output.read().decode("utf-8", errors="backslashreplace")
+            raise RuntimeError(
+                f"MATLAB verification timed out after {timeout}s; "
+                f"stopped owned PID {process.pid}.\n{details}"
+            ) from error
+        output.seek(0)
+        return subprocess.CompletedProcess(command, returncode, output.read(), b"")
+
+
+def _matlab_process_ids() -> set[int]:
+    """Observe processes separately from Engine sharing; fail closed."""
+    result = subprocess.run([
+        "powershell", "-NoProfile", "-NonInteractive", "-Command",
+        "@(Get-Process MATLAB -ErrorAction SilentlyContinue | "
+        "Select-Object -ExpandProperty Id) | ConvertTo-Json -Compress",
+    ], capture_output=True, text=True, check=True, timeout=30)
+    value = json.loads(result.stdout) if result.stdout.strip() else []
+    return {int(pid) for pid in (value if isinstance(value, list) else [value])}
+
+
+def _com_worker(expected_root: str, expression: str, pid: int) -> int:
+    """Attach to an explicitly selected, already running desktop; never create one."""
+    if pid <= 0 or pid not in _matlab_process_ids():
+        raise RuntimeError(f"Selected MATLAB PID is not running: {pid}")
+    import win32com.client
+
+    application = win32com.client.GetActiveObject("Matlab.Desktop.Application")
+    quote = lambda value: str(value).replace("'", "''")
+    # Run the acceptance in a function workspace, not the user's base workspace.
+    with tempfile.TemporaryDirectory(prefix="radia-com-worker-", dir=r"C:\temp") as temporary:
+        script = Path(temporary) / "verify_existing_session.m"
+        receipt = Path(temporary) / "completed.json"
+        script.write_text(f"""verify_existing_session_local();
+function verify_existing_session_local()
+assert(feature('getpid')=={pid}, 'Unexpected MATLAB PID');
+assert(strcmpi(matlabroot,'{quote(expected_root)}'), 'Unexpected MATLAB root');
+assert(isempty(find_system('SearchDepth',0,'Type','block_diagram')), 'Borrowed MATLAB has loaded diagrams');
+[~, loadedMex] = inmem;
+assert(~any(contains(string(loadedMex),["radia_mex","optuna_mex"])), 'Borrowed MATLAB has native handles');
+savedPath=path; savedPwd=pwd;
+names={{'PATH','MKL_THREADING_LAYER','PYTHONPATH','RADIA_PYTHON_EXECUTABLE'}};
+values=cellfun(@getenv,names,'UniformOutput',false);
+cleanup=onCleanup(@() restore_session(savedPath,savedPwd,names,values));
+setenv('RADIA_PYTHON_EXECUTABLE','{quote(sys.executable)}');
+{expression}
+clear cleanup;
+assert(strcmp(path,savedPath) && strcmp(pwd,savedPwd), 'Session paths were not restored');
+assert(all(cellfun(@(n,v) strcmp(getenv(n),v),names,values)), 'Session environment was not restored');
+fid=fopen('{quote(receipt)}','w'); assert(fid~=-1);
+closeFile=onCleanup(@() fclose(fid));
+fprintf(fid,'%s',jsonencode(struct('pid',feature('getpid'),'restored',true)));
+end
+function restore_session(savedPath,savedPwd,names,values)
+clear radia_mex optuna_mex;
+path(savedPath); cd(savedPwd);
+for k=1:numel(names), setenv(names{{k}},values{{k}}); end
+end
+""", encoding="utf-8")
+        output = application.Execute(f"run('{quote(script)}');")
+        print(output, end="", flush=True)
+        # Execute returns MATLAB errors as text. Require a fresh receipt written
+        # only after the complete expression and session restoration succeed.
+        if not receipt.is_file():
+            raise RuntimeError("COM acceptance or borrowed-session restoration failed")
+        proof = json.loads(receipt.read_text(encoding="utf-8"))
+        if proof != {"pid": pid, "restored": True}:
+            raise RuntimeError("Invalid COM completion receipt")
+    print(f"MATLAB COM connected: PID={pid}; borrowed session restored", flush=True)
+    return 0
+
+
+def _engine_worker(expected_root: str, expression: str, session: str | None = None) -> int:
+    """Reuse an explicitly named session, or own one when no MATLAB exists."""
+    if session and session.startswith("com:"):
+        if not re.fullmatch(r"com:[1-9][0-9]*", session):
+            raise ValueError("COM session must be com:<positive PID>")
+        return _com_worker(expected_root, expression, int(session[4:]))
+    import matlab.engine
+
+    processes = _matlab_process_ids()
+    shared = tuple(matlab.engine.find_matlab())
+    if session:
+        if session not in shared:
+            raise RuntimeError(f"Requested MATLAB Engine is not shared: {session}; available={shared}")
+        engine = matlab.engine.connect_matlab(session)
+    else:
+        if processes or shared:
+            raise RuntimeError(
+                f"MATLAB already exists (PIDs={sorted(processes)}, shared={shared}); "
+                "select an existing session with --engine-session. No new MATLAB was started.")
+        # Sharing discovery is not evidence that an unshared process is absent.
+        if _matlab_process_ids():
+            raise RuntimeError("MATLAB started during preflight; retry session discovery")
+        print("Starting dedicated MATLAB Engine session", flush=True)
+        engine = matlab.engine.start_matlab("-nodesktop -nosplash")
+    output, errors = io.StringIO(), io.StringIO()
+    saved_path = saved_pwd = None
+    borrowed_ready = False
+    saved_environment = {}
+    try:
+        if session:
+            pid = int(engine.feature("getpid"))
+            if pid not in processes:
+                raise RuntimeError(f"Shared MATLAB PID {pid} was not observed in process preflight")
+            loaded = engine.find_system("SearchDepth", 0.0, "Type", "block_diagram")
+            if loaded:
+                raise RuntimeError("Borrowed MATLAB has loaded Simulink diagrams; refusing to disturb them")
+            _, mex_files = engine.inmem(nargout=2)
+            if any(Path(str(name)).stem in {"radia_mex", "optuna_mex"} for name in mex_files):
+                raise RuntimeError("Borrowed MATLAB already has Radia/Optuna MEX loaded; preserving its handles")
+            saved_path, saved_pwd = engine.path(), engine.pwd()
+            saved_environment = {name: engine.getenv(name) for name in (
+                "PATH", "MKL_THREADING_LAYER", "PYTHONPATH", "RADIA_PYTHON_EXECUTABLE")}
+            borrowed_ready = True
+            print(f"Reusing MATLAB Engine {session}, PID={pid}", flush=True)
+        # radia.setup reads this; the candidate is this interpreter, never PATH's python.
+        engine.setenv("RADIA_PYTHON_EXECUTABLE", sys.executable, nargout=0)
+        print(f"RADIA_PYTHON_EXECUTABLE={sys.executable}", flush=True)
+        actual_root = engine.matlabroot()
+        if Path(actual_root).resolve() != Path(expected_root).resolve():
+            raise RuntimeError(
+                f"MATLAB Engine root mismatch: expected {expected_root}, got {actual_root}"
+            )
+        print(f"MATLAB Engine connected: {actual_root}", flush=True)
+        engine.eval(expression, nargout=0, stdout=output, stderr=errors)
+    finally:
+        print(output.getvalue(), end="", flush=True)
+        print(errors.getvalue(), end="", file=sys.stderr, flush=True)
+        if session:
+            try:
+                if borrowed_ready:
+                    engine.eval("clear radia_mex optuna_mex", nargout=0)
+            finally:
+                if saved_path is not None:
+                    engine.path(saved_path, nargout=0)
+                    engine.cd(saved_pwd, nargout=0)
+                    for name, value in saved_environment.items():
+                        engine.setenv(name, value, nargout=0)
+        else:
+            engine.quit()
+    return 0
+
+
+class _EngineScratch(tempfile.TemporaryDirectory):
+    """Engine.quit can return shortly before Windows releases native DLLs."""
+
+    def cleanup(self):
+        deadline = time.monotonic() + 30
+        while True:
+            try:
+                return super().cleanup()
+            except PermissionError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.25)
+
+
+def _require_candidate_interpreter(manifest: dict) -> None:
+    """MATLAB runs Radia through this interpreter, so it must hold the package's release."""
+    import importlib.metadata as metadata
+
+    expected = manifest.get("radia_version") or manifest.get("version")
+    try:
+        installed = metadata.version("radia")
+    except metadata.PackageNotFoundError:
+        installed = None
+    if installed != expected:
+        raise RuntimeError(
+            f"{sys.executable} provides radia {installed}, but the package is radia "
+            f"{expected}; run this verifier with the candidate interpreter")
+
+
+def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300,
+                     engine_session: str | None = None) -> str:
+    if not matlab.is_file():
+        raise FileNotFoundError(f"MATLAB executable does not exist: {matlab}")
+    scratch = Path(r"C:\temp")
+    scratch.mkdir(parents=True, exist_ok=True)
+    manifest = verify_archive(archive)
+    _require_candidate_interpreter(manifest)
+    full_library = (
+        manifest.get("schema") in {
+            "radia.simulink.library-release-manifest.v1",
+            "radia.simulink.library-release-manifest.v2",
+            "radia.simulink.library-release-manifest.v3",
+            "radia.simulink.library-release-manifest.v4",
+        }
+    )
+    verification_function = (
+        "verify_radia_simulink_release"
+        if full_library
+        else "verify_radia_ih_release"
+    )
+    success_marker = (
+        "RADIA_SIMULINK_RELEASE_OK" if full_library else "RADIA_IH_RELEASE_OK"
+    )
+    with _EngineScratch(
+            prefix="radia-ih-verify-", dir=scratch) as temporary:
+        root = Path(temporary)
+        with zipfile.ZipFile(archive) as bundle:
+            bundle.extractall(root)
+        matlab_root = str((root / "matlab").resolve()).replace("'", "''")
+        expression = (
+            f"addpath('{matlab_root}','-begin');"
+            f"assert(getfield({verification_function}(),'passed'));"
+        )
+        result = _run_matlab_process(
+            [sys.executable, "-X", "utf8", "-s", str(Path(__file__).resolve()),
+             "--engine-worker", str(matlab.parent.parent), expression]
+            + ([engine_session] if engine_session else []),
+            timeout=timeout,
+        )
+        # The Python Engine worker emits UTF-8 even on a cp932 host.
+        output = (result.stdout or b"").decode("utf-8", errors="backslashreplace") + \
+            (result.stderr or b"").decode("utf-8", errors="backslashreplace")
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Extracted Simulink MATLAB smoke failed with exit "
+                f"{result.returncode}:\n{output}"
+            )
+        if success_marker not in output:
+            raise RuntimeError(
+                f"MATLAB smoke did not emit {success_marker}"
+            )
+        return output
+
+
+def main() -> int:
+    if len(sys.argv) in (4, 5) and sys.argv[1] == "--engine-worker":
+        return _engine_worker(sys.argv[2], sys.argv[3], sys.argv[4] if len(sys.argv) == 5 else None)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("archive", type=Path)
+    parser.add_argument("--matlab", type=Path)
+    parser.add_argument("--manifest-only", action="store_true")
+    parser.add_argument("--timeout", type=int, default=300)
+    parser.add_argument("--engine-session", help="Shared Engine name or com:<PID> for a local existing desktop; never quits it")
+    args = parser.parse_args()
+    archive = args.archive.resolve()
+    manifest = verify_archive(archive)
+    if not args.manifest_only:
+        if args.matlab is None:
+            parser.error("--matlab is required unless --manifest-only is used")
+        matlab_output = run_matlab_smoke(
+            archive, args.matlab.resolve(), args.timeout, args.engine_session)
+        print(_console_safe(matlab_output.rstrip()))
+    print(json.dumps({
+        "status": "passed",
+        "execution_backend": ("not-executed" if args.manifest_only else
+                              "matlab-com" if (args.engine_session or "").startswith("com:") else "matlab-engine"),
+        "package": manifest["package"],
+        "version": manifest["version"],
+        "commit": manifest["commit"],
+        "sha256": digest(archive.read_bytes()),
+    }, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

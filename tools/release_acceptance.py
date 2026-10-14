@@ -1,0 +1,49 @@
+"""The one place the release acceptance hosts are named.
+
+Release-quad requires LAB and 100号機 for the same release commit
+(AGENTS.md / CLAUDE.md, "CI Execution, Validation Evidence, and Notebook
+Policy"). hibino is a computation host and is not an acceptance target.
+
+Two tools consume this: `release_quad.py`, which produces the evidence, and
+`verify_radia_promotion.py`, which refuses to publish without it. They used
+to each carry their own list, and drifted -- the promotion gate still asked
+for the two-host quad it was written against, so a release with two of the
+required hosts' evidence would have passed the public gate. Importing the tuple
+from here is what makes that drift impossible rather than merely unlikely.
+
+Deliberately dependency-free so the promotion verifier, which runs in a
+GitHub-hosted workflow, can import it without pulling in the release
+tooling's SSH, MATLAB and filesystem assumptions.
+"""
+
+# Evidence directory names under
+# validation_test/<suite>/results/candidate_<sha9>/<host>/, in gate order.
+RELEASE_ACCEPTANCE_HOSTS = ("lab", "100")
+
+# Public evidence names describe execution roles, never machine identities.
+PUBLIC_RELEASE_ACCEPTANCE_ROLES = {"lab": "validation", "100": "build"}
+
+# Evidence directories use deployment roles; JUnit records the OS hostname.
+# Verified SSH roles on 2026-10-11: 102 -> INTEL11, 100 -> T7920.
+# Historical records used LAB -> lab and 100 -> INTEL11. The promotion
+# verifier also requires distinct OS hostnames across the accepted records.
+RELEASE_ACCEPTANCE_HOSTNAMES = {
+    "lab": frozenset({"lab", "intel11"}),
+    "100": frozenset({"100", "intel11", "t7920"}),
+    "mdx1": frozenset({"mdx1"}),
+}
+
+# Publication requires the current physical fleet, not historical role aliases.
+CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES = {"lab": "intel11", "100": "t7920"}
+
+# Human names, for messages that name a machine rather than a directory.
+RELEASE_ACCEPTANCE_HOST_LABELS = {
+    "lab": "LAB",
+    "100": "100号機",
+    "mdx1": "mdx1",
+}
+
+RELEASE_ACCEPTANCE_HOST_LABELS = {host: RELEASE_ACCEPTANCE_HOST_LABELS[host]
+                                 for host in RELEASE_ACCEPTANCE_HOSTS}
+
+assert tuple(RELEASE_ACCEPTANCE_HOST_LABELS) == RELEASE_ACCEPTANCE_HOSTS

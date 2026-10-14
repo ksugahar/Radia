@@ -1,0 +1,130 @@
+{
+  "schema": "radia-optuna.published-wheel-acceptance.v1",
+  "date": "2026-10-13",
+  "version": "0.3.0",
+  "source_commit": "b9121af32ff26e380b00b0f07486480eec63ea3f",
+  "release_url": "https://github.com/ksugahar/Radia/releases/tag/radia-optuna-v0.3.0",
+  "wheel": {
+    "filename": "radia_optuna-0.3.0-py3-none-win_amd64.whl",
+    "sha256": "f418f21854a276b0487bd1e2af7c157bcf8f5ad1d7a244001f65e45be0ef6608",
+    "mex_sha256": "00b1f43b083508bc244e40d3e80acab25929c2672bab7b51277402b6365d0819"
+  },
+  "oracle_version": "5.0.0",
+  "acceptance": {
+    "100": {
+      "gpu": "Quadro RTX 5000",
+      "route": "CI installed-wheel acceptance; CI wheel hash matches published asset",
+      "ci_url": "https://github.com/ksugahar/Radia/actions/runs/38313458179",
+      "result": {
+        "ok": true,
+        "gpu_density_launches": 4,
+        "gpu_selection_launches": 2,
+        "complete_trials": 4,
+        "failed_trials": 1,
+        "simulink_block_trials": 4,
+        "simulink_block_resumed_trials": 6,
+        "simulink_topology_stable": true,
+        "teaching_model_trials": 12,
+        "table_resume": {
+          "schema": "radia-optuna.table-resume-test.v1",
+          "ok": true,
+          "source_trial_count": 4,
+          "restored_trial_count": 4,
+          "table_names": [
+            "TrialTable",
+            "ObjectiveTable",
+            "ParamTable",
+            "IntermediateTable",
+            "UserAttrTable",
+            "ConstraintTable",
+            "SamplerStateTable"
+          ]
+        },
+        "native": {
+          "api_version": 1,
+          "backend": "optuna_mex",
+          "command_count": 21,
+          "handle_count": 12,
+          "build_route": "mexcuda",
+          "taskmanager": false,
+          "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+          "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+          "execution": "matlab-mexcuda",
+          "host_parallel_runtime": "openmp",
+          "allocator": "cuda-stream-ordered",
+          "density_launches": 4,
+          "selection_launches": 2,
+          "host_to_device_bytes": 1304,
+          "device_to_host_bytes": 16,
+          "peak_temporary_bytes": 2976,
+          "cuda_runtime": 12080,
+          "cuda_driver": 13000,
+          "cuda_device": 0
+        }
+      }
+    },
+    "a100": {
+      "gpu": "NVIDIA A100-SXM4-40GB",
+      "route": "Published asset installed into isolated venv; dedicated MATLAB Engine session",
+      "matlab_version": "26.1.0.3203278",
+      "engine_version": "26.1.12",
+      "doctor_ok": true,
+      "owned_scratch_removed": true,
+      "result": {
+        "ok": true,
+        "gpu_density_launches": 4,
+        "gpu_selection_launches": 2,
+        "complete_trials": 4,
+        "failed_trials": 1,
+        "simulink_block_trials": 4,
+        "simulink_block_resumed_trials": 6,
+        "simulink_topology_stable": true,
+        "teaching_model_trials": 12,
+        "table_resume": {
+          "schema": "radia-optuna.table-resume-test.v1",
+          "ok": true,
+          "source_trial_count": 4,
+          "restored_trial_count": 4,
+          "table_names": [
+            "TrialTable",
+            "ObjectiveTable",
+            "ParamTable",
+            "IntermediateTable",
+            "UserAttrTable",
+            "ConstraintTable",
+            "SamplerStateTable"
+          ]
+        },
+        "native": {
+          "api_version": 1,
+          "backend": "optuna_mex",
+          "command_count": 21,
+          "handle_count": 12,
+          "build_route": "mexcuda",
+          "taskmanager": false,
+          "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+          "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+          "execution": "matlab-mexcuda",
+          "host_parallel_runtime": "openmp",
+          "allocator": "cudaMalloc",
+          "density_launches": 4,
+          "selection_launches": 2,
+          "host_to_device_bytes": 1304,
+          "device_to_host_bytes": 16,
+          "peak_temporary_bytes": 2976,
+          "cuda_runtime": 12080,
+          "cuda_driver": 13010,
+          "cuda_device": 0
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Functional acceptance is not performance acceptance.",
+    "Formal A100 timings in the linked 2026-10-12 record used separate development binaries, not this release wheel.",
+    "Success proves the exercised GPU and Simulink paths, not every optional sampler or integration.",
+    "Private raw operational evidence is retained outside the public repository."
+  ],
+  "performance_evidence": "../../optimization/results_optuna_cuda_performance_a100_20261012.json",
+  "provenance": "Independent elementary optimization and Simulink acceptance cases; no engineering-model or commercial-reference data."
+}

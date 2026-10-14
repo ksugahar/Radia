@@ -1,0 +1,170 @@
+{
+  "tools": [
+    {
+      "name": "acoustic_fembem_knowledge",
+      "title": "Acoustic FEM-BEM Knowledge",
+      "description": "Returns one compact topic covering acoustic FEM, Galerkin BEM, coupling, convolution quadrature, or validation conventions.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "topic": {"type": "string"}
+        },
+        "required": ["topic"]
+      },
+      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "acoustic_fembem_vol_mesh_summary",
+      "title": "Acoustic FEM-BEM VOL Mesh Summary",
+      "description": "Checks a Netgen VOL mesh and reports topology, orientation, labels, and bounds before an acoustic solve.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "vol_path": {"type": "string"}
+        },
+        "required": ["vol_path"]
+      },
+      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "acoustic_fembem_acoustic_gate",
+      "title": "Acoustic FEM-BEM Analytic Gate",
+      "description": "Runs a selected acoustic FEM-BEM teaching case against its analytic invariant or reference solution.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {"type": "string", "enum": ["soft", "rigid", "coupled_invisible", "coupled_fluid", "focus_adjoint", "radiation_force", "fsi", "fsi_dtn", "thrust_adjoint"]},
+          "wavenumber": {"type": "number"},
+          "quadrature_order": {"type": "number"},
+          "tolerance": {"type": "number"}
+        },
+        "required": ["kind", "wavenumber", "quadrature_order", "tolerance"]
+      },
+      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "acoustic_fembem_crossval_gate",
+      "title": "Acoustic FEM-BEM Cross-Validation Gate",
+      "description": "Runs a VOL-backed MATLAB comparison against a stored analytic or NGSolve-side contract.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {"type": "string", "enum": ["mesh_topology", "galerkin_ngsolve", "helmholtz_ngsolve", "catalog_100"]},
+          "fixture": {"type": "string"},
+          "tolerance": {"type": "number"},
+          "write_log": {"type": "boolean"}
+        },
+        "required": ["kind", "fixture", "tolerance", "write_log"]
+      },
+      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "acoustic_fembem_check_result_manifest_file",
+      "title": "Acoustic FEM-BEM Result Manifest Gate",
+      "description": "Checks that a result JSON records versions, dates, schema identifiers, units, and dominant timings.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "manifest_path": {"type": "string"},
+          "require_radia_version": {"type": "boolean"},
+          "require_result_output_schema": {"type": "boolean"},
+          "expected_result_output_schema_id": {"type": "string"}
+        },
+        "required": ["manifest_path", "require_radia_version", "require_result_output_schema", "expected_result_output_schema_id"]
+      },
+      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "acoustic_fembem_cq_time_grid",
+      "title": "Acoustic FEM-BEM CQ Time Grid",
+      "description": "Checks the BDF convolution-quadrature contour, sample count, and time-grid conventions.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "dt": {"type": "number"},
+          "n_steps": {"type": "number"},
+          "method": {"type": "string", "enum": ["BDF1", "BDF2"]},
+          "contour_samples": {"type": "number"},
+          "radius": {"type": "number"}
+        },
+        "required": ["dt", "n_steps", "method", "contour_samples", "radius"]
+      },
+      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "acoustic_fembem_cq_response_reality",
+      "title": "Acoustic FEM-BEM CQ Reality Gate",
+      "description": "Checks residual and imaginary leakage in an inverse-transformed convolution-quadrature response.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "summary_json": {"type": "string"},
+          "residual_tolerance": {"type": "number"},
+          "imaginary_tolerance": {"type": "number"}
+        },
+        "required": ["summary_json", "residual_tolerance", "imaginary_tolerance"]
+      },
+      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "acoustic_fembem_soft_sphere_cq_causality",
+      "title": "Soft-Sphere CQ Causality Gate",
+      "description": "Checks a soft-sphere transient response for residual, real reconstruction, and geometric arrival time.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "num_time": {"type": "number"},
+          "time_step": {"type": "number"},
+          "num_grid": {"type": "number"}
+        },
+        "required": ["num_time", "time_step", "num_grid"]
+      },
+      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "acoustic_fembem_adjoint_scaling",
+      "title": "Acoustic FEM-BEM Adjoint Scaling",
+      "description": "Checks reverse-mode gradient accuracy and one-adjoint-solve scaling across design sizes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rows_json": {"type": "string"},
+          "gradient_tolerance": {"type": "number"},
+          "affine_tolerance": {"type": "number"},
+          "minimum_final_ratio": {"type": "number"}
+        },
+        "required": ["rows_json", "gradient_tolerance", "affine_tolerance", "minimum_final_ratio"]
+      },
+      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+    },
+    {
+      "name": "acoustic_fembem_hmatrix_scaling",
+      "title": "Acoustic FEM-BEM H-Matrix Scaling",
+      "description": "Checks dense-reference matvec error, rank, and stored-entry growth for the readable H-matrix lane.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "point_counts_json": {"type": "string"},
+          "rank_tolerance": {"type": "number"},
+          "matvec_tolerance": {"type": "number"},
+          "max_rank": {"type": "number"},
+          "max_storage_exponent": {"type": "number"}
+        },
+        "required": ["point_counts_json", "rank_tolerance", "matvec_tolerance", "max_rank", "max_storage_exponent"]
+      },
+      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+    }
+  ],
+  "signatures": {
+    "acoustic_fembem_knowledge": {"function": "acoustic_fembem.fembem_knowledge_tool", "input": {"order": ["topic"]}},
+    "acoustic_fembem_vol_mesh_summary": {"function": "acoustic_fembem.check_vol_mesh_summary", "input": {"order": ["vol_path"]}},
+    "acoustic_fembem_acoustic_gate": {"function": "acoustic_fembem.check_fembem_acoustic_gate", "input": {"order": ["kind", "wavenumber", "quadrature_order", "tolerance"]}},
+    "acoustic_fembem_crossval_gate": {"function": "acoustic_fembem.check_fembem_crossval_gate", "input": {"order": ["kind", "fixture", "tolerance", "write_log"]}},
+    "acoustic_fembem_check_result_manifest_file": {"function": "acoustic_fembem.check_result_manifest_file", "input": {"order": ["manifest_path", "require_radia_version", "require_result_output_schema", "expected_result_output_schema_id"]}},
+    "acoustic_fembem_cq_time_grid": {"function": "acoustic_fembem.check_cq_time_grid", "input": {"order": ["dt", "n_steps", "method", "contour_samples", "radius"]}},
+    "acoustic_fembem_cq_response_reality": {"function": "acoustic_fembem.check_cq_response_reality", "input": {"order": ["summary_json", "residual_tolerance", "imaginary_tolerance"]}},
+    "acoustic_fembem_soft_sphere_cq_causality": {"function": "acoustic_fembem.check_soft_sphere_cq_causality", "input": {"order": ["num_time", "time_step", "num_grid"]}},
+    "acoustic_fembem_adjoint_scaling": {"function": "acoustic_fembem.check_adjoint_scaling", "input": {"order": ["rows_json", "gradient_tolerance", "affine_tolerance", "minimum_final_ratio"]}},
+    "acoustic_fembem_hmatrix_scaling": {"function": "acoustic_fembem.check_hmatrix_scaling", "input": {"order": ["point_counts_json", "rank_tolerance", "matvec_tolerance", "max_rank", "max_storage_exponent"]}}
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "radia.ih-cuda-algebra.v1",
+  "accepted": true,
+  "scope": "Resident algebra only; not a coupled IH/Simulink solver acceptance",
+  "timing_acceptance": false,
+  "a100_used": false,
+  "source_dirty": false,
+  "source_commit": "5ada8025d57518d146689dbfc0c6060fff53840b",
+  "source_sha256": {
+    "validation_test/ih_cuda/resident_smoke.cu": "1bf92883f2d2b133e33ad99b9385366e79315e80c047106c47dfe27b93037061",
+    "packages/radia-gpu/native/ih_resident_kernels.cuh": "fbf2c80017687fb309f4f5aa965f70d74fe93f0a7b22f6430335e0cbc342d5dc",
+    "packages/radia-gpu/native/ih_bicgstab_kernels.cuh": "75ee48e211fc17261a39e656c7726584dee8808ffe3d403c4875978f969b618c",
+    "validation_test/ih_cuda/run_resident_smoke.py": "8fe5457d345100f53779b9812c5e8e246c7d51227b1c08fa140f1a60f124fab9"
+  },
+  "cases": [
+    {
+      "current_A": 0.0,
+      "complex_operator_relative": 0.0,
+      "quadratic_loss_relative": 0.0,
+      "resident_repeats": 10,
+      "bicgstab_identity_first_correction_checked": true
+    },
+    {
+      "current_A": 1.0,
+      "complex_operator_relative": 4.986552810984927e-17,
+      "quadratic_loss_relative": 2.0291559590571803e-16,
+      "resident_repeats": 10,
+      "bicgstab_identity_first_correction_checked": true
+    },
+    {
+      "current_A": -2.5,
+      "complex_operator_relative": 5.983863373181912e-17,
+      "quadratic_loss_relative": 0.0,
+      "resident_repeats": 10,
+      "bicgstab_identity_first_correction_checked": true
+    }
+  ],
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "binary_sha256": "6dd3bd693655fd5732089993eb89aa2b0e6a96215d2c44b6e453aace16a3df37"
+}

@@ -1,0 +1,112 @@
+{
+  "accepted": true,
+  "scope": "Analytic CF and retained-cloud CUDA evaluation through actual NGSolve SetValues; generic Radia object and element families pending",
+  "timing_acceptance": false,
+  "a100_used": false,
+  "ngsolve": "6.2.2607",
+  "binary_sha256": "b6e2a6bea57a987f36380d25651733d7b9aa84518305dabad80a3d87bb5934e0",
+  "field_build": {
+    "schema": "radia.field-cuda-build.v1",
+    "source_commit": "52bdfc6fc80dae5a0a05829c91cf8f5afe9238f6",
+    "source_dirty": false,
+    "source_sha256": {
+      "src/core/rad_hdiv_field_evaluator.cpp": "e2b362345b8651f724550ef809ce205f868addee3e2260491cc77b8bd86d6af8",
+      "src/core/rad_hdiv_vim.cpp": "4e5bf22a16fb9ae838fd7d0a5094124754b1a88c824ac06fe6c6322375771fef",
+      "src/core/rad_hdiv_field_evaluator.h": "01565a3f96a4ae2860e58da2f9309c25e10c33ef4190c249b08a48054cf16935",
+      "src/core/rad_hdiv_vim.h": "2e5057f8dff731d85a25793641226ce5e020c8be890bffc9b520d50fad8ea1a6",
+      "src/core/rad_field_cloud_kernel.h": "d5f4a97ee4d593718a8f7905818c199123765c4186b155850f81720876ea578f",
+      "packages/radia-gpu/native/radia_cuda_field.cu": "7dd435427c49259a947647f89da34e36247ce3008c0d2763cd5fd23da0db01a6",
+      "packages/radia-gpu/tools/build_field_cuda.py": "478e3daa367a1b09d142de5372afaf3075d41ab6d9a1704a4e131a28c7c13e36",
+      "Build.ps1": "64f4a03bc576e7cbba2f6cbd36d7c81f72400acafe03497b1c2c74c3ec5a5adf"
+    },
+    "binary_sha256": "c3d256c68c794c926ca683ba8a1e741ffd149b82ef7927d77184c985ed48d1af",
+    "matlab": "26.1.0.3346908 (R2026a) Update 5",
+    "cuda_targets": [
+      "sm_75",
+      "sm_80",
+      "compute_80 PTX"
+    ],
+    "source_representation": "existing retained point cloud only",
+    "cpu_fallback": false,
+    "python_runtime_required": false,
+    "taskmanager_regions": false
+  },
+  "cpu_field_reference": {
+    "schema": "radia.field-cpu-reference.v1",
+    "source_commit": "69301918ac79deae6deab652e0a68b633c3ee0c6",
+    "source_sha256": {
+      "rad_hdiv_field_evaluator.cpp": "db4912925731c3b41a04bdfda44622c55ff85634bc0062a3b5f65a6c91a7b8be",
+      "rad_hdiv_field_evaluator.h": "c9a821ad8d52a312e3f1a4f3b0681ae1fbee0144f55206cfee09c72573e6c56e",
+      "rad_hdiv_vim.cpp": "a6bc36adc49fda5e5ae494a14db4189b5bdc8eb1162b00c6ceb220359bd57a46",
+      "rad_hdiv_vim.h": "171b9ee542ec6bc752826e10fd80377b8d4d5019e78b2d219f4b987944af154a",
+      "rad_parallel.h": "0ad545213c48b7a0f5df1c59d46e33a4c7e85fca62eab0637c0154d940110ed5"
+    },
+    "adapter_sha256": "b3e5e9b93d20988d345f028d2dfef7b60e7293f698664e4eb540eee608aa7521",
+    "binary_sha256": "ac6e1dda3ad0b49eafd59e8aaa5929de7ace4dbaed9eeafe7cddbbddcf6e1396",
+    "ngsolve": "6.2.2607",
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]"
+  },
+  "cases": [
+    {
+      "space": "hdiv",
+      "relative_coefficient_error": 8.829747361436512e-16,
+      "repeat_equal": true,
+      "targets": 24,
+      "retained_cloud_gpu_projection_relative_error": 0.0,
+      "gpu_reuse_passed": true
+    },
+    {
+      "space": "hcurl",
+      "relative_coefficient_error": 1.8429889837511003e-16,
+      "repeat_equal": true,
+      "targets": 24,
+      "retained_cloud_gpu_projection_relative_error": 0.0,
+      "gpu_reuse_passed": true
+    },
+    {
+      "space": "vectorh1",
+      "relative_coefficient_error": 1.5037081003997537e-16,
+      "repeat_equal": true,
+      "targets": 24,
+      "retained_cloud_gpu_projection_relative_error": 0.0,
+      "gpu_reuse_passed": true
+    }
+  ],
+  "contexts_released": true,
+  "build": {
+    "accepted": true,
+    "a100_used": false,
+    "scope": "Experimental native mapped-target replay, not full RadFld migration",
+    "source_commit": "4b654001e230ee49b1936da232eea8e0f0a5ab06",
+    "source_sha256": {
+      "packages/radia-gpu/native/radia_cuda_projection.cu": "ac45a8be1f5a960a69c280524a1f4cada67f526cdc34d095f403fa8b06121bbb",
+      "packages/radia-gpu/native/radia_projection_host.cpp": "0eb0de23860730b33c0ba97796e27d14e00cfb115c66732d6625234a121558c8",
+      "packages/radia-gpu/native/radia_projection_host.cuh": "7593b7b8288f4664c6d975b000e852c9334fc00e71a93694d0233cdbc54a1564",
+      "packages/radia-gpu/tools/build_projection_cuda.py": "63ef93907fe361f30b7eec5d51493e982a00ef5af902b575513907c0315267a3",
+      "Build.ps1": "506fc6e1d4f5889e51d858f00cbb7404081c86946c00abaf923c05c76c3f8218"
+    },
+    "taskmanager_started": false,
+    "source_dirty": false,
+    "binary_sha256": "b6e2a6bea57a987f36380d25651733d7b9aa84518305dabad80a3d87bb5934e0",
+    "matlab": "26.1.0.3346908 (R2026a) Update 5"
+  },
+  "transfer_inclusive_projection_seconds": null,
+  "peak_memory_bytes": null,
+  "memory_status": "Idle-host measurement pending",
+  "physical_FE_L2_acceptance": "pending",
+  "relative_limit": 0.0001,
+  "limitations": [
+    "Small retained-cloud case only; no analytic/high-order/curved source acceptance",
+    "Old accepted cloud artifact is identified by its original source/binary hashes, not relabeled as a current build",
+    "Full legacy command migration and clear/reload lifecycle remain pending"
+  ],
+  "validation_source_sha256": {
+    "validation_test/radfld_cuda/check_projection_bridge.py": "657dbff13d3b0c97a2ef9ab1283f213aaf5b997a9581e7ef4bb5e3d80b84f6e8",
+    "validation_test/radfld_cuda/projectBatchedField.m": "ec757b969e116471ae2dfc66c331d96845c894170abcaa71118044c624f67745",
+    "validation_test/radfld_cuda/evaluateProjectionTargets.m": "f852a7999616d0e5b5f0304f0de79d67853f85423feb10c7da65884e5e027c8e"
+  },
+  "input_sha256": {
+    "mesh_vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+  },
+  "input_description": "Original unit cube, order 1, two exterior scalar point sources; shared cloud convention without 1/(4*pi)"
+}

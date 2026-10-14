@@ -1,0 +1,18 @@
+{
+  "schema": "radia.matlab.pyltspice-parity.v1",
+  "reference": {"PyLTSpice": "6.0.1", "spicelib": "1.6.3"},
+  "complete": false,
+  "families": [
+    {"python": "RawRead", "matlab": "radia.ltspice.RawRead", "backend": "native-matlab", "status": "partial"},
+    {"python": "RawWrite", "matlab": "radia.ltspice.RawWrite", "backend": "native-matlab", "status": "partial"},
+    {"python": "Trace", "matlab": "radia.ltspice.Trace", "backend": "native-matlab", "status": "covered"},
+    {"python": "SpiceEditor", "matlab": "radia.ltspice.SpiceEditor", "backend": "native-matlab", "status": "partial"},
+    {"python": "SpiceCircuit", "matlab": "radia.ltspice.SpiceCircuit", "backend": "native-matlab", "status": "partial"},
+    {"python": "AscEditor", "matlab": "radia.ltspice.AscEditor", "backend": "native-matlab", "status": "partial"},
+    {"python": "SimRunner", "matlab": "radia.ltspice.SimRunner", "backend": "native-matlab", "status": "partial"},
+    {"python": "RunTask", "matlab": "radia.ltspice.RunTask", "backend": "native-matlab", "status": "partial"},
+    {"python": "SimCommander", "matlab": "radia.ltspice.SimCommander", "backend": "native-matlab", "status": "partial"},
+    {"python": "LTspice", "matlab": "radia.ltspice.LTspice", "backend": "native-matlab", "status": "partial"},
+    {"python": "LTSpiceLogReader", "matlab": "radia.ltspice.LTSpiceLogReader", "backend": "native-matlab", "status": "partial"}
+  ]
+}

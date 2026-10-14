@@ -1,0 +1,796 @@
+"""Three-engine nonlinear validation for coil-driven ESRF Examples 5, 6 and 7.
+
+HDiv-MMM receives its checked iron-only Cubit Q2 mesh.  HCurl reduced-A and
+the mixed total/reduced Omega route receive an independently
+checked, conforming physical-air plus Kelvin mesh built from the same iron
+STEP.  Every formulation is driven by one mesh-free CoilBuilder source tree.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib
+import importlib.metadata
+import importlib.util
+import json
+import platform
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+SOURCE_ROOT = HERE.parents[1] / "src"
+SOURCE_PACKAGE = SOURCE_ROOT / "radia"
+if (SOURCE_PACKAGE / "__init__.py").is_file():
+    # A checkout run must exercise the checkout's native extension and Python
+    # modules as one unit.  A released compute-node run has no source tree and
+    # therefore resolves entirely from the installed wheel; copying a .pyd is
+    # never a valid substitute for either route.
+    sys.path.insert(0, str(SOURCE_ROOT))
+
+import ngsolve as ng
+import numpy as np
+import radia as rad
+
+from radia.electromagnet_validation import (
+    require_static_electromagnet_three_engine_contract,
+)
+from radia.esrf_examples import get_esrf_bh_table
+from radia.kelvin_identify_ngsolve import detect_kelvin_offset, has_kelvin_identification
+
+from esrf_coil_yoke import (
+    average_observation_field,
+    build_radia_coil_source,
+    core_selector,
+    get_case,
+    observation_volume_quadrature,
+)
+
+
+CTYPE_RUNNER_PATH = HERE.parent / "c_type_three_engine" / "run_three_engine.py"
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _load_shared_engines():
+    """Reuse the C-type's tested three formulation adapters.
+
+    Geometry/source ownership stays in this runner; the formulation adapters
+    remain a single implementation until they are promoted into a public
+    validation support module.  Loading is explicit so invoking this script
+    never depends on the current working directory.
+    """
+    if not CTYPE_RUNNER_PATH.is_file():
+        raise FileNotFoundError(CTYPE_RUNNER_PATH)
+    spec = importlib.util.spec_from_file_location("_radia_c_type_engines", CTYPE_RUNNER_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load shared three-engine adapters from {CTYPE_RUNNER_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _validated_field(value, expected_count: int | None = None) -> np.ndarray:
+    raw = np.asarray(value)
+    if raw.dtype.kind not in "fiu":
+        raise ValueError("field must contain real numeric values")
+    field = np.asarray(raw, dtype=float)
+    if (field.ndim != 2 or field.shape[1] != 3 or not len(field)
+            or (expected_count is not None and len(field) != expected_count)
+            or not np.isfinite(field).all()):
+        raise ValueError("field must be finite, nonempty and have shape (N, 3)")
+    return field
+
+
+def _validated_tolerance(value) -> float:
+    if (isinstance(value, (bool, str)) or not np.isscalar(value)
+            or not np.isrealobj(value) or not np.isfinite(value) or not 0 < value < 1):
+        raise ValueError("tolerance must be finite and lie in (0, 1)")
+    return float(value)
+
+
+def _relative_rms(reference: np.ndarray, candidate: np.ndarray) -> float:
+    reference = _validated_field(reference)
+    candidate = _validated_field(candidate, len(reference))
+    denominator = float(np.sqrt(np.mean(np.sum(reference * reference, axis=1))))
+    if not np.isfinite(denominator) or denominator <= 0.0:
+        raise ValueError("three-engine reference norm must be finite and positive")
+    relative = float(
+        np.sqrt(np.mean(np.sum((candidate - reference) ** 2, axis=1))) / denominator
+    )
+    if not np.isfinite(relative):
+        raise ValueError("nonfinite three-engine relative RMS")
+    return relative
+
+
+CHECKPOINT_SCHEMA = "radia.validation.esrf-coil-yoke-checkpoint.v3"
+LEGACY_CHECKPOINT_SCHEMAS = ("radia.validation.esrf-coil-yoke-checkpoint.v2",)
+STATE_SCHEMA = "radia.validation.esrf-coil-yoke-picard-state.v1"
+# A v2 checkpoint carried the iteration cap inside its identity.  The cap does not
+# change a converged solution, so it is provenance, not identity, from v3 on.
+LEGACY_CAP_KEY = "nonlinear_maximum_iterations"
+
+
+def _checkpoint_contract(**values: object) -> dict[str, object]:
+    return dict(values)
+
+
+def _implementation_identity() -> dict[str, str]:
+    """Bind resumed numerical evidence to the actual native/Python implementation."""
+    modules = (
+        "radia._radia_pybind", "radia.vim._vim", "radia.kelvin_solver",
+        "radia.static_electromagnet", "radia.vector_potential_solver",
+        "radia.mixed_omega_newton", "radia.scalar_potential_solver",
+        "radia.picard_acceleration", "ngsolve.ngslib",
+    )
+    identity = {}
+    for name in modules:
+        module = importlib.import_module(name)
+        identity[name] = _sha256(Path(module.__file__))
+    identity["runner"] = _sha256(Path(__file__))
+    identity["shared_engines"] = _sha256(CTYPE_RUNNER_PATH)
+    identity["case_source"] = _sha256(HERE / "esrf_coil_yoke.py")
+    return identity
+
+
+def _runtime_identity(require_wheel: bool = False) -> dict[str, object]:
+    """Record the installed distribution and reject editable/source mixing on demand."""
+    distribution = importlib.metadata.distribution("radia")
+    direct_url = json.loads(distribution.read_text("direct_url.json") or "{}")
+    module = Path(rad.__file__).resolve()
+    installed_module = Path(distribution.locate_file("radia/__init__.py")).resolve()
+    editable = bool(direct_url.get("dir_info", {}).get("editable", False))
+    source_checkout = (SOURCE_PACKAGE / "__init__.py").is_file()
+    # An editable install has no package file at its locate_file() path.
+    installed_import = installed_module.is_file() and module.samefile(installed_module)
+    if require_wheel and (editable or source_checkout or not installed_import):
+        raise RuntimeError(
+            "--require-wheel rejects editable, source-checkout, or mixed Radia imports"
+        )
+    return {
+        "distribution_version": distribution.version,
+        "module": str(module),
+        "installed_module": str(installed_module),
+        "direct_url": direct_url,
+        "editable": editable,
+        "source_checkout": source_checkout,
+        "installed_import": installed_import,
+    }
+
+
+def _legacy_contract(payload: dict[str, object]) -> dict[str, object]:
+    """Strip the iteration cap a v2 checkpoint stored inside its contract."""
+    contract = dict(payload.get("contract", {}))
+    contract.pop(LEGACY_CAP_KEY, None)
+    settings = contract.get("engine_settings")
+    if isinstance(settings, dict):
+        settings = dict(settings)
+        settings.pop(LEGACY_CAP_KEY, None)
+        contract["engine_settings"] = settings
+    return contract
+
+
+def _is_converged_result(
+    diagnostics: dict[str, object], engine: str | None = None,
+    expected_nonlinear: bool | None = None,
+) -> bool:
+    if expected_nonlinear is not None and diagnostics.get("nonlinear") is not expected_nonlinear:
+        return False
+    stats = dict(diagnostics.get("nonlinear_stats") or {})
+    hdiv_stats = any(key.startswith("nonlinear_") for key in stats)
+    if engine not in (None, "hdiv_mmm", "reduced_a", "mixed_total_reduced_omega"):
+        return False
+    if engine in ("reduced_a", "mixed_total_reduced_omega") and hdiv_stats:
+        return False
+    if diagnostics.get("nonlinear") is False:
+        return not stats
+    if stats.get("converged") is not True:
+        return False
+    mode = stats.get("nonlinear_convergence_mode")
+    # HDiv needs its residual-based contract; cumulative backtracks cannot
+    # distinguish accepted iterations from an exhausted individual search.
+    is_hdiv = engine == "hdiv_mmm" or hdiv_stats
+    if is_hdiv and mode is None:
+        return False
+    if stats.get("nonlinear_line_search_exhausted") or (mode is not None and mode != "tolerance"):
+        return False
+    if mode is not None:
+        residual = stats.get("nonlinear_final_relative_residual")
+        tolerance = stats.get("nonlinear_residual_tolerance")
+        if (not isinstance(residual, (int, float)) or isinstance(residual, bool)
+                or not isinstance(tolerance, (int, float)) or isinstance(tolerance, bool)
+                or not np.isfinite(residual) or not np.isfinite(tolerance)
+                or tolerance <= 0 or not 0 <= residual <= tolerance):
+            return False
+    return True
+
+
+def _read_checkpoint(path: Path, contract: dict[str, object]):
+    """Return a converged result whose identity matches ``contract``, or None.
+
+    A stored contract that differs, an unknown schema, or a non-converged solve
+    all raise: a resumed run must never silently continue from a different
+    problem or from a partial iterate presented as a result.
+    """
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    schema = payload.get("schema")
+    if schema == CHECKPOINT_SCHEMA:
+        stored = payload.get("contract")
+    elif schema in LEGACY_CHECKPOINT_SCHEMAS:
+        stored = _legacy_contract(payload)
+    else:
+        raise RuntimeError(f"unsupported checkpoint schema {schema!r}: remove {path}")
+    if stored != contract:
+        raise RuntimeError(f"checkpoint contract changed: remove {path}")
+    diagnostics = dict(payload["diagnostics"])
+    if not _is_converged_result(diagnostics, contract.get("engine"), contract.get("nonlinear")):
+        raise RuntimeError(
+            f"checkpoint holds a non-converged solve and is not a result: remove {path}")
+    count = (len(contract["observation_points_m"])
+             if "observation_points_m" in contract else None)
+    return _validated_field(payload["field_T"], count), diagnostics
+
+
+def _write_checkpoint(
+    path: Path, contract: dict[str, object], field: np.ndarray,
+    diagnostics: dict[str, object], provenance: dict[str, object],
+) -> None:
+    if not _is_converged_result(diagnostics, contract.get("engine"), contract.get("nonlinear")):
+        raise RuntimeError(
+            "refusing to write a non-converged solve as a result checkpoint")
+    count = (len(contract["observation_points_m"])
+             if "observation_points_m" in contract else None)
+    field = _validated_field(field, count)
+    path.write_text(
+        json.dumps(
+            {
+                "schema": CHECKPOINT_SCHEMA,
+                "contract": contract,
+                "provenance": provenance,
+                "field_T": np.asarray(field, dtype=float).tolist(),
+                "diagnostics": diagnostics,
+            },
+            indent=2, allow_nan=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _read_state(path: Path, contract: dict[str, object]):
+    """Return the persisted partial Picard state for ``contract``, or None."""
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("schema") != STATE_SCHEMA or payload.get("contract") != contract:
+        raise RuntimeError(f"Picard state contract changed: remove {path}")
+    return dict(payload["state"])
+
+
+def _write_state(
+    path: Path, contract: dict[str, object], state: dict[str, object],
+    provenance: dict[str, object],
+) -> None:
+    """Persist a non-converged engine's per-element state, explicitly partial."""
+    path.write_text(
+        json.dumps(
+            {
+                "schema": STATE_SCHEMA,
+                "contract": contract,
+                "provenance": provenance,
+                "converged": False,
+                "state": state,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _picard_state(name: str, stats: dict[str, object], material_key: str) -> dict[str, object]:
+    return {
+        "engine": name,
+        "element_numbers": list(stats["element_numbers"]),
+        material_key: list(stats[material_key]),
+        "iterations": int(stats.get("iterations", 0)),
+        "resumed_iterations": int(stats.get("resumed_iterations", 0)),
+        "relative_B_change": stats.get("relative_B_change", stats.get("final_relative_change")),
+        "contraction_rate_estimate": stats.get("contraction_rate_estimate"),
+        "history": list(stats.get("history", ())),
+    }
+
+
+def _pairwise(fields: dict[str, np.ndarray], selector: np.ndarray) -> dict[str, object]:
+    required = {"hdiv_mmm", "reduced_a", "mixed_total_reduced_omega"}
+    if set(fields) != required:
+        raise ValueError("expected all three named engines, without extras")
+    checked = {name: _validated_field(value) for name, value in fields.items()}
+    count = len(next(iter(checked.values())))
+    if any(len(value) != count for value in checked.values()):
+        raise ValueError("engine field shapes differ")
+    selector = np.asarray(selector)
+    if selector.dtype.kind != "b" or selector.shape != (count,) or not selector.any():
+        raise ValueError("selector must be nonempty boolean mask matching field rows")
+    rows: dict[str, object] = {}
+    names = tuple(checked)
+    for index, left in enumerate(names):
+        for right in names[index + 1 :]:
+            left_values = checked[left][selector]
+            right_values = checked[right][selector]
+            rows[f"{left}__vs__{right}"] = {
+                "relative_rms": _relative_rms(left_values, right_values),
+                "maximum_absolute_difference_T": float(
+                    np.max(np.linalg.norm(left_values - right_values, axis=1))
+                ),
+            }
+            if not all(np.isfinite(value) for value in rows[f"{left}__vs__{right}"].values()):
+                raise ValueError("nonfinite pairwise metric")
+    return rows
+
+
+def _comparison_gate(fields, selector, tolerance):
+    tolerance = _validated_tolerance(tolerance)
+    pairs = _pairwise(fields, selector)
+    values = [row["relative_rms"] for row in pairs.values()]
+    # All inputs and all metrics are checked before any max aggregation.
+    if len(values) != 3 or not all(np.isfinite(value) for value in values):
+        raise ValueError("expected three finite pairwise comparisons")
+    maximum = max(values)
+    return pairs, maximum, all(value <= tolerance for value in values)
+
+
+def _require_mesh_contract(path: Path) -> dict[str, object]:
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    contract = payload.get("contract", {})
+    if (
+        payload.get("cubit_returncode") != 0
+        or not contract.get("finite_outer_air_box_forbidden", False)
+        or set(payload.get("materials", ())) != {"iron", "air", "kelvin"}
+        or not {"iron_air_interface", "kelvin_int", "kelvin_ext"}
+        <= set(payload.get("boundaries", ()))
+        or "GND" not in set(payload.get("bbboundaries", ()))
+        or int(payload.get("identification_count", 0)) <= 0
+    ):
+        raise RuntimeError(f"invalid coil-yoke FEM mesh contract: {path}")
+    return payload
+
+
+def _process_peak_memory_mb() -> float | None:
+    """Peak working set of this process in MB (Windows ``peak_wset``, else RSS), for memory evidence."""
+    try:
+        import os
+        import psutil
+    except ImportError:  # pragma: no cover - psutil is a runtime dependency on the validation hosts
+        return None
+    info = psutil.Process(os.getpid()).memory_info()
+    peak = getattr(info, "peak_wset", None) or info.rss
+    return float(peak) / (1024.0 * 1024.0)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--case", choices=(5, 6, 7), type=int, required=True)
+    parser.add_argument("--assets-dir", type=Path, required=True)
+    parser.add_argument("--fem-mesh", type=Path, required=True)
+    parser.add_argument("--fem-mesh-report", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--engines", nargs="+", choices=("hdiv_mmm", "reduced_a", "mixed_total_reduced_omega"),
+                        default=None, help="Run selected engines independently; subset is not three-engine acceptance")
+    parser.add_argument("--energy-quadrature-order", type=int, default=None,
+                        help="Record common energy/coenergy including Kelvin exterior quadrature")
+    parser.add_argument("--hdiv-order", choices=(1, 2), type=int, default=2)
+    parser.add_argument("--fem-order", type=int, default=2)
+    parser.add_argument("--hdiv-gram-eps", type=float, default=1.0e-12)
+    parser.add_argument(
+        "--hdiv-image",
+        default=None,
+        help="Explicit HDiv IMA mirror contract, for example --hdiv-image=-x-y for one ESRF quadrupole pole.",
+    )
+    parser.add_argument("--reduced-a-solver", choices=("direct", "sparsecholesky", "bddc", "ams", "auto"), default="direct")
+    parser.add_argument("--reduced-a-relaxation", type=float, default=0.1)
+    parser.add_argument("--nonlinear-tolerance", type=float, default=2.0e-5)
+    parser.add_argument("--nonlinear-maximum-iterations", type=int, default=80)
+    parser.add_argument(
+        "--mixed-nonlinear-maximum-iterations",
+        type=int,
+        default=None,
+        help=(
+            "Optional Newton iteration cap for mixed total/reduced Omega only. "
+            "HDiv and reduced-A retain --nonlinear-maximum-iterations."
+        ),
+    )
+    parser.add_argument(
+        "--reduced-a-anderson-depth",
+        type=int,
+        default=0,
+        help=(
+            "Constrained Anderson mixing depth for the reduced-A Picard loop (a smooth "
+            "saturating cube converged in 14 instead of 24 iterations at depth 2).  The "
+            "default 0 keeps the reduced-A checkpoint identity of earlier runs; a positive "
+            "depth enters the identity."
+        ),
+    )
+    parser.add_argument("--source-trace-tolerance", type=float, default=0.05)
+    parser.add_argument("--mixed-source-order", type=int, default=None,
+                        help="Hodge source projection order; default preserves API order selection")
+    parser.add_argument("--mixed-bonus", type=int, default=4,
+                        help="Mixed Omega volume/interface assembly bonus")
+    parser.add_argument("--mixed-material-bonus", type=int, default=None,
+                        help="Newton material quadrature bonus (defaults to mixed-bonus)")
+    parser.add_argument("--mixed-source-load", choices=("auto", "volume", "surface_flux"), default="auto")
+    parser.add_argument("--mixed-exact-exterior-source", action="store_true",
+                        help="Use exact Kelvin-pulled source instead of projected exterior trace")
+    parser.add_argument("--relative-rms-tolerance", type=float, default=0.01)
+    parser.add_argument("--observation-half-width", type=float, default=2.0e-5)
+    parser.add_argument("--threads", type=int, default=0)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--preflight", action="store_true")
+    parser.add_argument("--require-wheel", action="store_true",
+                        help="Reject editable, checkout, and mixed Radia imports")
+    options = parser.parse_args(argv)
+    _validated_tolerance(options.relative_rms_tolerance)
+    _validated_tolerance(options.nonlinear_tolerance)
+    if options.mixed_source_order is not None and options.mixed_source_order < 1:
+        raise ValueError("--mixed-source-order must be positive")
+    if options.mixed_bonus < 0:
+        raise ValueError("--mixed-bonus must be nonnegative")
+    if options.mixed_material_bonus is not None and options.mixed_material_bonus < 0:
+        raise ValueError("--mixed-material-bonus must be nonnegative")
+    if options.fem_order < 1:
+        raise ValueError("--fem-order must be positive")
+    if options.nonlinear_maximum_iterations < 1:
+        raise ValueError("--nonlinear-maximum-iterations must be positive")
+    if (
+        options.mixed_nonlinear_maximum_iterations is not None
+        and options.mixed_nonlinear_maximum_iterations < 1
+    ):
+        raise ValueError("--mixed-nonlinear-maximum-iterations must be positive")
+    if not 0.0 < options.hdiv_gram_eps < 1.0:
+        raise ValueError("--hdiv-gram-eps must lie in (0, 1)")
+    if not 0.0 < options.reduced_a_relaxation <= 1.0:
+        raise ValueError("--reduced-a-relaxation must lie in (0, 1]")
+    if options.reduced_a_anderson_depth < 0:
+        raise ValueError("--reduced-a-anderson-depth must be non-negative")
+    if not 0.0 < options.source_trace_tolerance < 1.0:
+        raise ValueError("--source-trace-tolerance must lie in (0, 1)")
+    if (
+        not np.isfinite(options.observation_half_width)
+        or options.observation_half_width <= 0.0
+    ):
+        raise ValueError("--observation-half-width must be finite and positive")
+    if options.threads > 0:
+        ng.SetNumThreads(options.threads)
+
+    case = get_case(options.case)
+    runtime_identity = _runtime_identity(options.require_wheel)
+    assets_dir = options.assets_dir.resolve()
+    iron_mesh_path = assets_dir / "model.vol"
+    fem_mesh_path = options.fem_mesh.resolve()
+    for path in (iron_mesh_path, fem_mesh_path):
+        if not path.is_file():
+            raise FileNotFoundError(path)
+    fem_mesh_report = _require_mesh_contract(options.fem_mesh_report.resolve())
+    with ng.TaskManager():
+        iron_mesh = ng.Mesh(str(iron_mesh_path))
+    with ng.TaskManager():
+        fem_mesh = ng.Mesh(str(fem_mesh_path))
+    if not has_kelvin_identification(fem_mesh):
+        raise RuntimeError("FEM mesh has no Kelvin point identification")
+    points, field_points = observation_volume_quadrature(
+        case.number, half_width_m=options.observation_half_width
+    )
+    for point in field_points:
+        if not fem_mesh(*map(float, point)):
+            raise RuntimeError(
+                f"observation quadrature point lies outside FEM mesh: {point.tolist()}"
+            )
+    rad.UtiDelAll()
+    coil, coil_manifest = build_radia_coil_source(case.number)
+    source_field = average_observation_field(
+        np.asarray(rad.Fld(coil, "b", field_points), dtype=float), len(points)
+    )
+    if not np.isfinite(source_field).all():
+        raise RuntimeError("CoilBuilder source field is non-finite at an observation point")
+    kelvin_center = tuple(float(value) for value in detect_kelvin_offset(fem_mesh))
+    engines = _load_shared_engines()
+    bh_table = get_esrf_bh_table(case.number)
+    mixed_nonlinear_maximum_iterations = (
+        int(options.nonlinear_maximum_iterations)
+        if options.mixed_nonlinear_maximum_iterations is None
+        else int(options.mixed_nonlinear_maximum_iterations)
+    )
+    output = options.output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    common = _checkpoint_contract(
+        implementation_sha256=_implementation_identity(),
+        runtime_identity=runtime_identity,
+        case=int(case.number),
+        iron_mesh_sha256=_sha256(iron_mesh_path),
+        fem_mesh_sha256=_sha256(fem_mesh_path),
+        fem_mesh_report_sha256=_sha256(options.fem_mesh_report.resolve()),
+        hdiv_order=int(options.hdiv_order),
+        fem_order=int(options.fem_order),
+        hdiv_gram_eps=float(options.hdiv_gram_eps),
+        hdiv_image=options.hdiv_image,
+        nonlinear=True,
+        nonlinear_tolerance=float(options.nonlinear_tolerance),
+        observation_points_m=points.tolist(),
+        observation_half_width_m=float(options.observation_half_width),
+        observation_quadrature="tensor_gauss_2x2x2",
+    )
+    energy_observer = None
+    energy_module = None
+    if options.energy_quadrature_order is not None:
+        energy_path = CTYPE_RUNNER_PATH.with_name("magnetic_energy.py")
+        energy_spec = importlib.util.spec_from_file_location("_radia_energy_validation", energy_path)
+        energy_module = importlib.util.module_from_spec(energy_spec)
+        energy_spec.loader.exec_module(energy_module)
+        if options.hdiv_image is not None:
+            raise ValueError("energy quadrature currently requires a full iron mesh")
+        energy_observer = energy_module.PhysicalVolumeEnergy(
+            fem_mesh, bh_table, options.energy_quadrature_order,
+            kelvin_center=kelvin_center, kelvin_radius=case.kelvin_radius_m)
+        common["energy_contract"] = energy_observer.contract
+        common["energy_implementation_sha256"] = _sha256(energy_path)
+    fields: dict[str, np.ndarray] = {}
+    diagnostics: dict[str, dict[str, object]] = {}
+
+    def run_hdiv(_state):
+        return engines.solve_hdiv(
+            iron_mesh,
+            coil,
+            bh_table,
+            nonlinear=True,
+            order=options.hdiv_order,
+            gram_eps=options.hdiv_gram_eps,
+            nonlinear_tolerance=options.nonlinear_tolerance,
+            nonlinear_maximum_iterations=options.nonlinear_maximum_iterations,
+            points=field_points,
+            image=options.hdiv_image,
+            energy_observer=energy_observer,
+        )
+
+    def run_reduced_a(state):
+        return engines.solve_reduced_a(
+            fem_mesh,
+            coil,
+            bh_table,
+            nonlinear=True,
+            order=options.fem_order,
+            linear_solver=options.reduced_a_solver,
+            relax=options.reduced_a_relaxation,
+            nonlinear_tolerance=options.nonlinear_tolerance,
+            nonlinear_maximum_iterations=options.nonlinear_maximum_iterations,
+            nonlinear_verbose=False,
+            kelvin_center=kelvin_center,
+            kelvin_radius=case.kelvin_radius_m,
+            points=field_points,
+            anderson_depth=options.reduced_a_anderson_depth,
+            nu_initial=None if state is None else np.asarray(state["nu_elements"], dtype=float),
+            observation_points=field_points,
+            energy_observer=energy_observer,
+        )
+
+    def run_mixed(_state):
+        return engines.solve_omega(
+            fem_mesh,
+            coil,
+            bh_table,
+            nonlinear=True,
+            order=options.fem_order,
+            nonlinear_tolerance=options.nonlinear_tolerance,
+            nonlinear_maximum_iterations=mixed_nonlinear_maximum_iterations,
+            nonlinear_verbose=False,
+            kelvin_center=kelvin_center,
+            kelvin_radius=case.kelvin_radius_m,
+            points=field_points,
+            source_trace_tolerance=options.source_trace_tolerance,
+            source_projection_order=options.mixed_source_order,
+            bonus_intorder=options.mixed_bonus,
+            material_bonus_intorder=options.mixed_material_bonus,
+            source_load=options.mixed_source_load,
+            exact_exterior_source=options.mixed_exact_exterior_source,
+            observation_points=field_points,
+            energy_observer=energy_observer,
+        )
+
+    # (engine, solve(state), per-element state key or None)
+    solver_specs = (
+        ("hdiv_mmm", run_hdiv, None),
+        ("reduced_a", run_reduced_a, "nu_elements"),
+        ("mixed_total_reduced_omega", run_mixed, None),
+    )
+    reduced_a_settings = {
+        "linear_solver": options.reduced_a_solver,
+        "relaxation": float(options.reduced_a_relaxation),
+    }
+    if options.reduced_a_anderson_depth:
+        reduced_a_settings["anderson_depth"] = int(options.reduced_a_anderson_depth)
+    engine_settings = {
+        "hdiv_mmm": {
+            "linear_tolerance": 1.0e-8,
+            "linear_maximum_iterations": 12000,
+            "preconditioner": "auto",
+        },
+        "reduced_a": reduced_a_settings,
+        "mixed_total_reduced_omega": {
+            "source_potential_contract": "total_hodge",
+            "source_projection_order": (max(2, int(options.fem_order))
+                                        if options.mixed_source_order is None
+                                        else int(options.mixed_source_order)),
+            "bonus_intorder": int(options.mixed_bonus),
+            "nonlinear_method": "newton",
+            "material_bonus_intorder": options.mixed_material_bonus,
+            "source_load": options.mixed_source_load,
+            "exact_exterior_source": bool(options.mixed_exact_exterior_source),
+            "source_trace_tolerance": float(options.source_trace_tolerance),
+        },
+    }
+    iteration_caps = {
+        "hdiv_mmm": int(options.nonlinear_maximum_iterations),
+        "reduced_a": int(options.nonlinear_maximum_iterations),
+        "mixed_total_reduced_omega": int(mixed_nonlinear_maximum_iterations),
+    }
+
+    def provenance(name: str) -> dict[str, object]:
+        return {
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "platform_class": platform.system(),
+            "nonlinear_maximum_iterations": iteration_caps[name],
+            "engine_settings": engine_settings[name],
+        }
+    if options.preflight:
+        payload = {
+            "schema": "radia.validation.esrf-coil-yoke-preflight.v2",
+            "passed": True,
+            "runtime_identity": runtime_identity,
+            "case": int(case.number),
+            "source": coil_manifest,
+            "source_field_rms_T": float(np.sqrt(np.mean(np.sum(source_field * source_field, axis=1)))),
+            "hdiv_image": options.hdiv_image,
+            "iron_mesh_sha256": _sha256(iron_mesh_path),
+            "fem_mesh_sha256": _sha256(fem_mesh_path),
+            "fem_mesh_contract": fem_mesh_report,
+            "kelvin_center_m": list(kelvin_center),
+            "observation_points_m": points.tolist(),
+        }
+        output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        return 0
+    for name, solve, state_key in solver_specs:
+        if options.engines is not None and name not in options.engines:
+            continue
+        checkpoint = output.with_suffix(f".{name}.checkpoint.json")
+        state_path = output.with_suffix(f".{name}.state.json")
+        contract = _checkpoint_contract(
+            **common, engine=name, engine_settings=engine_settings[name]
+        )
+        resumed = _read_checkpoint(checkpoint, contract) if options.resume else None
+        if resumed is not None:
+            fields[name], diagnostics[name] = resumed
+            diagnostics[name]["resumed_from_checkpoint"] = True
+            continue
+        # A partial state left by an earlier non-converged run of the SAME
+        # problem is a warm start, never a result.
+        state = (_read_state(state_path, contract)
+                 if options.resume and state_key is not None else None)
+        # A mixed Omega Newton non-convergence raises MixedOmegaNewtonNotConverged
+        # and propagates: that engine has no per-element warm-start state.
+        field_samples, diagnostics[name] = solve(state)
+        stats = dict(diagnostics[name].get("nonlinear_stats") or {})
+        if state is not None:
+            stats["resumed_iterations"] = (
+                int(state.get("resumed_iterations", 0)) + int(state["iterations"]))
+            stats["warm_start_state"] = str(state_path)
+            diagnostics[name]["nonlinear_stats"] = stats
+        if not _is_converged_result(diagnostics[name], name, common["nonlinear"]):
+            if state_key is not None and state_key in stats:
+                _write_state(state_path, contract, _picard_state(name, stats, state_key),
+                             provenance(name))
+                raise RuntimeError(
+                    f"{name} did not converge; its per-element state was saved to "
+                    f"{state_path} for a warm restart with --resume"
+                )
+            raise RuntimeError(f"{name} did not converge")
+        field_samples = _validated_field(field_samples, len(field_points))
+        fields[name] = _validated_field(
+            average_observation_field(field_samples, len(points)), len(points))
+        diagnostics[name]["observation_contract"] = {
+            "kind": "volume_average",
+            "quadrature": "tensor_gauss_2x2x2",
+            "half_width_m": float(options.observation_half_width),
+            "sample_count_per_centre": 8,
+        }
+        _write_checkpoint(checkpoint, contract, fields[name], diagnostics[name],
+                          provenance(name))
+        if state_path.is_file():
+            state_path.unlink()
+    if len(diagnostics) != 3:
+        output.write_text(json.dumps({
+            "schema": "radia.validation.esrf-coil-yoke-partial.v1",
+            "three_engine_acceptance": False, "case": int(case.number),
+            "engines": diagnostics, "fields_T": {name: value.tolist() for name, value in fields.items()},
+            "shared_input_contract": common,
+        }, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+        return 0
+    formulation_contract = require_static_electromagnet_three_engine_contract(diagnostics)
+    all_points = np.ones(len(points), dtype=bool)
+    core = core_selector(case.number, points)
+    raw_pairs = _pairwise(fields, all_points)
+    core_pairs, maximum_core_relative_rms, fields_agree = _comparison_gate(
+        fields, core, options.relative_rms_tolerance)
+    nonlinear_converged = all(
+        _is_converged_result(row, name, common["nonlinear"]) for name, row in diagnostics.items())
+    passed = nonlinear_converged and fields_agree
+    energy_comparison = (energy_module.compare_energy({
+        name: row["energy_observables"] for name, row in diagnostics.items()
+    }) if energy_observer else None)
+    result = {
+        "energy_comparison": energy_comparison,
+        "schema": "radia.validation.esrf-coil-yoke-three-engine.v2",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "passed": bool(passed),
+        "platform_class": platform.system(),
+        "python": sys.version,
+        "runtime_identity": runtime_identity,
+        "implementation_sha256": common["implementation_sha256"],
+        "peak_process_memory_mb": _process_peak_memory_mb(),
+        "case": int(case.number),
+        "formulation_contract": formulation_contract,
+        "shared_input_contract": {
+            "iron_cad": "same Cubit STEP authority for HDiv and FEM meshes",
+            "coil_source": coil_manifest,
+            "bh_table": "shared monotone PCHIP B(H)",
+            "finite_outer_air_box_forbidden": True,
+            "hdiv_air_mesh_forbidden": True,
+            "hdiv_image": options.hdiv_image,
+            "fem_kelvin_mesh_shared": True,
+            "mixed_h1_source_potential": "total_volume_hodge_with_harmonic_cut",
+        },
+        "iron_mesh": str(iron_mesh_path),
+        "iron_mesh_sha256": _sha256(iron_mesh_path),
+        "fem_mesh": str(fem_mesh_path),
+        "fem_mesh_sha256": _sha256(fem_mesh_path),
+        "fem_mesh_contract": fem_mesh_report,
+        "kelvin_center_m": list(kelvin_center),
+        "observation_points_m": points.tolist(),
+        "observation_contract": {
+            "kind": "volume_average",
+            "quadrature": "tensor_gauss_2x2x2",
+            "half_width_m": float(options.observation_half_width),
+            "sample_count_per_centre": 8,
+        },
+        "core_point_count": int(np.count_nonzero(core)),
+        "engines": diagnostics,
+        "fields_T": {name: value.tolist() for name, value in fields.items()},
+        "pairwise_raw": raw_pairs,
+        "pairwise_core": core_pairs,
+        "maximum_core_pairwise_relative_rms": maximum_core_relative_rms,
+        "relative_rms_tolerance": float(options.relative_rms_tolerance),
+        "nonlinear_converged": nonlinear_converged,
+        "provenance": {
+            "nonlinear_maximum_iterations": iteration_caps,
+            "engine_settings": engine_settings,
+            "checkpoint_schema": CHECKPOINT_SCHEMA,
+        },
+    }
+    output.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    if not passed:
+        raise RuntimeError(f"three-engine comparison did not pass; see {output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

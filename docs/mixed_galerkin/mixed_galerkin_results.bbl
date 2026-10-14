@@ -1,0 +1,38 @@
+\begin{thebibliography}{1}
+
+\bibitem{Senior1962}
+T.~B.~A. {Senior}.
+\newblock Impedance boundary conditions for imperfectly conducting surfaces.
+\newblock {\em Applied Scientific Research, Section B}, 8(1):418--436, 1960.
+
+\bibitem{senior1962note}
+T.~B.~A. Senior.
+\newblock A note on impedance boundary conditions.
+\newblock {\em Canadian Journal of Physics}, 40(5):663--665, 1962.
+
+\bibitem{Mitzner1967}
+K.~M. {Mitzner}.
+\newblock An integral equation approach to scattering from a body of finite
+  conductivity.
+\newblock {\em Radio Science}, 2(12):1459--1470, 1967.
+
+\bibitem{YuferevIda2009}
+Sergey~V. {Yuferev} and Nathan {Ida}.
+\newblock {\em Surface Impedance Boundary Conditions: A Comprehensive
+  Approach}.
+\newblock CRC Press, Boca Raton, FL, 2009.
+
+\bibitem{Kameari2018}
+Akihisa {Kameari}, Hassan {Ebrahimi}, Kengo {Sugahara}, Yuji {Shindo}, and
+  Tetsuji {Matsuo}.
+\newblock Cauer ladder network representation of eddy-current fields for model
+  order reduction using finite-element method.
+\newblock {\em IEEE Transactions on Magnetics}, 54(3):1–4, Mar 2018.
+
+\bibitem{QuarteroniValli1999}
+A.~{Quarteroni} and A.~{Valli}.
+\newblock {\em Domain Decomposition Methods for Partial Differential
+  Equations}.
+\newblock Oxford University Press, 1999.
+
+\end{thebibliography}

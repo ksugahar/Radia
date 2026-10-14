@@ -1,0 +1,71 @@
+{
+  "schema": "radia.hacapk-epsilon-sensitivity.v1",
+  "accepted": true,
+  "sources": 256,
+  "rank_budget": 64,
+  "assembly_epsilon": 1e-06,
+  "unchanged_cpu_parity_limit": 1e-08,
+  "full_assembly": {
+    "relative_difference": 5.814922503369669e-10,
+    "stats": {
+      "owned_device_bytes": 217704,
+      "applications": 1,
+      "kernel_launches": 4,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 561156,
+      "assembly_entry_batches": 229,
+      "assembly_entry_count": 39070,
+      "assembly_leaf_count": 11,
+      "assembly_lowrank_count": 1
+    },
+    "scope": "Constant affine tetra charges; full native hierarchy and CUDA entries; not general HDiv physics"
+  },
+  "strict_epsilon_1e_10": {
+    "relative_difference": 1.8877739286618826e-11,
+    "stats": {
+      "owned_device_bytes": 336392,
+      "applications": 1,
+      "kernel_launches": 4,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 561156,
+      "assembly_entry_batches": 287,
+      "assembly_entry_count": 51416,
+      "assembly_leaf_count": 11,
+      "assembly_lowrank_count": 0
+    },
+    "scope": "Constant affine tetra charges; full native hierarchy and CUDA entries; not general HDiv physics"
+  },
+  "owned_memory_reduction_fraction": 0.352826464363005,
+  "cpu_direct_offdiagonal_spectrum": {
+    "shape": [
+      128,
+      128
+    ],
+    "svd_optimal_relative_frobenius_tail": {
+      "1": 0.001510307300792446,
+      "2": 0.0009865042302798247,
+      "4": 1.5059788060784622e-06,
+      "8": 1.418333072250823e-09,
+      "16": 1.1078360741019105e-09,
+      "32": 8.414169922113194e-10,
+      "64": 4.4716459141156367e-10
+    },
+    "scope": "Independent CPU direct physical offdiagonal block; diagnostic only, no SVD replacement of ACA"
+  },
+  "binary_sha256": "c2c5819bbf3b45cee75e14ad656eba9816335d311b2175deff08dbacc3ffc1c0",
+  "input_sha256": "5110d32745ae7f48ea8e9a1dff39b1b1f637a7a5684826e426b572849807ca4d",
+  "executed_source_sha256": {
+    "validation_test\\hmatrix_cuda\\validate_resident.py": "77ee0ec813325abbb7ea3aa16167f47840240b9ee6add4bfca7abb4e4a36058e",
+    "validation_test\\hmatrix_cuda\\checkResidentHMatrix.m": "6e9e7864b3adfcc33622588dc1f745350c27a7f05250cd8e7b8fc44afc85387e",
+    "packages\\radia-gpu\\matlab\\+radia\\+gpu\\HMatrixOperator.m": "d98a77641d51eea484cefc8d9ee5b12d03395725b3ac7ccda8150e242933052a"
+  },
+  "timing_acceptance": false,
+  "general_hdiv_validation_complete": false,
+  "release_accepted": false,
+  "limitations": [
+    "Explicit diagnostic tolerance only; production defaults unchanged.",
+    "One matvec vector is not an operator-norm certificate.",
+    "Spectrum is for the independent direct CPU offdiagonal block; numerical evaluation floor cause is not isolated.",
+    "No timing measurement; owned bytes exclude runtime/global/host peaks."
+  ]
+}

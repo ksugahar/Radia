@@ -1,0 +1,275 @@
+"""Skip native AMS work only for verified non-native configuration changes."""
+
+from fnmatch import fnmatchcase
+import json
+import os
+from pathlib import Path
+import subprocess
+import tomllib
+
+
+# Checked against both workflow trigger lists by the lightweight contract suite.
+NATIVE_PATHS = (
+    'src/radia/_residual_gate.py',
+    'validation_test/open_boundary/test_kelvin_vector_direct_gate.py',
+    'validation_test/team21/**',
+    'tests/test_team21a_geometry_source.py',
+    'docs/maglev/demos/sphere/maglev_sphere_force.py',
+    'docs/maglev/demos/team28/team28_arnoldi_force.py',
+    'docs/maglev/demos/rotating_magnet_eddy.py',
+    'tests/test_maglev_sphere_golden.py',
+    'tests/test_team28_arnoldi_golden.py',
+    'tests/test_rotating_magnet_eddy_golden.py',
+    'validation_test/maglev/test_demo_evidence.py',
+    'packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py',
+    'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py',
+    'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py',
+    'validation_test/radia_mcp/test_axi_eddy_current_drive.py',
+    'validation_test/radia_mcp/test_eddy_driven_region.py',
+    'validation_test/radia_mcp/test_aphi_gauge_point.py',
+    'src/radia/bem/sibc_hacapk.py',
+    'src/radia/panels/surface_mesh_extract.py',
+    'tests/test_surface_orientation.py',
+    'src/radia/bem_sibc_solver.py',
+    'tests/test_bem_sibc_acceptance.py',
+    'src/radia/esim_cell_problem.py',
+    'src/radia/analytical_formulas/induction_heating.py',
+    'tests/test_esim_integration.py',
+    'src/radia/esim_coupled_solver.py',
+    'packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py',
+    'src/radia/gmsh_post_export.py',
+    'src/radia/em_material.py',
+    'src/radia/coil_from_cad.py',
+    'src/radia/force_ngsolve.py',
+    'src/radia/scalar_bie_sibc.py',
+    'packages/cubit-mesh-export/src/cubit_mesh_export/check.py',
+    'tests/test_ih_operator_assembly.py',
+    'tests/test_ih_operator_axisym.py',
+    'tests/test_ih_fin_surface_boundary.py',
+    'tests/axifem/test_heat_henrotte_smoke.py',
+    'tests/axifem/test_heat_field_extrema.py',
+    'validation_test/induction_heating/test_ih_operator_physics_golden.py',
+    'validation_test/axifem/test_heat_axisym_e2e.py',
+    'src/radia/esim_multiport.py',
+    'src/radia/panels/calc_inductance.py',
+    'tests/test_esim_incident_only_retirement.py',
+    'tests/test_esim_convergence_propagation.py',
+    'tests/analytical_formulas/test_induction_heating.py',
+    'src/radia/panels/em_table.py',
+    'tests/test_em_table.py',
+    'src/runtime/ih/radia_ih_thermal.cpp',
+    'tests/cpp/test_radia_ih_thermal_acceptance.cpp',
+    'src/radia/ih*.py',
+    'src/radia/panels/calc_heat*.py',
+    'src/radia/panels/calc_ih_axisym_coupled.py',
+    'src/radia/panels/calc_fem_kelvin.py',
+    'src/radia/panels/calc_fem_coilmesh.py',
+    'tests/test_ih_*.py',
+    'validation_test/induction_heating/test_fem_ams_parity.py',
+    'validation_test/induction_heating/fem_sibc_geometry.py',
+    'src/radia/vim/_nonlinear.py',
+    'src/radia/vim/_solve.py',
+    'tests/test_hdiv_energy_material_consistency.py',
+    'src/core/rad_arc_section.h',
+    'src/core/rad_arc_current.cpp',
+    'src/core/rad_ngsolve_radia_field.h',
+    'src/core/rad_parallel.h',
+    'tests/test_arc_far_rule.py',
+    'tests/test_radiafield_cache_parallel.py',
+    'tests/test_radiafield_memoize.py',
+    'tests/test_radiafield_precision.py',
+    'tests/test_mixed_omega_source_load.py',
+    'tests/test_three_engine_energy.py',
+    'validation_test/c_type_three_engine/magnetic_energy.py',
+    'tests/test_ams_internal_setup_parallel.py',
+    'src/core/rad_hacapk*',
+    'src/ext/HACApK/**',
+    'tests/test_hdiv_chargegram_build_safety.py',
+    'tests/test_hdiv_vim_native_matrix.py',
+    'tests/test_hdiv_same_process_determinism.py',
+    'src/radia/vector_potential_solver.py',
+    'src/radia/scalar_potential_solver.py',
+    'validation_test/panels/test_scalar_linear_direct.py',
+    'validation_test/panels/test_heat_boundary_roles.py',
+    'src/radia/topology_optimization.py',
+    'src/core/rad_hdiv*',
+    'src/radia/vim/**',
+    'src/radia/accelerator_lie_topopt.py',
+    'src/radia/isochronous_topopt.py',
+    'src/radia/ffag_topopt.py',
+    'src/radia/kelvin_identify_ngsolve.py',
+    'tests/feec/test_hdiv_vim_cyclic_periodic_hex.py',
+    'tests/test_hdiv_vim_bh_validation.py',
+    'tests/test_hdiv_vim_capabilities.py',
+    'tests/test_isochronous_topopt.py',
+    'tests/test_accelerator_lie_topopt.py',
+    'tests/test_topology_optimization.py',
+    'validation_test/topology_optimization/test_hex_cluster_derivative.py',
+    'src/radia/motor_design.py',
+    'src/radia/panels/calc_common.py',
+    'src/radia/panels/calc_axisym_volumetric.py',
+    'validation_test/panels/test_axisym_volumetric_direct.py',
+    'validation_test/panels/test_coilmesh_direct_residual.py',
+    'validation_test/panels/test_accel_linear_dispatch.py',
+    'validation_test/panels/test_kelvin_benchmark_direct.py',
+    'src/radia/panels/calc_kelvin_benchmark.py',
+    'src/radia/panels/calc_accel_magnet.py',
+    'tests/test_accel_solver_selection.py',
+    'src/radia/em_design.py',
+    'src/radia/panels/calc_motor_lamination.py',
+    'src/radia/panels/calc_motor_transient.py',
+    'validation_test/panels/test_motor_lamination_golden.py',
+    'validation_test/panels/test_motor_transient_golden.py',
+    'validation_test/panels/build_test_motor_mesh.py',
+    'tests/test_vim_eddy_hybrid.py',
+    'tests/test_vim_coupled_weak_vs_monolithic.py',
+    'tests/test_vector_potential_bh_tail.py',
+    'tests/test_reduced_a_source_materialization.py',
+    'tests/test_hdiv_response_contract.py',
+    'src/core/rad_beam_transfer.*',
+    'src/lib/rad_beam_transfer_pybind.*',
+    'src/radia/beam.py',
+    'validation_test/accelerator/benchmark_beam_transfer_mex_python.py',
+    'src/radia/ngsbem_peec_body_coupling.py',
+    'tests/test_ngsbem_peec_body_direct.py',
+    'src/radia/ngsbem_eddy.py',
+    'tests/test_ngsbem_eddy_direct.py',
+    'src/radia/eddy_aphi.py',
+    'src/radia/eddy_axisym_ring.py',
+    'src/radia/axisym_measure.py',
+    'src/radia/sibc_corner_patch.py',
+    'src/radia/mixed_omega_newton.py',
+    'src/radia/patch_recovery.py',
+    'tests/test_patch_recovery.py',
+    'src/radia/p1_newton.py',
+    'src/radia/p1_linear.py',
+    'tests/test_p1_newton.py',
+    'tests/test_p1_linear.py',
+    'src/radia/meshed_current.py',
+    'tests/test_meshed_current.py',
+    'src/radia/static_electromagnet.py',
+    'src/radia/kelvin_solver.py',
+    'src/radia/kelvin_mesh_validation.py',
+    'src/radia/scalar_potential_solver.py',
+    'validation_test/c_type_p1_ams_box/run_p1_box.py',
+    'tests/test_eddy_aphi_contract.py',
+    'tests/test_axisym_measure_contract.py',
+    'tests/test_sibc_corner_patch.py',
+    'tests/test_boundary_material_adjacency.py',
+    'tests/test_coil_axis_closed_form.py',
+    'tests/test_mixed_omega_newton.py',
+    'tests/test_kelvin_mixed_omega.py',
+    'tests/test_mixed_omega_review_fixes.py',
+    'tests/test_c_type_p1_box_lane.py',
+    'src/ext/sparsesolv/**',
+    'src/core/radia_mex_sparse_symmetry.h',
+    'tests/cpp/test_radia_mex_sparse_symmetry.cpp',
+    'src/radia/__init__.py',
+    'src/radia/_preconditioners.py',
+    'CMakeLists.txt',
+    'Build.ps1',
+    'tools/run_test_tier.py',
+    'tools/native_build_provenance.ps1',
+    'tests/test_native_build_provenance.py',
+    'tools/sparsesolv_ci_impact.py',
+    'tests/test_sparsesolv_ci_contract.py',
+    '.github/workflows/sparsesolv.yml',
+)
+
+
+def test_dependencies_only(before: str, after: str) -> bool:
+    """All configuration outside the two development extras must be identical."""
+    old, new = tomllib.loads(before), tomllib.loads(after)
+    if old == new:
+        return False
+    for document in (old, new):
+        extras = document.get("project", {}).get("optional-dependencies", {})
+        for name in ("test", "dev"):
+            values = extras.pop(name, [])
+            if not isinstance(values, list) or not all(isinstance(x, str) for x in values):
+                return False
+    return old == new
+
+
+def ams_manifest_unchanged(before: str, after: str) -> bool:
+    def relevant(text):
+        data = json.loads(text)
+        if data["schema"] != "radia.test-tier-manifest.v1":
+            raise ValueError("unknown manifest schema")
+        profiles = data.pop("profiles")
+        data.pop("impact_rules", None)  # AMS invokes the profile without --since.
+        selected = {}
+        name = "sparsesolv"
+        while name:
+            if name in selected:
+                raise ValueError("cyclic AMS profile inheritance")
+            profile = profiles[name]
+            paths = profile.get("paths", [])
+            if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
+                raise ValueError("invalid AMS paths")
+            budget = profile.get("max_elapsed_seconds")
+            if budget is not None and (not isinstance(budget, (int, float)) or budget <= 0):
+                raise ValueError("invalid AMS time budget")
+            selected[name] = profile
+            name = profile.get("extends")
+            if name is not None and not isinstance(name, str):
+                raise ValueError("invalid AMS parent")
+        for profile_name in ("solver-numerics", "solver-heavy"):
+            if profile_name in profiles:
+                selected[profile_name] = profiles[profile_name]
+        data["profiles"] = selected
+        paths = [path for profile in selected.values() for path in profile.get("paths", [])]
+        if not paths or len(paths) != len(set(paths)):
+            raise ValueError("empty or duplicate AMS test paths")
+        return data
+    return relevant(before) == relevant(after)
+
+
+def native_required(event_name, event, git):
+    if event_name not in ("push", "pull_request"):
+        return True, "manual or unknown event"
+    # A PR checkout is GitHub's merge commit; its first parent is the base.
+    # Pushes must inspect the entire event range, not just the final commit.
+    base = "HEAD^1" if event_name == "pull_request" else event["before"]
+    if not base or set(base) == {"0"}:
+        return True, "no comparison base"
+    changed = git("diff", "--name-only", "-z", base, "HEAD", "--").split("\0")
+    changed = set(filter(None, changed))
+    # No NATIVE_PATHS build or AMS test reads Markdown; the trigger excludes it too.
+    if changed and all(path.endswith(".md") for path in changed):
+        return False, "documentation-only change"
+    changed = {path for path in changed if not path.endswith(".md")}
+    if any(fnmatchcase(path, pattern) for path in changed for pattern in NATIVE_PATHS):
+        return True, "native source, runtime boundary, or CI contract changed"
+    checks = {"pyproject.toml": test_dependencies_only,
+              "tests/test_tier_manifest.json": ams_manifest_unchanged}
+    configs = changed.intersection(checks)
+    if not configs:
+        return True, "no verifiable configuration-only impact"
+    for path in sorted(configs):
+        if not checks[path](git("show", f"{base}:{path}"), git("show", f"HEAD:{path}")):
+            return True, f"AMS-relevant configuration changed: {path}"
+    return False, "configuration changes do not affect native AMS; other files are outside its trigger paths"
+
+
+def main():
+    root = Path(__file__).resolve().parents[1]
+
+    def git(*args):
+        return subprocess.check_output(
+            ["git", "-c", f"safe.directory={root.as_posix()}", "-C", str(root), *args],
+            encoding="utf-8", stderr=subprocess.PIPE,
+        )
+
+    try:
+        event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+        required, reason = native_required(os.environ["GITHUB_EVENT_NAME"], event, git)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.SubprocessError) as exc:
+        required, reason = True, f"impact unknown ({type(exc).__name__}); fail closed"
+    print(f"Native AMS required={required}: {reason}")
+    with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+        output.write(f"required={str(required).lower()}\n")
+
+
+if __name__ == "__main__":
+    main()

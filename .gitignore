@@ -1,0 +1,466 @@
+# Radia Python Module - Git Ignore File
+
+# ============================================================================
+# Local Development Files (DO NOT COMMIT)
+# ============================================================================
+CLAUDE.md
+AGENTS.md
+.agents/
+.claude/
+.mcp.json
+publish_to_pypi.cmd
+ngsolve_developers/
+to_developers/
+Build_PyPI_Package.ps1
+build_log.txt
+logs/
+src/FastMaxwellv1.0/
+# Scratch artifacts: use C:\temp, not in-repo temp/
+# (global policy — merged into C:\temp 2026-04-21)
+temp/
+/temp/
+
+*.html
+
+# ============================================================================
+# Build Directories
+# ============================================================================
+build*/
+# build*/ accidentally matches the build123d/ source directory in the
+# radia-mcp package. Re-admit it (the pre-2026-04-21 path under
+# src/radia/mcp_server/ is obsolete after the monorepo restructure).
+!packages/radia-mcp/src/radia_mcp/build123d/
+!docs/build123d_netgen_gmsh_flow/
+!docs/build123d_netgen_gmsh_flow/**
+!validation_test/build123d_netgen_gmsh_flow/
+!validation_test/build123d_netgen_gmsh_flow/**
+dist/
+radia-*/
+!packages/radia-mcp/
+!packages/radia-optuna/
+!packages/radia-gpu/
+*.egg-info/
+.eggs/
+
+# ============================================================================
+# Compiled Files
+# ============================================================================
+*.pyd
+*.mexw64
+*.pyd.build.json
+*.mexw64.build.json
+*.ccm
+*.so
+*.dll
+*.dylib
+*.o
+*.obj
+
+# Mathematica notebooks: manage as .wls, never .nb
+# (CLAUDE.md policy "Mathematica Content: .wls Not .nb")
+*.nb
+
+# But DO track the Cubit plugin .ccm/.ccl — they ship in the
+# cubit-mesh-export wheel and CI does not rebuild them. .pyd is
+# intentionally NOT tracked (Policy 2 bans .pyd in git, and it is an
+# optional Cubit-less HO meshing module). Wheel ships .ccm + .ccl only.
+!src/radia/cubit_mesh_export.ccm
+!packages/cubit-mesh-export/src/cubit_mesh_export/cubit_mesh_export.ccm
+!packages/cubit-mesh-export/src/cubit_mesh_export/cubit_mesh_export.ccl
+*.exe
+*.out
+*.app
+*.lib
+*.exp
+*.ilk
+*.pdb
+*.iobj
+*.ipdb
+*.zip
+*.whl
+
+# Precomputed matrices (regenerated at runtime)
+laplace_*.dat
+dipole_*.dat
+
+# ============================================================================
+# Python Cache
+# ============================================================================
+__pycache__/
+.ipynb_checkpoints/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+
+# ============================================================================
+# Test Artifacts
+# ============================================================================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+test_output/
+benchmark_results/
+*.csv
+test_radiafield_memory.py
+
+# ============================================================================
+# IDE and Editor Files
+# ============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# ============================================================================
+# CMake
+# ============================================================================
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# ============================================================================
+# Visual Studio
+# ============================================================================
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.tlog
+*.ipch
+*.sdf
+*.bsc
+*.db-wal
+*.mat
+# ============================================================================
+# Build Logs
+# ============================================================================
+build.log
+*.log
+
+# ============================================================================
+# Temporary and Backup Files
+# ============================================================================
+*.tmp
+*.temp
+*.bak
+*.backup
+*.cpp.bak
+*.h.bak
+*.py.bak
+*.old
+# Timestamped build backups (Build.ps1 backs up the old .pyd before copying
+# the new one as e.g. _radia_pybind.pyd.bak_20260531_093705 /
+# .pyd.old_20260530_165537).  Plain *.bak / *.old above do NOT match the
+# trailing timestamp, so these accumulated (87 MB / 37 files seen 2026-05-31).
+*.bak_*
+*.old_*
+*.lockedold
+*.lockedold*
+*.lockedold.pyd
+*.locked-old.pyd
+git_bisect_test.ps1
+git_bisect_wrapper.ps1
+bisect_test_temp.py
+# Local (non-CI) test artifacts at repo root
+/local-*-results.xml
+/test_gmsh_*.geo
+/test_gmsh_*.msh
+
+# ============================================================================
+# Python Virtual Environments
+# ============================================================================
+venv/
+env/
+ENV/
+.venv
+
+# ============================================================================
+# Documentation Build
+# ============================================================================
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# ============================================================================
+# Security and Credentials
+# ============================================================================
+.env
+.env.local
+*.key
+*.pem
+
+# ============================================================================
+# Large Output Files
+# ============================================================================
+# Large VTK files
+*_field_compare.vtu
+*_field_*.vtu
+
+# ============================================================================
+# Potential License Violations
+# ============================================================================
+file_format_documents/
+
+# ============================================================================
+# Exceptions - Keep These Files
+# ============================================================================
+# Keep source files
+!src/**/*.cpp
+!src/**/*.h
+!src/**/*.c
+
+# Keep important config files
+!.gitignore
+!pytest.ini
+!pyproject.toml
+!CMakeLists.txt
+
+# ============================================================================
+# IMPORTANT: PyPI Distribution Files - DO NOT IGNORE
+# ============================================================================
+# The following files are tracked and required for PyPI distribution:
+# - setup.py
+# - pyproject.toml
+# - MANIFEST.in
+# - LICENSE
+# - COPYRIGHT.txt
+#
+# Note: Build_PyPI_Package.ps1 is now ignored (merged into Build_Wheel.ps1)
+
+# MATLAB files (use Python matplotlib instead). Mathematica also uses
+# .m for package files; the MCP-shipped basis-function reference under
+# packages/radia-mcp/src/radia_mcp/mathematica/ must be tracked.
+*.m
+!matlab/**/*.m
+!tests/matlab/**/*.m
+!validation_test/**/*.m
+!validation_test/acoustics/benchmark_acoustic_mex_matlab.m
+!validation_test/optimization/validate_matlab_optuna_quality.m
+!packages/radia-optuna/tests/matlab/**/*.m
+!packages/radia-mcp/src/radia_mcp/mathematica/**/*.m
+
+# Reference repositories (local only)
+参考/
+
+# Debug and development outputs (DO NOT COMMIT)
+debug/
+*_output.txt
+*_debug.txt
+benchmark_*.txt
+.radia_cache/
+
+# Development folders (DO NOT COMMIT)
+dev/
+
+# Internal documentation (DO COMMIT - for maintainers)
+# internal/  <- Keep this commented, we want to commit internal/
+
+# NGSolve integration outputs
+*.ObjBckgCF/
+rad.ObjBckgCF/
+
+# GMSH/NGSolve .pos visualization files
+*.pos
+
+# Generated mesh/visualization files (keep only if near corresponding .py)
+*.vol
+*.vol.json
+!validation_test/sparsesolv/hiruma/meshes/mesh1_2.5T.vol
+*.npz
+*.npy
+*.cub5
+*.msh
+*.msh.opt
+*.step
+!docs/hdiv_vim/c_type_three_formulation_mixed_omega_iron.vol
+validation_test/cubit/kelvin_1_4_p_convergence/p_convergence.json
+!validation_test/peec_integration/verification/cubit_mesh_generation/*.msh
+# Test fixtures: hand-curated STEP files checked into the repo as
+# regression inputs (e.g. keiko's 1turn_coil_loft_outsideline.step).
+!tests/**/fixtures/*.step
+# CAD authority of a validation lane: the mesh is regenerated from this STEP by
+# the lane's own Cubit journal, so the STEP -- not the .vol -- is the asset.
+!validation_test/quadrupole_cefc2020/*.step
+# Minimal solver meshes used as deterministic regression inputs.
+!tests/fixtures/**/*.vol
+
+# Transient launcher config written by RadiaComp.cpp next to the .jou
+# (auto-Kelvin dialog state handed to auto_kelvin_entry.py)
+radia_launcher_config.json
+
+# Test output files (regenerated by test runs)
+tests/cubit/**/*.vtk
+tests/cubit/**/*.bdf
+tests/cubit/**/*.meg
+tests/cubit/**/*.msh
+tests/cubit/**/results.json
+
+# Cubit plugin debug output (regenerated by src/cubit_plugin/test_*.jou)
+src/cubit_plugin/test_*.bdf
+
+# Python development files (experimental implementations)
+src/python/*_fast.py
+src/python/*_cached_wrapper.py
+src/python/*.patch
+src/python/.*[0-9a-f]*
+tests/test_*_debug.py
+tests/test_fast_*.py
+tests/test_minimal_*.py
+tests/test_preparecache_*.py
+tests/test_python_cached_*.py
+tests/verify_*.py
+
+# HACApK development files
+*.pbf
+*.xcr
+bem-bb-config.txt
+hmat-assign.pl
+
+# ============================================================================
+# Temporary debugging scripts
+# ============================================================================
+fix_convergence.py
+optimize_matrix.py
+pip_freeze*.txt
+
+# ============================================================================
+# Application sample artifacts (regenerated by running .jou samples)
+# ============================================================================
+# Tracked: src/radia/panels/samples/*.jou (canonical .jou recipes)
+#          src/radia/panels/samples/*.vol  (export-generated input mesh)
+#          src/radia/panels/samples/*.step (CAD input geometry)
+# Ignored: solver outputs (.sol, .msh, post .vol, .json) generated by panel runs
+src/radia/panels/samples/*.txt
+!src/radia/panels/samples/em_sample_bh.txt
+src/radia/panels/samples/*.bdf
+src/radia/panels/samples/*.geo
+src/radia/panels/samples/_*.py
+src/radia/panels/samples/_*.jou
+src/radia/panels/samples/compare_*.py
+src/radia/panels/samples/test_*.py
+src/radia/panels/samples/test_*.jou
+src/radia/panels/samples/*.sol
+src/radia/panels/samples/3turnCoil.*
+
+# Solver-generated output files in panels/samples/ (regenerated by running
+# the panel against the .jou input).  Keep input geometry (.jou, .step,
+# .vol when generated by export from the .jou) but ignore everything
+# downstream of the solver.  Per "Panel Samples Quality Policy" in
+# CLAUDE.md, samples/ should hold only validated inputs that ship in the
+# wheel -- not solver outputs (which are debug artifacts).
+src/radia/panels/samples/*_peec_bem.json
+src/radia/panels/samples/*_peec_bem.msh
+src/radia/panels/samples/*_peec_bem.msh.opt
+src/radia/panels/samples/*_peec_bem_Jsurf.sol
+src/radia/panels/samples/*_peec_bem_Jvec.sol
+src/radia/panels/samples/*_peec_bem_qsurf.sol
+src/radia/panels/samples/*_peec_bem_bem.vol
+src/radia/panels/samples/*_peec_ind.json
+src/radia/panels/samples/*_peec_ind.msh
+src/radia/panels/samples/*_peec_ind.msh.opt
+src/radia/panels/samples/*_peec_ind_*.sol
+src/radia/panels/samples/*_peec_ind_field.vol
+src/radia/panels/samples/*_peec_ind_filaments.msh
+
+# PEEC topology cache (SHA256-keyed JSON written by filaments_from_step
+# next to the source .step when RADIA_PEEC_CACHE_DISABLE is unset).
+*.peec_v*_*.json
+src/radia/panels/samples/*.peec_peri*_sigma*_u*.json
+validation_test/panels/golden/*.peec_peri*_sigma*_u*.json
+src/radia/panels/samples/*_coil_filaments.msh
+src/radia/panels/samples/*_fem_kelvin.json
+src/radia/panels/samples/*_fem_kelvin.msh
+src/radia/panels/samples/*_fem_kelvin.msh.opt
+src/radia/panels/samples/*_fem_kelvin_*.sol
+src/radia/panels/samples/*_fem_kelvin_fem.vol
+src/radia/panels/samples/*_fem_coilmesh.json
+src/radia/panels/samples/*_fem_coilmesh_*.sol
+src/radia/panels/samples/*_wp.msh
+src/radia/panels/samples/*_wp.msh.opt
+# Stale "v2"-suffixed solver outputs are NEVER tracked
+src/radia/panels/samples/*_v2*
+
+# QA test outputs (from panel-cli-diff / Cubit toolbar / mesh quality probes)
+src/radia/panels/samples/*_qa_*.vtk
+src/radia/panels/samples/*_qa_*.msh
+src/radia/panels/samples/*_qa_*.bdf
+
+# .msh.opt and .vol.json companion files for solver-output meshes
+src/radia/panels/samples/*_peec_*.msh.opt
+src/radia/panels/samples/*_fem_*.msh.opt
+src/radia/panels/samples/*_qa_*.vol.json
+
+.code-workspace
+
+# Cubit intermediate files (pwd = repo root when launched from GUI)
+ExportedMesh.*
+cubit_mesh_export_model.cub5
+sphere_o3.vol
+p_convergence_sphere.png
+cubit[0-9]*.jou
+*.sat
+# Simulink generated artifacts. Source models (.slx) live under matlab/;
+# caches belong outside the repository (radia.setup defaults to C:\temp).
+*.slxc
+*.slx.autosave
+slprj/
+
+# Simulink Agentic Toolkit machine-local scan cache. The portable policy and
+# generated knowledge index under .satk remain version-controlled.
+.satk/library-cache/
+.satk/library-kg/.meta.json
+
+# Build/install logs
+aqtinstall.log
+*.egg-info/
+step_export.log
+
+# URN documentation embeds its public results in notebooks. Reproduction and
+# LTspice runtime artifacts belong under validation_test/ or an explicit output
+# directory, never back in docs/.
+docs/universal_relaxation_network/results/
+docs/universal_relaxation_network/validation_output/
+
+# Native-extension replacement backups left when a loaded binary cannot be
+# overwritten in place. These are local recovery artifacts, never sources.
+*.pyd.locked_*
+*.pyd.loaded-old
+*.mexw64.locked_*
+
+# VTU output files (use NGSolve VTKOutput or GMSH post instead)
+*.vtu
+docs/research/
+
+# Private working memory / project notes -- never publish
+memory/
+# Optional local MCP inventory snapshot. Live tools/list is authoritative.
+/packages/radia-mcp/docs/TOOLS.md
+# Codex worktrees and temporary review junctions are machine-local state.
+/.codex/
+/.codex-*/
+# Throwaway debug/presentation scripts dropped at repo root
+/*.py
+# Build.ps1-generated temporary MSVC batch (regenerated each build; never commit)
+/build_temp_msvc.bat
+
+# Stable advisory-lock sidecars for canonical bibliography writers (not content).
+*.radia-write-lock
+

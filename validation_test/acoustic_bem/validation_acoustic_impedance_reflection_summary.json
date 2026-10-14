@@ -1,0 +1,333 @@
+{
+  "c": 343.0,
+  "checks": {
+    "double_resistance_absorption": 0.8888888888888888,
+    "double_resistance_gamma": {
+      "abs": 0.3333333333333333,
+      "imag": 0.0,
+      "real": 0.3333333333333333
+    },
+    "matched_absorption": 1.0,
+    "oblique_absorption": 1.0,
+    "oblique_characteristic_normal_impedance": 826.0125999999998,
+    "pressure_release_total_pressure_abs": 0.0,
+    "reactive_absorbed_intensity": 0.0,
+    "reactive_boundary_reactive_intensity": 0.009685082285669734
+  },
+  "incident_pressure": 2.0,
+  "kind": "acoustic_impedance_reflection_validation",
+  "rho": 1.2041,
+  "rows": {
+    "double_resistance": {
+      "absorbed_intensity": 0.004304481015853215,
+      "absorption_coefficient": 0.8888888888888888,
+      "amplitude": "peak",
+      "boundary_active_intensity_into_load": 0.004304481015853215,
+      "boundary_complex_intensity_into_load": {
+        "abs": 0.004304481015853215,
+        "imag": 0.0,
+        "real": 0.004304481015853215
+      },
+      "boundary_reactive_intensity_into_load": 0.0,
+      "c": 343.0,
+      "characteristic_normal_impedance": 413.0063,
+      "incidence_angle_rad": 0.0,
+      "incident_intensity": 0.004842541142834867,
+      "incident_pressure": {
+        "abs": 2.0,
+        "imag": 0.0,
+        "real": 2.0
+      },
+      "normal_velocity_into_load": {
+        "abs": 0.003228360761889912,
+        "imag": 0.0,
+        "real": 0.003228360761889912
+      },
+      "normalized_impedance": {
+        "abs": 2.0,
+        "imag": 0.0,
+        "real": 2.0
+      },
+      "phasor_average_factor": 0.5,
+      "policy": "velocity_positive_into_load_pressure_reflection_gamma_zload_minus_zn_over_zload_plus_zn",
+      "power_balance_residual": 0.0,
+      "power_reflection_coefficient": 0.1111111111111111,
+      "pressure_reflection_coefficient": {
+        "abs": 0.3333333333333333,
+        "imag": 0.0,
+        "real": 0.3333333333333333
+      },
+      "reflected_intensity": 0.0005380601269816519,
+      "reflected_pressure": {
+        "abs": 0.6666666666666666,
+        "imag": 0.0,
+        "real": 0.6666666666666666
+      },
+      "rho": 1.2041,
+      "specific_impedance": {
+        "abs": 826.0126,
+        "imag": 0.0,
+        "real": 826.0126
+      },
+      "total_boundary_pressure": {
+        "abs": 2.6666666666666665,
+        "imag": 0.0,
+        "real": 2.6666666666666665
+      },
+      "velocity_reflection_coefficient": {
+        "abs": 0.3333333333333333,
+        "imag": 0.0,
+        "real": -0.3333333333333333
+      }
+    },
+    "matched": {
+      "absorbed_intensity": 0.004842541142834867,
+      "absorption_coefficient": 1.0,
+      "amplitude": "peak",
+      "boundary_active_intensity_into_load": 0.004842541142834867,
+      "boundary_complex_intensity_into_load": {
+        "abs": 0.004842541142834867,
+        "imag": 0.0,
+        "real": 0.004842541142834867
+      },
+      "boundary_reactive_intensity_into_load": 0.0,
+      "c": 343.0,
+      "characteristic_normal_impedance": 413.0063,
+      "incidence_angle_rad": 0.0,
+      "incident_intensity": 0.004842541142834867,
+      "incident_pressure": {
+        "abs": 2.0,
+        "imag": 0.0,
+        "real": 2.0
+      },
+      "normal_velocity_into_load": {
+        "abs": 0.004842541142834867,
+        "imag": 0.0,
+        "real": 0.004842541142834867
+      },
+      "normalized_impedance": {
+        "abs": 1.0,
+        "imag": 0.0,
+        "real": 1.0
+      },
+      "phasor_average_factor": 0.5,
+      "policy": "velocity_positive_into_load_pressure_reflection_gamma_zload_minus_zn_over_zload_plus_zn",
+      "power_balance_residual": 0.0,
+      "power_reflection_coefficient": 0.0,
+      "pressure_reflection_coefficient": {
+        "abs": 0.0,
+        "imag": 0.0,
+        "real": 0.0
+      },
+      "reflected_intensity": 0.0,
+      "reflected_pressure": {
+        "abs": 0.0,
+        "imag": 0.0,
+        "real": 0.0
+      },
+      "rho": 1.2041,
+      "specific_impedance": {
+        "abs": 413.0063,
+        "imag": 0.0,
+        "real": 413.0063
+      },
+      "total_boundary_pressure": {
+        "abs": 2.0,
+        "imag": 0.0,
+        "real": 2.0
+      },
+      "velocity_reflection_coefficient": {
+        "abs": 0.0,
+        "imag": 0.0,
+        "real": 0.0
+      }
+    },
+    "oblique_60deg_matched": {
+      "absorbed_intensity": 0.0024212705714174343,
+      "absorption_coefficient": 1.0,
+      "amplitude": "peak",
+      "boundary_active_intensity_into_load": 0.0024212705714174343,
+      "boundary_complex_intensity_into_load": {
+        "abs": 0.0024212705714174343,
+        "imag": 0.0,
+        "real": 0.0024212705714174343
+      },
+      "boundary_reactive_intensity_into_load": 0.0,
+      "c": 343.0,
+      "characteristic_normal_impedance": 826.0125999999998,
+      "incidence_angle_rad": 1.0471975511965976,
+      "incident_intensity": 0.0024212705714174343,
+      "incident_pressure": {
+        "abs": 2.0,
+        "imag": 0.0,
+        "real": 2.0
+      },
+      "normal_velocity_into_load": {
+        "abs": 0.0024212705714174343,
+        "imag": 0.0,
+        "real": 0.0024212705714174343
+      },
+      "normalized_impedance": {
+        "abs": 1.0,
+        "imag": 0.0,
+        "real": 1.0
+      },
+      "phasor_average_factor": 0.5,
+      "policy": "velocity_positive_into_load_pressure_reflection_gamma_zload_minus_zn_over_zload_plus_zn",
+      "power_balance_residual": 0.0,
+      "power_reflection_coefficient": 0.0,
+      "pressure_reflection_coefficient": {
+        "abs": 0.0,
+        "imag": 0.0,
+        "real": 0.0
+      },
+      "reflected_intensity": 0.0,
+      "reflected_pressure": {
+        "abs": 0.0,
+        "imag": 0.0,
+        "real": 0.0
+      },
+      "rho": 1.2041,
+      "specific_impedance": {
+        "abs": 826.0125999999998,
+        "imag": 0.0,
+        "real": 826.0125999999998
+      },
+      "total_boundary_pressure": {
+        "abs": 2.0,
+        "imag": 0.0,
+        "real": 2.0
+      },
+      "velocity_reflection_coefficient": {
+        "abs": 0.0,
+        "imag": 0.0,
+        "real": 0.0
+      }
+    },
+    "pressure_release": {
+      "absorbed_intensity": 0.0,
+      "absorption_coefficient": 0.0,
+      "amplitude": "peak",
+      "boundary_active_intensity_into_load": 0.0,
+      "boundary_complex_intensity_into_load": {
+        "abs": 0.0,
+        "imag": 0.0,
+        "real": 0.0
+      },
+      "boundary_reactive_intensity_into_load": 0.0,
+      "c": 343.0,
+      "characteristic_normal_impedance": 413.0063,
+      "incidence_angle_rad": 0.0,
+      "incident_intensity": 0.004842541142834867,
+      "incident_pressure": {
+        "abs": 2.0,
+        "imag": 0.0,
+        "real": 2.0
+      },
+      "normal_velocity_into_load": {
+        "abs": 0.009685082285669734,
+        "imag": 0.0,
+        "real": 0.009685082285669734
+      },
+      "normalized_impedance": {
+        "abs": 0.0,
+        "imag": 0.0,
+        "real": 0.0
+      },
+      "phasor_average_factor": 0.5,
+      "policy": "velocity_positive_into_load_pressure_reflection_gamma_zload_minus_zn_over_zload_plus_zn",
+      "power_balance_residual": 0.0,
+      "power_reflection_coefficient": 1.0,
+      "pressure_reflection_coefficient": {
+        "abs": 1.0,
+        "imag": 0.0,
+        "real": -1.0
+      },
+      "reflected_intensity": 0.004842541142834867,
+      "reflected_pressure": {
+        "abs": 2.0,
+        "imag": 0.0,
+        "real": -2.0
+      },
+      "rho": 1.2041,
+      "specific_impedance": {
+        "abs": 0.0,
+        "imag": 0.0,
+        "real": 0.0
+      },
+      "total_boundary_pressure": {
+        "abs": 0.0,
+        "imag": 0.0,
+        "real": 0.0
+      },
+      "velocity_reflection_coefficient": {
+        "abs": 1.0,
+        "imag": 0.0,
+        "real": 1.0
+      }
+    },
+    "pure_reactive": {
+      "absorbed_intensity": 0.0,
+      "absorption_coefficient": 0.0,
+      "amplitude": "peak",
+      "boundary_active_intensity_into_load": 0.0,
+      "boundary_complex_intensity_into_load": {
+        "abs": 0.009685082285669734,
+        "imag": 0.009685082285669734,
+        "real": 0.0
+      },
+      "boundary_reactive_intensity_into_load": 0.009685082285669734,
+      "c": 343.0,
+      "characteristic_normal_impedance": 413.0063,
+      "incidence_angle_rad": 0.0,
+      "incident_intensity": 0.004842541142834867,
+      "incident_pressure": {
+        "abs": 2.0,
+        "imag": 0.0,
+        "real": 2.0
+      },
+      "normal_velocity_into_load": {
+        "abs": 0.0068483873605467765,
+        "imag": -0.004842541142834867,
+        "real": 0.004842541142834867
+      },
+      "normalized_impedance": {
+        "abs": 1.0,
+        "imag": 1.0,
+        "real": 0.0
+      },
+      "phasor_average_factor": 0.5,
+      "policy": "velocity_positive_into_load_pressure_reflection_gamma_zload_minus_zn_over_zload_plus_zn",
+      "power_balance_residual": 0.0,
+      "power_reflection_coefficient": 1.0,
+      "pressure_reflection_coefficient": {
+        "abs": 1.0,
+        "imag": 1.0,
+        "real": 0.0
+      },
+      "reflected_intensity": 0.004842541142834867,
+      "reflected_pressure": {
+        "abs": 2.0,
+        "imag": 2.0,
+        "real": 0.0
+      },
+      "rho": 1.2041,
+      "specific_impedance": {
+        "abs": 413.0063,
+        "imag": 413.0063,
+        "real": 0.0
+      },
+      "total_boundary_pressure": {
+        "abs": 2.8284271247461903,
+        "imag": 2.0,
+        "real": 2.0
+      },
+      "velocity_reflection_coefficient": {
+        "abs": 1.0,
+        "imag": -1.0,
+        "real": 0.0
+      }
+    }
+  },
+  "validation_class": true
+}

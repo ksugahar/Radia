@@ -1,0 +1,32 @@
+{
+  "schema": "radia.validation.optuna-openmp-acceptance.v1",
+  "date": "2026-10-13",
+  "build_host_role": "100-native-build-and-correctness",
+  "build_route": "mexcuda",
+  "binary_sha256": {
+    "baseline": "6bf3ba422337ad847bf59c6b68e21298e922b6818c774708b4ceaca3663ecdc4",
+    "candidate": "440e105382ff9a6cb34ecc7ca9d44a48b85f8bf2fa3c49bef59b367d82a41eda"
+  },
+  "optuna_oracle": "5.0.0",
+  "cpu_upstream_passed": 15,
+  "gpu_suite_passed": 20,
+  "history_index_passed": 1,
+  "passed": 36,
+  "failed": 0,
+  "incomplete": 0,
+  "configured_omp_threads_for_correctness": 16,
+  "default_24_candidate_1024_component_analytical_density_passed": true,
+  "default_candidate_parallel_counter_regression_passed": true,
+  "formal_timing_host_role": "on-demand-a100-timing",
+  "independent_performance": "../../../validation_test/optimization/results_optuna_openmp_performance_a100_20261013.json",
+  "joint_performance": "../../../validation_test/optimization/results_optuna_openmp_joint_a100_20261013.json",
+  "fresh_timing_sessions": 28,
+  "interrupted_runs_excluded": 2,
+  "recovered_files_verified": 548,
+  "decision": "Recommend explicit CPU for routine TPE; retain GPU as an optional backend for large joint histories. No general GPU speedup claim and no default change.",
+  "limits": [
+    "Only the declared Optuna 5.0.0 oracle cases are verified; this is not complete upstream API compatibility.",
+    "Independent cases use 1 and 16 configured CPU threads; joint CPU screening additionally uses 4, 8 and 12.",
+    "No Python/DB or Rustuna baseline is measured."
+  ]
+}

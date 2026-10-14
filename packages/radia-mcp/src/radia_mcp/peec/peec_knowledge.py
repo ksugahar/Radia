@@ -1,0 +1,756 @@
+"""
+
+PUBLIC NOTEBOOK: docs/peec_integration/peec_showcase.ipynb -- Dowell
+continued-fraction + ngbem EFIE loop L + 4 paper figures (verified). Checked
+numerical evidence lives under validation_test/peec_integration; reusable
+centerline import is radia.peec_mesh_import.
+SHOWCASE NOTEBOOK: docs/peec/dowell_surface_impedance_demo.ipynb -- executable companion to docs/peec/PEEC_SURFACE_IMPEDANCE.md: F(xi)/G(xi) skin+proximity ratios vs normalized thickness, copper-foil Z(f) sweep, Dowell coth (H=0 BC) vs ESIM tanh (dH/dz=0 BC) boundary comparison, round-wire Bessel vs rect Dowell, and CF truncation accuracy (verified; F/G match deep_bar_resistance_factor/reactance_factor to machine precision).
+PEEC knowledge base for the mcp-server-peec MCP server.
+
+Covers: Loop-Star PEEC architecture, node-segment topology, circuit extraction,
+multi-filament subdivision, SIBC surface impedance,
+PRIMA model order reduction, SPICE netlist export, and ngsolve.bem integration.
+
+Sources:
+  - src/radia/peec_topology.py (PEECCircuitSolver, MNA)
+  - src/radia/fasthenry_parser.py (FastHenry .inp parser)
+  - src/radia/lanczos_reduction.py (PRIMA, Lanczos, SPICE export)
+  - src/radia/esim_cell_problem.py (ESIM nonlinear Z_s)
+  - src/core/rad_peec_matrices.h/cpp (C++ L, R, P, M_LS matrices)
+  - A. E. Ruehli, IEEE MTT, 1974 (original PEEC formulation)
+"""
+
+PEEC_OVERVIEW = """
+# PEEC (Partial Element Equivalent Circuit) Overview
+
+## Architecture
+
+PEEC extracts circuit parameters (L, R, C, M) from conductor geometry using
+integral equations with the Laplace kernel G(r) = 1/(4*pi*r).
+
+**Valid frequency range**: DC to ~100 MHz (Darwin/MQS approximation).
+
+### Filament-Panel Decomposition (FastImp Style)
+
+```
+Surface Mesh -> Face -> Panel (Star: charge Q)  -> P matrix (capacitance)
+             -> Edge -> Filament (Loop: current I) -> L, R matrices
+```
+
+Loop-Star basis transformation is NOT needed -- filaments and panels are
+inherently separate in PEEC.
+
+### System Equation
+
+```
+[Z_LL   Z_LS] [I_L]   [V_L]
+[Z_SL   Z_SS] [I_S] = [V_S]
+
+Z_LL = diag(R_dc + Z_s(f)) + jw*L    (loop impedance)
+Z_SS = P / (jw)                        (panel admittance)
+Z_LS = jw * M_LS                       (loop-star coupling)
+Z_SL = Z_LS^T                          (reciprocity)
+```
+
+Where:
+- L: mutual inductance matrix (Neumann formula, C++ `PEECMatrices`)
+- R_dc: DC resistance (diagonal)
+- Z_s(f): frequency-dependent surface impedance (Bessel/Dowell/ESIM)
+- P: potential coefficient matrix (capacitance = P^{-1})
+- M_LS: loop-star coupling matrix
+
+**Loop-only mode** (no panels, backward compatible):
+```
+Z_branch = diag(R_dc + Z_s) + jw*L
+Y_node = A * Z_branch^{-1} * A^T
+Y_node * V = I_ext
+```
+
+### Matrix Assembly (C++)
+
+Frequency-independent matrices (L, R_dc, P, M_LS) are computed in C++
+(`rad_peec_matrices.cpp`). Frequency-dependent Z_s is computed in Python.
+
+```python
+from radia.peec_matrices import PEECBuilder
+builder = PEECBuilder()
+# ... add segments ...
+topo = builder.build_topology()
+# topo contains: L, R, P, M_LS, segment_nodes, ports, etc.
+```
+
+### Benchmarks
+
+VALIDATION EVIDENCE
+`validation_test/solver_benchmarks/peec_solver_benchmarks_results.json`: dense
+Ruehli L vs HACApK H-matrix (ACA+ compression + scaling) and the MNA
+dense-vs-HACApK crossover, assembled from committed raw benchmark JSON; the
+extracted |Z11| matches the dense reference. The JSON records, comparison
+reports, and executable drivers are owned by
+`validation_test/solver_benchmarks/`. They are manual numerical evidence, not
+routine CI or a public docs demo.
+
+### References
+
+- A. E. Ruehli, "Equivalent Circuit Models...", IEEE MTT, 1974
+- G. Vecchi, "Loop-Star decomposition...", IEEE TAP, 1999
+- A. Odabasioglu et al., "PRIMA", IEEE TCAD, 1998
+"""
+
+PEEC_BUILDER_API = """
+# PEECBuilder API (Node-Segment Topology)
+
+## Basic Usage
+
+```python
+from radia.peec_matrices import PEECBuilder
+
+builder = PEECBuilder()
+
+# Add nodes (returns node ID)
+n1 = builder.add_node_at(0, 0, 0)           # x, y, z in meters
+n2 = builder.add_node_at(0.05, 0, 0)
+n3 = builder.add_node_at(0.1, 0, 0)
+
+# Add segments between nodes
+builder.add_connected_segment(n1, n2, 1e-3, 1e-3)  # width, height [m]
+builder.add_connected_segment(n2, n3, 1e-3, 1e-3)
+
+# Define port (positive node, negative node)
+builder.add_port(n1, n3)
+
+# Build topology -> returns dict with L, R, segment_nodes, ports, etc.
+topo = builder.build_topology()
+```
+
+## add_connected_segment Parameters
+
+```python
+builder.add_connected_segment(
+    node_from,       # Source node ID (from add_node_at)
+    node_to,         # Destination node ID
+    width,           # Cross-section width [m]
+    height,          # Cross-section height [m]
+    sigma=5.8e7,     # Conductivity [S/m] (default: copper)
+    nwinc=1,         # Width subdivisions for multi-filament
+    nhinc=1,         # Height subdivisions for multi-filament
+)
+```
+
+## Multi-Port Extraction
+
+```python
+# 2-port transformer
+builder.add_port(n1, n2)   # Port 1: primary
+builder.add_port(n3, n4)   # Port 2: secondary
+
+topo = builder.build_topology()
+solver = PEECCircuitSolver(topo)
+
+# Z-parameter matrix (2x2)
+Z_mat = solver.compute_Z_matrix(freq=1e6)
+# Z11 = V1/I1 (port 2 open), Z12 = V1/I2 (port 1 open), etc.
+
+# Coupling coefficient
+result = solver.compute_coupling_coefficient(freq=1e6)
+k = result['k']       # k = M12 / sqrt(L1 * L2)
+L1 = result['L1']     # Self-inductance port 1 [H]
+L2 = result['L2']     # Self-inductance port 2 [H]
+M = result['M']       # Mutual inductance [H]
+```
+
+## Topology Dict Contents
+
+```python
+topo = builder.build_topology()
+# topo keys:
+#   'L'              - (n_loop, n_loop) inductance matrix [H]
+#   'R'              - (n_loop,) DC resistance array [Ohm]
+#   'segment_nodes'  - (n_loop, 2) node connectivity [from, to]
+#   'n_nodes'        - Number of nodes
+#   'n_loop'         - Number of filament segments
+#   'ports'          - List of (node_pos, node_neg, port_id)
+#   'segment_centers'    - (n_loop, 3) segment centers [m]
+#   'segment_directions' - (n_loop, 3) unit direction vectors
+#   'segment_lengths'    - (n_loop,) segment lengths [m]
+# Optional (when panels present):
+#   'P'              - (n_star, n_star) potential coefficient matrix
+#   'M_LS'           - (n_loop, n_star) loop-star coupling
+#   'n_star'         - Number of panel (star) elements
+#   'C_gathered'     - Gathered capacitance matrix
+```
+"""
+
+PEEC_CIRCUIT_SOLVER = """
+# PEECCircuitSolver (MNA Port Impedance)
+
+## Basic Impedance Extraction
+
+```python
+from radia.peec_topology import PEECCircuitSolver
+
+solver = PEECCircuitSolver(topo)
+
+# Single frequency
+Z = solver.compute_port_impedance(freq=1e6)
+L = Z.imag / (2 * np.pi * 1e6)   # Inductance [H]
+R = Z.real                         # Resistance [Ohm]
+
+# Frequency sweep
+freqs = np.logspace(3, 9, 100)     # 1 kHz to 1 GHz
+Z_sweep = solver.frequency_sweep(freqs)
+```
+
+## With Surface Impedance (Skin Effect)
+
+```python
+import numpy as np
+from scipy.special import iv as besseli  # Modified Bessel I
+
+mu0 = 4e-7 * np.pi
+
+def circular_sibc(freq, radius, sigma, mu_r=1.0):
+    \"\"\"Bessel SIBC for circular conductor.\"\"\"
+    omega = 2 * np.pi * freq
+    mu = mu0 * mu_r
+    k = np.sqrt(1j * omega * mu * sigma)
+    kr = k * radius
+    Zs = (k / (2 * np.pi * radius * sigma)) * besseli(0, kr) / besseli(1, kr)
+    return Zs
+
+def Zs_func(freq):
+    return np.array([circular_sibc(freq, 0.5e-3, 5.8e7)] * n_seg)
+
+Z_sweep = solver.frequency_sweep(freqs, Zs_func=Zs_func)
+```
+
+## Solver Methods
+
+```python
+solver.set_solver_method(0)   # LU (LAPACK zgesv_, default)
+solver.set_solver_method(1)   # BiCGSTAB (large systems)
+solver.set_bicgstab_params(tol=1e-10, max_iter=1000)
+```
+
+## Resonance Detection (with panels)
+
+```python
+f_res = solver.get_resonant_frequencies(freq_min=1e3, freq_max=1e9)
+# Returns list of frequencies where Im(Z) crosses zero
+```
+"""
+
+PEEC_MULTI_FILAMENT = """
+# Multi-Filament Subdivision (nwinc/nhinc)
+
+## Purpose
+
+Skin and proximity effects require current redistribution within
+conductor cross-sections. Multi-filament splits each segment into
+(nwinc * nhinc) sub-filaments with full mutual inductance coupling.
+
+## Guidelines
+
+| Regime | d/delta | nwinc x nhinc | Description |
+|--------|---------|---------------|-------------|
+| DC     | < 0.5   | 1 x 1         | Uniform current |
+| Moderate | 2-5   | 3 x 3         | Onset of skin effect |
+| Strong | > 5     | 5 x 5+        | Concentrated surface current |
+
+Where d = conductor dimension, delta = skin depth.
+
+## Usage
+
+```python
+builder = PEECBuilder()
+n1 = builder.add_node_at(0, 0, 0)
+n2 = builder.add_node_at(0.1, 0, 0)
+
+# 3x3 = 9 sub-filaments per segment
+builder.add_connected_segment(n1, n2, 3e-3, 3e-3,
+                               sigma=5.8e7, nwinc=3, nhinc=3)
+builder.add_port(n1, n2)
+topo = builder.build_topology()
+# topo['n_loop'] = 9 (9 filaments from 1 segment)
+```
+
+## Skin Depth Reference
+
+```python
+import numpy as np
+mu0 = 4e-7 * np.pi
+delta = np.sqrt(2 / (2 * np.pi * freq * mu0 * mu_r * sigma))
+# Copper at 1 MHz: delta ~ 66 um
+# Copper at 100 kHz: delta ~ 209 um
+# Steel at 8 kHz: delta ~ 0.18 mm (mu_r=1000, sigma=10e6)
+```
+
+## Which physical direction does nwinc split?  PROBE, don't guess
+
+The builder picks the cross-section frame itself -- the caller cannot
+name the width axis (unlike FastHenry's `wx wy wz`).  Measured: an
+x-directed segment stacks its `nwinc` strands along **z**; a z-directed
+segment stacks them along **y**.  Read `topo['segment_centers']` to see
+where the strands actually went before interpreting any distribution.
+
+## LIMIT: do NOT subdivide across the direction of CURVATURE
+
+`nwinc`/`nhinc` subdivide ONE STRAIGHT PRISM at a time.  The builder
+sees a single segment with no curvature information, so a sub-filament
+is a parallel-offset copy that KEEPS THE PARENT LENGTH.  On a polygonal
+or curved coil the outward-offset strand therefore traces a path with
+the parent's perimeter instead of its own longer one, and its loop
+inductance comes out too small.
+
+Measured on a 36-chord split ring, R = 25 mm, 4x4 mm bar (nhinc=5, so
+the strands sit at dr = -1.69 .. +1.51 mm):
+
+| ring | offset-strand L | standalone ring at the true radius | analytic |
+|------|-----------------|------------------------------------|----------|
+| inner | 104.4 nH | 90.9 nH (R = 23.31 mm) | 92.5 nH |
+| outer |  95.3 nH | 107.3 nH (R = 26.51 mm) | 109.5 nH |
+
+The kernel is fine -- a ring BUILT at its true radius reproduces
+`mu0 R (ln(8R/a) - 2)` to ~2% and grows with R.  It is the offset model
+that inverts the ordering, so the predicted radial crowding comes out
+BACKWARDS (outward instead of the physical inward crowding of a loop).
+
+What to do:
+- Use `nwinc`/`nhinc` freely in the direction PERPENDICULAR to the plane
+  of curvature, and for straight bars/busbars (there the high-frequency
+  answer is exactly the inductance-limited `L^-1 1`, verified).
+- To resolve current ACROSS the curvature direction, build CONCENTRIC
+  node chains at the true radii (each its own series path in parallel
+  between the port nodes) instead of asking one segment to split.
+- Locked by `tests/test_peec_multifilament_curvature.py`.
+"""
+
+PEEC_FASTHENRY = """
+# FastHenry .inp Parser
+
+## Parsing FastHenry Input Files
+
+```python
+from fasthenry_parser import FastHenryParser
+
+parser = FastHenryParser()
+parser.parse_file('inductor.inp')
+
+# Get Radia PEEC builder
+builder = parser.to_peec_builder()
+topo = builder.build_topology()
+
+# Get frequency sweep points
+freqs = parser.get_frequencies()
+
+# Solve conductor / shielded PEEC. .magnetic blocks are rejected by solve().
+result = parser.solve(freqs)
+```
+
+## Supported Directives
+
+| Directive | Format | Example |
+|-----------|--------|---------|
+| `.Units` | `.Units mm` | Length unit (m, mm, um, cm, in, mils) |
+| `N<name>` | `N1 x=0 y=0 z=0` | Node definition |
+| `E<name>` | `E1 N1 N2 w=1 h=1 nwinc=3 nhinc=3 sigma=5.8e7` | Segment |
+| `.external` | `.external N1 N2` | Port definition |
+| `.freq` | `.freq fmin=1e3 fmax=1e9 ndec=10` | Frequency sweep |
+| `.default` | `.default sigma=5.8e7 w=0.5 h=0.1` | Default parameters |
+| `.equiv` | `.equiv N1 N2 N3` | Node merge (equivalence) |
+| `.magnetic` | Parsed for diagnostics, rejected by solve() | Magnetic core input |
+| `.panel` | See below | Panel (capacitive) block |
+
+## Magnetic Core Input (.magnetic)
+
+FastHenry `.magnetic` blocks are parsed only so inputs can be diagnosed.
+`parser.solve()` raises and points you to HDiv-VIM / reduced FEM for
+magnetic cores.
+
+## FastHenry .inp File Format Example
+
+```
+* Spiral inductor
+.Units mm
+.default sigma=5.8e7 nwinc=3 nhinc=1
+
+N1 x=0    y=0   z=0.5
+N2 x=10   y=0   z=0.5
+N3 x=10   y=10  z=0.5
+N4 x=0    y=10  z=0.5
+
+E1 N1 N2 w=0.5 h=0.1
+E2 N2 N3 w=0.5 h=0.1
+E3 N3 N4 w=0.5 h=0.1
+
+.external N1 N4
+.freq fmin=1e3 fmax=1e9 ndec=10
+
+.end
+```
+"""
+
+PEEC_MAGNETIC_POLICY = """
+# Magnetic Material Coupling Policy
+
+## Overview
+
+PEEC in Radia is conductor/shield circuit extraction.  Magnetic material
+cores stay mesh-backed and use HDiv-VIM / reduced FEM, then couple fields
+at the application layer.
+
+## Usage
+
+```python
+from radia.peec_matrices import PEECBuilder
+
+# Build conductor topology
+builder = PEECBuilder()
+n1 = builder.add_node_at(0, 0, 0)
+n2 = builder.add_node_at(0.1, 0, 0)
+builder.add_connected_segment(n1, n2, 1e-3, 1e-3, sigma=5.8e7)
+builder.add_port(n1, n2)
+topo = builder.build_topology()
+```
+
+For ferrite/iron cores:
+1. solve the conductor PEEC problem or extract the current distribution;
+2. solve the magnetic core with HDiv-VIM / reduced FEM;
+3. exchange fields in the application workflow and validate against a
+   result-bearing notebook or validation_test case.
+"""
+
+PEEC_SIBC = """
+# SIBC (Surface Impedance Boundary Condition)
+
+## Three SIBC Implementations
+
+| Conductor Type | Method | Library | Use Case |
+|----------------|--------|---------|----------|
+| Circular wire | Bessel I0/I1 | `scipy.special.iv` | Round conductors |
+| Rectangular (d << w) | Dowell formula | C++ `rad_peec_surface_impedance.cpp` | PCB traces, busbars |
+| Nonlinear magnetic | ESIM cell problem | `esim_cell_problem.py` | Steel/ferrite workpieces |
+
+## Bessel SIBC (Circular Conductor)
+
+```python
+import numpy as np
+from scipy.special import iv as besseli  # Modified Bessel I_n
+
+mu0 = 4e-7 * np.pi
+
+def circular_sibc(freq, radius, sigma, mu_r=1.0):
+    omega = 2 * np.pi * freq
+    mu = mu0 * mu_r
+    k = np.sqrt(1j * omega * mu * sigma)
+    kr = k * radius
+    Zs = (k / (2 * np.pi * radius * sigma)) * besseli(0, kr) / besseli(1, kr)
+    return Zs
+
+# CRITICAL: use scipy.special.iv (modified Bessel), NOT jv (regular Bessel)
+```
+
+## Dowell SIBC (Rectangular Conductor)
+
+For thin rectangular conductors where thickness d << width w. The closed-form
+Dowell factors live in Python:
+`radia.em_material.EMMaterial.dowell_Zs(freq, R)` (tanh surface impedance) and
+`radia_mcp.radia_ngsolve.solve.deep_bar_resistance_factor` /
+`deep_bar_reactance_factor` (the single-conductor `F(xi)` / `G(xi)` ratios; the
+C++ PEEC assembly in `rad_peec_matrices.cpp` consumes the per-segment `Z_s`).
+
+SHOWCASE NOTEBOOK `docs/peec/dowell_surface_impedance_demo.ipynb` (companion to
+`docs/peec/PEEC_SURFACE_IMPEDANCE.md`) runs these live: `F(xi)`/`G(xi)` vs
+normalized thickness `xi=a/delta`, a copper-foil `Z(f)` sweep, the Dowell `coth`
+(`H(a)=0`) vs ESIM `tanh` (`dH/dz(a)=0`) boundary comparison, a round-wire Bessel
+cross-section comparison, and continued-fraction (1st/2nd-order) truncation
+accuracy. (The full Dowell continued-fraction derivation is in
+`docs/peec_integration/peec_showcase.ipynb`.)
+
+## ESIM (Effective Surface Impedance Method)
+
+For H-dependent (nonlinear) surface impedance on magnetic conductors:
+
+```python
+from radia.esim_cell_problem import ESIMCellProblem
+
+# BH curve data: [[H (A/m), B (T)], ...]
+BH_DATA = [[0, 0], [100, 0.1], [1000, 1.2], [50000, 2.0]]
+
+esim = ESIMCellProblem(
+    bh_curve=BH_DATA,
+    sigma=10e6,        # Conductivity [S/m]
+    freq=8000,         # Frequency [Hz]
+)
+
+# Solve cell problem for surface field H0
+Z_s = esim.solve(H0=1000.0)
+# Z_s = complex surface impedance [Ohm/m^2]
+```
+
+ESIM solves the 1D cell problem:
+```
+rho * d^2H/ds^2 + j*omega*mu(|H|)*H = 0   for s in [0, inf)
+```
+
+Supports complex permeability: mu = mu' - j*mu" (grain eddy current losses).
+
+**Use for**: induction heating workpieces, nonlinear iron cores, lossy ferrite.
+"""
+
+PEEC_PRIMA = """
+# PRIMA Model Order Reduction
+
+## Overview
+
+PRIMA (Passive Reduced-order Interconnect Macromodeling Algorithm) reduces
+the full PEEC system by a congruence projection onto the Krylov space of the
+port vectors.  The reduced model is kept as projected matrices; it is evaluated
+through the port Schur complement and is not synthesised into an equivalent
+circuit.
+
+### Reduction Pipeline
+
+```
+Full system: [Z_LL, Z_LS, Z_LM; ...] (N DOFs)
+  -> Krylov basis Q from the port vectors (Q'RQ = I, k << N)
+  -> Congruence: R_r = Q'RQ, L_r = Q'LQ (symmetric, definite -> passive)
+  -> Port Schur complement: Z_port(s)
+```
+
+## Usage
+
+```python
+from radia.lanczos_reduction import LanczosReducer
+
+reducer = LanczosReducer(tol=1e-12)
+result = reducer.lanczos_generalized(L, R, k=20, v0=port_vector)
+Q = result.Q                  # R-orthonormal Krylov basis, Q[:, 0] || port_vector
+R_r, L_r = Q.T @ R @ Q, Q.T @ L @ Q
+```
+
+`radia.analysis.PEECAnalysisSolver` uses exactly this projection for the
+series PEEC port (port_vector = ones), where the reduced series impedance is
+exact.  `LoopStarMagneticPRIMA`, `LCResonantPRIMA`, `SecondOrderArnoldi` and
+`RationalKrylovLC` reduce loop/star/magnetic and second-order systems the same
+way.
+
+## Key Classes
+
+| Class | Purpose |
+|-------|---------|
+| `LanczosReducer` | Krylov basis with full re-orthogonalization (optional start vector) |
+| `LanczosResult` | Result: Q (basis), alpha/beta, projected T, rank |
+| `LoopStarMagneticPRIMA` | Loop-star-magnetic block reduction and port Schur impedance |
+| `LCResonantPRIMA`, `SecondOrderArnoldi`, `RationalKrylovLC` | Resonant / second-order / multi-shift reductions |
+| Magnetic-material coupling | Retired from PEEC; use HDiv-VIM / reduced FEM |
+
+## References
+
+- Odabasioglu, Celik, Pileggi, "PRIMA", IEEE TCAD, 1998
+- Gustavsen, Semlyen, "Vector Fitting", IEEE TPWRD, 1999
+"""
+
+PEEC_NGSOLVE_BEM = """
+# ngsolve.bem Integration
+
+## Frequency Range Overlap
+
+| Range | Solver | Notes |
+|-------|--------|-------|
+| DC - 1 MHz | Radia PEEC + SIBC | Circuit extraction, SPICE netlist |
+| DC - 1 MHz | ngsolve.bem (Weggler EFIE) | Low-freq stable EFIE |
+| 1 MHz - GHz | ngsolve.bem (Helmholtz) | Full-wave BEM |
+
+Both PEEC and ngsolve.bem cover the DC-1 MHz range. Choose based on output:
+- **PEEC**: L, R, C, M extraction, SPICE netlist, model order reduction
+- **ngsolve.bem**: field distribution, scattering, coupling to FEM
+
+## Radia PEEC Unique Features (vs ngsolve.bem)
+
+1. **Direct circuit extraction**: L, R, C, M matrices -> SPICE netlist
+2. **Lanczos MOR**: PRIMA reduction to compact equivalent circuit
+3. **FastHenry compatibility**: Parse existing .inp models
+4. **Multi-filament**: nwinc/nhinc for skin/proximity within PEEC
+
+## When to Use Which
+
+| Task | Use |
+|------|-----|
+| Inductance/resistance extraction | PEEC |
+| SPICE netlist for circuit simulator | PEEC + PRIMA |
+| Inductor on ferrite substrate | PEEC for conductors + HDiv-VIM / reduced FEM for core |
+| Field distribution visualization | ngsolve.bem |
+| High-frequency scattering (> 1 MHz) | ngsolve.bem (Helmholtz) |
+| Induction heating (P_total) | ngsolve.bem (Scalar BIE + SIBC) |
+| Impedance of complex 3D geometry | Either (cross-validate) |
+"""
+
+PEEC_PITFALLS = """
+# Common PEEC Pitfalls
+
+## 1. Units: Always Meters
+
+All coordinates in meters. Conductivity in S/m. Current density in A/m^2.
+Do NOT convert units -- Radia always uses meters.
+
+```python
+# CORRECT
+builder.add_node_at(0.001, 0, 0)  # 1 mm in meters
+builder.add_connected_segment(n1, n2, 0.5e-3, 0.1e-3)  # 0.5mm x 0.1mm
+
+# WRONG
+builder.add_node_at(1, 0, 0)  # This is 1 meter, not 1 mm!
+```
+
+## 2. Bessel Function: iv (Modified), NOT jv
+
+```python
+from scipy.special import iv as besseli  # CORRECT: modified Bessel I
+# from scipy.special import jv  # WRONG: regular Bessel J
+```
+
+MKL does not provide Bessel functions; use scipy.
+
+## 3. Port Definition Required
+
+Without `add_port()`, `compute_port_impedance()` returns 0.
+
+## 4. Cleanup with UtiDelAll
+
+PEEC no longer owns magnetic-material Radia objects.
+
+## 5. Import Order (with Cubit)
+
+If combining with Cubit panels, import order matters:
+```python
+import netgen       # First
+import ngsolve      # Second
+# ... setup cubit ...
+import cubit        # Last (DLL conflict avoidance)
+```
+
+## 6. Surface Impedance Array Size
+
+Zs array must have exactly n_loop elements (= number of filament segments).
+With multi-filament (nwinc=3, nhinc=3), n_loop = 9 * n_segments.
+
+## 7. Laplace Kernel Only
+
+PEEC uses G(r) = 1/(4*pi*r). Do NOT add Helmholtz kernel (e^{-jkr}/r).
+Wave propagation effects are NOT modeled. Use ngsolve.bem for high frequency.
+"""
+
+
+PEEC_POSTPROCESSING = """
+# Post-Processing: solved PEEC -> GMSH picture
+
+## One hop from solver to viewable .msh
+
+```python
+from radia.peec_topology import PEECCircuitSolver
+
+solver = PEECCircuitSolver(topo)
+summary = solver.export_gmsh("coil_I.msh", 50e3, [1.0],
+                             direction_view=True, complex_steps=True)
+# summary: n_segments, n_reverse_segments, I_abs_range, J_abs_range,
+#          P_total_W, current_convention, views, frequency_Hz
+```
+
+`PEECCircuitSolver.export_gmsh` solves the branch currents at that
+frequency and writes them with the per-segment geometry the solver was
+built from.  The functional form is
+`radia.gmsh_post_export.export_peec_topology_msh(topology, msh,
+currents=I)` -- use it when the currents come from somewhere else
+(a bundle reduction, a coupled BEM solve, a measured distribution).
+`currents=None` writes a geometry-only file: a cheap way to inspect
+the discretization BEFORE spending a solve.
+
+## Views written (ElementData, one value per PEEC segment)
+
+| View | Meaning |
+|------|---------|
+| `\\|I\\| [A]` | branch current magnitude |
+| `\\|J\\| [A/m^2]` | `\\|I\\|/(width*height)` -- the current DENSITY; this is what exposes skin/proximity when strands differ in cross-section |
+| `P [W]` | per-segment ohmic loss |
+| `I direction [A]` | opt-in: unit tangent x SIGNED Re(I) arrows |
+| `I_complex [A]` | opt-in: 2 steps (Re I, Im I) for AC animation |
+
+Loss convention is EXPLICIT, never guessed:
+`current_convention="amplitude"` (default, phasor amplitudes) gives
+`P = 0.5|I|^2 R`; `"rms"` gives `P = |I|^2 R`.  The choice is echoed in
+the summary dict, so a reported `P_total_W` is never ambiguous.
+`Zs=` adds `Re(Zs)` to the dissipation (and is used in the solve).
+
+## REVERSE CURRENTS -- |I| hides them
+
+Measured on a 4 mm square copper bar at 100 MHz (uniform partition):
+
+| nwinc x nhinc | segments | reverse strands | min Re(I) of 1 A |
+|---------------|----------|-----------------|------------------|
+| 3 x 3 | 9 | 1 (the center) | -0.091 A |
+| 4 x 4 | 16 | 4 | -0.025 A |
+| 5 x 5 | 25 | 8 | -0.031 A |
+
+The high-frequency limit reproduces `L^-1 1` exactly (verified to 5
+digits at 1e8 and 1e10 Hz), and Kirchhoff holds: `sum(I) = I_port`.
+Interior strands genuinely run BACKWARDS in the inductance-limited
+regime -- a `|I|` colormap paints them as ordinary positive current.
+
+Read the reversal from the SIGNED `I direction` arrows (a reverse
+strand points backwards) or from step 0 of `I_complex` (= Re I, with a
+diverging colormap); `n_reverse_segments` in the summary counts them.
+When a bundle plot looks "non-monotone from the surface inward", check
+the sign before blaming the mesh.
+
+On a CURVED coil, also do not read a radial crowding direction out of
+the picture at all: `nwinc`/`nhinc` offsets keep the parent length, so
+the radial ordering is inverted by construction (see the
+`multi_filament` topic).  The plot is a faithful view of the model; the
+model is only valid across the non-curvature direction.
+
+## Overlaying the conductor CAD
+
+```python
+# radia-mcp gmsh server, headless
+gmsh_render("coil_I.msh", "coil_I.png", merge_files=["coil.step"])
+gmsh_harmonic_to_time("coil_I.msh", view="I_complex [A]", n_steps=24,
+                      out_file="I_time.pos")
+gmsh_export_animation("I_time.pos", "I_rotating.gif",
+                      merge_files=["coil.step"])
+```
+
+radia/netgen `WriteStep` writes METER coordinates, so a radia-produced
+STEP overlays the current data 1:1 with no conversion.  A multi-strand
+segment's sub-filaments meet only at the topology NODE (a circuit
+connection, not a geometric one), so the small visual gap between
+strands at a node is the model, not an export defect.
+"""
+
+
+def get_peec_documentation(topic: str = "all") -> str:
+    """Return PEEC documentation by topic."""
+    topics = {
+        "overview": PEEC_OVERVIEW,
+        "builder": PEEC_BUILDER_API,
+        "solver": PEEC_CIRCUIT_SOLVER,
+        "multi_filament": PEEC_MULTI_FILAMENT,
+        "fasthenry": PEEC_FASTHENRY,
+        "magnetic": PEEC_MAGNETIC_POLICY,
+        "sibc": PEEC_SIBC,
+        "prima": PEEC_PRIMA,
+        "ngsolve_bem": PEEC_NGSOLVE_BEM,
+        "postproc": PEEC_POSTPROCESSING,
+        "pitfalls": PEEC_PITFALLS,
+    }
+
+    topic = topic.lower().strip()
+    if topic == "all":
+        return "\n\n".join(topics.values())
+    elif topic in topics:
+        return topics[topic]
+    else:
+        return (
+            f"Unknown topic: '{topic}'. "
+            f"Available: all, {', '.join(topics.keys())}"
+        )

@@ -1,0 +1,48 @@
+{
+  "schema": "radia.gpu.migration-evidence.v1",
+  "source_commit": "54a577e7ff73367da9b3869ab06e7120e0b717e7",
+  "installed_acceptance": {
+    "schema": "radia.gpu.installed-acceptance.v1",
+    "passed": true,
+    "matlab_release": "2026a",
+    "cuda_residual": 0,
+    "simulink_repeated_runs": 2,
+    "simulink_failure_cleanup": true,
+    "ltspice_checked": true,
+    "source_commit": "54a577e7ff73367da9b3869ab06e7120e0b717e7",
+    "distribution_version": "0.1.0a1",
+    "wheel_sha256": "4dc9b12f9acf04b31c252e15845d82543c8d3bc5bb4394de5494549295952d27"
+  },
+  "ltspice_mcp_acceptance": {
+    "schema": "radia.gpu.ltspice-mcp-acceptance.v1",
+    "passed": true,
+    "tool_count": 32,
+    "protocol": "2025-11-25",
+    "tool": "compare_topology",
+    "result": {
+      "equivalent": true,
+      "components_a": 1,
+      "components_b": 1,
+      "pin_incidences_a": 2,
+      "pin_incidences_b": 2
+    },
+    "source_commit": "54a577e7ff73367da9b3869ab06e7120e0b717e7",
+    "wheel_sha256": "4dc9b12f9acf04b31c252e15845d82543c8d3bc5bb4394de5494549295952d27"
+  },
+  "python_contract_tests": {
+    "passed": 397
+  },
+  "integration_contract_tests": {
+    "passed": 16
+  },
+  "matlab_data_safety_passed": true,
+  "remaining": [
+    "Move remaining legacy MATLAB/Simulink canonical sources out of root",
+    "Preserve independent radia-optuna source ownership",
+    "Separate CPU domain methods from integration adapters",
+    "Complete CPU wheel/sdist boundary verification",
+    "Final main CI and PyPI publication",
+    "A100 acceptance when available",
+    "Independent review before stable release"
+  ]
+}

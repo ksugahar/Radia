@@ -1,0 +1,299 @@
+#!/usr/bin/env python
+"""audit_application_block_contract.py -- enforce the application calc contract.
+
+Pure static AST analysis -- runs in <1 s, no NGSolve/Cubit needed.
+Suitable as a CI gate.
+
+What it checks
+==============
+
+For every ``src/radia/panels/calc_*.py``:
+
+  C1. Has a top-level ``build_argparser() -> ArgumentParser`` callable.
+  C2. Has a ``calc(args) -> dict`` callable.
+  C3. ``__main__`` block calls ``calc_main(build_argparser, calc)``.
+  C4. Heavy imports (ngsolve, radia, cubit, netgen) are NOT at module top.
+  C5. ``build_argparser()`` body has NO heavy imports either (must be
+      cheap so DesignSpecs can inspect it without paying the NGSolve cost).
+  C6. No function uses ``TaskManager`` BEFORE importing it (the late-
+      import UnboundLocalError trap -- keiko 100号機 2026-05-30).
+      Already covered by validation_test/panels/test_taskmanager_scoping.py; we
+      re-run it here so this script is a complete one-stop audit.
+
+For retired interface modules:
+
+  P0. New ``src/radia/radia_*.py`` desktop panel modules are forbidden.
+      Human application interfaces now live as Simulink blocks. The only
+      allowed ``radia_*.py`` non-panel shim is ``radia_ngsolve.py``.
+  P1. EM, PCB, Motor, and Stream Function notebook adapters/workbenches are
+      forbidden. IH is the temporary comparison exception.
+
+Exit code 0 = clean; non-zero = violations printed and counted.
+
+Run locally:
+    python tools/audit_application_block_contract.py
+
+CI:
+    python tools/audit_application_block_contract.py || exit 1
+"""
+
+from __future__ import annotations
+
+import ast
+import pathlib
+import re
+import sys
+from typing import Iterable
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+CALC_DIR = ROOT / "src" / "radia" / "panels"
+PANEL_DIR = ROOT / "src" / "radia"
+ALLOWED_RADIA_SHIMS = {"radia_ngsolve.py"}
+FORBIDDEN_WORKBENCH_MODULES = {
+    "em_notebook.py",
+    "pcb_notebook.py",
+    "motor_notebook.py",
+    "streamfunction_notebook.py",
+}
+FORBIDDEN_WORKBENCH_NOTEBOOKS = {
+    "radia_em.ipynb",
+    "radia_pcb.ipynb",
+    "radia_motor.ipynb",
+    "radia_streamfunction.ipynb",
+}
+
+# Modules that are NEVER allowed at top-of-file in either calc_*.py or
+# radia_*.py panel modules.  Either they trigger long imports
+# (ngsolve / netgen-mesher) or they require Cubit (which the panel
+# subprocess explicitly cannot have, per CLAUDE.md 4-Layer policy).
+HEAVY_TOP_IMPORTS = (
+    "ngsolve",
+    "netgen",
+    "cubit",
+    "radia_pybind",   # the Radia C++ binding
+)
+
+
+def _is_heavy_import(node: ast.AST) -> str | None:
+    """Return the offending module name, or None if not a heavy import."""
+    if isinstance(node, ast.Import):
+        for alias in node.names:
+            top = alias.name.split(".")[0]
+            if top in HEAVY_TOP_IMPORTS:
+                return alias.name
+    if isinstance(node, ast.ImportFrom):
+        top = (node.module or "").split(".")[0]
+        if top in HEAVY_TOP_IMPORTS:
+            return node.module
+    return None
+
+
+def _toplevel_heavy_imports(tree: ast.Module) -> list[tuple[int, str]]:
+    """Return [(lineno, modname)] for heavy imports at module top."""
+    bad = []
+    for node in tree.body:
+        m = _is_heavy_import(node)
+        if m:
+            bad.append((node.lineno, m))
+    return bad
+
+
+def _function_has_heavy_imports(fn: ast.FunctionDef) -> list[tuple[int, str]]:
+    """Heavy imports anywhere inside fn (e.g. build_argparser MUST NOT)."""
+    bad = []
+    for node in ast.walk(fn):
+        if node is fn:
+            continue
+        m = _is_heavy_import(node)
+        if m:
+            bad.append((node.lineno, m))
+    return bad
+
+
+def _function_late_imports_taskmanager(fn: ast.FunctionDef
+                                      ) -> tuple[int, int] | None:
+    """C6: Returns (first_use_line, first_import_line) if fn uses
+    `TaskManager` BEFORE importing it.  Mirror of the test in
+    validation_test/panels/test_taskmanager_scoping.py."""
+    first_use = None
+    first_imp = None
+    for node in ast.walk(fn):
+        if (isinstance(node, ast.Name)
+                and node.id == "TaskManager"
+                and isinstance(node.ctx, ast.Load)):
+            if first_use is None or node.lineno < first_use:
+                first_use = node.lineno
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if (alias.asname or alias.name) == "TaskManager":
+                    if first_imp is None or node.lineno < first_imp:
+                        first_imp = node.lineno
+    if first_use is not None and first_imp is not None and first_use < first_imp:
+        return (first_use, first_imp)
+    return None
+
+
+def _has_callable(tree: ast.Module, name: str) -> bool:
+    """Check for a function with `name` defined at module top."""
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return True
+    return False
+
+
+def _has_callable_anywhere(tree: ast.Module, name: str) -> bool:
+    """Check for a function with `name` anywhere in the module (top-level
+    OR nested inside main() etc.).  The canonical pattern allows
+    `def run(args):` nested inside `def main():`."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return True
+    return False
+
+
+def _main_calls(tree: ast.Module, func: str) -> bool:
+    """Does the if __name__ == '__main__' block call `func(...)`?"""
+    for node in tree.body:
+        if (isinstance(node, ast.If)
+                and isinstance(node.test, ast.Compare)
+                and isinstance(node.test.left, ast.Name)
+                and node.test.left.id == "__name__"):
+            for sub in ast.walk(node):
+                if (isinstance(sub, ast.Call)
+                        and isinstance(sub.func, ast.Name)
+                        and sub.func.id == func):
+                    return True
+    return False
+
+
+# Legacy calc_*.py files written before the canonical pattern was
+# documented (2026-05-31).  They use ad-hoc entry points and are NOT
+# required to comply, but should be migrated opportunistically.  New
+# files (not in this list) MUST comply.  Add an entry only when you
+# accept the legacy bug-class risk; remove an entry when you migrate
+# that file to the canonical pattern.
+LEGACY_CALC_EXEMPT = {
+    "calc_heat.py",           # thermal legacy pattern
+    "calc_heat_axisym.py",    # thermal sibling, legacy pattern
+    "calc_heat_with_em_table.py",  # thermal sibling, legacy pattern
+    "calc_mesh_eval.py",      # uses different entry
+    "calc_motor_lamination.py",
+    "calc_motor_transient.py",
+    "calc_peec.py",
+    "calc_pcb_peec.py",
+    "calc_stream_coil.py",
+    "calc_surface.py",
+    "calc_verify_vol.py",     # uses different entry
+    "calc_volume.py",         # legacy `def main(): ... calc_main(run, parser)`
+    "calc_kelvin_benchmark.py",
+    "calc_inductance.py",     # huge multi-mode legacy file
+    "calc_analytic.py",       # ad-hoc analytical formula sandbox
+    "calc_axisym_volumetric.py",  # axisym thermal/EM, separate pattern
+    "calc_em_table.py",       # passes args via dict-of-dicts, not argparse
+    "calc_equivalence_source.py",  # research script, separate pattern
+    # calc_*.py NOT in this set MUST follow the canonical pattern
+    # documented in docs/simulink/ADDING_APPLICATION_BLOCK.md.
+}
+
+
+def _calls_anywhere(tree: ast.Module, func: str) -> bool:
+    """True if func(...) is called anywhere in the module."""
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == func):
+            return True
+    return False
+
+
+def _audit_calc(path: pathlib.Path) -> list[str]:
+    """Return list of violation strings for one calc_*.py."""
+    if path.name == "calc_common.py":
+        return []   # helper module, exempt
+    if path.name in LEGACY_CALC_EXEMPT:
+        return []   # grandfathered legacy file
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    viols = []
+    rel = path.relative_to(ROOT).as_posix()
+
+    # C1
+    if not _has_callable(tree, "build_argparser"):
+        viols.append(f"{rel}: C1 missing `def build_argparser():`")
+
+    # C2: a callable named `run` or `calc` (the work function passed to
+    # calc_main).  Either name is fine; can be at module top OR nested
+    # inside `def main():` -- the canonical pattern defines it as a
+    # closure capturing the parsed args.
+    if not (_has_callable_anywhere(tree, "run")
+            or _has_callable_anywhere(tree, "calc")):
+        viols.append(f"{rel}: C2 missing work function `def run(args):` "
+                     f"(or `def calc(args):`)")
+
+    # C3: calc_main(...) must be called somewhere (not necessarily in
+    # __main__; legacy convention is to wrap it in main()).
+    if not _calls_anywhere(tree, "calc_main"):
+        viols.append(f"{rel}: C3 module does not call calc_main(...) -- "
+                     f"the helper that handles --output JSON dump")
+
+    # C4
+    for lineno, mod in _toplevel_heavy_imports(tree):
+        viols.append(f"{rel}:{lineno}: C4 top-level heavy import `{mod}` "
+                     f"(must be inside calc())")
+
+    # C5: build_argparser() must be cheap
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "build_argparser":
+            for ln, mod in _function_has_heavy_imports(node):
+                viols.append(f"{rel}:{ln}: C5 heavy import `{mod}` inside "
+                             f"build_argparser() (workbench introspects it)")
+
+    # C6
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            r = _function_late_imports_taskmanager(node)
+            if r:
+                u, i = r
+                viols.append(f"{rel}:{u}: C6 {node.name} uses TaskManager "
+                             f"BEFORE importing it (line {i}) -- "
+                             f"UnboundLocalError trap")
+    return viols
+
+def main() -> int:
+    viols: list[str] = []
+    calcs = sorted(CALC_DIR.glob("calc_*.py"))
+    panels = sorted(PANEL_DIR.glob("radia_*.py"))
+
+    for f in calcs:
+        viols.extend(_audit_calc(f))
+    for f in panels:
+        if f.name not in ALLOWED_RADIA_SHIMS:
+            rel = f.relative_to(ROOT).as_posix()
+            viols.append(
+                f"{rel}: P0 retired desktop panel module present -- "
+                "promote analysis UI through DesignSpec + Simulink block")
+    for name in sorted(FORBIDDEN_WORKBENCH_MODULES):
+        path = PANEL_DIR / name
+        if path.exists():
+            viols.append(f"{path.relative_to(ROOT).as_posix()}: P1 retired non-IH workbench adapter present")
+    notebook_dir = CALC_DIR / "notebooks"
+    for name in sorted(FORBIDDEN_WORKBENCH_NOTEBOOKS):
+        path = notebook_dir / name
+        if path.exists():
+            viols.append(f"{path.relative_to(ROOT).as_posix()}: P1 retired non-IH workbench present")
+
+    if viols:
+        print(f"Application contract: {len(viols)} VIOLATION(S)")
+        for v in viols:
+            print(f"  {v}")
+        print()
+        print(f"Audited {len(calcs)} calc_*.py + "
+              f"{len(panels)} radia_*.py guard file(s).")
+        print("See src/radia/CONVENTIONS.md for the Simulink application pattern.")
+        return 1
+    print(f"Application contract: CLEAN "
+          f"({len(calcs)} calc_*.py + {len(panels)} radia_*.py guard file(s))")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

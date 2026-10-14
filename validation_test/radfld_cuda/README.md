@@ -1,0 +1,303 @@
+# RadFld CUDA validation and next acceleration boundaries
+
+The first experimental CUDA backend implements **the existing retained point
+cloud representation** of the HDiv RadFld evaluator. It does not replace
+analytic polynomial or curved-element sources with sampled points, implement
+generic `rad.Fld` object dispatch, or claim that all RadFld source families are
+accelerated. Analytic/curved evaluators reject cloud export explicitly.
+
+Both CPU and CUDA share the point-source, compensated-sum and quadrupole
+kernels. The existing CPU tree constructor supplies exactly its source order,
+bounding boxes and moments. CUDA follows the same opening criterion, leaf
+order, and mirror/rotation images through a threaded traversal without a fixed
+device stack. Both `direct` and `tree` are explicit choices; there is no hidden
+CPU evaluation fallback or automatic change of approximation.
+
+`radia.gpu.FieldCloud` takes numeric source positions and strengths. Its result
+uses the existing cloud convention `sum q*(r-x)/|r-x|^3`, without `1/(4*pi)`;
+the caller retains the original physical conversion. The source geometry and
+tree stay on the device between calls. No Python adapter, Python-generated
+solver snapshot, NGSolve DLL or TaskManager region is required at runtime.
+This is a staged experiment, excluded from wheel staging until its own
+artifact/provenance and release gates are added. Published runtimes are unchanged.
+
+Build on 100 in an isolated clean checkout with `Build.ps1 -FieldCudaOnly
+-RequireNativeProvenance`. MATLAB-supported MSVC/CUDA configurations compile
+sm_75, sm_80 and compute_80 PTX. CUDA multiply-add contraction is disabled;
+there is no fast-math override. Exact device buffer counts are admitted only
+when max(2 GiB, 20% total GPU memory) remains free. A100 stays off and is never
+connected to by this workflow.
+
+## Independent CPU reference and measurements
+
+`build_reference.py --out <job-reference-dir>` compiles a validation-only
+pybind11 adapter against **unmodified pre-CUDA CPU sources** recovered from the
+explicit Git revision in its receipt. This is an independent CPU route using
+NGSolve scheduling, not an input prerequisite for MATLAB users. No reference
+binary is installed into another environment.
+
+`validate.py --reference-dir <job-reference-dir> --out <job-results-dir>` uses
+HDF5 inputs at every size (including inputs beyond 2 GB). It checks
+CI/preflight queues, other numerical/build processes and GPU load before
+starting MATLAB and between every sample. A conflict stops the run, closes
+only the task-owned Engine session and saves a failed/pending JSON; it never
+kills another job. Default sizes are 4096, 16384 and 65536 sources with 1024
+targets. Near, far, coincident-cloud, signed cancellation and image rotation
+cases are included. Increase sizes only within device and host memory budgets.
+
+Warm-up precedes two ABBA rounds for each algorithm, comparing original CPU
+construction/evaluation/result recovery against MATLAB source/tree setup,
+upload, CUDA evaluation, download, destruction and synchronization. Input
+reading and numerical checks are outside the timing. The public API completes
+within MATLAB. Startup time is recorded separately. CPU threads and all
+source, adapter, binary and input hashes are retained.
+
+GPU versus CPU **for the same algorithm** must meet relative vector and
+maximum pointwise error <= 1e-12. The tree also must meet <= 1e-5 versus CPU
+direct, with an explicitly recorded near-zero floor for pointwise ratios.
+Field comparisons use vector differences, never differences of magnitudes.
+Failure stops acceptance and retains the JSON. No linear solve occurs here,
+so a solver true residual is not applicable; HDiv-MMM solver validation still
+requires its existing true-residual and physical gates.
+
+JSON records exact simultaneously owned CUDA bytes, sampled CUDA free memory,
+MATLAB available/host memory, and Python process working-set/private bytes.
+These are not a whole-process native allocation peak; Python's reported peak
+is process-lifetime, not per-case. 100/RTX 5000 timing is diagnostic provenance,
+never formal idle-historical_cpu_worker performance acceptance. Raw MAT files, inputs, logs,
+compiler receipts and operational identities remain in private durable storage;
+only reviewed public JSON belongs in Git.
+
+## Following work authorized with this acceleration program
+
+1. Complete the staged cloud numerical/memory measurements after 100 is idle.
+   Connect supported RadFld source packing explicitly; do not present this
+   numeric backend as complete public RadFld parity. Port analytic/high-order
+   and curved near-field kernels without changing their physical contracts.
+2. Matrix Build: profile the existing `BuildHMatrix` and charge-basis timings.
+   Batch well-separated entry/block evaluation for CUDA while preserving
+   HACApK compression, symmetric host blocks, images, singular/Duffy near
+   integrals, and NGSolve-owned geometry/orientation/quadrature. Accelerating
+   a sampled-Laplace test strategy alone does not certify HDiv-MMM.
+3. HDiv-MMM: profile repeated H-matrix matvec, constitutive updates and solve
+   orchestration. Keep reusable data resident and measure transfer-inclusive
+   application time. Preserve NGSolve `sparsecholesky` for direct FE subsolves,
+   nonlinear convergence and true residual <= 1e-6. TaskManager is not started
+   in mexcuda. Record numerical, physical and memory evidence separately.
+4. A RadFld-specific FMM remains a candidate after direct/tree measurements.
+   Core compact interactions retain HACApK; do not restore core ExaFMM.
+   NGSolve native multipoles/FMM may serve the policy-approved smooth
+   free-space BEM/Biot-Savart scope. No GPU FMM backend is claimed here.
+
+## Analytic and curved CUDA migration in progress
+
+The production scalar formulas now live in `rad_hdiv_field_math.inc`, instantiated
+with the existing degree-18 CPU workspace and a degree-6 CUDA workspace.
+`rad_field_source_kernel.inc` shares exact source dispatch, origin translation,
+and the existing signed closest-reference Duffy integration. Far-field quadrature
+tables are generated by the original CPU routine and uploaded unchanged.
+`ExportSnapshot` retains analytic, high-order and curved source records; the
+cloud-only export still rejects element sources. CPU pybind11 scheduling remains
+caller-owned TaskManager; mexcuda uses CUDA or OpenMP, without starting TaskManager.
+
+This migration is **not yet built or numerically accepted**. The native `create_elements` command and MATLAB `FieldElements` wrapper now
+accept a version-1 numeric struct with `representation`, `volume`, and `surface`.
+Representations are `tet` (16/22 columns), `polynomial_tet` (32/22), `cubic_tet`
+(32/29), `sextic_quartic_tet` (96/44), and `curved_tet` (34/24). Affine origins
+are optional Nx3 arrays. Curved sources require Gauss points/weights as column
+vectors. Records follow the production CPU header exactly; this numeric API does
+not assemble NGSolve finite elements. Both experimental wrappers remain excluded
+from wheel staging pending release acceptance.
+
+Run `validate.py --representation <kind> --sizes 4 16 --targets 16 ...` separately
+for every element family before scaling. The independent pre-CUDA oracle adapter
+must first be rebuilt into a new job-owned directory. Original synthetic cases
+exercise materially scaled high-order terms and actual non-affine P2 geometry,
+near/interior/coplanar/far targets, and image rotations. The same strict parity
+limits apply initially; no element family has yet passed GPU validation. Distribution
+contract tests do not certify these mathematical changes. Rebuild and compare
+against the pre-migration CPU reference before any release integration. The
+session deliverable is a radia-gpu release after the requested RadFld, Matrix
+Build and HDiv-MMM work and their applicable release gates have been completed.
+
+## Required IH Simulink release comparison
+
+The release scope also includes the radia-ih GPU implementation running in
+Simulink, compared against an independent Python/pybind11 CPU reference for the
+same publishable physical IH case. A one-DOF smoke configuration, a frozen unit-
+current loss field, or GPU PCG alone does not certify the coupled IH workflow.
+The existing IH_RELEASE.md preview limitations must be checked against the final
+implementation rather than assumed resolved.
+
+Record the supported electromagnetic/thermal physics, mesh/label and material
+contracts, excitation and time-step history, numerical limits, true residuals,
+loss/power and temperature comparisons, cold start and warmed transfer-inclusive
+full execution time, memory indicators and limitations, and exact source/input/
+artifact identities in JSON. Use identical supported physical assumptions on
+both routes; do not compare nonlinear CPU physics with a frozen GPU model.
+Python is an independent accuracy oracle, not a GPU-user setup dependency.
+
+Apply simulink-app-health using the official MATLAB MCP and Simulink toolkit.
+Check the actual model, save it, close and reopen the exact saved path, repeat
+execution, and verify failure cleanup. Do not edit SLX ZIP/XML. Integrate the
+latest accepted IH work without overwriting another session's changes. CI and
+same-artifact distribution acceptance remain release gates. A100 remains off.
+
+The IH implementation now starts with resident complex CSR matvec, scalar-drive
+RHS generation, and a coherent quadratic loss projection in
+`packages/radia-gpu/native/ih_resident_kernels.cuh`. These are unbuilt primitives,
+not a working coupled IH backend. The loss projection sums complex basis fields
+before squaring, retaining cross terms; volume and surface measures must remain
+explicit and distinct. Next connect checked operator/state ownership, the
+complex solve and thermal update, residual gates and a shared Simulink context.
+Upload static operators once, exchange only required controls/observations at
+step boundaries, and avoid downloading heat/temperature solely to re-upload it
+between the coupled device computations. Preserve Simulink output/update order.
+
+## Native FEM projection bridge checkpoint
+
+`Build.ps1 -ProjectionCudaOnly -RequireNativeProvenance` now builds an
+experimental mexcuda gateway that reuses NGSolve SetValues. Host NGSolve code
+is compiled by supported MSVC (C++20, matching AVX2 ABI); mexcuda links the
+entry point. This compilation alone is not GPU acceleration.
+
+The context captures the actual mapped evaluation targets through an initial
+SetValues pass, then accepts bulk field values as a native vector CF and uses
+SetValues again. `projectBatchedField.m` connects MATLAB/CUDA field callbacks
+and exact-target/source-revision reuse. No nodal-sampling substitute is used.
+The initial capture pass and source construction must be included in cold
+whole-workflow timing; the helper's timer alone excludes those construction costs.
+NGSolve owns all FE interpolation, orientation and element transformations.
+No TaskManager is started. Only real 3D HDiv/HCurl/VectorH1 are supported now.
+
+`check_projection_bridge.py` independently constructs Python/NGSolve analytic
+Set references and optionally compares retained-cloud CPU pybind direct fields
+with the identified earlier CUDA cloud artifact through the same native
+projection. Python is validation-only; MATLAB performs the batched GPU route.
+`results/native-projection-cloud-20261012.json` records the clean projection
+build and the original cloud artifact/reference hashes. Three order-1 spaces
+passed, with analytic coefficient-vector error below 9e-16 and zero observed
+CPU/CUDA cloud projection difference for this small case. This is not physical
+FE L2 acceptance or general Radia-object/analytic/high-order/curved acceptance.
+Full legacy command migration, profiling counters, lifecycle across clear/reload,
+source-strength update tests, physical field gates and idle timing/memory are
+still pending. No speedup or complete RadFld migration is claimed.
+
+## Mixed precision checkpoint (2026-10-12)
+
+`tree_mixed32` explicitly evaluates accepted far-node multipoles in FP32.
+Opening tests, geometry, exact near-source kernels and output accumulation
+remain FP64. Unsafe FP32 coefficient/range cases use the documented FP64
+multipole calculation. Source and moment storage remains FP64; reduced memory
+or whole-operation speedup has not been established.
+
+`results/mixed32-projection-20261012.json` records an actual NGSolve SetValues
+projection with 256 positive point sources and 24 mapped targets. Independent
+pre-CUDA CPU direct fields give projected FE L2 relative errors below 1e-7 in
+HDiv, HCurl and VectorH1. This is a small cloud case, not acceptance for all
+analytic, high-order, curved, cancellation-sensitive or near-field inputs.
+The full analytic CUDA module now compiles; those families still need their
+independent numerical gates.
+
+`compareProjectionPrecision.m` is the pending idle-host ABBA measurement entry
+point. Its continuous timer includes source construction/upload, projection
+target capture, evaluation, projection, result recovery and release. Exact
+owned device buffer sizes and sampled CUDA free memory are distinguished from
+unmeasured process/host peaks. Timings on 100 are diagnostic, never formal historical_cpu_worker
+acceptance. Current timing and memory results remain pending due to host load.
+
+The projection validator now accepts `--representation` for each of the five
+element families, `--algorithm`, `--sources`, `--placement far|native` and an
+explicit `--result` path. Geometry and polynomial origins are translated
+together in the far case; near/exact cases retain their original geometry.
+Python and its operation-owned MATLAB session run below normal priority with
+one host computation thread. An old CPU oracle without `from_elements` must
+be rebuilt in a fresh job directory before element checks. These options are
+validation preparation; they do not constitute completed element acceptance.
+
+## Element precision acceptance checkpoint (2026-10-12)
+
+`results/elements-projection-precision-20261012.json` now records all five
+source families through actual order-1 HDiv, HCurl and VectorH1 projection.
+Small far direct cases matched the independent pre-CUDA CPU mathematical
+route. Original-placement mixed cases passed with projected FE L2 differences
+below 2.2e-15. Far mixed cases with 16 volume and 16 surface records passed
+the 1e-4 field and projected FE L2 gates (maximum 6.641e-5).
+The FP32-added field difference against the same FP64 tree was at most
+1.110e-7; the remaining error belongs to the tree approximation for these
+inputs. FP64 CUDA tree parity against the independent CPU tree also passed.
+
+These are small-case precision gates, not general geometry, larger scaling,
+whole-application, release or performance acceptance. Exact owned device
+buffers and sampled free memory are included with their limitations. The
+continuous transfer-inclusive timing comparison remains pending: host CPU
+load was still approximately 50 percent. The independent CPU adapter's schema
+version conversion was corrected to accept the same numeric version=1 used
+by the MATLAB element struct; core CPU mathematics remains at 69301918a.
+
+## Idle diagnostic ABBA checkpoint (2026-10-12)
+
+`results/projection-abba-20261012.json` records continuous source/target
+construction, transfers, evaluation, SetValues projection, result recovery
+and release. Both algorithms were called once before two ABBA rounds.
+Independent CPU precision input hashes match these inputs. All cases use
+24 actual mapped targets: 256 point sources or 16 volume plus 16 surface
+records. These are small diagnostics, not scaling or historical_cpu_worker performance gates.
+
+| Representation | FP64 median ms | Mixed32 median ms |
+|---|---:|---:|
+| Cloud | 3.488 | 5.651 |
+| Tet | 3.155 | 4.575 |
+| Polynomial tet | 3.401 | 3.503 |
+| Cubic tet | 3.130 | 4.356 |
+| Sextic/quartic tet | 4.753 | 4.765 |
+| Curved tet | 4.530 | 3.472 |
+
+Mixed precision is not uniformly faster at this size and remains explicit.
+Owned device buffers are identical in size; no memory reduction is claimed.
+Cold calls and exact owned/sampled memory metrics are retained with their
+limitations. Host/process/global peak memory remains unmeasured.
+
+The earlier socket CIM average near 50 percent conflicted with all-104-CPU
+samples (3.02 percent mean), process CPU deltas and empty queues. The latter
+established the idle diagnostic window; socket CIM alone must not govern
+future waits. `measure_projection_precision.py` repeats the queue/process/GPU
+guards outside timed intervals. Formal performance acceptance remains development/build host-only.
+
+## Larger projection and reuse numerical checkpoint (2026-10-12)
+
+`results/scale-reuse-numerical-20261012.json` increases actual mapped targets
+from 24 to 1820, and cloud sources from 256 to 1024. Curved source records
+also pass on this larger projection. Independent CPU direct-field references
+give projected FE L2 relative errors below 9.07e-8 (cloud) and 2.765e-6
+(curved). Explicit revision invalidation after doubling source coefficients
+passes; cached fields are valid only while their sources/options stay fixed.
+
+For three projection steps, 128-target chunks make 45 field calls, bulk
+evaluation makes three, and unchanged-field reuse makes one. Native/GPU state
+reuse and per-step rebuilding are separate modes. `profileProjectionReuse.m`
+includes construction, all transfers, three projections, recovery and release
+in each continuous sequence. `scale_projection_reuse.py` checks independent
+CPU values and projected FE L2, and guards idle timing outside the sequences.
+
+Competing computations appeared before the timing phase, then CI resumed.
+The bounded, single-thread, below-normal numerical checks completed; their
+times are excluded, not presented as speed comparisons. Exact device buffer
+ownership, logical MATLAB cache bytes and sampled GPU free memory retain
+their stated limits. Larger idle timing is still pending.
+
+
+## Matrix Build / HDiv-MMM resident checkpoint (2026-10-12)
+
+The next stage now has executable code in `validation_test/hmatrix_cuda` and
+`packages/radia-gpu/native`: checked persistent symmetric HACApK leaf application,
+physical normalization/permutation and resident `B^T G B`. A bounded CUDA
+constant-density linear tet/triangle block builder reuses the exact existing
+quadrature and analytic potential formulas. Ten numerical subgates pass; this
+does not certify adaptive HACApK Matrix Build, FE charge-map construction,
+constitutive/preconditioner integration or a complete HDiv-MMM solve.
+
+See `../hmatrix_cuda/README.md` for source/artifact identity, the earlier guarded
+operator-residency diagnostic and its limitations. Latest-artifact timing is
+pending competing computation. Experimental runtime payloads remain excluded
+from the published wheel. A100 has not been operated.

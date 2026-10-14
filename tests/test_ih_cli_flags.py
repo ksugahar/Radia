@@ -1,0 +1,109 @@
+"""The thermal-chain command lines expose the strict options and not the
+removed fallback ones."""
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+
+import pytest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PANELS = os.path.join(ROOT, "src", "radia", "panels")
+
+CASES = {
+    "calc_heat.py": (["--max-halvings", "--allow-frozen-ht",
+                      "--em-reference-temperature", "--power-tolerance",
+                      "--em-heat-boundaries", "--rotor-states",
+                      "--angle-step-tolerance", "--convection-map"],
+                     ["--q-phi-average-n", "--surface-label"]),
+    "calc_heat_axisym.py": (["--max-halvings", "--allow-frozen-ht",
+                             "--n-phi-samples", "--power-tolerance", "--convection-map"],
+                            ["--q-phi-average-n"]),
+    "calc_ih_axisym_coupled.py": (["--max-halvings", "--skin-resolution",
+                                   "--newton-max-iter"], []),
+    "calc_heat_with_em_table.py": (["--allow-frozen-ht",
+                                    "--allow-em-table-extrapolation", "--convection-map"],
+                                   ["--ht-order",
+                                    "--allow-table-extrapolation"]),
+}
+
+
+def _help(args):
+    env = dict(os.environ, PYTHONPATH=os.path.join(ROOT, "src"))
+    proc = subprocess.run([sys.executable, *args, "--help"],
+                          capture_output=True, text=True, timeout=120,
+                          env=env)
+    assert proc.returncode == 0, proc.stderr
+    return proc.stdout
+
+
+@pytest.mark.parametrize("script", sorted(CASES))
+def test_panel_flags(script):
+    text = _help([os.path.join(PANELS, script)])
+    present, removed = CASES[script]
+    for flag in present:
+        assert flag in text, f"{script} lacks {flag}"
+    for flag in removed:
+        assert flag + " " not in text and flag + "\n" not in text, \
+            f"{script} still offers {flag}"
+
+
+def test_post_processing_takes_region_and_geometry_from_the_sidecar():
+    text = _help(["-m", "radia.ih_thermal_post", "depth"])
+    assert "--span" in text
+    for flag in ("--axisymmetric", "--stations-unit", "--region"):
+        assert flag not in text
+
+
+def test_sidecar_command_offers_every_record_field():
+    text = _help(["-m", "radia.ih_thermal", "sidecar"])
+    for flag in ("--boundaries", "--p-wp", "--frequency", "--definedon",
+                 "--geometry"):
+        assert flag in text
+
+def test_rotor_states_alone_is_an_accepted_heat_source(tmp_path):
+    """--rotor-states replaces --qsurf-sol, so it must pass the source gate
+    and reach the next input check."""
+    env = dict(os.environ, PYTHONPATH=os.path.join(ROOT, "src"))
+    missing = str(tmp_path / "missing_wp.vol")
+    base = [sys.executable, os.path.join(PANELS, "calc_heat.py"),
+            "--wp-vol", missing]
+    with_rotor = subprocess.run(
+        base + ["--rotor-states", str(tmp_path / "rotor.json")],
+        capture_output=True, text=True, timeout=120, env=env)
+    without = subprocess.run(base, capture_output=True, text=True,
+                             timeout=120, env=env)
+    assert "--rotor-states is required" in without.stdout
+    assert "is required" not in with_rotor.stdout
+    assert "--wp-vol not found" in with_rotor.stdout
+
+
+@pytest.mark.parametrize("script,function,kwargs", [
+    ("calc_fem_kelvin.py", "solve_fem", {"solver": "pardiso"}),
+    ("calc_fem_kelvin.py", "solve_fem", {"solver": "misspelled"}),
+    ("calc_fem_coilmesh.py", "solve_fem_coilmesh", dict(vol="missing.vol", frequency=1.,
+     I_target=1., coil_sigma=1., wp_sigma=1., wp_mu_r=1., half_thickness=1., solver="bddc")),
+])
+def test_unsupported_solver_fails_before_loading_a_mesh(script, function, kwargs):
+    from importlib import import_module
+
+    module = import_module("radia.panels." + script.removesuffix(".py"))
+    with pytest.raises(ValueError):
+        getattr(module, function)(**kwargs)
+
+
+
+@pytest.mark.parametrize("selector,expected", [
+    ("", "Unknown convection boundary labels"),
+    ("air_cooling", "mutually exclusive"),
+])
+def test_convection_map_rejects_unknown_label_or_uniform_mix(tmp_path, selector, expected):
+    from types import SimpleNamespace
+    from radia.panels.calc_heat import _resolve_convection_roles
+
+    cooling = tmp_path / "cooling.json"
+    cooling.write_text('{"unknown_wall":{"h_W_m2K":10,"ambient_C":20}}')
+    mesh_labels = SimpleNamespace(GetBoundaries=lambda: ("air_cooling", "heated"))
+    with pytest.raises(ValueError, match=expected):
+        _resolve_convection_roles(mesh_labels, str(cooling), selector, 10.0, 20.0)

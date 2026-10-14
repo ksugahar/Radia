@@ -1,0 +1,36 @@
+"""Build full existing C HACApK with supported isolated MKL, no TaskManager."""
+from pathlib import Path
+import argparse, ctypes, hashlib, json, os, socket, subprocess
+
+def main():
+    p=argparse.ArgumentParser();p.add_argument('--mkl-root',type=Path,required=True);p.add_argument('--out',type=Path,required=True);a=p.parse_args()
+    if socket.gethostname().lower()!='t7920':raise RuntimeError('Build belongs to 100')
+    root=Path(__file__).resolve().parents[2];a.out.mkdir(parents=True,exist_ok=False)
+    sources=[Path(__file__).with_suffix('.c'),root/'packages/radia-gpu/native/hmatrix_serial_host.c']+[root/'src/ext/HACApK'/s for s in ['cHACApK_base.c','cHACApK_cpp_impl.c','cHACApK_lib.c','cHACApK_pca_cluster.c']]
+    tracked=sources+[Path(__file__),root/'src/ext/HACApK/cHACApK_aca.inc']+list((root/'src/ext/HACApK').glob('*.h'))+[root/'src/core/rad_hacapk_parallel.h']
+    result=dict(schema='radia.hacapk-full-host.v1',accepted=False,scope='Synthetic full native cluster/leaf/ACA infrastructure; not CUDA or HDiv physical acceptance',source_commit=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip(),source_sha256={s.relative_to(root).as_posix():hashlib.sha256(s.read_bytes()).hexdigest() for s in tracked},cases={},timing_measured=False)
+    try:
+        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
+        if not (a.mkl_root/'include/mkl.h').is_file() or not (a.mkl_root/'lib/mkl_rt.lib').is_file():raise RuntimeError('Supported mkl-devel headers and import library required')
+        result['mkl_import_library_sha256']=hashlib.sha256((a.mkl_root/'lib/mkl_rt.lib').read_bytes()).hexdigest()
+        result['mkl_header_sha256']=hashlib.sha256((a.mkl_root/'include/mkl.h').read_bytes()).hexdigest()
+        env=dict(os.environ,MKL_NUM_THREADS='1',MKL_THREADING_LAYER='SEQUENTIAL',OMP_NUM_THREADS='1')
+        env['PATH']=str(a.mkl_root/'bin')+';C:/Program Files/Python312/Library/bin;'+env['PATH']
+        for mode in ['scalar','batch']:
+            exe=a.out/(mode+'.exe');batch=a.out/(mode+'.cmd')
+            inputs=' '.join('"'+str(s)+'"' for s in sources)
+            define='/DRAD_HACAPK_BATCH_ENTRIES' if mode=='batch' else ''
+            batch.write_text('@echo off\ncall "C:/BuildTools/VS2022-CUDA/VC/Auxiliary/Build/vcvars64.bat" >nul\n'+f'cl /nologo /TC /MD /O2 /Gy {define} /I"{root/"src/ext/HACApK"}" /I"{root/"src/core"}" /I"{a.mkl_root/"include"}" {inputs} /Fo:"{a.out}/" /Fe:"{exe}" /link /OPT:REF /LIBPATH:"{a.mkl_root/"lib"}" mkl_rt.lib\n',encoding='utf-8')
+            built=subprocess.run(['cmd','/c',str(batch)],cwd=a.out,env=env,capture_output=True)
+            (a.out/(mode+'-build.log')).write_bytes(built.stdout+built.stderr);built.check_returncode()
+            run=subprocess.run([str(exe)],cwd=a.out,env=env,capture_output=True)
+            (a.out/(mode+'-run.log')).write_bytes(run.stdout+run.stderr);run.check_returncode()
+            result['cases'][mode]=json.loads(run.stdout.decode().splitlines()[-1])
+            result['cases'][mode]['binary_sha256']=hashlib.sha256(exe.read_bytes()).hexdigest()
+        if result['source_sha256']!={s.relative_to(root).as_posix():hashlib.sha256(s.read_bytes()).hexdigest() for s in tracked}:raise RuntimeError('Source changed during validation')
+        result['accepted']=True
+    except BaseException as error:
+        result['error']=f'{type(error).__name__}: {error}';raise
+    finally:(a.out/'result.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+
+if __name__=='__main__':main()

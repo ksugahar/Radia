@@ -1,0 +1,7 @@
+* Radia Simulink PID example: voltage-driven first-order RC plant
+VCTRL control 0 PWL FILE="${control_PWL}"
+RPLANT control output 10
+CPLANT output 0 1m
+.tran 0 1m 0 20u
+.save V(control) V(output)
+.end

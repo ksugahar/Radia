@@ -1,0 +1,435 @@
+"""Independent Cubit LAB/100 release-dual command.
+
+The published wheel is the byte oracle. LAB installs those exact wheel bytes;
+100号機 installs the owning package editable from the release checkout, whose
+files must equal the wheel. Radia/MCP metadata and their selected source
+remain untouched.
+"""
+from __future__ import annotations
+
+import argparse
+import base64
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+import urllib.request
+import zipfile
+from email.parser import BytesParser
+
+SCHEMA = 'cubit-mesh-export.release-dual.v4'
+TARGETS = ('lab', '100')
+# Deployment tier per target (AGENTS.md: LAB runs verified wheels, 100号機
+# keeps the dedicated editable development install).
+TIERS = {'lab': 'wheel', '100': 'editable'}
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def wheel_contract(path, distribution='cubit-mesh-export'):
+    prefix = distribution.replace('-', '_') + '/'
+    with zipfile.ZipFile(path) as archive:
+        names = archive.namelist()
+        metadata = BytesParser().parsebytes(archive.read(next(
+            n for n in names if n.endswith('.dist-info/METADATA'))))
+        if metadata['Name'] != distribution:
+            raise ValueError('Not a ' + distribution + ' wheel')
+        files = {}
+        for name in names:
+            if name.startswith(prefix) and not name.endswith('/'):
+                content = archive.read(name)
+                text = name.endswith(('.py', '.jou', '.svg', '.tmpl', '.json', '.md', '.txt'))
+                if text:
+                    content = content.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+                files[name] = {'sha256': digest(content), 'text': text}
+    required_files = (
+        'cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd', 'toolbar_smoke.py',
+        'cubit_gui/toolbar_probe.py', 'cubit_gui/cubit_export_menu.py',
+        'cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',
+        'cubit_gui/solver_ready_sample.jou', 'native_payloads.json',
+        'mcp/server.py', 'mcp/_support/status.py')
+    for required in required_files:
+        if prefix + required not in files:
+            raise ValueError('Wheel lacks ' + required)
+    return {'version': metadata['Version'], 'wheel_sha256': digest(Path(path).read_bytes()),
+            'files': files, 'requires': metadata.get_all('Requires-Dist', [])}
+
+
+def verify_published(distribution, contract):
+    with urllib.request.urlopen('https://pypi.org/pypi/' + distribution + '/' +
+                                contract['version'] + '/json', timeout=30) as response:
+        published = json.load(response)
+    if contract['wheel_sha256'] not in [u['digests']['sha256'] for u in published['urls']]:
+        raise ValueError(distribution + ': wheel bytes are not the published PyPI artifact')
+
+
+# Same worker executes locally or through the existing Administrator SSH token.
+# No GUI process is killed to make installation possible; active Cubit refuses it.
+WORKER = r'''
+import base64, getpass, hashlib, importlib.metadata as md, json, os
+from pathlib import Path
+import re, shutil, socket, subprocess, sys, sysconfig, zipfile
+cfg = json.loads(base64.b64decode(sys.argv[1]))
+root = Path(cfg['source_root']).resolve() if cfg.get('source_root') else None
+package = root / 'packages/cubit-mesh-export' if root else None
+out = Path(cfg['output']).resolve()
+out.mkdir(parents=True, exist_ok=True)
+events = []
+result = dict(schema=cfg['schema'], target=cfg['target'], hostname=socket.gethostname(),
+              user=getpass.getuser(), interpreter=sys.executable, source_root=str(root),
+              source_sha=cfg['source_sha'], version=cfg['version'],
+              wheel_sha256=cfg['wheel_sha256'], passed=False)
+
+def command(args, timeout=120):
+    p = subprocess.run(args, capture_output=True, text=True, encoding='utf-8',
+                       errors='replace', timeout=timeout)
+    events.append(dict(command=args, returncode=p.returncode, stdout=p.stdout, stderr=p.stderr))
+    if p.returncode:
+        raise RuntimeError(str(args) + '\n' + p.stdout[-5000:] + p.stderr[-2000:])
+    return p.stdout
+
+def preserved():
+    state = {}
+    for name in ('radia', 'radia-mcp', 'netgen-mesher', 'ngsolve', 'numpy', 'mcp'):
+        try:
+            d = md.distribution(name)
+            state[name] = dict(version=d.version, direct_url=d.read_text('direct_url.json'))
+        except md.PackageNotFoundError:
+            state[name] = None
+    return state
+
+def verify_files(base, files):
+    for relative, expected in files.items():
+        data = (base / relative).read_bytes()
+        if expected['text']:
+            data = data.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+        if hashlib.sha256(data).hexdigest() != expected['sha256']:
+            raise RuntimeError('Published wheel/source mismatch: ' + relative)
+
+def recover_scratch(text):
+    # Only the exact task-created directory reported by our command is eligible.
+    for value in re.findall(r'^\s*Work:\s*(.+)$', text, re.M):
+        scratch = Path(value.strip()).resolve()
+        if scratch.parent != Path('C:/temp').resolve() or not scratch.name.startswith(
+                ('cubit-smoke-', 'cubit-toolbar-smoke-')):
+            raise RuntimeError('Unsafe smoke scratch path: ' + str(scratch))
+        entries = [scratch, *scratch.rglob('*')]
+        if any(p.is_symlink() or p.is_junction() for p in entries):
+            raise RuntimeError('Smoke scratch contains a link')
+        destination = out / scratch.name
+        shutil.copytree(scratch, destination)
+        for p in entries:
+            if p.is_file() and hashlib.sha256(p.read_bytes()).digest() != hashlib.sha256(
+                    (destination / p.relative_to(scratch)).read_bytes()).digest():
+                raise RuntimeError('Evidence copy mismatch')
+        shutil.rmtree(scratch)
+        if scratch.exists():
+            raise RuntimeError('Smoke scratch cleanup failed')
+
+# 100 is the student host: every profile's .cubit must load the release,
+# not only the deploying Administrator's (2026-09-28 stale-startup incident).
+profile_scope = ['--all-users'] if cfg['target'] == '100' else []
+result['profile_scope'] = profile_scope
+tier = cfg['tier']
+result['tier'] = tier
+staging = None  # created fresh by this worker; never a pre-existing tree
+
+def create_owned():
+    # A new directory owned by this run, recorded before anything can fail.
+    import tempfile
+    if any(p.is_symlink() or p.is_junction() for p in (out, *out.parents)):
+        raise RuntimeError('Evidence directory path contains a link: ' + str(out))
+    return Path(tempfile.mkdtemp(prefix='cubit-dual-wheel-', dir=out)).resolve()
+
+def extract_into(wheel, target):
+    # Members may not leave the owned directory.
+    with zipfile.ZipFile(wheel) as archive:
+        for member in archive.namelist():
+            destination = (target / member).resolve()
+            if member.startswith(('/', '\\')) or ':' in member or target not in destination.parents:
+                raise RuntimeError('Unsafe wheel member path: ' + member)
+        archive.extractall(target)
+    return target
+
+def remove_owned(path):
+    entries = [path, *path.rglob('*')]
+    if any(p.is_symlink() or p.is_junction() for p in entries):
+        raise RuntimeError('Staging contains a link; left in place: ' + str(path))
+    shutil.rmtree(path)
+    if path.exists():
+        raise RuntimeError('Staging cleanup failed: ' + str(path))
+
+before = preserved()
+try:
+    if tier == 'editable':
+        if root is None:
+            raise RuntimeError('The editable tier needs its release checkout')
+        git = ['git', '-c', 'safe.directory=' + str(root), '-C', str(root)]
+        if command(git + ['rev-parse', 'HEAD']).strip() != cfg['source_sha']:
+            raise RuntimeError('Wrong release checkout SHA')
+        if command(git + ['status', '--porcelain', '--untracked-files=no']).strip():
+            raise RuntimeError('Release checkout has tracked modifications')
+        verify_files(package / 'src', cfg['files'])
+        installer_path = package / 'src/cubit_mesh_export/install.py'
+    elif tier == 'wheel':
+        # The transported bytes must be the published wheel before anything
+        # is read from them; the installer is loaded from that payload.
+        wheel = Path(cfg['wheel_path']).resolve()
+        if hashlib.sha256(wheel.read_bytes()).hexdigest() != cfg['wheel_sha256']:
+            raise RuntimeError('Transported wheel differs from the published wheel')
+        staging = create_owned()
+        result['staging'] = str(staging)
+        extract_into(wheel, staging)
+        verify_files(staging, cfg['files'])
+        installer_path = staging / 'cubit_mesh_export/install.py'
+    else:
+        raise RuntimeError('Unknown deployment tier: ' + str(tier))
+    from packaging.requirements import Requirement
+    for raw in cfg['requires']:
+        requirement = Requirement(raw)
+        if requirement.marker and not requirement.marker.evaluate():
+            continue
+        version = md.version(requirement.name)
+        if version not in requirement.specifier:
+            raise RuntimeError('Unsatisfied dependency; update explicitly before deploy: ' + raw)
+    for name in ('netgen-mesher', 'ngsolve'):
+        if md.version(name) != cfg['dependencies'][name]:
+            raise RuntimeError('Dependency mismatch; do not mutate shared solver runtime: ' + name)
+    # Load the selected standalone installer directly; avoid old editable imports.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('selected_cubit_install', installer_path)
+    installer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(installer)
+    cubit_dir = installer._find_cubit_dir()
+    if cubit_dir is None:
+        raise RuntimeError('Supported Cubit installation missing')
+    # Forced deployment (explicit --force-close-cubit only): close every
+    # running Cubit GUI, whoever owns it, and record whose it was.  Unsaved
+    # work in those sessions is lost; without the flag an open Cubit stops
+    # the deployment.
+    if cfg.get('force_close_cubit') and cfg['action'] in ('preflight', 'deploy'):
+        import csv, time
+        listing = command(['tasklist', '/FI', 'IMAGENAME eq coreform_cubit.exe',
+                           '/FO', 'CSV', '/NH', '/V'])
+        closed = [dict(pid=int(row[1]), session=row[2], user=row[6])
+                  for row in csv.reader(listing.splitlines())
+                  if len(row) > 6 and row[0].lower() == 'coreform_cubit.exe']
+        for proc in closed:
+            subprocess.run(['taskkill', '/F', '/PID', str(proc['pid'])],
+                           capture_output=True, text=True)
+        result['force_closed_cubit'] = result.get('force_closed_cubit', []) + closed
+        for _ in range(60):
+            ok, issues = installer.preflight(cubit_dir, verbose=False)
+            if ok:
+                break
+            time.sleep(1)
+    ok, issues = installer.preflight(cubit_dir, verbose=False)
+    if not ok:
+        raise RuntimeError(str(issues))
+    if cfg['action'] == 'deploy':
+        if tier == 'editable':
+            command([sys.executable, '-m', 'pip', 'install', '--no-deps', '--no-build-isolation',
+                     '-e', str(package)], 180)
+        else:
+            command([sys.executable, '-m', 'pip', 'install', '--no-deps', '--force-reinstall',
+                     str(Path(cfg['wheel_path']).resolve())], 180)
+        command([sys.executable, '-m', 'cubit_mesh_export.install', *profile_scope], 180)
+    if cfg['action'] != 'preflight':
+        # A fresh interpreter reports what is actually imported now.
+        probe = "import json,pathlib,importlib.metadata as m,cubit_mesh_export as c;d=m.distribution('cubit-mesh-export');print(json.dumps(dict(version=c.__version__,file=str(pathlib.Path(c.__file__).resolve()),direct_url=json.loads(d.read_text('direct_url.json') or 'null'))))"
+        identity = json.loads(command([sys.executable, '-c', probe]).strip())
+        direct_url = identity['direct_url'] or {}
+        imported = Path(identity['file']).resolve()
+        if identity['version'] != cfg['version']:
+            raise RuntimeError('Wrong installed version: ' + str(identity))
+        if tier == 'editable':
+            expected_file = package / 'src/cubit_mesh_export/__init__.py'
+            if (imported != expected_file.resolve()
+                    or direct_url.get('dir_info', {}).get('editable') is not True):
+                raise RuntimeError('Wrong actual editable import: ' + str(identity))
+        else:
+            if (direct_url.get('dir_info', {}).get('editable') is True
+                    or 'archive_info' not in direct_url
+                    or not str(direct_url.get('url', '')).endswith(Path(cfg['wheel_path']).name)):
+                raise RuntimeError('Not installed from the exact wheel: ' + str(identity))
+            if ((root is not None and root in imported.parents)
+                    or (staging is not None and staging in imported.parents)):
+                raise RuntimeError('Wheel tier imports a source or staging copy: ' + str(identity))
+            # Every packaged file in the live installation equals the wheel.
+            verify_files(imported.parent.parent, cfg['files'])
+            result['installed_payload_verified'] = True
+        result['installed'] = identity
+        command([sys.executable, '-m', 'cubit_mesh_export.mcp.server', '--selftest'], 120)
+        result['mcp_selftest'] = True
+        cli = Path(sysconfig.get_path('scripts')) / 'mcp-server-cubit.exe'
+        command([str(cli), '--selftest'], 120)
+        result['mcp_cli_selftest'] = True
+        command([sys.executable, '-m', 'cubit_mesh_export.install', '--verify-only', *profile_scope], 120)
+    if cfg['action'] == 'deploy':
+        for module, arguments in [('smoke_test', ['--keep']),
+                ('toolbar_smoke', ['--restarts', '2', '--keep', '--report-json', str(out / 'gui.json')])]:
+            try:
+                text = command([sys.executable, '-m', 'cubit_mesh_export.' + module, *arguments], 750)
+            finally:
+                if events:
+                    recover_scratch(events[-1]['stdout'])
+            result[module] = True
+    result['passed'] = True
+except Exception as exc:
+    result['error'] = repr(exc)
+finally:
+    if staging is not None:
+        # A cleanup problem is recorded beside, never instead of, the outcome.
+        try:
+            remove_owned(staging)
+            result['staging_removed'] = True
+        except Exception as cleanup_exc:
+            result['staging_removed'] = False
+            result['staging_cleanup_error'] = repr(cleanup_exc)
+    result['preserved_before'] = before
+    result['preserved_after'] = preserved()
+    result['unrelated_packages_unchanged'] = before == result['preserved_after']
+    result['passed'] = (result['passed'] and result['unrelated_packages_unchanged']
+                        and result.get('staging_removed', True))
+    result['events'] = events
+    (out / (cfg['action'] + '.json')).write_text(json.dumps(result, indent=2), encoding='utf-8')
+    print('CUBIT_DUAL_RESULT=' + json.dumps(result))
+sys.exit(0 if result['passed'] else 1)
+'''
+
+
+def check_receipt(receipt, contract, target):
+    expected = dict(schema=SCHEMA, target=target, source_sha=contract['source_sha'],
+                    version=contract['version'], wheel_sha256=contract['wheel_sha256'])
+    expected['profile_scope'] = ['--all-users'] if target == '100' else []
+    expected['tier'] = TIERS[target]
+    required = ('passed', 'unrelated_packages_unchanged', 'smoke_test', 'toolbar_smoke',
+                'mcp_selftest', 'mcp_cli_selftest')
+    if TIERS[target] == 'wheel':
+        required += ('installed_payload_verified',)
+    return (all(receipt.get(k) == v for k, v in expected.items())
+            and all(receipt.get(k) is True for k in required))
+
+
+def transport_wheel(wheel, target, run_from, output_dir):
+    """Return the target-local path of the exact wheel bytes for a wheel tier."""
+    wheel = Path(wheel).resolve()
+    if target == run_from:
+        return str(wheel)
+    destination = output_dir.rstrip('/\\') + '\\' + target + '\\wheel\\' + wheel.name
+    parent = destination.rsplit('\\', 1)[0]
+    # Same stdin route as the worker: no remote-shell quoting of the path.
+    encoded = base64.b64encode(parent.encode()).decode()
+    subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', target,
+                    'python', '-', encoded],
+                   input='import base64,pathlib,sys\n'
+                         'pathlib.Path(base64.b64decode(sys.argv[1]).decode()).mkdir('
+                         'parents=True, exist_ok=True)\n',
+                   check=True, capture_output=True, text=True, timeout=120)
+    subprocess.run(['scp', '-q', '-o', 'BatchMode=yes', str(wheel),
+                    target + ':' + destination.replace('\\', '/')],
+                   check=True, capture_output=True, text=True, timeout=600)
+    return destination
+
+
+def run(args):
+    import tomllib
+    contract = wheel_contract(args.wheel)
+    contract.update(schema=SCHEMA, source_sha=args.source_sha)
+    # The host running this command executes its own target locally and
+    # reaches the other through its ssh alias ('lab' or '100').
+    run_from = getattr(args, 'run_from', 'lab')
+    roots = {'lab': args.source_root_lab, '100': args.source_root_100}
+    evidence = {'lab': args.evidence_lab, '100': args.evidence_100}
+    if not roots[run_from]:
+        raise ValueError('The controller host needs its checkout: --source-root-' + run_from)
+    root = Path(roots[run_from])
+    metadata = tomllib.loads((root / 'packages/cubit-mesh-export/pyproject.toml').read_text(encoding='utf-8'))
+    contract['dependencies'] = {name: next(d.split('==')[1] for d in metadata['project']['dependencies']
+                                              if d.startswith(name + '=='))
+                                for name in ('netgen-mesher', 'ngsolve')}
+    if args.action != 'preflight':
+        tag = 'cubit-mesh-export-v' + contract['version']
+        p = subprocess.run(['git', '-c', 'safe.directory=' + str(root), '-C', str(root),
+                            'rev-parse', tag + '^{}'], capture_output=True, text=True, encoding="utf-8", check=True)
+        if p.stdout.strip() != args.source_sha:
+            raise ValueError('Tag does not identify selected source')
+        verify_published('cubit-mesh-export', contract)
+    output = Path(evidence[run_from])
+    output.mkdir(parents=True, exist_ok=True)
+    # Both preflights finish before either install starts.
+    phases = ['preflight', 'deploy'] if args.action == 'deploy' else [args.action]
+    for phase in phases:
+        for target in TARGETS:
+            if phase == 'done':
+                receipt = json.loads((output / target / 'deploy.json').read_text(encoding='utf-8'))
+                if not check_receipt(receipt, contract, target):
+                    raise ValueError('Missing or stale dual receipt: ' + target)
+            cfg = dict(contract, target=target, action='verify' if phase == 'done' else phase,
+                       tier=TIERS[target], source_root=roots[target] or '',
+                       output=str(Path(evidence[target]) / target),
+                       force_close_cubit=bool(getattr(args, 'force_close_cubit', False)))
+            if TIERS[target] == 'wheel':
+                # The worker re-hashes these bytes before reading or installing them.
+                cfg['wheel_path'] = transport_wheel(args.wheel, target, run_from,
+                                                    evidence[target])
+            encoded = base64.b64encode(json.dumps(cfg).encode()).decode()
+            command = [sys.executable, '-', encoded] if target == run_from else [
+                'ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', target, 'python', '-', encoded]
+            p = subprocess.run(command, input=WORKER, text=True, encoding='utf-8',
+                               errors='replace', capture_output=True, timeout=1800)
+            lines = [line for line in p.stdout.splitlines() if line.startswith('CUBIT_DUAL_RESULT=')]
+            if not lines:
+                raise RuntimeError(target + ': no worker receipt\n' + p.stderr[-3000:])
+            result = json.loads(lines[-1].partition('=')[2])
+            if target != run_from:
+                # Keep the remote receipt beside the local one; 'done' reads both here.
+                (output / target).mkdir(parents=True, exist_ok=True)
+                (output / target / (cfg['action'] + '.json')).write_text(
+                    json.dumps(result, indent=2), encoding='utf-8')
+            for proc in result.get('force_closed_cubit', []):
+                print(f"{phase} {target}: force-closed Cubit pid={proc['pid']} user={proc['user']}", flush=True)
+            print(f"{phase} {target}: {'PASS' if result['passed'] else 'FAIL'}", flush=True)
+            if p.returncode or not result['passed']:
+                raise RuntimeError(result.get('error', 'worker failed'))
+    if args.action == 'done':
+        (output / 'done.json').write_text(json.dumps(dict(contract, passed=True, targets=list(TARGETS)), indent=2))
+        print('PASS release-dual: exact published exporter wheel, LAB wheel / 100 editable and GUI/export/MCP gates; Radia/radia-mcp unchanged')
+    return 0
+
+
+def build_parser():
+    """Return the dedicated Cubit release-dual CLI parser."""
+
+    parser = argparse.ArgumentParser(
+        prog="release_cubit_dual",
+        description="Verify and deploy one cubit-mesh-export wheel on LAB and 100.",
+    )
+    parser.add_argument("--action", choices=("preflight", "deploy", "done"), required=True)
+    parser.add_argument("--wheel", required=True)
+    parser.add_argument("--source-sha", required=True)
+    parser.add_argument("--source-root-lab", default="",
+                        help="LAB installs the wheel; a checkout is needed only when "
+                             "this command runs from LAB (tag and dependency pins)")
+    parser.add_argument("--source-root-100", required=True)
+    parser.add_argument("--evidence-lab", required=True)
+    parser.add_argument("--evidence-100", required=True)
+    parser.add_argument("--run-from", choices=TARGETS, default="lab",
+                        help="host running this command; the other target is reached "
+                             "through its ssh alias ('lab' or '100')")
+    parser.add_argument("--force-close-cubit", action="store_true",
+                        help="close every running Cubit GUI on both targets before "
+                             "preflight (unsaved work in them is lost); recorded in "
+                             "each receipt")
+    return parser
+
+
+def main():
+    raise SystemExit(run(build_parser().parse_args()))
+
+
+if __name__ == "__main__":
+    main()

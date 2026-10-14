@@ -1,0 +1,72 @@
+{
+  "radia_version": "4.95.30",
+  "schema": "radia.validation.annular-motor-dual-lane-manifest.v1",
+  "generated_at_utc": "2026-07-31T07:55:16.561253+00:00",
+  "execution_environment": {
+    "host_role": "compute",
+
+    "python": "3.12.10"
+  },
+  "physical_identity": {
+    "geometry": {
+      "family": "concentric_annular_harmonic_fixture",
+      "resolved_geometry": "smooth_concentric_annuli",
+      "slot_geometry_resolved": false,
+      "rotor_inner_radius_m": 0.2,
+      "rotor_outer_radius_m": 0.8,
+      "stator_inner_radius_m": 1.0,
+      "stator_outer_radius_m": 1.4,
+      "axial_length_m": 0.2
+    },
+    "periodicity": {
+      "slots": 12,
+      "poles": 4,
+      "sector_count": 4,
+      "role": "nominal_symmetry_contract_not_resolved_slot_geometry"
+    },
+    "material": {
+      "rotor": {
+        "relative_permeability": 1001.0,
+        "conductivity_s_per_m": 58000000.0
+      },
+      "stator": {
+        "relative_permeability": 1001.0,
+        "conductivity_s_per_m": 58000000.0
+      },
+      "frequency_hz": 100.0
+    },
+    "excitation": {
+      "harmonic": 1,
+      "rotor_amplitude": 0.8,
+      "stator_amplitude": 1.0,
+      "angle_samples": 8,
+      "angle_basis": "mechanical_rad",
+      "endpoint_policy": "exclude_repeated_period_endpoint",
+      "rotation_representation": "first_spatial_harmonic_phase_only",
+      "magnetic_basis": [
+        "uniform_transverse_x",
+        "uniform_transverse_y"
+      ]
+    }
+  },
+  "shared_mesh_material_identity": {
+    "geometry_sha256": "5b535b3aeba6bb5c6a23fd716300b4089618c81b6252f8aed209ee98fee8a77e",
+    "material_sha256": "2bd30bc2ca31450f6a818103c3d5e6470628b0a75daa1af248a29a160fb46cd4",
+    "excitation_sha256": "9760cbc356bcdcedb407d06f7f5fce043016ac04794687757daf51f5d478928b",
+    "aggregate_sha256": "64b0c69d55ae9b802759b5cfd774e2c67174a5cd2cecb04e6e5c5f70b97304e9"
+  },
+  "artifact_files": {
+    "ngsolve_age": "ngsolve_age.json",
+    "hdiv_mmm_hcurl_eddy_bubble": "hdiv_mmm_hcurl_eddy_bubble.json",
+    "native_motor_angle_family": "native_motor_angle_family.json",
+    "dual_lane": "dual_lane.json",
+    "gate_result": "gate_result.json"
+  },
+  "timing_breakdown_s": {
+    "ngsolve_age": 0.1446409998461604,
+    "hdiv_mmm_hcurl_eddy_bubble": 58.985444699879736,
+    "packaging_and_gate": 0.00408990029245615,
+    "total": 59.134178100153804
+  },
+  "status": "pass"
+}

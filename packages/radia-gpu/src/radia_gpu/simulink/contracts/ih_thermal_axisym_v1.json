@@ -1,0 +1,7 @@
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "radia-ih-thermal-axisymmetric",
+  "strict_labels": true,
+  "required": {"materials": ["workpiece"], "boundaries": ["sibc"]},
+  "allowed": {"materials": ["workpiece"], "boundaries": ["sibc", "axis"]}
+}

@@ -1,0 +1,172 @@
+{
+  "schema": "radia-optuna.execution-choice.v1",
+  "date": "2026-10-13",
+  "host_role": "100-build-and-functional-validation",
+  "platform": "windows-x64",
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "gpu": {
+    "ok": true,
+    "cases": [
+      {
+        "name": "continuous",
+        "density_max_abs_error": 8.881784197001252e-16,
+        "selected_candidate_max_abs_error": 0,
+        "random_state_exact": true,
+        "tie_breaking": true
+      },
+      {
+        "name": "log",
+        "density_max_abs_error": 8.881784197001252e-16,
+        "selected_candidate_max_abs_error": 0,
+        "random_state_exact": true,
+        "tie_breaking": true
+      },
+      {
+        "name": "discrete",
+        "density_max_abs_error": 8.881784197001252e-16,
+        "selected_candidate_max_abs_error": 0,
+        "random_state_exact": true,
+        "tie_breaking": true
+      },
+      {
+        "name": "log_discrete",
+        "density_max_abs_error": 4.440892098500626e-15,
+        "selected_candidate_max_abs_error": 0,
+        "random_state_exact": true,
+        "tie_breaking": true
+      },
+      {
+        "name": "categorical",
+        "density_max_abs_error": 2.220446049250313e-16,
+        "selected_candidate_max_abs_error": 0,
+        "random_state_exact": true,
+        "tie_breaking": true
+      },
+      {
+        "name": "continuous_categorical_log_discrete_log_discrete",
+        "density_max_abs_error": 0,
+        "selected_candidate_max_abs_error": 0,
+        "random_state_exact": true,
+        "tie_breaking": true
+      }
+    ],
+    "density_launch_delta": 54,
+    "selection_launch_delta": 16
+  },
+  "binary_sha256": "381f59eb14f5a2e5109a6fe5ac733c7e6e209d065deb664998b1ad881ddd3b19",
+  "oracle": "5.0.0",
+  "sources": {
+    "packages/radia-optuna/native/optuna_mex.cpp": "e570fe511245dbe0caa47bd24f170fe2687611bd57e23e0117c2cf14d50c740a",
+    "packages/radia-optuna/native/optuna_cuda.cu": "bc63c512f99c5f1bb515b490ea40976cf4dc3adba2b195daa11f67a926ce1efb",
+    "packages/radia-optuna/native/optuna_cuda.hpp": "986298d7505a4c175d0d73dc5ad609b011273ec0ac58fd3f477a750ba3894abe"
+  },
+  "cpu": {
+    "ok": true,
+    "cases": [
+      {
+        "name": "continuous",
+        "density_max_abs_error": 6.661338147750939e-16,
+        "selected_candidate_max_abs_error": 0,
+        "random_state_exact": true,
+        "tie_breaking": true
+      },
+      {
+        "name": "log",
+        "density_max_abs_error": 4.440892098500626e-16,
+        "selected_candidate_max_abs_error": 0,
+        "random_state_exact": true,
+        "tie_breaking": true
+      },
+      {
+        "name": "discrete",
+        "density_max_abs_error": 8.881784197001252e-16,
+        "selected_candidate_max_abs_error": 0,
+        "random_state_exact": true,
+        "tie_breaking": true
+      },
+      {
+        "name": "log_discrete",
+        "density_max_abs_error": 3.552713678800501e-15,
+        "selected_candidate_max_abs_error": 0,
+        "random_state_exact": true,
+        "tie_breaking": true
+      },
+      {
+        "name": "categorical",
+        "density_max_abs_error": 0,
+        "selected_candidate_max_abs_error": 0,
+        "random_state_exact": true,
+        "tie_breaking": true
+      },
+      {
+        "name": "continuous_categorical_log_discrete_log_discrete",
+        "density_max_abs_error": 0,
+        "selected_candidate_max_abs_error": 0,
+        "random_state_exact": true,
+        "tie_breaking": true
+      }
+    ],
+    "native": {
+      "api_version": 1,
+      "backend": "optuna_mex",
+      "command_count": 22,
+      "handle_count": 0,
+      "build_route": "mexcuda",
+      "taskmanager": false,
+      "gpu_operations": "Parzen densities and TPE candidate evaluation/selection",
+      "host_operations": "Management, ordered RNG, candidate generation, Pareto and Sobol",
+      "execution": "matlab-mexcuda",
+      "host_parallel_runtime": "openmp",
+      "allocator": "cudaMalloc",
+      "density_launches": 0,
+      "selection_launches": 0,
+      "host_to_device_bytes": 0,
+      "device_to_host_bytes": 0,
+      "peak_temporary_bytes": 0,
+      "cuda_runtime": 0,
+      "cuda_driver": 0,
+      "cuda_device": -1,
+      "execution_mode": "cpu",
+      "cpu_density_calls": 42,
+      "cpu_selection_calls": 16
+    },
+    "density_launch_delta": 0,
+    "selection_launch_delta": 0
+  },
+  "integration": {
+    "cpu_upstream_passed": 14,
+    "gpu_suite_passed": 19,
+    "passed": 33,
+    "failed": 0,
+    "incomplete": 0
+  },
+  "cpu_simulink": {
+    "ok": true,
+    "gpu_density_launches": 0,
+    "gpu_selection_launches": 0,
+    "simulink_block_trials": 4,
+    "simulink_block_resumed_trials": 6,
+    "teaching_model_trials": 12,
+    "table_resume": {
+      "schema": "radia-optuna.table-resume-test.v1",
+      "ok": true,
+      "source_trial_count": 4,
+      "restored_trial_count": 4,
+      "table_names": [
+        "TrialTable",
+        "ObjectiveTable",
+        "ParamTable",
+        "IntermediateTable",
+        "UserAttrTable",
+        "ConstraintTable",
+        "SamplerStateTable"
+      ]
+    }
+  },
+  "limits": [
+    "Functional validation only; no performance claim.",
+    "Development source and binary; not the published 0.3.0 wheel.",
+    "No claim of acceptance on a machine without installed CUDA runtime libraries or toolboxes."
+  ],
+  "provenance": "Upstream Optuna 5.0.0 fixtures and independent elementary Simulink optimization cases."
+}

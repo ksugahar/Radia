@@ -1,0 +1,208 @@
+{
+  "schema": "radia.hmatrix-resident-numerical.v1",
+  "accepted": true,
+  "a100_used": false,
+  "timing_acceptance": false,
+  "scope": "Resident symmetric leaf algebra and public sampled/integrated-tet Gram CPU parity; bounded native constant-charge block assembly only; not general HACApK Matrix Build or full HDiv-MMM physics acceptance",
+  "cpu_mean_percent": 0.0,
+  "build": {
+    "schema": "radia.hmatrix-cuda-build.v1",
+    "accepted": true,
+    "source_dirty": false,
+    "source_commit": "0863b258a646936a5e698b5145c240f2299796d6",
+    "source_sha256": {
+      "packages/radia-gpu/native/radia_cuda_hmatrix.cu": "6be3c2c9c4848d312adc6ccbc786faed40c3521ae709e9f6345a3f79904d675a",
+      "packages/radia-gpu/native/hmatrix_resident.cuh": "d9d77afaabc3ad09229d1e2bd0afa95a35c38fbaa44270f2e42a7e326b2a87a2",
+      "packages/radia-gpu/native/hmatrix_hacapk_pack.cuh": "6504faf096219b420dbb0d796187411e2398eda405872c0fd99d3bd626d5dc7a",
+      "src/ext/HACApK/cHACApK_base.h": "0feb4603a640d028ff0cfc44ca1d0240552c3633f3fc4a3f33658ac7cac255c5",
+      "packages/radia-gpu/native/analytic_matrix_build.cuh": "e960916e8137f5eef399bfd0f7f09d9363446e1e05fbacbc6a33152de9046aaf",
+      "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127",
+      "src/core/rad_charge_quadrature.h": "f96cf5b92c6b4c26555cb4413e9efbe5e89754dc16ad9d502afecd09f1ee4989",
+      "src/core/rad_hdiv_vim.h": "bcc63c34546f21ab8fd65e39e6b6668fe687b217d62c1d61229653b5cad19308",
+      "src/core/rad_field_cloud_kernel.h": "af0fc87f58921c6368e5fbb448b372bea7fe40eef2bcff77f9508e09de374834",
+      "src/core/rad_hdiv_field_math.inc": "082adedb5c9a80d222bea026f4756aa4ea14d1e127774a4a7aff7867f8e8205e",
+      "src/core/rad_hdiv_field_kernel_api.inc": "18eb7b6468488c92a6e84a0be6ca7a97ddc6ab5eb4d0342b3453f210d024d589",
+      "src/core/rad_field_source_kernel.inc": "cb8bec501a06ad1d80712371fb4b7c97d4edcb7cb14a8aa67e22ea0cf4919fb8",
+      "packages/radia-gpu/tools/build_hmatrix_cuda.py": "50961afe614ef401643b28a08347ad444b81c452a22fe1aad14366b06ed5cdd0",
+      "Build.ps1": "b86553480773a18726b5031e92bd1bfb63c5d1ca04f1055c098dda30ad0cef2a"
+    },
+    "a100_used": false,
+    "scope": "Resident numeric HACApK leaf application only; assembly/physical solver not accepted",
+    "matlab": "26.1.0.3346908 (R2026a) Update 5",
+    "binary_sha256": "58318036ac31ac423c7e9cf3f2d08b98bf3dd8904cd8ea84d44cf6194d9d9cbd",
+    "cuda_targets": [
+      "sm_75",
+      "sm_80",
+      "compute_80 PTX"
+    ],
+    "taskmanager_started": false,
+    "python_runtime_required": false
+  },
+  "CPU_oracle": {
+    "module": "radia._radia_pybind",
+    "binary_sha256": "7871a3df0172de256235cf6eeeba31bd3269d2b1305d0632c7fa2df4c1e31275",
+    "ngsolve": "6.2.2607",
+    "note": "Independent installed public CPU reference: sampled and integrated constant-tet/triangle Gram"
+  },
+  "input_sha256": "2c132caf41f388dcea23298f8b602fcf9f7bcef10b979f1a3493c3c491141fec",
+  "result": {
+    "accepted": true,
+    "cases": [
+      {
+        "name": "dense",
+        "first_relative_error": 2.0842277492356747e-16,
+        "third_relative_error": 2.429505540148151e-16,
+        "stats": {
+          "owned_device_bytes": 1952,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 1952
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "lowrank",
+        "first_relative_error": 1.1054564207825698e-16,
+        "third_relative_error": 3.084379830382407e-16,
+        "stats": {
+          "owned_device_bytes": 2312,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 2312
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "mixed",
+        "first_relative_error": 1.6254035190650066e-16,
+        "third_relative_error": 2.860820257816377e-16,
+        "stats": {
+          "owned_device_bytes": 2192,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 2192
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "mixed-uneven",
+        "first_relative_error": 4.703128312253036e-16,
+        "third_relative_error": 7.222706075575992e-16,
+        "stats": {
+          "owned_device_bytes": 573312,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 573312
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "public-pybind-sampled-Gram",
+        "first_relative_error": 1.4578813943781033e-16,
+        "third_relative_error": 1.5765945442104818e-16,
+        "stats": {
+          "owned_device_bytes": 1048,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 1048
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "demag-dense-map",
+        "first_relative_error": 3.12819723385529e-16,
+        "third_relative_error": 2.7186949784278837e-16,
+        "stats": {
+          "owned_device_bytes": 2488,
+          "applications": 3,
+          "kernel_launches": 18,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 2488
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "demag-sparse-map",
+        "first_relative_error": 3.854557465143725e-17,
+        "third_relative_error": 1.1317479058154843e-16,
+        "stats": {
+          "owned_device_bytes": 1752,
+          "applications": 3,
+          "kernel_launches": 18,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 1752
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "public-pybind-analytic-tet-Gram",
+        "first_relative_error": 1.2026215981623038e-16,
+        "third_relative_error": 5.448692995994837e-16,
+        "stats": {
+          "owned_device_bytes": 232,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 232
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "native-CUDA-analytic-tet-block",
+        "first_relative_error": 1.2575220168118067e-16,
+        "third_relative_error": 1.8474802763860587e-16,
+        "stats": {
+          "owned_device_bytes": 232,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 4572
+        },
+        "invalid_input_preserved_state": true
+      },
+      {
+        "name": "native-CUDA-analytic-tet-triangle-block",
+        "first_relative_error": 2.0935959282232402e-16,
+        "third_relative_error": 2.0028905896328281e-16,
+        "stats": {
+          "owned_device_bytes": 440,
+          "applications": 3,
+          "kernel_launches": 12,
+          "host_synchronizations_per_apply": 0,
+          "setup_peak_owned_device_bytes": 5468
+        },
+        "invalid_input_preserved_state": true
+      }
+    ],
+    "wrapper_checked": true,
+    "live_count": 0,
+    "reload_stale_handle_rejected": true,
+    "invalid_create_released": true
+  },
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "source_sha256": {
+    "validation_test\\hmatrix_cuda\\validate_resident.py": "9931144c351a4602871acc6baabbe9b0bf82df307a4618782bcdc424c9c4e6be",
+    "validation_test\\hmatrix_cuda\\checkResidentHMatrix.m": "777cf32082077a5917ba7d7822af0ae34fac49a520faca72a37631f16d4bf71d",
+    "packages\\radia-gpu\\matlab\\+radia\\+gpu\\HMatrixOperator.m": "d98a77641d51eea484cefc8d9ee5b12d03395725b3ac7ccda8150e242933052a"
+  },
+  "memory_limitations": "Exact owned device buffers; no process/global peak or idle timing measured",
+  "runtime_identity": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "radia_distribution": "5.3.1"
+  },
+  "true_residual": {
+    "applicable": false,
+    "reason": "Operator applications only; full linear/nonlinear HDiv-MMM solver acceptance pending"
+  },
+  "acceptance_limits": [
+    "No full adaptive HACApK assembly, physical FE charge-map construction or HDiv-MMM solver acceptance.",
+    "Analytic CUDA frontend is bounded to 128 constant-density linear tetrahedron/triangle charges without images.",
+    "No cold process/module start, device reset or large HDF5 frontend acceptance.",
+    "Latest artifact idle timing remains pending."
+  ]
+}

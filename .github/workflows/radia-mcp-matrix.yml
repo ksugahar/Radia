@@ -1,0 +1,592 @@
+name: radia-mcp
+
+# Change-scoped CI boundary for the independently published radia-mcp wheel.
+# This workflow:
+#   - Runs on the FREE GitHub-hosted ubuntu-latest
+#   - Uses Python 3.10 / 3.11 / 3.12 only for implementation compatibility
+#   - Uses Python 3.12 once for impact-scoped package and server regression
+#   - Reserves the complete package/all-server audit for workflow_dispatch
+#   - Treats docs, packaging metadata, implementation, and release tags as
+#     distinct scopes so a tag does not repeat the main-branch test matrix
+#   - With minimal deps (no radia C++ ext, no ngsolve, no Cubit)
+#   - Checks affected server imports/selftests plus stable package contracts
+#   - Keeps all-catalog checks in the explicit full audit
+#
+# Why a separate distribution workflow:
+#   - Catches MCP-only regressions without building the Radia native core
+#   - Validates the lightweight install path (the one new external
+#     users will hit when they `pip install radia-mcp` and try a tool)
+#   - Independent of the self-hosted runner availability
+
+on:
+  push:
+    branches: [main]
+    tags: ['radia-mcp-v*']
+    paths:
+      - "packages/radia-mcp/**"
+      - "tests/mcp_server/**"
+      - "tests/mcp_integration/**"
+      - "packages/radia-gpu/matlab/**"
+      - "src/matlab/**"
+      - "validation_test/**"
+      - "packages/radia-optuna/**"
+      - ".agents/skills/md2html/**"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "README.md"
+      - "docs/**/*.msh"
+      - "src/radia/panels/samples/**/*.msh"
+      - ".github/workflows/radia-mcp-matrix.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/radia-mcp/**"
+      - "tests/mcp_server/**"
+      - "tests/mcp_integration/**"
+      - "packages/radia-gpu/matlab/**"
+      - "src/matlab/**"
+      - "validation_test/**"
+      - "packages/radia-optuna/**"
+      - ".agents/skills/md2html/**"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "README.md"
+      - "docs/**/*.msh"
+      - "src/radia/panels/samples/**/*.msh"
+      - ".github/workflows/radia-mcp-matrix.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: radia-mcp-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.classify.outputs.mode }}
+      python_versions: ${{ steps.classify.outputs.python_versions }}
+      run_tests: ${{ steps.classify.outputs.run_tests }}
+      run_full: ${{ steps.classify.outputs.run_full }}
+      build_wheel: ${{ steps.classify.outputs.build_wheel }}
+      changed_files_json: ${{ steps.classify.outputs.changed_files_json }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch impact comparison base
+        if: github.event_name != 'workflow_dispatch' && github.ref_type != 'tag'
+        shell: bash
+        env:
+          CI_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ -n "$CI_BASE_SHA" && ! "$CI_BASE_SHA" =~ ^0+$ ]]; then
+            git cat-file -e "$CI_BASE_SHA^{commit}" 2>/dev/null || \
+              git fetch --no-tags --depth=1 origin "$CI_BASE_SHA"
+          fi
+
+      - name: Keep new gates out of the legacy ngsolve monolith
+        if: github.event_name != 'workflow_dispatch' && github.ref_type != 'tag'
+        shell: bash
+        env:
+          CI_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python3 packages/radia-mcp/tools/check_ngsolve_architecture.py --selftest
+          if [[ -n "$CI_BASE_SHA" && ! "$CI_BASE_SHA" =~ ^0+$ ]]; then
+            python3 packages/radia-mcp/tools/check_ngsolve_architecture.py --base "$CI_BASE_SHA"
+          fi
+
+      - name: Classify radia-mcp change scope
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          mode=targeted
+          python_versions='["3.12"]'
+          run_tests=true
+          run_full=false
+          build_wheel=false
+          files=''
+
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            mode=release
+            python_versions='["3.12"]'
+            run_tests=false
+            run_full=false
+            build_wheel=true
+          elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            mode=full
+            python_versions='["3.10","3.11","3.12"]'
+            run_full=true
+            build_wheel=true
+          else
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              files=$(git diff --name-only "$BASE_SHA...$GITHUB_SHA")
+            elif [[ -n "${BEFORE_SHA:-}" && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
+              files=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")
+            else
+              files=$(git show --pretty='' --name-only "$GITHUB_SHA")
+            fi
+
+            printf '%s\n' "$files"
+            if [[ -n "$files" ]] && ! grep -qvE '^packages/radia-mcp/(docs/|README\.md$|CHANGELOG\.md$)' <<<"$files"; then
+              mode=docs
+              python_versions='["3.12"]'
+              run_tests=false
+              run_full=false
+              build_wheel=false
+            elif [[ -n "$files" ]] && ! grep -qvE '^packages/radia-mcp/(pyproject\.toml$|src/radia_mcp/__init__\.py$|README\.md$|CHANGELOG\.md$)' <<<"$files"; then
+              mode=package
+              python_versions='["3.12"]'
+              run_tests=false
+              run_full=false
+              build_wheel=true
+            else
+              if grep -qE '^packages/radia-mcp/src/' <<<"$files"; then
+                python_versions='["3.10","3.11","3.12"]'
+              fi
+              if [[ "$EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
+                build_wheel=true
+              fi
+            fi
+
+          fi
+
+          changed_files_json=$(printf '%s\n' "$files" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "python_versions=$python_versions" >> "$GITHUB_OUTPUT"
+          echo "run_tests=$run_tests" >> "$GITHUB_OUTPUT"
+          echo "run_full=$run_full" >> "$GITHUB_OUTPUT"
+          echo "build_wheel=$build_wheel" >> "$GITHUB_OUTPUT"
+          echo "changed_files_json=$changed_files_json" >> "$GITHUB_OUTPUT"
+          echo "Selected radia-mcp CI mode: $mode"
+
+  minimum-sdk:
+    needs: scope
+    if: needs.scope.outputs.mode != 'docs'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install declared minimum SDK in isolation
+        shell: bash
+        run: |
+          python -m pip install pytest tomli
+          SDK_MIN=$(python - <<'PY'
+          import tomli
+          from packaging.requirements import Requirement
+          with open("packages/radia-mcp/pyproject.toml", "rb") as stream:
+              dependencies = tomli.load(stream)["project"]["dependencies"]
+          requirement = next(Requirement(value) for value in dependencies if Requirement(value).name == "mcp")
+          floors = [item.version for item in requirement.specifier if item.operator == ">="]
+          assert len(floors) == 1, "MCP must declare exactly one inclusive SDK floor"
+          print(floors[0])
+          PY
+          )
+          python -m pip install -e "packages/radia-mcp[maintenance]" "mcp==$SDK_MIN"
+          echo "RADIA_MCP_EXPECTED_SDK=$SDK_MIN" >> "$GITHUB_ENV"
+      - name: Verify SDK registration, dispatch and real stdio reload
+        run: |
+          python -m pytest -q \
+            packages/radia-mcp/tests/test_mcp_sdk_dependency_contract.py \
+            packages/radia-mcp/tests/test_coarse_tool_registry.py \
+            packages/radia-mcp/tests/test_hot_reload.py
+
+  selftest:
+    needs: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(needs.scope.outputs.python_versions) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: packages/radia-mcp/pyproject.toml
+
+      # Minimal install: just mcp + radia-mcp itself.
+      # NO radia (heavy MKL+MSVC build), NO ngsolve, NO cubit binaries.
+      # MCP servers must import cleanly without these heavy deps
+      # (they are knowledge servers; runtime deps are optional).
+      - name: Install minimal deps
+        if: >-
+          needs.scope.outputs.run_tests == 'true' ||
+          needs.scope.outputs.build_wheel == 'true'
+        shell: bash
+        env:
+          RUN_TESTS: ${{ needs.scope.outputs.run_tests }}
+        run: |
+          # tomli: tomllib backport for Python 3.10 (tools/policy_lint.py reads pyproject.toml;
+          # tomllib is stdlib only on 3.11+).  No-op on 3.11/3.12 via the env marker.
+          python -m pip install -e "packages/radia-mcp[maintenance]" "tomli; python_version < '3.11'"
+          if [[ "$RUN_TESTS" == "true" ]]; then
+            # CSV and HDF5 report contracts need their data libraries, not a solver.
+            python -m pip install pytest numpy scipy h5py
+          fi
+
+      - name: Prepare impact-scoped test plan
+        if: needs.scope.outputs.run_tests == 'true'
+        shell: bash
+        env:
+          CHANGED_FILES_JSON: ${{ needs.scope.outputs.changed_files_json }}
+          RUN_FULL: ${{ needs.scope.outputs.run_full }}
+          CI_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ "$RUN_FULL" == "true" ]]; then
+            python packages/radia-mcp/tools/select_ci_tests.py \
+              --full --output radia-mcp-ci-selection.json
+          else
+            base_args=()
+            if [[ -n "$CI_BASE_SHA" && ! "$CI_BASE_SHA" =~ ^0+$ ]]; then
+              base_args=(--base "$CI_BASE_SHA")
+            fi
+            python packages/radia-mcp/tools/select_ci_tests.py \
+              --changed-files-json "$CHANGED_FILES_JSON" \
+              "${base_args[@]}" \
+              --output radia-mcp-ci-selection.json
+          fi
+          cat radia-mcp-ci-selection.json
+
+      - name: Install PPTX dependency for affected presentation contracts
+        if: needs.scope.outputs.run_tests == 'true'
+        run: |
+          python - <<'PY'
+          import json, subprocess, sys
+          plan = json.load(open("radia-mcp-ci-selection.json", encoding="utf-8"))
+          if plan["package_tests"] == ["tests"] or any(
+              "presentation" in path for path in plan["package_tests"]
+          ):
+              subprocess.run([sys.executable, "-m", "pip", "install", "-e", "packages/radia-mcp[document]"], check=True)
+              import pptx
+              print("PPTX contracts enabled:", pptx.__version__)
+          PY
+
+      - name: Compile check (catch SyntaxError on Py ${{ matrix.python-version }})
+        if: needs.scope.outputs.run_tests == 'true'
+        run: |
+          python -m compileall -q packages/radia-mcp/src
+
+      - name: Compatibility import check
+        if: needs.scope.outputs.run_tests == 'true'
+        run: |
+          python - <<'PY'
+          import importlib
+          import json
+
+          from radia_mcp.meta.catalog import CATALOG
+
+          plan = json.load(open("radia-mcp-ci-selection.json", encoding="utf-8"))
+          importlib.import_module("radia_mcp")
+          for short in plan["server_selftests"]:
+              importlib.import_module(f"{CATALOG[short]['subpackage']}.server")
+              print(f"import OK: {short}")
+          PY
+
+      - name: Publish-boundary lint
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
+        run: |
+          python packages/radia-mcp/tools/policy_lint.py --selftest
+          python packages/radia-mcp/tools/policy_lint.py
+
+      - name: Pytest (compact contracts plus affected package tests)
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          package_root = Path("packages/radia-mcp")
+          plan = json.loads(Path("radia-mcp-ci-selection.json").read_text(encoding="utf-8"))
+          env = os.environ.copy()
+          env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+          if plan["package_tests"] != ["tests"]:
+              env["RADIA_MCP_CI_SELECTION_JSON"] = json.dumps(plan["package_tests"])
+          # Discover from the directory so collect_ignore can reject missing optional deps.
+          # conftest still applies the exact impact selectors from the environment.
+          targets = ["tests"]
+          command = [
+              sys.executable, "-m", "pytest", "-v", "-r", "aR",
+              "-m", "not xval and not slow", *targets,
+          ]
+          raise SystemExit(
+              subprocess.run(command, cwd=package_root, env=env).returncode
+          )
+          PY
+
+      # Run both the local health check and the real MCP protocol path for
+      # affected servers. Explicit full audit selects all; a shared runtime
+      # change also selects all because it changes every server contract.
+      - name: Affected per-server selftest and stdio MCP contract
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
+        shell: bash
+        run: |
+          cd packages/radia-mcp
+          python - <<'PY'
+          import json, pathlib, subprocess, sys
+          sys.path.insert(0, "src")
+          from radia_mcp.meta import catalog
+
+          plan = json.loads(
+              pathlib.Path("../../radia-mcp-ci-selection.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          slow_servers = {
+              "radia-ngsolve": 120,
+              "literature-index": 120,
+              "mathematica": 90,
+          }
+          failed = []
+          selected = plan["server_selftests"]
+          for short in selected:
+              info = catalog.CATALOG[short]
+              cmd = [sys.executable, "-c",
+                     f"import sys; sys.path.insert(0, 'src'); "
+                     f"from {info['subpackage']}.server import main; "
+                     f"sys.argv = ['{info['entry_point']}', '--selftest']; "
+                     f"main()"]
+              r = subprocess.run(
+                  cmd,
+                  capture_output=True,
+                  text=True,
+                  timeout=slow_servers.get(short, 60),
+              )
+              ok = (r.returncode == 0)
+              tag = "OK  " if ok else "FAIL"
+              print(f"  {tag}  {short}")
+              if not ok:
+                  failed.append((short, "selftest", r.stderr[-300:].strip()))
+                  continue
+
+              protocol = subprocess.run(
+                  [
+                      sys.executable,
+                      "tools/smoke_mcp_stdio.py",
+                      "--server",
+                      short,
+                      "--timeout",
+                      str(slow_servers.get(short, 60)),
+                  ],
+                  capture_output=True,
+                  text=True,
+                  timeout=slow_servers.get(short, 60) + 15,
+              )
+              protocol_ok = protocol.returncode == 0
+              protocol_tag = "OK  " if protocol_ok else "FAIL"
+              print(f"  {protocol_tag}  {short} (stdio MCP)")
+              if not protocol_ok:
+                  failed.append(
+                      (short, "stdio MCP", protocol.stderr[-600:].strip())
+                  )
+
+          print(f"\nSelected: {len(selected)}, failed: {len(failed)}")
+          for n, stage, err in failed:
+              print(f"\n--- {n}: {stage} ---")
+              print(err)
+          if failed:
+              sys.exit(1)
+          PY
+
+      - name: MCP response regression tests
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          plan = json.loads(Path("radia-mcp-ci-selection.json").read_text(encoding="utf-8"))
+          if plan["run_mcp_response_tests"]:
+              env = os.environ.copy()
+              env["PYTHONPATH"] = os.pathsep.join(
+                  ["packages/radia-mcp/src", "src", env.get("PYTHONPATH", "")]
+              )
+              raise SystemExit(subprocess.run([
+                  sys.executable, "-m", "pytest", "tests/mcp_server", "-q"
+              ], env=env).returncode)
+          print("Skipped: no tests/mcp_server change in the impact plan")
+          PY
+
+      - name: Run selected repository integration contracts
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          plan = json.loads(Path("radia-mcp-ci-selection.json").read_text(encoding="utf-8"))
+          targets = plan["integration_tests"]
+          if targets:
+              import tomllib
+              metadata = tomllib.loads(Path("packages/radia-mcp/pyproject.toml").read_text(encoding="utf-8"))
+              dependencies = metadata["project"]["optional-dependencies"]["md2html"]
+              subprocess.run([sys.executable, "-m", "pip", "install", *dependencies], check=True)
+              env = os.environ.copy()
+              env.pop("RADIA_MCP_CI_SELECTION_JSON", None)
+              env["PYTHONPATH"] = str(Path("packages/radia-mcp/src").resolve())
+              subprocess.run([
+                  sys.executable, "-m", "pytest", "-v", "-ra",
+                  "--confcutdir=tests/mcp_integration", *targets,
+              ], env=env, check=True)
+              subprocess.run([
+                  sys.executable, "packages/radia-mcp/tools/check_package_test_boundary.py"
+              ], env=env, check=True)
+              raise SystemExit(0)
+          print("No repository integration contracts affected")
+          PY
+
+      - name: Upload impact-scoped test plan
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-mcp-ci-selection
+          path: radia-mcp-ci-selection.json
+          if-no-files-found: error
+
+      - name: Build and verify radia-mcp wheel
+        if: matrix.python-version == '3.12' && needs.scope.outputs.build_wheel == 'true'
+        run: |
+          python -m pip install build
+          python -m build --wheel packages/radia-mcp
+          WHEEL=$(find packages/radia-mcp/dist -name 'radia_mcp-*.whl' | head -1)
+          test -n "$WHEEL"
+          python packages/radia-mcp/tools/verify_wheel_contents.py "$WHEEL"
+          python -m pip install --force-reinstall --no-deps "$WHEEL"
+          cd "$RUNNER_TEMP"
+          python -c "import radia_mcp; print(radia_mcp.__version__)"
+          SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
+          python -I "$GITHUB_WORKSPACE/packages/radia-mcp/tools/smoke_mcp_stdio.py" \
+            --all --selftest --installed-wheel --timeout 120 \
+            --expect-module-root "$SITE_PACKAGES"
+
+      - name: Upload radia-mcp wheel
+        if: matrix.python-version == '3.12' && needs.scope.outputs.build_wheel == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-mcp-wheel
+          path: packages/radia-mcp/dist/*.whl
+          if-no-files-found: error
+
+  release-evidence:
+    # CONTRIBUTING: publish only a candidate whose explicit full audit
+    # (workflow_dispatch, mode=full) passed on the exact tagged commit.
+    needs: scope
+    if: >-
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'radia-mcp-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Require a successful full audit on the tagged commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          count=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/radia-mcp-matrix.yml/runs?head_sha=${GITHUB_SHA}&event=workflow_dispatch&status=success&per_page=1" \
+            --jq '.total_count')
+          if [[ "${count}" -lt 1 ]]; then
+            echo "::error::No successful radia-mcp full audit (workflow_dispatch) for ${GITHUB_SHA}; run it on this commit before tagging."
+            exit 1
+          fi
+          echo "full audit evidence found for ${GITHUB_SHA}"
+
+  publish:
+    needs: [scope, selftest, minimum-sdk, release-evidence]
+    if: >-
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'radia-mcp-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download wheel built by this tag CI
+        uses: actions/download-artifact@v4
+        with:
+          name: radia-mcp-wheel
+          path: dist
+
+      - name: Verify wheel version matches the triggering tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t wheels < <(find dist -maxdepth 1 -name 'radia_mcp-*.whl')
+          if [[ "${#wheels[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one radia-mcp wheel, found ${#wheels[@]}"
+            exit 1
+          fi
+          expected="${GITHUB_REF_NAME#radia-mcp-v}"
+          python3 - "${wheels[0]}" "$expected" <<'PY'
+          import email
+          import pathlib
+          import sys
+          import zipfile
+
+          wheel = pathlib.Path(sys.argv[1])
+          expected = sys.argv[2]
+          with zipfile.ZipFile(wheel) as archive:
+              metadata_name = next(
+                  name for name in archive.namelist()
+                  if name.endswith(".dist-info/METADATA")
+              )
+              metadata = email.message_from_bytes(archive.read(metadata_name))
+          actual = metadata["Version"]
+          if actual != expected:
+              raise SystemExit(
+                  f"wheel/tag version mismatch: wheel={actual}, tag={expected}"
+              )
+          summary = metadata.get("Summary", "")
+          if len(summary) > 512:
+              raise SystemExit(
+                  f"PyPI Summary is {len(summary)} characters; maximum is 512"
+              )
+          print(f"release wheel verified: {wheel.name} ({actual})")
+          PY
+
+      - name: Verify public runtime dependencies before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip --isolated download --only-binary=:all: \
+            --index-url https://pypi.org/simple \
+            --dest "$RUNNER_TEMP/radia-mcp-public-dependencies" dist/*.whl
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true

@@ -1,0 +1,316 @@
+{
+  "kind": "lamination_mu_eff_frequency_sweep_validation",
+  "validation_class": true,
+  "frequencies_hz": [
+    0.0,
+    1.0,
+    10.0,
+    50.0,
+    100.0,
+    1000.0,
+    10000.0,
+    100000.0,
+    1000000.0
+  ],
+  "cases": [
+    {
+      "label": "mild_0p35mm_95fill",
+      "parameters": {
+        "label": "mild_0p35mm_95fill",
+        "mu_r": 2000.0,
+        "sigma": 2000000.0,
+        "d_lam": 0.00035,
+        "fill": 0.95
+      },
+      "static_mu_rel": 1900.05,
+      "half_magnitude_frequency_hz": 4955.402200172827,
+      "high_frequency_abs_ratio_100k_over_1M": 3.1610252617284442,
+      "expected_high_frequency_ratio": 3.1622776601683795,
+      "rows": [
+        {
+          "frequency_hz": 0.0,
+          "b_abs": 0.0,
+          "mu_rel_real": 1900.05,
+          "mu_rel_imag": 0.0,
+          "mu_rel_abs": 1900.05,
+          "abs_over_static": 1.0,
+          "loss_tangent_like": -0.0
+        },
+        {
+          "frequency_hz": 1.0,
+          "b_abs": 0.03110018056710856,
+          "mu_rel_real": 1900.0497630024192,
+          "mu_rel_imag": -0.6125733537108679,
+          "mu_rel_abs": 1900.0498617488076,
+          "abs_over_static": 0.9999999272381294,
+          "loss_tangent_like": 0.0003223985843101773
+        },
+        {
+          "frequency_hz": 10.0,
+          "b_abs": 0.09834740623457015,
+          "mu_rel_real": 1900.0263006019275,
+          "mu_rel_imag": -6.125641683150117,
+          "mu_rel_abs": 1900.0361750411691,
+          "abs_over_static": 0.9999927238973549,
+          "loss_tangent_like": 0.00322397731084539
+        },
+        {
+          "frequency_hz": 50.0,
+          "b_abs": 0.2199114857512855,
+          "mu_rel_real": 1899.457733157024,
+          "mu_rel_imag": -30.61707887550159,
+          "mu_rel_abs": 1899.7044732191607,
+          "abs_over_static": 0.9998181485851219,
+          "loss_tangent_like": 0.01611885241827097
+        },
+        {
+          "frequency_hz": 100.0,
+          "b_abs": 0.3110018056710856,
+          "mu_rel_real": 1897.6836548475956,
+          "mu_rel_imag": -61.16470376511372,
+          "mu_rel_abs": 1898.6691062063453,
+          "abs_over_static": 0.9992732329182629,
+          "loss_tangent_like": 0.032231243394477097
+        },
+        {
+          "frequency_hz": 1000.0,
+          "b_abs": 0.9834740623457016,
+          "mu_rel_real": 1694.5746387458066,
+          "mu_rel_imag": -532.1467370644222,
+          "mu_rel_abs": 1776.165351550579,
+          "abs_over_static": 0.934799269256377,
+          "loss_tangent_like": 0.3140296832592019
+        },
+        {
+          "frequency_hz": 10000.0,
+          "b_abs": 3.110018056710856,
+          "mu_rel_real": 425.0366527923547,
+          "mu_rel_imag": -445.35063533505087,
+          "mu_rel_abs": 615.6243534902287,
+          "abs_over_static": 0.32400429119772045,
+          "loss_tangent_like": 1.047793484183634
+        },
+        {
+          "frequency_hz": 100000.0,
+          "b_abs": 9.834740623457016,
+          "mu_rel_real": 136.6580474591471,
+          "mu_rel_imag": -136.60756248175056,
+          "mu_rel_abs": 193.22796915185927,
+          "abs_over_static": 0.1016962549153229,
+          "loss_tangent_like": 0.9996305744276668
+        },
+        {
+          "frequency_hz": 1000000.0,
+          "b_abs": 31.100180567108563,
+          "mu_rel_real": 43.24919883922873,
+          "mu_rel_imag": -43.199198839228735,
+          "mu_rel_abs": 61.12825844555336,
+          "abs_over_static": 0.03217192097342352,
+          "loss_tangent_like": 0.9988439092204722
+        }
+      ]
+    },
+    {
+      "label": "thick_1p00mm_95fill",
+      "parameters": {
+        "label": "thick_1p00mm_95fill",
+        "mu_r": 2000.0,
+        "sigma": 2000000.0,
+        "d_lam": 0.001,
+        "fill": 0.95
+      },
+      "static_mu_rel": 1900.05,
+      "half_magnitude_frequency_hz": 607.0410305019899,
+      "high_frequency_abs_ratio_100k_over_1M": 3.1587044288424986,
+      "expected_high_frequency_ratio": 3.1622776601683795,
+      "rows": [
+        {
+          "frequency_hz": 0.0,
+          "b_abs": 0.0,
+          "mu_rel_real": 1900.05,
+          "mu_rel_imag": 0.0,
+          "mu_rel_abs": 1900.05,
+          "abs_over_static": 1.0,
+          "loss_tangent_like": -0.0
+        },
+        {
+          "frequency_hz": 1.0,
+          "b_abs": 0.08885765876316731,
+          "mu_rel_real": 1900.0342069008636,
+          "mu_rel_imag": -5.000549090497524,
+          "mu_rel_abs": 1900.0407871634231,
+          "abs_over_static": 0.999995151266242,
+          "loss_tangent_like": 0.0026318205600381764
+        },
+        {
+          "frequency_hz": 10.0,
+          "b_abs": 0.280992589241629,
+          "mu_rel_real": 1898.472287205944,
+          "mu_rel_imag": -49.95557401813181,
+          "mu_rel_abs": 1899.1294280971083,
+          "abs_over_static": 0.9995155012221302,
+          "loss_tangent_like": 0.026313565046373884
+        },
+        {
+          "frequency_hz": 50.0,
+          "b_abs": 0.6283185307179586,
+          "mu_rel_real": 1861.5509804239043,
+          "mu_rel_imag": -243.87828209939283,
+          "mu_rel_abs": 1877.4580339376298,
+          "abs_over_static": 0.9881098044460039,
+          "loss_tangent_like": 0.13100811348387456
+        },
+        {
+          "frequency_hz": 100.0,
+          "b_abs": 0.8885765876316731,
+          "mu_rel_real": 1756.7665529722099,
+          "mu_rel_imag": -454.27437119133987,
+          "mu_rel_abs": 1814.550612676083,
+          "abs_over_static": 0.9550015066319744,
+          "loss_tangent_like": 0.2585855078028264
+        },
+        {
+          "frequency_hz": 1000.0,
+          "b_abs": 2.8099258924162904,
+          "mu_rel_real": 476.60973876115975,
+          "mu_rel_imag": -503.82890006191604,
+          "mu_rel_abs": 693.5419263603183,
+          "abs_over_static": 0.36501246091435396,
+          "loss_tangent_like": 1.0571099561907955
+        },
+        {
+          "frequency_hz": 10000.0,
+          "b_abs": 8.885765876316732,
+          "mu_rel_real": 151.2461413882071,
+          "mu_rel_imag": -151.19614138820708,
+          "mu_rel_abs": 213.85899199122827,
+          "abs_over_static": 0.11255440224795572,
+          "loss_tangent_like": 0.99966941305384
+        },
+        {
+          "frequency_hz": 100000.0,
+          "b_abs": 28.099258924162903,
+          "mu_rel_real": 47.862751499262686,
+          "mu_rel_imag": -47.81275149926268,
+          "mu_rel_abs": 67.65280620203731,
+          "abs_over_static": 0.035605803111516704,
+          "loss_tangent_like": 0.9989553463093158
+        },
+        {
+          "frequency_hz": 1000000.0,
+          "b_abs": 88.85765876316732,
+          "mu_rel_real": 15.169719593730056,
+          "mu_rel_imag": -15.119719593730057,
+          "mu_rel_abs": 21.417897029013428,
+          "abs_over_static": 0.011272280744724313,
+          "loss_tangent_like": 0.9967039601693979
+        }
+      ]
+    },
+    {
+      "label": "high_mu_0p35mm_875fill",
+      "parameters": {
+        "label": "high_mu_0p35mm_875fill",
+        "mu_r": 5000.0,
+        "sigma": 4000000.0,
+        "d_lam": 0.00035,
+        "fill": 0.875
+      },
+      "static_mu_rel": 4375.125,
+      "half_magnitude_frequency_hz": 991.0870732242729,
+      "high_frequency_abs_ratio_100k_over_1M": 3.159241204579544,
+      "expected_high_frequency_ratio": 3.1622776601683795,
+      "rows": [
+        {
+          "frequency_hz": 0.0,
+          "b_abs": 0.0,
+          "mu_rel_real": 4375.125,
+          "mu_rel_imag": 0.0,
+          "mu_rel_abs": 4375.125,
+          "abs_over_static": 1.0,
+          "loss_tangent_like": -0.0
+        },
+        {
+          "frequency_hz": 1.0,
+          "b_abs": 0.0695421178605727,
+          "mu_rel_real": 4375.111357097394,
+          "mu_rel_imag": -7.052628106018501,
+          "mu_rel_abs": 4375.117041470525,
+          "abs_over_static": 0.9999981809595211,
+          "loss_tangent_like": 0.0016119882513567535
+        },
+        {
+          "frequency_hz": 10.0,
+          "b_abs": 0.2199114857512855,
+          "mu_rel_real": 4373.7612276642,
+          "mu_rel_imag": -70.49985267385235,
+          "mu_rel_abs": 4374.329377841326,
+          "abs_over_static": 0.9998181487023402,
+          "loss_tangent_like": 0.016118816049659545
+        },
+        {
+          "frequency_hz": 50.0,
+          "b_abs": 0.49173703117285084,
+          "mu_rel_real": 4341.341600709329,
+          "mu_rel_imag": -349.3262789233472,
+          "mu_rel_abs": 4355.373203664168,
+          "abs_over_static": 0.9954854326823046,
+          "loss_tangent_like": 0.08046505229311396
+        },
+        {
+          "frequency_hz": 100.0,
+          "b_abs": 0.695421178605727,
+          "mu_rel_real": 4243.735431531654,
+          "mu_rel_imag": -679.5476058746825,
+          "mu_rel_abs": 4297.798897283023,
+          "abs_over_static": 0.982325967208485,
+          "loss_tangent_like": 0.16012958791576207
+        },
+        {
+          "frequency_hz": 1000.0,
+          "b_abs": 2.1991148575128547,
+          "mu_rel_real": 1542.4737715004258,
+          "mu_rel_imag": -1533.669453180403,
+          "mu_rel_abs": 2175.170643279608,
+          "abs_over_static": 0.4971676565308667,
+          "loss_tangent_like": 0.9942920790727882
+        },
+        {
+          "frequency_hz": 10000.0,
+          "b_abs": 6.954211786057271,
+          "mu_rel_real": 445.0012994169853,
+          "mu_rel_imag": -444.91428811137325,
+          "mu_rel_abs": 629.2653496327725,
+          "abs_over_static": 0.14382797054547528,
+          "loss_tangent_like": 0.999804469547109
+        },
+        {
+          "frequency_hz": 100000.0,
+          "b_abs": 21.99114857512855,
+          "mu_rel_real": 140.79942439953678,
+          "mu_rel_imag": -140.6744243995422,
+          "mu_rel_abs": 199.0320868387391,
+          "abs_over_static": 0.04549174865603591,
+          "loss_tangent_like": 0.9991122122797899
+        },
+        {
+          "frequency_hz": 1000000.0,
+          "b_abs": 69.54211786057272,
+          "mu_rel_real": 44.61015896357357,
+          "mu_rel_imag": -44.48515896357357,
+          "mu_rel_abs": 62.99996548228985,
+          "abs_over_static": 0.014399580693646434,
+          "loss_tangent_like": 0.9971979476669861
+        }
+      ]
+    }
+  ],
+  "checks": {
+    "max_static_abs_error": 0.0,
+    "max_high_frequency_ratio_rel_error": 0.0011299549596447411,
+    "monotone_violations": [],
+    "thick_half_frequency_below_thin": true,
+    "high_mu_half_frequency_below_thin": true,
+    "all_nonzero_imaginary_parts_negative": true
+  }
+}

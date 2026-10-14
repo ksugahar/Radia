@@ -1,0 +1,150 @@
+
+########## nw x nh = 3 x 3 ##########
+
+[2/5] PEEC bundle + Loop-form reduction -> per-filament currents
+  done (0.1s, K x K = 9 x 9)
+  sum(I_fil) = 1.0000-0.0000j  |I_fil| mean = 1.345e-01
+  L_air (PEEC, vacuum) = 87.586 nH
+  R_coil              = 0.1645 mOhm
+
+[3/5] Workpiece surface mesh + ScalarBIESIBCSolver
+  wp nv=512  ne(BND)=1020  (0.2s)
+  BEM assembly: ndof=512 (134.6s)
+
+[4/5] phi_inc from filaments -> BIE + SIBC
+  phi_inc (0.9s)
+  BIE solve (0.0s)
+  H_t_rms  = 26.77 A/m
+  P_total  = 6.1442e-05 W
+
+[5/5] Back-reaction -> Delta_L, Delta_R
+  |Phi| min/max/mean = 4.010e-08 / 4.958e-08 / 4.443e-08
+  Delta_L = -45.561 nH  (Delta_R = +0.0583 mOhm)
+  L_total = L_air + Delta_L = 42.025 nH  (0.1s)
+
+----------------------------------------------------------------------
+  solver             L [nH]        P [W]
+  2D SIBC             57.61     6.63e-05
+  3D FEM-SIBC         56.94     5.78e-05
+  PEEC + BEM          42.03     6.14e-05
+  dL vs 2D = -27.05%    dP vs 2D = -7.33%
+
+########## nw x nh = 5 x 5 ##########
+
+[2/5] PEEC bundle + Loop-form reduction -> per-filament currents
+  done (0.1s, K x K = 25 x 25)
+  sum(I_fil) = 1.0000+0.0000j  |I_fil| mean = 5.039e-02
+  L_air (PEEC, vacuum) = 85.725 nH
+  R_coil              = 0.1979 mOhm
+
+[3/5] Workpiece surface mesh + ScalarBIESIBCSolver
+  wp nv=512  ne(BND)=1020  (0.2s)
+  BEM assembly: ndof=512 (134.7s)
+
+[4/5] phi_inc from filaments -> BIE + SIBC
+  phi_inc (2.5s)
+  BIE solve (0.0s)
+  H_t_rms  = 26.77 A/m
+  P_total  = 6.1443e-05 W
+
+[5/5] Back-reaction -> Delta_L, Delta_R
+  |Phi| min/max/mean = 3.924e-08 / 5.077e-08 / 4.443e-08
+  Delta_L = -45.578 nH  (Delta_R = +0.0612 mOhm)
+  L_total = L_air + Delta_L = 40.147 nH  (0.1s)
+
+----------------------------------------------------------------------
+  solver             L [nH]        P [W]
+  2D SIBC             57.61     6.63e-05
+  3D FEM-SIBC         56.94     5.78e-05
+  PEEC + BEM          40.15     6.14e-05
+  dL vs 2D = -30.31%    dP vs 2D = -7.33%
+
+########## nw x nh = 7 x 7 ##########
+
+[2/5] PEEC bundle + Loop-form reduction -> per-filament currents
+  done (0.2s, K x K = 49 x 49)
+  sum(I_fil) = 1.0000+0.0000j  |I_fil| mean = 2.601e-02
+  L_air (PEEC, vacuum) = 85.182 nH
+  R_coil              = 0.2147 mOhm
+
+[3/5] Workpiece surface mesh + ScalarBIESIBCSolver
+  wp nv=512  ne(BND)=1020  (0.2s)
+  BEM assembly: ndof=512 (138.4s)
+
+[4/5] phi_inc from filaments -> BIE + SIBC
+  phi_inc (4.9s)
+  BIE solve (0.0s)
+  H_t_rms  = 26.80 A/m
+  P_total  = 6.1551e-05 W
+
+[5/5] Back-reaction -> Delta_L, Delta_R
+  |Phi| min/max/mean = 3.890e-08 / 5.134e-08 / 4.446e-08
+  Delta_L = -45.629 nH  (Delta_R = +0.0635 mOhm)
+  L_total = L_air + Delta_L = 39.553 nH  (0.1s)
+
+----------------------------------------------------------------------
+  solver             L [nH]        P [W]
+  2D SIBC             57.61     6.63e-05
+  3D FEM-SIBC         56.94     5.78e-05
+  PEEC + BEM          39.55     6.16e-05
+  dL vs 2D = -31.34%    dP vs 2D = -7.16%
+
+########## nw x nh = 9 x 9 ##########
+
+[2/5] PEEC bundle + Loop-form reduction -> per-filament currents
+  done (0.6s, K x K = 81 x 81)
+  sum(I_fil) = 1.0000-0.0000j  |I_fil| mean = 1.576e-02
+  L_air (PEEC, vacuum) = 84.980 nH
+  R_coil              = 0.2220 mOhm
+
+[3/5] Workpiece surface mesh + ScalarBIESIBCSolver
+  wp nv=512  ne(BND)=1020  (0.2s)
+  BEM assembly: ndof=512 (125.4s)
+
+[4/5] phi_inc from filaments -> BIE + SIBC
+  phi_inc (8.1s)
+  BIE solve (0.0s)
+  H_t_rms  = 26.81 A/m
+  P_total  = 6.1591e-05 W
+
+[5/5] Back-reaction -> Delta_L, Delta_R
+  |Phi| min/max/mean = 3.870e-08 / 5.166e-08 / 4.446e-08
+  Delta_L = -45.648 nH  (Delta_R = +0.0645 mOhm)
+  L_total = L_air + Delta_L = 39.332 nH  (0.1s)
+
+----------------------------------------------------------------------
+  solver             L [nH]        P [W]
+  2D SIBC             57.61     6.63e-05
+  3D FEM-SIBC         56.94     5.78e-05
+  PEEC + BEM          39.33     6.16e-05
+  dL vs 2D = -31.73%    dP vs 2D = -7.10%
+
+########## nw x nh = 15 x 15 ##########
+
+[2/5] PEEC bundle + Loop-form reduction -> per-filament currents
+  done (4.0s, K x K = 225 x 225)
+  sum(I_fil) = 1.0000+0.0000j  |I_fil| mean = 5.667e-03
+  L_air (PEEC, vacuum) = 84.798 nH
+  R_coil              = 0.2294 mOhm
+
+[3/5] Workpiece surface mesh + ScalarBIESIBCSolver
+  wp nv=512  ne(BND)=1020  (0.2s)
+  BEM assembly: ndof=512 (124.1s)
+
+[4/5] phi_inc from filaments -> BIE + SIBC
+  phi_inc (22.6s)
+  BIE solve (0.0s)
+  H_t_rms  = 26.81 A/m
+  P_total  = 6.1626e-05 W
+
+[5/5] Back-reaction -> Delta_L, Delta_R
+  |Phi| min/max/mean = 3.842e-08 / 5.211e-08 / 4.447e-08
+  Delta_L = -45.663 nH  (Delta_R = +0.0655 mOhm)
+  L_total = L_air + Delta_L = 39.134 nH  (0.2s)
+
+----------------------------------------------------------------------
+  solver             L [nH]        P [W]
+  2D SIBC             57.61     6.63e-05
+  3D FEM-SIBC         56.94     5.78e-05
+  PEEC + BEM          39.13     6.16e-05
+  dL vs 2D = -32.07%    dP vs 2D = -7.05%

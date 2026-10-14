@@ -1,0 +1,31 @@
+{
+  "schema": "cubit-mesh-export.wheel-mcp-acceptance.v1",
+  "date_utc": "2026-10-11",
+  "distribution": "candidate-wheel",
+  "source_commit": "a92ddf3dcd88f8094cf47c6583272104b2bf2f53",
+  "cubit_version": "2026.8",
+  "wheel_sha256": "22a44dc2410a3a1025ab56b7f3da21abb4d5c39753133ed86af994e2a4af96b1",
+  "wheel_files_verified": 78,
+  "editable": false,
+  "tool_count": 53,
+  "execution_route": "stdio MCP / owned bundled Python / batch nographics",
+  "gui_started": false,
+  "export_passed": true,
+  "check_vol_passed": true,
+  "mesh": {
+    "order": 2,
+    "n_elements": 44675,
+    "n_points": 7618
+  },
+  "quality": {
+    "passed": true,
+    "curve_order": 2,
+    "volume_element_count": 44675,
+    "mapping_sample_count": 1072200,
+    "minimum_scaled_jacobian": 0.09556125364979749,
+    "invalid_jacobian_sample_count": 0,
+    "orientation_flip_sample_count": 0
+  },
+  "owned_shutdown": "owned-child",
+  "passed": true
+}

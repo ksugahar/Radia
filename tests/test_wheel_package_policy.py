@@ -1,0 +1,215 @@
+"""Release-wheel guards for local native backup artifacts."""
+
+from pathlib import Path
+import tomllib
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize('foreign', [
+    'radia/matlab/entry.py', 'radia/simulink/entry.py', 'radia/ltspice/entry.py',
+    'radia_gpu/__init__.py', 'radia/ltspice.py', 'radia/matlab_bridge.py',
+    'radia/kernel.m', 'radia/model.slx', 'radia/kernel.mexw64',
+    'radia/kernel.mexw64.build.json', 'radia/kernel.cu',
+    'radia/panels/application_interface_manifest.json',
+    'Requires-Dist: radia-gpu>=0.1.0', 'Requires-Dist: matlabengine; extra == "matlab"',
+    'radia/equation/__init__.py', 'radia/_equation.cp312-win_amd64.pyd',
+    'radia/_equation.cpython-312-x86_64-linux-gnu.so',
+])
+def test_cpu_wheel_rejects_foreign_product_payloads(tmp_path, foreign):
+    import importlib.util
+    import zipfile
+
+    spec = importlib.util.spec_from_file_location('cpu_wheel_guard', ROOT/'tools/verify_cpu_wheel.py')
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    wheel = tmp_path/'radia-5.3.1-py3-none-any.whl'
+    metadata = 'Metadata-Version: 2.1\nName: radia\nVersion: 5.3.1\nRequires-Dist: ngsolve==6.2.2607\n'
+
+    def write(candidate=None):
+        with zipfile.ZipFile(wheel, 'w') as archive:
+            archive.writestr('radia/__init__.py', '# CPU package')
+            extra = candidate + '\n' if candidate and candidate.startswith('Requires-Dist:') else ''
+            archive.writestr('radia-5.3.1.dist-info/METADATA', metadata + extra)
+            if candidate and not extra:
+                archive.writestr(candidate, 'foreign payload')
+
+    write()
+    assert guard.verify(wheel)['gpu_integration_absent'] is True
+    write(foreign)
+    expected = ('retired equation payload' if foreign.startswith(('radia/equation/', 'radia/_equation'))
+                else 'radia-gpu integration payload')
+    with pytest.raises(ValueError, match=expected):
+        guard.verify(wheel)
+
+
+def test_coil_builder_dependency_is_available_without_extras():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "scipy>=1.12" in config["project"]["dependencies"]
+
+
+def test_radia_wheel_excludes_native_backup_files():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    excluded = set(
+        config["tool"]["setuptools"]["exclude-package-data"]["radia"]
+    )
+    assert {
+        "*.locked-old.pyd",
+        "*.lockedold.pyd",
+        "*.pre_*.pyd",
+        "*.backup*.pyd",
+    } <= excluded
+
+
+def test_sdist_manifest_excludes_retired_and_backup_payloads():
+    from setuptools._distutils.filelist import FileList
+
+    kept = {
+        str(Path("src/radia/_radia_pybind.pyd")),
+        str(Path("src/radia/radia_motor_rom.dll")),
+        str(Path("src/radia/panels/cubit_toolbar/icons/export.svg")),
+    }
+    excluded = {
+        str(Path("src/radia/cubit_mesh_curver.pyd")),
+        str(Path("src/radia/_equation.pyd")),
+        str(Path("src/radia/_equation.cpython-312-x86_64-linux-gnu.so")),
+        str(Path("src/radia/equation/__init__.py")),
+        str(Path("src/radia/_radia_pybind.locked-old.pyd")),
+        str(Path("src/radia/_radia_pybind.lockedold.pyd")),
+        str(Path("src/radia/_radia_pybind.pre_release.pyd")),
+        str(Path("src/radia/_radia_pybind.backup1.pyd")),
+        str(Path("examples/retired.py")),
+        str(Path("examples/cubit/retired.vol")),
+    }
+    files = FileList()
+    files.set_allfiles(sorted(kept | excluded))
+    # Also cover files found before MANIFEST.in processing (e.g. cached lists).
+    files.files = sorted(kept | excluded)
+    for line in (ROOT / "MANIFEST.in").read_text(encoding="utf-8").splitlines():
+        if line.strip() and not line.lstrip().startswith("#"):
+            files.process_template_line(line)
+    assert kept <= set(files.files)
+    assert not excluded.intersection(files.files)
+
+
+def test_mkl_is_external_but_the_radia_owned_motor_abi_is_documented():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    policies = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+    assert "mkl>=2026,<2027" in config["project"]["dependencies"]
+    assert "mkl>=2024.2.0" not in policies
+    assert "radia_motor_rom.dll" in policies
+    assert "no third-party DLLs" in policies
+
+
+def test_ci_native_artifact_excludes_backups_and_pre_push_does_not_upload():
+    hook = (ROOT / "tools" / "git-hooks" / "pre-push").read_text(
+        encoding="utf-8"
+    )
+    workflow = (ROOT / ".github" / "workflows" / "build-test.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "upload_release_asset.py" not in hook
+    assert "!src/radia/*.locked-old.*" in workflow
+    assert "!src/radia/*.lockedold.*" in workflow
+    assert "!src/radia/*.pre_*.*" in workflow
+    assert "!src/radia/*.backup*.*" in workflow
+
+
+def test_retired_notebook_workbenches_are_absent_from_source():
+    retired = {
+        "notebook_workbench.py",
+        "ih_notebook.py",
+        "motor_notebook.py",
+        "pcb_notebook.py",
+        "streamfunction_notebook.py",
+    }
+    present = sorted(
+        name for name in retired if (ROOT / "src" / "radia" / name).exists()
+    )
+    assert present == []
+
+
+def test_wheel_does_not_package_generated_application_results():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    package_data = set(config["tool"]["setuptools"]["package-data"]["radia"])
+
+    assert "panels/samples/*.sol" not in package_data
+    assert "panels/samples/*.json" not in package_data
+
+
+def test_retired_desktop_viewer_is_not_packaged():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    scripts = config["project"].get("scripts", {})
+    gui_scripts = config["project"].get("gui-scripts", {})
+    optional = config["project"]["optional-dependencies"]
+
+    assert "radia-vol-viewer" not in scripts
+    assert "radia-vol-viewer-gui" not in gui_scripts
+    assert not (ROOT / "src" / "radia" / "tools" / "vol_sol_viewer.py").exists()
+    assert all("pyvista" not in requirement.lower() for requirement in optional["viz"])
+    assert all("pyvista" not in requirement.lower() for requirement in optional["dev"])
+
+
+def test_mcp_sdk_belongs_to_independent_mcp_distribution():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    project = config["project"]
+    optional = project["optional-dependencies"]
+
+    assert all(not requirement.lower().startswith("mcp") for requirement in project["dependencies"])
+    assert "mcp" not in optional
+    assert all(not requirement.lower().startswith("mcp") for requirement in optional["test"])
+
+
+def test_repack_regenerates_record_after_metadata_edits(tmp_path):
+    import base64
+    import csv
+    import hashlib
+    import io
+    import shutil
+    import subprocess
+    import zipfile
+    import os
+    import sys
+
+    source = tmp_path / "unpacked"
+    metadata = source / "probe-1.0.dist-info"
+    metadata.mkdir(parents=True)
+    (source / "probe.py").write_text("value = 1\n")
+    (metadata / "METADATA").write_text("Metadata-Version: 2.1\nName: probe\nVersion: 1.0\n")
+    (metadata / "WHEEL").write_text("Wheel-Version: 1.0\nRoot-Is-Purelib: false\nTag: cp312-cp312-win_amd64\n")
+    (metadata / "RECORD").write_text("probe-1.0.dist-info/WHEEL,sha256=stale,1\nremoved.dll,sha256=stale,1\n")
+    destination = tmp_path / "dist"
+    destination.mkdir()
+    wheel = destination / "probe-1.0-cp312-cp312-win_amd64.whl"
+    script = (ROOT / "Build_Wheel.ps1").read_text(encoding="utf-8")
+    block = script.split("    # Repack with wheel", 1)[1].split("    # Cleanup", 1)[0]
+    block = "# Repack with wheel" + block
+    def quote(path):
+        return "'" + str(path).replace("'", "''") + "'"
+    command = "$TempDir=" + quote(source) + "; $DistDir=" + quote(destination) + "; $NewWheelPath=" + quote(wheel) + ";\n" + block
+    shell = shutil.which("pwsh")
+    assert shell, "PowerShell is required to check the wheel builder"
+    environment = dict(os.environ)
+    # conftest may prepend a mesh tool's embedded Python for its own tests.
+    # This wheel-builder test must use the interpreter running the test suite.
+    environment["PATH"] = str(Path(sys.executable).parent) + os.pathsep + environment["PATH"]
+    result = subprocess.run([shell, "-NoProfile", "-Command", command],
+                            capture_output=True, text=True, env=environment)
+    assert result.returncode == 0, (
+        f"Wheel repack failed (exit {result.returncode}).\n"
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
+    with zipfile.ZipFile(wheel) as archive:
+        rows = list(csv.reader(io.StringIO(archive.read("probe-1.0.dist-info/RECORD").decode())))
+        assert "removed.dll" not in {row[0] for row in rows}
+        for name, digest, size in rows:
+            if name.endswith("/RECORD"):
+                assert digest == size == ""
+                continue
+            data = archive.read(name)
+            expected = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode()
+            assert digest == "sha256=" + expected
+            assert int(size) == len(data)

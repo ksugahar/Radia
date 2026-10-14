@@ -1,0 +1,247 @@
+"""Execute production gate functions via AST; no native imports or solves."""
+from __future__ import annotations
+
+import ast
+import itertools
+import json
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+RUNNER = Path(__file__).resolve().parents[1] / "validation_test/esrf_three_engine/run_coil_yoke_three_engine.py"
+NAMES = ("hdiv_mmm", "reduced_a", "mixed_total_reduced_omega")
+
+
+@pytest.fixture
+def gate():
+    tree = ast.parse(RUNNER.read_text(encoding="utf-8"))
+    functions = {"_validated_field", "_validated_tolerance", "_relative_rms", "_pairwise",
+                 "_comparison_gate", "_is_converged_result", "_legacy_contract",
+                 "_read_checkpoint", "_write_checkpoint"}
+    ns = {"np": np, "Path": Path, "json": json,
+          "CHECKPOINT_SCHEMA": "radia.validation.esrf-coil-yoke-checkpoint.v3",
+          "LEGACY_CHECKPOINT_SCHEMAS": ("radia.validation.esrf-coil-yoke-checkpoint.v2",),
+          "LEGACY_CAP_KEY": "nonlinear_maximum_iterations"}
+    selected = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in functions]
+    exec(compile(ast.Module(body=selected, type_ignores=[]), str(RUNNER), "exec"), ns)  # noqa: S102 - reviewed local AST only
+    return ns
+
+
+@pytest.mark.parametrize('backtracks', [0, 1, 32, 33, 34, 68, 86])
+def test_legacy_newton_without_residual_contract_cannot_resume(gate, backtracks):
+    diagnostic = {'nonlinear': True, 'nonlinear_stats': {
+        'converged': True, 'nonlinear_newton_iters': 1,
+        'nonlinear_line_search_backtracks': backtracks,
+        'nonlinear_final_rel_step': 9.8e-13}}
+    assert not gate['_is_converged_result'](diagnostic)
+
+
+@pytest.mark.parametrize('mode', ['settled', 'line-search-exhausted', 'iteration-limit', 'running'])
+def test_nonresidual_modes_are_not_convergence(gate, mode):
+    assert not gate['_is_converged_result']({'nonlinear_stats': {
+        'converged': True, 'nonlinear_convergence_mode': mode}})
+
+
+def test_new_tolerance_contract_does_not_use_aggregate_backtrack_heuristic(gate):
+    stats = {'converged': True, 'nonlinear_convergence_mode': 'tolerance',
+             'nonlinear_line_search_backtracks': 86, 'nonlinear_line_search_exhausted': False,
+             'nonlinear_final_relative_residual': 1e-6, 'nonlinear_residual_tolerance': 2e-5}
+    assert gate['_is_converged_result']({'nonlinear_stats': stats})
+    stats['nonlinear_line_search_exhausted'] = True
+    assert not gate['_is_converged_result']({'nonlinear_stats': stats})
+
+
+def test_hdiv_engine_rejects_missing_contract_even_without_stat_names(gate, tmp_path):
+    diagnostic = {'nonlinear': True, 'nonlinear_stats': {'converged': True}}
+    assert not gate['_is_converged_result'](diagnostic, 'hdiv_mmm')
+    contract = {'engine': 'hdiv_mmm', 'observation_points_m': [[0, 0, 0]]}
+    path = tmp_path / 'checkpoint.json'
+    path.write_text(json.dumps({'schema': gate['CHECKPOINT_SCHEMA'], 'contract': contract,
+                               'diagnostics': diagnostic, 'field_T': [[1, 2, 3]]}))
+    with pytest.raises(RuntimeError, match='non-converged'):
+        gate['_read_checkpoint'](path, contract)
+
+
+def test_current_three_engine_evidence_keeps_distinct_solver_contracts(gate):
+    path = RUNNER.parent / 'results/candidate_59b094d8/three_engine_case6_bdm1_bonus12.json'
+    payload = json.loads(path.read_text(encoding='utf-8'))
+    assert set(payload['engines']) == set(NAMES)
+    for name, diagnostic in payload['engines'].items():
+        assert gate['_is_converged_result'](diagnostic, name, True), name
+
+
+@pytest.mark.parametrize('engine', ['reduced_a', 'mixed_total_reduced_omega'])
+def test_fem_contract_and_hdiv_stats_misrouting(gate, engine):
+    diagnostic = {'nonlinear': True, 'nonlinear_stats': {'converged': True, 'iterations': 5}}
+    assert gate['_is_converged_result'](diagnostic, engine)
+    diagnostic['nonlinear_stats']['converged'] = False
+    assert not gate['_is_converged_result'](diagnostic, engine)
+    diagnostic['nonlinear_stats'].update(converged=True, nonlinear_convergence_mode='tolerance',
+                                       nonlinear_final_relative_residual=1e-7,
+                                       nonlinear_residual_tolerance=2e-5)
+    assert not gate['_is_converged_result'](diagnostic, engine)
+    diagnostic['nonlinear'] = False
+    assert not gate['_is_converged_result'](diagnostic, engine)
+
+
+def test_unknown_engine_is_not_accepted(gate):
+    assert not gate['_is_converged_result']({'nonlinear': False}, 'wrong-engine')
+
+
+@pytest.mark.parametrize('stats', [
+    {'converged': False},
+    {'converged': True, 'nonlinear_convergence_mode': 'iteration-limit'},
+    {'converged': True, 'nonlinear_convergence_mode': 'tolerance',
+     'nonlinear_final_relative_residual': 1., 'nonlinear_residual_tolerance': 2e-5},
+])
+def test_linear_flag_cannot_hide_nonlinear_evidence(gate, stats):
+    assert not gate['_is_converged_result']({'nonlinear': False, 'nonlinear_stats': stats}, 'hdiv_mmm')
+    assert gate['_is_converged_result']({'nonlinear': False, 'nonlinear_stats': {}}, 'hdiv_mmm')
+
+
+def test_checkpoint_expected_nonlinear_cannot_be_downgraded(gate, tmp_path):
+    diagnostic = {'nonlinear': False, 'nonlinear_stats': {}}
+    contract = {'engine': 'hdiv_mmm', 'nonlinear': True, 'observation_points_m': [[0, 0, 0]]}
+    path = tmp_path / 'checkpoint.json'
+    path.write_text(json.dumps({'schema': gate['CHECKPOINT_SCHEMA'], 'contract': contract,
+                               'diagnostics': diagnostic, 'field_T': [[1, 2, 3]]}))
+    with pytest.raises(RuntimeError, match='non-converged'):
+        gate['_read_checkpoint'](path, contract)
+    with pytest.raises(RuntimeError, match='non-converged'):
+        gate['_write_checkpoint'](path, contract, np.ones((1, 3)), diagnostic, {})
+
+
+@pytest.mark.parametrize('residual', [None, float('nan'), float('inf'), -1., 3e-5, True])
+def test_mode_alone_does_not_certify_a_residual(gate, residual):
+    assert not gate['_is_converged_result']({'nonlinear_stats': {
+        'converged': True, 'nonlinear_convergence_mode': 'tolerance',
+        'nonlinear_final_relative_residual': residual, 'nonlinear_residual_tolerance': 2e-5}})
+
+
+@pytest.mark.parametrize('path', [
+    'validation_test/esrf_three_engine/results/case6_nonlinear_three_engine_worker_a.json',
+    'validation_test/quadrupole_cefc2020/results/three_engine_J3.0_compute.json',
+])
+def test_published_false_convergence_evidence_is_rejected(gate, path):
+    payload = json.loads((RUNNER.parents[2] / path).read_text(encoding='utf-8'))
+    diagnostic = payload['engines']['hdiv_mmm']
+    assert diagnostic['nonlinear_stats']['nonlinear_line_search_backtracks'] == 34
+    assert not gate['_is_converged_result'](diagnostic)
+
+
+@pytest.mark.parametrize("order", list(itertools.permutations(NAMES)))
+@pytest.mark.parametrize("bad_engine", NAMES)
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_nonfinite_any_engine_any_order_rejected(gate, order, bad_engine, bad):
+    fields = {name: np.ones((2, 3)) for name in order}
+    fields[bad_engine][1, 2] = bad
+    with pytest.raises(ValueError, match="finite"):
+        gate["_comparison_gate"](fields, np.ones(2, dtype=bool), .01)
+
+
+@pytest.mark.parametrize("bad", [[], [[1, 2]], [[1, 2, 3]], [[True]*3]*2,
+                                   [[1j]*3]*2, [["1"]*3]*2])
+def test_shape_type_and_empty(gate, bad):
+    fields = {name: np.ones((2, 3)) for name in NAMES}
+    fields[NAMES[-1]] = bad
+    with pytest.raises(ValueError):
+        gate["_comparison_gate"](fields, np.ones(2, dtype=bool), .03)
+
+
+@pytest.mark.parametrize("names", [(), NAMES[:2], (*NAMES, "extra")])
+def test_required_engine_set(gate, names):
+    with pytest.raises(ValueError, match="three named engines"):
+        gate["_comparison_gate"]({n: np.ones((2, 3)) for n in names}, np.ones(2, dtype=bool), .01)
+
+
+@pytest.mark.parametrize("tol", [0, -1, 1, 2, np.nan, np.inf, -np.inf, True, ".03"])
+def test_invalid_tolerance(gate, tol):
+    with pytest.raises(ValueError, match="tolerance"):
+        gate["_comparison_gate"]({n: np.ones((2, 3)) for n in NAMES}, np.ones(2, dtype=bool), tol)
+
+
+@pytest.mark.parametrize("mask", [[], [0, 1], [False, False], [True], [[True, True]]])
+def test_invalid_selector(gate, mask):
+    with pytest.raises(ValueError, match="selector"):
+        gate["_comparison_gate"]({n: np.ones((2, 3)) for n in NAMES}, mask, .03)
+
+
+@pytest.mark.parametrize('delta,expected', [(0.0099, True), (0.0101, False)])
+def test_one_percent_boundary(gate, delta, expected):
+    fields = {n: np.ones((2, 3)) for n in NAMES}
+    fields[NAMES[-1]] *= 1 + delta
+    assert gate['_comparison_gate'](fields, np.ones(2, dtype=bool), .01)[2] == expected
+
+
+def test_small_field_error_does_not_accept_nonconvergence(gate):
+    fields = {n: np.ones((2, 3)) for n in NAMES}
+    assert gate['_comparison_gate'](fields, np.ones(2, dtype=bool), .01)[2]
+    assert not gate['_is_converged_result'](
+        {'nonlinear': True, 'nonlinear_stats': {'converged': False}}, 'hdiv_mmm', True)
+
+
+def test_valid_agreement_and_mismatch(gate):
+    fields = {n: np.ones((2, 3)) for n in NAMES}
+    assert gate["_comparison_gate"](fields, np.ones(2, dtype=bool), .03)[1:] == (0, True)
+    fields[NAMES[-1]] *= 1.1
+    pairs, maximum, passed = gate["_comparison_gate"](fields, np.ones(2, dtype=bool), .03)
+    assert len(pairs) == 3 and maximum == pytest.approx(.1) and not passed
+
+
+@pytest.mark.parametrize("value", [0.0, 1e308])
+def test_zero_or_overflow_norm(gate, value):
+    with np.errstate(over="ignore", invalid="ignore"), pytest.raises(ValueError):
+        gate["_comparison_gate"]({n: np.full((2, 3), value) for n in NAMES},
+                                  np.ones(2, dtype=bool), .03)
+
+
+@pytest.mark.parametrize("bad", [np.full((2, 3), np.nan), np.ones((1, 3)), np.ones((2, 2))])
+def test_checkpoint_read_write_reject_bad_field_without_overwriting(gate, bad, tmp_path):
+    path = tmp_path / "checkpoint.json"
+    contract = {"observation_points_m": [[0, 0, 0], [1, 0, 0]]}
+    diag = {"nonlinear": True, "nonlinear_stats": {"converged": True}}
+    payload = {"schema": gate["CHECKPOINT_SCHEMA"], "contract": contract,
+               "diagnostics": diag, "field_T": bad.tolist()}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    original = path.read_bytes()
+    with pytest.raises(ValueError):
+        gate["_read_checkpoint"](path, contract)
+    with pytest.raises(ValueError):
+        gate["_write_checkpoint"](path, contract, bad, diag, {})
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("value", ["false", 1, None, False])
+def test_truthy_convergence_is_not_true(gate, value):
+    assert not gate["_is_converged_result"]({"nonlinear_stats": {"converged": value}})
+
+
+def test_checkpoint_roundtrip(gate, tmp_path):
+    path = tmp_path / "checkpoint.json"
+    contract = {"observation_points_m": [[0, 0, 0], [1, 0, 0]]}
+    diag = {"nonlinear": True, "nonlinear_stats": {"converged": True}}
+    gate["_write_checkpoint"](path, contract, np.ones((2, 3)), diag, {})
+    np.testing.assert_array_equal(gate["_read_checkpoint"](path, contract)[0], np.ones((2, 3)))
+
+@pytest.mark.parametrize("installed", [False, True])
+def test_runtime_identity_handles_missing_editable_distribution_path(tmp_path, installed):
+    from types import SimpleNamespace
+    module = tmp_path / "live" / "__init__.py"
+    module.parent.mkdir()
+    module.write_text("# live package\n")
+    distribution_path = module if installed else tmp_path / "missing" / "__init__.py"
+    distribution = SimpleNamespace(version="test", locate_file=lambda name: distribution_path,
+        read_text=lambda name: json.dumps({"dir_info": {"editable": not installed}}))
+    ns = dict(Path=Path, json=json, rad=SimpleNamespace(__file__=str(module)),
+              SOURCE_PACKAGE=tmp_path / "not-a-checkout",
+              importlib=SimpleNamespace(metadata=SimpleNamespace(distribution=lambda name: distribution)))
+    function = next(n for n in ast.parse(RUNNER.read_text(encoding="utf-8")).body
+                    if isinstance(n, ast.FunctionDef) and n.name == "_runtime_identity")
+    exec(compile(ast.Module(body=[function], type_ignores=[]), str(RUNNER), "exec"), ns)
+    assert ns["_runtime_identity"]()["installed_import"] is installed
+    if installed:
+        assert ns["_runtime_identity"](True)["installed_import"] is True
+    else:
+        with pytest.raises(RuntimeError, match="--require-wheel rejects"):
+            ns["_runtime_identity"](True)

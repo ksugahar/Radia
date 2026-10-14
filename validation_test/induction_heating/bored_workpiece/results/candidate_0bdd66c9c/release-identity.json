@@ -1,0 +1,11 @@
+{
+  "schema": "radia.ih-release-evidence.v1",
+  "source_commit": "0bdd66c9cf8c94410f14dc7fa5fe81e5b04c6619",
+  "tag": "v5.3.2",
+  "wheel_sha256": "bb5337ea9aacf8f720634c5c1a3b8ea1722a53869bff6f26994e7eeb33eecd0a",
+  "native_ci_run": 38262424368,
+  "raw_numerical_record_sha256": "45db7875bc8abbb97234275590ab64d8fee504b2d620508c41a1b23c8465c3cf",
+  "public_numerical_record_sha256": "45db7875bc8abbb97234275590ab64d8fee504b2d620508c41a1b23c8465c3cf",
+  "focused_raw_sha256": "8c2a1ddbe899f20dc86b33648906c481ed3a05efc1054af9ca8fa33910770cbc",
+  "focused_public_sha256": "4ca7d3542152ae61251c6ade8b8585f7c86578e639c38b9d9f5f5e335f9319c8"
+}

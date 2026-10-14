@@ -1,0 +1,10 @@
+* Radia MATLAB LTspice integration fixture
+.param Rval=1000
+.param Cval=1u
+V1 in 0 PULSE(0 1 0 1u 1u 5m 10m)
+R1 in out {Rval}
+C1 out 0 {Cval}
+.tran 0 20m 0 10u
+.save V(in) V(out) I(V1)
+.meas tran vmax MAX V(out)
+.end

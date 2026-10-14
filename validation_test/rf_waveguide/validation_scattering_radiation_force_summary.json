@@ -1,0 +1,123 @@
+{
+  "checks": {
+    "absorber_force_N": 1.6678204759907603e-08,
+    "lossy_partial_factor": 1.25,
+    "max_force_abs_error_N": 0.0,
+    "reflector_force_N": 3.3356409519815205e-08,
+    "transparent_force_N": 0.0
+  },
+  "force_learning": "normal-incidence scattering force: F=(1+R-T)P/c=(A+2R)P/c",
+  "generated_at_utc": "2026-06-27T09:44:16Z",
+  "incident_power_W": 5.0,
+  "kind": "scattering_radiation_force_validation",
+  "rows": [
+    {
+      "expected_factor": 1.0,
+      "expected_force_N": 1.6678204759907603e-08,
+      "force_abs_error_N": 0.0,
+      "label": "perfect_absorber",
+      "summary": {
+        "absorber_reflector_equivalent_factor": 1.0,
+        "absorptance": 1.0,
+        "force_N": 1.6678204759907603e-08,
+        "force_from_absorptance_reflectance_N": 1.6678204759907603e-08,
+        "momentum_transfer_factor": 1.0,
+        "power_absorbed_W": 5.0,
+        "power_incident_W": 5.0,
+        "power_reflected_W": 0.0,
+        "power_transmitted_W": 0.0,
+        "reflectance": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "transmittance": 0.0
+      }
+    },
+    {
+      "expected_factor": 2.0,
+      "expected_force_N": 3.3356409519815205e-08,
+      "force_abs_error_N": 0.0,
+      "label": "perfect_reflector",
+      "summary": {
+        "absorber_reflector_equivalent_factor": 2.0,
+        "absorptance": 0.0,
+        "force_N": 3.3356409519815205e-08,
+        "force_from_absorptance_reflectance_N": 3.3356409519815205e-08,
+        "momentum_transfer_factor": 2.0,
+        "power_absorbed_W": 0.0,
+        "power_incident_W": 5.0,
+        "power_reflected_W": 5.0,
+        "power_transmitted_W": 0.0,
+        "reflectance": 1.0,
+        "speed_m_per_s": 299792458.0,
+        "transmittance": 0.0
+      }
+    },
+    {
+      "expected_factor": 0.0,
+      "expected_force_N": 0.0,
+      "force_abs_error_N": 0.0,
+      "label": "transparent_through_line",
+      "summary": {
+        "absorber_reflector_equivalent_factor": 0.0,
+        "absorptance": 0.0,
+        "force_N": 0.0,
+        "force_from_absorptance_reflectance_N": 0.0,
+        "momentum_transfer_factor": 0.0,
+        "power_absorbed_W": 0.0,
+        "power_incident_W": 5.0,
+        "power_reflected_W": 0.0,
+        "power_transmitted_W": 5.0,
+        "reflectance": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "transmittance": 1.0
+      }
+    },
+    {
+      "expected_factor": 0.5,
+      "expected_force_N": 8.339102379953801e-09,
+      "force_abs_error_N": 0.0,
+      "label": "lossless_partial_reflector",
+      "summary": {
+        "absorber_reflector_equivalent_factor": 0.5,
+        "absorptance": 0.0,
+        "force_N": 8.339102379953801e-09,
+        "force_from_absorptance_reflectance_N": 8.339102379953801e-09,
+        "momentum_transfer_factor": 0.5,
+        "power_absorbed_W": 0.0,
+        "power_incident_W": 5.0,
+        "power_reflected_W": 1.25,
+        "power_transmitted_W": 3.75,
+        "reflectance": 0.25,
+        "speed_m_per_s": 299792458.0,
+        "transmittance": 0.75
+      }
+    },
+    {
+      "expected_factor": 1.25,
+      "expected_force_N": 2.0847755949884502e-08,
+      "force_abs_error_N": 0.0,
+      "label": "lossy_partial_reflector",
+      "summary": {
+        "absorber_reflector_equivalent_factor": 1.25,
+        "absorptance": 0.25,
+        "force_N": 2.0847755949884502e-08,
+        "force_from_absorptance_reflectance_N": 2.0847755949884502e-08,
+        "momentum_transfer_factor": 1.25,
+        "power_absorbed_W": 1.25,
+        "power_incident_W": 5.0,
+        "power_reflected_W": 2.5,
+        "power_transmitted_W": 1.25,
+        "reflectance": 0.5,
+        "speed_m_per_s": 299792458.0,
+        "transmittance": 0.25
+      }
+    }
+  ],
+  "schema": "radia.validation.rf_waveguide.validation_scattering_radiation_force.v1",
+  "validation_class": true,
+  "versions": {
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "python_version": "3.12.10",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  }
+}

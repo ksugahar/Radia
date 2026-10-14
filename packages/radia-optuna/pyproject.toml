@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "radia-optuna"
+version = "0.4.0"
+description = "MATLAB mexcuda optimization with Simulink integration, verified against Optuna 5.0.0"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "BSD-3-Clause"
+authors = [{name = "Radia Development Team"}]
+keywords = ["matlab", "mexcuda", "cuda", "optuna", "optimization", "tpe", "simulink"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = []
+
+[project.optional-dependencies]
+# Required only by MATLAB features whose upstream Optuna 5.0.0 behavior is
+# deliberately executed through Python: GP acquisition, scrambled QMC,
+# parameter-importance/terminator evaluators, storage transports,
+# visualization, and lazy integrations. Native Random/TPE/evolutionary/pruner
+# use does not import Python at run time. Target-specific Optuna integration
+# dependencies remain optional exactly as they are upstream.
+upstream = [
+    "optuna==5.0.0",
+    "scipy>=1.11",
+    "torch>=2.0",
+    "scikit-learn>=1.3",
+    "cmaes>=0.12.0",
+]
+test = [
+    "build>=1.2",
+    "pytest>=8",
+    "wheel>=0.45",
+]
+
+[project.urls]
+Homepage = "https://github.com/ksugahar/Radia"
+Repository = "https://github.com/ksugahar/Radia"
+Documentation = "https://github.com/ksugahar/Radia/blob/main/matlab/README.md"
+
+[project.scripts]
+radia-optuna-path = "radia_optuna.cli:path_main"
+radia-optuna-doctor = "radia_optuna.cli:doctor_main"
+radia-optuna-bridge = "radia_optuna.bridge:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+radia_optuna = ["manifest.json"]

@@ -1,0 +1,25 @@
+{
+  "schema": "radia.validation.omega-quadrature-field-delta.v1",
+  "acceptance": "HOLD: two assembly rules are not a convergence certificate",
+  "order": 1,
+  "bonuses": [
+    4,
+    8
+  ],
+  "centre_count": 45,
+  "reference_rms_T": 0.09531885970421503,
+  "difference_rms_T": 4.571873766508915e-06,
+  "difference_relative_rms": 4.796399978656843e-05,
+  "difference_max_vector_T": 1.0650773313530368e-05,
+  "sample_difference_rms_T": 4.571873766548864e-06,
+  "sample_difference_max_vector_T": 1.065080378276166e-05,
+  "mesh_sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac",
+  "native": {
+    "_radia_pybind.pyd": "5d8fe9320b6776ed5712ca7158b9878994a827d99d5725278263734dbb8a5ac8"
+  },
+  "scope": "linear fixed-source/fixed-order assembly-rule sensitivity only",
+  "input_sha256": [
+    "bdd9f64989f2f463ed6c94f94d2a926fabd9161166880895bdff39ebdbc47a5d",
+    "b7c955954719b0cf38ee246c170ad028ca7648d02107550991798a7e9dbc6b82"
+  ]
+}

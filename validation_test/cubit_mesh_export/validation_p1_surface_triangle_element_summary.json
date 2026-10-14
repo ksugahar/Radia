@@ -1,0 +1,234 @@
+{
+  "checks": {
+    "area": 1.0,
+    "constant_load_integral": 5.0,
+    "gradient_partition_residual": 0.0,
+    "mass_integral_of_one": 3.0,
+    "mass_row_sums": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "mass_triplet_count": 9,
+    "stiffness_nullspace_residual": 0.0,
+    "stiffness_triplet_count": 9,
+    "unit_normal": [
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "element_summary": {
+    "area": 1.0,
+    "area_vector": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "coeff": 2.0,
+    "constant_load_integral": 5.0,
+    "constant_load_vector": [
+      1.6666666666666667,
+      1.6666666666666667,
+      1.6666666666666667
+    ],
+    "density": 3.0,
+    "expected_constant_load_integral": 5.0,
+    "expected_mass_integral_of_one": 3.0,
+    "gradient_partition_residual": 0.0,
+    "gradient_partition_sum": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "gradients": [
+      [
+        -0.5,
+        -1.0,
+        0.0
+      ],
+      [
+        0.5,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0
+      ]
+    ],
+    "local_node_ids_1based": [
+      1,
+      2,
+      3
+    ],
+    "mass_integral_of_one": 3.0,
+    "mass_matrix": [
+      [
+        0.5,
+        0.25,
+        0.25
+      ],
+      [
+        0.25,
+        0.5,
+        0.25
+      ],
+      [
+        0.25,
+        0.25,
+        0.5
+      ]
+    ],
+    "mass_row_sums": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "mass_triplets_1based": [
+      {
+        "col": 1,
+        "row": 1,
+        "value": 0.5
+      },
+      {
+        "col": 2,
+        "row": 1,
+        "value": 0.25
+      },
+      {
+        "col": 3,
+        "row": 1,
+        "value": 0.25
+      },
+      {
+        "col": 1,
+        "row": 2,
+        "value": 0.25
+      },
+      {
+        "col": 2,
+        "row": 2,
+        "value": 0.5
+      },
+      {
+        "col": 3,
+        "row": 2,
+        "value": 0.25
+      },
+      {
+        "col": 1,
+        "row": 3,
+        "value": 0.25
+      },
+      {
+        "col": 2,
+        "row": 3,
+        "value": 0.25
+      },
+      {
+        "col": 3,
+        "row": 3,
+        "value": 0.5
+      }
+    ],
+    "policy": "p1_surface_triangle_element_teaching_block",
+    "source": 5.0,
+    "stiffness_matrix": [
+      [
+        2.5,
+        -0.5,
+        -2.0
+      ],
+      [
+        -0.5,
+        0.5,
+        0.0
+      ],
+      [
+        -2.0,
+        0.0,
+        2.0
+      ]
+    ],
+    "stiffness_nullspace_residual": 0.0,
+    "stiffness_row_sums": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "stiffness_triplets_1based": [
+      {
+        "col": 1,
+        "row": 1,
+        "value": 2.5
+      },
+      {
+        "col": 2,
+        "row": 1,
+        "value": -0.5
+      },
+      {
+        "col": 3,
+        "row": 1,
+        "value": -2.0
+      },
+      {
+        "col": 1,
+        "row": 2,
+        "value": -0.5
+      },
+      {
+        "col": 2,
+        "row": 2,
+        "value": 0.5
+      },
+      {
+        "col": 3,
+        "row": 2,
+        "value": 0.0
+      },
+      {
+        "col": 1,
+        "row": 3,
+        "value": -2.0
+      },
+      {
+        "col": 2,
+        "row": 3,
+        "value": 0.0
+      },
+      {
+        "col": 3,
+        "row": 3,
+        "value": 2.0
+      }
+    ],
+    "unit_normal": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "vertices": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        2.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0
+      ]
+    ]
+  },
+  "kind": "p1_surface_triangle_element_summary_validation",
+  "learning_theme": "P1 boundary triangles should expose geometry, mass, stiffness, load, and one-based sparse triplets as one readable assembly block",
+  "validation_class": true
+}

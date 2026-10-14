@@ -1,0 +1,420 @@
+r"""Universal Relaxation Network (URN) -- causal/passive rational fitting of a
+
+SHOWCASE NOTEBOOK: docs/universal_relaxation_network/urn_showcase.ipynb -- legacy validation figures (URN-vs-VF, NASA/TDK fits, older attention ablation).
+frequency response, with direct time-domain (relaxation-network / SPICE / ADE)
+synthesis.
+
+URN is a KAN-inspired network that decomposes a measured or computed frequency
+response Z(omega) (impedance, dispersive permittivity/permeability, or an
+open-boundary DtN symbol G_n(omega)) into a sparse sum of PHYSICAL relaxation
+mechanisms -- Debye, Cole-Cole, Cole-Davidson, Havriliak-Negami, CPE, Warburg,
+Gerischer, RLC, skin-effect -- in both a series and a parallel (admittance)
+branch, with KAN-style adaptive relaxation-time (tau) refinement.  Because every basis is a passive,
+causal relaxation, the fitted model is GUARANTEED causal/passive and maps
+directly to a stable time-domain realisation: an equivalent SPICE circuit
+(generate_spice_netlist) or, equivalently, a set of first-order auxiliary
+differential equations (one per relaxation pole).
+
+This is the right tool to turn a frequency-domain absorbing-BC / dispersive
+material response into a TIME-DOMAIN representation for FETD / Newmark-beta:
+fit G_n(omega) (or eps(omega), mu(omega)) with URN, then each relaxation
+mechanism becomes a local-in-time auxiliary ODE -- no history convolution,
+and passivity (hence time-stepping stability) is built in.  Naively dropping a
+complex eps/mu sampled at one frequency into the time domain is non-causal;
+URN provides the causal broadband surrogate.
+
+Reference: K. Sugahara and Y. Sato, "KAN-inspired Universal Relaxation Network
+for Automatic Discovery of Physical Relaxation Mechanisms with Direct Circuit
+Synthesis," IEEE Access-format draft, 2026 (publication not established). Canonical runtime implementation:
+src/radia/urn; paper assets and benchmarks:
+docs/universal_relaxation_network/.
+
+API (this module):
+  get_urn_documentation(topic) -- knowledge text (this module)
+  run_urn_fit(freqs, Z, ...)   -- fit and return mechanisms + NRMSE + SPICE
+  urn_fit_from_csv(path, ...)  -- read a (freq, Re, Im) CSV, fit, return a report
+"""
+
+import os
+
+URN_OVERVIEW = r"""
+# Universal Relaxation Network (URN)
+
+URN fits a complex frequency response  Z(omega)  by a SPARSE sum of physical
+relaxation basis functions and synthesises a causal time-domain (circuit / ADE)
+realisation directly from the fit.
+
+Why it exists (vs Vector Fitting):
+- Vector Fitting (VF) places arbitrary rational poles; passivity must be
+  enforced post-hoc and can fail for fractional-order (Cole-Cole/CPE) data.
+- URN's bases ARE passive relaxations, so the model is causal/passive BY
+  CONSTRUCTION, and each term is physically interpretable (a tau, an exponent).
+- Historical NASA/TDK comparisons are archived evidence, not renewed measured
+  accuracy claims. The historical NASA frequency axis was model-assigned;
+  neither its error nor the aggregate 22.8% improvement establishes measured
+  frequency-domain accuracy.
+
+Private NASA inputs and noise-aware model selection:
+- NASA measurement CSV/MAT/ZIP files are not distributed in the current public
+  tree. Keep caller-owned downloads outside Git; do not attach raw rows to
+  public reports or release artifacts. Existing Git history is not rewritten.
+- Before fitting, establish an independent sample-aligned frequency record,
+  units and provenance. Private retention does not validate a guessed axis.
+  The docs consumers accept data_path or RADIA_NASA_EIS_CSV and fail loudly for
+  missing data or an undocumented axis. Legacy bundled-NASA validation modes
+  are retired; no synthetic fallback or successful partial aggregate is allowed.
+- The optional single-layer 34-basis Y-domain research dictionary is a case
+  configuration, not the urn_fit default. Report candidate basis count and retained basis count
+  separately. Do not force an arbitrary 1e-3 error target on noisy measurements.
+- Prefer a smaller active set when it explains data within independently
+  estimated measurement uncertainty. Check held-out error, relaxation-time and
+  weight stability across repeated fits/noise perturbations, and passivity.
+  If noise is unknown, report sensitivity rather than inventing a noise floor.
+  Fewer bases alone do not prove physical truth; lower training error alone
+  does not justify more bases. Do not claim a new fit without an executed result.
+- Separate parameter estimation from model selection. Even when a declared
+  measurement-error likelihood is used to fit parameters, improving the fitted
+  likelihood alone does not justify adding bases. Parsimony is an explicit
+  objective: do not spend additional bases explaining measurement error.
+  The current Huber fit and error-budget reducer do not declare a probabilistic
+  noise model and must not be reported as calibrated maximum-likelihood inference.
+
+Tool contract and optional research route:
+- urn_fit uses URNConfig / train_urn (the existing Z-domain implementation).
+  It does not invoke Y-domain fitting or reduction. Its NRMSE is the complex
+  RMS residual divided by RMS measured magnitude, not maximum pointwise error,
+  component-wise error, or measurement precision.
+- Research basis counts (34, 10, 8 or 5) and illustrative error budgets such as
+  5% are not universal defaults or established physical circuit counts.
+  Fitted components are model-assigned, not identified internal physical parts.
+- YAdmittanceURNConfig.research_34_basis() expands the legacy 22-basis factory:
+  six series RLC, four parallel RLC and four coil anti-resonance bases; no
+  frequency-dependent attention. Fit with train_y_admittance_urn.
+- reduce_y_admittance_urn(model, frequencies, impedance, uncertainty_ohm=...)
+  refits a duplicate-aware ablation path down to ONE basis, not a fixed 10/12
+  floor. Supply an independently justified positive ohmic error budget, scalar
+  or per sample. No default 1e-3 measurement accuracy is assumed.
+- redundant_y_bases compares same-family complex response shapes over the band;
+  close time constants alone do not prove redundancy. Ten fitted bases may
+  still duplicate mechanisms. Removal is followed by refitting, not blind merging.
+  Within the candidate pool, rank removal by error against the measurements in
+  the configured S/log-component metric, not raw impedance magnitude alone.
+- The reducer returns (selected_model, trace); selected_model is None when no
+  candidate meets the budget. It reports both S and log-component errors and
+  selects the smallest TESTED acceptable model, not a global minimal circuit.
+  Its sampled error budget is not a statistical noise model or held-out proof.
+- log_loss_floor_relative=1e-3 is an arcsinh/log scale, NOT a fit acceptance
+  target. Keep the measured uncertainty separate from that numerical scale.
+
+Pipeline:
+  freq response Z(omega)  --train_urn-->  sparse relaxation model
+       --get_active_components-->  {tau, alpha, beta, weight} per mechanism
+       --generate_spice_netlist-->  equivalent circuit (== auxiliary-ODE set)
+"""
+
+URN_METHOD = r"""
+# URN method
+
+Optional single-layer Y-URN research route: research_34_basis -> train_y_admittance_urn
+-> reduce_y_admittance_urn with caller-owned uncertainty_ohm. Its 34
+candidates and 10/12 comparisons are case settings, not mandatory defaults. Inspect
+redundant_y_bases and both error metrics. See overview for acceptance semantics.
+The 22-basis description below is a historical or alternative
+implementation, not the adopted SA/RM reduction recommendation.
+
+Model:  Z(omega) = Z_inf + sum_k w_k * basis_k(omega; tau_k, ...)   (series)
+                          + parallel/admittance branch (Y-space)
+
+Relaxation basis library (relaxation_basis_library.py):
+  Debye:             1 / (1 + j w tau)
+  Cole-Cole:         1 / (1 + (j w tau)^alpha)            0<alpha<=1
+  Cole-Davidson:     1 / (1 + j w tau)^beta
+  Havriliak-Negami:  1 / (1 + (j w tau)^alpha)^beta       (general fractional)
+  CPE / Warburg:     fractional / diffusion (alpha=1/2) elements
+  Gerischer, RLC, skin-effect (Dowell RL ladder)
+  + parallel (admittance-space) Debye / Cole-Cole / CPE / Warburg
+Magnetic variants (permeability): magnetic_debye, magnetic_cole_cole,
+  two_relaxation_permeability.
+
+Training (train_urn): Adam + cosine LR, multi-restart, relative-error loss
+  + sparsity penalty (drives unused bases to ~0 weight so the active set is
+  the discovered mechanism count).  KAN-style AdaptiveURN refines tau on a
+  coarse->fine grid where local error is high.
+
+log-spaced tau parameters are stored as log_tau (nn.Parameter); active
+components are read out by get_active_components(threshold) (weight above
+threshold), returning tau (in seconds), alpha/beta, weight_magnitude, branch.
+
+SA/RM-2026 paper variant (YAdmittanceURN): the research-meeting draft by
+Sato/Sugahara uses a pure attention-free Y-domain dictionary:
+Debye/magnetic-Debye/Cole-Cole/magnetic-Cole-Cole/inductive-CPE/
+capacitive-CPE/series-RLC = 22 bases, S-domain Huber loss with z0=median(|Z|),
+nonnegative gates, and output-ablation importance I_i.  This is exposed as train_y_admittance_urn,
+refit_y_admittance_active_bases, and s_domain_rmse so the draft can evolve
+without replacing the original NASA/TDK train_urn path.
+
+"""
+
+URN_API = r"""
+# URN API (canonical impl: radia.urn)
+
+from radia.urn import (
+    UniversalRelaxationNetwork, URNConfig, train_urn, generate_spice_netlist)
+
+config = URNConfig(n_debye=3, n_cole_cole=2, n_warburg=1,
+                   sparsity_weight=0.01, n_epochs=2000, n_restarts=3)
+model  = train_urn(freqs_Hz, Z_complex, config, verbose=False)
+mech   = model.get_active_components()       # {type: [{tau, alpha, weight_magnitude,...}]}
+spice  = generate_spice_netlist(model, "Z")  # SPICE netlist string (RC/RL ladders)
+
+URNConfig fields: n_debye/n_cole_cole/n_cole_davidson/n_havriliak_negami/n_cpe/
+  n_warburg/n_gerischer/n_rlc/n_skin_effect (series), *_parallel (admittance),
+  sparsity_weight, lr, n_epochs(=6000), n_restarts(=10), omega_ref/Z_ref(auto).
+  For a responsive tool call, lower n_epochs/n_restarts.
+
+Y-domain SA/RM variant:
+from radia.urn import (
+    YAdmittanceURNConfig, refit_y_admittance_active_bases,
+    s_domain_rmse, train_y_admittance_urn)
+cfg = YAdmittanceURNConfig.paper_22_basis()
+model = train_y_admittance_urn(freqs_Hz, Z_complex, cfg, verbose=False)
+active = model.active_bases()   # output-ablation ranking
+Zfit = model.predict(freqs_Hz)
+rmse_s = s_domain_rmse(Zfit, Z_complex)
+realizable = refit_y_admittance_active_bases(freqs_Hz, Z_complex, active, cfg)
+
+This MCP module wraps it:
+  run_urn_fit(freqs, Z, n_debye=.., n_cole_cole=.., n_warburg=.., n_epochs=..,
+              n_restarts=.., sparsity_weight=.., spice=True) -> dict
+      {"nrmse", "mechanisms", "spice_netlist", "n_active"}
+  urn_fit_from_csv(path, freq_col, real_col, imag_col, delimiter, skip_rows,
+                   ...same fit args..., spice_out="") -> formatted report str
+"""
+
+URN_TIMEDOMAIN = r"""
+# URN -> time domain (the point for FETD / Newmark-beta)
+
+A URN fit is a sum of passive relaxations, so it has an EXACT local-in-time
+realisation.  Each Debye term  w/(1 + j w tau)  <->  an auxiliary variable phi
+with    tau dphi/dt + phi = w * u ,   contributing phi to the response -- one
+first-order ODE per pole, NO history convolution.  Fractional terms
+(Cole-Cole/CPE) are realised as a short RC/RL ladder (Charef / Valsa / Dowell),
+i.e. a few extra auxiliary ODEs that approximate the fractional pole over the
+band.  generate_spice_netlist emits exactly these ladders; the same ladders are
+the ADE/auxiliary-ODE set for an FETD / Newmark-beta solver.
+
+Because the realisation is passive, the resulting time-stepping is STABLE
+(no growing modes) -- this is the structural advantage over plugging a raw
+complex (eps, mu) or a non-passive rational fit into the time domain, which is
+generally non-causal/unstable.
+
+Time-domain verification in the repo: demo_spice_timedomain.py,
+validation_test/universal_relaxation_network/run_ltspice_verification.py
+(actual LTspice) and
+validation_test/universal_relaxation_network/verify_timedomain_stability.py
+(URN vs VF stability).
+"""
+
+URN_CQ = r"""
+# URN -> convolution quadrature (CQ)
+
+CQ is the clean bridge when the solver already has a frequency-domain acoustic,
+Maxwell, impedance-boundary, or material operator and we want a causal transient
+response without first hand-writing every auxiliary ODE.
+
+Contract:
+  1. Fit or identify a passive URN relaxation model from samples of H(j omega).
+  2. Expose the fitted model as a Laplace evaluator H(s), not just as a table.
+  3. Feed H(delta(zeta)/dt) to Lubich CQ (BDF1/BDF2 are the small teaching
+     defaults).
+  4. Apply the resulting weights by causal discrete convolution to the boundary
+     or material input history.
+
+Why this matters:
+  - A plain FFT/IFFT demo treats the sampled time signal as periodic.  For a
+    hammer/step-like transient this can create pre-hit wrap-around unless the
+    padding/windowing convention is explicit.
+  - CQ evaluates the same fitted frequency-domain object through the Laplace
+    variable and gives a causal time-domain operator for the chosen time step.
+  - Because the URN ladder is non-negative/passive, the CQ kernel inherits a
+    stable physical realization; this is the useful path for FEM/BEM acoustics
+    and time-domain Maxwell material kernels.
+
+Education artifact:
+  docs/universal_relaxation_network/cq_urn_bridge.ipynb
+Checked evidence:
+  validation_test/universal_relaxation_network/cq_urn_bridge_results.json
+
+The result-bearing notebook fits a two-pole passive relaxation ladder on a
+candidate tau grid, builds BDF2 CQ weights, and compares the causal CQ response
+with a deliberately naive periodic IFFT contrast.  The point is not that IFFT is
+forbidden; the point is that CQ is the native transient operator once URN has
+identified a passive H(s).
+"""
+
+URN_APPLICATION = r"""
+# Using URN for open-boundary / dispersive-material time-domain models
+
+Target a frequency response that you want to march in time:
+  - an exterior open-boundary DtN symbol  G_n(omega)  on a truncation circle/
+    sphere (per multipole order n), OR
+  - a dispersive material response eps(omega) / mu(omega) of an absorbing layer,
+    OR a surface impedance / reflection coefficient.
+
+Recipe:
+  1. Sample the response over the band of interest: (freq, Re, Im).
+  2. run_urn_fit / urn_fit_from_csv -> passive relaxation model + NRMSE.
+  3. Each mechanism -> one (or a few) auxiliary ODE(s) on the boundary node
+     (or in the absorbing layer); fold into the FETD / Newmark-beta system
+     (the boundary admittance / material update each step).
+  4. The passivity guarantee => stable time stepping; the sparsity => few
+     auxiliary variables.
+
+This converts a per-frequency-designed absorbing BC (or lossy layer) into a
+single broadband, causal, local-in-time operator -- the time-domain
+representation needed for a transient (Newmark-beta) open-boundary PoC.
+"""
+
+_TOPICS = {
+    "overview": URN_OVERVIEW,
+    "method": URN_METHOD,
+    "api": URN_API,
+    "timedomain": URN_TIMEDOMAIN,
+    "cq": URN_CQ,
+    "application": URN_APPLICATION,
+}
+
+
+def get_urn_documentation(topic: str = "all") -> str:
+    """Return URN knowledge text.  topic in
+    {all, overview, method, api, timedomain, cq, application}."""
+    t = (topic or "all").strip().lower()
+    if t == "all":
+        return "\n".join(_TOPICS[k] for k in
+                         ["overview", "method", "api", "timedomain", "cq", "application"])
+    if t in _TOPICS:
+        return _TOPICS[t]
+    return (f"Unknown topic '{topic}'. Options: all, "
+            + ", ".join(_TOPICS) + ".")
+
+
+def run_urn_fit(freqs, Z, n_debye=3, n_cole_cole=2, n_warburg=1,
+                n_cole_davidson=0, sparsity_weight=0.01,
+                n_epochs=2000, n_restarts=3, spice=True):
+    """Fit a complex frequency response Z(freqs) with a URN and return a dict
+    {nrmse, n_active, mechanisms, spice_netlist}.
+
+    freqs : array of frequencies in Hz.   Z : complex array (same length).
+    Lower n_epochs / n_restarts for a faster (rougher) fit."""
+    import numpy as np
+    freqs = np.asarray(freqs, dtype=float)
+    Z = np.asarray(Z, dtype=complex)
+    if freqs.ndim != 1 or Z.ndim != 1 or freqs.shape != Z.shape or freqs.size < 2:
+        raise ValueError("freqs and Z must be aligned one-dimensional arrays with at least two samples")
+    if not np.all(np.isfinite(freqs) & (freqs > 0)):
+        raise ValueError("frequencies must be finite and positive (Hz)")
+    if not np.all(np.isfinite(Z)) or not np.any(np.abs(Z) > 0):
+        raise ValueError("Z must be finite and not identically zero")
+    counts = [_integer_option(v, k) for k, v in (
+        ("n_debye", n_debye), ("n_cole_cole", n_cole_cole),
+        ("n_warburg", n_warburg), ("n_cole_davidson", n_cole_davidson))]
+    if not sum(counts):
+        raise ValueError("at least one basis is required")
+    n_epochs = _integer_option(n_epochs, "n_epochs", minimum=1)
+    n_restarts = _integer_option(n_restarts, "n_restarts", minimum=1)
+    if not np.isfinite(sparsity_weight) or sparsity_weight < 0:
+        raise ValueError("sparsity_weight must be finite and nonnegative")
+    import torch
+
+    from radia.urn import URNConfig, generate_spice_netlist, train_urn
+
+    cfg = URNConfig(n_debye=int(n_debye), n_cole_cole=int(n_cole_cole),
+                    n_warburg=int(n_warburg), n_cole_davidson=int(n_cole_davidson),
+                    sparsity_weight=float(sparsity_weight),
+                    n_epochs=int(n_epochs), n_restarts=int(n_restarts))
+    model = train_urn(freqs, Z, cfg, verbose=False)
+
+    omega = torch.tensor(2 * np.pi * freqs, dtype=torch.float64)
+    Zp = model(omega).detach().numpy()
+    denom = np.sqrt(np.mean(np.abs(Z) ** 2))
+    nrmse = float(np.sqrt(np.mean(np.abs(Zp - Z) ** 2)) / (denom + 1e-30))
+
+    mech = model.get_active_components()
+    n_active = sum(len(v) for v in mech.values())
+    out = {"nrmse": nrmse, "n_active": int(n_active), "mechanisms": mech}
+    if spice:
+        try:
+            out["spice_netlist"] = generate_spice_netlist(model, "Z")
+        except Exception as e:  # noqa: BLE001
+            out["spice_error"] = f"SPICE synthesis failed: {e}"
+    return out
+
+
+def _format_report(res: dict) -> str:
+    lines = [f"URN fit: NRMSE = {res['nrmse']:.4e}   active components = {res['n_active']}",
+             "NRMSE = RMS complex residual / RMS measured magnitude (not maximum error).",
+             "Model-assigned components, not uniquely identified physical parts (tau in seconds):"]
+    for mtype, comps in res["mechanisms"].items():
+        if not comps:
+            continue
+        for c in comps:
+            parts = [f"tau={c.get('tau', float('nan')):.3e}"]
+            for key in ("alpha", "beta"):
+                if key in c and c[key] is not None:
+                    parts.append(f"{key}={c[key]:.3f}")
+            if "weight_magnitude" in c:
+                parts.append(f"|w|={c['weight_magnitude']:.3e}")
+            if c.get("branch"):
+                parts.append(str(c["branch"]))
+            lines.append(f"  {mtype}: " + "  ".join(parts))
+    if "spice_netlist" in res:
+        lines.append("\nSPICE netlist (== auxiliary-ODE ladder for FETD):")
+        lines.append(res["spice_netlist"])
+    if "spice_error" in res:
+        lines.append(res["spice_error"])
+    return "\n".join(lines)
+
+
+def _integer_option(value, name, minimum=0):
+    import operator
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer >= {minimum}")  # noqa: TRY004 -- uniform input validation contract
+    try:
+        parsed = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer >= {minimum}") from exc
+    if parsed < minimum:
+        raise ValueError(f"{name} must be an integer >= {minimum}")
+    return parsed
+
+
+def urn_fit_from_csv(data_csv, freq_col=0, real_col=1, imag_col=2,
+                     delimiter=",", skip_rows=0, n_debye=3, n_cole_cole=2,
+                     n_warburg=1, n_cole_davidson=0, sparsity_weight=0.01,
+                     n_epochs=2000, n_restarts=3, spice_out="") -> str:
+    """Read a (freq, Re, Im) CSV, fit a URN, return a text report.  If spice_out
+    is a path, the SPICE netlist is also written there."""
+    import numpy as np
+    if not os.path.isfile(data_csv):
+        return f"CSV not found: {data_csv}"
+    columns = [_integer_option(v, k) for k, v in (
+        ("freq_col", freq_col), ("real_col", real_col), ("imag_col", imag_col))]
+    if len(set(columns)) != 3:
+        raise ValueError("frequency, real and imaginary columns must be distinct")
+    skip_rows = _integer_option(skip_rows, "skip_rows")
+    data = np.loadtxt(data_csv, delimiter=delimiter, skiprows=skip_rows, ndmin=2)
+    if data.shape[0] < 2 or data.shape[1] <= max(columns):
+        raise ValueError("CSV needs at least two rows and all selected columns")
+    freqs = data[:, columns[0]]
+    Z = data[:, columns[1]] + 1j * data[:, columns[2]]
+    res = run_urn_fit(freqs, Z, n_debye=n_debye, n_cole_cole=n_cole_cole,
+                      n_warburg=n_warburg, n_cole_davidson=n_cole_davidson,
+                      sparsity_weight=sparsity_weight, n_epochs=n_epochs,
+                      n_restarts=n_restarts, spice=True)
+    if spice_out and "spice_netlist" in res:
+        with open(spice_out, "w", encoding="utf-8") as f:
+            f.write(res["spice_netlist"])
+        res = dict(res)
+        res["spice_netlist"] = (res["spice_netlist"]
+                                + f"\n* (also written to {spice_out})")
+    return _format_report(res)

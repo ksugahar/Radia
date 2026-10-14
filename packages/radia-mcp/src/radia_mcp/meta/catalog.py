@@ -1,0 +1,978 @@
+"""Authoritative catalog of all radia_mcp servers.
+
+Source of truth: this dict together with the package entry points. Generated
+documentation may project this catalog, but no workstation-local MCP client
+configuration is part of the repository contract.
+
+The catalog includes the `meta` server itself (self-referential entry)
+so that `radia_mcp_overview` reports a complete picture and
+`radia_mcp_by_tag("meta")` finds the entry-point.
+
+Each entry:
+    "<short_name>": {
+        "subpackage": "radia_mcp.<name>",
+        "entry_point": "mcp-server-<name>",
+        "description": str,
+        "primary_tools": [str, ...],
+        "related": [other short names that pair well],
+        "audit_command": optional heavy validation / repo-audit command,
+        "selftest_command": auto-added from entry_point by list/get helpers,
+        "tags": [str, ...]   for filtered queries
+    }
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+# Order roughly follows logical groupings (general → application)
+CATALOG: dict[str, dict[str, Any]] = {
+    "radia-ltspice": {
+        "subpackage": "radia_mcp.ltspice",
+        "entry_point": "mcp-server-radia-ltspice",
+        "description": "LTspice circuit integration through the optional radia-gpu implementation",
+        "primary_tools": ["netlist_to_asc", "check_circuit", "compare_topology", "circuit_knowledge"],
+        "related": ["radia-matlab", "radia-ngsolve"],
+        "tags": ["application"],
+    },
+    # ============================================================
+    # CAD / mesh authoring
+    # ============================================================
+    "build123d": {
+        "subpackage": "radia_mcp.build123d",
+        "entry_point": "mcp-server-build123d",
+        "description": "build123d STEP authoring (CAD-as-code) + Cubit interop",
+        "primary_tools": ["build123d_api", "execute_build123d",
+                            "build123d_to_cubit_hex"],
+        "related": ["cubit", "gmsh", "radia-ngsolve"],
+        "tags": ["cad"],
+    },
+    "gmsh": {
+        "subpackage": "radia_mcp.gmsh",
+        "entry_point": "mcp-server-gmsh",
+        "description": "GMSH MSH v4.1 inspect/validate + post-display "
+                       "launch artifacts + visualization-only policy lint",
+        "primary_tools": ["gmsh_inspect_msh", "gmsh_validate_msh",
+                          "gmsh_validate_geo", "gmsh_exec",
+                          "gmsh_render",
+                          "gmsh_write_post_launch_artifact",
+                          "gmsh_usage", "gmsh_reference"],
+        "related": ["build123d", "cubit", "radia-ngsolve"],
+        "audit_command": "mcp-server-gmsh --selftest --audit-repo",
+        "tags": ["mesh"],
+    },
+    # ============================================================
+    # FEM / BEM / specialty solvers
+    # ============================================================
+    "radia-ngsolve": {
+        "subpackage": "radia_mcp.radia_ngsolve",
+        "entry_point": "mcp-server-radia-ngsolve",
+        "description": "Radia + NGSolve: Kelvin / sparsesolv / PEEC / "
+                       "analytical formulas / lint",
+        "primary_tools": ["kelvin_transformation", "ngsolve_usage",
+                            "analytical_formulas", "peec_inductance"],
+        "related": [
+            "bem",
+            "build123d",
+            "cubit",
+            "fem",
+            "force",
+            "gmsh",
+            "radia-acoustic",
+            "radia-matlab",
+            "radia-ltspice",
+            "acoustic-fembem",
+            "mathematica",
+            "matrix-solvers",
+            "mor",
+            "peec",
+            "radia-streamfunction",
+        ],
+        "tags": ["fem", "solver"],
+    },
+    "force": {
+        "subpackage": "radia_mcp.force",
+        "entry_point": "mcp-server-force",
+        "description": "Shared electromagnetic-force and torque method "
+                       "selection, static/phasor sample integration, virtual "
+                       "work, air-gap torque, and validation gates",
+        "primary_tools": [
+            "force",
+            "force_result",
+            "force_recipe",
+            "force_lorentz",
+            "force_maxwell_surface",
+            "force_time_average_lorentz",
+            "force_time_average_maxwell_surface",
+            "force_coenergy_torque",
+            "force_air_gap_torque_samples",
+            "force_method_agreement_gate",
+            "force_validation_guide",
+        ],
+        "related": [
+            "differential-forms",
+            "maglev",
+            "motor",
+            "radia-ngsolve",
+            "team-benchmark",
+        ],
+        "tags": ["solver", "theory"],
+    },
+    "radia-matlab": {
+        "subpackage": "radia_mcp.matlab",
+        "entry_point": "mcp-server-radia-matlab",
+        "description": "Official MATLAB MCP composition, Radia/NGSolve MEX "
+                       "capability contract, radia-optuna MATLAB/Simulink "
+                       "difference support, and 43 generic ML/RL gates",
+        "primary_tools": ["matlab_agent_guide",
+                            "matlab_extension_contract",
+                            "matlab_official_server_config",
+                            "matlab_official_server_status",
+                            "matlab_radia_mex_contract",
+                            "matlab_optuna_mcp_route",
+                            "matlab_optuna_simulink_contract",
+                            "matlab_radia_acoustic_interface_contract"],
+        "related": ["acoustic-fembem", "radia-ngsolve", "radia-ltspice"],
+        "tags": ["ml", "optimization", "solver"],
+    },
+    "acoustic-fembem": {
+        "subpackage": "radia_mcp.acoustic_fembem",
+        "entry_point": "mcp-server-acoustic-fembem",
+        "description": "Readable MATLAB P1 acoustic FEM/BEM education solver, "
+                       "convolution quadrature, and validation gates",
+        "primary_tools": ["acoustic_fembem_agent_guide",
+                            "acoustic_fembem_extension_contract",
+                            "acoustic_fembem_server_config"],
+        "related": ["radia-matlab", "radia-ngsolve", "bem", "fem"],
+        "tags": ["fem", "theory"],
+    },
+    "radia-acoustic": {
+        "subpackage": "radia_mcp.radia_acoustic",
+        "entry_point": "mcp-server-radia-acoustic",
+        "description": "Production NGSolve/ngsolve.bem acoustics, FSI, and CQ",
+        "primary_tools": ["radia_acoustic_usage", "radia_acoustic_fsi_preflight", "radia_acoustic_cq_grid"],
+        "related": ["radia-ngsolve", "bem"],
+        "tags": ["fem", "solver"],
+    },
+    "radia-streamfunction": {
+        "subpackage": "radia_mcp.streamfunction",
+        "entry_point": "mcp-server-radia-streamfunction",
+        "description": "Stream-function coil design: (ACA+)+TSVD least-norm, "
+                       "FE-direct psi, regularisation / folded-Tikhonov Pareto "
+                       "front, single-stroke chain, sheet-metal levers",
+        "primary_tools": ["streamfunction"],
+        "related": [
+            "radia-ngsolve",
+            "bayesian-opt",
+            "nmr-mri",
+            "electromagnet",
+            "peec",
+        ],
+        "tags": ["optimization", "solver"],
+    },
+    "fem": {
+        "subpackage": "radia_mcp.fem",
+        "entry_point": "mcp-server-fem",
+        "description": "FEM formulations theory layer (A-Omega / T-Omega / H / "
+                       "Reduced / Darwin, edge / HO / XFEM / IGA / DG, gauging "
+                       "+ Kelvin, MSFEM, Schur circuit coupling, NGSolve hierarchical)",
+        "primary_tools": ["fem_overview"],
+        "related": [
+            "bem",
+            "differential-forms",
+            "gnn",
+            "matrix-solvers",
+            "pinn",
+            "radia-ngsolve",
+            "team-benchmark",
+            "acoustic-fembem",
+        ],
+        "tags": ["fem", "theory"],
+    },
+    "bem": {
+        "subpackage": "radia_mcp.bem",
+        "entry_point": "mcp-server-bem",
+        "description": "MoM/BEM theory: RWG, EFIE/MFIE/CFIE/PMCHWT, "
+                       "Loop-Star, Calderon, Radia HDiv-VIM, HACApK, FEM-BEM",
+        "primary_tools": ["bem_overview"],
+        "related": [
+            "fem",
+            "peec",
+            "radia-ngsolve",
+            "team-benchmark",
+            "acoustic-fembem",
+            "radia-acoustic",
+        ],
+        "tags": ["fem", "theory"],
+    },
+    "matrix-solvers": {
+        "subpackage": "radia_mcp.matrix_solvers",
+        "entry_point": "mcp-server-matrix-solvers",
+        "description": "Sparse solver theory + decision tree: Krylov "
+                       "(CG/BiCGSTAB/GMRES/COCG/COCR/IDR), preconditioners "
+                       "(AMG, Hiptmair-Xu AMS), Biro-Preis A-V, tree-cotree",
+        "primary_tools": ["matrix_solvers_overview"],
+        "related": ["radia-ngsolve", "fem"],
+        "tags": ["solver", "theory"],
+    },
+    "mor": {
+        "subpackage": "radia_mcp.mor",
+        "entry_point": "mcp-server-mor",
+        "description": "Model Order Reduction: POD, PRIMA/Krylov, "
+                       "hyperreduction (DEIM)",
+        "primary_tools": ["mor_systematic"],
+        "related": ["data-assimilation", "radia-ngsolve", "rna-mec"],
+        "tags": ["solver"],
+    },
+    # ============================================================
+    # Physics applications
+    # ============================================================
+    "ih": {
+        "subpackage": "radia_mcp.ih",
+        "entry_point": "mcp-server-ih",
+        "description": "Induction heating: SIBC, ESIM, Karl iteration, "
+                       "workpiece coupling",
+        "primary_tools": ["induction_heating", "ih_sibc", "ih_esim"],
+        "related": [
+            "litz-transmission",
+            "magnetic-materials",
+            "ndt",
+            "panel-review",
+            "peec",
+            "rna-mec",
+        ],
+        "tags": ["application"],
+    },
+    "peec": {
+        "subpackage": "radia_mcp.peec",
+        "entry_point": "mcp-server-peec",
+        "description": "PEEC filament/panel, FastHenry parser, HOIBC, "
+                       "Carstensen AC copper loss",
+        "primary_tools": ["peec_usage", "peec_hoibc", "peec_carstensen_ac_loss"],
+        "related": [
+            "bem",
+            "ih",
+            "litz-transmission",
+            "radia-ngsolve",
+            "radia-streamfunction",
+            "pcb",
+        ],
+        "tags": ["application"],
+    },
+    "electromagnet": {
+        "subpackage": "radia_mcp.electromagnet",
+        "entry_point": "mcp-server-electromagnet",
+        "description": "Accelerator electromagnet: CoilBuilder, Hantila, "
+                       "Play/Energy hysteresis",
+        "primary_tools": ["electromagnet_usage"],
+        "related": [
+            "accelerator",
+            "fusion-reactor",
+            "magnetic-materials",
+            "motor",
+            "nmr-mri",
+            "panel-review",
+            "radia-streamfunction",
+        ],
+        "tags": ["application"],
+    },
+    "motor": {
+        "subpackage": "radia_mcp.motor",
+        "entry_point": "mcp-server-motor",
+        "description": "Motor analysis: ONELAB transient, Hollaus effective "
+                       "material (lamination), Wakao autoencoder topology, "
+                       "Kaimori-Mifune Darwin TD",
+        "primary_tools": ["motor_validation_router", "motor_field_quick_check"],
+        "related": [
+            "electromagnet",
+            "force",
+            "maglev",
+            "magnetic-materials",
+            "panel-review",
+            "team-benchmark",
+            "topology-optimization",
+        ],
+        "tags": ["application"],
+    },
+    "accelerator": {
+        "subpackage": "radia_mcp.accelerator",
+        "entry_point": "mcp-server-accelerator",
+        "description": "Accelerator physics: beam optics, dipole/quad/sext "
+                       "magnets, undulator/wiggler",
+        "primary_tools": ["accelerator"],
+        "related": ["electromagnet", "fusion-reactor", "nmr-mri"],
+        "tags": ["application"],
+    },
+    "fusion-reactor": {
+        "subpackage": "radia_mcp.fusion_reactor",
+        "entry_point": "mcp-server-fusion-reactor",
+        "description": "Fusion reactor magnets: tokamak ITER + stellarator "
+                       "LHD/W7-X/heliotron lineage",
+        "primary_tools": ["fusion_reactor"],
+        "related": ["accelerator", "data-assimilation", "electromagnet"],
+        "tags": ["application"],
+    },
+    # ============================================================
+    # Materials / hysteresis / losses
+    # ============================================================
+    "magnetic-materials": {
+        "subpackage": "radia_mcp.magnetic_materials",
+        "entry_point": "mcp-server-magnetic-materials",
+        "description": "Magnetic materials: hysteresis (Play/Energy lab core), "
+                       "iron loss (Bertotti/Steinmetz/iGSE), JIS silicon steel, "
+                       "PM datasheets, Osborn demag factor",
+        "primary_tools": ["magnetic_materials_hysteresis", "magnetic_materials_iron_loss"],
+        "related": [
+            "electromagnet",
+            "ih",
+            "motor",
+            "ndt",
+            "rna-mec",
+        ],
+        "tags": ["application"],
+    },
+    "litz-transmission": {
+        "subpackage": "radia_mcp.litz_transmission",
+        "entry_point": "mcp-server-litz-transmission",
+        "description": "Litz wire AC loss (Dowell, homogenization, magnetic-"
+                       "plated wire) + multiconductor transmission line theory",
+        "primary_tools": ["litz_transmission"],
+        "related": [
+            "ih",
+            "metamaterial",
+            "peec",
+            "pcb",
+        ],
+        "tags": ["application"],
+    },
+    "rna-mec": {
+        "subpackage": "radia_mcp.rna_mec",
+        "entry_point": "mcp-server-rna-mec",
+        "description": "RNA / Magnetic Equivalent Circuit. ★ Lab specialty: "
+                       "Play-model hysteresis MEC",
+        "primary_tools": ["rna_mec"],
+        "related": ["magnetic-materials", "mor", "ih"],
+        "tags": ["application"],
+    },
+    # ============================================================
+    # ML / optimization
+    # ============================================================
+    "topology-optimization": {
+        "subpackage": "radia_mcp.topology_optimization",
+        "entry_point": "mcp-server-topology-optimization",
+        "description": "Topology optimization: SIMP, level set, ON/OFF, MMA, "
+                       "Wakao autoencoder+LS SynRM",
+        "primary_tools": ["topology_opt_topology_derivative"],
+        "related": [
+            "evolutionary",
+            "motor",
+            "bayesian-opt",
+        ],
+        "tags": ["ml", "optimization"],
+    },
+    "bayesian-opt": {
+        "subpackage": "radia_mcp.bayesian_opt",
+        "entry_point": "mcp-server-bayesian-opt",
+        "description": "BO + GP regression + FMQA + surrogate models (57 lab "
+                       "files; ARD kernel, PI-GP, multi-fidelity)",
+        "primary_tools": ["bayesian_opt"],
+        "related": ["evolutionary", "pinn", "radia-streamfunction",
+                    "topology-optimization"],
+        "tags": ["optimization"],
+    },
+    "evolutionary": {
+        "subpackage": "radia_mcp.evolutionary",
+        "entry_point": "mcp-server-evolutionary",
+        "description": "GA / DE / PSO / CMA-ES / Immune / NSGA-II for EM",
+        "primary_tools": ["evolutionary"],
+        "related": ["bayesian-opt", "topology-optimization"],
+        "tags": ["optimization"],
+    },
+    "data-assimilation": {
+        "subpackage": "radia_mcp.data_assimilation",
+        "entry_point": "mcp-server-data-assimilation",
+        "description": "Kalman / EnKF / 4D-Var for EM state estimation + "
+                       "sensor fusion",
+        "primary_tools": ["data_assimilation"],
+        "related": ["mor", "fusion-reactor"],
+        "tags": ["optimization"],
+    },
+    "gnn": {
+        "subpackage": "radia_mcp.gnn",
+        "entry_point": "mcp-server-gnn",
+        "description": "Graph Neural Networks for PDE/EM. Physics-Embedded "
+                       "GNN, E(n)-GNN / NequIP / MACE",
+        "primary_tools": ["gnn"],
+        "related": ["pinn", "fem"],
+        "tags": ["ml"],
+    },
+    "pinn": {
+        "subpackage": "radia_mcp.pinn",
+        "entry_point": "mcp-server-pinn",
+        "description": "Physics-Informed Neural Networks + Gaussian Processes "
+                       "for EM",
+        "primary_tools": ["pinn"],
+        "related": ["gnn", "bayesian-opt", "fem"],
+        "tags": ["ml"],
+    },
+    # ============================================================
+    # Domain-specific
+    # ============================================================
+    "pcb": {
+        "subpackage": "radia_mcp.pcb",
+        "entry_point": "mcp-server-pcb",
+        "description": "Wireless Power Transfer: coil + compensation (SS/LCC/"
+                       "LCL), efficiency, IEC 61980 / SAE J2954, FOD, dynamic EV / "
+                       "robot / bearingless motor, capacitive / microwave / metamaterial",
+        "primary_tools": ["pcb_overview"],
+        "related": [
+            "litz-transmission",
+            "maglev",
+            "metamaterial",
+            "peec",
+        ],
+        "tags": ["application"],
+    },
+    "ndt": {
+        "subpackage": "radia_mcp.ndt",
+        "entry_point": "mcp-server-ndt",
+        "description": "Non-destructive testing: eddy current testing, "
+                       "magnetic flux leakage, MFL signal analysis",
+        "primary_tools": ["ndt"],
+        "related": ["ih", "magnetic-materials"],
+        "tags": ["application"],
+    },
+    "metamaterial": {
+        "subpackage": "radia_mcp.metamaterial",
+        "entry_point": "mcp-server-metamaterial",
+        "description": "Metamaterials: homogenization, effective medium, "
+                       "periodic structures",
+        "primary_tools": ["metamaterial"],
+        "related": ["pcb", "litz-transmission"],
+        "tags": ["application"],
+    },
+    "nmr-mri": {
+        "subpackage": "radia_mcp.nmr_mri",
+        "entry_point": "mcp-server-nmr-mri",
+        "description": "NMR/MRI: gradient coils, B0 shimming, RF coils, "
+                       "field uniformity",
+        "primary_tools": ["nmr_mri_bibliography"],
+        "related": ["electromagnet", "accelerator", "radia-streamfunction"],
+        "tags": ["application"],
+    },
+    "maglev": {
+        "subpackage": "radia_mcp.maglev",
+        "entry_point": "mcp-server-maglev",
+        "description": "Magnetic levitation, UNIFIED: maglev systems "
+                       "(EMS/EDS/PM/SC/Halbach) + levitation FORCE physics "
+                       "(induction/EML/AMB/superconducting/diamagnetic/"
+                       "Earnshaw/force-computation). Lab research: Radia "
+                       "IEM<->FEM weak coupling + Foster modal reduced "
+                       "models for control-coupled maglev.",
+        "primary_tools": ["maglev"],
+        "related": ["force", "motor", "pcb"],
+        "tags": ["application"],
+    },
+    # ============================================================
+    # Knowledge / meta / theory
+    # ============================================================
+    "team-benchmark": {
+        "subpackage": "radia_mcp.team_benchmark",
+        "entry_point": "mcp-server-team-benchmark",
+        "description": "TEAM Workshop benchmark problems reference layer "
+                       "(30 problems × physics class). ★ Lab core: 13, 20, 23, 32, 33b",
+        "primary_tools": ["team_catalog"],
+        "related": ["fem", "bem", "force", "motor"],
+        "tags": ["application"],
+    },
+    "differential-forms": {
+        "subpackage": "radia_mcp.differential_forms",
+        "entry_point": "mcp-server-differential-forms",
+        "description": "Visual differential geometry / exterior calculus "
+                       "for EM: Cartan, de Rham, cohomology, EM forces theory",
+        "primary_tools": ["differential_forms_visual_geometry",
+                          "differential_forms_geometry_gate",
+                          "differential_forms_maxwell"],
+        "related": ["fem", "force", "mathematica"],
+        "tags": ["theory"],
+    },
+    "mathematica": {
+        "subpackage": "radia_mcp.mathematica",
+        "entry_point": "mcp-server-mathematica",
+        "description": "Mathematica recipes: vector calc, Kelvin transform, "
+                       "symbolic Maxwell, evaluation pipeline",
+        "primary_tools": [
+            "mathematica_verification_guide",
+            "mathematica_check_identities",
+            "mathematica_run_script",
+            "mathematica_status",
+        ],
+        "related": ["differential-forms", "radia-ngsolve", "md2html"],
+        "tags": ["theory"],
+    },
+    "md2html": {
+        "subpackage": "radia_mcp.md2html",
+        "entry_point": "mcp-server-md2html",
+        "description": "Markdown -> self-contained HTML with MathJax v3 + "
+                       "tables + fenced code + codehilite + base64 image "
+                       "embed + [N] reference linking + UTF-8 / cp932 "
+                       "fallback for legacy Japanese files.  Promoted "
+                       "from mcp-server-document.",
+        "primary_tools": ["md2html_convert"],
+        "related": ["mathematica", "literature-index"],
+        "tags": ["meta"],
+    },
+    # "figure" was a standalone server until 2026-07-18; it was a shared
+    # middle-layer server for paper-writing + presentation, and since
+    # presentation merged into paper-writing (2026-07-17), figure follows.
+    # Its figure_* / paper_figure_* tools are now served by
+    # mcp-server-paper-writing (see the paper-writing entry below); the
+    # radia_mcp.figure module remains the implementation home.
+    "chart2d": {
+        "subpackage": "radia_mcp.chart2d",
+        "entry_point": "mcp-server-chart2d",
+        "description": "22 paper-quality 2D charts as MCP tools: line / "
+                       "loglog / semilog / step / errorbar / fill_between"
+                       " / bode / histogram / bar / box / violin / ecdf /"
+                       " contour / contourf / pcolormesh / quiver / "
+                       "streamplot / imshow / polar / scatter / phase "
+                       "(Nyquist).  Each accepts return_mode='recipe' "
+                       "(Python text) | 'image' (MCP Image inline) | "
+                       "'both'.  Inherits radia_mcp.figure profile + "
+                       "gate stack.",
+        "primary_tools": ["chart2d_catalog", "chart2d_line", "chart2d_bode",
+                            "chart2d_scatter", "chart2d_contourf"],
+        "related": ["paper-writing"],
+        "tags": ["meta"],
+    },
+    "paper-writing": {
+        "subpackage": "radia_mcp.paper_writing",
+        "entry_point": "mcp-server-paper-writing",
+        "description": "Journal paper / digest writing helpers: IMRaD, "
+                       "abstract, citation, figure, equation, PDF layout, "
+                       "and reviewer-trigger lints. Also serves the merged "
+                       "presentation_* slide lint + PPTX tools (2026-07-17) "
+                       "and the merged figure_* / paper_figure_* "
+                       "publication-figure tools (2026-07-18: the standalone "
+                       "presentation and figure servers were retired -- AI "
+                       "cannot yet author slide decks end-to-end, and figure "
+                       "was a shared middle layer now unified here).",
+        "primary_tools": ["paper_writing_usage",
+                            "paper_writing_health_report",
+                            "paper_writing_em_submission_gate",
+                            "presentation_usage",
+                            "presentation_health_report",
+                            "presentation_extract_pptx_text",
+                            "figure_style_guide",
+                            "paper_figure_profiles"],
+        "related": [
+            "grant-writing",
+            "poster",
+            "document-meta",
+            "chart2d",
+            "pdf",
+            "bibliography",
+            "research-project",
+        ],
+        "tags": ["meta"],
+    },
+    "grant-writing": {
+        "subpackage": "radia_mcp.grant_writing",
+        "entry_point": "mcp-server-grant-writing",
+        "description": "Grant proposal helpers: Japanese technical-prose "
+                       "lint, explicit manuscript/grant genre routing, and "
+                       "Japanese-only grant readability scoring, "
+                       "section coverage, budget alignment, "
+                       "internal-to-external scale, collaborative-integration "
+                       "risk, tool-to-domain outcomes, derived-metric "
+                       "validation, cross-organization pilots, "
+                       "literature-gap evidence scope, named-software "
+                       "abstraction, reviewer vocabulary, benchmark role, "
+                       "persuasion hierarchy, equation introductions, and "
+                       "internal-memo shorthand, "
+                       "KAKENHI review-format realities (monochrome "
+                       "printing, human-rights box, researchmap-era "
+                       "publication identification, funding-overlap box), "
+                       "central-claim consistency between summary and body, "
+                       "recommendation-letter "
+                       "template, and KDDI Digital Innovation and KAKENHI "
+                       "OSS-platform checks.",
+        "primary_tools": ["grant_writing_usage",
+                            "grant_writing_health_report",
+                            "grant_writing_japanese_genre_contract",
+                            "grant_writing_japanese_readability_score",
+                            "grant_writing_kddi_digital_check",
+                            "grant_writing_kaken_oss_platform_check",
+                            "grant_writing_kaken_review_format_check",
+                            "grant_writing_central_claim_consistency_check",
+                            "grant_writing_internal_evidence_to_external_scale_check",
+                            "grant_writing_domain_outcome_chain_check",
+                            "grant_writing_derived_metric_validation_check",
+                            "grant_writing_cross_organization_pilot_check",
+                            "grant_writing_named_software_abstraction_check",
+                            "grant_writing_reviewer_vocabulary_check",
+                            "grant_writing_persuasion_quality_check",
+                            "grant_writing_literature_gap_evidence_check",
+                            "grant_writing_collaborative_integration_risk_check",
+                            "grant_writing_recommendation_letter_template"],
+        "related": ["paper-writing", "document-meta"],
+        "tags": ["meta"],
+    },
+    # "presentation" was a standalone server until 2026-07-17; its
+    # presentation_* tools are now served by mcp-server-paper-writing
+    # (see the paper-writing entry above). The radia_mcp.presentation
+    # module remains the implementation home.
+    "poster": {
+        "subpackage": "radia_mcp.poster",
+        "entry_point": "mcp-server-poster",
+        "description": "Conference poster generation and lint: templates, "
+                       "viewing-distance font size, color contrast, zone "
+                       "balance, QR audit, and print readiness.",
+        "primary_tools": ["poster_health_report", "poster_compile", "poster_lint",
+                            "poster_health_report"],
+        "related": [
+            "paper-writing",
+            "document-meta",
+        ],
+        "tags": ["meta"],
+    },
+    "literature-index": {
+        "subpackage": "radia_mcp.literature_index",
+        "entry_point": "mcp-server-literature-index",
+        "description": "★ Meta-MCP: full-text search across 3,889 lab "
+                       "literature files in public-safe curated corpus",
+        "primary_tools": ["literature_search", "literature_by_folder",
+                            "literature_folder_tree", "literature_stats",
+                            "literature_semantic_search"],
+        "related": ["meta", "md2html", "bibliography"],
+        "tags": ["meta"],
+    },
+    "document-meta": {
+        "subpackage": "radia_mcp.document_meta",
+        "entry_point": "mcp-server-document-meta",
+        "description": "Cross-cutting document helpers: deadline, version "
+                       "diff, templates, lint-all, and result-saving "
+                       "notebook/WebGUI audits.",
+        "primary_tools": [
+            "document_meta_notebook_result_audit",
+            "document_meta_notebook_citation_audit",
+            "document_meta_lint_all",
+        ],
+        "related": [
+            "meta",
+            "paper-writing",
+            "grant-writing",
+            "poster",
+            "pdf",
+            "doc-convert",
+            "research-project",
+        ],
+        "tags": ["meta"],
+    },
+    "pdf": {
+        "subpackage": "radia_mcp.pdf",
+        "entry_point": "mcp-server-pdf",
+        "description": "PDF inspection, text extraction, compression, cropping, metadata, and font-embedding checks.",
+        "primary_tools": ["pdf_inspect", "pdf_extract_text", "pdf_health_report"],
+        "related": ["document-meta", "paper-writing", "doc-convert"],
+        "tags": ["meta"],
+    },
+    "doc-convert": {
+        "subpackage": "radia_mcp.doc_convert",
+        "entry_point": "mcp-server-doc-convert",
+        "description": "Document conversion and extraction helpers for slides, speaker notes, title images, and OCR workflows.",
+        "primary_tools": ["doc_convert_classify", "doc_convert_extract_slides", "doc_convert_extract_speaker_notes"],
+        "related": ["document-meta", "pdf"],
+        "tags": ["meta"],
+    },
+    "bibliography": {
+        "subpackage": "radia_mcp.bibliography",
+        "entry_point": "mcp-server-bibliography",
+        "description": "Bibliography conversion, normalization, deduplication, lint, and citation validation.",
+        "primary_tools": ["bibliography_lint", "bibliography_dedupe", "bibliography_cite_validation"],
+        "related": ["paper-writing", "literature-index"],
+        "tags": ["meta"],
+    },
+    "research-project": {
+        "subpackage": "radia_mcp.research_project",
+        "entry_point": "mcp-server-research-project",
+        "description": "Research-project scanning, consistency checks, deadline planning, and health dashboards.",
+        "primary_tools": ["research_project_scan", "research_project_consistency_check", "research_project_health_dashboard"],
+        "related": ["document-meta", "paper-writing"],
+        "tags": ["meta"],
+    },
+
+    # ============================================================
+    # Meta (the catalog itself — recommended first call)
+    # ============================================================
+    "meta": {
+        "subpackage": "radia_mcp.meta",
+        "entry_point": "mcp-server-radia-meta",
+        "description": "★ RECOMMENDED FIRST CALL. Cross-server catalog "
+                       "of all radia_mcp.* servers — answers \"which "
+                       "tool covers concept X?\" without trial-and-error.",
+        "primary_tools": ["radia_mcp_overview", "radia_mcp_get",
+                            "radia_mcp_by_tag", "radia_mcp_related",
+                            "radia_mcp_health",
+                            "radia_mcp_validate_solver_artifact"],
+        "related": ["literature-index", "document-meta"],
+        "tags": ["meta"],
+    },
+
+    # ============================================================
+    # Panel review (Radia Simulink application-block contract)
+    # ============================================================
+    "panel-review": {
+        "subpackage": "radia_mcp.panel_review",
+        "entry_point": "mcp-server-panel-review",
+        "description": "Radia Simulink application-block review and construction "
+                       "contract (DesignSpec / masks / typed ports / result "
+                       "artifacts / validation / no-PySide gate).",
+        "primary_tools": ["panel_review"],
+        "related": ["electromagnet", "ih", "motor"],
+        "tags": ["meta"],
+    },
+}
+
+
+# ============================================================
+# External lab MCP packages — not in CATALOG (different PyPI dists,
+# different repos), but reported alongside for cross-team discovery.
+# Listed here so radia_mcp_overview() surfaces them as "you may also
+# want to install ...". Not subject to the per-server status-tool
+# policy (different repos, different conventions).
+# ============================================================
+EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
+    "cubit": {
+        "pypi": "cubit-mesh-export",
+        "github": "https://github.com/ksugahar/Radia",
+        "install": "pip install cubit-mesh-export",
+        "subpackage": "cubit_mesh_export.mcp",
+        "entry_point": "mcp-server-cubit",
+        "selftest_command": "mcp-server-cubit --selftest",
+        "audit_command": "mcp-server-cubit --selftest --audit-repo",
+        "description": "Independent Cubit APREPRO/headless meshing, export and MCP; no Radia required.",
+        "related": ["build123d", "gmsh", "radia-ngsolve", "topology-optimization"],
+    },
+    "optuna-mcp": {
+        "pypi": "optuna-mcp",
+        "github": "https://github.com/optuna/optuna-mcp",
+        "install": "pip install --upgrade optuna optuna-mcp",
+        "entry_point": "optuna-mcp",
+        "description": "Official Optuna MCP server for Study, Trial, "
+                       "Visualization, and Dashboard operations. Use "
+                       "`--storage sqlite:///C:/temp/optuna_mcp.db` for "
+                       "persistent lab sessions.",
+        "owns": "Every shared Optuna operation present in the live MCP tools/list response.",
+        "radia_difference_tool": "mcp-server-radia-matlab:matlab_optuna_mcp_route",
+        "license": "MIT",
+        "validation_storage": "fresh per-run temporary SQLite database",
+        "automated_dashboard": False,
+        "related": [
+            "bayesian-opt",
+            "evolutionary",
+            "topology-optimization",
+            "radia-streamfunction",
+            "radia-matlab",
+        ],
+    },
+    "elf": {
+        "pypi": "mcp-server-elf",
+        "github": "https://github.com/ksugahar/mcp-server-elf",
+        "install": "pip install mcp-server-elf",
+        "entry_point": "mcp-server-elf",
+        "description": "ELF600 BEM electromagnetic analysis docs "
+                       "(MAGIC magnetostatic / ELFIN electrostatic / "
+                       "BEAM particle tracking) — 16 tools + 1 prompt "
+                       "over help HTM, examples, vendor wiki, ctypes API.",
+        "related": ["radia-ngsolve", "motor", "mor"],
+    },
+    "mcp-server-document": {
+        "pypi": "(LAB-private, not on PyPI)",
+        "github": "(internal: public-safe curated corpus)",
+        "install": "pip install -e public-safe curated corpus",
+        "entry_point": "mcp-server-document",
+        "description": "Paper/grant/poster/presentation writing helpers "
+                       "(grant_writing_*, paper_writing_*, poster_*, "
+                       "presentation_*, bibliography_*, pdf_*, ocr_*) — "
+                       "thousands of skill-chain tools for academic "
+                       "document QA. Lab-only.",
+        "related": [],
+    },
+}
+
+
+# Aliases: CLI script names (mcp-server-<X>) and underscore / hyphen
+# variants resolve to the catalog short name.  Without these, a user
+# who remembered the CLI binary name ('mcp-server-radia-meta') would
+# call `radia_mcp_get('radia-meta')` and get "Unknown server", because
+# the catalog uses short names like 'meta' (the 'radia-' prefix is only
+# in the CLI script name, not the catalog key).
+#
+# Rule of thumb: any string a user might reasonably type to refer to a
+# server -- the CLI suffix, the underscore subpackage name, the
+# hyphen short name -- should resolve to the same CATALOG entry.
+from ..capability_packs import PACKS, modules_for
+
+for _pack, _spec in PACKS.items():
+    CATALOG[_pack] = {
+        "subpackage": f"radia_mcp.{_pack.replace('-', '_')}",
+        "entry_point": f"mcp-server-{_pack}",
+        "description": _spec["description"],
+        "primary_tools": ["capability_pack_status"],
+        "related": [],
+        "tags": ["meta"],
+        "kind": "capability-pack",
+        "profiles": ["all", *[p for p in _spec["profiles"] if p != "all"]],
+        "members": list(modules_for(_pack)),
+    }
+
+# Keep old entry points during migration; expose recommended replacements.
+for _name, _info in CATALOG.items():
+    if _name in PACKS:
+        continue
+    _module = _info["subpackage"].removeprefix("radia_mcp.")
+    _packs = [p for p in PACKS if _module in modules_for(p)]
+    if _packs:
+        _info["capability_packs"] = _packs
+CATALOG["grant-writing"]["integrated_into"] = "paper-writing"
+CATALOG["poster"]["integrated_into"] = "paper-writing"
+
+_ALIASES = {
+    "mcp-server-radia-spice-lab": "radia-ltspice",
+    "mcp-spice-circuit-lab": "radia-ltspice",
+    "mcp-ltspice": "radia-ltspice",
+    # CLI-name -> catalog key
+    "radia-meta": "meta",
+    "radia_meta": "meta",
+    # 2026-07-17: presentation merged into paper-writing (standalone
+    # server retired); keep the old name resolving for discovery.
+    "presentation": "paper-writing",
+    "mcp-server-presentation": "paper-writing",
+    # 2026-07-18: figure merged into paper-writing (standalone server
+    # retired); keep the old names resolving for discovery.
+    "figure": "paper-writing",
+    "mcp-server-figure": "paper-writing",
+}
+# Auto-generate underscore variants for every hyphenated catalog key
+# (e.g. 'magnetic-materials' resolves from both 'magnetic-materials' and
+# 'magnetic_materials').  Done once at module import to keep `get()` O(1).
+for _k, _info in CATALOG.items():
+    if "-" in _k:
+        _ALIASES.setdefault(_k.replace("-", "_"), _k)
+    _command = _info["entry_point"]
+    _server_id = _command.removeprefix("mcp-server-")
+    _ALIASES.setdefault(_server_id, _k)
+    _ALIASES.setdefault(_server_id.replace("-", "_"), _k)
+    _ALIASES.setdefault(_command, _k)
+del _k, _info, _command, _server_id  # don't leak loop variables
+
+
+def _resolve(name: str) -> str | None:
+    """Resolve a user-typed name to a canonical CATALOG key.
+
+    Accepts: catalog short names ('meta'), CLI-script suffixes
+    ('radia-meta'), and underscore variants ('radia_meta',
+    'magnetic_materials').  Returns None if no match.
+    """
+    if name in CATALOG:
+        return name
+    if name in _ALIASES:
+        return _ALIASES[name]
+    # Last-ditch: try the mcp-server-<name> prefix-stripped form
+    if name.startswith("mcp-server-"):
+        stripped = name[len("mcp-server-"):]
+        if stripped in CATALOG:
+            return stripped
+        if stripped in _ALIASES:
+            return _ALIASES[stripped]
+    return None
+
+
+def _resolve_external(name: str) -> str | None:
+    """Resolve a user-typed name to an EXTERNAL_PACKAGES key."""
+    if name in EXTERNAL_PACKAGES:
+        return name
+    if name.startswith("mcp-server-"):
+        stripped = name[len("mcp-server-"):]
+        if stripped in EXTERNAL_PACKAGES:
+            return stripped
+    return None
+
+
+def _entry(name: str, info: dict[str, Any]) -> dict[str, Any]:
+    """Return a public catalog entry with uniform runtime commands."""
+    out = {"name": name, **info}
+    entry_point = info.get("entry_point")
+    if entry_point:
+        server_id = entry_point.removeprefix("mcp-server-")
+        out.setdefault("server_id", server_id)
+        out.setdefault("product_name", f"radia-mcp.{server_id}")
+        out.setdefault("python_name", info.get("subpackage"))
+        out.setdefault("command", entry_point)
+        out.setdefault("selftest_command", f"{entry_point} --selftest")
+    return out
+
+
+def list_all() -> list[dict]:
+    """Return catalog entries as a flat list."""
+    return [_entry(n, info) for n, info in CATALOG.items()]
+
+
+def list_external() -> list[dict]:
+    """Separately distributed MCP packages, including monorepo siblings."""
+    return [{"name": n, **info} for n, info in EXTERNAL_PACKAGES.items()]
+
+
+def get(name: str) -> dict | None:
+    """Look up a single server by short name, CLI-name, or alias.
+
+    Resolves aliases first so callers can pass any of:
+        'meta'           - catalog short name
+        'radia-meta'     - CLI script suffix (mcp-server-radia-meta)
+        'radia_meta'     - underscore-variant
+        'mcp-server-meta' - full CLI name
+    """
+    key = _resolve(name)
+    return _entry(key, CATALOG[key]) if key else None
+
+
+def find_by_tag(tag: str) -> list[dict]:
+    """All servers tagged with `tag` (e.g. 'optimization')."""
+    return [
+        _entry(n, info)
+        for n, info in CATALOG.items()
+        if tag in info.get("tags", [])
+    ]
+
+
+def find_related(name: str) -> list[dict]:
+    """Servers/packages listed as `related` of `name` (alias-aware).
+
+    External packages are not part of ``CATALOG`` and are therefore not
+    imported or self-tested here.  They are still returned from related lookup
+    so the meta server can steer agents from a radia-mcp knowledge lane to the
+    official external MCP that should own a workflow, e.g. Optuna study/trial
+    operation.
+    """
+    key = _resolve(name)
+    ext_key = _resolve_external(name)
+    if key is None and ext_key is None:
+        return []
+    info = CATALOG.get(key) if key is not None else EXTERNAL_PACKAGES.get(ext_key)
+    if not info:
+        return []
+
+    related = []
+    for r in info.get("related", []):
+        if r in CATALOG:
+            related.append(_entry(r, CATALOG[r]))
+        elif r in EXTERNAL_PACKAGES:
+            related.append({"name": r, "external": True, **EXTERNAL_PACKAGES[r]})
+
+    if key is not None:
+        for ext_name, ext_info in EXTERNAL_PACKAGES.items():
+            if key in ext_info.get("related", []):
+                related.append({"name": ext_name, "external": True, **ext_info})
+
+    return related

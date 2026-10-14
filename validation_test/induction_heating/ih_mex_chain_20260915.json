@@ -1,0 +1,55 @@
+{
+  "passed": true,
+  "scope": "real weak BEM -> production thermal assembly -> MEX; in-memory coarse axisymmetric geometry represented by 3D volume",
+  "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
+  "cases": [
+    {
+      "name": "solid",
+      "nodes": 565,
+      "steps": 100,
+      "unit_power_W": 1.9101073235059936E-5,
+      "assembled_power_W": 1.910107323506001E-5,
+      "max_temperature_difference_K": 2.0103243514313363E-9,
+      "max_relative_temperature_rise_error": 2.0570848008572164E-7,
+      "heat_vector_relative_error": 0,
+      "source_sha256": {
+        "validation_test_induction_heating_prepare_ih_mex_chain_py": "6cb0860daab42acf777a1751a8d1f38be16d3ef9a134759d035569cbefa22f60",
+        "src_radia_panels_calc_inductance_py": "3ca59dc0ad004136d36c2948cfaaf576733f6813fc53523825f64666a58eaf85",
+        "src_radia_simulink_ih_operator_assembly_py": "3298ab87a45ac05481e4d498cee6dcfb764f67a8211f5c3556fcea751a752a2c",
+        "src_radia_bem_sibc_solver_py": "6e8fc66ee9b1b54ada1bc0947b5c8f9483c3c15f8a25e9ca4d8a286d8dc8513d",
+        "src_radia_bem_loop_extension_py": "334661c502aaac803b5489f5e3ca3e1b39e0e3a687434788997c196098b48337",
+        "src_radia_workpiece_surface_py": "f40c6db4137a9fe612ebd2da03a3395890d8f9bd5647295109593d79da102b9c"
+      }
+    },
+    {
+      "name": "bored",
+      "nodes": 622,
+      "steps": 100,
+      "unit_power_W": 1.9062500905205424E-5,
+      "assembled_power_W": 1.9062500905205418E-5,
+      "max_temperature_difference_K": 1.4709939932799898E-9,
+      "max_relative_temperature_rise_error": 1.8045207775312944E-7,
+      "heat_vector_relative_error": 0,
+      "source_sha256": {
+        "validation_test_induction_heating_prepare_ih_mex_chain_py": "6cb0860daab42acf777a1751a8d1f38be16d3ef9a134759d035569cbefa22f60",
+        "src_radia_panels_calc_inductance_py": "3ca59dc0ad004136d36c2948cfaaf576733f6813fc53523825f64666a58eaf85",
+        "src_radia_simulink_ih_operator_assembly_py": "3298ab87a45ac05481e4d498cee6dcfb764f67a8211f5c3556fcea751a752a2c",
+        "src_radia_bem_sibc_solver_py": "6e8fc66ee9b1b54ada1bc0947b5c8f9483c3c15f8a25e9ca4d8a286d8dc8513d",
+        "src_radia_bem_loop_extension_py": "334661c502aaac803b5489f5e3ca3e1b39e0e3a687434788997c196098b48337",
+        "src_radia_workpiece_surface_py": "f40c6db4137a9fe612ebd2da03a3395890d8f9bd5647295109593d79da102b9c"
+      }
+    }
+  ],
+  "native_build": {
+    "schema": "radia.native-build-provenance.v1",
+    "source_commit": "7a139b7aff51823a2118e15441b68fb47fc80abb",
+    "source_dirty": false,
+    "source_change_fingerprint_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+    "binary_name": "radia_mex.mexw64",
+    "binary_bytes": 3.876864E+6,
+    "binary_sha256": "b3ff42114217544cc7ff3b984f0273a88758b16b9cb51049592efb334da839f8",
+    "generated_at_utc": "2026-09-14T06:30:13.4712798+00:00"
+  },
+  "handles_before": 0,
+  "handles_after": 0
+}

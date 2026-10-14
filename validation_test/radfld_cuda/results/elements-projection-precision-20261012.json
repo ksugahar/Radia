@@ -1,0 +1,1428 @@
+{
+  "schema": "radia.radfld-elements-projection-precision.v1",
+  "accepted": true,
+  "scope": "Five retained analytic/high-order/curved source families, actual order-1 SetValues projection in three spaces; small independently authored cases only",
+  "host_role": "100 numerical validation; incidental times diagnostic",
+  "a100_used": false,
+  "relative_limit": 0.0001,
+  "maximum_field_relative_error": 6.640520375673319e-05,
+  "maximum_projected_FE_L2_relative_error": 6.640522201207661e-05,
+  "maximum_FP32_added_field_difference": 1.1093688366264214e-07,
+  "common_provenance": {
+    "field_build": {
+      "schema": "radia.field-cuda-build.v1",
+      "source_commit": "76e9bb885b67a97271789656b68a049e07e1a20c",
+      "source_dirty": false,
+      "source_sha256": {
+        "src/core/rad_hdiv_field_evaluator.cpp": "3abe79905362bb4c943aace95e62f7b87315c7d8eaf792fa1c8db3f14999a32f",
+        "src/core/rad_hdiv_vim.cpp": "397d692d21210d49e9389b8a9313260375fe0dbb055bfe7815d8f78fc5a87a06",
+        "src/core/rad_hdiv_field_evaluator.h": "69295403af30540232b966508866b731b4a24ba29ee7ee2498bb1aa85449e562",
+        "src/core/rad_hdiv_vim.h": "bcc63c34546f21ab8fd65e39e6b6668fe687b217d62c1d61229653b5cad19308",
+        "src/core/rad_field_cloud_kernel.h": "af0fc87f58921c6368e5fbb448b372bea7fe40eef2bcff77f9508e09de374834",
+        "src/core/rad_field_sources.h": "28bbbd100a2bcdc01c71cedfff2756548427226ead2dcd7aae5b5510dafd4029",
+        "src/core/rad_field_source_kernel.inc": "cb8bec501a06ad1d80712371fb4b7c97d4edcb7cb14a8aa67e22ea0cf4919fb8",
+        "src/core/rad_hdiv_field_math.inc": "082adedb5c9a80d222bea026f4756aa4ea14d1e127774a4a7aff7867f8e8205e",
+        "src/core/rad_hdiv_field_kernel_api.inc": "18eb7b6468488c92a6e84a0be6ca7a97ddc6ab5eb4d0342b3453f210d024d589",
+        "packages/radia-gpu/native/radia_cuda_field.cu": "dcb63c5ec244044f3eb330d16e033e7c5801f6780b1e8c30142e96a0ea852f7e",
+        "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127",
+        "packages/radia-gpu/tools/build_field_cuda.py": "b843345462848eec25d299fe789b0a43291bfbe6057850c8fd023bd52adff9e8",
+        "Build.ps1": "506fc6e1d4f5889e51d858f00cbb7404081c86946c00abaf923c05c76c3f8218"
+      },
+      "binary_sha256": "54bd6cc7c95e41ccce2c5b6524cb9e6cb163cb267983c2ac602d0c40563e7f68",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "cuda_targets": [
+        "sm_75",
+        "sm_80",
+        "compute_80 PTX"
+      ],
+      "source_representation": "existing retained point cloud only",
+      "cpu_fallback": false,
+      "python_runtime_required": false,
+      "taskmanager_regions": false
+    },
+    "cpu_field_reference": {
+      "schema": "radia.field-cpu-reference.v1",
+      "source_commit": "69301918ac79deae6deab652e0a68b633c3ee0c6",
+      "source_sha256": {
+        "rad_hdiv_field_evaluator.cpp": "db4912925731c3b41a04bdfda44622c55ff85634bc0062a3b5f65a6c91a7b8be",
+        "rad_hdiv_field_evaluator.h": "c9a821ad8d52a312e3f1a4f3b0681ae1fbee0144f55206cfee09c72573e6c56e",
+        "rad_hdiv_vim.cpp": "a6bc36adc49fda5e5ae494a14db4189b5bdc8eb1162b00c6ceb220359bd57a46",
+        "rad_hdiv_vim.h": "171b9ee542ec6bc752826e10fd80377b8d4d5019e78b2d219f4b987944af154a",
+        "rad_parallel.h": "0ad545213c48b7a0f5df1c59d46e33a4c7e85fca62eab0637c0154d940110ed5"
+      },
+      "adapter_sha256": "0f6b110621688b554ca5bcee0d2a2adcdb10834bf9a744b3e68dd78fc95296f2",
+      "binary_sha256": "c8c48a96f393c08c1a394479544831f819355a6c13bdc9a8b785b9f555124730",
+      "ngsolve": "6.2.2607",
+      "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]"
+    },
+    "binary_sha256": "b6e2a6bea57a987f36380d25651733d7b9aa84518305dabad80a3d87bb5934e0",
+    "ngsolve": "6.2.2607"
+  },
+  "checks": [
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "tet",
+      "placement": "far",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "input_sha256": {
+        "volume_origins": "99ccf3672cb2f429298eb5738a1244ebb3ffd8d83f995f0384fa42c33b749cfc",
+        "surface_origins": "99ccf3672cb2f429298eb5738a1244ebb3ffd8d83f995f0384fa42c33b749cfc",
+        "volume": "caa6aa6b1e5991251998c48f58e8e3e29f9639c06880211533f75258752a89c2",
+        "surface": "05ce98dc7f0229f59548bc0ea9aa90598df28f961993fa1adbbcf4988c3b26ca",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "polynomial_tet",
+      "placement": "far",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "input_sha256": {
+        "volume_origins": "99ccf3672cb2f429298eb5738a1244ebb3ffd8d83f995f0384fa42c33b749cfc",
+        "surface_origins": "99ccf3672cb2f429298eb5738a1244ebb3ffd8d83f995f0384fa42c33b749cfc",
+        "volume": "8f2f61c22f54b1e4e3c014c2e5644aca1281e2261f8ec9c5bb4b94a97d7f7e53",
+        "surface": "8407360a17f53c6e2d40b62080a3e869b7626fe8373a9c46bd51d990fe51189e",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "cubic_tet",
+      "placement": "far",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "input_sha256": {
+        "volume_origins": "99ccf3672cb2f429298eb5738a1244ebb3ffd8d83f995f0384fa42c33b749cfc",
+        "surface_origins": "99ccf3672cb2f429298eb5738a1244ebb3ffd8d83f995f0384fa42c33b749cfc",
+        "volume": "8f2f61c22f54b1e4e3c014c2e5644aca1281e2261f8ec9c5bb4b94a97d7f7e53",
+        "surface": "c7fab1c386c427dd4a648d45a0bffcad55c8cc8cbe1e96350ca3a2fa33584037",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "sextic_quartic_tet",
+      "placement": "far",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "input_sha256": {
+        "volume_origins": "99ccf3672cb2f429298eb5738a1244ebb3ffd8d83f995f0384fa42c33b749cfc",
+        "surface_origins": "99ccf3672cb2f429298eb5738a1244ebb3ffd8d83f995f0384fa42c33b749cfc",
+        "volume": "e9676849d2c7594e2a213eb35b4a78c2e9863be6533c722b2b100dc7026fbf04",
+        "surface": "9dfe34a6a619f6812772590a1c6a63b2e7a5bc7165858c1547aacbb2ddaff448",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "curved_tet",
+      "placement": "far",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "algorithm": "direct",
+          "source_count": 4,
+          "relative_FE_L2_error": 0.0,
+          "gpu_projection_relative_error": 0.0,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "input_sha256": {
+        "gauss_points": "0f6e7e85d965e1a32c6c8730695142f439b300d0fdbfe9f27b6c4b5212306f59",
+        "gauss_weights": "126849b533c1507dea6b499a6e140ef3f527a2991ccb1d53ed1072a4c4097155",
+        "volume": "a19d81a2750313740e3a1edf31e031c22d120437166baad64c52aac26ddca70a",
+        "surface": "a5add2ca34a95513764f43534758c16d9827a68e92ceaefe464244300945c08f",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "tet",
+      "placement": "native",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 1.0188154027710086e-16,
+          "device_memory": {
+            "owned_peak_bytes": 3408.0,
+            "persistent_owned_bytes": 2256.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 16000221184.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0286713
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 3.8296677040273097e-16,
+          "gpu_projection_relative_error": 4.026415360398339e-16,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 1.0188154027710086e-16,
+          "device_memory": {
+            "owned_peak_bytes": 3408.0,
+            "persistent_owned_bytes": 2256.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0050882
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 4.2136943235564835e-16,
+          "gpu_projection_relative_error": 2.770162294329683e-16,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 1.0188154027710086e-16,
+          "device_memory": {
+            "owned_peak_bytes": 3408.0,
+            "persistent_owned_bytes": 2256.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0052745
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 1.4641955614780278e-16,
+          "gpu_projection_relative_error": 1.6059650871627373e-16,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "input_sha256": {
+        "volume_origins": "9f33e165828fcb3a271159f6301306516eabb9618cd158dc45973878abc2dcdc",
+        "surface_origins": "9f33e165828fcb3a271159f6301306516eabb9618cd158dc45973878abc2dcdc",
+        "volume": "686d8d39d6b7628b3f35b514cdf7db44fd8a80f82ae02325367fd156f6551ae3",
+        "surface": "fcae25141e8e787c56f3f10df877d10f67a4db33bb455a4a85175e1488ea0e8a",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "polynomial_tet",
+      "placement": "native",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 1.4611892059108466e-17,
+          "device_memory": {
+            "owned_peak_bytes": 3408.0,
+            "persistent_owned_bytes": 2256.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 16000221184.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0281343
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 2.0567979357893666e-16,
+          "gpu_projection_relative_error": 1.0826406744024352e-16,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 1.4611892059108466e-17,
+          "device_memory": {
+            "owned_peak_bytes": 3408.0,
+            "persistent_owned_bytes": 2256.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0049306
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 3.463658699887373e-16,
+          "gpu_projection_relative_error": 2.875447971848485e-16,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 1.4611892059108466e-17,
+          "device_memory": {
+            "owned_peak_bytes": 3408.0,
+            "persistent_owned_bytes": 2256.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0050645
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 2.3505781063446855e-17,
+          "gpu_projection_relative_error": 3.076513462503636e-17,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "input_sha256": {
+        "volume_origins": "9f33e165828fcb3a271159f6301306516eabb9618cd158dc45973878abc2dcdc",
+        "surface_origins": "9f33e165828fcb3a271159f6301306516eabb9618cd158dc45973878abc2dcdc",
+        "volume": "43f1b89c1340fbe2f3f5d7732a4c4cd8d0140466ebcbfd411a32d1e58deafa83",
+        "surface": "f83e971169566738dbd008e61c0d300dccfacb5bde4c49def7a012a9ce078763",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "cubic_tet",
+      "placement": "native",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 7.164451141127769e-17,
+          "device_memory": {
+            "owned_peak_bytes": 3776.0,
+            "persistent_owned_bytes": 2624.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 16000221184.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0287152
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 3.6625928313417824e-16,
+          "gpu_projection_relative_error": 5.023336229892312e-16,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 7.164451141127769e-17,
+          "device_memory": {
+            "owned_peak_bytes": 3776.0,
+            "persistent_owned_bytes": 2624.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.005077
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 2.7990987214729533e-16,
+          "gpu_projection_relative_error": 3.8717947490795956e-16,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 7.164451141127769e-17,
+          "device_memory": {
+            "owned_peak_bytes": 3776.0,
+            "persistent_owned_bytes": 2624.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0056075
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 1.4127762601561735e-16,
+          "gpu_projection_relative_error": 2.0131634695023707e-16,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "input_sha256": {
+        "volume_origins": "9f33e165828fcb3a271159f6301306516eabb9618cd158dc45973878abc2dcdc",
+        "surface_origins": "9f33e165828fcb3a271159f6301306516eabb9618cd158dc45973878abc2dcdc",
+        "volume": "43f1b89c1340fbe2f3f5d7732a4c4cd8d0140466ebcbfd411a32d1e58deafa83",
+        "surface": "c7e1515e0ab92e73cc7968ec9aaf0b2806fb51cd45f56d031443c3e06cf321e6",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "sextic_quartic_tet",
+      "placement": "native",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 3.953511045015523e-17,
+          "device_memory": {
+            "owned_peak_bytes": 3776.0,
+            "persistent_owned_bytes": 2624.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 16000221184.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0606105
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 3.62987798417819e-16,
+          "gpu_projection_relative_error": 2.1991896815875227e-16,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 3.953511045015523e-17,
+          "device_memory": {
+            "owned_peak_bytes": 3776.0,
+            "persistent_owned_bytes": 2624.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0322448
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 5.723506027331279e-16,
+          "gpu_projection_relative_error": 4.230366610621439e-16,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 3.953511045015523e-17,
+          "device_memory": {
+            "owned_peak_bytes": 3776.0,
+            "persistent_owned_bytes": 2624.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0321232
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 6.144178542518188e-17,
+          "gpu_projection_relative_error": 6.335292811882912e-17,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "input_sha256": {
+        "volume_origins": "9f33e165828fcb3a271159f6301306516eabb9618cd158dc45973878abc2dcdc",
+        "surface_origins": "9f33e165828fcb3a271159f6301306516eabb9618cd158dc45973878abc2dcdc",
+        "volume": "28cdeff560e5f5cf1e7d71d45b238352ac0f5bd95529b0591e7b6551a18816d8",
+        "surface": "75ce5d0e18262f48c537cae83e189a033277e94890caafee87acb3ffd1bff091",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "curved_tet",
+      "placement": "native",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 1.586168208283912e-15,
+          "device_memory": {
+            "owned_peak_bytes": 2464.0,
+            "persistent_owned_bytes": 1312.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 16000221184.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0961943
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 2.1792898409697144e-15,
+          "gpu_projection_relative_error": 1.5573504718694819e-15,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 1.586168208283912e-15,
+          "device_memory": {
+            "owned_peak_bytes": 2464.0,
+            "persistent_owned_bytes": 1312.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0626491
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 1.779361839280072e-15,
+          "gpu_projection_relative_error": 1.3948582357722578e-15,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 1.586168208283912e-15,
+          "device_memory": {
+            "owned_peak_bytes": 2464.0,
+            "persistent_owned_bytes": 1312.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 4.0,
+            "tree_nodes": 1.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0619563
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 4,
+          "relative_FE_L2_error": 7.58141369304495e-16,
+          "gpu_projection_relative_error": 8.160522735451036e-16,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "input_sha256": {
+        "gauss_points": "0f6e7e85d965e1a32c6c8730695142f439b300d0fdbfe9f27b6c4b5212306f59",
+        "gauss_weights": "126849b533c1507dea6b499a6e140ef3f527a2991ccb1d53ed1072a4c4097155",
+        "volume": "b5916cf28e5d53b788a190e9934d2f1e547c57010487944fc93047a4991b613e",
+        "surface": "b3b6769070840911829a41f1cd6880382ac0c6108a0c0264a24e7598609dffb8",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "tet",
+      "placement": "far",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 3.598671938898653e-06,
+          "device_memory": {
+            "owned_peak_bytes": 19040.0,
+            "persistent_owned_bytes": 17888.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 16000221184.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0281099
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 9.386797865509566e-08,
+          "fp64_tree_relative_to_CPU_direct": 3.594139856140523e-06,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 19040.0,
+            "persistent_owned_bytes": 17888.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0006603
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 3.591896296003252e-06,
+          "gpu_projection_relative_error": 5.736803441693705e-06,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 3.598671938898653e-06,
+          "device_memory": {
+            "owned_peak_bytes": 19040.0,
+            "persistent_owned_bytes": 17888.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0003683
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 9.386797865509566e-08,
+          "fp64_tree_relative_to_CPU_direct": 3.594139856140523e-06,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 19040.0,
+            "persistent_owned_bytes": 17888.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0005976
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 3.612446772798202e-06,
+          "gpu_projection_relative_error": 2.536603037119502e-06,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 3.598671938898653e-06,
+          "device_memory": {
+            "owned_peak_bytes": 19040.0,
+            "persistent_owned_bytes": 17888.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0003165
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 9.386797865509566e-08,
+          "fp64_tree_relative_to_CPU_direct": 3.594139856140523e-06,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 19040.0,
+            "persistent_owned_bytes": 17888.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0001994
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 3.597196648297743e-06,
+          "gpu_projection_relative_error": 3.6045992014248172e-06,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "validator_sha256": "f437682bd2b98816bac5590b7ce4f739ded0d4427324a7a67f1d0151e50a88be",
+      "relative_limit": 0.0001,
+      "whole_transfer_inclusive_seconds": null,
+      "memory_limitations": "Exact owned device buffers and cudaMemGetInfo samples only; host/process/device global peak not measured. Incidental per-call times are diagnostic, not a continuous full-operation timing.",
+      "input_sha256": {
+        "volume_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "surface_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "volume": "86eb696274dd40061ed529e80e6566f9a4428d7df7c9cd63743840ea786d2b79",
+        "surface": "d4cf919ed1b221c8d97406377985e3583ef4bc970eabba80c993175c7fcae24f",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "polynomial_tet",
+      "placement": "far",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 8.068335288399465e-06,
+          "device_memory": {
+            "owned_peak_bytes": 19040.0,
+            "persistent_owned_bytes": 17888.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 16000221184.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0245696
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 9.003261977005273e-08,
+          "fp64_tree_relative_to_CPU_direct": 8.051078887090814e-06,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 19040.0,
+            "persistent_owned_bytes": 17888.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0004548
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 8.08191424218123e-06,
+          "gpu_projection_relative_error": 8.677845926778602e-06,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 8.068335288399465e-06,
+          "device_memory": {
+            "owned_peak_bytes": 19040.0,
+            "persistent_owned_bytes": 17888.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0005773
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 9.003261977005273e-08,
+          "fp64_tree_relative_to_CPU_direct": 8.051078887090814e-06,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 19040.0,
+            "persistent_owned_bytes": 17888.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0007507
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 8.046117448343081e-06,
+          "gpu_projection_relative_error": 7.931468901208681e-06,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 8.068335288399465e-06,
+          "device_memory": {
+            "owned_peak_bytes": 19040.0,
+            "persistent_owned_bytes": 17888.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0002372
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 9.003261977005273e-08,
+          "fp64_tree_relative_to_CPU_direct": 8.051078887090814e-06,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 19040.0,
+            "persistent_owned_bytes": 17888.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0002201
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 8.068290813390279e-06,
+          "gpu_projection_relative_error": 8.074277958039062e-06,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "validator_sha256": "f437682bd2b98816bac5590b7ce4f739ded0d4427324a7a67f1d0151e50a88be",
+      "relative_limit": 0.0001,
+      "whole_transfer_inclusive_seconds": null,
+      "memory_limitations": "Exact owned device buffers and cudaMemGetInfo samples only; host/process/device global peak not measured. Incidental per-call times are diagnostic, not a continuous full-operation timing.",
+      "input_sha256": {
+        "volume_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "surface_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "volume": "bdb257d3918d418a305afeee10763436ea7a71dc541b891af2254acbaf0841d6",
+        "surface": "12d5172255868a721c934310beed09c3ebe96290a6fe559e146b0c2020af54a1",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "cubic_tet",
+      "placement": "far",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 6.640520375673319e-05,
+          "device_memory": {
+            "owned_peak_bytes": 21984.0,
+            "persistent_owned_bytes": 20832.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 16000221184.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.024639
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 1.1093688366264214e-07,
+          "fp64_tree_relative_to_CPU_direct": 6.636879037353324e-05,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 21984.0,
+            "persistent_owned_bytes": 20832.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0002632
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 6.634828069467647e-05,
+          "gpu_projection_relative_error": 6.714593084054387e-05,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 6.640520375673319e-05,
+          "device_memory": {
+            "owned_peak_bytes": 21984.0,
+            "persistent_owned_bytes": 20832.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0004533
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 1.1093688366264214e-07,
+          "fp64_tree_relative_to_CPU_direct": 6.636879037353324e-05,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 21984.0,
+            "persistent_owned_bytes": 20832.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0007166
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 6.63954253054484e-05,
+          "gpu_projection_relative_error": 6.650270368574224e-05,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 6.640520375673319e-05,
+          "device_memory": {
+            "owned_peak_bytes": 21984.0,
+            "persistent_owned_bytes": 20832.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0002177
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 1.1093688366264214e-07,
+          "fp64_tree_relative_to_CPU_direct": 6.636879037353324e-05,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 21984.0,
+            "persistent_owned_bytes": 20832.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0005395
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 6.640522201207661e-05,
+          "gpu_projection_relative_error": 6.649949837460272e-05,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "validator_sha256": "f437682bd2b98816bac5590b7ce4f739ded0d4427324a7a67f1d0151e50a88be",
+      "relative_limit": 0.0001,
+      "whole_transfer_inclusive_seconds": null,
+      "memory_limitations": "Exact owned device buffers and cudaMemGetInfo samples only; host/process/device global peak not measured. Incidental per-call times are diagnostic, not a continuous full-operation timing.",
+      "input_sha256": {
+        "volume_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "surface_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "volume": "bdb257d3918d418a305afeee10763436ea7a71dc541b891af2254acbaf0841d6",
+        "surface": "ab743adf4900460b51beda6f5babd4f757576e1ae2b9d9dcf98d2c349d25f9a9",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "sextic_quartic_tet",
+      "placement": "far",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 3.1023633283493843e-06,
+          "device_memory": {
+            "owned_peak_bytes": 21984.0,
+            "persistent_owned_bytes": 20832.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 16000221184.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0235966
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 8.728018942137047e-08,
+          "fp64_tree_relative_to_CPU_direct": 3.111619303763639e-06,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 21984.0,
+            "persistent_owned_bytes": 20832.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.000694
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 3.0770431088812772e-06,
+          "gpu_projection_relative_error": 3.929258318370341e-06,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 3.1023633283493843e-06,
+          "device_memory": {
+            "owned_peak_bytes": 21984.0,
+            "persistent_owned_bytes": 20832.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0005256
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 8.728018942137047e-08,
+          "fp64_tree_relative_to_CPU_direct": 3.111619303763639e-06,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 21984.0,
+            "persistent_owned_bytes": 20832.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0007039
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 3.0952707100406433e-06,
+          "gpu_projection_relative_error": 2.7716801669789947e-06,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 3.1023633283493843e-06,
+          "device_memory": {
+            "owned_peak_bytes": 21984.0,
+            "persistent_owned_bytes": 20832.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0002637
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 8.728018942137047e-08,
+          "fp64_tree_relative_to_CPU_direct": 3.111619303763639e-06,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 21984.0,
+            "persistent_owned_bytes": 20832.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0003488
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 3.1015890751412325e-06,
+          "gpu_projection_relative_error": 3.097769399412028e-06,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "validator_sha256": "f437682bd2b98816bac5590b7ce4f739ded0d4427324a7a67f1d0151e50a88be",
+      "relative_limit": 0.0001,
+      "whole_transfer_inclusive_seconds": null,
+      "memory_limitations": "Exact owned device buffers and cudaMemGetInfo samples only; host/process/device global peak not measured. Incidental per-call times are diagnostic, not a continuous full-operation timing.",
+      "input_sha256": {
+        "volume_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "surface_origins": "6492bd95305afd92a8a30933e4e192af1ca3b333ab93c5c6b6642705db5997f7",
+        "volume": "899b06a4e653ffaa1f75b0cac96e42929bba40ac2bce4bf5d1dc5ea002fe7c2f",
+        "surface": "9f909a3bb910b3f7a440353be755bb6180c057e924f8b7cf423c4e19053f4447",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    },
+    {
+      "accepted": true,
+      "scope": "Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance",
+      "representation": "curved_tet",
+      "placement": "far",
+      "cases": [
+        {
+          "space": "hdiv",
+          "relative_coefficient_error": 8.829747361436512e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 2.7698557269193205e-06,
+          "device_memory": {
+            "owned_peak_bytes": 10592.0,
+            "persistent_owned_bytes": 9440.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 16000221184.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0245938
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 9.326469747669497e-08,
+          "fp64_tree_relative_to_CPU_direct": 2.7547840918104164e-06,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 10592.0,
+            "persistent_owned_bytes": 9440.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0005237
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 2.771533694180241e-06,
+          "gpu_projection_relative_error": 4.628171501553328e-06,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "hcurl",
+          "relative_coefficient_error": 1.8429889837511003e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 2.7698557269193205e-06,
+          "device_memory": {
+            "owned_peak_bytes": 10592.0,
+            "persistent_owned_bytes": 9440.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0004623
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 9.326469747669497e-08,
+          "fp64_tree_relative_to_CPU_direct": 2.7547840918104164e-06,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 10592.0,
+            "persistent_owned_bytes": 9440.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0008383
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 2.757980155722248e-06,
+          "gpu_projection_relative_error": 1.8816429334414843e-06,
+          "gpu_reuse_passed": true
+        },
+        {
+          "space": "vectorh1",
+          "relative_coefficient_error": 1.5037081003997537e-16,
+          "repeat_equal": true,
+          "targets": 24,
+          "relative_field_error": 2.7698557269193205e-06,
+          "device_memory": {
+            "owned_peak_bytes": 10592.0,
+            "persistent_owned_bytes": 9440.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0002311
+          },
+          "fp64_tree_CPU_parity": 0.0,
+          "relative_field_difference_from_FP64_tree": 9.326469747669497e-08,
+          "fp64_tree_relative_to_CPU_direct": 2.7547840918104164e-06,
+          "fp64_tree_device_memory": {
+            "owned_peak_bytes": 10592.0,
+            "persistent_owned_bytes": 9440.0,
+            "temporary_owned_bytes": 1152.0,
+            "cuda_free_before_bytes": 15433990144.0,
+            "cuda_free_after_bytes": 15433990144.0,
+            "source_count": 32.0,
+            "tree_nodes": 7.0,
+            "image_count": 0.0,
+            "total_seconds": 0.0002666
+          },
+          "algorithm": "tree_mixed32",
+          "source_count": 32,
+          "relative_FE_L2_error": 2.769480090979938e-06,
+          "gpu_projection_relative_error": 2.7653408393801908e-06,
+          "gpu_reuse_passed": true
+        }
+      ],
+      "timing_acceptance": false,
+      "a100_used": false,
+      "validator_sha256": "f437682bd2b98816bac5590b7ce4f739ded0d4427324a7a67f1d0151e50a88be",
+      "relative_limit": 0.0001,
+      "whole_transfer_inclusive_seconds": null,
+      "memory_limitations": "Exact owned device buffers and cudaMemGetInfo samples only; host/process/device global peak not measured. Incidental per-call times are diagnostic, not a continuous full-operation timing.",
+      "input_sha256": {
+        "gauss_points": "0f6e7e85d965e1a32c6c8730695142f439b300d0fdbfe9f27b6c4b5212306f59",
+        "gauss_weights": "126849b533c1507dea6b499a6e140ef3f527a2991ccb1d53ed1072a4c4097155",
+        "volume": "78fbb26dbbe0939478130c51a32eee4bdc0f4f1339da4619b3a40bc9da124250",
+        "surface": "a2c2f992ee5bab0c795e90115e890fcbd01d82227ae2c23d2be713713f265bfc",
+        "vol": "a43fa27522ae4cba948cc9f0cdb3cb3ac0b50cfa714aa5bcfac988a30be75b32"
+      },
+      "contexts_released": true
+    }
+  ],
+  "whole_transfer_inclusive_comparison": null,
+  "timing_acceptance": false,
+  "timing_status": "Pending otherwise idle host; observed CPU load 50.5 percent",
+  "limitations": [
+    "Far: 16 volume and 16 surface records; native/direct: 2 of each. Not a general geometry/conditioning guarantee.",
+    "Source and moment storage remains FP64; no storage reduction or speedup established.",
+    "Device buffer ownership is exact; sampled CUDA free memory is not a process/global peak. Host peak is unmeasured.",
+    "Historical field build receipt representation text is cloud-only; compiled module contains retained elements, whose present scope is established by these checks.",
+    "Generic Radia object dispatch, release/Simulink IH physics and larger scaling gates remain pending."
+  ]
+}

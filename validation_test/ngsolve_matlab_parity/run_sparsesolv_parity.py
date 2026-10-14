@@ -1,0 +1,138 @@
+"""Run the focused MEX tests through a private MATLAB Engine; retain JSON evidence."""
+import argparse
+import datetime
+import hashlib
+import json
+import platform
+import os
+import sys
+from pathlib import Path
+import subprocess
+import tempfile
+
+def start_owned_engine(engine_api):
+    """Start a private, CPU-bounded Engine without attaching to other sessions."""
+    return engine_api.start_matlab("-nodesktop -nosplash -singleCompThread")
+
+def record_timeout(child, output):
+    record = dict(passed=False, error="owned Engine worker timeout", worker_pid=child.pid)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(record), encoding="utf-8")
+    try:
+        # Kill only this runner's owned Engine process tree.
+        subprocess.run(["taskkill", "/PID", str(child.pid), "/T", "/F"], check=True)
+        child.wait(timeout=20)
+    except (OSError, subprocess.SubprocessError) as exc:
+        record["cleanup_error"] = str(exc)
+    finally:
+        output.write_text(json.dumps(record), encoding="utf-8")
+
+
+def main():
+    parser = argparse.ArgumentParser(__doc__)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
+    # The worker starts an owned MATLAB Engine and runs the complete MATLAB
+    # suite; on mdx1 (2026-10-02) that took 200 s and the old 240 s limit
+    # expired inside test_radiafield_mex.
+    parser.add_argument("--timeout", type=int, default=900,
+                        help="seconds to wait for the owned-Engine worker (default 900)")
+    args = parser.parse_args()
+    if not args.worker:
+        child = subprocess.Popen([sys.executable, str(Path(__file__).resolve()),
+                                  "--worker", "--output", str(args.output.resolve())])
+        try:
+            raise SystemExit(child.wait(timeout=args.timeout))
+        except subprocess.TimeoutExpired:
+            record_timeout(child, args.output)
+            raise SystemExit(124)
+    import matlab.engine
+    root = Path(__file__).resolve().parents[2]
+    if not (root/"src/radia/_radia_pybind.pyd").is_file():
+        raise RuntimeError("Build -RadiaOnly in this checkout before parity; do not borrow an editable binary")
+    os.environ["PYTHONPATH"] = str(root/"src") + os.pathsep + os.environ.get("PYTHONPATH", "")
+    mex = root / "packages/radia-gpu/matlab/radia_mex.mexw64"
+    record = dict(schema="radia.sparsesolv-matlab-parity.v1",
+                  utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                  platform_class=platform.system(), python=platform.python_version(),
+                  mex=str(mex), mex_sha256=hashlib.sha256(mex.read_bytes()).hexdigest(),
+                  source_state="Working tree snapshot; source_hashes identify tested files, not the base commit alone",
+                  source_base_commit=subprocess.check_output(["git", "-c", f"safe.directory={root.as_posix()}",
+                      "rev-parse", "HEAD"], cwd=root, text=True).strip(),
+                  source_hashes={str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
+                      for p in [root/"packages/radia-optuna/native/optuna_mex.cpp", root/"tests/matlab/test_sparsesolv_mex.m", root/"tests/matlab/test_ngsolve_sparsecholesky.m", root/"tests/matlab/test_setup_python_selection.m",
+                                root/"tests/matlab/test_mex_runtime_setup.m", root/"packages/radia-gpu/matlab/+radia/+internal/callMex.m",
+                                root/"packages/radia-gpu/matlab/+radia/setup.m",
+                                root/"tests/matlab/sparsesolv_python_reference.py",
+                                root/"packages/radia-gpu/matlab/+radia/+sparsesolv/ICCG.m",
+                                root/"src/ext/sparsesolv/include/sparsesolv/sparsesolv.hpp",
+                                root/"src/ext/sparsesolv/include/sparsesolv/ngsolve/sparsesolv_solvers.hpp",
+                                root/"tests/matlab/test_beam_transfer_mex.m",
+                                root/"tests/matlab/test_hacapk_rank_cap.m",
+                                root/"tests/matlab/test_radiafield_mex.m",
+                                root/'packages/radia-gpu/native/legacy/radia_ih_mex_commands.cpp',
+                                root/'packages/radia-gpu/matlab/+radia/+simulink/validateIHNativeConfig.m',
+                                root/'tests/matlab/test_ih_sparse_inputs.m',
+                                root/'packages/radia-gpu/matlab/+radia/+internal/nextIHNativeHandle.m',
+                                root/'packages/radia-gpu/matlab/+radia/+internal/selectedPythonExecutable.m',
+                                root/'packages/radia-gpu/matlab/+radia/+internal/resolveAssemblyPython.m',
+                                root/'packages/radia-gpu/matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m',
+                                root/'packages/radia-gpu/matlab/+radia/+simulink/addIHGeometryUpdateBlock.m',
+                                root/'packages/radia-gpu/matlab/+radia/+simulink/updateIHGeometry.m',
+                                root/'tests/matlab/test_ih_python_selection.m',
+                                root/'tests/matlab/test_ih_geometry_update.m',
+                                root/"packages/radia-gpu/matlab/+radia/RadiaField.m",
+                                root/"src/core/rad_ngsolve_radia_field.h",
+                                root/"src/ext/HACApK/cHACApK_base.c",
+                                root/"src/core/rad_hacapk_hdiv.cpp",
+                                root/"tests/matlab/beam_transfer_python_reference.py",
+                                root/"src/core/rad_beam_transfer.cpp",
+                                root/"src/lib/rad_beam_transfer_pybind.cpp",
+                                root/"packages/radia-gpu/native/legacy/radia_beam_mex_commands.cpp",
+                                *sorted((root/"src/ext/sparsesolv/include").rglob("*.hpp"))]},
+                  passed=False)
+    eng = None
+    Path("C:/temp").mkdir(parents=True, exist_ok=True)
+    scratch = tempfile.TemporaryDirectory(prefix="sparsesolv-matlab-", dir="C:/temp")
+    metrics = Path(scratch.name)/"metrics.json"
+    try:
+        eng = start_owned_engine(matlab.engine)
+        eng.setenv("RADIA_MEX_RELOAD_TEST", "1", nargout=0)
+        eng.cd(str(root), nargout=0)
+        eng.setenv("RADIA_PYTHON_EXECUTABLE", sys.executable, nargout=0)
+        eng.addpath(str(root / "packages/radia-gpu/matlab"), nargout=0)
+        eng.setenv("RADIA_SPARSESOLV_METRICS", str(metrics), nargout=0)
+        eng.eval("radia.setup(Force=true);", nargout=0)
+        record["matlab"] = eng.version()
+        record["resolved_mex"] = eng.which("radia_mex")
+        if Path(record["resolved_mex"]).resolve() != mex.resolve():
+            raise RuntimeError("MATLAB resolved a different MEX")
+        eng.workspace["testfiles"] = [str(root/"tests/matlab/test_sparsesolv_mex.m"),
+                                      str(root/"tests/matlab/test_ngsolve_sparsecholesky.m"), str(root/"tests/matlab/test_setup_python_selection.m"),
+                                      str(root/"tests/matlab/test_mex_runtime_setup.m"),
+                                      str(root/"tests/matlab/test_beam_transfer_mex.m"),
+                                      str(root/"tests/matlab/test_hacapk_rank_cap.m"),
+                                      str(root/"tests/matlab/test_ih_sparse_inputs.m"),
+                                      str(root/"tests/matlab/test_ih_python_selection.m"),
+                                      str(root/"tests/matlab/test_ih_geometry_update.m"),
+                                      str(root/"tests/matlab/test_radiafield_mex.m")]
+        eng.eval("r = runtests(testfiles); disp(table(r));", nargout=0)
+        record["tests"] = json.loads(eng.eval("jsonencode(struct('names',{string({r.Name})},'passed',[r.Passed],'failed',[r.Failed],'incomplete',[r.Incomplete],'duration',[r.Duration]))"))
+        record["passed"] = bool(eng.eval("~isempty(r) && all([r.Passed])"))
+        if metrics.is_file():
+            record["numerical"] = json.loads(metrics.read_text())
+    except Exception as exc:
+        record["error"] = str(exc)
+        raise
+    finally:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(record, indent=2), encoding="utf-8")
+        if eng is not None:
+            eng.quit()
+        scratch.cleanup()
+    if not record["passed"]:
+        raise SystemExit("MATLAB sparsesolv parity failed")
+
+
+if __name__ == "__main__":
+    main()

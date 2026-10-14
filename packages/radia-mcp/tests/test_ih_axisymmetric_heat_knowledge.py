@@ -1,0 +1,131 @@
+from radia_mcp.ih.ih_knowledge import get_induction_heating_documentation
+from radia_mcp.radia_ngsolve.knowledge.axifem import get_axifem_documentation
+
+
+def test_ih_solver_priority_distinguishes_hcurl_compound_and_thermal_spaces():
+    text = get_induction_heating_documentation("peec_bem_sibc")
+    assert "prefer AMS for p=1" in text
+    assert "BDDC with AMS coarse solve" in text
+    assert "Compound A-V" in text
+    assert "Scalar thermal H1" in text
+    assert "not a speed advantage" in text
+    normalized = " ".join(text.split())
+    assert "true relative residual gate of 1e-6" in normalized
+    assert "ICCG is refused unless it converges" in normalized
+    assert "`auto` selects `sparsecholesky` there" in normalized
+    assert "original rows removed" in normalized
+    assert "unphysical gradient load" in normalized
+    assert "pardiso" not in text.lower()
+    compound = get_induction_heating_documentation("av_coil_sigma")
+    assert 'inverse="sparsecholesky"' in compound
+    assert "Periodic Kelvin requires separate validation" in compound
+    assert "pardiso" not in compound.lower()
+    assert "pardiso" not in get_induction_heating_documentation("all").lower()
+
+
+def test_ih_thermal_knowledge_keeps_em_and_heat_spaces_separate():
+    thermal = get_induction_heating_documentation("thermal")
+    normalized = " ".join(thermal.split())
+
+    assert "Henrotte for EM, NGSolve H1 for heat" in thermal
+    assert "H1Henrotte" in thermal
+    assert "ngsolve.H1(mesh, order=2)" in thermal
+    assert "Q2 on quadrilateral meshes" in thermal
+    assert "P2 on triangular meshes" in thermal
+    assert "AxiHenrotteHeatStiffnessBFI" in thermal
+    assert "AxiHenrotteHeatMassBFI" in thermal
+    assert "fail fast on axis-touching Q2" in thermal
+    assert "--heat-flux-boundaries" in thermal
+    assert "--convection-boundaries" in thermal
+    assert "--radiation-boundaries" in thermal
+    assert "boundary_audit" in thermal
+    assert "--surface-label`` fails" in thermal
+    assert "true ``r=0`` center axis" in normalized
+    assert "zero because the weak form uses ``2*pi*r*ds``" in normalized
+    assert "solver fails fast" in normalized
+    assert "inner cylindrical surface at ``r>0``" in normalized
+    assert "Thermal `.vol` geometry contract: preserve after load" in thermal
+    assert "do NOT call wp_mesh.Curve(2)" in thermal
+    assert "preserve-input-vol-geometry" in thermal
+    assert "post_load_curve_applied=false" in thermal
+    assert "297 million times" in thermal
+
+
+def test_ih_curve_guidance_distinguishes_live_geometry_from_loaded_vol():
+    combined = get_induction_heating_documentation("gmsh_mesh")
+    normalized = " ".join(combined.split())
+
+    assert "Curve a mesh only while its generating geometry is live" in combined
+    assert "Never call `mesh.Curve()`" in combined
+    assert "after loading an arbitrary `.vol`" in normalized
+    assert "ngsolve-curve-after-vol-import" in combined
+
+
+def test_ih_pitfalls_reject_henrotte_temperature_reuse():
+    pitfalls = get_induction_heating_documentation("pitfalls")
+
+    assert "Do Not Reuse the Henrotte A_phi Space for Temperature" in pitfalls
+    assert "WRONG on an axis-touching Q2 mesh" in pitfalls
+    assert "standard scalar H1" in pitfalls
+    assert "Do not catch the" in pitfalls
+    assert "exception and fall back" in pitfalls
+
+
+def test_axifem_knowledge_routes_axisymmetric_heat_to_standard_h1():
+    support = get_axifem_documentation("support_matrix")
+    api = get_axifem_documentation("api")
+    combined = support + "\n" + api
+
+    assert "Axisymmetric heat" in combined
+    assert "ngsolve.H1(mesh, order=2)" in combined
+    assert "Q2 on quadrilateral meshes" in combined
+    assert "P2 on triangular meshes" in combined
+    assert "fail fast" in combined
+
+
+def test_ih_thermal_knowledge_fixes_cross_mesh_qsurf_handoff_to_p1():
+    thermal = get_induction_heating_documentation("thermal")
+    rotating = get_induction_heating_documentation("rotating")
+
+    assert "fixed P1 cross-mesh handoff" in thermal
+    assert "electromagnetic solve itself uses a higher order" in thermal
+    assert "always produces this handoff at order 1" in rotating
+
+
+def test_ih_thermal_knowledge_prefers_axisym_and_audits_3d_handoff():
+    thermal = get_induction_heating_documentation("thermal")
+    normalized = " ".join(thermal.split())
+
+    assert "3D EM does not require 3D heat" in thermal
+    assert "Do not select 3D heat" in normalized
+    assert "experiment constraint, not a formulation requirement" in normalized
+    assert "separately generated 2D ``(r,z)`` workpiece mesh" in normalized
+    assert "``Curve()`` changes geometry order, not dimension" in normalized
+    assert "cut at meridian arc-length bin" in normalized
+    assert "conserves the EM power" in normalized
+    assert "``--n-phi-samples`` (default 128)" in normalized
+    assert "--power-tolerance" in normalized
+    assert "``qsurf_projection``" in thermal
+    assert "no zero-flux fallback" in normalized
+
+
+def test_ih_thermal_knowledge_warns_against_frozen_ht_for_magnetic_parts():
+    thermal = get_induction_heating_documentation("thermal")
+    normalized = " ".join(thermal.split())
+
+    assert "Do not freeze |H_t| for ferromagnetic workpieces" in normalized
+    assert "--allow-frozen-ht" in normalized
+    assert "calc_ih_axisym_coupled.py" in normalized
+    assert "ih_thermal.load_field" in normalized
+    assert "beyond_span" in normalized
+
+
+def test_ih_reciprocity_and_heat_manual_does_not_certify_old_approximations():
+    text = get_induction_heating_documentation("all")
+    assert "complete-SIBC-reciprocity" in text
+    assert "solved-total-field-lumped-P1" in text
+    assert "validate_ih_sibc_closure.py" in text
+    assert "This restriction is on the EM BEM basis" in text
+    assert "heat-pattern fallback" not in text or "No fallback" in text
+    assert "delta_L keeps the plain-solve phi convention" not in text
+    assert "genus >= 1 skips keep" not in text

@@ -1,0 +1,166 @@
+"""Fail-closed solver-only cross-host probe contracts; no SSH required."""
+
+import ast
+import importlib.util
+import subprocess
+from pathlib import Path
+
+import pytest
+
+
+spec = importlib.util.spec_from_file_location(
+    "quad_phase9", Path(__file__).resolve().parents[1] / "tools/release_quad.py")
+quad = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(quad)
+
+
+def probe():
+    values = {
+        "VER radia": "4.95.91",
+        "ABI ngsolve": "6.2.2607",
+        "ABI netgen-mesher": "6.2.2607",
+        "NATIVE radia": "abcdef012345",
+    }
+    for name in ("panels/calc_inductance.py",
+                 "panels/calc_fem_kelvin.py", "panels/calc_fem_coilmesh.py"):
+        values["SHA radia/" + name] = "0123456789ab"
+    return "\n".join(f"{key} = {value}" for key, value in values.items())
+
+
+def test_required_keys_match_both_actual_probe_file_lists():
+    for script in (quad.CROSS_MACHINE_PROBE, quad.CROSS_MACHINE_PROBE_100_EDITABLE):
+        tree = ast.parse(script)
+        paths = next(ast.literal_eval(node.iter) for node in ast.walk(tree)
+                     if isinstance(node, ast.For) and isinstance(node.iter, ast.List))
+        assert {"SHA radia/" + path for path in paths} == {
+            key for key in quad._PHASE9_FIELDS if key.startswith("SHA radia/")}
+        assert "cubit_mesh_export" not in script
+        assert "radia-mcp" not in script
+    assert set(quad._parse_phase9_probe("LAB", probe())) == set(quad._PHASE9_FIELDS)
+
+
+def test_phase9_probes_wheel_hosts_as_wheels_and_100_as_editable(monkeypatch):
+    # LAB holds the published wheel since phase8 installs it; the git-show
+    # probe only works from an editable checkout and failed on LAB.
+    seen = {}
+    def record(label, cmd_prefix, probe_src):
+        seen[label] = (cmd_prefix, probe_src)
+        return probe()
+    monkeypatch.setattr(quad, "_probe", record)
+    assert quad.cmd_phase9(None) == 0
+    assert seen["LAB"] == (["ssh", "102", "python", "-"], quad.CROSS_MACHINE_PROBE)
+    assert seen["100号機"] == (["ssh", "100", quad.DEV_PYTHON_100_PS, "-"],
+                               quad.CROSS_MACHINE_PROBE_100_EDITABLE)
+    # 100号機's release runtime is a wheel and is compared on its own.
+    assert seen["100号機 release"] == (["ssh", "100", "python", "-"], quad.CROSS_MACHINE_PROBE)
+    assert "mdx1" not in seen and "mdx2" not in seen
+
+
+def test_phase9_accepts_complete_shuffled_output(monkeypatch):
+    monkeypatch.setattr(
+        quad, "_probe", lambda _label, *_args: "\n".join(reversed(probe().splitlines())))
+    assert quad.cmd_phase9(None) == 0
+
+
+@pytest.mark.parametrize("corrupt", [
+    lambda text: "\n".join(text.splitlines()[:-1]),
+    lambda text: text + "\n" + text.splitlines()[0],
+    lambda text: text + "\nUNRECOGNIZED = 1",
+    lambda text: text.replace("VER radia =", "VER radia "),
+    lambda text: text.replace("4.95.91", ""),
+    lambda text: text.replace("0123456789ab", "MISSING"),
+    lambda text: text.replace("4.95.91", "MISSING"),
+    lambda text: text.replace("4.95.91", "1garbage"),
+    lambda text: text.replace("4.95.91", "N/A"),
+    lambda text: text.replace("0123456789ab", "not-a-hash!!"),
+])
+def test_phase9_rejects_malformed_probe_even_when_all_hosts_agree(
+        monkeypatch, corrupt):
+    monkeypatch.setattr(quad, "_probe", lambda _label, *_args: corrupt(probe()))
+    assert quad.cmd_phase9(None) == 4
+
+
+def test_independent_package_drift_is_not_part_of_solver_probe(monkeypatch):
+    assert "VER cubit-mesh-export" not in quad._PHASE9_FIELDS
+    assert "VER radia-mcp" not in quad._PHASE9_FIELDS
+    monkeypatch.setattr(quad, "_probe", lambda _label, *_args: probe())
+    assert quad.cmd_phase9(None) == 0
+
+
+@pytest.mark.parametrize("failure", [None, ""])
+def test_failed_host_cannot_be_omitted(monkeypatch, failure):
+    monkeypatch.setattr(
+        quad, "_probe",
+        lambda label, *_args: failure if label == "LAB" else probe())
+    assert quad.cmd_phase9(None) == 4
+
+
+@pytest.mark.parametrize(
+    "error", [OSError("no executable"), subprocess.TimeoutExpired("probe", 120)])
+def test_probe_launch_failure_is_not_acceptance(monkeypatch, error):
+    def run(*_args, **_kwargs):
+        raise error
+    monkeypatch.setattr(quad.subprocess, "run", run)
+    assert quad._probe("LAB", ["python", "-"]) is None
+
+
+def test_failed_exit_rejects_even_complete_stdout(monkeypatch):
+    monkeypatch.setattr(
+        quad, "_run_script_with_file_output",
+        lambda *args, **_kwargs: subprocess.CompletedProcess(
+            args, 1, stdout=probe(), stderr="failed after output"))
+    assert quad._probe("LAB", ["python", "-"]) is None
+
+
+def test_script_output_uses_files_and_preserves_utf8_and_exit(monkeypatch):
+    def run(command, **kwargs):
+        assert kwargs["input"] == "print('検証')".encode("utf-8")
+        assert kwargs["timeout"] == 12
+        assert kwargs["stdout"] != subprocess.PIPE
+        assert kwargs["stderr"] != subprocess.PIPE
+        kwargs["stdout"].write("検証\n".encode("utf-8"))
+        kwargs["stderr"].write(b"diagnostic")
+        return subprocess.CompletedProcess(command, 7)
+    monkeypatch.setattr(quad.subprocess, "run", run)
+    result = quad._run_script_with_file_output(["python", "-"], "print('検証')", 12)
+    assert (result.returncode, result.stdout, result.stderr) == (7, "検証\n", "diagnostic")
+
+
+def test_remote_script_is_staged_and_cleaned_without_stdin(monkeypatch):
+    import base64
+    from pathlib import Path
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        assert kwargs["stdin"] == subprocess.DEVNULL
+        if command[0] == "scp":
+            assert Path(command[-2]).read_text(encoding="utf-8") == "print('ok')"
+            assert command[-1].startswith("100:C:/temp/radia-probe-")
+        else:
+            script = base64.b64decode(command[-1]).decode("utf-16-le")
+            assert "finally" in script and "Remove-Item -LiteralPath" in script
+            assert "'--argv-b64' 'YWJj'" in script
+            kwargs["stdout"].write(b"ok\n")
+        return subprocess.CompletedProcess(command, 0)
+    monkeypatch.setattr(quad.subprocess, "run", run)
+    result = quad._run_script_with_file_output(
+        ["ssh", "100", "python", "-", "--argv-b64", "YWJj"], "print('ok')", 12)
+    assert result.stdout == "ok\n" and len(calls) == 2
+
+
+def test_missing_version_parser_fails_closed(monkeypatch):
+    import builtins
+
+    original = builtins.__import__
+    def without_packaging(name, *args, **kwargs):
+        if name == "packaging.version":
+            raise ModuleNotFoundError("packaging unavailable")
+        return original(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, "__import__", without_packaging)
+    monkeypatch.setattr(quad, "_probe", lambda _label, *_args: probe())
+    assert quad.cmd_phase9(None) == 4
+
+
+def test_pep440_versions_are_accepted():
+    text = probe().replace("4.95.91", "5.0rc1")
+    assert quad._parse_phase9_probe("LAB", text)["VER radia"] == "5.0rc1"

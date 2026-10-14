@@ -1,0 +1,79 @@
+{
+  "accepted": true,
+  "scope": "NGSolve high-order mapped geometry and mass staging only",
+  "general_hdiv_validation_complete": false,
+  "true_residual": null,
+  "true_residual_reason": "No charge operator or material solve in this subgate",
+  "cases": [
+    {
+      "geometry": "affine",
+      "order": 1,
+      "cells": 1,
+      "dofs": 12,
+      "mass_relative_error": 1.0045381235019527e-16,
+      "mapped_node_max_absolute_error": 0.0,
+      "curved_cells": 0,
+      "mesh_sha256": "84687d94c2ffa1dfbe40ed09c7f000ba7aaa3d87296d259002e9d93e98b31ce1",
+      "cpu_reference_sha256": "6c071fc9361e95046e1ff1c3af372b67a8e1ffddb516582e916558980599224d",
+      "native_output_sha256": "66395e41e53965f5637649d9ed0a2b78ce7a667ba5e37d693a42649d4f6f4f97"
+    },
+    {
+      "geometry": "affine",
+      "order": 2,
+      "cells": 1,
+      "dofs": 30,
+      "mass_relative_error": 1.897505645860216e-16,
+      "mapped_node_max_absolute_error": 0.0,
+      "curved_cells": 0,
+      "mesh_sha256": "84687d94c2ffa1dfbe40ed09c7f000ba7aaa3d87296d259002e9d93e98b31ce1",
+      "cpu_reference_sha256": "48dbae8bc5c72160b883b39665b54f0a69d3c67212c7ff3fa313459591adcabb",
+      "native_output_sha256": "608dde17a485d641ad8379526e23afb7f1e2b5b2904e6c1efc487f33f8bbe2d0"
+    },
+    {
+      "geometry": "affine",
+      "order": 3,
+      "cells": 1,
+      "dofs": 60,
+      "mass_relative_error": 2.841687733217702e-16,
+      "mapped_node_max_absolute_error": 0.0,
+      "curved_cells": 0,
+      "mesh_sha256": "84687d94c2ffa1dfbe40ed09c7f000ba7aaa3d87296d259002e9d93e98b31ce1",
+      "cpu_reference_sha256": "369e270579d631e83daf30b983adf425f3f2681f0088d6dea63efe84365b1caa",
+      "native_output_sha256": "af93f618ef2ed2aa27eb2efb2882801d01e05d041d2d456aa88eaf8ea4629bd5"
+    },
+    {
+      "geometry": "curved",
+      "order": 1,
+      "cells": 13,
+      "dofs": 105,
+      "mass_relative_error": 1.531234493834191e-16,
+      "mapped_node_max_absolute_error": 0.0,
+      "curved_cells": 13,
+      "mesh_sha256": "a339966a361391ad2b64e7f57645336b3ac70fa549c7f08b2007875523d02236",
+      "cpu_reference_sha256": "c0057aa2364553e1a6e6ef72a9ef09e8cfc60bd7ab56d07f43c1c7b546a2962f",
+      "native_output_sha256": "f4d0ebb5d891c172c93b68531eb2c09de2dc88f7dad1d2421c8bfae2ca650c4d"
+    },
+    {
+      "geometry": "curved",
+      "order": 2,
+      "cells": 13,
+      "dofs": 288,
+      "mass_relative_error": 1.9672325502252915e-16,
+      "mapped_node_max_absolute_error": 0.0,
+      "curved_cells": 13,
+      "mesh_sha256": "a339966a361391ad2b64e7f57645336b3ac70fa549c7f08b2007875523d02236",
+      "cpu_reference_sha256": "4315253e35ce99a3115e347509ee2d475f62ae14761882f7c49ea072721eb4a4",
+      "native_output_sha256": "ae5320de0be20a473bb3693f83b164a674e08d346d959bff92a3f14483aed868"
+    }
+  ],
+  "binary_sha256": "2ee27b962268321e3c343e78343f8b1c1e1c1bbf67dbd17964e4a1666a3e8ecd",
+  "source_sha256": "2fc94225e1e697df084d9b3eb5ac98634f862644e38ae58ce7d729f3b0887306",
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "ngsolve": "6.2.2607",
+  "source_commit": "94d962484adf520dcab6668017aa9bb05ce1269f",
+  "timing_accepted": false,
+  "release_accepted": false,
+  "a100_used": false,
+  "durable_evidence": "<private-runtime>00_CAE\\Radia\\release-evidence\\hmatrix-cuda-20261012\\high-order-staging-20261013",
+  "public_runtime_metadata": "Identifying execution metadata omitted; original hash-verified record retained privately. Numerical values unchanged."
+}

@@ -1,0 +1,482 @@
+import numpy as np
+import pytest
+
+torch = pytest.importorskip("torch")
+
+from radia.urn import (
+    YAdmittanceURN,
+    YAdmittanceURNActiveBasis,
+    YAdmittanceURNConfig,
+    active_basis_refit_config,
+    refit_y_admittance_active_bases,
+    s_domain_rmse,
+    train_y_admittance_urn,
+)
+from radia.urn import train_stacked_y_urn
+from radia.urn.y_admittance_urn import (
+    complex_smooth_l1,
+    log_component_residual,
+    log_component_rmse,
+)
+
+
+def test_y_admittance_default_dictionary_matches_research_meeting_model():
+    freqs = np.logspace(2, 6, 8)
+    z = 10.0 + 1j * 2.0 * np.pi * freqs * 1.0e-4
+    cfg = YAdmittanceURNConfig()
+
+    model = YAdmittanceURN(freqs, cfg, z_data=z)
+    omega = torch.tensor(2.0 * np.pi * freqs, dtype=torch.float64)
+
+    assert cfg.total_basis_functions == 22
+    assert len(model.basis_labels) == 22
+    assert model.basis_matrix(omega).shape == (freqs.size, 22)
+
+    gates = model.gates().detach().numpy()
+    assert gates.shape == (22,)
+    assert np.all(gates > 0.0)
+
+
+def test_research_34_dictionary_and_duplicate_response_reduction():
+    from radia.urn import reduce_y_admittance_urn, redundant_y_bases
+
+    assert YAdmittanceURNConfig.research_34_basis().total_basis_functions == 34
+    freqs = np.logspace(2, 4, 12)
+    active = [YAdmittanceURNActiveBasis(i, "debye", i, 1.0, 1.0,
+                                      {"tau": 1e-4}) for i in range(3)]
+    cfg = active_basis_refit_config(active, n_epochs=1, n_restarts=1)
+    model = YAdmittanceURN(freqs, cfg)
+    model.initialize_from_active_bases(active)
+    target = model.predict(freqs)
+    before = {k: v.clone() for k, v in model.state_dict().items()}
+    assert len(redundant_y_bases(model, freqs)) == 3
+    selected, trace = reduce_y_admittance_urn(
+        model, freqs, target, uncertainty_ohm=1e6, refit_epochs=1, refit_restarts=1)
+    assert selected.config.total_basis_functions == 1
+    assert [t['basis_count'] for t in trace['trials']] == [3, 2, 1]
+    assert trace['trials'][1]['removed_basis']['reason'] == 'redundant_response'
+    assert trace['trials'][1]['removed_basis']['ablation_metric'] == cfg.loss_mode
+    assert trace['independent_validation'] is False
+    for key, value in model.state_dict().items():
+        assert torch.equal(value, before[key])
+
+    selected, trace = reduce_y_admittance_urn(
+        model, freqs, target, uncertainty_ohm=np.full(freqs.shape, 1e-15),
+        refit_epochs=1, refit_restarts=1)
+    assert selected is model  # Never silently return a smaller rejected trial.
+    assert trace['selected_basis_count'] == 3
+
+    selected, trace = reduce_y_admittance_urn(
+        model, freqs, target * 100, uncertainty_ohm=1e-20,
+        refit_epochs=1, refit_restarts=1)
+    assert selected is None
+    assert trace['status'] == 'no_acceptable_candidate'
+    for budget in [0, -1, float('nan'), [1, 2]]:
+        with pytest.raises(ValueError, match='uncertainty_ohm'):
+            reduce_y_admittance_urn(model, freqs, target, uncertainty_ohm=budget)
+
+
+def test_equal_time_constants_with_different_exponents_are_not_duplicates():
+    from radia.urn import redundant_y_bases
+
+    freqs = np.logspace(1, 6, 30)
+    active = [YAdmittanceURNActiveBasis(i, 'cole_cole', i, 1, 1,
+              {'tau': 1e-4, 'alpha': alpha}) for i, alpha in enumerate([0.1, 0.8])]
+    model = YAdmittanceURN(freqs, active_basis_refit_config(active))
+    model.initialize_from_active_bases(active)
+    assert redundant_y_bases(model, freqs) == []
+
+
+def test_reduction_ranks_removal_in_fitting_metric_not_magnitude(monkeypatch):
+    from radia.urn import reduce_y_admittance_urn
+
+    freqs = np.logspace(1, 6, 30)
+    active = [YAdmittanceURNActiveBasis(i, 'debye', i, 1, gate,
+              {'tau': tau}) for i, (tau, gate) in enumerate([(1e-4, 1), (1e-2, 10)])]
+    cfg = active_basis_refit_config(active, loss_mode='log_components')
+    model = YAdmittanceURN(freqs, cfg)
+    model.initialize_from_active_bases(active)
+    target = model.predict(freqs)
+    omega = torch.tensor(2*np.pi*freqs, dtype=torch.float64)
+    scores = []
+    with torch.no_grad():
+        for i in range(2):
+            mask = torch.ones(2, dtype=torch.float64)
+            mask[i] = 0
+            scores.append(log_component_rmse(model(omega, mask=mask).numpy(), target,
+                          floor=model.z0*cfg.log_loss_floor_relative))
+    expected = int(np.argmin(scores))
+    wrong_importance = np.ones(2)
+    wrong_importance[1-expected] = 0.0
+    monkeypatch.setattr(model, 'output_ablation_importance', lambda *args: wrong_importance)
+    _, trace = reduce_y_admittance_urn(model, freqs, target, uncertainty_ohm=1e6,
+                                     refit_epochs=1, refit_restarts=1)
+    removal = trace['trials'][1]['removed_basis']
+    assert removal['index'] == expected
+    assert removal['unrefitted_error'] == pytest.approx(min(scores))
+
+
+def test_paper_22_basis_uses_research_meeting_training_defaults():
+    cfg = YAdmittanceURNConfig.paper_22_basis(n_epochs=30)
+
+    assert cfg.total_basis_functions == 22
+    assert cfg.n_epochs == 30
+    assert cfg.lr == pytest.approx(5.0e-3)
+    assert cfg.sparsity_weight == pytest.approx(1.0e-4)
+    assert cfg.gate_init == pytest.approx(1.0)
+    assert cfg.active_threshold == pytest.approx(1.0e-3)
+
+
+def test_s_domain_rmse_matches_manuscript_metric():
+    z = np.array([1.0 + 1.0j, 2.0 + 0.5j, 5.0 - 0.25j])
+    z_fit = z * np.array([1.0, 1.01, 0.99])
+
+    assert s_domain_rmse(z, z) == pytest.approx(0.0)
+    assert s_domain_rmse(z_fit, z) > 0.0
+
+
+def test_anti_resonance_bases_extend_dictionary_and_stay_passive():
+    freqs = np.logspace(2, 7, 64)
+    z = 10.0 + 1j * 2.0 * np.pi * freqs * 1.0e-4
+    cfg = YAdmittanceURNConfig.paper_22_basis(
+        n_parallel_rlc=2, n_coil_antiresonance=2
+    )
+
+    model = YAdmittanceURN(freqs, cfg, z_data=z)
+    omega = torch.tensor(2.0 * np.pi * freqs, dtype=torch.float64)
+
+    assert cfg.total_basis_functions == 26
+    assert model.basis_labels[-4:] == [
+        ("parallel_rlc", 0),
+        ("parallel_rlc", 1),
+        ("coil_antiresonance", 0),
+        ("coil_antiresonance", 1),
+    ]
+    basis = model.basis_matrix(omega, normalize=False).detach().numpy()
+    assert basis.shape == (freqs.size, 26)
+    # Structural passivity: every dictionary column has Re(Y) >= 0.
+    assert np.min(basis.real) >= -1.0e-14
+
+    summary = model.parameter_summary()
+    prlc = [s for s in summary if s["basis_type"] == "parallel_rlc"]
+    coil = [s for s in summary if s["basis_type"] == "coil_antiresonance"]
+    assert len(prlc) == 2 and len(coil) == 2
+    for item in prlc + coil:
+        assert item["omega0"] > 0.0
+        assert item["q"] > 0.0
+
+
+def test_anti_resonance_coil_basis_has_admittance_valley():
+    freqs = np.logspace(4, 8, 401)
+    cfg = YAdmittanceURNConfig(
+        n_debye=0, n_magnetic_debye=0, n_cole_cole=0, n_magnetic_cole_cole=0,
+        n_inductive_cpe=0, n_capacitive_cpe=0, n_series_rlc=0,
+        n_parallel_rlc=0, n_coil_antiresonance=1,
+    )
+    model = YAdmittanceURN(freqs, cfg)
+    omega = torch.tensor(2.0 * np.pi * freqs, dtype=torch.float64)
+
+    column = model.basis_matrix(omega, normalize=False).detach().numpy()[:, 0]
+    magnitude = np.abs(column)
+    valley = int(np.argmin(magnitude))
+    # Anti-resonance: |Y| has an interior minimum (impedance peak).
+    assert 0 < valley < freqs.size - 1
+    assert magnitude[valley] < 0.5 * min(magnitude[0], magnitude[-1])
+    assert np.min(column.real) >= -1.0e-14
+
+
+def test_basis_normalization_is_fixed_on_the_training_grid():
+    freqs = np.logspace(2, 6, 24)
+    z = 10.0 + 1j * 2.0 * np.pi * freqs * 1.0e-4
+    cfg = YAdmittanceURNConfig.paper_22_basis(n_coil_antiresonance=1)
+    model = YAdmittanceURN(freqs, cfg, z_data=z)
+
+    dense = np.logspace(1.5, 6.5, 173)
+    union = np.unique(np.concatenate([freqs, dense]))
+    z_union = model.predict(union)
+    z_train = model.predict(freqs)
+    idx = np.searchsorted(union, freqs)
+
+    # The same gates must describe the same circuit on any evaluation grid:
+    # values at the training frequencies are identical whether evaluated alone
+    # or inside a larger grid (the RMS normalisation is training-grid fixed).
+    np.testing.assert_allclose(z_union[idx], z_train, rtol=1.0e-10)
+
+
+def test_conductance_floor_gives_strict_passivity():
+    freqs = np.logspace(3, 7, 48)
+    cfg = YAdmittanceURNConfig(
+        n_debye=0, n_magnetic_debye=0, n_cole_cole=0, n_magnetic_cole_cole=0,
+        n_inductive_cpe=0, n_capacitive_cpe=0, n_series_rlc=0,
+        n_ideal_inductor=1, n_ideal_capacitor=1,  # lossless-only dictionary
+        conductance_floor=1.0e-6,
+    )
+    model = YAdmittanceURN(freqs, cfg)
+    omega = torch.tensor(2.0 * np.pi * freqs, dtype=torch.float64)
+
+    with torch.no_grad():
+        admittance = model.forward_admittance(omega).numpy()
+
+    floor = model.y_ref * 1.0e-6
+    # Even with a purely lossless dictionary, Re(Y) >= G_min > 0 everywhere.
+    assert np.min(admittance.real) >= floor * (1.0 - 1.0e-12)
+
+
+def test_ideal_reactance_bases_are_pure_and_lossless():
+    freqs = np.logspace(2, 6, 32)
+    cfg = YAdmittanceURNConfig(
+        n_debye=0, n_magnetic_debye=0, n_cole_cole=0, n_magnetic_cole_cole=0,
+        n_inductive_cpe=0, n_capacitive_cpe=0, n_series_rlc=0,
+        n_ideal_inductor=1, n_ideal_capacitor=1,
+    )
+    model = YAdmittanceURN(freqs, cfg)
+    omega = torch.tensor(2.0 * np.pi * freqs, dtype=torch.float64)
+
+    assert cfg.total_basis_functions == 2
+    basis = model.basis_matrix(omega, normalize=False).detach().numpy()
+    w_norm = 2.0 * np.pi * freqs / model.omega_ref
+    np.testing.assert_allclose(basis[:, 0], 1.0 / (1j * w_norm), rtol=1.0e-12)
+    np.testing.assert_allclose(basis[:, 1], 1j * w_norm, rtol=1.0e-12)
+    np.testing.assert_allclose(basis.real, 0.0, atol=1.0e-15)  # lossless
+
+    summary = model.parameter_summary()
+    assert [s["basis_type"] for s in summary] == ["ideal_inductor", "ideal_capacitor"]
+
+
+def test_complex_smooth_l1_weighted_matches_unweighted_for_unit_weights():
+    residual = torch.tensor(
+        [0.5 + 0.2j, -0.01 + 0.03j, 2.0 - 1.0j], dtype=torch.complex128
+    )
+
+    unweighted = complex_smooth_l1(residual, 1.0e-2)
+    unit = complex_smooth_l1(residual, 1.0e-2, weight=torch.ones(3, dtype=torch.float64))
+    zero_mid = complex_smooth_l1(
+        residual, 1.0e-2, weight=torch.tensor([1.0, 0.0, 1.0], dtype=torch.float64)
+    )
+
+    assert float(unit) == pytest.approx(float(unweighted), rel=1.0e-12)
+    assert float(zero_mid) > float(unweighted)  # dropping the smallest residual
+
+
+def test_active_basis_refit_uses_selected_bases_without_attention():
+    freqs = np.logspace(2, 5, 12)
+    omega = 2.0 * np.pi * freqs
+    tau = 2.0e-4
+    y_true = 0.05 / (1.0 + 1j * omega * tau)
+    z_true = 1.0 / y_true
+    active = [
+        YAdmittanceURNActiveBasis(
+            basis_index=0,
+            basis_type="debye",
+            local_index=0,
+            importance=1.0,
+            gate=0.5,
+            parameters={"tau": tau},
+        )
+    ]
+
+    cfg = active_basis_refit_config(
+        active,
+        YAdmittanceURNConfig.paper_22_basis(n_epochs=0),
+    )
+    model = refit_y_admittance_active_bases(freqs, z_true, active, cfg, verbose=False)
+
+    assert cfg.total_basis_functions == 1
+    assert model.basis_labels == [("debye", 0)]
+    summary = model.parameter_summary()[0]
+    assert summary["tau"] == pytest.approx(tau)
+    assert summary["gate"] == pytest.approx(0.5)
+
+
+def test_initialize_from_model_embeds_smaller_dictionary_response():
+    freqs = np.logspace(2, 5, 16)
+    omega = 2.0 * np.pi * freqs
+    y_true = 0.05 / (1.0 + 1j * omega * 2.0e-4)
+    z_true = 1.0 / y_true
+    small_cfg = YAdmittanceURNConfig(
+        n_debye=1,
+        n_magnetic_debye=0,
+        n_cole_cole=0,
+        n_magnetic_cole_cole=0,
+        n_inductive_cpe=0,
+        n_capacitive_cpe=0,
+        n_series_rlc=0,
+        gate_init=0.5,
+    )
+    large_cfg = YAdmittanceURNConfig(
+        n_debye=2,
+        n_magnetic_debye=0,
+        n_cole_cole=0,
+        n_magnetic_cole_cole=0,
+        n_inductive_cpe=0,
+        n_capacitive_cpe=0,
+        n_series_rlc=0,
+        gate_init=0.5,
+    )
+    small = YAdmittanceURN(freqs, small_cfg, z_data=z_true)
+    large = YAdmittanceURN(freqs, large_cfg, z_data=z_true)
+
+    large.initialize_from_model(small, extra_gate=1.0e-12)
+
+    np.testing.assert_allclose(large.predict(freqs), small.predict(freqs), rtol=1.0e-8)
+
+
+@pytest.mark.parametrize("composition", ["series", "parallel"])
+def test_stacked_y_urn_grows_frozen_sections(composition):
+    freqs = np.logspace(2, 5, 20)
+    omega = 2.0 * np.pi * freqs
+    z = (2.0 + 1j * omega * 1.0e-5) + 1.0 / (0.02 + 1j * omega * 2.0e-7)
+    cfg = YAdmittanceURNConfig(
+        n_debye=2,
+        n_magnetic_debye=2,
+        n_cole_cole=0,
+        n_magnetic_cole_cole=0,
+        n_inductive_cpe=1,
+        n_capacitive_cpe=1,
+        n_series_rlc=0,
+        sparsity_weight=0.0,
+        lr=1.0e-2,
+        n_epochs=30,
+        n_restarts=1,
+        conductance_floor=1.0e-6,
+    )
+
+    stack = train_stacked_y_urn(
+        freqs, z, cfg, n_sections=2, composition=composition, verbose=False
+    )
+
+    assert len(stack.sections) == 2
+    assert len(stack.training_log) == 2
+    prediction = stack.predict(freqs)
+    assert np.all(np.isfinite(prediction.real))
+    assert np.all(np.isfinite(prediction.imag))
+    # Structural passivity of the composition.
+    assert np.all(prediction.real > 0.0)
+    # The recorded stack RMSE never degrades when a section is added.
+    assert (
+        stack.training_log[1]["stack_s_rmse"]
+        <= stack.training_log[0]["stack_s_rmse"] * 1.05
+    )
+
+
+def test_stacked_series_second_section_starts_negligible():
+    freqs = np.logspace(2, 5, 20)
+    omega = 2.0 * np.pi * freqs
+    z = 5.0 + 1j * omega * 1.0e-5
+    cfg = YAdmittanceURNConfig.paper_22_basis(gate_init=1.0e4)
+    section = YAdmittanceURN(freqs, cfg, z_data=z)
+    omega_t = torch.tensor(omega, dtype=torch.float64)
+
+    with torch.no_grad():
+        contribution = 1.0 / section.forward_admittance(omega_t).numpy()
+
+    # A gate_init of 1e4 makes the series contribution a near short, so a new
+    # series section reproduces the previous stack at initialization.
+    assert np.max(np.abs(contribution)) < 1.0e-3 * np.median(np.abs(z))
+
+
+def test_log_component_residual_measures_relative_component_errors():
+    floor = 1.0e-3
+    target = torch.tensor([1.0 + 10.0j, 100.0 - 5.0j], dtype=torch.complex128)
+    fit_exact = target.clone()
+    # +1% on Re only, then a sign-consistent Im perturbation.
+    fit_re = torch.tensor([1.01 + 10.0j, 101.0 - 5.0j], dtype=torch.complex128)
+
+    zero = log_component_residual(fit_exact, target, floor)
+    assert float(torch.max(torch.abs(zero.real))) < 1.0e-12
+    assert float(torch.max(torch.abs(zero.imag))) < 1.0e-12
+
+    res = log_component_residual(fit_re, target, floor)
+    # log(1.01) ~ 0.00995 on both points regardless of the Re magnitude:
+    np.testing.assert_allclose(
+        res.real.numpy(), np.log(1.01), rtol=1.0e-6
+    )
+    assert float(torch.max(torch.abs(res.imag))) < 1.0e-12
+
+    rmse = log_component_rmse(
+        fit_re.numpy(), target.numpy(), floor=floor
+    )
+    assert rmse == pytest.approx(np.log(1.01), rel=1.0e-6)
+
+
+def test_y_admittance_log_components_training_smoke():
+    freqs = np.logspace(2, 5, 24)
+    omega = 2.0 * np.pi * freqs
+    y_true = 0.05 / (1.0 + 1j * omega * 2.0e-4)
+    z_true = 1.0 / y_true
+    cfg = YAdmittanceURNConfig(
+        n_debye=1,
+        n_magnetic_debye=0,
+        n_cole_cole=0,
+        n_magnetic_cole_cole=0,
+        n_inductive_cpe=0,
+        n_capacitive_cpe=0,
+        n_series_rlc=0,
+        sparsity_weight=0.0,
+        lr=2.0e-2,
+        n_epochs=25,
+        n_restarts=1,
+        loss_mode="log_components",
+    )
+
+    model = train_y_admittance_urn(freqs, z_true, cfg, verbose=False)
+
+    assert np.all(np.isfinite(model.predict(freqs)))
+    assert model.training_history[0]["loss"] > model.training_history[-1]["loss"]
+
+
+def test_y_admittance_multi_restart_perturbs_deterministic_init():
+    freqs = np.logspace(2, 5, 24)
+    omega = 2.0 * np.pi * freqs
+    y_true = 0.05 / (1.0 + 1j * omega * 2.0e-4)
+    z_true = 1.0 / y_true
+    cfg = YAdmittanceURNConfig(
+        n_debye=2,
+        n_magnetic_debye=0,
+        n_cole_cole=0,
+        n_magnetic_cole_cole=0,
+        n_inductive_cpe=0,
+        n_capacitive_cpe=0,
+        n_series_rlc=0,
+        sparsity_weight=0.0,
+        lr=2.0e-2,
+        n_epochs=10,
+        n_restarts=3,
+    )
+
+    model = train_y_admittance_urn(freqs, z_true, cfg, verbose=False)
+
+    assert len(model.restart_summaries) == 3
+    assert [item["restart"] for item in model.restart_summaries] == [1.0, 2.0, 3.0]
+    assert len({item["seed"] for item in model.restart_summaries}) == 3
+    assert all(np.isfinite(item["loss"]) for item in model.restart_summaries)
+
+    assert np.all(np.isfinite(model.predict(freqs)))
+
+
+def test_y_admittance_training_smoke_single_debye_basis():
+    freqs = np.logspace(2, 5, 24)
+    omega = 2.0 * np.pi * freqs
+    y_true = 0.05 / (1.0 + 1j * omega * 2.0e-4)
+    z_true = 1.0 / y_true
+    cfg = YAdmittanceURNConfig(
+        n_debye=1,
+        n_magnetic_debye=0,
+        n_cole_cole=0,
+        n_magnetic_cole_cole=0,
+        n_inductive_cpe=0,
+        n_capacitive_cpe=0,
+        n_series_rlc=0,
+        sparsity_weight=0.0,
+        lr=2.0e-2,
+        n_epochs=20,
+        n_restarts=1,
+    )
+
+    model = train_y_admittance_urn(freqs, z_true, cfg, verbose=False)
+
+    assert np.all(np.isfinite(model.predict(freqs)))
+    assert model.training_history[0]["loss"] > model.training_history[-1]["loss"]
+    active = model.active_bases(freqs)
+    assert len(active) == 1
+    assert active[0].basis_type == "debye"

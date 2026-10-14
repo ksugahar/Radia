@@ -1,0 +1,3085 @@
+"""
+Knowledge base for build123d MCP server.
+
+Focused on CAE (Computer-Aided Engineering) workflows:
+geometry creation for FEM/BEM meshing, not 3D printing.
+"""
+
+# ============================================================
+# Overview
+# ============================================================
+
+OVERVIEW = """\
+# build123d for CAE — Overview
+
+build123d is a Python-native parametric CAD library built on the
+Open Cascade (OCCT) kernel. It provides two programming styles:
+
+- **Algebra mode**: stateless, operator-driven (`Box() - Cylinder()`)
+- **Builder mode**: stateful, context-managed (`with BuildPart(): ...`)
+
+## Why build123d for CAE
+
+- Python-native: loops, functions, parametric studies
+- OCCT kernel: industry-proven BREP geometry
+- STEP/BREP export: direct pipeline to Netgen, Cubit, GMSH meshers
+- Label/color attributes: map to material regions and boundary conditions
+- OSS (Apache-2.0): no license restrictions
+
+## CAE Pipeline
+
+```
+build123d (geometry) -> .step/.brep -> Mesher (Netgen/Cubit/GMSH) -> Solver (NGSolve/Radia)
+```
+
+## CAE-Safe Subset (IMPORTANT)
+
+For CAE meshing, prefer **primitives + boolean** operations:
+- Box, Cylinder, Cone, Sphere, Torus, Wedge + operator `-`, `+`, `&`
+- extrude, revolve, sweep, loft from clean sketches
+
+**Avoid** unless necessary:
+- fillet/chamfer with very small radii (creates micro-edges)
+- Complex Sketch constraints (over-constraint -> topology instability)
+- Mixing boolean operations across different CAD kernels (ACIS vs OCCT)
+
+The guiding principle: **Cubit-like simplicity in build123d syntax**.
+Keep geometry clean and meshable.
+"""
+
+# ============================================================
+# 3D Primitives
+# ============================================================
+
+PRIMITIVES_3D = """\
+# 3D Primitives
+
+All primitives support `rotation`, `align`, and `mode` parameters.
+Default alignment is CENTER on all axes.
+
+## Box
+```python
+Box(length, width, height)
+Box(10, 20, 5)  # 10mm x 20mm x 5mm box centered at origin
+```
+
+## Cylinder
+```python
+Cylinder(radius, height, arc_size=360)
+Cylinder(25, 50)  # r=25mm, h=50mm full cylinder
+Cylinder(25, 50, arc_size=180)  # half cylinder
+```
+
+## Cone
+```python
+Cone(bottom_radius, top_radius, height, arc_size=360)
+Cone(25, 10, 50)  # truncated cone
+Cone(25, 0, 50)   # pointed cone
+```
+
+## Sphere
+```python
+Sphere(radius, arc_size1=-90, arc_size2=90, arc_size3=360)
+Sphere(30)  # full sphere r=30mm
+Sphere(30, arc_size1=0)  # hemisphere (upper half)
+```
+
+## Torus
+```python
+Torus(major_radius, minor_radius, minor_start_angle=0,
+      minor_end_angle=360, major_angle=360)
+Torus(50, 10)  # full torus, R=50mm, r=10mm
+```
+
+## Wedge
+```python
+Wedge(xsize, ysize, zsize, xmin, zmin, xmax, zmax)
+# Near face: xsize x zsize, far face: (xmin..xmax) x (zmin..zmax)
+```
+
+## Boolean Operations (Algebra Mode)
+```python
+# Union (fuse)
+result = Box(10, 10, 10) + Cylinder(3, 20)
+
+# Subtraction (cut)
+result = Box(10, 10, 10) - Cylinder(3, 20)
+
+# Intersection
+result = Box(10, 10, 10) & Cylinder(8, 20)
+```
+
+## Positioning
+```python
+from build123d import Pos, Rot
+
+# Translate
+part = Pos(5, 0, 0) * Cylinder(3, 10)
+
+# Rotate (degrees)
+part = Rot(0, 0, 45) * Box(10, 10, 5)
+
+# Combine
+result = Box(20, 20, 10) - Pos(5, 0, 0) * Cylinder(3, 20)
+```
+"""
+
+# ============================================================
+# 2D Sketch Primitives
+# ============================================================
+
+PRIMITIVES_2D = """\
+# 2D Sketch Primitives
+
+Sketch objects create 2D faces on a workplane. Used as input to
+extrude, revolve, sweep, and loft.
+
+## Circle
+```python
+Circle(radius)
+Circle(25)  # circle r=25mm
+```
+
+## Rectangle
+```python
+Rectangle(width, height)
+Rectangle(10, 20)  # 10mm x 20mm rectangle
+```
+
+## Ellipse
+```python
+Ellipse(x_radius, y_radius)
+```
+
+## RegularPolygon
+```python
+RegularPolygon(radius, side_count, major_radius=True)
+RegularPolygon(10, 6)  # hexagon inscribed in r=10 circle
+```
+
+## Polygon (arbitrary vertices)
+```python
+Polygon((0, 0), (10, 0), (10, 5), (5, 10), (0, 10))
+```
+
+## Trapezoid
+```python
+Trapezoid(width, height, left_side_angle, right_side_angle=None)
+Trapezoid(20, 10, 70)  # symmetric trapezoid
+```
+
+## RectangleRounded
+```python
+RectangleRounded(width, height, radius)
+# Caution for CAE: small radius creates short edges
+```
+
+## Boolean on Sketches
+```python
+cross = Rectangle(2, 10) + Rectangle(10, 2)  # cross shape
+ring = Circle(10) - Circle(8)  # annular ring
+```
+"""
+
+# ============================================================
+# Operations
+# ============================================================
+
+OPERATIONS = """\
+# Operations (3D from 2D)
+
+## extrude — Linear extrusion
+```python
+# Algebra mode
+part = extrude(Rectangle(10, 20), amount=5)
+
+# Builder mode
+with BuildPart() as bp:
+    with BuildSketch():
+        Rectangle(10, 20)
+    extrude(amount=5)
+result = bp.part
+```
+
+## revolve — Axisymmetric rotation
+```python
+# Revolve rectangle around Y axis -> cylindrical shell
+sketch = Rectangle(5, 20, align=(Align.MIN, Align.MIN))
+part = revolve(Pos(10, 0) * sketch, axis=Axis.Y)
+
+# Partial revolve
+part = revolve(sketch, axis=Axis.Y, revolution_arc=180)
+```
+
+## sweep — Along a path
+```python
+# Sweep circle along a helix -> coil
+path = Helix(pitch=10, height=50, radius=25)
+part = sweep(Circle(2), path=path)
+```
+
+## loft — Between cross-sections
+```python
+with BuildPart() as bp:
+    with BuildSketch(Plane.XY):
+        Circle(10)
+    with BuildSketch(Plane.XY.offset(20)):
+        Rectangle(15, 15)
+    loft()
+```
+
+## offset — Shell/thicken
+```python
+# Create hollow box (shell)
+box = Box(10, 10, 10)
+top_face = box.faces().sort_by(Axis.Z)[-1]
+shelled = offset(box, amount=-1, openings=[top_face])
+```
+
+## thicken — Non-planar face to solid
+```python
+part = thicken(some_face, amount=2)
+```
+
+## mirror
+```python
+part = mirror(Box(10, 10, 5), about=Plane.YZ)
+```
+
+## split
+```python
+top_half = split(Sphere(10), bisect_by=Plane.XY, keep=Keep.TOP)
+```
+
+## section — Cross-section extraction
+```python
+cross = section(my_part, section_by=Plane.XY)
+# Returns a Sketch (2D face)
+```
+
+## fillet / chamfer (use with care for CAE)
+```python
+box = Box(10, 10, 10)
+# Fillet all edges
+filleted = fillet(box.edges(), radius=1)
+
+# Chamfer specific edges
+top_edges = box.edges().filter_by(Axis.Z).sort_by(Axis.Z)[-4:]
+chamfered = chamfer(top_edges, length=0.5)
+```
+**CAE warning**: fillet/chamfer with radius < 0.1 * characteristic_length
+will create micro-edges that degrade mesh quality. Prefer defeaturing
+(removing small features) over adding them.
+
+## scale
+```python
+scaled = scale(my_part, by=2.0)           # uniform
+scaled = scale(my_part, by=(1, 1, 0.5))   # non-uniform (changes geom type)
+```
+"""
+
+# ============================================================
+# Curves
+# ============================================================
+
+CURVES = """\
+# Curve Objects
+
+Curves (Edge/Wire) are used as sweep paths, sketch boundaries, etc.
+
+## Line
+```python
+Line((0, 0), (10, 5))
+```
+
+## Polyline
+```python
+Polyline((0, 0), (10, 0), (10, 10), (0, 10), close=True)
+```
+
+## Spline
+```python
+Spline((0, 0), (5, 3), (10, 0), tangents=((0, 1), (0, -1)))
+```
+
+## Arc types
+```python
+CenterArc(center=(0, 0), radius=10, start_angle=0, arc_size=90)
+RadiusArc(start_point=(0, 0), end_point=(10, 0), radius=15)
+SagittaArc(start_point=(0, 0), end_point=(10, 0), sagitta=3)
+ThreePointArc((0, 0), (5, 3), (10, 0))
+TangentArc((0, 0), (10, 5), tangent=(1, 0))
+```
+
+## Helix (for coils)
+```python
+Helix(pitch=10, height=100, radius=25)
+Helix(pitch=10, height=100, radius=25, cone_angle=5)  # conical helix
+```
+
+## Bezier
+```python
+Bezier((0, 0), (5, 10), (10, 0))  # quadratic
+Bezier((0, 0), (3, 10), (7, 10), (10, 0))  # cubic
+```
+
+## BuildLine (Builder mode)
+```python
+with BuildLine() as bl:
+    Line((0, 0), (10, 0))
+    ThreePointArc((10, 0), (15, 5), (10, 10))
+    Line((10, 10), (0, 10))
+path = bl.line
+```
+"""
+
+# ============================================================
+# Export / Import
+# ============================================================
+
+EXPORT_IMPORT = """\
+# Export / Import
+
+## STEP (primary CAE interchange format)
+```python
+from build123d import export_step, import_step
+
+# Export
+export_step(my_part, "model.step")
+export_step(my_part, "model.step", unit=Unit.MM)
+
+# Import
+compound = import_step("external_model.step")
+```
+
+## BREP (OCCT native, lossless for Netgen)
+```python
+from build123d import export_brep, import_brep
+
+export_brep(my_part, "model.brep")
+shape = import_brep("model.brep")
+```
+BREP is preferred when staying within the OCCT ecosystem
+(build123d -> Netgen/NGSolve) because no STEP translation
+tolerance issues arise.
+
+## STL (triangulated surface, for visualization)
+```python
+from build123d import export_stl, import_stl
+
+export_stl(my_part, "model.stl", tolerance=0.001)
+face = import_stl("model.stl")  # returns Face (reference only)
+```
+
+## glTF (web visualization)
+```python
+from build123d import export_gltf
+
+export_gltf(my_part, "model.glb", binary=True)
+```
+
+## SVG import (2D cross-sections)
+```python
+from build123d import import_svg
+
+wires_and_faces = import_svg("cross_section.svg")
+```
+
+## CAE Pipeline Examples
+
+### build123d -> Netgen (OSS, direct BREP)
+```python
+import netgen.occ as occ
+
+export_brep(my_part, "model.brep")
+geo = occ.OCCGeometry("model.brep")
+mesh = geo.GenerateMesh(maxh=0.01)
+```
+
+### build123d -> Cubit (hex mesh via STEP)
+```python
+export_step(my_part, "model.step")
+# In Cubit .jou:
+# import step "model.step" heal
+# volume all scheme tetmesh
+# mesh volume all
+```
+"""
+
+# ============================================================
+# Topology Queries
+# ============================================================
+
+TOPOLOGY = """\
+# Topology Queries and Selectors
+
+## Basic queries
+```python
+part = Box(10, 20, 30)
+
+part.faces()      # ShapeList of all 6 faces
+part.edges()      # ShapeList of all 12 edges
+part.vertices()   # ShapeList of all 8 vertices
+part.wires()      # ShapeList of wires
+part.solids()     # ShapeList of solids
+part.shells()     # ShapeList of shells
+```
+
+## Properties
+```python
+part.volume        # volume of solid
+part.area          # total surface area
+face.area          # area of single face
+edge.length        # length of edge
+part.center()      # center of mass (CenterOf.MASS by default)
+part.bounding_box()  # BoundBox object
+```
+
+## Filtering (ShapeList methods)
+```python
+# By axis direction
+top_face = part.faces().sort_by(Axis.Z)[-1]     # highest Z face
+bottom_face = part.faces().sort_by(Axis.Z)[0]   # lowest Z face
+z_edges = part.edges().filter_by(Axis.Z)         # edges parallel to Z
+
+# By geometry type
+planar = part.faces().filter_by(GeomType.PLANE)
+curved = part.faces().filter_by(GeomType.CYLINDER)
+
+# By position
+right_faces = part.faces().filter_by(
+    lambda f: f.center().X > 5
+)
+
+# Group by
+face_groups = part.faces().group_by(Axis.Z)  # group by Z position
+```
+
+## Labels and Colors (for CAE region assignment)
+```python
+# Assign labels
+coil = Cylinder(25, 50)
+coil.label = "coil"
+coil.color = Color("copper")
+
+core = Box(100, 100, 50)
+core.label = "iron_core"
+
+# Assembly with labeled parts
+assembly = Compound(children=[coil, core])
+assembly.label = "electromagnet"
+
+# Export with labels (preserved in STEP)
+export_step(assembly, "model.step")
+```
+
+## CAE Quality Checks
+```python
+# Minimum edge length (detect micro-edges)
+min_edge = min(e.length for e in part.edges())
+print(f"Minimum edge length: {min_edge}")
+
+# Check validity
+print(f"Valid: {part.is_valid}")
+
+# Face count (complexity indicator)
+print(f"Faces: {len(part.faces())}")
+
+# Bounding box dimensions
+bb = part.bounding_box()
+print(f"Size: {bb.size}")
+```
+"""
+
+# ============================================================
+# CAE Guidelines
+# ============================================================
+
+CAE_GUIDELINES = """\
+# CAE-Specific Guidelines for build123d
+
+## 1. Prefer Primitives + Boolean
+
+For CAE meshing (FEM/BEM), geometry must be **clean and meshable**.
+The safest approach mirrors what Cubit users do naturally:
+
+```python
+# GOOD: primitives + boolean (clean topology)
+workpiece = Cylinder(radius=25, height=50)
+coil = Pos(0, 0, 30) * Cylinder(radius=30, height=10) - \\
+       Pos(0, 0, 30) * Cylinder(radius=20, height=10)
+model = workpiece + coil
+
+# RISKY: complex sketch with constraints
+# (may produce micro-edges or degenerate faces)
+```
+
+## 2. Minimum Edge Length Rule
+
+Before exporting for meshing, check:
+```python
+min_edge = min(e.length for e in part.edges())
+char_length = max(part.bounding_box().size)
+ratio = min_edge / char_length
+
+if ratio < 0.001:
+    print(f"WARNING: micro-edge detected ({min_edge:.6f})")
+    print("This may cause mesh quality issues")
+```
+
+Target: min_edge / characteristic_length > 0.01
+
+## 3. BREP vs STEP for Netgen Pipeline
+
+- **BREP** (export_brep): lossless within OCCT ecosystem.
+  Use when meshing with Netgen directly.
+- **STEP**: universal interchange. Use when meshing with Cubit.
+  May introduce tolerance differences at import.
+
+```python
+# For Netgen: prefer BREP
+export_brep(part, "model.brep")
+
+# For Cubit: must use STEP
+export_step(part, "model.step")
+```
+
+## 4. Label Convention for CAE Regions
+
+Use labels to define material regions and boundary conditions:
+```python
+# Material regions (-> NGSolve/Cubit blocks)
+iron.label = "iron"
+air.label = "air"
+coil.label = "coil"
+
+# Boundary faces (-> NGSolve/Cubit sidesets)
+# Access specific faces and label them
+top = part.faces().sort_by(Axis.Z)[-1]
+top.label = "symmetry_plane"
+```
+
+## 5. Axisymmetric 2D Models
+
+For 2D axisymmetric problems, create the cross-section as a Sketch:
+```python
+# Cross-section in XZ plane (r-z plane)
+with BuildSketch(Plane.XZ) as sk:
+    with BuildLine():
+        Polyline((10, 0), (25, 0), (25, 50), (10, 50), close=True)
+    make_face()
+cross_section = sk.sketch
+
+# Export as BREP for 2D meshing
+export_brep(cross_section, "cross_section.brep")
+```
+
+## 6. Assembly Structure for Multi-Region Models
+
+```python
+# Create individual bodies
+coil = Cylinder(30, 10) - Cylinder(20, 10)
+coil.label = "coil"
+coil.color = Color("orange")
+
+workpiece = Cylinder(25, 50)
+workpiece.label = "workpiece"
+workpiece.color = Color("gray")
+
+air = Cylinder(100, 100) - coil - workpiece
+air.label = "air"
+
+# Combine as assembly
+model = Compound(children=[coil, workpiece, air])
+export_step(model, "ih_model.step")
+```
+
+## 7. Avoiding Dirty Geometry
+
+Common pitfalls that create unmeshable geometry:
+- **fillet(radius < 0.1 * min_dimension)**: creates micro-faces
+- **boolean with tangent surfaces**: OCCT may succeed but produce
+  degenerate edges at tangent contact
+- **non-manifold results**: boolean of coincident faces
+- **import from other kernels**: STEP from ACIS (Cubit) may have
+  slightly different trimming curves
+
+Mitigation:
+```python
+# After boolean operations, validate
+result = box - cylinder
+assert result.is_valid, "Boolean produced invalid geometry"
+min_e = min(e.length for e in result.edges())
+assert min_e > 1e-6, f"Micro-edge: {min_e}"
+```
+
+## Footgun: `is_valid` is an attribute, not a method
+
+In build123d 0.10+, `Shape.is_valid` is a **bool attribute**, not a
+method. Older training-data patterns that call `part.is_valid()` will
+raise `TypeError: 'bool' object is not callable`. Always write:
+```python
+assert part.is_valid           # correct
+# NOT: assert part.is_valid()  # wrong in 0.10+
+```
+"""
+
+# ============================================================
+# Examples
+# ============================================================
+
+EXAMPLES = """\
+# CAE Examples with build123d
+
+## Example 1: Induction Heating (IH) Coil + Workpiece
+
+```python
+from build123d import *
+
+# Workpiece (steel cylinder)
+workpiece = Cylinder(radius=0.025, height=0.025)
+workpiece.label = "workpiece"
+
+# Coil (hollow cylinder, single turn)
+coil = (
+    Pos(0, 0, 0.005)
+    * (Cylinder(radius=0.035, height=0.005)
+       - Cylinder(radius=0.030, height=0.005))
+)
+coil.label = "coil"
+
+# Air domain
+air = Cylinder(radius=0.1, height=0.1) - workpiece - coil
+air.label = "air"
+
+# Export
+model = Compound(children=[workpiece, coil, air])
+export_step(model, "ih_model.step")
+export_brep(model, "ih_model.brep")
+
+# Quality check
+for child in [workpiece, coil, air]:
+    min_e = min(e.length for e in child.edges())
+    print(f"{child.label}: {len(child.faces())} faces, "
+          f"min edge = {min_e:.6f}")
+```
+
+## Example 2: Axisymmetric Cross-Section (2D)
+
+```python
+from build123d import *
+
+# Define cross-section in r-z plane (Plane.XZ)
+# r = x-axis, z = z-axis
+
+with BuildSketch(Plane.XZ) as coil_cs:
+    with BuildLine():
+        Polyline(
+            (0.030, 0.000),
+            (0.035, 0.000),
+            (0.035, 0.005),
+            (0.030, 0.005),
+            close=True,
+        )
+    make_face()
+coil_face = coil_cs.sketch
+coil_face.label = "coil"
+export_brep(coil_face, "coil_2d.brep")
+```
+
+## Example 3: Parametric E-Core Transformer
+
+```python
+from build123d import *
+
+def e_core(W=10, H=15, D=5, t=3):
+    \"\"\"E-shaped transformer core.
+
+    Args:
+        W: total width
+        H: total height
+        D: depth (extrusion)
+        t: leg/yoke thickness
+    \"\"\"
+    # E-shape cross-section
+    with BuildSketch() as sk:
+        # Bottom yoke
+        Rectangle(W, t, align=(Align.CENTER, Align.MIN))
+        # Left leg
+        Pos(-W/2 + t/2, t) * Rectangle(t, H - t,
+            align=(Align.CENTER, Align.MIN))
+        # Center leg
+        Pos(0, t) * Rectangle(t, H - t,
+            align=(Align.CENTER, Align.MIN))
+        # Right leg
+        Pos(W/2 - t/2, t) * Rectangle(t, H - t,
+            align=(Align.CENTER, Align.MIN))
+
+    core = extrude(sk.sketch, amount=D)
+    core.label = "iron_core"
+    return core
+
+# Parametric study
+for t in [2, 3, 4]:
+    core = e_core(t=t)
+    export_step(core, f"e_core_t{t}.step")
+    print(f"t={t}: volume={core.volume:.1f}")
+```
+
+## Example 4: Accelerator Dipole Yoke (Quarter Model)
+
+```python
+from build123d import *
+
+# Quarter yoke with symmetry
+R_bore = 30   # bore radius [mm]
+R_outer = 150  # outer radius [mm]
+L_half = 200   # half length [mm]
+
+# Yoke cross-section (quarter, XZ plane)
+with BuildSketch(Plane.XZ) as yoke_sk:
+    # Quarter annulus
+    with BuildLine():
+        Line((R_bore, 0), (R_outer, 0))
+        CenterArc((0, 0), R_outer, 0, 90)
+        Line((0, R_outer), (0, R_bore))
+        CenterArc((0, 0), R_bore, 90, -90)
+    make_face()
+
+yoke = extrude(yoke_sk.sketch, amount=L_half)
+yoke.label = "iron_yoke"
+export_step(yoke, "dipole_quarter_yoke.step")
+```
+"""
+
+# ============================================================
+# Topic lookup
+# ============================================================
+
+COIL_MODELING = """
+# Coil Modeling for PEEC Filament Extraction
+
+## Variable Cross-Section Coils (Tapered, Shaped)
+
+Use `loft()` between rectangular cross-sections placed along a helix
+path. Each section can have different (w, h), creating a smooth taper.
+
+```python
+from build123d import *
+import math
+
+R, pitch, n_turns = 50, 10, 5   # mm
+w_bot, h_bot = 4, 4              # bottom cross-section
+w_top, h_top = 2, 2              # top cross-section
+n_sec = n_turns * 12 + 1         # 12 sections per turn
+
+sections = []
+for i in range(n_sec):
+    t = i / (n_sec - 1)
+    angle = 2 * math.pi * n_turns * t
+    z = pitch * n_turns * t
+    cx, cy = R * math.cos(angle), R * math.sin(angle)
+    w = w_bot + (w_top - w_bot) * t
+    h = h_bot + (h_top - h_bot) * t
+    # tangent direction
+    dx = -R * math.sin(angle) * 2 * math.pi * n_turns
+    dy = R * math.cos(angle) * 2 * math.pi * n_turns
+    dz = pitch * n_turns
+    norm = math.sqrt(dx**2 + dy**2 + dz**2)
+    tangent = (dx/norm, dy/norm, dz/norm)
+    plane = Plane(origin=(cx, cy, z),
+                  x_dir=(tangent[1], -tangent[0], 0),
+                  z_dir=tangent)
+    with BuildSketch(plane) as sk:
+        Rectangle(w, h)
+    sections.append(sk.sketch)
+
+coil = loft(sections)
+```
+
+## MCP Tool Shortcut
+
+Instead of writing the loft code manually, use:
+
+    generate_helix_coil(radius=50, pitch=10, n_turns=5,
+                        w_start=4, h_start=4, w_end=2, h_end=2)
+
+This returns the solid + the helix path points for section_along_path.
+
+## PEEC Filament Extraction Pipeline
+
+1. **Generate solid**: `generate_helix_coil(...)` or custom `execute_build123d(...)`
+2. **Export STEP**: set `export_dir` to save the solid
+3. **Section along path**: `section_along_path(step_file, path_json)` returns
+   per-segment (area, w_est, h_est) in CAD units
+4. **Build filaments**: feed (w, h) into `PEECBuilder.add_connected_segment()`
+   with per-segment local dimensions (convert CAD units to meters)
+5. **Solve**: `PEECCircuitSolver(topo, use_hacapk=True, outer_method="saddle")`
+
+Python-side helper: `from radia.coil_from_cad import filaments_from_step`
+wraps steps 3-5 in one call.
+
+## Best Practices
+
+- **sections_per_turn >= 8** for smooth loft (12 recommended)
+- **Label the solid** (`coil.label = "coil"`) for STEP export filename
+- **Square cross-section**: w_est = h_est = sqrt(area)
+- **Rectangular**: pass aspect_ratio to section_along_path (TODO)
+- **Multi-turn proximity**: section_along_path uses centroid-proximity
+  filtering so one cut plane hitting multiple turns picks the right face
+- **nwinc/nhinc >= 3** for skin/proximity at f > 10 kHz in PEEC
+- **Units**: build123d works in mm, PEEC in meters. scale = 1000.
+"""
+
+COIL_FROM_POLYLINE = """
+# Coil Construction from a Centerline Polyline (build123d loft)
+
+## When to Use
+
+The centerline is given as **discrete 3D points** `r[0..N-1]` (measured
+wire path, optimization output, FEA tool export, scan data) — NOT an
+analytical helix and NOT extracted from existing CAD.
+
+Counterparts:
+- `coil_modeling` (this file) — analytical helix with `loft()` over
+  parametric sections.
+- `cubit_mesh_export.mcp` `coil_from_polyline` topic — same algorithm, Cubit
+  flavour (creates one body per station, lofts pairwise).
+- `radia.coil_from_cad` — centerline EXTRACTION from existing STEP CAD.
+
+This topic is the **forward** problem: discrete points → solid CAD.
+
+## Algorithm (frame at each station + global loft)
+
+```
+Input:  r[0], r[1], ..., r[N-1]   (ordered 3D centerline points, mm)
+        R                         (cross-section radius / dims)
+
+For each interior point n = 1 .. N-2:
+    # 1. Tangent at r[n] via centered finite difference
+    w = (r[n+1] - r[n-1]) / |r[n+1] - r[n-1]|
+
+    # 2. "Up" vector — smallest-component trick to avoid up // w
+    k  = argmin |w[i]|     (the tangent's smallest absolute component)
+    up = e_k
+
+    # 3. Orthonormal frame at r[n]
+    u = normalize(w x up)        # in-plane x-axis
+    v = w x u                    # in-plane y-axis (= z_dir x x_dir)
+
+    # 4. build123d Plane: x_dir=u, z_dir=w => y_dir is auto = w x u = v
+    plane = Plane(origin=r[n], x_dir=u, z_dir=w)
+    section_n = Circle(R)  applied on plane     # or Rectangle, etc.
+
+# 5. Single global loft over all sections in order
+coil = loft(sections)                           # build123d Solid
+```
+
+`Plane(origin, x_dir, z_dir)` automatically derives the in-plane y-axis
+as `z_dir x x_dir`. With our conventions this gives **exactly** the
+columns of `M = [u | v | w]` from the Cubit flavour — so the two
+flavours produce geometrically identical cross-section placements.
+
+## Why the Smallest-Component Up Vector
+
+`up = e_k` with `k = argmin|w_i|` GUARANTEES `up` is not parallel to
+`w`, so `w x up` is well-conditioned. A naive `up = (0, 0, 1)` fails
+when the centerline is vertical.
+
+It is **NOT** a parallel-transport / rotation-minimizing frame (RMF):
+
+| Frame                   | Twist between stations | Cost                |
+|-------------------------|------------------------|---------------------|
+| Smallest-component up   | uncontrolled (random)  | O(1) per station    |
+| Parallel transport      | minimal (Bishop / RMF) | O(N) sequential     |
+| Frenet (binormal)       | ill-defined at straights | requires curvature |
+
+For **circular** cross-section the twist is invisible (rotational
+symmetry), so this cheap frame is fine. For **rectangle / racetrack /
+ellipse**, the twist between adjacent stations may produce a visibly
+twisted lofted solid — switch to RMF (double-reflection / Bishop).
+
+## Reference Implementation (algebra API, recommended)
+
+```python
+import numpy as np
+from build123d import Plane, Circle, loft, export_step
+
+# r is a list of np.array([x, y, z]) centerline points (mm), length N
+R_cross = 1.0   # cross-section radius (mm)
+
+sections = []
+for n in range(1, len(r) - 1):
+    # 1. tangent
+    w = r[n + 1] - r[n - 1]
+    w = w / np.linalg.norm(w)
+
+    # 2. smallest-component up
+    up = np.zeros(3)
+    up[int(np.argmin(np.abs(w)))] = 1.0
+
+    # 3. orthonormal frame
+    u = np.cross(w, up); u /= np.linalg.norm(u)
+    # v = np.cross(w, u)  # implied by Plane (z_dir x x_dir)
+
+    # 4. build123d plane and section
+    plane = Plane(origin=tuple(r[n]), x_dir=tuple(u), z_dir=tuple(w))
+    sections.append(plane * Circle(R_cross))   # algebra: place sketch on plane
+
+# 5. global loft
+coil = loft(sections)
+coil.label = "coil"
+export_step(coil, "coil_from_polyline.step")
+```
+
+`plane * Circle(R)` is the algebra-API idiom: the `Plane.__mul__`
+operator places the sketch on that plane (equivalent to
+`Plane.from_local_coords(sketch)`).
+
+## Builder API Variant
+
+```python
+from build123d import BuildPart, BuildSketch, Plane, Circle, loft
+
+with BuildPart() as part:
+    sections = []
+    for n in range(1, len(r) - 1):
+        w  = r[n + 1] - r[n - 1]; w  /= np.linalg.norm(w)
+        up = np.zeros(3); up[int(np.argmin(np.abs(w)))] = 1.0
+        u  = np.cross(w, up); u  /= np.linalg.norm(u)
+        plane = Plane(origin=tuple(r[n]), x_dir=tuple(u), z_dir=tuple(w))
+        with BuildSketch(plane) as sk:
+            Circle(R_cross)
+        sections.append(sk.sketch)
+    loft(sections)         # appended to BuildPart context
+
+coil = part.part
+```
+
+## Pairwise (Chain) Loft Variant — for Wiggly Polylines
+
+`loft([s_0, s_1, ..., s_{N-2}])` is a SINGLE OCC global loft. For
+densely sampled, wiggly polylines this can fail with self-intersection
+or surface tolerance errors. The Cubit flavour avoids this by lofting
+**pairwise** (one volume per adjacent pair, then `imprint+merge+unite`).
+The build123d analog is:
+
+```python
+from build123d import Compound
+
+pieces = []
+for n in range(len(sections) - 1):
+    pieces.append(loft([sections[n], sections[n + 1]]))
+coil = Compound(children=pieces)
+# Optional fuse: from build123d import Part; coil = Part() + pieces
+```
+
+`Compound` keeps each segment as a separate solid (good if you want
+to tag per-segment labels for PEEC). `Part() + pieces` fuses them into
+one body with shared internal faces removed (analogous to Cubit's
+`unite volume all` after `imprint+merge+compress`).
+
+## Caveats and Failure Modes
+
+1. **Endpoints are dropped.** The centered finite difference needs
+   both neighbours, so the first and last input points are NOT used as
+   stations — the resulting solid is shorter than the input polyline.
+   To preserve length, prepend / append ghost points or use one-sided
+   differences at the ends.
+
+2. **Closed loops require a wrap-around section.** For a closed coil
+   `r[N-1] approx r[0]`, append `sections[0]` to the end of the list
+   before the final `loft(...)` so the global loft wraps around — and
+   compute the centered tangent at the seam with periodic neighbours.
+
+3. **Twist visible for non-circular cross-section.** The
+   smallest-component frame can flip discretely when the dominant
+   tangent component changes between adjacent stations (e.g. tangent
+   rotates from +x-dominant to +y-dominant, k jumps from 1 to 2).
+   Adjacent sections then differ by a 90 deg roll → loft self-intersects
+   or twists. Fix: parallel-transport (Bishop / double-reflection) frame.
+
+4. **Polyline density matters.** Too sparse → faceted polygonal solid;
+   too dense → many input sections (slow loft, may fail OCC tolerance).
+   For wire paths from physical measurement, smooth and resample to a
+   uniform arc-length spacing before invoking this algorithm.
+
+5. **Units.** build123d default unit is mm. Make sure `r` is in mm
+   (or scale before/after). For PEEC the downstream pipeline scales
+   by 1/1000 to meters when calling `PEECBuilder.add_connected_segment`.
+
+6. **Global vs pairwise loft choice.** Default to `loft(sections)`
+   (smoother solid, single body); fall back to pairwise + Compound if
+   OCC raises self-intersection or surface tolerance errors on a
+   wiggly polyline.
+
+## Comparison to Existing Coil Topics in This Knowledge Base
+
+| Method                    | Input                  | Best For                        |
+|---------------------------|------------------------|----------------------------------|
+| `coil_modeling`           | analytical helix       | Regular cylindrical solenoid     |
+| `coil_from_polyline` (this) | discrete 3D points    | Measured / optimized free-form  |
+| `radia.coil_from_cad`     | existing STEP CAD      | Reverse-engineering filament from CAD |
+| `radia.coil_builder`      | analytical primitives  | Beam-optics design (straight + arc) |
+
+Pipeline downstream is identical: STEP export →
+`coil_from_cad.extract_centerline_from_step` → filaments →
+`PEECBuilder` → `PEECCircuitSolver`.
+
+## Cubit Flavour — Same Algorithm, Different Engine
+
+Identical math; different engine. See the `coil_from_polyline` topic
+in `cubit_mesh_export.mcp` for the Cubit version. Key engine differences:
+
+| Aspect              | build123d                    | Cubit                       |
+|---------------------|------------------------------|-----------------------------|
+| Frame placement     | `Plane(origin, x_dir, z_dir)` | `rotate Surface ... about origin` then `move` |
+| Loft strategy       | `loft([s0..sM])` (global)     | `create volume loft surface n n+1` (pairwise) |
+| Cleanup             | `Part() + pieces` to fuse     | `imprint all; merge all; compress; unite volume all` |
+| Section primitive   | `Circle(R)`, `Rectangle(w,h)` | `create surface circle ... zplane` |
+| STEP export         | `export_step(coil, ...)`      | `export step "..." overwrite` |
+| Use it when ...     | Scripted, no Cubit license needed | Already in a Cubit meshing pipeline |
+
+## Downstream Consumers (after STEP export)
+
+Once the lofted coil is exported to STEP, it feeds two production
+paths in this codebase. The path FROM the build123d solid is identical
+to the Cubit case — engine choice does not affect downstream usage.
+
+### A. Radia PEEC (filament-based circuit extraction)
+
+```python
+from build123d import export_step
+export_step(coil, "coil.step")
+
+from radia.coil_from_cad import extract_centerline_from_step
+from radia.peec_topology import PEECBuilder, PEECCircuitSolver
+
+path_m, w_m, h_m = extract_centerline_from_step("coil.step")  # mm -> m
+b = PEECBuilder()
+prev = b.add_node_at(*path_m[0])
+for p, w, h in zip(path_m[1:], w_m[1:], h_m[1:]):
+    nxt = b.add_node_at(*p)
+    b.add_connected_segment(prev, nxt, w, h, sigma=5.8e7,
+                            nwinc=3, nhinc=3)
+    prev = nxt
+b.add_port(b.nodes[0], b.nodes[-1])
+solver = PEECCircuitSolver(b.build_topology())
+Z = solver.compute_port_impedance(freq=1e6)
+```
+
+`extract_centerline_from_step` 5-Path dispatch handles the topology
+produced by this algorithm (single lofted tube, possibly closed).
+
+### B. BEM-A (port-driven self-inductance via ngsolve.bem)
+
+BEM-A consumes a **meshed** coil with `source` / `sink` BND labels on
+the two terminal faces. build123d alone cannot mesh — pipe the STEP
+through Cubit (preferred for hex) or Netgen (tet):
+
+```python
+# Option 1: Cubit hex mesh
+#   import "coil.step"; mesh volume all
+#   sideset 1 add surface <source_id>; sideset 1 name "source"
+#   sideset 2 add surface <sink_id>;   sideset 2 name "sink"
+#   export netgen "coil.vol" overwrite
+
+# Option 2: Netgen tet mesh from build123d directly
+from build123d import export_step
+from ngsolve import Mesh
+from netgen.occ import OCCGeometry
+# Tag the two end faces in build123d BEFORE export:
+coil.faces().sort_by(Axis.Z)[0].label = "source"   # bottom cap
+coil.faces().sort_by(Axis.Z)[-1].label = "sink"    # top cap
+export_step(coil, "coil.step")
+geo = OCCGeometry("coil.step")
+# CRITICAL: generate a SURFACE-ONLY mesh (volume tets make the BEM-A
+# saddle LU singular):
+from netgen.meshing import MeshingParameters, MeshingStep
+mesh = Mesh(geo.GenerateMesh(MeshingParameters(
+    maxh=2.0, perfstepsend=MeshingStep.MESHSURFACE)))
+
+from radia.bem.coil_inductance_ngsolve import compute_inductance_source_sink
+# Impedance-EFIE (the sole formulation since 2026-07-02): complex
+# Leontovich Zs inside the saddle -> J is the finite-impedance current
+# (the old PEC post-hoc R over-estimated ~3x on tightly-wound coils;
+# removed).  Pass omega=0 for a DC vacuum-L-only solve (R = 0).
+import math
+sigma, freq = 5.8e7, 50e3
+omega = 2 * math.pi * freq
+delta = math.sqrt(2.0 / (omega * 4e-7 * math.pi * sigma))
+res = compute_inductance_source_sink(
+    mesh, source_label="source", sink_label="sink",
+    omega=omega, Z_s_complex=(1.0 + 1.0j) / (sigma * delta),
+)
+print("L =", res["L"], "H,  R =", res["R"], "Ω")
+```
+
+**Critical: BEM-A requires terminal faces.**
+- *Open-ended path* (`r[0] != r[N-1]`): the two end-cap faces of the
+  lofted solid are natural source/sink. Tag them before export.
+- *Closed loop* (`r[N-1] ≈ r[0]`): the solid has no end faces. Either
+  (a) leave a small gap in the polyline (skip the wrap station) so two
+  caps appear, or (b) cut a thin slice perpendicular to the path
+  post-loft and tag the two new faces. PEEC has no equivalent
+  constraint — it can drive a closed loop via a port between any two
+  interior nodes.
+
+| Pipeline | Input from STEP                   | Output                | Use when                   |
+|----------|-----------------------------------|-----------------------|----------------------------|
+| PEEC     | centerline + (w, h)               | R + jωL, SPICE / Z(f) | DC-1 MHz, multi-port, MOR  |
+| BEM-A    | surface mesh + source/sink labels | L (+ optional AC R)   | high-fidelity self-L on free-form paths |
+"""
+
+EXAMPLES_INTRO = """\
+# build123d Introductory Examples (36 walk-through examples)
+
+Source: build123d `docs/introductory_examples.rst`. Each example is shown in
+both **Builder mode** (context-manager based) and **Algebra mode** (operator-
+based). For CAE work, either mode is acceptable — algebra mode is often more
+concise.
+
+## Ex 1 — Simple Rectangular Plate (Box)
+```python
+ex1 = Box(100, 100, 10)
+```
+
+## Ex 2 — Plate with Hole (Subtract)
+```python
+ex2 = Box(100, 100, 10) - Cylinder(radius=20, height=10)
+```
+
+## Ex 3 — Extruded Prismatic Solid (2D sketch + extrude)
+```python
+ex3_sk = Circle(40) - Rectangle(20, 20)
+ex3 = extrude(ex3_sk, amount=10)
+```
+
+## Ex 4 — Profile from Lines/Arcs + make_face + extrude
+```python
+l1 = Line((0,0), (100,0)); l2 = Line((100,0), (100,100))
+l3 = Line((100,100), (0,100)); l4 = Line((0,100), (0,0))
+profile = make_face(Curve() + [l1, l2, l3, l4])
+ex4 = extrude(profile, amount=10)
+```
+
+## Ex 5 — Moving the Working Point (Pos)
+```python
+box = Box(20, 20, 20)
+ex5 = Pos(0,0,0)*box + Pos(50,0,0)*box
+```
+
+## Ex 6 — Point Lists (Locations)
+```python
+cyl = Cylinder(radius=10, height=20)
+ex6 = Curve() + [Pos(p)*cyl for p in [(0,0,0),(50,0,0),(100,0,0)]]
+```
+
+## Ex 7 — Polygons at multiple locations
+```python
+poly = RegularPolygon(radius=20, side_count=6)
+sketch = Sketch() + [Pos(x,0)*poly for x in (0, 50, 100)]
+ex7 = extrude(sketch, amount=10)
+```
+
+## Ex 8 — Polylines + mirror
+```python
+poly = Polyline((0,0),(20,0),(20,10),(40,10),(40,20),(0,20))
+profile = make_face(poly)
+ex8 = extrude(profile + mirror(profile, about=Plane.YZ), amount=10)
+```
+
+## Ex 9 — Selectors + fillet
+```python
+box = Box(100, 100, 20)
+top_edges = box.edges().group_by(Axis.Z)[-1]
+ex9 = fillet(top_edges, radius=5)
+```
+
+## Ex 10 — Select LAST + Hole feature
+```python
+box = Box(100, 100, 20)
+filled = fillet(box.edges(), radius=5)
+ex10 = filled - Hole(radius=10, depth=20)
+```
+
+## Ex 11 — Face as plane + GridLocations
+```python
+box = Box(100, 100, 20)
+topf = box.faces().sort_by(Axis.Z)[-1]
+grid = GridLocations(x_spacing=30, y_spacing=30, x_count=2, y_count=2)
+pent = RegularPolygon(radius=10, side_count=5)
+ex11 = box - extrude(topf * [loc*pent for loc in grid], amount=-5)
+```
+
+## Ex 12 — Spline curve
+```python
+pts = [(0,0),(10,20),(20,10),(30,30)]
+spline = Spline(*pts)       # -> used inside BuildLine
+```
+
+## Ex 13 — CounterBoreHole / CounterSinkHole + PolarLocations
+```python
+box = Box(100, 100, 20)
+locs = PolarLocations(radius=40, count=4)
+ex13 = box - [loc * CounterBoreHole(pilot_diameter=8, bore_diameter=12, bore_depth=10) for loc in locs]
+```
+
+## Ex 14 — '@'/'%' operators + sweep
+```python
+l1 = Line((0,0),(100,0)); l2 = Line((100,0),(100,100))
+ex14 = sweep(Circle(radius=5), path=l1 + l2)
+```
+
+## Ex 15 — Mirror 2D geometry
+```python
+base = Curve() + [l1, l2, l3]
+curve = make_face(base + mirror(base, about=Plane.YZ))
+ex15 = extrude(curve, amount=10)
+```
+
+## Ex 16 — Mirror 3D object
+```python
+box = Box(100,100,20)
+ex16 = box + mirror(box, about=Plane.XY.offset(10))
+```
+
+## Ex 17 — Mirror from face
+```python
+box = Box(100,100,20)
+mir = Plane(box.faces().sort_by(Axis.Y)[-1])
+ex17 = box + mirror(box, about=mir)
+```
+
+## Ex 18 — Workplane on face + subtract-extrude
+```python
+box = Box(100,100,20)
+topf = box.faces().sort_by(Axis.Z)[-1]
+ex18 = box - extrude(topf * Rectangle(50,50), amount=-10)
+```
+
+## Ex 19 — Workplane on vertex
+```python
+box = Box(100,100,20)
+topf = box.faces().sort_by(Axis.Z)[-1]
+vtx = topf.vertices().group_by(Axis.X)[-1]
+ex19 = box - [Pos(v.X, v.Y, 0) * Cylinder(radius=10, height=20) for v in vtx]
+```
+
+## Ex 20 — Offset sketch workplane
+```python
+box = Box(100,100,20)
+plane = Plane(box.faces().sort_by(Axis.X)[0]).offset(10)
+ex20 = box + extrude(plane * Circle(radius=20), amount=10)
+```
+
+## Ex 21 — Plane in center of cylinder
+```python
+cyl = Cylinder(radius=20, height=100)
+plane = Plane(origin=cyl.origin + (0,0,50), z_dir=cyl.z_dir)
+ex21 = cyl + extrude(plane * Circle(radius=10), amount=50)
+```
+
+## Ex 22 — Rotated workplane + GridLocations
+```python
+box = Box(100,100,20)
+plane = Plane.XY.rotated(Axis.X, 45)
+grid = GridLocations(x_spacing=30, y_spacing=30, x_count=2, y_count=2)
+ex22 = box + extrude(plane * [loc*Circle(radius=5) for loc in grid], amount=10)
+```
+
+## Ex 23 — Revolve + split
+```python
+poly = Polyline((0,0),(20,0),(20,20),(0,20))
+profile = split(make_face(poly - Rectangle(10,10)), Plane.ZY, keep=Keep.FORWARD)
+ex23 = revolve(profile, axis=Axis.Z)
+```
+
+## Ex 24 — Loft between circle and rectangle
+```python
+circle = Circle(radius=30)
+rect = Pos(0,0,50) * Rectangle(40, 40)
+ex24 = loft([circle, rect])
+```
+
+## Ex 25 — Offset sketch (2D)
+```python
+rect = Rectangle(100, 100)
+ex25 = extrude(offset(rect, amount=10), amount=10)
+```
+
+## Ex 26 — 3D offset / shell
+```python
+box = Box(100,100,100)
+ex26 = offset(box, amount=5)
+```
+
+## Ex 27 — Split object
+```python
+box = Box(100,100,20)
+plane = Plane(box.faces().sort_by(Axis.X)[0]).offset(50)
+ex27 = split(box, plane, keep=Keep.FORWARD)
+```
+
+## Ex 28 — Locate features using faces
+```python
+prism = extrude(RegularPolygon(radius=30, side_count=3), amount=20)
+sphere = Sphere(radius=50)
+ex28 = sphere - [Plane(f) * Cylinder(radius=10, height=30) for f in prism.faces()]
+```
+
+## Ex 29 — Classic OCC Bottle
+```python
+profile = make_face(Spline((0,0),(10,5),(10,30),(5,40),(5,70)))
+bottle = revolve(profile, axis=Axis.Z)
+ex29 = offset(bottle, amount=-2)
+```
+
+## Ex 30 — Bezier curve with weights
+```python
+pts = [(0,0),(20,10),(40,0),(50,20)]; wts = [1,1,1,1]
+curve = Polyline(*pts) + Bezier(*pts, weights=wts)
+ex30 = extrude(make_face(curve), amount=10)
+```
+
+## Ex 31 — Nested locations (PolarLocations)
+```python
+hex_solid = extrude(RegularPolygon(radius=10, side_count=6), amount=10)
+ex31 = [loc * hex_solid for loc in PolarLocations(radius=50, count=6)]
+```
+
+## Ex 32 — Python for-loop over GridLocations
+```python
+circles = Circle(radius=10)
+grid = GridLocations(x_spacing=30, y_spacing=30, x_count=2, y_count=2)
+ex32 = [extrude(loc*circles, amount=(i+1)*5) for i, loc in enumerate(grid)]
+```
+
+## Ex 33 — Function + for-loop
+```python
+def make_square(size): return Rectangle(size, size)
+ex33 = [Pos(0,0,i*10) * extrude(make_square(20+i*10), amount=10) for i in range(5)]
+```
+
+## Ex 34 — Embossed / debossed text
+```python
+box = Box(100,100,20)
+topf = box.faces().sort_by(Axis.Z)[-1]
+ex34 = box + extrude(topf * Text("Hello", font_size=20), amount=5) \\
+           - extrude(topf * Text("World", font_size=20), amount=5)
+```
+
+## Ex 35 — Slots (SlotCenterToCenter, SlotArc)
+```python
+slot = SlotCenterToCenter(center_point_distance=50, width=10, height=20)
+arc = RadiusArc((0,0),(10,10), radius=15)
+ex35 = extrude(slot + SlotArc(arc=arc, width=10), amount=10)
+```
+
+## Ex 36 — extrude until face (Until.LAST)
+```python
+box = Box(100,100,50)
+ex36 = extrude(Circle(radius=20), amount=Until.LAST)
+```
+
+## Key primitives/operations index
+
+| Category | Names |
+|---|---|
+| 3D primitives | Box, Cylinder, Sphere, Cone, Torus |
+| 2D primitives | Rectangle, Circle, RegularPolygon, SlotCenterToCenter, SlotArc, Text |
+| Curves | Line, Polyline, Spline, Bezier, RadiusArc, CenterArc |
+| Operations | extrude, revolve, sweep, loft, offset, split, fillet, chamfer, mirror |
+| Placement | Pos, Plane, Locations, GridLocations, PolarLocations, HexLocations |
+| Selectors | faces().sort_by(Axis.Z), edges().group_by(Axis.X), Select.LAST |
+| Modes | Mode.ADD, Mode.SUBTRACT, Mode.INTERSECT, Mode.PRIVATE |
+| Termination | Until.NEXT, Until.LAST, Until.FIRST |
+"""
+
+EXAMPLES_GALLERY = """\
+# build123d Gallery Examples (21 complete examples)
+
+Source: build123d `docs/examples_1.rst`. Real-world parametric designs
+showing idiomatic use of build123d. For each: title, what it demonstrates,
+and key primitives/operations.
+
+## 1. Benchy — STL import + BREP replacement
+- Imports STL model as Solid via Mesher class, modifies by replacing chimney
+  with BREP version. Shows STL/BREP interop.
+- Key: Mesher class, STL import, model editing
+
+## 2. Bicycle Tire — wrap_faces for 2D->3D projection
+- Realistic tire with patterned tread by projecting 2D planar geometry onto
+  curved 3D surface.
+- Key: wrap_faces, pattern projection
+
+## 3. Bracelet — Sweep + Gordon surfaces + text projection
+- Doubly-curved bracelet with embossed label. OCCT stress test with freeform
+  surfaces, swept sections, Gordon surfaces.
+- Key: sweep, Gordon surfaces, curve/text projection, location_at
+
+## 4. Canadian Flag in Wind — Face projection to non-planar
+- Projects planar faces onto non-planar face.
+- Key: Face projection, complex line snapping
+
+## 5. Cast Bearing Unit — Draft operations
+- Castable flanged bearing housing with draft angles for mold release.
+- Key: draft, flanged geometry, mold design
+
+## 6. Circuit Board With Holes — Locations / product / range
+- Placing holes around a part.
+- Key: Locations, product, range
+
+## 7. Clock Face — PolarLocations for radial features
+- 3D clock face with minute indicators, arcs, lines, fillets, hour labels, slots.
+- Key: PolarLocations, arcs, fillets, extrude
+
+## 8. Fast Grid Holes — Face-with-holes pattern (625 holes)
+- Efficient approach: 2D Face construction with hole wires, then extrude in
+  a single operation (vs 3D boolean subtraction).
+- Key: HexLocations, Face constructor with hole wires, perf optimization
+- Validation must bind the requested count to the generated location count,
+  generated hole-wire count, and final face-wire count.  A caller-supplied
+  hole count plus matching volume can otherwise hide a missing generated hole.
+- For a prism with `N` polygonal through-holes, `h` sides per hole, and `o`
+  outer sides, the boundary count is `2 + o + N*h`.  Check this topology after
+  STEP/BREP self-roundtrip and after both headless external-CAD heal modes.
+- Use `build123d_face_first_perforation_handoff_gate` for the geometry evidence
+  and `build123d_face_first_perforation_source_replay_gate` for immutable source,
+  repeated execution, headless process ownership, and cleanup evidence.
+
+## 9. Handle — Multisection sweep
+- Drawer handle by sweeping through multiple profiles.
+- Key: multisection sweep, complex profiles
+
+## 10. Heat Exchanger — HexLocations + fillet
+- Parametric heat exchanger core, tube positions from HexLocations,
+  circular end caps, filleted tube ends.
+- Key: HexLocations, parametric design, fillet, circular constraints
+
+## 11. Key Cap — extrude with taper + extrude_until_next
+- Cherry MX key cap.
+- Key: extrude(..., taper=...), extrude until next
+
+## 12. Build123d Logo — Text and lines
+- Former build123d logo; builder mode generates SVG output.
+- Key: Text, lines, SVG export
+
+## 13. Maker Coin — DoubleTangentArc + text emboss
+- Smooth transitions via DoubleTangentArc, embossed text by projection
+  (even-depth text).
+- Key: DoubleTangentArc, text projection, embossing
+
+## 14. Multi-Sketch Loft — loft + type selection + shell
+- Key: loft, sort_by type, shell
+
+## 15. Peg Board J Hook — Complex path + flattening
+- J-shaped pegboard hook: sweep complex path, flatten sides for 3D printing.
+- Key: sweep, complex paths, flattening
+
+## 16. Platonic Solids — Custom Part object (PlatonicSolid)
+- Five highly symmetrical 3D shapes with congruent regular polygon faces.
+- Key: custom Part class, symmetrical geometry, polyhedra
+
+## 17. Playing Cards — Custom Sketch objects + Bezier
+- Club, Spade, Heart, Diamond, PlayingCard; two-part box with suit cutouts.
+- Key: Bezier curves, custom Sketch objects, SVG import
+
+## 18. Stud Wall — Custom Part + RigidJoints assembly
+- Custom Part objects, assemblies with snap-point RigidJoints.
+- Key: custom Part, assemblies, RigidJoints, object copy
+
+## 19. Tea Cup — Revolve + sweep + offset + fillet
+- Complex, non-flat geometry: revolve body, sweep handle, shell, fillet.
+- Key: revolve, sweep (2x), offset/shell, fillet
+
+## 20. Toy Truck — Sketch reuse + symmetry + tapered extrusions
+- Detailed body, cab, grill, bumper with joints for assembly.
+- Key: sketch reuse, symmetry, taper, selective fillet, joints
+
+## 21. Vase — Revolve + shell + selective fillet
+- Revolving, shelling, edge fillet by position and type.
+- Key: revolve, shell, edge selection by position/type, fillet
+
+## Distilled patterns for CAE (applicable ones)
+
+| Pattern from gallery | CAE relevance |
+|---|---|
+| Fast Grid Holes (Ex8): Face-with-holes + single extrude | Efficient boolean for perforated plates / cooling fins |
+| Heat Exchanger (Ex10): HexLocations + fillet | IH coil arrays, hex-packed tube fields |
+| Multi-Sketch Loft (Ex14): Loft + shell | Variable cross-section coils, taper windings |
+| Clock Face (Ex7): PolarLocations | Stator tooth arrangements, Halbach segment placement |
+| Tea Cup (Ex19): Revolve + shell | Axisymmetric coil bobbins, pressure vessels |
+| Key Cap (Ex11): extrude with taper | Drafted pole pieces, wedged magnets |
+| Vase (Ex21): Edge selection by position/type | Selective fillet on magnet poles / armature teeth |
+"""
+
+LAB_POLICY = """\
+# Sugawara Lab (菅原研) CAD / meshing stance (2026-04-20, reaffirmed)
+
+**Official lab position: build123d + Cubit are the primary pair.**
+These two cover the vast majority of lab work — build123d for CAD
+authoring (AI-writable, Python-native, OCCT), Cubit for
+industrial-grade hex meshing and visualization.
+
+## Stance toward neighbouring CAD tools
+
+| Tool | Lab stance |
+|---|---|
+| **build123d** | **主力 (push)** — 新規 lab work はこれで執筆 |
+| **Cubit** | **主力 (push)** — hex mesh + visualization の正面 |
+| **FreeCAD** | **応援 (friendly)** — 菅原研は FreeCAD コミュニティを支持する。lab では主力ではないが、assembly/設計共有は FreeCAD が強いシーンがあるので interop を大切にする。`freecad_to_cubit_hex` 経由で pipeline に乗る |
+| CadQuery | interop / compat — OCCT sibling、既存資産の移行 |
+| OpenSCAD | interop / compat — 既存スクリプト対応 |
+
+FreeCAD は「前面には出さないが味方」のスタンス。コミュニティを応援
+し、貶める気は無い。ただし**研究室の運用 (lab-internal workflow) は
+build123d**であり、新規モデリング・反復・パラメータスイープ・CAE
+パイプラインの全てで build123d を使う。FreeCAD を lab 内部で使うこ
+とはない。`freecad_exec_safely` は外部 / community 向け interop。
+
+## Lab iteration pattern (build123d 派)
+
+build123d は stateless (毎 `execute_build123d` が fresh Python) なので、
+Cubit/FreeCAD 流の `*_exec_safely` (live state を checkpoint→ batch
+dry-run → commit) は不要。代わりに lab は:
+
+- **`build123d_try`** — 1 変種を subprocess 隔離試行
+- **`build123d_try_race(scripts, max_concurrent)`** — N 変種を並列
+  試行、`valid_largest_volume` / `first_valid` / `first_ok` 規則で
+  winner 自動選定。fillet 半径や寸法のパラメータスイープに最適
+- **`build123d_to_cubit_hex(script)`** — winner を STEP → Cubit hex
+  まで一発で
+
+source は git で管理 → revert は `git restore`、安全網は VCS 任せ。
+build123d パイプラインに `*_exec_safely` 不要、というのが lab 設計。
+
+Use this topic when deciding which tool to use or when translating
+between them.
+
+## Role split
+
+| Tool | Role | When to use |
+|---|---|---|
+| **build123d** (Python / OCCT) + **Netgen/OCC** | **tet-only path, Python-driven** | Default CAD and tet-only meshing. VSCode-native authoring. build123d → Netgen (tet) → Radia / Gmsh pipeline. AI-writable. |
+| **Cubit** (`.jou`, `cubit.cmd(...)`) | **hex path + mixed-mesh CAD fallback** | (1) Radia/ELF requires hex — **only Cubit can supply**. (2) Hex-led meshes with tet regions and pyramid transition elements. (3) Shared-topology CAD cleanup via imprint/merge. (4) Shapes build123d cannot express cleanly. (5) Legacy `.jou` assets. |
+| (not used) | | FreeCAD (reproducibility), raw OCCT Python (verbose) |
+
+**This is a complementary split, not an either/or.** Both tools live in
+the lab toolchain permanently. Cubit is **not** being deprecated.
+
+## When you are asked to "translate a .jou to build123d"
+
+- **tet-only geometry** (boolean primitives, sweep, revolve, fillet):
+  translate directly — see `cubit_rosetta` topic for the mapping table.
+  Mesh it with Netgen/OCC unless Cubit-specific labels, cleanup, or legacy
+  reproducibility is the actual reason for using Cubit.
+- **Cubit-only primitives** (`imprint all`, `merge all`, hex-sweep
+  schemes, `block`, `sideset`, `nodeset`): do **not** invent build123d
+  equivalents — these concepts don't exist here. Flag them and keep
+  the `.jou` for the hex path instead.
+- **hex + tet transition meshes**: keep the `.jou` in Cubit and expect
+  pyramid transition elements. Use the Cubit MCP `cubit_vol_inventory`
+  preflight before choosing a downstream parser.
+- **Mesh directives** (`mesh volume N`, `scheme tetmesh`, size
+  settings): in the build123d pipeline, meshing is **Netgen's job**.
+  Drop these commands; pass `maxh` to `OCCGeometry.GenerateMesh()`.
+- **Block/sideset labels**: in the build123d pipeline, use
+  `part.label = "name"` + `Compound(children=[...])` + the
+  `radia_mcp.build123d.pipeline.run_pipeline_multi` API
+  which bridges labels to Gmsh physical groups.
+
+## Build123d slot gate: analytic mass properties first
+
+Before exporting a shape to Netgen or Cubit, compare build123d/OCCT mass
+properties with a closed form whenever possible.  For a centered box with a
+through cylindrical hole, use
+`box_through_cylinder_reference_row(x, y, z, radius, axis="z")`, then compare
+it with `shape_measurement_row(part)` via `shape_measurement_health_summary`.
+This catches boolean direction mistakes, unit mistakes, and accidental
+off-center holes before meshing.
+
+## Build123d CAD crosscheck: volume as the common currency
+
+After the analytic gate, export STEP and ask Cubit or another CAD kernel for
+the same body volumes.  The common exchange row is intentionally tiny:
+`{"name": "body_label", "volume": value}`.  Feed build123d rows and one or
+more external CAD row sets to `shape_volume_crosscheck_summary(...)` or the
+MCP tool `build123d_volume_crosscheck(...)`.  This is the right first gate
+for Cubit/CAD round trips because volume catches unit-scale mistakes, missing
+booleans, and dropped bodies without requiring identical face topology.
+
+When the validation claim specifically says "checked against Cubit and CST",
+wrap the volume summary with `shape_volume_crosscheck_source_coverage_gate(...)`
+and require sources such as `("cubit", "cst_import")`.  This keeps a
+single-source Cubit replay or build123d-only self-check from being mistaken for
+a two-kernel CAD crosscheck.
+
+Slot331 extends the volume crosscheck with source-identity metadata.  When an
+external CAD row set is created by Cubit, CST, or another importer, pass it as
+`{"source": "cubit", "rows": [...], "measurement_method": "...",
+"body_identity_key": "name", "source_artifact_id": "..."}`.  The summary keeps
+those fields, and `shape_volume_crosscheck_source_identity_gate(...)` can then
+require the expected measurement method, body identity key, and source artifact
+id before the volume rows are reused.  MCP callers can use
+`build123d_volume_crosscheck_source_identity_gate(...)` on the JSON returned by
+`build123d_volume_crosscheck(...)`.  This prevents a correct numeric volume from
+hiding a stale volume table, a mesh-volume-after-import method, or a row set
+keyed by an unstable body index instead of the build123d body name.
+
+Slot339 bundles coverage, source identity, and route contract into
+`shape_external_cad_volume_evidence_package_gate(...)` and the MCP tool
+`build123d_external_cad_volume_evidence_package(...)`.  Use it after
+`build123d_volume_crosscheck(...)` when the claim is "this build123d STEP is
+checked by Cubit and external CAD rows": the package requires both sources,
+per-source `measurement_method`, `body_identity_key`, and
+`source_artifact_id`, plus the build123d row's `geometry_id`, units, metadata,
+and `mesh_route="cubit_hex_or_mixed_path"`.  This keeps a numerically correct
+but stale CST table, a Cubit-only replay, or a tet-route CAD row from being
+promoted as Cubit/CST hex-mixed evidence.
+
+Slot391 extends the same volume crosscheck for parametric CAD and optimization
+replay.  When the CAD row set belongs to a parameter sweep, sizing study, or
+objective-driven design loop, pass per-source `parameter_set_artifact_id`,
+`parameter_set_digest`, `parameter_set_path`, `objective_observable_id`, and
+`objective_observable_family` through the measured-set metadata.  Then call
+`shape_volume_crosscheck_source_identity_gate(...)` or
+`shape_external_cad_volume_evidence_package_gate(...)` with the expected
+parameter/objective maps before solver-ready promotion.  This prevents a
+correct volume match from hiding stale sizing parameters, missing parameter-set
+paths, or an objective family that changed from CAD volume to mesh quality,
+thermal mass, or another downstream metric.
+
+Slot398 extends the downstream mesh-environment handoff.  A build123d CAD row
+with valid volume, area, bbox, source identity, parameter set, and objective
+identity is still not proof that the downstream hex/mixed mesher was live.  Bind
+it to `shape_mesh_environment_handoff_gate(...)` with a verified
+`cubit_headless_installation_route_gate(...)` payload.  When a version probe was
+used, pass only a sanitized `version_probe_summary`; raw license diagnostics
+belong in private operational logs, not in result-bearing CAD notebooks.  A
+stale summary version line must fail before a CAD row is promoted to Cubit
+mesh-ready evidence.
+
+Slot441 keeps Cubit headless teardown warnings separate from build123d CAD
+mass-property evidence.  If `cubit-smoke-test` exports a valid `.vol` and then
+reports a Cubit exit code 2 during teardown, do not treat the exit code alone as
+a build123d volume mismatch.  First check that the `.vol` parses and that the
+expected labels such as `source`, `sink`, `sibc`, `coil`, `workpiece`, and
+`air` survived.  Only then can the build123d CAD row proceed to the Cubit route
+handoff gates; if the file or labels are missing, the Cubit route is not
+solver-ready even when the original build123d volume row is correct.
+
+Slot449 adds the one-loop learning closure rule for build123d.  A build123d
+slot starts from build123d source CAD, not from a downstream mesh dump.  The CAD
+row should carry `result_artifact_id`, `result_output_schema_id`,
+`timing_breakdown_s`, and `learning_lanes.source_tool=verified` before a
+volume/area crosscheck is fed back into radia-mcp knowledge.  Cubit and CST are
+cross-kernel volume witnesses; they do not replace the build123d source script
+or the analytic mass-property gate.
+
+When the external CAD kernel also reports surface area or bounding boxes, use
+the stronger `shape_mass_property_crosscheck_summary(...)` or MCP tool
+`build123d_mass_property_crosscheck(...)`.  Keep `shape_volume_crosscheck_summary`
+as the fallback for minimal imports, but prefer the mass-property gate for
+solver-ready CAD because area errors can reveal lost faces or topology drift
+even when volume happens to match.
+
+The build123d measurement row is also compatible with the Cubit mass-property
+sidecar contract: `shape_measurement_row(part)` already contains `name`,
+`volume`, `area`, and `bounding_box.size`, so it can be replayed by
+`cubit_mass_property_sidecar_gate` before Cubit owns the hex-led route.  Use
+this bridge when build123d creates the CAD intent but Cubit provides the
+hex/mixed mesh; volume should remain the common currency, while surface area
+and bbox dimensions catch scale or face-selection mistakes before `.vol`
+inventory.
+
+Slot211 tightens that bridge: build123d CAD rows that are compared against
+Cubit, CST, or other CAD kernels should carry `length_unit`, `area_unit`, and
+`volume_unit` (or a `units` mapping).  Pass the expected units to
+`shape_cad_route_source_contract_gate` / `build123d_cad_route_source_contract`;
+a row with matching numeric volume but `mm^3` instead of `m^3` is not
+solver-ready evidence.
+
+When Cubit has exported the mesh package, connect the build123d CAD row to the
+`.vol` package with `shape_cubit_export_package_handoff_gate`.  The build123d
+row should carry an explicit `geometry_id`; the Cubit package gate should carry
+the same `geometry_id`, a stable `export_id`, order, `.vol`/`.vol.json` pair,
+raw result, and routing hint.  This catches stale sidecars and wrong-geometry
+mesh packages before notebooks or solver-ready runs consume the files.
+
+Slot405 extends that CAD-to-Cubit handoff with `.vol.json` count identity.
+When the Cubit package gate has parsed sidecar metadata, call
+`shape_cubit_export_package_handoff_gate(..., require_sidecar_inventory_counts=True)`.
+The build123d CAD volume can match the Cubit material-volume sidecar while the
+mesh sidecar still has stale `n_elements`, `n_points`, or `order`.  Require the
+package checks `vol_sidecar_element_count_matches_inventory`,
+`vol_sidecar_point_count_matches_inventory`, and
+`vol_sidecar_order_matches_expected` before promoting the build123d row to a
+notebook, panel, optimizer, or mixed-mesh solver-ready route.
+
+Slot412 extends the same handoff with `.vol.json` schema identity.  A build123d
+CAD row can match the Cubit material-volume sidecar and the mesh sidecar can
+still report plausible counts/order while the sidecar layout is a legacy
+material-volume table rather than the Netgen `.vol` inventory schema.  Require
+`vol_sidecar_schema_id` in the Cubit package gate, then call
+`shape_cubit_export_package_handoff_gate(..., require_sidecar_schema=True)` so a
+stale or missing sidecar schema fails before the CAD row becomes a notebook,
+panel, optimizer, or solver-route input.
+
+When Cubit has not yet produced a `.vol` package but has produced a
+headless mesh-quality package, use `shape_cubit_quality_package_handoff_gate`.  The
+build123d row still carries the explicit `geometry_id`, while the Cubit quality
+package carries the same `geometry_id`, a stable `export_id`, a headless
+command proof, and a positive quality-element count.  This catches GUI/leaked
+session evidence, zero-count quality rows, and stale mesh-quality packages
+before they are reused as CAD validation evidence.
+
+Once the `.vol` export is part of the handoff, call
+`shape_cubit_quality_package_handoff_gate(..., require_export_inventory=True)`.
+That asks the Cubit package gate for parsed `export_inventory` evidence:
+positive volume elements, a route such as `cubit_hex_or_mixed_path`, and an
+inventory element count that agrees with the quality row.  This is the build123d
+side of the slot194 Coreform lesson: CAD mass properties, mesh quality, and
+`.vol` topology inventory are three different evidence rows and should only be
+promoted when their `geometry_id`/`export_id` package agrees.
+
+Slot235 extends this handoff with the slot234 Coreform route lesson: if Cubit
+is the owner of a hex-led or mixed route, the parsed export inventory must
+contain the same quality element family and must not be a tri/tet-only
+inventory.  In other words, build123d may author the CAD intent, but it should
+not consume a Cubit hex quality row through the Netgen/MATLAB tri/tet-only
+education path.  Keep the CAD row, quality row, route hint, element-kind
+counts, and inventory sidecar as separately checked evidence before promotion.
+
+Slot370 adds the stricter Cubit quality-ledger handoff.  After Cubit produces
+`cubit_mesh_quality_ledger_identity_gate`, call
+`shape_cubit_quality_ledger_handoff_gate` from the build123d side and bind
+`quality_artifact_id`, `quality_digest`, `metric_set_id`, `mesh_artifact_id`,
+`mesh_digest`, `geometry_id`, and `routing_hint` before solver-ready reuse.
+This turns the quality JSON into evidence tied to the exported mesh artifact,
+not just a plausible minimum scaled-Jacobian number.  Pass the result into
+`shape_cad_handoff_manifest_gate` as `cubit_quality_ledger_handoff` and include
+`cubit_quality_ledger_json` in the file manifest when the ledger exists.
+
+Slot377 extends this handoff to execution metadata.  If the Cubit quality
+ledger was promoted with `created_at_utc`, version, elapsed time, and timing
+breakdown checks, call `shape_cubit_quality_ledger_handoff_gate` with
+`require_quality_execution_metadata=True`.  This prevents a fresh build123d CAD
+row from reusing a stale or context-free Cubit quality ledger whose geometry
+and digests happen to look valid.
+
+Slot384 carries the Coreform mixed-route reader contract back into the
+build123d CAD handoff.  When a build123d row requests
+`mesh_route="cubit_hex_or_mixed_path"`, call
+`shape_cubit_solver_route_handoff_gate` with
+`require_solver_contract_artifact=True` and pass the expected
+`solver_contract_artifact_id`, `solver_contract_digest`, and
+`solver_contract_path` from the Cubit route manifest.  A fresh STEP/measurement
+row and an otherwise healthy Cubit route should still fail if the downstream
+NGSolve/radia-ngsolve mixed-element reader contract digest is stale or missing.
+
+Slot419 extends the same mixed-route handoff with route-convention schema
+identity.  The downstream reader contract says which solver can consume the
+mesh, but `solver_route_convention_schema_id` says what the route roles mean:
+hex primary volume cells, pyramid transition bridge cells, tet compatibility
+or subregion cells, surface trace families, and no implicit tetization.  Pass
+`expected_solver_route_convention_schema_id` and
+`require_solver_route_convention_schema=True` to
+`shape_cubit_solver_route_handoff_gate`; a value-only or missing route
+convention should fail even when CAD volume, Cubit route policy, and reader
+contract identity look plausible.
+
+Before handing the CAD package to Cubit, CST, or a solver notebook, collect the
+shape rows, file list, external CAD volume summary, and optional Cubit package
+handoff gates with `shape_cad_handoff_manifest_gate`.  Required file kinds
+should usually include a STEP file, a build123d measurement JSON, and the
+external volume summary JSON; add Cubit quality or export package JSON when
+those exist, and add Cubit quality-ledger JSON when a quality ledger is part of
+the handoff.  This is the final build123d-side preflight: volume remains the
+common currency, but area, bbox, file identity, and downstream package gates
+must travel together so a stale STEP or stale quality JSON cannot masquerade as
+a valid CAD handoff.
+
+Slot299 extends this handoff with CAD output artifact identity.  When a STEP,
+measurement JSON, or package manifest is consumed downstream, add
+`cad_output_artifact_id`, `cad_output_digest`, and `cad_output_path` to the file
+manifest and require them with `shape_cad_handoff_manifest_gate`.  This keeps
+the build123d-authored output artifact separate from the Cubit command trace
+and from the later Cubit `.vol` export artifact.
+
+Slot307 extends this handoff with CAD observable identity.  Add
+`cad_observable_id` and `cad_observable_family` to the same file manifest when
+the package is being used as a volume/area/bbox handoff, external CAD volume
+crosscheck, mesh-intent row, or solver-ready CAD contract.  The output artifact
+identity says which STEP/JSON file was emitted; the observable identity says
+what engineering evidence that file is meant to provide.  Do not let a fresh
+STEP digest silently reuse an old mass-property or mesh-intent interpretation.
+
+Slot315 extends the same CAD handoff with unit and measurement-convention
+identity.  Put `length_unit`, `area_unit`, `volume_unit`, and
+`cad_measurement_convention` on the build123d row or file manifest, and pass
+the expected values to `shape_cad_handoff_manifest_gate`.  For closed OCCT
+solids, use a convention such as `occt_closed_solid_mass_properties`; a stale
+`m^3` row, missing `mm^3` volume unit, or `mesh_volume_after_import`
+convention should fail before Cubit/CST/build123d volume cross-check evidence
+is reused.
+
+Slot426 extends the same CAD handoff with measurement postprocess-row
+convention identity.  `cad_measurement_convention` says which mass-property
+measurement method was used, but `cad_measurement_postprocess_row_convention_schema_id`
+says how volume, area, bbox, compound selection, and objective rows were
+selected and reduced.  For the ordinary build123d/OCCT mass-property ledger,
+use `build123d_occt_mass_property_row_convention_v1` and call
+`shape_cad_handoff_manifest_gate(..., require_measurement_postprocess_row_convention_schema=True)`.
+A stale scalar-volume row convention should fail even when
+`occt_closed_solid_mass_properties` still matches.
+
+Slot433 extends the same CAD handoff with measurement component-basis schema
+identity.  The measurement convention names the OCCT mass-property method and
+the row-convention schema names the row reduction, but neither says whether the
+row represents volume, area, bbox size, bbox center, a selected compound, or a
+derived objective component.  Put
+`cad_measurement_component_basis_schema_id` on the build123d row or file
+manifest and call
+`shape_cad_handoff_manifest_gate(..., require_measurement_component_basis_schema=True)`.
+For ordinary build123d/OCCT mass-property rows, use
+`build123d_occt_volume_area_bbox_component_basis_v1`.  A stale scalar-volume
+component basis should fail even when the measurement convention and
+postprocess-row convention are still correct.
+
+Slot347 adds the Cubit solver-route handoff.  When build123d CAD rows request
+`mesh_route="cubit_hex_or_mixed_path"`, bind the downstream
+`cubit_mixed_solver_route_manifest_gate` with
+`shape_cubit_solver_route_handoff_gate(...)` and pass it into
+`shape_cad_handoff_manifest_gate(...)` as `cubit_solver_route_handoff`.  This
+keeps hex primary volume FEM, pyramid transition bridge, tet compatibility
+subregion, `tet_only_owner=netgen_tri_tet_path`, and
+`no_implicit_tetization=true` with the CAD package.  A stale route that silently
+tetizes pyramids fails before Cubit/NGSolve consumes the STEP or `.vol`.
+
+Slot251 adds the local submodel CAD preflight:
+`shape_submodel_cad_handoff_gate` binds a build123d local crop to its
+`recipe_id`, `parent_model_id`, `submodel_region_id`, `crop_box`, `export_id`,
+unit, STEP/measurement files, and the downstream boundary-handoff gate.  Use it
+before a local crop is meshed or exported: the local CAD bbox must sit inside
+the crop box, and the boundary handoff must point at the same submodel region.
+This is the build123d-side form of the zooming lesson: a good local volume is
+not enough when the parent model or inherited boundary contract is missing.
+Slot259 extends this handoff for Cubit mixed meshes: if the downstream boundary
+handoff reports `volume_kind_counts` containing a `pyramid`, pass the
+`shape_transition_role_metadata_gate` result as `transition_handoff`.  The CAD
+side must then prove that the transition row has `transition_kind="pyramid"`
+and connects `hex_region` to `tet_region`.  build123d still does not create the
+actual pyramid elements; it records the intent so Cubit can create and verify
+the mesh transition later.
+
+Slot267 extends the same bridge with surface-family intent.  If the downstream
+Cubit `.vol` gate reports `surface_kind_counts` such as `quad` and `triangle`,
+the build123d transition handoff may also carry
+`required_surface_kinds=("quad", "triangle")` or a transition-row
+`expected_surface_kinds` list.  This is still only CAD-side intent: build123d
+does not prove the mesh has quad/triangle faces.  Cubit/Coreform verifies the
+actual `.vol` surface families, while build123d keeps that expectation tied to
+the CAD crop, transition envelope, and STEP export.
+
+Slot275 extends the same bridge with material/block label intent.  If the
+downstream Cubit sidecar or boundary handoff reports material labels such as
+`hex_core`, `pyramid_transition`, and `tet_region`, the build123d transition
+rows should carry explicit `downstream_material_name` values and
+`shape_transition_role_metadata_gate` should be called with
+`expected_downstream_material_names=(...)`.  If a transition sidecar row is
+allowed to report zero volume, carry that exact label with
+`allowed_zero_downstream_material_names=(...)`.  This is the CAD-side version
+of the homogenization lesson: CAD body names, solver materials, and Cubit block
+labels can differ, so the mapping must be explicit before the submodel handoff
+accepts the package.
+
+Slot291 extends the bridge with Cubit meshing-scheme intent.  If the downstream
+Coreform/Cubit package will verify a scheme trace with
+`cubit_meshing_scheme_trace_gate`, the build123d CAD rows should first record
+their intended role-to-scheme mapping with
+`shape_cubit_meshing_scheme_intent_gate`: for example
+`hex_region -> map`, `mesh_transition -> tetmesh`, and
+`tet_region -> tetmesh`.  Also carry the downstream meshing trace id, required
+command fragments such as `imprint all`, `merge all`, and `export netgen`, and
+the expected export order.  This is still CAD-side intent only: Cubit owns
+volume ids, command digest, and actual `.vol` inventory, while build123d keeps
+the intended scheme contract tied to the STEP and measurement rows.
+
+Slot363 carries the Slot362 export-artifact rule into build123d.  When the
+downstream Cubit scheme trace already names an exported `.vol`, call
+`shape_cubit_meshing_scheme_intent_gate(...,
+require_downstream_export_output_artifact=True)` and pass the expected
+`export_output_artifact_id`, `export_output_digest`, and `export_output_path`.
+Then pass that result into the final `shape_cad_handoff_manifest_gate(...)` as
+`cubit_meshing_scheme_handoff`.  This rejects a fresh build123d STEP package
+that accidentally reuses an old Cubit `.vol` digest, even when the role-to-
+scheme mapping and command fragments still look correct.
+
+For high-order curvilinear hex or mixed-mesh work, run
+`shape_curvilinear_mesh_intent_gate(...)` before handing the CAD rows to the
+Cubit curvilinear mesh manifest (`cubit_curvilinear_handoff`).  build123d owns
+the CAD intent, `geometry_id`, role labels, and mass properties; Cubit owns
+order, curving, CAD projection error, Jacobian/quality evidence, and `.vol`
+export.  The row should say `role="hex_region"` and
+`mesh_route="cubit_hex_or_mixed_path"`.  If the Cubit curvilinear manifest is
+already available, the build123d gate also requires
+`projection_error_within_tolerance` and `negative_jacobian_count_zero` to be
+true.  Slot323 also lets this gate consume
+`cubit_mixed_order_series_inventory_gate`: when a Cubit order-series gate is
+attached, it must be `ok`, keep volume/surface topology invariant, keep
+`cubit_hex_or_mixed_path`, and include a non-curved first-order inventory even
+if later orders add `curvedelements`.  Do not let the tet-only Netgen education
+path enter this handoff by accident.
+
+Before treating a build123d CAD package as ready for Cubit/Coreform headless
+meshing, bind the CAD rows to the installed mesh-environment replay gate with
+`shape_mesh_environment_handoff_gate(...)`.  This is the build123d-side bridge
+to `cubit_headless_installation_route_gate`: build123d records volume, area,
+bbox, `geometry_id`, and `mesh_route`, while the Cubit gate records installed
+version, binary discovery, `-nographics -batch`, no-GUI-daemon policy, and
+whether a newer release note is only a watchlist.  Never claim a live mesh
+feature from a release-note version that is not installed and replayed.
+Slot227 extends this bridge with Cubit version-probe provenance: when the
+downstream environment gate records `license_status="ValidStudent"` and a
+synchronous `coreform_cubit.com -version` command, build123d should carry those
+fields through as downstream environment evidence.  They are not CAD evidence
+and should not be mixed into the volume/area/bbox pass condition.
+
+Slot355 carries the Slot354 console-binary rule into build123d handoff: the
+downstream environment gate must report `binary_path_is_console_com=True` and
+`version_probe_uses_recorded_binary=True` before a CAD package is treated as
+ready for Coreform meshing.  Reject `coreform_cubit.exe` GUI-launcher evidence,
+or a `.com -version` probe that was run against a different path, even when the
+build123d volume, area, and bbox rows are already clean.
+
+After the volume or mass-property crosscheck passes, run
+`shape_cad_route_source_contract_gate(...)` before promoting the package to the
+Cubit/Coreform hex or mixed-mesh lane.  The row should say that it was authored
+by build123d/OCCT (`authoring_source` or `source_kind`), carry a stable
+`geometry_id`, include volume/area/bbox, and route to
+`mesh_route="cubit_hex_or_mixed_path"`.  The external crosscheck summary should
+show both a Cubit/Coreform-style source and another external CAD source group.
+This gate is intentionally stricter than a pure volume check: a tet-only Netgen
+route can be valid for education, but it should not be silently reused as the
+Cubit hex/mixed solver-ready path.
+
+For multi-body STEP round trips, run `shape_name_identity_gate(...)` before
+trusting volume/area/bbox rows.  It compares the named-shape multiset and
+rejects missing, extra, duplicate, or unnamed imported solids.  This catches a
+common assembly failure mode: a source can contain every reference row within
+volume tolerance while also carrying an extra body that would silently enter a
+mesh or solver.
+
+After the name identity gate, run `shape_role_metadata_gate(...)` on a small
+row contract such as
+`{"name": "core", "role": "magnetic_core", "material": "electrical_steel"}`.
+Volume equality proves the body survived; role/material metadata proves the
+body is still solver-ready.  This is intentionally independent from STEP
+entity naming because Cubit, CST, Netgen, and downstream scripts may expose
+labels differently.  Keep the source-of-truth metadata row next to the
+build123d assembly and require the expected names, roles, and materials before
+meshing.
+
+For CAD that will enter the Cubit mixed hex+pyramid+tet lane, also run
+`shape_transition_role_metadata_gate(...)`.  The build123d side keeps the
+solver handoff intent: one row with role `hex_region`, one with role
+`mesh_transition`, and one with role `tet_region`; the transition row must have
+`transition_kind` set to `"pyramid"` and `connects_roles` containing
+`["hex_region", "tet_region"]`.  This is a CAD-side contract only: Cubit later
+creates the actual pyramid transition elements and the `.vol` inventory gate
+checks that they survived export.  When a downstream mixed `.vol` contract
+also requires quad and triangle surface families, pass
+`required_surface_kinds=("quad", "triangle")` and record
+`expected_surface_kinds=["quad", "triangle"]` on the transition row so the CAD
+package and mesh package share the same surface-family intent.
+
+Continuous-loop slot107 (2026-06-29): a build123d coaxial annular sleeve was
+checked across analytic/build123d, build123d STEP reimport, and headless Cubit
+STEP import with `shape_mass_property_crosscheck_summary(..., rtol=1e-4)`.
+The Cubit volume rel error was `3.693299710979559e-5`, while surface area and
+bbox matched within the gate.  Use this pattern when a later CST or Cubit import
+can provide area/bbox rows; append that source as `{"cst_import": rows}` or
+`{"cubit": rows}` instead of inventing a separate one-off checker.
+
+Continuous-loop gate (2026-06-29): a centered
+`Box(4, 3, 2) - Cylinder(r=0.4)` body passed the analytic mass-property gate,
+STEP export, and headless Coreform Cubit 2025.12 import with the same
+`{"name": "box_hole", "volume": 22.994690350851265}` row.  The external CAD
+volume crosscheck reported `max_volume_rel_error = 0.0`.  On Windows, prefer
+`coreform_cubit.com -nographics -batch script.py` for captured headless checks;
+`coreform_cubit.exe` can behave like a launcher and return before a batch script
+has actually executed.
+
+Heavier continuous-loop gate (2026-06-29): an L bracket formed by fusing two
+boxes, subtracting their overlap once, then cutting two through holes passed the
+same STEP -> Cubit volume check with
+`{"name": "l_bracket_two_holes", "volume": 2.8982123980236905}` and
+`max_volume_rel_error = 1.5322866265870984e-16`.  This is a better regression
+than a single box-hole body because it catches boolean union/overlap accounting
+and multiple-hole subtraction before the geometry enters the mesh pipeline.
+
+Boss-and-hole continuous-loop gate (2026-06-29): a mounting plate with a raised
+cylindrical boss, one central through-hole, and four corner through-holes passed
+the same analytic -> build123d -> Cubit STEP import volume contract via
+`mounting_plate_boss_reference_row(...)`.  The reference row was
+`{"name": "mounting_plate_boss_five_holes", "volume": 12.786811880091562}`;
+build123d measured `12.78681188009156`, Cubit measured
+`12.786811880091562`, `max_volume_rel_error = 1.3892101143412853e-16`,
+surface-area rel error `0.0`, and bbox size abs error `0.0`.  Record
+`min_edge_over_characteristic` along with volume; a CAD body can be valid but
+still mesh-hostile if tiny features slip below the meshability threshold.
+
+Curved STEP round-trip gate (2026-06-29): a stepped cylindrical spacer with a
+central bore and four bolt holes matched the analytic and build123d/OCCT volume
+exactly (`4.8536349860900865`), while headless Cubit STEP import measured
+`4.853663401216389` (`rel_error = 5.854366888206992e-6`).  This is acceptable
+for an external CAD-kernel round trip, but it would fail an over-strict
+`1e-6` gate.  Use a two-level policy: analytic/build123d checks can stay near
+`1e-12`, but curved boolean STEP handoff to another CAD kernel should use
+`shape_volume_crosscheck_summary(..., rtol=1e-5)` and also record surface area,
+bbox, and `min_edge_over_characteristic`.
+
+Fixture/terminal-plate continuous-loop gate (2026-06-29): a keyed terminal plate
+with two raised bosses, a rectangular window, an edge key slot, two boss holes,
+and two mirrored mounting holes passed the same analytic -> build123d -> external
+CAD volume contract via `keyed_terminal_plate_reference_row(...)`.
+The reference row was
+`{"name": "keyed_terminal_plate_two_bosses", "volume": 9.364087557965556}`;
+build123d and the external CAD import both measured `9.364087557965554`, with
+`max_volume_rel_error = 1.8969887118250976e-16`, surface-area rel error
+`3.4826588433543787e-16`, bbox size abs error `0.0`, and
+`min_edge_over_characteristic = 0.05`.  This is the recommended pattern for
+motor terminal boards, fixture plates, and sensor brackets: decompose each
+boolean feature into a visible volume term before trusting the downstream mesh
+or solver path.
+
+Flanged sleeve continuous-loop gate (2026-06-29): a coaxial flanged sleeve with
+a central bore, raised hub, and four flange bolt holes extends the same pattern
+to bearing seats, motor fixtures, and shaft-interface hardware.  Use
+`flanged_sleeve_reference_row(...)` to expose flange-annulus, hub-annulus, and
+bolt-hole terms before STEP handoff.  The reference row was
+`{"name": "flanged_sleeve_four_bolt_holes", "volume": 5.085955762823052}`;
+build123d/OCCT measured `5.085955762823052`, while the external CAD import
+measured `5.085958320184421` (`max_volume_rel_error =
+5.028278267134254e-7`).  This is below a `1e-6` round-trip gate but above an
+over-strict `1e-7` gate, so keep analytic/build123d checks tight and external
+curved STEP volume checks at a tolerance that reflects CAD-kernel healing.
+
+Coax annular sleeve continuous-loop gate (2026-06-29): a plain hollow cylinder
+is the CAD companion to the coaxial C/R teaching gate.  Use
+`coax_annular_sleeve_reference_row(inner_radius, outer_radius, height)` before
+promoting a cable shield, winding insulation, or busbar sleeve capacitance into
+an equivalent-circuit table.  The verified slot row was
+`{"name": "coax_annular_sleeve", "volume": 38.453094079939064}` for
+`r_in=0.9`, `r_out=2.1`, `height=3.4`; build123d/OCCT matched the analytic
+volume, while headless Cubit STEP import measured `38.451673891926546`
+(`max_volume_rel_error = 3.693299710979559e-5`) and preserved one volume with
+four analytic surfaces.  Use a `1e-4` external-CAD volume gate for this curved
+annular STEP round trip, while keeping the analytic/build123d gate at `1e-12`.
+
+Ribbed busbar / heat-sink continuous-loop gate (2026-06-29): a rectangular
+base plate with straight raised ribs and four bolt holes outside the fin band
+extends the same volume contract to motor terminals, conduction-cooled busbars,
+and heat-spreader fixtures.  Use
+`ribbed_busbar_heat_sink_reference_row(...)` to expose the base, straight-rib,
+and base-hole terms before STEP handoff.  The reference row for the continuous
+slot is
+`{"name": "ribbed_busbar_heat_sink_four_holes", "volume": 13.617497357233166}`.
+Keep bolt holes outside the fin footprint when you want the analytic volume to
+stay readable; if a hole cuts a rib, make that overlap term explicit before
+trusting the CAD round trip.
+
+Three-phase busbar / snubber-plate continuous-loop gate (2026-06-29): a
+motor-drive plate with three raised phase terminal tabs, two raised snubber
+component pads, and four mounting holes extends the same volume contract to
+drive-protection hardware.  Use
+`three_phase_busbar_snubber_plate_reference_row(...)` to expose the base,
+phase-tab, snubber-pad, and mount-hole terms before STEP handoff.  The verified
+slot row was
+`{"name": "three_phase_busbar_snubber_plate", "volume": 12.30740531929534}`;
+build123d measured `12.307405319295338`, headless Cubit measured
+`12.307405319295343`, and the Cubit import preserved one volume, 35 surfaces,
+and bbox size `[9.0, 3.6, 0.8]`.  This is a compact public-safe bridge from
+motor-control snubber topics to CAD: before debating EMI or switching behavior,
+make the terminal/snubber geometry measurable and repeatable.
+
+RCD snubber heat-spreader continuous-loop gate (2026-06-29): a ribbed base
+plate with two raised snubber pads and four mounting holes extends the same
+contract to drive-protection and thermal hardware.  Use
+`rcd_snubber_heat_spreader_reference_row(...)` to expose base, straight-rib,
+snubber-pad, and mount-hole terms.  The verified slot row was
+`{"name": "rcd_snubber_heat_spreader", "volume": 15.52205629192717}`;
+build123d measured `15.522056291927165`, headless Cubit measured
+`15.522056291927173`, and the Cubit import preserved one volume, 45 surfaces,
+and bbox size `[10.0, 4.0, 0.77]`.  Keep snubber pads outside the rib band
+unless an explicit pad-rib overlap term is added; the first slot attempt caught
+a `0.114` volume mismatch from a pad sitting on the edge rib.  This is a useful
+CAD-learning gate: readable analytic decomposition should fail early when the
+physical feature layout no longer matches the algebra.
+
+RCD capacitance sweep design-table gate (slot99): when a public motor-drive
+lesson varies snubber capacitance to reduce overshoot, keep the electrical
+value as explicit metadata next to the CAD variant instead of inferring it from
+pad area.  Use `rcd_snubber_capacitance_sweep_rows([0.047, 0.10, 0.22],
+[1.05, 1.25, 1.55])`, then audit it with
+`shape_parameter_sweep_summary(..., parameter_key="capacitance_uF",
+metric_keys=("volume", "snubber_pad_volume"))`.  This produces design-table
+rows whose capacitance, pad length, snubber-pad volume, and total heat-spreader
+volume stay together before the row is passed to circuit, thermal, Cubit, or
+CST validation.
+
+Thermal Robin cooling plate continuous-loop gate (2026-06-29): a base plate
+with straight cooling fins, two raised device pads, and four base-only mounting
+holes connects the CAD volume contract to conduction/convection teaching
+examples.  Use `thermal_robin_cooling_plate_reference_row(...)` to expose base,
+straight-fin, device-pad, and mount-hole terms before applying a Robin boundary
+or exporting to a mesh tool.  The verified slot row was
+`{"name": "thermal_robin_cooling_plate", "volume": 15.11290974078757}`;
+build123d measured `15.112909740787572`, headless Cubit measured
+`15.112909740787561`, and the Cubit import preserved one volume, 40 surfaces,
+and bbox size `[9.0, 4.5, 0.85]`.  Keep fins, pads, and holes disjoint unless
+an explicit overlap term is added.  For Coreform Cubit batch scripts launched
+with `coreform_cubit.com -nographics -batch`, avoid multi-line dict literals in
+the playback file; Cubit evaluates the file line-by-line in this mode, so write
+JSON records either as one-line dict assignments or by building the dictionary
+incrementally.
+
+Motor-housing thermal handoff gate (2026-07-11):
+`build123d_motor_housing_thermal_reference` returns the analytic multi-body
+volume, total separate-body surface area, body count, and curved-STEP
+tolerances for a cylindrical sleeve plus radial cooling fins.  The verified
+42/50/90 mm sleeve with eight 12 x 3 x 90 mm fins has nine bodies, volume
+`234019.097373788 mm^3`, and area `78825.19872953116 mm^2`.  Headless Cubit
+measured `233997.78602906506 mm^3` and the same area to `1.4e-14` relative;
+use the recorded `1e-4` curved-STEP volume tolerance and exact body-count gate.
+Keep the bodies separate until thermal contact/tie semantics are explicit.
+
+V-type IPM rotor-coupon continuous-loop gate (2026-06-29): a rectangular
+lamination coupon with two mirrored angled magnet pockets and a central bore
+is a readable public-safe proxy for IPM rotor CAD before a full rotor sector.
+Use `v_type_ipm_rotor_coupon_reference_row(...)` to expose the coupon,
+two-pocket, and bore terms before STEP handoff.  The verified reference row is
+`{"name": "v_type_ipm_rotor_coupon", "volume": 13.238339620676824}`.  Keep the
+magnet pockets fully inside the coupon, clear of the bore, and clear of each
+other; otherwise the analytic volume must include overlap terms and is no
+longer a simple pre-FEM gate.
+
+Use the full `shape_measurement_health_summary(...)` only when the other CAD
+side also supplies area and bounding boxes.  Keep private tool provenance in
+the private lane; public artifacts should describe this as an external CAD
+volume check.
+
+## Related topics
+- `cubit_rosetta` — verb-by-verb mapping Cubit ↔ build123d
+- `examples_intro` — 36 build123d patterns from upstream docs
+- `cae_guidelines` — clean-geometry rules for meshing
+
+The companion mcp-server-cubit has the matching
+`scripting_lab_policy` / `scripting_build123d_crossref` topics.
+"""
+
+CUBIT_ROSETTA = """\
+# Cubit ↔ build123d Rosetta Stone (CAD subset)
+
+Side-by-side mapping for the most common Cubit CAD verbs and their
+build123d equivalents.  Use this when porting `.jou` scripts or when
+writing build123d by a Cubit-trained mental model.
+
+**Scope**: geometry only. Mesh directives, blocks, sidesets, imprint,
+merge, and hex-sweep schemes are **intentionally absent** — they have
+no direct build123d equivalent (see `lab_policy`).
+
+## 3D primitives
+
+| Cubit journal | build123d |
+|---|---|
+| `create brick x 10 y 20 z 5` | `Box(10, 20, 5)` |
+| `create cylinder radius 3 height 10` | `Cylinder(radius=3, height=10)` |
+| `create sphere radius 5` | `Sphere(radius=5)` |
+| `create prism height 10 sides 6 radius 5` | `extrude(RegularPolygon(radius=5, side_count=6), amount=10)` |
+| `create torus major radius 10 minor radius 2` | `Torus(major_radius=10, minor_radius=2)` |
+| `create cone radius 3 radius2 1 height 10` | `Cone(bottom_radius=3, top_radius=1, height=10)` |
+
+## 2D sketch primitives (prefixed with `BuildSketch` or algebra mode)
+
+| Cubit journal | build123d |
+|---|---|
+| `create surface rectangle width 10 height 5` | `Rectangle(10, 5)` |
+| `create surface circle radius 5` | `Circle(5)` |
+| `create surface polygon sides 6 radius 5` | `RegularPolygon(5, side_count=6)` |
+
+## Boolean operations
+
+| Cubit journal | build123d |
+|---|---|
+| `subtract volume 2 from volume 1` | `v1 - v2` |
+| `unite volume 1 2` | `v1 + v2` |
+| `intersect volume 1 2` | `v1 & v2` |
+| `chop volume 1 with plane zplane offset 0` | `split(v1, Plane.XY, keep=Keep.BOTH)` |
+
+## Transforms
+
+| Cubit journal | build123d |
+|---|---|
+| `move volume 1 x 10 y 0 z 0` | `Pos(10, 0, 0) * v1` |
+| `rotate volume 1 angle 45 about z` | `Rot(0, 0, 45) * v1` or `v1.rotate(Axis.Z, 45)` |
+| `scale volume 1 2` | `Pos((0,0,0), (0,0,0)) * v1.scale(2)` |
+| `reflect volume 1 about yplane` | `mirror(v1, about=Plane.YZ)` |
+
+## Sweep / revolve / loft
+
+| Cubit journal | build123d |
+|---|---|
+| `sweep surface 1 along curve 1` | `sweep(sketch, path=line)` |
+| `sweep surface 1 perpendicular distance 10` | `extrude(sketch, amount=10)` |
+| `revolve surface 1 about z angle 360` | `revolve(sketch_on_plane_containing_axis, axis=Axis.Z, revolution_arc=360)` |
+| `create volume loft surface 1 2 3` | `loft([sk1, sk2, sk3])` |
+
+### Revolve idiom (common Cubit → build123d remap)
+
+Cubit pattern — sketch on `zplane`, move out to radius, revolve about Z:
+```
+create surface rectangle width 5 height 10 zplane
+move surface 1 x 20 y 0 z 0
+revolve surface 1 about z angle 360
+```
+build123d equivalent — sketch placed on `Plane.XZ` (which contains the
+Z axis) at offset via Pos, then `revolve`:
+```python
+profile = Plane.XZ * Pos(20, 0) * Rectangle(5, 10)
+ring = revolve(profile, axis=Axis.Z)
+```
+Key swap: Cubit's "sketch in zplane then move" ↔ build123d's
+"Plane.XZ * Pos(...) * sketch". The revolve axis must lie **in** the
+sketch plane, so `Plane.XZ` or `Plane.YZ` are the common choices for
+`axis=Axis.Z`.
+
+## Fillet / chamfer
+
+| Cubit journal | build123d |
+|---|---|
+| `modify curve 1 blend radius 0.5` | `fillet(edge_selection, radius=0.5)` |
+| `modify curve in volume 1 blend radius 0.5` | `fillet(part.edges(), radius=0.5)` (all edges) |
+| `chamfer curve 1 length 0.5` | `chamfer(edge_selection, length=0.5)` |
+
+Edge selection in build123d uses selectors, e.g.
+`part.edges().sort_by(Axis.Z)[-1]` for top edge,
+`part.edges().group_by(Axis.Z)[-1]` for top-face ring,
+`part.edges()` for **all edges** (the "modify curve in volume N" case).
+
+## IDs vs variables
+
+| Cubit model | build123d model |
+|---|---|
+| Implicit numbered IDs: `volume 1`, `surface 3`, `curve 5` | Explicit Python variables: `part`, `sk`, `edges` |
+| `rename volume 1 "coil"` | `part.label = "coil"` |
+| `group "coils" add volume 1 2 3` | `coils = Compound(children=[v1, v2, v3])`; `coils.label = "coils"` |
+| `reset` | (no equivalent — build123d scripts start fresh each run, nothing to reset) |
+
+### Compound vs fused Part
+
+- `Compound(children=[v1, v2, v3])` — **tree-structured assembly**. Each
+  child keeps its own `.label` and geometry; good for multi-region
+  meshing via the `run_pipeline_multi` bridge (labels → physical groups).
+- `v1 + v2 + v3` — **fused single solid** (boolean union). Labels on the
+  children are lost; the result has a single volume. Use when the
+  downstream consumer treats the geometry as one part (e.g., single
+  domain FEM).
+- Heuristic: if the downstream pipeline will want **per-region material
+  names**, build a Compound. If you want one contiguous solid for a
+  single-domain mesh, fuse with `+`.
+
+## What has NO build123d equivalent (keep `.jou`!)
+
+- `imprint all` / `merge all` — build123d doesn't expose multi-body
+  shared-topology operations; it uses OCCT's Compound model directly.
+  If a design needs imprinted+merged faces for conformal meshing with
+  hex, **stay in Cubit**.
+- `mesh volume N`, `scheme tetmesh`, `size ...`, `interval N` —
+  meshing is Netgen's job downstream. Pass `maxh=...` to
+  `OCCGeometry(...).GenerateMesh(maxh=maxh)`.
+- `block 1 volume all`, `sideset 1 surface X`, `nodeset 1 curve Y` —
+  use build123d labels + Compound children + the
+  `run_pipeline_multi` bridge that maps labels to Gmsh physical groups.
+- `export mesh "file.e"` (Exodus) — not part of the build123d pipeline.
+  Export via NGSolve Mesh: `mesh.Export("file.msh", "Gmsh Format")`.
+- Cubit APREPRO variables (`{var = 10}`) — use plain Python variables.
+
+## Decision help
+
+If more than ~20% of a `.jou` file is in the "no equivalent" table
+above, **don't translate it** — keep the `.jou`, run it through Cubit,
+export hex to Radia/ELF. build123d is the wrong tool for that design.
+
+If the `.jou` is purely CAD primitives + booleans + sweep/revolve,
+translation to build123d is straightforward using the tables above,
+and the result will plug into the Netgen tet pipeline.
+"""
+
+
+EXAMPLES_LAB_PATTERNS = """\
+# Lab-domain CAD patterns (build123d)
+
+Parametric archetypes for the research lab's three application
+domains: induction heating (IH), accelerator magnets, and magnetic
+levitation, plus PEEC filament CAD. Each pattern is tet-pipeline
+friendly (build123d → Netgen → Gmsh). Hex-required designs (e.g.,
+large-scale Radia/ELF hex workpieces) stay in Cubit — see
+`lab_policy`.
+
+## IH coil archetypes
+
+### 1. Single-turn ring coil (simplest)
+
+```python
+from build123d import Cylinder, Pos
+
+r_in, r_out, h = 22.0, 28.0, 10.0   # mm
+coil = Cylinder(radius=r_out, height=h) - Cylinder(radius=r_in, height=h)
+coil.label = "coil"
+```
+Use: low-frequency IH concept demos, circuit-extraction sanity checks.
+
+### 2. Helical multi-turn coil (realistic IH / inductor)
+
+Use the `generate_helix_coil` MCP tool directly; or inline:
+```python
+import math
+from build123d import BuildSketch, Rectangle, Plane, loft
+
+R, pitch, n_turns = 30.0, 6.0, 5.0    # mm
+w, h = 3.0, 3.0                        # cross-section
+n_sec = int(n_turns * 12) + 1
+sketches = []
+for i in range(n_sec):
+    t = i / (n_sec - 1)
+    angle = 2 * math.pi * n_turns * t
+    z = pitch * n_turns * t
+    cx, cy = R * math.cos(angle), R * math.sin(angle)
+    dx, dy, dz = (
+        -R * math.sin(angle) * 2 * math.pi * n_turns,
+         R * math.cos(angle) * 2 * math.pi * n_turns,
+         pitch * n_turns,
+    )
+    norm = math.sqrt(dx*dx + dy*dy + dz*dz)
+    tangent = (dx/norm, dy/norm, dz/norm)
+    x_dir = (tangent[1], -tangent[0], 0)
+    x_norm = math.hypot(x_dir[0], x_dir[1]) or 1.0
+    x_dir = (x_dir[0]/x_norm, x_dir[1]/x_norm, 0)
+    plane = Plane(origin=(cx, cy, z), x_dir=x_dir, z_dir=tangent)
+    with BuildSketch(plane) as sk:
+        Rectangle(w, h)
+    sketches.append(sk.sketch)
+
+coil = loft(sketches); coil.label = "coil"
+```
+Use: IH inductor field solve, PEEC filament extraction (feed the
+centerline path to `section_along_path` tool).
+
+### 3. Pancake coil (flat spiral)
+
+```python
+import math
+from build123d import BuildSketch, BuildLine, Spline, make_face, Plane, extrude
+
+R0, dR_per_turn, n_turns, track_w, thickness = 5.0, 2.5, 6, 1.5, 1.0
+n_pts = 400
+pts = []
+for i in range(n_pts):
+    t = i / (n_pts - 1) * n_turns
+    r = R0 + dR_per_turn * t
+    ang = 2 * math.pi * t
+    pts.append((r * math.cos(ang), r * math.sin(ang)))
+
+with BuildLine() as center:
+    Spline(*pts)
+# Sweep a rectangular cross-section of width track_w along this path,
+# then extrude the resulting 2D trace by the PCB thickness.
+# (For CAE, a simpler extruded-strip approximation suffices.)
+```
+Use: PCB-style IH pancakes, wireless power TX/RX coils.
+
+## Accelerator magnet archetypes
+
+### 4. Dipole yoke quarter (BEM-friendly with symmetry)
+
+```python
+from build123d import BuildSketch, BuildLine, Line, CenterArc, make_face, Plane, extrude
+
+R_bore, R_outer, L_half = 30.0, 150.0, 200.0   # mm
+with BuildSketch(Plane.XZ) as yoke_sk:
+    with BuildLine():
+        Line((R_bore, 0), (R_outer, 0))
+        CenterArc((0, 0), R_outer, 0, 90)
+        Line((0, R_outer), (0, R_bore))
+        CenterArc((0, 0), R_bore, 90, -90)
+    make_face()
+yoke = extrude(yoke_sk.sketch, amount=L_half)
+yoke.label = "iron_yoke"
+```
+Use: Radia dipole field, beam trajectory calculation (scope upper bound
+= beam tracking; MBD is out of current scope per `lab_policy`).
+
+### 5. Quadrupole pole tip (quarter model)
+
+```python
+# Hyperbolic pole face (simplified by a parabolic approximation
+# adequate for initial BEM modeling)
+from build123d import BuildSketch, BuildLine, Polyline, make_face, Plane, extrude
+
+aperture, pole_half_width, L_half = 25.0, 30.0, 300.0
+with BuildSketch(Plane.XZ) as pole:
+    with BuildLine():
+        Polyline(
+            (aperture, aperture),
+            (aperture + pole_half_width, aperture),
+            (aperture + pole_half_width, aperture + 50),
+            (aperture, aperture + 50),
+            close=True,
+        )
+    make_face()
+pole_tip = extrude(pole.sketch, amount=L_half)
+pole_tip.label = "pole_tip_q1"
+```
+Use: quadrupole field modeling, pole shape optimization.
+
+## Halbach segmented PM array
+
+### 6. Halbach ring (labels-per-segment for magnetization direction)
+
+Use the tested generator (no hand-rolled wedge math):
+
+```python
+from radia_mcp.build123d.archetypes import halbach_ring, parse_magnetization
+
+# 12-segment DIPOLE Halbach ring (pole_pairs=1 -> uniform transverse bore field)
+hb = halbach_ring(r_in=40, r_out=55, h=20, n_segments=12, pole_pairs=1, name="hb")
+# each child is a real annular wedge whose label encodes its easy-axis angle:
+for seg in hb.children:
+    m_deg = parse_magnetization(seg.label)     # e.g. "hb_00_M30.000" -> 30.0
+    # solver side: M = Br * (cos(m_deg), sin(m_deg), 0)
+```
+
+Key idea: each segment's **label encodes the magnetization (easy-axis) angle** via the
+``_M<deg>`` suffix, set by the Mallinson law ``alpha_k = (pole_pairs+1)*theta_k`` (so the dipole
+array's easy axis advances at TWICE the mechanical angle, a quadrupole at 3x).  The solver (Radia)
+recovers it with ``archetypes.parse_magnetization`` and sets the magnetization direction;
+``radia_mcp.build123d.pipeline.run_pipeline_multi`` carries the labels to Gmsh physical
+groups, preserving the mapping.  The underlying wedge is
+``radia_mcp.build123d.modeling.annular_segment`` (full annulus intersected with a pie slice -- robust
+for any span); ``polar_array`` tiles it.  See the `parametric_library` topic for the full op +
+archetype set.
+
+## PEEC filament CAD
+
+### 7. Variable-cross-section helix for PEEC
+
+Use the `generate_helix_coil` MCP tool with a taper:
+```python
+generate_helix_coil(
+    radius=50.0, pitch=10.0, n_turns=5.0,
+    w_start=4.0, h_start=4.0,   # bottom cross-section
+    w_end=2.0,   h_end=2.0,     # top cross-section (thinner)
+    sections_per_turn=12,
+    label="tapered_coil",
+    export_dir="runs",
+)
+```
+Then call `section_along_path(step_file, helix_path_json)` with the
+centerline from the same tool, and feed per-segment (w, h) into
+`PEECBuilder.add_connected_segment(...)`.
+
+## Magnetic levitation (scope: CAD + SimMechanics connection)
+
+### 8. EMS attractive-force electromagnet + rail (SimMechanics ready)
+
+```python
+from build123d import Box, Cylinder, Pos, Compound
+
+# Electromagnet (C-core)
+core_w, core_h, core_d, gap = 60.0, 40.0, 50.0, 5.0
+core = (Box(core_w, core_h, core_d)
+        - Pos(0, 0, 0) * Box(core_w - 20, core_h - 10, core_d + 2))
+core.label = "magnet_core"
+
+# Rail (levitated body)
+rail = Pos(0, -(core_h/2 + gap + 10/2), 0) * Box(core_w * 3, 10, core_d)
+rail.label = "rail"
+
+levitation = Compound(children=[core, rail])
+levitation.label = "maglev_system"
+```
+Use: Radia force calculation per vertical position → feed to
+SimMechanics as a force-vs-displacement table. Scope per lab_policy:
+stops at SimMechanics connection (control loop is out of scope).
+
+## Pattern → pipeline fit
+
+| Pattern | Pipeline | Notes |
+|---|---|---|
+| Single-turn ring | tet, multi-region | `run_pipeline_multi`, label per region |
+| Helical coil | tet | single region enough for field; PEEC via section helper |
+| Pancake coil | tet | thin; watch min-edge quality |
+| Dipole / Quad yoke | tet with symmetry planes | Radia handles quarter model natively |
+| Halbach ring | tet, **multi-region** | segment labels drive magnetization |
+| Tapered coil (PEEC) | post-solve (no mesh) | PEEC operates on filaments, not FEM mesh |
+| Maglev EMS | tet, multi-region | rail + core, fuse or compound |
+"""
+
+
+JOINTS_AND_MATES = """# Joints, Locations, and Assembly Mates
+
+build123d has first-class joint objects for kinematic / assembly
+relationships, mirroring FreeCAD / Fusion 360 mates.
+
+## Core joint types
+
+| class            | motion                        | typical use                |
+|------------------|-------------------------------|----------------------------|
+| `RigidJoint`     | none — glued pose             | bracket ↔ plate            |
+| `RevoluteJoint`  | single rotation axis          | hinge, axle                |
+| `LinearJoint`    | single translation axis       | slide, drawer              |
+| `CylindricalJoint` | rotate + slide along axis   | piston                     |
+| `BallJoint`      | 3-dof rotation                | knee, trackball            |
+
+## Minimal example
+
+```python
+from build123d import BuildPart, Box, Location, RigidJoint, export_step
+
+# Two parts
+with BuildPart() as plate:
+    Box(40, 40, 5)
+plate_part = plate.part
+plate_part.label = "plate"
+
+with BuildPart() as block:
+    Box(10, 10, 10)
+block_part = block.part
+block_part.label = "block"
+
+# Add named joints to each
+RigidJoint("top",  plate_part, Location((0, 0, 2.5)))
+RigidJoint("base", block_part, Location((0, 0, -5)))
+
+# Connect
+plate_part.joints["top"].connect_to(block_part.joints["base"])
+
+export_step(plate_part, "plate_with_block.step")
+```
+
+## Lab conventions
+
+1. Name every joint. Anonymous joints survive the STEP boundary as
+   anonymous locations, losing semantic meaning.
+2. Use `RigidJoint` for everything unless you explicitly need DOFs —
+   FEM consumers (Cubit, ngsolve) treat parts as rigidly glued
+   anyway.
+3. For radia-coil assemblies (coil + iron pole + air gap), rigid-
+   join each part to a shared origin frame so the exported STEP has
+   coincident coordinate systems (mesh imprint/merge picks up the
+   interfaces automatically).
+"""
+
+
+ASSEMBLIES_AND_COMPOUNDS = """# Assemblies: Compound, naming, STEP round-trip
+
+build123d represents assemblies as `Compound` objects — a tree of
+`Shape`s with shared children.  The STEP exporter walks the tree,
+preserving labels as block names (critical for Cubit downstream).
+
+## Build a compound
+
+```python
+from build123d import (
+    BuildPart, Box, Cylinder, Compound, Location, Mode, export_step,
+)
+
+with BuildPart() as magnet:
+    Box(20, 20, 10)
+    magnet.part.label = "magnet"
+
+with BuildPart() as pole:
+    Box(30, 30, 5, align=(0.5, 0.5, 0))
+    pole.part.label = "pole"
+pole.part.locate(Location((0, 0, 10)))
+
+with BuildPart() as air:
+    Box(100, 100, 100, align=(0.5, 0.5, 0))
+    with BuildPart(mode=Mode.SUBTRACT) as _cut:
+        Box(20, 20, 10)
+    air.part.label = "air"
+
+asm = Compound(children=[magnet.part, pole.part, air.part])
+export_step(asm, "asm.step")
+```
+
+## Labels matter
+
+STEP round-trip preserves `shape.label`.  After `import step "asm.step"`
+in Cubit, `block N add volume all; block N name "<label>"` will show
+"magnet", "pole", "air" — so physical-group naming is free.
+
+## Reverse: read assembly from STEP
+
+```python
+from build123d import import_step
+compound = import_step("asm.step")
+for child in compound.children:
+    print(child.label, child.volume)
+```
+"""
+
+
+CAE_WORKFLOW_TIPS = """# CAE workflow tips — getting from build123d to clean hex mesh
+
+## Pipeline (lab standard, 2026-04-19)
+
+```
+build123d (Python) → STEP → Cubit (hex mesh) → .msh v4.1 or .vol
+                                              → ngsolve / radia_ngsolve
+                                              → Abaqus / Nastran / other FEA
+```
+
+One-call equivalents (radia-mcp ≥ 0.17):
+  * `build123d_to_cubit_hex(script, target_size=1.0)` — build123d →
+    STEP → `cubit_mesh_auto` → persistent headless replay.
+  * `cadquery_to_cubit_hex(...)` — same from cadquery source.
+
+## Hex-friendly geometry checklist
+
+1. **Prismatic**: extruded 2D sketches sweep to pure hex trivially.
+2. **Simple topology**: ≤ 8 surfaces per volume usually sweeps. The
+   `cubit_mesh_auto` geometry-split rung (0.16+) auto-webcuts when
+   `surfaces/volume > 7`.
+3. **Clean edges**: no micro-edges (< 1e-3 of characteristic length);
+   `lint_build123d_script` flags fillets/chamfers below threshold.
+4. **Coincident faces**: when assembling, rigidly-join parts so
+   shared faces are exactly coincident → Cubit's `imprint all;
+   merge all` picks them up without tolerance drift.
+5. **Named bodies**: set `part.label = "..."` for every region you
+   want as a Cubit block.
+
+## Unit convention
+
+build123d default units are **mm**. STEP preserves units. Cubit's
+mesh-size command takes the same unit scale, so `volume all size 1.0`
+= 1 mm hex edge on a 30-mm-side block = ~30 hexes per edge.
+
+For SI workflows (meters), scale the Cubit side: `volume all size
+0.001` = 1 mm for a model drawn in meters. Getting this wrong is
+the #1 reason "mesh is too fine / too coarse" calls come in.
+
+## Why build123d over cadquery for this pipeline
+
+1. Builder API is less error-prone in complex assemblies (explicit
+   context > chained `Workplane`).
+2. First-class `Compound` + labels survive STEP → Cubit better.
+3. Same OCCT backend, so interop is lossless via `execute_cadquery`
+   / `cadquery_to_cubit_hex` when users bring cadquery scripts.
+"""
+
+
+PLANE_AXIS_LOCATION_COOKBOOK = """# Plane / Axis / Location cookbook
+
+Three small classes cause ≥50% of "why doesn't this work" moments in
+build123d. Memorize the patterns below.
+
+## Plane: a sketching / operation surface with orientation
+
+### Built-in planes
+
+```python
+from build123d import Plane
+
+Plane.XY    # z-up, normal = +Z, x_dir = +X, origin (0,0,0)
+Plane.XZ    # y-up, normal = +Y, x_dir = +X
+Plane.YZ    # x-up, normal = +X, x_dir = +Y
+Plane.front # alias for XZ (visualisation term)
+Plane.top   # alias for XY
+Plane.right # alias for YZ
+# ... also Plane.back / Plane.bottom / Plane.left  (the negatives)
+```
+
+### Offset a plane along its normal
+
+```python
+sketch_plane = Plane.XY.offset(10)          # 10 mm up in +Z
+```
+
+### Build a plane at arbitrary origin + orientation
+
+```python
+# Plane with origin (10, 0, 0), normal pointing in -X, sketch x-axis = +Y
+p = Plane(origin=(10, 0, 0), x_dir=(0, 1, 0), z_dir=(-1, 0, 0))
+```
+
+`x_dir` fixes the in-plane "right" direction; `z_dir` fixes the
+out-of-plane normal. Both must be unit-ish; build123d normalizes.
+
+### Plane × Location (rotate / translate a plane)
+
+```python
+rotated = Plane.XY * Rotation(0, 0, 45)      # 45° about Z
+moved   = Plane.XY * Location((0, 0, 20))    # 20 mm up
+combined = Plane.XY * Location((5, 0, 0), (90, 0, 0))  # translate + rotate
+```
+
+### Use a plane to place a BuildSketch
+
+```python
+from build123d import BuildPart, BuildSketch, Rectangle, extrude, Plane
+
+with BuildPart() as bp:
+    with BuildSketch(Plane.XY.offset(10)) as sk:    # sketch lives 10 mm up
+        Rectangle(10, 5)
+    extrude(amount=5)
+```
+
+### Use a face as a plane
+
+```python
+top_face = bp.part.faces().sort_by(Axis.Z)[-1]
+with BuildSketch(top_face) as sk:                   # accept Face where Plane expected
+    Rectangle(3, 3)
+extrude(amount=2)
+```
+
+## Axis: an infinite line used for rotation / selection
+
+### Built-in axes
+
+```python
+from build123d import Axis
+Axis.X   # line through origin in +X
+Axis.Y   # line through origin in +Y
+Axis.Z   # line through origin in +Z
+```
+
+### Custom axis
+
+```python
+# Axis through (1, 0, 0) in direction (0, 1, 1) (normalized internally)
+a = Axis(origin=(1, 0, 0), direction=(0, 1, 1))
+```
+
+### Rotate a shape about an axis
+
+```python
+# Note: Shape.rotate(axis, angle) — axis first, angle second
+rotated = part.rotate(Axis.Z, 45)
+rotated = part.rotate(Axis((1, 0, 0), (0, 0, 1)), 30)
+```
+
+Common mistake: `part.rotate(45, axis=(0,0,1))` → `TypeError: got
+multiple values for argument 'axis'`. The shape method takes `axis`
+as the FIRST positional. Pass an `Axis`, not a tuple.
+
+### Select faces along an axis
+
+```python
+from build123d import SortBy
+top_face = part.faces().sort_by(Axis.Z)[-1]   # highest face along Z
+bottom   = part.faces().sort_by(Axis.Z)[0]    # lowest
+```
+
+## Location: rigid-body pose (position + orientation)
+
+### Just a translation
+
+```python
+from build123d import Location
+loc = Location((10, 0, 0))
+```
+
+### Translation + Euler rotation (degrees)
+
+```python
+loc = Location((10, 0, 0), (0, 0, 45))       # translate + rotate 45° about Z
+loc = Location((0, 0, 0),  (90, 0, 0))       # rotate 90° about X
+```
+
+### Rotation-only
+
+```python
+from build123d import Rotation
+loc = Rotation(0, 0, 45)                     # pure 45° about Z
+```
+
+### Apply a Location to a shape
+
+```python
+# Absolute placement (replaces any existing location)
+placed = part.locate(loc)
+# Relative placement (multiplies current location)
+placed = part.located(loc)
+# Shorthand via operator
+placed = part * loc
+```
+
+### Use a Location to place a BuildPart context
+
+```python
+# Open a BuildPart whose "identity" is already at a specific pose
+from build123d import BuildPart, Box, Mode, Location
+
+with BuildPart() as outer:
+    Box(10, 10, 10)
+    with BuildPart(Location((0, 0, 10)), mode=Mode.SUBTRACT):
+        Box(3, 3, 3)          # subtract a 3-cube centered at (0,0,10)
+```
+
+## Common recipes
+
+### Sketch on the top face of an existing part
+
+```python
+top = part.faces().sort_by(Axis.Z)[-1]
+with BuildSketch(top) as sk:
+    Circle(3)
+extrude(amount=5)
+```
+
+### Sketch on a plane rotated about Z
+
+```python
+with BuildSketch(Plane.XY * Rotation(0, 0, 30)) as sk:
+    Rectangle(10, 5)
+```
+
+### Place a part at polar coordinates
+
+```python
+import math
+for i in range(6):
+    deg = 60 * i
+    r = 20
+    pose = Location((r * math.cos(math.radians(deg)),
+                     r * math.sin(math.radians(deg)), 0), (0, 0, deg))
+    with BuildPart(pose):
+        Box(3, 3, 3)
+```
+
+### Offset a face's own plane outward by some distance
+
+```python
+cap = part.faces().sort_by(Axis.X)[-1]
+cap_plane = Plane(cap).offset(5)    # 5 mm along the face normal
+```
+"""
+
+
+BUILDER_VS_ALGEBRA_ROSETTA = """# Builder API vs Algebra API — side-by-side rosetta
+
+build123d ships two styles of script. Pick ONE per script; mixing
+leads to confusion. The lab standard is **Builder API** (clearer scope,
+explicit context, less clever-one-liners).
+
+| Goal | Builder API (`with ...` context) | Algebra API (direct operators) |
+|---|---|---|
+| 3-D box | `with BuildPart() as bp:`<br>`    Box(10, 10, 10)`<br>`part = bp.part` | `part = Box(10, 10, 10)` |
+| Extrude sketch | `with BuildPart() as bp:`<br>`    with BuildSketch() as sk:`<br>`        Rectangle(10, 5)`<br>`    extrude(amount=3)` | `sk = Rectangle(10, 5)`<br>`part = extrude(sk, amount=3)` |
+| Sweep along path | `with BuildPart() as bp:`<br>`    with BuildLine() as ln:`<br>`        Line((0,0,0), (10,0,0))`<br>`    with BuildSketch() as sk:`<br>`        Rectangle(2, 2)`<br>`    sweep(sk.sketch, path=ln.line)` | `ln = Line((0,0,0), (10,0,0))`<br>`sk = Rectangle(2, 2)`<br>`part = sweep(sk, path=ln)` |
+| Subtract hole | `with BuildPart() as bp:`<br>`    Box(20, 20, 10)`<br>`    with BuildPart(mode=Mode.SUBTRACT):`<br>`        Cylinder(radius=3, height=20)` | `base = Box(20, 20, 10)`<br>`hole = Cylinder(radius=3, height=20)`<br>`part = base - hole` |
+| Union (add) | `with BuildPart() as bp:`<br>`    Box(10, 10, 10)`<br>`    Sphere(radius=4)  # default Mode.ADD` | `part = Box(10, 10, 10) + Sphere(radius=4)` |
+| Intersect | `with BuildPart() as bp:`<br>`    Box(10, 10, 10)`<br>`    Sphere(radius=6, mode=Mode.INTERSECT)` | `part = Box(10, 10, 10) & Sphere(radius=6)` |
+| Fillet all edges | `fillet(bp.part.edges(), radius=0.5)` | `part = fillet(part.edges(), radius=0.5)` |
+| Place on rotated plane | `with BuildSketch(Plane.XY * Rotation(0, 0, 45)):`<br>`    Rectangle(5, 5)` | `sk = Rectangle(5, 5) * Rotation(0, 0, 45) * Location((0,0,0))` |
+| Assembly | `with BuildPart() as a: Box(10, 10, 10)`<br>`with BuildPart() as b: Sphere(5)`<br>`asm = Compound(children=[a.part, b.part])` | `a = Box(10, 10, 10)`<br>`b = Sphere(5)`<br>`asm = Compound(children=[a, b])` |
+
+## When to pick which
+
+| Situation | Prefer |
+|---|---|
+| Multi-step composition, nested modes | Builder (explicit scope) |
+| One-liner parametric formula | Algebra (terser) |
+| Teaching / onboarding | Builder (verbose → easier to debug) |
+| Porting from CadQuery | Either, but Builder maps more clearly |
+| Functional / immutable style | Algebra |
+
+## Operators (Algebra API)
+
+| Operator | Meaning |
+|---|---|
+| `a + b` | union |
+| `a - b` | subtract |
+| `a & b` | intersect |
+| `a * loc` | apply Location (translate / rotate) |
+| `a * rot` | apply Rotation |
+
+## Mode (Builder API, and mode kwarg on Algebra ops)
+
+```python
+from build123d import Mode
+Mode.ADD         # union (default for most primitives inside BuildPart)
+Mode.SUBTRACT    # boolean subtract
+Mode.INTERSECT   # boolean intersect
+Mode.REPLACE     # overwrite (useful in BuildSketch)
+Mode.PRIVATE     # scratchpad; not merged into context
+```
+
+## Sketch-side operators
+
+| Goal | Builder | Algebra |
+|---|---|---|
+| Rectangle | `Rectangle(10, 5)` inside `BuildSketch` | `sk = Rectangle(10, 5)` |
+| Subtract hole | `Circle(2, mode=Mode.SUBTRACT)` inside `BuildSketch` | `sk = Rectangle(10, 5) - Circle(2)` |
+| Union | `Rectangle(10, 5)` + another shape in same `BuildSketch` | `sk = Rectangle(10, 5) + Circle(2)` |
+
+## Gotcha: the "pending" concept
+
+Inside a `BuildPart` with a nested `BuildLine`, the line becomes a
+**pending path** that subsequent `sweep(sketch)` can consume. The
+Algebra API has no pending concept — you pass `path=` explicitly.
+
+```python
+# Builder: sweep picks up the pending line automatically
+with BuildPart() as bp:
+    with BuildLine() as ln:
+        Line((0,0,0), (10,0,0))
+    with BuildSketch() as sk:
+        Rectangle(2, 2)
+    sweep(sk.sketch)                     # <-- no path=, uses ln.line
+
+# Algebra: always pass path=
+sk = Rectangle(2, 2)
+ln = Line((0,0,0), (10,0,0))
+part = sweep(sk, path=ln)                # <-- explicit
+```
+
+`lint_build123d_script` flags `sweep(sketch)` positional calls
+without `path=` because the pending-curve implicit mode is a frequent
+source of `BRep_API: Make Shape failed` when forgotten.
+"""
+
+
+from .build123d_api import get_api_reference as _get_b3d_api_reference
+
+
+PARAMETRIC_LIBRARY = r"""
+# Parametric modeling library (radia_mcp.build123d.modeling + .archetypes)
+
+A small, **tested** library of solid-modeller operations and EM-device archetypes -- the parametric
+building blocks you would author in a parametric solid modeller, as clean Netgen-meshable build123d
+solids with region labels.  Pure build123d (no radia_mcp dependency at runtime), so they import as a
+library OR copy-paste into an `execute_build123d` subprocess.
+
+## modeling -- generic operations (the building blocks)
+
+| helper | what it makes |
+|---|---|
+| `annular_segment(r_in, r_out, h, start_angle, end_angle)` | a radial WEDGE of an annulus (robust for any span < 360: annulus INTERSECTED with a pie slice -- no self-intersecting sketch) |
+| `tube(r_in, r_out, h)` | hollow cylinder |
+| `racetrack_coil(length, width, band, h, corner_radius)` | rounded-rectangle (racetrack) coil outline, extruded |
+| `polar_array(part, count, total_angle=360)` | rotate-with-copies -> labelled Compound (full ring or partial fan) |
+| `linear_array(part, count, spacing, direction)` | translate-with-copies |
+| `mirrored(part, about=Plane.XZ)` | symmetry completion (original + mirror) |
+| `assembly(*parts)` | group labelled regions into ONE multi-region Compound (does NOT fuse) |
+| `shape_envelope_row(shapes, margin)` / `enclosing_box(...)` | union bbox report and labelled outer box for air/void domains |
+| `enclosure_clearance_row(enclosure, inner_shapes)` / `enclosure_difference_region(...)` | bbox clearance + `outer - inner` void-region helper for boolean-disjoint multi-region meshes |
+| `shape_measurement_rows(...)` / `shape_measurement_comparison_summary(...)` | JSON-friendly volume/area/topology/bbox rows and external-kernel comparison for STEP round-trip validation |
+
+## archetypes -- EM devices (composed from the ops)
+
+| helper | device |
+|---|---|
+| `cylindrical_magnet(radius, h, m_angle_deg)` / `block_magnet(length, width, h, m_angle_deg)` | a PM primitive, easy-axis angle in the label |
+| `halbach_ring(r_in, r_out, h, n_segments, pole_pairs=1)` | segmented Halbach PM ring; per-segment easy axis = Mallinson `(pole_pairs+1)*theta` |
+| `pole_tip(base_width, tip_width, height, depth)` | trapezoidal shaped pole piece |
+| `c_core(width, height, depth, leg, gap)` | C-shaped electromagnet yoke with a pole gap |
+| `multipole_yoke(n_poles, r_bore, pole_len, pole_width, yoke_thickness, depth)` | n-pole iron yoke (dipole/quad/sextupole) + return ring |
+| `h_dipole(width, height, depth, leg, pole_width, gap)` | H-frame dipole yoke (window frame + 2 poles + gap) |
+| `solenoid(r_in, r_out, h)` / `helmholtz_pair(r_in, r_out, h, separation)` | solenoid bundle / coaxial coil pair |
+| `cos_theta_dipole(radius, conductor_w, conductor_h, length, n_per_half)` | cos-theta winding (arcsin-spaced axial bars -> pure dipole) |
+| `litz_wire(n_strands, strand_radius, bundle_radius, length, pitch)` | Litz wire: n twisted helical strands, each a separate conductor region for AC-loss (skin/proximity) analysis (`litz_packing_radius` for single-layer packing) |
+| `litz_single_layer_metrics(n_strands, strand_radius, strand_gap=0, serving_thickness=0)` | round Litz pre-CAD design table: centre radius, bare/served envelope, copper area, fill factors |
+| `e_core(width, height, depth, leg_width, back_thickness)` | E-core transformer / inductor (back spine + 3 legs + 2 windows) |
+| `slotted_stator(r_bore, r_yoke, n_slots, slot_depth, slot_span_deg, h)` | motor stator lamination (toothed ring); feeds the AGE solver |
+| `spm_rotor(r_shaft, r_rotor, n_poles, magnet_thickness, magnet_span_deg, h)` | surface-PM rotor (iron hub + radial alternating-N/S magnets, easy axes in the labels) |
+| `magnetization_map(compound, Br)` | close the loop: PM region labels -> `{label: (Mx, My)}` for the solver |
+
+`slotted_stator` + `spm_rotor` compose a full PMSM cross-section in build123d that drops straight into
+the AGE rotating-machine solver (`radia_ngsolve.airgap_motor_workflow`), including the hysteresis-coupled
+sweep -- so the geometry, magnetization labels, and field/torque solve share one parametric source.
+Verified end-to-end in `validation_test/radia_mcp/test_build123d_pmsm_field.py`: a `spm_rotor` -> `magnetization_map` ->
+AGE solve makes an air-gap field whose ring-harmonic spectrum peaks at the pole-pair number `n_poles/2`
+(with the 3rd space harmonic next), i.e. the rotor archetype produces the correct multipole field.
+
+GEOMETRY -> FIELD is gated for all three lab domains: **accelerator** (Halbach dipole uniform bore
+field / quadrupole null centre -- test_build123d_halbach_field), **motor** (spm_rotor n-pole air-gap
+field -- test_build123d_pmsm_field), and **coil / induction heating** (helmholtz_pair uniform centre
+field = (4/5)^1.5 mu0 NI/R, read back from the geometry -- test_build123d_coil_field).
+
+The magnetization convention is verified end-to-end against physics in
+`validation_test/radia_mcp/test_build123d_halbach_field.py`: a `halbach_ring` -> `magnetization_map` -> 2D A_z PM solve
+gives a UNIFORM transverse bore field of `Br*ln(r_out/r_in)` (dipole), and a quadrupole Halbach
+(`pole_pairs=2`) a field that grows from a null centre.  (A swept saddle coil is future work -- the
+closed-path sweep is fragile in the OCCT kernel; use `cos_theta_dipole` for transverse-field windings.)
+
+## Region labels & magnetization (the solver hand-off)
+
+build123d keeps region labels on a Compound's **`.children`** (NOT on the flattened `.solids()`, which
+drops them).  PM regions encode their easy-axis angle in the label via `archetypes.magnetization_tag`
+(`"{name}_{i:02d}_M{deg:.3f}"`); the solver recovers it with `archetypes.parse_magnetization` and sets
+`M = Br*(cos, sin, 0)`.  `run_pipeline_multi` carries these labels to Gmsh physical groups.
+
+```python
+from radia_mcp.build123d.modeling import annular_segment, polar_array, assembly, tube
+from radia_mcp.build123d.archetypes import halbach_ring, c_core, parse_magnetization
+
+hb = halbach_ring(40, 55, 20, 12, pole_pairs=1, name="pm")     # dipole Halbach
+yoke = c_core(120, 90, 60, 18, 26, name="yoke")
+machine = assembly(*hb.children, yoke, tube(10, 18, 40, "coil"), label="device")
+mags = {seg.label: parse_magnetization(seg.label) for seg in hb.children}
+```
+
+Validated: validation_test/radia_mcp/test_build123d_modeling.py, validation_test/radia_mcp/test_build123d_archetypes.py (analytic volumes,
+OCCT-valid, region labels, Netgen-meshable, Mallinson easy axes).  The reusable Netgen/GMSH bridge
+lives in `radia_mcp.build123d.pipeline`; the executable validation corpus lives in
+`validation_test/build123d_netgen_gmsh_flow/`, with result-saved notebooks and JSON archives under
+`docs/build123d_netgen_gmsh_flow/`.
+"""
+
+
+_TOPICS = {
+    "overview": OVERVIEW,
+    "parametric_library": PARAMETRIC_LIBRARY,
+    "lab_policy": LAB_POLICY,
+    "cubit_rosetta": CUBIT_ROSETTA,
+    "examples_lab_patterns": EXAMPLES_LAB_PATTERNS,
+    "primitives_3d": PRIMITIVES_3D,
+    "primitives_2d": PRIMITIVES_2D,
+    "operations": OPERATIONS,
+    "curves": CURVES,
+    "export_import": EXPORT_IMPORT,
+    "topology": TOPOLOGY,
+    "cae_guidelines": CAE_GUIDELINES,
+    "examples": EXAMPLES,
+    "examples_intro": EXAMPLES_INTRO,
+    "examples_gallery": EXAMPLES_GALLERY,
+    "coil_modeling": COIL_MODELING,
+    "coil_from_polyline": COIL_FROM_POLYLINE,
+    "polyline_coil": COIL_FROM_POLYLINE,  # alias
+    "centerline_coil": COIL_FROM_POLYLINE,  # alias
+    "coil_from_points": COIL_FROM_POLYLINE,  # alias
+    "frame_sweep": COIL_FROM_POLYLINE,  # alias
+    "loft_polyline": COIL_FROM_POLYLINE,  # alias
+    "joints_and_mates": JOINTS_AND_MATES,
+    "assemblies_and_compounds": ASSEMBLIES_AND_COMPOUNDS,
+    "cae_workflow_tips": CAE_WORKFLOW_TIPS,
+    "plane_axis_location_cookbook": PLANE_AXIS_LOCATION_COOKBOOK,
+    "builder_vs_algebra_rosetta": BUILDER_VS_ALGEBRA_ROSETTA,
+    "api_reference": _get_b3d_api_reference(),
+}
+
+
+def get_build123d_documentation(topic: str = "overview") -> str:
+    """Return knowledge base content for requested topic."""
+    key = topic.strip().lower()
+    if key == "all":
+        return "\n\n".join(_TOPICS.values())
+    if key in _TOPICS:
+        return _TOPICS[key]
+    available = ", ".join(sorted(_TOPICS.keys()))
+    return f"Unknown topic '{topic}'. Available: {available}, all"

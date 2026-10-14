@@ -1,0 +1,1321 @@
+{
+  "schema": "radia.ams-nonlinear-resident-evidence.v1",
+  "accepted": true,
+  "source_commit": "d117eb6121379b9c9eb1862dab6e4a1098a0e81b",
+  "native_binary_sha256": "1ce50af48ce26a62f4ad29e26fbfc6101905808d7216acda5e7cb99465995144",
+  "cases": [
+    {
+      "schema": "radia.ams-nonlinear-resident.v1",
+      "accepted": true,
+      "host": "Windows",
+      "source_commit": "d117eb6121379b9c9eb1862dab6e4a1098a0e81b",
+      "timing_classification": "build-host diagnostic; dense quadrature prototype; not formal performance acceptance",
+      "python_role": "independent FE oracle and validation input generation",
+      "a100_used": false,
+      "material": "H=(nu0+gamma*|B|^2)B; nu0=1; gamma=4; positive unit gauge mass",
+      "gpu_residency": "quadrature maps, material, residual, tangent, solution and frozen AMS hierarchy remain GPU arrays; rebuild route downloads tangent values for native host setup",
+      "limitations": [
+        "dense quadrature prototype, not production scaling",
+        "AMS workspace currently allocated per linear solve",
+        "first/cold and ordered warm samples; diagnostic only"
+      ],
+      "mesh_sha256": "aef4d403e3ed7ac7632db3c48a65719db7f0a0c843d3cd227b2a01ea886b8a8f",
+      "mesh_route": "explicit Netgen unit cube -> saved .vol -> NGSolve reload",
+      "dofs": 260,
+      "quadrature_points": 2114,
+      "map_assembly_relative_error": 1.9982522395019322e-14,
+      "shared_fe_setup_seconds": 0.15339429999585263,
+      "cpu_samples": [
+        {
+          "total_seconds": 0.06200930000341032,
+          "setup_seconds": 0.01507250001304783,
+          "history": [
+            [
+              0,
+              1.0,
+              4.095604879812113e-11,
+              0.00390625
+            ],
+            [
+              1,
+              2.136313692962067,
+              7.2938536803063e-12,
+              0.125
+            ],
+            [
+              2,
+              1.8799808935082212,
+              3.0630221635762755e-12,
+              1.0
+            ],
+            [
+              3,
+              0.4862786978039765,
+              2.979615644662034e-11,
+              1.0
+            ],
+            [
+              4,
+              0.06286777411884972,
+              3.603813382926742e-11,
+              1.0
+            ],
+            [
+              5,
+              0.0020372160652424465,
+              5.0363903294157684e-11,
+              1.0
+            ],
+            [
+              6,
+              4.93622591384022e-06,
+              2.4128415408554393e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.8410773479755153e-10
+        },
+        {
+          "total_seconds": 0.05979250000382308,
+          "setup_seconds": 0.01427910001075361,
+          "history": [
+            [
+              0,
+              1.0,
+              4.095604879812113e-11,
+              0.00390625
+            ],
+            [
+              1,
+              2.136313692962067,
+              7.2938536803063e-12,
+              0.125
+            ],
+            [
+              2,
+              1.8799808935082212,
+              3.0630221635762755e-12,
+              1.0
+            ],
+            [
+              3,
+              0.4862786978039765,
+              2.979615644662034e-11,
+              1.0
+            ],
+            [
+              4,
+              0.06286777411884972,
+              3.603813382926742e-11,
+              1.0
+            ],
+            [
+              5,
+              0.0020372160652424465,
+              5.0363903294157684e-11,
+              1.0
+            ],
+            [
+              6,
+              4.93622591384022e-06,
+              2.4128415408554393e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.8410773479755153e-10
+        },
+        {
+          "total_seconds": 0.06054320000112057,
+          "setup_seconds": 0.014346800002385862,
+          "history": [
+            [
+              0,
+              1.0,
+              4.095604879812113e-11,
+              0.00390625
+            ],
+            [
+              1,
+              2.136313692962067,
+              7.2938536803063e-12,
+              0.125
+            ],
+            [
+              2,
+              1.8799808935082212,
+              3.0630221635762755e-12,
+              1.0
+            ],
+            [
+              3,
+              0.4862786978039765,
+              2.979615644662034e-11,
+              1.0
+            ],
+            [
+              4,
+              0.06286777411884972,
+              3.603813382926742e-11,
+              1.0
+            ],
+            [
+              5,
+              0.0020372160652424465,
+              5.0363903294157684e-11,
+              1.0
+            ],
+            [
+              6,
+              4.93622591384022e-06,
+              2.4128415408554393e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.8410773479755153e-10
+        }
+      ],
+      "cpu_warm_median_seconds": 0.06016785000247182,
+      "gpu": [
+        {
+          "route": 1,
+          "sample": 1,
+          "total_seconds": 0.603815,
+          "upload_seconds": 0.0623455,
+          "input_owned_bytes": 13777376,
+          "observed_device_bytes": 45190912,
+          "setup_seconds": 0.23381640000000004,
+          "solve_seconds": 0.0951011,
+          "builds": 7,
+          "rebuild_rule": "route3: next iteration rebuild if PCG exceeds max(30,2*first solve after rebuild)",
+          "history": [
+            [
+              1.0,
+              1.0,
+              11.0,
+              4.095604839697166e-11,
+              0.00390625
+            ],
+            [
+              2.0,
+              2.1363136929619473,
+              14.0,
+              3.708686391957445e-11,
+              0.125
+            ],
+            [
+              3.0,
+              1.8799808935116407,
+              15.0,
+              2.002083701257835e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.48627869780775534,
+              15.0,
+              2.979607856475312e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.06286777411929509,
+              15.0,
+              3.603813277744722e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.00203721606534015,
+              15.0,
+              5.036399141202793e-11,
+              1.0
+            ],
+            [
+              7.0,
+              4.936225920884783e-06,
+              15.0,
+              2.4128459380888545e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.841077403813178e-10,
+          "cpu_solution_relative_error": 7.881638746681853e-13,
+          "independent_nonlinear_residual": 2.8410651043409904e-10,
+          "B_relative_RMS_error": 6.829639046827097e-15
+        },
+        {
+          "route": 2,
+          "sample": 2,
+          "total_seconds": 0.4385348,
+          "upload_seconds": 0.0623455,
+          "input_owned_bytes": 13777376,
+          "observed_device_bytes": 45190912,
+          "setup_seconds": 0.0133695,
+          "solve_seconds": 0.325428,
+          "builds": 1,
+          "rebuild_rule": "route3: next iteration rebuild if PCG exceeds max(30,2*first solve after rebuild)",
+          "history": [
+            [
+              1.0,
+              1.0,
+              11.0,
+              4.095604839697166e-11,
+              0.00390625
+            ],
+            [
+              2.0,
+              2.1363136929619473,
+              88.0,
+              7.398142105906708e-11,
+              0.125
+            ],
+            [
+              3.0,
+              1.8799808935149918,
+              82.0,
+              8.305688768401597e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.48627869781809785,
+              78.0,
+              7.14576318811519e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.06286777411812561,
+              74.0,
+              8.497732404646269e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0020372160654662645,
+              84.0,
+              6.074460656792636e-11,
+              1.0
+            ],
+            [
+              7.0,
+              4.93622597162544e-06,
+              87.0,
+              8.700108581245567e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.841077339510316e-10,
+          "cpu_solution_relative_error": 1.2790697987303293e-12,
+          "independent_nonlinear_residual": 2.841065006495243e-10,
+          "B_relative_RMS_error": 7.357830375757835e-15
+        },
+        {
+          "route": 3,
+          "sample": 3,
+          "total_seconds": 0.2752865,
+          "upload_seconds": 0.0623455,
+          "input_owned_bytes": 13777376,
+          "observed_device_bytes": 45190912,
+          "setup_seconds": 0.039546700000000004,
+          "solve_seconds": 0.14559429999999998,
+          "builds": 3,
+          "rebuild_rule": "route3: next iteration rebuild if PCG exceeds max(30,2*first solve after rebuild)",
+          "history": [
+            [
+              1.0,
+              1.0,
+              11.0,
+              4.095604839697166e-11,
+              0.00390625
+            ],
+            [
+              2.0,
+              2.1363136929619473,
+              88.0,
+              7.398142105906708e-11,
+              0.125
+            ],
+            [
+              3.0,
+              1.8799808935149918,
+              15.0,
+              2.0020671482265344e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.4862786978224272,
+              28.0,
+              4.7279066513135665e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.0628677741253876,
+              29.0,
+              7.680123668786456e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.002037216065984584,
+              31.0,
+              5.01154762077631e-11,
+              1.0
+            ],
+            [
+              7.0,
+              4.936225932696182e-06,
+              15.0,
+              2.4128296374169745e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.8410774599714663e-10,
+          "cpu_solution_relative_error": 8.183487710859358e-13,
+          "independent_nonlinear_residual": 2.841065185996786e-10,
+          "B_relative_RMS_error": 6.809039712565736e-15
+        },
+        {
+          "route": 3,
+          "sample": 4,
+          "total_seconds": 0.2721691,
+          "upload_seconds": 0.0623455,
+          "input_owned_bytes": 13777376,
+          "observed_device_bytes": 45190912,
+          "setup_seconds": 0.038680400000000004,
+          "solve_seconds": 0.14472959999999999,
+          "builds": 3,
+          "rebuild_rule": "route3: next iteration rebuild if PCG exceeds max(30,2*first solve after rebuild)",
+          "history": [
+            [
+              1.0,
+              1.0,
+              11.0,
+              4.095604839697166e-11,
+              0.00390625
+            ],
+            [
+              2.0,
+              2.1363136929619473,
+              88.0,
+              7.398142105906708e-11,
+              0.125
+            ],
+            [
+              3.0,
+              1.8799808935149918,
+              15.0,
+              2.0020671482265344e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.4862786978224272,
+              28.0,
+              4.7279066513135665e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.0628677741253876,
+              29.0,
+              7.680123668786456e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.002037216065984584,
+              31.0,
+              5.01154762077631e-11,
+              1.0
+            ],
+            [
+              7.0,
+              4.936225932696182e-06,
+              15.0,
+              2.4128296374169745e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.8410774599714663e-10,
+          "cpu_solution_relative_error": 8.183487710859358e-13,
+          "independent_nonlinear_residual": 2.841065185996786e-10,
+          "B_relative_RMS_error": 6.809039712565736e-15
+        },
+        {
+          "route": 2,
+          "sample": 5,
+          "total_seconds": 0.417056,
+          "upload_seconds": 0.0623455,
+          "input_owned_bytes": 13777376,
+          "observed_device_bytes": 45190912,
+          "setup_seconds": 0.0125693,
+          "solve_seconds": 0.3144403,
+          "builds": 1,
+          "rebuild_rule": "route3: next iteration rebuild if PCG exceeds max(30,2*first solve after rebuild)",
+          "history": [
+            [
+              1.0,
+              1.0,
+              11.0,
+              4.095604839697166e-11,
+              0.00390625
+            ],
+            [
+              2.0,
+              2.1363136929619473,
+              88.0,
+              7.398142105906708e-11,
+              0.125
+            ],
+            [
+              3.0,
+              1.8799808935149918,
+              82.0,
+              8.305688768401597e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.48627869781809785,
+              78.0,
+              7.14576318811519e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.06286777411812561,
+              74.0,
+              8.497732404646269e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.0020372160654662645,
+              84.0,
+              6.074460656792636e-11,
+              1.0
+            ],
+            [
+              7.0,
+              4.93622597162544e-06,
+              87.0,
+              8.700108581245567e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.841077339510316e-10,
+          "cpu_solution_relative_error": 1.2790697987303293e-12,
+          "independent_nonlinear_residual": 2.841065006495243e-10,
+          "B_relative_RMS_error": 7.357830375757835e-15
+        },
+        {
+          "route": 1,
+          "sample": 6,
+          "total_seconds": 0.2676879,
+          "upload_seconds": 0.0623455,
+          "input_owned_bytes": 13777376,
+          "observed_device_bytes": 45190912,
+          "setup_seconds": 0.09444469999999999,
+          "solve_seconds": 0.0779469,
+          "builds": 7,
+          "rebuild_rule": "route3: next iteration rebuild if PCG exceeds max(30,2*first solve after rebuild)",
+          "history": [
+            [
+              1.0,
+              1.0,
+              11.0,
+              4.095604839697166e-11,
+              0.00390625
+            ],
+            [
+              2.0,
+              2.1363136929619473,
+              14.0,
+              3.708686391957445e-11,
+              0.125
+            ],
+            [
+              3.0,
+              1.8799808935116407,
+              15.0,
+              2.002083701257835e-11,
+              1.0
+            ],
+            [
+              4.0,
+              0.48627869780775534,
+              15.0,
+              2.979607856475312e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.06286777411929509,
+              15.0,
+              3.603813277744722e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.00203721606534015,
+              15.0,
+              5.036399141202793e-11,
+              1.0
+            ],
+            [
+              7.0,
+              4.936225920884783e-06,
+              15.0,
+              2.4128459380888545e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.841077403813178e-10,
+          "cpu_solution_relative_error": 7.881638746681853e-13,
+          "independent_nonlinear_residual": 2.8410651043409904e-10,
+          "B_relative_RMS_error": 6.829639046827097e-15
+        }
+      ],
+      "gpu_binary_sha256": "1ce50af48ce26a62f4ad29e26fbfc6101905808d7216acda5e7cb99465995144",
+      "versions": {
+        "ngsolve": "6.2.2607",
+        "numpy": "2.5.4",
+        "scipy": "1.18.1",
+        "matlabengine": "26.1"
+      },
+      "cpu_threads": 1,
+      "matlab_startup_seconds": 10.165615699996124,
+      "native_source_commit": "d117eb6121379b9c9eb1862dab6e4a1098a0e81b",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5"
+    },
+    {
+      "schema": "radia.ams-nonlinear-resident.v1",
+      "accepted": true,
+      "host": "Windows",
+      "source_commit": "d117eb6121379b9c9eb1862dab6e4a1098a0e81b",
+      "timing_classification": "build-host diagnostic; dense quadrature prototype; not formal performance acceptance",
+      "python_role": "independent FE oracle and validation input generation",
+      "a100_used": false,
+      "material": "H=(nu0+gamma*|B|^2)B; nu0=1; gamma=4; positive unit gauge mass",
+      "gpu_residency": "quadrature maps, material, residual, tangent, solution and frozen AMS hierarchy remain GPU arrays; rebuild route downloads tangent values for native host setup",
+      "limitations": [
+        "dense quadrature prototype, not production scaling",
+        "AMS workspace currently allocated per linear solve",
+        "first/cold and ordered warm samples; diagnostic only"
+      ],
+      "mesh_sha256": "e9e4bdb605eccc20f0c64073dae422f699503a730d016c151196be96f5b296fd",
+      "mesh_route": "explicit Netgen unit cube -> saved .vol -> NGSolve reload",
+      "dofs": 698,
+      "quadrature_points": 6370,
+      "map_assembly_relative_error": 2.0025856955719873e-14,
+      "shared_fe_setup_seconds": 0.520174200006295,
+      "cpu_samples": [
+        {
+          "total_seconds": 0.20710820000385866,
+          "setup_seconds": 0.04725079998024739,
+          "history": [
+            [
+              0,
+              1.0,
+              2.1016364004233556e-11,
+              0.001953125
+            ],
+            [
+              1,
+              5.020911130366038,
+              1.063489749432664e-11,
+              0.25
+            ],
+            [
+              2,
+              3.8961745308753497,
+              6.020037371210066e-12,
+              1.0
+            ],
+            [
+              3,
+              1.0267115229828734,
+              9.430209132401981e-12,
+              1.0
+            ],
+            [
+              4,
+              0.21181513761360185,
+              2.1281413052090844e-11,
+              1.0
+            ],
+            [
+              5,
+              0.022525141279109245,
+              4.674938529989393e-11,
+              1.0
+            ],
+            [
+              6,
+              0.0015520325063981034,
+              4.2387696821113944e-11,
+              1.0
+            ],
+            [
+              7,
+              9.650380354575238e-05,
+              4.63647241236766e-11,
+              1.0
+            ],
+            [
+              8,
+              5.573288715478075e-07,
+              4.600124036538213e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.133299290372615e-11
+        },
+        {
+          "total_seconds": 0.20213640001020394,
+          "setup_seconds": 0.04428679996635765,
+          "history": [
+            [
+              0,
+              1.0,
+              2.1016364004233556e-11,
+              0.001953125
+            ],
+            [
+              1,
+              5.020911130366038,
+              1.063489749432664e-11,
+              0.25
+            ],
+            [
+              2,
+              3.8961745308753497,
+              6.020037371210066e-12,
+              1.0
+            ],
+            [
+              3,
+              1.0267115229828734,
+              9.430209132401981e-12,
+              1.0
+            ],
+            [
+              4,
+              0.21181513761360185,
+              2.1281413052090844e-11,
+              1.0
+            ],
+            [
+              5,
+              0.022525141279109245,
+              4.674938529989393e-11,
+              1.0
+            ],
+            [
+              6,
+              0.0015520325063981034,
+              4.2387696821113944e-11,
+              1.0
+            ],
+            [
+              7,
+              9.650380354575238e-05,
+              4.63647241236766e-11,
+              1.0
+            ],
+            [
+              8,
+              5.573288715478075e-07,
+              4.600124036538213e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.133299290372615e-11
+        },
+        {
+          "total_seconds": 0.20173329999670386,
+          "setup_seconds": 0.04423340002540499,
+          "history": [
+            [
+              0,
+              1.0,
+              2.1016364004233556e-11,
+              0.001953125
+            ],
+            [
+              1,
+              5.020911130366038,
+              1.063489749432664e-11,
+              0.25
+            ],
+            [
+              2,
+              3.8961745308753497,
+              6.020037371210066e-12,
+              1.0
+            ],
+            [
+              3,
+              1.0267115229828734,
+              9.430209132401981e-12,
+              1.0
+            ],
+            [
+              4,
+              0.21181513761360185,
+              2.1281413052090844e-11,
+              1.0
+            ],
+            [
+              5,
+              0.022525141279109245,
+              4.674938529989393e-11,
+              1.0
+            ],
+            [
+              6,
+              0.0015520325063981034,
+              4.2387696821113944e-11,
+              1.0
+            ],
+            [
+              7,
+              9.650380354575238e-05,
+              4.63647241236766e-11,
+              1.0
+            ],
+            [
+              8,
+              5.573288715478075e-07,
+              4.600124036538213e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.133299290372615e-11
+        }
+      ],
+      "cpu_warm_median_seconds": 0.2019348500034539,
+      "gpu": [
+        {
+          "route": 1,
+          "sample": 1,
+          "total_seconds": 1.583082,
+          "upload_seconds": 0.0967273,
+          "input_owned_bytes": 110740464,
+          "observed_device_bytes": 166058640,
+          "setup_seconds": 0.3084913,
+          "solve_seconds": 0.1932968,
+          "builds": 9,
+          "rebuild_rule": "route3: next iteration rebuild if PCG exceeds max(30,2*first solve after rebuild)",
+          "history": [
+            [
+              1.0,
+              1.0,
+              13.0,
+              2.1016351106782554e-11,
+              0.001953125
+            ],
+            [
+              2.0,
+              5.020911130365817,
+              21.0,
+              6.218058388034773e-11,
+              0.25
+            ],
+            [
+              3.0,
+              3.8961745308704336,
+              16.0,
+              8.23887166315827e-11,
+              1.0
+            ],
+            [
+              4.0,
+              1.0267115229550867,
+              17.0,
+              3.5854862719744204e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.2118151376063372,
+              17.0,
+              8.605394569797371e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.02252514127751008,
+              18.0,
+              4.674937619340832e-11,
+              1.0
+            ],
+            [
+              7.0,
+              0.0015520325044189474,
+              19.0,
+              4.238770800528231e-11,
+              1.0
+            ],
+            [
+              8.0,
+              9.650380327479162e-05,
+              19.0,
+              4.636479321549177e-11,
+              1.0
+            ],
+            [
+              9.0,
+              5.573288682217565e-07,
+              19.0,
+              4.60012436176143e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.133299947032932e-11,
+          "cpu_solution_relative_error": 4.717038934589715e-12,
+          "independent_nonlinear_residual": 2.1332388947618883e-11,
+          "B_relative_RMS_error": 6.718517133750112e-15
+        },
+        {
+          "route": 2,
+          "sample": 2,
+          "total_seconds": 1.8990314,
+          "upload_seconds": 0.0967273,
+          "input_owned_bytes": 110740464,
+          "observed_device_bytes": 166058640,
+          "setup_seconds": 0.0193677,
+          "solve_seconds": 0.9700072,
+          "builds": 1,
+          "rebuild_rule": "route3: next iteration rebuild if PCG exceeds max(30,2*first solve after rebuild)",
+          "history": [
+            [
+              1.0,
+              1.0,
+              13.0,
+              2.1016351106782554e-11,
+              0.001953125
+            ],
+            [
+              2.0,
+              5.020911130365817,
+              272.0,
+              9.675406936289441e-11,
+              0.25
+            ],
+            [
+              3.0,
+              3.896174530777771,
+              117.0,
+              5.4946997942783394e-11,
+              1.0
+            ],
+            [
+              4.0,
+              1.026711522943634,
+              78.0,
+              8.47325104524142e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.2118151375981529,
+              78.0,
+              9.705164732072219e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.02252514127217081,
+              85.0,
+              6.71753609045166e-11,
+              1.0
+            ],
+            [
+              7.0,
+              0.0015520325003230535,
+              102.0,
+              8.488869902960102e-11,
+              1.0
+            ],
+            [
+              8.0,
+              9.650380235790524e-05,
+              101.0,
+              9.83737779668467e-11,
+              1.0
+            ],
+            [
+              9.0,
+              5.573288532196478e-07,
+              101.0,
+              8.724802710880491e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.1332974155910708e-11,
+          "cpu_solution_relative_error": 5.3258708874826986e-12,
+          "independent_nonlinear_residual": 2.1332377546453434e-11,
+          "B_relative_RMS_error": 6.721867669423726e-15
+        },
+        {
+          "route": 3,
+          "sample": 3,
+          "total_seconds": 1.4401668,
+          "upload_seconds": 0.0967273,
+          "input_owned_bytes": 110740464,
+          "observed_device_bytes": 166058640,
+          "setup_seconds": 0.055967199999999995,
+          "solve_seconds": 0.4789699,
+          "builds": 3,
+          "rebuild_rule": "route3: next iteration rebuild if PCG exceeds max(30,2*first solve after rebuild)",
+          "history": [
+            [
+              1.0,
+              1.0,
+              13.0,
+              2.1016351106782554e-11,
+              0.001953125
+            ],
+            [
+              2.0,
+              5.020911130365817,
+              272.0,
+              9.675406936289441e-11,
+              0.25
+            ],
+            [
+              3.0,
+              3.896174530777771,
+              16.0,
+              8.238861190483424e-11,
+              1.0
+            ],
+            [
+              4.0,
+              1.0267115229265362,
+              24.0,
+              7.324614385543923e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.2118151375934793,
+              31.0,
+              8.78982993180592e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.02252514127024599,
+              43.0,
+              6.090258098891653e-11,
+              1.0
+            ],
+            [
+              7.0,
+              0.001552032499892293,
+              19.0,
+              4.238769687754514e-11,
+              1.0
+            ],
+            [
+              8.0,
+              9.650380231727561e-05,
+              19.0,
+              5.085114432810146e-11,
+              1.0
+            ],
+            [
+              9.0,
+              5.573288530932136e-07,
+              19.0,
+              5.090393953252735e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.133299081300259e-11,
+          "cpu_solution_relative_error": 4.410753294691644e-12,
+          "independent_nonlinear_residual": 2.1332380500528607e-11,
+          "B_relative_RMS_error": 6.712500052556589e-15
+        },
+        {
+          "route": 3,
+          "sample": 4,
+          "total_seconds": 1.4480686,
+          "upload_seconds": 0.0967273,
+          "input_owned_bytes": 110740464,
+          "observed_device_bytes": 166058640,
+          "setup_seconds": 0.0566172,
+          "solve_seconds": 0.4850943,
+          "builds": 3,
+          "rebuild_rule": "route3: next iteration rebuild if PCG exceeds max(30,2*first solve after rebuild)",
+          "history": [
+            [
+              1.0,
+              1.0,
+              13.0,
+              2.1016351106782554e-11,
+              0.001953125
+            ],
+            [
+              2.0,
+              5.020911130365817,
+              272.0,
+              9.675406936289441e-11,
+              0.25
+            ],
+            [
+              3.0,
+              3.896174530777771,
+              16.0,
+              8.238861190483424e-11,
+              1.0
+            ],
+            [
+              4.0,
+              1.0267115229265362,
+              24.0,
+              7.324614385543923e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.2118151375934793,
+              31.0,
+              8.78982993180592e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.02252514127024599,
+              43.0,
+              6.090258098891653e-11,
+              1.0
+            ],
+            [
+              7.0,
+              0.001552032499892293,
+              19.0,
+              4.238769687754514e-11,
+              1.0
+            ],
+            [
+              8.0,
+              9.650380231727561e-05,
+              19.0,
+              5.085114432810146e-11,
+              1.0
+            ],
+            [
+              9.0,
+              5.573288530932136e-07,
+              19.0,
+              5.090393953252735e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.133299081300259e-11,
+          "cpu_solution_relative_error": 4.410753294691644e-12,
+          "independent_nonlinear_residual": 2.1332380500528607e-11,
+          "B_relative_RMS_error": 6.712500052556589e-15
+        },
+        {
+          "route": 2,
+          "sample": 5,
+          "total_seconds": 1.8931968,
+          "upload_seconds": 0.0967273,
+          "input_owned_bytes": 110740464,
+          "observed_device_bytes": 166058640,
+          "setup_seconds": 0.0182267,
+          "solve_seconds": 0.9692715999999999,
+          "builds": 1,
+          "rebuild_rule": "route3: next iteration rebuild if PCG exceeds max(30,2*first solve after rebuild)",
+          "history": [
+            [
+              1.0,
+              1.0,
+              13.0,
+              2.1016351106782554e-11,
+              0.001953125
+            ],
+            [
+              2.0,
+              5.020911130365817,
+              272.0,
+              9.675406936289441e-11,
+              0.25
+            ],
+            [
+              3.0,
+              3.896174530777771,
+              117.0,
+              5.4946997942783394e-11,
+              1.0
+            ],
+            [
+              4.0,
+              1.026711522943634,
+              78.0,
+              8.47325104524142e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.2118151375981529,
+              78.0,
+              9.705164732072219e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.02252514127217081,
+              85.0,
+              6.71753609045166e-11,
+              1.0
+            ],
+            [
+              7.0,
+              0.0015520325003230535,
+              102.0,
+              8.488869902960102e-11,
+              1.0
+            ],
+            [
+              8.0,
+              9.650380235790524e-05,
+              101.0,
+              9.83737779668467e-11,
+              1.0
+            ],
+            [
+              9.0,
+              5.573288532196478e-07,
+              101.0,
+              8.724802710880491e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.1332974155910708e-11,
+          "cpu_solution_relative_error": 5.3258708874826986e-12,
+          "independent_nonlinear_residual": 2.1332377546453434e-11,
+          "B_relative_RMS_error": 6.721867669423726e-15
+        },
+        {
+          "route": 1,
+          "sample": 6,
+          "total_seconds": 1.2569898,
+          "upload_seconds": 0.0967273,
+          "input_owned_bytes": 110740464,
+          "observed_device_bytes": 166058640,
+          "setup_seconds": 0.16670829999999998,
+          "solve_seconds": 0.1833518,
+          "builds": 9,
+          "rebuild_rule": "route3: next iteration rebuild if PCG exceeds max(30,2*first solve after rebuild)",
+          "history": [
+            [
+              1.0,
+              1.0,
+              13.0,
+              2.1016351106782554e-11,
+              0.001953125
+            ],
+            [
+              2.0,
+              5.020911130365817,
+              21.0,
+              6.218058388034773e-11,
+              0.25
+            ],
+            [
+              3.0,
+              3.8961745308704336,
+              16.0,
+              8.23887166315827e-11,
+              1.0
+            ],
+            [
+              4.0,
+              1.0267115229550867,
+              17.0,
+              3.5854862719744204e-11,
+              1.0
+            ],
+            [
+              5.0,
+              0.2118151376063372,
+              17.0,
+              8.605394569797371e-11,
+              1.0
+            ],
+            [
+              6.0,
+              0.02252514127751008,
+              18.0,
+              4.674937619340832e-11,
+              1.0
+            ],
+            [
+              7.0,
+              0.0015520325044189474,
+              19.0,
+              4.238770800528231e-11,
+              1.0
+            ],
+            [
+              8.0,
+              9.650380327479162e-05,
+              19.0,
+              4.636479321549177e-11,
+              1.0
+            ],
+            [
+              9.0,
+              5.573288682217565e-07,
+              19.0,
+              4.60012436176143e-11,
+              1.0
+            ]
+          ],
+          "final_residual": 2.133299947032932e-11,
+          "cpu_solution_relative_error": 4.717038934589715e-12,
+          "independent_nonlinear_residual": 2.1332388947618883e-11,
+          "B_relative_RMS_error": 6.718517133750112e-15
+        }
+      ],
+      "gpu_binary_sha256": "1ce50af48ce26a62f4ad29e26fbfc6101905808d7216acda5e7cb99465995144",
+      "versions": {
+        "ngsolve": "6.2.2607",
+        "numpy": "2.5.4",
+        "scipy": "1.18.1",
+        "matlabengine": "26.1"
+      },
+      "cpu_threads": 1,
+      "matlab_startup_seconds": 9.863325899990741,
+      "native_source_commit": "d117eb6121379b9c9eb1862dab6e4a1098a0e81b",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5"
+    }
+  ],
+  "linear_regression": {
+    "accepted": true,
+    "cycles": [
+      1,
+      7
+    ],
+    "setup_threads": [
+      1,
+      2
+    ],
+    "source_commit": "d117eb6121379b9c9eb1862dab6e4a1098a0e81b"
+  },
+  "conclusion": "Nonlinear CPU/GPU parity passed; no CPU speedup in the dense small-model prototype; adaptive reuse reduces build count but can increase total time.",
+  "resolved_regression": "698-DOF gradient coarse factor had a nonfinite diagonal inverse; explicit constant-nullspace gauge in sparsecholesky resolves it without changing the physical operator.",
+  "production_limitations": [
+    "dense quadrature maps, at most 2000 DOFs",
+    "per-linear-solve MEX workspace allocation",
+    "100 timings diagnostic, not formal performance acceptance"
+  ]
+}

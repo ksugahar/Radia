@@ -1,0 +1,910 @@
+"""UI-neutral induction-heating design specification.
+
+The production Simulink block, Python/MCP entry points, and validation use this
+design state and the same command-building rules. The module intentionally has
+no Qt/PySide dependency.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from itertools import permutations
+from pathlib import Path
+import sys
+import warnings
+
+
+METHOD_PEEC_IND = "PEEC inductance (coil only, STEP)"
+METHOD_BEMA_IND = "BEM-A inductance (coil only, .vol)"
+METHOD_THERMAL_3D_STATIC = "Thermal: 3D static (no rotation)"
+METHOD_THERMAL_3D_ROTATING = "Thermal: 3D + rotation (q_surf re-sampled per step)"
+METHOD_THERMAL_AXISYM = "Thermal: 2D axisymmetric (rotation implicit)"
+METHOD_PEEC_BEM = "PEEC + BEM weak coupling (workpiece)"
+METHOD_BEMA_BEM = "BEM-A + BEM weak coupling (workpiece)"
+METHOD_BEMA_BEM_STRONG = "BEM-A + BEM strong coupling (workpiece, CoupledBEMSolver)"
+METHOD_PEEC_FEM_KELVIN = "PEEC coil + FEM wp (SIBC) + Kelvin"
+METHOD_FEM_FULL = "Full simulation (FEM A-V + wp SIBC + Kelvin)"
+
+IH_METHODS = (
+    METHOD_PEEC_IND,
+    METHOD_BEMA_IND,
+    METHOD_PEEC_BEM,
+    METHOD_BEMA_BEM,
+    METHOD_BEMA_BEM_STRONG,
+    METHOD_PEEC_FEM_KELVIN,
+    METHOD_FEM_FULL,
+    METHOD_THERMAL_3D_STATIC,
+    METHOD_THERMAL_3D_ROTATING,
+    METHOD_THERMAL_AXISYM,
+)
+THERMAL_METHODS = frozenset({
+    METHOD_THERMAL_3D_STATIC,
+    METHOD_THERMAL_3D_ROTATING,
+    METHOD_THERMAL_AXISYM,
+})
+WORKPIECE_METHODS = frozenset({
+    METHOD_PEEC_BEM,
+    METHOD_BEMA_BEM,
+    METHOD_BEMA_BEM_STRONG,
+    METHOD_PEEC_FEM_KELVIN,
+    METHOD_FEM_FULL,
+    *THERMAL_METHODS,
+})
+PEEC_STEP_METHODS = frozenset({
+    METHOD_PEEC_IND,
+    METHOD_PEEC_BEM,
+    METHOD_PEEC_FEM_KELVIN,
+})
+BEMA_COIL_VOL_METHODS = frozenset({
+    METHOD_BEMA_IND,
+    METHOD_BEMA_BEM,
+    METHOD_BEMA_BEM_STRONG,
+})
+
+HEAT_SRC_UNIFORM = "Uniform q_surf [W/m^2]"
+HEAT_SRC_SPATIAL = "Spatial q_surf .sol (from IH)"
+MESH_TYPE_3D = "3D volume"
+MESH_TYPE_AXISYM = "2D axisymmetric (r, z)"
+
+THERMAL_PRESET_TO_CLI = {
+    "Steel (Fe)": "steel",
+    "Aluminum": "aluminum",
+    "Copper": "copper",
+    "Stainless 304": "stainless",
+    "Brass": "brass",
+    "Custom": "custom",
+}
+TIME_SCHEME_TO_CLI = {
+    "Backward Euler": "backward-euler",
+    "Crank-Nicolson": "crank-nicolson",
+}
+
+PEEC_SOLVERS = {
+    "Dense LU (small)": {
+        "coil_bem_solver": "dense-lu",
+        "coil_saddle_solver": "auto",
+        "wp_bem_backend": "intree-dense",
+    },
+    "HACApK (large)": {
+        "coil_bem_solver": "hacapk-gmres",
+        "coil_saddle_solver": "hacapk_cocr",
+        "wp_bem_backend": "hacapk",
+    },
+}
+FEM_SOLVERS = {
+    "auto": "auto",
+    "Automatic (AMS / BDDC+AMS)": "auto",
+    "sparsecholesky (direct)": "sparsecholesky",
+    "AMS (iterative, p=1)": "ams",
+    "BDDC (iterative, p>=2)": "bddc",
+    "BDDC+AMS (iterative, p>=2)": "bddc",
+    "iccg (fallback)": "iccg",
+}
+
+# Geometry-input slots and the file extensions each accepts.  These path
+# fields are the inputs users re-point most often between runs, and the
+# extension identifies a file's role uniquely -- so a crossed pair
+# (e.g. the coil .step typed into wp_vol and the workpiece .vol into
+# peec_step) is repaired deterministically at the spec boundary instead
+# of failing later inside a mesh or STEP reader.  See
+# IHDesignSpec.normalize_geometry_roles.
+GEOMETRY_SLOT_EXTENSIONS: dict[str, tuple[str, ...]] = {
+    "wp_vol": (".vol", ".vol.gz"),
+    "coil_vol": (".vol", ".vol.gz"),
+    "em_vol": (".vol", ".vol.gz"),
+    "peec_step": (".step", ".stp"),
+    "qsurf_sol": (".sol",),
+}
+
+
+def _fits_slot(slot: str, value: str) -> bool:
+    low = value.lower()
+    return any(low.endswith(ext) for ext in GEOMETRY_SLOT_EXTENSIONS[slot])
+
+
+def _panels_dir() -> Path:
+    return Path(__file__).resolve().parent / "panels"
+
+
+def calc_script(name: str, panels_dir: str | Path | None = None) -> str:
+    base = Path(panels_dir) if panels_dir is not None else _panels_dir()
+    return str(base / name)
+
+
+def msh_output(base_path: str | Path, suffix: str) -> str:
+    base = Path(base_path) if base_path else Path("output")
+    return str(base.with_suffix("")) + suffix + ".msh"
+
+
+def json_output(base_path: str | Path, suffix: str) -> str:
+    base = Path(base_path) if base_path else Path("output")
+    return str(base.with_suffix("")) + suffix + ".json"
+
+
+@dataclass(slots=True)
+class IHDesignSpec:
+    """All user-facing IH design inputs, independent of any UI toolkit."""
+
+    method: str = METHOD_PEEC_IND
+    frequency: str = "7000"
+    current: str = "1.0"
+
+    coil_material: str = "Copper"
+    coil_sigma: str = "5.8e7"
+    peec_step: str = ""
+    peec_n_peri: int = 16
+    peec_nwinc: int = 2
+    peec_nhinc: int = 2
+
+    coil_vol: str = ""
+    coil_source_name: str = "source"
+    coil_sink_name: str = "sink"
+
+    wp_vol: str = ""
+    wp_material: str = "Steel (mu_r=100)"
+    wp_sigma: str = "5.0e6"
+    mu_r: str = "100"
+    half_thickness: str = "0.0125"
+    # calc_inductance weak-path genus-1 loop DOF. "auto" (default)
+    # applies it whenever it can: with the
+    # "Dense LU (small)" solver preset (= intree-dense backend) + linear
+    # SIBC + order 1, a genus-1 workpiece gets the solved shorted-turn
+    # current automatically; inapplicable cases skip with a recorded
+    # wp_loop_dof_skip_reason + caveat.  "on" makes unmet prerequisites
+    # fail loud.  There is deliberately no "off" because the unextended
+    # genus-1 solve omits the required cohomology mode, and the incident potential
+    # is basis-determined in calc_inductance (P1 -> surface-Poisson),
+    # not a panel knob.
+    wp_loop_dof: str | bool = "auto"
+
+    impedance_model: str = "Linear SIBC"
+    bh_file: str = ""
+    esim_max_iter: int = 30
+    esim_tol: str = "1e-3"
+    esim_per_panel: bool = False
+    esim_anderson_m: int = 5
+    esim_relax: str = "0.5"
+
+    solver: str = "Dense LU (small)"
+    fes_order: int = 1
+
+    # Thermal-solver FE order, separate from the EM ``fes_order``.
+    # None selects the method default: order 2 for axisym heat, where
+    # order 1 shows a near-axis cusp, and order 1 for the 3D solver.
+    thermal_fes_order: int | None = None
+
+    thermal_mesh_type: str = MESH_TYPE_3D
+    heat_source: str = HEAT_SRC_UNIFORM
+    q_uniform: str = "1.0e6"
+    qsurf_sol: str = ""
+    em_vol: str = ""
+    qsurf_order: int = 1
+    q_phi_average: bool = False
+    # Used only by the axisymmetric thermal route with spatial q_surf.
+    # 128 resolved the circumferential mean of a faceted 3D EM surface
+    # to about 0.1% in an independent 2D cross-check.
+    n_phi_samples: int = 128
+    heat_flux_boundaries: str = ""
+    convection_boundaries: str = ""
+    radiation_boundaries: str = ""
+    # Migration-only trap.  Never translate this legacy setting silently:
+    # it mixed three independent physical boundary roles.
+    surface_label: str | None = None
+    thermal_material: str = "Steel (Fe)"
+    override_kcprho: bool = False
+    rho: str = "7800"
+    cp: str = "467"
+    k: str = "46.6"
+    rotation_rpm: float = 0.0
+    rotation_axis: str = "z"
+    # One EM solution per rotor angle (radia.ih-rotor-states/1) for a
+    # rotating part that is not a body of revolution; replaces qsurf_sol.
+    rotor_states: str = ""
+    h_conv: str = "10"
+    t_ext: str = "20"
+    emissivity: str = "0"
+    t_init: str = "20"
+    time_scheme: str = "Backward Euler"
+    dt: str = "0.5"
+    t_end: str = "5.0"
+    linear_solver: str = "sparsecholesky"
+    probe_point: str = ""
+    csv_output: str = ""
+    # Overheating as an optimisation constraint: the heat result reports
+    # the volume above each threshold and, for temperature_limit (for
+    # example the solidus of the alloy), exceeded / excess / volume above.
+    exposure_thresholds: str = ""
+    temperature_limit: str = ""
+    # Temperature-dependent k, cp (CSV T_C,k_W_mK,cp_J_kgK); a step that does
+    # not converge is an error unless max_halvings allows explicit halvings.
+    thermal_material_table: str = ""
+    max_halvings: int = 0
+    # EM boundaries that carry q_surf.  Empty uses the boundaries recorded in
+    # the q_surf sidecar; thermal boundary names are never borrowed.
+    em_heat_boundaries: str = ""
+
+    # Repairs applied by normalize_geometry_roles, newest last.  Kept on
+    # the spec so the Simulink runner / MCP callers can surface them.
+    geometry_role_notes: tuple[str, ...] = ()
+    convection_map: str = ""
+
+    def __post_init__(self) -> None:
+        if self.surface_label is not None:
+            raise ValueError(
+                "surface_label was removed because it coupled heat input, "
+                "convection, and radiation to one ambiguous boundary set. "
+                "Set heat_flux_boundaries and convection_boundaries "
+                "independently, plus radiation_boundaries when emissivity "
+                "is nonzero.")
+        # Preserve the pre-dropdown constructor contract without reviving the
+        # removed unextended genus-1 route.
+        if isinstance(self.wp_loop_dof, bool):
+            self.wp_loop_dof = "on" if self.wp_loop_dof else "auto"
+        if self.wp_loop_dof not in {"auto", "on"}:
+            raise ValueError("wp_loop_dof must be auto or on")
+        self.geometry_role_notes = tuple(self.geometry_role_notes or ())
+        self.normalize_geometry_roles()
+
+    def normalize_geometry_roles(self) -> tuple[str, ...]:
+        """Repair geometry file inputs whose values were crossed.
+
+        The .vol / .step / .sol path fields are the inputs users
+        re-point most often, and a file's extension identifies its role
+        uniquely.  Filled slots whose value does not match the slot's
+        accepted extensions are re-assigned when exactly ONE arrangement
+        of the same values fits every slot (e.g. wp_vol="coil.step" +
+        peec_step="wp.vol" becomes wp_vol="wp.vol" +
+        peec_step="coil.step").  Each repair is recorded in
+        ``geometry_role_notes`` and emitted as a UserWarning so it shows
+        in run logs.  Without a unique arrangement this raises
+        immediately, naming every offending slot and its expected
+        extensions, instead of failing later inside a mesh or STEP
+        reader.  Values are never moved into slots the user left empty
+        -- that would silently change the selected method.
+        """
+        filled = {
+            slot: str(getattr(self, slot)).strip()
+            for slot in GEOMETRY_SLOT_EXTENSIONS
+            if str(getattr(self, slot)).strip()
+        }
+        wrong = [s for s, v in filled.items() if not _fits_slot(s, v)]
+        if not wrong:
+            return ()
+        fixes = {
+            arrangement
+            for arrangement in permutations(filled[s] for s in wrong)
+            if all(_fits_slot(s, v) for s, v in zip(wrong, arrangement))
+        }
+        if len(fixes) != 1:
+            lines = [
+                f"  {slot}={filled[slot]!r} expects "
+                f"{' / '.join(GEOMETRY_SLOT_EXTENSIONS[slot])}"
+                for slot in wrong
+            ]
+            hint = ""
+            if any(_fits_slot("peec_step", filled[s]) for s in wrong):
+                hint = ("\n  Hint: a .step coil belongs in peec_step "
+                        "(PEEC methods); meshes are .vol.")
+            raise ValueError(
+                "Geometry inputs do not match their slots and no unique "
+                "reassignment of the same values fits:\n"
+                + "\n".join(lines) + hint
+            )
+        notes = []
+        for slot, value in zip(wrong, next(iter(fixes))):
+            if value != filled[slot]:
+                notes.append(
+                    "geometry input reassigned by extension: "
+                    f"{slot} <- {value!r} (was {filled[slot]!r})"
+                )
+            setattr(self, slot, value)
+        self.geometry_role_notes = self.geometry_role_notes + tuple(notes)
+        for note in notes:
+            warnings.warn(note, UserWarning, stacklevel=2)
+        return tuple(notes)
+
+    def impedance_model_cli(self) -> str:
+        if self.impedance_model == "Linear SIBC":
+            return "sibc"
+        if self.impedance_model.startswith("Nonlinear ESIM"):
+            return "esim"
+        raise ValueError(f"Unknown impedance model: {self.impedance_model}")
+
+    def coil_solver_cli(self) -> str:
+        if self.method in (METHOD_BEMA_IND, METHOD_BEMA_BEM,
+                            METHOD_BEMA_BEM_STRONG):
+            return "bem-a"
+        return "peec"
+
+    def visible_fields(self) -> set[str]:
+        """Return spec fields that should be exposed for the current method."""
+
+        fields = {"method"}
+        thermal = self.method in THERMAL_METHODS
+        if not thermal:
+            fields.update({"frequency", "current", "solver"})
+        if self.method in PEEC_STEP_METHODS:
+            fields.update({
+                "peec_step", "coil_material", "coil_sigma",
+                "peec_n_peri",
+            })
+        if self.method == METHOD_PEEC_FEM_KELVIN:
+            fields.update({"peec_nwinc", "peec_nhinc"})
+        if self.method in BEMA_COIL_VOL_METHODS:
+            fields.update({
+                "coil_vol", "coil_source_name", "coil_sink_name",
+                "coil_material", "coil_sigma",
+            })
+        if self.method in WORKPIECE_METHODS:
+            fields.update({"wp_vol"})
+        if self.method in (
+            METHOD_PEEC_BEM, METHOD_BEMA_BEM,
+            METHOD_PEEC_FEM_KELVIN, METHOD_FEM_FULL,
+        ):
+            fields.update({
+                "wp_material", "wp_sigma", "mu_r", "half_thickness",
+                "impedance_model", "fes_order",
+            })
+            if (
+                self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM)
+                and self.impedance_model_cli() == "sibc"
+                and self.fes_order == 1
+            ):
+                # calc_inductance weak path only (strong / FEM-Kelvin /
+                # FEM-full do not take this flag; ESIM and P2 cannot apply it).
+                fields.add("wp_loop_dof")
+            if self.impedance_model_cli() == "esim":
+                fields.update({
+                    "bh_file", "esim_max_iter", "esim_per_panel",
+                })
+                if self.method != METHOD_PEEC_FEM_KELVIN:
+                    fields.update({"esim_tol", "esim_relax"})
+                if self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM):
+                    fields.add("esim_anderson_m")
+        if self.method == METHOD_BEMA_BEM_STRONG:
+            # Strong coupling (CoupledBEMSolver) is linear-SIBC only:
+            # workpiece material + Leontovich Z_s knobs, no impedance-model /
+            # fes-order / ESIM (the coupled solver fixes wp_order=1 and passes
+            # a single global scalar Z_s).
+            fields.update({
+                "wp_material", "wp_sigma", "mu_r", "half_thickness",
+            })
+        if thermal:
+            fields.update({
+                "thermal_mesh_type", "heat_source", "heat_flux_boundaries",
+                "convection_boundaries", "convection_map", "radiation_boundaries",
+                "thermal_material", "override_kcprho", "rho", "cp", "k",
+                "h_conv", "t_ext", "emissivity", "t_init", "time_scheme",
+                "dt", "t_end", "linear_solver", "thermal_fes_order",
+                "probe_point", "csv_output", "exposure_thresholds",
+                "temperature_limit", "thermal_material_table",
+            })
+            if self.thermal_material_table:
+                fields.add("max_halvings")
+            if self.method != METHOD_THERMAL_3D_STATIC:
+                fields.update({"rotation_rpm", "rotation_axis"})
+                if (self.method != METHOD_THERMAL_AXISYM
+                        and self.heat_source != HEAT_SRC_UNIFORM):
+                    fields.add("rotor_states")
+            if self.heat_source == HEAT_SRC_UNIFORM:
+                fields.add("q_uniform")
+            else:
+                fields.update({"qsurf_sol", "em_vol", "qsurf_order",
+                               "em_heat_boundaries"})
+                if self.method == METHOD_THERMAL_AXISYM:
+                    fields.add("n_phi_samples")
+                else:
+                    fields.add("q_phi_average")
+        return fields
+
+    def missing_required_inputs(
+        self,
+        *,
+        check_exists: bool = False,
+    ) -> list[str]:
+        """Return human-readable missing input labels for the current method."""
+
+        missing: list[str] = []
+
+        def need(value: str | Path, label: str) -> None:
+            text = str(value).strip()
+            if not text:
+                missing.append(label)
+                return
+            if check_exists and not Path(text).is_file():
+                missing.append(f"{label} (not found)")
+
+        if self.method in PEEC_STEP_METHODS:
+            need(self.peec_step, "Coil STEP")
+        if self.method in BEMA_COIL_VOL_METHODS:
+            need(self.coil_vol, "Coil .vol")
+        if self.method in WORKPIECE_METHODS:
+            need(self.wp_vol, "Workpiece .vol")
+        if self.impedance_model_cli() == "esim" and self.method not in THERMAL_METHODS:
+            need(self.bh_file, "BH file")
+        if self.method in THERMAL_METHODS and self.heat_source == HEAT_SRC_SPATIAL:
+            need(self.qsurf_sol, "qsurf .sol")
+            need(self.em_vol, "EM .vol")
+        if self.method in THERMAL_METHODS:
+            need(self.heat_flux_boundaries, "Heat-flux boundary selector")
+            try:
+                convection_active = float(self.h_conv) != 0.0
+            except (TypeError, ValueError):
+                convection_active = True
+            if convection_active and not self.convection_map:
+                need(self.convection_boundaries,
+                     "Convection boundary selector")
+            try:
+                radiation_active = float(self.emissivity) != 0.0
+            except (TypeError, ValueError):
+                radiation_active = True
+            if radiation_active:
+                need(self.radiation_boundaries,
+                     "Radiation boundary selector")
+        return missing
+
+    def is_runnable(self, *, check_exists: bool = False) -> bool:
+        """Return whether the current spec has the required user inputs."""
+
+        return not self.missing_required_inputs(check_exists=check_exists)
+
+    def build_command(
+        self,
+        vol_path: str | None = None,
+        *,
+        python: str | None = None,
+        panels_dir: str | Path | None = None,
+    ) -> list[str]:
+        """Build the headless calc command for the current design.
+
+        All IH methods, including thermal modes, are represented here so the
+        Simulink block, Python/MCP entry points, and validation share one
+        command contract.
+        """
+
+        # Idempotent: covers specs whose path fields were mutated after
+        # construction (construction itself normalizes in __post_init__).
+        self.normalize_geometry_roles()
+        py = python or sys.executable
+        if self.method in THERMAL_METHODS:
+            return self._build_thermal_command(py, panels_dir)
+        if self.method in (METHOD_PEEC_IND, METHOD_BEMA_IND):
+            return self._build_inductance_command(py, panels_dir)
+
+        wp_vol = vol_path or self.wp_vol
+        if not wp_vol:
+            raise ValueError("No workpiece .vol file specified.")
+        if self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM):
+            return self._build_weak_bem_command(wp_vol, py, panels_dir)
+        if self.method == METHOD_BEMA_BEM_STRONG:
+            return self._build_strong_bem_command(wp_vol, py, panels_dir)
+        if self.method == METHOD_PEEC_FEM_KELVIN:
+            return self._build_fem_kelvin_command(wp_vol, py, panels_dir)
+        if self.method == METHOD_FEM_FULL:
+            return self._build_fem_full_command(wp_vol, py, panels_dir)
+        raise ValueError(f"Unknown IH method: {self.method}")
+
+    def _coil_input_args(self) -> tuple[list[str], str]:
+        coil_solver = self.coil_solver_cli()
+        if coil_solver == "peec":
+            if not self.peec_step:
+                raise ValueError("Coil STEP file is required for PEEC mode.")
+            coil_in = self.peec_step
+            return ["--coil-step", coil_in], coil_in
+        if not self.coil_vol:
+            raise ValueError("Coil .vol file is required for BEM-A mode.")
+        coil_in = self.coil_vol
+        return [
+            "--coil-vol", coil_in,
+            "--coil-source-name", self.coil_source_name,
+            "--coil-sink-name", self.coil_sink_name,
+        ], coil_in
+
+    def _bem_size(self) -> dict[str, str]:
+        try:
+            return PEEC_SOLVERS[self.solver]
+        except KeyError as exc:
+            raise ValueError(f"Unknown BEM solver: {self.solver}") from exc
+
+    def _fem_solver(self) -> str:
+        # The shared design defaults to a BEM preset. Switching the method
+        # selects the FE method's default, rather than forcing a direct solve.
+        if self.solver in PEEC_SOLVERS:
+            selected = "auto"
+        elif self.solver in FEM_SOLVERS:
+            selected = FEM_SOLVERS[self.solver]
+        else:
+            raise ValueError(f"Unknown FEM solver: {self.solver}")
+        if self.method == METHOD_FEM_FULL:
+            if selected not in {"auto", "sparsecholesky"}:
+                raise ValueError("volumetric A-V coil solve supports only sparsecholesky")
+            return "sparsecholesky"
+        return selected
+
+    def _build_inductance_command(
+        self,
+        py: str,
+        panels_dir: str | Path | None,
+    ) -> list[str]:
+        coil_arg, coil_in = self._coil_input_args()
+        coil_solver = self.coil_solver_cli()
+        bem_size = self._bem_size()
+        cmd = [
+            py,
+            calc_script("calc_inductance.py", panels_dir),
+            *coil_arg,
+            "--coil-solver", coil_solver,
+            "--coil-bem-solver", bem_size["coil_bem_solver"],
+            "--frequency", self.frequency,
+            "--current", self.current,
+            "--coil-sigma", self.coil_sigma,
+            "--msh-output", msh_output(coil_in, "_peec_ind"),
+            "--output", json_output(coil_in, "_peec_ind"),
+        ]
+        if coil_solver == "peec":
+            cmd += ["--peec-n-peri", str(self.peec_n_peri)]
+        return cmd
+
+    def _build_weak_bem_command(
+        self,
+        vol_path: str,
+        py: str,
+        panels_dir: str | Path | None,
+    ) -> list[str]:
+        coil_arg, coil_in = self._coil_input_args()
+        coil_solver = self.coil_solver_cli()
+        bem_size = self._bem_size()
+        cmd = [
+            py,
+            calc_script("calc_inductance.py", panels_dir),
+            *coil_arg,
+            "--coil-solver", coil_solver,
+            "--coil-bem-solver", bem_size["coil_bem_solver"],
+            "--wp-bem-backend", bem_size["wp_bem_backend"],
+            "--frequency", self.frequency,
+            "--current", self.current,
+            "--coil-sigma", self.coil_sigma,
+            "--vol", vol_path,
+            "--wp-label", "sibc",
+            "--sigma", self.wp_sigma,
+            "--half-thickness", self.half_thickness,
+            "--mu-r", self.mu_r,
+            "--impedance-model", self.impedance_model_cli(),
+            "--h1-order", str(self.fes_order),
+            "--msh-output", msh_output(vol_path, "_peec_bem"),
+            "--output", json_output(vol_path, "_peec_bem"),
+        ]
+        if coil_solver == "peec":
+            cmd += ["--peec-n-peri", str(self.peec_n_peri)]
+        if self.wp_loop_dof != "auto":
+            cmd += ["--wp-loop-dof", self.wp_loop_dof]
+        self._append_esim_args(cmd, include_anderson=True, kelvin=False)
+        return cmd
+
+    def _build_strong_bem_command(
+        self,
+        vol_path: str,
+        py: str,
+        panels_dir: str | Path | None,
+    ) -> list[str]:
+        """BEM-A coil + iterative CoupledBEMSolver strong coupling.
+
+        Linear-SIBC only (a single global Leontovich Z_s); the coupled
+        solver recomputes the coil surface current against the workpiece
+        reaction field each Picard iteration, so ΔL includes the workpiece
+        magnetic-energy term and P_wp is self-consistent.  Requires a BEM-A
+        coil .vol (source/sink labels) -- no PEEC, no ESIM.
+        """
+        if self.impedance_model_cli() != "sibc":
+            raise ValueError(
+                "BEM strong coupling supports only Linear SIBC; "
+                "Nonlinear ESIM cannot be substituted by the linear model."
+            )
+        coil_arg, _coil_in = self._coil_input_args()
+        bem_size = self._bem_size()
+        return [
+            py,
+            calc_script("calc_inductance.py", panels_dir),
+            *coil_arg,
+            "--coil-solver", "bem-a",
+            "--coil-bem-solver", bem_size["coil_bem_solver"],
+            "--coil-saddle-solver", bem_size["coil_saddle_solver"],
+            "--wp-bem-backend", bem_size["wp_bem_backend"],
+            "--frequency", self.frequency,
+            "--current", self.current,
+            "--coil-sigma", self.coil_sigma,
+            "--vol", vol_path,
+            "--wp-label", "sibc",
+            "--sigma", self.wp_sigma,
+            "--half-thickness", self.half_thickness,
+            "--mu-r", self.mu_r,
+            "--coupling-mode", "strong",
+            "--msh-output", msh_output(vol_path, "_bema_bem_strong"),
+            "--output", json_output(vol_path, "_bema_bem_strong"),
+        ]
+
+    def _build_fem_kelvin_command(
+        self,
+        vol_path: str,
+        py: str,
+        panels_dir: str | Path | None,
+    ) -> list[str]:
+        if not self.peec_step:
+            raise ValueError("PEEC STEP file is required for PEEC+FEM+Kelvin.")
+        cmd = [
+            py,
+            calc_script("calc_fem_kelvin.py", panels_dir),
+            "--vol", vol_path,
+            "--fes-order", str(self.fes_order),
+            "--frequency", self.frequency,
+            "--material", "custom",
+            "--sigma", self.wp_sigma,
+            "--mu-r", self.mu_r,
+            "--impedance", self.impedance_model_cli(),
+            "--formulation", "total",
+            "--current", self.current,
+            "--half-thickness", self.half_thickness,
+            "--solver", self._fem_solver(),
+            "--peec-step", self.peec_step,
+            "--peec-sigma", self.coil_sigma,
+            "--peec-nwinc", str(self.peec_nwinc),
+            "--peec-nhinc", str(self.peec_nhinc),
+            "--peec-n-peri", str(self.peec_n_peri),
+            "--require-kelvin",
+            "--msh-output", msh_output(vol_path, "_fem_kelvin"),
+            "--output", json_output(vol_path, "_fem_kelvin"),
+        ]
+        self._append_esim_args(cmd, include_anderson=False, kelvin=True)
+        return cmd
+
+    def _build_fem_full_command(
+        self,
+        vol_path: str,
+        py: str,
+        panels_dir: str | Path | None,
+    ) -> list[str]:
+        cmd = [
+            py,
+            calc_script("calc_fem_coilmesh.py", panels_dir),
+            "--vol", vol_path,
+            "--frequency", self.frequency,
+            "--current", self.current,
+            "--coil-sigma", self.coil_sigma,
+            "--sigma", self.wp_sigma,
+            "--mu-r", self.mu_r,
+            "--half-thickness", self.half_thickness,
+            "--fes-order", str(self.fes_order),
+            "--solver", self._fem_solver(),
+            "--sibc-bnd", "sibc",
+            "--source-bnd", "source",
+            "--sink-bnd", "sink",
+            "--coil-mat", "coil",
+            "--impedance-model", self.impedance_model_cli(),
+            "--require-kelvin",
+            "--msh-output", msh_output(vol_path, "_fem_full"),
+            "--output", json_output(vol_path, "_fem_full"),
+        ]
+        self._append_esim_args(cmd, include_anderson=False, kelvin=False)
+        return cmd
+
+    def _append_esim_args(
+        self,
+        cmd: list[str],
+        *,
+        include_anderson: bool,
+        kelvin: bool,
+    ) -> None:
+        if self.impedance_model_cli() != "esim":
+            return
+        if not self.bh_file:
+            raise ValueError(
+                "Nonlinear ESIM impedance model requires a BH file."
+            )
+        if kelvin:
+            cmd += ["--bh-file", self.bh_file, "--max-iter", str(self.esim_max_iter)]
+        else:
+            cmd += [
+                "--bh-file", self.bh_file,
+                "--esim-max-iter", str(self.esim_max_iter),
+                "--esim-tol", self.esim_tol,
+                "--esim-relax", self.esim_relax,
+            ]
+            if include_anderson:
+                cmd += ["--esim-anderson-m", str(self.esim_anderson_m)]
+        if self.esim_per_panel:
+            cmd.append("--esim-per-panel")
+
+    def _thermal_mesh_type_for_method(self) -> str:
+        if self.method == METHOD_THERMAL_AXISYM:
+            return MESH_TYPE_AXISYM
+        if self.method in (METHOD_THERMAL_3D_STATIC, METHOD_THERMAL_3D_ROTATING):
+            return MESH_TYPE_3D
+        return self.thermal_mesh_type
+
+    def resolved_thermal_fes_order(self) -> int:
+        """Return the explicit or method-specific thermal H1 order."""
+        mesh_type = self._thermal_mesh_type_for_method()
+        if self.thermal_fes_order is None:
+            return 2 if mesh_type == MESH_TYPE_AXISYM else 1
+        if isinstance(self.thermal_fes_order, bool):
+            raise ValueError("thermal_fes_order must be a positive integer")
+        try:
+            order = int(self.thermal_fes_order)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "thermal_fes_order must be a positive integer"
+            ) from exc
+        if order < 1 or str(order) != str(self.thermal_fes_order).strip():
+            raise ValueError("thermal_fes_order must be a positive integer")
+        return order
+
+    def _build_thermal_command(
+        self,
+        py: str,
+        panels_dir: str | Path | None,
+    ) -> list[str]:
+        wp = self.wp_vol
+        if not wp:
+            raise ValueError("Workpiece .vol is required for Heat.")
+
+        mesh_type = self._thermal_mesh_type_for_method()
+        is_axisym = mesh_type == MESH_TYPE_AXISYM
+        thermal_fes_order = self.resolved_thermal_fes_order()
+        calc = "calc_heat_axisym.py" if is_axisym else "calc_heat.py"
+        try:
+            material_cli = THERMAL_PRESET_TO_CLI[self.thermal_material]
+        except KeyError as exc:
+            raise ValueError(
+                f"Unknown thermal material: {self.thermal_material}"
+            ) from exc
+        try:
+            scheme_cli = TIME_SCHEME_TO_CLI[self.time_scheme]
+        except KeyError as exc:
+            raise ValueError(f"Unknown time scheme: {self.time_scheme}") from exc
+        rotation_rpm = 0.0 if self.method == METHOD_THERMAL_3D_STATIC else self.rotation_rpm
+
+        boundary_missing = []
+        if not self.heat_flux_boundaries.strip():
+            boundary_missing.append("heat_flux_boundaries")
+        if self.convection_map and self.convection_boundaries.strip():
+            raise ValueError("convection_map and convection_boundaries are mutually exclusive")
+        if float(self.h_conv) != 0.0 and not self.convection_map and not self.convection_boundaries.strip():
+            boundary_missing.append("convection_boundaries")
+        if (float(self.emissivity) != 0.0
+                and not self.radiation_boundaries.strip()):
+            boundary_missing.append("radiation_boundaries")
+        if boundary_missing:
+            raise ValueError(
+                "Thermal boundary roles must be explicit; missing "
+                + ", ".join(boundary_missing) + ".")
+
+        cmd = [
+            py,
+            calc_script(calc, panels_dir),
+            "--wp-vol", wp,
+            "--heat-flux-boundaries", self.heat_flux_boundaries,
+            "--material", material_cli,
+            "--h-conv", self.h_conv,
+            "--t-ext", self.t_ext,
+            "--emissivity", self.emissivity,
+            "--t-initial", self.t_init,
+            "--dt", self.dt,
+            "--t-end", self.t_end,
+            "--time-scheme", scheme_cli,
+            "--linear-solver", self.linear_solver,
+            "--fes-order", str(thermal_fes_order),
+            "--rotation-rpm", str(rotation_rpm),
+            "--msh-output", msh_output(wp, "_heat"),
+            "--output", json_output(wp, "_heat"),
+        ]
+
+        # A 2D (r,z) solve is already fixed about the z axis.
+        # calc_heat_axisym.py intentionally has no rotation-axis option.
+        if not is_axisym:
+            cmd += ["--rotation-axis", str(self.rotation_axis)]
+
+        if self.convection_map:
+            cmd += ["--convection-map", self.convection_map]
+        if self.convection_boundaries:
+            cmd += ["--convection-boundaries", self.convection_boundaries]
+        if self.radiation_boundaries:
+            cmd += ["--radiation-boundaries", self.radiation_boundaries]
+
+        if material_cli == "custom" or self.override_kcprho:
+            cmd += ["--rho", self.rho, "--cp", self.cp, "--k", self.k]
+
+        if self.heat_source == HEAT_SRC_UNIFORM:
+            cmd += ["--q-uniform", self.q_uniform]
+        else:
+            if self.rotor_states:
+                if is_axisym or self.method == METHOD_THERMAL_3D_STATIC:
+                    raise ValueError("rotor_states describes a rotating 3D "
+                                     "part; use the rotating 3D thermal "
+                                     "method")
+                if self.qsurf_sol or self.em_vol or self.q_phi_average:
+                    raise ValueError("rotor_states lists its own EM "
+                                     "solutions; leave qsurf_sol, em_vol and "
+                                     "q_phi_average unset")
+                if not float(self.rotation_rpm) > 0:
+                    raise ValueError("rotor_states needs rotation_rpm > 0")
+            elif not (self.qsurf_sol and self.em_vol):
+                raise ValueError(
+                    "Spatial qsurf mode requires a qsurf .sol and its companion EM .vol."
+                )
+            if int(self.qsurf_order) != 1:
+                raise ValueError(
+                    "Spatial cross-mesh qsurf currently requires "
+                    "qsurf_order=1; higher-order H1 transfer is not a "
+                    "vertex-sampling contract.")
+            if self.rotor_states:
+                cmd += ["--rotor-states", self.rotor_states,
+                        "--qsurf-order", str(self.qsurf_order)]
+            else:
+                cmd += [
+                    "--qsurf-sol", self.qsurf_sol,
+                    "--em-vol", self.em_vol,
+                    "--qsurf-order", str(self.qsurf_order),
+                ]
+            if is_axisym:
+                if isinstance(self.n_phi_samples, bool):
+                    raise ValueError(
+                        "n_phi_samples must be a positive integer"
+                    )
+                try:
+                    n_phi = int(self.n_phi_samples)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        "n_phi_samples must be a positive integer"
+                    ) from exc
+                if n_phi < 1 or str(n_phi) != str(self.n_phi_samples).strip():
+                    raise ValueError(
+                        "n_phi_samples must be a positive integer"
+                    )
+                cmd += ["--n-phi-samples", str(n_phi)]
+            elif self.q_phi_average:
+                cmd += ["--q-phi-average"]
+
+        if self.heat_source != HEAT_SRC_UNIFORM and self.em_heat_boundaries:
+            cmd += ["--em-heat-boundaries", self.em_heat_boundaries]
+        if self.exposure_thresholds.strip():
+            cmd += ["--exposure-thresholds", self.exposure_thresholds.strip()]
+        if str(self.temperature_limit).strip():
+            float(self.temperature_limit)          # fail early on bad input
+            cmd += ["--temperature-limit", str(self.temperature_limit).strip()]
+        if self.thermal_material_table:
+            cmd += ["--material-table", self.thermal_material_table]
+        if isinstance(self.max_halvings, bool) or \
+                int(self.max_halvings) != self.max_halvings or \
+                self.max_halvings < 0:
+            raise ValueError("max_halvings must be a non-negative integer")
+        if self.max_halvings:
+            if not self.thermal_material_table:
+                raise ValueError("max_halvings applies to the nonlinear "
+                                 "(material-table) heat solve only")
+            cmd += ["--max-halvings", str(int(self.max_halvings))]
+        probe = self.probe_point.strip()
+        if probe:
+            cmd += ["--probe-point", probe]
+        if self.csv_output:
+            cmd += ["--csv-output", self.csv_output]
+        return cmd

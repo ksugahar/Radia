@@ -1,0 +1,167 @@
+{
+  "schema": "radia.hacapk-entry-on-demand.v1",
+  "runtime": {
+    "os": "Windows",
+    "ngsolve": "6.2.2607"
+  },
+  "construction_scope": "Fresh-process single-thread construction only; old=prior dense-entry, default=updated auto, new=explicit on-demand; same runtime and host",
+  "construction_source_old": "341469e6f3f6f79dda25eba8dc7c86eac5cefd9e",
+  "construction_source_updated": "ae432e4e86bedee9bf33f04bb074065d3ad32f01",
+  "construction": [
+    {
+      "faces": 2048,
+      "old": {
+        "construction_seconds": 5.74497350002639,
+        "peak_working_set_bytes": 150880256,
+        "peak_commit_bytes": 574611456
+      },
+      "default": {
+        "construction_seconds": 5.678103699989151,
+        "peak_working_set_bytes": 151044096,
+        "peak_commit_bytes": 557920256
+      },
+      "new": {
+        "construction_seconds": 28.013420500035863,
+        "peak_working_set_bytes": 145489920,
+        "peak_commit_bytes": 570298368
+      }
+    },
+    {
+      "faces": 6272,
+      "old": {
+        "construction_seconds": 21.387840199982747,
+        "peak_working_set_bytes": 440836096,
+        "peak_commit_bytes": 1659559936
+      },
+      "default": {
+        "construction_seconds": 21.746752300008666,
+        "peak_working_set_bytes": 442753024,
+        "peak_commit_bytes": 1558085632
+      },
+      "new": {
+        "construction_seconds": 157.0861763000139,
+        "peak_working_set_bytes": 237338624,
+        "peak_commit_bytes": 1371480064
+      }
+    },
+    {
+      "faces": 11552,
+      "old": {
+        "construction_seconds": 43.12230779998936,
+        "peak_working_set_bytes": 1193218048,
+        "peak_commit_bytes": 2163716096
+      },
+      "default": {
+        "construction_seconds": 43.91433980001602,
+        "peak_working_set_bytes": 1192947712,
+        "peak_commit_bytes": 2061295616
+      },
+      "new": {
+        "construction_seconds": 382.8233248000033,
+        "peak_working_set_bytes": 375791616,
+        "peak_commit_bytes": 1507000320
+      }
+    }
+  ],
+  "dense_reference_comparisons": [
+    {
+      "faces": 512,
+      "case_count": 12,
+      "reference": "same-mesh dense body and P0",
+      "max_relative_difference": {
+        "heat_power_w": 7.93156499367953e-08,
+        "reaction_power_w": 3.06171333397387e-07,
+        "alpha": 8.979321522003395e-09,
+        "field": 1.9496887749688232e-05
+      },
+      "max_linear_residual": 3.127149785641139e-09,
+      "lift_field_relative_max": 0.0006329796428935326
+    },
+    {
+      "faces": 2048,
+      "case_count": 12,
+      "reference": "same-mesh dense body and P0",
+      "max_relative_difference": {
+        "heat_power_w": 5.740999724501705e-07,
+        "reaction_power_w": 8.436202174610941e-07,
+        "alpha": 2.255432945554791e-08,
+        "field": 4.3459720956531154e-05
+      },
+      "max_linear_residual": 3.1752073384295273e-09,
+      "lift_field_relative_max": 0.0001682804710626858
+    },
+    {
+      "faces": 6272,
+      "case_count": 12,
+      "reference": "same-mesh dense body and P0",
+      "max_relative_difference": {
+        "heat_power_w": 8.418100319040889e-07,
+        "reaction_power_w": 1.0383136360703205e-06,
+        "alpha": 3.792245837463104e-08,
+        "field": 9.949418096974342e-05
+      },
+      "max_linear_residual": 3.0367379108413184e-09,
+      "lift_field_relative_max": 0.00013883537876952545
+    },
+    {
+      "faces": 11552,
+      "case_count": 2,
+      "reference": "same-mesh dense body and P0",
+      "max_relative_difference": {
+        "heat_power_w": 5.632098454277923e-07,
+        "reaction_power_w": 2.413921060817614e-07,
+        "alpha": 2.5530468674356577e-08,
+        "field": 0.0001583832857227987
+      },
+      "max_linear_residual": 2.774766415744258e-09,
+      "lift_field_relative_max": 0.0
+    }
+  ],
+  "tight_lift_check": {
+    "faces": 6272,
+    "case_count": 2,
+    "gmres_tol": 1e-13,
+    "lift_field_relative": 9.333820493116034e-08,
+    "lift_heat_relative": 1.6952950154802693e-10,
+    "max_relative_to_prior_tight_hacapk": {
+      "reference_heat_relative": 3.885780586188048e-15,
+      "reference_alpha_relative": 2.221183895997266e-16,
+      "reference_reaction_relative": 2.4424906541753444e-15,
+      "reference_field_relative": 1.0069795843317948e-13
+    }
+  },
+  "large_weak_case": {
+    "faces": 20000,
+    "vertices": 10000,
+    "threads": 4,
+    "geometry_sha256": "5e5b7a0177ea7c1cde8fdd7d6516e9785fe5c24526d84cadc4e54ad79b8023c7",
+    "peak_working_set_bytes": 1354817536,
+    "peak_commit_bytes": 3078828032,
+    "body_construction_route": "p1-entry-on-demand",
+    "body_sl_reciprocity": {
+      "constant": 5.206858522307897e-10,
+      "x": 1.1690133213950955e-09,
+      "z": 1.586297283136553e-08
+    },
+    "reference": "No same-mesh dense physical reference; compact scalar and face-jump cases",
+    "source_state": "Native clean ae432e4e8; guarded Python inputs captured before final commit",
+    "maxima": {
+      "linear_residual": 1.665561575773988e-09,
+      "faraday_residual": 1.944457631357886e-16,
+      "power_balance_relative": 6.425671000998001e-05,
+      "seam_jump_deviation": 1.103450664174943e-12,
+      "frozen_residual": 9.954904802768151e-11
+    },
+    "heat_power_w": {
+      "scalar": 5.125741851119383e-07,
+      "jump": 7.952639703397338e-07
+    },
+    "p0_backend": "ngsolve-galerkin-fmm"
+  },
+  "limitations": [
+    "On-demand construction is slower; default retained through 7000 full nodal DOFs",
+    "No general speed, linear-storage or arbitrary-geometry accuracy claim",
+    "Large-case timing excluded from matched costs; large route weak only",
+    "P0 FMM complete native storage inventory unknown; measured process peaks reported"
+  ]
+}

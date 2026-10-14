@@ -1,0 +1,1021 @@
+{
+  "schema": "radia.projection-scaling-reuse-numerical.v1",
+  "accepted": true,
+  "scope": "Expanded actual order-1 HDiv projection, numerical/call-count gates only",
+  "timing_acceptance": false,
+  "a100_used": false,
+  "checks": [
+    {
+      "schema": "radia.projection-scaling-reuse.v1",
+      "accepted": true,
+      "timing_acceptance": false,
+      "classification": "Nonidle small numerical check; timings invalid and excluded",
+      "a100_used": false,
+      "sources": 1024,
+      "representation": "cloud",
+      "maxh": 0.25,
+      "receipts": {
+        "field": {
+          "schema": "radia.field-cuda-build.v1",
+          "source_commit": "76e9bb885b67a97271789656b68a049e07e1a20c",
+          "source_dirty": false,
+          "source_sha256": {
+            "src/core/rad_hdiv_field_evaluator.cpp": "3abe79905362bb4c943aace95e62f7b87315c7d8eaf792fa1c8db3f14999a32f",
+            "src/core/rad_hdiv_vim.cpp": "397d692d21210d49e9389b8a9313260375fe0dbb055bfe7815d8f78fc5a87a06",
+            "src/core/rad_hdiv_field_evaluator.h": "69295403af30540232b966508866b731b4a24ba29ee7ee2498bb1aa85449e562",
+            "src/core/rad_hdiv_vim.h": "bcc63c34546f21ab8fd65e39e6b6668fe687b217d62c1d61229653b5cad19308",
+            "src/core/rad_field_cloud_kernel.h": "af0fc87f58921c6368e5fbb448b372bea7fe40eef2bcff77f9508e09de374834",
+            "src/core/rad_field_sources.h": "28bbbd100a2bcdc01c71cedfff2756548427226ead2dcd7aae5b5510dafd4029",
+            "src/core/rad_field_source_kernel.inc": "cb8bec501a06ad1d80712371fb4b7c97d4edcb7cb14a8aa67e22ea0cf4919fb8",
+            "src/core/rad_hdiv_field_math.inc": "082adedb5c9a80d222bea026f4756aa4ea14d1e127774a4a7aff7867f8e8205e",
+            "src/core/rad_hdiv_field_kernel_api.inc": "18eb7b6468488c92a6e84a0be6ca7a97ddc6ab5eb4d0342b3453f210d024d589",
+            "packages/radia-gpu/native/radia_cuda_field.cu": "dcb63c5ec244044f3eb330d16e033e7c5801f6780b1e8c30142e96a0ea852f7e",
+            "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127",
+            "packages/radia-gpu/tools/build_field_cuda.py": "b843345462848eec25d299fe789b0a43291bfbe6057850c8fd023bd52adff9e8",
+            "Build.ps1": "506fc6e1d4f5889e51d858f00cbb7404081c86946c00abaf923c05c76c3f8218"
+          },
+          "binary_sha256": "54bd6cc7c95e41ccce2c5b6524cb9e6cb163cb267983c2ac602d0c40563e7f68",
+          "matlab": "26.1.0.3346908 (R2026a) Update 5",
+          "cuda_targets": [
+            "sm_75",
+            "sm_80",
+            "compute_80 PTX"
+          ],
+          "source_representation": "existing retained point cloud only",
+          "cpu_fallback": false,
+          "python_runtime_required": false,
+          "taskmanager_regions": false
+        },
+        "projection": {
+          "accepted": true,
+          "a100_used": false,
+          "scope": "Experimental native mapped-target replay, not full RadFld migration",
+          "source_commit": "4b654001e230ee49b1936da232eea8e0f0a5ab06",
+          "source_sha256": {
+            "packages/radia-gpu/native/radia_cuda_projection.cu": "ac45a8be1f5a960a69c280524a1f4cada67f526cdc34d095f403fa8b06121bbb",
+            "packages/radia-gpu/native/radia_projection_host.cpp": "0eb0de23860730b33c0ba97796e27d14e00cfb115c66732d6625234a121558c8",
+            "packages/radia-gpu/native/radia_projection_host.cuh": "7593b7b8288f4664c6d975b000e852c9334fc00e71a93694d0233cdbc54a1564",
+            "packages/radia-gpu/tools/build_projection_cuda.py": "63ef93907fe361f30b7eec5d51493e982a00ef5af902b575513907c0315267a3",
+            "Build.ps1": "506fc6e1d4f5889e51d858f00cbb7404081c86946c00abaf923c05c76c3f8218"
+          },
+          "taskmanager_started": false,
+          "source_dirty": false,
+          "binary_sha256": "b6e2a6bea57a987f36380d25651733d7b9aa84518305dabad80a3d87bb5934e0",
+          "matlab": "26.1.0.3346908 (R2026a) Update 5"
+        },
+        "CPU": {
+          "schema": "radia.field-cpu-reference.v1",
+          "source_commit": "69301918ac79deae6deab652e0a68b633c3ee0c6",
+          "source_sha256": {
+            "rad_hdiv_field_evaluator.cpp": "db4912925731c3b41a04bdfda44622c55ff85634bc0062a3b5f65a6c91a7b8be",
+            "rad_hdiv_field_evaluator.h": "c9a821ad8d52a312e3f1a4f3b0681ae1fbee0144f55206cfee09c72573e6c56e",
+            "rad_hdiv_vim.cpp": "a6bc36adc49fda5e5ae494a14db4189b5bdc8eb1162b00c6ceb220359bd57a46",
+            "rad_hdiv_vim.h": "171b9ee542ec6bc752826e10fd80377b8d4d5019e78b2d219f4b987944af154a",
+            "rad_parallel.h": "0ad545213c48b7a0f5df1c59d46e33a4c7e85fca62eab0637c0154d940110ed5"
+          },
+          "adapter_sha256": "0f6b110621688b554ca5bcee0d2a2adcdb10834bf9a744b3e68dd78fc95296f2",
+          "binary_sha256": "c8c48a96f393c08c1a394479544831f819355a6c13bdc9a8b785b9f555124730",
+          "ngsolve": "6.2.2607",
+          "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]"
+        }
+      },
+      "source_sha256": {
+        "validation_test\\radfld_cuda\\scale_projection_reuse.py": "197c2ecd3847dbe81acf81db074367fbe8987b15d198712a1f7bde9acbbebbda",
+        "validation_test\\radfld_cuda\\profileProjectionReuse.m": "0e0d6846d1bb738829ed5abd41dea052a2959ca483444cf29f46f023f93d3628",
+        "validation_test\\radfld_cuda\\check_projection_bridge.py": "f437682bd2b98816bac5590b7ce4f739ded0d4427324a7a67f1d0151e50a88be",
+        "validation_test\\radfld_cuda\\projectBatchedField.m": "ec757b969e116471ae2dfc66c331d96845c894170abcaa71118044c624f67745",
+        "validation_test\\radfld_cuda\\evaluateProjectionTargets.m": "f852a7999616d0e5b5f0304f0de79d67853f85423feb10c7da65884e5e027c8e"
+      },
+      "idle_cpu_mean_percent": 4.115384615384615,
+      "mesh_sha256": "e9e4bdb605eccc20f0c64073dae422f699503a730d016c151196be96f5b296fd",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "gpu": {
+        "name": "Quadro RTX 5000",
+        "total_memory": 17179541504.0,
+        "available_memory": 16004415488.0
+      },
+      "code_analysis": [],
+      "targets": 1820,
+      "input_sha256": {
+        "xyz": "5d07b5f9ebabef0507df18baaebc111f0451e45dfec3a40d3ebff8e4d70058e8",
+        "strength": "e331ccd6109f941246da14c155cef42e4af56791444257caf590642522f36677"
+      },
+      "targets_sha256": "b9c630c9c4fe1d76388766402ba17ef73f708b689f56d978218ca7963145d114",
+      "measurements": {
+        "accepted": true,
+        "relative_limit": 0.0001,
+        "timing_acceptance": false,
+        "steps": 3,
+        "chunk_size": 128,
+        "samples": [
+          {
+            "mode": "rebuild64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "rebuild64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "chunk64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 45,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 99488,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 1344,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "chunk64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 45,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 99488,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 1344,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch32",
+            "relative_coefficient_error": 2.262709279539183e-07,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree_mixed32"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch32",
+            "relative_coefficient_error": 2.262709279539183e-07,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree_mixed32"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "cache64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 1,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "cache64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 1,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 1.5092221300682947e-08,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch32",
+            "relative_coefficient_error": 2.262709279539183e-07,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree_mixed32"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "cache32",
+            "relative_coefficient_error": 2.262709279539183e-07,
+            "field_calls": 1,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree_mixed32"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "cache32",
+            "relative_coefficient_error": 2.262709279539183e-07,
+            "field_calls": 1,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree_mixed32"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch32",
+            "relative_coefficient_error": 2.262709279539183e-07,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 185504,
+              "persistent_owned_bytes": 98144,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 1024,
+              "tree_nodes": 255,
+              "image_count": 0,
+              "algorithm": "tree_mixed32"
+            },
+            "matlab_cache_array_bytes": 87360
+          }
+        ],
+        "a100_used": false,
+        "field_relative_error": 9.197201239219349e-08,
+        "FP64_field_relative_error": 1.5152341979921897e-08,
+        "source_revision_invalidation_passed": true,
+        "cache_scope": "Unchanged geometry, strength, options and explicit source revision only; not valid after source updates.",
+        "memory_limitations": "Device owned buffer peak is exact; CUDA free-memory samples are not process/global peaks. MATLAB target/cache arrays counted by numel*8; native host peak unmeasured."
+      },
+      "projected_FE_L2_relative_errors": [
+        1.5162052401523078e-08,
+        1.5162052401523078e-08,
+        1.5162052401523078e-08,
+        1.5162052401523078e-08,
+        1.5162052401523078e-08,
+        1.5162052401523078e-08,
+        1.5162052401523078e-08,
+        1.5162052401523078e-08,
+        1.5162052401523078e-08,
+        9.063280446116022e-08,
+        9.063280446116022e-08,
+        1.5162052401523078e-08,
+        1.5162052401523078e-08,
+        1.5162052401523078e-08,
+        1.5162052401523078e-08,
+        1.5162052401523078e-08,
+        9.063280446116022e-08,
+        9.063280446116022e-08,
+        9.063280446116022e-08,
+        9.063280446116022e-08
+      ],
+      "median_amortized_step_seconds": null,
+      "contexts_released": true,
+      "limitations": [
+        "Far synthetic source placement, actual order-1 HDiv projection; not general physical/scaling acceptance.",
+        "Cache comparisons reuse unchanged fields only; rebuild is required after source changes.",
+        "Host/native peak unmeasured; device owned buffers and sampled free memory are distinguished."
+      ]
+    },
+    {
+      "schema": "radia.projection-scaling-reuse.v1",
+      "accepted": true,
+      "timing_acceptance": false,
+      "classification": "Nonidle small numerical check; timings invalid and excluded",
+      "a100_used": false,
+      "sources": 16,
+      "representation": "curved_tet",
+      "maxh": 0.25,
+      "receipts": {
+        "field": {
+          "schema": "radia.field-cuda-build.v1",
+          "source_commit": "76e9bb885b67a97271789656b68a049e07e1a20c",
+          "source_dirty": false,
+          "source_sha256": {
+            "src/core/rad_hdiv_field_evaluator.cpp": "3abe79905362bb4c943aace95e62f7b87315c7d8eaf792fa1c8db3f14999a32f",
+            "src/core/rad_hdiv_vim.cpp": "397d692d21210d49e9389b8a9313260375fe0dbb055bfe7815d8f78fc5a87a06",
+            "src/core/rad_hdiv_field_evaluator.h": "69295403af30540232b966508866b731b4a24ba29ee7ee2498bb1aa85449e562",
+            "src/core/rad_hdiv_vim.h": "bcc63c34546f21ab8fd65e39e6b6668fe687b217d62c1d61229653b5cad19308",
+            "src/core/rad_field_cloud_kernel.h": "af0fc87f58921c6368e5fbb448b372bea7fe40eef2bcff77f9508e09de374834",
+            "src/core/rad_field_sources.h": "28bbbd100a2bcdc01c71cedfff2756548427226ead2dcd7aae5b5510dafd4029",
+            "src/core/rad_field_source_kernel.inc": "cb8bec501a06ad1d80712371fb4b7c97d4edcb7cb14a8aa67e22ea0cf4919fb8",
+            "src/core/rad_hdiv_field_math.inc": "082adedb5c9a80d222bea026f4756aa4ea14d1e127774a4a7aff7867f8e8205e",
+            "src/core/rad_hdiv_field_kernel_api.inc": "18eb7b6468488c92a6e84a0be6ca7a97ddc6ab5eb4d0342b3453f210d024d589",
+            "packages/radia-gpu/native/radia_cuda_field.cu": "dcb63c5ec244044f3eb330d16e033e7c5801f6780b1e8c30142e96a0ea852f7e",
+            "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127",
+            "packages/radia-gpu/tools/build_field_cuda.py": "b843345462848eec25d299fe789b0a43291bfbe6057850c8fd023bd52adff9e8",
+            "Build.ps1": "506fc6e1d4f5889e51d858f00cbb7404081c86946c00abaf923c05c76c3f8218"
+          },
+          "binary_sha256": "54bd6cc7c95e41ccce2c5b6524cb9e6cb163cb267983c2ac602d0c40563e7f68",
+          "matlab": "26.1.0.3346908 (R2026a) Update 5",
+          "cuda_targets": [
+            "sm_75",
+            "sm_80",
+            "compute_80 PTX"
+          ],
+          "source_representation": "existing retained point cloud only",
+          "cpu_fallback": false,
+          "python_runtime_required": false,
+          "taskmanager_regions": false
+        },
+        "projection": {
+          "accepted": true,
+          "a100_used": false,
+          "scope": "Experimental native mapped-target replay, not full RadFld migration",
+          "source_commit": "4b654001e230ee49b1936da232eea8e0f0a5ab06",
+          "source_sha256": {
+            "packages/radia-gpu/native/radia_cuda_projection.cu": "ac45a8be1f5a960a69c280524a1f4cada67f526cdc34d095f403fa8b06121bbb",
+            "packages/radia-gpu/native/radia_projection_host.cpp": "0eb0de23860730b33c0ba97796e27d14e00cfb115c66732d6625234a121558c8",
+            "packages/radia-gpu/native/radia_projection_host.cuh": "7593b7b8288f4664c6d975b000e852c9334fc00e71a93694d0233cdbc54a1564",
+            "packages/radia-gpu/tools/build_projection_cuda.py": "63ef93907fe361f30b7eec5d51493e982a00ef5af902b575513907c0315267a3",
+            "Build.ps1": "506fc6e1d4f5889e51d858f00cbb7404081c86946c00abaf923c05c76c3f8218"
+          },
+          "taskmanager_started": false,
+          "source_dirty": false,
+          "binary_sha256": "b6e2a6bea57a987f36380d25651733d7b9aa84518305dabad80a3d87bb5934e0",
+          "matlab": "26.1.0.3346908 (R2026a) Update 5"
+        },
+        "CPU": {
+          "schema": "radia.field-cpu-reference.v1",
+          "source_commit": "69301918ac79deae6deab652e0a68b633c3ee0c6",
+          "source_sha256": {
+            "rad_hdiv_field_evaluator.cpp": "db4912925731c3b41a04bdfda44622c55ff85634bc0062a3b5f65a6c91a7b8be",
+            "rad_hdiv_field_evaluator.h": "c9a821ad8d52a312e3f1a4f3b0681ae1fbee0144f55206cfee09c72573e6c56e",
+            "rad_hdiv_vim.cpp": "a6bc36adc49fda5e5ae494a14db4189b5bdc8eb1162b00c6ceb220359bd57a46",
+            "rad_hdiv_vim.h": "171b9ee542ec6bc752826e10fd80377b8d4d5019e78b2d219f4b987944af154a",
+            "rad_parallel.h": "0ad545213c48b7a0f5df1c59d46e33a4c7e85fca62eab0637c0154d940110ed5"
+          },
+          "adapter_sha256": "0f6b110621688b554ca5bcee0d2a2adcdb10834bf9a744b3e68dd78fc95296f2",
+          "binary_sha256": "c8c48a96f393c08c1a394479544831f819355a6c13bdc9a8b785b9f555124730",
+          "ngsolve": "6.2.2607",
+          "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]"
+        }
+      },
+      "source_sha256": {
+        "validation_test\\radfld_cuda\\scale_projection_reuse.py": "197c2ecd3847dbe81acf81db074367fbe8987b15d198712a1f7bde9acbbebbda",
+        "validation_test\\radfld_cuda\\profileProjectionReuse.m": "0e0d6846d1bb738829ed5abd41dea052a2959ca483444cf29f46f023f93d3628",
+        "validation_test\\radfld_cuda\\check_projection_bridge.py": "f437682bd2b98816bac5590b7ce4f739ded0d4427324a7a67f1d0151e50a88be",
+        "validation_test\\radfld_cuda\\projectBatchedField.m": "ec757b969e116471ae2dfc66c331d96845c894170abcaa71118044c624f67745",
+        "validation_test\\radfld_cuda\\evaluateProjectionTargets.m": "f852a7999616d0e5b5f0304f0de79d67853f85423feb10c7da65884e5e027c8e"
+      },
+      "idle_cpu_mean_percent": 11.228846153846153,
+      "mesh_sha256": "e9e4bdb605eccc20f0c64073dae422f699503a730d016c151196be96f5b296fd",
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "gpu": {
+        "name": "Quadro RTX 5000",
+        "total_memory": 17179541504.0,
+        "available_memory": 16004415488.0
+      },
+      "code_analysis": [],
+      "targets": 1820,
+      "input_sha256": {
+        "gauss_points": "0f6e7e85d965e1a32c6c8730695142f439b300d0fdbfe9f27b6c4b5212306f59",
+        "gauss_weights": "126849b533c1507dea6b499a6e140ef3f527a2991ccb1d53ed1072a4c4097155",
+        "volume": "78fbb26dbbe0939478130c51a32eee4bdc0f4f1339da4619b3a40bc9da124250",
+        "surface": "a2c2f992ee5bab0c795e90115e890fcbd01d82227ae2c23d2be713713f265bfc"
+      },
+      "targets_sha256": "b9c630c9c4fe1d76388766402ba17ef73f708b689f56d978218ca7963145d114",
+      "measurements": {
+        "accepted": true,
+        "relative_limit": 0.0001,
+        "timing_acceptance": false,
+        "steps": 3,
+        "chunk_size": 128,
+        "samples": [
+          {
+            "mode": "rebuild64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "rebuild64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "chunk64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 45,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 10784,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 1344,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "chunk64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 45,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 10784,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 1344,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch32",
+            "relative_coefficient_error": 2.727934002860718e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree_mixed32"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch32",
+            "relative_coefficient_error": 2.727934002860718e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree_mixed32"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "cache64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 1,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "cache64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 1,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch64",
+            "relative_coefficient_error": 2.7108525531643857e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch32",
+            "relative_coefficient_error": 2.727934002860718e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree_mixed32"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "cache32",
+            "relative_coefficient_error": 2.727934002860718e-06,
+            "field_calls": 1,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree_mixed32"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "cache32",
+            "relative_coefficient_error": 2.727934002860718e-06,
+            "field_calls": 1,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree_mixed32"
+            },
+            "matlab_cache_array_bytes": 87360
+          },
+          {
+            "mode": "batch32",
+            "relative_coefficient_error": 2.727934002860718e-06,
+            "field_calls": 3,
+            "targets": 1820,
+            "device_memory": {
+              "owned_peak_bytes": 96800,
+              "persistent_owned_bytes": 9440,
+              "temporary_owned_bytes": 87360,
+              "cuda_free_before_bytes": 15433990144.0,
+              "cuda_free_after_bytes": 15433990144.0,
+              "source_count": 32,
+              "tree_nodes": 7,
+              "image_count": 0,
+              "algorithm": "tree_mixed32"
+            },
+            "matlab_cache_array_bytes": 87360
+          }
+        ],
+        "a100_used": false,
+        "field_relative_error": 2.7614134186485487e-06,
+        "FP64_field_relative_error": 2.7512505154115026e-06,
+        "source_revision_invalidation_passed": true,
+        "cache_scope": "Unchanged geometry, strength, options and explicit source revision only; not valid after source updates.",
+        "memory_limitations": "Device owned buffer peak is exact; CUDA free-memory samples are not process/global peaks. MATLAB target/cache arrays counted by numel*8; native host peak unmeasured."
+      },
+      "projected_FE_L2_relative_errors": [
+        2.754799045929798e-06,
+        2.754799045929798e-06,
+        2.754799045929798e-06,
+        2.754799045929798e-06,
+        2.754799045929798e-06,
+        2.754799045929798e-06,
+        2.754799045929798e-06,
+        2.754799045929798e-06,
+        2.754799045929798e-06,
+        2.764449789960474e-06,
+        2.764449789960474e-06,
+        2.754799045929798e-06,
+        2.754799045929798e-06,
+        2.754799045929798e-06,
+        2.754799045929798e-06,
+        2.754799045929798e-06,
+        2.764449789960474e-06,
+        2.764449789960474e-06,
+        2.764449789960474e-06,
+        2.764449789960474e-06
+      ],
+      "median_amortized_step_seconds": null,
+      "contexts_released": true,
+      "limitations": [
+        "Far synthetic source placement, actual order-1 HDiv projection; not general physical/scaling acceptance.",
+        "Cache comparisons reuse unchanged fields only; rebuild is required after source changes.",
+        "Host/native peak unmeasured; device owned buffers and sampled free memory are distinguished."
+      ]
+    }
+  ],
+  "whole_transfer_inclusive_timing": null,
+  "timing_status": "Deferred: other computation became active, then CI resumed. Nonidle sample times deliberately excluded.",
+  "maximum_FE_L2_relative_error": 2.764449789960474e-06,
+  "limitations": [
+    "Unchanged source field only for cache reuse; tested explicit revision invalidation after doubling source coefficients.",
+    "1820 mapped targets; point cloud 1024 or curved volume/surface 16 each. Not full scaling acceptance.",
+    "Exact owned device buffers and logical MATLAB cache array bytes are recorded separately from sampled free GPU memory; host/global peak not measured."
+  ]
+}

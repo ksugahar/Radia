@@ -1,0 +1,22 @@
+{
+  "schema": "radia.hacapk-entry-batch-contract.v1",
+  "accepted": true,
+  "a100_used": false,
+  "scope": "Serial MATLAB host scheduling C contract only; not connected to full HACApK assembly",
+  "cases": {
+    "serial": {
+      "iterations": 257,
+      "jobs": 1,
+      "threads": 1,
+      "taskmanager_used": false
+    }
+  },
+  "source_sha256": {
+    "validation_test/hmatrix_cuda/check_serial_host.c": "372d56628df2f9b81b8f64bc537f12decf210382da14feee1e05ac02f614cf1f",
+    "src/ext/HACApK/cHACApK_calc_entry_ij.h": "fad71d96a59e5c4ec7096224ae7e41ac45febe9e033ced29a3bff30c2dc7dc65",
+    "validation_test/hmatrix_cuda/check_entry_batch.py": "efa3667a15143b54a618252c31780853a745c3e600f4ed9ed5d1ed80b39d4fa0",
+    "packages/radia-gpu/native/hmatrix_serial_host.c": "2d18961c058a624d9d4d5f0bff2bf65360e81ba61a1f086963a6985dab91f2e5",
+    "src/core/rad_hacapk_parallel.h": "76a31060959b87db46dadeb247a4186b5a533ff7b1a742d27013fbc1c75ecf9d"
+  },
+  "timing_acceptance": false
+}

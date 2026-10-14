@@ -1,0 +1,9 @@
+{
+  "schema": "radia.charge-quadrature-sharing.v1",
+  "accepted": true,
+  "scope": "Exact textual extraction of pre-existing charge-Gram quadrature; not full CPU solver build acceptance",
+  "original_source_commit": "8c1aac6e9",
+  "original_fragment_sha256": "91ba854f2998a5538443627fb7a3c8e6c290f7be67f4d10918e3e7fb39132648",
+  "shared_header_sha256": "f96cf5b92c6b4c26555cb4413e9efbe5e89754dc16ad9d502afecd09f1ee4989",
+  "native_CPU_parity_result": "resident-numerical-20261012.json"
+}

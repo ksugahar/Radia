@@ -1,0 +1,523 @@
+import hashlib
+import importlib.util
+import json
+import sys
+from types import SimpleNamespace
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SUITE = ROOT / "validation_test" / "c_type_three_engine"
+
+
+@pytest.mark.parametrize("pairs", [[(1, 2), (3, 4)], [(1, 2, 7), (3, 4, 7)]])
+def test_kelvin_identification_inventory_accepts_netgen_identification_ids(monkeypatch, pairs):
+    spec = importlib.util.spec_from_file_location("c_type_builder", SUITE / "build_cubit_meshes.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    points = {
+        1: SimpleNamespace(p=(0., 0., 0.)),
+        2: SimpleNamespace(p=(0., 0., 2.)),
+        3: SimpleNamespace(p=(1., 0., 0.)),
+        4: SimpleNamespace(p=(1., 0., 2.)),
+    }
+    native = SimpleNamespace(GetIdentifications=lambda: pairs, Points=lambda: points)
+    monkeypatch.setitem(sys.modules, "ngsolve", SimpleNamespace(Mesh=lambda _: SimpleNamespace(ngmesh=native)))
+    result = module._kelvin_identification_inventory(Path("fixture.vol"))
+    assert result == {
+        "pair_count": 2,
+        "translation_m": [0., 0., 2.],
+        "maximum_pair_translation_error_m": 0.,
+    }
+
+
+def module_hash(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _load_convergence_module():
+    path = SUITE / "run_mesh_convergence.py"
+    spec = importlib.util.spec_from_file_location("c_type_mesh_convergence", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_c_type_cad_is_cubit_authority():
+    journal = (SUITE / "cad" / "c_type_iron.jou").read_text(encoding="utf-8")
+    assert "create volume loft" in journal
+    assert "volume all copy reflect z" in journal
+    assert "netgen.occ" not in journal
+
+
+def test_three_engine_runner_has_shared_physics_contract():
+    runner = (SUITE / "run_three_engine.py").read_text(encoding="utf-8")
+    assert 'SOURCE_ROOT = HERE.parents[1] / "src"' in runner
+    assert 'SOURCE_PACKAGE = SOURCE_ROOT / "radia"' in runner
+    assert "sys.path.insert(0, str(SOURCE_ROOT))" in runner
+    assert 'imported_radia = sys.modules.get("radia")' in runner
+    assert "package_paths.insert(0, str(SOURCE_PACKAGE))" in runner
+    assert 'rad.RadiaField(coil, "h")' in runner
+    assert 'rad.RadiaField(coil, "b")' in runner
+    assert "HDiv-MMM" in runner
+    assert '"formulation": "HDiv-MMM"' in runner
+    assert '"discretization": "BDM%d" % order' in runner
+    assert "HCurl reduced-A" in runner
+    assert "H1 mixed total/reduced Omega" in runner
+    assert "StaticElectromagnetMixedDomain" in runner
+    assert "solve_static_electromagnet_mixed_total_reduced_omega" in runner
+    assert 'reduced_materials=("air",)' in runner
+    assert 'total_materials=("iron", "kelvin")' in runner
+    assert 'reduced_total_interface="iron_air_interface"' in runner
+    assert "source_trace_tolerance=source_trace_tolerance" in runner
+    assert "source_trace" in runner
+    assert "iron volume Hodge split retains" in runner
+    electromagnet = (ROOT / "src" / "radia" / "static_electromagnet.py").read_text(encoding="utf-8")
+    assert 'int(order) if source_potential_contract == "total_hodge"' in electromagnet
+    assert "else max(2, int(order))" in electromagnet
+    assert "nonlinear_material_bonus_intorder=material_bonus_intorder if nonlinear else None" in runner
+    assert "fixed_mesh_equality_claimed" in runner
+    assert "pairwise_raw_full_tube" in runner
+    assert "pairwise_median_projected_gap_core" in runner
+    assert "reflection_diagnostics" in runner
+    assert "median_plane_one_sided_tangential_relative_rms" in runner
+    assert "not a reflection-symmetry error" in runner
+    assert 'kelvin_vol = mesh_dir / "kelvin_domain.vol"' in runner
+    assert "has_kelvin_identification" in runner
+    assert '"--hdiv-gram-eps"' in runner
+    assert 'default=1.0e-14' in runner
+    assert '"--source-trace-tolerance"' in runner
+    assert 'default=0.05' in runner
+    assert '"--primary-only"' not in runner
+    assert '"--reduced-a-relax"' in runner
+    assert '"relax": float(options.reduced_a_relax)' in runner
+    assert 'hdiv_mixed_pair_name = "hdiv_mmm__vs__mixed_total_reduced_omega"' in runner
+    assert '"hdiv_mixed_gap_core_relative_rms"' in runner
+    assert '"bh_interpolation_shared"' in runner
+    assert '"hdiv_gram_eps": float(options.hdiv_gram_eps)' in runner
+    assert '"nonlinear_converged": nonlinear_converged' in runner
+    assert 'nonlinear_stats.get("nonlinear_converged_final_stage", False)' in runner
+    assert '".reduced-a-checkpoint.json"' in runner
+    assert '".mixed-total-reduced-omega-checkpoint.json"' in runner
+    assert '"implementation_sha256"' in runner
+    assert '"radia_pybind"' in runner
+    assert '"coil_builder"' in runner
+    assert '"hdiv_mixed_accuracy_passed"' in runner
+    assert '"all_pairwise_within_tolerance"' in runner
+    assert 'dirichlet="GND"' in runner
+    assert "finite_outer_air_box_forbidden" in runner
+    assert "require_static_electromagnet_three_engine_contract" in runner
+    assert '"static_electromagnet_formulation_contract"' in runner
+    assert "outer_boundary" not in runner
+
+
+def test_omega_and_hdiv_share_the_nonlinear_bh_interpolation_contract():
+    source = (
+        ROOT / "src" / "radia" / "scalar_potential_solver.py"
+    ).read_text(encoding="utf-8")
+
+    assert "def _build_bh_interpolator(" in source
+    assert "from radia.bh_law import monotone_bh_pchip" in source
+    assert "B_max + MU_0 * (value - H_max)" in source
+    nonlinear = source.split("def solve_nonlinear(", 1)[1].split(
+        "def solve_nonlinear_newton(", 1
+    )[0]
+    assert "B_of_H = _build_bh_interpolator(bh)" in nonlinear
+    assert "interp1d" not in nonlinear
+
+    from radia.scalar_potential_solver import MU_0, _build_bh_interpolator
+    from radia.vim._nonlinear import _bh_table_funcs
+
+    table = np.loadtxt(SUITE.parents[1] / "src" / "radia" / "panels" /
+                       "samples" / "em_sample_bh.txt")
+    omega_b_of_h = _build_bh_interpolator(table)
+    _, hdiv_b_of_h, _, h_max, _ = _bh_table_funcs(table[:, 0], table[:, 1])
+    h_values = np.geomspace(max(table[1, 0] * 1e-3, 1e-8), 4.0 * h_max, 2000)
+    hdiv_values = np.where(
+        h_values <= h_max,
+        hdiv_b_of_h(h_values),
+        table[-1, 1] + MU_0 * (h_values - h_max),
+    )
+    omega_values = np.asarray([omega_b_of_h(value) for value in h_values])
+    np.testing.assert_array_equal(omega_values, hdiv_values)
+
+
+def test_reduced_a_nonlinear_direct_path_is_symmetric_and_residual_checked():
+    source = (
+        ROOT / "src" / "radia" / "vector_potential_solver.py"
+    ).read_text(encoding="utf-8")
+    nonlinear = source.split("def solve_nonlinear(", 1)[1].split(
+        "def solve_hysteresis(", 1
+    )[0]
+    assert "BilinearForm(fes, symmetric=True)" in nonlinear
+    assert "eps=DEFAULT_GAUGE_EPSILON" in nonlinear
+    assert "physical_gauge_coeff = physical_eps * nu_air" in nonlinear
+    assert "kelvin_gauge_coeff" in nonlinear
+    # Direct FE solves resolve through the native SparseCholesky selector.
+    assert "inverse=direct_inverse_type(solver)" in nonlinear
+    assert "inverse='pardisospd'" not in nonlinear
+    assert "maximum_linear_relative_residual" in nonlinear
+    assert "reduced-A linear solve failed its relative-residual" in nonlinear
+    assert "reduced-A linear solve produced a non-finite residual" in nonlinear
+    assert "_build_nu_of_b_interpolator(bh_data)" in nonlinear
+    assert "interp1d" not in nonlinear
+
+
+def test_reduced_a_inverts_the_shared_pchip_b_of_h_law():
+    from radia.scalar_potential_solver import MU_0, _build_bh_interpolator
+    from radia.vector_potential_solver import _build_nu_of_b_interpolator
+
+    table = np.loadtxt(
+        SUITE.parents[1]
+        / "src"
+        / "radia"
+        / "panels"
+        / "samples"
+        / "em_sample_bh.txt"
+    )[:, :2]
+    b_of_h = _build_bh_interpolator(table)
+    nu_of_b, b_max = _build_nu_of_b_interpolator(table)
+    h_samples = np.geomspace(max(table[1, 0] * 1e-3, 1e-8), 4 * table[-1, 0], 200)
+    for h_value in h_samples:
+        b_value = b_of_h(h_value)
+        recovered_h = nu_of_b(b_value) * b_value
+        np.testing.assert_allclose(recovered_h, h_value, rtol=2e-12, atol=1e-8)
+    assert b_max == table[-1, 1]
+    b_above = 1.5 * b_max
+    expected_h = table[-1, 0] + (b_above - b_max) / MU_0
+    np.testing.assert_allclose(nu_of_b(b_above) * b_above, expected_h)
+
+
+def test_mesh_builder_keeps_hdiv_air_mesh_free():
+    builder = (SUITE / "build_cubit_meshes.py").read_text(encoding="utf-8")
+    helper = (SUITE / "cubit_reflection_mesh.py").read_text(encoding="utf-8")
+    assert '"iron.vol"' in builder
+    assert '"kelvin_domain.vol"' in builder
+    assert "HDiv-MMM must not acquire an artificial air domain" in builder
+    assert "create sphere radius" in helper
+    assert "add_kelvin_cubit" in builder
+    assert "outer_boundary" not in builder
+    assert 'export netgen "{output.as_posix()}" order 1 overwrite' in builder
+    assert "_reflection_inventory" in builder
+    assert "missing_reflected_volume_elements" in builder
+    assert "_kelvin_identification_inventory" in builder
+    assert "maximum_pair_translation_error_m" in builder
+    assert "_kelvin_fes_inventory" in builder
+    assert '"slaved_free_dofs"' in builder
+    assert '"trace_norm_ratio"' in builder
+
+
+def test_reflection_builder_copies_meshed_volumes():
+    helper = (SUITE / "cubit_reflection_mesh.py").read_text(encoding="utf-8")
+    assert "copy reflect" in helper
+    # The physical half -- iron, air and any gap slabs -- is meshed as one
+    # group, checked to be meshed, and only then reflected.
+    positive = 'positive = " ".join(str(value) for value in [iron_up, air_up, *layers_up])'
+    mesh_command = 'cubit.cmd(f"mesh volume {positive}")'
+    meshed_gate = "_require_meshed(cubit, [iron_up, air_up, *layers_up])"
+    reflect_call = "iron_down = _reflect_meshed_volume(cubit, iron_up)"
+    for needle in (positive, mesh_command, meshed_gate, reflect_call):
+        assert needle in helper, needle
+    assert helper.rindex(positive) < helper.rindex(mesh_command)
+    assert helper.rindex(mesh_command) < helper.rindex(meshed_gate)
+    assert helper.rindex(meshed_gate) < helper.rindex(reflect_call)
+    assert "meshing two pre-reflected geometric halves independently is forbidden" in helper.lower()
+
+
+def test_nonlinear_omega_uses_the_periodic_kelvin_h1_factory():
+    source = (
+        ROOT / "src" / "radia" / "scalar_potential_solver.py"
+    ).read_text(encoding="utf-8")
+    picard = source.split("def _picard_loop(", 1)[1].split(
+        "def _eval_bh_curve(", 1
+    )[0]
+
+    assert "fes = self._make_h1_space(dirichlet)" in picard
+    assert "fes = H1(" not in picard
+
+
+def test_historical_global_omega_results_preserve_pass_and_failed_gate_evidence():
+    results = SUITE / "results"
+    mesh = json.loads(
+        (results / "validation_20260829_mesh.json").read_text(encoding="utf-8")
+    )
+    linear = json.loads(
+        (results / "validation_20260829_linear_order2.json").read_text(encoding="utf-8")
+    )
+    nonlinear = json.loads(
+        (results / "validation_20260829_nonlinear_order1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    nonlinear_order2 = json.loads(
+        (results / "validation_20260829_nonlinear_order2_primary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert mesh["passed"] is True
+    assert mesh["kelvin_identification"]["pair_count"] == 462
+    assert mesh["kelvin_identification"]["maximum_pair_translation_error_m"] < 1e-12
+    assert mesh["kelvin_fes"]["slaved_free_dofs"] == 462
+    assert abs(mesh["kelvin_fes"]["trace_norm_ratio"] - 1.0) < 1e-12
+    assert linear["passed"] is True
+    assert linear["maximum_gap_core_pairwise_relative_rms"] < 0.03
+    assert nonlinear["nonlinear_converged"] is True
+    assert nonlinear["passed"] is False
+    assert nonlinear["maximum_gap_core_pairwise_relative_rms"] > 0.03
+    assert nonlinear_order2["passed"] is True
+    assert nonlinear_order2["primary_accuracy_passed"] is True
+    assert nonlinear_order2["all_pairwise_within_tolerance"] is True
+    assert nonlinear_order2["nonlinear_converged"] is True
+    assert nonlinear_order2["comparison_contract"]["primary_pair"] == [
+        "hdiv_mmm",
+        "omega_reduced_omega",
+    ]
+    assert nonlinear_order2["primary_gap_core_relative_rms"] < 0.003
+    assert nonlinear_order2["comparison_contract"]["bh_interpolation_shared"]
+
+
+def test_historical_mixed_omega_v3_evidence_is_not_current_contract():
+    results = SUITE / "results"
+    linear = json.loads(
+        (results / "compute_20260902_linear_order3_mixed_omega_v3.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    nonlinear = json.loads(
+        (results / "compute_20260902_nonlinear_order2_mixed_omega_v3.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    for payload in (linear, nonlinear):
+        assert payload["schema"] == "radia.validation.c-type-formulation-comparison.v3"
+        assert payload["passed"] is True
+        assert payload["primary_accuracy_passed"] is True
+        assert payload["all_pairwise_within_tolerance"] is True
+        assert payload["selected_accuracy_passed"] is True
+        assert payload["comparison_contract"]["source_trace_tolerance"] == 0.05
+        trace = payload["engines"]["omega_reduced_omega"]["source_trace"]
+        assert trace["iron_relative_tangential_residual"] < 0.05
+        assert trace["kelvin_relative_tangential_residual"] < 0.05
+        assert payload["maximum_gap_core_pairwise_relative_rms"] < 0.01
+    assert nonlinear["nonlinear_converged"] is True
+    assert nonlinear["engines"]["omega_reduced_omega"]["nonlinear_stats"]["converged"]
+    assert set(nonlinear["engines"]) == {
+        "hdiv_mmm", "reduced_a", "omega_reduced_omega"
+    }
+
+
+def test_current_mixed_omega_three_engine_v4_evidence_is_complete():
+    results = SUITE / "results"
+    linear = json.loads(
+        (
+            results / "compute_20260903_linear_order3_mixed_omega_v4.json"
+        ).read_text(encoding="utf-8")
+    )
+    nonlinear = json.loads(
+        (
+            results / "compute_20260903_nonlinear_order2_mixed_omega_v4.json"
+        ).read_text(encoding="utf-8")
+    )
+    expected = {
+        "hdiv_mmm": "HDiv-MMM",
+        "reduced_a": "HCurl reduced-A",
+        "mixed_total_reduced_omega": "H1 mixed total/reduced Omega",
+    }
+    for payload in (linear, nonlinear):
+        assert payload["schema"] == "radia.validation.c-type-formulation-comparison.v4"
+        assert payload["passed"] is True
+        assert payload["hdiv_mixed_accuracy_passed"] is True
+        assert payload["all_pairwise_within_tolerance"] is True
+        assert payload["comparison_contract"]["source_trace_tolerance"] == 0.05
+        assert payload["comparison_contract"][
+            "static_electromagnet_formulation_contract"
+        ]["engines"] == list(expected)
+        assert set(payload["engines"]) == set(expected)
+        for name, formulation in expected.items():
+            assert payload["engines"][name]["formulation"] == formulation
+        trace = payload["engines"]["mixed_total_reduced_omega"]["source_trace"]
+        assert trace["iron_relative_tangential_residual"] < 0.05
+        assert trace["kelvin_relative_tangential_residual"] < 0.05
+        assert payload["maximum_gap_core_pairwise_relative_rms"] < 0.01
+    assert nonlinear["nonlinear_converged"] is True
+    assert nonlinear["engines"]["hdiv_mmm"]["nonlinear_stats"]["converged"]
+    assert nonlinear["engines"]["reduced_a"]["nonlinear_stats"]["converged"]
+    assert nonlinear["engines"]["mixed_total_reduced_omega"]["nonlinear_stats"][
+        "converged"
+    ]
+
+
+def test_current_mixed_omega_mesh_certificate_is_complete_and_portable():
+    results = SUITE / "results"
+    certificate = json.loads(
+        (
+            results
+            / "c_type_20260903_nonlinear_bdm2_mesh_convergence_certificate.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert certificate["schema"] == (
+        "radia.validation.c-type-absolute-accuracy-certificate.v1"
+    )
+    assert certificate["passed"] is True
+    assert all(certificate["checks"].values())
+    assert certificate["claim"]["analytic_absolute_truth_claimed"] is False
+    assert "mixed total/reduced Omega" in certificate["claim"]["scope"]
+    assert certificate["fine_mesh_maximum_pairwise_relative_rms"] < 0.005
+    assert certificate["combined_relative_numerical_uncertainty"] < 0.01
+    assert certificate["reproducibility"]["reference_machine"].casefold() == "reference"
+    assert certificate["reproducibility"]["replicate_machine"].casefold() == "replicate"
+    assert certificate["reproducibility"]["maximum_relative_rms"] < 1e-9
+    assert certificate["mesh_family"] == "cubit_20260830_mesh_family.json"
+    assert (results / certificate["mesh_family"]).is_file()
+
+    expected = {
+        "coarse": "c_type_20260903_nonlinear_bdm2_coarse.json",
+        "medium": "c_type_20260903_nonlinear_bdm2_medium.json",
+        "fine": "c_type_20260903_nonlinear_bdm2_fine.json",
+        "finer": "c_type_20260903_nonlinear_bdm2_finer_reference.json",
+    }
+    assert [row["name"] for row in certificate["level_results"]] == list(expected)
+    for row in certificate["level_results"]:
+        artifact = results / row["result"]
+        assert row["result"] == expected[row["name"]]
+        assert artifact.is_file()
+        assert module_hash(artifact) == row["result_sha256"]
+
+
+def test_historical_global_omega_accuracy_certificate_is_not_relabelled():
+    results = SUITE / "results"
+    manifest = json.loads(
+        (results / "cubit_20260830_mesh_family.json").read_text(encoding="utf-8")
+    )
+    certificate = json.loads(
+        (
+            results
+            / "reference_compute_20260830_nonlinear_order2_convergence.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert manifest["passed"] is True
+    assert [row["name"] for row in manifest["levels"]] == [
+        "coarse",
+        "medium",
+        "fine",
+        "finer",
+    ]
+    assert certificate["schema"] == (
+        "radia.validation.c-type-absolute-accuracy-certificate.v1"
+    )
+    assert certificate["passed"] is True
+    assert certificate["claim"]["analytic_absolute_truth_claimed"] is False
+    assert certificate["convergence_levels"] == ["medium", "fine", "finer"]
+    assert all(certificate["checks"].values())
+    assert certificate["fine_mesh_maximum_pairwise_relative_rms"] < 0.005
+    assert certificate["combined_relative_numerical_uncertainty"] < 0.01
+    assert certificate["reproducibility"]["reference_machine"].casefold() == "reference"
+    assert certificate["reproducibility"]["replicate_machine"].casefold() == "replicate"
+    assert certificate["reproducibility"]["maximum_relative_rms"] < 1e-9
+    assert all(
+        row["convergence_levels"] == ["medium", "fine", "finer"]
+        for row in certificate["engine_convergence"].values()
+    )
+    assert "mixed total/reduced Omega" not in certificate["claim"]["scope"]
+
+
+def test_mesh_family_builder_uses_one_geometric_cubit_sequence():
+    source = (SUITE / "build_mesh_family.py").read_text(encoding="utf-8")
+    assert 'DEFAULT_LEVELS = (' in source
+    assert '("coarse", 1.25)' in source
+    assert '("medium", 1.00)' in source
+    assert '("fine", 0.80)' in source
+    assert '("finer", 0.64)' in source
+    assert 'from build_cubit_meshes import CUBIT_DEFAULT, build' in source
+    assert '"geometric_size_sequence": True' in source
+    assert '"element_counts_strictly_increase"' in source
+    assert "netgen.occ" not in source
+
+
+def test_accuracy_certificate_requires_all_three_converged_routes():
+    source = (SUITE / "run_mesh_convergence.py").read_text(encoding="utf-8")
+    assert (
+        'ENGINES = ("hdiv_mmm", "reduced_a", "mixed_total_reduced_omega")'
+        in source
+    )
+    assert "radia.validation.c-type-formulation-comparison.v4" in source
+    assert 'set(payload.get("engines", {})) != set(ENGINES)' in source
+    assert 'if not payload.get("nonlinear_converged", False)' in source
+    assert '"mesh_convergence_passed"' in source
+    assert '"fine_mesh_cross_formulation_passed"' in source
+    assert '"combined_uncertainty_passed"' in source
+    assert '"independent_host_reproducibility_passed"' in source
+    assert '"independent_host_replicate_required": True' in source
+    assert 'reproducibility_passed = False' in source
+    assert 'accuracy replication must use an independent host' in source
+    assert 'replicate result uses a different Radia version' in source
+    assert 'replicate result uses different implementation inputs' in source
+    assert '"analytic_absolute_truth_claimed": False' in source
+    assert '"convergence_levels": level_names[-3:]' in source
+    assert 'subprocess.Popen(' in source
+    assert '"--primary-only"' not in source
+
+
+def test_accuracy_certificate_uses_the_last_three_of_four_mesh_levels():
+    module = _load_convergence_module()
+    level_names = ["coarse", "medium", "fine", "finer"]
+
+    def payload(value):
+        return {
+            "observation_points_m": [[0.0, 0.0, 0.0]],
+            "gap_core_half_length_m": 0.01,
+            "median_plane_projected_fields_T": {
+                "hdiv_mmm": [[0.0, 0.0, value]],
+            },
+        }
+
+    payloads = [payload(value) for value in (-20.0, 1.0, 1.05, 1.075)]
+    result = module._engine_convergence(
+        payloads, level_names, "hdiv_mmm", refinement_ratio=1.25
+    )
+
+    assert result["convergence_levels"] == ["medium", "fine", "finer"]
+    assert result["penultimate_increment_absolute_rms_T"] == pytest.approx(0.05)
+    assert result["last_increment_absolute_rms_T"] == pytest.approx(0.025)
+    assert result["contracting"] is True
+    assert result["observed_order"] > 0.5
+
+
+def test_accuracy_replication_rejects_same_host_and_software_drift():
+    module = _load_convergence_module()
+    base = {
+        "machine": "worker-reference",
+        "mesh_result_sha256": "mesh",
+        "comparison_contract": {"order": 2},
+        "radia_version": "4.95.71",
+        "engine_checkpoint_contracts": {"hdiv_mmm": {"implementation": "a"}},
+        "observation_points_m": [[0.0, 0.0, 0.0]],
+        "gap_core_half_length_m": 0.01,
+        "median_plane_projected_fields_T": {
+            engine: [[0.0, 0.0, 1.0]] for engine in module.ENGINES
+        },
+    }
+    with pytest.raises(RuntimeError, match="independent host"):
+        module._replicate_metrics(base, dict(base))
+
+    different_host = {**base, "machine": "worker-replicate"}
+    drifted = {**different_host, "radia_version": "4.95.70"}
+    with pytest.raises(RuntimeError, match="different Radia version"):
+        module._replicate_metrics(base, drifted)
+
+    metrics = module._replicate_metrics(base, different_host)
+    assert metrics["maximum_relative_rms"] == 0.0
+    assert metrics["reference_machine"] == "reference"
+    assert metrics["replicate_machine"] == "replicate"
+    assert "worker-reference" not in json.dumps(metrics)
+    assert "worker-replicate" not in json.dumps(metrics)
+    missing_identity = {k: v for k, v in base.items() if k != "machine"}
+    with pytest.raises(RuntimeError, match="both machine names"):
+        module._replicate_metrics(missing_identity, different_host)

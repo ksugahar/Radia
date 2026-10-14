@@ -1,0 +1,356 @@
+{
+  "schema": "radia.test-tier-manifest.v1",
+  "impact_rules": {
+    "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py": ["tests/test_ih_panel_esim_assembly.py", "tests/test_ih_operator_assembly.py"],
+    "src/radia/bem_complete_reaction.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py"],
+    "src/radia/bem_coupled_solver.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py", "validation_test/panels/test_strong_coupling_cli_contract.py"],
+    "src/radia/peec_coupled_bem_solver.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py", "validation_test/panels/test_strong_coupling_cli_contract.py"],
+    "src/radia/bem_loop_work.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_loop_work_pairings.py"],
+    "src/radia/bem_loop_extension.py": ["tests/test_bem_loop_hacapk.py","tests/test_bem_strong_panel_impedance.py", "tests/test_bem_loop_work_pairings.py", "tests/test_bem_loop_panel_impedance.py", "validation_test/bem/test_loop_extension_ring.py"],
+    "src/radia/panels/calc_inductance.py": ["tests/test_panel_esim_complete_state.py", "tests/test_bem_strong_panel_impedance.py", "tests/test_bem_loop_panel_impedance.py"],
+    "src/radia/esim_panel_evaluator.py": ["tests/test_panel_esim_complete_state.py", "validation_test/induction_heating/test_esim_panel_evaluator.py"],
+    "src/radia/bem_sibc_solver.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_sibc_acceptance.py"],
+    "src/radia/p1_linear.py": ["tests/test_p1_linear.py"],
+    "src/radia/lamination.py": ["tests/test_lamination_api.py"],
+    "docs/maglev/demos/sphere/maglev_sphere_force.py": ["tests/test_maglev_sphere_golden.py"],
+    "docs/maglev/demos/team28/team28_arnoldi_force.py": ["tests/test_team28_arnoldi_golden.py"],
+    "docs/maglev/demos/rotating_magnet_eddy.py": ["tests/test_rotating_magnet_eddy_golden.py"],
+    "validation_test/surface_rom_team10/transient.py": [
+      "tests/test_surface_rom_linear_gate_contract.py"
+    ],
+    "validation_test/team21/": ["tests/test_team21a_geometry_source.py"],
+    "src/radia/kelvin_solver.py": ["validation_test/open_boundary/test_kelvin_vector_direct_gate.py"],
+    "src/radia/ih_heat_transient.py": ["tests/test_ih_energy_audit_contract.py"],
+    "src/radia/ih_heat_boundaries.py": ["tests/test_ih_heat_boundaries.py"],
+    "src/radia/vim/_envelope_stop.py": ["tests/test_envelope_stop_core.py"],
+    "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py": [
+      "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
+      "validation_test/radia_mcp/test_eddy_driven_region.py",
+      "validation_test/radia_mcp/test_aphi_gauge_point.py"
+    ],
+    "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py": [
+      "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py"
+    ],
+    "packages/radia-mcp/src/radia_mcp/peec/prompts/ngsolve_recipes.md": [
+      "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py"
+    ],
+    "validation_test/mixed_omega_trace_reuse/": [
+      "tests/test_trace_reuse_evidence_contract.py"
+    ],
+    "src/radia/_residual_gate.py": ["tests/test_mcp_residual_vendor_contract.py"],
+    "src/radia/panels/calc_fem_kelvin.py": [
+      "tests/test_element_line_quadrature_contract.py",
+      "tests/test_calc_fem_kelvin_fail_loud.py"
+    ],
+    "validation_test/esrf_three_engine/run_hybrid_undulator_three_engine.py": [
+      "tests/test_three_engine_agreement_gate.py"
+    ],
+    "src/radia/vim/_nonlinear.py": [
+      "tests/test_hdiv_energy_material_consistency.py",
+      "tests/test_hdiv_bh_table_saturation_contract.py"
+    ],
+    "src/radia/bh_law.py": [
+      "tests/test_bh_law.py",
+      "tests/test_hdiv_energy_material_consistency.py",
+      "tests/test_hdiv_bh_table_saturation_contract.py"
+    ],
+    "src/radia/panels/samples/em_sample_bh.txt": [
+      "tests/test_hdiv_bh_table_saturation_contract.py"
+    ],
+    "validation_test/feec/bh_saturation_audit.py": [
+      "tests/test_hdiv_bh_table_saturation_contract.py"
+    ],
+    "validation_test/feec/test_hdiv_vim_energy_newton.py": [
+      "tests/test_hdiv_bh_table_saturation_contract.py"
+    ],
+    "validation_test/feec/run_energy_newton_audit.py": [
+      "tests/test_hdiv_bh_table_saturation_contract.py"
+    ],
+    ".github/workflows/radia-fast.yml": [
+      "tests/test_ci_execution_policy.py",
+        "tests/test_public_runtime_privacy.py",
+      "tests/test_privacy_source_contract.py",
+      "tests/test_run_test_tier.py",
+      "tests/test_test_tier_policy.py",
+      "tests/test_hdiv_bh_table_saturation_contract.py"
+    ],
+    "validation_test/feec/results/bh_saturation_20260914/qualified/result.json": [
+      "tests/test_hdiv_bh_table_saturation_contract.py"
+    ],
+    "src/radia/vim/_solve.py": [
+      "tests/test_hdiv_energy_material_consistency.py",
+      "tests/test_hdiv_newton_failure_contract.py",
+      "tests/test_esrf_three_engine_finite_gate.py"
+    ],
+    "validation_test/esrf_three_engine/check_case6_inputs.py": [
+      "tests/test_esrf6_mesh_identity.py"
+    ],
+    "validation_test/esrf_three_engine/case6_mesh_contract.json": [
+      "tests/test_esrf6_mesh_identity.py"
+    ],
+    "validation_test/esrf_three_engine/run_coil_yoke_three_engine.py": [
+      "tests/test_esrf_three_engine_finite_gate.py",
+      "tests/test_esrf_mixed_quadrature_wiring.py"
+    ],
+    "validation_test/c_type_three_engine/run_three_engine.py": [
+      "tests/test_esrf_mixed_quadrature_wiring.py",
+      "tests/test_esrf_three_engine_finite_gate.py",
+      "tests/test_hdiv_newton_failure_contract.py"
+    ],
+    "validation_test/quadrupole_cefc2020/run_qmag_hdiv.py": [
+      "tests/test_esrf_three_engine_finite_gate.py",
+      "tests/test_hdiv_newton_failure_contract.py"
+    ],
+    "validation_test/omega_quadrature/": [
+      "tests/test_omega_block_action_diagnostics.py",
+      "tests/test_omega_quadrature_plateau.py"
+    ],
+    "validation_test/esrf_three_engine/results/candidate_59b094d8/": [
+      "tests/test_omega_quadrature_plateau.py",
+      "tests/test_esrf6_repaired_acceptance_record.py"
+    ],
+    "validation_test/feec/check_wedge_charge_pullback.py": [
+      "tests/test_wedge_charge_pullback_contract.py"
+    ],
+    "packages/radia-optuna/native/optuna_mex.cpp": [
+      "tests/test_sparsesolv_matlab_contract.py"
+    ],
+    "packages/radia-gpu/matlab/+radia/+sparsesolv/": [
+      "tests/test_sparsesolv_matlab_contract.py"
+    ],
+    "packages/radia-gpu/matlab/python_api_parity_manifest.json": [
+      "tests/test_sparsesolv_matlab_contract.py",
+      "tests/test_matlab_python_parity_manifest.py"
+    ],
+    "packages/radia-gpu/matlab/+radia/+python/": [
+      "tests/test_matlab_python_parity_manifest.py"
+    ],
+    "Build.ps1": [
+      "tests/test_build_failure_propagation.py"
+    ],
+    "validation_test/accelerator/benchmark_beam_transfer_mex_python.py": [
+      "tests/test_beam_transfer_mex_pybind_validation.py"
+    ],
+    "validation_test/accelerator/benchmark_beam_transfer_mex_matlab.m": [
+      "tests/test_beam_transfer_mex_pybind_validation.py"
+    ],
+    "validation_test/accelerator/beam_transfer_benchmark_case.json": [
+      "tests/test_beam_transfer_mex_pybind_validation.py"
+    ],
+    ".github/workflows/sparsesolv.yml": [
+      "tests/test_sparsesolv_ci_contract.py"
+    ],
+    ".github/workflows/ltspice-data-safety.yml": [
+      "tests/test_ltspice_ci_scope.py"
+    ],
+    ".github/workflows/radia-optuna.yml": [
+      "tests/test_ltspice_ci_scope.py"
+    ],
+    "tools/ci_preflight_lab.py": [
+      "tests/test_ci_preflight_lab.py"
+    ],
+    "tools/release_quad.py": [
+      "tests/test_release_quad_state.py",
+      "tests/test_release_quad_editable_source.py",
+      "tests/test_release_quad_editable_intent.py",
+      "tests/test_release_quad_optuna_candidate.py",
+      "tests/test_release_quad_phase9_contract.py",
+      "tests/test_release_quad_evidence_motor.py",
+      "tests/test_mdx_runner_pool.py"
+    ],
+    "tools/editable_intent.py": [
+      "tests/test_editable_intent.py",
+      "tests/test_release_quad_editable_intent.py"
+    ],
+    "tools/verify_simulink_release.py": [
+      "tests/test_simulink_release_package.py",
+      "tests/test_release_quad_optuna_candidate.py"
+    ],
+    "tools/audit_taskmanager.py": [
+      "tests/test_audit_taskmanager.py"
+    ],
+    "tools/ci_preflight.py": [
+      "tests/test_ci_preflight_scope.py"
+    ],
+    "tools/run_test_tier.py": [
+      "tests/test_run_test_tier.py"
+    ],
+    "tools/sparsesolv_ci_impact.py": [
+      "tests/test_sparsesolv_ci_contract.py"
+    ],
+    "src/radia/patch_recovery.py": [
+      "tests/test_patch_recovery.py"
+    ]
+  },
+  "profiles": {
+    "native-build-contracts": {
+      "description": "Real Git and PowerShell build-provenance contracts, without native compilation.",
+      "max_elapsed_seconds": 60,
+      "paths": [
+        "tests/test_native_build_provenance.py"
+      ]
+    },
+    "fast-contracts": {
+      "description": "Pure source, policy, package, and public-notebook contracts for every push.",
+      "max_elapsed_seconds": 120,
+      "paths": [
+        "tests/test_three_engine_agreement_gate.py",
+        "tests/test_ci_execution_policy.py",
+        "tests/test_omega_quadrature_plateau.py",
+        "tests/test_esrf6_repaired_acceptance_record.py",
+        "tests/test_ci_monitor.py",
+        "tests/test_mdx_runner_pool.py",
+        "tests/test_release_quad_optuna_candidate.py",
+        "tests/test_test_tier_policy.py",
+        "tests/test_run_test_tier.py",
+        "tests/test_docs_notebook_contract.py",
+        "tests/test_radia_promotion_gate.py",
+        "tests/test_mcp_residual_vendor_contract.py",
+        "tests/test_trace_reuse_evidence_contract.py",
+        "tests/test_ih_energy_audit_contract.py",
+        "tests/test_wheel_package_policy.py",
+        "tests/test_application_interface_manifest.py",
+        "tests/test_matlab_python_parity_manifest.py",
+        "tests/axifem/test_docs_notebook_evidence.py"
+      ]
+    },
+    "native-smoke": {
+      "description": "Fast contracts plus deterministic native import and field regression checks.",
+      "extends": "fast-contracts",
+      "max_elapsed_seconds": 120,
+      "paths": [
+        "tests/test_hdiv_bh_table_saturation_contract.py",
+        "tests/test_simple.py",
+        "tests/test_radia.py",
+        "tests/test_meshless_relaxation_contract.py",
+        "tests/test_version_consistency.py",
+        "tests/test_ngsolve_2607_compatibility.py",
+        "tests/test_vim_api_names.py",
+        "src/ext/sparsesolv/tests/test_sparsesolv.py",
+        "src/ext/sparsesolv/tests/test_hermitian_iccg.py",
+        "src/ext/sparsesolv/tests/test_ams_repeatability.py",
+        "tests/test_ams_internal_setup_parallel.py"
+      ]
+    },
+    "solver-heavy": {
+      "description": "Required native derivative and motor workflow validation outside the compact numerical tier.",
+      "paths": [
+        "validation_test/topology_optimization/test_hex_cluster_derivative.py",
+        "validation_test/panels/test_motor_lamination_golden.py",
+        "validation_test/panels/test_motor_transient_golden.py",
+        "validation_test/panels/test_axisym_volumetric_direct.py",
+        "validation_test/panels/test_coilmesh_direct_residual.py",
+        "validation_test/panels/test_accel_linear_dispatch.py",
+        "validation_test/panels/test_kelvin_benchmark_direct.py",
+        "validation_test/panels/test_scalar_linear_direct.py",
+        "validation_test/induction_heating/test_ih_operator_physics_golden.py",
+        "validation_test/axifem/test_heat_axisym_e2e.py"
+      ]
+    },
+    "solver-numerics": {
+      "description": "Required NGSolve contracts for mixed Omega, HDiv/topology, eddy currents, SIBC and IH thermal coupling; no partial dependency run.",
+      "paths": [
+        "tests/test_bem_complete_reaction.py",
+        "tests/test_bem_strong_panel_impedance.py",
+        "tests/test_panel_esim_complete_state.py",
+        "validation_test/induction_heating/test_esim_panel_evaluator.py",
+        "validation_test/panels/test_strong_coupling_cli_contract.py",
+        "tests/test_bem_loop_work_pairings.py",
+        "tests/test_bem_loop_panel_impedance.py",
+        "tests/test_bem_loop_hacapk.py",
+        "validation_test/bem/test_loop_extension_ring.py",
+        "tests/test_bem_sibc_acceptance.py",
+        "tests/test_surface_orientation.py",
+        "tests/test_maglev_sphere_golden.py",
+        "tests/test_team28_arnoldi_golden.py",
+        "tests/test_rotating_magnet_eddy_golden.py",
+        "validation_test/maglev/test_demo_evidence.py",
+        "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
+        "validation_test/radia_mcp/test_eddy_driven_region.py",
+        "validation_test/radia_mcp/test_aphi_gauge_point.py",
+        "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
+        "tests/test_accel_solver_selection.py",
+        "tests/test_ngsbem_peec_body_direct.py",
+        "tests/test_ngsbem_eddy_direct.py",
+        "tests/test_eddy_aphi_contract.py",
+        "tests/test_hdiv_energy_material_consistency.py",
+        "tests/test_envelope_stop_core.py",
+        "tests/test_axisym_measure_contract.py",
+        "tests/test_calc_fem_kelvin_fail_loud.py",
+        "tests/test_sibc_corner_patch.py",
+        "tests/test_boundary_material_adjacency.py",
+        "tests/test_coil_axis_closed_form.py",
+        "tests/test_mixed_omega_newton.py",
+        "tests/test_direct_residual_gate.py",
+        "tests/test_cohomology_cut_linear_residual.py",
+        "validation_test/open_boundary/test_kelvin_connected_ground.py",
+        "validation_test/open_boundary/test_kelvin_vector_direct_gate.py",
+        "tests/test_team21a_geometry_source.py",
+        "tests/test_kelvin_mixed_omega.py",
+        "tests/test_mixed_omega_review_fixes.py",
+        "tests/test_c_type_p1_box_lane.py",
+        "tests/test_meshed_current.py",
+        "tests/test_p1_newton.py",
+      "tests/test_p1_linear.py",
+        "tests/test_arc_far_rule.py",
+        "tests/test_radiafield_cache_parallel.py",
+        "tests/test_radiafield_memoize.py",
+        "tests/test_radiafield_precision.py",
+        "tests/test_mixed_omega_source_load.py",
+        "tests/test_vector_potential_bh_tail.py",
+        "tests/test_reduced_a_source_materialization.py",
+        "tests/test_hdiv_response_contract.py",
+        "tests/feec/test_hdiv_vim_cyclic_periodic_hex.py",
+        "tests/test_hdiv_chargegram_build_safety.py",
+        "tests/test_hdiv_vim_native_matrix.py",
+        "tests/test_hdiv_same_process_determinism.py",
+        "tests/feec/test_hdiv_hex_nonconforming_touching_pair.py",
+        "tests/test_bh_law.py",
+        "tests/feec/test_hdiv_jacobi_diagonal_fail_loud.py",
+        "tests/test_three_engine_energy.py",
+        "tests/test_hdiv_vim_bh_validation.py",
+        "tests/test_hdiv_vim_capabilities.py",
+        "tests/test_isochronous_topopt.py",
+        "tests/test_accelerator_lie_topopt.py",
+        "tests/test_topology_optimization.py",
+        "tests/test_vim_eddy_hybrid.py",
+        "tests/test_vim_coupled_weak_vs_monolithic.py",
+        "tests/test_patch_recovery.py",
+        "tests/test_ih_axisym_coupled.py",
+        "tests/test_ih_case_depth.py",
+        "tests/test_ih_cli_flags.py",
+        "tests/test_ih_coupled_source.py",
+        "tests/test_ih_geometry_roles.py",
+        "tests/test_ih_holes.py",
+        "tests/test_esim_integration.py",
+        "tests/test_esim_incident_only_retirement.py",
+        "tests/test_esim_convergence_propagation.py",
+        "tests/analytical_formulas/test_induction_heating.py",
+        "tests/test_em_table.py",
+        "tests/test_ih_nonlinear_heat.py",
+        "tests/test_ih_thermal_material_enthalpy.py",
+        "tests/test_ih_panel_esim_assembly.py",
+        "tests/test_ih_operator_assembly.py",
+        "tests/test_ih_operator_axisym.py",
+        "tests/test_ih_fin_surface_boundary.py",
+        "tests/axifem/test_heat_henrotte_smoke.py",
+        "tests/axifem/test_heat_field_extrema.py",
+        "tests/test_ih_optimize_fail_loud.py",
+        "tests/test_ih_thermal_exposure.py",
+        "tests/test_ih_thermal_transfer.py",
+        "validation_test/panels/test_heat_boundary_roles.py",
+        "validation_test/induction_heating/test_fem_ams_parity.py"
+      ]
+    },
+    "sparsesolv": {
+      "description": "Required native AMS, AMG and Krylov solver regressions.",
+      "max_elapsed_seconds": 120,
+      "paths": [
+        "src/ext/sparsesolv/tests/test_sparsesolv.py",
+        "src/ext/sparsesolv/tests/test_hermitian_iccg.py",
+        "src/ext/sparsesolv/tests/test_ams_repeatability.py",
+        "tests/test_ams_internal_setup_parallel.py"
+      ]
+    }
+  }
+}
