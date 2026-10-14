@@ -537,8 +537,13 @@ private:
             if (!node || (fence_selector(token) < 0 && token != "\\lvert" &&
                           token != "\\rvert" && token != "\\vert" &&
                           token != "\\lVert" && token != "\\rVert")) {
-                error_ = "Fixed delimiter command requires a supported delimiter";
-                return nullptr;
+                if (rejectUnsupported_) {
+                    error_ = "Fixed delimiter command requires a supported delimiter";
+                    return nullptr;
+                }
+                // Interactive partial TeX remains editable: ignore the size
+                // command and retain any ordinary token already read.
+                return node;
             }
             auto& ch = static_cast<CharNode&>(*node);
             ch.typeface = TF_SYMBOL;

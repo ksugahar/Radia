@@ -54,6 +54,9 @@ property, so its enlarged font does not change an adjacent fraction's layout.
 Native TeX round trips preserve the exact command. MathJax's font-specific
 big-family heights are mapped to these shared Office classes; internal
 binomial layout is not classified as an explicit size command.
+Strict export rejects missing/non-delimiter arguments. Interactive native
+parsing ignores an unfinished size command and retains an ordinary token,
+so a half-typed command does not make the whole equation invalid.
 General `\middle` separators and one-sided fences currently retain visible
 characters without stretching; they are outside the stretchable-fence gate.
 

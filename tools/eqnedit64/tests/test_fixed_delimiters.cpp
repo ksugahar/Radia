@@ -35,6 +35,11 @@ int main() {
                 require(!parse_latex(command + " " + argument, nullptr, &error, true) && !error.empty(),
                         "invalid sized delimiter argument accepted");
             }
+            require(bool(parse_latex(command)), "half-typed delimiter broke interactive parsing");
+            auto partial = parse_latex(command + " x");
+            require(bool(partial) && tree_to_latex(*partial).find('x') != std::string::npos &&
+                    tree_to_mathml(*partial).find("minsize=") == std::string::npos,
+                    "interactive invalid argument lost its ordinary token");
         }
     }
     std::cout << "PASS: 16 fixed delimiter commands, exact TeX fixed points and invalid arguments\n";
