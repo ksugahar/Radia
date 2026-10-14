@@ -233,7 +233,11 @@ def test_eqnedit64_ci_is_separate_from_radia_mcp_ci():
         encoding="utf-8"
     )
 
-    assert "packages/radia-mcp/" not in ci
+    # Distribution triggers stay independent. The native exporter lane may
+    # exercise its PPTX consumer as an explicit integration contract.
+    triggers = ci.split("workflow_dispatch:", 1)[0]
+    assert "packages/radia-mcp/" not in triggers
+    assert "packages/radia-mcp/tests/test_presentation_markdown_math.py" in ci
     for path in ("packages/eqnedit64/**", "tools/eqnedit64/**"):
         assert path in ci
         assert path in radia_fast

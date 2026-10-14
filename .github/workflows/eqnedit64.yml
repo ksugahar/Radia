@@ -144,7 +144,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install test build dependencies
-        run: python -m pip install pybind11 pytest
+        run: python -m pip install pybind11 pytest python-pptx
 
       - name: Verify named TrueType product candidate
         if: ${{ inputs.font_acceptance == true }}
@@ -295,6 +295,23 @@ jobs:
         run: >-
           pwsh -NoProfile -File tests/test_cli_output.ps1
           -AppPath build_cmake/Release/Eqnedit64.exe
+
+      - name: Validate native PowerPoint math and Markdown packaging
+        run: |
+          python -m pytest ../../packages/eqnedit64/tests/test_math_export.py ../../packages/radia-mcp/tests/test_presentation_markdown_math.py -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/check_powerpoint_math.py --app build_cmake/Release/Eqnedit64.exe --probe build_cmake/Release/office_payload_probe.exe --output powerpoint-math-evidence
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project tests/ooxml_schema/ooxml_schema.csproj -- tests/office_bit_corpus.json powerpoint-math-evidence
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Preserve native PowerPoint math evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-powerpoint-math
+          path: tools/eqnedit64/powerpoint-math-evidence/
+          if-no-files-found: error
 
       - uses: actions/setup-node@v4
         with:

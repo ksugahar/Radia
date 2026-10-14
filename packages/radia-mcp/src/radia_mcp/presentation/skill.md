@@ -10,13 +10,18 @@
 > 作る。** 台本が先で、スライドは「言っている間に見せるもの」。§Phase 2 の
 > script-first がこの運用の中心で、下記の **script-first Markdown** がその
 > 入稿形式（`>` 引用 = セリフ → ノート、それ以外 = スライドに映すもの）。
-> `radia.equation.markdown_to_pptx` がその 1 ファイルから、数式を Microsoft
+> `presentation_markdown_to_pptx` がその 1 ファイルから、数式を Microsoft
 > 数式 (OMML) のまま持つ .pptx とスピーカーノートを組む。したがって
 > 「AI はスライド本体を作れない」という旧前提はもう成り立たない。AI の
 > lint / 抽出 / 時間予算 / 台本照合はそのまま効く（同じ 1 ファイルに台本と
 > スライドが両方あるので、むしろ照合が効きやすい）。
 
 ### Eqnedit64 / 数式生成の責任分担
+
+一括PPTXは eqnedit64>=3.1.4 が必要です。最新版バックエンドがない場合は例外とし、
+画像や旧モジュールへ自動置換しません。対応構文とOffice検証の制限は
+`tools/eqnedit64/docs/POWERPOINT_MATH.md` を参照してください。
+
 
 - native版とJS版の正本はどちらもRadiaの `tools/eqnedit64` に置く。
   JS実装は `tools/eqnedit64/web/equation-editor.js`、共通契約は
@@ -29,7 +34,7 @@
 - JS版はブラウザUIであり、`radia_mcp.presentation` のWindows実行
   バックエンドにはしない。
 - script-first Markdownからデッキを組む場合は
-  `radia.equation.markdown_to_pptx` を使う。数式は画像ではなく編集可能な
+  `presentation_markdown_to_pptx` を使う。数式は画像ではなく編集可能な
   PowerPointネイティブOMMLとして直接PPTXへ入る。
 - 既存PowerPointへ貼る一時クリップボードが必要な場合は
   `presentation_copy_equation(tex, target="office")` を使う。Eqnedit64が
@@ -42,7 +47,7 @@
   `target="png"` とする。PNG/EMFファイルが必要なら
   `presentation_render_equation` を使う。
 - 数十式を一式ずつ短命なEqnedit64プロセスで変換しない。デッキ一括生成は
-  `radia.equation` の同一Pythonプロセスを使い、フォント登録・解除の連続を避ける。
+  Eqnedit64のnative OOXML出力と一括PPTXアダプタを使い、フォント登録・解除の連続を避ける。
 - 入出力の正本は常にTeX。MTEFや`.eqn`をMCPワークフローへ導入しない。
 
 ---
@@ -356,8 +361,8 @@ A4 紙に手書きで筋を書く:
 ```
 
 ```python
-import radia.equation as eq
-eq.markdown_to_pptx(open("talk.md", encoding="utf-8").read(), "talk.pptx",
+from radia_mcp.presentation.tools import presentation_markdown_to_pptx
+presentation_markdown_to_pptx(open("talk.md", encoding="utf-8").read(), "talk.pptx",
                     title="Kelvin 変換")
 ```
 

@@ -44,6 +44,7 @@
 #include "eqnedit64_version.h"
 #include "mathml_emitter.h"
 #include "office_html.h"
+#include <stdexcept>
 #include "palettes.h"
 #include "tex_document.h"
 
@@ -1794,6 +1795,7 @@ enum class ConversionDestination {
     PngClipboard,
     PngFile,
     EmfFile,
+    PowerPointMathFile,
 };
 
 enum class TwoArgumentAction {
@@ -1828,6 +1830,8 @@ ConversionDestination conversion_destination(const std::wstring& output) {
         return ConversionDestination::PngFile;
     if (wide_ends_with_ci(output, L".emf"))
         return ConversionDestination::EmfFile;
+    if (wide_ends_with_ci(output, L".pptxmath"))
+        return ConversionDestination::PowerPointMathFile;
     return ConversionDestination::Invalid;
 }
 
@@ -4785,6 +4789,31 @@ int convert_source(const std::wstring& source, const std::wstring& output) {
             return render_png(wide_utf8(input), output);
         case ConversionDestination::EmfFile:
             return render_emf(wide_utf8(input), output);
+        case ConversionDestination::PowerPointMathFile: {
+            wchar_t full[MAX_PATH], temporary[MAX_PATH];
+            try {
+                const auto math = eqnedit::latex_to_powerpoint_math(input);
+                const DWORD length = GetFullPathNameW(output.c_str(), MAX_PATH, full, nullptr);
+                if (!length || length >= MAX_PATH)
+                    throw std::runtime_error("Output path is invalid or too long");
+                const std::wstring target(full);
+                const auto slash = target.find_last_of(L"\\/");
+                const auto parent = target.substr(0, slash + 1);
+                if (!GetTempFileNameW(parent.c_str(), L"eqm", 0, temporary))
+                    throw std::runtime_error("Cannot create atomic output temporary file");
+                const bool written = write_file(temporary, math);
+                const bool moved = written && MoveFileExW(temporary, target.c_str(),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+                if (!moved) {
+                    DeleteFileW(temporary);
+                    throw std::runtime_error("Cannot publish PowerPoint math output");
+                }
+                return 0;
+            } catch (const std::exception& error) {
+                return report_cli_error(wide_utf8(std::string(error.what()) +
+                    "\nTeX: " + input), 98);
+            }
+        }
         default:
             return 94;
     }
@@ -6682,6 +6711,7 @@ int show_cli_help() {
         L"  clipboard-png  PNG画像クリップボード（ファイルは作らない）\r\n"
         L"  equation.png   PNGファイル\r\n"
         L"  equation.emf   EMFファイル\r\n\r\n"
+        L"  equation.pptxmath  PowerPoint OOXML math (strict export)\r\n\r\n"
         L"例: Eqnedit64.exe equation.tex office\r\n"
         L"例: Eqnedit64.exe equation.tex equation.png\r\n"
         L"例: Eqnedit64.exe clipboard clipboard-png\r\n\r\n"
@@ -6721,7 +6751,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
                 break;
             case TwoArgumentAction::Reject:
                 return report_cli_error(
-                    L"出力は office、slides、clipboard-png、.png、.emf "
+                    L"出力は office、slides、clipboard-png、.png、.emf、.pptxmath "
                     L"のいずれかを指定してください。", 94);
         }
     }
