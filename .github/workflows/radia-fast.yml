@@ -14,6 +14,18 @@ on:
       - "packages/radia-gpu/**"
       - "packages/eqnedit64/**"
       - "tools/eqnedit64/**"
+      - "tests/policy/**"
+      - ".github/workflows/eqnedit64.yml"
+      - ".github/workflows/release-eqnedit64-pypi.yml"
+      - ".github/workflows/radia-mcp-matrix.yml"
+      - ".github/workflows/cubit-mesh-export.yml"
+      - ".github/workflows/radia-optuna.yml"
+      - ".github/workflows/release-radia-optuna.yml"
+      - ".github/workflows/radia-gpu.yml"
+      - ".github/workflows/radia-gpu-release.yml"
+      - ".github/workflows/sparsesolv.yml"
+      - ".github/workflows/policy-lint.yml"
+      - ".github/workflows/ltspice-data-safety.yml"
   pull_request:
     branches: [main]
     paths-ignore:
@@ -24,6 +36,18 @@ on:
       - "packages/radia-gpu/**"
       - "packages/eqnedit64/**"
       - "tools/eqnedit64/**"
+      - "tests/policy/**"
+      - ".github/workflows/eqnedit64.yml"
+      - ".github/workflows/release-eqnedit64-pypi.yml"
+      - ".github/workflows/radia-mcp-matrix.yml"
+      - ".github/workflows/cubit-mesh-export.yml"
+      - ".github/workflows/radia-optuna.yml"
+      - ".github/workflows/release-radia-optuna.yml"
+      - ".github/workflows/radia-gpu.yml"
+      - ".github/workflows/radia-gpu-release.yml"
+      - ".github/workflows/sparsesolv.yml"
+      - ".github/workflows/policy-lint.yml"
+      - ".github/workflows/ltspice-data-safety.yml"
   workflow_dispatch:
 
 permissions:

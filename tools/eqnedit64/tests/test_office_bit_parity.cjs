@@ -185,6 +185,26 @@ function officeBytes(html) {
                    ": browser read differs from raw Windows clipboard");
       }
       const n = officeBytes(native), w = officeBytes(copied.html);
+      for (const bytes of [n, w]) {
+        const languageAndDelimiter = await page.evaluate(({html, id}) => {
+          const doc = new DOMParser().parseFromString(html, "application/xml");
+          const ns = "http://schemas.microsoft.com/office/2004/12/omml";
+          const spans = Array.from(doc.getElementsByTagName("span"));
+          if (!spans.length || !spans.every(span => span.getAttribute("lang") ===
+              (/[\u3000-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u{20000}-\u{3134F}]/u.test(span.textContent) ? "ja-JP" : "en-US"))) return false;
+          const expected = ["plain-paired", "fraction-paired", "big-paired", "angle-paired", "nested-paired"].includes(id);
+          if (["separate-parentheses", "separate-brackets", "function-parentheses", "separate-absolute"].includes(id))
+            return !doc.getElementsByTagNameNS(ns, "d").length;
+          if (id === "separate-explicit") return doc.getElementsByTagNameNS(ns, "d").length === 2;
+          if (!expected) return true;
+          const delimiters = Array.from(doc.getElementsByTagNameNS(ns, "d"));
+          return delimiters.length === (id === "nested-paired" ? 2 : 1) && delimiters.every(d =>
+            d.getElementsByTagNameNS(ns, "grow")[0]?.getAttributeNS(ns, "val") === "1" &&
+            d.getElementsByTagNameNS(ns, "begChr")[0]?.getAttributeNS(ns, "val") &&
+            d.getElementsByTagNameNS(ns, "endChr")[0]?.getAttributeNS(ns, "val"));
+        }, {html: bytes.toString("utf8"), id: fixture.id});
+        assert(languageAndDelimiter, fixture.id + ": explicit language/delimiter contract failed");
+      }
       if (fixture.run_styles || fixture.function_name) {
         for (const bytes of [n, w]) {
           const stylesOk = await page.evaluate(({html, styles, functionName}) => {
@@ -219,8 +239,15 @@ function officeBytes(html) {
             if (doc.getElementsByTagName("parsererror").length) return false;
             const naries = doc.getElementsByTagNameNS(
               "http://schemas.microsoft.com/office/2004/12/omml", "nary");
-            return naries.length === 1 && Array.from(naries).every(nary =>
-              nary.nextElementSibling && nary.nextElementSibling.textContent.startsWith(closing));
+            return naries.length === 1 && Array.from(naries).every(nary => {
+              if (nary.nextElementSibling && nary.nextElementSibling.textContent.startsWith(closing)) return true;
+              const operand = nary.parentElement;
+              const delimiter = operand && operand.parentElement;
+              const end = delimiter && Array.from(delimiter.children).find(child => child.localName === "dPr");
+              const chr = end && Array.from(end.children).find(child => child.localName === "endChr");
+              return operand.localName === "e" && delimiter.localName === "d" &&
+                chr && chr.getAttributeNS("http://schemas.microsoft.com/office/2004/12/omml", "val") === closing;
+            });
           }, {html: bytes.toString("utf8"), closing: fixture.nary_tail_outside});
           assert(structureOk, fixture.id + ": enclosing closing fence not outside m:e");
         }

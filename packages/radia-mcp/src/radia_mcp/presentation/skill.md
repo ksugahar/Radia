@@ -10,10 +10,18 @@
 > 作る。** 台本が先で、スライドは「言っている間に見せるもの」。§Phase 2 の
 > script-first がこの運用の中心で、下記の **script-first Markdown** がその
 > 入稿形式（`>` 引用 = セリフ → ノート、それ以外 = スライドに映すもの）。
-> Markdownから編集可能な数式を含むPPTXを一括生成する経路は、Eqnedit64への移植待ちです。
-> 現在は利用できません。画像へ自動置換せず、台本とスライドの構成は以下の原則で管理します。
+> `presentation_markdown_to_pptx` がその 1 ファイルから、数式を Microsoft
+> 数式 (OMML) のまま持つ .pptx とスピーカーノートを組む。したがって
+> 「AI はスライド本体を作れない」という旧前提はもう成り立たない。AI の
+> lint / 抽出 / 時間予算 / 台本照合はそのまま効く（同じ 1 ファイルに台本と
+> スライドが両方あるので、むしろ照合が効きやすい）。
 
 ### Eqnedit64 / 数式生成の責任分担
+
+一括PPTXは eqnedit64>=3.1.4 が必要です。最新版バックエンドがない場合は例外とし、
+画像や旧モジュールへ自動置換しません。対応構文とOffice検証の制限は
+`tools/eqnedit64/docs/POWERPOINT_MATH.md` を参照してください。
+
 
 - native版とJS版の正本はどちらもRadiaの `tools/eqnedit64` に置く。
   JS実装は `tools/eqnedit64/web/equation-editor.js`、共通契約は
@@ -25,8 +33,9 @@
 - `presentation_equation_policy()` で、この正本・公開先・変換経路を確認できる。
 - JS版はブラウザUIであり、`radia_mcp.presentation` のWindows実行
   バックエンドにはしない。
-- script-first Markdownから編集可能な数式を含むデッキを一括生成する機能は一時利用不可です。
-  presentation_equation_policy() の batch availability を確認してください。
+- script-first Markdownからデッキを組む場合は
+  `presentation_markdown_to_pptx` を使う。数式は画像ではなく編集可能な
+  PowerPointネイティブOMMLとして直接PPTXへ入る。
 - 既存PowerPointへ貼る一時クリップボードが必要な場合は
   `presentation_copy_equation(tex, target="office")` を使う。Eqnedit64が
   Office Math、TeX、EMF、不透明画像を同時に公開する。
@@ -37,8 +46,9 @@
 - Google Slides向けは `target="google-slides"`、画像貼り付けだけなら
   `target="png"` とする。PNG/EMFファイルが必要なら
   `presentation_render_equation` を使う。
-- デッキ一括生成を、多数の短命なEqnedit64プロセスや画像への自動置換で代用しないでください。
-- 入出力の正本はTeXです。画像出力は編集可能なOffice数式とは区別します。
+- 数十式を一式ずつ短命なEqnedit64プロセスで変換しない。デッキ一括生成は
+  Eqnedit64のnative OOXML出力と一括PPTXアダプタを使い、フォント登録・解除の連続を避ける。
+- 入出力の正本は常にTeX。MTEFや`.eqn`をMCPワークフローへ導入しない。
 
 ---
 
@@ -350,10 +360,15 @@ A4 紙に手書きで筋を書く:
 - $\nu' = \nu \dfrac{r'^{2}}{R^{2}}$
 ```
 
-上記Markdownから編集可能な数式を含むPPTXを生成する機能は、Eqnedit64への移植待ちです。
-現在の presentation_pptx_* ツールでデッキを編集し、既存Officeセッションへの数式は
-presentation_copy_equation を使用します。画像を明示的に選ぶ場合に限り、
-presentation_render_equation の出力を画像として配置してください。
+```python
+from radia_mcp.presentation.tools import presentation_markdown_to_pptx
+presentation_markdown_to_pptx(open("talk.md", encoding="utf-8").read(), "talk.pptx",
+                    title="Kelvin 変換")
+```
+
+数式は `$...$` / `$$...$$` のまま書けばよい。**画像ではなく Microsoft 数式
+(OMML)** として入るので、PowerPoint の数式エディタでそのまま直せ、テーマの
+フォントと文字サイズに追従する。セリフ側に書いた `$...$` も同じ扱い。
 
 なぜこの向きか:
 

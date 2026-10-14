@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[2]
 RELEASE_WORKFLOWS=(
     ROOT/".github"/"workflows"/"release.yml",
 )
@@ -233,15 +233,19 @@ def test_eqnedit64_ci_is_separate_from_radia_mcp_ci():
         encoding="utf-8"
     )
 
-    assert "packages/radia-mcp/" not in ci
+    # Distribution triggers stay independent. The native exporter lane may
+    # exercise its PPTX consumer as an explicit integration contract.
+    triggers = ci.split("workflow_dispatch:", 1)[0]
+    assert "packages/radia-mcp/" not in triggers
+    assert "packages/radia-mcp/tests/test_presentation_markdown_math.py" in ci
     for path in ("packages/eqnedit64/**", "tools/eqnedit64/**"):
         assert path in ci
         assert path in radia_fast
-        assert path in policy
+    assert "paths-ignore:" not in policy
 
 
 def test_eqnedit64_release_order_is_handtest_fable_main_o_drive_then_tag():
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     skill = (root / ".agents/skills/release-eqnedit64/SKILL.md").read_text(
         encoding="utf-8")
     sync = (

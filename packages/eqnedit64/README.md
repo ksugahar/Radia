@@ -1,6 +1,13 @@
 # Eqnedit64 for Python
 
-Source version: **3.1.3** (released).
+Source version: **3.1.4** (review candidate; released version remains 3.1.3).
+
+Candidate native OOXML export: `Eqnedit64.exe equation.tex equation.pptxmath`.
+The checked Python helper is `eqnedit64.export_powerpoint_math(tex, output)`.
+The optional radia-mcp adapter assembles Markdown decks with native editable math;
+missing/old backends and unsupported input raise. See the native product's
+`docs/POWERPOINT_MATH.md` for the format, supported subset and validation limits.
+This candidate has not passed the isolated PowerPoint release gate and is not published.
 
 `eqnedit64` packages the same TeX-first equation engine and standalone Windows
 application maintained in the Radia monorepo. The signed one-file

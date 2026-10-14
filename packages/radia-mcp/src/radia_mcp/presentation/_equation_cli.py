@@ -57,8 +57,9 @@ def presentation_equation_policy() -> dict:
         },
         "presentation_paths": {
             "batch_pptx": {
-                "available": False,
-                "reason": "Markdown-to-PPTX equation migration to Eqnedit64 is pending",
+                "implemented": True,
+                "tool": "presentation_markdown_to_pptx",
+                "requires": "eqnedit64>=3.1.4",
                 "fallback": None,
             },
             "interactive_clipboard": "presentation_copy_equation (Eqnedit64)",

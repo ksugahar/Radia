@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.4 review candidate
+
+- Add strict native PowerPoint OOXML math export (.pptxmath) and a checked subprocess helper.
+- Share structural Office emission with the existing RichEdit clipboard route.
+- This candidate is not released. Markdown deck assembly is owned by the optional radia-mcp adapter.
+
 ## 3.1.3 — review candidate
 
 - Prepare shared OMML run properties (upright/bold/bold-italic) and function

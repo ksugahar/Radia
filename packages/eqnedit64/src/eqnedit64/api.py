@@ -3,8 +3,10 @@ from __future__ import annotations
 
 from importlib.resources import files
 from pathlib import Path
+import os
 import subprocess
 import tempfile
+import xml.etree.ElementTree as ET
 
 
 _COPY_TARGETS = {
@@ -14,6 +16,47 @@ _COPY_TARGETS = {
     "png": "clipboard-png",
 }
 _RENDER_SUFFIXES = {".png", ".emf"}
+
+
+def export_powerpoint_math(tex: str, output: str | Path,
+                           timeout_s: float = 30.0) -> Path:
+    """Export checked native PowerPoint OOXML math, with no clipboard/images.
+
+    Unsupported TeX raises. The destination is replaced only after successful
+    CLI execution and namespace validation; an existing file survives errors.
+    """
+    if not 0 < float(timeout_s) <= 120:
+        raise ValueError("timeout_s must be in (0, 120]")
+    if not isinstance(tex, str) or not tex.strip():
+        raise ValueError("tex must be a non-empty string")
+    destination = Path(output).expanduser().resolve()
+    if destination.suffix.lower() != ".pptxmath":
+        raise ValueError("output extension must be .pptxmath")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    source = _tex_file(tex)
+    try:
+        with tempfile.TemporaryDirectory(prefix="eqnedit64-math-", dir=destination.parent) as scratch:
+            candidate = Path(scratch) / "equation.pptxmath"
+            result = _invoke([str(source), str(candidate)], timeout_s)
+            if result.returncode:
+                raise RuntimeError(
+                    f"Eqnedit64 math export exited {result.returncode}: "
+                    f"{(result.stderr or result.stdout).strip()}"
+                )
+            if not candidate.is_file() or not 0 < candidate.stat().st_size <= 10_000_000:
+                raise RuntimeError("Eqnedit64 did not create a bounded math output")
+            root = ET.fromstring(candidate.read_bytes())
+            math = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+            drawing = "http://schemas.openxmlformats.org/drawingml/2006/main"
+            if root.tag != f"{{{math}}}oMathPara" or root.find(f"{{{math}}}oMath") is None:
+                raise RuntimeError("Invalid PowerPoint math root")
+            if any(not node.tag.startswith((f"{{{math}}}", f"{{{drawing}}}"))
+                   or node.tag == f"{{{math}}}t" for node in root.iter()):
+                raise RuntimeError("Invalid PowerPoint math dialect")
+            os.replace(candidate, destination)
+    finally:
+        source.unlink(missing_ok=True)
+    return destination
 
 
 def backend_path() -> Path:

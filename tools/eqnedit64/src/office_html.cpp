@@ -1,4 +1,5 @@
 #include "office_html.h"
+#include "tex_parser.h"
 #include "mathml_emitter.h"
 #include "named_colors.h"
 #include "office_alphabets.h"
@@ -244,14 +245,45 @@ std::string alphabet(const std::string &text, const std::string &variant) {
   }
   return out;
 }
-const std::string style = "font-size:18.0pt;font-family:'Cambria "
+const std::string style = "mso-ansi-language:EN-US;mso-bidi-language:EN-US;font-size:18.0pt;font-family:'Cambria "
                           "Math';mso-ascii-font-family:'Cambria "
                           "Math';mso-font-kerning:12.0pt;color:black";
-std::string control() {
-  return "<span style=\"" + style +
-         ";font-style:normal\"><m:ctrlPr></m:ctrlPr></span>";
+std::string office_language(const std::string &text) {
+  // UTF-8 ranges covering Japanese kana, CJK ideographs and full-width forms.
+  for (size_t i = 0; i < text.size();) {
+    uint32_t cp = static_cast<unsigned char>(text[i++]);
+    int count = cp >= 0xF0 ? 3 : cp >= 0xE0 ? 2 : cp >= 0xC0 ? 1 : 0;
+    if (count) cp &= (1u << (6 - count)) - 1;
+    while (count-- && i < text.size()) cp = (cp << 6) | (static_cast<unsigned char>(text[i++]) & 63);
+    if ((cp >= 0x3000 && cp <= 0x9FFF) || (cp >= 0xF900 && cp <= 0xFAFF) ||
+        (cp >= 0xFF00 && cp <= 0xFFEF) || (cp >= 0x20000 && cp <= 0x3134F)) return "ja-JP";
+  }
+  return "en-US";
 }
-std::string emit(const Xml &);
+enum class OfficeDialect { RichEdit, PowerPoint };
+class OfficeEmitter {
+  OfficeDialect dialect_;
+public:
+  explicit OfficeEmitter(OfficeDialect dialect) : dialect_(dialect) {}
+  std::string arrayProperties() {
+    // ISO baseJc is vertical (top/center/bottom), not horizontal justification.
+    return "<m:eqArrPr><m:baseJc m:val=\"" +
+        std::string(dialect_ == OfficeDialect::RichEdit ? "left" : "center") +
+        "\"/></m:eqArrPr>";
+  }
+  std::string runProperties(const std::string &colour = "", bool normal = true,
+                            bool bold = false, const std::string &language = "en-US") {
+    return "<a:rPr lang=\"" + language + "\" sz=\"1800\" i=\"" + std::string(normal ? "0" : "1") +
+           "\" b=\"" + (bold ? "1" : "0") + "\"><a:solidFill><a:srgbClr val=\"" +
+           (colour.empty() ? std::string("000000") : colour.substr(1)) +
+           "\"/></a:solidFill><a:latin typeface=\"Cambria Math\"/></a:rPr>";
+  }
+std::string control() {
+  if (dialect_ != OfficeDialect::RichEdit)
+    return "<m:ctrlPr>" + runProperties() + "</m:ctrlPr>";
+  return "<span style=\"" + style +
+         ";font-style:normal\" lang=\"en-US\"><m:ctrlPr></m:ctrlPr></span>";
+}
 std::string run(const Xml &n) {
   if (content(n).empty())
     return {};
@@ -285,13 +317,19 @@ std::string run(const Xml &n) {
     if (colour.empty())
       throw std::runtime_error("unsupported Office colour");
   }
+  if (dialect_ != OfficeDialect::RichEdit) {
+    const std::string tag = "a:t";
+    return "<m:r>" + properties + runProperties(colour, normal, bold, office_language(content(n))) + "<" + tag +
+           " xml:space=\"preserve\">" + escape(alphabet(content(n), variant)) +
+           "</" + tag + "></m:r>";
+  }
   return "<m:r>" + properties + "<span style=\"" + style +
          (colour.empty() ? "" : ";color:" + escape(colour)) +
          ";font-style:" + (normal ? "normal" : "italic") +
          (!mapped && variant.find("bold") != std::string::npos
               ? ";font-weight:bold"
               : "") +
-         "\">" + escape(alphabet(content(n), variant)) + "</span></m:r>";
+         ";mso-fareast-language:" + office_language(content(n)) + "\" lang=\"" + office_language(content(n)) + "\">" + escape(alphabet(content(n), variant)) + "</span></m:r>";
 }
 bool scripted(const Xml &n) {
   return n.name == "msub" || n.name == "msup" || n.name == "msubsup" ||
@@ -345,6 +383,14 @@ void advanceFence(const Xml &node, std::vector<std::string> &stack) {
     if (!close.empty())
       stack.push_back(close);
   }
+}
+bool singleDelimiterPair(const Xml &row) {
+  std::vector<std::string> stack;
+  for (size_t i = 0; i < row.children.size(); ++i) {
+    advanceFence(*row.children[i], stack);
+    if (stack.empty() && i + 1 < row.children.size()) return false;
+  }
+  return stack.empty();
 }
 bool operandBoundary(const Xml &node, const std::vector<std::string> &inside,
                      const std::vector<std::string> &outside) {
@@ -429,6 +475,18 @@ std::string wrapped(const std::string &tag, const std::string &body) {
 std::string emit(const Xml &n) {
   const auto &name = n.name;
   auto child = [&](size_t i) { return emit(*n.children.at(i)); };
+  if ((name == "mrow" || name == "math") && n.children.size() >= 2 &&
+      n.children.front()->name == "mo" && n.children.back()->name == "mo" &&
+      !fenceClose(content(*n.children.front())).empty() &&
+      fenceClose(content(*n.children.front())) == content(*n.children.back()) &&
+      singleDelimiterPair(n)) {
+    std::string body;
+    for (size_t i = 1; i + 1 < n.children.size(); ++i) body += child(i);
+    return wrapped("d", wrapped("dPr",
+        "<m:begChr m:val=\"" + escape(content(*n.children.front())) +
+        "\"/><m:endChr m:val=\"" + escape(content(*n.children.back())) +
+        "\"/><m:grow m:val=\"1\"/>" + control()) + wrapped("e", body));
+  }
   if (name == "math" || name == "mrow" || name == "mstyle" ||
       name == "semantics" || name == "mtd")
     return sequence(n);
@@ -439,8 +497,13 @@ std::string emit(const Xml &n) {
   if (name == "mspace") {
     if (std::stod(n.attr("width")) == 0.0)
       return {};
+    if (dialect_ != OfficeDialect::RichEdit) {
+      const std::string tag = "a:t";
+      return "<m:r><m:rPr><m:sty m:val=\"p\"/></m:rPr>" +
+             runProperties() + "<" + tag + ">&#160;</" + tag + "></m:r>";
+    }
     return "<m:r><m:rPr><m:sty m:val=\"p\"/></m:rPr><span style=\"" + style +
-           ";font-style:normal\">&#160;</span></m:r>";
+           ";font-style:normal;mso-fareast-language:en-US\" lang=\"en-US\">&#160;</span></m:r>";
   }
   if (scripted(n) && !n.children.empty() && large(*n.children[0]))
     return nary(n, "");
@@ -495,7 +558,7 @@ std::string emit(const Xml &n) {
       for (auto &r : n.children)
         rows += wrapped("e", sequence(*r));
       return wrapped(
-          "eqArr", "<m:eqArrPr><m:baseJc m:val=\"left\"/></m:eqArrPr>" + rows);
+          "eqArr", arrayProperties() + rows);
     }
     return wrapped("m", wrapped("mPr", control()) + sequence(n));
   }
@@ -532,6 +595,7 @@ std::string emit(const Xml &n) {
   }
   throw std::runtime_error("unsupported Office element: " + name);
 }
+};  // OfficeEmitter
 const Xml *outerTable(const Xml &n) {
   const auto &x = unwrapped(n);
   if (x.name == "math" && x.children.size() == 1)
@@ -557,23 +621,26 @@ bool leafRows(const Xml &table, std::vector<const Xml *> &rows) {
   return true;
 }
 } // namespace
+static std::string office_body(const Xml &root, OfficeEmitter &emitter) {
+  std::vector<const Xml *> rows;
+  const auto table = outerTable(root);
+  std::string body;
+  if (table && leafRows(*table, rows) && rows.size() >= 2) {
+    for (auto row : rows) body += emitter.wrapped("e", emitter.emit(*row));
+    body = emitter.wrapped("eqArr",
+        emitter.arrayProperties() + body);
+  } else body = emitter.emit(root);
+  return body;
+}
 std::string latex_to_office_html(const std::string &latex) {
   const auto mml = latex_to_mathml(latex, 18);
   if (mml.empty())
     throw std::runtime_error("invalid TeX");
   auto root = Parser(mml).parse();
-  std::vector<const Xml *> rows;
-  const auto table = outerTable(*root);
-  std::string body;
-  if (table && leafRows(*table, rows) && rows.size() >= 2) {
-    for (auto row : rows)
-      body += wrapped("e", emit(*row));
-    body = wrapped("eqArr",
-                   "<m:eqArrPr><m:baseJc m:val=\"left\"/></m:eqArrPr>" + body);
-  } else
-    body = emit(*root);
+  OfficeEmitter emitter(OfficeDialect::RichEdit);
+  std::string body = office_body(*root, emitter);
   const std::regex adjacent(
-      R"rx(<m:r>((?:<m:rPr><m:sty m:val="(?:p|b|bi)"/></m:rPr>)?)<span style="([^"]*)">([^<]*)</span></m:r><m:r>\1<span style="\2">([^<]*)</span></m:r>)rx");
+      R"rx(<m:r>((?:<m:rPr><m:sty m:val="(?:p|b|bi)"/></m:rPr>)?)<span style="([^"]*" lang="[^"]*)">([^<]*)</span></m:r><m:r>\1<span style="\2">([^<]*)</span></m:r>)rx");
   for (;;) {
     auto merged = std::regex_replace(
         body, adjacent, "<m:r>$1<span style=\"$2\">$3$4</span></m:r>");
@@ -586,8 +653,22 @@ std::string latex_to_office_html(const std::string &latex) {
       "xmlns:m=\"http://schemas.microsoft.com/office/2004/12/"
       "omml\"><m:oMathParaPr><m:jc m:val=\"left\"/></m:oMathParaPr><m:oMath>" +
       body + "</m:oMath></m:oMathPara>";
-  return "<p style=\"margin:0;font-size:18pt;font-family:Cambria "
+  return "<p lang=\"en-US\" style=\"margin:0;font-size:18pt;font-family:Cambria "
          "Math\"><!--[if gte msEquation 12]>" +
          math + "<![endif]--><![if !msEquation]>" + mml + "<![endif]></p>";
+}
+std::string latex_to_powerpoint_math(const std::string &latex) {
+  bool depthExceeded = false;
+  std::string error;
+  auto tree = parse_latex(latex, &depthExceeded, &error, true);
+  if (!tree || depthExceeded)
+    throw std::runtime_error(error.empty() ? "Invalid or over-depth TeX" : error);
+  const auto mathml = tree_to_mathml(*tree, 18);
+  auto root = Parser(mathml).parse();
+  OfficeEmitter emitter(OfficeDialect::PowerPoint);
+  return "<m:oMathPara xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\" " +
+      std::string("xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"") +
+      "><m:oMathParaPr><m:jc m:val=\"left\"/></m:oMathParaPr><m:oMath>" +
+      office_body(*root, emitter) + "</m:oMath></m:oMathPara>";
 }
 } // namespace eqnedit

@@ -76,9 +76,9 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 `cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; the only GUI run is the separately scoped human-facing release test, while journal/checkpoint handoff remains artifact-only.
 
 ### Shared MCP Runtime Ownership
-- radia-mcp releases independently of Radia: release-dual targets LAB (wheel) and 100 (editable). Never deploy radia-mcp to jmag/mdx/hibino/mdx1/mdx2; isolated CI tests are not deployment.
-- Routine editable updates: update the usual source -> reconnect -> check the live source and one harmless affected tool. Pure Python edits need no reinstall; source relocation or dependency/package-metadata changes do. No new daemon or mandatory ledger; see the shared runtime policy for exceptions.
-- MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version. Retain obsolete copies only as identified debugging evidence with a removal condition, never as deployment targets or rollback reserves; remove them after consumer and unique-work checks. Details follow the shared runtime policy below.
+- radia-mcp releases independently of Radia: release-dual targets LAB (wheel) and 100 (editable). Never deploy radia-mcp to jmag/mdx/hibino/mdx1/mdx2; isolated CI tests are not deployment. Do not wait for a solver release.
+- Routine editable updates: update the usual source, reconnect, check the live source and one harmless affected tool. Pure Python edits need no reinstall; relocation or dependency/metadata changes do. No new daemon or mandatory ledger.
+- MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version. Obsolete copies are only identified debugging evidence with a removal condition, never deployment targets or rollback reserves; remove them after consumer and unique-work checks.
 - MCP is experimental development tooling, not a numerical solver release. Developers may edit live MCP source and change its editable source with
   `pip install -e`; no dedicated branch, frozen snapshot or separate deployment
   approval is required for routine MCP experiments.
@@ -98,22 +98,22 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 
 ### CPU / GPU Execution Policy (2026-10-11)
 - CPU: Python (pybind11)/NGSolve, built with Visual Studio Build Tools on Windows; NGSolve TaskManager owns CPU parallel execution under the caller-owned region policy. CPU MEX is unsupported.
-- GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products. GPU workflows must complete within MATLAB/mexcuda, including solver setup and preconditioner construction; do not require a Python adapter or Python-generated solver snapshot. Native Python DLL dependencies inherited from NGSolve are permitted; GPU use must not require Python adapter execution. Python owns CPU execution and independent numerical-accuracy validation. Python CPU reference runs are validation workflows, not prerequisites for GPU users.
-- mexcuda modules may retain CPU host control; not every calculation belongs on GPU. Never include, link, or use NGSolve TaskManager in mexcuda builds. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing. Python CPU reference runs are independent validation, not GPU-user prerequisites.
+- GPU: `radia-gpu` uses MATLAB mexcuda (optional Simulink/LTspice adapters, no external products). GPU workflows complete within MATLAB/mexcuda, including solver setup and preconditioners, without a Python adapter or Python-generated snapshot; NGSolve-inherited native DLLs are permitted. Python owns CPU execution and independent accuracy validation, not GPU-user prerequisites.
+- mexcuda modules may retain CPU host control. Never include, link, or use NGSolve TaskManager in mexcuda builds. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
-- No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
-- Develop/build radia-gpu on 100; release acceptance uses 100 RTX 5000 and independent review; SSH host `NGSolve` (A100) is optional GPU evaluation. Never deploy to 102.
-- Record parity, artifact hashes and validation JSON; offline A100 stays pending and does not block development or publication. Poisson does not certify ICCG/AMS/HDiv-MMM.
+- No implicit CPU/GPU/Python fallback; where a mexcuda module offers both routes, expose explicit selection (e.g. `Backend="gpu"|"cpu"`), record the actual backend and raise when it fails. Internal CPU/GPU agreement does not replace Python CPU validation. Measure host setup and CPU solves separately.
+- Develop/build radia-gpu on 100; release acceptance uses 100 RTX 5000 and independent review; `NGSolve` A100 is optional. Never deploy to 102.
+- Record parity, artifact hashes and validation JSON. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### GPU Kernel Research Strategy (2026-10-11)
 
-- Use mexcuda as the laboratory's GPU numerical-kernel route. Keep mathematical and physical assumptions explicit and auditable; implement missing Radia-owned critical singular/near-field interaction kernels directly in CUDA. Preserve NGSolve ownership of FE semantics and the existing HACApK/core-kernel policy.
-- GPU workflows use MATLAB + mexcuda for setup and execution. Python/pybind11 + NGSolve/Netgen provides the independent CPU execution and accuracy-validation route. Checked numeric exchange (for example MAT/HDF5) may support validation but must not become a required Python adapter for GPU users. Record units, numbering, labels and ABI at exchange boundaries.
-- Numeric artifacts or individual variables exceeding 2 GB must use HDF5; MATLAB-compatible MAT v7.3 is permitted. Check size before writing and use a validated reader/writer pair rather than splitting data merely to bypass this requirement. File-format capacity does not establish GPU working-set capacity.
-- Reuse MATLAB gpuArray/BLAS where they implement the declared formulation correctly. MATLAB supports convergence monitoring, analysis, parameter sweeps and visualization around independently callable GPU kernels; Simulink integration is optional. Select and validate iterative solvers for the actual operator rather than prescribing one solver universally.
-- Establish CPU/GPU numerical agreement and measured performance on small public or independently publishable cases on the local RTX GPU before scaling. Save timings, transfers, memory observations, versions and true residuals in JSON; do not infer speedup from the backend name.
-- Paid A100 capacity is human-started. Prepare inputs, commands, acceptance criteria and a bounded runtime before requesting its use; batch necessary measurements and recover evidence. Never start or provision it autonomously.
-- Target both development and compute GPU architectures, retaining validated PTX compatibility where applicable. Rebuild for a different OS or MATLAB ABI; verify target execution and performance before claiming portability or scaling.
+- mexcuda is the GPU kernel route. Keep assumptions explicit and auditable; implement missing Radia-owned singular/near-field kernels in CUDA. NGSolve keeps FE semantics; HACApK/core-kernel policy is unchanged.
+- Checked numeric exchange (for example MAT/HDF5) may support Python/NGSolve validation but must not become a required adapter for GPU users. Record units, numbering, labels and ABI at exchange boundaries.
+- Artifacts or variables over 2 GB use HDF5 (MAT v7.3 permitted) checked before writing, with a validated reader/writer; never split to bypass this. File-format capacity is not GPU working-set capacity.
+- Reuse gpuArray/BLAS where they implement the declared formulation. Keep GPU kernels independently callable. Validate iterative solvers for the actual operator.
+- Establish CPU/GPU agreement and performance on small publishable cases on the local RTX GPU before scaling; save timings, transfers, memory, versions and true residuals in JSON. Backend names are not speedup evidence.
+- Paid A100 is human-started only: prepare inputs, commands, acceptance criteria and bounded runtime, batch measurements and recover evidence.
+- Target development and compute GPU architectures with validated PTX compatibility; rebuild per OS/MATLAB ABI and verify before claiming portability or scaling.
 
 ### MATLAB And Simulink
 
@@ -155,10 +155,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
   validation inputs may produce a visible skip. Heavier `.vol` work
   belongs to `validation_test/`, and `docs/**/*.ipynb` may show the Cubit
   generation step.
-- Drive Cubit headless via APREPRO or Python on the CLI, never the GUI; only `cubit-mesh-export` owns GUI release tests.
-- Prefer Cubit APREPRO/Python batch for production/validation CAD and meshes;
-  consider Sculpt for suitable HEX domains; build123d/Netgen alternatives must be explicit.
-- Radia reads checked `.vol` files; CI uses fixtures. Generate headlessly via APREPRO/Python and export through `cubit-mesh-export`.
+- Drive Cubit headless (APREPRO/Python CLI, never GUI; only `cubit-mesh-export` owns GUI release tests) for production/validation CAD and meshes, exporting through `cubit-mesh-export`; consider Sculpt for suitable HEX domains; build123d/Netgen alternatives must be explicit.
 - `cubit_mesh_export.mcp` owns Cubit MCP/APIs without Radia; each distribution owns its runtime helpers and requires neither the other MCP package nor a shared private distribution.
   Radia may depend on Cubit for applicable workflows and prefers it when licensed; build123d + Netgen is the explicit alternative. MCP handoff is artifact-only, never GUI control.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
@@ -178,17 +175,11 @@ solver boundary is a checked `.vol` regardless of the creation route.
 **POLICY**: CI/builds use 100号機 with the `100` runner label.
 100号機 permits isolated tests and heavy numerical/memory validation.
 Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
-LAB owns SSH preflight. Start SSH host `NGSolve` (A100) on demand for CPU/GPU timing and additional GPU validation; mdx/mdx1/mdx2/hibino are retired execution targets.
+LAB owns SSH preflight. Start SSH host `NGSolve` (mdx A100) on demand only for mexcuda GPU work; mdx/mdx1/mdx2/hibino are retired execution targets.
 Release-quad requires 102号機 and 100号機 for the same release commit; on-demand NGSolve timing is separate.
-Decision 2026-10-01: editable only on 100号機, in a dedicated local development
-venv for maintainers/students, separate from the release runtime. LAB and NGSolve use
-verified wheels.
-`cubit-mesh-export` is independently tested on 100 and LAB/102. NGSolve hosts start from checked exported .vol files, without Cubit.
-Solver releases must not install, uninstall, repoint, or version-gate the exporter.
-Do not install or run Cubit on NGSolve; consume checked .vol artifacts. This boundary
-does not prohibit Cubit-independent checker unit tests in isolated CI
-environments. Existing installations are not silently removed.
-CPU/MCP distribution tests run on LAB/102; `NGSolve` A100 validation runs without Cubit.
+Decision 2026-10-01: editable only on 100号機, in a dedicated local development venv for maintainers/students, separate from the release runtime. LAB and NGSolve use verified wheels.
+`cubit-mesh-export` is tested independently on 100 and LAB/102; solver releases never install, uninstall, repoint or version-gate it.
+NGSolve hosts start from checked exported .vol files, without Cubit (never install or run Cubit there; `NGSolve` A100 validation runs without Cubit); Cubit-independent checker unit tests may run in isolated CI. Existing installations are not silently removed.
 
 MATLAB-capable runners use a MATLAB-authenticated account and pass an Engine
 startup/calculation/shutdown check in the actual runner context. SYSTEM and SSH
@@ -225,18 +216,17 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 `jmag`: JMAG evaluation only. Keep Python 3.12.10, SSH service/config/keys, VC++ runtime and `inetpub` for control from 100. No Radia deployment, builds, CI/preflight, solver runs, validation or timing.
 
-**POLICY (2026-10-13)**: Start SSH host `NGSolve` (A100) on demand for CPU/GPU timing. mdx/mdx1/mdx2/hibino are retired execution targets.
+**POLICY (2026-10-14)**: Development completes on 100号機 (CPU time within ~20% of A100 host; CPU work stays local). Start SSH host `NGSolve` (mdx A100) on demand only for mexcuda GPU work. mdx/mdx1/mdx2/hibino are retired execution targets.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes NGSolve hostname`; check running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs. Never stop another session's jobs.
-Compare CPU/GPU on the same host; fix and record threads, including a 16-thread baseline where supported. Measure speed, scaling, setup, transfers and total time; save hardware, memory and versions in JSON.
-100 owns builds/CI and isolated numerical validation; 100/LAB timings are diagnostic. A100 is optional for development/publication. Gmsh rendering needs a desktop.
-Historical mdx measurements remain valid provenance; never relabel them. Keep hosts/IPs/paths private. Recover unique work before separately authorized VM/disk deletion.
+Compare CPU/GPU on the same host with fixed, recorded threads (16-thread baseline where supported). Measure speed, scaling, setup, transfers and total time; save hardware, memory and versions in JSON.
+100 owns development, builds/CI and isolated numerical validation; 100/LAB timings are diagnostic. A100 is optional for development/publication. Gmsh rendering needs a desktop.
+Historical measurements remain valid provenance: public evidence uses neutral roles; role-to-host maps, originals and hashes stay in private storage. Never relabel to another host. Keep hosts/IPs/paths private. Recover unique work before separately authorized VM/disk deletion.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
 
 ### Compute Scratch Cleanup
 
-**POLICY (2026-10-13)**: Remote compute jobs, including NGSolve and retirement cleanup on jmag, finish only after verified recovery
-and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments and helpers.
+**POLICY (2026-10-13)**: Remote compute jobs, including NGSolve and retirement cleanup on jmag, finish only after verified recovery and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments and helpers.
 - Recover JSON, logs, commands, runtime/source identity, hashes and non-reconstructible inputs
   to LAB durable storage. Numerical evidence goes in `validation_test/`, public demonstrations
   in executed `docs/**/*.ipynb`; raw operational logs/inventories stay outside tracked source.
@@ -249,8 +239,13 @@ and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments 
 
 ## Build And Release
 
-- Dependency versions live in package metadata and CI; do not duplicate pins
-  here.
+- Build ownership (2026-10-06): 100号機 is the build host. Build numerical
+  solver candidates and release artifacts there from an isolated reviewed
+  checkout using current `Build.ps1`/CMake. 100号機 also owns source
+  development; LAB and compute hosts consume the same hash-verified artifacts.
+  Do not route an ad-hoc candidate build to LAB or a compute host merely
+  because it has free resources. Never replace another session's runtime.
+- Dependency versions live in package metadata and CI; do not duplicate pins here.
 - Install MKL from its supported package dependency. Do not bundle MKL or an
   Intel-specific NumPy build; preserve user NumPy ownership.
 - `radia_motor_rom.dll` is Radia-owned. Release wheels contain no third-party DLLs
@@ -283,14 +278,20 @@ radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and 
 
 - Never reset, clean, stash, delete, or overwrite another session's WIP.
 - Commit only reviewed files owned by the task; use clean integration worktrees.
-- Inspect branches, PRs, and remote main before merge or rebase.
+- Inspect branches, PRs and remote main before merge or rebase.
 - Do not finish while required tests, CI, build, or release commands run.
+- Run each task in its same-named Claude/Codex sessions.
 
 Defaults: Codex implements and validates numerics. Claude reviews, integrates,
 pushes, runs CI, fixes forward, tags, publishes, deploys and owns release gates.
-Reassess roles as tools and results evolve; explicit user assignments prevail.
+User assignments prevail.
 
 ## Detailed Guidance
 
 Use focused skills and `packages/radia-mcp/src/radia_mcp/**/knowledge/` for detail; correct policy conflicts there with a focused regression.
 Do not expand this file into a second manual.
+
+## Private Commercial Reference Comparisons (2026-10-07)
+
+Commercial reference-solver comparisons (models, inputs, meshes, materials, outputs, values, figures, logs, reviews, provenance) are unpublished lab data. Keep them in private storage and out of every public commit, document, notebook, package, release, CI output, paper, presentation or link; anonymizing or relabeling does not permit publication.
+Transfer only general algorithms without comparison data, validated independently on analytical, public or publishable cases. Publication needs an explicit user policy change and license clearance. Applies to Codex and Claude; never a reason to delete, move or rewrite existing artifacts or history.
