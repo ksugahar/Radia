@@ -356,16 +356,71 @@ def _identifying_runtime_filename(path):
 
 PUBLIC_RUNTIME_UNC = re.compile(r"(?:^|[\s=\x22\x27])\\\\[A-Za-z][A-Za-z0-9_.-]+\\[A-Za-z0-9_.-]")
 
-def _public_strings(value):
+# Encoded notebook payloads are bytes, not prose: text rules must never read or
+# rewrite them (a privacy substitution once corrupted 23 such fields).
+NOTEBOOK_IMAGE_MIMES = ("image/png", "image/jpeg", "image/gif")
+NOTEBOOK_IMAGE_MAGIC = {"image/png": b"\x89PNG\r\n\x1a\n", "image/jpeg": b"\xff\xd8\xff",
+                        "image/gif": b"GIF8"}
+WEBGUI_BASE64_KEYS = ("points3d", "Bezier_points", "Bezier_trig_points", "edges")
+
+
+def notebook_binary_payloads(document):
+    """Yield (json_path, mime_or_key, text) for every base64 payload in a notebook."""
+    if not isinstance(document, dict):
+        return
+    for c, cell in enumerate(document.get("cells") or []):
+        for o, output in enumerate(cell.get("outputs") or [] if isinstance(cell, dict) else []):
+            data = output.get("data") if isinstance(output, dict) else None
+            for mime in NOTEBOOK_IMAGE_MIMES:
+                if isinstance(data, dict) and mime in data:
+                    value = data[mime]
+                    text = "".join(value) if isinstance(value, list) else value
+                    yield ("cells", c, "outputs", o, "data", mime), mime, text
+    widgets = ((document.get("metadata") or {}).get("widgets") or {}).get(
+        "application/vnd.jupyter.widget-state+json") or {}
+    for model_id, model in (widgets.get("state") or {}).items():
+        value = ((model or {}).get("state") or {}).get("value") if isinstance(model, dict) else None
+        if not isinstance(value, dict):
+            continue
+        for key in WEBGUI_BASE64_KEYS:
+            items = value.get(key)
+            for i, text in enumerate(items if isinstance(items, list) else []):
+                if isinstance(text, str):
+                    yield ("metadata", "widgets", "state", model_id, "value", key, i), key, text
+
+
+def check_notebook_binary_integrity(path, content):
+    """Every encoded notebook payload must decode strictly (and images keep their magic)."""
+    import base64
+    import binascii
+    try:
+        document = json.loads(content)
+    except ValueError:
+        return [f"{path}: notebook is not valid JSON"]
+    hits = []
+    for json_path, kind, text in notebook_binary_payloads(document):
+        try:
+            raw = base64.b64decode("".join(text.split()), validate=True)
+        except (binascii.Error, ValueError):
+            hits.append(f"{path}: {'/'.join(map(str, json_path))}: invalid base64 payload")
+            continue
+        magic = NOTEBOOK_IMAGE_MAGIC.get(kind)
+        if magic and not raw.startswith(magic):
+            hits.append(f"{path}: {'/'.join(map(str, json_path))}: {kind} payload lost its signature")
+    return hits
+
+
+def _public_strings(value, skip=frozenset()):
     if isinstance(value, str):
-        yield value
+        if id(value) not in skip:
+            yield value
     elif isinstance(value, dict):
         for key, item in value.items():
             yield key
-            yield from _public_strings(item)
+            yield from _public_strings(item, skip)
     elif isinstance(value, list):
         for item in value:
-            yield from _public_strings(item)
+            yield from _public_strings(item, skip)
 
 def public_runtime_identity_hits(path, content):
     """Reject identifying metadata, including UNC roots, without TeX false hits."""
@@ -387,7 +442,17 @@ def public_runtime_identity_hits(path, content):
         try:
             document = json.loads(content)
             structured = True
-            texts = list(_public_strings(document))
+            skip = set()
+            if path.endswith(".ipynb"):
+                skip = {id(text) for _, _, text in notebook_binary_payloads(document)}
+                # Joined list-form images are new strings; skip their parts too.
+                for cell in document.get("cells") or []:
+                    for output in cell.get("outputs") or [] if isinstance(cell, dict) else []:
+                        for mime in NOTEBOOK_IMAGE_MIMES:
+                            value = (output.get("data") or {}).get(mime) if isinstance(output, dict) else None
+                            if isinstance(value, list):
+                                skip.update(id(part) for part in value)
+            texts = list(_public_strings(document, frozenset(skip)))
             def contains_host(value):
                 if isinstance(value, dict):
                     return any((key.lower() in ("host", "hostname", "validation_host", "host_name", "computer_name", "machine_name") and isinstance(item, str) and item.lower() not in ("windows", "linux", "darwin", "runtime")) or (key.lower() == "machine" and isinstance(item, str) and item.lower() in ("lab", "intel11", "mdx1", "mdx2", "hibino", "100")) or contains_host(item) for key, item in value.items())
@@ -417,6 +482,25 @@ def public_runtime_identity_hits(path, content):
 BARE_MDX = re.compile(r"(?i)(?<![A-Za-z0-9_])mdx(?![A-Za-z0-9_])")  # no backslashes: _sh passes it through a shell
 BARE_MDX_BASELINE = "tools/policy_lint_bare_mdx_baseline.json"
 
+def _bare_mdx_notebook_lines(path):
+    """Matching notebook lines, excluding encoded payload lines (bytes, not prose)."""
+    with open(os.path.join(REPO, path), encoding="utf-8") as source:
+        content = source.read()
+    try:
+        payloads = {text for _, _, text in notebook_binary_payloads(json.loads(content))}
+    except ValueError:
+        payloads = set()
+    count = 0
+    for line in content.splitlines():
+        if not BARE_MDX.search(line):
+            continue
+        for payload in payloads:
+            if payload and payload in line:
+                line = line.replace(payload, "")
+        if BARE_MDX.search(line):
+            count += 1
+    return count
+
 def check_bare_mdx_growth():
     """Reject new bare 'mdx' host mentions; existing ones wait for history-rewrite redaction."""
     # A missing baseline is empty (strict), so deleting it cannot disable the check.
@@ -428,7 +512,11 @@ def check_bare_mdx_growth():
     current = {}
     for record in _git_grep(BARE_MDX.pattern, [], extra=("-P", "-I", "-c")):
         path, count = record.rsplit(":", 1)
-        if path != BARE_MDX_BASELINE:
+        if path == BARE_MDX_BASELINE:
+            continue
+        if path.endswith(".ipynb"):
+            count = _bare_mdx_notebook_lines(path)
+        if int(count):
             current[path] = int(count)
     return [f"{path}: bare 'mdx' host mention ({count} > baseline {baseline.get(path, 0)}); use a neutral role"
             for path, count in sorted(current.items()) if count > baseline.get(path, 0)]
@@ -584,6 +672,15 @@ def check_all():
 
     identity_hits = check_public_runtime_privacy()
     results.append(("Policy 11: public runtime privacy", not identity_hits, "\n".join(identity_hits[:20]) if identity_hits else "ok"))
+
+    # 12: notebook images and WebGUI buffers are bytes; text edits must not touch them.
+    payload_hits = []
+    for path in _git_ls_files():
+        if path.endswith(".ipynb"):
+            with open(os.path.join(REPO, path), encoding="utf-8") as source:
+                payload_hits.extend(check_notebook_binary_integrity(path, source.read()))
+    results.append(("Policy 12: notebook binary payloads decode", not payload_hits,
+                    "\n".join(payload_hits[:20]) if payload_hits else "ok"))
     return results
 
 
