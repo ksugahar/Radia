@@ -1326,7 +1326,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         reduced_zero_normal_boundary=None, surface_dirichlet=None,
         kelvin_match_exact=False,
         reduced_source_load="volume", total_source_load="volume",
-        total_source_potential=None, load_source_h=None):
+        total_source_potential=None, load_source_h=None,
+        current_free_total_source_boxes=None):
     """Solve the mixed total/reduced Omega formulation.
 
     The total/reduced scalar-potential split of Simkin and Trowbridge
@@ -1468,6 +1469,12 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         load_source_h: optional representation of ``H_s`` used only in the
             reduced load (for example :func:`interpolate_source_field`).  The
             reported reduced field still uses the exact ``H_s``.
+        current_free_total_source_boxes: explicit conservative SI enclosures
+            of all source currents, shape (N,2,3). Certify disjoint source
+            support and vanishing real first cohomology in straight total
+            tetrahedra before using ``H_total=-grad(phi_total)``. Cannot be
+            combined with a total source decomposition. Completeness of the
+            enclosures is caller-owned physical input, not inferred from H_s.
     """
     if inverse != "sparsecholesky":
         raise ValueError("direct FE solves require inverse='sparsecholesky'")
@@ -1482,6 +1489,21 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
                          "with reduced_source_load='surface_flux'")
     reduced_materials = tuple(reduced_materials)
     total_materials = tuple(total_materials)
+    current_free_total_certificate = None
+    if current_free_total_source_boxes is not None:
+        if any(
+            _is_kelvin_material(name, kelvin_mats, exact=kelvin_match_exact)
+            for name in total_materials
+        ):
+            raise ValueError(
+                "current-free support certificate cannot cover transformed Kelvin "
+                "total materials"
+            )
+        if total_source_h is not None or total_source_potential is not None or total_source_materials:
+            raise ValueError("current-free total mode cannot carry a total source decomposition")
+        from .source_free_region import certify_current_free_total_region
+        current_free_total_certificate = certify_current_free_total_region(
+            mesh, total_materials, current_free_total_source_boxes)
     actual_materials = set(mesh.GetMaterials())
     reduced_set = set(reduced_materials)
     total_set = set(total_materials)
@@ -1962,6 +1984,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         "kelvin_source_potential": kelvin_source_potential,
         "total_source_h": total_source_h,
         "total_source_materials": total_source_materials,
+        "current_free_total_certificate": current_free_total_certificate,
         "source_loads": {"reduced": reduced_source_load, "total": total_source_load,
                          "surface_flux_balance": source_load_diagnostics},
         "H_cf": H_cf,
