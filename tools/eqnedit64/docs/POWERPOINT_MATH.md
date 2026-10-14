@@ -45,16 +45,27 @@ must inspect that choice; they must not silently treat those shapes as absent.
 Prose follows `font_pt`; native math stays at 18 pt.
 Display equations are left-aligned with 8 pt before/after paragraph spacing.
 Matched visible pairs in one row, including plain parentheses, explicit
-`\left...\right`, use a stretchable Office delimiter structure. The clipboard
-route also normalizes `\bigl...\bigr`; strict OOXML export rejects those explicit size commands.
+`\left...\right`, use a stretchable Office delimiter structure. The `\big`, `\Big`, `\bigg`, `\Bigg` commands (plain and `l/r/m` variants)
+are fixed-size tokens in both clipboard and strict OOXML output. At the 18 pt
+Office base, the four classes use upright symbol runs of 21.6, 32.4, 43.2 and
+54.0 pt. They never grow with the operand or become a stretchable `m:d`.
+Each fixed symbol is scoped inside its own `m:box` with an 18 pt control
+property, so its enlarged font does not change an adjacent fraction's layout.
+Native TeX round trips preserve the exact command. MathJax's font-specific
+big-family heights are mapped to these shared Office classes; internal
+binomial layout is not classified as an explicit size command.
+Strict export rejects missing/non-delimiter arguments. Interactive native
+parsing ignores an unfinished size command and retains an ordinary token,
+so a half-typed command does not make the whole equation invalid.
 General `\middle` separators and one-sided fences currently retain visible
 characters without stretching; they are outside the stretchable-fence gate.
 
 ## Validation and limits
 
 The declared corpus has 64 fixtures: 61 clipboard byte comparisons plus 3 clipboard exclusions;
-strict OOXML has 60 structural/text/style/colour comparisons and 4 required
-rejections, including explicit bigl/bigr size commands.
+strict OOXML has 61 structural/text/style/colour comparisons and 3 required
+rejections. The big-family fixture independently checks all 16 commands and
+all four fixed run sizes in both clipboard HTML and DrawingML.
 Run grouping, control formatting and dialect-specific vertical layout are
 normalized; byte identity is not claimed. Independent golden annotations
 check functions, upright/bold styles and enclosing nary fences.

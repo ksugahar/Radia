@@ -325,8 +325,25 @@
   },
   {
     "id": "big-paired",
-    "tex": "\\bigl(a+b\\bigr)",
-    "ooxml_rejected": "Native strict export does not support explicit bigl/bigr size commands; clipboard parity is tested separately."
+    "tex": "\\big( x+\\bigl[\\frac{x}{y}\\bigr]+x\\bigm|y+\\Big) x+\\Bigl[\\frac{x}{y}\\Bigr]+x\\Bigm|y+\\bigg( x+\\biggl[\\frac{x}{y}\\biggr]+x\\biggm|y+\\Bigg) x+\\Biggl[\\frac{x}{y}\\Biggr]+x\\Biggm|y",
+    "fixed_delimiter_sizes": [
+      2160,
+      2160,
+      2160,
+      2160,
+      3240,
+      3240,
+      3240,
+      3240,
+      4320,
+      4320,
+      4320,
+      4320,
+      5400,
+      5400,
+      5400,
+      5400
+    ]
   },
   {
     "id": "one-sided",
