@@ -1,6 +1,6 @@
 /* Toolbar palettes: the catalogue of everything that can be inserted.
  *
- * the editor puts every symbol and every template on one of nineteen toolbar
+ * The palette catalog puts every symbol and every template on one of nineteen toolbar
  * palettes -- ten of symbols, nine of templates -- and has no Insert menu at
  * all.  Two clicks reach any of its ~300 items.  Eqnedit64 had flat menus
  * instead, which left 117 of its 160 symbols with no mouse route and no

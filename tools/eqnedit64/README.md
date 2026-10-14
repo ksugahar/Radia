@@ -105,7 +105,7 @@ Eqnedit64.exe clipboard clipboard-png
 `.tex`を二つ渡した場合はExplorerの複数選択とみなし、変換せず先頭文書をGUIで開きます。
 `--help` / `--version`はコンソールまたはredirect時に標準出力へ書きます。詳しい契約は
 [`docs/COMMAND_LINE.md`](docs/COMMAND_LINE.md) を参照してください。成功0、入力読込み失敗82、
-空入力83、クリップボード失敗84、出力指定不正94です。
+空入力83、クリップボード失敗84、出力指定不正94、色指定不正97、厳密OOXML出力失敗98です。
 旧`--copy-*`、`--render-*`、`--texclip`、`--clipboard-tex-to-png`も終了コード94で拒否します。`Eqnedit64.exe --help` で同じ短い形式を確認できます。
 
 ## 操作デバッグ

@@ -36,7 +36,10 @@ $failures = @()
 foreach ($tex in @('\int_a^b f(x)dx', '\frac{a}{b}', '\sqrt{x}', 'x^{2}+\alpha')) {
     $emf = Join-Path $work 'clip.emf'
     if (Test-Path $emf) { Remove-Item -LiteralPath $emf }
-    & $exe --render-emf $tex $emf | Out-Null
+    $inputTex = Join-Path $work "input.tex"
+    [IO.File]::WriteAllText($inputTex, $tex, [Text.UTF8Encoding]::new($false))
+    & $exe $inputTex $emf | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "EMF export failed: $LASTEXITCODE" }
     if (-not (Test-Path $emf)) { $failures += "$tex : no metafile was written"; continue }
 
     $bytes = [System.IO.File]::ReadAllBytes($emf)

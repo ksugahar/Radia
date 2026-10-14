@@ -66,7 +66,8 @@ Eqnedit64.exe clipboard clipboard-png
   the dialog behavior.
 
 Exit codes are 0 for success, 82 for input read failure, 83 for empty input, 84
-for clipboard publication failure, and 94 for an invalid output destination.
+for clipboard publication failure, 94 for an invalid output destination,
+97 for an invalid colour, and 98 for strict OOXML export rejection.
 The removed `--copy-*`, `--render-*`, `--texclip`, `--clipboard-tex-to-png`
 inputs and the ambiguous output word `png` are rejected with exit code 94 and
 a migration diagnostic before the GUI, clipboard or image conversion starts.

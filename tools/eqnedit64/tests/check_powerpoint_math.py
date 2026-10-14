@@ -36,7 +36,7 @@ def normalized(node):
             text = "".join(span.itertext())
         else:
             color = next((n.attrib["val"] for n in node.iter(f"{{{A}}}srgbClr")), "000000")
-            text = "".join(n.text or "" for n in node.iter(f"{{{A}}}t"))
+            text = "".join(n.text or "" for n in node.iter(f"{{{M}}}t"))
         return ["run", sty, color, text]
     children = []
     for child in node:
@@ -67,7 +67,7 @@ def semantic_tree(root):
                 value = ET.Element(f"{{{M}}}r")
                 sty = ET.SubElement(ET.SubElement(value, f"{{{M}}}rPr"), f"{{{M}}}sty")
                 sty.set(f"{{{M}}}val", "p")
-                ET.SubElement(value, f"{{{A}}}t").text = text
+                ET.SubElement(value, f"{{{M}}}t").text = text
                 return value
             index = list(parent).index(node)
             parent.remove(node)
@@ -109,7 +109,7 @@ def main():
                               text=True, encoding="utf-8", errors="replace", timeout=30)
     try:
         excluded = {f["id"] for f in corpus if f.get("coverage") == "excluded"}
-        assert excluded == {"boxed", "binom", "cancel"} and len(corpus) == 64
+        assert excluded == {"boxed", "binom", "cancel"} and len(corpus) == 66
         ooxml_rejected = {f["id"] for f in corpus if f.get("ooxml_rejected")}
         assert not ooxml_rejected
         for fixture in corpus:
