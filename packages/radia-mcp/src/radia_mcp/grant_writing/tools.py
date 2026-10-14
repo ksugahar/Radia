@@ -152,6 +152,29 @@ def _expand_sibling_inputs(
     return "\n".join(lines)
 
 
+def _as_text_file(value, suffixes=(".md", ".tex", ".txt")):
+    """Return an existing text-file Path, or None when ``value`` is prose.
+
+    Inline proposal text is never statted: newlines, a component longer than
+    the 255-byte filesystem limit (Japanese prose reaches it at ~85
+    characters on Linux), an unsupported suffix or any OSError mean "text".
+    """
+    if value is None:
+        return None
+    s = str(value)
+    if "\n" in s or "\r" in s or len(s) > 320:
+        return None
+    if any(len(part.encode("utf-8")) > 255 for part in s.replace("\\", "/").split("/")):
+        return None
+    try:
+        path = pathlib.Path(s)
+        if path.suffix.lower() not in suffixes or not path.is_file():
+            return None
+    except (OSError, ValueError):
+        return None
+    return path
+
+
 def _read_text_if_path(text_or_path: str) -> str:
     """Treat a short existing .md/.tex/.txt path as a file, else as text.
 
@@ -162,13 +185,11 @@ def _read_text_if_path(text_or_path: str) -> str:
     if text_or_path is None:
         return ""
     s = str(text_or_path)
-    if "\n" in s or "\r" in s:
-        return s
-    if len(s) > 320:
+    p = _as_text_file(s)
+    if p is None:
         return s
     try:
-        p = pathlib.Path(s)
-        if p.exists() and p.suffix.lower() in {".md", ".tex", ".txt"}:
+        if True:
             text = _decode_text_file(p)
             if p.suffix.lower() == ".tex":
                 text = _expand_sibling_inputs(text, p, 0, {p.resolve()})
@@ -8227,10 +8248,8 @@ def _find_compiled_pdf(text_or_path: str, pdf: str) -> pathlib.Path | None:
     # Proposal text must never reach the filesystem: statting it once per call
     # is a network round trip on a NAS-hosted tree, and the suite calls this on
     # every report.
-    if len(text_or_path) > 260 or "\n" in text_or_path:
-        return None
-    source = pathlib.Path(text_or_path)
-    if source.suffix.lower() not in {".md", ".tex", ".txt"} or not source.is_file():
+    source = _as_text_file(text_or_path)
+    if source is None:
         return None
     same_stem = source.with_suffix(".pdf")
     if same_stem.is_file():
@@ -8646,9 +8665,9 @@ def grant_writing_health_report(
         if compiled is not None:
             tex_dir = ""
             source_path = None
-            if len(str(text_or_path)) <= 260 and "\n" not in str(text_or_path):
-                candidate = pathlib.Path(str(text_or_path))
-                if candidate.is_file() and candidate.suffix.lower() == ".tex":
+            candidate = _as_text_file(text_or_path, (".tex",))
+            if candidate is not None:
+                if True:
                     source_path = candidate
                     tex_dir = str(candidate.parent)
             limits = grant_writing_page_limit_check(str(compiled), tex_dir=tex_dir)
@@ -8670,9 +8689,9 @@ def grant_writing_health_report(
                     })
         else:
             source_path = None
-            if len(str(text_or_path)) <= 260 and "\n" not in str(text_or_path):
-                candidate = pathlib.Path(str(text_or_path))
-                if candidate.is_file() and candidate.suffix.lower() == ".tex":
+            candidate = _as_text_file(text_or_path, (".tex",))
+            if candidate is not None:
+                if True:
                     source_path = candidate
             if source_path is not None:
                 sibling_pdfs = sorted(source_path.parent.glob("*.pdf"))
