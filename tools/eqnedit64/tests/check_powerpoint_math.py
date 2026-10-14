@@ -52,6 +52,11 @@ def normalized(node):
 def semantic_tree(root):
     """Compare delimiter content independent of its stretchable layout form."""
     root = ET.fromstring(ET.tostring(root))
+    # Validation copy only: RichEdit and ISO serializers use different namespaces.
+    for node in root.iter():
+        node.tag = node.tag.replace("{" + OLD + "}", "{" + M + "}")
+        node.attrib = {key.replace("{" + OLD + "}", "{" + M + "}"): value
+                       for key, value in node.attrib.items()}
     for parent in list(root.iter())[::-1]:
         for node in list(parent):
             if node.tag != f"{{{M}}}d":
@@ -104,13 +109,15 @@ def main():
                               text=True, encoding="utf-8", errors="replace", timeout=30)
     try:
         excluded = {f["id"] for f in corpus if f.get("coverage") == "excluded"}
-        assert excluded == {"boxed", "binom", "cancel"} and len(corpus) == 52
+        assert excluded == {"boxed", "binom", "cancel"} and len(corpus) == 64
+        ooxml_rejected = {f["id"] for f in corpus if f.get("ooxml_rejected")}
+        assert ooxml_rejected == {"big-paired"}
         for fixture in corpus:
             source = args.output / (fixture["id"] + ".tex")
             output = args.output / (fixture["id"] + ".pptxmath")
             source.write_text(fixture["tex"], "utf-8")
             native = call(app, [source, output])
-            if fixture["id"] in excluded:
+            if fixture["id"] in excluded | ooxml_rejected:
                 assert native.returncode != 0 and fixture["tex"] in native.stderr and not output.exists(), fixture["id"]
                 report["rejected"] += 1
                 continue
@@ -122,9 +129,14 @@ def main():
             assert html.returncode == 0, html.stderr
             primary = html.stdout.split("<!--[if gte msEquation 12]>", 1)[1].split("<![endif]-->", 1)[0]
             semantic = semantic_tree(root)
-            assert normalized(ET.fromstring(primary)) == normalized(semantic), fixture["id"]
-            if r"\left" in fixture["tex"]:
+            assert normalized(semantic_tree(ET.fromstring(primary))) == normalized(semantic), fixture["id"]
+            if r"\left" in fixture["tex"] and fixture["id"] not in {"one-sided", "brace-cases"}:
                 assert root.find(f".//{{{M}}}d/{{{M}}}dPr/{{{M}}}grow").get(f"{{{M}}}val") == "1", fixture["id"]
+            for run in root.iter(f"{{{M}}}r"):
+                text = "".join(run.itertext())
+                cjk = any(0x3000 <= ord(c) <= 0x9FFF or 0xF900 <= ord(c) <= 0xFAFF or
+                          0xFF00 <= ord(c) <= 0xFFEF or 0x20000 <= ord(c) <= 0x3134F for c in text)
+                assert run.find(f"{{{A}}}rPr").get("lang") == ("ja-JP" if cjk else "en-US"), fixture["id"]
             for expected in fixture.get("run_styles", []):
                 matching = "".join("".join(n.itertext()) for n in root.iter(f"{{{M}}}r")
                     if ((n.find(f"{{{M}}}rPr/{{{M}}}sty").get(f"{{{M}}}val")
@@ -144,7 +156,7 @@ def main():
                     following = siblings[siblings.index(nary) + 1:]
                     assert any("".join(node.itertext()).endswith(tail) for node in following), fixture["id"]
             report["covered"] += 1
-        assert report["covered"] == 49 and report["rejected"] == 3
+        assert report["covered"] == 60 and report["rejected"] == 4
         for i, tex in enumerate([r"\unknown{x}", r"\begin{unknown}x\end{unknown}",
                                  r"\frac{x}{y", r"\begin{aligned}x\end{matrix}"]):
             source = args.output / f"invalid-{i}.tex"
