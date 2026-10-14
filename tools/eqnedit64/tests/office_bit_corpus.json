@@ -314,5 +314,54 @@
         "sty": "b"
       }
     ]
+  },
+  {
+    "id": "plain-paired",
+    "tex": "(a+b)"
+  },
+  {
+    "id": "fraction-paired",
+    "tex": "\\left(\\frac{x}{y}\\right)"
+  },
+  {
+    "id": "big-paired",
+    "tex": "\\bigl(a+b\\bigr)",
+    "ooxml_rejected": "Native strict export does not support explicit bigl/bigr size commands; clipboard parity is tested separately."
+  },
+  {
+    "id": "one-sided",
+    "tex": "\\left.\\frac{x}{y}\\right|"
+  },
+  {
+    "id": "nested-paired",
+    "tex": "\\left[\\left(\\frac{x}{y}\\right)\\right]"
+  },
+  {
+    "id": "brace-cases",
+    "tex": "\\begin{cases}x&y\\\\a&b\\end{cases}"
+  },
+  {
+    "id": "angle-paired",
+    "tex": "\\left\\langle\\frac{x}{y}\\right\\rangle"
+  },
+  {
+    "id": "separate-parentheses",
+    "tex": "(a)+(b)"
+  },
+  {
+    "id": "separate-brackets",
+    "tex": "[a](b)"
+  },
+  {
+    "id": "separate-explicit",
+    "tex": "\\left(a\\right)+\\left(b\\right)"
+  },
+  {
+    "id": "function-parentheses",
+    "tex": "f(x)g(y)"
+  },
+  {
+    "id": "separate-absolute",
+    "tex": "|a|+|b|"
   }
 ]

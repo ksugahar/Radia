@@ -9,7 +9,8 @@ Eqnedit64.exe equation.tex equation.pptxmath
 The output is an XML `m:oMathPara` in the 2006 Office math namespace, with
 DrawingML `a:rPr` and `a:t` runs. It is intended for PowerPoint's `a14:m`
 extension, not Word import and not HTML. The serializer shares equation
-structure with the normal-copy RichEdit HTML route; the latter is unchanged.
+structure with the normal-copy RichEdit HTML route. Both routes emit matched
+visible delimiter pairs as stretchable structures.
 ISO `baseJc` is vertical and uses `center` here. Horizontal paragraph
 justification remains `left`.
 
@@ -43,14 +44,17 @@ iterator does not expose shapes nested in the choice. XML-aware consumers
 must inspect that choice; they must not silently treat those shapes as absent.
 Prose follows `font_pt`; native math stays at 18 pt.
 Display equations are left-aligned with 8 pt before/after paragraph spacing.
-Paired `\left...\right` fences use a stretchable Office delimiter structure.
+Matched visible pairs in one row, including plain parentheses, explicit
+`\left...\right`, use a stretchable Office delimiter structure. The clipboard
+route also normalizes `\bigl...\bigr`; strict OOXML export rejects those explicit size commands.
 General `\middle` separators and one-sided fences currently retain visible
 characters without stretching; they are outside the stretchable-fence gate.
 
 ## Validation and limits
 
-The declared corpus has 52 fixtures: 49 structural/text/style/colour semantic
-comparisons against the clipboard emitter, and 3 required rejections.
+The declared corpus has 64 fixtures: 61 clipboard byte comparisons plus 3 clipboard exclusions;
+strict OOXML has 60 structural/text/style/colour comparisons and 4 required
+rejections, including explicit bigl/bigr size commands.
 Run grouping, control formatting and dialect-specific vertical layout are
 normalized; byte identity is not claimed. Independent golden annotations
 check functions, upright/bold styles and enclosing nary fences.
@@ -69,3 +73,11 @@ protects the user's documents, and changes no Office settings. Publication
 and retirement-PR merge require their own approvals.
 
 Primary format reference: [Microsoft DrawingML math extension](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/853b19c7-68a9-4f9a-a2ae-5e6cb0d02e62).
+
+Clipboard HTML explicitly declares English for mathematical/control runs and
+Japanese for runs containing Japanese kana, CJK ideographs or full-width text.
+This prevents inherited unrelated proofing languages without changing Office settings.
+
+Native array column specifications (`\begin{array}{...}`) are unsupported;
+use the supported `cases` or `matrix` environments. A single stretchable
+delimiter encloses only one balanced group; adjacent groups remain separate.

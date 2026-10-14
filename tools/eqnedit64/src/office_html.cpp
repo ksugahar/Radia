@@ -245,9 +245,21 @@ std::string alphabet(const std::string &text, const std::string &variant) {
   }
   return out;
 }
-const std::string style = "font-size:18.0pt;font-family:'Cambria "
+const std::string style = "mso-ansi-language:EN-US;mso-bidi-language:EN-US;font-size:18.0pt;font-family:'Cambria "
                           "Math';mso-ascii-font-family:'Cambria "
                           "Math';mso-font-kerning:12.0pt;color:black";
+std::string office_language(const std::string &text) {
+  // UTF-8 ranges covering Japanese kana, CJK ideographs and full-width forms.
+  for (size_t i = 0; i < text.size();) {
+    uint32_t cp = static_cast<unsigned char>(text[i++]);
+    int count = cp >= 0xF0 ? 3 : cp >= 0xE0 ? 2 : cp >= 0xC0 ? 1 : 0;
+    if (count) cp &= (1u << (6 - count)) - 1;
+    while (count-- && i < text.size()) cp = (cp << 6) | (static_cast<unsigned char>(text[i++]) & 63);
+    if ((cp >= 0x3000 && cp <= 0x9FFF) || (cp >= 0xF900 && cp <= 0xFAFF) ||
+        (cp >= 0xFF00 && cp <= 0xFFEF) || (cp >= 0x20000 && cp <= 0x3134F)) return "ja-JP";
+  }
+  return "en-US";
+}
 enum class OfficeDialect { RichEdit, PowerPoint };
 class OfficeEmitter {
   OfficeDialect dialect_;
@@ -260,8 +272,8 @@ public:
         "\"/></m:eqArrPr>";
   }
   std::string runProperties(const std::string &colour = "", bool normal = true,
-                            bool bold = false) {
-    return "<a:rPr sz=\"1800\" i=\"" + std::string(normal ? "0" : "1") +
+                            bool bold = false, const std::string &language = "en-US") {
+    return "<a:rPr lang=\"" + language + "\" sz=\"1800\" i=\"" + std::string(normal ? "0" : "1") +
            "\" b=\"" + (bold ? "1" : "0") + "\"><a:solidFill><a:srgbClr val=\"" +
            (colour.empty() ? std::string("000000") : colour.substr(1)) +
            "\"/></a:solidFill><a:latin typeface=\"Cambria Math\"/></a:rPr>";
@@ -270,7 +282,7 @@ std::string control() {
   if (dialect_ != OfficeDialect::RichEdit)
     return "<m:ctrlPr>" + runProperties() + "</m:ctrlPr>";
   return "<span style=\"" + style +
-         ";font-style:normal\"><m:ctrlPr></m:ctrlPr></span>";
+         ";font-style:normal\" lang=\"en-US\"><m:ctrlPr></m:ctrlPr></span>";
 }
 std::string run(const Xml &n) {
   if (content(n).empty())
@@ -307,7 +319,7 @@ std::string run(const Xml &n) {
   }
   if (dialect_ != OfficeDialect::RichEdit) {
     const std::string tag = "a:t";
-    return "<m:r>" + properties + runProperties(colour, normal, bold) + "<" + tag +
+    return "<m:r>" + properties + runProperties(colour, normal, bold, office_language(content(n))) + "<" + tag +
            " xml:space=\"preserve\">" + escape(alphabet(content(n), variant)) +
            "</" + tag + "></m:r>";
   }
@@ -317,7 +329,7 @@ std::string run(const Xml &n) {
          (!mapped && variant.find("bold") != std::string::npos
               ? ";font-weight:bold"
               : "") +
-         "\">" + escape(alphabet(content(n), variant)) + "</span></m:r>";
+         ";mso-fareast-language:" + office_language(content(n)) + "\" lang=\"" + office_language(content(n)) + "\">" + escape(alphabet(content(n), variant)) + "</span></m:r>";
 }
 bool scripted(const Xml &n) {
   return n.name == "msub" || n.name == "msup" || n.name == "msubsup" ||
@@ -371,6 +383,14 @@ void advanceFence(const Xml &node, std::vector<std::string> &stack) {
     if (!close.empty())
       stack.push_back(close);
   }
+}
+bool singleDelimiterPair(const Xml &row) {
+  std::vector<std::string> stack;
+  for (size_t i = 0; i < row.children.size(); ++i) {
+    advanceFence(*row.children[i], stack);
+    if (stack.empty() && i + 1 < row.children.size()) return false;
+  }
+  return stack.empty();
 }
 bool operandBoundary(const Xml &node, const std::vector<std::string> &inside,
                      const std::vector<std::string> &outside) {
@@ -455,9 +475,11 @@ std::string wrapped(const std::string &tag, const std::string &body) {
 std::string emit(const Xml &n) {
   const auto &name = n.name;
   auto child = [&](size_t i) { return emit(*n.children.at(i)); };
-  if (dialect_ == OfficeDialect::PowerPoint && name == "mrow" &&
-      n.children.size() >= 2 && n.children.front()->attr("fence") == "true" &&
-      n.children.back()->attr("fence") == "true") {
+  if ((name == "mrow" || name == "math") && n.children.size() >= 2 &&
+      n.children.front()->name == "mo" && n.children.back()->name == "mo" &&
+      !fenceClose(content(*n.children.front())).empty() &&
+      fenceClose(content(*n.children.front())) == content(*n.children.back()) &&
+      singleDelimiterPair(n)) {
     std::string body;
     for (size_t i = 1; i + 1 < n.children.size(); ++i) body += child(i);
     return wrapped("d", wrapped("dPr",
@@ -481,7 +503,7 @@ std::string emit(const Xml &n) {
              runProperties() + "<" + tag + ">&#160;</" + tag + "></m:r>";
     }
     return "<m:r><m:rPr><m:sty m:val=\"p\"/></m:rPr><span style=\"" + style +
-           ";font-style:normal\">&#160;</span></m:r>";
+           ";font-style:normal;mso-fareast-language:en-US\" lang=\"en-US\">&#160;</span></m:r>";
   }
   if (scripted(n) && !n.children.empty() && large(*n.children[0]))
     return nary(n, "");
@@ -618,7 +640,7 @@ std::string latex_to_office_html(const std::string &latex) {
   OfficeEmitter emitter(OfficeDialect::RichEdit);
   std::string body = office_body(*root, emitter);
   const std::regex adjacent(
-      R"rx(<m:r>((?:<m:rPr><m:sty m:val="(?:p|b|bi)"/></m:rPr>)?)<span style="([^"]*)">([^<]*)</span></m:r><m:r>\1<span style="\2">([^<]*)</span></m:r>)rx");
+      R"rx(<m:r>((?:<m:rPr><m:sty m:val="(?:p|b|bi)"/></m:rPr>)?)<span style="([^"]*" lang="[^"]*)">([^<]*)</span></m:r><m:r>\1<span style="\2">([^<]*)</span></m:r>)rx");
   for (;;) {
     auto merged = std::regex_replace(
         body, adjacent, "<m:r>$1<span style=\"$2\">$3$4</span></m:r>");
@@ -631,7 +653,7 @@ std::string latex_to_office_html(const std::string &latex) {
       "xmlns:m=\"http://schemas.microsoft.com/office/2004/12/"
       "omml\"><m:oMathParaPr><m:jc m:val=\"left\"/></m:oMathParaPr><m:oMath>" +
       body + "</m:oMath></m:oMathPara>";
-  return "<p style=\"margin:0;font-size:18pt;font-family:Cambria "
+  return "<p lang=\"en-US\" style=\"margin:0;font-size:18pt;font-family:Cambria "
          "Math\"><!--[if gte msEquation 12]>" +
          math + "<![endif]--><![if !msEquation]>" + mml + "<![endif]></p>";
 }
