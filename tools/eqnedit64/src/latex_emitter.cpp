@@ -444,6 +444,10 @@ void LaTeXEmitter::emitNode(const Node* node, std::string& out) {
  * CHAR emission
  * ============================================================ */
 void LaTeXEmitter::emitChar(const CharNode& ch, std::string& out) {
+    if (!ch.delimiterCommand.empty()) {
+        out += ch.delimiterCommand + " " + ch.latex + " ";
+        return;
+    }
     uint32_t code = ch.charCode;
     int tf = ch.typeface;
 
