@@ -128,7 +128,10 @@ def canvas_side(latex, name, workdir):
     if not os.path.exists(exe):
         exe = os.path.join(_ROOT, "dist", "Eqnedit64.exe")
     png = os.path.join(workdir, "canvas%d.png" % (abs(hash(name)) % 100000))
-    subprocess.run([exe, "--render-png", latex, png], capture_output=True)
+    source = os.path.splitext(png)[0] + ".tex"
+    with open(source, "w", encoding="utf-8") as stream:
+        stream.write(latex)
+    subprocess.run([exe, source, png], capture_output=True)
     if not os.path.exists(png):
         return None
     return ink_box(png)

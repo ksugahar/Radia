@@ -3161,6 +3161,22 @@
     math.setAttribute("display", "inline");
     math.setAttribute("mathsize", "18pt");
 
+    // MathJax's four big-family classes use font-specific heights. Convert
+    // only explicit single-token ORD/OPEN/CLOSE/REL wrappers to the shared
+    // Office size classes before removing MathJax's private attributes.
+    var fixedSizes = {"1.2em": "1.2em", "1.623em": "1.8em",
+      "2.047em": "2.4em", "2.470em": "3.0em"};
+    Array.prototype.forEach.call(math.querySelectorAll("mo"), function (node) {
+      var parent = node.parentNode;
+      var size = node.getAttribute("minsize");
+      if (parent && parent.localName === "mrow" && parent.children.length === 1 &&
+          ["ORD", "OPEN", "CLOSE", "REL"].indexOf(parent.getAttribute("data-mjx-texclass")) >= 0 &&
+          size === node.getAttribute("maxsize") && Object.prototype.hasOwnProperty.call(fixedSizes, size)) {
+        node.setAttribute("minsize", fixedSizes[size]);
+        node.setAttribute("maxsize", fixedSizes[size]);
+      }
+    });
+
     Array.prototype.forEach.call(math.querySelectorAll("*"), function (node) {
       Array.prototype.slice.call(node.attributes).forEach(function (attribute) {
         if (attribute.name.indexOf("data-") === 0) {
@@ -3254,6 +3270,17 @@
   function officeLanguage(text) {
     return /[\u3000-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u{20000}-\u{3134F}]/u.test(text) ? "ja-JP" : "en-US";
   }
+  function officeFixedDelimiterScale(node) {
+    if (node.localName !== "mo" || !node.getAttribute("minsize") ||
+        node.getAttribute("minsize") !== node.getAttribute("maxsize")) return 0;
+    var sizes = {"1.2em": 1.2, "1.8em": 1.8, "2.4em": 2.4, "3em": 3, "3.0em": 3};
+    var size = node.getAttribute("minsize");
+    // Other equal min/max values are internal MathJax layout (for example
+    // binomial fences), outside this explicit TeX big-family mapping.
+    if (!Object.prototype.hasOwnProperty.call(sizes, size)) return 0;
+    return sizes[size];
+  }
+
   function officeOmmlRun(node, forceNormal) {
     if (!node.textContent) return "";
     // Native FunctionNode has no nonprinting MathJax function-application mark.
@@ -3277,10 +3304,14 @@
       (bold ? (normal ? "b" : "bi") : "p") + "\"/></m:rPr>" : "";
     var weight = !mappedAlphabet && variant && variant.indexOf("bold") !== -1 ?
       ";font-weight:bold" : "";
-    return "<m:r>" + properties + "<span style=\"" + OFFICE_MATH_RUN_STYLE +
+    var scale = officeFixedDelimiterScale(node);
+    var runStyle = scale ? OFFICE_MATH_RUN_STYLE.replace("18.0pt", (18 * scale).toFixed(1) + "pt") : OFFICE_MATH_RUN_STYLE;
+    var run = "<m:r>" + properties + "<span style=\"" + runStyle +
       (colour ? ";color:" + officeHtmlEscape(colour) : "") +
       ";font-style:" + (normal ? "normal" : "italic") + weight + ";mso-fareast-language:" + officeLanguage(node.textContent) + "\" lang=\"" + officeLanguage(node.textContent) + "\">" +
       officeHtmlEscape(officeMathAlphabet(node.textContent, variant)) + "</span></m:r>";
+    return scale ? "<m:box><m:boxPr>" + officeOmmlControl() +
+      "</m:boxPr><m:e>" + run + "</m:e></m:box>" : run;
   }
 
   function officeOmmlControl() {
@@ -3421,6 +3452,8 @@
       throw new Error("unsupported Office padding dimensions");
     }
     if ((name === "mrow" || name === "math" || name === "mstyle") && children.length >= 2 &&
+        !officeFixedDelimiterScale(officeUnwrapped(children[0])) &&
+        !officeFixedDelimiterScale(officeUnwrapped(children[children.length - 1])) &&
         officeUnwrapped(children[0]).localName === "mo" && officeUnwrapped(children[children.length - 1]).localName === "mo" &&
         officeFenceClose(officeUnwrapped(children[0]).textContent) &&
         officeFenceClose(officeUnwrapped(children[0]).textContent) === officeUnwrapped(children[children.length - 1]).textContent &&

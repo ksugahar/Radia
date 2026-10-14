@@ -214,12 +214,15 @@ console.log("PASS: Web style selection wrapping and caret placement");
 console.log("PASS: Web hole traversal, native source layout, structural Enter");
 
 for (const environment of ["pmatrix", "cases", "aligned"]) {
-  const snippet = "\\begin{" + environment + "}{} & {}\\\\{} & {}\\end{" + environment + "}";
-  const item = [environment, snippet, environment, "", environment, 0];
+  const item = editor.palettes.flatMap(palette => palette.items).find(entry =>
+    entry[1].startsWith("\\begin{" + environment + "}"));
+  assert(item, environment + ": production palette item missing");
+  const snippet = item[1];
   const actual = editor.composePaletteInsertion("x", 0, 1, item);
   const pretty = editor.prettyTex(snippet);
   const position = pretty.indexOf("{}");
   assert.equal(actual.value, pretty.slice(0, position + 1) + "x" + pretty.slice(position + 1));
   assert.equal(actual.caret, position + 2);
   assert.match(actual.value, /\n/);
+  assert.equal(item[1], snippet, "insertion must not mutate the catalogue");
 }
