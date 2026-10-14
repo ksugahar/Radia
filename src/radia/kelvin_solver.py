@@ -1491,6 +1491,16 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     total_materials = tuple(total_materials)
     current_free_total_certificate = None
     if current_free_total_source_boxes is not None:
+        from .kelvin_material import _is_kelvin_material
+
+        if any(
+            _is_kelvin_material(name, kelvin_mats, exact=kelvin_match_exact)
+            for name in total_materials
+        ):
+            raise ValueError(
+                "current-free support certificate cannot cover transformed Kelvin "
+                "total materials"
+            )
         if total_source_h is not None or total_source_potential is not None or total_source_materials:
             raise ValueError("current-free total mode cannot carry a total source decomposition")
         from .source_free_region import certify_current_free_total_region

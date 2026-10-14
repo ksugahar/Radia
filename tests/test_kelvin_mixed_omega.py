@@ -777,3 +777,20 @@ def test_sparse_direct_saddle_solve_satisfies_original_system(order):
         residual.data = changed * computed - rhs
         assert np.linalg.norm(residual.FV().NumPy()[free]) / np.linalg.norm(
             rhs.FV().NumPy()[free]) < 1e-10
+
+
+def test_current_free_physical_support_rejects_transformed_total_region():
+    import ngsolve as ng
+    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
+    mesh = _two_region_mesh(maxh=.8)
+    material = mesh.GetMaterials().index('total') + 1
+    mesh.ngmesh.SetMaterial(material, 'kelvin')
+    mesh = ng.Mesh(mesh.ngmesh)
+    mesh.Curve(1)
+    with ng.TaskManager(), pytest.raises(ValueError, match='transformed Kelvin'):
+        solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh, ng.CoefficientFunction((0., 0., 0.)), 0., 1., (3., 0., 0.),
+            reduced_materials=('reduced',), total_materials=('kelvin',),
+            interface_boundary='source_total_interface', kelvin_mats=('kelvin',),
+            current_free_total_source_boxes=[[[4., 4., 4.], [5., 5., 5.]]],
+        )
