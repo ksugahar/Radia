@@ -10,12 +10,12 @@ using DocumentFormat.OpenXml.Validation;
 if (args.Length != 2) throw new ArgumentException("usage: schema-tool corpus.json output-directory");
 XNamespace math = "http://schemas.openxmlformats.org/officeDocument/2006/math";
 XNamespace drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
-XNamespace word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const string a14 = "http://schemas.microsoft.com/office/drawing/2010/main";
 var reportPath = Path.Combine(args[1], "result.json");
 var report = JsonNode.Parse(File.ReadAllText(reportPath))!.AsObject();
 var corpus = JsonNode.Parse(File.ReadAllText(args[0]))!.AsArray();
 int fragments = 0;
+int drawingPropertyLimitations = 0;
 var validator = new OpenXmlValidator(FileFormatVersions.Office2010);
 try
 {
@@ -28,9 +28,9 @@ try
         foreach (var run in root.Descendants(math + "r"))
         {
             var names = run.Elements().Select(e => e.Name).ToArray();
-            if (!names.SequenceEqual(new[] { math + "rPr", drawing + "rPr", drawing + "t" }) &&
-                !names.SequenceEqual(new[] { drawing + "rPr", drawing + "t" }))
-                throw new InvalidDataException("PowerPoint math run must use a:rPr/a:t");
+            if (!names.SequenceEqual(new[] { math + "rPr", drawing + "rPr", math + "t" }) &&
+                !names.SequenceEqual(new[] { drawing + "rPr", math + "t" }))
+                throw new InvalidDataException("PowerPoint math run must use a:rPr/m:t");
         }
         foreach (var props in root.Descendants(drawing + "rPr"))
         {
@@ -51,18 +51,17 @@ try
         var expectedSizes = item["fixed_delimiter_sizes"]?.AsArray().Select(s => s!.GetValue<int>()).ToArray() ?? Array.Empty<int>();
         if (!actualSizes.SequenceEqual(expectedSizes))
             throw new InvalidDataException("Fixed delimiter sizes differ from the independent corpus profile");
-        // Validation-only copy: remove DrawingML run formatting and normalize
-        // text tags so the independent ISO math-structure schema can check
-        // fractions/scripts/nary/matrices/functions. This is not a production
-        // translator and is not claimed to validate the a14 extension itself.
-        var structural = new XElement(root);
-        foreach (var props in structural.Descendants(drawing + "rPr").ToList())
-            props.ReplaceWith(new XElement(word + "rPr"));
-        foreach (var text in structural.Descendants(drawing + "t")) text.Name = math + "t";
-        var paragraph = new DocumentFormat.OpenXml.Math.Paragraph(structural.ToString(SaveOptions.DisableFormatting));
+        // Validate the shipped fragment without renaming text or properties.
+        // The ISO SDK does not describe DrawingML rPr inside Office math;
+        // those exact properties are checked against the strict profile above.
+        var paragraph = new DocumentFormat.OpenXml.Math.Paragraph(root.ToString(SaveOptions.DisableFormatting));
         var errors = validator.Validate(paragraph).ToArray();
-        if (errors.Length != 0)
-            throw new InvalidDataException(item["id"] + ": " + string.Join("; ", errors.Select(e => e.Description)));
+        var structuralErrors = errors.Where(e =>
+            !(e.Description.Contains(drawing.NamespaceName + ":rPr") ||
+              (e.Node?.NamespaceUri == drawing.NamespaceName && e.Node.LocalName == "rPr"))).ToArray();
+        drawingPropertyLimitations += errors.Length - structuralErrors.Length;
+        if (structuralErrors.Length != 0)
+            throw new InvalidDataException(item["id"] + ": " + string.Join("; ", structuralErrors.Select(e => e.Description)));
         fragments++;
     }
     using var deck = PresentationDocument.Open(Path.Combine(args[1], "native-equations.pptx"), false);
@@ -76,9 +75,10 @@ try
     report["schema_validation"] = new JsonObject
     {
         ["math_structure_fragments"] = fragments,
+        ["drawing_run_property_sdk_limitations"] = drawingPropertyLimitations,
         ["outer_package_errors"] = outerErrors.Length,
         ["a14_sdk_limitation_errors"] = packageErrors.Length - outerErrors.Length,
-        ["scope"] = "ISO math structure after validation-only run normalization; outer package; strict DrawingML run profile",
+        ["scope"] = "Unmodified shipped math fragments; declared DrawingML rPr SDK limitations; outer package; strict DrawingML run profile",
         ["full_a14_schema_certification"] = false,
         ["powerpoint_import_certified"] = false,
     };

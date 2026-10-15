@@ -233,7 +233,7 @@ def presentation_markdown_to_pptx(markdown: str, output_path: str,
                         root = etree.fromstring(path.read_bytes(), parser)
                         if root.tag != f"{{{MATH_NS}}}oMathPara" or any(
                             not element.tag.startswith((f"{{{MATH_NS}}}", f"{{{DRAWING_NS}}}"))
-                            or element.tag == f"{{{MATH_NS}}}t" for element in root.iter()
+                            or element.tag == f"{{{DRAWING_NS}}}t" for element in root.iter()
                         ):
                             raise RuntimeError("Eqnedit64 returned an invalid PowerPoint math dialect")
                         cache[value] = root

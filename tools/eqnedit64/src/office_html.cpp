@@ -337,7 +337,7 @@ std::string run(const Xml &n) {
       throw std::runtime_error("unsupported Office colour");
   }
   if (dialect_ != OfficeDialect::RichEdit) {
-    const std::string tag = "a:t";
+    const std::string tag = "m:t";
     return scoped("<m:r>" + properties + runProperties(colour, normal, bold, office_language(content(n)), size) + "<" + tag +
            " xml:space=\"preserve\">" + escape(alphabet(content(n), variant)) +
            "</" + tag + "></m:r>");
@@ -399,7 +399,7 @@ bool closingFence(const std::string &token) {
 }
 void advanceFence(const Xml &node, std::vector<std::string> &stack) {
   const auto &token = unwrapped(node);
-  if (token.name != "mo")
+  if (token.name != "mo" && token.name != "mi")
     return;
   if (!stack.empty() && stack.back() == token.text) {
     stack.pop_back();
@@ -500,11 +500,12 @@ std::string wrapped(const std::string &tag, const std::string &body) {
 std::string emit(const Xml &n) {
   const auto &name = n.name;
   auto child = [&](size_t i) { return emit(*n.children.at(i)); };
-  if ((name == "mrow" || name == "math") && n.children.size() >= 2 &&
-      n.children.front()->name == "mo" && n.children.back()->name == "mo" &&
-      !fixedDelimiterScale(*n.children.front()) && !fixedDelimiterScale(*n.children.back()) &&
-      !fenceClose(content(*n.children.front())).empty() &&
-      fenceClose(content(*n.children.front())) == content(*n.children.back()) &&
+  if ((name == "mrow" || name == "math" || name == "mstyle") && n.children.size() >= 2 &&
+      (unwrapped(*n.children.front()).name == "mo" || unwrapped(*n.children.front()).name == "mi") &&
+      (unwrapped(*n.children.back()).name == "mo" || unwrapped(*n.children.back()).name == "mi") &&
+      !fixedDelimiterScale(unwrapped(*n.children.front())) && !fixedDelimiterScale(unwrapped(*n.children.back())) &&
+      !fenceClose(content(unwrapped(*n.children.front()))).empty() &&
+      fenceClose(content(unwrapped(*n.children.front()))) == content(unwrapped(*n.children.back())) &&
       singleDelimiterPair(n)) {
     std::string body;
     for (size_t i = 1; i + 1 < n.children.size(); ++i) body += child(i);
@@ -524,7 +525,7 @@ std::string emit(const Xml &n) {
     if (std::stod(n.attr("width")) == 0.0)
       return {};
     if (dialect_ != OfficeDialect::RichEdit) {
-      const std::string tag = "a:t";
+      const std::string tag = "m:t";
       return "<m:r><m:rPr><m:sty m:val=\"p\"/></m:rPr>" +
              runProperties() + "<" + tag + ">&#160;</" + tag + "></m:r>";
     }

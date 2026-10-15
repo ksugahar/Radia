@@ -42,5 +42,13 @@ int main() {
                     "interactive invalid argument lost its ordinary token");
         }
     }
-    std::cout << "PASS: 16 fixed delimiter commands, exact TeX fixed points and invalid arguments\n";
+    for (const std::string tex : {"\\mathbf{(x)}", "\\color{red}{(x)}"}) {
+        const auto math = latex_to_powerpoint_math(tex);
+        require(math.find("<m:d>") != std::string::npos,
+                "styled parentheses lost their delimiter structure");
+        require(math.find("<m:t") != std::string::npos &&
+                math.find("<a:t") == std::string::npos,
+                "PowerPoint math text is not canonical m:t");
+    }
+    std::cout << "PASS: fixed delimiter commands, TeX fixed points, styled fences and canonical math text\n";
 }

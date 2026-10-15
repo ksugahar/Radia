@@ -380,5 +380,15 @@
   {
     "id": "separate-absolute",
     "tex": "|a|+|b|"
+  },
+  {
+    "id": "bold-parentheses",
+    "tex": "\\mathbf{(x)}",
+    "coverage": "covered"
+  },
+  {
+    "id": "colour-parentheses",
+    "tex": "\\color{red}{(x)}",
+    "coverage": "covered"
   }
 ]

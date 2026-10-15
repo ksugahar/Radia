@@ -9,7 +9,7 @@ api = module_from_spec(SPEC)
 SPEC.loader.exec_module(api)
 M = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 A = "http://schemas.openxmlformats.org/drawingml/2006/main"
-VALID = f'<m:oMathPara xmlns:m="{M}" xmlns:a="{A}"><m:oMath><m:r><a:t>x</a:t></m:r></m:oMath></m:oMathPara>'
+VALID = f'<m:oMathPara xmlns:m="{M}" xmlns:a="{A}"><m:oMath><m:r><a:rPr/><m:t>x</m:t></m:r></m:oMath></m:oMathPara>'
 
 
 def test_export_checked_atomic_output_and_source_cleanup(tmp_path, monkeypatch):
@@ -30,7 +30,7 @@ def test_export_checked_atomic_output_and_source_cleanup(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("payload,status", [(None, 1), (None, 0), ("<bad/>", 0),
-    (VALID.replace("a:t", "m:t"), 0), (VALID.replace(A, "urn:unsupported"), 0)])
+    (VALID.replace("m:t", "a:t"), 0), (VALID.replace(A, "urn:unsupported"), 0)])
 def test_rejected_export_preserves_destination(tmp_path, monkeypatch, payload, status):
     def invoke(arguments, timeout):
         if payload:
