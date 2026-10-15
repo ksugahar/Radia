@@ -523,3 +523,16 @@ def test_added_or_removed_unknown_profile_fails_closed(profile):
     for old, new in ((before, after), (after, before)):
         with pytest.raises(ValueError):
             IMPACT._tier_owners(old, new, manifest, {})
+
+
+def test_joining_powershell_statements_is_a_change():
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    old = (ROOT / "Build.ps1").read_text(encoding="utf-8")
+    marker = '$ErrorActionPreference = "Stop"'
+    assert marker in old
+    head, tail = old.split(marker, 1)
+    joined = head + marker + " " + tail.lstrip("\r\n")
+    assert IMPACT.lane_required("radia-gpu", {"Build.ps1"}, lambda p: (old, joined), manifest)[0] is True
+    # Indentation and comment-only edits stay exempt.
+    reindented = old.replace(marker, "    " + marker + "  # comment", 1)
+    assert IMPACT.code_tokens(old, "powershell") == IMPACT.code_tokens(reindented, "powershell")
