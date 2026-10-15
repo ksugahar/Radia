@@ -59,10 +59,11 @@ are reported separately. These do not certify a transient whole-device peak.
 100 is a numerical/build acceptance host. Its `--diagnostic` results do not
 certify performance and retain explicit memory admission checks. Formal
 same-host A100 timing keeps CPU/GPU idle admission thresholds. The A100 host
-was powered off on 2026-10-13, so the new IC implementation has no A100
-performance or same-binary runtime acceptance yet. The pending record must
-remain pending until that host is available and the exact accepted candidate
-artifact is loaded and verified. The published 0.1.4 wheel is unchanged.
+was powered off at the initial 2026-10-13 acceptance. The human started it
+for baseline and optimized IC acceptance on 2026-10-15. Those same-host
+three-size evaluations are complete; see [tuning.md](tuning.md). The tuned
+IC is an explicitly recorded experimental overlay on the unchanged base
+wheel. This task does not publish or replace a distribution.
 
 Candidate numerical acceptance on 100 (2026-10-13): installed CI wheel
 `0.1.5rc1`, run `38387288896`, passed all 360 independent FEM solution
@@ -97,9 +98,10 @@ All times below are diagnostic 100 values, not formal performance acceptance.
 
 Natural-order GPU IC has many triangular dependency levels and scalar host
 synchronizations. These diagnostic results do not establish an IC speedup;
-A100 tuning and formal timings remain pending. AMS remains the preferred
+Formal baseline and tuned GPU-worker evaluations are now recorded in
+[tuning.md](tuning.md). AMS remains the preferred
 candidate for the larger HCurl cases. The selected wheel and IC binary
-hashes are pinned in [a100-pending.json](results/a100-pending.json).
+hashes are pinned in [gpu-evaluation-status.json](results/gpu-evaluation-status.json).
 
 Lifecycle acceptance releases contexts independently of the selected CUDA device,
 checks caller-device restoration, stale/type rejection and MEX unloadability.
