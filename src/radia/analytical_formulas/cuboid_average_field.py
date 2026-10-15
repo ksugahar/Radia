@@ -17,9 +17,7 @@ numerical path at ``rel_err ~3e-14`` over 8 source/target geometries.
 The previously deferred Wakao Part 6 §7 OCR ambiguity is resolved
 by the sympy derivation; Stafl §3.4 (initially named as the "parent
 reference") is in fact a 2-D rectangular conductor and is unrelated
-to the 3-D cuboid magnetisation problem. See
-``memory/project_phase_alpha_g1_g2_derived.md`` for the derivation
-record.
+to the 3-D cuboid magnetisation problem.
 
 The Gauss-Legendre numerical path is preserved as
 :func:`average_B_in_box_numerical` for diagnostic / cross-validation

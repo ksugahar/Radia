@@ -32,7 +32,7 @@ How to add an entry after a talk
 ================================
 Append a dict to FIELD_NOTES (or flip an "anticipated" entry to
 "recorded" and fill in the real Q&A).  Keep it SHORT -- this ships in the
-radia-mcp wheel; long narrative belongs in memory/ or docs/.  Fields:
+radia-mcp wheel; long narrative belongs in owning engineering docs/.  Fields:
 
   id        : stable slug (venue-year-topic)
   venue     : "CEFC 2026" / "Compumag 2025" ...

@@ -40,10 +40,10 @@ an entry to PATTERNS below.  Fields:
   root_cause : technical explanation (file:line if possible)
   detection  : what test / audit / CI gate catches it now
   prevention : the rule to follow (links to skill / doc)
-  related    : ["memory/<file>.md", "tools/<script>.py", ...]
+  related    : ["docs/<topic>.md", "tools/<script>.py", ...]
 
 KEEP entries SHORT.  This file ships to PyPI in the radia-mcp wheel;
-verbose narrative belongs in memory/ or docs/.
+verbose narrative belongs in owning engineering docs/.
 """
 
 from __future__ import annotations
@@ -397,8 +397,7 @@ PATTERNS: list[dict] = [
                       "(displaces the previous activation row).  See "
                       "public-safe curated corpus "
                       "-ReleaseSeat switch (2026-05-30 update).",
-        "related": ["memory/feedback_coreform_http_500_login.md",
-                    "memory/reference_rlm_activate_logoff_procedure.md"],
+        "related": [],
     },
     {
         "id": "cubit-rlm-per-user-per-machine-activation",
@@ -427,7 +426,7 @@ PATTERNS: list[dict] = [
                       "runas/Start-Process -Credential to run as that "
                       "user (needs their Windows password).  Per-user "
                       "cache lives at %LOCALAPPDATA%\\Coreform\\.",
-        "related": ["memory/reference_rlm_activate_logoff_procedure.md",
+        "related": [
                     ".claude/skills/cubit-license/SKILL.md"],
     },
 
@@ -459,7 +458,7 @@ PATTERNS: list[dict] = [
                       "term fix: change concurrency group to "
                       "`ci-${sha}-${ref}` so each tag has its own "
                       "group.",
-        "related": ["memory/feedback_tag_push_concurrency_race.md",
+        "related": [
                     ".github/workflows/build-test.yml"],
     },
     {
@@ -545,7 +544,7 @@ PATTERNS: list[dict] = [
         "prevention": "Force `-Rebuild` always-on for main / PR / tag "
                       "(commits e6518268 + 7f46d995).  Adds ~15-25 min "
                       "to CI but eliminates the entire class.",
-        "related": ["memory/feedback_ninja_stale_obj_after_netgen_upgrade.md",
+        "related": [
                     ".github/workflows/build-test.yml"],
     },
     {
@@ -580,7 +579,7 @@ PATTERNS: list[dict] = [
                       "locally -- make the binaries fetch a FALLBACK "
                       "(skip-if-present), not mandatory.",
         "related": [".github/workflows/build-test.yml",
-                    "memory/project_tier2_cme_sole_plugin_shipper_2026_06_01.md"],
+                    ],
     },
     {
         "id": "release-smoke-admin-license-fail-nonblocking",
@@ -610,7 +609,7 @@ PATTERNS: list[dict] = [
                       "the plugin/hash contract; run licensed GUI smoke only "
                       "under a licensed user. Do not weaken radia-mcp gates.",
         "related": [".claude/skills/cubit-license/SKILL.md",
-                    "memory/reference_rlm_activate_logoff_procedure.md"],
+                    ],
     },
     {
         "id": "gitignored-skills-lag-code-renames",
@@ -637,7 +636,7 @@ PATTERNS: list[dict] = [
                       "tracked policies, current shared skills, package docs, "
                       "and live client configurations. Keep package ownership "
                       "explicit and test retired entry points as absent.",
-        "related": ["memory/project_tier2_cme_sole_plugin_shipper_2026_06_01.md"],
+        "related": [],
     },
 
     # =====================================================
@@ -803,7 +802,7 @@ PATTERNS: list[dict] = [
         "prevention": "rm the site-packages '~*' orphan dirs, THEN "
                       "pip install --force-reinstall; the package then "
                       "imports cleanly.",
-        "related": ["memory/project_radia_ih_june_completion_2026_06_02.md"],
+        "related": [],
     },
     {
         "id": "tools-md-drift-wip-contamination",
@@ -1054,7 +1053,7 @@ PATTERNS: list[dict] = [
                       "non-ASCII scan.",
         "related": [
             "AGENTS.md: No Development Cruft in SOURCE",
-            "memory/docs_cruft_prune_2026_06_28.md",
+            "docs/induction_heating/README.md",
         ],
     },
 
@@ -1126,7 +1125,7 @@ PATTERNS: list[dict] = [
                       "CAD volume).",
         "related": ["docs/electric_machine/planar_vim_motor_helpers.py",
                     "docs/electric_machine/em_reference_audit.ipynb",
-                    "memory/fem_reference_coil_polygon_deficit.md"],
+                    ],
     },
     {
         "id": "truncation-ladder-frozen-edge",
@@ -1160,7 +1159,7 @@ PATTERNS: list[dict] = [
                       "by the log/1-r tail, not 3D decay.  For pure-harmonic exteriors use the "
                       "exact open condition instead (n=1: dA/dr + A/R = 2 B0 cos(theta) Robin).",
         "related": ["docs/electric_machine/em_reference_audit.ipynb",
-                    "memory/hdiv_vim_tri_quad_motor.md"],
+                    ],
     },
     {
         "id": "conjugate-potential-sign-branch-cut",
@@ -1232,7 +1231,7 @@ PATTERNS: list[dict] = [
                       "(docs/electric_machine/planar_vim_motor_helpers.py::fem_reference_bar).",
         "related": ["docs/electric_machine/planar_vim_motor_helpers.py",
                     "docs/electric_machine/em_reference_audit.ipynb",
-                    "memory/hodograph_design_forward_verified.md"],
+                    ],
     },
 
     # =====================================================
@@ -1265,7 +1264,7 @@ PATTERNS: list[dict] = [
                       "Only the gauge constant changes, and for potentials recovered from a "
                       "gradient only differences are physical anyway.  Reserve NumberSpace "
                       "for iterative solvers or genuinely small systems.",
-        "related": ["memory/hodograph_design_forward_verified.md"],
+        "related": [],
     },
     {
         "id": "duplicate-corner-points-stall-mesher",
@@ -1290,7 +1289,7 @@ PATTERNS: list[dict] = [
                       "curve4[::-1][1:-1]` so shared endpoints appear once, dedup with a "
                       "geometric tolerance (~10 um, not 1 um), and RAISE on any remaining "
                       "self-intersection rather than handing a bad outline to the mesher.",
-        "related": ["memory/hodograph_design_forward_verified.md"],
+        "related": [],
     },
     {
         "id": "terminal-corner-contaminates-designed-body",
@@ -1324,7 +1323,7 @@ PATTERNS: list[dict] = [
                       "1.3 %.  Never trim the contaminated samples silently -- the trim length "
                       "must be justified by a measured decay, or the check is circular.",
         "related": ["validation_test/clebsch_legendre/verify_ipm_bridge_free_boundary.py",
-                    "memory/hodograph_ipm_bridge_free_boundary.md"],
+                    ],
     },
     {
         "id": "hodograph-wall-cusp-speed-cancellation",
@@ -1359,7 +1358,7 @@ PATTERNS: list[dict] = [
                       "finite start slope, flat into the plateau); stagger profile "
                       "feature angles so no two coincide.",
         "related": ["validation_test/clebsch_legendre/verify_synrm_collector_design.py",
-                    "memory/hodograph_synrm_channel_rungs.md"],
+                    ],
     },
     {
         "id": "outline-piece-reversed-phantom-self-intersections",
@@ -1439,7 +1438,7 @@ PATTERNS: list[dict] = [
                       "as an artifact until a control says otherwise.",
         "related": ["validation_test/radia_mcp/mesh_quality_study/run_rotation_control.py",
                     "validation_test/radia_mcp/mesh_quality_study/run_vector_elements.py",
-                    "memory/mesh_quality_min_is_chaotic.md"],
+                    ],
     },
     {
         "id": "raw-math-markup-survives-on-the-slide",

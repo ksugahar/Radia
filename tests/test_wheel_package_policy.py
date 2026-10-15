@@ -213,3 +213,23 @@ def test_repack_regenerates_record_after_metadata_edits(tmp_path):
             expected = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode()
             assert digest == "sha256=" + expected
             assert int(size) == len(data)
+
+
+def test_raw_native_distribution_is_not_pure(tmp_path):
+    import runpy
+    from unittest.mock import patch
+    from setuptools.command.bdist_wheel import bdist_wheel
+
+    with patch('setuptools.setup') as setup:
+        runpy.run_path(str(ROOT / 'setup.py'))
+    distribution = setup.call_args.kwargs['distclass']()
+    assert distribution.has_ext_modules()
+    command = bdist_wheel(distribution)
+    command.dist_dir = str(tmp_path)
+    command.ensure_finalized()
+    assert command.root_is_pure is False
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Config variable.*is unset", category=RuntimeWarning)
+        python, abi, platform = command.get_tag()
+    assert python != 'py3' and abi != 'none' and platform != 'any'

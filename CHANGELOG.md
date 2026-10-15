@@ -3379,7 +3379,7 @@ Benchmark new implementations against the alternative BEFORE shipping.
 4.25.0 shipped intree BEM-A based on a single ngsolve.bem timing
 (104 s @ N_J=5064) measured at a problem size 5x larger than the
 panel uses.  At production N (300-1500), ngsolve.bem is ~0.4-6 s, not
-slow.  See `memory/project_bem_a_ngsolve_chosen_2026_05_03.md`.
+slow.
 
 ### Future Phase 6 (radia-mcp 0.39.x or radia 4.27.x)
 

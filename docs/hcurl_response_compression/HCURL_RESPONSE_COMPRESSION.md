@@ -956,3 +956,7 @@ response space has been exposed.
 - K. Hollaus, V. Hanser, and M. Schoebinger, "A Nonlinear Effective Surface
   Impedance in a Magnetic Scalar Potential Formulation," IEEE Transactions on
   Magnetics, Early Access, 2025.  https://doi.org/10.1109/TMAG.2025.3613932
+
+## HCurl-SIBC composition
+
+Project the stable full sampled Laplace current Gram with three current-component CSR maps. For cross-only composition subtract sampled reduced diagonal blocks and add exact/BEM diagonals. Never zero same-partition scalar entries: artificial checkerboard sparsity undermines ACA pivots. HDiv magnetic-charge bases require a separate rectangular field coupling, not an isomorphic current block.

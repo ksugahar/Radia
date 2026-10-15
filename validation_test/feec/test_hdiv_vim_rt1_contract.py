@@ -13,7 +13,7 @@ test_hdiv_vim_wedge_spectrum.py.
 This test LOCKS the production fail-loud boundaries (No-Fallbacks: the raise IS
 the feature), the BDM1/BDM2 happy paths, and the rad.Solve 'auto' split.
 
-NGSolve + Netgen required.  See memory/hdiv_rt1_field_production.md.
+NGSolve + Netgen required.  See docs/hdiv_vim/README.md.
 """
 import numpy as np
 import pytest

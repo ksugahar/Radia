@@ -1409,8 +1409,7 @@ that variant from older gmsh tutorials.
 viewer, or hypothesising about launch paths. Reference incident
 2026-05-30 (third recurrence): user observed Gx fingerprint coil viewer
 producing python.exe with empty stdout; GetWindowRect returned
-(-2560, 497) - (-1166, 1957), MoveWindow rescued it. Documented in
-`memory/feedback_gmsh_gui_invisible_from_background.md`.
+(-2560, 497) - (-1166, 1957), MoveWindow rescued it.
 
 Note: the MCP `gmsh_render` / `gmsh_export_animation` tools bake this
 prevention in (subprocess with `-noconfig` + explicit

@@ -8,7 +8,7 @@ The 2-D square is the natural corner-bearing extension of the
 cylinder (cylindrical cross-section is corner-free).  An earlier failed
 v1 attempt used psi = f(x) sin(pi y/L) + sin(pi x/L) f(y), a smooth
 y-factor that lacks the y-direction skin layer.  That dead source was
-deleted; the lesson is recorded in memory/mixed_galerkin_examples_prune.md.
+deleted; the lesson is recorded in docs/maglev/demos/README.md.
 The corrected corner-aware envelope is
 
     psi(x, y; s) = f(x) f(y)

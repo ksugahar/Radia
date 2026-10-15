@@ -4,7 +4,7 @@
 single-stroke wire that the OCCT STEP route (``_write_former_step``, netgen.occ
 Pipe/Fuse AND build123d sweep -- one kernel) segfaults / silently under-cuts on
 (channel ratio ~0.5% or a degenerate shell).  See
-``memory/sf_printable_former_cad_status.md``.
+``docs/stream_function.md``.
 
 This golden encodes exactly that OCCT-breaker geometry (a multi-turn wire whose
 inter-turn connectors cross other turns -> a self-overlapping tube) and asserts

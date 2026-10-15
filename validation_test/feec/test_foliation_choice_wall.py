@@ -17,7 +17,7 @@ The golden asserts the WALL behaviour, NOT a solve:
     reformulation.
 
 See validation_test/feec/vim_legacy/foliation_choice_wall.py and the unification memory file
-memory/clebsch_cohomology_streamfunction_unification.md (Honest frontier F1).
+docs/clebsch_hodograph/README.md (Honest frontier F1).
 """
 import os
 import sys

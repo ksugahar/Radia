@@ -19,7 +19,6 @@
 *   - Newell A. J., Williams W., Dunlop D. J., "A generalization of the
 *     demagnetizing tensor for nonuniform magnetization", J. Geophys. Res.
 *     98 (1993), pp. 9551-9555.
-*   - memory/project_phase_alpha_g1_g2_derived.md (Radia Phase-alpha record).
 *
 -------------------------------------------------------------------------*/
 

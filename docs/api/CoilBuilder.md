@@ -280,3 +280,7 @@ Row-vector format: `orientation[i, :]` = i-th basis vector.
 | `orientation[2, :]` | Z-axis | Cross-product (axial) |
 
 Tilt rotates around the Y-axis (current direction) before segment construction.
+
+## Geometric frames
+
+Orientation rows are local axes in world components. Mirror with O @ M and negate only local Z to restore handedness; retain traversal and current. Rotate with O @ R.T. Test pointwise endpoints and paths; pair symmetry can hide a bad mirror.

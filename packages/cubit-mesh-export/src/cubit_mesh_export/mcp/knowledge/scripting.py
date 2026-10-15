@@ -3507,7 +3507,7 @@ Verified 2026-04-25: 143/143 copy-mesh pairs now land at machine
 precision (2.6e-16 m).  Same lesson applies to any copy-mesh between
 geometrically equivalent N-fold-symmetric faces.
 
-See `memory/feedback_kelvin_1_8_blocker.md` and CLAUDE.md
+See `docs/kelvin/CONVENTION.md` and CLAUDE.md
 "AI-Driven Cubit: Probe, Don't Guess" for the general principle:
 **probe Cubit and print the actual values before writing the
 classification logic** -- do not derive selectors from the .jou

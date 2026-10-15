@@ -18,6 +18,7 @@ on:
       - '.github/workflows/radia-gpu.yml'
       - '!**/*.md'
       - 'packages/radia-gpu/README.md'  # wheel metadata and payload
+      - 'docs/ltspice/README.md'  # CLI documentation contract
   push:
     branches: [main]
     paths:
@@ -35,6 +36,7 @@ on:
       - '.github/workflows/radia-gpu.yml'
       - '!**/*.md'
       - 'packages/radia-gpu/README.md'  # wheel metadata and payload
+      - 'docs/ltspice/README.md'  # CLI documentation contract
   workflow_dispatch:
 
 permissions:

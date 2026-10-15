@@ -2504,7 +2504,7 @@ All four scripts mu_r=100, R_air=0.20 m, Kelvin offset 3*R = 0.60 m.
    `_add_kelvin_cubit_reduction`: pick `min(curves,
    key=(centroid_z, centroid_y, centroid_x))` for translation-
    equivalent source / target anchors.  See
-   `memory/feedback_kelvin_1_8_blocker.md` (mesh fixed; 1/8 numerical
+   `docs/kelvin/CONVENTION.md` (mesh fixed; 1/8 numerical
    solver still has a kelvin_far singularity issue, deferred).
 
 ## CLI
