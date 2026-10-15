@@ -17,7 +17,7 @@ This directory was promoted out of the examples tier.
 Previously that tier also held TODO-only benchmark stubs. Those
 were removed because they were not runnable examples. The target list is kept
 in `docs/stream_function/benchmarks.md` and
-`memory/stream_function_benchmark_stubs_prune.md` until a target is implemented
+`docs/stream_function.md` until a target is implemented
 with JSON output.
 
 ## How to run

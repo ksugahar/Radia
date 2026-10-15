@@ -250,7 +250,7 @@ Arkkio, Henrotte, VWP) are validated here.
 
 - `radia_mcp.differential_forms.forces` — all 7 force methods
 - `radia_mcp.electromagnet` — Hantila solver applied to problem 20
-- `memory/feedback_em_force_team20_validation.md` (lab memory)
+- `docs/force_validation/README.md` (lab memory)
 """
 
 

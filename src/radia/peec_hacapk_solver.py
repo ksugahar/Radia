@@ -24,8 +24,7 @@ real HACApK MatVec twice per complex matvec:
 i.e. one HACApK MatVec on x_im (for the y_re row) and one on x_re
 (for the y_im row).  The diagonal parts are applied elementwise.
 
-Reference: memory/hacapk_peec_prima_plan.md "Option A"
-Step 4 stage 2 of the HACApK-PEEC plan.
+
 """
 
 from __future__ import annotations

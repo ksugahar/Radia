@@ -26,7 +26,7 @@ an assumption established by either basis name.
 > which removes the `d` parameter entirely and improves wall-band
 > accuracy by 1–4 orders of magnitude. The Warburg-Schur code was
 > hard-deleted; see
-> `memory/project_warburg_schur_deprecated_2026_06_12.md` for the
+> `docs/maglev/demos/README.md` for the
 > history and lessons.
 
 ## Framework summary
@@ -113,7 +113,7 @@ Resolved 2026-09-02, so the conference copy no longer feeds anything:
 - `_references/cylinder_bessel.py`, `_references/sphere_bessel.py` — superseded
   here by `radia.maglev.mixed_galerkin.references`; the copy is the older route.
 - `square2d/_broken_simple_envelope.py` — a dead end kept under a `_broken_`
-  name; its lesson is already in `memory/mixed_galerkin_examples_prune.md`.
+  name; its lesson is already in `docs/maglev/demos/README.md`.
 
 ## Headline results (post Phase 8b correction)
 

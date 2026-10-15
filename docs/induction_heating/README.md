@@ -62,3 +62,7 @@ UI inspection and the four-host exact-package gate remain separate requirements.
 workpiece physical comparison; `validation_test/ih_esim_benchmark/` owns the
 ESIM benchmark corpus. The notebooks show those claims and limits without
 replacing the checked evidence or the IH MCP operating manual.
+
+## Native Simulink boundary
+
+IH Level-2 wrappers own checked native handles. LUTs, lumped plants and Python trajectory playback do not establish solver parity. Advance thermal state only in Update. Nonlinear parity requires constitutive iterations and conservative transfer between noncoincident meshes; linear wiring fixtures do not certify it.

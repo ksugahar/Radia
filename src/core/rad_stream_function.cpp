@@ -240,7 +240,7 @@ TSVDResult ACATSVD(int M, int N, const EntryFn& entry,
     // ONE small kt x kt SVD  Rc Rd^T = Um Sm VTm  then gives the exact SVD of A:
     //   A = (Qc Um) Sm (Qd VTm^T)^T,   U = Qc Um,  V = Qd VTm^T,  S = Sm.
     // (The legacy manuscript Method 2/3 -- two/three SVDs -- were removed here;
-    //  the lesson lives in memory/aca_tsvd_qr_recompression.md.)
+    //  the lesson lives in docs/stream_function.md.)
     std::vector<double> Qc, Rc, Qd, Rd;
     QrEcon(M, kt, C.data(), Qc, Rc);   // Qc (M x kt), Rc (kt x kt)
     QrEcon(N, kt, D.data(), Qd, Rd);   // Qd (N x kt), Rd (kt x kt)

@@ -130,7 +130,7 @@ def pdf_lint_image_detection_dpi(
         "Replace `(arr < N).any(axis=0)` with a count-threshold:\n"
         "  col_dark = (arr < 200).sum(axis=0)\n"
         "  is_content_col = col_dark >= max(5, int(H * 0.01))\n"
-        "See memory/feedback_image_content_detection_dpi.md for the rationale."
+        "Sparse dark pixels alone do not establish a content column."
     )
     return {
         "target": str(src),

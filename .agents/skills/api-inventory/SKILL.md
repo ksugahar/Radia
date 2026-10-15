@@ -78,7 +78,7 @@ active-dev area).
 ## Step 4 -- act (separately, carefully)
 - **plumbing-delete / deprecated-drop**: remove and delegate to the named
   netgen/ngsolve replacement. Per "No Development Cruft in SOURCE": keep one
-  canonical version, distill any lesson to `memory/` first, recover from git if
+  canonical version, distill any durable lesson into the owning docs or package knowledge first, recover from git if
   needed.
 - **method-demote**: un-pybind gradually behind the intent layer -- panels /
   examples / CoilBuilder depend on the primitives today, so DEMOTE first, remove

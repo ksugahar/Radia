@@ -544,3 +544,11 @@ Current user-facing notebooks in this directory should be result-bearing and
 store their display results directly. Checked numerical JSON belongs under
 `validation_test/`; notebook checksum sidecars and old comparison archives are
 not part of the public docs surface.
+
+## Charge-Gram geometry limits
+
+QuadBlockHex/QuadBlockWedge remain production routes for general cells. Box closed forms are axis-aligned local oracles, not replacements for warped/curved/swept cells; removable singularities require real limits and quadrants. Average directed AB/BA FAR quadrature for HEX, WEDGE and high-order TET: upper-triangle mirroring alone does not ensure reflection invariance. One-sided switches are diagnostic only.
+
+## Topology optimization solver contract
+
+Use native Jacobi-PCG with checked true residuals. Do not restore the slower Python MultiVector path. Keep raw Schur responses and geometry regularization in the discrete master; graph cuts require a submodular backend, without a BESO substitute.
