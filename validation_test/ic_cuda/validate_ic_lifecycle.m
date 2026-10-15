@@ -26,7 +26,7 @@ mustReject(@()radia_cuda_ic('release',uint64(1)));
 mustReject(@()radia_cuda_ic('release',double(h)));
 % Lock balance is observable: clear must unload the native module.
 clear radia_cuda_ic;
-loaded=inmem('-completenames');
+[~,loaded]=inmem('-completenames');
 assert(~any(contains(loaded,'radia_cuda_ic.mex')),'IC MEX remains locked');
 clear restore;
 % A stale generation must not revive after unloading/reloading the MEX.
