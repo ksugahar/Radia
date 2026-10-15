@@ -39,7 +39,7 @@ cl /nologo /O2 /W4 /WX /EHsc /MT /fsanitize=address /Zi /std:c++17 /utf-8 ^
    /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src ^
    /TP src\eqnedit64_app.cpp src\equation_edit.cpp src\equation_render.cpp ^
        src\tex_parser.cpp src\equation_node.cpp src\latex_emitter.cpp ^
-       src\mathml_emitter.cpp src\math_symbols.cpp src\palettes.cpp src\tex_document.cpp ^
+       src\mathml_emitter.cpp src\office_html.cpp src\math_symbols.cpp src\palettes.cpp src\tex_document.cpp ^
    /Fe:build\Eqnedit64_asan.exe /Fo:build\ /Fd:build\Eqnedit64.pdb ^
    /link /SUBSYSTEM:WINDOWS user32.lib gdi32.lib comctl32.lib comdlg32.lib shell32.lib ^
          ole32.lib imm32.lib windowscodecs.lib build\Eqnedit64.res
