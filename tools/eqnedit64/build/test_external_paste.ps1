@@ -1051,18 +1051,18 @@ try {
         throw "Eqnedit64 aligned clipboard publication failed: $($alignedPublisher.ExitCode)"
     }
     $alignedOfficeHtml = Read-ClipboardUtf8 $htmlFormat
-    $alignedMathCount = ([regex]::Matches(
-        $alignedOfficeHtml, '<math(?:\s|>)')).Count
-    $alignedBreakCount = ([regex]::Matches(
-        $alignedOfficeHtml, '<br(?:\s|/|>)')).Count
-    if ($alignedMathCount -ne 3 -or $alignedBreakCount -ne 2 -or
-        ([regex]::Matches($alignedOfficeHtml,
-            '<span style="font-size:18pt">&#160;</span>')).Count -ne 3 -or
-        $alignedOfficeHtml -match '<malign(?:group|mark)(?:\s|/|>)' -or
-        $alignedOfficeHtml -match '<mtable(?:\s|>)') {
-        throw ("Aligned Office HTML must contain three clean editable math " +
-            "rows and two line breaks: math=$alignedMathCount, " +
-            "breaks=$alignedBreakCount.")
+    $alignedBranch = [regex]::Match($alignedOfficeHtml,
+        '(?s)<!--\[if gte msEquation 12\]>(?<math>.*?)<!\[endif\]-->')
+    if (-not $alignedBranch.Success) { throw 'Aligned primary OMML is missing.' }
+    [xml]$alignedSource = '<root xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
+        $alignedBranch.Groups['math'].Value + '</root>'
+    $alignedNamespaces = [Xml.XmlNamespaceManager]::new($alignedSource.NameTable)
+    $alignedNamespaces.AddNamespace('m', 'http://schemas.openxmlformats.org/officeDocument/2006/math')
+    $alignedMathCount = $alignedSource.SelectNodes('//m:oMath', $alignedNamespaces).Count
+    $alignedRowsCount = $alignedSource.SelectNodes('//m:eqArr/m:e', $alignedNamespaces).Count
+    if ($alignedMathCount -ne 1 -or $alignedRowsCount -ne 3 -or
+        $alignedSource.SelectNodes('//m:t[text()="&"]', $alignedNamespaces).Count -ne 0) {
+        throw "Aligned primary OMML must contain one equation array with three clean rows: math=$alignedMathCount, rows=$alignedRowsCount."
     }
     if ([EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlFormat) -or
         [EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlPresentationFormat)) {
@@ -1332,3 +1332,4 @@ try {
     }
     if ($restoreFailure) { throw $restoreFailure }
 }
+
