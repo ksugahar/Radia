@@ -122,7 +122,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         seeds.update("src/core/" + name for name in
                      re.findall(r"src/core/([A-Za-z0-9_.]+)", script.read_text(encoding="utf-8")))
     core = set(CONTRACT.include_closure(ROOT, sorted(seeds), "src/core"))
-    assert {p for p in shared if p.startswith("src/core/")} == core
+    assert {p for p in shared if p.startswith("src/core/")} == core | {"src/core/radia_mex_sparse_symmetry.h"}
     assert len(core) == 14
     # The radia-gpu lane must start on every file its native build reads.
     lane = MANIFEST["lanes"]["radia-gpu"]["events"]
@@ -138,7 +138,23 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         "packages/radia-mcp/src/radia_mcp/common/__init__.py",
         "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
         "packages/radia-mcp/src/radia_mcp/common/status.py"}
+    expected |= {
+        "src/core/radia_mex_sparse_symmetry.h",
+        "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
+        "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+        "tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
+        "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
+        "validation_test/induction_heating/test_ih_operator_physics_golden.py",
+    }
     assert shared == expected
+    # The shared IH contracts execute the GPU package adapter against CPU Radia solvers.
+    for path in ("tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
+                 "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
+                 "validation_test/induction_heating/test_ih_operator_physics_golden.py"):
+        assert "from radia_gpu.simulink" in (ROOT / path).read_text(encoding="utf-8")
+    adapter = (ROOT / "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py").read_text(encoding="utf-8")
+    assert "radia.panels" in adapter
+    assert "cubit_mesh_export.check" in (ROOT / "tests/test_ih_operator_assembly.py").read_text(encoding="utf-8")
     # Integration evidence: radia-gpu LTspice tests cross-check the radia-mcp LTspice gates.
     gpu_ltspice_tests = list((ROOT / "packages/radia-gpu/tests/ltspice").glob("test_*.py"))
     assert any("from radia_mcp.ltspice" in path.read_text(encoding="utf-8") for path in gpu_ltspice_tests)

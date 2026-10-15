@@ -203,6 +203,43 @@ jobs:
           echo "changed_files_json=$changed_files_json" >> "$GITHUB_OUTPUT"
           echo "Selected radia-mcp CI mode: $mode"
 
+  numerical-validation:
+    needs: [ci-impact, scope]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && needs.scope.outputs.run_tests == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: [self-hosted, Windows, X64, "100"]
+    timeout-minutes: 15
+    env:
+      OMP_NUM_THREADS: '1'
+      NGS_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run MCP owned NGSolve numerical acceptance
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "radia-mcp-numerical-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $python = Join-Path $venv 'Scripts/python.exe'
+          $pins = @(& $python -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x for x in d['project']['dependencies'] if x.startswith(('ngsolve==','netgen-mesher=='))],sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $pins.Count -ne 2) { throw 'Expected exact FE validation pins' }
+          & $python -m pip install @pins numpy scipy pytest "mcp>=1.21.1,<2"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:PYTHONPATH = "$PWD/packages/radia-mcp/src"
+          & $python -c "import ngsolve, netgen.occ"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $python -m pytest -q --confcutdir=validation_test/radia_mcp validation_test/radia_mcp/test_aphi_gauge_point.py validation_test/radia_mcp/test_axi_eddy_current_drive.py validation_test/radia_mcp/test_eddy_driven_region.py validation_test/radia_mcp/test_hoibc_weingarten_curvature.py --junitxml "$venv/numerical.xml"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $python -c "import sys,xml.etree.ElementTree as E; cases=list(E.parse(sys.argv[1]).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'MCP numerical acceptance must execute'" "$venv/numerical.xml"
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: radia-mcp-numerical-evidence
+          path: ${{ runner.temp }}/radia-mcp-numerical-${{ github.run_id }}-${{ github.run_attempt }}/numerical.xml
+          if-no-files-found: warn
+
   minimum-sdk:
     needs: [ci-impact, scope]
     if: ${{ needs.ci-impact.outputs.required == 'true' && (needs.scope.outputs.mode != 'docs') }}
