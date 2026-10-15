@@ -398,6 +398,42 @@
       "selection": "all_owners"
     },
     {
+      "pattern": "packages/radia-mcp/src/radia_mcp/common/__init__.py",
+      "owners": [
+        "radia-mcp",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "imported by radia_mcp.ltspice.server, which radia-gpu LTspice tests cross-check"
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
+      "owners": [
+        "radia-mcp",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "imported by radia_mcp.ltspice.server, which radia-gpu LTspice tests cross-check"
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/common/status.py",
+      "owners": [
+        "radia-mcp",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "imported by radia_mcp.ltspice.server, which radia-gpu LTspice tests cross-check"
+      },
+      "selection": "all_owners"
+    },
+    {
       "pattern": "packages/radia-optuna/**",
       "owners": [
         "radia-optuna"
@@ -1127,6 +1163,42 @@
     },
     {
       "pattern": "src/core/rad_bem_galerkin.h",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_bem_galerkin.cpp",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_biot_savart_filaments.cpp",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_host_parallel.h",
       "owners": [
         "radia",
         "radia-gpu"
@@ -1869,6 +1941,9 @@
           "paths": [
             "packages/radia-gpu/**",
             "packages/radia-mcp/src/radia_mcp/ltspice/**",
+            "packages/radia-mcp/src/radia_mcp/common/__init__.py",
+            "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
+            "packages/radia-mcp/src/radia_mcp/common/status.py",
             "validation_test/radia_gpu/**",
             "validation_test/ams_cuda/**",
             "validation_test/ic_cuda/**",
@@ -1879,6 +1954,9 @@
             "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
             "src/ext/HACApK/**",
             "src/core/rad_bem_galerkin.h",
+            "src/core/rad_bem_galerkin.cpp",
+            "src/core/rad_biot_savart_filaments.cpp",
+            "src/core/rad_host_parallel.h",
             "src/core/rad_biot_savart_filaments.h",
             "src/core/rad_charge_quadrature.h",
             "src/core/rad_field_cloud_kernel.h",
@@ -1910,6 +1988,9 @@
           "paths": [
             "packages/radia-gpu/**",
             "packages/radia-mcp/src/radia_mcp/ltspice/**",
+            "packages/radia-mcp/src/radia_mcp/common/__init__.py",
+            "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
+            "packages/radia-mcp/src/radia_mcp/common/status.py",
             "validation_test/radia_gpu/**",
             "validation_test/ams_cuda/**",
             "validation_test/ic_cuda/**",
@@ -1920,6 +2001,9 @@
             "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
             "src/ext/HACApK/**",
             "src/core/rad_bem_galerkin.h",
+            "src/core/rad_bem_galerkin.cpp",
+            "src/core/rad_biot_savart_filaments.cpp",
+            "src/core/rad_host_parallel.h",
             "src/core/rad_biot_savart_filaments.h",
             "src/core/rad_charge_quadrature.h",
             "src/core/rad_field_cloud_kernel.h",
