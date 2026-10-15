@@ -1,6 +1,9 @@
 {
   "schema": "radia.gpu.ic-tuning-validation.v1",
   "accepted": true,
+  "native_residual_operator": "projected original operator (constrained diagonals = 1, constrained RHS = 0)",
+  "independent_residual_operator": "Python original free-DOF equations; separately recomputed",
+  "historical_scope": "Pre-review-fix overlay; measured hashes and values are unchanged and do not certify the later owned-cuBLAS-workspace binary",
   "compute_oracle": {
     "schema": "radia.gpu.ic-accuracy.v1",
     "passed": true,
