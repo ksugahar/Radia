@@ -364,7 +364,8 @@ off-screen bitmap、メッセージ送信、CLI、COM APIで試す。
 ### 9.3 フォント試験の隔離
 
 完全なフォントライフサイクル試験を対話中のvalidation hostで繰り返してはならない。
-GitHub-hosted Windows runnerまたは破棄可能なVM/ユーザーセッションで
+GitHub-hosted Windows runner、または承認済み試験セッションである100号機の
+Administratorセッション（2026-10-15 利用者決定）で
 `EQNEDIT64_ISOLATED_TEST_SESSION=1`を設定する。
 
 `build/test_font_session.ps1`は32回起動終了し、次を監視する。
@@ -455,9 +456,9 @@ native出力は `tools/eqnedit64/dist/Eqnedit64.exe`。ビルド前に同じ出�
 6. exact `origin/main`からdevelopment host（development host）でrelease EXEをビルドし、
    `CN=ksugahar`で署名する。validation hostは検証専用で、正式リリースのビルド・署名には使わない。
 7. `sync_to_o.ps1 -WhatIf`でversion、build stamp、署名、source SHA、O:配置先を
-   事前検査する。private-font full suiteはPR/main/tagの隔離CIだけで行い、
-   development host/validation hostの対話セッションで`EQNEDIT64_ISOLATED_TEST_SESSION`を偽装して
-   `accept_release.ps1`を実行しない。
+   事前検査する。private-font full suiteはPR/main/tagの隔離CIと、100号機の
+   Administratorセッション（承認済み試験セッション）で行う。validation hostや
+   他ユーザーのセッションで`EQNEDIT64_ISOLATED_TEST_SESSION`を設定しない。
 8. `.agents/skills/release-eqnedit64/scripts/sync_to_o.ps1`で
    `O:\Eqnedit64.exe`を更新する。
 9. `O:\Eqnedit64.release.json`へ予定tag、version、source SHA、EXE SHA-256、signerを記録し、

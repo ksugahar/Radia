@@ -73,9 +73,14 @@ GitHub/PyPI success alone does not complete an Eqnedit64 release.
   so it stays clear of the `fontdrvhost.exe` failure that leaves the session's
   Office fonts inkless. Everything that *runs* the built binary - the GUI,
   rendering, `--self-test`, the font-session endurance suites, and
-  `accept_release.ps1` - belongs to the isolated CI or VM session. LAB is a
-  validation machine only and must not compile or sign release binaries. Do
-  not bypass `EQNEDIT64_ISOLATED_TEST_SESSION` on the build host or LAB.
+  `accept_release.ps1` - belongs to hosted CI or to the approved test session.
+  On 100号機 the approved test session is the Administrator session (user
+  decision 2026-10-15): run `test_external_paste.ps1` and `accept_release.ps1`
+  there with `EQNEDIT64_ISOLATED_TEST_SESSION=1`, only when no Office process
+  runs in that same session, and never attach to or stop other users' Office
+  or sessions. LAB is a validation machine only and must not compile or sign
+  release binaries; do not set `EQNEDIT64_ISOLATED_TEST_SESSION` on LAB or in
+  any other user's session.
 
 ## Required order
 
@@ -129,7 +134,8 @@ The publication destination is
 3. In the homepage workspace, run
    `site_builder/tools/ci_equation_editor.py --radia-repository <tag-checkout> --profile browser --verify-download`.
    This builds only the editor page/assets and checks the browser contract.
-   Run the existing Office integration gate in the approved isolated session
+   Run the existing Office integration gate in the approved test session
+   (100号機 Administrator session)
    when shared clipboard behavior changed. Do not run Wolfram, Mathematica,
    NGSolve, or the undergraduate/advanced teaching suites for this publication.
 4. Use `site_builder/tools/upload_winscp.ps1` sequentially for additive upload
