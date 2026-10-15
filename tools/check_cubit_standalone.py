@@ -35,6 +35,7 @@ def main():
         cubit = root / "programs/Coreform Cubit 2026.8/bin"
         (cubit / "cubit").mkdir(parents=True)
         (cubit / "cubit/__init__.py").write_text("# test profile only\n")
+        (cubit / "cubit/_cubit3.pyd").touch()
         (cubit / "cubitx.exe").touch()
         (cubit.parent / "plugins").mkdir()
         environment = {
