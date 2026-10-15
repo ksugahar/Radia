@@ -468,3 +468,17 @@ def test_toml_number_to_bool_is_a_change():
 
 def test_huge_integer_budget_is_invalid_not_a_crash():
     assert IMPACT._valid_budget(10 ** 400) is False
+
+
+def test_typed_canonical_separates_dates_from_look_alike_strings():
+    import datetime
+    when = datetime.date(2026, 10, 15)
+    for look_alike in (f"date:{when!r}", "2026-10-15", repr(when)):
+        assert IMPACT._canonical({"k": when}) != IMPACT._canonical({"k": look_alike})
+    before = "[tool.pytest.ini_options]\ncustom_date = 2026-10-15\n"
+    after = '[tool.pytest.ini_options]\ncustom_date = "date:datetime.date(2026, 10, 15)"\n'
+    assert not IMPACT.test_dependencies_only(before, after)
+
+
+def test_malformed_event_payload_fails_closed():
+    assert IMPACT.required_for_event("radia-gpu", "push", [], None, {})[0] is True
