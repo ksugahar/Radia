@@ -11,6 +11,8 @@ param(
     [int]$EnduranceSeeds = 100,
     [ValidateRange(1, 1000000)]
     [int]$EnduranceOps = 5000,
+    [ValidateRange(60, 3600)]
+    [int]$EnduranceTimeoutSeconds = 1800,
     [switch]$SkipBuild,
     [string]$ReportPath = 'C:\temp\Eqnedit64-final-acceptance.json'
 )
@@ -65,9 +67,11 @@ Invoke-PowerShellScript 'build\test_font_session.ps1' @(
 
 # The long normal-build run is separate from ASan: it exercises the signed,
 # portable executable that will actually be deployed.
+$enduranceTimer = [Diagnostics.Stopwatch]::StartNew()
 Invoke-PowerShellScript 'build\test_ui_fuzz.ps1' @(
     '-AppPath', $distExe, '-Seeds', $EnduranceSeeds, '-Ops', $EnduranceOps,
-    '-TimeoutSeconds', 120)
+    '-TimeoutSeconds', $EnduranceTimeoutSeconds)
+$enduranceTimer.Stop()
 
 $paintReport = 'C:\temp\Eqnedit64-paint-benchmark.txt'
 $paintError = 'C:\temp\Eqnedit64-paint-benchmark.err.txt'
@@ -120,6 +124,8 @@ $report = [ordered]@{
         seeds = $EnduranceSeeds
         operations_per_seed = $EnduranceOps
         total_operations = $EnduranceSeeds * $EnduranceOps
+        timeout_seconds = $EnduranceTimeoutSeconds
+        elapsed_seconds = [math]::Round($enduranceTimer.Elapsed.TotalSeconds, 3)
     }
     font_lifecycles = 32
     paint_benchmark = $paintMeasurements.Trim()
