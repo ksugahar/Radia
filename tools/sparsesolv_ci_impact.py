@@ -58,10 +58,18 @@ def _valid_budget(value) -> bool:
         return False
 
 
+def _typed(value):
+    """Tag every leaf with its type so no string can impersonate another type."""
+    if isinstance(value, dict):
+        return ["dict", sorted([str(k), _typed(v)] for k, v in value.items())]
+    if isinstance(value, (list, tuple)):
+        return ["list", [_typed(v) for v in value]]
+    return [type(value).__name__, repr(value)]
+
+
 def _canonical(value) -> str:
-    """Type-strict comparison form: 1 and true must not compare equal."""
-    return json.dumps(value, sort_keys=True, ensure_ascii=False,
-                      default=lambda o: f"{type(o).__name__}:{o!r}")
+    """Type-strict comparison form: 1, true, a date and a look-alike string all differ."""
+    return json.dumps(_typed(value), ensure_ascii=False)
 
 
 def ams_manifest_unchanged(before: str, after: str) -> bool:
@@ -389,6 +397,13 @@ def changed_paths(raw):
 
 
 def required_for_event(lane,event_name,event,git,data):
+    try:
+        return _required_for_event(lane,event_name,event,git,data)
+    except Exception as exc:  # malformed event payloads must also select the lane
+        return True,f'impact unknown ({type(exc).__name__}); fail closed'
+
+
+def _required_for_event(lane,event_name,event,git,data):
     if event_name not in ('push','pull_request') or event.get('ref','').startswith('refs/tags/'):
         return True,'release/manual/unknown event: preserve full lane'
     base=event.get('before') if event_name=='push' else event.get('pull_request',{}).get('base',{}).get('sha')
