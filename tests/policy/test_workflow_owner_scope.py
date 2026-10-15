@@ -60,7 +60,7 @@ def test_exception_removal_is_allowed_but_growth_and_stale_entries_fail():
         CONTRACT.exception_coverage(MANIFEST, set())
 
 
-@pytest.mark.parametrize("change", ["owner", "reason", "selection", "root_catchall", "duplicate"])
+@pytest.mark.parametrize("change", ["owner", "reason", "selection", "root_catchall", "duplicate", "empty_attribution", "unknown_attribution"])
 def test_schema_rejects_ambiguous_or_unjustified_ownership(change):
     candidate = copy.deepcopy(MANIFEST)
     shared = next(r for r in candidate["rules"] if len(r["owners"]) > 1)
@@ -72,6 +72,8 @@ def test_schema_rejects_ambiguous_or_unjustified_ownership(change):
         shared["selection"] = "implicit_fallback"
     elif change == "root_catchall":
         candidate["rules"].append({"pattern": "**", "owners": ["repo"]})
+    elif change in ("empty_attribution", "unknown_attribution"):
+        candidate["root_content_diff"]["attribution"]["Build.ps1"]["OptunaMexOnly"] = [] if change == "empty_attribution" else ["unknown"]
     else:
         candidate["rules"].append(copy.deepcopy(candidate["rules"][0]))
     with pytest.raises(ValueError):
@@ -122,7 +124,8 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     assert "src/ext/HACApK" in hmatrix_build
     expected = set(CONTRACT.ROOT_CONFIGS) | set(actual) | core | {
         "src/ext/HACApK/**", helper, "tests/test_native_build_provenance.py",
-        "tests/matlab/fixtures/ltspice_rc.cir"}
+        "tests/matlab/fixtures/ltspice_rc.cir", "tools/sparsesolv_ci_impact.py",
+        "tools/ci_distribution_contract.py", "tools/ci_distribution_manifest.json"}
     assert shared == expected
     objective = ROOT / "tests/matlab/fixtures/radia_optuna_ltspice_objective.m"
     assert "ltspice_rc.cir" in objective.read_text(encoding="utf-8")
@@ -260,3 +263,17 @@ EXCEPTION_CEILING = {
     'CI-MIG-083': 'd80f2d57ed6a6d40fd25b3b44e8a1de02330c4d0a64ec6b8252214ea9c5c272d',
     'CI-MIG-084': '74ab1b3ccf1adea48ff5aa53fb2eccaac98c0b098b03d72ff12640ce997e6b80',
 }
+
+
+def test_job_conditions_are_single_expressions():
+    """A `${{ }}` condition followed by stray text becomes a truthy string.
+
+    That silently ran tag-only release jobs on pull requests, so every job
+    condition that opens an expression must also end with it.
+    """
+    for workflow in sorted((ROOT / ".github/workflows").glob("*.yml")):
+        document = yaml.load(workflow.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+        for name, job in (document.get("jobs") or {}).items():
+            condition = str(job.get("if", "")).strip()
+            if condition.startswith("${{"):
+                assert condition.endswith("}}") and condition.count("${{") == 1, (workflow.name, name, condition)

@@ -104,7 +104,7 @@ def test_radia_mcp_publishes_only_from_its_successful_tag_ci():
     assert "workflow_run:" not in workflow
     assert "release-radia-mcp.yml" not in workflow
     assert "radia-mcp-ci-release-context" not in workflow
-    assert "needs: [scope, selftest, minimum-sdk, release-evidence]" in workflow
+    assert "needs: [ci-impact, scope, selftest, minimum-sdk, release-evidence]" in workflow
     assert "Require a successful full audit on the tagged commit" in workflow
     assert "head_sha=${GITHUB_SHA}&event=workflow_dispatch&status=success" in workflow
     assert "full audit evidence found for ${GITHUB_SHA}" in workflow
@@ -122,7 +122,7 @@ def test_cubit_mesh_export_publishes_only_from_its_successful_tag_ci():
     assert "workflow_run:" not in workflow
     assert "release-cubit-mesh-export.yml" not in workflow
     assert "cubit-mesh-export-ci-release-context" not in workflow
-    assert "needs: build-test" in workflow
+    assert "needs: [ci-impact, build-test]" in workflow
     assert "github.ref_type == 'tag'" in workflow
     assert "startsWith(github.ref_name, 'cubit-mesh-export-v')" in workflow
     assert "Download wheel built by this tag CI" in workflow

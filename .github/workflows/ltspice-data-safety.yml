@@ -9,6 +9,14 @@ on:
       - 'tests/matlab/test_ltspice_data_safety.m'
       - 'tests/matlab/fixtures/ltspice_numdgt7*'
       - '.github/workflows/ltspice-data-safety.yml'
+      - 'CMakeLists.txt'
+      - 'Build.ps1'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_distribution_contract.py'
+      - 'tools/ci_distribution_manifest.json'
       - '!**/*.md'
   pull_request:
     branches: [main]
@@ -18,6 +26,14 @@ on:
       - 'tests/matlab/test_ltspice_data_safety.m'
       - 'tests/matlab/fixtures/ltspice_numdgt7*'
       - '.github/workflows/ltspice-data-safety.yml'
+      - 'CMakeLists.txt'
+      - 'Build.ps1'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_distribution_contract.py'
+      - 'tools/ci_distribution_manifest.json'
       - '!**/*.md'
   workflow_dispatch:
 
@@ -29,8 +45,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ci-impact:
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.route.outputs.required }}
+      reason: ${{ steps.route.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Route distribution impact
+        id: route
+        run: python tools/sparsesolv_ci_impact.py --lane ltspice-data-safety
+
   matlab-data-contracts:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: [ci-impact]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Windows, X64, "100"]
     timeout-minutes: 5
     env:

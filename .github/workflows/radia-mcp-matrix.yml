@@ -37,6 +37,14 @@ on:
       - "docs/**/*.msh"
       - "src/radia/panels/samples/**/*.msh"
       - ".github/workflows/radia-mcp-matrix.yml"
+      - 'CMakeLists.txt'
+      - 'Build.ps1'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_distribution_contract.py'
+      - 'tools/ci_distribution_manifest.json'
   pull_request:
     branches: [main]
     paths:
@@ -54,6 +62,14 @@ on:
       - "docs/**/*.msh"
       - "src/radia/panels/samples/**/*.msh"
       - ".github/workflows/radia-mcp-matrix.yml"
+      - 'CMakeLists.txt'
+      - 'Build.ps1'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_distribution_contract.py'
+      - 'tools/ci_distribution_manifest.json'
   workflow_dispatch:
 
 concurrency:
@@ -61,7 +77,25 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  ci-impact:
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.route.outputs.required }}
+      reason: ${{ steps.route.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Route distribution impact
+        id: route
+        run: python tools/sparsesolv_ci_impact.py --lane radia-mcp-matrix
+
   scope:
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (true) }}
+    needs: [ci-impact]
     runs-on: ubuntu-latest
     outputs:
       mode: ${{ steps.classify.outputs.mode }}
@@ -170,8 +204,8 @@ jobs:
           echo "Selected radia-mcp CI mode: $mode"
 
   minimum-sdk:
-    needs: scope
-    if: needs.scope.outputs.mode != 'docs'
+    needs: [ci-impact, scope]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (needs.scope.outputs.mode != 'docs') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -204,7 +238,8 @@ jobs:
             packages/radia-mcp/tests/test_hot_reload.py
 
   selftest:
-    needs: scope
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (true) }}
+    needs: [ci-impact, scope]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -519,10 +554,8 @@ jobs:
   release-evidence:
     # CONTRIBUTING: publish only a candidate whose explicit full audit
     # (workflow_dispatch, mode=full) passed on the exact tagged commit.
-    needs: scope
-    if: >-
-      github.ref_type == 'tag' &&
-      startsWith(github.ref_name, 'radia-mcp-v')
+    needs: [ci-impact, scope]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (github.ref_type == 'tag' && startsWith(github.ref_name, 'radia-mcp-v')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -545,10 +578,8 @@ jobs:
           echo "full audit evidence found for ${GITHUB_SHA}"
 
   publish:
-    needs: [scope, selftest, minimum-sdk, release-evidence]
-    if: >-
-      github.ref_type == 'tag' &&
-      startsWith(github.ref_name, 'radia-mcp-v')
+    needs: [ci-impact, scope, selftest, minimum-sdk, release-evidence]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (github.ref_type == 'tag' && startsWith(github.ref_name, 'radia-mcp-v')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: pypi

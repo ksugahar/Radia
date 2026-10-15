@@ -116,9 +116,10 @@ def test_unknown_native_impact_fails_closed(tmp_path, monkeypatch, error):
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
     def fail(*args):
         raise error
-    monkeypatch.setattr(IMPACT, "native_required", fail)
-    IMPACT.main()
-    assert output.read_text() == "required=true\n"
+    monkeypatch.setattr(IMPACT, "required_for_event", fail)
+    IMPACT.main([])
+    assert output.read_text().startswith("required=true\nreason=")
+    assert "fail closed" in output.read_text()
 
 
 def test_native_impact_gates_expensive_steps_and_watches_itself():
@@ -314,3 +315,268 @@ def test_p1_linear_routes_to_solver_numerics_and_native_ci(changed):
     triggers = workflow.get("on", workflow.get(True))
     for event in ("push", "pull_request"):
         assert changed in triggers[event]["paths"]
+
+
+ROOT_CASES = [
+    ('pyproject.toml', '[project]\nversion="1"\n', '[project]\nversion="2"\n', {'radia'}),
+    ('pyproject.toml', '[tool.setuptools.package-data]\nradia_gpu=["*.m"]\n',
+     '[tool.setuptools.package-data]\nradia_gpu=["*.cu"]\n', {'radia-gpu'}),
+    ('Build.ps1', "param()\nif ($OptunaMexOnly) { matlab -batch 'old' }\n",
+     "param()\nif ($OptunaMexOnly) { matlab -batch 'new' }\n", {'radia-optuna'}),
+    ('Build.ps1', 'if ($RadiaOnly) { python old }', 'if ($RadiaOnly) { python new }', {'radia'}),
+    ('Build.ps1', 'if ($AmsCudaOnly) { python old }', 'if ($AmsCudaOnly) { python new }', {'radia-gpu'}),
+    ('CMakeLists.txt', 'option(RADIA_BUILD_MATLAB_MEX "enable" OFF)',
+     'option(RADIA_BUILD_MATLAB_MEX "enable" ON)', {'radia-gpu'}),
+    ('CMakeLists.txt', 'target_compile_definitions(_radia_pybind PRIVATE OLD)',
+     'target_compile_definitions(_radia_pybind PRIVATE NEW)', {'radia'}),
+    ('MANIFEST.in', 'recursive-include packages/radia-gpu *.m\n',
+     'recursive-include packages/radia-gpu *.cu\n', {'radia-gpu'}),
+    ('tests/test_tier_manifest.json',
+     json.dumps({'schema':'radia.test-tier-manifest.v1','profiles':{'gpu-unit':{
+         'paths':['packages/radia-gpu/tests/test_ic_payload.py'],'max_elapsed_seconds':1}}}),
+     json.dumps({'schema':'radia.test-tier-manifest.v1','profiles':{'gpu-unit':{
+         'paths':['packages/radia-gpu/tests/test_ic_payload.py'],'max_elapsed_seconds':2}}}), {'radia-gpu'}),
+]
+
+
+CODE_LIKE = ('Build.ps1', 'CMakeLists.txt', 'MANIFEST.in')
+
+
+@pytest.mark.parametrize('path,before,after,owners', [c for c in ROOT_CASES if c[0] not in CODE_LIKE])
+def test_root_content_diff_selects_only_evidenced_owners(path,before,after,owners):
+    assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == owners
+
+
+@pytest.mark.parametrize('path,before,after,owners', [c for c in ROOT_CASES if c[0] in CODE_LIKE])
+def test_code_like_root_changes_select_all_file_owners(path,before,after,owners):
+    data=IMPACT.manifest()
+    assert IMPACT.root_owners(path,before,after,data)[0] == set(IMPACT.CONTRACT.owner_rule(data,path)['owners'])
+
+
+@pytest.mark.parametrize('path', ['pyproject.toml', 'tests/test_tier_manifest.json'])
+def test_real_root_comments_and_whitespace_select_no_build(path):
+    before=(ROOT/path).read_text(encoding='utf-8')
+    after=before+'\n' if path.endswith('.json') else before+'\n# comment only\n'
+    assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == set()
+
+
+@pytest.mark.parametrize('path', ['Build.ps1', 'CMakeLists.txt', 'MANIFEST.in'])
+def test_code_like_root_formatting_is_never_exempt(path):
+    """PowerShell whitespace can change meaning, so even comment-only edits select all owners."""
+    before=(ROOT/'Build.ps1').read_text(encoding='utf-8')
+    after=before+'\n# comment only\n'
+    assert IMPACT.root_owners('Build.ps1',before,after,IMPACT.manifest())[0] == set(IMPACT.CONTRACT.DISTRIBUTIONS)
+
+
+@pytest.mark.parametrize('path,before,after', [
+    ('pyproject.toml','[project]\nfuture=1','[project]\nfuture=2'),
+    ('Build.ps1','$shared=1','$shared=2'),
+    ('CMakeLists.txt','set(UNKNOWN 1)','set(UNKNOWN 2)'),
+    ('MANIFEST.in','global-exclude *.so','global-exclude *.dll'),
+    ('tests/test_tier_manifest.json','{}','{"unknown":true}'),
+])
+def test_unattributed_root_edits_select_all_file_owners(path,before,after):
+    assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == set(IMPACT.CONTRACT.DISTRIBUTIONS)
+
+
+@pytest.mark.parametrize('path,broken', [
+    ('pyproject.toml','[broken'),('Build.ps1','if ($AmsCudaOnly) {'),
+    ('CMakeLists.txt','add_library('),('MANIFEST.in','unknown directive'),
+    ('tests/test_tier_manifest.json','{'),
+])
+def test_unparsable_deleted_or_unavailable_roots_fail_closed(path,broken):
+    before=(ROOT/path).read_text(encoding='utf-8');data=IMPACT.manifest()
+    for old,new in [(before,broken),(before,None),(None,before)]:
+        assert IMPACT.root_owners(path,old,new,data)[0] == set(IMPACT.CONTRACT.DISTRIBUTIONS)
+
+
+def test_rename_status_preserves_both_ownership_boundaries():
+    raw='R100\0packages/radia-gpu/old.py\0packages/radia-optuna/new.py\0D\0Build.ps1\0'
+    assert IMPACT.changed_paths(raw)=={'packages/radia-gpu/old.py','packages/radia-optuna/new.py','Build.ps1'}
+    with pytest.raises(ValueError): IMPACT.changed_paths('R100\0old\0')
+    data=IMPACT.manifest()
+    for lane in ('radia-gpu','radia-optuna'):
+        assert IMPACT.lane_required(lane,IMPACT.changed_paths(raw),lambda p:(None,None),data)[0]
+
+
+def test_directive_order_and_quoted_hash_are_not_comment_only_edits():
+    data=IMPACT.manifest()
+    a='include packages/radia-gpu/source.m\nexclude packages/radia-gpu/source.m\n'
+    b='exclude packages/radia-gpu/source.m\ninclude packages/radia-gpu/source.m\n'
+    for path, before, after in (('MANIFEST.in', a, b),
+                                ('CMakeLists.txt', 'option(RADIA_BUILD_MATLAB_MEX "a#b" OFF)',
+                                 'option(RADIA_BUILD_MATLAB_MEX "a#c" OFF)')):
+        assert IMPACT.root_owners(path,before,after,data)[0] == set(IMPACT.CONTRACT.owner_rule(data,path)['owners'])
+
+
+def test_ams_legacy_exemption_cannot_override_unparsable_or_unknown_content():
+    before=manifest();after=manifest();after['impact_rules']='invalid'
+    assert IMPACT.lane_required('sparsesolv',{'tests/test_tier_manifest.json'},
+        lambda p:(json.dumps(before),json.dumps(after)),IMPACT.manifest())[0]
+
+
+@pytest.mark.parametrize('lane', ['radia-gpu','radia-optuna','sparsesolv','radia-mcp-matrix'])
+def test_missing_base_or_blob_lookup_cannot_skip_a_lane(lane):
+    data=IMPACT.manifest()
+    assert IMPACT.required_for_event(lane,'push',{'before':'0'*40},None,data)[0]
+    assert IMPACT.required_for_event(lane,'pull_request',{},None,data)[0]
+    def missing(path): raise OSError('blob unavailable')
+    assert IMPACT.lane_required(lane,{'Build.ps1'},missing,data)[0]
+
+
+@pytest.mark.parametrize('event', ['push','pull_request'])
+def test_router_uses_full_push_range_or_pr_merge_base(event):
+    calls=[];base='a'*40
+    payload={'before':base,'pull_request':{'base':{'sha':base}}}
+    def git(*args):
+        calls.append(args)
+        if args[0]=='merge-base': return 'b'*40
+        if args[0]=='diff': return 'M\0pyproject.toml\0'
+        return '[project]\nversion="'+('1' if args[1].startswith(('a','b')) else '2')+'"\n'
+    assert not IMPACT.required_for_event('radia-gpu',event,payload,git,IMPACT.manifest())[0]
+    diff=next(c for c in calls if c[0]=='diff')
+    assert diff[4]==('b'*40 if event=='pull_request' else base)
+
+
+def test_all_distribution_gates_are_hosted_and_preserve_full_manual_release_runs():
+    data=IMPACT.manifest()
+    for lane,definition in data['lanes'].items():
+        if definition['scope']=='repository_contract' or not definition['content_diff_active']: continue
+        workflow=yaml.load((ROOT/definition['workflow']).read_text(encoding='utf-8'),Loader=yaml.BaseLoader)
+        if 'ci-impact' not in workflow['jobs']: continue  # tag/manual-only workflows
+        gate=workflow['jobs']['ci-impact']
+        assert gate['runs-on']=='ubuntu-latest'
+        assert gate['steps'][0]['with']['fetch-depth']=='0'
+        assert f'--lane {lane}' in gate['steps'][-1]['run']
+        for name,job in workflow['jobs'].items():
+            if name=='ci-impact':continue
+            assert 'ci-impact' in job['needs']
+            assert "needs.ci-impact.outputs.required == 'true'" in job['if']
+        assert IMPACT.required_for_event(lane,'workflow_dispatch',{},None,data)[0]
+        assert IMPACT.required_for_event(lane,'push',{'ref':'refs/tags/package-v1'},None,data)[0]
+
+
+@pytest.mark.parametrize("bad", [True, False, float("nan"), float("inf"), 0, -1, "30"])
+def test_invalid_tier_budget_fails_closed(bad):
+    """JSON true equals 1 in Python; a budget edited to true must not read as unchanged."""
+    before = (ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8")
+    data = json.loads(before)
+    name = next(n for n, p in data["profiles"].items() if "max_elapsed_seconds" in p)
+    data["profiles"][name]["max_elapsed_seconds"] = bad
+    after = json.dumps(data)
+    with pytest.raises(ValueError):
+        IMPACT._tier_owners(before, after, IMPACT.CONTRACT.load(ROOT),
+                            IMPACT.CONTRACT.load(ROOT)["rules"][0].get("content_diff", {}))
+    if name == "sparsesolv":
+        with pytest.raises(ValueError):
+            IMPACT.ams_manifest_unchanged(before, after)
+
+
+def test_numeric_one_and_true_are_distinct_changes():
+    assert IMPACT._canonical({"max_elapsed_seconds": 1}) != IMPACT._canonical({"max_elapsed_seconds": True})
+
+
+def test_toml_number_to_bool_is_a_change():
+    before = "[tool.pytest.ini_options]\nverbosity_assertions = 1\n"
+    after = "[tool.pytest.ini_options]\nverbosity_assertions = true\n"
+    assert not IMPACT.test_dependencies_only(before, after)
+    assert IMPACT._canonical(1) != IMPACT._canonical(True)
+
+
+def test_huge_integer_budget_is_invalid_not_a_crash():
+    assert IMPACT._valid_budget(10 ** 400) is False
+
+
+def test_typed_canonical_separates_dates_from_look_alike_strings():
+    import datetime
+    when = datetime.date(2026, 10, 15)
+    for look_alike in (f"date:{when!r}", "2026-10-15", repr(when)):
+        assert IMPACT._canonical({"k": when}) != IMPACT._canonical({"k": look_alike})
+    before = "[tool.pytest.ini_options]\ncustom_date = 2026-10-15\n"
+    after = '[tool.pytest.ini_options]\ncustom_date = "date:datetime.date(2026, 10, 15)"\n'
+    assert not IMPACT.test_dependencies_only(before, after)
+
+
+def test_malformed_event_payload_fails_closed():
+    assert IMPACT.required_for_event("radia-gpu", "push", [], None, {})[0] is True
+
+
+@pytest.mark.parametrize("value", [None, "tests/x.py", [1], {"a": []}])
+def test_malformed_impact_rule_fails_closed(value):
+    before = (ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8")
+    data = json.loads(before)
+    data.setdefault("impact_rules", {})["src/radia/new_router_probe.py"] = value
+    with pytest.raises(ValueError):
+        IMPACT._tier_owners(before, json.dumps(data), IMPACT.CONTRACT.load(ROOT), {})
+
+
+def test_added_and_removed_impact_rules_select_owners():
+    before = (ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8")
+    data = json.loads(before)
+    data.setdefault("impact_rules", {})["src/radia/new_router_probe.py"] = ["tests/test_sparsesolv_ci_contract.py"]
+    added = json.dumps(data)
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    assert IMPACT._tier_owners(before, added, manifest, {})
+    assert IMPACT._tier_owners(added, before, manifest, {})
+
+
+def test_powershell_block_comment_is_not_a_cmake_comment():
+    import json as _json
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    old = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    new = old + "\n<# INVALID CMAKE #>\n"
+    required = IMPACT.lane_required("radia-gpu", {"CMakeLists.txt"}, lambda p: (old, new), manifest)
+    assert required[0] is True
+    assert IMPACT.code_tokens(old, "cmake") != IMPACT.code_tokens(new, "cmake")
+
+
+@pytest.mark.parametrize("profile", [{}, {"description": "only prose"}])
+def test_added_or_removed_unknown_profile_fails_closed(profile):
+    before = (ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8")
+    data = json.loads(before)
+    data["profiles"]["unknown_new_profile"] = profile
+    after = json.dumps(data)
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    for old, new in ((before, after), (after, before)):
+        with pytest.raises(ValueError):
+            IMPACT._tier_owners(old, new, manifest, {})
+
+
+def test_joining_powershell_statements_is_a_change():
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    old = (ROOT / "Build.ps1").read_text(encoding="utf-8")
+    marker = '$ErrorActionPreference = "Stop"'
+    assert marker in old
+    head, tail = old.split(marker, 1)
+    joined = head + marker + " " + tail.lstrip("\r\n")
+    assert IMPACT.lane_required("radia-gpu", {"Build.ps1"}, lambda p: (old, joined), manifest)[0] is True
+    # Indentation and comment-only edits stay exempt.
+    reindented = old.replace(marker, "    " + marker + "  # comment", 1)
+    assert IMPACT.code_tokens(old, "powershell") == IMPACT.code_tokens(reindented, "powershell")
+
+
+def test_powershell_formatting_change_selects_all_owners():
+    """Trailing space after a continuation backtick breaks PowerShell; never exempt it."""
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    old = (ROOT / "Build.ps1").read_text(encoding="utf-8")
+    line = next(l for l in old.splitlines() if l.rstrip().endswith("`"))
+    new = old.replace(line, line.rstrip() + " ", 1)
+    assert new != old
+    for lane in ("radia-gpu", "sparsesolv"):
+        assert IMPACT.lane_required(lane, {"Build.ps1"}, lambda p: (old, new), manifest)[0] is True
+
+
+def test_cmake_variable_reference_split_selects_owners():
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    old = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    assert "${Python3_EXECUTABLE}" in old
+    new = old.replace("${Python3_EXECUTABLE}", "$ {Python3_EXECUTABLE}", 1)
+    for lane in ("radia-gpu", "sparsesolv"):
+        assert IMPACT.lane_required(lane, {"CMakeLists.txt"}, lambda p: (old, new), manifest)[0] is True
+
+
+def test_attributed_edit_cannot_mask_a_global_cmake_edit():
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    old = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    new = old.replace("${Python3_EXECUTABLE}", "$ {Python3_EXECUTABLE}", 1).replace("retired", "unsupported", 1)
+    assert IMPACT.lane_required("sparsesolv", {"CMakeLists.txt"}, lambda p: (old, new), manifest)[0] is True

@@ -59,10 +59,27 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  ci-impact:
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.route.outputs.required }}
+      reason: ${{ steps.route.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Route distribution impact
+        id: route
+        run: python tools/sparsesolv_ci_impact.py --lane radia-fast
+
   fast-contracts:
+    needs: [ci-impact]
     # Fork code never executes on laboratory infrastructure. GitHub-hosted
     # package/policy workflows still cover that public contribution path.
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Windows, X64, "100"]
     timeout-minutes: 20
     env:

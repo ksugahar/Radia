@@ -9,6 +9,14 @@ on:
       - 'packages/eqnedit64/**'
       - '.github/workflows/eqnedit64.yml'
       - '.github/workflows/release-eqnedit64-pypi.yml'
+      - 'CMakeLists.txt'
+      - 'Build.ps1'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_distribution_contract.py'
+      - 'tools/ci_distribution_manifest.json'
   pull_request:
     branches: [main]
     paths:
@@ -16,6 +24,14 @@ on:
       - 'packages/eqnedit64/**'
       - '.github/workflows/eqnedit64.yml'
       - '.github/workflows/release-eqnedit64-pypi.yml'
+      - 'CMakeLists.txt'
+      - 'Build.ps1'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_distribution_contract.py'
+      - 'tools/ci_distribution_manifest.json'
   workflow_dispatch:
     inputs:
       font_diagnostic:
@@ -52,8 +68,25 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  ci-impact:
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.route.outputs.required }}
+      reason: ${{ steps.route.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Route distribution impact
+        id: route
+        run: python tools/sparsesolv_ci_impact.py --lane eqnedit64
+
   web:
-    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true }}
+    needs: [ci-impact]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true) }}
     # The browser edition is pure JavaScript plus a string-contract test, so it
     # answers in seconds on a free runner instead of waiting for the Windows
     # native build.  This is a fast-feedback lane, not a replacement: the
@@ -104,7 +137,8 @@ jobs:
           node tests/test_palette_browser.cjs
 
   build-test:
-    if: ${{ inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true }}
+    needs: [ci-impact]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true) }}
     # Font registration tests run only in this disposable GitHub-hosted
     # session. They must not churn the interactive laboratory desktop's font
     # cache or disturb applications such as LINE and Office.
@@ -385,7 +419,8 @@ jobs:
           if-no-files-found: warn
 
   font-boundary-diagnostic:
-    if: ${{ inputs.font_diagnostic == true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true }}
+    needs: [ci-impact]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (inputs.font_diagnostic == true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true) }}
     runs-on: windows-2022
     timeout-minutes: 15
     strategy:
@@ -427,7 +462,8 @@ jobs:
           if-no-files-found: warn
 
   font-dump-build:
-    if: ${{ inputs.font_dump == true && inputs.font_probe != true && inputs.font_prefix != true }}
+    needs: [ci-impact]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (inputs.font_dump == true && inputs.font_probe != true && inputs.font_prefix != true) }}
     runs-on: windows-2022
     timeout-minutes: 15
     strategy:
@@ -486,8 +522,8 @@ jobs:
             tools/eqnedit64/assets/THIRD_PARTY_NOTICES.md
 
   font-dump-trial:
-    needs: font-dump-build
-    if: ${{ inputs.font_dump == true && inputs.font_probe != true && inputs.font_prefix != true }}
+    needs: [ci-impact, font-dump-build]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (inputs.font_dump == true && inputs.font_probe != true && inputs.font_prefix != true) }}
     runs-on: windows-2022
     timeout-minutes: 15
     strategy:
@@ -565,7 +601,8 @@ jobs:
           if-no-files-found: warn
 
   font-probe-build:
-    if: ${{ inputs.font_probe == true && inputs.font_prefix != true }}
+    needs: [ci-impact]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (inputs.font_probe == true && inputs.font_prefix != true) }}
     runs-on: windows-2022
     timeout-minutes: 10
     defaults:
@@ -597,8 +634,8 @@ jobs:
             tools/eqnedit64/font-probe-manifest.json
 
   font-probe-trial:
-    needs: font-probe-build
-    if: ${{ inputs.font_probe == true && inputs.font_prefix != true }}
+    needs: [ci-impact, font-probe-build]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (inputs.font_probe == true && inputs.font_prefix != true) }}
     runs-on: windows-2022
     timeout-minutes: 10
     strategy:
@@ -667,7 +704,8 @@ jobs:
           if-no-files-found: warn
 
   font-prefix-trial:
-    if: ${{ inputs.font_prefix == true }}
+    needs: [ci-impact]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (inputs.font_prefix == true) }}
     runs-on: windows-2022
     timeout-minutes: 10
     strategy:
