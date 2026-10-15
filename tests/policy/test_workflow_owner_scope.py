@@ -303,3 +303,17 @@ def test_job_conditions_are_single_expressions():
             condition = str(job.get("if", "")).strip()
             if condition.startswith("${{"):
                 assert condition.endswith("}}") and condition.count("${{") == 1, (workflow.name, name, condition)
+
+
+def test_cubit_lane_reincludes_every_packaged_markdown_pattern():
+    import tomllib
+    package = ROOT / "packages/cubit-mesh-export"
+    project = tomllib.loads((package / "pyproject.toml").read_text(encoding="utf-8"))
+    expected = {f"packages/cubit-mesh-export/{project['project']['readme']}"}
+    for module, patterns in project["tool"]["setuptools"]["package-data"].items():
+        folder = "packages/cubit-mesh-export/src/" + module.replace(".", "/")
+        expected |= {f"{folder}/{p}" for p in patterns if p.endswith(".md")}
+    for event in ("push", "pull_request"):
+        paths = MANIFEST["lanes"]["cubit-mesh-export"]["events"][event]["paths"]
+        assert "!**/*.md" in paths
+        assert expected <= set(paths[paths.index("!**/*.md") + 1:]), event

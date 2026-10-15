@@ -26,6 +26,10 @@ on:
       - 'tools/sparsesolv_ci_impact.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
+      - '!**/*.md'
+      - 'packages/cubit-mesh-export/README.md'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/mcp/README.md'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/*.md'
   pull_request:
     branches: [main]
     paths:
@@ -50,6 +54,10 @@ on:
       - 'tools/sparsesolv_ci_impact.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
+      - '!**/*.md'
+      - 'packages/cubit-mesh-export/README.md'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/mcp/README.md'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/*.md'
   workflow_dispatch:
 
 permissions:
