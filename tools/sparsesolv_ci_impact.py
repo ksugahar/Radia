@@ -370,8 +370,12 @@ def root_owners(path,old,new,data):
         elif path=='tests/test_tier_manifest.json': owners=_tier_owners(old,new,data,rules[path])
         else: raise ValueError('unknown root config')
         if not owners <= all_owners|{'repo'}: raise ValueError('unknown attributed owner')
-        return owners,'verified content diff' if owners else 'comment/whitespace/prose-only change'
-    except (ValueError,KeyError,TypeError,AttributeError,IndexError) as exc:
+        # Only a real parser can prove a formatting edit harmless (TOML, JSON). For code-like
+        # files a textual change that attributes to nobody is unproven and selects everyone.
+        if not owners and old != new and path in ('Build.ps1','CMakeLists.txt','MANIFEST.in'):
+            raise ValueError('unproven formatting change in a code-like root file')
+        return owners,'verified content diff' if owners else 'parser-verified formatting-only change'
+    except Exception as exc:
         return all_owners,f'{type(exc).__name__}: {exc}; all file owners (fail closed)'
 
 
