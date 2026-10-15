@@ -1,0 +1,10 @@
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "curve_sideset_bbnd",
+  "strict_labels": true,
+  "required": {
+    "materials": ["domain"],
+    "boundaries": ["outer"],
+    "bboundaries": ["test_edge"]
+  }
+}

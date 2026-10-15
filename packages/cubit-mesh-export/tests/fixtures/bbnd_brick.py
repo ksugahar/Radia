@@ -10,7 +10,7 @@ for command in (
     "reset", "create brick x 1 y 1 z 1", "volume all scheme tetmesh",
     "volume all size 0.5", "mesh volume all", "block 1 add tet all",
     'block 1 name "domain"', "sideset 1 add surface all",
-    'sideset 1 name "boundary"',
+    'sideset 1 name "outer"',
 ):
     cubit.cmd(command)
 
