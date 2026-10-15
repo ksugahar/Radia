@@ -37,7 +37,7 @@ except (OSError, ValueError, KeyError, TypeError, AttributeError):
 def test_dependencies_only(before: str, after: str) -> bool:
     """All configuration outside the two development extras must be identical."""
     old, new = tomllib.loads(before), tomllib.loads(after)
-    if old == new:
+    if _canonical(old) == _canonical(new):
         return False
     for document in (old, new):
         extras = document.get("project", {}).get("optional-dependencies", {})
@@ -45,18 +45,23 @@ def test_dependencies_only(before: str, after: str) -> bool:
             values = extras.pop(name, [])
             if not isinstance(values, list) or not all(isinstance(x, str) for x in values):
                 return False
-    return old == new
+    return _canonical(old) == _canonical(new)
 
 
 def _valid_budget(value) -> bool:
     """A time budget is a finite positive number; JSON true/false are not numbers."""
-    return (isinstance(value, (int, float)) and not isinstance(value, bool)
-            and math.isfinite(value) and value > 0)
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value) and value > 0
+    except (OverflowError, ValueError):
+        return False
 
 
 def _canonical(value) -> str:
     """Type-strict comparison form: 1 and true must not compare equal."""
-    return json.dumps(value, sort_keys=True, ensure_ascii=False)
+    return json.dumps(value, sort_keys=True, ensure_ascii=False,
+                      default=lambda o: f"{type(o).__name__}:{o!r}")
 
 
 def ams_manifest_unchanged(before: str, after: str) -> bool:
@@ -149,7 +154,7 @@ def _toml_owners(old, new, config):
     before, after = tomllib.loads(old), tomllib.loads(new)
     a, b = dict(_leaves(before)), dict(_leaves(after)); result = set()
     for key in a.keys() | b.keys():
-        if key in a and key in b and a[key] == b[key]: continue
+        if key in a and key in b and _canonical(a[key]) == _canonical(b[key]): continue
         if key in (('project','optional-dependencies','test'), ('project','optional-dependencies','dev')):
             for value in (a.get(key, []), b.get(key, [])):
                 if not isinstance(value, list) or not all(isinstance(v,str) for v in value):
@@ -393,7 +398,7 @@ def required_for_event(lane,event_name,event,git,data):
         if not base: raise ValueError('missing merge base')
         changed=changed_paths(git('diff','--name-status','-z','--find-renames',base,'HEAD','--'))
         return lane_required(lane,changed,lambda p:(git('show',f'{base}:{p}'),git('show',f'HEAD:{p}')),data)
-    except (OSError,ValueError,KeyError,TypeError,AttributeError,subprocess.SubprocessError) as exc:
+    except Exception as exc:  # any unanticipated failure must select the lane
         return True,f'impact unknown ({type(exc).__name__}); fail closed'
 
 
@@ -425,7 +430,7 @@ def main(argv=None):
         CONTRACT.validate_schema(data)
         if args.lane not in data["lanes"]: raise ValueError("unknown lane")
         required, reason = required_for_event(args.lane, os.environ["GITHUB_EVENT_NAME"], event, git, data)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.SubprocessError) as exc:
+    except Exception as exc:  # any unanticipated failure must select the lane
         required, reason = True, f"impact unknown ({type(exc).__name__}); fail closed"
     safe_reason = reason.replace('\r',' ').replace('\n',' ')
     print(f"{args.lane} required={required}: {safe_reason}")
