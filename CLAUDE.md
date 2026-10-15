@@ -284,8 +284,8 @@ radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and 
   レポジトリ管理 sessions coordinate, each directing its own tool's sessions;
   Claude–Codex exchange occurs only between these two hubs.
 
-Defaults: Codex implements and validates numerics. Claude reviews, integrates,
-pushes, runs CI, fixes forward, tags, publishes, deploys and owns release gates.
+Defaults: Codex implements and validates numerics. After review, the レポジトリ管理
+hubs merge and run CI; Claude fixes forward, tags, publishes, deploys, owns release gates.
 User assignments prevail.
 
 ## Detailed Guidance
