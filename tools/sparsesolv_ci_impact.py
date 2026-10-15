@@ -106,11 +106,18 @@ def ams_manifest_unchanged(before: str, after: str) -> bool:
     return _canonical(relevant(before)) == _canonical(relevant(after))
 
 
+NEWLINE = chr(10)
+
+
 def code_tokens(text, language):
     """Conservative lexer: preserve strings, discard comments/spacing, fail closed."""
     tokens = []; i = 0
     while i < len(text):
         if text[i].isspace():
+            # PowerShell ends statements at newlines; keep one boundary token so joining two
+            # statements is a change, while indentation and blank/comment-only lines are not.
+            if language == 'powershell' and text[i] == NEWLINE and tokens and tokens[-1] != NEWLINE:
+                tokens.append(NEWLINE)
             i += 1; continue
         if language == 'powershell' and text.startswith('<#', i):
             end = text.find('#>', i+2)
@@ -123,7 +130,7 @@ def code_tokens(text, language):
                 if end < 0: raise ValueError('unterminated CMake comment')
                 i = end+len(bracket[1])+2
             else:
-                end = text.find('\n', i); i = len(text) if end < 0 else end+1
+                end = text.find('\n', i); i = len(text) if end < 0 else end  # keep the newline as a boundary
             continue
         start = i
         here = re.match(r'@([\'"])\r?\n', text[i:]) if language == 'powershell' else None
