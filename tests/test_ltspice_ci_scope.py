@@ -36,7 +36,11 @@ def test_optuna_ci_does_not_build_for_unrelated_raw_fixtures():
     for event in ('push', 'pull_request'):
         patterns = workflow['on'][event]['paths']
         def selected(path):
-            return any(fnmatchcase(path, pattern) for pattern in patterns)
+            included = False
+            for pattern in patterns:
+                if fnmatchcase(path, pattern.lstrip('!')):
+                    included = not pattern.startswith('!')
+            return included
 
         assert not selected('tests/matlab/fixtures/ltspice_numdgt7_binary.raw')
         assert not selected('tests/matlab/fixtures/kicad_ltspice_bridge.kicad_sch')
@@ -45,3 +49,27 @@ def test_optuna_ci_does_not_build_for_unrelated_raw_fixtures():
         assert selected('tests/matlab/fixtures/generate_sobol_direction_numbers.py')
         for fixture in (root / 'tests/matlab/fixtures').glob('*optuna*'):
             assert selected(fixture.relative_to(root).as_posix())
+
+
+def test_markdown_inputs_are_explicitly_scoped():
+    root = Path(__file__).resolve().parents[1]
+    for name, included, excluded in (
+        ('radia-optuna.yml', ['packages/radia-optuna/README.md',
+          'packages/radia-optuna/MATLAB_README.md', 'packages/radia-optuna/THIRD_PARTY_NOTICES.md',
+          'packages/radia-optuna/OPTUNA_SIMULINK_LAB.md'], ['packages/radia-optuna/HANDOVER.md']),
+        ('ltspice-data-safety.yml', [], ['tests/matlab/fixtures/ltspice_numdgt7_README.md']),
+        ('radia-gpu.yml', ['docs/ltspice/README.md', 'packages/radia-gpu/README.md'],
+          ['packages/radia-gpu/HANDOVER.md']),
+    ):
+        workflow = yaml.load((root / '.github/workflows' / name).read_text(), Loader=yaml.BaseLoader)
+        for event in ('push', 'pull_request'):
+            patterns = workflow['on'][event]['paths']
+            assert '!**/*.md' in patterns
+            def selected(path):
+                result = False
+                for pattern in patterns:
+                    if fnmatchcase(path, pattern.lstrip('!')):
+                        result = not pattern.startswith('!')
+                return result
+            assert all(selected(path) for path in included)
+            assert not any(selected(path) for path in excluded)

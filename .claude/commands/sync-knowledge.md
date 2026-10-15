@@ -15,7 +15,7 @@ Synchronize knowledge across all documentation layers after code changes or new 
 
 4. **docs/research/**: Add mathematical derivations, formulation documents for new theoretical results.
 
-5. **memory/**: Update project memories for decisions, discoveries, or status changes that affect future conversations.
+5. **Owning engineering docs**: Record durable engineering decisions in the owning docs page or package knowledge module; omit session chronology.
 
 6. **Verify**: Run `python -m pytest tests/ -q --ignore=tests/cubit --ignore=tests/mcp` to ensure nothing broke.
 
@@ -27,5 +27,5 @@ Synchronize knowledge across all documentation layers after code changes or new 
 - MCP knowledge updates should include code examples that users can copy
 - CLAUDE.md updates should be policies or architecture, not tutorials
 - docs/research/ is for mathematical derivations and theoretical background
-- memory/ is for decisions and context that help in future conversations
+- Durable decisions belong in owning engineering docs or package knowledge modules
 - Always verify code examples in MCP knowledge are syntactically correct

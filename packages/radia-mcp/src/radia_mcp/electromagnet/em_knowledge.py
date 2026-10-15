@@ -866,7 +866,7 @@ All four are checked by the Electromagnet validation lane under
 
 If a future task asks to "add 1/8 to the Kelvin benchmark panel",
 the answer is no -- the BVP doesn't admit it.  See
-`memory/feedback_kelvin_1_8_not_a_real_use_case.md` for the
+`docs/kelvin/CONVENTION.md` for the
 multi-hour debug trail (rho_min sweep + h-refinement both
 disproved numerical-issue hypotheses) before the BVP-symmetry
 realisation landed.

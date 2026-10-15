@@ -1921,3 +1921,7 @@ B = cuboid.get_B([25, 0, 0])
 
 **Last Updated**: 2026-02-16
 **License**: LGPL-2.1 (modifications), BSD-style (original RADIA from ESRF)
+
+## Retired extruded constructors
+
+ObjMltExtPgn, ObjMltExtRtg and ObjMltExtTri are retired unsafe constructors. Do not restore Python, MATLAB or C ABI entry points.

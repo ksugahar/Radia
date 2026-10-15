@@ -1216,7 +1216,7 @@ mismatch and needs source-level debugging in
 - `validation_test/sparsesolv/hiruma/bench_compact_ams.py` --
   reference reproducer.
 
-**Memory file**: `memory/project_3turncoil_fem_convergence_blockers.md`
+**Engineering documentation**: `docs/solver_benchmarks/README.md`
 """
 
 

@@ -772,7 +772,7 @@ def aca_tsvd(M, N, entry, modes=None, kmax=None,
         direct dense SVD (exact reference).  NO backward compatibility: the
         legacy integers 2/3 and the terse "qr"/"aca" now RAISE (the manuscript
         Method 2/3 were removed 2026-07-05; see
-        ``memory/aca_tsvd_qr_recompression.md``).
+        ``docs/stream_function.md``).
 
     Returns
     -------

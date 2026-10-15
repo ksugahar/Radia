@@ -71,8 +71,7 @@ kernels `A` is numerically **low rank**, so we instead:
    come out **orthonormal** -- exactly what the folded regularisation
    (`RegularizedTSVD`) requires.
 
-   Exactly **two** methods are kept (the manuscript Method 2/3 were removed; see
-   `memory/aca_tsvd_qr_recompression.md`): `method="aca_qr_tsvd"` (this fast
+   Exactly **two** methods are kept (the manuscript Method 2/3 were removed): `method="aca_qr_tsvd"` (this fast
    ACA + QR + TSVD path, the default) and `method="dense"` -- the plain/direct
    TSVD (materialise `A` and take its dense SVD), the **exact reference** the
    review noted the paper lacked.  NO backward compatibility: legacy `method=2/3`

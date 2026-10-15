@@ -56,7 +56,7 @@ dependencies = [
     #     ngsolve-side H-matrix path: `rad.RadiaField(...)` has no
     #     `use_hmatrix=` parameter (passing it raises TypeError), and
     #     BEM-A remains dense (H-matrix deferred — see
-    #     memory/direction_bem_a_hmatrix_in_radia.md).  Radia-specific
+    #     docs/peec_integration/README.md).  Radia-specific
     #     H-matrix acceleration is kept in Radia's C++ kernels, primarily
     #     the HDiv-VIM open-boundary path.
     "ngsolve==6.2.2607",

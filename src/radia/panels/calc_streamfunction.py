@@ -2191,7 +2191,7 @@ def _write_former_stl(chain, wire_diam, clearance, margin, wall, decimate,
     segfaults or emits a degenerate near-EMPTY channel.  VERIFIED on the 3D
     self-crossing distorted MRI-scale wire (386 pts, 8 m): union 0.7 s, cut
     0.1 s, channel ratio 0.93, watertight (see
-    memory/sf_printable_former_cad_status.md).  Optional feature: needs
+    docs/stream_function.md).  Optional feature: needs
     ``trimesh`` + ``manifold3d`` (``pip install trimesh manifold3d``); raises a
     clear message if absent.  Raises (No-Fallback) if the result is not
     watertight or the channel is near-empty."""

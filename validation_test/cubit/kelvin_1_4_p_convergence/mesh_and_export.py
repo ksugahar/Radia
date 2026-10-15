@@ -8,7 +8,7 @@ Why 1/4 not 1/8: Cubit's copy mesh on a 3-cut octant cap produces
 ~5% of vertex pairs with O(2 cm) translation error and creates a
 hash-table inconsistency that NGSolve cannot rewrap (NgException:
 "Ask for unused hash-value").  The blocker is in Cubit's copy-mesh
-projection, not in NGSolve.  Documented in memory/feedback_kelvin_1_8_blocker.md.
+projection, not in NGSolve.  Documented in docs/kelvin/CONVENTION.md.
 
 Geometry (units: meters):
   Magnetic sphere (radius a)                a    = 0.05

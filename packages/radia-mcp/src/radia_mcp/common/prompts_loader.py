@@ -4,7 +4,7 @@ Learned from wjc9011/COMSOL_Multiphysics_MCP — they keep
 `src/knowledge/prompts/{mph_api,physics_guide,workflow}.md` as
 separate markdown files and load them as plain text. This avoids
 the `r\"\"\"...\"\"\"` raw-string parser collision we hit twice
-(see memory/feedback_*.md if it exists, or just remember: any
+(any
 Python triple-quoted docstring inside a raw-string r\"\"\"..\"\"\"
 breaks because `\"\"\"` cannot be escaped inside raw strings).
 

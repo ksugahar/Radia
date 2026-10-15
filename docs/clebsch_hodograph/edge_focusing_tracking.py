@@ -18,7 +18,7 @@ here (a genuinely curl-free fringe, see the sign note) FOCUSES, giving 1/f_z = +
 Why tracking, not a field-EFB slope.  The vertical edge focusing is a SECOND-ORDER,
 off-mid-plane property of the fringe; the effective-field-boundary (EFB) slope of the
 mid-plane |B| CANNOT recover it (it is wrong-sign / blows up on a compact dipole; see
-memory/edge_focusing_efb_slope_negative).  The correct measurement is the linearized
+the linearized tracking definition below).  The correct measurement is the linearized
 vertical Hill integral along the reference orbit:
     1 / f_z = (q/p) INT ( u_y dB_x/dz - u_x dB_y/dz )|_{z=0} ds ,
 with u the mid-plane orbit tangent.  This module (a) builds a genuinely MAXWELLIAN

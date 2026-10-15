@@ -84,7 +84,6 @@ convention.
 
 - CLAUDE.md "Axisymmetric FE" section (POLICY 2026-05-10)
 - `docs/axifem/FORMULATION.md` (lab repo) — full derivation
-- `memory/reference_femm_source_axisym_conventions.md`
 - [LOCAL] `10_FEM_定式化/21_軸対称/` (1 file)
 
 ## Cross-reference

@@ -3,7 +3,7 @@
 Locks docs/clebsch_hodograph/edge_focusing_tracking.{ipynb,py}: the particle-tracking
 Hill integral recovers the hard-edge vertical edge-focusing law |1/f_z| = tan(beta)/rho
 on a genuinely Maxwellian (curl-free) tilted fringe -- the CORRECT measurement of edge
-focusing (the field-EFB slope cannot; see memory/edge_focusing_efb_slope_negative).
+focusing (the field-EFB slope cannot; see the linearized tracking definition below).
 
 The optics claims are pure-numpy and deterministic (no ngsolve); the final test
 adds a small Radia coil-symmetry regression.  The claims locked here are:
