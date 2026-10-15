@@ -1057,7 +1057,7 @@ try {
     [xml]$alignedSource = '<root xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
         $alignedBranch.Groups['math'].Value + '</root>'
     $alignedNamespaces = [Xml.XmlNamespaceManager]::new($alignedSource.NameTable)
-    $alignedNamespaces.AddNamespace('m', 'http://schemas.openxmlformats.org/officeDocument/2006/math')
+    $alignedNamespaces.AddNamespace('m', 'http://schemas.microsoft.com/office/2004/12/omml')
     $alignedMathCount = $alignedSource.SelectNodes('//m:oMath', $alignedNamespaces).Count
     $alignedRowsCount = $alignedSource.SelectNodes('//m:eqArr/m:e', $alignedNamespaces).Count
     if ($alignedMathCount -ne 1 -or $alignedRowsCount -ne 3 -or
@@ -1332,4 +1332,3 @@ try {
     }
     if ($restoreFailure) { throw $restoreFailure }
 }
-
