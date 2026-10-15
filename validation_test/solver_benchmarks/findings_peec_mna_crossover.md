@@ -105,7 +105,7 @@ parallel filament bundles.  Measured directly: at N=1800 (nwinc=3,
 9 parallel sub-filaments per segment) the HACApK L matvec error is
 ~2e-2 regardless of ``aca_eps`` (1e-4 through 1e-8) and ``eta`` (1-3).
 The same problem was documented in stage 3 (see
-memory/hacapk_peec_prima_plan.md "N=1024 10% rel error on helix,
+docs/peec_integration/README.md "N=1024 10% rel error on helix,
 N=2000 19%").  HACApK ACA compression fails to capture the near-field
 interaction between tightly bundled parallel filaments.
 

@@ -21,3 +21,7 @@ written to `validation_test/maglev/demos/`, where acceptance tests own them.
 Each subfolder has its own `README.md` with a per-script table (purpose /
 run command / headline result).  Start with `cube_alpha_sweep.py` for the
 core API, then `sphere/` for the validated force workflow.
+
+## Square analytical reference
+
+Use psi = f(x) f(y) for the square boundary-layer reference. The additive sine envelope vanishes on the boundary but misses the orthogonal boundary-layer structure.

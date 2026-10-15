@@ -24,7 +24,7 @@
  * peer review JIAM-2026-36), the only numerical algorithm implemented in this
  * file because HACApK does not provide it.  It reproduces the dense TSVD of the
  * ACA approximation to machine precision.  (The legacy manuscript Method 2/3 --
- * two/three SVDs -- were removed; see memory/aca_tsvd_qr_recompression.md.)
+ * two/three SVDs -- were removed; see docs/stream_function.md.)
  *
  * Storage convention: ROW-MAJOR for the returned U / V (matches Radia's
  * CblasRowMajor / NumPy C-contiguous arrays).

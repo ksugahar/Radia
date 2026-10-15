@@ -11,7 +11,6 @@ ALLOWED_MARKDOWN = {
     "CHANGELOG.md",
     "CLAUDE.md",
     "CONTRIBUTING.md",
-    "MEMORY.md",
     "README.md",
     "ROADMAP.md",
     "SECURITY.md",
@@ -29,7 +28,7 @@ BANNED_SUFFIXES = {
     ".vtu",
 }
 
-BANNED_DIRECTORIES = {"logs", "slprj", "temp", "work"}
+BANNED_DIRECTORIES = {"logs", "slprj", "temp", "work", "memory"}
 
 
 def test_repository_root_contains_no_scratch_artifacts() -> None:

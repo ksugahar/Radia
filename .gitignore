@@ -458,6 +458,8 @@ memory/
 /.codex-*/
 # Throwaway debug/presentation scripts dropped at repo root
 /*.py
+!/setup.py
+/.test-temp/
 # Build.ps1-generated temporary MSVC batch (regenerated each build; never commit)
 /build_temp_msvc.bat
 

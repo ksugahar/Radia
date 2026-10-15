@@ -742,8 +742,7 @@ SINGLE-STROKE ERROR CORRECTION via DEFORM (already shipped; VectorH1 upgrade)
 
 IMPLEMENTATION STATUS (tests/ + validation/docs -> Simulink)  [Stage A DONE 2026-06-11]
 ------------------------------------------------------------------------------------------
-  Phase 0  record the unification (memory/clebsch_cohomology_streamfunction_
-           unification.md) -- DONE.
+  Phase 0  record the unification (docs/stream_function.md) -- DONE.
   Phase 1  2D bidirectional map (Tampere) -- DONE: validation_test/feec/vim_legacy/
            bidirectional_map_2d.py + tests/feec/test_bidirectional_map_2d.py (5).
            w=zeta^2: forward A,phi 1e-15; orthogonality 2.6e-14; Jacobian
@@ -803,7 +802,7 @@ IMPLEMENTATION STATUS (tests/ + validation/docs -> Simulink)  [Stage A DONE 2026
 Files: src/radia/clebsch_potential.py (ClebschSolver, AxisymStreamFunctionSolver),
 src/radia/cohomology_cut.py (gmsh-free cohomology cut via radia.cohomology), src/radia/
 stream_function.py + panels/calc_streamfunction.py (ACA+TSVD engine),
-memory/clebsch_cohomology_streamfunction_unification.md (full record).
+docs/stream_function.md (maintained overview).
 """
 
 

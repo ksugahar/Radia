@@ -620,3 +620,7 @@ fallback is used by a declared native GPU construction call.
 The oracle remains Optuna 5.0.0. Numerical parity and transfer-inclusive
 measurements are required before claiming acceleration. Building with
 mexcuda alone does not certify speedup or every sampler's GPU acceleration.
+
+## TPE estimator contract
+
+Optuna 5 unified TPESampler owns both objective modes. Use shared weighted Parzen mixtures, hypervolume-contribution below weights, explicit prior, below-mixture sampling and log l(x)-log g(x) selection. Never restore scalar-bandwidth KDE or legacy MOTPE fallback. Joint sampling follows upstream bandwidth and RNG oracles; conditional/changed distributions outside the intersection sample independently.

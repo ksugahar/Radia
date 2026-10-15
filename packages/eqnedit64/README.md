@@ -89,3 +89,7 @@ diagonal strike. They are not passes and do not qualify for Web hand-test
 exemption. Bare functions may have empty OMML arguments; `sin 2x` collects only
 `2`. PowerPoint colour loss on the shared OMML route remains a known limitation.
 Full arbitrary-TeX or Office/browser parity is not established.
+
+## PowerPoint normal paste
+
+Ctrl+V must produce editable inline m:oMath, no m:oMathPara, left aligned, with 18 pt equation, trailing character and insertion point in a blank presentation. EXE/Web use inline MathML in CF_HTML. Test Application.CommandBars.ExecuteMso("Paste"), never substitute Shapes.Paste(). Refuse attachment to user processes, inspect saved OMML/rendering, restore clipboard and close owned resources only. Slides image copy remains 300 dpi / 24 pt.

@@ -70,7 +70,7 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
         H0: Uniform external field amplitude [A/m].
         field_axis: "x" | "y" | "z" -- direction of H0.
         fes_order: H1 polynomial order.  Use >= 2 for Kelvin (curved
-            geometry) per memory/feedback_kelvin_high_order_required.md.
+            geometry) per docs/kelvin/CONVENTION.md.
         R_kelvin: Kelvin sphere radius [m].  Must match the .vol mesh.
         probe: (x, y, z) probe point in the magnetic interior.
         output_msh: Optional path to write a GMSH .msh post-export.

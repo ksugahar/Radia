@@ -21,8 +21,8 @@ but the EM panel itself is fully covered by the 1/2 and 1/4 samples
 Solver status (2026-04-26): Hz_origin -> 0 in the continuous limit
 (verified by h-refinement); the failure is formulation-level, not
 discretization.  rho_min cap and Dirichlet variants do NOT close
-the gap.  See `memory/feedback_kelvin_1_8_not_a_real_use_case.md`
-and `memory/feedback_kelvin_1_8_blocker.md` for the investigation.
+the gap.  See `docs/kelvin/CONVENTION.md`
+and `docs/kelvin/CONVENTION.md` for the investigation.
 
 Run:
   python kelvin_benchmark_sphere_1_8_build.py [--out-dir DIR]

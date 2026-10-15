@@ -1431,5 +1431,4 @@ Its Application to 2-D Magnetic Field Problems"*, CEFC 2026 (Bossavit
 school). The 2-D complex-potential / conformal pole design lineage is older
 still (Rogowski 1923, Halbach). These scripts are an independent NGSolve
 realisation coupled to the lab's reduced-potential + Kelvin machinery — **not
-a novelty claim.** See `memory/derham_field_current_duality.md` for the full
-prior-art verdict.
+a novelty claim.**

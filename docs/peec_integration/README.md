@@ -11,3 +11,7 @@ corpus. Benchmark, comparison, smoke, and solver-regression scripts live under
 `validation_test/peec_integration`; reusable behavior belongs in `src/radia`.
 Completed source-routing ledgers are retained by Git history, not as public
 notebooks.
+
+## Independent loss diagnostics
+
+Validate basis orientation, loop projection, vector-potential normalization and SIBC power normalization separately. Use SIBC for thin-skin sweeps; volume references suit mesh-resolvable skin depth or magnetic material behavior. Keep executable asserted checks in validation_test, not diagnostic source archives.

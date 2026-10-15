@@ -25,6 +25,11 @@ on:
       - 'CMakeLists.txt'
       - 'validation_test/optimization/validate_optuna_cuda.m'
       - '.github/workflows/radia-optuna.yml'
+      - '!**/*.md'
+      - 'packages/radia-optuna/README.md'
+      - 'packages/radia-optuna/MATLAB_README.md'
+      - 'packages/radia-optuna/THIRD_PARTY_NOTICES.md'
+      - 'packages/radia-optuna/OPTUNA_SIMULINK_LAB.md'
   pull_request:
     branches: [main]
     paths:
@@ -48,6 +53,11 @@ on:
       - 'CMakeLists.txt'
       - 'validation_test/optimization/validate_optuna_cuda.m'
       - '.github/workflows/radia-optuna.yml'
+      - '!**/*.md'
+      - 'packages/radia-optuna/README.md'
+      - 'packages/radia-optuna/MATLAB_README.md'
+      - 'packages/radia-optuna/THIRD_PARTY_NOTICES.md'
+      - 'packages/radia-optuna/OPTUNA_SIMULINK_LAB.md'
   workflow_dispatch:
 
 permissions:

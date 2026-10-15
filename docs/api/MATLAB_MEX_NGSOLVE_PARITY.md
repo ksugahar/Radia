@@ -349,3 +349,7 @@ Read the coverage record's `full_compatibility_complete` and its constructor
 default audit before making a completeness claim. Earlier 4.9 timing and
 proposal-sequence results do not certify the 5.0 implementation. Performance
 claims require fresh equal-budget measurements for the current implementation.
+
+## GridFunction projection
+
+Match Python gf.Set with ngcomp::SetValues; direct FE Interpolate is not equivalent for high-order HDiv.
