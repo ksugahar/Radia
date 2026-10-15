@@ -633,6 +633,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
   fflush(stdout);
   {
     std::vector<int> curve_ids = CubitInterface::parse_cubit_list("curve", "all");
+    cubit_curve_to_ng_edge_.clear();
     int edgenr = 1;
     for (int cid : curve_ids) {
       // Get parent surfaces of this curve
@@ -664,6 +665,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
       double crv_length = re ? re->measure() : 1.0;
       double u_start = re ? re->start_param() : 0.0;
 
+      int exported_segments = 0;
       for (int eid : edge_ids) {
         std::vector<int> conn = CubitInterface::get_connectivity("edge", eid);
         if ((int)conn.size() < 2) continue;
@@ -692,7 +694,10 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
         nseg.EPGeomInfo(0).dist = dist0;
         nseg.EPGeomInfo(1).dist = dist1;
         ng_mesh_->AddSegment(nseg);
+        exported_segments++;
       }
+      if (exported_segments > 0 && exported_segments == (int)edge_ids.size())
+        cubit_curve_to_ng_edge_[cid] = edge_descriptor_index;
       edgenr++;
     }
     PRINT_INFO("  Phase1e2: %d edge groups added\n", edgenr - 1);
