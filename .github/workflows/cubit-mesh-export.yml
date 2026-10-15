@@ -18,6 +18,14 @@ on:
       - 'tools/audit_pyside6_only.py'
       - 'validation_test/cubit_mesh_export/**'
       - '.github/workflows/cubit-mesh-export.yml'
+      - 'CMakeLists.txt'
+      - 'Build.ps1'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_distribution_contract.py'
+      - 'tools/ci_distribution_manifest.json'
   pull_request:
     branches: [main]
     paths:
@@ -34,6 +42,14 @@ on:
       - 'tools/audit_pyside6_only.py'
       - 'validation_test/cubit_mesh_export/**'
       - '.github/workflows/cubit-mesh-export.yml'
+      - 'CMakeLists.txt'
+      - 'Build.ps1'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_distribution_contract.py'
+      - 'tools/ci_distribution_manifest.json'
   workflow_dispatch:
 
 permissions:
@@ -44,7 +60,25 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  ci-impact:
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.route.outputs.required }}
+      reason: ${{ steps.route.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Route distribution impact
+        id: route
+        run: python tools/sparsesolv_ci_impact.py --lane cubit-mesh-export
+
   build-test:
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (true) }}
+    needs: [ci-impact]
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
@@ -196,8 +230,8 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: build-test
-    if: >-
+    needs: [ci-impact, build-test]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (github.ref_type == 'tag' && startsWith(github.ref_name, 'cubit-mesh-export-v')) }}
       github.ref_type == 'tag' &&
       startsWith(github.ref_name, 'cubit-mesh-export-v')
     runs-on: ubuntu-latest

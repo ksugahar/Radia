@@ -116,9 +116,10 @@ def test_unknown_native_impact_fails_closed(tmp_path, monkeypatch, error):
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
     def fail(*args):
         raise error
-    monkeypatch.setattr(IMPACT, "native_required", fail)
-    IMPACT.main()
-    assert output.read_text() == "required=true\n"
+    monkeypatch.setattr(IMPACT, "required_for_event", fail)
+    IMPACT.main([])
+    assert output.read_text().startswith("required=true\nreason=")
+    assert "fail closed" in output.read_text()
 
 
 def test_native_impact_gates_expensive_steps_and_watches_itself():
@@ -314,3 +315,125 @@ def test_p1_linear_routes_to_solver_numerics_and_native_ci(changed):
     triggers = workflow.get("on", workflow.get(True))
     for event in ("push", "pull_request"):
         assert changed in triggers[event]["paths"]
+
+
+ROOT_CASES = [
+    ('pyproject.toml', '[project]\nversion="1"\n', '[project]\nversion="2"\n', {'radia'}),
+    ('pyproject.toml', '[tool.setuptools.package-data]\nradia_gpu=["*.m"]\n',
+     '[tool.setuptools.package-data]\nradia_gpu=["*.cu"]\n', {'radia-gpu'}),
+    ('Build.ps1', "param()\nif ($OptunaMexOnly) { matlab -batch 'old' }\n",
+     "param()\nif ($OptunaMexOnly) { matlab -batch 'new' }\n", {'radia-optuna'}),
+    ('Build.ps1', 'if ($RadiaOnly) { python old }', 'if ($RadiaOnly) { python new }', {'radia'}),
+    ('Build.ps1', 'if ($AmsCudaOnly) { python old }', 'if ($AmsCudaOnly) { python new }', {'radia-gpu'}),
+    ('CMakeLists.txt', 'option(RADIA_BUILD_MATLAB_MEX "enable" OFF)',
+     'option(RADIA_BUILD_MATLAB_MEX "enable" ON)', {'radia-gpu'}),
+    ('CMakeLists.txt', 'target_compile_definitions(_radia_pybind PRIVATE OLD)',
+     'target_compile_definitions(_radia_pybind PRIVATE NEW)', {'radia'}),
+    ('MANIFEST.in', 'recursive-include packages/radia-gpu *.m\n',
+     'recursive-include packages/radia-gpu *.cu\n', {'radia-gpu'}),
+    ('tests/test_tier_manifest.json',
+     json.dumps({'schema':'radia.test-tier-manifest.v1','profiles':{'gpu-unit':{
+         'paths':['packages/radia-gpu/tests/test_ic_payload.py'],'max_elapsed_seconds':1}}}),
+     json.dumps({'schema':'radia.test-tier-manifest.v1','profiles':{'gpu-unit':{
+         'paths':['packages/radia-gpu/tests/test_ic_payload.py'],'max_elapsed_seconds':2}}}), {'radia-gpu'}),
+]
+
+
+@pytest.mark.parametrize('path,before,after,owners', ROOT_CASES)
+def test_root_content_diff_selects_only_evidenced_owners(path,before,after,owners):
+    assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == owners
+
+
+@pytest.mark.parametrize('path', IMPACT.CONTRACT.ROOT_CONFIGS)
+def test_real_root_comments_and_whitespace_select_no_build(path):
+    before=(ROOT/path).read_text(encoding='utf-8')
+    after=before+'\n' if path.endswith('.json') else before+'\n# comment only\n'
+    assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == set()
+
+
+@pytest.mark.parametrize('path,before,after', [
+    ('pyproject.toml','[project]\nfuture=1','[project]\nfuture=2'),
+    ('Build.ps1','$shared=1','$shared=2'),
+    ('CMakeLists.txt','set(UNKNOWN 1)','set(UNKNOWN 2)'),
+    ('MANIFEST.in','global-exclude *.so','global-exclude *.dll'),
+    ('tests/test_tier_manifest.json','{}','{"unknown":true}'),
+])
+def test_unattributed_root_edits_select_all_file_owners(path,before,after):
+    assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == set(IMPACT.CONTRACT.DISTRIBUTIONS)
+
+
+@pytest.mark.parametrize('path,broken', [
+    ('pyproject.toml','[broken'),('Build.ps1','if ($AmsCudaOnly) {'),
+    ('CMakeLists.txt','add_library('),('MANIFEST.in','unknown directive'),
+    ('tests/test_tier_manifest.json','{'),
+])
+def test_unparsable_deleted_or_unavailable_roots_fail_closed(path,broken):
+    before=(ROOT/path).read_text(encoding='utf-8');data=IMPACT.manifest()
+    for old,new in [(before,broken),(before,None),(None,before)]:
+        assert IMPACT.root_owners(path,old,new,data)[0] == set(IMPACT.CONTRACT.DISTRIBUTIONS)
+
+
+def test_rename_status_preserves_both_ownership_boundaries():
+    raw='R100\0packages/radia-gpu/old.py\0packages/radia-optuna/new.py\0D\0Build.ps1\0'
+    assert IMPACT.changed_paths(raw)=={'packages/radia-gpu/old.py','packages/radia-optuna/new.py','Build.ps1'}
+    with pytest.raises(ValueError): IMPACT.changed_paths('R100\0old\0')
+    data=IMPACT.manifest()
+    for lane in ('radia-gpu','radia-optuna'):
+        assert IMPACT.lane_required(lane,IMPACT.changed_paths(raw),lambda p:(None,None),data)[0]
+
+
+def test_directive_order_and_quoted_hash_are_not_comment_only_edits():
+    data=IMPACT.manifest()
+    a='include packages/radia-gpu/source.m\nexclude packages/radia-gpu/source.m\n'
+    b='exclude packages/radia-gpu/source.m\ninclude packages/radia-gpu/source.m\n'
+    assert IMPACT.root_owners('MANIFEST.in',a,b,data)[0]=={'radia-gpu'}
+    assert IMPACT.root_owners('CMakeLists.txt',
+        'option(RADIA_BUILD_MATLAB_MEX "a#b" OFF)',
+        'option(RADIA_BUILD_MATLAB_MEX "a#c" OFF)',data)[0]=={'radia-gpu'}
+
+
+def test_ams_legacy_exemption_cannot_override_unparsable_or_unknown_content():
+    before=manifest();after=manifest();after['impact_rules']='invalid'
+    assert IMPACT.lane_required('sparsesolv',{'tests/test_tier_manifest.json'},
+        lambda p:(json.dumps(before),json.dumps(after)),IMPACT.manifest())[0]
+
+
+@pytest.mark.parametrize('lane', ['radia-gpu','radia-optuna','sparsesolv','radia-mcp-matrix'])
+def test_missing_base_or_blob_lookup_cannot_skip_a_lane(lane):
+    data=IMPACT.manifest()
+    assert IMPACT.required_for_event(lane,'push',{'before':'0'*40},None,data)[0]
+    assert IMPACT.required_for_event(lane,'pull_request',{},None,data)[0]
+    def missing(path): raise OSError('blob unavailable')
+    assert IMPACT.lane_required(lane,{'Build.ps1'},missing,data)[0]
+
+
+@pytest.mark.parametrize('event', ['push','pull_request'])
+def test_router_uses_full_push_range_or_pr_merge_base(event):
+    calls=[];base='a'*40
+    payload={'before':base,'pull_request':{'base':{'sha':base}}}
+    def git(*args):
+        calls.append(args)
+        if args[0]=='merge-base': return 'b'*40
+        if args[0]=='diff': return 'M\0pyproject.toml\0'
+        return '[project]\nversion="'+('1' if args[1].startswith(('a','b')) else '2')+'"\n'
+    assert not IMPACT.required_for_event('radia-gpu',event,payload,git,IMPACT.manifest())[0]
+    diff=next(c for c in calls if c[0]=='diff')
+    assert diff[4]==('b'*40 if event=='pull_request' else base)
+
+
+def test_all_distribution_gates_are_hosted_and_preserve_full_manual_release_runs():
+    data=IMPACT.manifest()
+    for lane,definition in data['lanes'].items():
+        if definition['scope']=='repository_contract' or not definition['content_diff_active']: continue
+        workflow=yaml.load((ROOT/definition['workflow']).read_text(encoding='utf-8'),Loader=yaml.BaseLoader)
+        if 'ci-impact' not in workflow['jobs']: continue  # tag/manual-only workflows
+        gate=workflow['jobs']['ci-impact']
+        assert gate['runs-on']=='ubuntu-latest'
+        assert gate['steps'][0]['with']['fetch-depth']=='0'
+        assert f'--lane {lane}' in gate['steps'][-1]['run']
+        for name,job in workflow['jobs'].items():
+            if name=='ci-impact':continue
+            assert 'ci-impact' in job['needs']
+            assert "needs.ci-impact.outputs.required == 'true'" in job['if']
+        assert IMPACT.required_for_event(lane,'workflow_dispatch',{},None,data)[0]
+        assert IMPACT.required_for_event(lane,'push',{'ref':'refs/tags/package-v1'},None,data)[0]
