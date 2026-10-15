@@ -224,6 +224,10 @@ def _ps_owners(old,new,config):
     result=set()
     for switch in (a.keys() | b.keys())-{'unknown'}:
         if a.get(switch)!=b.get(switch): result.update(config[switch])
+    # PowerShell whitespace is not provably harmless (backtick continuation, statement
+    # boundaries, here-strings): a textual change with identical tokens selects everyone.
+    if not result and old != new:
+        raise ValueError('unproven PowerShell formatting change')
     return result
 
 
