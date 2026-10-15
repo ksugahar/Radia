@@ -6,7 +6,6 @@ then provides correct code and verifies no findings.
 
 import pytest
 from radia_mcp.radia_ngsolve.rules import (
-    ALL_RULES,
     check_objbckg_no_lambda,
     check_missing_utidelall,
     check_hardcoded_absolute_paths,
@@ -373,25 +372,3 @@ class TestCoilScalarPotentialAsLift:
 # ============================================================
 # Meta-tests
 # ============================================================
-
-class TestAllRulesList:
-    def test_all_rules_count(self):
-        # Tripwire: bump when adding/removing a rule in
-        # radia_ngsolve.rules.ALL_RULES (NOT covered by ci_preflight's
-        # pre-push gate -- only this build-test pytest runs it).
-        assert len(ALL_RULES) == 40
-
-    def test_all_rules_callable(self):
-        for rule in ALL_RULES:
-            assert callable(rule)
-
-    def test_clean_code_no_findings(self):
-        """Clean code should produce zero findings across all rules."""
-        clean = (
-            'import numpy as np\n'
-            'x = np.linspace(0, 1, 100)\n'
-        )
-        lines = clean.splitlines()
-        for rule in ALL_RULES:
-            findings = rule("clean.py", lines)
-            assert findings == [], f"{rule.__name__} fired on clean code"

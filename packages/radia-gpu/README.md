@@ -6,6 +6,14 @@ CPU electromagnetic execution belongs to `radia` (Python/pybind11/NGSolve).
 `radia-mcp` is the AI operation interface. Neither package is required merely
 to locate and use the installed GPU MATLAB files.
 
+The 0.1.5rc1 candidate adds experimental GPU IC(0)-PCG with retained factors
+and `radia.gpu.HCurlICSystem`. CUDA performs the fixed-shift numerical
+factorization; cuSPARSE performs the forward and transpose triangular solves.
+Host code owns symbolic analysis and iteration control. The published 0.1.4
+wheel remains unchanged. A100 comparison is pending while that host is shut
+down; build-host measurements are numerical diagnostics, not formal timing.
+See `validation_test/ic_cuda` for accuracy, lifecycle and scaling evidence.
+
 Version 0.1.4 contains FP64 CUDA CSR Jacobi-PCG, a Simulink block for the same
 kernel, and the selected standalone LTspice workflow. It also contains experimental FP64 assembled-operator AMS and its versioned
 HDF5 exchange, bounded HDiv-MMM and Laplace FMM operators. This does not certify
