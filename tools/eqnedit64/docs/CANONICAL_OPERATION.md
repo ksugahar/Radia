@@ -58,6 +58,11 @@ GitHub-hosted Windowsの隔離CIで実行する。
 pwsh -NoProfile -File build\accept_release.ps1
 ```
 
+耐久試験は100 seed×5,000操作を維持し、既定の制限時間は1,800秒。
+`-EnduranceTimeoutSeconds`で60～3,600秒の範囲を指定できる。
+制限時間と耐久試験の実測秒数は結果JSONの`gui_endurance`に記録する。
+タイムアウトは失敗であり、seed数や操作数を減らして代替しない。
+
 この一つのコマンドが、通常回帰、PowerPoint COM、IrfanView CLI、Google Slides
 形式、ASan、100 seed×5,000回の非表示Win32操作、96/120/144/192 dpi相当の
 オフスクリーン視認性、最大式でも1再描画5 ms未満の性能ゲート、
