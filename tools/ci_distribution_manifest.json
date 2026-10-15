@@ -1470,7 +1470,11 @@
             "tests/test_tier_manifest.json",
             "tools/sparsesolv_ci_impact.py",
             "tools/ci_distribution_contract.py",
-            "tools/ci_distribution_manifest.json"
+            "tools/ci_distribution_manifest.json",
+            "!**/*.md",
+            "packages/cubit-mesh-export/README.md",
+            "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/README.md",
+            "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/OWNERSHIP.md"
           ]
         },
         "pull_request": {
@@ -1498,7 +1502,11 @@
             "tests/test_tier_manifest.json",
             "tools/sparsesolv_ci_impact.py",
             "tools/ci_distribution_contract.py",
-            "tools/ci_distribution_manifest.json"
+            "tools/ci_distribution_manifest.json",
+            "!**/*.md",
+            "packages/cubit-mesh-export/README.md",
+            "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/README.md",
+            "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/OWNERSHIP.md"
           ]
         },
         "workflow_dispatch": {}
@@ -1507,7 +1515,9 @@
         "tools/sparsesolv_ci_impact.py:required_for_event"
       ],
       "markdown_inputs": [
-        "packages/cubit-mesh-export/README.md"
+        "packages/cubit-mesh-export/README.md",
+        "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/README.md",
+        "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/OWNERSHIP.md"
       ],
       "content_diff_active": [
         "CMakeLists.txt",
@@ -2647,26 +2657,6 @@
     }
   },
   "migration_exceptions": [
-    {
-      "id": "CI-MIG-001",
-      "lane": "cubit-mesh-export",
-      "kind": "markdown_native",
-      "pattern": "packages/cubit-mesh-export/**",
-      "current": "Current envelope starts native work for prose Markdown.",
-      "target": "Exclude Markdown then re-include actual build/test inputs.",
-      "owner": "cubit-mesh-export",
-      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-002",
-      "lane": "cubit-mesh-export",
-      "kind": "markdown_native",
-      "pattern": "validation_test/**",
-      "current": "Current envelope starts native work for prose Markdown.",
-      "target": "Exclude Markdown then re-include actual build/test inputs.",
-      "owner": "cubit-mesh-export",
-      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing"
-    },
     {
       "id": "CI-MIG-008",
       "lane": "eqnedit64",
