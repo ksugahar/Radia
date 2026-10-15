@@ -115,6 +115,15 @@ if (Test-Path -LiteralPath $stamp) {
     if ($match) { $buildCommit = $match.Line -replace '.*"(.*)".*', '$1' }
 }
 $gitCommit = (& git -C $root rev-parse HEAD).Trim()
+$asanRuntime = if (-not $SkipBuild) {
+    $runtimePath = Join-Path $root 'build\clang_rt.asan_dynamic-x86_64.dll'
+    $runtimeInfo = Get-Item -LiteralPath $runtimePath -ErrorAction Stop
+    [ordered]@{
+        path = $runtimeInfo.FullName
+        version = $runtimeInfo.VersionInfo.FileVersion
+        sha256 = (Get-FileHash -LiteralPath $runtimePath -Algorithm SHA256).Hash
+    }
+} else { $null }
 $report = [ordered]@{
     schema = 'eqnedit64.final-acceptance.v1'
     accepted_at = (Get-Date).ToString('o')
@@ -136,6 +145,7 @@ $report = [ordered]@{
     paint_benchmark = $paintMeasurements.Trim()
     background_suite = if ($SkipBuild) { 'skipped by caller' } else { 'passed' }
     asan_suite = if ($SkipBuild) { 'skipped by caller' } else { 'passed' }
+    asan_runtime = $asanRuntime
     build_phase_fuzz_timeout_seconds = if ($SkipBuild) { $null } else { $EnduranceTimeoutSeconds }
 }
 $reportFolder = Split-Path -Parent $ReportPath

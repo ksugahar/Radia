@@ -17,6 +17,13 @@ $exe = if ($AppPath) {
         'build\Eqnedit64_asan.exe') -ErrorAction Stop).Path
 }
 $previousOptions = $env:ASAN_OPTIONS
+$runtime = Join-Path (Split-Path -Parent $exe) 'clang_rt.asan_dynamic-x86_64.dll'
+if (-not (Test-Path -LiteralPath $runtime -PathType Leaf)) {
+    throw "MSVC ASan runtime missing beside diagnostic executable: $runtime. Rebuild with build_asan.bat."
+}
+$runtimeInfo = Get-Item -LiteralPath $runtime
+$runtimeHash = (Get-FileHash -LiteralPath $runtime -Algorithm SHA256).Hash
+Write-Host "ASan runtime: $runtime; version=$($runtimeInfo.VersionInfo.FileVersion); SHA256=$runtimeHash"
 
 try {
     $env:ASAN_OPTIONS = 'abort_on_error=1:halt_on_error=1:detect_leaks=0'

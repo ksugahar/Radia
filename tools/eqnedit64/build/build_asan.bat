@@ -49,4 +49,20 @@ if not exist build\Eqnedit64_asan.exe (
     echo [ERROR] build\Eqnedit64_asan.exe was not produced
     exit /b 1
 )
+REM MSVC ASan uses an LLVM-named runtime even when compiled with cl.exe.
+REM vcvars PATH belongs to this batch process; make the diagnostic executable
+REM runnable by the later PowerShell gate without changing the user PATH.
+set "ASAN_COMPILER_DIR="
+for /f "delims=" %%I in ('where cl.exe') do if not defined ASAN_COMPILER_DIR (
+    set "ASAN_COMPILER_DIR=%%~dpI"
+)
+set "ASAN_RUNTIME=!ASAN_COMPILER_DIR!clang_rt.asan_dynamic-x86_64.dll"
+echo [INFO] ASan compiler: !ASAN_COMPILER_DIR!cl.exe
+echo [INFO] ASan runtime: !ASAN_RUNTIME!
+if not exist "!ASAN_RUNTIME!" (
+    echo [ERROR] MSVC x64 ASan runtime was not found: !ASAN_RUNTIME!
+    exit /b 1
+)
+copy /y "!ASAN_RUNTIME!" "build\clang_rt.asan_dynamic-x86_64.dll" >nul
+if errorlevel 1 ( echo [ERROR] ASan runtime staging failed & exit /b 1 )
 echo [OK] build\Eqnedit64_asan.exe
