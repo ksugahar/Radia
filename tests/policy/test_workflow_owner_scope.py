@@ -146,6 +146,16 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
         "validation_test/induction_heating/test_ih_operator_physics_golden.py",
     }
+    expected |= {
+        "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
+        "validation_test/radia_mcp/test_aphi_gauge_point.py",
+        "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
+        "validation_test/radia_mcp/test_eddy_driven_region.py",
+        "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
+    }
     assert shared == expected
     # The shared IH contracts execute the GPU package adapter against CPU Radia solvers.
     for path in ("tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",

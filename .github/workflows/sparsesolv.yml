@@ -163,6 +163,14 @@ on:
       - 'validation_test/induction_heating/test_ih_operator_physics_golden.py'
       - 'packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py'
       - 'packages/cubit-mesh-export/src/cubit_mesh_export/check.py'
+      - 'validation_test/radia_mcp/test_aphi_gauge_point.py'
+      - 'validation_test/radia_mcp/test_axi_eddy_current_drive.py'
+      - 'validation_test/radia_mcp/test_eddy_driven_region.py'
+      - 'validation_test/radia_mcp/test_hoibc_weingarten_curvature.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py'
+      - 'packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py'
       - '!**/*.md'
   push:
     branches: [main]
@@ -326,6 +334,14 @@ on:
       - 'validation_test/induction_heating/test_ih_operator_physics_golden.py'
       - 'packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py'
       - 'packages/cubit-mesh-export/src/cubit_mesh_export/check.py'
+      - 'validation_test/radia_mcp/test_aphi_gauge_point.py'
+      - 'validation_test/radia_mcp/test_axi_eddy_current_drive.py'
+      - 'validation_test/radia_mcp/test_eddy_driven_region.py'
+      - 'validation_test/radia_mcp/test_hoibc_weingarten_curvature.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py'
+      - 'packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py'
       - '!**/*.md'
   workflow_dispatch:
 
@@ -439,7 +455,7 @@ jobs:
         if: steps.native-impact.outputs.required == 'true'
         shell: pwsh
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-gpu\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-gpu\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
           RADIA_TESTS_ALLOW_PARTIAL: '0'
           RADIA_TEST_NGSOLVE_THREADS: '1'
           OMP_NUM_THREADS: '1'

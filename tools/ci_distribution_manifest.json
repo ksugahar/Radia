@@ -1553,6 +1553,102 @@
       "owners": [
         "radia-gpu"
       ]
+    },
+    {
+      "pattern": "validation_test/radia_mcp/test_aphi_gauge_point.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "MCP NGSolve numerical consumer contracts require the CPU Radia build and run in the solver integration profiles."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "MCP NGSolve numerical consumer contracts require the CPU Radia build and run in the solver integration profiles."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "validation_test/radia_mcp/test_eddy_driven_region.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "MCP NGSolve numerical consumer contracts require the CPU Radia build and run in the solver integration profiles."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "MCP NGSolve numerical consumer contracts require the CPU Radia build and run in the solver integration profiles."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "MCP NGSolve numerical consumer contracts require the CPU Radia build and run in the solver integration profiles."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "MCP NGSolve numerical consumer contracts require the CPU Radia build and run in the solver integration profiles."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "MCP NGSolve numerical consumer contracts require the CPU Radia build and run in the solver integration profiles."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "MCP NGSolve numerical consumer contracts require the CPU Radia build and run in the solver integration profiles."
+      },
+      "selection": "all_owners"
     }
   ],
   "shared_include_closures": [
@@ -2649,6 +2745,14 @@
             "validation_test/induction_heating/test_ih_operator_physics_golden.py",
             "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
             "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
+            "validation_test/radia_mcp/test_aphi_gauge_point.py",
+            "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
+            "validation_test/radia_mcp/test_eddy_driven_region.py",
+            "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
+            "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py",
             "!**/*.md"
           ]
         },
@@ -2816,6 +2920,14 @@
             "validation_test/induction_heating/test_ih_operator_physics_golden.py",
             "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
             "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
+            "validation_test/radia_mcp/test_aphi_gauge_point.py",
+            "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
+            "validation_test/radia_mcp/test_eddy_driven_region.py",
+            "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
+            "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py",
             "!**/*.md"
           ]
         },

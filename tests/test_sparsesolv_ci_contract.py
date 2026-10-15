@@ -265,13 +265,6 @@ def test_cpu_lane_excludes_foreign_runtime_and_integration_gates():
         "src/runtime/ih/radia_ih_thermal.cpp",
         "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
         "tests/test_sparsesolv_ci_contract.py",
-        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
-        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
-        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
-        "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
-        "validation_test/radia_mcp/test_eddy_driven_region.py",
-        "validation_test/radia_mcp/test_aphi_gauge_point.py",
-        "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
     ]
     for event in ("push", "pull_request"):
         for path in excluded:
@@ -283,8 +276,8 @@ def test_cpu_lane_excludes_foreign_runtime_and_integration_gates():
     scripts = "\n".join(step.get("run", "") for step in steps)
     assert "test_radia_mex_sparse_symmetry" not in scripts
     assert "test_radia_ih_thermal_acceptance" not in scripts
-    for step in steps:
-        assert "radia-mcp" not in step.get("env", {}).get("PYTHONPATH", "")
+    numerical = next(step for step in steps if step.get("name") == "Run required NGSolve numerical contracts")
+    assert "packages\\radia-mcp\\src" in numerical["env"]["PYTHONPATH"]
 
 
 def test_native_solver_lane_builds_required_axisymmetric_extension():
@@ -595,8 +588,7 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
         "sparsesolv": [
             "tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
             "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
-            "validation_test/induction_heating/test_ih_operator_physics_golden.py"],
-        "radia-mcp-matrix": [
+            "validation_test/induction_heating/test_ih_operator_physics_golden.py",
             "validation_test/radia_mcp/test_aphi_gauge_point.py",
             "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
             "validation_test/radia_mcp/test_eddy_driven_region.py",
@@ -628,26 +620,23 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
                 assert '-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl' in scripts
                 assert 'vcvars64.bat' in scripts and 'call `"$vcvars`" && cmake' in scripts
                 assert '-G "Visual Studio' not in scripts
-            else:
-                assert path in scripts
-                job = workflow["jobs"]["numerical-validation"]
-                assert "needs.scope.outputs.run_tests == 'true'" in job["if"]
-                assert "--confcutdir=validation_test/radia_mcp" in scripts
     inputs = {
         "sparsesolv": ["packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
-                       "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py"],
+                       "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+                       "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
+                       "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
+                       "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
+                       "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py"],
         "radia-gpu": ["src/runtime/ih/radia_ih_thermal.cpp", "src/runtime/ih/radia_ih_runtime.cpp",
                       "src/runtime/ih/radia_ih_transport.cpp", "src/runtime/ih/radia_ih_thermal.h",
                       "src/core/radia_mex_sparse_symmetry.h"],
-        "radia-mcp-matrix": ["packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
-                             "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
-                             "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
-                             "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py"],
     }
     for lane, paths in inputs.items():
         for path in paths:
             assert all(IMPACT.CONTRACT.selected(path, data["lanes"][lane]["events"][e])
                        for e in ("push", "pull_request")), (lane, path)
+    mcp_workflow = yaml.load((ROOT / ".github/workflows/radia-mcp-matrix.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    assert "numerical-validation" not in mcp_workflow["jobs"]
     # The lightweight router contract remains in the repository impact lane.
     spec = importlib.util.spec_from_file_location("tier_coverage", ROOT / "tools/run_test_tier.py")
     tier_router = importlib.util.module_from_spec(spec)
