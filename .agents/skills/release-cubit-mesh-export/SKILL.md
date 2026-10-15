@@ -89,9 +89,9 @@ wrong tier, and a LAB receipt without `installed_payload_verified`. On 100 the
 worker registers every profile (`--all-users`); the receipt requires it.
 
 **Forced** (the user explicitly asked to close running Cubit): add
-`--force-close-cubit`. Every running `coreform_cubit.exe` on both hosts is
-killed before preflight, whoever owns it; unsaved work in those sessions is
-lost. The closed pid/user list is printed and kept in each receipt
+`--force-close-cubit`. Every running `coreform_cubit.exe`, `clarox.exe` and
+`cubitx.exe` on both hosts is killed before preflight, whoever owns it; unsaved work in those sessions is
+lost. The closed image/pid/user list is printed and kept in each receipt
 (`force_closed_cubit`). Use it only on explicit instruction for that deploy.
 
 Receipts: the local host's worker writes its own; remote receipts are copied
