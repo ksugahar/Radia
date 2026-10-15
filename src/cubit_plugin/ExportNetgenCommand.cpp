@@ -748,6 +748,42 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     }
   }
 
+  // ---- Cubit curve sidesets -> Netgen CD2 (BBND edge) names ----
+  // CD2 names use the 1-based EdgeDescriptor index, not the Cubit curve ID
+  // or the adjacent face descriptor. Each represented curve owns one label.
+  {
+    const auto &curve_edges = nc->get_cubit_curve_to_ng_edge();
+    std::map<int, std::string> edge_labels;
+    for (const auto &sg : md.sidesets) {
+      auto curves = CubitInterface::get_sideset_curves(sg.id);
+      if (curves.empty()) continue;
+      std::string label = sg.name.empty() ? "sideset_" + std::to_string(sg.id) : sg.name;
+      for (auto &ch : label) if (ch == ' ') ch = '_';
+      if (label == "default") {
+        PRINT_ERROR("Curve sideset %d uses reserved BBND name 'default'.\n", sg.id);
+        return false;
+      }
+      for (int cid : curves) {
+        auto edge = curve_edges.find(cid);
+        if (edge == curve_edges.end()) {
+          PRINT_ERROR("Curve sideset %d '%s': curve %d cannot be represented "
+                      "as a complete BBND edge in the exported volume mesh.\n",
+                      sg.id, label.c_str(), cid);
+          return false;
+        }
+        auto previous = edge_labels.find(edge->second);
+        if (previous != edge_labels.end() && previous->second != label) {
+          PRINT_ERROR("Curve %d has conflicting BBND sideset names '%s' and '%s'.\n",
+                      cid, previous->second.c_str(), label.c_str());
+          return false;
+        }
+        edge_labels[edge->second] = label;
+      }
+    }
+    for (const auto &entry : edge_labels)
+      ng_mesh->SetCD2Name(entry.first, entry.second);
+  }
+
   // ---- Cubit nodesets -> Netgen CD3 (BBBND vertex) names ----
   // Each Cubit nodeset (e.g. "GND" at the Kelvin sphere centre, used as
   // the Dirichlet anchor for Omega-reduced FEM) becomes a named Element0d
