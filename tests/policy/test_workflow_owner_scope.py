@@ -125,8 +125,12 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     expected = set(CONTRACT.ROOT_CONFIGS) | set(actual) | core | {
         "src/ext/HACApK/**", helper, "tests/test_native_build_provenance.py",
         "tests/matlab/fixtures/ltspice_rc.cir", "tools/sparsesolv_ci_impact.py",
-        "tools/ci_distribution_contract.py", "tools/ci_distribution_manifest.json"}
+        "tools/ci_distribution_contract.py", "tools/ci_distribution_manifest.json",
+        "packages/radia-mcp/src/radia_mcp/ltspice/**"}
     assert shared == expected
+    # Integration evidence: radia-gpu LTspice tests cross-check the radia-mcp LTspice gates.
+    gpu_ltspice_tests = list((ROOT / "packages/radia-gpu/tests/ltspice").glob("test_*.py"))
+    assert any("from radia_mcp.ltspice" in path.read_text(encoding="utf-8") for path in gpu_ltspice_tests)
     objective = ROOT / "tests/matlab/fixtures/radia_optuna_ltspice_objective.m"
     assert "ltspice_rc.cir" in objective.read_text(encoding="utf-8")
     assert "ltspice_rc.cir" in (ROOT / "tests/matlab/test_ltspice_workflow.m").read_text(encoding="utf-8")
