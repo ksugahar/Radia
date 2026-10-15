@@ -3275,9 +3275,8 @@
         node.getAttribute("minsize") !== node.getAttribute("maxsize")) return 0;
     var sizes = {"1.2em": 1.2, "1.8em": 1.8, "2.4em": 2.4, "3em": 3, "3.0em": 3};
     var size = node.getAttribute("minsize");
-    // Other equal min/max values are internal MathJax layout (for example
-    // binomial fences), outside this explicit TeX big-family mapping.
-    if (!Object.prototype.hasOwnProperty.call(sizes, size)) return 0;
+    if (!Object.prototype.hasOwnProperty.call(sizes, size))
+      throw new Error("unsupported fixed delimiter size");
     return sizes[size];
   }
 
@@ -3459,6 +3458,10 @@
         officeFenceClose(officeUnwrapped(children[0]).textContent) === officeUnwrapped(children[children.length - 1]).textContent &&
         officeSingleDelimiterPair(children)) {
       var inner = node.cloneNode(true);
+      ["mathcolor", "mathvariant"].forEach(function (attribute) {
+        var inherited = officeInheritedAttribute(node, attribute);
+        if (inherited) inner.setAttribute(attribute, inherited);
+      });
       inner.removeChild(inner.firstElementChild);
       inner.removeChild(inner.lastElementChild);
       return '<m:d><m:dPr><m:begChr m:val="' +

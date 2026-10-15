@@ -173,7 +173,7 @@ bool is_letter(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 bool is_digit(char c)  { return c >= '0' && c <= '9'; }
 
 bool is_automatic_function_name(const std::string& name) {
-    /* the editor string resources 11000--11038, plus common engineering
+    /* The function string resources 11000--11038, plus common engineering
      * operators already understood by Eqnedit64's TeX emitter/parser. */
     static const char* kNames[] = {
         "Im", "Pr", "Re", "arg", "arcsin", "arccos", "arctan",
@@ -2212,7 +2212,7 @@ const std::vector<std::string>& Equation::templates() {
 const std::vector<Equation::SequenceBinding>& Equation::sequence_shortcuts() {
     static const std::vector<SequenceBinding> kSequences = [] {
         std::vector<SequenceBinding> result = {
-        /* the editor template family. */
+        /* Template-family shortcuts. */
         {'T', 'F', false, "template.frac",       "fraction"},
         {'T', '/', false, "template.slashfrac",  "slashed fraction"},
         {'T', 'H', false, "template.sup",        "superscript"},
@@ -2243,7 +2243,7 @@ const std::vector<Equation::SequenceBinding>& Equation::sequence_shortcuts() {
         {'T', '_', false, "template.underline",  "underline"},
         {'T', 'W', false, "template.tilde",      "tilde accent"},
 
-        /* the editor Ctrl+K symbol family. */
+        /* Ctrl+K symbol-family shortcuts. */
         {'K', 'I', false, "symbol.\\infty",      "infinity"},
         {'K', 'A', false, "symbol.\\rightarrow", "right arrow"},
         {'K', 'D', false, "symbol.\\partial",    "partial derivative"},

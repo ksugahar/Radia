@@ -7,7 +7,7 @@ Eqnedit64.exe equation.tex equation.pptxmath
 ```
 
 The output is an XML `m:oMathPara` in the 2006 Office math namespace, with
-DrawingML `a:rPr` and `a:t` runs. It is intended for PowerPoint's `a14:m`
+DrawingML `a:rPr` formatting and canonical Office math `m:t` text runs. It is intended for PowerPoint's `a14:m`
 extension, not Word import and not HTML. The serializer shares equation
 structure with the normal-copy RichEdit HTML route. Both routes emit matched
 visible delimiter pairs as stretchable structures.
@@ -62,8 +62,8 @@ characters without stretching; they are outside the stretchable-fence gate.
 
 ## Validation and limits
 
-The declared corpus has 64 fixtures: 61 clipboard byte comparisons plus 3 clipboard exclusions;
-strict OOXML has 61 structural/text/style/colour comparisons and 3 required
+The declared corpus has 66 fixtures: 63 clipboard byte comparisons plus 3 clipboard exclusions;
+strict OOXML has 63 structural/text/style/colour comparisons and 3 required
 rejections. The big-family fixture independently checks all 16 commands and
 all four fixed run sizes in both clipboard HTML and DrawingML.
 Run grouping, control formatting and dialect-specific vertical layout are
@@ -72,8 +72,9 @@ check functions, upright/bold styles and enclosing nary fences.
 
 The isolated Eqnedit64 CI lane runs CLI atomic-error checks, real native-backed
 Markdown-to-PPTX packaging and `python-pptx` reopen checks. The Open XML SDK
-checks ISO math structure after validation-only run normalization, outer
-package structure and a strict DrawingML run profile. It does not completely
+checks shipped math fragments without renaming text or formatting, outer
+package structure and a strict DrawingML run profile. DrawingML run-property
+SDK limitations are counted separately; text is never rewritten to make validation pass. It does not completely
 validate the `a14` payload, and these checks do not certify PowerPoint import.
 The result JSON explicitly records that limitation.
 
@@ -92,3 +93,13 @@ This prevents inherited unrelated proofing languages without changing Office set
 Native array column specifications (`\begin{array}{...}`) are unsupported;
 use the supported `cases` or `matrix` environments. A single stretchable
 delimiter encloses only one balanced group; adjacent groups remain separate.
+
+## Desktop evidence and renewed candidate gate (2026-10-15)
+
+Prior approved desktop batches opened, edited, saved and reopened the generated
+math decks. Their saved math contained canonical `m:t` text (12 and 11 text
+nodes in the two reviewed decks), replacing the producer's former `a:t`.
+That evidence motivated this correction; it does not qualify the changed
+candidate. The new candidate requires a fresh approved PowerPoint batch and
+clipboard recheck, exact-SHA CI, signed O: hand testing and Claude review
+before release. Those renewed desktop and signing gates are pending.

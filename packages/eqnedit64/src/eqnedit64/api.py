@@ -51,7 +51,7 @@ def export_powerpoint_math(tex: str, output: str | Path,
             if root.tag != f"{{{math}}}oMathPara" or root.find(f"{{{math}}}oMath") is None:
                 raise RuntimeError("Invalid PowerPoint math root")
             if any(not node.tag.startswith((f"{{{math}}}", f"{{{drawing}}}"))
-                   or node.tag == f"{{{math}}}t" for node in root.iter()):
+                   or node.tag == f"{{{drawing}}}t" for node in root.iter()):
                 raise RuntimeError("Invalid PowerPoint math dialect")
             os.replace(candidate, destination)
     finally:

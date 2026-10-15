@@ -414,7 +414,7 @@ def main() -> int:
     if eq.latex().replace(" ", "") != "\\frac{a+b}{}":
         failures.append(f"fraction did not wrap the selection: {eq.latex()!r}")
 
-    # the editor double-clicked the current structural slot, not the whole
+    # Double-click selects the current structural slot, not the whole
     # equation.  The outermost slot still means the full equation.
     eq = Equation()
     eq.insert_template("frac")
@@ -498,7 +498,7 @@ def main() -> int:
     if eq.undo_name() != "TeX Edit":
         failures.append(f"source history name was {eq.undo_name()!r}")
 
-    # the editor persistent style chords are represented by actual TeX
+    # Persistent style chords are represented by actual TeX
     # typefaces, so the mode is not merely a visual flag in the native app.
     styled_cases = {
         "text": ("abc", r"\text{abc}"),
@@ -534,7 +534,7 @@ def main() -> int:
             "custom function style was not stable: "
             f"{custom_function!r} -> {again.latex()!r}")
 
-    # Exact the editor automatic-Function dictionary: PE string resources
+    # Exact automatic-function dictionary: PE string resources
     # 11000--11038, loaded by x86 routine 0x00430670 as 0x27 entries.
     # Check both bulk model insertion and the character-by-character sequence
     # delivered by the real Win32 input path.

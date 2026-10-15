@@ -4,20 +4,23 @@
 
 - Add strict native PowerPoint OOXML math export (.pptxmath) and a checked subprocess helper.
 - Share structural Office emission with the existing RichEdit clipboard route.
+- Use canonical m:t text in PowerPoint math runs; validate shipped XML without text-tag rewriting.
+- Remove legacy CLI switches (exit 94); document colour rejection (97) and strict export rejection (98).
+- Share stretchable m:d delimiters, scoped fixed-size big-family symbols in m:box, and explicit proofing language.
+- Align styled/singleton delimiter boundaries and reject unsupported fixed sizes consistently in native/Web output.
+- Consolidate public product names and retain separate signed/Office/hand-test/publication gates.
 - This candidate is not released. Markdown deck assembly is owned by the optional radia-mcp adapter.
 
-## 3.1.3 — review candidate
+## 3.1.3 — 2026-10-08
 
-- Prepare shared OMML run properties (upright/bold/bold-italic) and function
-  application structure after sin hand-test failure; 49 covered producer matches
-  with style/structure assertions. New headed wire and Office retest pending.
+- Released shared upright/bold/bold-italic run properties and function structure,
+  with the recorded headed-wire and Office qualification.
 
 - Extend Office byte-parity corpus to 39 fixtures: 36 require identical primary OMML, and 3 audited exclusions are reported separately, never counted as equivalence passes.
 - Give native/Web nary operands the same fence boundary: enclosing closing fences stay outside m:e; matched fences within operands retain their contents and separators.
 - Omit the nonprinting U+2061 function-application token in both Office serializers so bare named functions agree.
 - Known non-covered constructs: native boxed/binom commands do not preserve their structure, and native cancel emits a bottom bar instead of Web's diagonal strike. These constructs require separate Web testing; no native/Web equivalence claim.
 - Confirm both Office producers intentionally classify delimiters/operators from tokens rather than differing MathML fence/stretchy/largeop attributes (F-3). No blanket stretchy-fence or arbitrary-TeX equivalence claim.
-- Candidate only; hosted actual-wire gate and review pending. No O: or public release update.
 
 ## 3.1.2 — 2026-10-08
 
@@ -32,14 +35,6 @@
 ## 3.1.1 — 2026-10-05
 
 - Preserve native single-equation integral bounds in PowerPoint with registered MathML.
-
-## Unreleased
-
-- Clarify that the signed standalone EXE is the canonical direct converter;
-  package helpers are thin subprocess clients rather than a second CLI or a
-  pybind11 conversion API.
-- Keep the packaged Web source and recent-insertion display readable through
-  the same CJK-aware browser font fallback stack.
 
 ## 3.0.13 - 2026-09-03
 
