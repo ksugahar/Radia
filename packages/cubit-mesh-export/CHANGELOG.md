@@ -4,9 +4,6 @@
 
 - Preserve curve sideset names as Netgen CD2/NGSolve BBND labels on exported volume-mesh edges.
 - Reject curve sidesets with conflicting names or curves that cannot be completely represented in the exported mesh.
-
-## Unreleased
-
 - Reject incomplete packaged Cubit Python bindings and missing configured SDK provenance.
 - Stage candidate command plugins as DLLs in owned scratch for the Cubit 2026.8 headless console, preserving source files.
 
