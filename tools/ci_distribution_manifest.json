@@ -1,0 +1,3048 @@
+{
+  "schema": "radia.ci-distributions.v1",
+  "distributions": [
+    "radia",
+    "radia-gpu",
+    "radia-mcp",
+    "radia-optuna",
+    "cubit-mesh-export",
+    "eqnedit64"
+  ],
+  "infrastructure_owner": "repo",
+  "rule_semantics": "ordered_last_match_replaces",
+  "root_content_diff": {
+    "paths": [
+      "CMakeLists.txt",
+      "Build.ps1",
+      "pyproject.toml",
+      "MANIFEST.in",
+      "tests/test_tier_manifest.json"
+    ],
+    "unknown": "all_owners",
+    "prose": "no_native_build",
+    "implementation": "pending; existing selectors remain authoritative"
+  },
+  "rules": [
+    {
+      "pattern": "memory/**",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "src/**",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tests/**",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "validation_test/**",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "docs/**",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tools/**",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": ".agents/**",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": ".claude/**",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": ".github/**",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": ".satk/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": ".gitattributes",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": ".gitignore",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": ".pre-commit-config.yaml",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "AGENTS.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "BUILD.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "Build_Wheel.ps1",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "owners": [
+        "radia"
+      ],
+      "pattern": "setup.py"
+    },
+    {
+      "pattern": "CHANGELOG.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "CLAUDE.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "CONTRIBUTING.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "COPYRIGHT.txt",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "LICENSE",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "MEMORY.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "README.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "ROADMAP.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "SECURITY.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "packages/radia-gpu/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "packages/radia-mcp/**",
+      "owners": [
+        "radia-mcp"
+      ]
+    },
+    {
+      "pattern": "packages/radia-optuna/**",
+      "owners": [
+        "radia-optuna"
+      ]
+    },
+    {
+      "pattern": "packages/cubit-mesh-export/**",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "packages/eqnedit64/**",
+      "owners": [
+        "eqnedit64"
+      ]
+    },
+    {
+      "pattern": "src/cubit_plugin/**",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "tests/test_cubit*",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "tests/test_release_cubit_dual.py",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "docs/cubit/**",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "docs/cubit_mesh_export/**",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "docs/jou_translation_bench/**",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "validation_test/cubit/**",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "validation_test/cubit_mesh_export/**",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "validation_test/esrf_radia_examples_cubit/**",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "tools/check_cubit_standalone.py",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "tools/release_cubit_dual.py",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "tools/find_cubit.ps1",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "tools/find_cubit.py",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "tools/audit_pyside6_only.py",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "src/runtime/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "tests/matlab/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "tests/cpp/test_radia_mex*",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "tests/test_matlab*",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "tests/test_simulink*",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "tests/test_ih_operator*",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "tests/test_ih_fin_surface_boundary.py",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "tests/test_ltspice*",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "tests/test_kicad*",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "docs/simulink/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "docs/ltspice/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "docs/api/MATLAB*.md",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "docs/api_inventory/PYLTSPICE*.md",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "validation_test/ams_cuda/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "validation_test/hmatrix_cuda/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "validation_test/ic_cuda/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "validation_test/fmm_cuda/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "validation_test/ih_cuda/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "validation_test/ngsolve_cuda_mex/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "validation_test/radfld_cuda/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "validation_test/radia_gpu/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "validation_test/matlab_mex_runtime/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "validation_test/matlab_runtime/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "validation_test/ngsolve_matlab_parity/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "validation_test/ltspice/**",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "tools/check_matlab_python_parity.py",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "tools/verify_simulink_release.py",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "tools/audit_application_block_contract.py",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": "tests/mcp_server/**",
+      "owners": [
+        "radia-mcp"
+      ]
+    },
+    {
+      "pattern": "tests/mcp_integration/**",
+      "owners": [
+        "radia-mcp"
+      ]
+    },
+    {
+      "pattern": "tests/test_mcp*",
+      "owners": [
+        "radia-mcp"
+      ]
+    },
+    {
+      "pattern": "tests/test_matrix_solvers_knowledge.py",
+      "owners": [
+        "radia-mcp"
+      ]
+    },
+    {
+      "pattern": "tools/sync_mcp_residual_gate.py",
+      "owners": [
+        "radia-mcp"
+      ]
+    },
+    {
+      "pattern": "validation_test/radia_mcp/**",
+      "owners": [
+        "radia-mcp"
+      ]
+    },
+    {
+      "pattern": "validation_test/grant_writing/**",
+      "owners": [
+        "radia-mcp"
+      ]
+    },
+    {
+      "pattern": "validation_test/mathematica/**",
+      "owners": [
+        "radia-mcp"
+      ]
+    },
+    {
+      "pattern": "tests/matlab/test_optuna*.m",
+      "owners": [
+        "radia-optuna"
+      ]
+    },
+    {
+      "pattern": "tests/matlab/private/optuna*.m",
+      "owners": [
+        "radia-optuna"
+      ]
+    },
+    {
+      "pattern": "tests/matlab/fixtures/*optuna*",
+      "owners": [
+        "radia-optuna"
+      ]
+    },
+    {
+      "pattern": "tests/matlab/fixtures/generate_sobol_direction_numbers.py",
+      "owners": [
+        "radia-optuna"
+      ]
+    },
+    {
+      "pattern": "validation_test/radia_optuna/**",
+      "owners": [
+        "radia-optuna"
+      ]
+    },
+    {
+      "pattern": "validation_test/optimization/*optuna*",
+      "owners": [
+        "radia-optuna"
+      ]
+    },
+    {
+      "pattern": "tools/eqnedit64/**",
+      "owners": [
+        "eqnedit64"
+      ]
+    },
+    {
+      "pattern": "docs/equation/**",
+      "owners": [
+        "eqnedit64"
+      ]
+    },
+    {
+      "pattern": ".agents/skills/release-eqnedit64/**",
+      "owners": [
+        "eqnedit64"
+      ]
+    },
+    {
+      "pattern": "tests/policy/**",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "tests/test_ci*",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "tests/test_sparsesolv_ci_contract.py",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "tests/test_ltspice_ci_scope.py",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "tests/test_policy*",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "tests/test_repository_root_hygiene.py",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "tests/test_run_test_tier.py",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "tests/test_test_tier_policy.py",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "docs/operations/**",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "docs/README.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "docs/NOTEBOOK_AUTHORING.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "docs/START_HERE.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "docs/VALIDATION_GUIDE.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "docs/CLN_POLICY.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "validation_test/README.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "validation_test/STUDY_INDEX.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "validation_test/conftest.py",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "validation_test/slow_nodeids.txt",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "validation_test/ci_runtime/**",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "validation_test/maintenance/**",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "validation_test/toolchain/**",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "tools/audit_taskmanager.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tools/check_native_module_abi.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tools/prepare_radia_acceptance.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tools/probe_hdiv_pyramid.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tools/release_acceptance.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tools/release_quad.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tools/verify_cpu_wheel.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tools/verify_radia_promotion.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tools/sparsesolv_ci_impact.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tools/run_test_tier.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/build-test.yml",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/cubit-mesh-export.yml",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/eqnedit64.yml",
+      "owners": [
+        "eqnedit64"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/ltspice-data-safety.yml",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/policy-lint.yml",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/radia-fast.yml",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/radia-gpu-release.yml",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/radia-gpu.yml",
+      "owners": [
+        "radia-gpu"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/radia-mcp-matrix.yml",
+      "owners": [
+        "radia-mcp"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/radia-optuna.yml",
+      "owners": [
+        "radia-optuna"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/release-eqnedit64-pypi.yml",
+      "owners": [
+        "eqnedit64"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/release-radia-optuna.yml",
+      "owners": [
+        "radia-optuna"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/release.yml",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/sparsesolv.yml",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "CMakeLists.txt",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Root configuration; content-diff selection among owners, unknown means all."
+      },
+      "selection": "content_diff"
+    },
+    {
+      "pattern": "Build.ps1",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Root configuration; content-diff selection among owners, unknown means all."
+      },
+      "selection": "content_diff"
+    },
+    {
+      "pattern": "pyproject.toml",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Root configuration; content-diff selection among owners, unknown means all."
+      },
+      "selection": "content_diff"
+    },
+    {
+      "pattern": "MANIFEST.in",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Root configuration; content-diff selection among owners, unknown means all."
+      },
+      "selection": "content_diff"
+    },
+    {
+      "pattern": "tests/test_tier_manifest.json",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Root configuration; content-diff selection among owners, unknown means all."
+      },
+      "selection": "content_diff"
+    },
+    {
+      "pattern": "src/ext/HACApK/**",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU HACApK and GPU build_hmatrix_cuda.py compile this implementation."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_bem_galerkin.h",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_biot_savart_filaments.h",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_charge_quadrature.h",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_field_cloud_kernel.h",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_field_source_kernel.inc",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_field_sources.h",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_hacapk_parallel.h",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_hdiv_field_evaluator.h",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_hdiv_field_kernel_api.inc",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_hdiv_field_math.inc",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_hdiv_vim.h",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "AMS GPU setup/reference bridge include closure from build_ams_cuda.py seeds."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "AMS GPU setup/reference bridge include closure from build_ams_cuda.py seeds."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "AMS GPU setup/reference bridge include closure from build_ams_cuda.py seeds."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "AMS GPU setup/reference bridge include closure from build_ams_cuda.py seeds."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/native_build_provenance.ps1",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "CPU build and GPU verify_radia_mex_provenance.py consume this helper contract; Optuna returns before helper import."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tests/test_native_build_provenance.py",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "CPU build and GPU verify_radia_mex_provenance.py consume this helper contract; Optuna returns before helper import."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tests/matlab/fixtures/ltspice_rc.cir",
+      "owners": [
+        "radia-gpu",
+        "radia-optuna"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "LTspice integration and Optuna objective consume this circuit fixture."
+      },
+      "selection": "all_owners"
+    }
+  ],
+  "shared_include_closures": [
+    {
+      "prefix": "src/ext/sparsesolv/include",
+      "seeds": [
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp",
+        "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp"
+      ],
+      "paths": [
+        "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp"
+      ]
+    }
+  ],
+  "lanes": {
+    "build-test": {
+      "workflow": ".github/workflows/build-test.yml",
+      "owners": [
+        "radia"
+      ],
+      "scope": "distribution",
+      "native": true,
+      "events": {
+        "push": {
+          "tags": [
+            "v*"
+          ]
+        },
+        "workflow_dispatch": {
+          "inputs": {
+            "run_validation_test": {
+              "description": "Run validation_test/ (manual heavy validation gate)",
+              "required": "false",
+              "default": "false",
+              "type": "boolean"
+            },
+            "full_slow": {
+              "description": "Run @pytest.mark.slow validation tests too",
+              "required": "false",
+              "default": "false",
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "selector_refs": [],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": []
+    },
+    "cubit-mesh-export": {
+      "workflow": ".github/workflows/cubit-mesh-export.yml",
+      "owners": [
+        "cubit-mesh-export"
+      ],
+      "scope": "distribution",
+      "native": true,
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "tags": [
+            "cubit-mesh-export-v*"
+          ],
+          "paths": [
+            "packages/cubit-mesh-export/**",
+            "src/cubit_plugin/**",
+            "tests/test_cubit_standalone_gui.py",
+            "tools/check_cubit_standalone.py",
+            "tools/release_cubit_dual.py",
+            "tests/test_release_cubit_dual.py",
+            "tests/test_cubit_installers.py",
+            "tests/test_cubit_mesh_quality.py",
+            "tests/test_cubit_menu_startup.py",
+            "tests/test_cubit_auto_kelvin_entry.py",
+            "tools/audit_pyside6_only.py",
+            "validation_test/cubit_mesh_export/**",
+            ".github/workflows/cubit-mesh-export.yml"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "packages/cubit-mesh-export/**",
+            "src/cubit_plugin/**",
+            "tests/test_cubit_standalone_gui.py",
+            "tools/check_cubit_standalone.py",
+            "tools/release_cubit_dual.py",
+            "tests/test_release_cubit_dual.py",
+            "tests/test_cubit_installers.py",
+            "tests/test_cubit_mesh_quality.py",
+            "tests/test_cubit_menu_startup.py",
+            "tests/test_cubit_auto_kelvin_entry.py",
+            "tools/audit_pyside6_only.py",
+            "validation_test/cubit_mesh_export/**",
+            ".github/workflows/cubit-mesh-export.yml"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "selector_refs": [],
+      "markdown_inputs": [
+        "packages/cubit-mesh-export/README.md"
+      ],
+      "content_diff_active": [],
+      "required_paths": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ]
+    },
+    "eqnedit64": {
+      "workflow": ".github/workflows/eqnedit64.yml",
+      "owners": [
+        "eqnedit64"
+      ],
+      "scope": "distribution",
+      "native": true,
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "tags": [
+            "eqnedit64-v*"
+          ],
+          "paths": [
+            "tools/eqnedit64/**",
+            "packages/eqnedit64/**",
+            ".github/workflows/eqnedit64.yml",
+            ".github/workflows/release-eqnedit64-pypi.yml"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "tools/eqnedit64/**",
+            "packages/eqnedit64/**",
+            ".github/workflows/eqnedit64.yml",
+            ".github/workflows/release-eqnedit64-pypi.yml"
+          ]
+        },
+        "workflow_dispatch": {
+          "inputs": {
+            "font_diagnostic": {
+              "description": "Run three isolated font-boundary arms, not release acceptance",
+              "type": "boolean",
+              "default": "false"
+            },
+            "font_dump": {
+              "description": "Diagnostic CFF/TrueType outline A/B, eight isolated trials; no release",
+              "type": "boolean",
+              "default": "false"
+            },
+            "font_dump_public_key": {
+              "description": "Base64 DER public encryption key; private key stays off GitHub",
+              "type": "string",
+              "default": ""
+            },
+            "font_probe": {
+              "description": "Bounded 2x2 private-font probe with three fresh-VM replicates",
+              "type": "boolean",
+              "default": "false"
+            },
+            "font_prefix": {
+              "description": "Fixed-payload deep-radical and edit-history diagnostics",
+              "type": "boolean",
+              "default": "false"
+            },
+            "font_acceptance": {
+              "description": "Full native candidate tests with named Eqnedit Math product asset; no release",
+              "type": "boolean",
+              "default": "false"
+            }
+          }
+        }
+      },
+      "selector_refs": [],
+      "markdown_inputs": [
+        "packages/eqnedit64/README.md"
+      ],
+      "content_diff_active": [],
+      "required_paths": [
+        ".agents/skills/release-eqnedit64/SKILL.md",
+        ".agents/skills/release-eqnedit64/agents/openai.yaml",
+        ".agents/skills/release-eqnedit64/scripts/assert_release_signature.ps1",
+        ".agents/skills/release-eqnedit64/scripts/release_eqnedit64.ps1",
+        ".agents/skills/release-eqnedit64/scripts/sync_handtest_to_o.ps1",
+        ".agents/skills/release-eqnedit64/scripts/sync_to_o.ps1",
+        "docs/equation/README.md",
+        "docs/equation/eqnedit64_handover.md",
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ]
+    },
+    "ltspice-data-safety": {
+      "workflow": ".github/workflows/ltspice-data-safety.yml",
+      "owners": [
+        "radia-gpu"
+      ],
+      "scope": "distribution",
+      "native": true,
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "packages/radia-gpu/matlab/+radia/+ltspice/readRaw*.m",
+            "packages/radia-gpu/matlab/+radia/+ltspice/*TransientState.m",
+            "tests/matlab/test_ltspice_data_safety.m",
+            "tests/matlab/fixtures/ltspice_numdgt7*",
+            ".github/workflows/ltspice-data-safety.yml",
+            "!**/*.md"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "packages/radia-gpu/matlab/+radia/+ltspice/readRaw*.m",
+            "packages/radia-gpu/matlab/+radia/+ltspice/*TransientState.m",
+            "tests/matlab/test_ltspice_data_safety.m",
+            "tests/matlab/fixtures/ltspice_numdgt7*",
+            ".github/workflows/ltspice-data-safety.yml",
+            "!**/*.md"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "selector_refs": [],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ]
+    },
+    "policy-lint": {
+      "workflow": ".github/workflows/policy-lint.yml",
+      "owners": [
+        "repo"
+      ],
+      "scope": "repository_contract",
+      "native": false,
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        }
+      },
+      "selector_refs": [],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": []
+    },
+    "radia-fast": {
+      "workflow": ".github/workflows/radia-fast.yml",
+      "owners": [
+        "radia"
+      ],
+      "scope": "distribution",
+      "native": false,
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths-ignore": [
+            "packages/radia-mcp/**",
+            "tests/mcp_server/**",
+            "packages/cubit-mesh-export/**",
+            "packages/radia-optuna/**",
+            "packages/radia-gpu/**",
+            "packages/eqnedit64/**",
+            "tools/eqnedit64/**",
+            "tests/policy/**",
+            ".github/workflows/eqnedit64.yml",
+            ".github/workflows/release-eqnedit64-pypi.yml",
+            ".github/workflows/radia-mcp-matrix.yml",
+            ".github/workflows/cubit-mesh-export.yml",
+            ".github/workflows/radia-optuna.yml",
+            ".github/workflows/release-radia-optuna.yml",
+            ".github/workflows/radia-gpu.yml",
+            ".github/workflows/radia-gpu-release.yml",
+            ".github/workflows/sparsesolv.yml",
+            ".github/workflows/policy-lint.yml",
+            ".github/workflows/ltspice-data-safety.yml"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths-ignore": [
+            "packages/radia-mcp/**",
+            "tests/mcp_server/**",
+            "packages/cubit-mesh-export/**",
+            "packages/radia-optuna/**",
+            "packages/radia-gpu/**",
+            "packages/eqnedit64/**",
+            "tools/eqnedit64/**",
+            "tests/policy/**",
+            ".github/workflows/eqnedit64.yml",
+            ".github/workflows/release-eqnedit64-pypi.yml",
+            ".github/workflows/radia-mcp-matrix.yml",
+            ".github/workflows/cubit-mesh-export.yml",
+            ".github/workflows/radia-optuna.yml",
+            ".github/workflows/release-radia-optuna.yml",
+            ".github/workflows/radia-gpu.yml",
+            ".github/workflows/radia-gpu-release.yml",
+            ".github/workflows/sparsesolv.yml",
+            ".github/workflows/policy-lint.yml",
+            ".github/workflows/ltspice-data-safety.yml"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "selector_refs": [
+        "tools/run_test_tier.py"
+      ],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ]
+    },
+    "radia-gpu-release": {
+      "workflow": ".github/workflows/radia-gpu-release.yml",
+      "owners": [
+        "radia-gpu"
+      ],
+      "scope": "distribution",
+      "native": false,
+      "events": {
+        "workflow_dispatch": {
+          "inputs": {
+            "ci_run_id": {
+              "description": "Successful main radia-gpu CI run (publish its wheel without rebuilding)",
+              "required": "true",
+              "type": "string"
+            },
+            "wheel_sha256": {
+              "description": "SHA-256 of that exact accepted wheel",
+              "required": "true",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "selector_refs": [],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": []
+    },
+    "radia-gpu": {
+      "workflow": ".github/workflows/radia-gpu.yml",
+      "owners": [
+        "radia-gpu"
+      ],
+      "scope": "distribution",
+      "native": true,
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "packages/radia-gpu/**",
+            "packages/radia-mcp/src/radia_mcp/ltspice/**",
+            "validation_test/radia_gpu/**",
+            "validation_test/ams_cuda/**",
+            "validation_test/ic_cuda/**",
+            "validation_test/ngsolve_cuda_mex/**",
+            "validation_test/hmatrix_cuda/**",
+            "validation_test/fmm_cuda/**",
+            "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp",
+            "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
+            "Build.ps1",
+            ".github/workflows/radia-gpu.yml",
+            "!**/*.md",
+            "packages/radia-gpu/README.md",
+            "docs/ltspice/README.md"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "packages/radia-gpu/**",
+            "packages/radia-mcp/src/radia_mcp/ltspice/**",
+            "validation_test/radia_gpu/**",
+            "validation_test/ams_cuda/**",
+            "validation_test/ic_cuda/**",
+            "validation_test/ngsolve_cuda_mex/**",
+            "validation_test/hmatrix_cuda/**",
+            "validation_test/fmm_cuda/**",
+            "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp",
+            "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
+            "Build.ps1",
+            ".github/workflows/radia-gpu.yml",
+            "!**/*.md",
+            "packages/radia-gpu/README.md",
+            "docs/ltspice/README.md"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "selector_refs": [],
+      "markdown_inputs": [
+        "packages/radia-gpu/README.md",
+        "docs/ltspice/README.md"
+      ],
+      "content_diff_active": [],
+      "required_paths": [
+        "docs/ltspice/README.md",
+        "src/core/rad_bem_galerkin.h",
+        "src/core/rad_biot_savart_filaments.h",
+        "src/core/rad_charge_quadrature.h",
+        "src/core/rad_field_cloud_kernel.h",
+        "src/core/rad_field_source_kernel.inc",
+        "src/core/rad_field_sources.h",
+        "src/core/rad_hacapk_parallel.h",
+        "src/core/rad_hdiv_field_evaluator.h",
+        "src/core/rad_hdiv_field_kernel_api.inc",
+        "src/core/rad_hdiv_field_math.inc",
+        "src/core/rad_hdiv_vim.h",
+        "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp",
+        "src/ext/HACApK/cHACApK_aca.inc",
+        "src/ext/HACApK/cHACApK_base.c",
+        "src/ext/HACApK/cHACApK_base.h",
+        "src/ext/HACApK/cHACApK_block_tree.c",
+        "src/ext/HACApK/cHACApK_block_tree.h",
+        "src/ext/HACApK/cHACApK_calc_entry_ij.h",
+        "src/ext/HACApK/cHACApK_cpp.h",
+        "src/ext/HACApK/cHACApK_cpp_impl.c",
+        "src/ext/HACApK/cHACApK_harith.c",
+        "src/ext/HACApK/cHACApK_harith.h",
+        "src/ext/HACApK/cHACApK_harith_par.cpp",
+        "src/ext/HACApK/cHACApK_lib.c",
+        "src/ext/HACApK/cHACApK_lib.h",
+        "src/ext/HACApK/cHACApK_pca_cluster.c",
+        "src/ext/HACApK/cHACApK_pca_cluster.h",
+        "src/ext/HACApK/hacapk_log.h",
+        "src/ext/HACApK/mpi_stub.h",
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ]
+    },
+    "radia-mcp-matrix": {
+      "workflow": ".github/workflows/radia-mcp-matrix.yml",
+      "owners": [
+        "radia-mcp"
+      ],
+      "scope": "distribution",
+      "native": false,
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "tags": [
+            "radia-mcp-v*"
+          ],
+          "paths": [
+            "packages/radia-mcp/**",
+            "tests/mcp_server/**",
+            "tests/mcp_integration/**",
+            "packages/radia-gpu/matlab/**",
+            "src/matlab/**",
+            "validation_test/**",
+            "packages/radia-optuna/**",
+            ".agents/skills/md2html/**",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "README.md",
+            "docs/**/*.msh",
+            "src/radia/panels/samples/**/*.msh",
+            ".github/workflows/radia-mcp-matrix.yml"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "packages/radia-mcp/**",
+            "tests/mcp_server/**",
+            "tests/mcp_integration/**",
+            "packages/radia-gpu/matlab/**",
+            "src/matlab/**",
+            "validation_test/**",
+            "packages/radia-optuna/**",
+            ".agents/skills/md2html/**",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "README.md",
+            "docs/**/*.msh",
+            "src/radia/panels/samples/**/*.msh",
+            ".github/workflows/radia-mcp-matrix.yml"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "selector_refs": [
+        ".github/workflows/radia-mcp-matrix.yml:scope/classify",
+        "packages/radia-mcp/tools/select_ci_tests.py"
+      ],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ]
+    },
+    "radia-optuna": {
+      "workflow": ".github/workflows/radia-optuna.yml",
+      "owners": [
+        "radia-optuna"
+      ],
+      "scope": "distribution",
+      "native": true,
+      "events": {
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "tags": [
+            "radia-optuna-v*"
+          ],
+          "paths": [
+            "packages/radia-optuna/**",
+            "tests/matlab/fixtures/*optuna*",
+            "tests/matlab/fixtures/generate_sobol_direction_numbers.py",
+            "tests/matlab/fixtures/ltspice_rc.cir",
+            "tests/matlab/test_optuna*.m",
+            "tests/matlab/private/optuna*.m",
+            "packages/radia-optuna/matlab/+radia/+optuna/**",
+            "packages/radia-optuna/matlab/+radia/+simulink/buildOptunaBlock.m",
+            "packages/radia-optuna/matlab/+radia/+simulink/optunaSFunction.m",
+            "packages/radia-optuna/matlab/+radia/+simulink/optunaRuntimeStore.m",
+            "packages/radia-optuna/matlab/+radia/+simulink/addOptunaMonitor.m",
+            "packages/radia-optuna/matlab/radia_optuna_sfun.m",
+            "packages/radia-optuna/matlab/optuna_upstream_compatibility.json",
+            "packages/radia-optuna/matlab/optuna50_api_coverage.json",
+            "packages/radia-optuna/native/optuna_mex.cpp",
+            "Build.ps1",
+            "tools/native_build_provenance.ps1",
+            "CMakeLists.txt",
+            "validation_test/optimization/validate_optuna_cuda.m",
+            ".github/workflows/radia-optuna.yml",
+            "!**/*.md",
+            "packages/radia-optuna/README.md",
+            "packages/radia-optuna/MATLAB_README.md",
+            "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
+            "packages/radia-optuna/OPTUNA_SIMULINK_LAB.md"
+          ]
+        },
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "packages/radia-optuna/**",
+            "tests/matlab/fixtures/*optuna*",
+            "tests/matlab/fixtures/generate_sobol_direction_numbers.py",
+            "tests/matlab/fixtures/ltspice_rc.cir",
+            "tests/matlab/test_optuna*.m",
+            "tests/matlab/private/optuna*.m",
+            "packages/radia-optuna/matlab/+radia/+optuna/**",
+            "packages/radia-optuna/matlab/+radia/+simulink/buildOptunaBlock.m",
+            "packages/radia-optuna/matlab/+radia/+simulink/optunaSFunction.m",
+            "packages/radia-optuna/matlab/+radia/+simulink/optunaRuntimeStore.m",
+            "packages/radia-optuna/matlab/+radia/+simulink/addOptunaMonitor.m",
+            "packages/radia-optuna/matlab/radia_optuna_sfun.m",
+            "packages/radia-optuna/matlab/optuna_upstream_compatibility.json",
+            "packages/radia-optuna/matlab/optuna50_api_coverage.json",
+            "packages/radia-optuna/native/optuna_mex.cpp",
+            "Build.ps1",
+            "tools/native_build_provenance.ps1",
+            "CMakeLists.txt",
+            "validation_test/optimization/validate_optuna_cuda.m",
+            ".github/workflows/radia-optuna.yml",
+            "!**/*.md",
+            "packages/radia-optuna/README.md",
+            "packages/radia-optuna/MATLAB_README.md",
+            "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
+            "packages/radia-optuna/OPTUNA_SIMULINK_LAB.md"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "selector_refs": [],
+      "markdown_inputs": [
+        "packages/radia-optuna/README.md",
+        "packages/radia-optuna/MATLAB_README.md",
+        "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
+        "packages/radia-optuna/OPTUNA_SIMULINK_LAB.md"
+      ],
+      "content_diff_active": [],
+      "required_paths": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ]
+    },
+    "release-eqnedit64-pypi": {
+      "workflow": ".github/workflows/release-eqnedit64-pypi.yml",
+      "owners": [
+        "eqnedit64"
+      ],
+      "scope": "distribution",
+      "native": false,
+      "events": {
+        "workflow_run": {
+          "workflows": [
+            "Eqnedit64"
+          ],
+          "types": [
+            "completed"
+          ]
+        }
+      },
+      "selector_refs": [],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": []
+    },
+    "release-radia-optuna": {
+      "workflow": ".github/workflows/release-radia-optuna.yml",
+      "owners": [
+        "radia-optuna"
+      ],
+      "scope": "distribution",
+      "native": false,
+      "events": {
+        "workflow_dispatch": {
+          "inputs": {
+            "ci_run_id": {
+              "description": "Successful main-push CI run gated by release-quad",
+              "required": "true",
+              "type": "string"
+            },
+            "candidate_sha256": {
+              "description": "SHA256 emitted by release_quad optuna-done",
+              "required": "true",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "selector_refs": [],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": []
+    },
+    "release": {
+      "workflow": ".github/workflows/release.yml",
+      "owners": [
+        "radia"
+      ],
+      "scope": "distribution",
+      "native": false,
+      "events": {
+        "workflow_run": {
+          "workflows": [
+            "Radia Native Release"
+          ],
+          "types": [
+            "completed"
+          ]
+        },
+        "workflow_dispatch": {
+          "inputs": {
+            "ci_run_id": {
+              "description": "Successful exact-tag native build run ID (no rebuild)",
+              "required": "true",
+              "type": "string"
+            },
+            "wheel_sha256": {
+              "description": "SHA-256 of the wheel accepted on 102 and 100",
+              "required": "true",
+              "type": "string"
+            },
+            "acceptance_commit": {
+              "description": "Full main-reachable commit containing both required host acceptance records",
+              "required": "true",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "selector_refs": [],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": []
+    },
+    "sparsesolv": {
+      "workflow": ".github/workflows/sparsesolv.yml",
+      "owners": [
+        "radia"
+      ],
+      "scope": "distribution",
+      "native": true,
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "src/radia/_residual_gate.py",
+            "validation_test/open_boundary/test_kelvin_vector_direct_gate.py",
+            "validation_test/team21/**",
+            "tests/test_team21a_geometry_source.py",
+            "docs/maglev/demos/sphere/maglev_sphere_force.py",
+            "docs/maglev/demos/team28/team28_arnoldi_force.py",
+            "docs/maglev/demos/rotating_magnet_eddy.py",
+            "tests/test_maglev_sphere_golden.py",
+            "tests/test_team28_arnoldi_golden.py",
+            "tests/test_rotating_magnet_eddy_golden.py",
+            "validation_test/maglev/test_demo_evidence.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
+            "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
+            "validation_test/radia_mcp/test_eddy_driven_region.py",
+            "validation_test/radia_mcp/test_aphi_gauge_point.py",
+            "src/radia/bem/sibc_hacapk.py",
+            "src/radia/panels/surface_mesh_extract.py",
+            "tests/test_surface_orientation.py",
+            "src/radia/bem_sibc_solver.py",
+            "tests/test_bem_sibc_acceptance.py",
+            "src/radia/esim_cell_problem.py",
+            "src/radia/analytical_formulas/induction_heating.py",
+            "tests/test_esim_integration.py",
+            "src/radia/esim_coupled_solver.py",
+            "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+            "src/radia/gmsh_post_export.py",
+            "src/radia/em_material.py",
+            "src/radia/coil_from_cad.py",
+            "src/radia/force_ngsolve.py",
+            "src/radia/scalar_bie_sibc.py",
+            "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
+            "tests/test_ih_operator_assembly.py",
+            "tests/test_ih_operator_axisym.py",
+            "tests/test_ih_fin_surface_boundary.py",
+            "tests/axifem/test_heat_henrotte_smoke.py",
+            "tests/axifem/test_heat_field_extrema.py",
+            "validation_test/induction_heating/test_ih_operator_physics_golden.py",
+            "validation_test/axifem/test_heat_axisym_e2e.py",
+            "src/radia/esim_multiport.py",
+            "src/radia/panels/calc_inductance.py",
+            "tests/test_esim_incident_only_retirement.py",
+            "tests/test_esim_convergence_propagation.py",
+            "tests/analytical_formulas/test_induction_heating.py",
+            "src/radia/panels/em_table.py",
+            "tests/test_em_table.py",
+            "src/runtime/ih/radia_ih_thermal.cpp",
+            "tests/cpp/test_radia_ih_thermal_acceptance.cpp",
+            "src/radia/ih*.py",
+            "src/radia/panels/calc_heat*.py",
+            "src/radia/panels/calc_ih_axisym_coupled.py",
+            "src/radia/panels/calc_fem_kelvin.py",
+            "src/radia/panels/calc_fem_coilmesh.py",
+            "tests/test_ih_*.py",
+            "validation_test/induction_heating/test_fem_ams_parity.py",
+            "validation_test/induction_heating/fem_sibc_geometry.py",
+            "src/radia/vim/_nonlinear.py",
+            "src/radia/vim/_solve.py",
+            "tests/test_hdiv_energy_material_consistency.py",
+            "src/core/rad_arc_section.h",
+            "src/core/rad_arc_current.cpp",
+            "src/core/rad_ngsolve_radia_field.h",
+            "src/core/rad_parallel.h",
+            "tests/test_arc_far_rule.py",
+            "tests/test_radiafield_cache_parallel.py",
+            "tests/test_radiafield_memoize.py",
+            "tests/test_radiafield_precision.py",
+            "tests/test_mixed_omega_source_load.py",
+            "tests/test_three_engine_energy.py",
+            "validation_test/c_type_three_engine/magnetic_energy.py",
+            "tests/test_ams_internal_setup_parallel.py",
+            "src/core/rad_hacapk*",
+            "src/ext/HACApK/**",
+            "tests/test_hdiv_chargegram_build_safety.py",
+            "tests/test_hdiv_vim_native_matrix.py",
+            "tests/test_hdiv_same_process_determinism.py",
+            "src/radia/vector_potential_solver.py",
+            "src/radia/scalar_potential_solver.py",
+            "validation_test/panels/test_scalar_linear_direct.py",
+            "validation_test/panels/test_heat_boundary_roles.py",
+            "src/radia/topology_optimization.py",
+            "src/core/rad_hdiv*",
+            "src/radia/vim/**",
+            "src/radia/accelerator_lie_topopt.py",
+            "src/radia/isochronous_topopt.py",
+            "src/radia/ffag_topopt.py",
+            "src/radia/kelvin_identify_ngsolve.py",
+            "tests/feec/test_hdiv_vim_cyclic_periodic_hex.py",
+            "tests/test_hdiv_vim_bh_validation.py",
+            "tests/test_hdiv_vim_capabilities.py",
+            "tests/test_isochronous_topopt.py",
+            "tests/test_accelerator_lie_topopt.py",
+            "tests/test_topology_optimization.py",
+            "validation_test/topology_optimization/test_hex_cluster_derivative.py",
+            "src/radia/motor_design.py",
+            "src/radia/panels/calc_common.py",
+            "src/radia/panels/calc_axisym_volumetric.py",
+            "validation_test/panels/test_axisym_volumetric_direct.py",
+            "validation_test/panels/test_coilmesh_direct_residual.py",
+            "validation_test/panels/test_accel_linear_dispatch.py",
+            "validation_test/panels/test_kelvin_benchmark_direct.py",
+            "src/radia/panels/calc_kelvin_benchmark.py",
+            "src/radia/panels/calc_accel_magnet.py",
+            "tests/test_accel_solver_selection.py",
+            "src/radia/em_design.py",
+            "src/radia/panels/calc_motor_lamination.py",
+            "src/radia/panels/calc_motor_transient.py",
+            "validation_test/panels/test_motor_lamination_golden.py",
+            "validation_test/panels/test_motor_transient_golden.py",
+            "validation_test/panels/build_test_motor_mesh.py",
+            "tests/test_vim_eddy_hybrid.py",
+            "tests/test_vim_coupled_weak_vs_monolithic.py",
+            "tests/test_vector_potential_bh_tail.py",
+            "tests/test_reduced_a_source_materialization.py",
+            "tests/test_hdiv_response_contract.py",
+            "src/core/rad_beam_transfer.*",
+            "src/lib/rad_beam_transfer_pybind.*",
+            "src/radia/beam.py",
+            "validation_test/accelerator/benchmark_beam_transfer_mex_python.py",
+            "src/radia/ngsbem_peec_body_coupling.py",
+            "tests/test_ngsbem_peec_body_direct.py",
+            "src/radia/ngsbem_eddy.py",
+            "tests/test_ngsbem_eddy_direct.py",
+            "src/radia/eddy_aphi.py",
+            "src/radia/eddy_axisym_ring.py",
+            "src/radia/axisym_measure.py",
+            "src/radia/sibc_corner_patch.py",
+            "src/radia/mixed_omega_newton.py",
+            "src/radia/patch_recovery.py",
+            "tests/test_patch_recovery.py",
+            "src/radia/p1_newton.py",
+            "src/radia/p1_linear.py",
+            "tests/test_p1_newton.py",
+            "tests/test_p1_linear.py",
+            "src/radia/meshed_current.py",
+            "tests/test_meshed_current.py",
+            "src/radia/static_electromagnet.py",
+            "src/radia/kelvin_solver.py",
+            "src/radia/kelvin_mesh_validation.py",
+            "src/radia/scalar_potential_solver.py",
+            "validation_test/c_type_p1_ams_box/run_p1_box.py",
+            "tests/test_eddy_aphi_contract.py",
+            "tests/test_axisym_measure_contract.py",
+            "tests/test_sibc_corner_patch.py",
+            "tests/test_boundary_material_adjacency.py",
+            "tests/test_coil_axis_closed_form.py",
+            "tests/test_mixed_omega_newton.py",
+            "tests/test_kelvin_mixed_omega.py",
+            "tests/test_mixed_omega_review_fixes.py",
+            "tests/test_c_type_p1_box_lane.py",
+            "src/ext/sparsesolv/**",
+            "src/core/radia_mex_sparse_symmetry.h",
+            "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
+            "src/radia/__init__.py",
+            "src/radia/_preconditioners.py",
+            "CMakeLists.txt",
+            "Build.ps1",
+            "tools/run_test_tier.py",
+            "tools/native_build_provenance.ps1",
+            "tests/test_native_build_provenance.py",
+            "tools/sparsesolv_ci_impact.py",
+            "tests/test_sparsesolv_ci_contract.py",
+            ".github/workflows/sparsesolv.yml",
+            "pyproject.toml",
+            "tests/test_tier_manifest.json",
+            "!**/*.md"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "src/radia/_residual_gate.py",
+            "validation_test/open_boundary/test_kelvin_vector_direct_gate.py",
+            "validation_test/team21/**",
+            "tests/test_team21a_geometry_source.py",
+            "docs/maglev/demos/sphere/maglev_sphere_force.py",
+            "docs/maglev/demos/team28/team28_arnoldi_force.py",
+            "docs/maglev/demos/rotating_magnet_eddy.py",
+            "tests/test_maglev_sphere_golden.py",
+            "tests/test_team28_arnoldi_golden.py",
+            "tests/test_rotating_magnet_eddy_golden.py",
+            "validation_test/maglev/test_demo_evidence.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
+            "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
+            "validation_test/radia_mcp/test_eddy_driven_region.py",
+            "validation_test/radia_mcp/test_aphi_gauge_point.py",
+            "src/radia/bem/sibc_hacapk.py",
+            "src/radia/panels/surface_mesh_extract.py",
+            "tests/test_surface_orientation.py",
+            "src/radia/bem_sibc_solver.py",
+            "tests/test_bem_sibc_acceptance.py",
+            "src/radia/esim_cell_problem.py",
+            "src/radia/analytical_formulas/induction_heating.py",
+            "tests/test_esim_integration.py",
+            "src/radia/esim_coupled_solver.py",
+            "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+            "src/radia/gmsh_post_export.py",
+            "src/radia/em_material.py",
+            "src/radia/coil_from_cad.py",
+            "src/radia/force_ngsolve.py",
+            "src/radia/scalar_bie_sibc.py",
+            "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
+            "tests/test_ih_operator_assembly.py",
+            "tests/test_ih_operator_axisym.py",
+            "tests/test_ih_fin_surface_boundary.py",
+            "tests/axifem/test_heat_henrotte_smoke.py",
+            "tests/axifem/test_heat_field_extrema.py",
+            "validation_test/induction_heating/test_ih_operator_physics_golden.py",
+            "validation_test/axifem/test_heat_axisym_e2e.py",
+            "src/radia/esim_multiport.py",
+            "src/radia/panels/calc_inductance.py",
+            "tests/test_esim_incident_only_retirement.py",
+            "tests/test_esim_convergence_propagation.py",
+            "tests/analytical_formulas/test_induction_heating.py",
+            "src/radia/panels/em_table.py",
+            "tests/test_em_table.py",
+            "src/runtime/ih/radia_ih_thermal.cpp",
+            "tests/cpp/test_radia_ih_thermal_acceptance.cpp",
+            "src/radia/ih*.py",
+            "src/radia/panels/calc_heat*.py",
+            "src/radia/panels/calc_ih_axisym_coupled.py",
+            "src/radia/panels/calc_fem_kelvin.py",
+            "src/radia/panels/calc_fem_coilmesh.py",
+            "tests/test_ih_*.py",
+            "validation_test/induction_heating/test_fem_ams_parity.py",
+            "validation_test/induction_heating/fem_sibc_geometry.py",
+            "src/radia/vim/_nonlinear.py",
+            "src/radia/vim/_solve.py",
+            "tests/test_hdiv_energy_material_consistency.py",
+            "src/core/rad_arc_section.h",
+            "src/core/rad_arc_current.cpp",
+            "src/core/rad_ngsolve_radia_field.h",
+            "src/core/rad_parallel.h",
+            "tests/test_arc_far_rule.py",
+            "tests/test_radiafield_cache_parallel.py",
+            "tests/test_radiafield_memoize.py",
+            "tests/test_radiafield_precision.py",
+            "tests/test_mixed_omega_source_load.py",
+            "tests/test_three_engine_energy.py",
+            "validation_test/c_type_three_engine/magnetic_energy.py",
+            "tests/test_ams_internal_setup_parallel.py",
+            "src/core/rad_hacapk*",
+            "src/ext/HACApK/**",
+            "tests/test_hdiv_chargegram_build_safety.py",
+            "tests/test_hdiv_vim_native_matrix.py",
+            "tests/test_hdiv_same_process_determinism.py",
+            "src/radia/vector_potential_solver.py",
+            "src/radia/scalar_potential_solver.py",
+            "validation_test/panels/test_scalar_linear_direct.py",
+            "validation_test/panels/test_heat_boundary_roles.py",
+            "src/radia/topology_optimization.py",
+            "src/core/rad_hdiv*",
+            "src/radia/vim/**",
+            "src/radia/accelerator_lie_topopt.py",
+            "src/radia/isochronous_topopt.py",
+            "src/radia/ffag_topopt.py",
+            "src/radia/kelvin_identify_ngsolve.py",
+            "tests/feec/test_hdiv_vim_cyclic_periodic_hex.py",
+            "tests/test_hdiv_vim_bh_validation.py",
+            "tests/test_hdiv_vim_capabilities.py",
+            "tests/test_isochronous_topopt.py",
+            "tests/test_accelerator_lie_topopt.py",
+            "tests/test_topology_optimization.py",
+            "validation_test/topology_optimization/test_hex_cluster_derivative.py",
+            "src/radia/motor_design.py",
+            "src/radia/panels/calc_common.py",
+            "src/radia/panels/calc_axisym_volumetric.py",
+            "validation_test/panels/test_axisym_volumetric_direct.py",
+            "validation_test/panels/test_coilmesh_direct_residual.py",
+            "validation_test/panels/test_accel_linear_dispatch.py",
+            "validation_test/panels/test_kelvin_benchmark_direct.py",
+            "src/radia/panels/calc_kelvin_benchmark.py",
+            "src/radia/panels/calc_accel_magnet.py",
+            "tests/test_accel_solver_selection.py",
+            "src/radia/em_design.py",
+            "src/radia/panels/calc_motor_lamination.py",
+            "src/radia/panels/calc_motor_transient.py",
+            "validation_test/panels/test_motor_lamination_golden.py",
+            "validation_test/panels/test_motor_transient_golden.py",
+            "validation_test/panels/build_test_motor_mesh.py",
+            "tests/test_vim_eddy_hybrid.py",
+            "tests/test_vim_coupled_weak_vs_monolithic.py",
+            "tests/test_vector_potential_bh_tail.py",
+            "tests/test_reduced_a_source_materialization.py",
+            "tests/test_hdiv_response_contract.py",
+            "src/core/rad_beam_transfer.*",
+            "src/lib/rad_beam_transfer_pybind.*",
+            "src/radia/beam.py",
+            "validation_test/accelerator/benchmark_beam_transfer_mex_python.py",
+            "src/radia/ngsbem_peec_body_coupling.py",
+            "tests/test_ngsbem_peec_body_direct.py",
+            "src/radia/ngsbem_eddy.py",
+            "tests/test_ngsbem_eddy_direct.py",
+            "src/radia/eddy_aphi.py",
+            "src/radia/eddy_axisym_ring.py",
+            "src/radia/axisym_measure.py",
+            "src/radia/sibc_corner_patch.py",
+            "src/radia/mixed_omega_newton.py",
+            "src/radia/patch_recovery.py",
+            "tests/test_patch_recovery.py",
+            "src/radia/p1_newton.py",
+            "src/radia/p1_linear.py",
+            "tests/test_p1_newton.py",
+            "tests/test_p1_linear.py",
+            "src/radia/meshed_current.py",
+            "tests/test_meshed_current.py",
+            "src/radia/static_electromagnet.py",
+            "src/radia/kelvin_solver.py",
+            "src/radia/kelvin_mesh_validation.py",
+            "src/radia/scalar_potential_solver.py",
+            "validation_test/c_type_p1_ams_box/run_p1_box.py",
+            "tests/test_eddy_aphi_contract.py",
+            "tests/test_axisym_measure_contract.py",
+            "tests/test_sibc_corner_patch.py",
+            "tests/test_boundary_material_adjacency.py",
+            "tests/test_coil_axis_closed_form.py",
+            "tests/test_mixed_omega_newton.py",
+            "tests/test_kelvin_mixed_omega.py",
+            "tests/test_mixed_omega_review_fixes.py",
+            "tests/test_c_type_p1_box_lane.py",
+            "src/ext/sparsesolv/**",
+            "src/core/radia_mex_sparse_symmetry.h",
+            "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
+            "src/radia/__init__.py",
+            "src/radia/_preconditioners.py",
+            "CMakeLists.txt",
+            "Build.ps1",
+            "tools/run_test_tier.py",
+            "tools/native_build_provenance.ps1",
+            "tests/test_native_build_provenance.py",
+            "tools/sparsesolv_ci_impact.py",
+            "tests/test_sparsesolv_ci_contract.py",
+            ".github/workflows/sparsesolv.yml",
+            "pyproject.toml",
+            "tests/test_tier_manifest.json",
+            "!**/*.md"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "selector_refs": [
+        "tools/sparsesolv_ci_impact.py:native_required"
+      ],
+      "markdown_inputs": [],
+      "content_diff_active": [
+        "pyproject.toml",
+        "tests/test_tier_manifest.json"
+      ],
+      "required_paths": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ]
+    }
+  },
+  "migration_exceptions": [
+    {
+      "id": "CI-MIG-001",
+      "lane": "cubit-mesh-export",
+      "kind": "markdown_native",
+      "pattern": "packages/cubit-mesh-export/**",
+      "current": "Current envelope starts native work for prose Markdown.",
+      "target": "Exclude Markdown then re-include actual build/test inputs.",
+      "owner": "cubit-mesh-export",
+      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-002",
+      "lane": "cubit-mesh-export",
+      "kind": "markdown_native",
+      "pattern": "validation_test/**",
+      "current": "Current envelope starts native work for prose Markdown.",
+      "target": "Exclude Markdown then re-include actual build/test inputs.",
+      "owner": "cubit-mesh-export",
+      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing"
+    },
+    {
+      "lane": "cubit-mesh-export",
+      "kind": "missing_trigger",
+      "pattern": "Build.ps1",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "cubit-mesh-export",
+      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-003"
+    },
+    {
+      "lane": "cubit-mesh-export",
+      "kind": "missing_trigger",
+      "pattern": "CMakeLists.txt",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "cubit-mesh-export",
+      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-004"
+    },
+    {
+      "lane": "cubit-mesh-export",
+      "kind": "missing_trigger",
+      "pattern": "MANIFEST.in",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "cubit-mesh-export",
+      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-005"
+    },
+    {
+      "lane": "cubit-mesh-export",
+      "kind": "missing_trigger",
+      "pattern": "pyproject.toml",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "cubit-mesh-export",
+      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-006"
+    },
+    {
+      "lane": "cubit-mesh-export",
+      "kind": "missing_trigger",
+      "pattern": "tests/test_tier_manifest.json",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "cubit-mesh-export",
+      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-007"
+    },
+    {
+      "id": "CI-MIG-008",
+      "lane": "eqnedit64",
+      "kind": "markdown_native",
+      "pattern": "packages/eqnedit64/**",
+      "current": "Current envelope starts native work for prose Markdown.",
+      "target": "Exclude Markdown then re-include actual build/test inputs.",
+      "owner": "eqnedit64",
+      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-009",
+      "lane": "eqnedit64",
+      "kind": "markdown_native",
+      "pattern": "tools/eqnedit64/**",
+      "current": "Current envelope starts native work for prose Markdown.",
+      "target": "Exclude Markdown then re-include actual build/test inputs.",
+      "owner": "eqnedit64",
+      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-010",
+      "lane": "eqnedit64",
+      "kind": "missing_trigger",
+      "pattern": ".agents/skills/release-eqnedit64/**",
+      "current": "Owner contract input is absent from trigger projection.",
+      "target": "Include this input in the appropriate owner scope.",
+      "owner": "eqnedit64",
+      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing"
+    },
+    {
+      "lane": "eqnedit64",
+      "kind": "missing_trigger",
+      "pattern": "Build.ps1",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "eqnedit64",
+      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-011"
+    },
+    {
+      "lane": "eqnedit64",
+      "kind": "missing_trigger",
+      "pattern": "CMakeLists.txt",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "eqnedit64",
+      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-012"
+    },
+    {
+      "lane": "eqnedit64",
+      "kind": "missing_trigger",
+      "pattern": "MANIFEST.in",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "eqnedit64",
+      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-013"
+    },
+    {
+      "id": "CI-MIG-014",
+      "lane": "eqnedit64",
+      "kind": "missing_trigger",
+      "pattern": "docs/equation/**",
+      "current": "Owner contract input is absent from trigger projection.",
+      "target": "Include this input in the appropriate owner scope.",
+      "owner": "eqnedit64",
+      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing"
+    },
+    {
+      "lane": "eqnedit64",
+      "kind": "missing_trigger",
+      "pattern": "pyproject.toml",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "eqnedit64",
+      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-015"
+    },
+    {
+      "lane": "eqnedit64",
+      "kind": "missing_trigger",
+      "pattern": "tests/test_tier_manifest.json",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "eqnedit64",
+      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-016"
+    },
+    {
+      "lane": "ltspice-data-safety",
+      "kind": "missing_trigger",
+      "pattern": "Build.ps1",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-gpu",
+      "follow_up": "ltspice-data-safety owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-018"
+    },
+    {
+      "lane": "ltspice-data-safety",
+      "kind": "missing_trigger",
+      "pattern": "CMakeLists.txt",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-gpu",
+      "follow_up": "ltspice-data-safety owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-019"
+    },
+    {
+      "lane": "ltspice-data-safety",
+      "kind": "missing_trigger",
+      "pattern": "MANIFEST.in",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-gpu",
+      "follow_up": "ltspice-data-safety owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-020"
+    },
+    {
+      "lane": "ltspice-data-safety",
+      "kind": "missing_trigger",
+      "pattern": "pyproject.toml",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-gpu",
+      "follow_up": "ltspice-data-safety owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-021"
+    },
+    {
+      "lane": "ltspice-data-safety",
+      "kind": "missing_trigger",
+      "pattern": "tests/test_tier_manifest.json",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-gpu",
+      "follow_up": "ltspice-data-safety owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-022"
+    },
+    {
+      "id": "CI-MIG-023",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": ".agents/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-024",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": ".claude/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-025",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": ".gitattributes",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-026",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": ".github/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-027",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": ".gitignore",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-028",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": ".pre-commit-config.yaml",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-029",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": ".satk/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-030",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "AGENTS.md",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-031",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "BUILD.md",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-032",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "CHANGELOG.md",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-033",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "CLAUDE.md",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-034",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "CONTRIBUTING.md",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-035",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "COPYRIGHT.txt",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-036",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "LICENSE",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-038",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "README.md",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-039",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "ROADMAP.md",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-040",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "SECURITY.md",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-041",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "docs/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-043",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "src/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-044",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "tests/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-045",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "tools/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-046",
+      "lane": "radia-fast",
+      "kind": "foreign_trigger",
+      "pattern": "validation_test/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-047",
+      "lane": "radia-gpu",
+      "kind": "content_diff_pending",
+      "pattern": "Build.ps1",
+      "current": "Native lane lacks content-diff selection for this shared root config.",
+      "target": "Extend existing content-diff mechanisms; unknown impact selects all owners.",
+      "owner": "radia-gpu",
+      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-048",
+      "lane": "radia-gpu",
+      "kind": "foreign_trigger",
+      "pattern": "packages/radia-mcp/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia-gpu",
+      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing"
+    },
+    {
+      "lane": "radia-gpu",
+      "kind": "missing_trigger",
+      "pattern": "CMakeLists.txt",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-gpu",
+      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-049"
+    },
+    {
+      "lane": "radia-gpu",
+      "kind": "missing_trigger",
+      "pattern": "MANIFEST.in",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-gpu",
+      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-050"
+    },
+    {
+      "lane": "radia-gpu",
+      "kind": "missing_trigger",
+      "pattern": "pyproject.toml",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-gpu",
+      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-052"
+    },
+    {
+      "id": "CI-MIG-053",
+      "lane": "radia-gpu",
+      "kind": "missing_trigger",
+      "pattern": "src/core/**",
+      "current": "Owner contract input is absent from trigger projection.",
+      "target": "Include this input in the appropriate owner scope.",
+      "owner": "radia-gpu",
+      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-054",
+      "lane": "radia-gpu",
+      "kind": "missing_trigger",
+      "pattern": "src/ext/HACApK/**",
+      "current": "Owner contract input is absent from trigger projection.",
+      "target": "Include this input in the appropriate owner scope.",
+      "owner": "radia-gpu",
+      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing"
+    },
+    {
+      "lane": "radia-gpu",
+      "kind": "missing_trigger",
+      "pattern": "tests/test_tier_manifest.json",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-gpu",
+      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-055"
+    },
+    {
+      "id": "CI-MIG-056",
+      "lane": "radia-mcp-matrix",
+      "kind": "foreign_trigger",
+      "pattern": ".agents/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-057",
+      "lane": "radia-mcp-matrix",
+      "kind": "foreign_trigger",
+      "pattern": "AGENTS.md",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-058",
+      "lane": "radia-mcp-matrix",
+      "kind": "foreign_trigger",
+      "pattern": "CLAUDE.md",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-059",
+      "lane": "radia-mcp-matrix",
+      "kind": "foreign_trigger",
+      "pattern": "README.md",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-060",
+      "lane": "radia-mcp-matrix",
+      "kind": "foreign_trigger",
+      "pattern": "docs/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-061",
+      "lane": "radia-mcp-matrix",
+      "kind": "foreign_trigger",
+      "pattern": "packages/radia-gpu/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-062",
+      "lane": "radia-mcp-matrix",
+      "kind": "foreign_trigger",
+      "pattern": "packages/radia-optuna/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-063",
+      "lane": "radia-mcp-matrix",
+      "kind": "foreign_trigger",
+      "pattern": "validation_test/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing"
+    },
+    {
+      "lane": "radia-mcp-matrix",
+      "kind": "missing_trigger",
+      "pattern": "Build.ps1",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-064"
+    },
+    {
+      "lane": "radia-mcp-matrix",
+      "kind": "missing_trigger",
+      "pattern": "CMakeLists.txt",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-065"
+    },
+    {
+      "lane": "radia-mcp-matrix",
+      "kind": "missing_trigger",
+      "pattern": "MANIFEST.in",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-066"
+    },
+    {
+      "lane": "radia-mcp-matrix",
+      "kind": "missing_trigger",
+      "pattern": "pyproject.toml",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-067"
+    },
+    {
+      "lane": "radia-mcp-matrix",
+      "kind": "missing_trigger",
+      "pattern": "tests/test_tier_manifest.json",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-mcp",
+      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-068"
+    },
+    {
+      "id": "CI-MIG-069",
+      "lane": "radia-optuna",
+      "kind": "content_diff_pending",
+      "pattern": "Build.ps1",
+      "current": "Native lane lacks content-diff selection for this shared root config.",
+      "target": "Extend existing content-diff mechanisms; unknown impact selects all owners.",
+      "owner": "radia-optuna",
+      "follow_up": "radia-optuna owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-070",
+      "lane": "radia-optuna",
+      "kind": "content_diff_pending",
+      "pattern": "CMakeLists.txt",
+      "current": "Native lane lacks content-diff selection for this shared root config.",
+      "target": "Extend existing content-diff mechanisms; unknown impact selects all owners.",
+      "owner": "radia-optuna",
+      "follow_up": "radia-optuna owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-071",
+      "lane": "radia-optuna",
+      "kind": "foreign_trigger",
+      "pattern": "tools/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia-optuna",
+      "follow_up": "radia-optuna owner lane PR; repository management owns shared routing"
+    },
+    {
+      "lane": "radia-optuna",
+      "kind": "missing_trigger",
+      "pattern": "MANIFEST.in",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-optuna",
+      "follow_up": "radia-optuna owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-073"
+    },
+    {
+      "lane": "radia-optuna",
+      "kind": "missing_trigger",
+      "pattern": "pyproject.toml",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-optuna",
+      "follow_up": "radia-optuna owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-074"
+    },
+    {
+      "lane": "radia-optuna",
+      "kind": "missing_trigger",
+      "pattern": "tests/test_tier_manifest.json",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia-optuna",
+      "follow_up": "radia-optuna owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-075"
+    },
+    {
+      "id": "CI-MIG-076",
+      "lane": "sparsesolv",
+      "kind": "content_diff_pending",
+      "pattern": "Build.ps1",
+      "current": "Native lane lacks content-diff selection for this shared root config.",
+      "target": "Extend existing content-diff mechanisms; unknown impact selects all owners.",
+      "owner": "radia",
+      "follow_up": "sparsesolv owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-077",
+      "lane": "sparsesolv",
+      "kind": "content_diff_pending",
+      "pattern": "CMakeLists.txt",
+      "current": "Native lane lacks content-diff selection for this shared root config.",
+      "target": "Extend existing content-diff mechanisms; unknown impact selects all owners.",
+      "owner": "radia",
+      "follow_up": "sparsesolv owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-078",
+      "lane": "sparsesolv",
+      "kind": "foreign_trigger",
+      "pattern": "packages/cubit-mesh-export/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "sparsesolv owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-079",
+      "lane": "sparsesolv",
+      "kind": "foreign_trigger",
+      "pattern": "packages/radia-gpu/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "sparsesolv owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-080",
+      "lane": "sparsesolv",
+      "kind": "foreign_trigger",
+      "pattern": "packages/radia-mcp/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "sparsesolv owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-081",
+      "lane": "sparsesolv",
+      "kind": "foreign_trigger",
+      "pattern": "src/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "sparsesolv owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-082",
+      "lane": "sparsesolv",
+      "kind": "foreign_trigger",
+      "pattern": "tests/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "sparsesolv owner lane PR; repository management owns shared routing"
+    },
+    {
+      "id": "CI-MIG-083",
+      "lane": "sparsesolv",
+      "kind": "foreign_trigger",
+      "pattern": "validation_test/**",
+      "current": "Current envelope admits a foreign-owned input.",
+      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
+      "owner": "radia",
+      "follow_up": "sparsesolv owner lane PR; repository management owns shared routing"
+    },
+    {
+      "lane": "sparsesolv",
+      "kind": "missing_trigger",
+      "pattern": "MANIFEST.in",
+      "current": "Shared root configuration is outside this lane trigger.",
+      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
+      "owner": "radia",
+      "follow_up": "sparsesolv owner lane PR; repository management owns shared routing",
+      "id": "CI-MIG-084"
+    }
+  ]
+}
