@@ -280,7 +280,9 @@ radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and 
 - Commit only reviewed files owned by the task; use clean integration worktrees.
 - Inspect branches, PRs and remote main before merge or rebase.
 - Do not finish while required tests, CI, build, or release commands run.
-- Run each task in its same-named Claude/Codex sessions.
+- Run each task in its same-named Claude/Codex sessions. The Claude and Codex
+  レポジトリ管理 sessions coordinate, each directing its own tool's sessions;
+  Claude–Codex exchange occurs only between these two hubs.
 
 Defaults: Codex implements and validates numerics. Claude reviews, integrates,
 pushes, runs CI, fixes forward, tags, publishes, deploys and owns release gates.
