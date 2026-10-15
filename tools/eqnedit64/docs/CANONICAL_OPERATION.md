@@ -48,10 +48,10 @@ GitHub-hosted Windowsの隔離CIで実行する。
 ビルドはファイルロック解除のためその実行中プロセスを強制終了する。
 別の配布先と無関係な同名プロセスは対象にしない。
 
-`accept_release.ps1`と`test_external_paste.ps1`は、100号機のAdministratorセッションを
-承認済み試験セッションとして実行する（2026-10-15 利用者決定）。そのセッションで
+`accept_release.ps1`と`test_external_paste.ps1`は、development hostの承認済み試験セッション
+（対応は非公開の運用記録）で実行する（2026-10-15 利用者決定）。そのセッションで
 `EQNEDIT64_ISOLATED_TEST_SESSION=1`を設定し、同じセッションでOfficeが起動していない
-ときだけ実行する。他ユーザーのセッションやOfficeには接続・停止しない。LABや他ユーザーの
+ときだけ実行する。他ユーザーのセッションやOfficeには接続・停止しない。validation hostや他ユーザーの
 セッションではこの変数を設定しない。
 
 ```powershell
@@ -80,8 +80,8 @@ eventが伴わない場合は製品FAILではなく`INCONCLUSIVE`として停止
 greenになるまで回し直して合格扱いにせず、健全な新しい隔離sessionで候補を再検査する。
 
 公開順は固定する。まずリリースコミットを`main`へpushして隔離main CIを通し、その
-`origin/main`と同じコミットからINTEL11（100号機）でコンパイルと署名だけを行う。
-LABは検証専用とし、正式リリースのコンパイル・署名には使わない。次に
+`origin/main`と同じコミットからdevelopment hostでコンパイルと署名だけを行う。
+validation hostは検証専用とし、正式リリースのコンパイル・署名には使わない。次に
 `.agents\skills\release-eqnedit64\scripts\sync_to_o.ps1`で
 `O:\Eqnedit64.exe`を更新し、隣の`O:\Eqnedit64.release.json`へ予定tag、
 source SHA、EXE SHA-256、version、signerを記録する。ここまで成功してから最後に
