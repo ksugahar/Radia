@@ -22,6 +22,9 @@ DOFs. Only already-projected zero constrained couplings are accepted. Checked
 zero constrained diagonals are extended by identity; constrained RHS entries
 must remain zero. This preserves the free-DOF equations, with zero constrained
 solution entries. Without a mask, every row must have a positive diagonal.
+The native true residual uses the projected original operator (constrained
+diagonals = 1, constrained RHS = 0). Independent Python checks separately
+evaluate the original free-DOF equations.
 Missing/duplicate/unsorted CSR entries, asymmetric or nonfinite data,
 nonpositive factor pivots, nonpositive PCG curvature, nonconvergence and stale
 or foreign handles raise. The diagonal shift is fixed (default 1.05), never
@@ -34,6 +37,15 @@ checks the MATLAB context, explicit constraints, rejected operations, handle
 generations and cleanup. Actual loaded module paths and SHA-256 hashes are
 verified in the owned MATLAB Engine. Installed-wheel acceptance invokes the
 same checks when the IC payload is present. NumPy/SciPy are test dependencies.
+
+`radia_cuda_ic('profile', handle, gpuRhs, repetitions)` is a diagnostic-only
+command, bounded to 500 repetitions. `profile_ic.m` uses it for separate
+operation microprofiles. These measurements must never enter acceptance
+timing medians; use the full solve harness for transfer-inclusive acceptance.
+
+The context owns a 4 MiB cuBLAS workspace assigned after stream selection and
+before CUDA Graph capture. It remains allocated until graph/handle teardown
+and is included in native retained and setup-peak owned-buffer counts.
 
 The six-route FEM study is
 `validation_test/ams_cuda/measure_scale_installed.py --job <checked-job>
@@ -49,7 +61,9 @@ so small iteration-count differences are expected.
 The study records fresh mesh/operator/RHS/factor construction, transfer-inclusive
 first solve, and matrix/factor reuse at current scales 2, 0.5 and 1. Every
 solve starts from zero and is checked against a separate Python NGSolve
-`sparsecholesky` solution and original-A residual. Startup and first initialized
+`sparsecholesky` solution and independent original free-DOF residual. Native
+checks use the projected original operator (constrained diagonals = 1,
+constrained RHS = 0). Startup and first initialized
 calls are separate; no OS/device cold-start claim is made. Process memory
 sampling includes loaded runtimes and validation/serialization; CPU RSS also
 includes the retained independent reference operator. Native owned buffers,
@@ -59,10 +73,11 @@ are reported separately. These do not certify a transient whole-device peak.
 100 is a numerical/build acceptance host. Its `--diagnostic` results do not
 certify performance and retain explicit memory admission checks. Formal
 same-host A100 timing keeps CPU/GPU idle admission thresholds. The A100 host
-was powered off on 2026-10-13, so the new IC implementation has no A100
-performance or same-binary runtime acceptance yet. The pending record must
-remain pending until that host is available and the exact accepted candidate
-artifact is loaded and verified. The published 0.1.4 wheel is unchanged.
+was powered off at the initial 2026-10-13 acceptance. The human started it
+for baseline and optimized IC acceptance on 2026-10-15. Those same-host
+three-size evaluations are complete; see [tuning.md](tuning.md). The tuned
+IC is an explicitly recorded experimental overlay on the unchanged base
+wheel. This task does not publish or replace a distribution.
 
 Candidate numerical acceptance on 100 (2026-10-13): installed CI wheel
 `0.1.5rc1`, run `38387288896`, passed all 360 independent FEM solution
@@ -97,9 +112,10 @@ All times below are diagnostic 100 values, not formal performance acceptance.
 
 Natural-order GPU IC has many triangular dependency levels and scalar host
 synchronizations. These diagnostic results do not establish an IC speedup;
-A100 tuning and formal timings remain pending. AMS remains the preferred
+Formal baseline and tuned GPU-worker evaluations are now recorded in
+[tuning.md](tuning.md). AMS remains the preferred
 candidate for the larger HCurl cases. The selected wheel and IC binary
-hashes are pinned in [a100-pending.json](results/a100-pending.json).
+hashes are pinned in [gpu-evaluation-status.json](results/gpu-evaluation-status.json).
 
 Lifecycle acceptance releases contexts independently of the selected CUDA device,
 checks caller-device restoration, stale/type rejection and MEX unloadability.

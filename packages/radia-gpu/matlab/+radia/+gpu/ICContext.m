@@ -1,5 +1,7 @@
 classdef ICContext < handle
     %ICCONTEXT Retain a CUDA IC(0) factor and FP64 PCG workspace.
+    % The native profile command is diagnostic-only; its microtimings are not
+    % acceptance medians. See validation_test/ic_cuda/README.md.
     properties (SetAccess=private)
         SetupInfo struct
     end

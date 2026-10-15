@@ -5,9 +5,10 @@ before=radia_cuda_ic('live_count');op=toCSR(data.A);rhs=gpuArray(data.b);
 [h,setup]=radia_cuda_ic('create',op,1.05);cleanup=onCleanup(@()radia_cuda_ic('release',h));
 applied=gather(radia_cuda_ic('apply',h,rhs));applyError=norm(applied-data.expected_pre)/norm(data.expected_pre);
 assert(isfinite(applyError)&&applyError<1e-12);
-scales=[1 2 .5 0 1];errors=zeros(5,2);reports=cell(5,1);
+scales=[1 2 .5 0 1];errors=zeros(5,2);reports=cell(5,1);rejections=0;
 for k=1:5
     [x,reports{k}]=radia_cuda_ic('solve',h,scales(k)*rhs,1e-12,100);
+    assert(reports{k}.graph_cached&&reports{k}.iteration_host_syncs==ceil(reports{k}.iterations/reports{k}.graph_batch_iterations));
     x=gather(x);errors(k,:)=[norm(x-scales(k)*data.expected)/max(norm(scales(k)*data.expected),1), ...
         norm(data.A*x-scales(k)*data.b)/max(norm(scales(k)*data.b),1)];
 end
@@ -18,7 +19,10 @@ if isfield(data,'sparse_A')
     sparseCleanup=onCleanup(@()radia_cuda_ic('release',sh));
     pre=gather(radia_cuda_ic('apply',sh,gpuArray(data.sparse_b)));
     sparseApplyError=norm(pre-data.sparse_expected_pre)/norm(data.sparse_expected_pre);
-    [sx,~]=radia_cuda_ic('solve',sh,gpuArray(data.sparse_b),1e-12,1000);sx=gather(sx);
+    [sx,sparseInfo]=radia_cuda_ic('solve',sh,gpuArray(data.sparse_b),1e-12,1000);sx=gather(sx);
+    [bounded,~]=radia_cuda_ic('solve',sh,gpuArray(data.sparse_b),1e-12,sparseInfo.iterations);
+    assert(norm(gather(bounded)-sx)<1e-12);
+    mustFail(@()solveBounded(sh,gpuArray(data.sparse_b),sparseInfo.iterations-1));rejections=rejections+1;
     assert(isfinite(sparseApplyError)&&sparseApplyError<1e-11);
     assert(norm(sx-data.sparse_expected)/norm(data.sparse_expected)<1e-10);
     assert(norm(data.sparse_A*sx-data.sparse_b)/norm(data.sparse_b)<1e-10);clear sparseCleanup;
@@ -27,11 +31,12 @@ object=radia.gpu.ICContext(op,Shift=1.05);objectCleanup=onCleanup(@()delete(obje
 [objectSolution,objectInfo]=object.solve(rhs,Tolerance=1e-12,ReturnOnGPU=false);
 assert(norm(objectSolution-data.expected)<1e-11&&objectInfo.result_download_bytes==24);
 assert(norm(gather(object.apply(rhs))-data.expected_pre)<1e-11);clear objectCleanup;
-rejections=0;
 masked=toCSR(blkdiag(data.A,0));masked.free=gpuArray(int32([1;1;1;0]));
 [mh,maskInfo]=radia_cuda_ic('create',masked,1.05);maskCleanup=onCleanup(@()radia_cuda_ic('release',mh));
 [mx,~]=radia_cuda_ic('solve',mh,gpuArray([data.b;0]),1e-12,100);
 assert(norm(gather(mx)-[data.expected;0])<1e-11&&maskInfo.explicit_free_mask);
+maskedApply=gather(radia_cuda_ic('apply',mh,gpuArray([data.b;0])));
+assert(norm(maskedApply-[data.expected_pre;0])<1e-11&&maskInfo.projected_zero_entries_pruned==3);
 assert(norm(gather(masked.values)-reshape(blkdiag(data.A,0).',[],1))==0);
 mustFail(@()solveLimited(mh,gpuArray([data.b;1])));rejections=rejections+1;clear maskCleanup;
 bad=op;bad.free=gpuArray(int32([1;2;1]));mustFail(@()badCreate(bad,1));rejections=rejections+1;
@@ -76,6 +81,9 @@ n=size(A,1);op=struct('rows',double(n),'cols',double(n), ...
 end
 function solveLimited(h,b)
 [~,~]=radia_cuda_ic('solve',h,b,1e-12,1);
+end
+function solveBounded(h,b,limit)
+[~,~]=radia_cuda_ic('solve',h,b,1e-12,limit);
 end
 function op=toSparseCSR(A)
 n=size(A,1);[columns,rows,values]=find(sparse(A.'));counts=accumarray(rows,1,[n 1]);
