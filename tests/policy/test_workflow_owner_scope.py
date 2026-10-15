@@ -263,3 +263,17 @@ EXCEPTION_CEILING = {
     'CI-MIG-083': 'd80f2d57ed6a6d40fd25b3b44e8a1de02330c4d0a64ec6b8252214ea9c5c272d',
     'CI-MIG-084': '74ab1b3ccf1adea48ff5aa53fb2eccaac98c0b098b03d72ff12640ce997e6b80',
 }
+
+
+def test_job_conditions_are_single_expressions():
+    """A `${{ }}` condition followed by stray text becomes a truthy string.
+
+    That silently ran tag-only release jobs on pull requests, so every job
+    condition that opens an expression must also end with it.
+    """
+    for workflow in sorted((ROOT / ".github/workflows").glob("*.yml")):
+        document = yaml.load(workflow.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+        for name, job in (document.get("jobs") or {}).items():
+            condition = str(job.get("if", "")).strip()
+            if condition.startswith("${{"):
+                assert condition.endswith("}}") and condition.count("${{") == 1, (workflow.name, name, condition)
