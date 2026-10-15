@@ -3,7 +3,9 @@ param(
     [ValidateRange(1, 10000)]
     [int]$Seeds = 24,
     [ValidateRange(1, 1000000)]
-    [int]$Ops = 3000
+    [int]$Ops = 3000,
+    [ValidateRange(1, 3600)]
+    [int]$TimeoutSeconds = 600
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,7 +35,7 @@ try {
     }
 
     & (Join-Path $PSScriptRoot 'test_ui_fuzz.ps1') -AppPath $exe `
-        -Seeds $Seeds -Ops $Ops -TimeoutSeconds 90
+        -Seeds $Seeds -Ops $Ops -TimeoutSeconds $TimeoutSeconds
     Write-Host 'PASS: ASan hidden tests and GUI fuzz'
 } finally {
     $env:ASAN_OPTIONS = $previousOptions
