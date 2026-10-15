@@ -590,7 +590,7 @@ def test_attributed_edit_cannot_mask_a_global_cmake_edit():
 def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
     """Moving a numerical gate must preserve execution, not just ownership labels."""
     data = IMPACT.manifest()
-    tier = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["profiles"]
+    tier = json.loads((ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8"))["profiles"]
     homes = {
         "sparsesolv": [
             "tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
@@ -606,7 +606,7 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
     }
     for lane, paths in homes.items():
         definition = data["lanes"][lane]
-        workflow = yaml.load((ROOT / definition["workflow"]).read_text(), Loader=yaml.BaseLoader)
+        workflow = yaml.load((ROOT / definition["workflow"]).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
         scripts = "\n".join(step.get("run", "") for job in workflow["jobs"].values()
                             for step in job.get("steps", []))
         for path in paths:
@@ -618,11 +618,11 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
                             if path in tier[name]["paths"]]
                 assert profiles and all("--profile " + name in scripts for name in profiles)
             elif lane == "radia-gpu":
-                project = (ROOT / "packages/radia-gpu/tests/native/CMakeLists.txt").read_text()
+                project = (ROOT / "packages/radia-gpu/tests/native/CMakeLists.txt").read_text(encoding="utf-8")
                 assert path in project
                 assert Path(path).stem in scripts
                 assert "ctest --test-dir" in scripts and "--no-tests=error" in scripts
-                assert Path(path).stem not in (ROOT / "CMakeLists.txt").read_text()
+                assert Path(path).stem not in (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
                 assert "target_compile_options(test_radia_mex_sparse_symmetry PRIVATE /W4 /permissive-)" in project
                 assert "target_compile_options(test_radia_mex_sparse_symmetry PRIVATE -Wall -Wextra -Wpedantic)" in project
                 assert '-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl' in scripts
