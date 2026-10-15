@@ -363,6 +363,12 @@ def root_owners(path,old,new,data):
     try:
         if old is None or new is None: raise ValueError('missing/deleted/renamed blob')
         rules=data['root_content_diff']['attribution']
+        if path in ('Build.ps1','CMakeLists.txt','MANIFEST.in'):
+            # Proving every changed region of a script/build file attributable needs a full
+            # language parser; a partial lexer let mixed edits hide global changes. Any change
+            # to a code-like root file therefore selects all of its owners.
+            if old == new: return set(),'unchanged'
+            raise ValueError('code-like root file changed; attribution not proven')
         if path=='pyproject.toml': owners=_toml_owners(old,new,rules[path])
         elif path=='Build.ps1': owners=_ps_owners(old,new,rules[path])
         elif path=='CMakeLists.txt': owners=_cmake_owners(old,new,rules[path])
