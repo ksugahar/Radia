@@ -84,7 +84,14 @@ struct Context {
     cusparseSpMatDescr_t lower=nullptr;cusparseDnVecDescr_t vr=nullptr,vt=nullptr,vz=nullptr;
     cusparseSpSVDescr_t forward=nullptr,backward=nullptr;
     ~Context(){if(device>=0)cudaSetDevice(device);if(forward)cusparseSpSV_destroyDescr(forward);if(backward)cusparseSpSV_destroyDescr(backward);if(vr)cusparseDestroyDnVec(vr);if(vt)cusparseDestroyDnVec(vt);if(vz)cusparseDestroyDnVec(vz);if(lower)cusparseDestroySpMat(lower);if(sparse)cusparseDestroy(sparse);if(blas)cublasDestroy(blas);}
-    void selected(){int d;ck(cudaGetDevice(&d));if(d!=device)throw std::runtime_error("IC context belongs to another CUDA device");}
+#ifdef RADIA_IC_LIFECYCLE_TEST
+    bool simulateDeviceMismatch=false;
+#endif
+    void selected(){
+#ifdef RADIA_IC_LIFECYCLE_TEST
+        if(simulateDeviceMismatch)throw std::runtime_error("IC context belongs to another CUDA device");
+#endif
+        int d;ck(cudaGetDevice(&d));if(d!=device)throw std::runtime_error("IC context belongs to another CUDA device");}
     void flag(){int v;ck(cudaMemcpy(&v,failure.p,sizeof(v),cudaMemcpyDeviceToHost));if(v)throw std::runtime_error("Invalid/nonfinite/asymmetric matrix, RHS, or nonpositive IC pivot");}
     size_t bytes()const{return rp.bytes()+ci.bytes()+lrp.bytes()+lci.bytes()+free.bytes()+failure.bytes()+av.bytes()+l.bytes()+x.bytes()+r.bytes()+p.bytes()+ap.bytes()+tmp.bytes()+z.bytes()+forwardBuffer.bytes()+backwardBuffer.bytes();}
     void setup(const mxArray* op,double s){
@@ -145,7 +152,15 @@ struct Context {
 using Handle=uint64_t;constexpr Handle TAG=0x1CC0;
 std::unordered_map<Handle,std::unique_ptr<Context>> contexts;
 Handle id(const mxArray* a){if(mxGetClassID(a)!=mxUINT64_CLASS||mxIsComplex(a)||mxGetNumberOfElements(a)!=1)throw std::runtime_error("typed uint64 IC handle required");Handle h=*static_cast<const Handle*>(mxGetData(a));if((h>>48)!=TAG)throw std::runtime_error("IC handle type mismatch");return h;}
-Context& context(const mxArray* a){auto it=contexts.find(id(a));if(it==contexts.end())throw std::runtime_error("stale/released IC handle");it->second->selected();return *it->second;}
+auto lookup(const mxArray* a){auto it=contexts.find(id(a));if(it==contexts.end())throw std::runtime_error("stale/released IC handle");return it;}
+Context& context(const mxArray* a){auto it=lookup(a);it->second->selected();return *it->second;}
+void release(const mxArray* a){
+    auto it=lookup(a); // Validate type/liveness without requiring the owning device.
+    int caller;ck(cudaGetDevice(&caller));
+    contexts.erase(it); // Context and buffer destructors free on their owning device.
+    mexUnlock(); // Balance the erased context even if restoring the device fails.
+    ck(cudaSetDevice(caller));
+}
 void atExit(){int d=-1;cudaGetDevice(&d);contexts.clear();if(d>=0)cudaSetDevice(d);}
 mxArray* copyGPU(const double* p,int n){mwSize size=n;auto a=mxGPUCreateGPUArray(1,&size,mxDOUBLE_CLASS,mxREAL,MX_GPU_DO_NOT_INITIALIZE);try{ck(cudaMemcpy(mxGPUGetData(a),p,size_t(n)*sizeof(double),cudaMemcpyDeviceToDevice));auto out=mxGPUCreateMxArrayOnGPU(a);mxGPUDestroyGPUArray(a);return out;}catch(...){mxGPUDestroyGPUArray(a);throw;}}
 mxArray* info(Context& c,int iterations,double residual,bool checked=true){
@@ -163,7 +178,13 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** args){
             static Handle generation=Handle(std::chrono::high_resolution_clock::now().time_since_epoch().count())&0x0000ffffffffffffULL;if(generation==0x0000ffffffffffffULL)throw std::runtime_error("IC generation exhausted");Handle h=(TAG<<48)|++generation;
             out[1]=info(*c,0,0,false);out[0]=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);*static_cast<Handle*>(mxGetData(out[0]))=h;contexts.emplace(h,std::move(c));static bool registered=false;if(!registered){mexAtExit(atExit);registered=true;}mexLock();return;
         }
-        if(command=="release"){if(nrhs!=2||nlhs!=0)throw std::runtime_error("release requires IC handle");context(args[1]);contexts.erase(id(args[1]));mexUnlock();return;}
+        if(command=="release"){if(nrhs!=2||nlhs!=0)throw std::runtime_error("release requires IC handle");release(args[1]);return;}
+#ifdef RADIA_IC_LIFECYCLE_TEST
+        if(command=="test_device_mismatch"){
+            if(nrhs!=2||nlhs!=0)throw std::runtime_error("test_device_mismatch arity");
+            lookup(args[1])->second->simulateDeviceMismatch=true;return;
+        }
+#endif
         if(command=="live_count"){if(nrhs!=1||nlhs!=1)throw std::runtime_error("live_count arity");out[0]=mxCreateDoubleScalar(double(contexts.size()));return;}
         if(command=="solve"||command=="apply"){
             bool solving=command=="solve";if(nrhs!=(solving?5:3)||nlhs!=(solving?2:1))throw std::runtime_error("IC solve/apply arity");auto& c=context(args[1]);Inputs input;auto b=input.get<double>(args[2],mxDOUBLE_CLASS,c.n);ck(cudaDeviceSynchronize());

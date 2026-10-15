@@ -1,4 +1,8 @@
-# GPU IC(0) acceptance
+# Experimental GPU IC(0) acceptance
+
+This feature is experimental. At 106,272 DOFs, diagnostic reused GPU IC
+was about 3.40 s versus 2.36 s for CPU IC with 16 threads: GPU IC is
+currently slower in this measurement; no speedup is claimed.
 
 `radia_cuda_ic` owns a checked real FP64 CSR operator, natural-order
 fixed-shift IC(0) factors and reusable PCG workspace. CUDA performs numerical
@@ -96,3 +100,12 @@ synchronizations. These diagnostic results do not establish an IC speedup;
 A100 tuning and formal timings remain pending. AMS remains the preferred
 candidate for the larger HCurl cases. The selected wheel and IC binary
 hashes are pinned in [a100-pending.json](results/a100-pending.json).
+
+Lifecycle acceptance releases contexts independently of the selected CUDA device,
+checks caller-device restoration, stale/type rejection and MEX unloadability.
+`validate_ic_lifecycle(false)` switches physical devices when multiple GPUs are
+available; with one GPU it checks same-device release. A separate test-only
+build with `-DRADIA_IC_LIFECYCLE_TEST` runs `validate_ic_lifecycle(true)` to
+simulate the selected-device mismatch on one GPU. This checks the formerly
+blocking lookup and solve/apply rejection; it does not certify physical
+multi-GPU switching. The simulation command is absent from production builds.
