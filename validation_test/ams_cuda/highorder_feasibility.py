@@ -64,6 +64,7 @@ def main(args):
                     timer=time.perf_counter()
                     with ng.TaskManager():a.Assemble();b.Assemble()
                     item['assembly_and_preconditioner_seconds']=time.perf_counter()-timer
+                    b.vec.FV().NumPy()[~np.asarray(list(s.FreeDofs()),dtype=bool)]=0
                     item['preconditioner_setup_seconds']=None
                     item['phase_limitation']='BDDC local contributions/coarse setup occur during NGSolve assembly; no fabricated disjoint timer'
                     item['coarse_statistics']=ssn.AMSCoarseStats()
@@ -78,6 +79,7 @@ def main(args):
                     item.update(status='passed',solve_seconds=seconds,iterations=iterations,warm_reuse_median_seconds=statistics.median(seconds[1:]),independent=validate(np.column_stack(values)),idle_before=guard)
                 except Exception as ex:item.update(status='failed',error=repr(ex));print('CPU feasibility FAILED',order,threads,repr(ex),flush=True)
                 finally:item.update(process_rss_after=psutil.Process().memory_info().rss,memory_definition='Process RSS endpoints including retained independent reference; not transient peak')
+                print('CPU feasibility',order,threads,item['status'],flush=True)
             if args.cpu_only:
                 case['gpu']=dict(status='not_run',reason='CPU-only build-host feasibility');continue
             # Explicit solver-validation fixture. NGSolve owns assembly; this
