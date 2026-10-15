@@ -437,3 +437,23 @@ def test_all_distribution_gates_are_hosted_and_preserve_full_manual_release_runs
             assert "needs.ci-impact.outputs.required == 'true'" in job['if']
         assert IMPACT.required_for_event(lane,'workflow_dispatch',{},None,data)[0]
         assert IMPACT.required_for_event(lane,'push',{'ref':'refs/tags/package-v1'},None,data)[0]
+
+
+@pytest.mark.parametrize("bad", [True, False, float("nan"), float("inf"), 0, -1, "30"])
+def test_invalid_tier_budget_fails_closed(bad):
+    """JSON true equals 1 in Python; a budget edited to true must not read as unchanged."""
+    before = (ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8")
+    data = json.loads(before)
+    name = next(n for n, p in data["profiles"].items() if "max_elapsed_seconds" in p)
+    data["profiles"][name]["max_elapsed_seconds"] = bad
+    after = json.dumps(data)
+    with pytest.raises(ValueError):
+        IMPACT._tier_owners(before, after, IMPACT.CONTRACT.load(ROOT),
+                            IMPACT.CONTRACT.load(ROOT)["rules"][0].get("content_diff", {}))
+    if name == "sparsesolv":
+        with pytest.raises(ValueError):
+            IMPACT.ams_manifest_unchanged(before, after)
+
+
+def test_numeric_one_and_true_are_distinct_changes():
+    assert IMPACT._canonical({"max_elapsed_seconds": 1}) != IMPACT._canonical({"max_elapsed_seconds": True})
