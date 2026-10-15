@@ -243,6 +243,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python validation_test/ams_cuda/nonlinear_resident.py --gpu-dir $gpuMatlab --matlab-dir $gpuMatlab --out "$env:RUNNER_TEMP/radia-ams-nonlinear-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.35 --threads 2 --setup-threads 2 --contract
           exit $LASTEXITCODE
+      - name: Verify installed IH research payload with official Toolkit
+        shell: pwsh
+        run: |
+          $toolkit = Join-Path $env:RUNNER_TEMP "radia-ih-toolkit-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          git clone --no-checkout https://github.com/matlab/simulink-agentic-toolkit.git $toolkit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $toolkit checkout --detach c58e6aec7b904769ae43536e169d747feda95416
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $wheels = @(Get-ChildItem "$env:RUNNER_TEMP/radia-gpu-wheel-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT/radia_gpu-*.whl")
+          if ($wheels.Count -ne 1) { throw 'Expected exactly one accepted wheel' }
+          $installedPython = "$env:RUNNER_TEMP/radia-gpu-installed-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT/Scripts/python.exe"
+          python validation_test/ih_cuda/run_installed.py --installed-python $installedPython --wheel $wheels[0].FullName --toolkit-tools (Join-Path $toolkit 'tools') --out "$env:RUNNER_TEMP/radia-ih-installed-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
       - name: Select public numerical evidence
         if: always()
         shell: pwsh

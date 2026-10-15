@@ -17,6 +17,6 @@ The isolated integration combines current main, IH temperature-BH source 266580d
 
 ## Remaining preparation gaps
 
-The CI now selects the IH exact-commit artifact for packaging, but the new run_installed.py IH numerical/CPU/Toolkit runner still needs execution against the final wheel and a CI invocation with the official Toolkit dependency before release. The new final integrated build and both-machine installed-wheel runs are pending. No qualification records may be synthesized from older standalone IH results.
+The CI now selects the IH exact-commit artifact for packaging, but the new run_installed.py IH numerical/CPU/Toolkit runner and pinned official Toolkit CI invocation still need execution against the final wheel before release. The reviewed B1 power/sign gate is not yet integrated; B3 remains open. The new final integrated build and both-machine installed-wheel runs are pending. No qualification records may be synthesized from older standalone IH results.
 
 IH research limitations: flat P1 closed genus-zero body, bounded complete reaction assembly, user-supplied coil impedance, temperature-interpolated single-valued BH with no hysteresis history/minor-loop loss, staggered thermal coupling and bounded surface-layer thermal model. Independent FEM and experimental validation remain unverified. The synthetic high-current test is not a laboratory operating instruction. IC tuned reuse may improve speed while fresh setup remains slower and owned memory increases; disclose the measured scope rather than claiming universal acceleration.

@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 import subprocess
 import sys
@@ -9,6 +10,15 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'packages/radia-gpu'))
 from verify_wheel import verify, verify_installed_identity
+
+
+def check_cpu_release_gate(cpu):
+    errors = cpu.get('relative_errors', {})
+    if cpu.get('accepted') is not True or set(errors) != {'temperature', 'heat', 'impedance', 'electromagnetic'}:
+        raise ValueError('Incomplete independent IH CPU evidence')
+    for value, limit in [(v, 1e-8) for v in errors.values()] + [(cpu.get('true_relative_residual'), 1e-6)]:
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= limit:
+            raise ValueError('Release CPU parity gate failed')
 
 
 def main():
@@ -24,6 +34,9 @@ def main():
     engine = None
     try:
         wheel = verify(args.wheel)
+        source = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
+        if source != wheel['source_commit']:
+            raise ValueError('Validation source differs from wheel source')
         installed = json.loads(subprocess.check_output(
             [str(args.installed_python), '-I', '-c',
              'import json,radia_gpu; print(json.dumps(radia_gpu.verify()))'], text=True))
@@ -34,6 +47,9 @@ def main():
         digest = hashlib.sha256(binary.read_bytes()).hexdigest()
         if digest != receipt['binary_sha256'] or receipt['source_commit'] != wheel['source_commit']:
             raise ValueError('Installed IH receipt mismatch')
+        sample = payload / 'samples/ih-temperature-bh/makeTemperatureBHConfig.m'
+        if sample.read_bytes() != (ROOT / 'validation_test/ih_cuda/makeTemperatureBHConfig.m').read_bytes():
+            raise ValueError('Installed sample differs from CPU validation fixture')
         if not (args.toolkit_tools / 'model_check/model_check.p').is_file():
             raise ValueError('Official Simulink Toolkit tools are required')
         import matlab.engine
@@ -42,6 +58,10 @@ def main():
         result = engine.checkTemperatureBH(str(payload), str(args.out), str(payload), nargout=1)
         if not result['accepted'] or Path(engine.which('radia_cuda_ih')).resolve() != binary:
             raise ValueError('Installed IH numerical/lifecycle acceptance failed')
+        for symbol, relative in [('radia.simulink.ihResidentSFunction', '+radia/+simulink/ihResidentSFunction.m'),
+                                 ('radia.simulink.buildTemperatureBHResearchModel', '+radia/+simulink/buildTemperatureBHResearchModel.m')]:
+            if Path(engine.which(symbol)).resolve() != (payload / relative).resolve():
+                raise ValueError('Source path shadows installed MATLAB wrapper')
         engine.addpath(engine.genpath(str(args.toolkit_tools.resolve())), nargout=0)
         models = list(args.out.glob('*.slx'))
         if len(models) != 1:
@@ -60,8 +80,7 @@ def main():
         subprocess.run([sys.executable, str(ROOT / 'validation_test/ih_cuda/check_temperature_bh_cpu.py'),
                         str(args.out)], check=True)
         cpu = json.loads((args.out / 'cpu-result.json').read_text(encoding='utf-8'))
-        if max(cpu['relative_errors'].values()) > 1e-8 or cpu['true_relative_residual'] > 1e-6:
-            raise ValueError('Release CPU parity gate failed')
+        check_cpu_release_gate(cpu)
         record.update(accepted=True, source_commit=wheel['source_commit'],
                       wheel_sha256=wheel['wheel_sha256'], manifest_sha256=wheel['manifest_sha256'],
                       binary_sha256=digest, cpu=cpu, toolkit_accepted=True,
@@ -70,10 +89,12 @@ def main():
         record['error'] = str(error)
         raise
     finally:
-        if engine is not None:
-            engine.quit()
-        (args.out / 'installed-result.json').write_text(
-            json.dumps(record, indent=2, allow_nan=False) + '\n', encoding='utf-8')
+        try:
+            if engine is not None:
+                engine.quit()
+        finally:
+            (args.out / 'installed-result.json').write_text(
+                json.dumps(record, indent=2, allow_nan=False) + '\n', encoding='utf-8')
 
 
 if __name__ == '__main__':
