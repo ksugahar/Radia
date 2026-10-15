@@ -47,6 +47,13 @@ class build_py(_build_py):
         for path, field in ((binary, "binary_sha256"), (source, "source_sha256")):
             if hashlib.sha256(path.read_bytes()).hexdigest() != receipt[field]:
                 raise RuntimeError(f"CUDA build provenance mismatch: {path.name}")
+        ic_binary = build / 'radia_cuda_ic.mexw64'
+        ic_source = PACKAGE / 'native/radia_cuda_ic.cu'
+        ic_hash = hashlib.sha256(ic_binary.read_bytes()).hexdigest()
+        ic_source_hash = hashlib.sha256(ic_source.read_bytes()).hexdigest()
+        if (receipt.get('binary_sha256_by_file', {}).get(ic_binary.name) != ic_hash
+                or receipt.get('source_sha256_by_file', {}).get(ic_source.name) != ic_source_hash):
+            raise RuntimeError('IC CUDA build provenance mismatch')
         ams_build = ROOT / "build-ams-cuda"
         ams_receipt = json.loads((ams_build / "build.json").read_text(encoding="utf-8"))
         ams_binary = ams_build / "radia_cuda_ams.mexw64"
@@ -62,7 +69,7 @@ class build_py(_build_py):
         staged = package / "matlab"
         staged.mkdir(parents=True, exist_ok=True)
         expected = {p.relative_to(PACKAGE / "src/radia_gpu").as_posix() for p in (PACKAGE / "src/radia_gpu").rglob("*") if p.is_file() and "__pycache__" not in p.parts}
-        expected.update({"LICENSE", "README.md", "build.json", "ams-build.json"})
+        expected.update({"LICENSE", "README.md", "build.json", "ams-build.json", "ic-build.json"})
         hmatrix = os.environ.get('RADIA_HDIV_HMATRIX_BUILD')
         projection = os.environ.get('RADIA_HDIV_PROJECTION_BUILD')
         if bool(hmatrix) != bool(projection):
@@ -91,6 +98,15 @@ class build_py(_build_py):
             expected.add(target.relative_to(package).as_posix())
         shutil.copy2(binary, staged / binary.name)
         expected.add("matlab/" + binary.name)
+        shutil.copy2(ic_binary, staged / ic_binary.name)
+        expected.add('matlab/' + ic_binary.name)
+        public_ic = dict(schema='radia.gpu.ic-payload.v1', source_commit=commit, source_dirty=False,
+                         source_sha256=ic_source_hash, binary_sha256=ic_hash,
+                         gpu_numerical_factorization=True, no_cpu_solver_fallback=True,
+                         factorization='FP64 fixed-shift natural-order IC(0)',
+                         triangular_backend='cuSPARSE SpSV', cuda_targets=receipt['cuda_targets'],
+                         matlab=receipt['matlab'])
+        (package/'ic-build.json').write_text(json.dumps(public_ic,indent=2)+'\n')
         shutil.copy2(ams_binary, staged / ams_binary.name)
         expected.add("matlab/" + ams_binary.name)
         for name in ("readAMSExchange.m", "amsPCG.m"):
@@ -119,7 +135,7 @@ class build_py(_build_py):
         metadata = tomllib.loads((PACKAGE / "pyproject.toml").read_text())
         manifest = dict(schema="radia.gpu.distribution.v1", version=metadata["project"]["version"],
                         source_commit=commit, files=payload,
-                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "Reusable affine linear HCurl matrix and AMS hierarchy", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Bounded affine/P2 HDiv orders 1/2"] if hmatrix else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
+                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "Experimental reusable CUDA FP64 IC(0)-PCG", "Reusable affine linear HCurl matrix and AMS hierarchy", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Bounded affine/P2 HDiv orders 1/2"] if hmatrix else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
                         runtime_requirements=["Windows x64", "MATLAB R2026a", "Parallel Computing Toolbox", "NVIDIA GPU/driver", "Simulink for blocks", "User-installed LTspice for circuit execution"])
         (package / "manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")
 
