@@ -7,6 +7,8 @@ on:
     paths:
       - 'tools/eqnedit64/**'
       - 'packages/eqnedit64/**'
+      - 'docs/equation/**'
+      - '.agents/skills/release-eqnedit64/**'
       - '.github/workflows/eqnedit64.yml'
       - '.github/workflows/release-eqnedit64-pypi.yml'
       - 'CMakeLists.txt'
@@ -17,11 +19,23 @@ on:
       - 'tools/sparsesolv_ci_impact.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
+      - '!**/*.md'
+      - 'tools/eqnedit64/README.md'
+      - 'tools/eqnedit64/CHANGELOG.md'
+      - 'tools/eqnedit64/docs/GUI_SPEC.md'
+      - 'tools/eqnedit64/web/README.md'
+      - 'packages/eqnedit64/README.md'
+      - 'packages/eqnedit64/CHANGELOG.md'
+      - 'docs/equation/README.md'
+      - 'docs/equation/eqnedit64_handover.md'
+      - '.agents/skills/release-eqnedit64/SKILL.md'
   pull_request:
     branches: [main]
     paths:
       - 'tools/eqnedit64/**'
       - 'packages/eqnedit64/**'
+      - 'docs/equation/**'
+      - '.agents/skills/release-eqnedit64/**'
       - '.github/workflows/eqnedit64.yml'
       - '.github/workflows/release-eqnedit64-pypi.yml'
       - 'CMakeLists.txt'
@@ -32,6 +46,16 @@ on:
       - 'tools/sparsesolv_ci_impact.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
+      - '!**/*.md'
+      - 'tools/eqnedit64/README.md'
+      - 'tools/eqnedit64/CHANGELOG.md'
+      - 'tools/eqnedit64/docs/GUI_SPEC.md'
+      - 'tools/eqnedit64/web/README.md'
+      - 'packages/eqnedit64/README.md'
+      - 'packages/eqnedit64/CHANGELOG.md'
+      - 'docs/equation/README.md'
+      - 'docs/equation/eqnedit64_handover.md'
+      - '.agents/skills/release-eqnedit64/SKILL.md'
   workflow_dispatch:
     inputs:
       font_diagnostic:
@@ -72,6 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       required: ${{ steps.route.outputs.required }}
+      native: ${{ steps.prose.outputs.native }}
       reason: ${{ steps.route.outputs.reason }}
     steps:
       - uses: actions/checkout@v4
@@ -83,10 +108,45 @@ jobs:
       - name: Route distribution impact
         id: route
         run: python tools/sparsesolv_ci_impact.py --lane eqnedit64
+      - name: Separate Eqnedit64 prose-only changes from native work
+        id: prose
+        # docs/equation prose and the release-skill prose need parse/link checks
+        # only. Any other path, or an unknown event/base, keeps the native lanes.
+        run: python tools/eqnedit64/build/ci_prose_only.py
+
+  docs:
+    needs: [ci-impact]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && needs.ci-impact.outputs.native != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Eqnedit64 prose links
+        run: python tools/eqnedit64/build/ci_prose_only.py --check-links
+      # release-eqnedit64-pypi reads this context on every successful push run;
+      # a prose-only run is never a tag, so it qualifies as not eligible.
+      - name: Record exact Eqnedit64 CI ref context
+        run: |
+          mkdir -p "$RUNNER_TEMP/eqnedit64-ci-release-context"
+          python - <<'PY'
+          import json, os, pathlib
+          pathlib.Path(os.environ['RUNNER_TEMP'], 'eqnedit64-ci-release-context', 'context.json').write_text(json.dumps({
+              'schema': 'eqnedit64.ci-release-context.v1', 'ref': os.environ['GITHUB_REF'],
+              'ref_type': os.environ['GITHUB_REF_TYPE'], 'sha': os.environ['GITHUB_SHA'],
+              'run_id': os.environ['GITHUB_RUN_ID']}), encoding='utf-8')
+          PY
+      - name: Upload exact Eqnedit64 CI ref context
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-ci-release-context
+          path: ${{ runner.temp }}/eqnedit64-ci-release-context/context.json
+          if-no-files-found: error
 
   web:
     needs: [ci-impact]
-    if: ${{ needs.ci-impact.outputs.required == 'true' && (inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true) }}
+    if: ${{ needs.ci-impact.outputs.required == 'true' && needs.ci-impact.outputs.native == 'true' && (inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true) }}
     # The browser edition is pure JavaScript plus a string-contract test, so it
     # answers in seconds on a free runner instead of waiting for the Windows
     # native build.  This is a fast-feedback lane, not a replacement: the
@@ -138,7 +198,7 @@ jobs:
 
   build-test:
     needs: [ci-impact]
-    if: ${{ needs.ci-impact.outputs.required == 'true' && (inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true) }}
+    if: ${{ needs.ci-impact.outputs.required == 'true' && needs.ci-impact.outputs.native == 'true' && (inputs.font_diagnostic != true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true) }}
     # Font registration tests run only in this disposable GitHub-hosted
     # session. They must not churn the interactive laboratory desktop's font
     # cache or disturb applications such as LINE and Office.
