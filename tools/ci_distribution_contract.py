@@ -101,14 +101,28 @@ def validate_schema(manifest):
             reason = rule.get("reason", {})
             if reason.get("kind") not in KINDS or not reason.get("detail", "").strip():
                 raise ValueError(f"shared reason required: {pattern}")
-            if rule.get("selection") not in ("all_owners", "content_diff"):
+            if rule.get("selection") not in ("all_owners", "content_diff", "content_diff:tools/sparsesolv_ci_impact.py"):
                 raise ValueError(f"shared selection required: {pattern}")
         elif "reason" in rule or "selection" in rule:
             raise ValueError(f"unshared path carries shared metadata: {pattern}")
     for path in ROOT_CONFIGS:
         rule = owner_rule(manifest, path)
-        if set(rule["owners"]) != set(DISTRIBUTIONS) or rule.get("selection") != "content_diff":
+        if set(rule["owners"]) != set(DISTRIBUTIONS) or rule.get("selection") != "content_diff:tools/sparsesolv_ci_impact.py":
             raise ValueError(f"root content-diff contract missing: {path}")
+    routing = manifest["root_content_diff"]
+    if routing.get("router") != "tools/sparsesolv_ci_impact.py" or routing.get("unknown") != "all_owners":
+        raise ValueError("unknown root router/fallback")
+    attribution = routing["attribution"]
+    if set(attribution) != set(ROOT_CONFIGS):
+        raise ValueError("incomplete root attribution")
+    maps = [attribution["Build.ps1"], attribution["tests/test_tier_manifest.json"]]
+    maps += [attribution["CMakeLists.txt"][key] for key in ("targets", "options")]
+    maps += [attribution["pyproject.toml"][key] for key in ("extras", "packages")]
+    lists = [attribution["pyproject.toml"]["build_system"]]
+    lists += [owners for mapping in maps for owners in mapping.values()]
+    for owners in lists:
+        if not isinstance(owners, list) or not owners or not set(owners) <= set(DISTRIBUTIONS) | {"repo"}:
+            raise ValueError("invalid root attribution owners")
     for name, lane in manifest["lanes"].items():
         if not lane["owners"] or not set(lane["owners"]) <= set(DISTRIBUTIONS) | {"repo"}:
             raise ValueError(f"invalid lane owners: {name}")
