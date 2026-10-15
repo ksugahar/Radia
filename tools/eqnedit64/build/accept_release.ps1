@@ -19,8 +19,8 @@ $ErrorActionPreference = 'Stop'
 if ($env:EQNEDIT64_ISOLATED_TEST_SESSION -ne '1') {
     throw @'
 The full release gate starts and exits several private-font processes.
-Run it only in a disposable CI, VM, or dedicated Windows user session, then
-set EQNEDIT64_ISOLATED_TEST_SESSION=1 in that isolated session.
+Run it only in hosted CI or the approved test session (the 100 Administrator
+session), then set EQNEDIT64_ISOLATED_TEST_SESSION=1 in that session.
 '@
 }
 $root = Split-Path -Parent $PSScriptRoot
