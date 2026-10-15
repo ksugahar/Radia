@@ -273,6 +273,14 @@ public:
         std::string(dialect_ == OfficeDialect::RichEdit ? "left" : "center") +
         "\"/></m:eqArrPr>";
   }
+  std::string alignmentPoint() {
+    const std::string properties = "<m:rPr><m:aln/></m:rPr>";
+    if (dialect_ == OfficeDialect::RichEdit)
+      return "<m:r>" + properties + "<span style=\"" + style +
+          ";font-style:normal;mso-fareast-language:en-US\" lang=\"en-US\">&amp;</span></m:r>";
+    return "<m:r>" + properties + runProperties() +
+        "<m:t xml:space=\"preserve\">&amp;</m:t></m:r>";
+  }
   std::string runProperties(const std::string &colour = "", bool normal = true,
                             bool bold = false, const std::string &language = "en-US", int size = 1800) {
     return "<a:rPr lang=\"" + language + "\" sz=\"" + std::to_string(size) + "\" i=\"" + std::string(normal ? "0" : "1") +
@@ -582,8 +590,14 @@ std::string emit(const Xml &n) {
   if (name == "mtable") {
     if (n.attr("columnalign") == "right left") {
       std::string rows;
-      for (auto &r : n.children)
-        rows += wrapped("e", sequence(*r));
+      for (auto &r : n.children) {
+        std::string row;
+        for (size_t i = 0; i < r->children.size(); ++i) {
+          if (i % 2 == 1) row += alignmentPoint();
+          row += emit(*r->children[i]);
+        }
+        rows += wrapped("e", row);
+      }
       return wrapped(
           "eqArr", arrayProperties() + rows);
     }
@@ -653,7 +667,7 @@ static std::string office_body(const Xml &root, OfficeEmitter &emitter) {
   const auto table = outerTable(root);
   std::string body;
   if (table && leafRows(*table, rows) && rows.size() >= 2) {
-    for (auto row : rows) body += emitter.wrapped("e", emitter.emit(*row));
+    for (auto row : rows) body += emitter.wrapped("e", emitter.alignmentPoint() + emitter.emit(*row));
     body = emitter.wrapped("eqArr",
         emitter.arrayProperties() + body);
   } else body = emitter.emit(root);
