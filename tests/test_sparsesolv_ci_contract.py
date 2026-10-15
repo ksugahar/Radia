@@ -482,3 +482,22 @@ def test_typed_canonical_separates_dates_from_look_alike_strings():
 
 def test_malformed_event_payload_fails_closed():
     assert IMPACT.required_for_event("radia-gpu", "push", [], None, {})[0] is True
+
+
+@pytest.mark.parametrize("value", [None, "tests/x.py", [1], {"a": []}])
+def test_malformed_impact_rule_fails_closed(value):
+    before = (ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8")
+    data = json.loads(before)
+    data.setdefault("impact_rules", {})["src/radia/new_router_probe.py"] = value
+    with pytest.raises(ValueError):
+        IMPACT._tier_owners(before, json.dumps(data), IMPACT.CONTRACT.load(ROOT), {})
+
+
+def test_added_and_removed_impact_rules_select_owners():
+    before = (ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8")
+    data = json.loads(before)
+    data.setdefault("impact_rules", {})["src/radia/new_router_probe.py"] = ["tests/test_sparsesolv_ci_contract.py"]
+    added = json.dumps(data)
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    assert IMPACT._tier_owners(before, added, manifest, {})
+    assert IMPACT._tier_owners(added, before, manifest, {})

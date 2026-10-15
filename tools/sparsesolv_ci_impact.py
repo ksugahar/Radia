@@ -334,8 +334,13 @@ def _tier_owners(old,new,data,config):
             if not paths or pa.get('extends') or pb.get('extends'): raise ValueError('unknown profile inheritance')
             for path in paths: result.update(CONTRACT.owner_rule(data,path)['owners'])
     ia,ib=a.get('impact_rules',{}),b.get('impact_rules',{})
+    for rules in (ia,ib):
+        if not isinstance(rules,dict): raise ValueError('invalid impact_rules')
+        for key,value in rules.items():
+            if not isinstance(key,str) or not isinstance(value,list) or not all(isinstance(v,str) for v in value):
+                raise ValueError('invalid impact rule')
     for path in ia.keys()|ib.keys():
-        if ia.get(path)==ib.get(path): continue
+        if path in ia and path in ib and _canonical(ia[path])==_canonical(ib[path]): continue
         for p in [path]+ia.get(path,[])+ib.get(path,[]): result.update(CONTRACT.owner_rule(data,p)['owners'])
     return result
 
