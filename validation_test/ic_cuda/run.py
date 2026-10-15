@@ -37,6 +37,7 @@ def check(engine,binary_dir,matlab_dir,out):
         if not Path(actual['path']).resolve().is_relative_to(Path(engine.matlabroot()).resolve()):raise RuntimeError('CUDA library resolved outside the selected MATLAB runtime')
         libraries[name]=actual['sha256']
     result=dict(schema='radia.gpu.ic-accuracy.v1',passed=True,binary_sha256=sha(binary),fixture_sha256=sha(fixture),numpy=np.__version__,independent_cpu='NumPy original-A solve, shifted full-pattern solve and independent square-root sparse IC(0) oracle',apply_relative=float(native['apply_relative']),sparse_apply_relative=float(native['sparse_apply_relative']),solution_relative_max=float(np.max(np.asarray(native['solve_errors'])[:,0])),true_relative_residual_max=float(np.max(np.asarray(native['solve_errors'])[:,1])),rejection_count=int(native['rejection_count']),live_count_restored=bool(native['live_count_restored']),frontend_checked=True,device=native['device'])
+    result['lifecycle']=dict(engine.validate_ic_lifecycle(nargout=1))
     result['runtime_library_sha256']=libraries
     (out/'result.json').write_text(json.dumps(result,indent=2,allow_nan=False)+'\n');return result
 
