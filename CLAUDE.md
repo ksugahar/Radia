@@ -12,10 +12,10 @@ Scope:
 2. Improve repository and `radia-mcp` quality, maintenance, validation,
    build, CI, packaging, and release operation.
 
-Do not add unrelated features.
+Do not add unrelated features. No backward compatibility: keep only the latest design; delete legacy paths, aliases, flags, shims and old releases; repository health comes first.
 ## Repository Boundaries
 The monorepo independently releases `radia`, `radia-gpu`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
-Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
+Scope commits to the owner. Each PyPI distribution owns its CI lane in `tools/ci_distribution_manifest.json`; shared files trigger multiple lanes only for real shared ABI, build or integration changes. Migration exceptions only shrink.
 `radia`: CPU Python/pybind11 only. `packages/radia-gpu`: all MATLAB/Simulink/LTspice source, dependencies, build and distribution. `radia-mcp`: cross-package knowledge/tools, optional GPU backend. Keep `radia-optuna` independent.
 CPU `radia` releases exclude mexcuda, MATLAB, LTspice and Simulink artifacts and their CI gates. These belong to independent distribution releases; shared and CPU numerical gates remain mandatory.
 
@@ -48,7 +48,7 @@ Prefer established public abstractions over proprietary plumbing.
   Preserve citations and independent methods; renaming is not removal.
   Use measured operating-band error to select reduced order.
   Follow [CLN implementation policy](docs/CLN_POLICY.md).
-- Call eigenmode-bulk + surface-impedance coupling **Modal-bulk SIBC** (was Foster + SIBC; legacy identifiers stay), never "mixed Galerkin".
+- Call eigenmode-bulk + surface-impedance coupling **Modal-bulk SIBC** (formerly Foster + SIBC), never "mixed Galerkin".
 
 - Use SI units; magnetization is A/m.
 - PARDISO is not used in principle: Python/MEX direct FE solves/subsolves use `sparsecholesky`, never a PARDISO fallback.
@@ -78,7 +78,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 ### Shared MCP Runtime Ownership
 - radia-mcp releases independently of Radia: release-dual targets LAB (wheel) and 100 (editable). Never deploy radia-mcp to the JMAG evaluation host or retired execution targets; isolated CI tests are not deployment. Do not wait for a solver release.
 - Routine editable updates: update the usual source, reconnect, check the live source and one harmless affected tool. Pure Python edits need no reinstall; relocation or dependency/metadata changes do. No new daemon or mandatory ledger.
-- MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version. Obsolete copies are only identified debugging evidence with a removal condition, never deployment targets or rollback reserves; remove them after consumer and unique-work checks.
+- MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version or keep rollback copies; remove obsolete copies after consumer and unique-work checks.
 - MCP is experimental development tooling, not a numerical solver release. Developers may edit live MCP source and change its editable source with
   `pip install -e`; no dedicated branch, frozen snapshot or separate deployment
   approval is required for routine MCP experiments.
@@ -177,7 +177,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
 Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
 LAB owns SSH preflight. Use the on-demand GPU worker only for mexcuda GPU work; Retired execution targets are excluded from deployment, CI and computation.
 Release-quad requires 102号機 and 100号機 for the same release commit; on-demand NGSolve timing is separate.
-Decision 2026-10-01: editable only on 100号機, in a dedicated local development venv for maintainers/students, separate from the release runtime. LAB and NGSolve use verified wheels.
+Decision 2026-10-01: editable only on 100号機, in a dedicated development venv separate from the release runtime. LAB and NGSolve use verified wheels.
 `cubit-mesh-export` is tested independently on 100 and LAB/102; solver releases never install, uninstall, repoint or version-gate it.
 NGSolve hosts start from checked exported .vol files, without Cubit (never install or run Cubit there; `NGSolve` A100 validation runs without Cubit); Cubit-independent checker unit tests may run in isolated CI. Existing installations are not silently removed.
 
@@ -280,10 +280,12 @@ radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and 
 - Commit only reviewed files owned by the task; use clean integration worktrees.
 - Inspect branches, PRs and remote main before merge or rebase.
 - Do not finish while required tests, CI, build, or release commands run.
-- Run each task in its same-named Claude/Codex sessions.
+- Run each task in its same-named Claude/Codex sessions. The Claude and Codex
+  レポジトリ管理 sessions coordinate, each directing its own tool's sessions;
+  Claude–Codex exchange occurs only between these two hubs.
 
-Defaults: Codex implements and validates numerics. Claude reviews, integrates,
-pushes, runs CI, fixes forward, tags, publishes, deploys and owns release gates.
+Defaults: Codex implements and validates numerics. After review, the レポジトリ管理
+hubs merge and run CI; Claude fixes forward, tags, publishes, deploys, owns release gates.
 User assignments prevail.
 
 ## Detailed Guidance
