@@ -117,16 +117,42 @@ def test_shared_ams_closure_and_native_consumers_are_real():
             if (ROOT / "src/core" / include).is_file():
                 seeds.add("src/core/" + include)
     hmatrix_build = (ROOT / "packages/radia-gpu/tools/build_hmatrix_cuda.py").read_text(encoding="utf-8")
-    seeds.update("src/core/" + name for name in re.findall(r"src/core/([^']+)'", hmatrix_build))
+    # Every GPU build script that names or compiles a src/core file seeds the closure.
+    for script in sorted((ROOT / "packages/radia-gpu/tools").glob("build_*_cuda.py")):
+        seeds.update("src/core/" + name for name in
+                     re.findall(r"src/core/([A-Za-z0-9_.]+)", script.read_text(encoding="utf-8")))
     core = set(CONTRACT.include_closure(ROOT, sorted(seeds), "src/core"))
     assert {p for p in shared if p.startswith("src/core/")} == core
-    assert len(core) == 11
+    assert len(core) == 14
+    # The radia-gpu lane must start on every file its native build reads.
+    lane = MANIFEST["lanes"]["radia-gpu"]["events"]
+    for event in ("push", "pull_request"):
+        missing = [p for p in sorted(core) if not CONTRACT.selected(p, lane[event])]
+        assert not missing, (event, missing)
     assert "src/ext/HACApK" in hmatrix_build
     expected = set(CONTRACT.ROOT_CONFIGS) | set(actual) | core | {
         "src/ext/HACApK/**", helper, "tests/test_native_build_provenance.py",
         "tests/matlab/fixtures/ltspice_rc.cir", "tools/sparsesolv_ci_impact.py",
-        "tools/ci_distribution_contract.py", "tools/ci_distribution_manifest.json"}
+        "tools/ci_distribution_contract.py", "tools/ci_distribution_manifest.json",
+        "packages/radia-mcp/src/radia_mcp/ltspice/**",
+        "packages/radia-mcp/src/radia_mcp/common/__init__.py",
+        "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
+        "packages/radia-mcp/src/radia_mcp/common/status.py"}
     assert shared == expected
+    # Integration evidence: radia-gpu LTspice tests cross-check the radia-mcp LTspice gates.
+    gpu_ltspice_tests = list((ROOT / "packages/radia-gpu/tests/ltspice").glob("test_*.py"))
+    assert any("from radia_mcp.ltspice" in path.read_text(encoding="utf-8") for path in gpu_ltspice_tests)
+    # The radia_mcp modules the LTspice server imports are part of that integration surface.
+    server = (ROOT / "packages/radia-mcp/src/radia_mcp/ltspice/server.py").read_text(encoding="utf-8")
+    imported = set(re.findall(r"^\s*from radia_mcp\.common(?:\.(\w+))? import", server, re.M))
+    modules = {"packages/radia-mcp/src/radia_mcp/common/__init__.py"} | {
+        f"packages/radia-mcp/src/radia_mcp/common/{name}.py" for name in imported if name}
+    if "" in imported:  # package-level names resolve lazily through common/__init__.py
+        modules.add("packages/radia-mcp/src/radia_mcp/common/status.py")
+    lane = MANIFEST["lanes"]["radia-gpu"]["events"]
+    for module in sorted(modules):
+        assert module in shared, module
+        assert all(CONTRACT.selected(module, lane[event]) for event in ("push", "pull_request")), module
     objective = ROOT / "tests/matlab/fixtures/radia_optuna_ltspice_objective.m"
     assert "ltspice_rc.cir" in objective.read_text(encoding="utf-8")
     assert "ltspice_rc.cir" in (ROOT / "tests/matlab/test_ltspice_workflow.m").read_text(encoding="utf-8")

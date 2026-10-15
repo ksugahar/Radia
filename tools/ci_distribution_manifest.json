@@ -386,6 +386,54 @@
       ]
     },
     {
+      "pattern": "packages/radia-mcp/src/radia_mcp/ltspice/**",
+      "owners": [
+        "radia-mcp",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "radia-gpu LTspice tests import radia_mcp.ltspice.server and cross-check its gates against the GPU implementation"
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/common/__init__.py",
+      "owners": [
+        "radia-mcp",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "imported by radia_mcp.ltspice.server, which radia-gpu LTspice tests cross-check"
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
+      "owners": [
+        "radia-mcp",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "imported by radia_mcp.ltspice.server, which radia-gpu LTspice tests cross-check"
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/common/status.py",
+      "owners": [
+        "radia-mcp",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "imported by radia_mcp.ltspice.server, which radia-gpu LTspice tests cross-check"
+      },
+      "selection": "all_owners"
+    },
+    {
       "pattern": "packages/radia-optuna/**",
       "owners": [
         "radia-optuna"
@@ -1115,6 +1163,42 @@
     },
     {
       "pattern": "src/core/rad_bem_galerkin.h",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_bem_galerkin.cpp",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_biot_savart_filaments.cpp",
+      "owners": [
+        "radia",
+        "radia-gpu"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "CPU field/quadrature source included by GPU native kernels or build_hmatrix_cuda.py inputs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/rad_host_parallel.h",
       "owners": [
         "radia",
         "radia-gpu"
@@ -1857,6 +1941,9 @@
           "paths": [
             "packages/radia-gpu/**",
             "packages/radia-mcp/src/radia_mcp/ltspice/**",
+            "packages/radia-mcp/src/radia_mcp/common/__init__.py",
+            "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
+            "packages/radia-mcp/src/radia_mcp/common/status.py",
             "validation_test/radia_gpu/**",
             "validation_test/ams_cuda/**",
             "validation_test/ic_cuda/**",
@@ -1865,6 +1952,21 @@
             "validation_test/fmm_cuda/**",
             "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp",
             "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
+            "src/ext/HACApK/**",
+            "src/core/rad_bem_galerkin.h",
+            "src/core/rad_bem_galerkin.cpp",
+            "src/core/rad_biot_savart_filaments.cpp",
+            "src/core/rad_host_parallel.h",
+            "src/core/rad_biot_savart_filaments.h",
+            "src/core/rad_charge_quadrature.h",
+            "src/core/rad_field_cloud_kernel.h",
+            "src/core/rad_field_source_kernel.inc",
+            "src/core/rad_field_sources.h",
+            "src/core/rad_hacapk_parallel.h",
+            "src/core/rad_hdiv_field_evaluator.h",
+            "src/core/rad_hdiv_field_kernel_api.inc",
+            "src/core/rad_hdiv_field_math.inc",
+            "src/core/rad_hdiv_vim.h",
             "Build.ps1",
             ".github/workflows/radia-gpu.yml",
             "CMakeLists.txt",
@@ -1886,6 +1988,9 @@
           "paths": [
             "packages/radia-gpu/**",
             "packages/radia-mcp/src/radia_mcp/ltspice/**",
+            "packages/radia-mcp/src/radia_mcp/common/__init__.py",
+            "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
+            "packages/radia-mcp/src/radia_mcp/common/status.py",
             "validation_test/radia_gpu/**",
             "validation_test/ams_cuda/**",
             "validation_test/ic_cuda/**",
@@ -1894,6 +1999,21 @@
             "validation_test/fmm_cuda/**",
             "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp",
             "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
+            "src/ext/HACApK/**",
+            "src/core/rad_bem_galerkin.h",
+            "src/core/rad_bem_galerkin.cpp",
+            "src/core/rad_biot_savart_filaments.cpp",
+            "src/core/rad_host_parallel.h",
+            "src/core/rad_biot_savart_filaments.h",
+            "src/core/rad_charge_quadrature.h",
+            "src/core/rad_field_cloud_kernel.h",
+            "src/core/rad_field_source_kernel.inc",
+            "src/core/rad_field_sources.h",
+            "src/core/rad_hacapk_parallel.h",
+            "src/core/rad_hdiv_field_evaluator.h",
+            "src/core/rad_hdiv_field_kernel_api.inc",
+            "src/core/rad_hdiv_field_math.inc",
+            "src/core/rad_hdiv_vim.h",
             "Build.ps1",
             ".github/workflows/radia-gpu.yml",
             "CMakeLists.txt",
@@ -2926,36 +3046,6 @@
       "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
       "owner": "radia",
       "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-048",
-      "lane": "radia-gpu",
-      "kind": "foreign_trigger",
-      "pattern": "packages/radia-mcp/**",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia-gpu",
-      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-053",
-      "lane": "radia-gpu",
-      "kind": "missing_trigger",
-      "pattern": "src/core/**",
-      "current": "Owner contract input is absent from trigger projection.",
-      "target": "Include this input in the appropriate owner scope.",
-      "owner": "radia-gpu",
-      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-054",
-      "lane": "radia-gpu",
-      "kind": "missing_trigger",
-      "pattern": "src/ext/HACApK/**",
-      "current": "Owner contract input is absent from trigger projection.",
-      "target": "Include this input in the appropriate owner scope.",
-      "owner": "radia-gpu",
-      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing"
     },
     {
       "id": "CI-MIG-056",
