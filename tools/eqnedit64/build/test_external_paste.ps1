@@ -782,9 +782,13 @@ $alignedRaw = '\begin{aligned}\begin{aligned}\mathrm{I}\\\mathrm{IIIIIIII}\end{a
 
 if (-not (Test-Path -LiteralPath $app)) { throw "Portable app is missing: $app" }
 if (-not (Test-Path -LiteralPath $irfanView)) { throw "IrfanView is missing: $irfanView" }
-$existingPowerPoint = @(Get-Process -Name POWERPNT -ErrorAction SilentlyContinue)
-if ($existingPowerPoint.Count -ne 0) {
-    throw 'PowerPoint is already running; refusing to attach to or close a user session.'
+$currentSessionId = [Diagnostics.Process]::GetCurrentProcess().SessionId
+# Other Windows sessions have separate Office instances and clipboards.
+# Refuse existing Office only in this session; never stop another user's work.
+$existingOffice = @(Get-Process -Name POWERPNT, EXCEL, WINWORD -ErrorAction SilentlyContinue |
+    Where-Object { $_.SessionId -eq $currentSessionId })
+if ($existingOffice.Count -ne 0) {
+    throw 'Office is already running in this Windows session; refusing to attach to or close a user session.'
 }
 
 function Assert-PowerPointEquationRendering([string]$Path) {
