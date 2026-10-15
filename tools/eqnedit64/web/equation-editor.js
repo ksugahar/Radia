@@ -3572,7 +3572,9 @@
       // MathJax aligned/align rows: retain one editable equation array.
       return "<m:eqArr><m:eqArrPr><m:baseJc m:val=\"left\"/>" +
         "</m:eqArrPr>" + children.map(function (row) {
-          return "<m:e>" + officeOmmlChildren(row) + "</m:e>";
+          return "<m:e>" + Array.from(row.children).map(function (cell, index) {
+            return (index % 2 === 1 ? officeAlignmentPoint() : "") + officeOmmlNode(cell);
+          }).join("") + "</m:e>";
         }).join("") + "</m:eqArr>";
     }
     if (name === "mtable") {
@@ -3627,13 +3629,17 @@
 
   /* UXP-0029: candidate Office HTML transport. Actual PowerPoint acceptance
    * is a user gate; generated OMML alone is not a successful paste. */
+  function officeAlignmentPoint() {
+    return '<m:r><m:rPr><m:aln/></m:rPr><span style="' + OFFICE_MATH_RUN_STYLE +
+      ';font-style:normal;mso-fareast-language:en-US" lang="en-US">&amp;</span></m:r>';
+  }
   function officeOmmlHtml(mml) {
     var doc = new window.DOMParser().parseFromString(mml, "application/xml");
     if (doc.querySelector("parsererror, merror")) throw new Error("invalid MathML");
     var rows = splitUnanchoredOfficeRows(doc.documentElement);
     var body = rows ? "<m:eqArr><m:eqArrPr><m:baseJc m:val=\"left\"/>" +
       "</m:eqArrPr>" + rows.map(function (row) {
-        return "<m:e>" + officeOmml(row) + "</m:e>";
+        return "<m:e>" + officeAlignmentPoint() + officeOmml(row) + "</m:e>";
       }).join("") + "</m:eqArr>" : officeOmml(mml);
     // The legacy namespace + HTML runs are the RichEdit HTML math dialect,
     // documented by Microsoft (RichEdit HTML Support, 2021-05-30).

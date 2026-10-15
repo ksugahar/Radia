@@ -5,10 +5,12 @@
   },
   {
     "id": "H6-anchored",
+    "alignment_points": 2,
     "tex": "\\begin{aligned}y&=\\int_a^b x^2\\,dx\\\\z&=1\\end{aligned}"
   },
   {
     "id": "H6-unanchored",
+    "alignment_points": 2,
     "tex": "\\begin{aligned}y=\\int_a^b x^2\\,dx\\\\z=1\\end{aligned}"
   },
   {

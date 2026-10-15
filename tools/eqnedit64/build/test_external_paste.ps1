@@ -1092,7 +1092,11 @@ try {
         $namespace = [Xml.XmlNamespaceManager]::new($alignedDocument.NameTable)
         $namespace.AddNamespace('m', 'http://schemas.openxmlformats.org/officeDocument/2006/math')
         $savedMathRows = $alignedDocument.SelectNodes('//m:eqArr/m:e', $namespace).Count
-        if ($savedMathRows -ne 3 -or $alignedSlideXml -match '<m:t>&amp;</m:t>') {
+        $savedAlignmentPoints = $alignedDocument.SelectNodes(
+            '//m:eqArr/m:e/m:r[m:rPr/m:aln and m:t="&"]', $namespace).Count
+        $visibleAmpersands = $alignedDocument.SelectNodes(
+            '//m:eqArr//m:r[m:t="&" and not(m:rPr/m:aln)]', $namespace).Count
+        if ($savedMathRows -ne 3 -or $savedAlignmentPoints -ne 3 -or $visibleAmpersands -ne 0) {
             throw "PowerPoint did not retain three equation-array rows: rows=$savedMathRows."
         }
     }
