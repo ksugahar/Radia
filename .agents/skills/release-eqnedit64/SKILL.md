@@ -43,7 +43,7 @@ GitHub/PyPI success alone does not complete an Eqnedit64 release.
 - After the hand-test and Fable gates, push the approved release commit to
   `main` and require the main Eqnedit64 CI to pass. Do not create or push the
   release tag yet.
-- Build and sign the standalone executable on INTEL11 (100号機) from that
+- Build and sign the standalone executable on the current 100号機 build host from that
   exact `origin/main` commit. LAB is reserved for validation; do not compile
   or sign release binaries there. Use
   `tools/eqnedit64/build/build_eqnedit64.bat`. The signing key is
@@ -63,18 +63,19 @@ GitHub/PyPI success alone does not complete an Eqnedit64 release.
   SERVICE, which can reach neither a per-user mapped drive nor the workgroup
   share. The staged binary must pass cryptographic Authenticode verification and the
   approved certificate thumbprint policy in `scripts/assert_release_signature.ps1`.
-  Approved keys are INTEL11 `7E80D4365CFDBA7B22B33C35EB7CD6A41050E065`
+  The current 100号機 key is `2AC60C00B3C67A805FEC23DF27DE1C219EA6BD9A`.
+  Historical verification keys are `7E80D4365CFDBA7B22B33C35EB7CD6A41050E065`
   and historical LAB `BAEBD216FF82C03F57B2796C42DC8F4D083E07E1`.
   A matching subject alone does not identify the key or prove the build host;
   build-host/source records and hashes remain separate required evidence.
-- On INTEL11 (100号機), the release build invokes the compiler and
+- On the current 100号機 build host, the release build invokes the compiler and
   `signtool`; it starts no window, renders no equation, and registers no font,
   so it stays clear of the `fontdrvhost.exe` failure that leaves the session's
   Office fonts inkless. Everything that *runs* the built binary - the GUI,
   rendering, `--self-test`, the font-session endurance suites, and
   `accept_release.ps1` - belongs to the isolated CI or VM session. LAB is a
   validation machine only and must not compile or sign release binaries. Do
-  not bypass `EQNEDIT64_ISOLATED_TEST_SESSION` on INTEL11 or LAB.
+  not bypass `EQNEDIT64_ISOLATED_TEST_SESSION` on the build host or LAB.
 
 ## Required order
 
@@ -87,7 +88,7 @@ GitHub/PyPI success alone does not complete an Eqnedit64 release.
    hand testing. Do not merge to `main` before this gate is recorded.
 5. Merge the approved release commit to `main` and push it.
 6. Wait for the main Eqnedit64 CI and Policy Lint to pass.
-7. On INTEL11 (100号機), run the build, staging, and tag-push phase as one
+7. On the current 100号機 build host, run the build, staging, and tag-push phase as one
    command. It checks the source against
    `origin/main`, refuses a tag that already exists, refuses a tree whose
    declared version disagrees with the tag, compiles and signs, verifies the

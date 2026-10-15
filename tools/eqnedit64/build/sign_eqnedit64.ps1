@@ -6,8 +6,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $resolved = (Resolve-Path -LiteralPath $Path).Path
+. (Join-Path $PSScriptRoot '../../../.agents/skills/release-eqnedit64/scripts/assert_release_signature.ps1')
+$currentSigner = @(Get-EqneditApprovedSignerThumbprints)[0]
 $certificate = Get-ChildItem -LiteralPath 'Cert:\CurrentUser\My' | Where-Object {
-    $_.Subject -eq $Subject -and $_.HasPrivateKey -and
+    $_.Subject -eq $Subject -and $_.Thumbprint -eq $currentSigner -and $_.HasPrivateKey -and
     $_.NotAfter -gt (Get-Date) -and
     $_.EnhancedKeyUsageList.ObjectId -contains '1.3.6.1.5.5.7.3.3'
 } | Sort-Object NotAfter -Descending | Select-Object -First 1
