@@ -139,7 +139,7 @@ def _run_worker(cfg):
     import json
     import subprocess
     encoded = base64.b64encode(json.dumps(cfg).encode()).decode()
-    p = subprocess.run([sys.executable, '-', encoded], input=dual.WORKER, text=True,
+    p = subprocess.run([sys.executable, '-', encoded], input=_mock_process_worker(), text=True,
                        capture_output=True, timeout=120)
     lines = [line for line in p.stdout.splitlines() if line.startswith('CUBIT_DUAL_RESULT=')]
     assert lines, p.stderr
@@ -275,7 +275,7 @@ def test_wheel_tier_verify_accepts_only_the_exact_installed_wheel(tmp_path):
                    action='verify', tier='wheel', source_root='', output=str(out),
                    wheel_path=str(wheel), dependencies=pins, force_close_cubit=False)
         encoded = base64.b64encode(json.dumps(cfg).encode()).decode()
-        p = subprocess.run([str(python), '-', encoded], input=dual.WORKER, text=True,
+        p = subprocess.run([str(python), '-', encoded], input=_mock_process_worker(), text=True,
                            capture_output=True, timeout=300, env=env)
         line = [l for l in p.stdout.splitlines() if l.startswith('CUBIT_DUAL_RESULT=')][-1]
         return json.loads(line.partition('=')[2])
@@ -350,3 +350,97 @@ def test_standalone_installer_rejects_reverse_radia_integration_flag(monkeypatch
     with pytest.raises(SystemExit) as error:
         install.main()
     assert error.value.code == 2
+
+
+def _mock_process_worker():
+    # Mock only process commands; wheel installs/identity probes keep their real isolation.
+    return """import subprocess
+_actual_run = subprocess.run
+def _process_mock(args, **kwargs):
+    if args[0] == 'tasklist':
+        return subprocess.CompletedProcess(args, 0, '', '')
+    if args[0] == 'taskkill':
+        raise AssertionError('Unexpected process termination in fixture test')
+    return _actual_run(args, **kwargs)
+subprocess.run = _process_mock
+""" + dual.WORKER
+
+
+def _process_guard(monkeypatch, images, force, fail_pid=None):
+    """Execute the actual worker guard with synthetic tasklist/taskkill only."""
+    import ast
+    import csv
+    import io
+    import subprocess
+    from types import SimpleNamespace
+    active = [(name, 100 + i) for i, name in enumerate(images)]
+    calls = []
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if args[0] == 'tasklist':
+            out = io.StringIO()
+            writer = csv.writer(out)
+            for name, pid in active:
+                writer.writerow([name, pid, 'Console', 1, '10 K', 'Running', 'owner', '0:00', 'Cubit'])
+            return subprocess.CompletedProcess(args, 0, out.getvalue(), '')
+        assert args[:3] == ['taskkill', '/F', '/PID']
+        pid = int(args[3])
+        if pid == fail_pid:
+            return subprocess.CompletedProcess(args, 1, '', 'termination denied')
+        active[:] = [(name, value) for name, value in active if value != pid]
+        return subprocess.CompletedProcess(args, 0, '', '')
+    monkeypatch.setattr(subprocess, 'run', fake_run)
+    tree = ast.parse(dual.WORKER)
+    definitions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                   and node.name in ('command', 'running_cubit_processes')]
+    ns = dict(CUBIT_PROCESS_IMAGES=dual.CUBIT_PROCESS_IMAGES, events=[], subprocess=subprocess,
+              cfg=dict(force_close_cubit=force, action='preflight'), result={}, cubit_dir=Path('.'),
+              installer=SimpleNamespace(preflight=lambda *a, **k: (True, [])))
+    exec(compile(ast.Module(body=definitions, type_ignores=[]), '<worker-functions>', 'exec'), ns)
+    block = next(node for node in tree.body if isinstance(node, ast.Try))
+    start = next(i for i, node in enumerate(block.body) if isinstance(node, ast.If)
+                 and "cfg.get('force_close_cubit')" in ast.unparse(node.test))
+    # Guard ends immediately before the deployment/verification branches.
+    end = next(i for i in range(start + 1, len(block.body))
+               if isinstance(block.body[i], ast.If)
+               and ast.unparse(block.body[i].test) == "cfg['action'] == 'deploy'")
+    guard = ast.Module(body=block.body[start:end], type_ignores=[])
+    error = None
+    try:
+        exec(compile(guard, '<worker-guard>', 'exec'), ns)
+    except RuntimeError as exc:
+        error = str(exc)
+    return ns, calls, error
+
+
+@pytest.mark.parametrize('image', ['coreform_cubit.exe', 'clarox.exe', 'cubitx.exe'])
+def test_worker_preflight_refuses_each_cubit_image(monkeypatch, image):
+    _, calls, error = _process_guard(monkeypatch, [image], False)
+    assert error and image in error
+    assert not any(call[0] == 'taskkill' for call in calls)
+
+
+def test_force_close_targets_exact_cubit_images_and_records_receipt(monkeypatch):
+    images = ['coreform_cubit.exe', 'CLAROX.EXE', 'cubitx.exe',
+              'python.exe', 'cubit-plugin-install.exe', 'not-clarox.exe']
+    ns, calls, error = _process_guard(monkeypatch, images, True)
+    assert error is None
+    assert [call for call in calls if call[0] == 'taskkill'] == [
+        ['taskkill', '/F', '/PID', str(pid)] for pid in (100, 101, 102)]
+    assert [p['image'] for p in ns['result']['force_closed_cubit']] == images[:3]
+    assert all(p['user'] == 'owner' and p['session'] == 'Console'
+               for p in ns['result']['force_closed_cubit'])
+    sys.path.insert(0, str(ROOT / 'packages/cubit-mesh-export/src'))
+    from cubit_mesh_export import install
+    assert set(dual.CUBIT_PROCESS_IMAGES) == {'coreform_cubit.exe', 'clarox.exe', 'cubitx.exe'}
+    assert all(install._is_cubit_process_name(name) for name in dual.CUBIT_PROCESS_IMAGES)
+    assert all(not install._is_cubit_process_name(name) for name in images[3:])
+
+
+def test_force_close_failure_stops_and_retains_completed_closures(monkeypatch):
+    ns, calls, error = _process_guard(monkeypatch, list(dual.CUBIT_PROCESS_IMAGES),
+                                      True, fail_pid=101)
+    assert error and 'termination denied' in error
+    assert [p['pid'] for p in ns['result']['force_closed_cubit']] == [100]
+    assert ns['result']['force_closed_cubit'][0]['image'] == 'coreform_cubit.exe'
+    assert not any(call == ['taskkill', '/F', '/PID', '102'] for call in calls)
