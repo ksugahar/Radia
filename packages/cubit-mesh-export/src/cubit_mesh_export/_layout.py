@@ -5,7 +5,9 @@ import os
 
 def has_python_binding(bin_dir: Path) -> bool:
     return any((bin_dir / name).is_file() for name in (
-        'cubit.py', '_cubit3.pyd', '_cubit3.so', 'cubit/__init__.py'))
+        'cubit.py', '_cubit3.pyd', '_cubit3.so')) or (
+            (bin_dir / 'cubit/__init__.py').is_file()
+            and (bin_dir / 'cubit/_cubit3.pyd').is_file())
 
 
 def plugin_directory(install_dir: Path) -> Path:
