@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MPL-2.0 */
 // FP64 natural-order IC(0). Host performs symbolic indexing only; CUDA owns
-// numerical factorization, triangular solves, PCG and original-A residuals.
+// numerical factorization, triangular solves, PCG and projected-operator residuals.
 #include "mex.h"
 #include "gpu/mxGPUArray.h"
 #include <cuda_runtime.h>
@@ -108,7 +108,9 @@ struct Context {
     Buffer<double> av,l,u,x,r,p,ap,tmp,z,scalars;
     Buffer<IterationState> state;
     cudaStream_t stream=nullptr;cudaGraph_t graph=nullptr;cudaGraphExec_t graphExec=nullptr;
-    Buffer<char> forwardBuffer,backwardBuffer;
+    // cudaMalloc alignment meets cuBLAS workspace alignment. Retain the buffer
+    // until graph and cuBLAS handle destruction (before member destructors).
+    Buffer<char> forwardBuffer,backwardBuffer,blasWorkspace;
     cusparseHandle_t sparse=nullptr;cublasHandle_t blas=nullptr;
     cusparseSpMatDescr_t lower=nullptr,upper=nullptr;cusparseDnVecDescr_t vr=nullptr,vt=nullptr,vz=nullptr;
     cusparseSpSVDescr_t forward=nullptr,backward=nullptr;
@@ -122,7 +124,7 @@ struct Context {
 #endif
         int d;ck(cudaGetDevice(&d));if(d!=device)throw std::runtime_error("IC context belongs to another CUDA device");}
     void flag(){int v;ck(cudaMemcpy(&v,failure.p,sizeof(v),cudaMemcpyDeviceToHost));if(v)throw std::runtime_error("Invalid/nonfinite/asymmetric matrix, RHS, or nonpositive IC pivot");}
-    size_t bytes()const{return rp.bytes()+ci.bytes()+lrp.bytes()+lci.bytes()+urp.bytes()+uci.bytes()+free.bytes()+failure.bytes()+av.bytes()+l.bytes()+u.bytes()+x.bytes()+r.bytes()+p.bytes()+ap.bytes()+tmp.bytes()+z.bytes()+scalars.bytes()+state.bytes()+forwardBuffer.bytes()+backwardBuffer.bytes();}
+    size_t bytes()const{return rp.bytes()+ci.bytes()+lrp.bytes()+lci.bytes()+urp.bytes()+uci.bytes()+free.bytes()+failure.bytes()+av.bytes()+l.bytes()+u.bytes()+x.bytes()+r.bytes()+p.bytes()+ap.bytes()+tmp.bytes()+z.bytes()+scalars.bytes()+state.bytes()+forwardBuffer.bytes()+backwardBuffer.bytes()+blasWorkspace.bytes();}
     void setup(const mxArray* op,double s){
         auto phase=Clock::now();
         shift=s;if(!(shift>=1&&shift<=100))throw std::runtime_error("IC fixed shift must be in [1,100]");ck(cudaGetDevice(&device));ck(cudaDeviceSynchronize());
@@ -169,7 +171,11 @@ struct Context {
         cs(cusparseSpSV_bufferSize(sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&one,upper,vt,vz,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,backward,&b));forwardBuffer.alloc(a);backwardBuffer.alloc(b);
         cs(cusparseSpSV_analysis(sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&one,lower,vr,vt,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,forward,forwardBuffer.p));
         cs(cusparseSpSV_analysis(sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&one,upper,vt,vz,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,backward,backwardBuffer.p));ck(cudaDeviceSynchronize());
-        analysisSeconds=elapsed(phase);phase=Clock::now();scalars.alloc(3);state.alloc(1);captureGraph();graphSeconds=elapsed(phase);setupPeakOwned=bytes()+mapping.bytes()+ordered.bytes()+ld.bytes()+transpose.bytes();
+        analysisSeconds=elapsed(phase);phase=Clock::now();scalars.alloc(3);state.alloc(1);
+        // SetStream resets a handle's workspace, so assign this only after the
+        // stream is fixed and before warmup/capture. No later SetStream calls.
+        blasWorkspace.alloc(4ULL<<20);cb(cublasSetWorkspace(blas,blasWorkspace.p,blasWorkspace.bytes()));
+        captureGraph();graphSeconds=elapsed(phase);setupPeakOwned=bytes()+mapping.bytes()+ordered.bytes()+ld.bytes()+transpose.bytes();
     }
     void apply(){double one=1;cs(cusparseSpSV_solve(sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&one,lower,vr,vt,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,forward));cs(cusparseSpSV_solve(sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&one,upper,vt,vz,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,backward));}
     void captureGraph(){
@@ -215,7 +221,7 @@ struct Context {
         }
         if(!converged)throw std::runtime_error("IC PCG iteration limit exhausted");
         spmv<<<blocks(n),T>>>(n,rp.p,ci.p,av.p,x.p,ap.p);subtract<<<blocks(n),T>>>(n,rhs,ap.p,bnorm);double relative=norm(ap.p);
-        if(!std::isfinite(relative)||relative>std::min(1e-6,std::max(10*tol,1e-12)))throw std::runtime_error("IC PCG original-A true residual failed");++solves;return {iterations,relative};
+        if(!std::isfinite(relative)||relative>std::min(1e-6,std::max(10*tol,1e-12)))throw std::runtime_error("IC PCG projected original operator true residual failed");++solves;return {iterations,relative};
     }
 };
 using Handle=uint64_t;constexpr Handle TAG=0x1CC0;

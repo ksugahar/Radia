@@ -2,7 +2,9 @@
 
 Natural-order fixed-shift IC(0) retains the original free-DOF factor action.
 Validated constrained zero couplings are omitted from the factor graph; the
-original CSR remains available for the final true residual. An explicit upper
+original free-DOF CSR equations remain available for the final true residual.
+The native check uses the projected original operator (constrained diagonals
+= 1, constrained RHS = 0). An explicit upper
 CSR retains the transpose values for non-transpose SpSV. Device scalars and
 cached eight-step CUDA graphs batch iteration control; device state freezes
 updates at first convergence or the exact iteration limit. There is no fallback.
@@ -10,7 +12,8 @@ The context owns the graph, stream and buffers and retains the existing device
 restoration, typed-handle and unloadability contracts. cuSPARSE 12.8 documents
 [SpSV graph capture support](https://docs.nvidia.com/cuda/archive/12.8.0/cusparse/index.html#cusparsespsv).
 
-Accepted 2026-10-15: 360 independent original-A solution/residual checks across
+Historical overlay accepted 2026-10-15: 360 independent original free-DOF
+solution/residual checks across
 10,460 / 32,233 / 106,272 DoFs, CPU IC/AMS 1/16 threads and GPU IC/AMS.
 Maximum vector error 1.122e-11; true residual 5.621e-12.
 Independent CPU factor application agrees within 6.1e-16 at every size.
@@ -47,3 +50,9 @@ host FE basis setup is 1.382 s within 1.553 s GPU setup, versus 0.671 s CPU16 se
 Fresh GPU IC remains slower than CPU16 IC because host FE
 setup is serial and graph/factor construction must be paid once. GPU AMS
 remains substantially faster for these HCurl systems.
+
+Review fix: the context now retains an explicit 4 MiB cuBLAS workspace through
+graph/handle teardown. The historical binary hashes, times and memory figures
+above precede that fix; they do not certify the rebuilt binary. Revalidate the
+new binary and exact formal wheel separately. The native `profile` command is
+diagnostic-only, excluded from acceptance timing medians.

@@ -1,6 +1,8 @@
 {
   "schema": "radia.gpu.ic-tuning-comparison.v1",
   "accepted": true,
+  "native_residual_operator": "projected original operator (constrained diagonals = 1, constrained RHS = 0)",
+  "historical_scope": "Pre-review-fix overlay; measured hashes and values are unchanged and do not certify the later owned-cuBLAS-workspace binary",
   "date": "2026-10-15",
   "base_wheel_sha256": "de899d5fc8faf48430f3de55d288f3a49077197f6af43d09d0b5cbeb44635884",
   "baseline_ic_sha256": "c00b0cb1bdfc43e1154622dcc2105affeceb26c3fc009bd3a189ab5e57a89f1a",
