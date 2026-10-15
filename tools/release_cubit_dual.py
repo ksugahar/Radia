@@ -23,6 +23,8 @@ TARGETS = ('lab', '100')
 # Deployment tier per target (AGENTS.md: LAB runs verified wheels, 100号機
 # keeps the dedicated editable development install).
 TIERS = {'lab': 'wheel', '100': 'editable'}
+# Repository-side guard also protects deployment with an older selected installer.
+CUBIT_PROCESS_IMAGES = ('coreform_cubit.exe', 'clarox.exe', 'cubitx.exe')
 
 
 def digest(data):
@@ -68,7 +70,7 @@ def verify_published(distribution, contract):
 
 # Same worker executes locally or through the existing Administrator SSH token.
 # No GUI process is killed to make installation possible; active Cubit refuses it.
-WORKER = r'''
+WORKER = 'CUBIT_PROCESS_IMAGES = ' + repr(CUBIT_PROCESS_IMAGES) + '\n' + r'''
 import base64, getpass, hashlib, importlib.metadata as md, json, os
 from pathlib import Path
 import re, shutil, socket, subprocess, sys, sysconfig, zipfile
@@ -90,6 +92,14 @@ def command(args, timeout=120):
     if p.returncode:
         raise RuntimeError(str(args) + '\n' + p.stdout[-5000:] + p.stderr[-2000:])
     return p.stdout
+
+def running_cubit_processes():
+    import csv
+    listing = command(['tasklist', '/FO', 'CSV', '/NH', '/V'])
+    return [dict(image=row[0], pid=int(row[1]), session=row[2], user=row[6])
+            for row in csv.reader(listing.splitlines())
+            if row and row[0].lower() in CUBIT_PROCESS_IMAGES and len(row) > 6]
+
 
 def preserved():
     state = {}
@@ -211,21 +221,20 @@ try:
     # work in those sessions is lost; without the flag an open Cubit stops
     # the deployment.
     if cfg.get('force_close_cubit') and cfg['action'] in ('preflight', 'deploy'):
-        import csv, time
-        listing = command(['tasklist', '/FI', 'IMAGENAME eq coreform_cubit.exe',
-                           '/FO', 'CSV', '/NH', '/V'])
-        closed = [dict(pid=int(row[1]), session=row[2], user=row[6])
-                  for row in csv.reader(listing.splitlines())
-                  if len(row) > 6 and row[0].lower() == 'coreform_cubit.exe']
+        import time
+        closed = running_cubit_processes()
+        result.setdefault('force_closed_cubit', [])
         for proc in closed:
-            subprocess.run(['taskkill', '/F', '/PID', str(proc['pid'])],
-                           capture_output=True, text=True)
-        result['force_closed_cubit'] = result.get('force_closed_cubit', []) + closed
+            command(['taskkill', '/F', '/PID', str(proc['pid'])])
+            result['force_closed_cubit'].append(proc)
         for _ in range(60):
             ok, issues = installer.preflight(cubit_dir, verbose=False)
-            if ok:
+            if ok and not running_cubit_processes():
                 break
             time.sleep(1)
+    running = running_cubit_processes()
+    if running:
+        raise RuntimeError('Cubit processes running; ask owners to save and close before deploying: ' + str(running))
     ok, issues = installer.preflight(cubit_dir, verbose=False)
     if not ok:
         raise RuntimeError(str(issues))
