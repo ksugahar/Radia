@@ -315,15 +315,15 @@ class TestPeecPOverJw:
 # ============================================================
 
 class TestAllRulesList:
-    def test_all_rules_count(self):
-        # Tripwire: bump when adding/removing a rule in
-        # radia_ngsolve.rules.ALL_RULES (NOT covered by ci_preflight's
-        # pre-push gate -- only this build-test pytest runs it).
-        assert len(ALL_RULES) == 40
-
-    def test_all_rules_callable(self):
+    def test_rule_registry_is_unique_and_uniformly_callable(self):
+        # Structural contract instead of a hand-bumped count: every
+        # registered rule is a distinct function taking (filepath, lines)
+        # and returning a list of findings.
+        names = [rule.__name__ for rule in ALL_RULES]
+        assert names and len(names) == len(set(names))
         for rule in ALL_RULES:
             assert callable(rule)
+            assert isinstance(rule("empty.py", []), list), rule.__name__
 
     def test_clean_code_no_findings(self):
         """Clean code should produce zero findings across all rules."""
