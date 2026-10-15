@@ -137,10 +137,10 @@ def main():
                 cjk = any(0x3000 <= ord(c) <= 0x9FFF or 0xF900 <= ord(c) <= 0xFAFF or
                           0xFF00 <= ord(c) <= 0xFFEF or 0x20000 <= ord(c) <= 0x3134F for c in text)
                 assert run.find(f"{{{A}}}rPr").get("lang") == ("ja-JP" if cjk else "en-US"), fixture["id"]
+            if "alignment_points" in fixture:
+                points = root.findall(f".//{{{M}}}eqArr/{{{M}}}e/{{{M}}}r/{{{M}}}rPr/{{{M}}}aln")
+                assert len(points) == fixture["alignment_points"], fixture["id"]
             if fixture.get("fixed_delimiter_sizes"):
-                if "alignment_points" in fixture:
-                    points = root.findall(f".//{{{M}}}eqArr/{{{M}}}e/{{{M}}}r/{{{M}}}rPr/{{{M}}}aln")
-                    assert len(points) == fixture["alignment_points"], fixture["id"]
                 sizes = [int(n.get("sz")) for n in root.iter(f"{{{A}}}rPr") if int(n.get("sz")) != 1800]
                 assert sizes == fixture["fixed_delimiter_sizes"], (fixture["id"], sizes)
                 assert root.find(f".//{{{M}}}d") is None, "fixed delimiters must not grow"
