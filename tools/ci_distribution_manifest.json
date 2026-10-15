@@ -1636,6 +1636,8 @@
           "paths": [
             "tools/eqnedit64/**",
             "packages/eqnedit64/**",
+            "docs/equation/**",
+            ".agents/skills/release-eqnedit64/**",
             ".github/workflows/eqnedit64.yml",
             ".github/workflows/release-eqnedit64-pypi.yml",
             "CMakeLists.txt",
@@ -1645,7 +1647,17 @@
             "tests/test_tier_manifest.json",
             "tools/sparsesolv_ci_impact.py",
             "tools/ci_distribution_contract.py",
-            "tools/ci_distribution_manifest.json"
+            "tools/ci_distribution_manifest.json",
+            "!**/*.md",
+            "tools/eqnedit64/README.md",
+            "tools/eqnedit64/CHANGELOG.md",
+            "tools/eqnedit64/docs/GUI_SPEC.md",
+            "tools/eqnedit64/web/README.md",
+            "packages/eqnedit64/README.md",
+            "packages/eqnedit64/CHANGELOG.md",
+            "docs/equation/README.md",
+            "docs/equation/eqnedit64_handover.md",
+            ".agents/skills/release-eqnedit64/SKILL.md"
           ]
         },
         "pull_request": {
@@ -1655,6 +1667,8 @@
           "paths": [
             "tools/eqnedit64/**",
             "packages/eqnedit64/**",
+            "docs/equation/**",
+            ".agents/skills/release-eqnedit64/**",
             ".github/workflows/eqnedit64.yml",
             ".github/workflows/release-eqnedit64-pypi.yml",
             "CMakeLists.txt",
@@ -1664,7 +1678,17 @@
             "tests/test_tier_manifest.json",
             "tools/sparsesolv_ci_impact.py",
             "tools/ci_distribution_contract.py",
-            "tools/ci_distribution_manifest.json"
+            "tools/ci_distribution_manifest.json",
+            "!**/*.md",
+            "tools/eqnedit64/README.md",
+            "tools/eqnedit64/CHANGELOG.md",
+            "tools/eqnedit64/docs/GUI_SPEC.md",
+            "tools/eqnedit64/web/README.md",
+            "packages/eqnedit64/README.md",
+            "packages/eqnedit64/CHANGELOG.md",
+            "docs/equation/README.md",
+            "docs/equation/eqnedit64_handover.md",
+            ".agents/skills/release-eqnedit64/SKILL.md"
           ]
         },
         "workflow_dispatch": {
@@ -1706,7 +1730,15 @@
         "tools/sparsesolv_ci_impact.py:required_for_event"
       ],
       "markdown_inputs": [
-        "packages/eqnedit64/README.md"
+        "tools/eqnedit64/README.md",
+        "tools/eqnedit64/CHANGELOG.md",
+        "tools/eqnedit64/docs/GUI_SPEC.md",
+        "tools/eqnedit64/web/README.md",
+        "packages/eqnedit64/README.md",
+        "packages/eqnedit64/CHANGELOG.md",
+        "docs/equation/README.md",
+        "docs/equation/eqnedit64_handover.md",
+        ".agents/skills/release-eqnedit64/SKILL.md"
       ],
       "content_diff_active": [
         "CMakeLists.txt",
@@ -2775,46 +2807,6 @@
     }
   },
   "migration_exceptions": [
-    {
-      "id": "CI-MIG-008",
-      "lane": "eqnedit64",
-      "kind": "markdown_native",
-      "pattern": "packages/eqnedit64/**",
-      "current": "Current envelope starts native work for prose Markdown.",
-      "target": "Exclude Markdown then re-include actual build/test inputs.",
-      "owner": "eqnedit64",
-      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-009",
-      "lane": "eqnedit64",
-      "kind": "markdown_native",
-      "pattern": "tools/eqnedit64/**",
-      "current": "Current envelope starts native work for prose Markdown.",
-      "target": "Exclude Markdown then re-include actual build/test inputs.",
-      "owner": "eqnedit64",
-      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-010",
-      "lane": "eqnedit64",
-      "kind": "missing_trigger",
-      "pattern": ".agents/skills/release-eqnedit64/**",
-      "current": "Owner contract input is absent from trigger projection.",
-      "target": "Include this input in the appropriate owner scope.",
-      "owner": "eqnedit64",
-      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-014",
-      "lane": "eqnedit64",
-      "kind": "missing_trigger",
-      "pattern": "docs/equation/**",
-      "current": "Owner contract input is absent from trigger projection.",
-      "target": "Include this input in the appropriate owner scope.",
-      "owner": "eqnedit64",
-      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing"
-    },
     {
       "id": "CI-MIG-023",
       "lane": "radia-fast",
