@@ -342,7 +342,19 @@ work.
 
 ### BBND -- edge / curve labels (NGSolve `mesh.GetBBoundaries()`)
 
-Source: Cubit **named curves** + Cubit **sidesets-on-curves**.
+Source: Cubit **sidesets-on-curves**, named with `sideset <id> name "<label>"`.
+Geometry curve names alone do not define a BBND label. For example:
+
+```text
+sideset 100 add curve 1
+sideset 100 name "test_edge"
+```
+
+Each curve's complete exported segmentation receives its sideset name in the
+Netgen EdgeDescriptor/CD2 table. Multiple curves may share one label. Spaces
+are normalized to underscores, as for surface labels. Different labels on the
+same curve, the reserved name `default`, or a curve that cannot be completely
+represented in the exported volume mesh cause export to fail before writing.
 
 The exporter writes CD2 segments only for curves that own actual 1-D mesh edges
 and whose parent surfaces both have exported Netgen descriptors.  Imported STL
@@ -351,10 +363,9 @@ those stale curves are intentionally omitted from the companion edge-length
 references.  For a point-only anchor, put the curve or vertices in a Cubit
 **nodeset**; the exporter expands the nodeset to BBBND points (next table).
 
-The BBND label-name convention to be respected once segment
-generation lands:
+The BBND label-name convention is:
 
-| Cubit name on a curve | NGSolve BBND name | Meaning                                       |
+| Cubit curve sideset name | NGSolve BBND name | Meaning                                       |
 |-----------------------|-------------------|-----------------------------------------------|
 | `dir_<name>`          | `dir_<name>`      | Dirichlet edge (e.g. ground line in 2D)       |
 | `neu_<name>`          | `neu_<name>`      | Explicit Neumann edge                         |
