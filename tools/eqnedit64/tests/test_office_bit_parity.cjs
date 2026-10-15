@@ -219,9 +219,9 @@ function officeBytes(html) {
         }, {html: bytes.toString("utf8"), id: fixture.id});
         assert(languageAndDelimiter, fixture.id + ": explicit language/delimiter contract failed");
       }
-      if (fixture.run_styles || fixture.function_name) {
+      if (fixture.run_styles || fixture.function_name || fixture.alignment_points !== undefined) {
         for (const bytes of [n, w]) {
-          const stylesOk = await page.evaluate(({html, styles, functionName}) => {
+          const stylesOk = await page.evaluate(({html, styles, functionName, alignmentPoints}) => {
             const doc = new DOMParser().parseFromString(html, "application/xml");
             if (doc.getElementsByTagName("parsererror").length) return false;
             const ns = "http://schemas.microsoft.com/office/2004/12/omml";
@@ -240,9 +240,14 @@ function officeBytes(html) {
               return name && argument && name.textContent.startsWith(functionName) &&
                 argument.textContent.length > 0;
             });
-            return styleMatches && functionMatches;
+            const alignedRuns = runs.filter(run => run.getElementsByTagNameNS(ns, "aln").length);
+            const alignmentMatches = alignmentPoints === undefined ||
+              (alignedRuns.length === alignmentPoints && alignedRuns.every(run =>
+                run.parentNode.localName === "e" && run.parentNode.parentNode.localName === "eqArr" &&
+                run.textContent === "&"));
+            return styleMatches && functionMatches && alignmentMatches;
           }, {html: bytes.toString("utf8"), styles: fixture.run_styles,
-              functionName: fixture.function_name});
+              functionName: fixture.function_name, alignmentPoints: fixture.alignment_points});
           assert(stylesOk, fixture.id + ": OMML run style/function structure mismatch");
         }
       }
