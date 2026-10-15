@@ -56,3 +56,12 @@ graph/handle teardown. The historical binary hashes, times and memory figures
 above precede that fix; they do not certify the rebuilt binary. Revalidate the
 new binary and exact formal wheel separately. The native `profile` command is
 diagnostic-only, excluded from acceptance timing medians.
+
+The [review-fix validation](results/ic-low-fixes-validation.json) records a
+clean build of the workspace fix on the RTX 5000, actual loaded-module hash
+verification, independent CPU solution error 1.632e-16 and true residual
+1.327e-16, 25 rejection gates, and a separate test-only selected-device
+mismatch binary built from the same native source. Both retained-buffer and
+setup-peak accounting increase by exactly 4,194,304 bytes on the same small
+oracle input. Physical multi-GPU switching, final-wheel acceptance, and new
+A100 scaling remain separate gates; this correctness run makes no timing claim.
