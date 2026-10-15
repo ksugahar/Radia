@@ -8,7 +8,7 @@
 - Remove legacy CLI switches (exit 94); document colour rejection (97) and strict export rejection (98).
 - Share stretchable m:d delimiters, scoped fixed-size big-family symbols in m:box, and explicit proofing language.
 - Align styled/singleton delimiter boundaries and reject unsupported fixed sizes consistently in native/Web output.
-- Restore shared left edges for unanchored multiline Office equations and explicit alignment points for anchored rows, without visible alignment symbols.
+- Restore shared left edges for unanchored multiline Office equations whose rows contain no nested aligned block, and explicit alignment points for anchored rows, without visible alignment symbols. Single-row and nested mixed blocks keep the matrix route.
 - Consolidate public product names and retain separate signed/Office/hand-test/publication gates.
 - This candidate is not released. Markdown deck assembly is owned by the optional radia-mcp adapter.
 

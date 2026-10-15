@@ -92,4 +92,4 @@ Full arbitrary-TeX or Office/browser parity is not established.
 
 ## PowerPoint normal paste
 
-Ctrl+V must produce editable inline m:oMath, no m:oMathPara, left aligned, with 18 pt equation, trailing character and insertion point in a blank presentation. EXE/Web use inline MathML in CF_HTML. Test Application.CommandBars.ExecuteMso("Paste"), never substitute Shapes.Paste(). Refuse attachment to user processes, inspect saved OMML/rendering, restore clipboard and close owned resources only. Slides image copy remains 300 dpi / 24 pt.
+Ctrl+V must produce editable inline m:oMath on the slide (no m:oMathPara there), left aligned, with 18 pt equation, trailing character and insertion point in a blank presentation. EXE/Web put RichEdit OMML in the CF_HTML msEquation block as the primary payload, with MathML only as fallback. Test Application.CommandBars.ExecuteMso("Paste"), never substitute Shapes.Paste(). Refuse attachment to user processes, inspect saved OMML/rendering, restore clipboard and close owned resources only. Slides image copy remains 300 dpi / 24 pt.
