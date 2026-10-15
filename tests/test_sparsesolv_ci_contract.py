@@ -344,11 +344,18 @@ def test_root_content_diff_selects_only_evidenced_owners(path,before,after,owner
     assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == owners
 
 
-@pytest.mark.parametrize('path', IMPACT.CONTRACT.ROOT_CONFIGS)
+@pytest.mark.parametrize('path', [p for p in IMPACT.CONTRACT.ROOT_CONFIGS if p != 'Build.ps1'])
 def test_real_root_comments_and_whitespace_select_no_build(path):
     before=(ROOT/path).read_text(encoding='utf-8')
     after=before+'\n' if path.endswith('.json') else before+'\n# comment only\n'
     assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == set()
+
+
+def test_build_ps1_formatting_is_never_exempt():
+    """PowerShell whitespace can change meaning, so even comment-only edits select all owners."""
+    before=(ROOT/'Build.ps1').read_text(encoding='utf-8')
+    after=before+'\n# comment only\n'
+    assert IMPACT.root_owners('Build.ps1',before,after,IMPACT.manifest())[0] == set(IMPACT.CONTRACT.DISTRIBUTIONS)
 
 
 @pytest.mark.parametrize('path,before,after', [
@@ -536,3 +543,14 @@ def test_joining_powershell_statements_is_a_change():
     # Indentation and comment-only edits stay exempt.
     reindented = old.replace(marker, "    " + marker + "  # comment", 1)
     assert IMPACT.code_tokens(old, "powershell") == IMPACT.code_tokens(reindented, "powershell")
+
+
+def test_powershell_formatting_change_selects_all_owners():
+    """Trailing space after a continuation backtick breaks PowerShell; never exempt it."""
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    old = (ROOT / "Build.ps1").read_text(encoding="utf-8")
+    line = next(l for l in old.splitlines() if l.rstrip().endswith("`"))
+    new = old.replace(line, line.rstrip() + " ", 1)
+    assert new != old
+    for lane in ("radia-gpu", "sparsesolv"):
+        assert IMPACT.lane_required(lane, {"Build.ps1"}, lambda p: (old, new), manifest)[0] is True
