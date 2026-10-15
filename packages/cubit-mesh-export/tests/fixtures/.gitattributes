@@ -1,0 +1,2 @@
+# Preserve the exact native writer bytes, including its generated whitespace.
+bbnd_brick.vol binary

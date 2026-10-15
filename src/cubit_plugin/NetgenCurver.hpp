@@ -117,6 +117,12 @@ public:
     return cubit_nid_to_ng_pi_;
   }
 
+  // Only curves whose complete linear segmentation was exported are present.
+  // Values are 1-based Netgen EdgeDescriptor indices, also used by CD2 names.
+  const std::unordered_map<int, int>& get_cubit_curve_to_ng_edge() const {
+    return cubit_curve_to_ng_edge_;
+  }
+
   // Get edge high-order nodes between two vertex node IDs.
   // Returns (order-1) node IDs along the edge from n0 to n1.
   std::vector<int> get_edge_nodes(int n0, int n1) const;
@@ -140,6 +146,7 @@ public:
   static int gmsh_element_type(int base_nn, int elem_type, int order);
 
 private:
+  std::unordered_map<int, int> cubit_curve_to_ng_edge_;
   // Phase 1: Convert linear mesh (from MeshData) to netgen::Mesh
   bool build_netgen_mesh(const MeshData &md);
 
