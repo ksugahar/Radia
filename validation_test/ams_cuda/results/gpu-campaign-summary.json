@@ -507,5 +507,16 @@
     "p1 cold/initialized separate and two balanced cycles; high-order feasibility has one construction and four zero-start RHS solves, not a broad performance study",
     "Some GPU upload/assembly and BDDC assembly/setup phases are inseparable in existing native reports; missing disjoint timers are null",
     "Single-GPU selected-device mismatch simulation; physical multi-GPU switching unverified"
-  ]
+  ],
+  "recovery_and_cleanup": {
+    "recovery_hashes_verified": true,
+    "recovered_files": 221,
+    "recovery_archive_sha256": "df3f52901f57a88682c8e436a99fcfa837d82adbba597a73ee5e1ae74bfe6a46",
+    "owned_remote_scratch_deleted": true,
+    "idle_verified_utc": "2026-10-15T19:57:29.9729743Z",
+    "idle_verified_jst": "2026-10-16 04:57:29 JST",
+    "matlab_python_processes": 0,
+    "gpu_utilization_percent": 0,
+    "gpu_used_MiB": 10
+  }
 }
