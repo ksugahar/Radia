@@ -110,6 +110,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python validation_test/ams_cuda/fmm_physics.py --binary "$env:RADIA_FMM_BUILD" --out "$env:RUNNER_TEMP/radia-fmm-physics-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           exit $LASTEXITCODE
+      - name: Verify IC accuracy and device-switch release lifecycle
+        shell: pwsh
+        run: |
+          python validation_test/ic_cuda/run.py --binary-dir build-cuda-mex --matlab-dir packages/radia-gpu/matlab --out "$env:RUNNER_TEMP/radia-ic-accuracy-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ic_cuda/lifecycle_simulation.py --out "$env:RUNNER_TEMP/radia-ic-lifecycle-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
       - name: Package and verify independent distribution
         shell: pwsh
         run: |
