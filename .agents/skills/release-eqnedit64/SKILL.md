@@ -12,9 +12,25 @@ GitHub/PyPI success alone does not complete an Eqnedit64 release.
 
 ## O: hand-test invariant
 
+- Run manual-equivalent validation in the background. Do not use desktop UI
+  automation, SendInput, cursor movement, keyboard injection, or foreground
+  activation: the user continues other work during tests. Use the existing
+  hidden native window-procedure tests and PowerPoint COM paste/save/reopen
+  checks; do not ask the user to relay packets or perform those automated checks.
+- Use `tools/eqnedit64/build/test_background.ps1` for native editing contracts
+  and `test_external_paste.ps1 -AppPath O:/Eqnedit64.exe` (STA) for the actual
+  O: clipboard/PowerPoint gate. Keep the approved-session and clipboard-restore
+  requirements. Record exact source/EXE hashes and item-level results.
+- `tools/eqnedit64/tests/test_office_bit_parity.cjs` without `--wire` runs a
+  headless native/Web producer-byte comparison. Report its scope accurately.
+  `--wire` additionally tests the real Windows clipboard and requires a headed
+  browser; run it on isolated hosted CI, never the user's active desktop.
+  Preserve per-fixture hashes and explicit exclusions. Neither mode replaces
+  the real PowerPoint paste gate or the final release approval.
+
 - `O:\Eqnedit64.exe` is Sugahara's canonical hand-test entry point. After a
   candidate is committed, developer-signed, and passes the local background
-  tests, update O: **before asking Sugahara to test it**. Do not leave the only
+  tests, update O: **before accepting the hand-test result**. Do not leave the only
   testable candidate under `C:\temp` or a worktree path.
 - Hand-test staging does not require a version bump, a push to `main`, or a
   release tag. It does require a clean committed source, a build stamp matching
@@ -87,7 +103,8 @@ GitHub/PyPI success alone does not complete an Eqnedit64 release.
 1. Commit and push the versioned release candidate branch.
 2. Wait for its Eqnedit64 CI and Policy Lint to pass, build the exact signed
    candidate, and stage it with `sync_handtest_to_o.ps1`.
-3. Complete Sugahara's O: hand test.
+3. Complete the background O: hand-test gates above. Record user feedback when
+   provided; do not stop and request human execution of covered automated checks.
 4. Run one Claude Code Fable review on that candidate and its specification
    diff. Record and resolve the findings, then refresh affected tests and O:
    hand testing. Do not merge to `main` before this gate is recorded.
