@@ -9,6 +9,7 @@ import tomllib
 import argparse
 from collections import defaultdict
 import importlib.util
+import math
 import re
 import difflib
 
@@ -47,6 +48,17 @@ def test_dependencies_only(before: str, after: str) -> bool:
     return old == new
 
 
+def _valid_budget(value) -> bool:
+    """A time budget is a finite positive number; JSON true/false are not numbers."""
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and value > 0)
+
+
+def _canonical(value) -> str:
+    """Type-strict comparison form: 1 and true must not compare equal."""
+    return json.dumps(value, sort_keys=True, ensure_ascii=False)
+
+
 def ams_manifest_unchanged(before: str, after: str) -> bool:
     def relevant(text):
         data = json.loads(text)
@@ -64,7 +76,7 @@ def ams_manifest_unchanged(before: str, after: str) -> bool:
             if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
                 raise ValueError("invalid AMS paths")
             budget = profile.get("max_elapsed_seconds")
-            if budget is not None and (not isinstance(budget, (int, float)) or budget <= 0):
+            if budget is not None and not _valid_budget(budget):
                 raise ValueError("invalid AMS time budget")
             selected[name] = profile
             name = profile.get("extends")
@@ -78,7 +90,7 @@ def ams_manifest_unchanged(before: str, after: str) -> bool:
         if not paths or len(paths) != len(set(paths)):
             raise ValueError("empty or duplicate AMS test paths")
         return data
-    return relevant(before) == relevant(after)
+    return _canonical(relevant(before)) == _canonical(relevant(after))
 
 
 def code_tokens(text, language):
@@ -294,7 +306,7 @@ def _tier_owners(old,new,data,config):
         for name,profile in profiles.items():
             if not set(profile)<={'description','paths','extends','max_elapsed_seconds'}: raise ValueError('unknown profile key')
             if not isinstance(profile.get('paths',[]),list) or not all(isinstance(p,str) for p in profile.get('paths',[])): raise ValueError('invalid profile paths')
-            if 'max_elapsed_seconds' in profile and (not isinstance(profile['max_elapsed_seconds'],(int,float)) or profile['max_elapsed_seconds']<=0): raise ValueError('invalid budget')
+            if 'max_elapsed_seconds' in profile and not _valid_budget(profile['max_elapsed_seconds']): raise ValueError('invalid budget')
             seen=set(); current=name
             while current is not None:
                 if current in seen: raise ValueError('tier inheritance cycle')
@@ -302,7 +314,7 @@ def _tier_owners(old,new,data,config):
     for name in a['profiles'].keys()|b['profiles'].keys():
         pa,pb=a['profiles'].get(name,{}).copy(),b['profiles'].get(name,{}).copy()
         pa.pop('description',None);pb.pop('description',None)
-        if pa==pb: continue
+        if _canonical(pa)==_canonical(pb): continue
         if name in config: result.update(config[name])
         else:
             paths=pa.get('paths',[])+pb.get('paths',[])
