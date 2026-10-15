@@ -25,7 +25,7 @@ def main(a):
         timing_boundary='Fresh mesh load, FE matrix/RHS construction, preconditioner setup and first zero-guess solve. Reuse changes only RHS scale, retaining matrix and preconditioner. GPU setup and solves include transfers and gathered result; validation and serialization excluded.',
         initialization='First initialized call per configuration is recorded separately and excluded from balanced medians; MATLAB/GPU startup separate; no OS/device cold reset claim',
         memory_definition='50ms absolute process RSS/private samples include surrounding validation/serialization and loaded runtimes; GPU native owned bounds and free-memory endpoints, not transient whole-device peak',
-        threads_policy=dict(cpu_ngsolve=[1,16],cpu_blas=1,cpu_ams_coarse_factor=1,gpu_host_setup=1),ic_configuration=dict(shift=1.05,auto_shift=False,ordering='native IC default',initial_guess='zero'))
+        threads_policy=dict(cpu_ngsolve=[1,16],cpu_blas=1,cpu_ams_coarse_factor=1,gpu_host_setup=1),ic_configuration=dict(shift=1.05,auto_shift=False,ordering='native IC default',initial_guess='zero'),requested_solver_family=a.solver_family)
     try:
         if socket.gethostname().lower()!='ngsolve' and not a.diagnostic:raise RuntimeError('Formal timing requires selected A100 host')
         for name,digest in json.loads((job/'manifest.json').read_text()).items():
@@ -165,6 +165,8 @@ def main(a):
                 return data['solution'],report
             routes=[('cpu-ams',1),('cpu-ic',1),('gpu-ams',1),('cpu-ams',16),('cpu-ic',16)]
             if a.ic_directory:routes.append(('gpu-ic',1))
+            if a.solver_family!='all':routes=[pair for pair in routes if pair[0].endswith('-'+a.solver_family)]
+            if a.solver_family=='ic' and not a.ic_directory:raise ValueError('IC campaign requires the explicit IC binary directory')
             for index,(route,threads) in enumerate(routes):
                 gc.collect();guard=quiet()
                 with Memory(pid if route.startswith('gpu-') else os.getpid()) as memory:
@@ -195,4 +197,4 @@ def main(a):
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     for n in ('job','wheel','out'):p.add_argument('--'+n,type=Path,required=True)
-    p.add_argument('--cycles',type=int,default=2);p.add_argument('--targets',nargs='*',type=int);p.add_argument('--diagnostic',action='store_true');p.add_argument('--ic-directory',type=Path);main(p.parse_args())
+    p.add_argument('--cycles',type=int,default=2);p.add_argument('--targets',nargs='*',type=int);p.add_argument('--diagnostic',action='store_true');p.add_argument('--ic-directory',type=Path);p.add_argument('--solver-family',choices=('all','ams','ic'),default='all');main(p.parse_args())
