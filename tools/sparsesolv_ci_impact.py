@@ -112,7 +112,7 @@ def code_tokens(text, language):
     while i < len(text):
         if text[i].isspace():
             i += 1; continue
-        if text.startswith('<#', i):
+        if language == 'powershell' and text.startswith('<#', i):
             end = text.find('#>', i+2)
             if end < 0: raise ValueError('unterminated block comment')
             i = end+2; continue
@@ -325,9 +325,10 @@ def _tier_owners(old,new,data,config):
                 if current in seen: raise ValueError('tier inheritance cycle')
                 seen.add(current); current=profiles[current].get('extends')
     for name in a['profiles'].keys()|b['profiles'].keys():
+        present=(name in a['profiles'], name in b['profiles'])
         pa,pb=a['profiles'].get(name,{}).copy(),b['profiles'].get(name,{}).copy()
         pa.pop('description',None);pb.pop('description',None)
-        if _canonical(pa)==_canonical(pb): continue
+        if all(present) and _canonical(pa)==_canonical(pb): continue
         if name in config: result.update(config[name])
         else:
             paths=pa.get('paths',[])+pb.get('paths',[])

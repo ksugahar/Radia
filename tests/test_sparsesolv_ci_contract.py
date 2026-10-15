@@ -501,3 +501,25 @@ def test_added_and_removed_impact_rules_select_owners():
     manifest = IMPACT.CONTRACT.load(ROOT)
     assert IMPACT._tier_owners(before, added, manifest, {})
     assert IMPACT._tier_owners(added, before, manifest, {})
+
+
+def test_powershell_block_comment_is_not_a_cmake_comment():
+    import json as _json
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    old = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    new = old + "\n<# INVALID CMAKE #>\n"
+    required = IMPACT.lane_required("radia-gpu", {"CMakeLists.txt"}, lambda p: (old, new), manifest)
+    assert required[0] is True
+    assert IMPACT.code_tokens(old, "cmake") != IMPACT.code_tokens(new, "cmake")
+
+
+@pytest.mark.parametrize("profile", [{}, {"description": "only prose"}])
+def test_added_or_removed_unknown_profile_fails_closed(profile):
+    before = (ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8")
+    data = json.loads(before)
+    data["profiles"]["unknown_new_profile"] = profile
+    after = json.dumps(data)
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    for old, new in ((before, after), (after, before)):
+        with pytest.raises(ValueError):
+            IMPACT._tier_owners(old, new, manifest, {})
