@@ -344,14 +344,15 @@ def test_root_content_diff_selects_only_evidenced_owners(path,before,after,owner
     assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == owners
 
 
-@pytest.mark.parametrize('path', [p for p in IMPACT.CONTRACT.ROOT_CONFIGS if p != 'Build.ps1'])
+@pytest.mark.parametrize('path', ['pyproject.toml', 'tests/test_tier_manifest.json'])
 def test_real_root_comments_and_whitespace_select_no_build(path):
     before=(ROOT/path).read_text(encoding='utf-8')
     after=before+'\n' if path.endswith('.json') else before+'\n# comment only\n'
     assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == set()
 
 
-def test_build_ps1_formatting_is_never_exempt():
+@pytest.mark.parametrize('path', ['Build.ps1', 'CMakeLists.txt', 'MANIFEST.in'])
+def test_code_like_root_formatting_is_never_exempt(path):
     """PowerShell whitespace can change meaning, so even comment-only edits select all owners."""
     before=(ROOT/'Build.ps1').read_text(encoding='utf-8')
     after=before+'\n# comment only\n'
@@ -554,3 +555,12 @@ def test_powershell_formatting_change_selects_all_owners():
     assert new != old
     for lane in ("radia-gpu", "sparsesolv"):
         assert IMPACT.lane_required(lane, {"Build.ps1"}, lambda p: (old, new), manifest)[0] is True
+
+
+def test_cmake_variable_reference_split_selects_owners():
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    old = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    assert "${Python3_EXECUTABLE}" in old
+    new = old.replace("${Python3_EXECUTABLE}", "$ {Python3_EXECUTABLE}", 1)
+    for lane in ("radia-gpu", "sparsesolv"):
+        assert IMPACT.lane_required(lane, {"CMakeLists.txt"}, lambda p: (old, new), manifest)[0] is True
