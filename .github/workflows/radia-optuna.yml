@@ -25,6 +25,12 @@ on:
       - 'CMakeLists.txt'
       - 'validation_test/optimization/validate_optuna_cuda.m'
       - '.github/workflows/radia-optuna.yml'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_distribution_contract.py'
+      - 'tools/ci_distribution_manifest.json'
       - '!**/*.md'
       - 'packages/radia-optuna/README.md'
       - 'packages/radia-optuna/MATLAB_README.md'
@@ -53,6 +59,12 @@ on:
       - 'CMakeLists.txt'
       - 'validation_test/optimization/validate_optuna_cuda.m'
       - '.github/workflows/radia-optuna.yml'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_distribution_contract.py'
+      - 'tools/ci_distribution_manifest.json'
       - '!**/*.md'
       - 'packages/radia-optuna/README.md'
       - 'packages/radia-optuna/MATLAB_README.md'
@@ -68,8 +80,25 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  ci-impact:
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.route.outputs.required }}
+      reason: ${{ steps.route.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Route distribution impact
+        id: route
+        run: python tools/sparsesolv_ci_impact.py --lane radia-optuna
+
   build-test:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: [ci-impact]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Windows, X64, "100"]
     steps:
       - uses: actions/checkout@v4
@@ -134,8 +163,9 @@ jobs:
           retention-days: 7
 
   installed-wheel-matlab-e2e:
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (true) }}
     name: radia-optuna installed-wheel MATLAB/Simulink E2E
-    needs: build-test
+    needs: [ci-impact, build-test]
     runs-on: [self-hosted, Windows, X64, "100"]
     timeout-minutes: 45
     steps:

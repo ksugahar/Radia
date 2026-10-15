@@ -42,7 +42,7 @@ def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
     assert "MKLROOT=C:\\Program Files\\Python312\\Library" not in native
     assert 'runs-on: [self-hosted, Windows, X64, "100"]' in optuna
     assert "windows-radia" not in optuna
-    optuna_self_hosted = optuna.split("  installed-wheel-matlab-e2e:", 1)[0]
+    optuna_self_hosted = optuna.split("  build-test:", 1)[1].split("  installed-wheel-matlab-e2e:", 1)[0]
     assert "actions/setup-python" not in optuna_self_hosted
     assert "RADIA_OPTUNA_CI_PYTHON" in optuna_self_hosted
     assert "-m venv" in optuna_self_hosted

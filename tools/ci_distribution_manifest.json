@@ -20,7 +20,201 @@
     ],
     "unknown": "all_owners",
     "prose": "no_native_build",
-    "implementation": "pending; existing selectors remain authoritative"
+    "implementation": "manifest-driven per-lane gate; unknown impact selects all file owners",
+    "router": "tools/sparsesolv_ci_impact.py",
+    "attribution": {
+      "pyproject.toml": {
+        "project_keys": [
+          "name",
+          "version",
+          "description",
+          "readme",
+          "requires-python",
+          "license",
+          "authors",
+          "maintainers",
+          "keywords",
+          "classifiers",
+          "dependencies",
+          "urls",
+          "scripts"
+        ],
+        "extras": {
+          "optuna": [
+            "radia"
+          ],
+          "cubit": [
+            "radia"
+          ],
+          "topopt-cad": [
+            "radia"
+          ],
+          "build123d": [
+            "radia"
+          ],
+          "beam": [
+            "radia"
+          ],
+          "viz": [
+            "radia"
+          ],
+          "docs": [
+            "radia"
+          ],
+          "urn": [
+            "radia"
+          ],
+          "test": [
+            "radia"
+          ],
+          "dev": [
+            "radia"
+          ]
+        },
+        "packages": {
+          "radia": [
+            "radia"
+          ],
+          "radia-gpu": [
+            "radia-gpu"
+          ],
+          "radia-mcp": [
+            "radia-mcp"
+          ],
+          "radia-optuna": [
+            "radia-optuna"
+          ],
+          "eqnedit64": [
+            "eqnedit64"
+          ],
+          "cubit-mesh-export": [
+            "cubit-mesh-export"
+          ],
+          "radia_gpu": [
+            "radia-gpu"
+          ],
+          "radia_mcp": [
+            "radia-mcp"
+          ],
+          "radia_optuna": [
+            "radia-optuna"
+          ],
+          "cubit_mesh_export": [
+            "cubit-mesh-export"
+          ]
+        },
+        "build_system": [
+          "radia",
+          "radia-gpu",
+          "radia-mcp",
+          "radia-optuna",
+          "cubit-mesh-export",
+          "eqnedit64"
+        ],
+        "tooling_sections": [
+          "tool.black",
+          "tool.isort",
+          "tool.coverage"
+        ]
+      },
+      "CMakeLists.txt": {
+        "targets": {
+          "test_ih_rotation_runtime": [
+            "radia"
+          ],
+          "test_radia_ih_thermal_acceptance": [
+            "radia"
+          ],
+          "test_rad_beam_transfer": [
+            "radia"
+          ],
+          "test_rad_beam_dynamics": [
+            "radia"
+          ],
+          "test_rad_arc_section": [
+            "radia"
+          ],
+          "test_radia_mex_sparse_symmetry": [
+            "radia"
+          ],
+          "radia_motor_rom": [
+            "radia"
+          ],
+          "test_radhmat": [
+            "radia"
+          ],
+          "peec_matrices": [
+            "radia"
+          ],
+          "_radia_pybind": [
+            "radia"
+          ]
+        },
+        "options": {
+          "RADIA_BUILD_MATLAB_MEX": [
+            "radia-gpu"
+          ],
+          "RADIA_BUILD_OPTUNA_MEX_ONLY": [
+            "radia-optuna"
+          ]
+        }
+      },
+      "Build.ps1": {
+        "CudaMexOnly": [
+          "radia-gpu"
+        ],
+        "AmsCudaOnly": [
+          "radia-gpu"
+        ],
+        "HMatrixCudaOnly": [
+          "radia-gpu"
+        ],
+        "ProjectionCudaOnly": [
+          "radia-gpu"
+        ],
+        "IhCudaOnly": [
+          "radia-gpu"
+        ],
+        "FieldCudaOnly": [
+          "radia-gpu"
+        ],
+        "FmmCudaOnly": [
+          "radia-gpu"
+        ],
+        "RadiaOnly": [
+          "radia"
+        ],
+        "AxiFemOnly": [
+          "radia"
+        ],
+        "OptunaMexOnly": [
+          "radia-optuna"
+        ]
+      },
+      "MANIFEST.in": {
+        "selection": "directive paths resolved through ordered ownership rules"
+      },
+      "tests/test_tier_manifest.json": {
+        "native-build-contracts": [
+          "radia"
+        ],
+        "fast-contracts": [
+          "radia"
+        ],
+        "native-smoke": [
+          "radia"
+        ],
+        "solver-heavy": [
+          "radia"
+        ],
+        "solver-numerics": [
+          "radia"
+        ],
+        "sparsesolv": [
+          "radia"
+        ]
+      }
+    }
   },
   "rules": [
     {
@@ -738,12 +932,6 @@
       ]
     },
     {
-      "pattern": "tools/sparsesolv_ci_impact.py",
-      "owners": [
-        "radia"
-      ]
-    },
-    {
       "pattern": "tools/run_test_tier.py",
       "owners": [
         "radia"
@@ -847,7 +1035,7 @@
         "kind": "shared_build",
         "detail": "Root configuration; content-diff selection among owners, unknown means all."
       },
-      "selection": "content_diff"
+      "selection": "content_diff:tools/sparsesolv_ci_impact.py"
     },
     {
       "pattern": "Build.ps1",
@@ -863,7 +1051,7 @@
         "kind": "shared_build",
         "detail": "Root configuration; content-diff selection among owners, unknown means all."
       },
-      "selection": "content_diff"
+      "selection": "content_diff:tools/sparsesolv_ci_impact.py"
     },
     {
       "pattern": "pyproject.toml",
@@ -879,7 +1067,7 @@
         "kind": "shared_build",
         "detail": "Root configuration; content-diff selection among owners, unknown means all."
       },
-      "selection": "content_diff"
+      "selection": "content_diff:tools/sparsesolv_ci_impact.py"
     },
     {
       "pattern": "MANIFEST.in",
@@ -895,7 +1083,7 @@
         "kind": "shared_build",
         "detail": "Root configuration; content-diff selection among owners, unknown means all."
       },
-      "selection": "content_diff"
+      "selection": "content_diff:tools/sparsesolv_ci_impact.py"
     },
     {
       "pattern": "tests/test_tier_manifest.json",
@@ -911,7 +1099,7 @@
         "kind": "shared_build",
         "detail": "Root configuration; content-diff selection among owners, unknown means all."
       },
-      "selection": "content_diff"
+      "selection": "content_diff:tools/sparsesolv_ci_impact.py"
     },
     {
       "pattern": "src/ext/HACApK/**",
@@ -1140,6 +1328,57 @@
         "detail": "LTspice integration and Optuna objective consume this circuit fixture."
       },
       "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/sparsesolv_ci_impact.py",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64",
+        "repo"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Every distribution branch lane consumes this common routing foundation before executing its build/test jobs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/ci_distribution_contract.py",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64",
+        "repo"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Every distribution branch lane consumes this common routing foundation before executing its build/test jobs."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/ci_distribution_manifest.json",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64",
+        "repo"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Every distribution branch lane consumes this common routing foundation before executing its build/test jobs."
+      },
+      "selection": "all_owners"
     }
   ],
   "shared_include_closures": [
@@ -1223,7 +1462,15 @@
             "tests/test_cubit_auto_kelvin_entry.py",
             "tools/audit_pyside6_only.py",
             "validation_test/cubit_mesh_export/**",
-            ".github/workflows/cubit-mesh-export.yml"
+            ".github/workflows/cubit-mesh-export.yml",
+            "CMakeLists.txt",
+            "Build.ps1",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json"
           ]
         },
         "pull_request": {
@@ -1243,16 +1490,32 @@
             "tests/test_cubit_auto_kelvin_entry.py",
             "tools/audit_pyside6_only.py",
             "validation_test/cubit_mesh_export/**",
-            ".github/workflows/cubit-mesh-export.yml"
+            ".github/workflows/cubit-mesh-export.yml",
+            "CMakeLists.txt",
+            "Build.ps1",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json"
           ]
         },
         "workflow_dispatch": {}
       },
-      "selector_refs": [],
+      "selector_refs": [
+        "tools/sparsesolv_ci_impact.py:required_for_event"
+      ],
       "markdown_inputs": [
         "packages/cubit-mesh-export/README.md"
       ],
-      "content_diff_active": [],
+      "content_diff_active": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ],
       "required_paths": [
         "CMakeLists.txt",
         "Build.ps1",
@@ -1280,7 +1543,15 @@
             "tools/eqnedit64/**",
             "packages/eqnedit64/**",
             ".github/workflows/eqnedit64.yml",
-            ".github/workflows/release-eqnedit64-pypi.yml"
+            ".github/workflows/release-eqnedit64-pypi.yml",
+            "CMakeLists.txt",
+            "Build.ps1",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json"
           ]
         },
         "pull_request": {
@@ -1291,7 +1562,15 @@
             "tools/eqnedit64/**",
             "packages/eqnedit64/**",
             ".github/workflows/eqnedit64.yml",
-            ".github/workflows/release-eqnedit64-pypi.yml"
+            ".github/workflows/release-eqnedit64-pypi.yml",
+            "CMakeLists.txt",
+            "Build.ps1",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json"
           ]
         },
         "workflow_dispatch": {
@@ -1329,11 +1608,19 @@
           }
         }
       },
-      "selector_refs": [],
+      "selector_refs": [
+        "tools/sparsesolv_ci_impact.py:required_for_event"
+      ],
       "markdown_inputs": [
         "packages/eqnedit64/README.md"
       ],
-      "content_diff_active": [],
+      "content_diff_active": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ],
       "required_paths": [
         ".agents/skills/release-eqnedit64/SKILL.md",
         ".agents/skills/release-eqnedit64/agents/openai.yaml",
@@ -1368,6 +1655,14 @@
             "tests/matlab/test_ltspice_data_safety.m",
             "tests/matlab/fixtures/ltspice_numdgt7*",
             ".github/workflows/ltspice-data-safety.yml",
+            "CMakeLists.txt",
+            "Build.ps1",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json",
             "!**/*.md"
           ]
         },
@@ -1381,14 +1676,30 @@
             "tests/matlab/test_ltspice_data_safety.m",
             "tests/matlab/fixtures/ltspice_numdgt7*",
             ".github/workflows/ltspice-data-safety.yml",
+            "CMakeLists.txt",
+            "Build.ps1",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json",
             "!**/*.md"
           ]
         },
         "workflow_dispatch": {}
       },
-      "selector_refs": [],
+      "selector_refs": [
+        "tools/sparsesolv_ci_impact.py:required_for_event"
+      ],
       "markdown_inputs": [],
-      "content_diff_active": [],
+      "content_diff_active": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ],
       "required_paths": [
         "CMakeLists.txt",
         "Build.ps1",
@@ -1484,10 +1795,17 @@
         "workflow_dispatch": {}
       },
       "selector_refs": [
-        "tools/run_test_tier.py"
+        "tools/run_test_tier.py",
+        "tools/sparsesolv_ci_impact.py:required_for_event"
       ],
       "markdown_inputs": [],
-      "content_diff_active": [],
+      "content_diff_active": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ],
       "required_paths": [
         "CMakeLists.txt",
         "Build.ps1",
@@ -1549,6 +1867,13 @@
             "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
             "Build.ps1",
             ".github/workflows/radia-gpu.yml",
+            "CMakeLists.txt",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json",
             "!**/*.md",
             "packages/radia-gpu/README.md",
             "docs/ltspice/README.md"
@@ -1571,6 +1896,13 @@
             "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
             "Build.ps1",
             ".github/workflows/radia-gpu.yml",
+            "CMakeLists.txt",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json",
             "!**/*.md",
             "packages/radia-gpu/README.md",
             "docs/ltspice/README.md"
@@ -1578,12 +1910,20 @@
         },
         "workflow_dispatch": {}
       },
-      "selector_refs": [],
+      "selector_refs": [
+        "tools/sparsesolv_ci_impact.py:required_for_event"
+      ],
       "markdown_inputs": [
         "packages/radia-gpu/README.md",
         "docs/ltspice/README.md"
       ],
-      "content_diff_active": [],
+      "content_diff_active": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ],
       "required_paths": [
         "docs/ltspice/README.md",
         "src/core/rad_bem_galerkin.h",
@@ -1654,7 +1994,15 @@
             "README.md",
             "docs/**/*.msh",
             "src/radia/panels/samples/**/*.msh",
-            ".github/workflows/radia-mcp-matrix.yml"
+            ".github/workflows/radia-mcp-matrix.yml",
+            "CMakeLists.txt",
+            "Build.ps1",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json"
           ]
         },
         "pull_request": {
@@ -1675,17 +2023,32 @@
             "README.md",
             "docs/**/*.msh",
             "src/radia/panels/samples/**/*.msh",
-            ".github/workflows/radia-mcp-matrix.yml"
+            ".github/workflows/radia-mcp-matrix.yml",
+            "CMakeLists.txt",
+            "Build.ps1",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json"
           ]
         },
         "workflow_dispatch": {}
       },
       "selector_refs": [
         ".github/workflows/radia-mcp-matrix.yml:scope/classify",
-        "packages/radia-mcp/tools/select_ci_tests.py"
+        "packages/radia-mcp/tools/select_ci_tests.py",
+        "tools/sparsesolv_ci_impact.py:required_for_event"
       ],
       "markdown_inputs": [],
-      "content_diff_active": [],
+      "content_diff_active": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ],
       "required_paths": [
         "CMakeLists.txt",
         "Build.ps1",
@@ -1730,6 +2093,12 @@
             "CMakeLists.txt",
             "validation_test/optimization/validate_optuna_cuda.m",
             ".github/workflows/radia-optuna.yml",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json",
             "!**/*.md",
             "packages/radia-optuna/README.md",
             "packages/radia-optuna/MATLAB_README.md",
@@ -1762,6 +2131,12 @@
             "CMakeLists.txt",
             "validation_test/optimization/validate_optuna_cuda.m",
             ".github/workflows/radia-optuna.yml",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json",
             "!**/*.md",
             "packages/radia-optuna/README.md",
             "packages/radia-optuna/MATLAB_README.md",
@@ -1771,14 +2146,22 @@
         },
         "workflow_dispatch": {}
       },
-      "selector_refs": [],
+      "selector_refs": [
+        "tools/sparsesolv_ci_impact.py:required_for_event"
+      ],
       "markdown_inputs": [
         "packages/radia-optuna/README.md",
         "packages/radia-optuna/MATLAB_README.md",
         "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
         "packages/radia-optuna/OPTUNA_SIMULINK_LAB.md"
       ],
-      "content_diff_active": [],
+      "content_diff_active": [
+        "CMakeLists.txt",
+        "Build.ps1",
+        "pyproject.toml",
+        "MANIFEST.in",
+        "tests/test_tier_manifest.json"
+      ],
       "required_paths": [
         "CMakeLists.txt",
         "Build.ps1",
@@ -2057,6 +2440,9 @@
             ".github/workflows/sparsesolv.yml",
             "pyproject.toml",
             "tests/test_tier_manifest.json",
+            "MANIFEST.in",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json",
             "!**/*.md"
           ]
         },
@@ -2231,17 +2617,24 @@
             ".github/workflows/sparsesolv.yml",
             "pyproject.toml",
             "tests/test_tier_manifest.json",
+            "MANIFEST.in",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json",
             "!**/*.md"
           ]
         },
         "workflow_dispatch": {}
       },
       "selector_refs": [
-        "tools/sparsesolv_ci_impact.py:native_required"
+        "tools/sparsesolv_ci_impact.py:native_required",
+        "tools/sparsesolv_ci_impact.py:required_for_event"
       ],
       "markdown_inputs": [],
       "content_diff_active": [
+        "CMakeLists.txt",
+        "Build.ps1",
         "pyproject.toml",
+        "MANIFEST.in",
         "tests/test_tier_manifest.json"
       ],
       "required_paths": [
@@ -2275,56 +2668,6 @@
       "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing"
     },
     {
-      "lane": "cubit-mesh-export",
-      "kind": "missing_trigger",
-      "pattern": "Build.ps1",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "cubit-mesh-export",
-      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-003"
-    },
-    {
-      "lane": "cubit-mesh-export",
-      "kind": "missing_trigger",
-      "pattern": "CMakeLists.txt",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "cubit-mesh-export",
-      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-004"
-    },
-    {
-      "lane": "cubit-mesh-export",
-      "kind": "missing_trigger",
-      "pattern": "MANIFEST.in",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "cubit-mesh-export",
-      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-005"
-    },
-    {
-      "lane": "cubit-mesh-export",
-      "kind": "missing_trigger",
-      "pattern": "pyproject.toml",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "cubit-mesh-export",
-      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-006"
-    },
-    {
-      "lane": "cubit-mesh-export",
-      "kind": "missing_trigger",
-      "pattern": "tests/test_tier_manifest.json",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "cubit-mesh-export",
-      "follow_up": "cubit-mesh-export owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-007"
-    },
-    {
       "id": "CI-MIG-008",
       "lane": "eqnedit64",
       "kind": "markdown_native",
@@ -2355,36 +2698,6 @@
       "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing"
     },
     {
-      "lane": "eqnedit64",
-      "kind": "missing_trigger",
-      "pattern": "Build.ps1",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "eqnedit64",
-      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-011"
-    },
-    {
-      "lane": "eqnedit64",
-      "kind": "missing_trigger",
-      "pattern": "CMakeLists.txt",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "eqnedit64",
-      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-012"
-    },
-    {
-      "lane": "eqnedit64",
-      "kind": "missing_trigger",
-      "pattern": "MANIFEST.in",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "eqnedit64",
-      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-013"
-    },
-    {
       "id": "CI-MIG-014",
       "lane": "eqnedit64",
       "kind": "missing_trigger",
@@ -2393,76 +2706,6 @@
       "target": "Include this input in the appropriate owner scope.",
       "owner": "eqnedit64",
       "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing"
-    },
-    {
-      "lane": "eqnedit64",
-      "kind": "missing_trigger",
-      "pattern": "pyproject.toml",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "eqnedit64",
-      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-015"
-    },
-    {
-      "lane": "eqnedit64",
-      "kind": "missing_trigger",
-      "pattern": "tests/test_tier_manifest.json",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "eqnedit64",
-      "follow_up": "eqnedit64 owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-016"
-    },
-    {
-      "lane": "ltspice-data-safety",
-      "kind": "missing_trigger",
-      "pattern": "Build.ps1",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-gpu",
-      "follow_up": "ltspice-data-safety owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-018"
-    },
-    {
-      "lane": "ltspice-data-safety",
-      "kind": "missing_trigger",
-      "pattern": "CMakeLists.txt",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-gpu",
-      "follow_up": "ltspice-data-safety owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-019"
-    },
-    {
-      "lane": "ltspice-data-safety",
-      "kind": "missing_trigger",
-      "pattern": "MANIFEST.in",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-gpu",
-      "follow_up": "ltspice-data-safety owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-020"
-    },
-    {
-      "lane": "ltspice-data-safety",
-      "kind": "missing_trigger",
-      "pattern": "pyproject.toml",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-gpu",
-      "follow_up": "ltspice-data-safety owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-021"
-    },
-    {
-      "lane": "ltspice-data-safety",
-      "kind": "missing_trigger",
-      "pattern": "tests/test_tier_manifest.json",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-gpu",
-      "follow_up": "ltspice-data-safety owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-022"
     },
     {
       "id": "CI-MIG-023",
@@ -2685,16 +2928,6 @@
       "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
     },
     {
-      "id": "CI-MIG-047",
-      "lane": "radia-gpu",
-      "kind": "content_diff_pending",
-      "pattern": "Build.ps1",
-      "current": "Native lane lacks content-diff selection for this shared root config.",
-      "target": "Extend existing content-diff mechanisms; unknown impact selects all owners.",
-      "owner": "radia-gpu",
-      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing"
-    },
-    {
       "id": "CI-MIG-048",
       "lane": "radia-gpu",
       "kind": "foreign_trigger",
@@ -2703,36 +2936,6 @@
       "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
       "owner": "radia-gpu",
       "follow_up": "radia-gpu owner lane PR; repository management owns shared routing"
-    },
-    {
-      "lane": "radia-gpu",
-      "kind": "missing_trigger",
-      "pattern": "CMakeLists.txt",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-gpu",
-      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-049"
-    },
-    {
-      "lane": "radia-gpu",
-      "kind": "missing_trigger",
-      "pattern": "MANIFEST.in",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-gpu",
-      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-050"
-    },
-    {
-      "lane": "radia-gpu",
-      "kind": "missing_trigger",
-      "pattern": "pyproject.toml",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-gpu",
-      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-052"
     },
     {
       "id": "CI-MIG-053",
@@ -2753,16 +2956,6 @@
       "target": "Include this input in the appropriate owner scope.",
       "owner": "radia-gpu",
       "follow_up": "radia-gpu owner lane PR; repository management owns shared routing"
-    },
-    {
-      "lane": "radia-gpu",
-      "kind": "missing_trigger",
-      "pattern": "tests/test_tier_manifest.json",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-gpu",
-      "follow_up": "radia-gpu owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-055"
     },
     {
       "id": "CI-MIG-056",
@@ -2845,76 +3038,6 @@
       "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing"
     },
     {
-      "lane": "radia-mcp-matrix",
-      "kind": "missing_trigger",
-      "pattern": "Build.ps1",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-mcp",
-      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-064"
-    },
-    {
-      "lane": "radia-mcp-matrix",
-      "kind": "missing_trigger",
-      "pattern": "CMakeLists.txt",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-mcp",
-      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-065"
-    },
-    {
-      "lane": "radia-mcp-matrix",
-      "kind": "missing_trigger",
-      "pattern": "MANIFEST.in",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-mcp",
-      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-066"
-    },
-    {
-      "lane": "radia-mcp-matrix",
-      "kind": "missing_trigger",
-      "pattern": "pyproject.toml",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-mcp",
-      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-067"
-    },
-    {
-      "lane": "radia-mcp-matrix",
-      "kind": "missing_trigger",
-      "pattern": "tests/test_tier_manifest.json",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-mcp",
-      "follow_up": "radia-mcp-matrix owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-068"
-    },
-    {
-      "id": "CI-MIG-069",
-      "lane": "radia-optuna",
-      "kind": "content_diff_pending",
-      "pattern": "Build.ps1",
-      "current": "Native lane lacks content-diff selection for this shared root config.",
-      "target": "Extend existing content-diff mechanisms; unknown impact selects all owners.",
-      "owner": "radia-optuna",
-      "follow_up": "radia-optuna owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-070",
-      "lane": "radia-optuna",
-      "kind": "content_diff_pending",
-      "pattern": "CMakeLists.txt",
-      "current": "Native lane lacks content-diff selection for this shared root config.",
-      "target": "Extend existing content-diff mechanisms; unknown impact selects all owners.",
-      "owner": "radia-optuna",
-      "follow_up": "radia-optuna owner lane PR; repository management owns shared routing"
-    },
-    {
       "id": "CI-MIG-071",
       "lane": "radia-optuna",
       "kind": "foreign_trigger",
@@ -2923,56 +3046,6 @@
       "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
       "owner": "radia-optuna",
       "follow_up": "radia-optuna owner lane PR; repository management owns shared routing"
-    },
-    {
-      "lane": "radia-optuna",
-      "kind": "missing_trigger",
-      "pattern": "MANIFEST.in",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-optuna",
-      "follow_up": "radia-optuna owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-073"
-    },
-    {
-      "lane": "radia-optuna",
-      "kind": "missing_trigger",
-      "pattern": "pyproject.toml",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-optuna",
-      "follow_up": "radia-optuna owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-074"
-    },
-    {
-      "lane": "radia-optuna",
-      "kind": "missing_trigger",
-      "pattern": "tests/test_tier_manifest.json",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia-optuna",
-      "follow_up": "radia-optuna owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-075"
-    },
-    {
-      "id": "CI-MIG-076",
-      "lane": "sparsesolv",
-      "kind": "content_diff_pending",
-      "pattern": "Build.ps1",
-      "current": "Native lane lacks content-diff selection for this shared root config.",
-      "target": "Extend existing content-diff mechanisms; unknown impact selects all owners.",
-      "owner": "radia",
-      "follow_up": "sparsesolv owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-077",
-      "lane": "sparsesolv",
-      "kind": "content_diff_pending",
-      "pattern": "CMakeLists.txt",
-      "current": "Native lane lacks content-diff selection for this shared root config.",
-      "target": "Extend existing content-diff mechanisms; unknown impact selects all owners.",
-      "owner": "radia",
-      "follow_up": "sparsesolv owner lane PR; repository management owns shared routing"
     },
     {
       "id": "CI-MIG-078",
@@ -3033,16 +3106,6 @@
       "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
       "owner": "radia",
       "follow_up": "sparsesolv owner lane PR; repository management owns shared routing"
-    },
-    {
-      "lane": "sparsesolv",
-      "kind": "missing_trigger",
-      "pattern": "MANIFEST.in",
-      "current": "Shared root configuration is outside this lane trigger.",
-      "target": "Route content-diff impact to this owner; unknown changes select all owners.",
-      "owner": "radia",
-      "follow_up": "sparsesolv owner lane PR; repository management owns shared routing",
-      "id": "CI-MIG-084"
     }
   ]
 }
