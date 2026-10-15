@@ -29,7 +29,7 @@ on:
       - '!**/*.md'
       - 'packages/cubit-mesh-export/README.md'
       - 'packages/cubit-mesh-export/src/cubit_mesh_export/mcp/README.md'
-      - 'packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/OWNERSHIP.md'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/*.md'
   pull_request:
     branches: [main]
     paths:
@@ -57,7 +57,7 @@ on:
       - '!**/*.md'
       - 'packages/cubit-mesh-export/README.md'
       - 'packages/cubit-mesh-export/src/cubit_mesh_export/mcp/README.md'
-      - 'packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/OWNERSHIP.md'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/*.md'
   workflow_dispatch:
 
 permissions:
