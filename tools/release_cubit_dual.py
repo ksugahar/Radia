@@ -1,6 +1,6 @@
-"""Independent Cubit LAB/100 release-dual command.
+"""Independent Cubit 100/102 release-dual command.
 
-The published wheel is the byte oracle. LAB installs those exact wheel bytes;
+The published wheel is the byte oracle. 102 installs those exact wheel bytes;
 100号機 installs the owning package editable from the release checkout, whose
 files must equal the wheel. Radia/MCP metadata and their selected source
 remain untouched.
@@ -13,6 +13,7 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import socket
 import sys
 import urllib.request
 import zipfile
@@ -20,7 +21,7 @@ from email.parser import BytesParser
 
 SCHEMA = 'cubit-mesh-export.release-dual.v4'
 TARGETS = ('lab', '100')
-# Deployment tier per target (AGENTS.md: LAB runs verified wheels, 100号機
+# Deployment tier per target (AGENTS.md: 102 runs verified wheels, 100号機
 # keeps the dedicated editable development install).
 TIERS = {'lab': 'wheel', '100': 'editable'}
 # Repository-side guard also protects deployment with an older selected installer.
@@ -208,6 +209,13 @@ try:
     for name in ('netgen-mesher', 'ngsolve'):
         if md.version(name) != cfg['dependencies'][name]:
             raise RuntimeError('Dependency mismatch; do not mutate shared solver runtime: ' + name)
+    # Absolute package imports in the installer must use the verified payload,
+    # ahead of old editable installs and inherited PYTHONPATH entries.
+    selected_src = package / 'src' if tier == 'editable' else staging
+    sys.path.insert(0, str(selected_src))
+    for name in list(sys.modules):
+        if name == 'cubit_mesh_export' or name.startswith('cubit_mesh_export.'):
+            del sys.modules[name]
     # Load the selected standalone installer directly; avoid old editable imports.
     import importlib.util
     spec = importlib.util.spec_from_file_location('selected_cubit_install', installer_path)
@@ -323,23 +331,42 @@ def check_receipt(receipt, contract, target):
             and all(receipt.get(k) is True for k in required))
 
 
-def transport_wheel(wheel, target, run_from, output_dir):
+def check_ssh_alias(target, alias):
+    """Resolve SSH's configured HostName before any remote mutation."""
+    try:
+        resolved = subprocess.run(['ssh', '-G', alias], check=True,
+                                  capture_output=True, text=True, timeout=15)
+        settings = dict(line.split(None, 1) for line in resolved.stdout.splitlines()
+                        if line.strip() and len(line.split(None, 1)) == 2)
+        hostname = settings.get('hostname')
+        if not hostname:
+            raise ValueError('ssh -G returned no hostname')
+        socket.getaddrinfo(hostname, settings.get('port', '22'), type=socket.SOCK_STREAM)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        raise RuntimeError(f'{target}: SSH alias {alias!r} cannot resolve its configured '
+                           f'host; check --ssh-alias-{target} and SSH config: {exc}; '
+                           f'{getattr(exc, "stderr", "") or ""}') from exc
+    return hostname
+
+
+def transport_wheel(wheel, target, run_from, output_dir, ssh_alias=None):
     """Return the target-local path of the exact wheel bytes for a wheel tier."""
     wheel = Path(wheel).resolve()
     if target == run_from:
         return str(wheel)
+    ssh_alias = ssh_alias or target
     destination = output_dir.rstrip('/\\') + '\\' + target + '\\wheel\\' + wheel.name
     parent = destination.rsplit('\\', 1)[0]
     # Same stdin route as the worker: no remote-shell quoting of the path.
     encoded = base64.b64encode(parent.encode()).decode()
-    subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', target,
+    subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', ssh_alias,
                     'python', '-', encoded],
                    input='import base64,pathlib,sys\n'
                          'pathlib.Path(base64.b64decode(sys.argv[1]).decode()).mkdir('
                          'parents=True, exist_ok=True)\n',
                    check=True, capture_output=True, text=True, timeout=120)
     subprocess.run(['scp', '-q', '-o', 'BatchMode=yes', str(wheel),
-                    target + ':' + destination.replace('\\', '/')],
+                    ssh_alias + ':' + destination.replace('\\', '/')],
                    check=True, capture_output=True, text=True, timeout=600)
     return destination
 
@@ -351,6 +378,10 @@ def run(args):
     # The host running this command executes its own target locally and
     # reaches the other through its ssh alias ('lab' or '100').
     run_from = getattr(args, 'run_from', 'lab')
+    aliases = {target: getattr(args, 'ssh_alias_' + target, target) for target in TARGETS}
+    for target in TARGETS:
+        if target != run_from:
+            check_ssh_alias(target, aliases[target])
     roots = {'lab': args.source_root_lab, '100': args.source_root_100}
     evidence = {'lab': args.evidence_lab, '100': args.evidence_100}
     if not roots[run_from]:
@@ -384,10 +415,10 @@ def run(args):
             if TIERS[target] == 'wheel':
                 # The worker re-hashes these bytes before reading or installing them.
                 cfg['wheel_path'] = transport_wheel(args.wheel, target, run_from,
-                                                    evidence[target])
+                                                    evidence[target], aliases[target])
             encoded = base64.b64encode(json.dumps(cfg).encode()).decode()
             command = [sys.executable, '-', encoded] if target == run_from else [
-                'ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', target, 'python', '-', encoded]
+                'ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', aliases[target], 'python', '-', encoded]
             p = subprocess.run(command, input=WORKER, text=True, encoding='utf-8',
                                errors='replace', capture_output=True, timeout=1800)
             lines = [line for line in p.stdout.splitlines() if line.startswith('CUBIT_DUAL_RESULT=')]
@@ -406,7 +437,7 @@ def run(args):
                 raise RuntimeError(result.get('error', 'worker failed'))
     if args.action == 'done':
         (output / 'done.json').write_text(json.dumps(dict(contract, passed=True, targets=list(TARGETS)), indent=2))
-        print('PASS release-dual: exact published exporter wheel, LAB wheel / 100 editable and GUI/export/MCP gates; Radia/radia-mcp unchanged')
+        print('PASS release-dual: exact published exporter wheel, 100 editable / 102 wheel and GUI/export/MCP gates; Radia/radia-mcp unchanged')
     return 0
 
 
@@ -415,20 +446,23 @@ def build_parser():
 
     parser = argparse.ArgumentParser(
         prog="release_cubit_dual",
-        description="Verify and deploy one cubit-mesh-export wheel on LAB and 100.",
+        description="Verify and deploy one cubit-mesh-export wheel on 100 and 102.",
     )
     parser.add_argument("--action", choices=("preflight", "deploy", "done"), required=True)
     parser.add_argument("--wheel", required=True)
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--source-root-lab", default="",
-                        help="LAB installs the wheel; a checkout is needed only when "
-                             "this command runs from LAB (tag and dependency pins)")
+                        help="102 installs the wheel; a checkout is needed only when "
+                             "this command runs from 102 (tag and dependency pins)")
     parser.add_argument("--source-root-100", required=True)
     parser.add_argument("--evidence-lab", required=True)
     parser.add_argument("--evidence-100", required=True)
     parser.add_argument("--run-from", choices=TARGETS, default="lab",
                         help="host running this command; the other target is reached "
                              "through its ssh alias ('lab' or '100')")
+    for target in TARGETS:
+        parser.add_argument('--ssh-alias-' + target, default=target,
+                            help='configured SSH alias for remote target ' + target)
     parser.add_argument("--force-close-cubit", action="store_true",
                         help="close every running Cubit GUI on both targets before "
                              "preflight (unsaved work in them is lost); recorded in "
