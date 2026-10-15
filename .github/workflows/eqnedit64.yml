@@ -116,7 +116,7 @@ jobs:
 
   docs:
     needs: [ci-impact]
-    if: ${{ needs.ci-impact.outputs.required == 'true' && needs.ci-impact.outputs.native != 'true' }}
+    if: ${{ needs.ci-impact.outputs.required == 'true' && needs.ci-impact.outputs.native == 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
