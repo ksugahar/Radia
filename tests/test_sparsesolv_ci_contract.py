@@ -457,3 +457,14 @@ def test_invalid_tier_budget_fails_closed(bad):
 
 def test_numeric_one_and_true_are_distinct_changes():
     assert IMPACT._canonical({"max_elapsed_seconds": 1}) != IMPACT._canonical({"max_elapsed_seconds": True})
+
+
+def test_toml_number_to_bool_is_a_change():
+    before = "[tool.pytest.ini_options]\nverbosity_assertions = 1\n"
+    after = "[tool.pytest.ini_options]\nverbosity_assertions = true\n"
+    assert not IMPACT.test_dependencies_only(before, after)
+    assert IMPACT._canonical(1) != IMPACT._canonical(True)
+
+
+def test_huge_integer_budget_is_invalid_not_a_crash():
+    assert IMPACT._valid_budget(10 ** 400) is False
