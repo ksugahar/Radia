@@ -12,6 +12,7 @@ on:
       - 'validation_test/radia_gpu/**'
       - 'validation_test/ams_cuda/**'
       - 'validation_test/ic_cuda/**'
+      - 'validation_test/ih_cuda/**'
       - 'validation_test/ngsolve_cuda_mex/**'
       - 'validation_test/hmatrix_cuda/**'
       - 'validation_test/fmm_cuda/**'
@@ -59,6 +60,7 @@ on:
       - 'validation_test/radia_gpu/**'
       - 'validation_test/ams_cuda/**'
       - 'validation_test/ic_cuda/**'
+      - 'validation_test/ih_cuda/**'
       - 'validation_test/ngsolve_cuda_mex/**'
       - 'validation_test/hmatrix_cuda/**'
       - 'validation_test/fmm_cuda/**'
@@ -174,6 +176,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./Build.ps1 -FmmCudaOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./Build.ps1 -IhCudaOnly -RequireNativeProvenance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $commit = git rev-parse HEAD
           function Select-ExactBuild($candidates) {
             $accepted = @($candidates | Where-Object {
@@ -190,6 +194,8 @@ jobs:
           $fmm = Select-ExactBuild (Get-ChildItem build-fmm-cuda -Directory -Filter 'job-*')
           "RADIA_HDIV_HMATRIX_BUILD=$hmatrix" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_HDIV_PROJECTION_BUILD=$projection" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $ih = Select-ExactBuild (Get-ChildItem build-ih-cuda -Directory -Filter 'job-*')
+          "RADIA_IH_BUILD=$ih" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_FMM_BUILD=$fmm" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Verify GPU boundary and Poisson precision
         shell: pwsh

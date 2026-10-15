@@ -144,3 +144,60 @@ This does not certify complete reaction geometry assembly, physical validity,
 or research release completion. That assembly must preserve the existing
 SL/DL singular quadrature, mass inverse, surface-Poisson transpose work, coil
 saddle constraint and total-field heat; incident-only coupling is insufficient.
+
+## Temperature-dependent amplitude B-H research model
+
+The dedicated coupled candidate accepts `bh_knots` (common H axis in A/m)
+and `bh_values_T` (element x temperature x H knot, tesla). It builds checked
+piecewise-linear B(H) coefficients in the same mexcuda module. Temperature
+interpolation updates each element's resistivity, initial permeability and
+amplitude law before its ESIM solve. No Python solver is invoked by MATLAB or
+Simulink. Unsupported hysteresis history is not inferred from these tables.
+
+Build an isolated candidate on the build host using
+`Build.ps1 -IhCudaOnly -RequireNativeProvenance`. In MATLAB, add the resulting
+artifact directory, `packages/radia-gpu/matlab` and this validation directory
+to the path. Run `checkTemperatureBH(artifactDirectory, outputDirectory)`.
+It creates `ih_temperature_bh_public.slx` with current/ambient input and
+temperature, heat and separate real/imaginary element-Zs observation outputs. The model
+workspace owns `ihConfig`; replace the synthetic material tables only with
+measured, unit-checked data covering the operating temperature range.
+
+Run the independent CPU equation check with
+`python validation_test/ih_cuda/check_temperature_bh_cpu.py outputDirectory`.
+Its original CPU finite-difference cell solver and dense block solve are
+independent of the CUDA solution; geometry/BEM assembly is shared. This is
+not independent full-physics certification or experimental validation.
+The original public model uses a thin surface thermal layer, not resolved
+bulk thermal FE. The released 0.1.3/0.1.4 wheels remain unchanged.
+
+`TEMPERATURE_BH_EXPERIMENT.md` defines measurement items, staged validation,
+uncertainty, held-out conditions and the distinction between amplitude B-H
+and hysteresis loss. Raw experimental data and real-device cases remain
+private. See the candidate result JSON for actual numerical acceptance;
+documentation or a successful CUDA build alone does not establish it.
+
+Set `observe_element_impedance=true` for the two optional Zs observation ports.
+The default two-port temperature/heat interface remains available. Zs is the
+last accepted electromagnetic step's impedance, evaluated at that step's
+starting temperature; it is zero before the first accepted update and after
+reset. Observation downloads occur only when requested. Intermediate heat and
+temperature exchange between the electromagnetic and thermal stages remains
+on the device. `element_impedance(handle)` likewise returns the accepted Zs,
+including after a rejected candidate. Supply `solver_relative_tolerance` when
+a stricter inner solve is needed for an ill-conditioned coupled block.
+
+## Integration review checkpoint (2026-10-15)
+
+The 2026-10-13 temperature-BH JSON is historical acceptance of the recorded
+native artifact and MATLAB harness, not acceptance of a new wheel or current
+main. The new package staging is opt-in via RADIA_IH_BUILD and requires a clean
+exact-source receipt with the declared research features. Old fixed-operator
+IH receipts cannot be used to populate the release payload.
+
+A new wheel still needs the CI IH build/test lane, all-module installed
+qualification including IH CPU equations and residuals, official Toolkit
+save/reopen/repeat/failure checks on its installed sample, independent Claude
+review and the owning publication gates. Independent full FEM and experimental
+accuracy remain unverified under the research release scope; they are not
+replaced by algebraic CPU parity.

@@ -10,6 +10,13 @@ struct TemperatureMaterialTable {
     int temperatures,knotsCount;
     // Properties are [element][temperature]; cubics add [interval][4].
 };
+__global__ void validateElementTemperatureRange(RealCSRView map,const double* temperature,
+        const double* axis,int count,int* invalid){
+    const auto e=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;
+    if(e>=map.rows)return;
+    double t=0.;for(int k=map.rowptr[e];k<map.rowptr[e+1];++k)t+=map.values[k]*temperature[map.columns[k]];
+    if(!isfinite(t)||t<axis[0]||t>axis[count-1])atomicExch(invalid,1);
+}
 __global__ void updateElementESIMMaterials(RealCSRView temperatureEvaluation,
         const double* acceptedTemperature,TemperatureMaterialTable table,
         const ESIMCellParameters* geometry,ESIMCellParameters* candidate,

@@ -68,10 +68,10 @@ std::vector<double> realVector(const mxArray* a,size_t count){
 #include "ih_peec_bem_assembly.cuh"
 // Explicit bounded operator frontend. Geometry/reaction assembly is separate.
 struct ElementMaterial {
- Matrix evaluation,entryMap;Buffer axis,rho,mu,saturation,geometry,fields,base,baseWeights;
+ Matrix evaluation,entryMap;Buffer axis,rho,mu,saturation,geometry,fields,base,baseWeights,bhKnots,bhCoefficients;
  std::unique_ptr<ESIMCoupling> coupling;
  std::size_t owned=0;
- void abandon(){if(coupling)coupling->abandonAfterDeviceReset();evaluation.abandon();entryMap.abandon();for(auto* b:{&axis,&rho,&mu,&saturation,&geometry,&fields,&base,&baseWeights})b->p=nullptr;}
+ void abandon(){if(coupling)coupling->abandonAfterDeviceReset();evaluation.abandon();entryMap.abandon();for(auto* b:{&axis,&rho,&mu,&saturation,&geometry,&fields,&base,&baseWeights,&bhKnots,&bhCoefficients})b->p=nullptr;}
  explicit ElementMaterial(const mxArray* cfg,Matrix& a,Matrix& p,Buffer& weights,const std::vector<double>& w,std::size_t thermalDOF,unsigned components){
   const auto elements=p.rows/components;if(elements>4096||a.rows>4096)throw std::invalid_argument("Element ESIM research dimensions exceed 4096");
   evaluation.read(field(cfg,"temperature_evaluation"),false);entryMap.read(field(cfg,"operator_impedance_map"),true);
@@ -85,7 +85,39 @@ struct ElementMaterial {
   const auto* inputMu=field(cfg,"initial_permeability_H_per_m");
   if(!mxIsDouble(inputMu)||mxIsSparse(inputMu)||mxGetM(inputMu)!=elements||mxGetN(inputMu)!=nt)throw std::invalid_argument("Permeability table shape/type mismatch");
   std::vector<cuDoubleComplex> permeability(elements*nt);for(size_t e=0;e<elements;++e)for(size_t t=0;t<nt;++t){auto j=e+elements*t;auto z=mxIsComplex(inputMu)?make_cuDoubleComplex(mxGetComplexDoubles(inputMu)[j].real,mxGetComplexDoubles(inputMu)[j].imag):make_cuDoubleComplex(mxGetDoubles(inputMu)[j],0.);if(!cellFiniteHost(z)||cuCreal(z)<=0.||cuCimag(z)>0.)throw std::invalid_argument("Permeability must be finite and passive");permeability[e*nt+t]=z;}
-  if(mxGetField(cfg,0,"bh_knots")||mxGetField(cfg,0,"bh_coefficients"))throw std::invalid_argument("Temperature-dependent nonlinear B-H gateway is not yet accepted");
+  // Measured anhysteretic amplitude law, piecewise linear in H and T.
+  // Build cubics locally (zero cubic/quadratic terms), never through Python.
+  std::vector<double> knots,coefficients;
+  const auto* inputKnots=mxGetField(cfg,0,"bh_knots");
+  const auto* inputB=mxGetField(cfg,0,"bh_values_T");
+  if(mxGetField(cfg,0,"bh_coefficients"))throw std::invalid_argument("Use checked bh_values_T, not unchecked polynomial coefficients");
+  if(bool(inputKnots)!=bool(inputB))throw std::invalid_argument("B-H requires both bh_knots and bh_values_T");
+  if(inputKnots){
+   const auto nk=mxGetNumberOfElements(inputKnots);
+   if(nk<2||nk>4096)throw std::invalid_argument("B-H requires 2..4096 common H knots");
+   if(elements*nt*(nk-1)*4>(256ULL<<20)/sizeof(double))throw std::overflow_error("B-H coefficient table exceeds 256 MiB host budget");
+   knots=realVector(inputKnots,nk);
+   if(knots[0]!=0.)throw std::invalid_argument("B-H H axis must start at zero");
+   for(size_t k=1;k<nk;++k)if(knots[k]<=knots[k-1])throw std::invalid_argument("B-H H axis must strictly increase");
+   const auto* dims=mxGetDimensions(inputB);
+   if(mxGetNumberOfDimensions(inputB)!=3||dims[0]!=elements||dims[1]!=nt||dims[2]!=nk)throw std::invalid_argument("bh_values_T must be element by temperature by H knot");
+   auto values=realVector(inputB,elements*nt*nk);
+   coefficients.resize(elements*nt*(nk-1)*4);
+   constexpr double mu0=1.2566370614359172954e-6;
+   for(size_t e=0;e<elements;++e)for(size_t t=0;t<nt;++t){
+    auto at=[&](size_t k){return values[e+elements*(t+nt*k)];};
+    if(at(0)!=0.||cuCimag(permeability[e*nt+t])!=0.)throw std::invalid_argument("Amplitude B-H starts at B=0 and requires real initial permeability; hysteresis is not represented");
+    for(size_t k=0;k+1<nk;++k){
+     const double slope=(at(k+1)-at(k))/(knots[k+1]-knots[k]);
+     if(!std::isfinite(slope)||slope<mu0)throw std::invalid_argument("B-H differential permeability must be finite and at least mu0");
+     const auto j=((e*nt+t)*(nk-1)+k)*4;
+     coefficients[j]=coefficients[j+1]=0.;coefficients[j+2]=slope;coefficients[j+3]=at(k);
+     if(k==0&&std::abs(slope-cuCreal(permeability[e*nt+t]))>1e-10*std::max(slope,cuCreal(permeability[e*nt+t])))throw std::invalid_argument("Initial permeability must match first B-H segment");
+    }
+    const double tail=mu0*(knots.back()+sat[e*nt+t]);
+    if(std::abs(tail-at(nk-1))>1e-10*std::max(tail,at(nk-1)))throw std::invalid_argument("B-H saturation tail must be continuous");
+   }
+  }
   const auto* inputGeometry=field(cfg,"esim_cell_parameters");if(mxGetM(inputGeometry)!=elements||mxGetN(inputGeometry)!=7)throw std::invalid_argument("ESIM cells require element by 7 parameters");auto values=realVector(inputGeometry,elements*7);
   std::vector<ESIMCellParameters> cells(elements);int maxNodes=0;for(size_t e=0;e<elements;++e){auto at=[&](size_t k){return values[e+elements*k];};auto& cell=cells[e];
    if(at(0)<3||at(0)>4096||at(0)!=int(at(0))||at(1)<1||at(1)>10000||at(1)!=int(at(1))||(at(2)!=0.&&at(2)!=1.)||at(3)<=0.||at(4)<=0.||at(5)<=0.||at(5)>1e-6||at(6)<=0.||at(6)>1.)throw std::invalid_argument("Invalid ESIM cell geometry/iteration contract");
@@ -93,14 +125,17 @@ struct ElementMaterial {
   auto guesses=realVector(field(cfg,"initial_field_A_per_m"),elements);for(auto x:guesses)if(x<=0.)throw std::invalid_argument("ESIM initial fields must be positive");
   double iterations=number(field(cfg,"max_constitutive_iterations"));if(iterations<2||iterations>10000||iterations!=int(iterations))throw std::invalid_argument("Invalid constitutive iteration limit");
   owned=evaluation.bytes()+entryMap.bytes()+temperatures.size()*sizeof(double)+resistivity.size()*sizeof(double)+permeability.size()*sizeof(cuDoubleComplex)+sat.size()*sizeof(double)+cells.size()*sizeof(ESIMCellParameters)+guesses.size()*sizeof(double)+a.z.size()*sizeof(cuDoubleComplex)+w.size()*sizeof(double);
+  owned+=(knots.size()+coefficients.size())*sizeof(double);
   size_t available,total;cudaCheck(cudaMemGetInfo(&available,&total));auto reserve=std::max<size_t>(2ULL<<30,total/5);if(available<=reserve||owned>available-reserve)throw std::runtime_error("Element material upload exceeds GPU reserve");
   evaluation.upload();entryMap.upload();axis.put(temperatures);rho.put(resistivity);mu.put(permeability);saturation.put(sat);geometry.put(cells);fields.put(guesses);base.put(a.z);baseWeights.put(w);
-  ESIMCouplingView v{};v.temperatureEvaluation=evaluation.realView();v.table={axis.get<double>(),rho.get<double>(),saturation.get<double>(),nullptr,nullptr,mu.get<cuDoubleComplex>(),int(nt),0};v.entryMap=entryMap.complexView();v.fieldProjection=p.complexView();v.matrix=a.complexView();v.baseValues=base.get<cuDoubleComplex>();v.mutableValues=static_cast<cuDoubleComplex*>(a.dz.p);v.geometry=geometry.get<ESIMCellParameters>();v.initialFields=fields.get<double>();v.baseLossWeights=baseWeights.get<double>();v.mutableLossWeights=static_cast<double*>(weights.p);v.elements=elements;v.components=components;v.workspaceNodes=maxNodes;v.maxIterations=int(iterations);v.tolerance=number(field(cfg,"constitutive_tolerance"));v.relaxation=number(field(cfg,"constitutive_relaxation"));v.fieldFloor=number(field(cfg,"field_floor_A_per_m"));coupling=std::make_unique<ESIMCoupling>(v);owned+=coupling->ownedBytes();
+  bhKnots.put(knots);bhCoefficients.put(coefficients);
+  ESIMCouplingView v{};v.temperatureEvaluation=evaluation.realView();v.table={axis.get<double>(),rho.get<double>(),saturation.get<double>(),bhKnots.get<double>(),bhCoefficients.get<double>(),mu.get<cuDoubleComplex>(),int(nt),int(knots.size())};v.entryMap=entryMap.complexView();v.fieldProjection=p.complexView();v.matrix=a.complexView();v.baseValues=base.get<cuDoubleComplex>();v.mutableValues=static_cast<cuDoubleComplex*>(a.dz.p);v.geometry=geometry.get<ESIMCellParameters>();v.initialFields=fields.get<double>();v.baseLossWeights=baseWeights.get<double>();v.mutableLossWeights=static_cast<double*>(weights.p);v.elements=elements;v.components=components;v.workspaceNodes=maxNodes;v.maxIterations=int(iterations);v.tolerance=number(field(cfg,"constitutive_tolerance"));v.relaxation=number(field(cfg,"constitutive_relaxation"));v.fieldFloor=number(field(cfg,"field_floor_A_per_m"));coupling=std::make_unique<ESIMCoupling>(v);owned+=coupling->ownedBytes();
  }
  static bool cellFiniteHost(cuDoubleComplex z){return std::isfinite(cuCreal(z))&&std::isfinite(cuCimag(z));}
 };
 struct Context {
  int device=0;cudaStream_t guard=nullptr;
+ double solveTolerance=1e-10;
  Matrix a,p,system,k,c,projection,preconditioner;
  PreconditionerPrecision precision=PreconditionerPrecision::None;Buffer rhs,weights,ones,initial;
  std::unique_ptr<ElementMaterial> material;
@@ -140,6 +175,9 @@ struct Context {
    for(size_t i=0;i<=a.rows;++i)preconditioner.rowptr[i]=int32_t(i*a.rows);for(size_t i=0;i<a.rows;++i)for(size_t j=0;j<a.rows;++j)preconditioner.col[i*a.rows+j]=int32_t(j);
   }else if(precision!=PreconditionerPrecision::None){preconditioner.read(field(cfg,"preconditioner_inverse"),true);
    if(preconditioner.rows!=a.rows||preconditioner.columns!=a.columns)throw std::invalid_argument("Fixed preconditioner dimensions disagree");}
+  if(const auto* requested=mxGetField(cfg,0,"solver_relative_tolerance")){
+   solveTolerance=number(requested);if(solveTolerance<=0.||solveTolerance>1e-6)throw std::invalid_argument("Invalid explicit IH solver tolerance");
+  }
   const auto n=system.rows;double components=number(field(cfg,"loss_components"));
   if(components<1||components>INT_MAX||components!=int(components)||p.rows%int(components))throw std::invalid_argument("Invalid IH loss components");
   const size_t samples=p.rows/size_t(components);
@@ -174,6 +212,7 @@ struct Context {
    op.updateMaterial=[](void* owner,cudaStream_t stream,const double* t,double current){static_cast<ESIMCoupling*>(owner)->prepare(stream,t,current);};
    op.solveMaterial=[](void* owner,ComplexSolver& solver,double tolerance,int iterations){return static_cast<ESIMCoupling*>(owner)->solve(solver,tolerance,iterations);};
    op.commitMaterial=[](void* owner){static_cast<ESIMCoupling*>(owner)->commit();};op.resetMaterial=[](void* owner){static_cast<ESIMCoupling*>(owner)->reset();};
+   op.validateCandidateTemperature=[](void* owner,cudaStream_t stream,const double* t){static_cast<ESIMCoupling*>(owner)->validateTemperature(stream,t);};
   }
   state=std::make_unique<CoupledState>(op);owned+=state->ownedBytes();
   }catch(...){cudaStreamDestroy(guard);guard=nullptr;throw;}
@@ -210,7 +249,12 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
    out[0]=mxCreateDoubleMatrix(c.a.rows,c.a.columns,mxCOMPLEX);
    for(size_t row=0;row<c.a.rows;++row)for(int32_t k=c.a.rowptr[row];k<c.a.rowptr[row+1];++k){auto& z=mxGetComplexDoubles(out[0])[row+c.a.rows*c.a.col[k]];z.real=cuCreal(values[k]);z.imag=cuCimag(values[k]);}return;
   }
-  if(command=="update"){if(nrhs!=4||nlhs)throw std::invalid_argument("update requires current and ambient");c.state->update(number(in[2]),number(in[3]));return;}
+  if(command=="update"){if(nrhs!=4||nlhs)throw std::invalid_argument("update requires current and ambient");c.state->update(number(in[2]),number(in[3]),c.solveTolerance);return;}
+  if(command=="element_impedance"){
+   if(nrhs!=2||nlhs!=1||!c.material)throw std::invalid_argument("element_impedance requires element material context and one output");
+   const auto values=c.material->coupling->acceptedCells();out[0]=mxCreateDoubleMatrix(values.size(),1,mxCOMPLEX);
+   for(size_t i=0;i<values.size();++i){mxGetComplexDoubles(out[0])[i].real=cuCreal(values[i].impedance);mxGetComplexDoubles(out[0])[i].imag=cuCimag(values[i].impedance);}return;
+  }
   if(command=="electromagnetic_state"){
    if(nrhs!=2||nlhs!=1)throw std::invalid_argument("electromagnetic_state returns one complex vector");
    const auto v=c.state->electromagneticState();out[0]=mxCreateDoubleMatrix(v.size(),1,mxCOMPLEX);

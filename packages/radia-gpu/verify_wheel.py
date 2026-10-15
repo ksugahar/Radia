@@ -108,6 +108,30 @@ def verify(path: Path) -> dict:
                     or fmm['taskmanager_used'] or fmm['python_adapter_required']
                     or fmm['binary_sha256'] != manifest['files']['matlab/radia_cuda_fmm.mexw64']):
                 raise ValueError('FMM CUDA binary receipt mismatch')
+        ih_files = {'ih-build.json', 'matlab/radia_cuda_ih.mexw64',
+                    'matlab/radia_ih_cuda_sfun.m',
+                    'matlab/+radia/+simulink/ihResidentSFunction.m',
+                    'matlab/+radia/+simulink/makeCompletePEECBEMConfig.m',
+                    'matlab/+radia/+simulink/buildTemperatureBHResearchModel.m',
+                    'matlab/samples/ih-temperature-bh/makeTemperatureBHConfig.m',
+                    'matlab/samples/ih-temperature-bh/runTemperatureBHResearch.m',
+                    'IH_TEMPERATURE_BH.md', 'IH_EXPERIMENT.md'}
+        if ih_files & set(manifest['files']):
+            if not ih_files <= set(manifest['files']):
+                raise ValueError('Incomplete IH research payload')
+            ih = json.loads(archive.read('radia_gpu/ih-build.json'))
+            if (ih.get('schema') != 'radia.gpu.ih-research-payload.v1'
+                    or ih.get('source_dirty') is not False
+                    or ih.get('source_commit') != manifest['source_commit']
+                    or ih.get('taskmanager_regions') is not False
+                    or ih.get('python_runtime_required') is not False
+                    or ih.get('cpu_fallback') is not False
+                    or not {'element-temperature-bh','complete-flat-p1-reaction','accepted-element-impedance','transactional-temperature-range'} <= set(ih.get('features', []))
+                    or ih.get('research_only') is not True
+                    or ih.get('experimental_validation') is not False
+                    or ih.get('independent_fem_validation') is not False
+                    or ih.get('binary_sha256') != manifest['files']['matlab/radia_cuda_ih.mexw64']):
+                raise ValueError('IH research binary receipt mismatch')
     solvers = []
     for relative in manifest['files']:
         if relative.endswith('.mexw64'):

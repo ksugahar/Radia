@@ -48,13 +48,13 @@ struct ESIMCouplingView {
 };
 class ESIMCoupling {
     ESIMCouplingView v_;
-    ESIMCellParameters* parameters_=nullptr;ESIMCellResult* cells_=nullptr;
+    ESIMCellParameters* parameters_=nullptr;ESIMCellResult* cells_=nullptr;ESIMCellResult* acceptedCells_=nullptr;
     double *fields_=nullptr,*next_=nullptr,*temperature_=nullptr,*coefficients_=nullptr,*scalar_=nullptr;
     cuDoubleComplex *workspace_=nullptr,*ax_=nullptr;int* invalid_=nullptr;
     std::size_t bytes_=0;unsigned candidateIterations_=0,acceptedIterations_=0;
     double candidateResidual_=0.,acceptedResidual_=0.,candidateFieldResidual_=0.,acceptedFieldResidual_=0.;
     template<class T>void allocate(T*& p,std::size_t n){cudaCheck(cudaMalloc(&p,n*sizeof(T)));bytes_+=n*sizeof(T);}
-    void release()noexcept{for(auto* p:{fields_,next_,temperature_,coefficients_,scalar_})if(p)cudaFree(p);if(parameters_)cudaFree(parameters_);if(cells_)cudaFree(cells_);if(workspace_)cudaFree(workspace_);if(ax_)cudaFree(ax_);if(invalid_)cudaFree(invalid_);}
+    void release()noexcept{for(auto* p:{fields_,next_,temperature_,coefficients_,scalar_})if(p)cudaFree(p);if(parameters_)cudaFree(parameters_);if(cells_)cudaFree(cells_);if(acceptedCells_)cudaFree(acceptedCells_);if(workspace_)cudaFree(workspace_);if(ax_)cudaFree(ax_);if(invalid_)cudaFree(invalid_);}
     void cells(cudaStream_t stream,const double* field){finiteElementESIMCells<<<unsigned((v_.elements+31)/32),32,0,stream>>>(parameters_,field,v_.elements,v_.workspaceNodes,workspace_,cells_);}
     void matrix(cudaStream_t stream){esimOperatorValues<<<unsigned((v_.entryMap.rows+127)/128),128,0,stream>>>(v_.entryMap,v_.baseValues,cells_,v_.mutableValues,invalid_);}
     void check(cudaStream_t stream){int bad;cudaCheck(cudaMemcpyAsync(&bad,invalid_,sizeof(int),cudaMemcpyDeviceToHost,stream));cudaCheck(cudaStreamSynchronize(stream));if(bad)throw std::runtime_error("Element ESIM material/operator candidate rejected");}
@@ -67,15 +67,20 @@ public:
             throw std::invalid_argument("Invalid bounded element ESIM coupling contract");
         const auto coefficientCount=v.table.knotsCount?std::size_t(v.table.knotsCount-1)*4*v.elements:0;
         if(coefficientCount>(2ULL<<30)/sizeof(double))throw std::overflow_error("ESIM coefficient workspace exceeds direct payload budget");
-        const auto need=v.elements*(sizeof(ESIMCellParameters)+sizeof(ESIMCellResult)+3*sizeof(double)+std::size_t(v.workspaceNodes)*4*sizeof(cuDoubleComplex))+coefficientCount*sizeof(double)+v.matrix.rows*sizeof(cuDoubleComplex)+2*sizeof(double)+sizeof(int);
+        const auto need=v.elements*(sizeof(ESIMCellParameters)+2*sizeof(ESIMCellResult)+3*sizeof(double)+std::size_t(v.workspaceNodes)*4*sizeof(cuDoubleComplex))+coefficientCount*sizeof(double)+v.matrix.rows*sizeof(cuDoubleComplex)+2*sizeof(double)+sizeof(int);
         std::size_t free,total;cudaCheck(cudaMemGetInfo(&free,&total));const auto reserve=std::max<std::size_t>(2ULL<<30,total/5);
         if(free<=reserve||need>free-reserve)throw std::runtime_error("Element ESIM context exceeds GPU reserve");
-        try{allocate(parameters_,v.elements);allocate(cells_,v.elements);allocate(fields_,v.elements);allocate(next_,v.elements);allocate(temperature_,v.elements);if(coefficientCount)allocate(coefficients_,coefficientCount);allocate(workspace_,v.elements*std::size_t(v.workspaceNodes)*4);allocate(ax_,v.matrix.rows);allocate(invalid_,1);allocate(scalar_,2);}catch(...){release();throw;}
+        try{allocate(parameters_,v.elements);allocate(cells_,v.elements);allocate(acceptedCells_,v.elements);cudaCheck(cudaMemset(acceptedCells_,0,v.elements*sizeof(ESIMCellResult)));allocate(fields_,v.elements);allocate(next_,v.elements);allocate(temperature_,v.elements);if(coefficientCount)allocate(coefficients_,coefficientCount);allocate(workspace_,v.elements*std::size_t(v.workspaceNodes)*4);allocate(ax_,v.matrix.rows);allocate(invalid_,1);allocate(scalar_,2);}catch(...){release();throw;}
     }
     ESIMCoupling(const ESIMCoupling&)=delete;ESIMCoupling& operator=(const ESIMCoupling&)=delete;
     ~ESIMCoupling(){release();}
-    void abandonAfterDeviceReset()noexcept{parameters_=nullptr;cells_=nullptr;fields_=next_=temperature_=coefficients_=scalar_=nullptr;workspace_=ax_=nullptr;invalid_=nullptr;}
+    void abandonAfterDeviceReset()noexcept{parameters_=nullptr;cells_=acceptedCells_=nullptr;fields_=next_=temperature_=coefficients_=scalar_=nullptr;workspace_=ax_=nullptr;invalid_=nullptr;}
     std::size_t ownedBytes()const{return bytes_;}
+    void validateTemperature(cudaStream_t stream,const double* temperature){
+        cudaCheck(cudaMemsetAsync(invalid_,0,sizeof(int),stream));
+        validateElementTemperatureRange<<<unsigned((v_.elements+127)/128),128,0,stream>>>(v_.temperatureEvaluation,temperature,v_.table.kelvin,v_.table.temperatures,invalid_);
+        check(stream);
+    }
     void prepare(cudaStream_t stream,const double* temperature,double){
         cudaCheck(cudaMemsetAsync(invalid_,0,sizeof(int),stream));
         updateElementESIMMaterials<<<unsigned((v_.elements+127)/128),128,0,stream>>>(v_.temperatureEvaluation,temperature,v_.table,v_.geometry,parameters_,temperature_,coefficients_,invalid_);
@@ -99,8 +104,9 @@ public:
         }
         throw std::runtime_error("Element ESIM complete-block constitutive iteration did not converge; accepted state preserved");
     }
-    void commit(){acceptedIterations_=candidateIterations_;acceptedResidual_=candidateResidual_;acceptedFieldResidual_=candidateFieldResidual_;}
-    void reset(){acceptedIterations_=candidateIterations_=0;acceptedResidual_=candidateResidual_=acceptedFieldResidual_=candidateFieldResidual_=0.;}
+    void commit(){cudaCheck(cudaMemcpy(acceptedCells_,cells_,v_.elements*sizeof(ESIMCellResult),cudaMemcpyDeviceToDevice));acceptedIterations_=candidateIterations_;acceptedResidual_=candidateResidual_;acceptedFieldResidual_=candidateFieldResidual_;}
+    void reset(){cudaCheck(cudaMemset(acceptedCells_,0,v_.elements*sizeof(ESIMCellResult)));acceptedIterations_=candidateIterations_=0;acceptedResidual_=candidateResidual_=acceptedFieldResidual_=candidateFieldResidual_=0.;}
+    std::vector<ESIMCellResult> acceptedCells()const{std::vector<ESIMCellResult> out(v_.elements);cudaCheck(cudaMemcpy(out.data(),acceptedCells_,out.size()*sizeof(ESIMCellResult),cudaMemcpyDeviceToHost));return out;}
     unsigned iterations()const{return acceptedIterations_;}double residual()const{return acceptedResidual_;}double fieldResidual()const{return acceptedFieldResidual_;}
 };
 } // namespace radia_ih_cuda

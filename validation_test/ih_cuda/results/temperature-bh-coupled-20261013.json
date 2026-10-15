@@ -1,0 +1,230 @@
+{
+  "schema": "radia.ih-temperature-bh-coupled.v1",
+  "accepted": true,
+  "research_only": true,
+  "experimental_validation": false,
+  "independent_geometry_validation": false,
+  "scope": "Original tetrahedron/external coil, complete flat-P1 reaction block, element amplitude B-H(T), thin surface thermal layer",
+  "native_source_commit": "835f07c65497f91240dcf40d5bba0735ffb46301",
+  "binary_sha256": "52d4575aa1816ec458ce5b0f29d510cc2edcca22d6af5e5dc5257661fe6c01a0",
+  "validation_commit": "85809822426398dcf6a264f205c34658389f74f5",
+  "input_sha256": "7a4cefbba2cd21cfffefb5db0fb2b8517c136d4b3f344d043037ba9f6deb77aa",
+  "cpu": {
+    "accepted": true,
+    "scope": "Independent CPU ESIM finite differences and dense complete equations; shared native geometry assembly",
+    "relative_errors": {
+      "temperature": 0.0,
+      "heat": 7.550499187940215e-14,
+      "impedance": 6.420886276495046e-14,
+      "electromagnetic": 1.3332142753315284e-12
+    },
+    "true_relative_residual": 2.262165620211624e-17,
+    "max_field_A_per_m": 69739.9917996702
+  },
+  "gpu": {
+    "accepted": true,
+    "research_only": true,
+    "experimental_validation": false,
+    "toolkit_accepted": true,
+    "impedance_real_ohm": [
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        1.814113674682964e-07,
+        1.7052503285769996e-07,
+        1.6624301847360995e-07,
+        1.6263294282139906e-07
+      ],
+      [
+        1.8134763422385947e-07,
+        1.7048919510084195e-07,
+        1.6623015645405702e-07,
+        1.6268875304821432e-07
+      ],
+      [
+        1.8128449027117278e-07,
+        1.7045375823255122e-07,
+        1.662175579062639e-07,
+        1.6274399453616558e-07
+      ],
+      [
+        1.812219292458369e-07,
+        1.7041871758618568e-07,
+        1.6620521926261423e-07,
+        1.6279867267114354e-07
+      ],
+      [
+        1.811599448624443e-07,
+        1.703840685529246e-07,
+        1.6619313700056852e-07,
+        1.628527927964667e-07
+      ]
+    ],
+    "impedance_imag_ohm": [
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        8.057909723826119e-06,
+        7.917431003918835e-06,
+        7.919671875859019e-06,
+        7.933075293683108e-06
+      ],
+      [
+        8.05790112578454e-06,
+        7.917431687316907e-06,
+        7.919672045513777e-06,
+        7.933075759420882e-06
+      ],
+      [
+        8.057892597791569e-06,
+        7.917432362203586e-06,
+        7.919672211573419e-06,
+        7.933076217328323e-06
+      ],
+      [
+        8.057884139239715e-06,
+        7.917433028697234e-06,
+        7.9196723740893e-06,
+        7.933076667542137e-06
+      ],
+      [
+        8.057875749531135e-06,
+        7.917433686914017e-06,
+        7.919672533117319e-06,
+        7.933077110204152e-06
+      ]
+    ],
+    "temperature_K": [
+      [
+        300,
+        310,
+        320,
+        330
+      ],
+      [
+        300.17109620528396,
+        310.0038645999934,
+        319.95415862281243,
+        329.9049129475377
+      ],
+      [
+        300.34033998896814,
+        310.0079792950201,
+        319.90881441362757,
+        329.8105676938837
+      ],
+      [
+        300.5077514215284,
+        310.01233993101187,
+        319.8639619901917,
+        329.71695764215093
+      ],
+      [
+        300.6733503559825,
+        310.0169424060864,
+        319.8195960285434,
+        329.62407625976834
+      ],
+      [
+        300.8371564302464,
+        310.02178266994616,
+        319.77571126238206,
+        329.53191707781986
+      ]
+    ],
+    "heat_W": [
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0.0004591005857845509,
+        0.020734421970590205,
+        0.020213764813262574,
+        0.018199750067611847
+      ],
+      [
+        0.0004589393686161332,
+        0.020730064382473636,
+        0.020212200884559987,
+        0.018205995059871884
+      ],
+      [
+        0.0004587796422706843,
+        0.020725755541622135,
+        0.020210668994307093,
+        0.01821217641282281
+      ],
+      [
+        0.0004586213906455756,
+        0.020721494880552208,
+        0.020209168708655377,
+        0.01821829472910101
+      ],
+      [
+        0.0004584645978379969,
+        0.02071728183880842,
+        0.02020769959923475,
+        0.018224350606576404
+      ]
+    ],
+    "info": {
+      "steps": 5,
+      "owned_device_bytes": 54964,
+      "eddy_iterations": 157,
+      "eddy_true_residual": 2.8915597841794777e-16,
+      "thermal_iterations": 3,
+      "thermal_true_residual": 5.984435459326875e-16,
+      "preconditioner_precision": "fp64",
+      "constitutive_iterations": 39,
+      "constitutive_true_residual": 2.8924336350500207e-16,
+      "constitutive_field_residual": 6.6637993078102615e-12,
+      "material_mode": "element-esim-operators"
+    },
+    "thermal_balance_relative": [
+      1.604704764443724e-11,
+      1.232161088173673e-11,
+      1.4199481057259243e-11,
+      1.6883083266984463e-11,
+      1.4578221768924793e-11
+    ],
+    "failed_candidate_preserved": true,
+    "reset": true,
+    "repeat_identical": true,
+    "save_close_reopen": true,
+    "simulink_failure_released": true,
+    "invalid_material_rejected": true,
+    "out_of_temperature_range_preserved": true,
+    "matlab": "26.1.0.3346908 (R2026a) Update 5"
+  },
+  "official_matlab_mcp": true,
+  "official_toolkit_healthy": true,
+  "a100_used": false,
+  "formal_timing_acceptance": false,
+  "memory_scope": "Exact accounted owned device buffers; setup temporary, host/global/CUDA-runtime peaks not measured",
+  "limitations": [
+    "Single-valued amplitude B-H, no hysteresis history or loop loss",
+    "Flat P1 connected genus-zero boundary and supplied coil impedance",
+    "Surface thermal approximation, not resolved bulk thermal FE",
+    "Independent CPU cell/direct equations share BEM geometry assembly",
+    "Released wheels 0.1.3/0.1.4 unchanged"
+  ],
+  "validation_source_sha256": {
+    "validation_test/ih_cuda/checkTemperatureBH.m": "40d665b74ed430f2c680aa35370243c99ae45bc171c1a9733d09f281d70f5817",
+    "validation_test/ih_cuda/makeTemperatureBHConfig.m": "b406e6b189b730e923196c5dde85261ffcfca118727c20e284748e9850462cb5",
+    "validation_test/ih_cuda/check_temperature_bh_cpu.py": "41d742f11a4c15537f3bc795e0a68cbf7c5474518f6883f1ed571e55c22e5a7d",
+    "validation_test/ih_cuda/TEMPERATURE_BH_EXPERIMENT.md": "e7c357d78fe5ea245521b1e74e0bc9946767eee8c6cb7d9be6e891077091673a",
+    "packages/radia-gpu/matlab/+radia/+simulink/ihResidentSFunction.m": "4d31436a578a98bbf54c4b367904646fb165a97a4d3335f8ea491fefc13c1a24",
+    "src/radia/esim_cell_problem.py": "e53962942f82f8c35e4bd1841f79aae95c57c4a5d27ab9209c0d7a24e2a6a8c4"
+  }
+}

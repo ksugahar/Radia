@@ -23,6 +23,7 @@ struct CoupledOperators {
     ComplexSolver::Result (*solveMaterial)(void*,ComplexSolver&,double,int)=nullptr;
     void (*commitMaterial)(void*)=nullptr;
     void (*resetMaterial)(void*)=nullptr;
+    void (*validateCandidateTemperature)(void*,cudaStream_t,const double*)=nullptr;
 };
 class CoupledState {
     CoupledOperators op_;
@@ -111,6 +112,7 @@ public:
         int invalid=0;cudaCheck(cudaMemcpyAsync(&invalid,invalid_,sizeof(int),cudaMemcpyDeviceToHost,thermal_->stream()));
         cudaCheck(cudaStreamSynchronize(thermal_->stream()));
         if(invalid)throw std::runtime_error("IH candidate temperature rejected; accepted state preserved");
+        if(op_.validateCandidateTemperature)op_.validateCandidateTemperature(op_.materialOwner,thermal_->stream(),candidate_);
         cudaCheck(cudaMemcpyAsync(acceptedElectromagnetic_,eddy_->solution(),op_.eddy.rows*sizeof(cuDoubleComplex),cudaMemcpyDeviceToDevice,thermal_->stream()));
         cudaCheck(cudaStreamSynchronize(thermal_->stream()));
         if(op_.commitMaterial)op_.commitMaterial(op_.materialOwner);
