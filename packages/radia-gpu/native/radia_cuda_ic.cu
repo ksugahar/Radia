@@ -19,6 +19,8 @@
 
 namespace {
 constexpr int T=256;
+using Clock=std::chrono::steady_clock;
+double elapsed(Clock::time_point start){return std::chrono::duration<double>(Clock::now()-start).count();}
 void ck(cudaError_t s){if(s!=cudaSuccess)throw std::runtime_error(cudaGetErrorString(s));}
 void cs(cusparseStatus_t s){if(s!=CUSPARSE_STATUS_SUCCESS)throw std::runtime_error("cuSPARSE error "+std::to_string(s));}
 void cb(cublasStatus_t s){if(s!=CUBLAS_STATUS_SUCCESS)throw std::runtime_error("cuBLAS error "+std::to_string(s));}
@@ -77,6 +79,7 @@ __global__ void subtract(int n,const double* b,double* ax,double bnorm){int i=bl
 struct Context {
     int n=0,nz=0,device=-1,levels=0;unsigned solves=0;double shift=1.05;
     size_t symbolicDownload=0,symbolicUpload=0,setupPeakOwned=0;
+    double symbolicSeconds=0,factorSeconds=0,analysisSeconds=0;
     Buffer<int> rp,ci,lrp,lci,free,failure;bool explicitFree=false;
     Buffer<double> av,l,x,r,p,ap,tmp,z;
     Buffer<char> forwardBuffer,backwardBuffer;
@@ -95,6 +98,7 @@ struct Context {
     void flag(){int v;ck(cudaMemcpy(&v,failure.p,sizeof(v),cudaMemcpyDeviceToHost));if(v)throw std::runtime_error("Invalid/nonfinite/asymmetric matrix, RHS, or nonpositive IC pivot");}
     size_t bytes()const{return rp.bytes()+ci.bytes()+lrp.bytes()+lci.bytes()+free.bytes()+failure.bytes()+av.bytes()+l.bytes()+x.bytes()+r.bytes()+p.bytes()+ap.bytes()+tmp.bytes()+z.bytes()+forwardBuffer.bytes()+backwardBuffer.bytes();}
     void setup(const mxArray* op,double s){
+        auto phase=Clock::now();
         shift=s;if(!(shift>=1&&shift<=100))throw std::runtime_error("IC fixed shift must be in [1,100]");ck(cudaGetDevice(&device));ck(cudaDeviceSynchronize());
         n=dimension(field(op,"rows"));if(dimension(field(op,"cols"))!=n)throw std::runtime_error("square SPD operator required");
         auto values=field(op,"values");if(!mxIsGPUArray(values))throw std::runtime_error("GPU CSR required");auto check=mxGPUCreateFromMxArray(values);size_t count=mxGPUGetNumberOfElements(check);mxGPUDestroyGPUArray(check);if(count>INT_MAX||count<size_t(n))throw std::runtime_error("int32 CSR storage limit");nz=int(count);
@@ -116,9 +120,11 @@ struct Context {
         Buffer<int> mapping,ordered;mapping.upload(source);std::vector<int> offsets(size_t(levels)+1),order(n);
         for(int v:level)++offsets[v+1];for(int k=0;k<levels;++k)offsets[k+1]+=offsets[k];auto cursor=offsets;
         for(int i=0;i<n;++i)order[cursor[level[i]]++]=i;ordered.upload(order);
+        ck(cudaDeviceSynchronize());symbolicSeconds=elapsed(phase);phase=Clock::now();
         Buffer<double> ld;ld.alloc(lc.size());l.alloc(lc.size());lowerValues<<<blocks(lc.size()),T>>>(int(lc.size()),mapping.p,av.p,ld.p);
         for(int k=0;k<levels;++k){int size=offsets[k+1]-offsets[k];factorLevel<<<blocks(size),T>>>(size,ordered.p+offsets[k],lrp.p,lci.p,ld.p,shift,failure.p);}
         flag();toCholesky<<<blocks(n),T>>>(n,lrp.p,lci.p,ld.p,l.p);ck(cudaGetLastError());
+        ck(cudaDeviceSynchronize());factorSeconds=elapsed(phase);phase=Clock::now();
         x.alloc(n);r.alloc(n);p.alloc(n);ap.alloc(n);tmp.alloc(n);z.alloc(n);
         cs(cusparseCreate(&sparse));cb(cublasCreate(&blas));cs(cusparseCreateCsr(&lower,n,n,lc.size(),lrp.p,lci.p,l.p,CUSPARSE_INDEX_32I,CUSPARSE_INDEX_32I,CUSPARSE_INDEX_BASE_ZERO,CUDA_R_64F));
         cusparseFillMode_t fill=CUSPARSE_FILL_MODE_LOWER;cusparseDiagType_t diag=CUSPARSE_DIAG_TYPE_NON_UNIT;
@@ -129,11 +135,22 @@ struct Context {
         cs(cusparseSpSV_bufferSize(sparse,CUSPARSE_OPERATION_TRANSPOSE,&one,lower,vt,vz,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,backward,&b));forwardBuffer.alloc(a);backwardBuffer.alloc(b);
         cs(cusparseSpSV_analysis(sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&one,lower,vr,vt,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,forward,forwardBuffer.p));
         cs(cusparseSpSV_analysis(sparse,CUSPARSE_OPERATION_TRANSPOSE,&one,lower,vt,vz,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,backward,backwardBuffer.p));ck(cudaDeviceSynchronize());
-        setupPeakOwned=bytes()+mapping.bytes()+ordered.bytes()+ld.bytes();
+        analysisSeconds=elapsed(phase);setupPeakOwned=bytes()+mapping.bytes()+ordered.bytes()+ld.bytes();
     }
     void apply(){double one=1;cs(cusparseSpSV_solve(sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&one,lower,vr,vt,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,forward));cs(cusparseSpSV_solve(sparse,CUSPARSE_OPERATION_TRANSPOSE,&one,lower,vt,vz,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,backward));}
     double norm(const double* v){double value;cb(cublasDnrm2(blas,n,v,1,&value));if(!std::isfinite(value))throw std::runtime_error("nonfinite FP64 norm");return value;}
     double dot(const double* a,const double* b){double value;cb(cublasDdot(blas,n,a,1,b,1,&value));if(!std::isfinite(value))throw std::runtime_error("nonfinite PCG inner product");return value;}
+    mxArray* profile(const double* rhs,int count){
+        ck(cudaMemset(failure.p,0,2*sizeof(int)));checkVector<<<blocks(n),T>>>(n,rhs,free.p,failure.p);flag();
+        ck(cudaMemcpy(r.p,rhs,r.bytes(),cudaMemcpyDeviceToDevice));apply();
+        auto measure=[&](auto operation){ck(cudaDeviceSynchronize());auto start=Clock::now();for(int i=0;i<count;++i)operation();ck(cudaDeviceSynchronize());return elapsed(start)/count;};
+        double one=1;
+        const char* names[]={"forward_seconds","backward_seconds","spmv_seconds","dot_host_seconds","norm_host_seconds","repetitions"};
+        double values[]={measure([&]{cs(cusparseSpSV_solve(sparse,CUSPARSE_OPERATION_NON_TRANSPOSE,&one,lower,vr,vt,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,forward));}),
+            measure([&]{cs(cusparseSpSV_solve(sparse,CUSPARSE_OPERATION_TRANSPOSE,&one,lower,vt,vz,CUDA_R_64F,CUSPARSE_SPSV_ALG_DEFAULT,backward));}),
+            measure([&]{spmv<<<blocks(n),T>>>(n,rp.p,ci.p,av.p,r.p,ap.p);}),measure([&]{dot(r.p,r.p);}),measure([&]{norm(r.p);}),double(count)};
+        auto result=mxCreateStructMatrix(1,1,6,names);for(int i=0;i<6;++i)mxSetField(result,0,names[i],mxCreateDoubleScalar(values[i]));return result;
+    }
     std::pair<int,double> solve(const double* rhs,double tol,int limit){
         selected();ck(cudaMemset(failure.p,0,2*sizeof(int)));checkVector<<<blocks(n),T>>>(n,rhs,free.p,failure.p);flag();ck(cudaMemset(x.p,0,x.bytes()));ck(cudaMemcpy(r.p,rhs,r.bytes(),cudaMemcpyDeviceToDevice));double bnorm=norm(rhs);int iterations=0;
         if(bnorm==0){int nonzero;ck(cudaMemcpy(&nonzero,failure.p+1,sizeof(int),cudaMemcpyDeviceToHost));if(nonzero)throw std::runtime_error("RHS norm outside supported FP64 range; explicitly rescale the system");}
@@ -164,11 +181,12 @@ void release(const mxArray* a){
 void atExit(){int d=-1;cudaGetDevice(&d);contexts.clear();if(d>=0)cudaSetDevice(d);}
 mxArray* copyGPU(const double* p,int n){mwSize size=n;auto a=mxGPUCreateGPUArray(1,&size,mxDOUBLE_CLASS,mxREAL,MX_GPU_DO_NOT_INITIALIZE);try{ck(cudaMemcpy(mxGPUGetData(a),p,size_t(n)*sizeof(double),cudaMemcpyDeviceToDevice));auto out=mxGPUCreateMxArrayOnGPU(a);mxGPUDestroyGPUArray(a);return out;}catch(...){mxGPUDestroyGPUArray(a);throw;}}
 mxArray* info(Context& c,int iterations,double residual,bool checked=true){
-    const char* names[]={"iterations","true_relative_residual","shift","factor_levels","gpu_owned_bytes","solve_count","backend","preconditioner","factorization_backend","triangular_backend","residual_checked","symbolic_download_bytes","symbolic_upload_bytes","gpu_setup_peak_owned_bytes","memory_definition","explicit_free_mask"};
-    auto a=mxCreateStructMatrix(1,1,16,names);double v[]={double(iterations),residual,c.shift,double(c.levels),double(c.bytes()),double(c.solves)};
+    const char* names[]={"iterations","true_relative_residual","shift","factor_levels","gpu_owned_bytes","solve_count","backend","preconditioner","factorization_backend","triangular_backend","residual_checked","symbolic_download_bytes","symbolic_upload_bytes","gpu_setup_peak_owned_bytes","memory_definition","explicit_free_mask","symbolic_and_input_seconds","numeric_factor_seconds","triangular_analysis_seconds"};
+    auto a=mxCreateStructMatrix(1,1,19,names);double v[]={double(iterations),residual,c.shift,double(c.levels),double(c.bytes()),double(c.solves)};
     for(int i=0;i<6;++i)mxSetField(a,0,names[i],i==1&&!checked?mxCreateDoubleMatrix(0,0,mxREAL):mxCreateDoubleScalar(v[i]));
     const char* text[]={"MATLAB/mexcuda CUDA FP64","natural-order fixed-shift IC(0)","CUDA level-scheduled incomplete LDLT converted to Cholesky","cuSPARSE SpSV forward and transpose"};for(int i=0;i<4;++i)mxSetField(a,0,names[i+6],mxCreateString(text[i]));
-    mxSetField(a,0,names[10],mxCreateLogicalScalar(checked));mxSetField(a,0,names[11],mxCreateDoubleScalar(double(c.symbolicDownload)));mxSetField(a,0,names[12],mxCreateDoubleScalar(double(c.symbolicUpload)));mxSetField(a,0,names[13],mxCreateDoubleScalar(double(c.setupPeakOwned)));mxSetField(a,0,names[14],mxCreateString("Explicit owned CUDA buffers and queried SpSV workspaces; excludes opaque library/runtime allocations and caller inputs/outputs"));mxSetField(a,0,names[15],mxCreateLogicalScalar(c.explicitFree));return a;
+    mxSetField(a,0,names[10],mxCreateLogicalScalar(checked));mxSetField(a,0,names[11],mxCreateDoubleScalar(double(c.symbolicDownload)));mxSetField(a,0,names[12],mxCreateDoubleScalar(double(c.symbolicUpload)));mxSetField(a,0,names[13],mxCreateDoubleScalar(double(c.setupPeakOwned)));mxSetField(a,0,names[14],mxCreateString("Explicit owned CUDA buffers and queried SpSV workspaces; excludes opaque library/runtime allocations and caller inputs/outputs"));mxSetField(a,0,names[15],mxCreateLogicalScalar(c.explicitFree));
+    mxSetField(a,0,names[16],mxCreateDoubleScalar(c.symbolicSeconds));mxSetField(a,0,names[17],mxCreateDoubleScalar(c.factorSeconds));mxSetField(a,0,names[18],mxCreateDoubleScalar(c.analysisSeconds));return a;
 }
 }
 void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** args){
@@ -186,6 +204,7 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** args){
         }
 #endif
         if(command=="live_count"){if(nrhs!=1||nlhs!=1)throw std::runtime_error("live_count arity");out[0]=mxCreateDoubleScalar(double(contexts.size()));return;}
+        if(command=="profile"){if(nrhs!=4||nlhs!=1)throw std::runtime_error("profile(handle,gpuRhs,repetitions)");auto& c=context(args[1]);Inputs input;auto b=input.get<double>(args[2],mxDOUBLE_CLASS,c.n);int count=dimension(args[3]);if(count>500)throw std::runtime_error("Profile repetitions exceed bound");out[0]=c.profile(b,count);return;}
         if(command=="solve"||command=="apply"){
             bool solving=command=="solve";if(nrhs!=(solving?5:3)||nlhs!=(solving?2:1))throw std::runtime_error("IC solve/apply arity");auto& c=context(args[1]);Inputs input;auto b=input.get<double>(args[2],mxDOUBLE_CLASS,c.n);ck(cudaDeviceSynchronize());
             if(solving){double tol=scalar(args[3]),lim=scalar(args[4]);if(!(tol>0&&tol<=1e-6)||lim<1||lim>100000||lim!=floor(lim))throw std::runtime_error("IC tolerance or iteration limit invalid");auto result=c.solve(b,tol,int(lim));out[0]=copyGPU(c.x.p,c.n);out[1]=info(c,result.first,result.second);}
