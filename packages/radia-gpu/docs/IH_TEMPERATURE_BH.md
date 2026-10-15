@@ -71,6 +71,14 @@ with ESIM, computes coherent loss, and advances the thermal equation. The
 accepted electromagnetic, thermal, heat and Zs states commit together after
 the checks. Zs belongs to the last electromagnetic update's starting
 temperature; it is zero before the first update and after reset.
+This initial/reset zero is a nonphysical placeholder, not a zero-impedance
+material measurement. Omit sample zero when plotting physical impedance.
+
+The block preconditioner is built once at context creation from the base
+operator without the ESIM impedance terms. It is not refreshed when element
+Zs changes and is not a factorization of the current material-dependent
+operator. Every solve must still satisfy its explicit true-residual gate;
+large material changes can affect convergence and cause a reported failure.
 
 The electromagnetic-to-thermal exchange stays on device. The optional Zs
 observation downloads only requested diagnostics. A failed native update

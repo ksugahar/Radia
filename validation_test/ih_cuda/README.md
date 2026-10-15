@@ -25,7 +25,9 @@ element-specific parameters and checked workspace stride.
 material cells, distinct mapped temperatures, repeated calls and rejected
 out-of-table input. It is a component check, not complete PEEC-BEM, nonlinear
 temperature-dependent B(H), Simulink or release acceptance. The material
-primitives are not yet connected to the persistent public MEX context.
+primitives are connected to the persistent `element-esim-operators` MEX
+frontend in the temperature-BH candidate. This component check alone does not
+qualify that frontend; see the later temperature-BH and integration checkpoints.
 
 `run_resident_smoke.py` builds a validation-only mexcuda gateway and checks the
 resident complex CSR action, scalar-drive RHS and coherent quadratic loss
@@ -183,7 +185,16 @@ last accepted electromagnetic step's impedance, evaluated at that step's
 starting temperature; it is zero before the first accepted update and after
 reset. Observation downloads occur only when requested. Intermediate heat and
 temperature exchange between the electromagnetic and thermal stages remains
-on the device. `element_impedance(handle)` likewise returns the accepted Zs,
+on the device. Initial/reset Zs=0 is a nonphysical placeholder: omit sample zero
+when plotting physical impedance. Setting the observation flag with a fixed
+material mode is rejected during S-Function setup.
+
+The block preconditioner is constructed once from the base operator without
+ESIM terms and is not refreshed as Zs changes. True-residual checks apply to
+the actual updated operator; changing material can still cause convergence
+failure.
+
+`element_impedance(handle)` likewise returns the accepted Zs,
 including after a rejected candidate. Supply `solver_relative_tolerance` when
 a stricter inner solve is needed for an ill-conditioned coupled block.
 

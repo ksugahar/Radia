@@ -12,7 +12,13 @@ block.NumInputPorts=2;
 outputCount=2;
 if isfield(config,'observe_element_impedance')
     assert(islogical(config.observe_element_impedance)&&isscalar(config.observe_element_impedance),'observe_element_impedance must be scalar logical');
-    if config.observe_element_impedance,outputCount=4;end
+    if config.observe_element_impedance
+        assert(isfield(config,'material_mode') && ...
+            strcmp(config.material_mode,'element-esim-operators'),...
+            'radia:ih:ImpedanceObservationMode',...
+            'Element impedance observation requires element-esim-operators material mode');
+        outputCount=4;
+    end
 end
 % Assign once: shrinking and re-expanding ports during Update Diagram
 % deletes the observation wires on subsequent compilation/save/reload.
