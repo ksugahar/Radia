@@ -608,6 +608,25 @@ function Get-ClipboardFormatCount {
     }
 }
 
+function Test-IntegralBounds([string]$SlideXml) {
+    [xml]$document = $SlideXml
+    $namespaces = [Xml.XmlNamespaceManager]::new($document.NameTable)
+    $namespaces.AddNamespace('m', 'http://schemas.openxmlformats.org/officeDocument/2006/math')
+    # Scope bounds to one operator; a regex can accidentally consume a preceding sum.
+    # Office re-encodes italic Latin letters as supplementary Unicode characters.
+    foreach ($operator in $document.SelectNodes('//m:nary', $namespaces)) {
+        $lower = $operator.SelectSingleNode('m:sub', $namespaces)
+        $upper = $operator.SelectSingleNode('m:sup', $namespaces)
+        $location = $operator.SelectSingleNode('m:naryPr/m:limLoc/@m:val', $namespaces)
+        if ($lower -and $upper -and $location -and $location.Value -ceq 'subSup' -and
+            $lower.InnerText.Normalize([Text.NormalizationForm]::FormKC) -ceq 'a' -and
+            $upper.InnerText.Normalize([Text.NormalizationForm]::FormKC) -ceq 'b') {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Get-SlideXml([string]$PptxPath, [int]$SlideNumber = 1) {
     $archive = [IO.Compression.ZipFile]::OpenRead($PptxPath)
     try {
@@ -994,13 +1013,7 @@ try {
     $naryCount = ([regex]::Matches($slideXml, '<m:nary>')).Count
     $barCount = ([regex]::Matches($slideXml, '<m:bar>')).Count
     $accentCount = ([regex]::Matches($slideXml, '<m:acc>')).Count
-    $integralLimits = [regex]::Match(
-        $slideXml,
-        '(?s)<m:nary><m:naryPr>.*?<m:limLoc m:val="subSup"/>.*?' +
-        '<m:sub>(?<lower>.*?)</m:sub><m:sup>(?<upper>.*?)</m:sup><m:e>')
-    $hasIntegralLimits = $integralLimits.Success -and
-        $integralLimits.Groups['lower'].Value -match '<m:t>[a𝑎]</m:t>' -and
-        $integralLimits.Groups['upper'].Value -match '<m:t>[b𝑏]</m:t>'
+    $hasIntegralLimits = Test-IntegralBounds $slideXml
     if (-not $hasInlineContainer -or -not $hasInlineMath -or
         -not $hasFraction -or -not $hasRadical -or $naryCount -lt 2 -or
         ($barCount + $accentCount) -lt 2 -or -not $hasIntegralLimits) {
@@ -1136,7 +1149,7 @@ try {
             }
             Write-Host "OBSERVATION: native PowerPoint matrix saved XML red=$redInXml (UXP-0030; scalar H7 retains red, matrix qualification pending)"
         }
-        if ($tableXml -notmatch '(?s)<m:nary>.*?<m:sub>.*?<m:t>[a𝑎]</m:t>.*?</m:sub>.*?<m:sup>.*?<m:t>[b𝑏]</m:t>.*?</m:sup>') {
+        if (-not (Test-IntegralBounds $tableXml)) {
             throw 'PowerPoint table paste lost integral bounds.'
         }
         $tableSlide.Shapes.Item(1).Export($tablePowerPointPngOutput, 2)
