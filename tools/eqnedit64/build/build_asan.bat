@@ -39,7 +39,7 @@ cl /nologo /O2 /W4 /WX /EHsc /MT /fsanitize=address /Zi /std:c++17 /utf-8 ^
    /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src ^
    /TP src\eqnedit64_app.cpp src\equation_edit.cpp src\equation_render.cpp ^
        src\tex_parser.cpp src\equation_node.cpp src\latex_emitter.cpp ^
-       src\mathml_emitter.cpp src\math_symbols.cpp src\palettes.cpp src\tex_document.cpp ^
+       src\mathml_emitter.cpp src\office_html.cpp src\math_symbols.cpp src\palettes.cpp src\tex_document.cpp ^
    /Fe:build\Eqnedit64_asan.exe /Fo:build\ /Fd:build\Eqnedit64.pdb ^
    /link /SUBSYSTEM:WINDOWS user32.lib gdi32.lib comctl32.lib comdlg32.lib shell32.lib ^
          ole32.lib imm32.lib windowscodecs.lib build\Eqnedit64.res
@@ -49,4 +49,20 @@ if not exist build\Eqnedit64_asan.exe (
     echo [ERROR] build\Eqnedit64_asan.exe was not produced
     exit /b 1
 )
+REM MSVC ASan uses an LLVM-named runtime even when compiled with cl.exe.
+REM vcvars PATH belongs to this batch process; make the diagnostic executable
+REM runnable by the later PowerShell gate without changing the user PATH.
+set "ASAN_COMPILER_DIR="
+for /f "delims=" %%I in ('where cl.exe') do if not defined ASAN_COMPILER_DIR (
+    set "ASAN_COMPILER_DIR=%%~dpI"
+)
+set "ASAN_RUNTIME=!ASAN_COMPILER_DIR!clang_rt.asan_dynamic-x86_64.dll"
+echo [INFO] ASan compiler: !ASAN_COMPILER_DIR!cl.exe
+echo [INFO] ASan runtime: !ASAN_RUNTIME!
+if not exist "!ASAN_RUNTIME!" (
+    echo [ERROR] MSVC x64 ASan runtime was not found: !ASAN_RUNTIME!
+    exit /b 1
+)
+copy /y "!ASAN_RUNTIME!" "build\clang_rt.asan_dynamic-x86_64.dll" >nul
+if errorlevel 1 ( echo [ERROR] ASan runtime staging failed & exit /b 1 )
 echo [OK] build\Eqnedit64_asan.exe

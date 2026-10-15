@@ -62,6 +62,13 @@ pwsh -NoProfile -File build\accept_release.ps1
 `-EnduranceTimeoutSeconds`で60～3,600秒の範囲を指定できる。
 制限時間と耐久試験の実測秒数は結果JSONの`gui_endurance`に記録する。
 タイムアウトは失敗であり、seed数や操作数を減らして代替しない。
+`-EnduranceTimeoutSeconds`は前段の背景GUIファズとASanファズにも渡す。
+両者の24 seed×3,000操作と、通常版の100 seed×5,000操作を維持する。
+省略なしの実行では、前段の制限時間も`build_phase_fuzz_timeout_seconds`に記録する。
+ASan版は通常版と同じOffice/OMML出力ソースをコンパイルする。
+MSVCのASanランタイム（`clang_rt.asan_dynamic-x86_64.dll`）は同じコンパイラの
+ディレクトリから試験用`build/`へ配置し、試験ログにバージョンとSHA-256を記録する。
+配布用`dist/`には含めない。
 
 この一つのコマンドが、通常回帰、PowerPoint COM、IrfanView CLI、Google Slides
 形式、ASan、100 seed×5,000回の非表示Win32操作、96/120/144/192 dpi相当の

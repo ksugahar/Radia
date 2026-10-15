@@ -30,10 +30,14 @@ $buildExe = Join-Path $root 'build\Eqnedit64.exe'
 $distExe = Join-Path $root 'dist\Eqnedit64.exe'
 $started = Get-Date
 
-function Invoke-Batch([string]$RelativePath) {
+function Invoke-Batch([string]$RelativePath, [int]$FuzzTimeoutSeconds = 0) {
     Push-Location $root
     try {
-        & cmd.exe /d /c $RelativePath
+        if ($FuzzTimeoutSeconds) {
+            & cmd.exe /d /c $RelativePath $FuzzTimeoutSeconds
+        } else {
+            & cmd.exe /d /c $RelativePath
+        }
         if ($LASTEXITCODE -ne 0) {
             throw "$RelativePath failed with exit code $LASTEXITCODE"
         }
@@ -51,9 +55,10 @@ function Invoke-PowerShellScript([string]$RelativePath, [object[]]$Arguments) {
 }
 
 if (-not $SkipBuild) {
-    Invoke-Batch 'build\build_tests.bat'
+    Invoke-Batch 'build\build_tests.bat' $EnduranceTimeoutSeconds
     Invoke-Batch 'build\build_asan.bat'
-    Invoke-PowerShellScript 'build\test_asan.ps1' @()
+    Invoke-PowerShellScript 'build\test_asan.ps1' @(
+        '-TimeoutSeconds', $EnduranceTimeoutSeconds)
 }
 
 foreach ($required in @($buildExe, $distExe)) {
@@ -110,6 +115,15 @@ if (Test-Path -LiteralPath $stamp) {
     if ($match) { $buildCommit = $match.Line -replace '.*"(.*)".*', '$1' }
 }
 $gitCommit = (& git -C $root rev-parse HEAD).Trim()
+$asanRuntime = if (-not $SkipBuild) {
+    $runtimePath = Join-Path $root 'build\clang_rt.asan_dynamic-x86_64.dll'
+    $runtimeInfo = Get-Item -LiteralPath $runtimePath -ErrorAction Stop
+    [ordered]@{
+        path = $runtimeInfo.FullName
+        version = $runtimeInfo.VersionInfo.FileVersion
+        sha256 = (Get-FileHash -LiteralPath $runtimePath -Algorithm SHA256).Hash
+    }
+} else { $null }
 $report = [ordered]@{
     schema = 'eqnedit64.final-acceptance.v1'
     accepted_at = (Get-Date).ToString('o')
@@ -131,6 +145,8 @@ $report = [ordered]@{
     paint_benchmark = $paintMeasurements.Trim()
     background_suite = if ($SkipBuild) { 'skipped by caller' } else { 'passed' }
     asan_suite = if ($SkipBuild) { 'skipped by caller' } else { 'passed' }
+    asan_runtime = $asanRuntime
+    build_phase_fuzz_timeout_seconds = if ($SkipBuild) { $null } else { $EnduranceTimeoutSeconds }
 }
 $reportFolder = Split-Path -Parent $ReportPath
 if (-not (Test-Path -LiteralPath $reportFolder)) {
