@@ -232,8 +232,6 @@ jobs:
   publish:
     needs: [ci-impact, build-test]
     if: ${{ needs.ci-impact.outputs.required == 'true' && (github.ref_type == 'tag' && startsWith(github.ref_name, 'cubit-mesh-export-v')) }}
-      github.ref_type == 'tag' &&
-      startsWith(github.ref_name, 'cubit-mesh-export-v')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
