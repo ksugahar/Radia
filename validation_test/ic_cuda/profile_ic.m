@@ -18,12 +18,13 @@ for k=1:3
     solution=gather(x);wait(g);seconds(k)=toc(timer);
 end
 profile=radia_cuda_ic('profile',h,fem.rhs,30);
+preconditioned=gather(radia_cuda_ic('apply',h,fem.rhs));
 report=struct('schema','radia.gpu.ic-phase-profile.v1','assembly_seconds',assemblySeconds, ...
     'factor_setup_seconds',setupSeconds,'solve_seconds',seconds,'linear',{linear}, ...
     'setup',setup,'phases',profile,'assembly',assembly,'device',g.Name, ...
     'matlab',version,'binary',which('radia_cuda_ic'), ...
     'timing_scope','Explicit microprofile; excluded from six-route acceptance timing');
-save(output,'solution','report','-v7');
+save(output,'solution','preconditioned','report','-v7');
 fid=fopen(output+".json",'w');assert(fid~=-1);fileCleanup=onCleanup(@()fclose(fid));
 fprintf(fid,'%s\n',jsonencode(report));
 end
