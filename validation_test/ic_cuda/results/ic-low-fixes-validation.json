@@ -1,0 +1,82 @@
+{
+  "schema": "radia.gpu.ic-low-fixes-validation.v1",
+  "passed": true,
+  "compiled_source_commit": "4ca6e5566212e488967422b662b155e6124a4fe9",
+  "source_dirty": false,
+  "native_source_sha256": "63bd7f50df63b60aa2cc2d7495045890d14523352e8ab69d05a74cf7e9abc6bb",
+  "production_mex_sha256": "dc1a4a3ea7fd7b68d3ea437216a96fed219ca660d7d71c812adb3b7491677be8",
+  "device": "Quadro RTX 5000",
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "cuda_targets": [
+    "sm_75",
+    "sm_80",
+    "compute_80 PTX"
+  ],
+  "independent_cpu": {
+    "schema": "radia.gpu.ic-accuracy.v1",
+    "passed": true,
+    "binary_sha256": "dc1a4a3ea7fd7b68d3ea437216a96fed219ca660d7d71c812adb3b7491677be8",
+    "fixture_sha256": "55e9de87ec976b2a0625b2ff5aee8c78b1f1af668c44cbed0f956e5245e87d86",
+    "numpy": "2.5.3",
+    "independent_cpu": "NumPy original-A solve, shifted full-pattern solve and independent square-root sparse IC(0) oracle",
+    "apply_relative": 1.743608947116815e-16,
+    "sparse_apply_relative": 1.3253928529842417e-16,
+    "solution_relative_max": 1.6314466480974827e-16,
+    "true_relative_residual_max": 1.3269703217737503e-16,
+    "rejection_count": 25,
+    "live_count_restored": true,
+    "frontend_checked": true,
+    "device": "Quadro RTX 5000",
+    "lifecycle": {
+      "passed": true,
+      "path": "same-device",
+      "caller_device_restored": true,
+      "live_count": 0.0,
+      "mex_unloaded": true,
+      "stale_rejected": true
+    },
+    "runtime_library_sha256": {
+      "cusparse64_12.dll": "0af1ee97b0c573951dd368a862d3e7eceb00bf1313e9344ad326734a8447db8f",
+      "cublas64_12.dll": "f34af240d84211f509020b4a6f88914bbc15a15c2678832fa330fc963d136c1d"
+    }
+  },
+  "native_residual_operator": "projected original operator (constrained diagonals = 1, constrained RHS = 0)",
+  "mismatch_simulation": {
+    "passed": true,
+    "path": "test-only selected-device mismatch simulation",
+    "caller_device_restored": true,
+    "live_count": 0.0,
+    "mex_unloaded": true,
+    "stale_rejected": true,
+    "binary_sha256": "6f81fab8364fecf2de314b76e8a854a60fec269c4fa5e7a945a4ebfa5c46c335",
+    "source_sha256": "63bd7f50df63b60aa2cc2d7495045890d14523352e8ab69d05a74cf7e9abc6bb",
+    "limitation": "Simulates selected-device mismatch; physical multi-GPU switching remains unverified"
+  },
+  "workspace_accounting": {
+    "schema": "radia.gpu.ic-workspace-accounting.v1",
+    "passed": true,
+    "definition": "Same independent 3-row oracle input; explicit native buffers only, not whole-device peak",
+    "owned_workspace_bytes": 4194304,
+    "counts": {
+      "gpu_owned_bytes": {
+        "baseline": 3248,
+        "fixed": 4197552,
+        "increase": 4194304
+      },
+      "gpu_setup_peak_owned_bytes": {
+        "baseline": 3356,
+        "fixed": 4197660,
+        "increase": 4194304
+      }
+    }
+  },
+  "focused_package_tests": 31,
+  "performance_measured": false,
+  "formal_wheel_accepted": false,
+  "limitations": [
+    "Small RTX correctness and lifecycle acceptance only; not final-wheel or A100 acceptance",
+    "Test-only mismatch binary has separate hash; no physical multi-GPU switch verified",
+    "Explicit owned buffers exclude opaque library/runtime allocations and caller inputs/outputs",
+    "Historical pre-fix A100 timing and same-binary evidence do not certify this new binary"
+  ]
+}
