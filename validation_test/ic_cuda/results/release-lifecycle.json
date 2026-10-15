@@ -1,0 +1,43 @@
+{
+  "passed": true,
+  "production": {
+    "schema": "radia.gpu.ic-accuracy.v1",
+    "passed": true,
+    "binary_sha256": "1d1b56a95edc783ca50602c9e4e68e27f1672da589ef46558e8f75134f575d4e",
+    "fixture_sha256": "9a6766522c5574d4aca00884e79b139286e127506f93cad15a13d551ee0f8219",
+    "numpy": "2.5.3",
+    "independent_cpu": "NumPy original-A solve, shifted full-pattern solve and independent square-root sparse IC(0) oracle",
+    "apply_relative": 1.743608947116815e-16,
+    "sparse_apply_relative": 1.3253928529842417e-16,
+    "solution_relative_max": 1.6314466480974827e-16,
+    "true_relative_residual_max": 1.3269703217737503e-16,
+    "rejection_count": 24,
+    "live_count_restored": true,
+    "frontend_checked": true,
+    "device": "Quadro RTX 5000",
+    "lifecycle": {
+      "passed": true,
+      "path": "same-device",
+      "caller_device_restored": true,
+      "live_count": 0.0,
+      "mex_unloaded": true,
+      "stale_rejected": true
+    },
+    "runtime_library_sha256": {
+      "cusparse64_12.dll": "0af1ee97b0c573951dd368a862d3e7eceb00bf1313e9344ad326734a8447db8f",
+      "cublas64_12.dll": "f34af240d84211f509020b4a6f88914bbc15a15c2678832fa330fc963d136c1d"
+    }
+  },
+  "simulation": {
+    "passed": true,
+    "path": "test-only selected-device mismatch simulation",
+    "caller_device_restored": true,
+    "live_count": 0.0,
+    "mex_unloaded": true,
+    "stale_rejected": true
+  },
+  "simulation_binary_sha256": "c3872e7a3160cdf96af3918a6609ae465373b9f89fa111d9ce0d103805fd3429",
+  "note": "Single-GPU mismatch simulation; physical multi-GPU switch not tested",
+  "schema": "radia.gpu.ic-release-lifecycle.v1",
+  "native_source_sha256": "d8f0c97731f0b9741d6ad115e4d33d6244920535942eecfe16c3e2e8c876fc62"
+}
