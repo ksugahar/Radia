@@ -339,9 +339,18 @@ ROOT_CASES = [
 ]
 
 
-@pytest.mark.parametrize('path,before,after,owners', ROOT_CASES)
+CODE_LIKE = ('Build.ps1', 'CMakeLists.txt', 'MANIFEST.in')
+
+
+@pytest.mark.parametrize('path,before,after,owners', [c for c in ROOT_CASES if c[0] not in CODE_LIKE])
 def test_root_content_diff_selects_only_evidenced_owners(path,before,after,owners):
     assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == owners
+
+
+@pytest.mark.parametrize('path,before,after,owners', [c for c in ROOT_CASES if c[0] in CODE_LIKE])
+def test_code_like_root_changes_select_all_file_owners(path,before,after,owners):
+    data=IMPACT.manifest()
+    assert IMPACT.root_owners(path,before,after,data)[0] == set(IMPACT.CONTRACT.owner_rule(data,path)['owners'])
 
 
 @pytest.mark.parametrize('path', ['pyproject.toml', 'tests/test_tier_manifest.json'])
@@ -394,10 +403,10 @@ def test_directive_order_and_quoted_hash_are_not_comment_only_edits():
     data=IMPACT.manifest()
     a='include packages/radia-gpu/source.m\nexclude packages/radia-gpu/source.m\n'
     b='exclude packages/radia-gpu/source.m\ninclude packages/radia-gpu/source.m\n'
-    assert IMPACT.root_owners('MANIFEST.in',a,b,data)[0]=={'radia-gpu'}
-    assert IMPACT.root_owners('CMakeLists.txt',
-        'option(RADIA_BUILD_MATLAB_MEX "a#b" OFF)',
-        'option(RADIA_BUILD_MATLAB_MEX "a#c" OFF)',data)[0]=={'radia-gpu'}
+    for path, before, after in (('MANIFEST.in', a, b),
+                                ('CMakeLists.txt', 'option(RADIA_BUILD_MATLAB_MEX "a#b" OFF)',
+                                 'option(RADIA_BUILD_MATLAB_MEX "a#c" OFF)')):
+        assert IMPACT.root_owners(path,before,after,data)[0] == set(IMPACT.CONTRACT.owner_rule(data,path)['owners'])
 
 
 def test_ams_legacy_exemption_cannot_override_unparsable_or_unknown_content():
@@ -564,3 +573,10 @@ def test_cmake_variable_reference_split_selects_owners():
     new = old.replace("${Python3_EXECUTABLE}", "$ {Python3_EXECUTABLE}", 1)
     for lane in ("radia-gpu", "sparsesolv"):
         assert IMPACT.lane_required(lane, {"CMakeLists.txt"}, lambda p: (old, new), manifest)[0] is True
+
+
+def test_attributed_edit_cannot_mask_a_global_cmake_edit():
+    manifest = IMPACT.CONTRACT.load(ROOT)
+    old = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    new = old.replace("${Python3_EXECUTABLE}", "$ {Python3_EXECUTABLE}", 1).replace("retired", "unsupported", 1)
+    assert IMPACT.lane_required("sparsesolv", {"CMakeLists.txt"}, lambda p: (old, new), manifest)[0] is True
