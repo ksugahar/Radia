@@ -52,6 +52,17 @@ def _fake_cubit(program_files: Path, version: str) -> Path:
     return root
 
 
+def _fake_native_sdk_cache(repo_root: Path):
+    sdk = repo_root / "sdk"
+    (sdk / "cmake").mkdir(parents=True)
+    (sdk / "BUILD_INFO").write_text("short=2026.8\n", encoding="utf-8")
+    for build in ("build-pyd", "build-ccm"):
+        folder = repo_root / "src/cubit_plugin" / build
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "CMakeCache.txt").write_text(
+            f"Cubit_DIR:PATH={sdk / 'cmake'}\n", encoding="utf-8")
+
+
 def _patch_windows_env(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("ProgramFiles", str(tmp_path / "ProgramFiles"))
     monkeypatch.setenv("ProgramFiles(x86)", "")
@@ -105,6 +116,7 @@ def test_2026_8_package_layout_is_shared_by_installer_and_headless_mcp(monkeypat
     root = program_files / "Coreform Cubit 2026.8"
     (root / "bin/cubit").mkdir(parents=True)
     (root / "bin/cubit/__init__.py").touch()
+    (root / "bin/cubit/_cubit3.pyd").touch()
     (root / "bin/cubitx.exe").touch()
     (root / "plugins").mkdir()
     monkeypatch.setenv("CUBIT_INSTALL_DIR", str(root))
@@ -629,6 +641,7 @@ def test_native_manifest_rejects_drift_in_either_required_payload(
         config.parent.mkdir(parents=True)
         config.write_text('set(CMAKE_CXX_COMPILER_ID "MSVC")\n'
                           'set(CMAKE_CXX_COMPILER_VERSION "19.51.36257.0")\n', encoding="utf-8")
+    _fake_native_sdk_cache(tmp_path)
     manifest = provenance.record_manifest(tmp_path, package_dir)
     assert all(item["toolchain"] == "MSVC 19.51.36257.0 / CMake / Ninja"
                for item in manifest["payloads"].values())
@@ -661,7 +674,9 @@ def test_sdist_setup_verifies_payloads_without_native_sources(
     manifest_path = package_dir / "native_payloads.json"
     manifest_path.write_text('{"payloads": {}}', encoding="utf-8")
     monkeypatch.setattr(provenance, "_source_commit", lambda _root: "a" * 40)
+    _fake_native_sdk_cache(tmp_path)
     provenance.record_manifest(tmp_path, package_dir)
+    shutil.rmtree(tmp_path / "src/cubit_plugin")
     assert provenance.verify_manifest(None, package_dir) == []
 
     if damage in ("schema", "size"):

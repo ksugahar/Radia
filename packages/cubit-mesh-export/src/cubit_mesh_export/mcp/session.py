@@ -10,6 +10,7 @@ import glob
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -301,6 +302,7 @@ def run_headless_journal(
     cwd = Path(working_directory) if working_directory else temp_root
     cwd.mkdir(parents=True, exist_ok=True)
     plugin_dir = None
+    plugin_candidates = []
     if command_plugin_directory is not None:
         plugin_dir = Path(command_plugin_directory)
         if not plugin_dir.is_dir():
@@ -309,6 +311,10 @@ def run_headless_journal(
                 "gui_started": False,
                 "error": f"command plugin directory not found: {plugin_dir}",
             }
+        plugin_candidates = [source for source in plugin_dir.iterdir()
+                             if source.is_file() and source.suffix.lower() in {".ccm", ".dll"}]
+        if not plugin_candidates:
+            raise ValueError(f"No .ccm/.dll candidate plugins in {plugin_dir}")
 
     with tempfile.TemporaryDirectory(
             prefix="cubit_mesh_export_headless_", dir=str(temp_root)) as scratch:
@@ -320,7 +326,14 @@ def run_headless_journal(
         if plugin_dir is not None:
             argv.append("-noinitfile")
             if console.name.lower() == "cubitx.exe":
-                env["CUBIT_PLUGIN_DIR"] = str(plugin_dir)
+                staged = Path(scratch) / "plugins"
+                staged.mkdir()
+                for source in plugin_candidates:
+                    destination = staged / source.with_suffix(".dll").name
+                    if destination.exists():
+                        raise ValueError(f"Conflicting candidate plugin DLL: {destination.name}")
+                    shutil.copy2(source, destination)
+                env["CUBIT_PLUGIN_DIR"] = str(staged)
             else:
                 argv.extend(["-commandplugindir", str(plugin_dir)])
         argv.append(str(driver))
