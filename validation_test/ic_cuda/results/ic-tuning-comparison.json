@@ -1,0 +1,682 @@
+{
+  "schema": "radia.gpu.ic-tuning-comparison.v1",
+  "accepted": true,
+  "native_residual_operator": "projected original operator (constrained diagonals = 1, constrained RHS = 0)",
+  "historical_scope": "Pre-review-fix overlay; measured hashes and values are unchanged and do not certify the later owned-cuBLAS-workspace binary",
+  "date": "2026-10-15",
+  "base_wheel_sha256": "de899d5fc8faf48430f3de55d288f3a49077197f6af43d09d0b5cbeb44635884",
+  "baseline_ic_sha256": "c00b0cb1bdfc43e1154622dcc2105affeceb26c3fc009bd3a189ab5e57a89f1a",
+  "optimized_ic_sha256": "d02c7730fa6e01c228c96769a1aeea27c2502365f8ef655378068145a8f211a4",
+  "optimized_source_commit": "243af2776c7aab849b31caf6a4852b23927c1603",
+  "baseline_evidence_commit": "eb07b5ba8d9e816c71517ac39454d5ca742a5f45",
+  "comparison_scope": "Sequential idle measurements on the same GPU worker and identical checked meshes, CPU 1/16 and BLAS1; no simultaneous measurement jobs",
+  "cases": [
+    {
+      "total_dofs": 10460,
+      "free_dofs": 7571,
+      "baseline_gpu_ic": {
+        "fresh_median_seconds": 0.48522005,
+        "setup_median_seconds": 0.18412184999999998,
+        "reuse_median_seconds": 0.26467125
+      },
+      "optimized_gpu_ic": {
+        "fresh_median_seconds": 0.4268879,
+        "setup_median_seconds": 0.17152535000000002,
+        "reuse_median_seconds": 0.22165875000000002
+      },
+      "cpu16_ic": {
+        "fresh_median_seconds": 0.346469149999848,
+        "setup_median_seconds": 0.08986595000033049,
+        "reuse_median_seconds": 0.25536434999958146
+      },
+      "baseline_reuse_speedup": 1.1940482836793043,
+      "cpu16_reuse_speedup": 1.1520607690857294,
+      "baseline_fresh_speedup": 1.1366451239306619,
+      "gpu_owned_bytes": 6734644,
+      "gpu_setup_peak_owned_bytes": 7761652,
+      "factor_levels": 240,
+      "projected_lower_zero_entries_pruned": 20914,
+      "iterations": 238,
+      "iteration_host_syncs": 30
+    },
+    {
+      "total_dofs": 32233,
+      "free_dofs": 26839,
+      "baseline_gpu_ic": {
+        "fresh_median_seconds": 0.9183894499999999,
+        "setup_median_seconds": 0.47467435,
+        "reuse_median_seconds": 0.4326486
+      },
+      "optimized_gpu_ic": {
+        "fresh_median_seconds": 0.7319574,
+        "setup_median_seconds": 0.4452439,
+        "reuse_median_seconds": 0.25690275
+      },
+      "cpu16_ic": {
+        "fresh_median_seconds": 0.6378442999994149,
+        "setup_median_seconds": 0.214840500000264,
+        "reuse_median_seconds": 0.4215987999996287
+      },
+      "baseline_reuse_speedup": 1.6840948569059693,
+      "cpu16_reuse_speedup": 1.6410832503724802,
+      "baseline_fresh_speedup": 1.254703415799881,
+      "gpu_owned_bytes": 22647024,
+      "gpu_setup_peak_owned_bytes": 26358548,
+      "factor_levels": 163,
+      "projected_lower_zero_entries_pruned": 40875,
+      "iterations": 365,
+      "iteration_host_syncs": 46
+    },
+    {
+      "total_dofs": 106272,
+      "free_dofs": 91533,
+      "baseline_gpu_ic": {
+        "fresh_median_seconds": 3.7076964500000003,
+        "setup_median_seconds": 1.6024607,
+        "reuse_median_seconds": 2.0862365499999997
+      },
+      "optimized_gpu_ic": {
+        "fresh_median_seconds": 3.2337899,
+        "setup_median_seconds": 1.55279565,
+        "reuse_median_seconds": 1.6665203000000002
+      },
+      "cpu16_ic": {
+        "fresh_median_seconds": 2.673291750000317,
+        "setup_median_seconds": 0.6705822499998249,
+        "reuse_median_seconds": 1.9802636999997958
+      },
+      "baseline_reuse_speedup": 1.251851867631015,
+      "cpu16_reuse_speedup": 1.1882625732190575,
+      "baseline_fresh_speedup": 1.1465483425500216,
+      "gpu_owned_bytes": 76733396,
+      "gpu_setup_peak_owned_bytes": 89573732,
+      "factor_levels": 514,
+      "projected_lower_zero_entries_pruned": 107736,
+      "iterations": 730,
+      "iteration_host_syncs": 92
+    }
+  ],
+  "phase_profiles": {
+    "baseline": [
+      {
+        "schema": "radia.gpu.ic-phase-profile.v1",
+        "assembly_seconds": 0.2751858,
+        "factor_setup_seconds": 0.0703548,
+        "solve_seconds": [
+          0.3197876,
+          0.2664676,
+          0.2655115
+        ],
+        "linear": [
+          {
+            "iterations": 237,
+            "true_relative_residual": 9.878855169389597e-13,
+            "solve_count": 1
+          },
+          {
+            "iterations": 237,
+            "true_relative_residual": 9.878855169389597e-13,
+            "solve_count": 2
+          },
+          {
+            "iterations": 237,
+            "true_relative_residual": 9.878855169389597e-13,
+            "solve_count": 3
+          }
+        ],
+        "setup": {
+          "iterations": 0,
+          "true_relative_residual": [],
+          "shift": 1.05,
+          "factor_levels": 291,
+          "gpu_owned_bytes": 6706732.0,
+          "solve_count": 0,
+          "backend": "MATLAB/mexcuda CUDA FP64",
+          "preconditioner": "natural-order fixed-shift IC(0)",
+          "factorization_backend": "CUDA level-scheduled incomplete LDLT converted to Cholesky",
+          "triangular_backend": "cuSPARSE SpSV forward and transpose",
+          "residual_checked": false,
+          "symbolic_download_bytes": 659900,
+          "symbolic_upload_bytes": 1403488.0,
+          "gpu_setup_peak_owned_bytes": 7738416.0,
+          "memory_definition": "Explicit owned CUDA buffers and queried SpSV workspaces; excludes opaque library/runtime allocations and caller inputs/outputs",
+          "explicit_free_mask": true,
+          "symbolic_and_input_seconds": 0.0014401,
+          "numeric_factor_seconds": 0.037277,
+          "triangular_analysis_seconds": 0.0291785
+        },
+        "phases": {
+          "forward_seconds": 0.0005088533333333333,
+          "backward_seconds": 0.0004971366666666667,
+          "spmv_seconds": 9.89e-06,
+          "dot_host_seconds": 2.7326666666666667e-05,
+          "norm_host_seconds": 4.397666666666667e-05,
+          "repetitions": 30
+        },
+        "assembly": {
+          "schema": "radia.hcurl-cuda-assembly.v1",
+          "host_basis_seconds": 0.1263017,
+          "upload_assembly_seconds": 0.0423772,
+          "total_seconds": 0.1697426,
+          "gpu_peak_owned_bytes_upper_bound": 17386016.0,
+          "upload_bytes": 8716748.0,
+          "download_bytes": 1236112.0,
+          "taskmanager_started": false,
+          "python_adapter_used": false,
+          "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+        },
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "binary": "<private runtime path>",
+        "timing_scope": "Explicit microprofile; excluded from six-route acceptance timing",
+        "loaded_module": {
+          "sha256": "aa30f0b7bb1fd088ea0e5e5642910c64fc063d5db729931b5bd6a4deec5dde12",
+          "path": "<private runtime path>"
+        },
+        "idle_before": {
+          "cpu_percent": 8.1,
+          "gpu": "NVIDIA A100-SXM4-40GB",
+          "gpu_utilization_percent": 0.0,
+          "device_free_MiB": 40645.0,
+          "host_available_bytes": 55283068928
+        },
+        "settling_rejections": []
+      },
+      {
+        "schema": "radia.gpu.ic-phase-profile.v1",
+        "assembly_seconds": 0.4113434,
+        "factor_setup_seconds": 0.0660632,
+        "solve_seconds": [
+          0.4222061,
+          0.4094469,
+          0.4128074
+        ],
+        "linear": [
+          {
+            "iterations": 365,
+            "true_relative_residual": 8.710896171289217e-13,
+            "solve_count": 1
+          },
+          {
+            "iterations": 365,
+            "true_relative_residual": 8.710896171289217e-13,
+            "solve_count": 2
+          },
+          {
+            "iterations": 365,
+            "true_relative_residual": 8.710896171289217e-13,
+            "solve_count": 3
+          }
+        ],
+        "setup": {
+          "iterations": 0,
+          "true_relative_residual": [],
+          "shift": 1.05,
+          "factor_levels": 288,
+          "gpu_owned_bytes": 21302588.0,
+          "solve_count": 0,
+          "backend": "MATLAB/mexcuda CUDA FP64",
+          "preconditioner": "natural-order fixed-shift IC(0)",
+          "factorization_backend": "CUDA level-scheduled incomplete LDLT converted to Cholesky",
+          "triangular_backend": "cuSPARSE SpSV forward and transpose",
+          "residual_checked": false,
+          "symbolic_download_bytes": 2118300.0,
+          "symbolic_upload_bytes": 4494472.0,
+          "gpu_setup_peak_owned_bytes": 24608964.0,
+          "memory_definition": "Explicit owned CUDA buffers and queried SpSV workspaces; excludes opaque library/runtime allocations and caller inputs/outputs",
+          "explicit_free_mask": true,
+          "symbolic_and_input_seconds": 0.0047242,
+          "numeric_factor_seconds": 0.0528584,
+          "triangular_analysis_seconds": 0.0059884
+        },
+        "phases": {
+          "forward_seconds": 0.0005193833333333334,
+          "backward_seconds": 0.0004762066666666667,
+          "spmv_seconds": 1.7333333333333332e-05,
+          "dot_host_seconds": 2.736e-05,
+          "norm_host_seconds": 4.133666666666667e-05,
+          "repetitions": 30
+        },
+        "assembly": {
+          "schema": "radia.hcurl-cuda-assembly.v1",
+          "host_basis_seconds": 0.3953644,
+          "upload_assembly_seconds": 0.00434,
+          "total_seconds": 0.4022258,
+          "gpu_peak_owned_bytes_upper_bound": 56724624.0,
+          "upload_bytes": 28522948.0,
+          "download_bytes": 3978728.0,
+          "taskmanager_started": false,
+          "python_adapter_used": false,
+          "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+        },
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "binary": "<private runtime path>",
+        "timing_scope": "Explicit microprofile; excluded from six-route acceptance timing",
+        "loaded_module": {
+          "sha256": "aa30f0b7bb1fd088ea0e5e5642910c64fc063d5db729931b5bd6a4deec5dde12",
+          "path": "<private runtime path>"
+        },
+        "idle_before": {
+          "cpu_percent": 0.2,
+          "gpu": "NVIDIA A100-SXM4-40GB",
+          "gpu_utilization_percent": 0.0,
+          "device_free_MiB": 40206.0,
+          "host_available_bytes": 54832599040
+        },
+        "settling_rejections": []
+      },
+      {
+        "schema": "radia.gpu.ic-phase-profile.v1",
+        "assembly_seconds": 1.4284324,
+        "factor_setup_seconds": 0.1703412,
+        "solve_seconds": [
+          2.0805387,
+          2.0785032,
+          2.0783088
+        ],
+        "linear": [
+          {
+            "iterations": 730,
+            "true_relative_residual": 1.1516596557633542e-12,
+            "solve_count": 1
+          },
+          {
+            "iterations": 730,
+            "true_relative_residual": 1.1516596557633542e-12,
+            "solve_count": 2
+          },
+          {
+            "iterations": 730,
+            "true_relative_residual": 1.1516596557633542e-12,
+            "solve_count": 3
+          }
+        ],
+        "setup": {
+          "iterations": 0,
+          "true_relative_residual": [],
+          "shift": 1.05,
+          "factor_levels": 658,
+          "gpu_owned_bytes": 70875284.0,
+          "solve_count": 0,
+          "backend": "MATLAB/mexcuda CUDA FP64",
+          "preconditioner": "natural-order fixed-shift IC(0)",
+          "factorization_backend": "CUDA level-scheduled incomplete LDLT converted to Cholesky",
+          "triangular_backend": "cuSPARSE SpSV forward and transpose",
+          "residual_checked": false,
+          "symbolic_download_bytes": 7069516.0,
+          "symbolic_upload_bytes": 14989216.0,
+          "gpu_setup_peak_owned_bytes": 81904640.0,
+          "memory_definition": "Explicit owned CUDA buffers and queried SpSV workspaces; excludes opaque library/runtime allocations and caller inputs/outputs",
+          "explicit_free_mask": true,
+          "symbolic_and_input_seconds": 0.0159073,
+          "numeric_factor_seconds": 0.1394449,
+          "triangular_analysis_seconds": 0.0134415
+        },
+        "phases": {
+          "forward_seconds": 0.0014091833333333334,
+          "backward_seconds": 0.0012783900000000001,
+          "spmv_seconds": 3.982666666666667e-05,
+          "dot_host_seconds": 2.8136666666666664e-05,
+          "norm_host_seconds": 4.340666666666667e-05,
+          "repetitions": 30
+        },
+        "assembly": {
+          "schema": "radia.hcurl-cuda-assembly.v1",
+          "host_basis_seconds": 1.3963883,
+          "upload_assembly_seconds": 0.0123099,
+          "total_seconds": 1.4159298,
+          "gpu_peak_owned_bytes_upper_bound": 190109504.0,
+          "upload_bytes": 95663596.0,
+          "download_bytes": 13288848.0,
+          "taskmanager_started": false,
+          "python_adapter_used": false,
+          "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+        },
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "binary": "<private runtime path>",
+        "timing_scope": "Explicit microprofile; excluded from six-route acceptance timing",
+        "loaded_module": {
+          "sha256": "aa30f0b7bb1fd088ea0e5e5642910c64fc063d5db729931b5bd6a4deec5dde12",
+          "path": "<private runtime path>"
+        },
+        "idle_before": {
+          "cpu_percent": 0.7,
+          "gpu": "NVIDIA A100-SXM4-40GB",
+          "gpu_utilization_percent": 0.0,
+          "device_free_MiB": 40174.0,
+          "host_available_bytes": 54812934144
+        },
+        "settling_rejections": []
+      }
+    ],
+    "optimized": [
+      {
+        "schema": "radia.gpu.ic-phase-profile.v1",
+        "assembly_seconds": 0.2740573,
+        "factor_setup_seconds": 0.0631403,
+        "solve_seconds": [
+          0.2740337,
+          0.2197557,
+          0.2192797
+        ],
+        "linear": [
+          {
+            "iterations": 238,
+            "true_relative_residual": 6.172948363982827e-13,
+            "solve_count": 1,
+            "iteration_host_syncs": 30,
+            "graph_cached": true
+          },
+          {
+            "iterations": 238,
+            "true_relative_residual": 6.172948363982827e-13,
+            "solve_count": 2,
+            "iteration_host_syncs": 30,
+            "graph_cached": true
+          },
+          {
+            "iterations": 238,
+            "true_relative_residual": 6.172948363982827e-13,
+            "solve_count": 3,
+            "iteration_host_syncs": 30,
+            "graph_cached": true
+          }
+        ],
+        "setup": {
+          "iterations": 0,
+          "true_relative_residual": [],
+          "shift": 1.05,
+          "factor_levels": 240,
+          "gpu_owned_bytes": 6734644.0,
+          "solve_count": 0,
+          "backend": "MATLAB/mexcuda CUDA FP64",
+          "preconditioner": "natural-order fixed-shift IC(0)",
+          "factorization_backend": "CUDA level-scheduled incomplete LDLT converted to Cholesky",
+          "triangular_backend": "cuSPARSE SpSV explicit lower/upper non-transpose CSR",
+          "residual_checked": false,
+          "symbolic_download_bytes": 701740,
+          "symbolic_upload_bytes": 1812444.0,
+          "gpu_setup_peak_owned_bytes": 7761652.0,
+          "memory_definition": "Explicit owned CUDA buffers and queried SpSV workspaces; excludes opaque library/runtime allocations and caller inputs/outputs",
+          "explicit_free_mask": true,
+          "symbolic_and_input_seconds": 0.0019035,
+          "numeric_factor_seconds": 0.0272532,
+          "triangular_analysis_seconds": 0.0286564,
+          "graph_capture_seconds": 0.0029014,
+          "iteration_host_syncs": 0,
+          "graph_batch_iterations": 8,
+          "graph_cached": true,
+          "factor_nonzeros": 61573,
+          "projected_zero_entries_pruned": 20914
+        },
+        "phases": {
+          "forward_seconds": 0.00042974333333333333,
+          "backward_seconds": 0.00043273333333333335,
+          "spmv_seconds": 9.923333333333334e-06,
+          "dot_host_seconds": 2.6023333333333332e-05,
+          "norm_host_seconds": 4.302e-05,
+          "repetitions": 30
+        },
+        "assembly": {
+          "schema": "radia.hcurl-cuda-assembly.v1",
+          "host_basis_seconds": 0.1267157,
+          "upload_assembly_seconds": 0.0420806,
+          "total_seconds": 0.1698286,
+          "gpu_peak_owned_bytes_upper_bound": 17386016.0,
+          "upload_bytes": 8716748.0,
+          "download_bytes": 1236112.0,
+          "taskmanager_started": false,
+          "python_adapter_used": false,
+          "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+        },
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "binary": "<private runtime path>",
+        "timing_scope": "Explicit microprofile; excluded from six-route acceptance timing",
+        "loaded_module": {
+          "sha256": "d02c7730fa6e01c228c96769a1aeea27c2502365f8ef655378068145a8f211a4",
+          "path": "<private runtime path>"
+        },
+        "idle_before": {
+          "cpu_percent": 8.8,
+          "gpu": "NVIDIA A100-SXM4-40GB",
+          "gpu_utilization_percent": 0.0,
+          "device_free_MiB": 40645.0,
+          "host_available_bytes": 55255142400
+        },
+        "settling_rejections": []
+      },
+      {
+        "schema": "radia.gpu.ic-phase-profile.v1",
+        "assembly_seconds": 0.4082017,
+        "factor_setup_seconds": 0.0444392,
+        "solve_seconds": [
+          0.3011235,
+          0.2551413,
+          0.2546132
+        ],
+        "linear": [
+          {
+            "iterations": 365,
+            "true_relative_residual": 8.94725445845195e-13,
+            "solve_count": 1,
+            "iteration_host_syncs": 46,
+            "graph_cached": true
+          },
+          {
+            "iterations": 365,
+            "true_relative_residual": 8.94725445845195e-13,
+            "solve_count": 2,
+            "iteration_host_syncs": 46,
+            "graph_cached": true
+          },
+          {
+            "iterations": 365,
+            "true_relative_residual": 8.94725445845195e-13,
+            "solve_count": 3,
+            "iteration_host_syncs": 46,
+            "graph_cached": true
+          }
+        ],
+        "setup": {
+          "iterations": 0,
+          "true_relative_residual": [],
+          "shift": 1.05,
+          "factor_levels": 163,
+          "gpu_owned_bytes": 22647024.0,
+          "solve_count": 0,
+          "backend": "MATLAB/mexcuda CUDA FP64",
+          "preconditioner": "natural-order fixed-shift IC(0)",
+          "factorization_backend": "CUDA level-scheduled incomplete LDLT converted to Cholesky",
+          "triangular_backend": "cuSPARSE SpSV explicit lower/upper non-transpose CSR",
+          "residual_checked": false,
+          "symbolic_download_bytes": 2247232.0,
+          "symbolic_upload_bytes": 6216636.0,
+          "gpu_setup_peak_owned_bytes": 26358548.0,
+          "memory_definition": "Explicit owned CUDA buffers and queried SpSV workspaces; excludes opaque library/runtime allocations and caller inputs/outputs",
+          "explicit_free_mask": true,
+          "symbolic_and_input_seconds": 0.0060859,
+          "numeric_factor_seconds": 0.0318268,
+          "triangular_analysis_seconds": 0.0036592,
+          "graph_capture_seconds": 0.0006617,
+          "iteration_host_syncs": 0,
+          "graph_batch_iterations": 8,
+          "graph_cached": true,
+          "factor_nonzeros": 223912,
+          "projected_zero_entries_pruned": 40875
+        },
+        "phases": {
+          "forward_seconds": 0.00031744333333333336,
+          "backward_seconds": 0.00029474333333333335,
+          "spmv_seconds": 1.704e-05,
+          "dot_host_seconds": 2.678666666666667e-05,
+          "norm_host_seconds": 4.263333333333333e-05,
+          "repetitions": 30
+        },
+        "assembly": {
+          "schema": "radia.hcurl-cuda-assembly.v1",
+          "host_basis_seconds": 0.3924259,
+          "upload_assembly_seconds": 0.0041768,
+          "total_seconds": 0.3991429,
+          "gpu_peak_owned_bytes_upper_bound": 56724624.0,
+          "upload_bytes": 28522948.0,
+          "download_bytes": 3978728.0,
+          "taskmanager_started": false,
+          "python_adapter_used": false,
+          "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+        },
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "binary": "<private runtime path>",
+        "timing_scope": "Explicit microprofile; excluded from six-route acceptance timing",
+        "loaded_module": {
+          "sha256": "d02c7730fa6e01c228c96769a1aeea27c2502365f8ef655378068145a8f211a4",
+          "path": "<private runtime path>"
+        },
+        "idle_before": {
+          "cpu_percent": 0.0,
+          "gpu": "NVIDIA A100-SXM4-40GB",
+          "gpu_utilization_percent": 0.0,
+          "device_free_MiB": 40206.0,
+          "host_available_bytes": 54792589312
+        },
+        "settling_rejections": []
+      },
+      {
+        "schema": "radia.gpu.ic-phase-profile.v1",
+        "assembly_seconds": 1.4104731,
+        "factor_setup_seconds": 0.1422296,
+        "solve_seconds": [
+          1.6803636,
+          1.6658244,
+          1.6657586
+        ],
+        "linear": [
+          {
+            "iterations": 730,
+            "true_relative_residual": 1.1236683852888978e-12,
+            "solve_count": 1,
+            "iteration_host_syncs": 92,
+            "graph_cached": true
+          },
+          {
+            "iterations": 730,
+            "true_relative_residual": 1.1236683852888978e-12,
+            "solve_count": 2,
+            "iteration_host_syncs": 92,
+            "graph_cached": true
+          },
+          {
+            "iterations": 730,
+            "true_relative_residual": 1.1236683852888978e-12,
+            "solve_count": 3,
+            "iteration_host_syncs": 92,
+            "graph_cached": true
+          }
+        ],
+        "setup": {
+          "iterations": 0,
+          "true_relative_residual": [],
+          "shift": 1.05,
+          "factor_levels": 514,
+          "gpu_owned_bytes": 76733396.0,
+          "solve_count": 0,
+          "backend": "MATLAB/mexcuda CUDA FP64",
+          "preconditioner": "natural-order fixed-shift IC(0)",
+          "factorization_backend": "CUDA level-scheduled incomplete LDLT converted to Cholesky",
+          "triangular_backend": "cuSPARSE SpSV explicit lower/upper non-transpose CSR",
+          "residual_checked": false,
+          "symbolic_download_bytes": 7494604.0,
+          "symbolic_upload_bytes": 21185132.0,
+          "gpu_setup_peak_owned_bytes": 89573732.0,
+          "memory_definition": "Explicit owned CUDA buffers and queried SpSV workspaces; excludes opaque library/runtime allocations and caller inputs/outputs",
+          "explicit_free_mask": true,
+          "symbolic_and_input_seconds": 0.0194022,
+          "numeric_factor_seconds": 0.1099801,
+          "triangular_analysis_seconds": 0.0103793,
+          "graph_capture_seconds": 0.000642,
+          "iteration_host_syncs": 0,
+          "graph_batch_iterations": 8,
+          "graph_cached": true,
+          "factor_nonzeros": 775953,
+          "projected_zero_entries_pruned": 107736
+        },
+        "phases": {
+          "forward_seconds": 0.0011258466666666665,
+          "backward_seconds": 0.0010309633333333333,
+          "spmv_seconds": 3.951666666666667e-05,
+          "dot_host_seconds": 2.7166666666666665e-05,
+          "norm_host_seconds": 4.331e-05,
+          "repetitions": 30
+        },
+        "assembly": {
+          "schema": "radia.hcurl-cuda-assembly.v1",
+          "host_basis_seconds": 1.3788958,
+          "upload_assembly_seconds": 0.0119267,
+          "total_seconds": 1.3981829,
+          "gpu_peak_owned_bytes_upper_bound": 190109504.0,
+          "upload_bytes": 95663596.0,
+          "download_bytes": 13288848.0,
+          "taskmanager_started": false,
+          "python_adapter_used": false,
+          "assembly": "NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction"
+        },
+        "device": "NVIDIA A100-SXM4-40GB",
+        "matlab": "26.1.0.3203278 (R2026a)",
+        "binary": "<private runtime path>",
+        "timing_scope": "Explicit microprofile; excluded from six-route acceptance timing",
+        "loaded_module": {
+          "sha256": "d02c7730fa6e01c228c96769a1aeea27c2502365f8ef655378068145a8f211a4",
+          "path": "<private runtime path>"
+        },
+        "idle_before": {
+          "cpu_percent": 0.1,
+          "gpu": "NVIDIA A100-SXM4-40GB",
+          "gpu_utilization_percent": 0.0,
+          "device_free_MiB": 40174.0,
+          "host_available_bytes": 54773207040
+        },
+        "settling_rejections": []
+      }
+    ]
+  },
+  "factor_action_parity": {
+    "schema": "radia.gpu.ic-factor-action-parity.v1",
+    "accepted": true,
+    "cases": [
+      {
+        "total_dofs": 10460,
+        "baseline_cpu_relative": 6.018997050655346e-16,
+        "optimized_cpu_relative": 6.001352296352344e-16,
+        "optimized_baseline_relative": 2.4289160592694504e-16
+      },
+      {
+        "total_dofs": 32233,
+        "baseline_cpu_relative": 5.455451324837936e-16,
+        "optimized_cpu_relative": 5.476928128631874e-16,
+        "optimized_baseline_relative": 1.9169516292390823e-16
+      },
+      {
+        "total_dofs": 106272,
+        "baseline_cpu_relative": 5.757373673055849e-16,
+        "optimized_cpu_relative": 5.77288384525893e-16,
+        "optimized_baseline_relative": 2.0874638234487982e-16
+      }
+    ],
+    "relative_limit": 1e-08,
+    "baseline_difference_limit": 1e-10,
+    "cpu_threads": 1,
+    "cpu_origin": {
+      "distribution": "radia",
+      "version": "5.3.2",
+      "sha256": "6b1f734563f56728c849d1bea4a6aecd7400ff73ee00f2b7ae30d131f9fb1b3e"
+    }
+  },
+  "limitations": [
+    "Explicit buffer bounds exclude opaque graph/library/runtime allocations; process memory includes surrounding validation",
+    "The instrumented baseline microprofile build records source_dirty=true; its CUDA source bytes were independently matched to committed b1088ea7b92ef8238d4dd8040c5730fb5adcca69, including checkout CRLF. It is diagnostic, not a distribution acceptance artifact.",
+    "Fresh GPU IC includes serial host FE setup; reuse gains do not imply faster initial construction."
+  ]
+}

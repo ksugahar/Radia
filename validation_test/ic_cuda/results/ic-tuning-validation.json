@@ -1,0 +1,142 @@
+{
+  "schema": "radia.gpu.ic-tuning-validation.v1",
+  "accepted": true,
+  "native_residual_operator": "projected original operator (constrained diagonals = 1, constrained RHS = 0)",
+  "independent_residual_operator": "Python original free-DOF equations; separately recomputed",
+  "historical_scope": "Pre-review-fix overlay; measured hashes and values are unchanged and do not certify the later owned-cuBLAS-workspace binary",
+  "compute_oracle": {
+    "schema": "radia.gpu.ic-accuracy.v1",
+    "passed": true,
+    "binary_sha256": "d02c7730fa6e01c228c96769a1aeea27c2502365f8ef655378068145a8f211a4",
+    "fixture_sha256": "7bca55782559b29bd2470e5d707c8d4b702b32debb7bad7d0eed8d23401dd116",
+    "numpy": "2.5.3",
+    "independent_cpu": "NumPy original-A solve, shifted full-pattern solve and independent square-root sparse IC(0) oracle",
+    "apply_relative": 1.743608947116815e-16,
+    "sparse_apply_relative": 1.3253928529842417e-16,
+    "solution_relative_max": 1.6314466480974827e-16,
+    "true_relative_residual_max": 1.3269703217737503e-16,
+    "rejection_count": 25,
+    "live_count_restored": true,
+    "frontend_checked": true,
+    "device": "NVIDIA A100-SXM4-40GB",
+    "lifecycle": {
+      "passed": true,
+      "path": "same-device",
+      "caller_device_restored": true,
+      "live_count": 0.0,
+      "mex_unloaded": true,
+      "stale_rejected": true
+    },
+    "runtime_library_sha256": {
+      "cusparse64_12.dll": "0af1ee97b0c573951dd368a862d3e7eceb00bf1313e9344ad326734a8447db8f",
+      "cublas64_12.dll": "f34af240d84211f509020b4a6f88914bbc15a15c2678832fa330fc963d136c1d"
+    }
+  },
+  "development_oracle": {
+    "schema": "radia.gpu.ic-accuracy.v1",
+    "passed": true,
+    "binary_sha256": "d02c7730fa6e01c228c96769a1aeea27c2502365f8ef655378068145a8f211a4",
+    "fixture_sha256": "03441738ef6d2d3ec29569a1e6fc1d7295489a8f504bac4a30bed63680d92112",
+    "numpy": "2.5.3",
+    "independent_cpu": "NumPy original-A solve, shifted full-pattern solve and independent square-root sparse IC(0) oracle",
+    "apply_relative": 1.743608947116815e-16,
+    "sparse_apply_relative": 1.3253928529842417e-16,
+    "solution_relative_max": 1.6314466480974827e-16,
+    "true_relative_residual_max": 1.3269703217737503e-16,
+    "rejection_count": 25,
+    "live_count_restored": true,
+    "frontend_checked": true,
+    "device": "Quadro RTX 5000",
+    "lifecycle": {
+      "passed": true,
+      "path": "same-device",
+      "caller_device_restored": true,
+      "live_count": 0.0,
+      "mex_unloaded": true,
+      "stale_rejected": true
+    },
+    "runtime_library_sha256": {
+      "cusparse64_12.dll": "0af1ee97b0c573951dd368a862d3e7eceb00bf1313e9344ad326734a8447db8f",
+      "cublas64_12.dll": "f34af240d84211f509020b4a6f88914bbc15a15c2678832fa330fc963d136c1d"
+    }
+  },
+  "factor_action_parity": {
+    "schema": "radia.gpu.ic-factor-action-parity.v1",
+    "accepted": true,
+    "cases": [
+      {
+        "total_dofs": 10460,
+        "baseline_cpu_relative": 6.018997050655346e-16,
+        "optimized_cpu_relative": 6.001352296352344e-16,
+        "optimized_baseline_relative": 2.4289160592694504e-16
+      },
+      {
+        "total_dofs": 32233,
+        "baseline_cpu_relative": 5.455451324837936e-16,
+        "optimized_cpu_relative": 5.476928128631874e-16,
+        "optimized_baseline_relative": 1.9169516292390823e-16
+      },
+      {
+        "total_dofs": 106272,
+        "baseline_cpu_relative": 5.757373673055849e-16,
+        "optimized_cpu_relative": 5.77288384525893e-16,
+        "optimized_baseline_relative": 2.0874638234487982e-16
+      }
+    ],
+    "relative_limit": 1e-08,
+    "baseline_difference_limit": 1e-10,
+    "cpu_threads": 1,
+    "cpu_origin": {
+      "distribution": "radia",
+      "version": "5.3.2",
+      "sha256": "6b1f734563f56728c849d1bea4a6aecd7400ff73ee00f2b7ae30d131f9fb1b3e"
+    }
+  },
+  "development_fem": {
+    "accepted": true,
+    "timing_accepted": false,
+    "total_dofs": 10460,
+    "summary": {
+      "cpu-ams-1": {
+        "fresh_median_seconds": 0.3206260999722872,
+        "setup_median_seconds": 0.2568817499850411,
+        "reuse_median_seconds": 0.0639433000178542
+      },
+      "cpu-ic-1": {
+        "fresh_median_seconds": 0.3941693499800749,
+        "setup_median_seconds": 0.15413564999471419,
+        "reuse_median_seconds": 0.23537935002241284
+      },
+      "gpu-ams-1": {
+        "fresh_median_seconds": 0.5458371,
+        "setup_median_seconds": 0.4423661,
+        "reuse_median_seconds": 0.051919999999999994
+      },
+      "cpu-ams-16": {
+        "fresh_median_seconds": 0.42547415001899935,
+        "setup_median_seconds": 0.38659040001221,
+        "reuse_median_seconds": 0.03491005001706071
+      },
+      "cpu-ic-16": {
+        "fresh_median_seconds": 0.39580534998094663,
+        "setup_median_seconds": 0.12091435000183992,
+        "reuse_median_seconds": 0.281621299975086
+      },
+      "gpu-ic-1": {
+        "fresh_median_seconds": 0.76488425,
+        "setup_median_seconds": 0.44289095,
+        "reuse_median_seconds": 0.25277045
+      }
+    },
+    "ic_candidate": {
+      "build_source_commit": "243af2776c7aab849b31caf6a4852b23927c1603",
+      "binary_sha256": "d02c7730fa6e01c228c96769a1aeea27c2502365f8ef655378068145a8f211a4",
+      "source_sha256": "a915d44482526e44681376455af8f8af8568a935a4e2e900f7c1907393a859f4",
+      "frontend_sha256": {
+        "ICContext.m": "0832ecab4e01b14a017882b77c0e65c0211dfb90199ce81fda427c75d978afbd",
+        "HCurlICSystem.m": "ed256323c2efb1f7655c3c527a36fe3f76b4b8ef59f5cfe7adff2f9745407c0b"
+      },
+      "distribution_status": "Explicit experimental IC overlay; base AMS wheel 0.1.5rc1 is unchanged"
+    }
+  }
+}
