@@ -1,9 +1,13 @@
-# Approved release certificates, including the historical LAB signer.
-function Assert-EqneditReleaseSignature([string]$Path, [switch]$AllowUntrustedRoot) {
-    $approved = @(
+# Current build-host key and historical artifact-verification keys.
+function Get-EqneditApprovedSignerThumbprints {
+    @(
+        '2AC60C00B3C67A805FEC23DF27DE1C219EA6BD9A',
         '7E80D4365CFDBA7B22B33C35EB7CD6A41050E065',
         'BAEBD216FF82C03F57B2796C42DC8F4D083E07E1'
     )
+}
+function Assert-EqneditReleaseSignature([string]$Path, [switch]$AllowUntrustedRoot) {
+    $approved = @(Get-EqneditApprovedSignerThumbprints)
     $signature = Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
     # Pin the certificate before adding its public root on a disposable
     # hosted runner. Re-evaluate Authenticode afterwards and require Valid.

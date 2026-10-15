@@ -3928,3 +3928,20 @@ def test_reviewer_momentum_accepts_decision_value_before_obstacle():
     types = {risk["type"] for risk in result["risks"]}
 
     assert "decision_value_hidden_in_negative_opening" not in types
+
+
+def test_inline_japanese_prose_is_never_statted_as_a_path(monkeypatch):
+    """Linux rejects path components over 255 bytes (ENAMETOOLONG)."""
+    import pathlib
+    from radia_mcp.grant_writing import tools
+
+    prose = "本研究は磁気機器の設計判断を支える解析手法を確立する。" * 4
+    assert len(prose.encode("utf-8")) > 255 and "\n" not in prose
+
+    def boom(self):
+        raise OSError(36, "File name too long")
+
+    monkeypatch.setattr(pathlib.Path, "is_file", boom)
+    assert tools._as_text_file(prose) is None
+    assert tools._as_text_file("short.md") is None  # OSError from stat means text
+    assert tools._read_text_if_path(prose) == prose

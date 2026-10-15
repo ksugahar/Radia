@@ -3,7 +3,7 @@
 # steps before it - the hand test, the Fable review, the merge to main - which
 # stay in SKILL.md.
 #
-# Run this build and signing phase on INTEL11 (100号機). LAB is reserved for
+# Run this build and signing phase on the current 100号機 build host. LAB is reserved for
 # validation and must not compile or sign release binaries. The signing key is
 # non-exportable and its certificate is pinned; build-host provenance is
 # recorded separately from signature verification. The
@@ -87,7 +87,7 @@ $dist = Join-Path $eqnedit 'dist\Eqnedit64.exe'
 if ($SkipBuild) {
     Step 'skipping the build on request; verifying the existing dist binary'
 } else {
-    Step 'compiling and signing on INTEL11 (100号機)'
+    Step 'compiling and signing on the current 100号機 build host'
     & cmd.exe /d /c (Join-Path $eqnedit 'build\build_eqnedit64.bat')
     if ($LASTEXITCODE -ne 0) {
         throw "build_eqnedit64.bat failed with exit code $LASTEXITCODE."

@@ -1,9 +1,10 @@
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '../../../.agents/skills/release-eqnedit64/scripts/assert_release_signature.ps1')
 function Get-AuthenticodeSignature { return $script:fixture }
-$approved = '7E80D4365CFDBA7B22B33C35EB7CD6A41050E065'
+$approved = '2AC60C00B3C67A805FEC23DF27DE1C219EA6BD9A'
 foreach ($sample in @(
     @('Valid', 'CN=ksugahar', $approved, $true),
+    @('Valid', 'CN=ksugahar', '7E80D4365CFDBA7B22B33C35EB7CD6A41050E065', $true),
     @('Valid', 'CN=ksugahar', 'BAEBD216FF82C03F57B2796C42DC8F4D083E07E1', $true),
     @('Valid', 'CN=ksugahar', ('0' * 40), $false),
     @('Valid', 'CN=other', $approved, $false),
