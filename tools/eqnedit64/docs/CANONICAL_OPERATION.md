@@ -48,9 +48,11 @@ GitHub-hosted Windowsの隔離CIで実行する。
 ビルドはファイルロック解除のためその実行中プロセスを強制終了する。
 別の配布先と無関係な同名プロセスは対象にしない。
 
-`accept_release.ps1`は使い捨てVMまたは専用の隔離ユーザーセッションでCI相当を再現する
-場合だけ使う。対話中LABでは実行せず、ガードを通すために
-`EQNEDIT64_ISOLATED_TEST_SESSION=1`を設定してはならない。
+`accept_release.ps1`と`test_external_paste.ps1`は、100号機のAdministratorセッションを
+承認済み試験セッションとして実行する（2026-10-15 利用者決定）。そのセッションで
+`EQNEDIT64_ISOLATED_TEST_SESSION=1`を設定し、同じセッションでOfficeが起動していない
+ときだけ実行する。他ユーザーのセッションやOfficeには接続・停止しない。LABや他ユーザーの
+セッションではこの変数を設定しない。
 
 ```powershell
 pwsh -NoProfile -File build\accept_release.ps1
