@@ -219,7 +219,7 @@ function officeBytes(html) {
         }, {html: bytes.toString("utf8"), id: fixture.id});
         assert(languageAndDelimiter, fixture.id + ": explicit language/delimiter contract failed");
       }
-      if (fixture.run_styles || fixture.function_name) {
+      if (fixture.run_styles || fixture.function_name || fixture.alignment_points !== undefined) {
         for (const bytes of [n, w]) {
           const stylesOk = await page.evaluate(({html, styles, functionName, alignmentPoints}) => {
             const doc = new DOMParser().parseFromString(html, "application/xml");
