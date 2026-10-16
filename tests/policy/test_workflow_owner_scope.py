@@ -122,7 +122,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         seeds.update("src/core/" + name for name in
                      re.findall(r"src/core/([A-Za-z0-9_.]+)", script.read_text(encoding="utf-8")))
     core = set(CONTRACT.include_closure(ROOT, sorted(seeds), "src/core"))
-    assert {p for p in shared if p.startswith("src/core/")} == core
+    assert {p for p in shared if p.startswith("src/core/")} == core | {"src/core/radia_mex_sparse_symmetry.h"}
     assert len(core) == 14
     # The radia-gpu lane must start on every file its native build reads.
     lane = MANIFEST["lanes"]["radia-gpu"]["events"]
@@ -138,7 +138,33 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         "packages/radia-mcp/src/radia_mcp/common/__init__.py",
         "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
         "packages/radia-mcp/src/radia_mcp/common/status.py"}
+    expected |= {
+        "src/core/radia_mex_sparse_symmetry.h",
+        "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
+        "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+        "tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
+        "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
+        "validation_test/induction_heating/test_ih_operator_physics_golden.py",
+    }
+    expected |= {
+        "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
+        "validation_test/radia_mcp/test_aphi_gauge_point.py",
+        "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
+        "validation_test/radia_mcp/test_eddy_driven_region.py",
+        "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
+    }
     assert shared == expected
+    # The shared IH contracts execute the GPU package adapter against CPU Radia solvers.
+    for path in ("tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
+                 "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
+                 "validation_test/induction_heating/test_ih_operator_physics_golden.py"):
+        assert "from radia_gpu.simulink" in (ROOT / path).read_text(encoding="utf-8")
+    adapter = (ROOT / "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py").read_text(encoding="utf-8")
+    assert "radia.panels" in adapter
+    assert "cubit_mesh_export.check" in (ROOT / "tests/test_ih_operator_assembly.py").read_text(encoding="utf-8")
     # Integration evidence: radia-gpu LTspice tests cross-check the radia-mcp LTspice gates.
     gpu_ltspice_tests = list((ROOT / "packages/radia-gpu/tests/ltspice").glob("test_*.py"))
     assert any("from radia_mcp.ltspice" in path.read_text(encoding="utf-8") for path in gpu_ltspice_tests)
@@ -189,7 +215,7 @@ def test_solver_triggers_exclude_only_independent_workflows_and_policy_tests():
 
 def test_policy_contracts_run_in_policy_lane():
     workflow = (ROOT / ".github/workflows/policy-lint.yml").read_text()
-    assert "python -m pytest tests/policy/ -q" in workflow
+    assert "python -m pytest tests/policy/ tests/test_sparsesolv_ci_contract.py -q" in workflow
     manifest = (ROOT / "tests/test_tier_manifest.json").read_text()
     assert "test_release_workflow_ref_gate.py" not in manifest
 

@@ -41,6 +41,10 @@ on:
       - 'tools/sparsesolv_ci_impact.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
+      - 'src/runtime/ih/**'
+      - 'tests/cpp/test_radia_ih_thermal_acceptance.cpp'
+      - 'tests/cpp/test_radia_mex_sparse_symmetry.cpp'
+      - 'src/core/radia_mex_sparse_symmetry.h'
       - '!**/*.md'
       - 'packages/radia-gpu/README.md'  # wheel metadata and payload
       - 'docs/ltspice/README.md'  # CLI documentation contract
@@ -84,6 +88,10 @@ on:
       - 'tools/sparsesolv_ci_impact.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
+      - 'src/runtime/ih/**'
+      - 'tests/cpp/test_radia_ih_thermal_acceptance.cpp'
+      - 'tests/cpp/test_radia_mex_sparse_symmetry.cpp'
+      - 'src/core/radia_mex_sparse_symmetry.h'
       - '!**/*.md'
       - 'packages/radia-gpu/README.md'  # wheel metadata and payload
       - 'docs/ltspice/README.md'  # CLI documentation contract
@@ -134,6 +142,22 @@ jobs:
           & $python -m pip install @pins numpy scipy h5py psutil build wheel pytest schemdraw mkl-devel "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Run owned C++ runtime and sparse symmetry acceptance
+        shell: pwsh
+        run: |
+          python -m pip install cmake ninja
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $nativeBuild = Join-Path $env:RUNNER_TEMP "radia-gpu-native-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+          if ($LASTEXITCODE -ne 0 -or -not $vs) { throw 'MSVC installation not found' }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          & cmd.exe /d /c "call `"$vcvars`" && cmake -S packages/radia-gpu/tests/native -B `"$nativeBuild`" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & cmd.exe /d /c "call `"$vcvars`" && cmake --build `"$nativeBuild`" --config Release --target test_radia_mex_sparse_symmetry test_radia_ih_thermal_acceptance --parallel 2"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir $nativeBuild -C Release -R '^radia\.(mex_sparse_symmetry|ih_thermal_acceptance)\.cpp$' --output-on-failure --no-tests=error
+          exit $LASTEXITCODE
       - name: Build GPU mexcuda gateway
         shell: pwsh
         run: |

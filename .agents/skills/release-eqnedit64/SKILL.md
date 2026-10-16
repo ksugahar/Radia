@@ -9,6 +9,9 @@ Finish with four matching outcomes: `O:\Eqnedit64.exe`, the tagged GitHub
 Release, the PyPI wheels, and the Web/JS edition published on the Sugahara
 Laboratory homepage. All four must correspond to the same release tag.
 GitHub/PyPI success alone does not complete an Eqnedit64 release.
+The homepage's Windows EXE link must also name the newly published Eqnedit64
+tag. A stale public download link blocks completion even when the release
+assets and Web JavaScript are correct.
 
 ## O: hand-test invariant
 
@@ -148,6 +151,11 @@ The publication destination is
    to the tag's verified GitHub Release asset. Keep the visible label versionless
    (`Windows版をダウンロード`), the GitHub source link, and the Windows
    screenshot. The learning portal links to this independent page.
+   This is mandatory for every formal EXE release, including releases whose
+   Web/JS source did not change. Link to the permanent asset produced by
+   GitHub Actions: `https://github.com/ksugahar/Radia/releases/download/<tag>/Eqnedit64.exe`.
+   Do not use a temporary Actions artifact URL or the monorepo-wide
+   `releases/latest` alias, which may refer to another distribution.
 3. In the homepage workspace, run
    `site_builder/tools/ci_equation_editor.py --radia-repository <tag-checkout> --profile browser --verify-download`.
    This builds only the editor page/assets and checks the browser contract.
@@ -167,6 +175,13 @@ The publication destination is
    URLs, JS hash, browser result, and uploaded files in the homepage handover.
    If the public JS already matches the tag, verify it and record that fact;
    an unchanged JS file need not be uploaded again.
+   Verify the public page's actual download href names this exact tag, fetch
+   that EXE successfully, and compare its SHA-256 with the formal O: manifest
+   and released executable. Local Markdown changes alone are insufficient.
+6. Send the tag/source SHA, public homepage and EXE URLs, EXE/JS hashes and
+   verification results through the Codex and Claude repository-management
+   hubs to Claude Code's same-named editor session. Keep this exchange in the
+   background; do not ask the user to relay it.
 
 If homepage publication or verification fails, report the release as partially
 published with the failing destination. Preserve successful EXE publication and
