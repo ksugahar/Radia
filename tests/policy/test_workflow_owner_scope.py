@@ -189,7 +189,7 @@ def test_solver_triggers_exclude_only_independent_workflows_and_policy_tests():
 
 def test_policy_contracts_run_in_policy_lane():
     workflow = (ROOT / ".github/workflows/policy-lint.yml").read_text()
-    assert "python -m pytest tests/policy/ -q" in workflow
+    assert "python -m pytest tests/policy/ tests/test_sparsesolv_ci_contract.py -q" in workflow
     manifest = (ROOT / "tests/test_tier_manifest.json").read_text()
     assert "test_release_workflow_ref_gate.py" not in manifest
 
