@@ -25,6 +25,8 @@ for (const fixture of contract315.fixtures) {
   corpus.push({...fixture, id: "315-" + fixture.id, contract315: fixture.id});
 }
 const baselineProbe = process.env.EQNEDIT64_BASELINE_314_PROBE;
+const requireBaseline315 = process.argv.includes("--require-baseline315");
+if (requireBaseline315 && !baselineProbe) throw Error("3.1.5 release gate requires EQNEDIT64_BASELINE_314_PROBE");
 const fixtureIds = new Set(corpus.map(fixture => fixture.id));
 assert.equal(fixtureIds.size, corpus.length, "Duplicate corpus fixture ID");
 for (const id of ["H1-H5", "H6-anchored", "H6-unanchored", "cases", "pmatrix",
@@ -286,13 +288,14 @@ function officeBytes(html) {
             const matrices = Array.from(doc.getElementsByTagNameNS(ns, "m"));
             const rows = array => Array.from(array.children).filter(e => e.localName === "e");
             const marked = row => Array.from(row.children).filter(r => r.localName === "r" && r.getElementsByTagNameNS(ns, "aln").length);
+            const beforeEquals = row => marked(row).length === 1 && marked(row)[0].nextElementSibling?.localName === "r" && marked(row)[0].nextElementSibling.textContent.startsWith("=");
             if (id === "single-unanchored") return arrays.length === 0 && matrices.length === 0;
-            if (id === "single-anchored") return arrays.length === 1 && rows(arrays[0]).length === 1 && marked(rows(arrays[0])[0]).length === 1;
+            if (id === "single-anchored") return arrays.length === 1 && rows(arrays[0]).length === 1 && beforeEquals(rows(arrays[0])[0]);
             if (id === "pure-nested") return arrays.length === 1 && rows(arrays[0]).length === 3 && rows(arrays[0]).every(r => marked(r).length === 1 && marked(r)[0] === r.firstElementChild);
             if (id === "mixed-nested") {
               if (arrays.length !== 2 || matrices.length) return false;
               const outer = rows(arrays[0]), inner = rows(arrays[1]);
-              return outer.length === 2 && inner.length === 2 && outer.every(r => marked(r).length === 1) && marked(outer[0])[0] === outer[0].lastElementChild && inner.every(r => marked(r).length === 1);
+              return outer.length === 2 && inner.length === 2 && outer.every(r => marked(r).length === 1) && marked(outer[0])[0] === outer[0].lastElementChild && beforeEquals(outer[1]) && inner.every(beforeEquals);
             }
             if (id === "matrix-one-cell") return matrices.length === 1 && arrays.length === 0 && matrices[0].getElementsByTagNameNS(ns, "mr").length === 1;
             if (id === "matrix-multi") return matrices.length === 1 && arrays.length === 0 && matrices[0].getElementsByTagNameNS(ns, "mr").length === 2;
@@ -338,6 +341,8 @@ function officeBytes(html) {
                               path.join(__dirname, "office_bit_corpus.json")))
                           .digest("hex"),
       baseline314_probe: baselineProbe || null,
+      baseline314_required: requireBaseline315,
+      baseline314_scope: baselineProbe ? "checked against explicit baseline probe" : "NOT CHECKED (ordinary CI only)",
       baseline314_checked: Boolean(baselineProbe),
       baseline314_verified: Boolean(baselineProbe) && results.filter(r => r.baseline314_equal !== null).length === 6 && results.every(r => r.baseline314_equal !== false),
       contract315_sha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(__dirname, "office_315_contract.json"))).digest("hex"),
@@ -350,6 +355,10 @@ function officeBytes(html) {
     },
                                                                         null,
                                                                         2));
+    if (requireBaseline315) {
+      assert.equal(results.filter(r => r.baseline314_equal !== null).length, 6, "Six immutable baseline comparisons required");
+      assert(results.every(r => r.baseline314_equal !== false), "Required immutable baseline verification failed");
+    }
     const covered = results.filter(r => r.coverage === "covered");
     const excluded = results.filter(r => r.coverage === "excluded");
     const failures = covered.filter(r => !r.equal || r.baseline314_equal === false);
