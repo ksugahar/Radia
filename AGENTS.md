@@ -172,18 +172,18 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: CI/builds use 100号機 with the `100` runner label.
-100号機 permits isolated tests and heavy numerical/memory validation.
+**POLICY**: CI/builds use 100号機 with the `100` runner label. Stage3: fast-contracts uses `ci-light`, no `100`; heavy jobs keep `100`. Final: `100` + one capability; see routing manifest.
+100号機 permits isolated heavy validation.
 Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
 LAB owns SSH preflight. Use the on-demand GPU worker only for mexcuda GPU work; Retired execution targets are excluded from deployment, CI and computation.
-Release-quad requires 102号機 and 100号機 for the same release commit; on-demand NGSolve timing is separate.
-Decision 2026-10-01: editable only on 100号機, in a dedicated development venv separate from the release runtime. LAB and NGSolve use verified wheels.
-`cubit-mesh-export` is tested independently on 100 and LAB/102; solver releases never install, uninstall, repoint or version-gate it.
-NGSolve hosts start from checked exported .vol files, without Cubit (never install or run Cubit there; `NGSolve` A100 validation runs without Cubit); Cubit-independent checker unit tests may run in isolated CI. Existing installations are not silently removed.
+Release-quad: same commit on 102号機 and 100号機; NGSolve timing is separate.
+Editable: 100号機 development venv, isolated from releases. LAB and NGSolve use verified wheels.
+`cubit-mesh-export`: tests on 100 and LAB/102; solver releases never install, uninstall, repoint or version-gate it.
+NGSolve hosts start from checked exported .vol files, without Cubit (never install or run Cubit there; `NGSolve` A100 validation runs without Cubit); Cubit-independent checker tests may run in isolated CI. No silent uninstalls.
 
 MATLAB-capable runners use a MATLAB-authenticated account and pass an Engine
 startup/calculation/shutdown check in the actual runner context. SYSTEM and SSH
-success are not substitutes. Keep service diagnostics manual-only.
+success are not substitutes. Manual diagnostics; authenticated interactive `run.cmd`, never a MATLAB runner service.
 
 CI scope begins at the independently released distribution boundary. The
 checked `radia_mcp.meta` catalog and each server's live `tools/list` response

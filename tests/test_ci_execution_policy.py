@@ -24,7 +24,10 @@ def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
     release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
 
     assert "name: Radia\n" in fast
-    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in fast
+    import yaml
+    labels = yaml.safe_load(fast)['jobs']['fast-contracts']['runs-on']
+    assert labels == ['self-hosted', 'Windows', 'X64', 'ci-light']
+    assert '100' not in labels
     assert "Build with MSVC" not in fast
     assert "validation_test/" not in fast.split("jobs:", 1)[1]
     assert "name: Radia Native Release" in native
