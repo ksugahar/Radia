@@ -105,17 +105,42 @@ lost. The closed image/pid/user list is printed and kept in each receipt
 Receipts: the local host's worker writes its own; remote receipts are copied
 beside it (`<evidence>/<target>/<action>.json`), which `done` reads.
 
-## 4. After deploy
+## 4. Acceptance and post-release cleanup
 
-- Check `python -c "import cubit_mesh_export as c; print(c.__version__, c.__file__)"`
-  on both hosts, and that no profile's `.cubit` still carries a
-  `## BEGIN radia toolbar` block.
-- The startup shim resolves the installed package at every Cubit start
-  (2.1.2+), so older release checkouts, their wheels and LAB-local clones can
-  be removed once both hosts report the new version. Ask before deleting.
-- Installation registers Coreform's official WorkflowToolbar automatically;
-  never require users to import the package manually. Verify both restart
-  persistence and actual dispatch of all six buttons. The real-desktop GUI
-  release test normally stays with the user; explicit authorization to automate
-  it permits task-owned GUI test processes, without touching existing sessions.
-  MCP execution itself remains batch/nographics only.
+For every release, Codex and Claude use the shared
+[cubit-toolbar-acceptance](../cubit-toolbar-acceptance/SKILL.md) contract.
+Local skills must reference this repository contract rather than carry
+independent acceptance requirements.
+
+- On 100号機 and 102号機, verify the release/import/native identity and
+  installed startup/menu/toolbar registration, then all six production GUI
+  handler/command-builder paths, licensed APREPRO/Python backend execution
+  with the same options, and validated fresh output artifacts. Reuse exact
+  existing release evidence when it satisfies the contract.
+- Record `cubit-mesh-export.toolbar-acceptance.v2` and policy
+  `aprepro-python-gui-handler-equivalence-2026-10-16`. Both hosts must pass.
+  Unmeasured mouse dispatch, visible dialogs, Cancel, restart dispatch,
+  normal-GUI automatic discovery and BBND GUI behavior stay `null`, with
+  scope in separate fields. These are optional diagnostics, not additional
+  release gates. Do not claim them from handler-equivalence evidence.
+- Never manually import a missing toolbar to call normal registration PASS.
+  Keep MCP Cubit execution batch/nographics. Do not create accounts, activate
+  licenses or force-close user sessions merely to perform acceptance tests.
+- Management assigns one cleanup executor within the human-authorized scope.
+  Recover inputs, scripts, commands, outputs, successful/failed logs and
+  runtime identity to durable private evidence; verify source/destination
+  SHA-256 before deleting anything. Preserve the selected deployed checkout,
+  wheel and evidence.
+- Check exact absolute targets, active consumers, unique untracked/ignored
+  work and escaping links/junctions. Close only owned sessions normally;
+  delete approved scratch with literal paths and verify absence. Obsolete
+  branch/worktree retirement additionally checks main inclusion and ownership.
+  No blanket temp cleanup, unrelated deletion or implicit force-kill.
+- Save an executor/timestamp/target/hash/precheck/outcome cleanup receipt.
+  A rejected deletion is not retried through another tool or agent to bypass
+  policy. Retained work needs an owner, reason and cleanup trigger.
+- Codex hands verified results to its management hub. Claude management
+  confirms acceptance and cleanup through the counterpart hub. Close the
+  release only after actual confirmation, a final hash inventory check and
+  cleanup completion (or explicitly report the separate retained cleanup item).
+  A sent review packet or passing CI alone is not a closure receipt.
