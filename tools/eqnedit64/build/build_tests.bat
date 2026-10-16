@@ -12,6 +12,7 @@ if /I not "%EQNEDIT64_ISOLATED_TEST_SESSION%"=="1" (
     exit /b 90
 )
 
+pwsh -NoProfile -File tests\test_rich_edit_alignment_contract.ps1 || exit /b 1
 call build\build_eqnedit64.bat || exit /b 1
 call build\build_pymodule.bat || exit /b 1
 build\test_tex_document.exe || exit /b 1
