@@ -97,12 +97,12 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
 ### CPU / GPU Execution Policy (2026-10-11)
-- CPU: Python (pybind11)/NGSolve, built with Visual Studio Build Tools on Windows; NGSolve TaskManager owns CPU parallel execution. CPU MEX is unsupported.
+- CPU: Python (pybind11)/NGSolve, built with Visual Studio 2026 Build Tools on Windows; NGSolve TaskManager owns CPU parallel execution. CPU MEX is unsupported.
 - GPU: `radia-gpu` uses MATLAB mexcuda (optional Simulink/LTspice adapters, no external products). GPU setup, preconditioners and execution stay in MATLAB/mexcuda without Python adapters or snapshots. NGSolve-inherited DLLs are permitted. Python provides independent CPU accuracy validation, never a GPU-user prerequisite.
 - mexcuda modules may retain CPU host control. Never include, link, or use NGSolve TaskManager in mexcuda builds, except a read-only guard that fails if a foreign TaskManager is active. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing.
-- Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
+- radia: portability. radia-gpu: newer validated tools. VS2026/CUDA13.4.2 adoption requires AMS/IH parity/lifecycle PASS on A100/Quadro RTX 5000. No old fallback or unsupported flags (XML/env too); record versions. Smoke is not vendor support.
 - No implicit CPU/GPU/Python fallback. When both routes exist, select explicitly (`Backend="gpu"|"cpu"`), record the backend and raise on failure. Internal CPU/GPU agreement does not replace Python CPU validation. Measure host setup and CPU solves separately.
-- Develop/build radia-gpu on 100; release acceptance uses 100 RTX 5000 and independent review; `NGSolve` A100 is optional. Never deploy to 102.
+- Active GPU development/builds/validation: NGSolve A100. Local development/same-wheel RTX 5000 acceptance: 100, with independent review. No A100 release gate; no GPU on 102.
 - Record parity, artifact hashes and validation JSON. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### GPU Kernel Research Strategy (2026-10-11)
@@ -112,7 +112,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - Above 2 GB, use HDF5 (MAT v7.3 permitted), precheck size and validate readers/writers. Never split to bypass limits; format capacity is not GPU capacity.
 - Reuse gpuArray/BLAS where they implement the declared formulation. Keep GPU kernels independently callable. Validate iterative solvers for the actual operator.
 - Establish CPU/GPU agreement and performance on small publishable cases on the local RTX GPU before scaling; save timings, transfers, memory, versions and true residuals in JSON. Backend names are not speedup evidence.
-- Paid A100 is human-started only: prepare inputs, commands, acceptance criteria and bounded runtime, batch measurements and recover evidence.
+- Humans alone start/stop A100. Bounded jobs require resource admission and evidence recovery. Offline: explicit failure, no host fallback or indefinite PR queue.
 - Target development and compute GPU architectures with validated PTX compatibility; rebuild per OS/MATLAB ABI and verify before claiming portability or scaling.
 
 ### MATLAB And Simulink
@@ -172,12 +172,12 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: CI/builds use 100号機 with the `100` runner label.
+**POLICY**: Shared CPU CI/builds use 100号機 with the `100` runner label; GPU development/builds use NGSolve A100.
 100号機 permits isolated tests and heavy numerical/memory validation.
 Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
 LAB owns SSH preflight. Use the on-demand GPU worker only for mexcuda GPU work; Retired execution targets are excluded from deployment, CI and computation.
 Release-quad requires 102号機 and 100号機 for the same release commit; on-demand NGSolve timing is separate.
-Decision 2026-10-01: editable only on 100号機, in a dedicated development venv separate from the release runtime. LAB and NGSolve use verified wheels.
+CPU editable: dedicated 100 venv; LAB uses wheels. A100 GPU work uses isolated reviewed source; deployments use verified artifacts.
 `cubit-mesh-export` is tested independently on 100 and LAB/102; solver releases never install, uninstall, repoint or version-gate it.
 NGSolve hosts start from checked exported .vol files, without Cubit (never install or run Cubit there; `NGSolve` A100 validation runs without Cubit); Cubit-independent checker unit tests may run in isolated CI. Existing installations are not silently removed.
 
@@ -216,11 +216,11 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 `jmag`: JMAG evaluation only. Keep Python 3.12.10, SSH service/config/keys, VC++ runtime and `inetpub` for control from 100. No Radia deployment, builds, CI/preflight, solver runs, validation or timing.
 
-**POLICY (2026-10-14)**: Development completes on 100号機 (CPU time within ~20% of A100 host; CPU work stays local). Use the on-demand GPU worker only for mexcuda GPU work. Retired execution targets are excluded from deployment, CI and computation.
+**POLICY**: CPU work stays on 100; NGSolve A100 owns primary GPU work. Use the on-demand GPU worker only for mexcuda GPU work. Retired execution targets are excluded from deployment, CI and computation.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes NGSolve hostname`; check running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs. Never stop another session's jobs.
 Compare CPU/GPU on the same host with fixed, recorded threads (16-thread baseline where supported). Measure speed, scaling, setup, transfers and total time; save hardware, memory and versions in JSON.
-100 owns development, builds/CI and isolated numerical validation; 100/LAB timings are diagnostic. A100 is optional for development/publication. Gmsh rendering needs a desktop.
-Historical measurements remain valid provenance: public evidence uses neutral roles; role-to-host maps, originals and hashes stay in private storage. Never relabel to another host. Keep hosts/IPs/paths private. Recover unique work before separately authorized VM/disk deletion.
+100: CPU development/builds/CI and GPU acceptance; 100/LAB timings are diagnostic. Gmsh needs a desktop.
+Measurements remain valid provenance: publish neutral roles, not hosts/IPs/paths; keep maps/originals/hashes private. Never relabel hosts. Recover unique work before authorized VM/disk deletion.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
 
@@ -239,13 +239,11 @@ Historical measurements remain valid provenance: public evidence uses neutral ro
 
 ## Build And Release
 
-- Build ownership (2026-10-06): 100号機 is the build host. Build numerical
-  solver candidates and release artifacts there from an isolated reviewed
-  checkout using current `Build.ps1`/CMake. 100号機 also owns source
-  development; LAB and compute hosts consume the same hash-verified artifacts.
-  Do not route an ad-hoc candidate build to LAB or a compute host merely
-  because it has free resources. Never replace another session's runtime.
-- Dependency versions live in package metadata and CI; do not duplicate pins here.
+- Build ownership: CPU artifacts on 100; GPU artifacts on NGSolve A100, using
+  reviewed isolated source and current `Build.ps1`/CMake; 100 owns local source.
+  Consumers use hash-verified artifacts. No CPU builds on LAB or
+  compute hosts; preserve others' runtimes. Reuse immutable verified-source evidence.
+- Upgrade tools/dependencies and validate; no backward compatibility. Retire old builds/fallbacks/toolchains after consumer/unique-work checks; no rollback reserves. History is provenance, not runtime. Pins: metadata/CI.
 - Install MKL from its supported package dependency. Do not bundle MKL or an
   Intel-specific NumPy build; preserve user NumPy ownership.
 - `radia_motor_rom.dll` is Radia-owned. Release wheels contain no third-party DLLs
