@@ -49,6 +49,15 @@ def minimal_import_findings(text):
 def git(root, *args):
     return subprocess.check_output(['git', '-c', f'safe.directory={root}', *args], cwd=root, text=True, encoding='utf-8').strip()
 
+def changed_lines(root, base, candidate, path):
+    """Do not promote historical assertions elsewhere in an edited file to new debt."""
+    diff = git(root, 'diff', '--unified=0', f'{base}...{candidate}', '--', path)
+    lines = set()
+    for start, count in re.findall(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@', diff, re.M):
+        lines.update(range(int(start), int(start) + (int(count) if count else 1)))
+    return lines
+
+
 def plan(root, base, candidate):
     if not re.fullmatch(r'[0-9a-f]{40}', candidate):
         raise ValueError('candidate must be a full immutable Git SHA')
@@ -74,7 +83,10 @@ def plan(root, base, candidate):
         file = root/path
         if not file.is_file() or not path.endswith('.py'): continue
         text = file.read_text(encoding='utf-8-sig')
+        added_lines = changed_lines(root, base, candidate, path)
         for line in positive_literal_conflicts(text, policy.PUBLIC_RUNTIME_IDENTITY):
+            if line not in added_lines:
+                continue
             findings.append({'path': path, 'line': line, 'reason': 'positive assertion requires policy-banned runtime literal; review required'})
         if path.startswith('packages/radia-mcp/tests/'):
             findings.extend(dict(path=path, **item) for item in minimal_import_findings(text))
