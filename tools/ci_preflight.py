@@ -456,7 +456,12 @@ def main(argv=None):
     ap.add_argument("--since", default="",
                     help="select gates by what changed since REF (e.g. "
                          "origin/main); used by the pre-push hook to stay fast")
+    ap.add_argument("--local-push-candidate", help="clean exact candidate SHA: local policy/contracts and static impact audit only")
+    ap.add_argument("--local-push-base", default="origin/main")
     args = ap.parse_args(argv)
+    if args.local_push_candidate:
+        from local_push_checks import run
+        return run(__import__("pathlib").Path(REPO), args.local_push_base, args.local_push_candidate)
 
     gates = list(ALL_GATES)
     scope_ref = args.since or "origin/main"
