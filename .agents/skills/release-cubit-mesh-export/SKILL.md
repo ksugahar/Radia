@@ -88,6 +88,14 @@ either install. Tiers are fixed per target: LAB `wheel`, 100 `editable`
 wrong tier, and a LAB receipt without `installed_payload_verified`. On 100 the
 worker registers every profile (`--all-users`); the receipt requires it.
 
+The remote target is reached through its SSH alias (`lab` / `100` by
+default); pass `--ssh-alias-lab 102` or `--ssh-alias-100 <alias>` when the
+running host's SSH config uses another name. Every remote alias must resolve
+before any remote action, or the command stops. The worker imports the
+installer's helpers from the selected payload (release checkout for 100,
+verified wheel for LAB), so 100 needs no prior `cubit_mesh_export` install
+and an old editable install cannot shadow the candidate.
+
 **Forced** (the user explicitly asked to close running Cubit): add
 `--force-close-cubit`. Every running `coreform_cubit.exe`, `clarox.exe` and
 `cubitx.exe` on both hosts is killed before preflight, whoever owns it; unsaved work in those sessions is
