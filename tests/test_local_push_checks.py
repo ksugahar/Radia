@@ -63,3 +63,7 @@ def test_rename_retains_old_lane_input(tmp_path):
         assert impact.lane_required('radia', paths, lambda _: ('', ''), impact.manifest())[0]
     finally:
         sys.path.pop(0)
+
+def test_conflict_line_scope_preserves_existing_assertions(monkeypatch):
+    monkeypatch.setattr(m, 'git', lambda *args: '@@ -2 +2,2 @@\n+changed\n+assertion\n@@ -8 +9,0 @@')
+    assert m.changed_lines(Path('.'), 'base', 'head', 'test.py') == {2, 3}
