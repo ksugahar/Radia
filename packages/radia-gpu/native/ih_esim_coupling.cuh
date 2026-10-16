@@ -60,7 +60,7 @@ class ESIMCoupling {
     void release()noexcept{for(auto* p:{fields_,next_,temperature_,coefficients_,scalar_})if(p)cudaFree(p);if(parameters_)cudaFree(parameters_);if(cells_)cudaFree(cells_);if(acceptedCells_)cudaFree(acceptedCells_);if(workspace_)cudaFree(workspace_);if(ax_)cudaFree(ax_);if(invalid_)cudaFree(invalid_);if(acceptedValues_)cudaFree(acceptedValues_);if(stagedValues_)cudaFree(stagedValues_);if(acceptedWeights_)cudaFree(acceptedWeights_);if(stagedWeights_)cudaFree(stagedWeights_);}
     void cells(cudaStream_t stream,const double* field){finiteElementESIMCells<<<unsigned((v_.elements+31)/32),32,0,stream>>>(parameters_,field,v_.elements,v_.workspaceNodes,workspace_,cells_);}
     void matrix(cudaStream_t stream){esimOperatorValues<<<unsigned((v_.entryMap.rows+127)/128),128,0,stream>>>(v_.entryMap,v_.baseValues,cells_,v_.mutableValues,invalid_);}
-    void check(cudaStream_t stream){int bad;cudaCheck(cudaMemcpyAsync(&bad,invalid_,sizeof(int),cudaMemcpyDeviceToHost,stream));cudaCheck(cudaStreamSynchronize(stream));if(bad)throw std::runtime_error("Element ESIM material/operator candidate rejected");}
+    void check(cudaStream_t stream,const char* rejection="Element ESIM material/operator candidate rejected"){int bad;cudaCheck(cudaMemcpyAsync(&bad,invalid_,sizeof(int),cudaMemcpyDeviceToHost,stream));cudaCheck(cudaStreamSynchronize(stream));if(bad)throw std::runtime_error(rejection);}
 public:
     explicit ESIMCoupling(ESIMCouplingView v):v_(v){
         if(!v.elements||v.elements>4096||!v.matrix.rows||v.matrix.rows>4096||v.workspaceNodes<3||v.workspaceNodes>4096||
@@ -82,7 +82,7 @@ public:
     void validateTemperature(cudaStream_t stream,const double* temperature){
         cudaCheck(cudaMemsetAsync(invalid_,0,sizeof(int),stream));
         validateElementTemperatureRange<<<unsigned((v_.elements+127)/128),128,0,stream>>>(v_.temperatureEvaluation,temperature,v_.table.kelvin,v_.table.temperatures,invalid_);
-        check(stream);
+        check(stream,"Element ESIM candidate temperature outside material table; accepted state preserved");
     }
     void prepare(cudaStream_t stream,const double* temperature,double){
         cudaCheck(cudaMemsetAsync(invalid_,0,sizeof(int),stream));
