@@ -214,7 +214,9 @@
       "tests/test_audit_taskmanager.py"
     ],
     "tools/ci_preflight.py": [
-      "tests/test_ci_preflight_scope.py"
+      "tests/test_ci_preflight_scope.py",
+      "tests/test_local_push_checks.py",
+      "tests/test_pre_push_check.py"
     ],
     "tools/run_test_tier.py": [
       "tests/test_run_test_tier.py"
@@ -232,6 +234,10 @@
       "tests/test_pre_push_check.py"
     ],
     "tools/install_git_hooks.py": [
+      "tests/test_pre_push_check.py"
+    ],
+    "tools/local_push_checks.py": [
+      "tests/test_local_push_checks.py",
       "tests/test_pre_push_check.py"
     ]
   },

@@ -4,9 +4,43 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
 ROOT = Path(__file__).absolute().parents[1]
 ZERO = "0" * 40
+
+
+def run_local_candidate(base, head):
+    """Local checks run on a detached candidate, never another session's WIP."""
+    git = ["git", "-c", f"safe.directory={ROOT}"]
+    if base == ZERO:
+        base = subprocess.check_output(
+            [*git, "merge-base", head, "origin/main"], cwd=ROOT,
+            text=True, encoding="utf-8").strip()
+    parent = Path(tempfile.mkdtemp(prefix="radia-push-candidate-"))
+    checkout = parent / "candidate"
+    added = False
+    result = 1
+    try:
+        subprocess.run([*git, "worktree", "add", "--detach", str(checkout), head],
+                       cwd=ROOT, check=True, timeout=60)
+        added = True
+        result = subprocess.run(
+            [sys.executable, "tools/ci_preflight.py", "--local-push-candidate", head,
+             "--local-push-base", base], cwd=checkout, timeout=420).returncode
+    finally:
+        if added:
+            if checkout.is_symlink() or checkout.resolve().parent != parent.resolve():
+                raise ValueError("owned candidate cleanup path escaped its temporary parent")
+            cleanup = subprocess.run(
+                [*git, "worktree", "remove", "--force", str(checkout)], cwd=ROOT,
+                timeout=60)
+            if cleanup.returncode:
+                print(f"pre-push: owned candidate cleanup failed: {checkout}", file=sys.stderr)
+                result = 1
+        if not checkout.exists():
+            parent.rmdir()  # Empty, exact task-created parent only; no recursive fallback.
+    return result
 
 
 def candidates(lines):
@@ -36,6 +70,9 @@ def main(lines=None):
         if updates and not helper.is_file():
             raise ValueError("candidate preflight helper is missing")
         for base, head in updates:
+            local_result = run_local_candidate(base, head)
+            if local_result:
+                return local_result
             print(f"pre-push: impact-scoped candidate preflight {head}", flush=True)
             completed = subprocess.run(
                 [sys.executable, str(helper), "--base", base, "--head", head],
@@ -44,7 +81,7 @@ def main(lines=None):
             if completed.returncode:
                 return completed.returncode
         return 0
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print(f"pre-push: {exc}", file=sys.stderr)
         return 1
 
