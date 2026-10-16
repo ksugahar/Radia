@@ -179,7 +179,9 @@ def test_office_mathml_is_validated_and_styles_survive_to_omml() -> None:
     assert 'setAttribute("largeop", "true")' in canonical
     assert 'cells[0].textContent.trim() === ""' in SOURCE
     assert "collectLeafCells(nested, output)" in SOURCE
-    assert "leafCells.length < 2" in SOURCE
+    # Single-row ordinary math and multirow arrays are behavior-checked by
+    # test_office_bit_parity.cjs using office_315_contract.json. Do not pin
+    # an internal row-count threshold here.
 
 
 def test_autoloaded_macros_are_warmed_before_the_first_office_copy() -> None:
