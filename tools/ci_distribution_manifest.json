@@ -1954,6 +1954,40 @@
         "detail": "CPU contract tests/test_trace_reuse_evidence_contract.py consumes this input."
       },
       "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/ci_runner_routing.py",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64",
+        "repo"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Cross-distribution workflow capability routing is checked by the source-contract lane before local execution; unknown jobs and unaudited lightweight execution fail closed."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/ci_runner_routing.json",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64",
+        "repo"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Cross-distribution workflow capability routing is checked by the source-contract lane before local execution; unknown jobs and unaudited lightweight execution fail closed."
+      },
+      "selection": "all_owners"
     }
   ],
   "shared_include_closures": [
