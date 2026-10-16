@@ -1,6 +1,7 @@
 // Resident constitutive iteration for an explicitly assembled complete block.
 // The assembler owns coil/body reaction and impedance-entry coefficients.
 #pragma once
+#include "ih_work_snapshot.cuh"
 #include "ih_temperature_material.cuh"
 #include "ih_complex_solver.cuh"
 namespace radia_ih_cuda {
@@ -119,6 +120,20 @@ public:
             cudaCheck(cudaMemcpyAsync(stagedValues_,v_.mutableValues,v_.entryMap.rows*sizeof(cuDoubleComplex),cudaMemcpyDeviceToDevice,stream));
             cudaCheck(cudaMemcpyAsync(stagedWeights_,v_.mutableLossWeights,v_.elements*v_.components*sizeof(double),cudaMemcpyDeviceToDevice,stream));
         }
+    }
+    void configureSnapshot(WorkSnapshot& bank)const{
+        using K=WorkSnapshot::Kind;
+        bank.add("A_certified",v_.entryMap.rows,K::Complex);bank.add("loss_weights",v_.elements*v_.components,K::Real);
+        bank.add("field_used_for_solve",v_.elements,K::Real);bank.add("field_certified",v_.elements,K::Real);
+        bank.add("T_element_eval",v_.elements,K::Real);bank.add("cells",v_.elements,K::Cells);bank.add("material_parameters",v_.elements,K::Parameters);
+        const auto coefficientCount=v_.table.knotsCount?std::size_t(v_.table.knotsCount-1)*4*v_.elements:0;
+        bank.add("evaluated_bh_coefficients",coefficientCount,K::Real);
+    }
+    void stageSnapshot(WorkSnapshot& bank,cudaStream_t stream,WorkSnapshot::Meta& meta){
+        bank.stage("A_certified",v_.mutableValues,stream);bank.stage("loss_weights",v_.mutableLossWeights,stream);
+        bank.stage("field_used_for_solve",fields_,stream);bank.stage("field_certified",next_,stream);
+        bank.stage("T_element_eval",temperature_,stream);bank.stage("cells",cells_,stream);bank.stage("material_parameters",parameters_,stream);
+        bank.stage("evaluated_bh_coefficients",coefficients_,stream);meta.certified=candidateResidual_;meta.field=candidateFieldResidual_;
     }
     std::size_t atomicityBytes()const noexcept{return 2*v_.entryMap.rows*sizeof(cuDoubleComplex)+2*v_.elements*v_.components*sizeof(double);}
     void reset(){stageAccepted(nullptr,true);cudaCheck(cudaStreamSynchronize(nullptr));cudaCheck(cudaGetLastError());commit();}

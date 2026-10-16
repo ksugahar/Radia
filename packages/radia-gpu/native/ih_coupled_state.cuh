@@ -2,6 +2,7 @@
 #pragma once
 #include "ih_complex_solver.cuh"
 #include "ih_thermal_kernels.cuh"
+#include "ih_work_snapshot.cuh"
 #include <memory>
 #include <climits>
 #include <vector>
@@ -19,6 +20,8 @@ struct CoupledOperators {
     double dt,conductivity,convectionScale;
     // Dynamic ESIM/material owners must supply their real update function.
     // It runs before each solve with the accepted temperature on device.
+    WorkSnapshot* snapshot=nullptr;
+    void (*stageWorkMaterial)(void*,WorkSnapshot&,cudaStream_t,WorkSnapshot::Meta&)=nullptr;
     bool dynamicMaterial;
     void (*updateMaterial)(void*,cudaStream_t,const double*,double);
     void* materialOwner;
@@ -97,6 +100,7 @@ public:
         std::swap(acceptedElectromagnetic_,candidateElectromagnetic_);
         std::swap(temperature_,candidate_);std::swap(heat_,candidateHeat_);
         lastEddy_=em;lastThermal_=thermal;if(resetting)steps_=0;else ++steps_;
+        if(op_.snapshot)op_.snapshot->commit(resetting);
     }
     static_assert(noexcept(std::declval<CoupledState&>().commitAccepted({}, {}, false)),"Commit must not throw");
     void reset() {
@@ -131,7 +135,17 @@ public:
         if(op_.validateCandidateTemperature)op_.validateCandidateTemperature(op_.materialOwner,thermal_->stream(),candidate_);
         cudaCheck(cudaMemcpyAsync(candidateElectromagnetic_,eddy_->solution(),op_.eddy.rows*sizeof(cuDoubleComplex),cudaMemcpyDeviceToDevice,thermal_->stream()));
         if(op_.stageMaterial)op_.stageMaterial(op_.materialOwner,thermal_->stream(),false);
+        if(op_.snapshot){
+            auto& bank=*op_.snapshot;const auto stream=thermal_->stream();bank.begin(stream);
+            bank.stage("x",candidateElectromagnetic_,stream);bank.stage("rhs",eddy_->rhs(),stream);
+            bank.stage("T_material_eval",temperature_,stream);bank.stage("T_accepted_after",candidate_,stream);
+            bank.stage("heat_Qe",candidateHeat_,stream);
+            WorkSnapshot::Meta meta{};meta.step=steps_+1;meta.current=current;meta.ambient=ambient;meta.linear=eddyResult.trueRelativeResidual;
+            if(op_.stageWorkMaterial)op_.stageWorkMaterial(op_.materialOwner,bank,stream,meta);
+            bank.end(stream,meta);
+        }
         cudaCheck(cudaStreamSynchronize(thermal_->stream()));cudaCheck(cudaGetLastError());
+        if(op_.snapshot)op_.snapshot->finish();
         commitAccepted(eddyResult,thermalResult,false);
     }
     // Explicit observation only; never an intermediate Simulink transfer.

@@ -134,21 +134,22 @@ struct ElementMaterial {
  static bool cellFiniteHost(cuDoubleComplex z){return std::isfinite(cuCreal(z))&&std::isfinite(cuCimag(z));}
 };
 struct Context {
- int device=0;cudaStream_t guard=nullptr;bool poisoned=false;
+ int device=0;cudaStream_t guard=nullptr;bool poisoned=false;std::vector<int32_t> snapshotIndices;cuDoubleComplex suppliedCoilImpedance{};
  double solveTolerance=1e-10;
  Matrix a,p,system,k,c,projection,preconditioner;
  PreconditionerPrecision precision=PreconditionerPrecision::None;Buffer rhs,weights,ones,initial;
  std::unique_ptr<ElementMaterial> material;
+ std::unique_ptr<WorkSnapshot> snapshot;
  std::unique_ptr<CoupledState> state;size_t owned=0;
  ~Context(){
   int previous=device;cudaGetDevice(&previous);if(previous!=device)cudaSetDevice(device);
   const auto status=guard?cudaStreamQuery(guard):cudaSuccess;
   if(status!=cudaSuccess&&status!=cudaErrorNotReady){
-   if(state)state->abandonAfterDeviceReset();if(material)material->abandon();
+   if(snapshot)snapshot->abandon();if(state)state->abandonAfterDeviceReset();if(material)material->abandon();
    for(auto* m:{&a,&p,&system,&k,&c,&projection,&preconditioner})m->abandon();
    rhs.p=weights.p=ones.p=initial.p=nullptr;guard=nullptr;
   }
-  state.reset();material.reset();
+  state.reset();snapshot.reset();material.reset();
   // Free operators while their owning device is selected.
   for(auto* m:{&a,&p,&system,&k,&c,&projection,&preconditioner})for(auto* b:{&m->dr,&m->dc,&m->dz,&m->dreal,&m->df}){if(b->p)cudaFree(b->p);b->p=nullptr;}
   for(auto* b:{&rhs,&weights,&ones,&initial}){if(b->p)cudaFree(b->p);b->p=nullptr;}
@@ -218,6 +219,23 @@ struct Context {
    op.commitMaterial=[](void* owner)noexcept{static_cast<ESIMCoupling*>(owner)->commit();};
    op.validateCandidateTemperature=[](void* owner,cudaStream_t stream,const double* t){static_cast<ESIMCoupling*>(owner)->validateTemperature(stream,t);};
   }
+  if(const auto* requested=mxGetField(cfg,0,"validation_work_snapshot")){
+   if(!mxIsLogicalScalar(requested))throw std::invalid_argument("Snapshot option must be scalar logical");
+   if(mxIsLogicalScalarTrue(requested)){
+    if(!material||a.rows>4096||a.z.size()>=INT_MAX)throw std::invalid_argument("Snapshot requires bounded element ESIM and int32 CSR");
+    if(a.rowptr.size()!=a.rows+1||a.rowptr.front()!=0||a.rowptr.back()!=int32_t(a.z.size()))throw std::invalid_argument("Snapshot CSR count mismatch");
+    for(std::size_t row=0;row<a.rows;++row){if(a.rowptr[row]>a.rowptr[row+1])throw std::invalid_argument("Nonmonotone snapshot CSR");int32_t previous=-1;for(int32_t index=a.rowptr[row];index<a.rowptr[row+1];++index){if(a.col[index]<=previous||a.col[index]<0||std::size_t(a.col[index])>=a.columns)throw std::invalid_argument("Snapshot CSR must be sorted and unique");previous=a.col[index];}}
+    auto indices=realVector(field(cfg,"validation_work_coil_port_indices"),2);
+    for(double value:indices){if(value<1||value>double(a.rows)||value!=std::floor(value))throw std::invalid_argument("Checked one-based coil/port indices required");snapshotIndices.push_back(int32_t(value-1));}
+    if(snapshotIndices[0]==snapshotIndices[1]||cuCreal(b[snapshotIndices[1]])!=1.||cuCimag(b[snapshotIndices[1]])!=0.)throw std::invalid_argument("Invalid port/current constraint mapping");
+    for(int32_t index=a.rowptr[snapshotIndices[0]];index<a.rowptr[snapshotIndices[0]+1];++index)if(a.col[index]==snapshotIndices[0])suppliedCoilImpedance=a.z[index];
+    snapshot=std::make_unique<WorkSnapshot>();using K=WorkSnapshot::Kind;
+    snapshot->add("x",a.rows,K::Complex);snapshot->add("rhs",a.rows,K::Complex);
+    snapshot->add("T_material_eval",n,K::Real);snapshot->add("T_accepted_after",n,K::Real);snapshot->add("heat_Qe",samples,K::Real);
+    material->coupling->configureSnapshot(*snapshot);snapshot->allocate(workspace+a.rows*sizeof(cuDoubleComplex));owned+=snapshot->bytes();op.snapshot=snapshot.get();
+    op.stageWorkMaterial=[](void* owner,WorkSnapshot& bank,cudaStream_t stream,WorkSnapshot::Meta& meta){static_cast<ESIMCoupling*>(owner)->stageSnapshot(bank,stream,meta);};
+   }
+  }
   state=std::make_unique<CoupledState>(op);owned+=state->ownedBytes();
   }catch(...){cudaStreamDestroy(guard);guard=nullptr;throw;}
  }
@@ -247,6 +265,34 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
   if(command=="live_count"){if(nrhs!=1||nlhs!=1)throw std::invalid_argument("live_count takes no arguments");out[0]=mxCreateDoubleScalar(double(contexts.size()));return;}
   if(nrhs<2)throw std::invalid_argument("Missing IH handle");auto& c=get(in[1]);
   if(command=="reset"){if(nrhs!=2||nlhs)throw std::invalid_argument("reset signature mismatch");try{c.state->reset();}catch(...){c.noteFailure();throw;}return;}
+  if(command=="accepted_work_snapshot"){
+   if(nrhs!=2||nlhs!=1||!c.snapshot||!c.snapshot->valid()||c.snapshot->meta().step!=c.state->steps())throw std::invalid_argument("Enabled valid same-step accepted snapshot required");
+   const auto start=std::chrono::steady_clock::now();auto& bank=*c.snapshot;
+   out[0]=mxCreateStructMatrix(1,1,0,nullptr);
+   auto put=[&](const std::string& name,mxArray* value){mxAddField(out[0],name.c_str());mxSetField(out[0],0,name.c_str(),value);};
+   auto real=[&](const std::string& name,const std::vector<double>& value){auto* a=mxCreateDoubleMatrix(value.size(),1,mxREAL);std::copy(value.begin(),value.end(),mxGetDoubles(a));put(name,a);};
+   auto integer=[&](const std::string& name,const std::vector<int32_t>& value){auto* a=mxCreateNumericMatrix(value.size(),1,mxINT32_CLASS,mxREAL);std::copy(value.begin(),value.end(),static_cast<int32_t*>(mxGetData(a)));put(name,a);};
+   auto count=[&](const char* name,uint64_t value){auto* a=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);*static_cast<uint64_t*>(mxGetData(a))=value;put(name,a);};
+   auto scalar=[&](const char* name,double value){put(name,mxCreateDoubleScalar(value));};
+   auto complex=[&](const std::string& name,const std::vector<cuDoubleComplex>& value){std::vector<double> re,im;re.reserve(value.size());im.reserve(value.size());for(auto z:value){re.push_back(cuCreal(z));im.push_back(cuCimag(z));}real(name+"_re",re);real(name+"_im",im);};
+   put("schema_version",mxCreateString("radia.ih.accepted-work.v2.1"));put("snapshot_valid",mxCreateLogicalScalar(true));count("snapshot_step",bank.meta().step);count("snapshot_generation",bank.epoch());count("handle_generation",handle(in[1]));
+   scalar("device_ordinal",c.device);cudaDeviceProp properties{};cudaCheck(cudaGetDeviceProperties(&properties,c.device));std::string uuid;const char* hex="0123456789abcdef";for(unsigned char value:properties.uuid.bytes){uuid+=hex[value>>4];uuid+=hex[value&15];}put("device_uuid",mxCreateString(uuid.c_str()));
+   put("material_mode",mxCreateString("element-esim-operators"));put("phasor_convention",mxCreateString("peak exp(+i omega t)"));put("native_build_id",mxCreateString("external exact-source MEX receipt required"));
+   count("n_rows",c.a.rows);count("n_cols",c.a.columns);count("nnz",c.a.z.size());integer("csr_rowptr",c.a.rowptr);integer("csr_col",c.a.col);
+   put("csr_layout",mxCreateString("zero-based sorted unique row-major; split real/imag FP64"));put("last_linear_operator_saved",mxCreateLogicalScalar(false));put("condition_estimate",mxCreateString("none; independent CPU validation only"));
+   scalar("controls_current",bank.meta().current);scalar("controls_ambient",bank.meta().ambient);scalar("linear_true_residual",bank.meta().linear);scalar("certified_true_residual_native",bank.meta().certified);scalar("field_fixed_point_residual",bank.meta().field);
+   put("residual_definition",mxCreateString("certified norm(Ax-b)/norm(b), absolute norm(Ax) if b=0; linear residual belongs to unsaved lagged operator"));
+   for(const auto& slot:bank.slots()){
+    if(slot.kind==WorkSnapshot::Kind::Real)real(slot.name,bank.read<double>(slot));
+    else if(slot.kind==WorkSnapshot::Kind::Complex)complex(slot.name,bank.read<cuDoubleComplex>(slot));
+    else if(slot.kind==WorkSnapshot::Kind::Cells){auto values=bank.read<ESIMCellResult>(slot);std::vector<cuDoubleComplex> z;std::vector<double> r;std::vector<int32_t> status;for(const auto& cell:values){z.push_back(cell.impedance);r.push_back(cell.trueResidual);status.push_back(cell.status);}complex("Zs",z);real("cell_true_residual",r);integer("cell_status",status);}
+    else{auto values=bank.read<ESIMCellParameters>(slot);std::vector<double> rho,omega,thickness,tolerance,relaxation,saturation;std::vector<int32_t> nodes,cylinder;std::vector<cuDoubleComplex> mu;for(const auto& cell:values){rho.push_back(cell.resistivity);omega.push_back(cell.omega);thickness.push_back(cell.halfThickness);tolerance.push_back(cell.tolerance);relaxation.push_back(cell.relaxation);saturation.push_back(cell.law.saturationMagnetization);nodes.push_back(cell.nodes);cylinder.push_back(cell.cylinder?1:0);mu.push_back(cell.law.initialMu);}real("evaluated_resistivity_ohm_m",rho);real("omega",omega);real("cell_half_thickness_m",thickness);real("cell_tolerance",tolerance);real("cell_relaxation",relaxation);real("saturation_magnetization_A_per_m",saturation);integer("cell_nodes",nodes);integer("cell_cylinder",cylinder);complex("initial_mu",mu);}
+   }
+   integer("loss_projection_rowptr",c.p.rowptr);integer("loss_projection_col",c.p.col);complex("loss_projection",c.p.z);count("loss_projection_rows",c.p.rows);count("loss_projection_cols",c.p.columns);count("loss_components",c.p.rows/c.material->evaluation.rows);integer("port_indices",c.snapshotIndices);complex("supplied_coil_impedance",std::vector<cuDoubleComplex>{c.suppliedCoilImpedance});
+   integer("temperature_evaluation_rowptr",c.material->evaluation.rowptr);integer("temperature_evaluation_col",c.material->evaluation.col);real("temperature_evaluation",c.material->evaluation.real);
+   std::vector<double> base(c.p.rows);cudaCheck(cudaMemcpy(base.data(),c.material->baseWeights.p,base.size()*sizeof(double),cudaMemcpyDeviceToHost));real("base_loss_weights",base);
+   count("snapshot_bytes",bank.bytes());count("atomicity_fix_bytes",c.state->atomicityBytes()+c.material->coupling->atomicityBytes());count("owned_device_bytes",c.owned);put("owned_setup_peak_bytes",mxCreateDoubleMatrix(0,0,mxREAL));put("setup_peak_applicability",mxCreateString("not yet instrumented; owned_device_bytes excludes freed setup temporaries"));scalar("t_d2d_sync_s",bank.meta().stageSeconds);scalar("t_d2d_gpu_s",bank.meta().gpuCopySeconds);scalar("t_d2h_s",std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count());return;
+  }
   if(command=="diagnostic_operator"){
    if(nrhs!=2||nlhs!=1)throw std::invalid_argument("diagnostic_operator returns candidate operator, not accepted state");
    std::vector<cuDoubleComplex> values(c.a.z.size());

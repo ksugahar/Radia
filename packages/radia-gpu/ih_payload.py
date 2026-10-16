@@ -10,7 +10,7 @@ NATIVE_SOURCES = ('radia_cuda_ih.cu', 'ih_coupled_state.cuh', 'ih_complex_solver
                   'ih_bicgstab_kernels.cuh', 'ih_thermal_kernels.cuh',
                   'ih_resident_kernels.cuh', 'ih_preconditioner.cuh',
                   'ih_esim_coupling.cuh', 'ih_temperature_material.cuh',
-                  'ih_esim_cell.cuh', 'ih_peec_bem_assembly.cuh')
+                  'ih_esim_cell.cuh', 'ih_peec_bem_assembly.cuh', 'ih_work_snapshot.cuh')
 CORE_SOURCES = ('rad_bem_galerkin.cpp', 'rad_bem_galerkin.h',
                 'rad_biot_savart_filaments.cpp', 'rad_biot_savart_filaments.h',
                 'rad_host_parallel.h')
