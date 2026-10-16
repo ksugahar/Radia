@@ -470,6 +470,27 @@ def test_host_roles_agree_across_deployment_skills():
     assert "LAB/100 editable sources" not in build
     assert "LAB/100 must remain verified editable" not in build
     assert "LAB uses verified wheels and only 100号機 uses an editable development install" in build
-    assert "test host with verified wheels" in cubit
-    assert "LAB `wheel`, 100 `editable`" in cubit
-    assert "release-quad must not install, repoint or gate it" in cubit
+    # The public role table documents CLI identifiers, not physical host names.
+    # Bind its tiers to the actual deployment source instead of historical prose.
+    guide = root / ".agents/skills/release-cubit-mesh-export/SKILL.md"
+    documented_tiers = {}
+    for line in guide.read_text(encoding="utf-8").splitlines():
+        cells = [cell.strip().strip("`") for cell in line.strip("|").split("|")]
+        if len(cells) == 3 and cells[2] in {"editable", "wheel"}:
+            assert cells[1] not in documented_tiers, "duplicate deployment target"
+            documented_tiers[cells[1]] = cells[2]
+    source = root / "tools/release_cubit_dual.py"
+    spec = importlib.util.spec_from_file_location("cubit_dual_policy_contract", source)
+    assert spec and spec.loader
+    dual = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(dual)
+    assert documented_tiers == dual.TIERS == {"100": "editable", "lab": "wheel"}
+    assert set(documented_tiers) == set(dual.TARGETS)
+    assert "`tools/release_cubit_dual.py`" in cubit
+    assert "solver releases must not install, repoint or version-gate it" in cubit
+    # Both release agents use the same portable acceptance/cleanup contract.
+    import re
+    links = re.findall(r"\]\((\.\./[^)]+)\)", guide.read_text(encoding="utf-8"))
+    assert any((guide.parent / link).resolve() ==
+               (root / ".agents/skills/cubit-toolbar-acceptance/SKILL.md").resolve()
+               and (guide.parent / link).is_file() for link in links)
