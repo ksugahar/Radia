@@ -291,7 +291,9 @@ def test_pre_push_runs_the_unpushed_candidate_on_lab():
     hook = (ROOT / "tools" / "git-hooks" / "pre-push").read_text(encoding="utf-8")
     helper = (ROOT / "tools" / "ci_preflight_lab.py").read_text(encoding="utf-8")
 
-    assert "ci_preflight_lab.py --base \"$remote_sha\" --head \"$local_sha\"" in hook
+    dispatcher = (ROOT / "tools" / "pre_push_check.py").read_text(encoding="utf-8")
+    assert "python tools/pre_push_check.py" in hook
+    assert '"--base", base, "--head", head' in dispatcher
     assert '"bundle", "create"' in helper
     assert 'git_output("merge-base", head, main_ref)' in helper
     assert "$base = '{effective_base}'" in helper
@@ -301,7 +303,7 @@ def test_pre_push_runs_the_unpushed_candidate_on_lab():
     assert "numpy scipy pytest pyyaml setuptools wheel 'mcp>=1.0,<2'" in helper
     assert 'import mcp, numpy, pytest, scipy, setuptools, wheel, yaml' in helper
     assert "tools/run_test_tier.py --profile fast-contracts" in helper
-    assert "LAB preflight helper missing" in hook
+    assert "candidate preflight helper is missing" in dispatcher
     assert '&& [ -f tools/ci_preflight_lab.py ]' not in hook
     assert "upload_release_asset.py" not in hook
     assert "developer push must never upload mutable" in hook
