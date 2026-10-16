@@ -97,10 +97,10 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
 ### CPU / GPU Execution Policy (2026-10-11)
-- CPU: Python (pybind11)/NGSolve, built with Visual Studio 2026 Build Tools on Windows; NGSolve TaskManager owns CPU parallel execution. CPU MEX is unsupported.
+- CPU: Python (pybind11)/NGSolve, built with Visual Studio 2022 Build Tools on Windows; NGSolve TaskManager owns CPU parallel execution. CPU MEX is unsupported.
 - GPU: `radia-gpu` uses MATLAB mexcuda (optional Simulink/LTspice adapters, no external products). GPU setup, preconditioners and execution stay in MATLAB/mexcuda without Python adapters or snapshots. NGSolve-inherited DLLs are permitted. Python provides independent CPU accuracy validation, never a GPU-user prerequisite.
 - mexcuda modules may retain CPU host control. Never include, link, or use NGSolve TaskManager in mexcuda builds, except a read-only guard that fails if a foreign TaskManager is active. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing.
-- CPU radia: VS2026. radia-gpu: Build Tools 2022 + CUDA 12.8 only; prioritize MATLAB built-in GPU interoperability on A100/Quadro RTX 5000. No unsupported overrides (XML/env too). AMS/IH parity/lifecycle required; no GPU VS2026/CUDA13.
+- All CPU/GPU builds: Build Tools 2022/MSVC 14.44, selected by mexcuda. CUDA: MATLAB-bundled 12.8 only; no external Toolkit or unsupported overrides. Verify MATLAB built-in interoperability and AMS/IH parity/lifecycle on A100/RTX 5000.
 - No implicit CPU/GPU/Python fallback. When both routes exist, select explicitly (`Backend="gpu"|"cpu"`), record the backend and raise on failure. Internal CPU/GPU agreement does not replace Python CPU validation. Measure host setup and CPU solves separately.
 - Active GPU development/builds/validation: NGSolve A100. Local development/same-wheel RTX 5000 acceptance: 100, with independent review. No A100 release gate; no GPU on 102.
 - Record parity, artifact hashes and validation JSON. Poisson does not certify ICCG/AMS/HDiv-MMM.
