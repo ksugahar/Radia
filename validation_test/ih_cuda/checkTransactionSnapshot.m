@@ -152,7 +152,13 @@ else
 end
 end
 function message=expectFailure(action,word)
-message='';failed=false;try,action();catch err,message=err.message;failed=contains(lower(err.message),lower(word));end
+message='returned normally';failed=false;
+try
+ action();
+catch err
+ message=['exception identifier: ',err.identifier,'; message: ',err.message];
+ failed=contains(lower(err.message),lower(word));
+end
 assert(failed,['Expected failure: ',word,'; actual message: ',message]);
 end
 function expectSnapshotFailure(h)
