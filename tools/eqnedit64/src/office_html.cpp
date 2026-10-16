@@ -666,7 +666,10 @@ static std::string office_body(const Xml &root, OfficeEmitter &emitter) {
   std::vector<const Xml *> rows;
   const auto table = outerTable(root);
   std::string body;
-  if (table && leafRows(*table, rows) && rows.size() >= 2) {
+  if (table && leafRows(*table, rows) && rows.size() == 1) {
+    // A single independent aligned row is ordinary editable math, not a matrix.
+    body = emitter.emit(*rows.front());
+  } else if (table && leafRows(*table, rows) && rows.size() >= 2) {
     for (auto row : rows) body += emitter.wrapped("e", emitter.alignmentPoint() + emitter.emit(*row));
     body = emitter.wrapped("eqArr",
         emitter.arrayProperties() + body);
