@@ -1,109 +1,95 @@
 ---
 name: release-cubit-mesh-export
-description: Release and LAB/100 release-dual deployment of cubit-mesh-export (version bump, native rebuild, pyd asset, tag, PyPI, release checkouts, deploy, forced deploy that closes running Cubit). Use for "release cubit-mesh-export", "release-dual", "deploy the exporter to LAB/100/102", or a forced redeploy while Cubit is open.
+description: Release cubit-mesh-export and deploy the same published artifacts to the editable development and wheel acceptance hosts, with native provenance, dual-host verification, handler acceptance and cleanup.
 ---
 
 # release-cubit-mesh-export
 
-cubit-mesh-export releases independently of Radia. Its deployment is the
-LAB/100 **release-dual** (`tools/release_cubit_dual.py`); the Radia solver
-release-quad must not install, repoint or gate it. Never install or run Cubit
-on GPU evaluation workers; they consume checked .vol artifacts without Cubit.
-Distribution acceptance and pre-push contracts run on LAB with Cubit 2026.8.
+cubit-mesh-export releases independently. Its deployment uses
+`tools/release_cubit_dual.py`; solver releases must not install, repoint or
+version-gate it. Cubit runs only on licensed Cubit hosts, not compute workers
+that consume checked mesh artifacts.
 
-## Hosts (check `hostname` first)
+## Host roles and private configuration
 
-| name | host | ssh alias | notes |
-|---|---|---|---|
-| LAB = 102号機 | 192.168.121.102 | `lab` (also `102`) | test host with verified wheels; pwsh 7 ssh shell |
-| 100号機 | 192.168.121.100, hostname `T7920` | `100` | development/editable/review/integration host; many user profiles |
+| Role | CLI target key | Deployment tier |
+|---|---|---|
+| Development/build/controller host | `100` | editable |
+| Acceptance host | `lab` | wheel |
 
-- On 100, `W:` is local and `S:` is `subst` of `W:\00_CAE`; `W:\` is shared as
-  `\\192.168.121.100\Work`. LAB's interactive session maps that share as `S:`.
-- An ssh session on LAB has **no `S:`/`W:` and no share credentials** (UNC
-  access is denied). Anything LAB must run over ssh needs a LAB-local source
-  (`C:\release-dual\cubit-mesh-export-<ver>`).
-- Inside an ssh session on LAB, a nested `ssh` started from Python with piped
-  stdio hangs; with inherited stdio it works. So run the orchestrator **from
-  100** (`--run-from 100`) when driving both hosts over ssh; from LAB it only
-  works in LAB's interactive session.
-- Use native PowerShell file operations with explicit, verified paths. If
-  approval review rejects a deletion, report the rejection; do not retry
-  through another API or shell to bypass it.
+These are tool identifiers, not public hostnames or a physical host map.
+Resolve machines, SSH aliases, users, local paths and durable evidence roots
+from private operator configuration through management. Keep that mapping
+outside tracked source, tests and release artifacts. Verify the current
+hostname privately against the selected role before acting.
 
-## 1. Release (version N)
+Run dual-host orchestration from the development host (`--run-from 100`).
+Remote SSH tokens may not have interactive mapped drives or share credentials;
+use target-local paths for remote work. Nested SSH with piped stdio from the
+wheel host is not the supported controller route. Verify the configured alias
+with `--ssh-alias-lab <wheel-alias>` / `--ssh-alias-100 <editable-alias>`;
+resolution fails explicitly before remote action. Never silently pick another
+machine. Host routing and privacy do not waive release gates.
 
-1. Work in a clean worktree from `origin/main`. Bump the version in **three**
-   places: `packages/cubit-mesh-export/pyproject.toml`,
-   `src/cubit_mesh_export/__init__.py`, and `src/cubit_plugin/cubit_mesh_export_pybind.cpp`
-   (`m.attr("__version__")`; `tests/test_cubit_installers.py` enforces this).
-   Add the `## N - ...` CHANGELOG section. Commit sources first.
-2. `src/cubit_plugin/cubit_build.ps1 -Rebuild`, then commit `cubit_mesh_export.ccm`
-   and `native_payloads.json` (the manifest records the last commit touching
-   `src/cubit_plugin`; after any rebase of those commits, fix its `commit`).
-3. Upload the git-ignored pyd as the content-addressed asset named in the
-   manifest, then download it back and compare the hash:
-   `gh release upload binaries C:\temp\cubit_mesh_curver-<sha256>.pyd -R ksugahar/Radia`.
-   CI fails without it.
-4. Tests: `tests/test_cubit_mesh_quality.py tests/test_cubit_installers.py
-   tests/test_release_cubit_dual.py tests/test_native_build_provenance.py
-   packages/cubit-mesh-export/tests` (a missing local pyd fails
-   `test_distribution_ci_packages_the_exact_candidate_binaries`).
-   For native changes, rerun `validation_test/cubit_mesh_export/geometric_refit_benchmark.py`
-   with an **absolute** `--plugin-dir` (a relative one silently loads the
-   installed plugin) and compare the `.vol` bytes with the previous release.
-5. `git push origin HEAD:main` (the pre-push LAB preflight must pass; a
-   `Connection reset` to LAB is transport, retry), wait for the
-   `cubit-mesh-export` workflow, then push the annotated tag
-   `cubit-mesh-export-vN`; its run publishes to PyPI.
+Codex implements/validates and returns exact commits and evidence to Codex
+management. Claude management owns review, push/PR/CI/merge/tag/publication and
+deployment through the counterpart hub. Agree one executor per outward action.
 
-## 2. Release checkouts and wheel
+## 1. Release candidate
 
-- 100: `git -C W:\00_CAE\Radia\01_GitHub worktree add --detach W:\00_CAE\Radia\release-dual\cubit-mesh-export-N cubit-mesh-export-vN`,
-  copy the hash-checked pyd into `packages/cubit-mesh-export/src/cubit_mesh_export/`,
-  run `_native_provenance.py verify`.
-- LAB needs no release checkout: it is the wheel tier. The command copies the
-  wheel to `<evidence-lab>\lab\wheel\`, the worker re-hashes it against the
-  published SHA-256, installs it with `pip install --no-deps --force-reinstall`,
-  and verifies in a fresh interpreter that the import is not editable, comes
-  from that wheel, and that every packaged file equals the wheel.
-- Wheel: `pip download --no-deps --only-binary=:all: --no-cache-dir cubit-mesh-export==N -d W:\00_CAE\Radia\release-dual\wheels-cubit-N`
-  and confirm its sha256 against PyPI's JSON.
+1. Use a clean checkout from reviewed main on the build host. Update the
+   package version in `packages/cubit-mesh-export/pyproject.toml`, the package
+   `src/cubit_mesh_export/__init__.py`, and
+   `src/cubit_plugin/cubit_mesh_export_pybind.cpp`, plus CHANGELOG. Commit source.
+2. Use current `src/cubit_plugin/cubit_build.ps1 -Rebuild`. Commit the `.ccm`
+   and `native_payloads.json`; its source commit identifies the native inputs.
+   After rewritten commits, reconcile provenance and verify it again.
+3. Claude uploads the content-addressed pyd asset named by the manifest to
+   the `binaries` release, downloads it back and verifies size/SHA-256. CI needs
+   that exact asset. Use an operator-selected scratch path, not a fixed host path.
+4. Validate `tests/test_cubit_mesh_quality.py`, `tests/test_cubit_installers.py`,
+   `tests/test_release_cubit_dual.py`, `tests/test_native_build_provenance.py` and
+   `packages/cubit-mesh-export/tests`. Missing required candidate binaries fail.
+   For native changes run the owning geometric refit benchmark with an absolute
+   `--plugin-dir` and compare outputs against the previous published release.
+5. Hand the candidate to management for reciprocal review and CI/main merge.
+   After exact-release main CI succeeds, Claude pushes the annotated tag
+   `cubit-mesh-export-vN`; its workflow publishes to PyPI. Download the wheel
+   from PyPI and match its SHA-256 with published metadata before deployment.
 
-## 3. Deploy
+## 2. Release checkout and wheel
 
-Normal (stops if any Cubit is open), from 100:
+Use private configuration to set `$Repository`, `$ReleaseRoot`, `$Wheel`,
+`$EvidenceWheel`, `$EvidenceEditable` and `$WheelAlias` in the controller's
+PowerShell. All paths must be absolute and verified for the selected role.
+Create the development release worktree at the exact release tag, copy the
+hash-verified pyd into the owning package, and verify `_native_provenance.py`.
+The wheel host needs no source checkout. Transported wheel bytes are rehashed,
+installed without dependency changes and verified in a fresh interpreter.
+The editable checkout's packaged files must equal those same published bytes.
+
+## 3. Dual-host deploy
 
 ```powershell
 python tools/release_cubit_dual.py --action deploy --run-from 100 `
-  --wheel W:\00_CAE\Radia\release-dual\wheels-cubit-N\cubit_mesh_export-N-cp312-cp312-win_amd64.whl `
-  --source-sha <tag commit> `
-  --source-root-100 W:\00_CAE\Radia\release-dual\cubit-mesh-export-N `
-  --evidence-lab C:\temp\cubit-dual-N --evidence-100 C:\temp\cubit-dual-N
+  --wheel $Wheel --source-sha <tag-commit> --source-root-100 $ReleaseRoot `
+  --ssh-alias-lab $WheelAlias `
+  --evidence-lab $EvidenceWheel --evidence-100 $EvidenceEditable
 ```
 
-then the same arguments with `--action done`. Both preflights finish before
-either install. Tiers are fixed per target: LAB `wheel`, 100 `editable`
-(`TIERS`); each receipt records its tier and `done` rejects a receipt of the
-wrong tier, and a LAB receipt without `installed_payload_verified`. On 100 the
-worker registers every profile (`--all-users`); the receipt requires it.
+Then run the same arguments with `--action done`. Both preflights finish
+before either install. Target keys bind receipts to tiers: `lab` is wheel,
+`100` is editable with `--all-users`. The controller imports installer helpers
+from the selected verified payload; a prior install is unnecessary and an old
+editable package must not shadow it. Receipts record exact identity, package
+preservation, exports, MCP selftests and registration verification. `done`
+rejects missing/stale/wrong-tier receipts. Archive operational evidence privately.
 
-The remote target is reached through its SSH alias (`lab` / `100` by
-default); pass `--ssh-alias-lab 102` or `--ssh-alias-100 <alias>` when the
-running host's SSH config uses another name. Every remote alias must resolve
-before any remote action, or the command stops. The worker imports the
-installer's helpers from the selected payload (release checkout for 100,
-verified wheel for LAB), so 100 needs no prior `cubit_mesh_export` install
-and an old editable install cannot shadow the candidate.
-
-**Forced** (the user explicitly asked to close running Cubit): add
-`--force-close-cubit`. Every running `coreform_cubit.exe`, `clarox.exe` and
-`cubitx.exe` on both hosts is killed before preflight, whoever owns it; unsaved work in those sessions is
-lost. The closed image/pid/user list is printed and kept in each receipt
-(`force_closed_cubit`). Use it only on explicit instruction for that deploy.
-
-Receipts: the local host's worker writes its own; remote receipts are copied
-beside it (`<evidence>/<target>/<action>.json`), which `done` reads.
+Normally running Cubit stops deployment. Only an explicit instruction for that
+deployment permits `--force-close-cubit`; it terminates all detected
+`coreform_cubit.exe`, `clarox.exe` and `cubitx.exe` processes on both targets and
+records image/PID/user, with unsaved work loss. Never infer permission from a
+release request or acceptance-policy change. Preserve other users' jobs.
 
 ## 4. Acceptance and post-release cleanup
 
@@ -112,7 +98,7 @@ For every release, Codex and Claude use the shared
 Local skills must reference this repository contract rather than carry
 independent acceptance requirements.
 
-- On 100号機 and 102号機, verify the release/import/native identity and
+- On the editable and wheel hosts, verify the release/import/native identity and
   installed startup/menu/toolbar registration, then all six production GUI
   handler/command-builder paths, licensed APREPRO/Python backend execution
   with the same options, and validated fresh output artifacts. Reuse exact

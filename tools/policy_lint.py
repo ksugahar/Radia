@@ -131,7 +131,6 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     '.agents/skills/deploy/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/pybind-mex-bridge/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/pyside6-health/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
-    '.agents/skills/release-cubit-mesh-export/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/release-eqnedit64/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/release-eqnedit64/scripts/assert_release_signature.ps1': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/release-eqnedit64/scripts/release_eqnedit64.ps1': 'Existing operational deployment/build instructions and scripts; phase 2.',
