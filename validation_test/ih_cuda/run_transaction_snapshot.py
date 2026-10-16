@@ -37,12 +37,14 @@ def main():
                 raise RuntimeError('Build source inventory mismatch: ' + name)
         receipts.append(receipt)
     units = json.loads(args.reviewed_block_units.read_text())
-    if not isinstance(units, list) or len(units) != 9 or not all(isinstance(x, str) and x for x in units):
-        raise RuntimeError('Nine IH-reviewed ordered block units required')
+    if units != ['A', 'V', 'A', 'A', 'A', 'A', 'A/m', 'V', 'V']:
+        raise RuntimeError('Reviewed complete-block unknown units mismatch')
     fixture = root / 'validation_test/ih_cuda'
     wrappers = root / 'packages/radia-gpu/matlab'
     identity = dict(source_commit=head, route='official Engine; fresh operation-owned session',
                     receipts=receipts, block_units_sha256=sha(args.reviewed_block_units),
+                    row_units=['V', 'A', 'A', 'A', 'A m^2', 'A m^2', 'A m', 'V', 'V'],
+                    gauge_interpretation='Scaled Lagrange multipliers; not independently measured physical potentials',
                     source_sha256={str(p.relative_to(root)): sha(p) for p in [
                         Path(__file__), fixture / 'checkTransactionSnapshot.m',
                         fixture / 'makeTemperatureBHConfig.m',

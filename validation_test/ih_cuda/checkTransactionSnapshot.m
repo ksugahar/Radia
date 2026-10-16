@@ -33,12 +33,15 @@ try
  assert(strcmp(result.production_mex_sha256,productionReceipt.binary_sha256));
  switchArtifact(testArtifact);
  [cfg,assembly]=makeTemperatureBHConfig();
- fields=fieldnames(assembly.ordered_unknown_indices);dims=zeros(1,numel(fields));ordered=[];
+ fields={'coil';'port';'incident_potential';'incident_gauge';'body_potential';'body_gauge';'mass_flux';'reaction_potential';'reaction_gauge'};
+ assert(isequal(fieldnames(assembly.ordered_unknown_indices),fields),'Reviewed ordered block names required');
+ dims=zeros(1,numel(fields));ordered=[];
  for k=1:numel(fields)
   indices=assembly.ordered_unknown_indices.(fields{k});dims(k)=numel(indices);ordered=[ordered,indices]; %#ok<AGROW>
  end
  assert(isequal(ordered,1:size(cfg.eddy,1)),'Complete ordered unknown partition required');
  assert(numel(blockUnits)==numel(dims),'Reviewed physical block units required');
+ assert(isequal(blockUnits(:),{'A';'V';'A';'A';'A';'A';'A/m';'V';'V'}),'Reviewed unknown units required');
  cfg.validation_work_snapshot=true;
  cfg.validation_work_coil_port_indices=[assembly.unknown_indices.coil,assembly.unknown_indices.port];
  cfg.validation_work_block_dims=dims;cfg.validation_work_block_units=blockUnits;
