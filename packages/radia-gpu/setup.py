@@ -56,6 +56,7 @@ class build_py(_build_py):
             raise RuntimeError('IC CUDA build provenance mismatch')
         ams_build = ROOT / "build-ams-cuda"
         ams_receipt = json.loads((ams_build / "build.json").read_text(encoding="utf-8"))
+        payload_module('verify_wheel').verify_ams_distribution_eligibility(ams_receipt)
         ams_binary = ams_build / "radia_cuda_ams.mexw64"
         ams_source = PACKAGE / "native/radia_cuda_ams.cu"
         ams_hash = hashlib.sha256(ams_binary.read_bytes()).hexdigest()
@@ -116,6 +117,8 @@ class build_py(_build_py):
             expected.add(target.relative_to(package).as_posix())
         public_ams = {key: ams_receipt[key] for key in (
             "schema", "source_commit", "source_dirty", "matlab", "no_cpu_solver_fallback")}
+        public_ams.update(geometry_lifecycle_test_build=ams_receipt.get('geometry_lifecycle_test_build'),
+                          distribution_eligible=ams_receipt['distribution_eligible'])
         public_ams.update(binary_sha256=ams_hash,
                           source_sha256=ams_receipt["source_sha256"]["packages/radia-gpu/native/radia_cuda_ams.cu"])
         (package / "ams-build.json").write_text(json.dumps(public_ams, indent=2)+"\n", encoding="utf-8")

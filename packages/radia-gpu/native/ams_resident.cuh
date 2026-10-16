@@ -74,6 +74,8 @@ Handle handleValue(const mxArray* a,Handle tag){
 mxArray* handleArray(Handle h){auto a=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);*static_cast<Handle*>(mxGetData(a))=h;return a;}
 ResidentAMS& amsContext(const mxArray* a){auto it=amsContexts.find(handleValue(a,AMS_TAG));
     if(it==amsContexts.end())throw std::runtime_error("stale or released AMS handle");it->second->checkDevice();return *it->second;}
+void clearGeometryContexts();
+size_t geometryContextCount();
 void clearResidentContexts();
 void registerResidentExit(){static bool registered=false;if(!registered){mexAtExit(clearResidentContexts);registered=true;}}
 mxArray* gpuCopy(const double* p,int n){Output out(n);ck(cudaMemcpy(out.data(),p,size_t(n)*sizeof(double),cudaMemcpyDeviceToDevice));return mxGPUCreateMxArrayOnGPU(out.a);}

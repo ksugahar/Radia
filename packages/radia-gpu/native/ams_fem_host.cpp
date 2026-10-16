@@ -6,11 +6,16 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <chrono>
 #include <set>
 #include <stdexcept>
 
 RadiaHCurlStage RadiaStageHCurl(const std::string& path,
     const std::vector<std::string>& labels,const std::string& dirichlet) {
+    auto phaseStart=std::chrono::steady_clock::now();
+    auto elapsed=[&](){auto now=std::chrono::steady_clock::now();
+        double seconds=std::chrono::duration<double>(now-phaseStart).count();
+        phaseStart=now;return seconds;};
     auto mesh=std::make_shared<ngcomp::MeshAccess>(path);
     auto ne=mesh->GetNE(ngfem::VOL);
     if(mesh->GetDimension()!=3||!ne||ne>size_t((INT_MAX-256)/36)||mesh->GetDeformation()||mesh->GetCurveOrder()>1)
@@ -19,6 +24,7 @@ RadiaHCurlStage RadiaStageHCurl(const std::string& path,
     for(auto name:mesh->GetMaterials(ngfem::BND))actual.emplace(name);
     if(expected.empty()||expected.size()!=labels.size()||expected!=actual)
         throw std::invalid_argument("HCurl .vol boundary label contract mismatch");
+    double meshSeconds=elapsed();
     ngcore::Flags flags;flags.SetFlag("order",1);flags.SetFlag("nograds");
     flags.SetFlag("dirichlet",dirichlet);
     auto space=std::make_shared<ngcomp::HCurlHighOrderFESpace>(mesh,flags);
@@ -26,7 +32,8 @@ RadiaHCurlStage RadiaStageHCurl(const std::string& path,
     auto nd=space->GetNDof();
     if(!nd||nd>INT_MAX-256||nd!=mesh->GetNEdges())
         throw std::overflow_error("HCurl assembly requires one int32 DOF per edge");
-    RadiaHCurlStage s;s.n=int(nd);s.e=int(ne);
+    RadiaHCurlStage s;s.mesh_seconds=meshSeconds;s.space_seconds=elapsed();
+    s.n=int(nd);s.e=int(ne);
     ngfem::IntegrationRule rule(ngfem::ET_TET,2);s.nq=int(rule.Size());
     // Each numeric variable remains below 2 GiB; larger workflows require an
     // explicit HDF5/out-of-core design, not overflow or silent splitting.
@@ -38,6 +45,7 @@ RadiaHCurlStage RadiaStageHCurl(const std::string& path,
     for(int i=0;i<s.n;++i)s.free[i]=mask->Test(i);
     std::vector<std::vector<int>> rows(nd),incident(nd);
     ngstd::LocalHeap heap(1<<22,"radia_cuda_hcurl_stage");
+    s.allocation_seconds=elapsed();
     for(int e=0;e<s.e;++e){
         ngstd::HeapReset reset(heap);ngfem::ElementId eid(ngfem::VOL,e);
         if(mesh->GetElType(eid)!=ngfem::ET_TET||mesh->GetElement(eid).is_curved)
@@ -66,6 +74,7 @@ RadiaHCurlStage RadiaStageHCurl(const std::string& path,
                 s.shape[(size_t(e)*s.nq+q)*18+a*3+c]=v;}
         }s.volume[e]=volume;
     }
+    s.element_seconds=elapsed();
     s.rp.push_back(0);s.incident_rp.push_back(0);
     for(int i=0;i<s.n;++i){auto& row=rows[i];std::sort(row.begin(),row.end());row.erase(std::unique(row.begin(),row.end()),row.end());
         if(row.empty())throw std::runtime_error("Unused HCurl DOF");
@@ -75,12 +84,15 @@ RadiaHCurlStage RadiaStageHCurl(const std::string& path,
     for(int e=0;e<s.e;++e)for(int a=0;a<6;++a)for(int b=0;b<6;++b){int i=s.dofs[e*6+a],j=s.dofs[e*6+b];
         auto begin=s.ci.begin()+s.rp[i],end=s.ci.begin()+s.rp[i+1];auto p=std::lower_bound(begin,end,j);
         if(p==end||*p!=j)throw std::runtime_error("HCurl CSR scatter contract failed");s.slots[e*36+a*6+b]=int(p-s.ci.begin());}
+    s.csr_seconds=elapsed();
     auto grad=space->CreateGradient();
     if(grad->Height()!=s.n||grad->Width()!=mesh->GetNV())throw std::runtime_error("NGSolve gradient/vertex contract failed");
     s.grp.push_back(0);
     for(int i=0;i<s.n;++i){auto cols=grad->GetRowIndices(i);auto values=grad->GetRowValues(i);
         for(int k=0;k<cols.Size();++k){s.gci.push_back(cols[k]);s.gvalues.push_back(values[k]);}s.grp.push_back(int(s.gci.size()));}
+    s.gradient_seconds=elapsed();
     const int nv=int(mesh->GetNV());s.coordinates.resize(size_t(nv)*3);
     for(int i=0;i<nv;++i){auto p=mesh->GetPoint<3>(i);for(int c=0;c<3;++c)s.coordinates[i+size_t(nv)*c]=p[c];}
+    s.coordinate_seconds=elapsed();
     return s;
 }

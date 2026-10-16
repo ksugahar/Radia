@@ -8,6 +8,12 @@ import re
 import zipfile
 
 
+def verify_ams_distribution_eligibility(receipt):
+    if (receipt.get('geometry_lifecycle_test_build') is True
+            or receipt.get('distribution_eligible') is not True):
+        raise ValueError('AMS test or unclassified build is not distribution eligible')
+
+
 def verify_installed_identity(installed: dict, wheel: dict) -> None:
     """Reject a different build even when its source and version are identical."""
     digest = wheel.get('manifest_sha256', '')
@@ -59,6 +65,7 @@ def verify(path: Path) -> dict:
         if receipt["binary_sha256"] != manifest["files"][binary]:
             raise ValueError("CUDA binary receipt mismatch")
         ams_receipt = json.loads(archive.read("radia_gpu/ams-build.json"))
+        verify_ams_distribution_eligibility(ams_receipt)
         if (ams_receipt["source_dirty"] or ams_receipt["source_commit"] != manifest["source_commit"]
                 or ams_receipt["binary_sha256"] != manifest["files"]["matlab/radia_cuda_ams.mexw64"]):
             raise ValueError("AMS CUDA binary receipt mismatch")

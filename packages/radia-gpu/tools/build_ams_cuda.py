@@ -10,7 +10,19 @@ import sys
 import sysconfig
 import ctypes
 
+def geometry_build_mode():
+    flag=os.environ.get('RADIA_AMS_GEOMETRY_LIFECYCLE_TEST','0')
+    if flag not in ('0','1'):raise ValueError('RADIA_AMS_GEOMETRY_LIFECYCLE_TEST must be 0 or 1')
+    test=flag=='1'
+    return dict(geometry_lifecycle_test_build=test,distribution_eligible=not test,
+                output_directory_name='build-ams-geometry-test' if test else 'build-ams-cuda',
+                cuda_test_definitions=['RADIA_AMS_GEOMETRY_LIFECYCLE_TEST'] if test else [],
+                build_classification='Test-only geometry lifecycle binary; never distribute' if test else 'Production candidate')
+
 def main(args):
+    mode=geometry_build_mode()
+    if args.describe_build_mode:
+        print(json.dumps(mode,indent=2));return
     import netgen
     import matlab.engine
     package=Path(__file__).resolve().parents[1]
@@ -21,7 +33,7 @@ def main(args):
     if socket.gethostname().lower()!='t7920':
         raise RuntimeError('Candidate builds belong to 100/T7920')
     ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
-    out=root/'build-ams-cuda';out.mkdir(exist_ok=True)
+    out=root/mode['output_directory_name'];out.mkdir(exist_ok=True)
     net=Path(netgen.__file__).parent
     vs=Path('C:/BuildTools/VS2022-CUDA')
     vcvars=vs/'VC/Auxiliary/Build/vcvars64.bat'
@@ -31,7 +43,7 @@ def main(args):
     source=package/'native/ams_snapshot_module.cpp'
     sources=[source,package/'native/ams_cpu_reference.cpp',package/'native/ams_resident.cuh',package/'native/ams_nonlinear.cuh',package/'native/radia_cuda_ams.cu',package/'native/ams_matlab_setup.cpp',
              package/'native/ams_setup_gpu.hpp',package/'native/ams_setup_gpu.cuh',
-             package/'native/ams_fem_host.hpp',package/'native/ams_fem_host.cpp',package/'native/ams_fem.cuh',
+             package/'native/ams_fem_host.hpp',package/'native/ams_fem_host.cpp',package/'native/ams_fem.cuh',package/'native/ams_geometry.cuh',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp',
@@ -87,6 +99,7 @@ def main(args):
         with (out/'fem-host-build.log').open('w') as log:
             subprocess.run(['cmd','/c',str(batch)],stdout=log,stderr=subprocess.STDOUT,check=True)
         flags='NVCCFLAGS=-gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
+        if mode['geometry_lifecycle_test_build']:flags+=' -DRADIA_AMS_GEOMETRY_LIFECYCLE_TEST'
         eng.mexcuda('-v','-f',str(config),flags,'-lcublas','-outdir',str(out),str(cuda),str(host_obj),str(fem_obj),
                     str(python_lib),str(net/'lib/libngsolve.lib'),str(net/'lib/ngcore.lib'),str(net/'lib/nglib.lib'),nargout=0)
         if (hashes!={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
@@ -102,10 +115,12 @@ def main(args):
         record['matlab_setup_backend']='Shared native AMS; optional CUDA AP and Pt(AP); serial NGSolve sparsecholesky; no TaskManager regions'
         record['python_runtime_adapter_required']=False
         record['python_dll_indirect_dependency_permitted']=True
+        record.update(mode)
         (out/'build.json').write_text(json.dumps(record,indent=2)+'\n')
         print(json.dumps(record,indent=2))
     finally:eng.quit()
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--require-clean-source',action='store_true')
+    p.add_argument('--describe-build-mode',action='store_true',help='Print artifact classification without compiling or importing MATLAB')
     main(p.parse_args())
