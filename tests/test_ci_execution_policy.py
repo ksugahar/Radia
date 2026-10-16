@@ -361,7 +361,8 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert "Retired execution targets are excluded from deployment, CI and computation" in normalized
     assert "BatchMode=yes NGSolve hostname" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
-    assert "A100 is optional for development/publication" in normalized
+    assert "NGSolve A100 owns primary GPU work" in normalized
+    assert "A100 is optional for development/publication" not in normalized
     assert "100/LAB timings are diagnostic" in normalized
     assert "one heavy job at a time" in normalized
     assert "running jobs and available memory" in normalized
