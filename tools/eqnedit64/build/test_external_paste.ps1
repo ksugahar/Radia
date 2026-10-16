@@ -640,6 +640,29 @@ function Get-SlideXml([string]$PptxPath, [int]$SlideNumber = 1) {
     }
 }
 
+# This oracle applies only to independent rows with no user-specified alignment anchors.
+# Explicitly anchored equations and matrices require their own structural checks.
+function Assert-RichEditUnanchoredAlignmentRows([xml]$Source, [int]$ExpectedRows) {
+    $namespaces = [Xml.XmlNamespaceManager]::new($Source.NameTable)
+    $namespaces.AddNamespace('m', 'http://schemas.microsoft.com/office/2004/12/omml')
+    $rows = $Source.SelectNodes('//m:eqArr/m:e', $namespaces)
+    if ($Source.SelectNodes('//m:oMath', $namespaces).Count -ne 1 -or
+        $rows.Count -ne $ExpectedRows) {
+        throw 'Aligned RichEdit OMML must contain one equation array with the expected row count.'
+    }
+    foreach ($row in $rows) {
+        # RichEdit text is an HTML span, not the ISO m:t text element.
+        $markers = $row.SelectNodes('./m:r[m:rPr/m:aln]/span', $namespaces)
+        if ($markers.Count -ne 1 -or $markers[0].InnerText -cne '&' -or
+            $row.FirstChild.SelectNodes('./m:rPr/m:aln', $namespaces).Count -ne 1) {
+            throw 'Each unanchored RichEdit row must start with one marked alignment ampersand.'
+        }
+    }
+    if ($Source.SelectNodes('//m:r[span[text()="&"] and not(m:rPr/m:aln)]', $namespaces).Count) {
+        throw 'An unmarked RichEdit ampersand would be visible as alignment syntax.'
+    }
+}
+
 function Assert-PowerPointMathRowsShareLeftEdge([string]$Path) {
     $bitmap = [Drawing.Bitmap]::FromFile($Path)
     try {
@@ -1056,14 +1079,7 @@ try {
     if (-not $alignedBranch.Success) { throw 'Aligned primary OMML is missing.' }
     [xml]$alignedSource = '<root xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
         $alignedBranch.Groups['math'].Value + '</root>'
-    $alignedNamespaces = [Xml.XmlNamespaceManager]::new($alignedSource.NameTable)
-    $alignedNamespaces.AddNamespace('m', 'http://schemas.microsoft.com/office/2004/12/omml')
-    $alignedMathCount = $alignedSource.SelectNodes('//m:oMath', $alignedNamespaces).Count
-    $alignedRowsCount = $alignedSource.SelectNodes('//m:eqArr/m:e', $alignedNamespaces).Count
-    if ($alignedMathCount -ne 1 -or $alignedRowsCount -ne 3 -or
-        $alignedSource.SelectNodes('//m:t[text()="&"]', $alignedNamespaces).Count -ne 0) {
-        throw "Aligned primary OMML must contain one equation array with three clean rows: math=$alignedMathCount, rows=$alignedRowsCount."
-    }
+    Assert-RichEditUnanchoredAlignmentRows $alignedSource 3
     if ([EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlFormat) -or
         [EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlPresentationFormat)) {
         throw 'Aligned independent rows must use CF_HTML without registered MathML.'
