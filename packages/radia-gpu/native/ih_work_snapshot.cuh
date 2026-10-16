@@ -51,7 +51,6 @@ public:
     void end(cudaStream_t stream,Meta meta){metadata_[1-accepted_]=meta;cudaCheck(cudaEventRecord(stop_,stream));}
     void finish(){float ms;cudaCheck(cudaEventElapsedTime(&ms,start_,stop_));metadata_[1-accepted_].gpuCopySeconds=double(ms)*1e-3;metadata_[1-accepted_].stageSeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-stageStart_).count();}
     void commit(bool resetting)noexcept{if(resetting){valid_=false;++epoch_;}else{accepted_=1-accepted_;valid_=true;}}
-    static_assert(noexcept(std::declval<WorkSnapshot&>().commit(false)),"Snapshot commit must not throw");
     void abandon()noexcept{normAx_=nullptr;normValues_=nullptr;bank_[0]=bank_[1]=nullptr;start_=stop_=nullptr;valid_=false;}
     bool valid()const noexcept{return valid_;}std::uint64_t epoch()const noexcept{return epoch_;}
     std::size_t bytes()const noexcept{return 2*bankBytes_+scratchBytes_;}
@@ -66,4 +65,5 @@ public:
         std::vector<T> out(slot.count);if(slot.bytes)cudaCheck(cudaMemcpy(out.data(),static_cast<const char*>(bank_[accepted_])+slot.offset,slot.bytes,cudaMemcpyDeviceToHost));return out;
     }
 };
+static_assert(noexcept(std::declval<WorkSnapshot&>().commit(false)),"Snapshot commit must not throw");
 }
