@@ -550,7 +550,6 @@ See [BUILD.md](BUILD.md) for compiler, NGSolve, MKL, and packaging details.
 ```text
 src/core/                       C++ Radia and native electromagnetic kernels
 src/radia/                      CPU Python package and NGSolve integration
-src/radia/ltspice/              CPU-side SPICE parser
 packages/radia-gpu/             CUDA MEX, MATLAB, Simulink and LTspice integration
 packages/radia-mcp/             MCP servers and executable domain knowledge
 packages/cubit-mesh-export/     Cubit exporters, plugin and check-vol
@@ -632,7 +631,8 @@ Current priorities are:
 
 1. complete and validate HDiv-MMM topology optimization, including scalable
    open-boundary operators and independent numerical checks;
-2. complete robust Hodograph and accelerator-magnet design workflows;
+2. improve repository and `radia-mcp` quality, maintenance, validation,
+   build, CI, packaging, and release operation;
 3. deepen Eddy, SIBC/ESIM, PEEC, Foster reduction, and thermal coupling;
 4. expand measured Python/MATLAB/MEX parity and native Simulink dynamics;
 5. improve executed documentation, independent validation, and reproducible
