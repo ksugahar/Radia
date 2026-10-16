@@ -1,6 +1,6 @@
 ---
 name: cubit-toolbar-acceptance
-description: Accept cubit-mesh-export toolbar releases using APREPRO/Python execution, the same GUI-handler dispatch path, native identity and validated artifacts on 100 and 102. Mouse-driven end-to-end GUI tests are optional diagnostics.
+description: Accept cubit-mesh-export toolbar releases using APREPRO/Python execution, the same GUI-handler dispatch path, native identity and validated artifacts on the editable and wheel hosts. Mouse-driven end-to-end GUI tests are optional diagnostics.
 ---
 
 # Cubit toolbar acceptance
@@ -9,7 +9,7 @@ This repository file is the canonical contract for Codex and Claude. Local skill
 
 ## Acceptance policy (human decision, 2026-10-16)
 
-On **100号機 and 102号機**, successful APREPRO/Python backend execution plus verification that the GUI actions invoke that same tested path is sufficient. Mouse clicks add no mandatory acceptance gate when they invoke the same handler with equivalent options. Do not require six mouse-driven exports, Cancel testing, repeated dialog opening, screenshots, restart dispatch of every button, or a dedicated GUI account merely to close a release.
+On **editable development host and wheel acceptance host**, successful APREPRO/Python backend execution plus verification that the GUI actions invoke that same tested path is sufficient. Mouse clicks add no mandatory acceptance gate when they invoke the same handler with equivalent options. Do not require six mouse-driven exports, Cancel testing, repeated dialog opening, screenshots, restart dispatch of every button, or a dedicated GUI account merely to close a release.
 
 This supersedes this skill's previous mandatory real-desktop six-button policy. Historical blocked GUI attempts remain historical evidence; do not rewrite them as successful clicks. A capture/RDP/mouse-automation limitation alone does not block acceptance under this policy. Actual registration, dispatch, native identity or export failures still block their affected checks. Do not call backend-only success GUI dispatch evidence.
 
@@ -17,7 +17,7 @@ Codex implements and validates. Return results to the Codex repository-managemen
 
 ## Required evidence
 
-1. Establish the selected release version, source/tag SHA, published wheel SHA-256, deployment receipt, interpreter/import paths, Cubit version and per-host runtime identity. Verify the actual loaded plugin path/hash against native_payloads.json (.ccm may be deployed as plugins/cubit_mesh_export.dll), and the matching pyd hash. Disk-file equality alone does not prove the loaded path. Preserve 100 editable / 102 wheel identity.
+1. Establish the selected release version, source/tag SHA, published wheel SHA-256, deployment receipt, interpreter/import paths, Cubit version and per-host runtime identity. Verify the actual loaded plugin path/hash against native_payloads.json (.ccm may be deployed as plugins/cubit_mesh_export.dll), and the matching pyd hash. Disk-file equality alone does not prove the loaded path. Preserve the declared editable / wheel identity for each host.
 2. Verify all six installed toolbar script registrations resolve to the intended package's GUI handlers. Exercise the same handler/command-building path programmatically with explicit options and record the resulting APREPRO/Python invocation. A headless test may control dialog inputs through a test seam, but it must execute the production handler and command builder; replacing the handler with a fake or inspecting its source alone is insufficient. Record whether this is programmatic GUI-handler dispatch or an observed GUI invocation; never claim mouse operation that did not occur. Existing automated dispatch tests may be reused when they match the release and runtime contract.
 3. Execute the resulting backend commands through licensed Cubit APREPRO/Python on both hosts using independently authored small geometry and explicit settings. Match dispatch command/options to the real execution and validate fresh output artifacts. Reuse already passing release evidence for the same bytes and contracts rather than repeat work. Missing format coverage stays unverified.
 4. Confirm installed startup/menu/toolbar registration using deployment verification and existing startup/display evidence. A separate restart/visibility probe is appropriate when registration changed or evidence is missing; it is not an automatic demand for six mouse clicks. Preserve supported batch/nographics-only behavior for MCP execution.
@@ -50,7 +50,7 @@ Use schema `cubit-mesh-export.toolbar-acceptance.v2` and `acceptance_policy: apr
 - generated and executed command/options, output paths/sizes/SHA-256 and diagnostics;
 - optional `mouse_dispatch_pass`, `cancel_pass`, `restart_dispatch_pass` (true/false/null; untested values must be null, with mouse_scope or outside_acceptance_scope recording the policy scope separately).
 
-Host PASS requires release/native identity, correct registration and all six required dispatch/backend/artifact checks. Overall PASS requires both hosts. Example: `100 PASS; 102 backend/dispatch null; overall incomplete` reflects missing required execution, while `mouse_capture blocked; required checks PASS on both; overall PASS under v2` is valid. Never infer unmeasured checks from green CI or a menu screenshot. Numerical validation gates remain unchanged.
+Host PASS requires release/native identity, correct registration and all six required dispatch/backend/artifact checks. Overall PASS requires both hosts. Example: `editable host PASS; wheel host backend/dispatch null; overall incomplete` reflects missing required execution, while `mouse_capture blocked; required checks PASS on both; overall PASS under v2` is valid. Never infer unmeasured checks from green CI or a menu screenshot. Numerical validation gates remain unchanged.
 
 Recover result JSON, artifacts, commands and hashes to private durable release evidence. Preserve failed diagnostics. Remove only verified task-owned scratch within authorized scope, preserving deployed releases, evidence and other sessions' WIP. Report remaining session/process cleanup separately; acceptance-policy changes do not authorize force-killing a process.
 
