@@ -75,6 +75,9 @@ MSVCのASanランタイム（`clang_rt.asan_dynamic-x86_64.dll`）は同じコ�
 オフスクリーン視認性、最大式でも1再描画5 ms未満の性能ゲート、
 `CN=ksugahar`署名、単体exeを確認する。途中で一つでも失敗した場合は公開しない。結果は既定で
 `C:\temp\Eqnedit64-final-acceptance.json` に残る。
+今後の最終ゲートは`eqnedit64.final-acceptance.v2`で、実行対象を
+`app_path`・`app_sha256`・`session_id`に記録する。これはフォント試験と同じキーである。
+保存済みv1証拠は書き換えず、正式配布マニフェストのスキーマも変更しない。
 `fontdrvhost.exe`交代の事前対照窓にも同じApplication Errorがある、または交代にcrash
 eventが伴わない場合は製品FAILではなく`INCONCLUSIVE`として停止する。そのrunnerを
 greenになるまで回し直して合格扱いにせず、健全な新しい隔離sessionで候補を再検査する。

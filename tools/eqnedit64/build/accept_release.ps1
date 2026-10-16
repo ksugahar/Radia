@@ -124,13 +124,14 @@ $asanRuntime = if (-not $SkipBuild) {
     }
 } else { $null }
 $report = [ordered]@{
-    schema = 'eqnedit64.final-acceptance.v1'
+    schema = 'eqnedit64.final-acceptance.v2'
     accepted_at = (Get-Date).ToString('o')
     elapsed_seconds = [math]::Round(((Get-Date) - $started).TotalSeconds, 3)
     source_commit = $gitCommit
     executable_build_commit = $buildCommit
-    executable = $distExe
-    sha256 = $distHash
+    app_path = $distExe
+    app_sha256 = $distHash
+    session_id = [Diagnostics.Process]::GetCurrentProcess().SessionId
     signer = $signature.SignerCertificate.Subject
     distribution_files = @($releaseFiles.Name)
     gui_endurance = [ordered]@{
