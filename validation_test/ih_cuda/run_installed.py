@@ -10,6 +10,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'packages/radia-gpu'))
 from verify_wheel import verify, verify_installed_identity
+from ih_public_evidence import ih_public
 
 
 def check_cpu_release_gate(cpu):
@@ -75,6 +76,12 @@ def main():
             raise ValueError('Installed sample differs from CPU validation fixture')
         if not (args.toolkit_tools / 'model_check/model_check.p').is_file():
             raise ValueError('Official Simulink Toolkit tools are required')
+        toolkit_commit = subprocess.check_output(
+            ['git', '-C', str(args.toolkit_tools.resolve().parent), 'rev-parse', 'HEAD'], text=True).strip()
+        if toolkit_commit != 'c58e6aec7b904769ae43536e169d747feda95416':
+            raise ValueError('Unreviewed official Toolkit revision')
+        if subprocess.check_output(['git', '-C', str(args.toolkit_tools.resolve().parent), 'status', '--porcelain'], text=True).strip():
+            raise ValueError('Modified official Toolkit source')
         import matlab.engine
         engine = matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread')
         engine.addpath(str(ROOT / 'validation_test/ih_cuda'), nargout=0)
@@ -128,14 +135,31 @@ def main():
                         or diagnostic.get('release_accepted') is not False):
                     raise ValueError('Invalid reaction diagnostic result')
                 reaction.append(diagnostic)
-        record.update(accepted=True, source_commit=wheel['source_commit'],
+        if (subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip() != source
+                or subprocess.check_output(['git', '-C', str(ROOT), 'status', '--porcelain'], text=True).strip()):
+            raise ValueError('Validation source changed during execution')
+        lifecycle = {key: bool(result[key]) for key in
+                     ('repeat_identical', 'save_close_reopen', 'failed_candidate_preserved', 'reset')}
+        lifecycle['contexts_released'] = engine.radia_cuda_ih('live_count', nargout=1) == 0
+        record.update(schema='radia.gpu.ih-installed-qualification.v1',
+                      accepted=True, source_commit=wheel['source_commit'],
                       wheel_sha256=wheel['wheel_sha256'], manifest_sha256=wheel['manifest_sha256'],
                       binary_sha256=digest, cpu=cpu, toolkit_accepted=True,
                       matlab_version=engine.version(), loaded_mex=str(binary),
+                      lifecycle=lifecycle, toolkit_commit=toolkit_commit,
                       reaction_diagnostics=reaction, b1_closed=False,
                       release_accepted=False,
                       reaction_acquisition_implemented=True,
                       reaction_acquisition_executed=args.acquire_reaction)
+        # Project only this subgate's scalar fields. Raw paths, acquisition
+        # records and diagnostic text stay in the private result directory.
+        public_input = {key: record[key] for key in
+                        ('schema', 'accepted', 'source_commit', 'wheel_sha256',
+                         'manifest_sha256', 'binary_sha256', 'matlab_version',
+                         'toolkit_commit', 'toolkit_accepted', 'cpu', 'lifecycle')}
+        public = ih_public(public_input)
+        (args.out / 'public-ih-subgate.json').write_text(
+            json.dumps(public, indent=2, allow_nan=False) + '\n', encoding='utf-8')
     except Exception as error:
         record['error'] = str(error)
         raise

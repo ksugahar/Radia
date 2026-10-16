@@ -270,4 +270,5 @@ jobs:
             ${{ runner.temp }}/radia-gpu-wheel-${{ github.run_id }}-${{ github.run_attempt }}/*.whl
             ${{ runner.temp }}/radia-gpu-installed-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/result.json
             ${{ runner.temp }}/radia-gpu-public-${{ github.run_id }}-${{ github.run_attempt }}/*.json
+            ${{ runner.temp }}/radia-ih-installed-${{ github.run_id }}-${{ github.run_attempt }}/public-ih-subgate.json
           if-no-files-found: error
