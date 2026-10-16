@@ -151,6 +151,8 @@ on:
       - 'tests/test_native_build_provenance.py'
       - 'tools/sparsesolv_ci_impact.py'
       - '.github/workflows/sparsesolv.yml'
+      - 'tools/validation_source_gate.py'
+      - 'tests/validation_gate/**'
       - 'pyproject.toml'
       - 'tests/test_tier_manifest.json'
       - 'src/radia/lamination.py'
@@ -324,6 +326,8 @@ on:
       - 'tests/test_native_build_provenance.py'
       - 'tools/sparsesolv_ci_impact.py'
       - '.github/workflows/sparsesolv.yml'
+      - 'tools/validation_source_gate.py'
+      - 'tests/validation_gate/**'
       - 'pyproject.toml'
       - 'tests/test_tier_manifest.json'
       - 'src/radia/lamination.py'
@@ -348,9 +352,16 @@ on:
       - 'packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py'
       - '!**/*.md'
   workflow_dispatch:
+    inputs:
+      force_validation:
+        description: Execute full solver-heavy validation without receipt reuse
+        type: boolean
+        default: true
+
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: sparsesolv-${{ github.ref }}
@@ -465,6 +476,7 @@ jobs:
           OMP_NUM_THREADS: '1'
           OPENBLAS_NUM_THREADS: '1'
           MKL_NUM_THREADS: '1'
+          GH_TOKEN: ${{ github.token }}
         run: |
           python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -473,7 +485,8 @@ jobs:
           python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-numerics.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
           exit $LASTEXITCODE
 
-      - name: Run required heavier numerical validation
+      - name: Validate solver-heavy source or verify trusted prior evidence
+        id: heavy-validation
         if: steps.native-impact.outputs.required == 'true'
         shell: pwsh
         env:
@@ -483,13 +496,28 @@ jobs:
           OMP_NUM_THREADS: '1'
           OPENBLAS_NUM_THREADS: '1'
           MKL_NUM_THREADS: '1'
+          GH_TOKEN: ${{ github.token }}
         run: |
           python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python tools/run_test_tier.py --profile solver-heavy --junitxml "$env:RUNNER_TEMP\solver-heavy.xml"
+          $forceArgs = @()
+          if ('${{ github.event_name }}' -notin @('push','pull_request') -and '${{ inputs.force_validation }}' -ne 'false') { $forceArgs = @('--force') }
+          python tools/validation_source_gate.py --output "$env:RUNNER_TEMP/solver-heavy-validation" @forceArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-heavy.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
-          exit $LASTEXITCODE
+          $verification = Get-Content -Raw "$env:RUNNER_TEMP/solver-heavy-validation/verification.json" | ConvertFrom-Json
+          if ($verification.accepted -ne $true) { throw 'solver-heavy validation failed' }
+          "mode=$($verification.mode)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Publish executed solver-heavy source receipt
+        if: success() && steps.heavy-validation.outputs.mode == 'execute'
+        uses: actions/upload-artifact@v4
+        with:
+          name: solver-heavy-validation-v1
+          path: |
+            ${{ runner.temp }}/solver-heavy-validation/receipt.json
+            ${{ runner.temp }}/solver-heavy-validation/solver-heavy.xml
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload solver test results
         if: always() && steps.native-impact.outputs.required == 'true'
@@ -499,6 +527,7 @@ jobs:
           path: |
             ${{ runner.temp }}/sparsesolv-results.xml
             ${{ runner.temp }}/solver-numerics.xml
-            ${{ runner.temp }}/solver-heavy.xml
+            ${{ runner.temp }}/solver-heavy-validation/verification.json
+            ${{ runner.temp }}/solver-heavy-validation/solver-heavy.xml
             build-msvc/build.log
           if-no-files-found: warn
