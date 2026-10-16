@@ -31,4 +31,4 @@ jobs:
       - name: Distribution CI contract
         run: |
           python -m pip install pytest pyyaml
-          python -m pytest tests/policy/ -q
+          python -m pytest tests/policy/ tests/test_sparsesolv_ci_contract.py -q
