@@ -264,7 +264,7 @@
         "tools/ci_distribution_contract.py",
         "tools/ci_distribution_manifest.json"
       ],
-      "audit_sha256": "bf8ed124e19af6a69b54d01863359ecb7e0c251afc09ebdbf806c70809b5a4de",
+      "audit_sha256": "630b2f9f9e8a7885ff53c7c9f367592bbb56f6c2d0205778e1053058d8b33028",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
