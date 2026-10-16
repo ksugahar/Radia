@@ -640,7 +640,9 @@ function Get-SlideXml([string]$PptxPath, [int]$SlideNumber = 1) {
     }
 }
 
-function Assert-RichEditAlignmentRows([xml]$Source, [int]$ExpectedRows) {
+# This oracle applies only to independent rows with no user-specified alignment anchors.
+# Explicitly anchored equations and matrices require their own structural checks.
+function Assert-RichEditUnanchoredAlignmentRows([xml]$Source, [int]$ExpectedRows) {
     $namespaces = [Xml.XmlNamespaceManager]::new($Source.NameTable)
     $namespaces.AddNamespace('m', 'http://schemas.microsoft.com/office/2004/12/omml')
     $rows = $Source.SelectNodes('//m:eqArr/m:e', $namespaces)
@@ -1077,7 +1079,7 @@ try {
     if (-not $alignedBranch.Success) { throw 'Aligned primary OMML is missing.' }
     [xml]$alignedSource = '<root xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
         $alignedBranch.Groups['math'].Value + '</root>'
-    Assert-RichEditAlignmentRows $alignedSource 3
+    Assert-RichEditUnanchoredAlignmentRows $alignedSource 3
     if ([EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlFormat) -or
         [EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlPresentationFormat)) {
         throw 'Aligned independent rows must use CF_HTML without registered MathML.'

@@ -7,7 +7,7 @@ $ast = [Management.Automation.Language.Parser]::ParseFile(
 if ($errors) { throw ($errors | Out-String) }
 $definition = $ast.Find({ param($node)
     $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
-    $node.Name -eq 'Assert-RichEditAlignmentRows'
+    $node.Name -eq 'Assert-RichEditUnanchoredAlignmentRows'
 }, $true)
 if (-not $definition) { throw 'The production alignment oracle is missing.' }
 . ([scriptblock]::Create($definition.Extent.Text))
@@ -16,7 +16,7 @@ $content = '<m:r><span>a</span></m:r>'
 $row = '<m:e>' + $marker + $content + '</m:e>'
 $valid = '<m:oMath xmlns:m="http://schemas.microsoft.com/office/2004/12/omml"><m:eqArr>' +
     ($row * 3) + '</m:eqArr></m:oMath>'
-Assert-RichEditAlignmentRows ([xml]$valid) 3
+Assert-RichEditUnanchoredAlignmentRows ([xml]$valid) 3
 $badCases = @{
     missing_marker = $valid.Replace('<m:aln/>', '')
     wrong_marker_text = $valid.Replace('&amp;', 'x')
@@ -27,7 +27,7 @@ $badCases = @{
 }
 foreach ($name in $badCases.Keys) {
     $rejected = $false
-    try { Assert-RichEditAlignmentRows ([xml]$badCases[$name]) 3 }
+    try { Assert-RichEditUnanchoredAlignmentRows ([xml]$badCases[$name]) 3 }
     catch { $rejected = $true }
     if (-not $rejected) { throw "Malformed RichEdit input was accepted: $name" }
 }
