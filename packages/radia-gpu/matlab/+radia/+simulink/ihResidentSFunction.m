@@ -9,7 +9,21 @@ block.NumDialogPrms=1;
 block.DialogPrmsTunable={'Nontunable'};
 config=block.DialogPrm(1).Data;
 block.NumInputPorts=2;
-block.NumOutputPorts=2;
+outputCount=2;
+if isfield(config,'observe_element_impedance')
+    assert(islogical(config.observe_element_impedance)&&isscalar(config.observe_element_impedance),'observe_element_impedance must be scalar logical');
+    if config.observe_element_impedance
+        assert(isfield(config,'material_mode') && ...
+            strcmp(config.material_mode,'element-esim-operators'),...
+            'radia:ih:ImpedanceObservationMode',...
+            'Element impedance observation requires element-esim-operators material mode');
+        outputCount=4;
+    end
+end
+% Assign once: shrinking and re-expanding ports during Update Diagram
+% deletes the observation wires on subsequent compilation/save/reload.
+block.NumOutputPorts=outputCount;
+block.SetPreCompPortInfoToDefaults;
 for k=1:2
     block.InputPort(k).Dimensions=1;
     block.InputPort(k).DatatypeID=0;
@@ -20,6 +34,14 @@ for k=1:2
 end
 block.OutputPort(1).Dimensions=numel(config.initial_temperature_K);
 block.OutputPort(2).Dimensions=size(config.loss_projection,1)/config.loss_components;
+if isfield(config,'observe_element_impedance') && config.observe_element_impedance
+    for port=3:4
+        block.OutputPort(port).Dimensions=size(config.loss_projection,1)/config.loss_components;
+        block.OutputPort(port).DatatypeID=0;
+        block.OutputPort(port).Complexity='Real';
+        block.OutputPort(port).SamplingMode='Sample';
+    end
+end
 block.SampleTimes=[config.sample_time_s,0];
 block.SimStateCompliance='DisallowSimState';
 block.RegBlockMethod('PostPropagationSetup',@postPropagationSetup);
@@ -56,6 +78,11 @@ function outputs(block)
 [t,q,~]=radia_cuda_ih('outputs',handle(block));
 block.OutputPort(1).Data=t;
 block.OutputPort(2).Data=q;
+if isfield(block.DialogPrm(1).Data,'observe_element_impedance') && block.DialogPrm(1).Data.observe_element_impedance
+    z=radia_cuda_ih('element_impedance',handle(block));
+    block.OutputPort(3).Data=real(z);
+    block.OutputPort(4).Data=imag(z);
+end
 end
 function update(block)
 try

@@ -16,7 +16,7 @@ classdef HCurlSystem < handle
     methods
         function self=HCurlSystem(volPath,boundaryLabels,options)
             arguments
-                volPath (1,1) string
+                volPath
                 boundaryLabels (1,:) string
                 options.Dirichlet (1,1) string = ".*"
                 options.Reluctivity (1,1) double {mustBeFinite,mustBePositive} = 1

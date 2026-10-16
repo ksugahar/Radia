@@ -1,4 +1,14 @@
-# Radia IH Simulink Preview
+# Historical fixed-operator IH Simulink preview
+
+This document describes the older `radia_mex` fixed-operator preview, not the
+`radia_cuda_ih` temperature-dependent amplitude B-H workflow. Its CPU MEX
+route is historical and unsupported by the current CPU/GPU execution policy.
+Do not use the installation commands below as current release instructions.
+For the MATLAB/mexcuda research candidate, supported material contract,
+installation and qualification limits, read
+[IH_TEMPERATURE_BH.md](../docs/IH_TEMPERATURE_BH.md). The two workflows have
+different runtimes and acceptance evidence; the historical limitations below
+do not describe the new candidate's material capability.
 
 The next preview is `0.1.0-preview.8`. Its manifest describes the material-frame
 thermal state used by the current runtime; it does not apply a second rotation

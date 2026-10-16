@@ -77,7 +77,7 @@ struct NonlinearState {
 };
 constexpr Handle NONLINEAR_TAG=0xA65B;
 std::unordered_map<Handle,std::unique_ptr<NonlinearState>> nonlinearContexts;
-void clearResidentContexts(){amsContexts.clear();nonlinearContexts.clear();}
+void clearResidentContexts(){amsContexts.clear();nonlinearContexts.clear();clearGeometryContexts();}
 NonlinearState& nonlinearContext(const mxArray* a){auto it=nonlinearContexts.find(handleValue(a,NONLINEAR_TAG));
     if(it==nonlinearContexts.end())throw std::runtime_error("stale or released nonlinear handle");it->second->checkDevice();return *it->second;}
 bool nonlinearCommand(const std::string& command,int nlhs,mxArray** out,int nrhs,const mxArray** args){
@@ -98,9 +98,10 @@ bool nonlinearCommand(const std::string& command,int nlhs,mxArray** out,int nrhs
     }
     if(command=="resident_status"){
         if(nrhs!=1||nlhs!=1)throw std::runtime_error("status=radia_cuda_ams('resident_status')");
-        const char* fields[]={"ams_contexts","nonlinear_contexts"};out[0]=mxCreateStructMatrix(1,1,2,fields);
+        const char* fields[]={"ams_contexts","nonlinear_contexts","geometry_contexts"};out[0]=mxCreateStructMatrix(1,1,3,fields);
         mxSetField(out[0],0,fields[0],mxCreateDoubleScalar(double(amsContexts.size())));
-        mxSetField(out[0],0,fields[1],mxCreateDoubleScalar(double(nonlinearContexts.size())));return true;
+        mxSetField(out[0],0,fields[1],mxCreateDoubleScalar(double(nonlinearContexts.size())));
+        mxSetField(out[0],0,fields[2],mxCreateDoubleScalar(double(geometryContextCount())));return true;
     }
     if(command!="nonlinear_evaluate"&&command!="nonlinear_energy")return false;
     bool assemble=command=="nonlinear_evaluate";

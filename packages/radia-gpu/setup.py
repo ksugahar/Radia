@@ -26,9 +26,9 @@ SIMULINK_FILES = (
 )
 
 
-def payload_module():
+def payload_module(name='hdiv_payload'):
     # PEP 517 backends need not put this setup directory on sys.path.
-    spec = importlib.util.spec_from_file_location('radia_gpu_payload', PACKAGE / 'hdiv_payload.py')
+    spec = importlib.util.spec_from_file_location('radia_gpu_' + name, PACKAGE / (name + '.py'))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -56,6 +56,7 @@ class build_py(_build_py):
             raise RuntimeError('IC CUDA build provenance mismatch')
         ams_build = ROOT / "build-ams-cuda"
         ams_receipt = json.loads((ams_build / "build.json").read_text(encoding="utf-8"))
+        payload_module('verify_wheel').verify_ams_distribution_eligibility(ams_receipt)
         ams_binary = ams_build / "radia_cuda_ams.mexw64"
         ams_source = PACKAGE / "native/radia_cuda_ams.cu"
         ams_hash = hashlib.sha256(ams_binary.read_bytes()).hexdigest()
@@ -79,6 +80,9 @@ class build_py(_build_py):
         fmm = os.environ.get('RADIA_FMM_BUILD')
         if fmm:
             expected.update(payload_module().stage_fmm(ROOT, package, commit, fmm))
+        ih = os.environ.get('RADIA_IH_BUILD')
+        if ih:
+            expected.update(payload_module('ih_payload').stage(ROOT, package, commit, ih))
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
                 if path.name == 'LaplaceFMM.m' and not fmm:
@@ -116,6 +120,8 @@ class build_py(_build_py):
             expected.add(target.relative_to(package).as_posix())
         public_ams = {key: ams_receipt[key] for key in (
             "schema", "source_commit", "source_dirty", "matlab", "no_cpu_solver_fallback")}
+        public_ams.update(geometry_lifecycle_test_build=ams_receipt.get('geometry_lifecycle_test_build'),
+                          distribution_eligible=ams_receipt['distribution_eligible'])
         public_ams.update(binary_sha256=ams_hash,
                           source_sha256=ams_receipt["source_sha256"]["packages/radia-gpu/native/radia_cuda_ams.cu"])
         (package / "ams-build.json").write_text(json.dumps(public_ams, indent=2)+"\n", encoding="utf-8")
@@ -137,6 +143,8 @@ class build_py(_build_py):
                         source_commit=commit, files=payload,
                         capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "Experimental reusable CUDA FP64 IC(0)-PCG", "Reusable affine linear HCurl matrix and AMS hierarchy", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Bounded affine/P2 HDiv orders 1/2"] if hmatrix else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
                         runtime_requirements=["Windows x64", "MATLAB R2026a", "Parallel Computing Toolbox", "NVIDIA GPU/driver", "Simulink for blocks", "User-installed LTspice for circuit execution"])
+        if ih:
+            manifest['capabilities'].append('Research element-temperature amplitude B-H PEEC-BEM/ESIM surface-thermal coupling')
         (package / "manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")
 
 

@@ -12,6 +12,7 @@ on:
       - 'validation_test/radia_gpu/**'
       - 'validation_test/ams_cuda/**'
       - 'validation_test/ic_cuda/**'
+      - 'validation_test/ih_cuda/**'
       - 'validation_test/ngsolve_cuda_mex/**'
       - 'validation_test/hmatrix_cuda/**'
       - 'validation_test/fmm_cuda/**'
@@ -59,6 +60,7 @@ on:
       - 'validation_test/radia_gpu/**'
       - 'validation_test/ams_cuda/**'
       - 'validation_test/ic_cuda/**'
+      - 'validation_test/ih_cuda/**'
       - 'validation_test/ngsolve_cuda_mex/**'
       - 'validation_test/hmatrix_cuda/**'
       - 'validation_test/fmm_cuda/**'
@@ -174,6 +176,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./Build.ps1 -FmmCudaOnly -RequireNativeProvenance
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./Build.ps1 -IhCudaOnly -RequireNativeProvenance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $commit = git rev-parse HEAD
           function Select-ExactBuild($candidates) {
             $accepted = @($candidates | Where-Object {
@@ -190,6 +194,8 @@ jobs:
           $fmm = Select-ExactBuild (Get-ChildItem build-fmm-cuda -Directory -Filter 'job-*')
           "RADIA_HDIV_HMATRIX_BUILD=$hmatrix" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_HDIV_PROJECTION_BUILD=$projection" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $ih = Select-ExactBuild (Get-ChildItem build-ih-cuda -Directory -Filter 'job-*')
+          "RADIA_IH_BUILD=$ih" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_FMM_BUILD=$fmm" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Verify GPU boundary and Poisson precision
         shell: pwsh
@@ -237,6 +243,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python validation_test/ams_cuda/nonlinear_resident.py --gpu-dir $gpuMatlab --matlab-dir $gpuMatlab --out "$env:RUNNER_TEMP/radia-ams-nonlinear-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.35 --threads 2 --setup-threads 2 --contract
           exit $LASTEXITCODE
+      - name: Verify installed IH research payload with official Toolkit
+        shell: pwsh
+        run: |
+          $toolkit = Join-Path $env:RUNNER_TEMP "radia-ih-toolkit-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          git clone --no-checkout https://github.com/matlab/simulink-agentic-toolkit.git $toolkit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $toolkit checkout --detach c58e6aec7b904769ae43536e169d747feda95416
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $wheels = @(Get-ChildItem "$env:RUNNER_TEMP/radia-gpu-wheel-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT/radia_gpu-*.whl")
+          if ($wheels.Count -ne 1) { throw 'Expected exactly one accepted wheel' }
+          $installedPython = "$env:RUNNER_TEMP/radia-gpu-installed-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT/Scripts/python.exe"
+          python validation_test/ih_cuda/run_installed.py --installed-python $installedPython --wheel $wheels[0].FullName --toolkit-tools (Join-Path $toolkit 'tools') --out "$env:RUNNER_TEMP/radia-ih-installed-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
       - name: Select public numerical evidence
         if: always()
         shell: pwsh
@@ -251,4 +270,5 @@ jobs:
             ${{ runner.temp }}/radia-gpu-wheel-${{ github.run_id }}-${{ github.run_attempt }}/*.whl
             ${{ runner.temp }}/radia-gpu-installed-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/result.json
             ${{ runner.temp }}/radia-gpu-public-${{ github.run_id }}-${{ github.run_attempt }}/*.json
+            ${{ runner.temp }}/radia-ih-installed-${{ github.run_id }}-${{ github.run_attempt }}/public-ih-subgate.json
           if-no-files-found: error

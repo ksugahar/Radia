@@ -4,6 +4,9 @@
 #ifndef SPARSESOLV_SERIAL_AMS_SETUP
 #error MATLAB AMS must disable all internally owned TaskManager regions
 #endif
+#ifndef SPARSESOLV_OPENMP_AMS_SETUP
+#error MATLAB AMS host loops require bounded OpenMP dispatch, not NGSolve worker dispatch
+#endif
 #include "sparsesolv/preconditioners/compact_ams.hpp"
 #include <mex.h>
 #include <matrix.h>
@@ -197,13 +200,9 @@ void RadiaAMSSetup(int nlhs,mxArray** output,int nrhs,const mxArray** input) {
     int threads=dimension(input[2]);
     ngla::CompactSetupThreadScope thread_scope(threads);
     ngla::HypreBasedAMS::RequireSerialSetup();
-    // No TaskManager is activated. Match the serial CPU oracle's NGSolve
-    // configuration and restore the caller's limit after this command.
-    struct SerialNGSolve {
-        int previous=ngcore::TaskManager::GetMaxThreads();
-        SerialNGSolve(){ngcore::TaskManager::SetNumThreads(1);}
-        ~SerialNGSolve(){ngcore::TaskManager::SetNumThreads(previous);}
-    } serial_ngsolve;
+    // Compact loops use bounded OpenMP; owned NGSolve regions are disabled.
+    // Keep the inherited active-region rejection above. Do not mutate the
+    // process-global NGSolve thread limit to obtain serial coarse construction.
         auto a=read_csr(field(model,"A"));auto g=read_csr(field(model,"G"));
         if(a->Height()!=a->Width()||g->Height()!=a->Height())throw std::runtime_error("Incompatible operator dimensions");
         auto* xyz=field(model,"coordinates");

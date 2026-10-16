@@ -16,6 +16,7 @@ FEMArray femCSR(int n,int m,const std::vector<int>& rp,const std::vector<int>& c
     femPut(p.get(),"rows",femOwn(mxCreateDoubleScalar(n)));femPut(p.get(),"cols",femOwn(mxCreateDoubleScalar(m)));
     femPut(p.get(),"rowptr",femVector(rp,mxINT32_CLASS,gpu));femPut(p.get(),"columns",femVector(ci,mxINT32_CLASS,gpu));femPut(p.get(),"values",std::move(values));return p;
 }
+#include "ams_geometry.cuh"
 __global__ void femLocal(int e,int nq,const double* shape,const double* weights,const double* curl,
     const double* volume,double massCoefficient,double jx,double jy,double jz,double* localMass,double* localCurl,double* localRhs){
     int k=blockIdx.x*blockDim.x+threadIdx.x;if(k>=e*36)return;int cell=k/36,a=(k%36)/6,b=k%6;
@@ -36,40 +37,56 @@ __global__ void femReduce(int n,const int* rp,const int* slots,const int* incide
     rhs[i]=free[i]?r:0;
 }
 bool femCommand(const std::string& command,int nl,mxArray** out,int nr,const mxArray** in){
-    if(command!="assemble_hcurl")return false;
-    if(nr!=8||nl!=3)throw std::invalid_argument("[model,fem,info]=radia_cuda_ams('assemble_hcurl',vol,labels,dirichlet,nu,mass,J,gamma)");
+    if(geometryCommand(command,nl,out,nr,in))return true;
+    const bool reused=command=="assemble_hcurl_geometry";
+    if(command!="assemble_hcurl"&&!reused)return false;
+    if(nr!=(reused?6:8)||nl!=3)throw std::invalid_argument("HCurl assembly requires model/fem/info outputs and explicit geometry or vol/labels/dirichlet inputs");
     auto totalStart=std::chrono::steady_clock::now();
-    if(!mxIsCell(in[2]))throw std::invalid_argument("Boundary label contract must be a cell array of char rows");
-    std::vector<std::string> labels;for(size_t i=0;i<mxGetNumberOfElements(in[2]);++i){auto* label=mxGetCell(in[2],i);if(!label)throw std::invalid_argument("Empty boundary label cell");labels.push_back(word(label));}
-    double nu=scalar(in[4]),m=scalar(in[5]);
+    std::vector<std::string> labels;
+    if(!reused){
+        if(!mxIsCell(in[2]))throw std::invalid_argument("Boundary label contract must be a cell array of char rows");
+        for(size_t i=0;i<mxGetNumberOfElements(in[2]);++i){auto* label=mxGetCell(in[2],i);if(!label)throw std::invalid_argument("Empty boundary label cell");labels.push_back(word(label));}
+    }
+    const int first=reused?2:4;
+    double nu=scalar(in[first]),m=scalar(in[first+1]);
     if(nu<=0||m<=0)throw std::invalid_argument("Positive SI reluctivity and positive gauge mass required");
-    if(!mxIsDouble(in[6])||mxIsComplex(in[6])||mxIsSparse(in[6])||mxGetNumberOfElements(in[6])!=3)
+    if(!mxIsDouble(in[first+2])||mxIsComplex(in[first+2])||mxIsSparse(in[first+2])||mxGetNumberOfElements(in[first+2])!=3)
         throw std::invalid_argument("J must be a full three-component double vector in A/m^2");
-    // in[7] is the explicit polynomial nonlinearity coefficient, zero for linear runs.
-    double gamma=scalar(in[7]);if(gamma<0)throw std::invalid_argument("Nonnegative constitutive gamma required");
-    const double* j=mxGetPr(in[6]);for(int c=0;c<3;++c)if(!std::isfinite(j[c]))throw std::invalid_argument("Nonfinite source current");
-    auto s=RadiaStageHCurl(word(in[1]),labels,word(in[3]));
+    // Last input is the explicit polynomial nonlinearity coefficient, zero for linear runs.
+    double gamma=scalar(in[first+3]);if(gamma<0)throw std::invalid_argument("Nonnegative constitutive gamma required");
+    const double* j=mxGetPr(in[first+2]);for(int c=0;c<3;++c)if(!std::isfinite(j[c]))throw std::invalid_argument("Nonfinite source current");
+    HCurlGeometry* geometry=reused?&geometryContext(in[1]):nullptr;
+    const double checkSecondsBefore=geometry?geometry->livenessCheckSeconds:0;
+    const size_t checkCallsBefore=geometry?geometry->livenessCheckCalls:0;
+    RadiaHCurlStage temporary;
+    if(!reused)temporary=RadiaStageHCurl(word(in[1]),labels,word(in[3]));
+    const auto& s=reused?geometry->stage:temporary;
     double hostSeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-totalStart).count();
     size_t nz=s.ci.size(),freeBytes=s.free.size()*sizeof(int);
-    size_t mappedBytes=(s.shape.size()+s.weights.size()+s.curls.size()+s.volume.size())*sizeof(double);
+    const size_t shapeCount=size_t(s.e)*s.nq*18,weightCount=size_t(s.e)*s.nq,curlCount=size_t(s.e)*18,volumeCount=size_t(s.e);
+    size_t mappedBytes=(shapeCount+weightCount+curlCount+volumeCount)*sizeof(double);
     size_t topologyBytes=(s.dofs.size()+s.slots.size()+s.incident_rp.size()+s.incident.size()+s.rp.size()+s.ci.size())*sizeof(int)+freeBytes;
     size_t scratchBytes=size_t(s.e)*(36*2+6)*sizeof(double);
     size_t outputBytes=(2*nz+s.n)*sizeof(double);
     size_t ownedBytes=mappedBytes+topologyBytes+scratchBytes+outputBytes+
         (nz+s.n)*sizeof(double)+(s.rp.size()+s.ci.size())*sizeof(int)+sizeof(int);
+    // Include the resident geometry even if mxDuplicateArray materializes
+    // independent device storage for a returned/read-only array view.
+    if(geometry)ownedBytes+=geometry->deviceBytes;
     size_t available,total;ck(cudaMemGetInfo(&available,&total));size_t reserve=std::max<size_t>(2ULL<<30,total/5);
     if(available<=reserve||ownedBytes>available-reserve)throw std::runtime_error("HCurl assembly exceeds CUDA memory reserve max(2 GiB,20%)");
     auto start=std::chrono::steady_clock::now();
-    auto shape=femVector(s.shape,mxDOUBLE_CLASS,true),weights=femVector(s.weights,mxDOUBLE_CLASS,true);
-    auto curls=femVector(s.curls,mxDOUBLE_CLASS,true),volume=femVector(s.volume,mxDOUBLE_CLASS,true);
-    auto dofs=femVector(s.dofs,mxINT32_CLASS,true),slots=femVector(s.slots,mxINT32_CLASS,true);
-    auto irp=femVector(s.incident_rp,mxINT32_CLASS,true),incident=femVector(s.incident,mxINT32_CLASS,true);
-    auto free=femVector(s.free,mxINT32_CLASS,true),rp=femVector(s.rp,mxINT32_CLASS,true);
+    auto mapped=[&](const char* key,const auto& values,mxClassID type){return geometry?geometry->copy(key):femVector(values,type,true);};
+    auto shape=mapped("shape",s.shape,mxDOUBLE_CLASS),weights=mapped("weights",s.weights,mxDOUBLE_CLASS);
+    auto curls=mapped("curls",s.curls,mxDOUBLE_CLASS),volume=mapped("volume",s.volume,mxDOUBLE_CLASS);
+    auto dofs=mapped("dofs",s.dofs,mxINT32_CLASS),slots=mapped("slots",s.slots,mxINT32_CLASS);
+    auto irp=mapped("incident_rp",s.incident_rp,mxINT32_CLASS),incident=mapped("incident",s.incident,mxINT32_CLASS);
+    auto free=mapped("free",s.free,mxINT32_CLASS),rp=mapped("rp",s.rp,mxINT32_CLASS);
     // ci is created only for the returned mass CSR below.
     Buffer lm(size_t(s.e)*36),lc(size_t(s.e)*36),lr(size_t(s.e)*6),mass(nz),A(nz),rhs(s.n);
     Input view;auto dp=[&](const FEMArray& a,size_t n){return view.get<double>(a.get(),mxDOUBLE_CLASS,n);};
     auto ip=[&](const FEMArray& a,size_t n){return view.get<int>(a.get(),mxINT32_CLASS,n);};
-    femLocal<<<(s.e*36+T-1)/T,T>>>(s.e,s.nq,dp(shape,s.shape.size()),dp(weights,s.weights.size()),dp(curls,s.curls.size()),dp(volume,s.volume.size()),m,j[0],j[1],j[2],lm.p,lc.p,lr.p);
+    femLocal<<<(s.e*36+T-1)/T,T>>>(s.e,s.nq,dp(shape,shapeCount),dp(weights,weightCount),dp(curls,curlCount),dp(volume,volumeCount),m,j[0],j[1],j[2],lm.p,lc.p,lr.p);
     femReduce<<<(s.n+T-1)/T,T>>>(s.n,ip(rp,s.rp.size()),ip(slots,s.slots.size()),ip(irp,s.incident_rp.size()),ip(incident,s.incident.size()),ip(free,s.free.size()),lm.p,lc.p,lr.p,nu,mass.p,A.p,rhs.p);
     verify_vec<<<(int(nz)+T-1)/T,T>>>(int(nz),mass.p,false,view.validation.p);
     verify_vec<<<(int(nz)+T-1)/T,T>>>(int(nz),A.p,false,view.validation.p);
@@ -86,19 +103,41 @@ bool femCommand(const std::string& command,int nl,mxArray** out,int nr,const mxA
     femPut(model.get(),"cycle",femOwn(mxCreateDoubleScalar(1)));
     auto fem=femStruct({"schema","mass","elements","dofs","slots","curls","volume","free","rhs","nu0","gamma"});
     femPut(fem.get(),"schema",femOwn(mxCreateString("radia.ams-nonlinear-tet6.v1")));
-    femPut(fem.get(),"mass",femCSR(s.n,s.n,s.rp,s.ci,femOwn(gpuCopy(mass.p,nz)),true));
+    auto massCSR=geometry?femStruct({"rows","cols","rowptr","columns","values"}):
+        femCSR(s.n,s.n,s.rp,s.ci,femOwn(gpuCopy(mass.p,nz)),true);
+    if(geometry){
+        femPut(massCSR.get(),"rows",femOwn(mxCreateDoubleScalar(s.n)));
+        femPut(massCSR.get(),"cols",femOwn(mxCreateDoubleScalar(s.n)));
+        femPut(massCSR.get(),"rowptr",geometry->copy("rp"));femPut(massCSR.get(),"columns",geometry->copy("ci"));
+        femPut(massCSR.get(),"values",femOwn(gpuCopy(mass.p,nz)));
+    }
+    femPut(fem.get(),"mass",std::move(massCSR));
     femPut(fem.get(),"elements",femOwn(mxCreateDoubleScalar(s.e)));femPut(fem.get(),"dofs",std::move(dofs));femPut(fem.get(),"slots",std::move(slots));
     femPut(fem.get(),"curls",std::move(curls));femPut(fem.get(),"volume",std::move(volume));femPut(fem.get(),"free",std::move(free));
     femPut(fem.get(),"rhs",femOwn(gpuCopy(rhs.p,s.n)));femPut(fem.get(),"nu0",femOwn(mxCreateDoubleScalar(nu)));femPut(fem.get(),"gamma",femOwn(mxCreateDoubleScalar(gamma)));
-    auto info=femStruct({"schema","host_basis_seconds","upload_assembly_seconds","total_seconds","gpu_peak_owned_bytes_upper_bound","upload_bytes","download_bytes","taskmanager_started","python_adapter_used","assembly"});
+    auto info=femStruct({"schema","host_basis_seconds","host_staging_phases","upload_assembly_seconds","total_seconds","gpu_peak_owned_bytes_upper_bound","upload_bytes","download_bytes","python_adapter_used","assembly","geometry_reused","geometry_retained_device_bytes","geometry_retained_host_vector_capacity_bytes","geometry_liveness_check_seconds","geometry_liveness_check_calls"});
     femPut(info.get(),"schema",femOwn(mxCreateString("radia.hcurl-cuda-assembly.v1")));
     auto number=[&](const char* k,double x){femPut(info.get(),k,femOwn(mxCreateDoubleScalar(x)));};
     number("host_basis_seconds",hostSeconds);number("upload_assembly_seconds",deviceSeconds);
+    auto phases=femStruct({"mesh_validation_seconds","space_setup_seconds","allocation_mask_seconds",
+        "element_basis_incidence_seconds","csr_scatter_seconds","gradient_seconds","coordinates_seconds"});
+    auto phase=[&](const char* k,double x){femPut(phases.get(),k,femOwn(mxCreateDoubleScalar(reused?0:x)));};
+    phase("mesh_validation_seconds",s.mesh_seconds);phase("space_setup_seconds",s.space_seconds);
+    phase("allocation_mask_seconds",s.allocation_seconds);phase("element_basis_incidence_seconds",s.element_seconds);
+    phase("csr_scatter_seconds",s.csr_seconds);phase("gradient_seconds",s.gradient_seconds);
+    phase("coordinates_seconds",s.coordinate_seconds);
+    femPut(info.get(),"host_staging_phases",std::move(phases));
     number("total_seconds",std::chrono::duration<double>(std::chrono::steady_clock::now()-totalStart).count());
     // Includes output copies concurrently with all setup buffers, and validation flag.
     number("gpu_peak_owned_bytes_upper_bound",ownedBytes);
-    number("upload_bytes",mappedBytes+topologyBytes+(s.rp.size()+s.ci.size())*sizeof(int));number("download_bytes",nz*sizeof(double));
-    femPut(info.get(),"taskmanager_started",femOwn(mxCreateLogicalScalar(false)));femPut(info.get(),"python_adapter_used",femOwn(mxCreateLogicalScalar(false)));
+    // ci is uploaded only with mass CSR; rp is uploaded for reduction and CSR.
+    number("upload_bytes",reused?0:mappedBytes+topologyBytes+s.rp.size()*sizeof(int));number("download_bytes",nz*sizeof(double));
+    femPut(info.get(),"geometry_reused",femOwn(mxCreateLogicalScalar(reused)));
+    number("geometry_retained_device_bytes",geometry?double(geometry->deviceBytes):0);
+    number("geometry_retained_host_vector_capacity_bytes",geometry?double(geometry->hostBytes):0);
+    number("geometry_liveness_check_seconds",geometry?geometry->livenessCheckSeconds-checkSecondsBefore:0);
+    number("geometry_liveness_check_calls",geometry?double(geometry->livenessCheckCalls-checkCallsBefore):0);
+    femPut(info.get(),"python_adapter_used",femOwn(mxCreateLogicalScalar(false)));
     femPut(info.get(),"assembly",femOwn(mxCreateString("NGSolve affine HCurl mapped shapes; CUDA FP64 element quadrature and deterministic row reduction")));
     out[0]=model.release();out[1]=fem.release();out[2]=info.release();return true;
 }

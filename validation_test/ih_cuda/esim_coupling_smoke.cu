@@ -70,7 +70,8 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
   op.heatSamples=cells;op.lossComponents=1;op.dt=.001;op.conductivity=1.;op.convectionScale=0.;op.dynamicMaterial=true;op.materialOwner=&coupling;
   op.updateMaterial=[](void* owner,cudaStream_t stream,const double* t,double current){static_cast<ESIMCoupling*>(owner)->prepare(stream,t,current);};
   op.solveMaterial=[](void* owner,ComplexSolver& linear,double tolerance,int iterations){return static_cast<ESIMCoupling*>(owner)->solve(linear,tolerance,iterations);};
-  op.commitMaterial=[](void* owner){static_cast<ESIMCoupling*>(owner)->commit();};op.resetMaterial=[](void* owner){static_cast<ESIMCoupling*>(owner)->reset();};
+  op.stageMaterial=[](void* owner,cudaStream_t stream,bool reset){static_cast<ESIMCoupling*>(owner)->stageAccepted(stream,reset);};
+  op.commitMaterial=[](void* owner)noexcept{static_cast<ESIMCoupling*>(owner)->commit();};
   CoupledState state(op);for(int step=0;step<5;++step)state.update(1.,300.);
   const auto accepted=state.electromagneticState();const auto acceptedTemperature=state.temperature();const auto acceptedHeat=state.heat();
   bool rejected=false;try{state.update(1.7976931348623157e308,300.);}catch(const std::exception&){rejected=true;}
