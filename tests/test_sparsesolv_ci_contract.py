@@ -436,6 +436,19 @@ def test_router_uses_full_push_range_or_pr_merge_base(event):
     assert diff[4]==('b'*40 if event=='pull_request' else base)
 
 
+def _router_lane(command):
+    """Exact --lane argument of the router command (not a substring match)."""
+    tokens=command.split()
+    values=[tokens[i+1] for i,t in enumerate(tokens[:-1]) if t=='--lane']
+    return values[0] if len(values)==1 else None
+
+
+def test_router_lane_is_matched_exactly():
+    assert _router_lane('python tools/sparsesolv_ci_impact.py --lane radia-gpu')=='radia-gpu'
+    assert _router_lane('python tools/sparsesolv_ci_impact.py --lane radia-gpu-release')!='radia-gpu'
+    assert _router_lane('python tools/sparsesolv_ci_impact.py --lane a --lane b') is None
+
+
 def test_all_distribution_gates_are_hosted_and_preserve_full_manual_release_runs():
     data=IMPACT.manifest()
     for lane,definition in data['lanes'].items():
@@ -445,7 +458,9 @@ def test_all_distribution_gates_are_hosted_and_preserve_full_manual_release_runs
         gate=workflow['jobs']['ci-impact']
         assert gate['runs-on']=='ubuntu-latest'
         assert gate['steps'][0]['with']['fetch-depth']=='0'
-        assert f'--lane {lane}' in gate['steps'][-1]['run']
+        # The router step must run; lane-local steps (e.g. eqnedit64's prose gate) may follow it.
+        routers=[s.get('run','') for s in gate['steps'] if 'tools/sparsesolv_ci_impact.py' in s.get('run','')]
+        assert len(routers)==1 and _router_lane(routers[0])==lane, (lane, routers)
         for name,job in workflow['jobs'].items():
             if name=='ci-impact':continue
             assert 'ci-impact' in job['needs']
