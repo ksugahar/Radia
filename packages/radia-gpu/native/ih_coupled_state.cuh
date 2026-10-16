@@ -121,7 +121,7 @@ public:
         lastEddy_=em;lastThermal_=thermal;lastAtomicityStageSeconds_=stageSeconds;if(resetting)steps_=0;else ++steps_;
         if(op_.snapshot)op_.snapshot->commit(resetting);
     }
-    static_assert(noexcept(std::declval<CoupledState&>().commitAccepted({}, {}, false)),"Commit must not throw");
+    static_assert(noexcept(std::declval<CoupledState&>().commitAccepted({}, {}, false, 0.)),"Commit must not throw");
     void reset() {
         cudaCheck(cudaMemcpyAsync(candidate_,op_.initialTemperature,op_.thermalSystem.rows*sizeof(double),cudaMemcpyDeviceToDevice,thermal_->stream()));
         cudaCheck(cudaMemsetAsync(candidateHeat_,0,op_.heatSamples*sizeof(double),thermal_->stream()));
