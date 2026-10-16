@@ -211,9 +211,7 @@ def test_mixed_manifest_and_runtime_dependency_change_still_runs():
     "src/radia/vector_potential_solver.py", "src/radia/topology_optimization.py",
     "src/radia/ih_thermal.py", "src/radia/ih_axisym_coupled.py",
     "src/radia/panels/calc_fem_kelvin.py",
-    "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
     "src/radia/coil_from_cad.py",
-    "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
 ])
 def test_numerical_source_changes_select_built_ngsolve_lane(source):
     assert IMPACT.native_required("push", {"before": "a" * 40},
@@ -226,22 +224,11 @@ def test_numerical_source_changes_select_built_ngsolve_lane(source):
     assert "find('skipped') is None" in numerical["run"]
 
 
-@pytest.mark.parametrize("source", [
-    "src/core/radia_mex_sparse_symmetry.h",
-    "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
-])
-def test_mex_sparse_symmetry_sources_require_the_native_lane(source):
-    assert IMPACT.native_required("push", {"before": "a" * 40},
-                                  lambda *args: source + "\0")[0]
-
 
 def test_ih_thermal_and_complex_ams_contracts_run_with_ngsolve():
     profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["profiles"]
     required = {"tests/test_ih_axisym_coupled.py", "tests/test_ih_thermal_transfer.py",
                 "tests/test_ih_thermal_exposure.py",
-                "tests/test_ih_operator_assembly.py",
-                "tests/test_ih_operator_axisym.py",
-                "tests/test_ih_fin_surface_boundary.py",
                 "validation_test/induction_heating/test_fem_ams_parity.py"}
     assert required <= set(profiles["solver-numerics"]["paths"])
     assert required.isdisjoint(profiles["fast-contracts"]["paths"])
@@ -272,14 +259,25 @@ def test_heavy_derivative_validation_remains_required_after_tier_split():
     assert not IMPACT.ams_manifest_unchanged(json.dumps(before), json.dumps(after))
 
 
-def test_mex_symmetry_cpp_runs_through_generator_independent_ctest():
-    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+def test_cpu_lane_excludes_foreign_runtime_and_integration_gates():
+    workflow = yaml.load((ROOT / ".github/workflows/sparsesolv.yml").read_text(), Loader=yaml.BaseLoader)
+    excluded = [
+        "src/runtime/ih/radia_ih_thermal.cpp",
+        "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
+        "tests/test_sparsesolv_ci_contract.py",
+    ]
+    for event in ("push", "pull_request"):
+        for path in excluded:
+            assert not IMPACT.CONTRACT.selected(path, workflow["on"][event]), path
+    profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["profiles"]
+    for name in ("solver-numerics", "solver-heavy", "native-build-contracts"):
+        assert set(excluded).isdisjoint(profiles[name]["paths"])
     steps = workflow["jobs"]["ams-regression"]["steps"]
-    build = next(s for s in steps if s.get("name") == "Build current package and SparseSolv")
-    assert "ctest --test-dir build-msvc -C Release" in build["run"]
-    assert "--no-tests=error" in build["run"]
-    assert "radia\\.mex_sparse_symmetry\\.cpp$" in build["run"]
-    assert "build-msvc\\Release\\test_radia_mex_sparse_symmetry.exe" not in build["run"]
+    scripts = "\n".join(step.get("run", "") for step in steps)
+    assert "test_radia_mex_sparse_symmetry" not in scripts
+    assert "test_radia_ih_thermal_acceptance" not in scripts
+    numerical = next(step for step in steps if step.get("name") == "Run required NGSolve numerical contracts")
+    assert "packages\\radia-mcp\\src" in numerical["env"]["PYTHONPATH"]
 
 
 def test_native_solver_lane_builds_required_axisymmetric_extension():
@@ -438,6 +436,19 @@ def test_router_uses_full_push_range_or_pr_merge_base(event):
     assert diff[4]==('b'*40 if event=='pull_request' else base)
 
 
+def _router_lane(command):
+    """Exact --lane argument of the router command (not a substring match)."""
+    tokens=command.split()
+    values=[tokens[i+1] for i,t in enumerate(tokens[:-1]) if t=='--lane']
+    return values[0] if len(values)==1 else None
+
+
+def test_router_lane_is_matched_exactly():
+    assert _router_lane('python tools/sparsesolv_ci_impact.py --lane radia-gpu')=='radia-gpu'
+    assert _router_lane('python tools/sparsesolv_ci_impact.py --lane radia-gpu-release')!='radia-gpu'
+    assert _router_lane('python tools/sparsesolv_ci_impact.py --lane a --lane b') is None
+
+
 def test_all_distribution_gates_are_hosted_and_preserve_full_manual_release_runs():
     data=IMPACT.manifest()
     for lane,definition in data['lanes'].items():
@@ -447,7 +458,9 @@ def test_all_distribution_gates_are_hosted_and_preserve_full_manual_release_runs
         gate=workflow['jobs']['ci-impact']
         assert gate['runs-on']=='ubuntu-latest'
         assert gate['steps'][0]['with']['fetch-depth']=='0'
-        assert f'--lane {lane}' in gate['steps'][-1]['run']
+        # The router step must run; lane-local steps (e.g. eqnedit64's prose gate) may follow it.
+        routers=[s.get('run','') for s in gate['steps'] if 'tools/sparsesolv_ci_impact.py' in s.get('run','')]
+        assert len(routers)==1 and _router_lane(routers[0])==lane, (lane, routers)
         for name,job in workflow['jobs'].items():
             if name=='ci-impact':continue
             assert 'ci-impact' in job['needs']
@@ -580,3 +593,76 @@ def test_attributed_edit_cannot_mask_a_global_cmake_edit():
     old = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
     new = old.replace("${Python3_EXECUTABLE}", "$ {Python3_EXECUTABLE}", 1).replace("retired", "unsupported", 1)
     assert IMPACT.lane_required("sparsesolv", {"CMakeLists.txt"}, lambda p: (old, new), manifest)[0] is True
+
+
+def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
+    """Moving a numerical gate must preserve execution, not just ownership labels."""
+    data = IMPACT.manifest()
+    tier = json.loads((ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8"))["profiles"]
+    homes = {
+        "sparsesolv": [
+            "tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
+            "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
+            "validation_test/induction_heating/test_ih_operator_physics_golden.py",
+            "validation_test/radia_mcp/test_aphi_gauge_point.py",
+            "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
+            "validation_test/radia_mcp/test_eddy_driven_region.py",
+            "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py"],
+        "radia-gpu": ["tests/cpp/test_radia_ih_thermal_acceptance.cpp",
+                      "tests/cpp/test_radia_mex_sparse_symmetry.cpp"],
+    }
+    for lane, paths in homes.items():
+        definition = data["lanes"][lane]
+        workflow = yaml.load((ROOT / definition["workflow"]).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+        scripts = "\n".join(step.get("run", "") for job in workflow["jobs"].values()
+                            for step in job.get("steps", []))
+        for path in paths:
+            assert all(IMPACT.CONTRACT.selected(path, definition["events"][e])
+                       for e in ("push", "pull_request")), (lane, path)
+            assert set(IMPACT.CONTRACT.owner_rule(data, path)["owners"]) & set(definition["owners"])
+            if lane == "sparsesolv":
+                profiles = [name for name in ("solver-numerics", "solver-heavy")
+                            if path in tier[name]["paths"]]
+                assert profiles and all("--profile " + name in scripts for name in profiles)
+            elif lane == "radia-gpu":
+                project = (ROOT / "packages/radia-gpu/tests/native/CMakeLists.txt").read_text(encoding="utf-8")
+                assert path in project
+                assert Path(path).stem in scripts
+                assert "ctest --test-dir" in scripts and "--no-tests=error" in scripts
+                assert Path(path).stem not in (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+                assert "target_compile_options(test_radia_mex_sparse_symmetry PRIVATE /W4 /permissive-)" in project
+                assert "target_compile_options(test_radia_mex_sparse_symmetry PRIVATE -Wall -Wextra -Wpedantic)" in project
+                assert '-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl' in scripts
+                assert 'vcvars64.bat' in scripts and 'call `"$vcvars`" && cmake' in scripts
+                assert '-G "Visual Studio' not in scripts
+    inputs = {
+        "sparsesolv": ["packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
+                       "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+                       "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
+                       "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
+                       "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
+                       "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py"],
+        "radia-gpu": ["src/runtime/ih/radia_ih_thermal.cpp", "src/runtime/ih/radia_ih_runtime.cpp",
+                      "src/runtime/ih/radia_ih_transport.cpp", "src/runtime/ih/radia_ih_thermal.h",
+                      "src/core/radia_mex_sparse_symmetry.h"],
+    }
+    for lane, paths in inputs.items():
+        for path in paths:
+            assert all(IMPACT.CONTRACT.selected(path, data["lanes"][lane]["events"][e])
+                       for e in ("push", "pull_request")), (lane, path)
+    mcp_workflow = yaml.load((ROOT / ".github/workflows/radia-mcp-matrix.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    assert "numerical-validation" not in mcp_workflow["jobs"]
+    # The lightweight router contract remains in the repository impact lane.
+    spec = importlib.util.spec_from_file_location("tier_coverage", ROOT / "tools/run_test_tier.py")
+    tier_router = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tier_router)
+    router_test = "tests/test_sparsesolv_ci_contract.py"
+    selected = tier_router.select_impact_tests(tier["fast-contracts"]["paths"], [router_test],
+                                               profile_name="fast-contracts")
+    assert router_test in selected
+    repo_workflow = yaml.load((ROOT / ".github/workflows/radia-fast.yml").read_text(), Loader=yaml.BaseLoader)
+    repo_scripts = "\n".join(step.get("run", "") for job in repo_workflow["jobs"].values()
+                             for step in job.get("steps", []))
+    assert "--profile fast-contracts" in repo_scripts and "--since" in repo_scripts
+    assert all(IMPACT.CONTRACT.selected(router_test, data["lanes"]["radia-fast"]["events"][e])
+               for e in ("push", "pull_request"))

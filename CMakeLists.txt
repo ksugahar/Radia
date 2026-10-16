@@ -303,14 +303,6 @@ if(BUILD_TESTING)
     target_include_directories(test_ih_rotation_runtime PRIVATE src/runtime/ih)
     add_test(NAME radia.ih_rotation.cpp COMMAND test_ih_rotation_runtime)
 
-    add_executable(test_radia_ih_thermal_acceptance
-        tests/cpp/test_radia_ih_thermal_acceptance.cpp
-        src/runtime/ih/radia_ih_runtime.cpp
-        src/runtime/ih/radia_ih_thermal.cpp
-        src/runtime/ih/radia_ih_transport.cpp)
-    target_include_directories(test_radia_ih_thermal_acceptance PRIVATE src/runtime/ih)
-    target_compile_features(test_radia_ih_thermal_acceptance PRIVATE cxx_std_17)
-    add_test(NAME radia.ih_thermal_acceptance.cpp COMMAND test_radia_ih_thermal_acceptance)
 	add_executable(test_rad_beam_transfer
 		${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/test_rad_beam_transfer.cpp
 		${CORE_DIR}/rad_beam_transfer.cpp
@@ -354,18 +346,7 @@ if(BUILD_TESTING)
 	add_test(NAME radia.arc_section.cpp COMMAND test_rad_arc_section)
 	set_tests_properties(radia.arc_section.cpp PROPERTIES TIMEOUT 120)
 
-	add_executable(test_radia_mex_sparse_symmetry
-		${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/test_radia_mex_sparse_symmetry.cpp
-	)
-	target_include_directories(test_radia_mex_sparse_symmetry PRIVATE
-		${CMAKE_CURRENT_SOURCE_DIR}/src/core)
-	target_compile_features(test_radia_mex_sparse_symmetry PRIVATE cxx_std_17)
-	if(MSVC)
-		target_compile_options(test_radia_mex_sparse_symmetry PRIVATE /W4 /permissive-)
-	else()
-		target_compile_options(test_radia_mex_sparse_symmetry PRIVATE -Wall -Wextra -Wpedantic)
-	endif()
-	add_test(NAME radia.mex_sparse_symmetry.cpp COMMAND test_radia_mex_sparse_symmetry)
+
 endif()
 
 # Platform-neutral C ABI for Simulink S-functions, Modelica, and FMI wrappers.
