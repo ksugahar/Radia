@@ -28,7 +28,11 @@ jobs:
           python tools/policy_lint.py
           python tools/eqnedit64/tests/check_public_names.py
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Distribution CI contract
         run: |
           python -m pip install pytest pyyaml
-          python -m pytest tests/policy/ -q
+          python -m pytest tests/policy/ tests/test_sparsesolv_ci_contract.py -q
