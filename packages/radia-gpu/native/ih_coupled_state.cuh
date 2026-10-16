@@ -8,6 +8,7 @@
 #include <vector>
 #include <type_traits>
 #include <utility>
+#include <chrono>
 namespace radia_ih_cuda {
 struct CoupledOperators {
     ComplexCSRView eddy,lossProjection,thermalSystem;
@@ -39,7 +40,7 @@ class CoupledState {
     cuDoubleComplex* candidateElectromagnetic_=nullptr;
     int* invalid_=nullptr;
     cudaEvent_t heatReady_=nullptr;
-    std::size_t steps_=0;
+    std::size_t steps_=0;double lastAtomicityStageSeconds_=0.;
 #ifdef RADIA_IH_TRANSACTION_TEST
     unsigned testFailureStage_=0;
 #endif
@@ -109,14 +110,15 @@ public:
     const double* testAcceptedTemperature()const noexcept{return temperature_;}
     const double* testAcceptedHeat()const noexcept{return heat_;}
 #endif
+    double atomicityStageSeconds()const noexcept{return lastAtomicityStageSeconds_;}
     std::size_t atomicityBytes()const noexcept{return op_.eddy.rows*sizeof(cuDoubleComplex);}
     ~CoupledState(){release();}
-    void commitAccepted(const ComplexSolver::Result& em,const ComplexSolver::Result& thermal,bool resetting)noexcept{
+    void commitAccepted(const ComplexSolver::Result& em,const ComplexSolver::Result& thermal,bool resetting,double stageSeconds=0.)noexcept{
         static_assert(noexcept(std::declval<CoupledOperators>().commitMaterial(nullptr)),"Material commit must be noexcept");
         if(op_.commitMaterial)op_.commitMaterial(op_.materialOwner);
         std::swap(acceptedElectromagnetic_,candidateElectromagnetic_);
         std::swap(temperature_,candidate_);std::swap(heat_,candidateHeat_);
-        lastEddy_=em;lastThermal_=thermal;if(resetting)steps_=0;else ++steps_;
+        lastEddy_=em;lastThermal_=thermal;lastAtomicityStageSeconds_=stageSeconds;if(resetting)steps_=0;else ++steps_;
         if(op_.snapshot)op_.snapshot->commit(resetting);
     }
     static_assert(noexcept(std::declval<CoupledState&>().commitAccepted({}, {}, false)),"Commit must not throw");
@@ -151,6 +153,7 @@ public:
         cudaCheck(cudaStreamSynchronize(thermal_->stream()));
         if(invalid)throw std::runtime_error("IH candidate temperature rejected; accepted state preserved");
         if(op_.validateCandidateTemperature)op_.validateCandidateTemperature(op_.materialOwner,thermal_->stream(),candidate_);
+        const auto atomicityStart=std::chrono::steady_clock::now();
         cudaCheck(cudaMemcpyAsync(candidateElectromagnetic_,eddy_->solution(),op_.eddy.rows*sizeof(cuDoubleComplex),cudaMemcpyDeviceToDevice,thermal_->stream()));
         testPoint(3);if(op_.stageMaterial)op_.stageMaterial(op_.materialOwner,thermal_->stream(),false);testPoint(4);
         if(op_.snapshot){
@@ -164,7 +167,7 @@ public:
         }
         testPoint(5);cudaCheck(cudaStreamSynchronize(thermal_->stream()));cudaCheck(cudaGetLastError());
         if(op_.snapshot)op_.snapshot->finish();testPoint(6);
-        commitAccepted(eddyResult,thermalResult,false);
+        commitAccepted(eddyResult,thermalResult,false,std::chrono::duration<double>(std::chrono::steady_clock::now()-atomicityStart).count());
     }
     // Explicit observation only; never an intermediate Simulink transfer.
     std::vector<cuDoubleComplex> electromagneticState() {

@@ -10,7 +10,7 @@ payload=importlib.util.module_from_spec(spec);spec.loader.exec_module(payload)
 
 
 @pytest.mark.parametrize('fault',[None,'commit','dirty','binary','source',
-                                  'python','taskmanager','features','sample','missing-source','test-build','ineligible','missing-eligibility'])
+                                  'python','taskmanager','features','sample','missing-source','test-build','ineligible','missing-eligibility','missing-test-flag','eligible-one'])
 def test_ih_exact_research_staging(tmp_path,fault):
     root=tmp_path/'source';folder=tmp_path/'build';folder.mkdir()
     sources={}
@@ -28,6 +28,8 @@ def test_ih_exact_research_staging(tmp_path,fault):
                  features=sorted(payload.FEATURES),source_sha256=sources,
                  binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                  matlab='fixture',cuda_targets=['fixture'])
+    if fault=='missing-test-flag':receipt.pop('transaction_test_build')
+    if fault=='eligible-one':receipt['distribution_eligible']=1
     if fault=='test-build':receipt['transaction_test_build']=True
     if fault=='ineligible':receipt['distribution_eligible']=False
     if fault=='missing-eligibility':receipt.pop('distribution_eligible')
@@ -51,3 +53,10 @@ def test_ih_exact_research_staging(tmp_path,fault):
         public=json.loads((out/'ih-build.json').read_text())
         assert public['research_only'] and not public['experimental_validation']
         assert public['binary_sha256']==hashlib.sha256((out/'matlab/radia_cuda_ih.mexw64').read_bytes()).hexdigest()
+
+
+@pytest.mark.parametrize('receipt',[{'distribution_eligible':True},{'transaction_test_build':True,'distribution_eligible':True},{'transaction_test_build':False},{'transaction_test_build':False,'distribution_eligible':False},{'transaction_test_build':False,'distribution_eligible':1}])
+def test_wheel_verifier_rejects_test_or_missing_ih_classification(receipt):
+    spec=importlib.util.spec_from_file_location('ih_wheel_verify',Path(__file__).parents[1]/'verify_wheel.py')
+    verifier=importlib.util.module_from_spec(spec);spec.loader.exec_module(verifier)
+    with pytest.raises(ValueError):verifier.verify_ih_distribution_eligibility(receipt)

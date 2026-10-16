@@ -14,6 +14,11 @@ def verify_ams_distribution_eligibility(receipt):
         raise ValueError('AMS test or unclassified build is not distribution eligible')
 
 
+def verify_ih_distribution_eligibility(receipt):
+    if receipt.get('transaction_test_build') is not False or receipt.get('distribution_eligible') is not True:
+        raise ValueError('IH test or unclassified build is not distribution eligible')
+
+
 def verify_installed_identity(installed: dict, wheel: dict) -> None:
     """Reject a different build even when its source and version are identical."""
     digest = wheel.get('manifest_sha256', '')
@@ -120,8 +125,7 @@ def verify(path: Path) -> dict:
             if not ih_files <= set(manifest['files']):
                 raise ValueError('Incomplete IH research payload')
             ih = json.loads(archive.read('radia_gpu/ih-build.json'))
-            if ih.get('transaction_test_build') is not False or ih.get('distribution_eligible') is not True:
-                raise ValueError('IH test or unclassified build is not distribution eligible')
+            verify_ih_distribution_eligibility(ih)
             if (ih.get('schema') != 'radia.gpu.ih-research-payload.v1'
                     or ih.get('source_dirty') is not False
                     or ih.get('source_commit') != manifest['source_commit']

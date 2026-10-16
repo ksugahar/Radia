@@ -136,11 +136,13 @@ public:
         bank.stage("evaluated_bh_coefficients",coefficients_,stream);meta.certified=candidateResidual_;meta.field=candidateFieldResidual_;meta.constitutiveTolerance=v_.tolerance;meta.fieldFloor=v_.fieldFloor;meta.relaxation=v_.relaxation;meta.constitutiveIterations=candidateIterations_;meta.constitutiveMaxIterations=unsigned(v_.maxIterations);
     }
     std::size_t atomicityBytes()const noexcept{return 2*v_.entryMap.rows*sizeof(cuDoubleComplex)+2*v_.elements*v_.components*sizeof(double);}
-    void reset(){stageAccepted(nullptr,true);cudaCheck(cudaStreamSynchronize(nullptr));cudaCheck(cudaGetLastError());commit();}
     void commit()noexcept{
         std::swap(acceptedCells_,cells_);std::swap(acceptedValues_,stagedValues_);std::swap(acceptedWeights_,stagedWeights_);
         acceptedIterations_=candidateIterations_;acceptedResidual_=candidateResidual_;acceptedFieldResidual_=candidateFieldResidual_;
     }
+#ifdef RADIA_IH_TRANSACTION_TEST
+    void testConstitutiveLimit(unsigned limit){if(limit<2||limit>10000)throw std::invalid_argument("Invalid test constitutive limit");v_.maxIterations=int(limit);}
+#endif
     const ESIMCellResult* acceptedCellsDevice()const noexcept{return acceptedCells_;}
     const cuDoubleComplex* acceptedValues()const noexcept{return acceptedValues_;}
     const double* acceptedWeights()const noexcept{return acceptedWeights_;}
