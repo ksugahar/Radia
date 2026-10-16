@@ -88,3 +88,38 @@ wheel must export coherent accepted voltage/current/heat records for both
 dedicated cases, with artifact receipts. The nonmagnetic case also needs
 independent FEM reaction results and both BEM refinements before review can
 close B1. B2 waits for the final wheel and fresh same-artifact runs.
+
+## Installed MATLAB acquisition call contract
+
+`recordReactionGPU.m` now implements the two-case native acquisition. The
+installed-wheel runner supplies the original public temperature-BH sample's
+`cfg` and `assembly`, after verifying its clean exact-source build receipt:
+
+```matlab
+paths = recordReactionGPU(cfg, assembly, wheelPath, fullSourceSHA, newOutputDir);
+```
+
+It keeps the supplied geometry/material/thermal configuration for the B-H
+case, but explicitly sets the single supplied coil impedance to zero before
+context creation. For the second case it additionally removes the B-H table,
+sets every initial permeability to mu0 and saturation magnetization to zero,
+and requires positive resistivity. These are declared input experiments, not
+corrections to resulting voltage or heat. The default excitation is the same
+synthetic 10 kA peak as the public sample; five updates are recorded. The runner
+may explicitly supply `CurrentA`, `AmbientK` and bounded `Updates` options.
+
+After each native update, the driver reads `outputs`, `electromagnetic_state`
+and `element_impedance` from its own checked handle, requires the native step
+count to match, and reads voltage directly from the declared port unknown.
+It preserves each completed update JSON and the actual case input MAT before
+proceeding. It never changes MATLAB paths, unloads modules or closes another
+session. A different resident IH MEX is rejected; its owned handle is cleaned
+up on success or failure. The two returned records paths are CLI inputs for
+`reaction_gate.py`. Raw acquisition includes local paths and stays private.
+
+No acquisition has been executed. The driver does not replace independent
+FEM or two-level BEM refinement: its geometry is whatever verified public
+configuration the runner supplies. Missing final wheel, formula approval and
+compute admission still block numerical execution. The previously listed
+acquisition implementation gap is addressed in source, pending execution and
+review; all physical and release conclusions remain open.
