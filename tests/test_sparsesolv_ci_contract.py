@@ -244,10 +244,14 @@ def test_heavy_derivative_validation_remains_required_after_tier_split():
     path = "validation_test/topology_optimization/test_hex_cluster_derivative.py"
     workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text(encoding="utf-8"))
     steps = workflow["jobs"]["ams-regression"]["steps"]
-    heavy = next(s for s in steps if s.get("name") == "Run required heavier numerical validation")
-    assert "--profile solver-heavy" in heavy["run"]
+    heavy = next(s for s in steps if s.get("id") == "heavy-validation")
+    assert "tools/validation_source_gate.py" in heavy["run"]
+    gate = (ROOT / "tools/validation_source_gate.py").read_text(encoding="utf-8")
+    assert "PROFILE = 'solver-heavy'" in gate
+    assert "'tools/run_test_tier.py','--profile',PROFILE" in gate
     assert heavy["env"]["RADIA_TESTS_ALLOW_PARTIAL"] == "0"
-    assert "find('skipped') is None" in heavy["run"]
+    assert "('failure','error','skipped')" in gate
+    assert "if not cases or any" in gate
     assert "steps.native-impact.outputs.required == 'true'" in heavy["if"]
     profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8"))["profiles"]
     assert path in profiles["solver-heavy"]["paths"]
@@ -623,7 +627,15 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
             if lane == "sparsesolv":
                 profiles = [name for name in ("solver-numerics", "solver-heavy")
                             if path in tier[name]["paths"]]
-                assert profiles and all("--profile " + name in scripts for name in profiles)
+                assert profiles
+                for name in profiles:
+                    if name == "solver-heavy":
+                        assert "tools/validation_source_gate.py" in scripts
+                        gate = (ROOT / "tools/validation_source_gate.py").read_text(encoding="utf-8")
+                        assert "PROFILE = 'solver-heavy'" in gate
+                        assert "'tools/run_test_tier.py','--profile',PROFILE" in gate
+                    else:
+                        assert "--profile " + name in scripts
             elif lane == "radia-gpu":
                 project = (ROOT / "packages/radia-gpu/tests/native/CMakeLists.txt").read_text(encoding="utf-8")
                 assert path in project

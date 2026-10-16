@@ -239,6 +239,9 @@
     "tools/local_push_checks.py": [
       "tests/test_local_push_checks.py",
       "tests/test_pre_push_check.py"
+    ],
+    "tools/validation_source_gate.py": [
+      "tests/validation_gate/test_source_gate.py"
     ]
   },
   "profiles": {
