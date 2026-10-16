@@ -105,7 +105,7 @@ def check_junit(payload):
 
 def verified_receipt(root, artifact, run, archive, fingerprint, now):
     """Authoritative GitHub API metadata is separate from artifact contents."""
-    if artifact.get('expired') or artifact.get('name')!=ARTIFACT: raise ValueError('expired/wrong artifact')
+    if artifact.get('expired') is not False or artifact.get('name')!=ARTIFACT: raise ValueError('expired/wrong artifact')
     if (run.get('path')!=WORKFLOW or run.get('head_branch')!='main' or run.get('status')!='completed'
             or run.get('conclusion')!='success' or run.get('event') not in ('push','workflow_dispatch')):
         raise ValueError('untrusted run provenance')
