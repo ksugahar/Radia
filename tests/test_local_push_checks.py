@@ -67,3 +67,9 @@ def test_rename_retains_old_lane_input(tmp_path):
 def test_conflict_line_scope_preserves_existing_assertions(monkeypatch):
     monkeypatch.setattr(m, 'git', lambda *args: '@@ -2 +2,2 @@\n+changed\n+assertion\n@@ -8 +9,0 @@')
     assert m.changed_lines(Path('.'), 'base', 'head', 'test.py') == {2, 3}
+
+def test_multiline_conflict_edit_on_literal_line_is_detected():
+    source = "assert (\n    'forbidden'\n    in source\n)\n"
+    pattern = re.compile('forbidden')
+    assert m.positive_literal_conflicts(source, pattern, {2}) == [1]
+    assert m.positive_literal_conflicts(source, pattern, {8}) == []

@@ -16,7 +16,7 @@ def load(path, name):
     spec.loader.exec_module(module)
     return module
 
-def positive_literal_conflicts(text, pattern):
+def positive_literal_conflicts(text, pattern, edited_lines=None):
     """Only positive membership assertions: negative/synthetic fixtures aren't demands."""
     tree = ast.parse(text)
     result = []
@@ -26,7 +26,8 @@ def positive_literal_conflicts(text, pattern):
             if len(test.ops) == 1 and isinstance(test.ops[0], ast.In):
                 value = test.left
                 if isinstance(value, ast.Constant) and isinstance(value.value, str) and pattern.search(value.value):
-                    result.append(node.lineno)
+                    if edited_lines is None or edited_lines.intersection(range(node.lineno, node.end_lineno + 1)):
+                        result.append(node.lineno)
     return result
 
 def minimal_import_findings(text):
@@ -84,9 +85,7 @@ def plan(root, base, candidate):
         if not file.is_file() or not path.endswith('.py'): continue
         text = file.read_text(encoding='utf-8-sig')
         added_lines = changed_lines(root, base, candidate, path)
-        for line in positive_literal_conflicts(text, policy.PUBLIC_RUNTIME_IDENTITY):
-            if line not in added_lines:
-                continue
+        for line in positive_literal_conflicts(text, policy.PUBLIC_RUNTIME_IDENTITY, added_lines):
             findings.append({'path': path, 'line': line, 'reason': 'positive assertion requires policy-banned runtime literal; review required'})
         if path.startswith('packages/radia-mcp/tests/'):
             findings.extend(dict(path=path, **item) for item in minimal_import_findings(text))
