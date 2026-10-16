@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "status": "proposed-before-execution",
+  "finding": "B1",
+  "phasor_convention": "peak amplitude, exp(+i omega t)",
+  "power_balance": {
+    "case": "temperature-BH sample with identical geometry and material, dedicated zero supplied coil resistance",
+    "port_power_W": "0.5 * real(V_port * conj(I))",
+    "coil_loss_W": "0.5 * real(Zcoil) * abs(I)^2; must be exactly zero in this case",
+    "body_heat_W": "sum of accepted face-integrated heat outputs, not heat densities",
+    "relative_error": "abs(port_power_W - coil_loss_W - body_heat_W) / max(abs(body_heat_W), 1e-18)",
+    "relative_limit": 0.01,
+    "normalization_floor_W": 1e-18,
+    "minimum_body_heat_W": 1e-16,
+    "requirements": [
+      "Use accepted port voltage and prescribed current without reconstructing the reaction row from cfg.eddy or operator_impedance_map",
+      "Pair voltage, heat and current from the same accepted electromagnetic update; omit initialization/reset placeholders",
+      "Require finite strictly positive dissipated body heat",
+      "Apply the gate to every accepted update, not only a final average"
+    ]
+  },
+  "reactive_sign": {
+    "case": "separate nonmagnetic passive conductor: constant mu=mu0, positive resistivity, no remanence and no nonlinear BH table",
+    "supplied_coil_impedance_ohm": [0.0, 0.0],
+    "reaction_impedance_ohm": "V_port / I",
+    "reactive_power_var": "0.5 * imag(V_port * conj(I))",
+    "expected_sign": "negative: induced eddy currents reduce coil inductance for this nonmagnetic conductor",
+    "maximum_imaginary_reaction_impedance_ohm": -1e-12,
+    "requirements": [
+      "Require nonzero finite current and finite passive surface impedance",
+      "Confirm the sign independently with the air-domain HCurl FEM reaction voltage, without native BEM assembly",
+      "Require both BEM refinement levels to satisfy the sign and the preregistered reaction-impedance convergence gate",
+      "Do not apply this sign rule to the magnetic temperature-BH sample: permeability can increase inductance",
+      "If the chosen publishable case produces a reaction below the floor, report insufficient signal rather than a pass"
+    ]
+  },
+  "linear_true_relative_residual_limit": 1e-6,
+  "cpu_gpu_relative_error_limit": 1e-8,
+  "artifact_requirements": [
+    "Final clean source commit and installed wheel SHA256",
+    "Actual loaded MEX path and SHA256 matching the installed wheel",
+    "Validation source hashes and preregistered plan hash",
+    "Per-update voltage, current, face heat, power error and reaction impedance in JSON",
+    "Same artifact used by native and Simulink/Toolkit qualification"
+  ],
+  "limitations": [
+    "Power balance alone is necessary but does not prove every transpose entry correct",
+    "Same-boundary-law FEM comparison does not validate the nonlinear bulk approximation",
+    "No execution or release acceptance is claimed by this plan"
+  ]
+}
