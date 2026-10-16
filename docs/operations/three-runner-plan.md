@@ -1,12 +1,18 @@
 # Three-runner CI plan (review draft, 2026-10-16)
 
-Status: proposal, not deployment authorization. Baseline: `ebb117b80` (includes
+Status: approved staged plan; no blanket service authorization. Baseline: `ebb117b80` (includes
 the CPU workflow rename in PR #427). Codex implements and validates; Claude
 repository management reviews and owns GitHub integration. The user reviews
-this plan before runner registration or service configuration. Tokens remain
+this plan before runner registration or service configuration. Stage 3 is now
+approved and the isolated light runner is registered. Tokens remain
 user-owned and are never placed in source, logs, manifests or command history.
 
 ## 1. Routing and contracts
+
+Migration exception: light must NOT carry `100` while heavy jobs still select
+the generic label. Stage 3 uses `[self-hosted, Windows, X64, ci-light]`.
+Restore `100` only after all heavy jobs select explicit capabilities. Contract
+tests validate the transitional and final states separately.
 
 Three runner instances share the existing Windows build host; they are not
 three machines. Give each exactly one capability label in addition to
@@ -89,19 +95,19 @@ exclusive window rather than stealing the light runner's capacity.
 
 ## 3. MATLAB authentication in the real runner context
 
-Choose an explicitly MATLAB-authenticated Windows account. Never infer its
-license state from SYSTEM, SSH or the developer desktop. Service logon rights,
-MathWorks licensing eligibility and installed product versions must be
-confirmed before adopting service execution. Do not copy credentials between
-accounts. If the actual service cannot authenticate, block that lane and
-review the execution model; do not fall back to an interactive user's session.
+User decision: keep MATLAB/GPU in the authenticated account's interactive
+session started with `run.cmd`; do not service-install this runner. Verify
+license state in that actual runner context, not SYSTEM, SSH or a separate
+manual desktop test. Do not copy credentials between accounts. Authentication
+failure blocks this lane; any later service migration needs separate review.
 
 In a diagnostic job routed to the new MATLAB runner, record account identity
 privately, runner role, Python executable, MATLAB/Engine/CUDA/compiler
 versions, then start a new official Engine, calculate a deterministic matrix
 product, verify its value, query the CUDA device and execute a tiny GPU
 calculation, and quit the owned Engine in `finally`. Verify its PID ended.
-Repeat in that actual context after an approved reboot and login-state change.
+Repeat in that actual interactive runner context after approved reboot/relaunch;
+logout and remote disconnection must not be assumed equivalent.
 GUI/Simulink acceptance stays separate where required. Use the MATLAB release's
 supported Python Engine package:
 [installation](https://www.mathworks.com/help/matlab/matlab_external/install-the-matlab-engine-for-python.html),
@@ -135,7 +141,7 @@ cleanup is recorded with owner/reason/trigger, not retried through another tool.
    negative tests, then change only `fast-contracts` in a reviewed PR. Keep
    required check names stable. Confirm a real required PR check finishes.
 4. Create/validate MATLAB runner account and Engine/GPU lifecycle in the actual
-   service, then migrate all four MATLAB jobs together. Require the GPU OS lock
+   interactive `run.cmd` context (no service), then migrate all four MATLAB jobs together. Require the GPU OS lock
    for manual work too. Validate a small published numerical contract.
 5. Convert or replace the old runner as native-only after its current job drains.
    Migrate native jobs, retire generic eligibility, and test all three lanes
@@ -155,16 +161,16 @@ required checks pending silently on a label with no online eligible runner.
 ## 6. Performance measurement windows
 
 Adopt an explicit benchmark reservation. Drain and stop admission to all three
-local runners, then stop their idle listener services for the approved window
+local runners, then stop their idle listeners for the approved window
 (configuration executor only; never stop an active job). Also check manual
 jobs, free RAM and GPU, and prohibit competing specialist work. A paused
 workflow alone does not stop an already queued job reaching another runner.
-Record start/end service states, process inventory and CI status.
+Record start/end listener states, process inventory and CI status.
 
-Only benchmark after all local runner services are stopped and exclusive
+Only benchmark after all local runner listeners are stopped and exclusive
 ownership is confirmed. Fix CPU threads, include transfers/setup and cold/warm
 runs, and save hardware/software/hashes in JSON. Unexpected CI/manual overlap
-invalidates affected timing. Restart the same services afterward and verify
+invalidates affected timing. Restart the same listeners afterward and verify
 online state and a harmless job per lane. Accuracy checks may run concurrently
 under caps, but are never relabelled benchmark timings. Existing contended
 measurements remain diagnostics, not accepted performance evidence.
@@ -182,7 +188,7 @@ for BOTH AGENTS.md and CLAUDE.md (not edited in this draft):
 > exclusive host lock. Each job enforces declared CPU, aggregate process-tree
 > memory and timeout budgets. Existing GitHub-hosted package/source jobs remain
 > explicitly classified. Performance acceptance runs only in reserved windows
-> after all local runner services drain and stop; restore and verify afterward.
+> after all local runner listeners drain and stop; restore and verify afterward.
 
 Do not apply this text before review; existing root policy edits belong to
 other work and remain untouched. No new runner on the wheel host or retired
@@ -206,7 +212,7 @@ preflight is early feedback, not a replacement for GitHub CI/release gates.
 Acceptance before registration: Claude review disposition and user's plan
 confirmation. Acceptance before routing adoption: actual runner identities,
 account/Engine evidence, contract mutations, bounded simultaneous-load test,
-recovery test and staged PR CI. Unresolved choices: final service account,
+recovery test and staged PR CI. Unresolved choices: final account/context proof,
 measured per-job exceptions, physical CPU sets and enforceable benchmark
 reservation procedure. No implementation may silently assume these resolved.
 
