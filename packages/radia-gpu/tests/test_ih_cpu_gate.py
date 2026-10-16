@@ -18,3 +18,17 @@ def test_ih_cpu_qualification(fault):
     if fault:
         with pytest.raises(ValueError):runner.check_cpu_release_gate(cpu)
     else:runner.check_cpu_release_gate(cpu)
+
+@pytest.mark.parametrize('fault',[None,'duplicate','missing-kind','one-file'])
+def test_dedicated_reaction_inputs(tmp_path,fault):
+    import json
+    first=tmp_path/'bh.json';second=tmp_path/'nonmagnetic.json'
+    first.write_text(json.dumps({'case_kind':'temperature-bh-zero-resistance'}))
+    second.write_text(json.dumps({'case_kind':'nonmagnetic-reactive'}))
+    paths=[first,second]
+    if fault=='duplicate':paths=[first,first]
+    if fault=='missing-kind':second.write_text('{}')
+    if fault=='one-file':paths=[first]
+    if fault:
+        with pytest.raises(ValueError):runner.reaction_inputs(paths)
+    else:assert len(runner.reaction_inputs(paths))==2
