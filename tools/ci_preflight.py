@@ -34,6 +34,7 @@ import argparse
 import importlib
 import json
 import os
+from pathlib import Path
 import subprocess
 import sys
 
@@ -461,7 +462,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if args.local_push_candidate:
         from local_push_checks import run
-        return run(__import__("pathlib").Path(REPO), args.local_push_base, args.local_push_candidate)
+        return run(Path(REPO), args.local_push_base, args.local_push_candidate)
 
     gates = list(ALL_GATES)
     scope_ref = args.since or "origin/main"

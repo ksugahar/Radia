@@ -13,10 +13,16 @@ ZERO = "0" * 40
 def run_local_candidate(base, head):
     """Local checks run on a detached candidate, never another session's WIP."""
     git = ["git", "-c", f"safe.directory={ROOT}"]
-    if base == ZERO:
-        base = subprocess.check_output(
-            [*git, "merge-base", head, "origin/main"], cwd=ROOT,
-            text=True, encoding="utf-8").strip()
+    try:
+        if base == ZERO:
+            base = subprocess.check_output(
+                [*git, "merge-base", head, "origin/main"], cwd=ROOT,
+                text=True, encoding="utf-8").strip()
+        subprocess.run([*git, "cat-file", "-e", f"{base}^{{commit}}"],
+                       cwd=ROOT, check=True, capture_output=True, timeout=30)
+    except subprocess.SubprocessError as exc:
+        print(f"pre-push: cannot resolve base {base}; fetch the remote base commit/history and retry: {exc}", file=sys.stderr)
+        return 1
     parent = Path(tempfile.mkdtemp(prefix="radia-push-candidate-"))
     checkout = parent / "candidate"
     added = False
@@ -28,18 +34,24 @@ def run_local_candidate(base, head):
         result = subprocess.run(
             [sys.executable, "tools/ci_preflight.py", "--local-push-candidate", head,
              "--local-push-base", base], cwd=checkout, timeout=420).returncode
+    except (ValueError, OSError, subprocess.SubprocessError) as exc:
+        print(f"pre-push: local candidate check failed: {exc}", file=sys.stderr)
+        result = 1
     finally:
-        if added:
-            if checkout.is_symlink() or checkout.resolve().parent != parent.resolve():
-                raise ValueError("owned candidate cleanup path escaped its temporary parent")
-            cleanup = subprocess.run(
-                [*git, "worktree", "remove", "--force", str(checkout)], cwd=ROOT,
-                timeout=60)
-            if cleanup.returncode:
-                print(f"pre-push: owned candidate cleanup failed: {checkout}", file=sys.stderr)
-                result = 1
-        if not checkout.exists():
-            parent.rmdir()  # Empty, exact task-created parent only; no recursive fallback.
+        try:
+            if added:
+                if checkout.is_symlink() or checkout.resolve().parent != parent.resolve():
+                    raise ValueError("owned candidate cleanup path escaped its temporary parent")
+                cleanup = subprocess.run(
+                    [*git, "worktree", "remove", "--force", str(checkout)], cwd=ROOT,
+                    timeout=60)
+                if cleanup.returncode:
+                    raise ValueError(f"git worktree remove returned {cleanup.returncode}")
+            if not checkout.exists():
+                parent.rmdir()  # Empty exact parent only; no recursive fallback.
+        except (ValueError, OSError, subprocess.SubprocessError) as exc:
+            print(f"pre-push: owned candidate cleanup failed ({checkout}): {exc}", file=sys.stderr)
+            result = 1
     return result
 
 
