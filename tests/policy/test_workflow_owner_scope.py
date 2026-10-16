@@ -93,6 +93,45 @@ def test_ordered_matching_preserves_actions_markdown_reinclusion():
     assert CONTRACT.owner_rule(MANIFEST, "packages/radia-mcp/src/radia_mcp/presentation/tools.py")["owners"] == ["radia-mcp"]
 
 
+# Foreign files the radia-mcp-matrix lane really reads, with the reader that
+# proves it (pattern -> (reader, text the reader contains)).
+MCP_LANE_READS = {
+    "AGENTS.md": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "AGENTS.md"),
+    "CLAUDE.md": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "CLAUDE.md"),
+    "README.md": ("tests/mcp_integration/test_matlab_source_contract.py", "README.md"),
+    ".agents/skills/md2html/md2html.py": ("tests/mcp_integration/test_md2html_legacy_cli.py", "md2html.py"),
+    "packages/radia-gpu/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m": ("tests/mcp_integration/test_circuit_field_simulink_contract.py", "makeCircuitFieldStateSpace"),
+    "packages/radia-gpu/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m": ("tests/mcp_integration/test_circuit_field_simulink_contract.py", "buildCircuitFieldStateSpaceModel"),
+    "packages/radia-gpu/matlab/+radia/+acoustic/**": ("tests/mcp_integration/test_matlab_source_contract.py", "+acoustic"),
+    "packages/radia-gpu/native/radia_cuda_csr_pcg.cu": ("packages/radia-mcp/src/radia_mcp/matlab/runtime.py", "radia_cuda_csr_pcg.cu"),
+    "packages/radia-optuna/matlab/**": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "packages/radia-optuna/matlab"),
+    "packages/radia-optuna/native/optuna_mex.cpp": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_quality.py", "optuna_mex.cpp"),
+    "packages/radia-optuna/src/radia_optuna/manifest.json": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_quality.py", "manifest.json"),
+    "packages/radia-optuna/THIRD_PARTY_NOTICES.md": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_quality.py", "THIRD_PARTY_NOTICES"),
+    "tests/matlab/fixtures/optuna*": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "optuna50_oracle.json"),
+    "tests/matlab/fixtures/generate_optuna*": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "generate_optuna50_oracle.py"),
+    "tests/matlab/test_optuna*.m": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "test_optuna*.m"),
+    "validation_test/optimization/benchmark_*": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_quality.py", "benchmark_"),
+    "validation_test/vim_coupled/results_*.json": ("tests/mcp_integration/test_hdiv_vim_disk_validation_evidence.py", "vim_coupled"),
+    "validation_test/maglev/team28_coilbuilder_dynamic_simulink_results.json": ("tests/mcp_integration/test_team28_cycle_averaged_motion_gate.py", "team28_coilbuilder_dynamic_simulink_results.json"),
+    "src/lib/radia_pybind.cpp": ("tests/mcp_integration/test_matlab_source_contract.py", "radia_pybind.cpp"),
+    "src/radia/panels/calc_fem_kelvin.py": ("tests/mcp_integration/test_solver_capacity_report_contract.py", "calc_fem_kelvin.py"),
+    "docs/**/*.msh": ("tests/mcp_integration/test_repo_msh_assets.py", '"docs"'),
+    "validation_test/**/*.msh": ("tests/mcp_integration/test_repo_msh_assets.py", '"validation_test"'),
+    "src/radia/panels/samples/**/*.msh": ("tests/mcp_integration/test_repo_msh_assets.py", '"src/radia/panels/samples"'),
+}
+
+
+def test_mcp_lane_shared_reads_are_real_and_triggered():
+    lane = MANIFEST["lanes"]["radia-mcp-matrix"]["events"]
+    for pattern, (reader, text) in MCP_LANE_READS.items():
+        assert text in (ROOT / reader).read_text(encoding="utf-8"), (pattern, reader)
+        rule = next(r for r in MANIFEST["rules"] if r["pattern"] == pattern)
+        assert "radia-mcp" in rule["owners"] and rule["reason"]["kind"] == "integration", pattern
+        for event in ("push", "pull_request"):
+            assert pattern in lane[event]["paths"], (event, pattern)
+
+
 def test_shared_ams_closure_and_native_consumers_are_real():
     closure, = MANIFEST["shared_include_closures"]
     actual = CONTRACT.include_closure(ROOT, closure["seeds"], closure["prefix"])
@@ -122,7 +161,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         seeds.update("src/core/" + name for name in
                      re.findall(r"src/core/([A-Za-z0-9_.]+)", script.read_text(encoding="utf-8")))
     core = set(CONTRACT.include_closure(ROOT, sorted(seeds), "src/core"))
-    assert {p for p in shared if p.startswith("src/core/")} == core
+    assert {p for p in shared if p.startswith("src/core/")} == core | {"src/core/radia_mex_sparse_symmetry.h"}
     assert len(core) == 14
     # The radia-gpu lane must start on every file its native build reads.
     lane = MANIFEST["lanes"]["radia-gpu"]["events"]
@@ -137,8 +176,34 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         "packages/radia-mcp/src/radia_mcp/ltspice/**",
         "packages/radia-mcp/src/radia_mcp/common/__init__.py",
         "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
-        "packages/radia-mcp/src/radia_mcp/common/status.py"}
+        "packages/radia-mcp/src/radia_mcp/common/status.py"} | set(MCP_LANE_READS)
+    expected |= {
+        "src/core/radia_mex_sparse_symmetry.h",
+        "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
+        "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+        "tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
+        "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
+        "validation_test/induction_heating/test_ih_operator_physics_golden.py",
+    }
+    expected |= {
+        "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
+        "validation_test/radia_mcp/test_aphi_gauge_point.py",
+        "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
+        "validation_test/radia_mcp/test_eddy_driven_region.py",
+        "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
+    }
     assert shared == expected
+    # The shared IH contracts execute the GPU package adapter against CPU Radia solvers.
+    for path in ("tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
+                 "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
+                 "validation_test/induction_heating/test_ih_operator_physics_golden.py"):
+        assert "from radia_gpu.simulink" in (ROOT / path).read_text(encoding="utf-8")
+    adapter = (ROOT / "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py").read_text(encoding="utf-8")
+    assert "radia.panels" in adapter
+    assert "cubit_mesh_export.check" in (ROOT / "tests/test_ih_operator_assembly.py").read_text(encoding="utf-8")
     # Integration evidence: radia-gpu LTspice tests cross-check the radia-mcp LTspice gates.
     gpu_ltspice_tests = list((ROOT / "packages/radia-gpu/tests/ltspice").glob("test_*.py"))
     assert any("from radia_mcp.ltspice" in path.read_text(encoding="utf-8") for path in gpu_ltspice_tests)
@@ -189,7 +254,7 @@ def test_solver_triggers_exclude_only_independent_workflows_and_policy_tests():
 
 def test_policy_contracts_run_in_policy_lane():
     workflow = (ROOT / ".github/workflows/policy-lint.yml").read_text()
-    assert "python -m pytest tests/policy/ -q" in workflow
+    assert "python -m pytest tests/policy/ tests/test_sparsesolv_ci_contract.py -q" in workflow
     manifest = (ROOT / "tests/test_tier_manifest.json").read_text()
     assert "test_release_workflow_ref_gate.py" not in manifest
 
