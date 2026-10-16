@@ -45,6 +45,8 @@ spec.loader.exec_module(verify)
     ({}, False),
     ({'distribution_eligible': 1}, False),
     ({'distribution_eligible': 'true'}, False),
+    ({'distribution_eligible': True}, False),
+    ({'geometry_lifecycle_test_build': 0, 'distribution_eligible': True}, False),
 ])
 def test_ams_distribution_requires_explicit_production_eligibility(receipt, accepted):
     if accepted:

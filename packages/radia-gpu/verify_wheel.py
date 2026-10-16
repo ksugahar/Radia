@@ -9,7 +9,7 @@ import zipfile
 
 
 def verify_ams_distribution_eligibility(receipt):
-    if (receipt.get('geometry_lifecycle_test_build') is True
+    if (receipt.get('geometry_lifecycle_test_build') is not False
             or receipt.get('distribution_eligible') is not True):
         raise ValueError('AMS test or unclassified build is not distribution eligible')
 
