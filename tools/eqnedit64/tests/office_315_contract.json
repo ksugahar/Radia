@@ -33,7 +33,7 @@
     },
     {
       "id": "cases",
-      "tex": "\\begin{cases}x&x>0\\\\0&x\\le0\\end{cases}",
+      "tex": "\\begin{cases}x&x>0\\\\0&x\\leq0\\end{cases}",
       "expected": "preserve cases delimiter and two-row two-cell structure"
     }
   ],
@@ -51,5 +51,8 @@
     "three-row-unanchored"
   ],
   "position_tolerance_px": 0,
-  "position_tolerance_policy": "Fixed before any measurement; no post-result relaxation."
+  "position_tolerance_policy": "Fixed before any measurement; no post-result relaxation.",
+  "fixture_revision": 2,
+  "amendment": "cases uses equivalent supported \\leq instead of legacy unsupported \\le; original mismatch retained privately; product alias support unchanged",
+  "measurement_method": "PowerPoint character COM bounding coordinates rounded to exported PNG pixel scale; tolerance 0 px fixed before measurement; original unequal-I raster regression also requires zero spread."
 }
