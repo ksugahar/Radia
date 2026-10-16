@@ -444,3 +444,132 @@ def test_force_close_failure_stops_and_retains_completed_closures(monkeypatch):
     assert [p['pid'] for p in ns['result']['force_closed_cubit']] == [100]
     assert ns['result']['force_closed_cubit'][0]['image'] == 'coreform_cubit.exe'
     assert not any(call == ['taskkill', '/F', '/PID', '102'] for call in calls)
+
+
+@pytest.mark.parametrize('tier', ['wheel', 'editable'])
+def test_preflight_installer_imports_selected_helpers_before_stale_package(tmp_path, monkeypatch, tier):
+    """Exercise the worker in a fresh process with a hostile old PYTHONPATH."""
+    import subprocess
+    stale = tmp_path / 'stale' / 'cubit_mesh_export'
+    stale.mkdir(parents=True)
+    (stale / '__init__.py').write_text('')
+    (stale / '_layout.py').write_text('raise RuntimeError("STALE layout imported")\n')
+    monkeypatch.setenv('PYTHONPATH', str(stale.parent))
+    wheel = tmp_path / 'candidate.whl'
+    _fake_cubit_wheel(wheel)
+    with zipfile.ZipFile(wheel, 'a') as archive:
+        archive.writestr('cubit_mesh_export/__init__.py', '')
+        archive.writestr('cubit_mesh_export/_layout.py', 'selected = True\n')
+    # Replace the synthetic installer without duplicate zip members.
+    with zipfile.ZipFile(wheel) as archive:
+        payload = {name: archive.read(name) for name in archive.namelist()}
+    payload['cubit_mesh_export/install.py'] = (
+        b'from pathlib import Path\nfrom cubit_mesh_export._layout import selected\n'
+        b'assert selected\ndef _find_cubit_dir():\n    return Path(".")\n'
+        b'def preflight(cubit_dir, verbose=False):\n    return True, []\n')
+    with zipfile.ZipFile(wheel, 'w') as archive:
+        for name, data in payload.items():
+            archive.writestr(name, data)
+    source = tmp_path / 'release'
+    sha = 'a' * 40
+    if tier == 'editable':
+        src = source / 'packages/cubit-mesh-export/src'
+        src.mkdir(parents=True)
+        with zipfile.ZipFile(wheel) as archive:
+            archive.extractall(src)
+        for args in (['init'], ['add', '.'], ['-c', 'user.name=Test', '-c',
+                     'user.email=test@example.invalid', 'commit', '-m', 'fixture']):
+            subprocess.run(['git', '-C', str(source), *args], check=True, capture_output=True)
+        sha = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
+    cfg = dict(dual.wheel_contract(wheel), schema=dual.SCHEMA, source_sha=sha,
+               target='100' if tier == 'editable' else 'lab', tier=tier,
+               action='preflight', source_root=str(source) if tier == 'editable' else '',
+               output=str(tmp_path / 'evidence'), wheel_path=str(wheel),
+               dependencies=_pins_or_skip(), force_close_cubit=False)
+    code, result = _run_worker(cfg)
+    assert code == 0 and result['passed'], result.get('error')
+
+
+def test_configured_ssh_alias_is_used_for_both_transports(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(dual.subprocess, 'run', lambda cmd, **kw: calls.append(cmd))
+    wheel = tmp_path / 'candidate.whl'
+    wheel.write_bytes(b'wheel')
+    dual.transport_wheel(wheel, 'lab', '100', r'C:\temp\e', '102')
+    assert calls[0][5] == '102'
+    assert calls[1][-1].startswith('102:')
+    args = dual.build_parser().parse_args([
+        '--action', 'preflight', '--wheel', str(wheel), '--source-sha', 'a' * 40,
+        '--source-root-100', 'release', '--evidence-lab', 'e', '--evidence-100', 'e',
+        '--ssh-alias-lab', '102'])
+    assert args.ssh_alias_lab == '102' and args.ssh_alias_100 == '100'
+
+
+@pytest.mark.parametrize('failure', ['dns', 'config', 'missing'])
+def test_ssh_alias_resolution_fails_clearly(monkeypatch, failure):
+    from types import SimpleNamespace
+    def fake_run(cmd, **kwargs):
+        assert cmd == ['ssh', '-G', 'configured-alias']
+        if failure == 'config':
+            raise dual.subprocess.CalledProcessError(255, cmd, stderr='Bad configuration')
+        return SimpleNamespace(stdout='' if failure == 'missing' else 'hostname remote.invalid\nport 22\n')
+    def dns(*args, **kwargs):
+        raise dual.socket.gaierror('host not found')
+    monkeypatch.setattr(dual.subprocess, 'run', fake_run)
+    monkeypatch.setattr(dual.socket, 'getaddrinfo', dns)
+    with pytest.raises(RuntimeError, match="lab: SSH alias 'configured-alias'.*--ssh-alias-lab"):
+        dual.check_ssh_alias('lab', 'configured-alias')
+
+
+def test_ssh_alias_checks_effective_hostname_not_alias(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(dual.subprocess, 'run', lambda *a, **k: SimpleNamespace(
+        stdout='hostname remote.example\nport 2222\n'))
+    calls = []
+    monkeypatch.setattr(dual.socket, 'getaddrinfo', lambda *a, **k: calls.append(a))
+    assert dual.check_ssh_alias('lab', '102') == 'remote.example'
+    assert calls == [('remote.example', '2222')]
+
+@pytest.mark.parametrize('run_from', ['100', 'lab'])
+def test_orchestrator_checks_remote_alias_before_transport_and_uses_it_for_worker(monkeypatch, tmp_path, run_from):
+    import json
+    from types import SimpleNamespace
+    events = []
+    remote = next(t for t in dual.TARGETS if t != run_from)
+    alias = 'custom-' + remote
+    monkeypatch.setattr(dual, 'wheel_contract', lambda _: dict(version='1.0.2', files={}, requires=[]))
+    monkeypatch.setattr(dual, 'check_ssh_alias', lambda target, name: events.append(('check', target, name)))
+    def transport(wheel, target, local, output, name):
+        events.append(('transport', target, name))
+        return 'wheel.whl'
+    monkeypatch.setattr(dual, 'transport_wheel', transport)
+    def worker(cmd, **kwargs):
+        events.append(('worker', cmd))
+        return SimpleNamespace(returncode=0, stdout='CUBIT_DUAL_RESULT=' + json.dumps({'passed': True}), stderr='')
+    monkeypatch.setattr(dual.subprocess, 'run', worker)
+    args = dual.build_parser().parse_args([
+        '--action', 'preflight', '--wheel', 'wheel.whl', '--source-sha', 'a' * 40,
+        '--source-root-100', str(ROOT), '--source-root-lab', str(ROOT),
+        '--evidence-lab', str(tmp_path), '--evidence-100', str(tmp_path),
+        '--run-from', run_from, '--ssh-alias-' + remote, alias])
+    assert dual.run(args) == 0
+    assert events[0] == ('check', remote, alias)
+    commands = [event[1] for event in events if event[0] == 'worker']
+    ssh = next(cmd for cmd in commands if cmd[0] == 'ssh')
+    assert ssh[5] == alias
+    assert len(commands) == 2
+
+
+def test_unresolved_alias_aborts_orchestrator_before_transfer_or_workers(monkeypatch):
+    monkeypatch.setattr(dual, 'wheel_contract', lambda _: dict(version='1.0.2'))
+    def fail(*args):
+        raise RuntimeError('unresolved configured SSH alias')
+    monkeypatch.setattr(dual, 'check_ssh_alias', fail)
+    monkeypatch.setattr(dual.subprocess, 'run', lambda *a, **k: pytest.fail('started worker'))
+    monkeypatch.setattr(dual, 'transport_wheel', lambda *a: pytest.fail('transferred wheel'))
+    args = dual.build_parser().parse_args([
+        '--action', 'deploy', '--wheel', 'wheel.whl', '--source-sha', 'a' * 40,
+        '--source-root-100', 'missing', '--evidence-lab', 'e', '--evidence-100', 'e',
+        '--run-from', '100'])
+    with pytest.raises(RuntimeError, match='unresolved configured SSH alias'):
+        dual.run(args)
