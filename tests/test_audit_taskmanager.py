@@ -226,7 +226,7 @@ def test_syntax_warning_identifies_source_file(audit_module, tmp_path):
 def test_fast_ci_runs_the_full_taskmanager_audit():
     import yaml
     root = Path(__file__).resolve().parents[1]
-    workflow = yaml.safe_load((root / ".github/workflows/radia-fast.yml").read_text())
+    workflow = yaml.safe_load((root / ".github/workflows/radia.yml").read_text(encoding="utf-8"))
     steps = workflow["jobs"]["fast-contracts"]["steps"]
     audit = next(s for s in steps if s.get("name") == "Audit caller-owned TaskManager regions")
     assert "tools/audit_taskmanager.py" in audit["run"]

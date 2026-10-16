@@ -18,7 +18,7 @@ def _preflight_module():
 
 
 def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
-    fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(encoding="utf-8")
+    fast = (ROOT / ".github" / "workflows" / "radia.yml").read_text(encoding="utf-8")
     native = (ROOT / ".github" / "workflows" / "build-test.yml").read_text(encoding="utf-8")
     optuna = (ROOT / ".github" / "workflows" / "radia-optuna.yml").read_text(encoding="utf-8")
     release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
@@ -26,7 +26,7 @@ def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
     assert "name: Radia\n" in fast
     assert 'runs-on: [self-hosted, Windows, X64, "100"]' in fast
     assert "Build with MSVC" not in fast
-    assert "validation_test/" not in fast
+    assert "validation_test/" not in fast.split("jobs:", 1)[1]
     assert "name: Radia Native Release" in native
     assert 'runs-on: [self-hosted, Windows, X64, "100"]' in native
     assert "mkl-devel" in native
@@ -55,7 +55,7 @@ def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
 def test_fast_ci_declares_bh_and_wheel_contract_dependencies():
     import yaml
 
-    workflow = yaml.safe_load((ROOT / '.github/workflows/radia-fast.yml').read_text(encoding='utf-8'))
+    workflow = yaml.safe_load((ROOT / '.github/workflows/radia.yml').read_text(encoding='utf-8'))
     steps = workflow['jobs']['fast-contracts']['steps']
     setup = next(step['run'] for step in steps
                  if step.get('name') == 'Create isolated fast-CI environment')
@@ -114,7 +114,7 @@ def test_policy_lint_enforces_the_retired_examples_boundary():
 
 
 def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
-    fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(
+    fast = (ROOT / ".github" / "workflows" / "radia.yml").read_text(
         encoding="utf-8"
     )
     mcp = (ROOT / ".github" / "workflows" / "radia-mcp-matrix.yml").read_text(
@@ -127,7 +127,7 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
         "packages/radia-optuna/**",
         "packages/eqnedit64/**",
     ):
-        assert independent_path in fast
+        assert independent_path not in fast
 
     # Universal Policy Lint triggers are owned by the workflow-owner contract
     # in tests/policy/test_workflow_owner_scope.py.

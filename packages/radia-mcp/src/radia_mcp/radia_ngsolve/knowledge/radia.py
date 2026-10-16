@@ -2742,7 +2742,7 @@ Routine source CI and native release CI are deliberately separate:
 
 | Lane | Trigger | Scope |
 |------|---------|-------|
-| `radia-fast.yml` | affected pushes/PRs | development/build host fast policy and regression gates |
+| `radia.yml` | affected pushes/PRs | development/build host fast policy and regression gates |
 | `policy-lint.yml` | non-MCP pushes/PRs | portable source-policy checks |
 | `radia-mcp-matrix.yml` | MCP changes | impact-selected MCP tests/selftests |
 | `build-test.yml` | `v*` tag or manual dispatch | isolated native build, bounded tests, wheel candidate |
