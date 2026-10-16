@@ -383,9 +383,22 @@ def _integration_tests(changed: list[str]) -> list[str]:
         return []  # A standalone package has no repository integration lane.
     broad = (
         "tests/mcp_integration/", "tests/mcp_server/fixtures/", "matlab/",
-        "validation_test/", "src/matlab/", "packages/radia-optuna/",
-        "packages/radia-gpu/",
-        ".agents/skills/md2html/", ".github/workflows/radia-mcp-matrix.yml",
+        # Foreign inputs this lane genuinely reads (see the radia-mcp-matrix
+        # integration rules in tools/ci_distribution_manifest.json).
+        "validation_test/radia_mcp/", "validation_test/vim_coupled/results_",
+        "validation_test/maglev/team28_coilbuilder_dynamic_simulink_results.json",
+        "validation_test/optimization/benchmark_",
+        "packages/radia-optuna/matlab/", "packages/radia-optuna/native/optuna_mex.cpp",
+        "packages/radia-optuna/src/radia_optuna/manifest.json",
+        "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
+        "tests/matlab/fixtures/optuna", "tests/matlab/fixtures/generate_optuna",
+        "tests/matlab/test_optuna",
+        "packages/radia-gpu/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m",
+        "packages/radia-gpu/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
+        "packages/radia-gpu/matlab/+radia/+acoustic/",
+        "packages/radia-gpu/native/radia_cuda_csr_pcg.cu",
+        "src/lib/radia_pybind.cpp", "src/radia/panels/calc_fem_kelvin.py",
+        ".agents/skills/md2html/md2html.py", ".github/workflows/radia-mcp-matrix.yml",
         "packages/radia-mcp/tools/select_ci_tests.py",
         "packages/radia-mcp/tools/check_package_test_boundary.py",
         "packages/radia-mcp/src/radia_mcp/radia_ngsolve/force.py",
