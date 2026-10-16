@@ -40,6 +40,16 @@ class CoupledState {
     int* invalid_=nullptr;
     cudaEvent_t heatReady_=nullptr;
     std::size_t steps_=0;
+#ifdef RADIA_IH_TRANSACTION_TEST
+    unsigned testFailureStage_=0;
+#endif
+    void testPoint(unsigned stage){
+#ifdef RADIA_IH_TRANSACTION_TEST
+        if(testFailureStage_==stage){testFailureStage_=0;throw std::runtime_error("Injected IH transaction rejection");}
+#else
+        (void)stage;
+#endif
+    }
     ComplexSolver::Result lastEddy_{},lastThermal_{};
     void release()noexcept {
         // Solver destructors synchronize their own streams before state release.
@@ -92,6 +102,13 @@ public:
         return eddy_->ownedBytes()+thermal_->ownedBytes()+2*op_.eddy.rows*sizeof(cuDoubleComplex)+
             (2*op_.heatSamples+3*op_.thermalSystem.rows+2)*sizeof(double)+sizeof(int);
     }
+    cudaError_t drainCandidateWork()noexcept{const auto first=cudaStreamSynchronize(eddy_->stream());const auto second=cudaStreamSynchronize(thermal_->stream());return first!=cudaSuccess?first:second;}
+#ifdef RADIA_IH_TRANSACTION_TEST
+    void setTestFailure(unsigned stage){if(stage<1||stage>7)throw std::invalid_argument("Unknown transaction test stage");testFailureStage_=stage;}
+    const cuDoubleComplex* testAcceptedEM()const noexcept{return acceptedElectromagnetic_;}
+    const double* testAcceptedTemperature()const noexcept{return temperature_;}
+    const double* testAcceptedHeat()const noexcept{return heat_;}
+#endif
     std::size_t atomicityBytes()const noexcept{return op_.eddy.rows*sizeof(cuDoubleComplex);}
     ~CoupledState(){release();}
     void commitAccepted(const ComplexSolver::Result& em,const ComplexSolver::Result& thermal,bool resetting)noexcept{
@@ -109,7 +126,7 @@ public:
         cudaCheck(cudaMemsetAsync(candidateElectromagnetic_,0,op_.eddy.rows*sizeof(cuDoubleComplex),thermal_->stream()));
         if(op_.stageMaterial)op_.stageMaterial(op_.materialOwner,thermal_->stream(),true);
         cudaCheck(cudaStreamSynchronize(thermal_->stream()));cudaCheck(cudaGetLastError());
-        commitAccepted({}, {}, true);
+        testPoint(7);commitAccepted({}, {}, true);
     }
     // Called only at the Simulink discrete Update boundary. Outputs observes
     // accepted state; no thermal vector is returned merely to re-upload it.
@@ -120,13 +137,14 @@ public:
         if(op_.updateMaterial)op_.updateMaterial(op_.materialOwner,eddy_->stream(),temperature_,current);
         scaleDrive<<<unsigned((op_.eddy.rows+127)/128),128,0,eddy_->stream()>>>(op_.rhsPerAmp,controls_,op_.eddy.rows,eddy_->rhs());
         const auto eddyResult=op_.solveMaterial?op_.solveMaterial(op_.materialOwner,*eddy_,tolerance,maxIterations):eddy_->solve(tolerance,maxIterations);
+        testPoint(1);
         quadraticLoss<<<unsigned((op_.heatSamples+127)/128),128,0,eddy_->stream()>>>(op_.lossProjection,eddy_->solution(),op_.lossWeights,op_.heatSamples,op_.lossComponents,candidateHeat_);
         cudaCheck(cudaEventRecord(heatReady_,eddy_->stream()));
         cudaCheck(cudaStreamWaitEvent(thermal_->stream(),heatReady_,0));
         const auto blocks=unsigned((op_.thermalSystem.rows+127)/128);
         thermalLoad<<<blocks,128,0,thermal_->stream()>>>(op_.heatProjection,candidateHeat_,load_);
         thermalIncrementRHS<<<blocks,128,0,thermal_->stream()>>>(op_.stiffness,op_.convection,load_,temperature_,op_.constantCoefficients,controls_+1,op_.dt,op_.conductivity,op_.convectionScale,thermal_->rhs());
-        const auto thermalResult=thermal_->solve(tolerance,maxIterations);
+        const auto thermalResult=thermal_->solve(tolerance,maxIterations);testPoint(2);
         cudaCheck(cudaMemsetAsync(invalid_,0,sizeof(int),thermal_->stream()));
         thermalCandidate<<<blocks,128,0,thermal_->stream()>>>(temperature_,thermal_->solution(),candidate_,invalid_,op_.thermalSystem.rows);
         int invalid=0;cudaCheck(cudaMemcpyAsync(&invalid,invalid_,sizeof(int),cudaMemcpyDeviceToHost,thermal_->stream()));
@@ -134,18 +152,18 @@ public:
         if(invalid)throw std::runtime_error("IH candidate temperature rejected; accepted state preserved");
         if(op_.validateCandidateTemperature)op_.validateCandidateTemperature(op_.materialOwner,thermal_->stream(),candidate_);
         cudaCheck(cudaMemcpyAsync(candidateElectromagnetic_,eddy_->solution(),op_.eddy.rows*sizeof(cuDoubleComplex),cudaMemcpyDeviceToDevice,thermal_->stream()));
-        if(op_.stageMaterial)op_.stageMaterial(op_.materialOwner,thermal_->stream(),false);
+        testPoint(3);if(op_.stageMaterial)op_.stageMaterial(op_.materialOwner,thermal_->stream(),false);testPoint(4);
         if(op_.snapshot){
             auto& bank=*op_.snapshot;const auto stream=thermal_->stream();bank.begin(stream);
             bank.stage("x",candidateElectromagnetic_,stream);bank.stage("rhs",eddy_->rhs(),stream);
             bank.stage("T_material_eval",temperature_,stream);bank.stage("T_accepted_after",candidate_,stream);
             bank.stage("heat_Qe",candidateHeat_,stream);
-            WorkSnapshot::Meta meta{};meta.step=steps_+1;meta.current=current;meta.ambient=ambient;meta.linear=eddyResult.trueRelativeResidual;
+            WorkSnapshot::Meta meta{};meta.step=steps_+1;meta.current=current;meta.ambient=ambient;meta.linear=eddyResult.trueRelativeResidual;meta.linearTolerance=tolerance;meta.linearIterations=eddyResult.iterations;meta.linearMaxIterations=unsigned(maxIterations);
             if(op_.stageWorkMaterial)op_.stageWorkMaterial(op_.materialOwner,bank,stream,meta);
-            bank.end(stream,meta);
+            bank.norms(op_.eddy,eddy_->solution(),eddy_->rhs(),stream);bank.end(stream,meta);
         }
-        cudaCheck(cudaStreamSynchronize(thermal_->stream()));cudaCheck(cudaGetLastError());
-        if(op_.snapshot)op_.snapshot->finish();
+        testPoint(5);cudaCheck(cudaStreamSynchronize(thermal_->stream()));cudaCheck(cudaGetLastError());
+        if(op_.snapshot)op_.snapshot->finish();testPoint(6);
         commitAccepted(eddyResult,thermalResult,false);
     }
     // Explicit observation only; never an intermediate Simulink transfer.

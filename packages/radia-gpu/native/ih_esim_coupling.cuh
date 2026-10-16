@@ -133,7 +133,7 @@ public:
         bank.stage("A_certified",v_.mutableValues,stream);bank.stage("loss_weights",v_.mutableLossWeights,stream);
         bank.stage("field_used_for_solve",fields_,stream);bank.stage("field_certified",next_,stream);
         bank.stage("T_element_eval",temperature_,stream);bank.stage("cells",cells_,stream);bank.stage("material_parameters",parameters_,stream);
-        bank.stage("evaluated_bh_coefficients",coefficients_,stream);meta.certified=candidateResidual_;meta.field=candidateFieldResidual_;
+        bank.stage("evaluated_bh_coefficients",coefficients_,stream);meta.certified=candidateResidual_;meta.field=candidateFieldResidual_;meta.constitutiveTolerance=v_.tolerance;meta.fieldFloor=v_.fieldFloor;meta.relaxation=v_.relaxation;meta.constitutiveIterations=candidateIterations_;meta.constitutiveMaxIterations=unsigned(v_.maxIterations);
     }
     std::size_t atomicityBytes()const noexcept{return 2*v_.entryMap.rows*sizeof(cuDoubleComplex)+2*v_.elements*v_.components*sizeof(double);}
     void reset(){stageAccepted(nullptr,true);cudaCheck(cudaStreamSynchronize(nullptr));cudaCheck(cudaGetLastError());commit();}
@@ -141,6 +141,7 @@ public:
         std::swap(acceptedCells_,cells_);std::swap(acceptedValues_,stagedValues_);std::swap(acceptedWeights_,stagedWeights_);
         acceptedIterations_=candidateIterations_;acceptedResidual_=candidateResidual_;acceptedFieldResidual_=candidateFieldResidual_;
     }
+    const ESIMCellResult* acceptedCellsDevice()const noexcept{return acceptedCells_;}
     const cuDoubleComplex* acceptedValues()const noexcept{return acceptedValues_;}
     const double* acceptedWeights()const noexcept{return acceptedWeights_;}
     std::vector<ESIMCellResult> acceptedCells()const{std::vector<ESIMCellResult> out(v_.elements);cudaCheck(cudaMemcpy(out.data(),acceptedCells_,out.size()*sizeof(ESIMCellResult),cudaMemcpyDeviceToHost));return out;}

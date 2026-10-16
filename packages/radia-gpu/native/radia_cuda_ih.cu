@@ -134,7 +134,7 @@ struct ElementMaterial {
  static bool cellFiniteHost(cuDoubleComplex z){return std::isfinite(cuCreal(z))&&std::isfinite(cuCimag(z));}
 };
 struct Context {
- int device=0;cudaStream_t guard=nullptr;bool poisoned=false;std::vector<int32_t> snapshotIndices;cuDoubleComplex suppliedCoilImpedance{};
+ int device=0;cudaStream_t guard=nullptr;bool poisoned=false;std::vector<int32_t> snapshotIndices,snapshotBlockDims;std::vector<std::string> snapshotUnits;cuDoubleComplex suppliedCoilImpedance{};
  double solveTolerance=1e-10;
  Matrix a,p,system,k,c,projection,preconditioner;
  PreconditionerPrecision precision=PreconditionerPrecision::None;Buffer rhs,weights,ones,initial;
@@ -157,6 +157,7 @@ struct Context {
  }
  static bool sticky(cudaError_t status)noexcept{return status==cudaErrorIllegalAddress||status==cudaErrorLaunchFailure||status==cudaErrorAssert||status==cudaErrorECCUncorrectable||status==cudaErrorLaunchTimeout||status==cudaErrorUnknown;}
  void noteFailure()noexcept{const auto last=cudaPeekAtLastError();const auto status=guard?cudaStreamQuery(guard):cudaSuccess;if(sticky(last)||sticky(status))poisoned=true;}
+ void recoverFailure()noexcept{noteFailure();if(!poisoned&&state){const auto status=state->drainCandidateWork();if(sticky(status))poisoned=true;}}
  void check(){if(poisoned)throw std::runtime_error("IH context poisoned; destroy only");noteFailure();if(poisoned)throw std::runtime_error("IH context poisoned; destroy only");int current;cudaCheck(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("IH context belongs to another GPU");cudaCheck(cudaStreamQuery(guard));}
  explicit Context(const mxArray* cfg){
   if(number(field(cfg,"schema_version"))!=1.)throw std::invalid_argument("Unsupported IH operator schema");
@@ -229,10 +230,13 @@ struct Context {
     for(double value:indices){if(value<1||value>double(a.rows)||value!=std::floor(value))throw std::invalid_argument("Checked one-based coil/port indices required");snapshotIndices.push_back(int32_t(value-1));}
     if(snapshotIndices[0]==snapshotIndices[1]||cuCreal(b[snapshotIndices[1]])!=1.||cuCimag(b[snapshotIndices[1]])!=0.)throw std::invalid_argument("Invalid port/current constraint mapping");
     for(int32_t index=a.rowptr[snapshotIndices[0]];index<a.rowptr[snapshotIndices[0]+1];++index)if(a.col[index]==snapshotIndices[0])suppliedCoilImpedance=a.z[index];
+    const auto* dimsInput=field(cfg,"validation_work_block_dims");auto dims=realVector(dimsInput,mxGetNumberOfElements(dimsInput));std::size_t sum=0;for(double value:dims){if(value<1||value>double(a.rows)||value!=std::floor(value))throw std::invalid_argument("Positive block dimensions required");snapshotBlockDims.push_back(int32_t(value));sum+=std::size_t(value);}if(sum!=a.rows)throw std::invalid_argument("Snapshot block dimensions must partition unknowns");
+    const auto* units=field(cfg,"validation_work_block_units");if(!mxIsCell(units)||mxGetNumberOfElements(units)!=snapshotBlockDims.size())throw std::invalid_argument("Block units must match checked partition");for(std::size_t index=0;index<snapshotBlockDims.size();++index){auto unit=text(mxGetCell(units,index));if(unit.empty()||unit.size()>128)throw std::invalid_argument("Explicit bounded physical block units required");snapshotUnits.push_back(unit);}
+    for(std::size_t element=0;element<samples;++element){if(w[element*std::size_t(components)]<=0.)throw std::invalid_argument("Snapshot physical half-area must be positive");for(std::size_t component=1;component<std::size_t(components);++component)if(w[element*std::size_t(components)+component]!=w[element*std::size_t(components)])throw std::invalid_argument("Snapshot requires repeated physical half-area weights");}
     snapshot=std::make_unique<WorkSnapshot>();using K=WorkSnapshot::Kind;
-    snapshot->add("x",a.rows,K::Complex);snapshot->add("rhs",a.rows,K::Complex);
+    snapshot->add("certified_norms_b_r_x",3,K::Real);snapshot->add("x",a.rows,K::Complex);snapshot->add("rhs",a.rows,K::Complex);
     snapshot->add("T_material_eval",n,K::Real);snapshot->add("T_accepted_after",n,K::Real);snapshot->add("heat_Qe",samples,K::Real);
-    material->coupling->configureSnapshot(*snapshot);snapshot->allocate(workspace+a.rows*sizeof(cuDoubleComplex));owned+=snapshot->bytes();op.snapshot=snapshot.get();
+    material->coupling->configureSnapshot(*snapshot);snapshot->allocate(workspace+a.rows*sizeof(cuDoubleComplex),a.rows);owned+=snapshot->bytes();op.snapshot=snapshot.get();
     op.stageWorkMaterial=[](void* owner,WorkSnapshot& bank,cudaStream_t stream,WorkSnapshot::Meta& meta){static_cast<ESIMCoupling*>(owner)->stageSnapshot(bank,stream,meta);};
    }
   }
@@ -264,7 +268,28 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
   }
   if(command=="live_count"){if(nrhs!=1||nlhs!=1)throw std::invalid_argument("live_count takes no arguments");out[0]=mxCreateDoubleScalar(double(contexts.size()));return;}
   if(nrhs<2)throw std::invalid_argument("Missing IH handle");auto& c=get(in[1]);
-  if(command=="reset"){if(nrhs!=2||nlhs)throw std::invalid_argument("reset signature mismatch");try{c.state->reset();}catch(...){c.noteFailure();throw;}return;}
+  if(command=="reset"){if(nrhs!=2||nlhs)throw std::invalid_argument("reset signature mismatch");try{c.state->reset();}catch(...){c.recoverFailure();throw;}return;}
+#ifdef RADIA_IH_TRANSACTION_TEST
+  if(command=="transaction_test_failure"){
+   if(nrhs!=3||nlhs)throw std::invalid_argument("Test failure stage signature");const auto stage=number(in[2]);if(stage<1||stage>7||stage!=std::floor(stage))throw std::invalid_argument("Test stage must be integer1..7");c.state->setTestFailure(unsigned(stage));return;
+  }
+  if(command=="transaction_test_poison"){
+   if(nrhs!=2||nlhs)throw std::invalid_argument("Test poison signature");c.poisoned=true;return;
+  }
+  if(command=="transaction_test_capture"){
+   if(nrhs!=2||nlhs!=1||!c.material)throw std::invalid_argument("Test capture needs element material");
+   out[0]=mxCreateStructMatrix(1,1,0,nullptr);
+   auto put=[&](const char* name,mxArray* value){mxAddField(out[0],name);mxSetField(out[0],0,name,value);};
+   auto raw=[&](const char* name,const void* pointer,std::size_t bytes){auto* value=mxCreateNumericMatrix(bytes,1,mxUINT8_CLASS,mxREAL);if(bytes)cudaCheck(cudaMemcpy(mxGetData(value),pointer,bytes,cudaMemcpyDeviceToHost));put(name,value);};
+   auto count=[&](const char* name,uint64_t number){auto* value=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);*static_cast<uint64_t*>(mxGetData(value))=number;put(name,value);};
+   raw("em",c.state->testAcceptedEM(),c.a.rows*sizeof(cuDoubleComplex));raw("temperature",c.state->testAcceptedTemperature(),c.system.rows*sizeof(double));raw("heat",c.state->testAcceptedHeat(),c.projection.columns*sizeof(double));
+   raw("cells",c.material->coupling->acceptedCellsDevice(),c.material->evaluation.rows*sizeof(ESIMCellResult));raw("loss_weights",c.material->coupling->acceptedWeights(),c.p.rows*sizeof(double));raw("matrix_values",c.material->coupling->acceptedValues(),c.a.z.size()*sizeof(cuDoubleComplex));
+   raw("snapshot_bank",c.snapshot?c.snapshot->testAcceptedBank():nullptr,c.snapshot?c.snapshot->testBankBytes():0);
+   count("steps",c.state->steps());count("snapshot_step",c.snapshot&&c.snapshot->valid()?c.snapshot->meta().step:0);count("snapshot_generation",c.snapshot?c.snapshot->epoch():0);count("handle_generation",handle(in[1])&0x0000ffffffffffffULL);put("snapshot_valid",mxCreateLogicalScalar(c.snapshot&&c.snapshot->valid()));
+   cudaDeviceProp properties{};cudaCheck(cudaGetDeviceProperties(&properties,c.device));std::string uuid;const char* hex="0123456789abcdef";for(unsigned char value:properties.uuid.bytes){uuid+=hex[value>>4];uuid+=hex[value&15];}put("device_uuid",mxCreateString(uuid.c_str()));count("handle_token",handle(in[1]));count("n_rows",c.a.rows);count("nnz",c.a.z.size());count("thermal_rows",c.system.rows);count("heat_samples",c.projection.columns);count("cell_count",c.material->evaluation.rows);count("cell_struct_size_bytes",sizeof(ESIMCellResult));count("complex_element_bytes",sizeof(cuDoubleComplex));
+   put("schema_version",mxCreateString("radia.ih.transaction-test-capture.v1"));put("representation",mxCreateString("uint8 raw device bytes; little-endian Windows; complex interleaved FP64; cells include native padding; same MEX only; private capture; hash externally"));return;
+  }
+#endif
   if(command=="accepted_work_snapshot"){
    if(nrhs!=2||nlhs!=1||!c.snapshot||!c.snapshot->valid()||c.snapshot->meta().step!=c.state->steps())throw std::invalid_argument("Enabled valid same-step accepted snapshot required");
    const auto start=std::chrono::steady_clock::now();auto& bank=*c.snapshot;
@@ -275,12 +300,12 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
    auto count=[&](const char* name,uint64_t value){auto* a=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);*static_cast<uint64_t*>(mxGetData(a))=value;put(name,a);};
    auto scalar=[&](const char* name,double value){put(name,mxCreateDoubleScalar(value));};
    auto complex=[&](const std::string& name,const std::vector<cuDoubleComplex>& value){std::vector<double> re,im;re.reserve(value.size());im.reserve(value.size());for(auto z:value){re.push_back(cuCreal(z));im.push_back(cuCimag(z));}real(name+"_re",re);real(name+"_im",im);};
-   put("schema_version",mxCreateString("radia.ih.accepted-work.v2.1"));put("snapshot_valid",mxCreateLogicalScalar(true));count("snapshot_step",bank.meta().step);count("snapshot_generation",bank.epoch());count("handle_generation",handle(in[1]));
+   put("schema_version",mxCreateString("radia.ih.accepted-work.v2.1"));put("snapshot_valid",mxCreateLogicalScalar(true));count("snapshot_step",bank.meta().step);count("snapshot_generation",bank.epoch());count("handle_token",handle(in[1]));count("handle_generation",handle(in[1])&0x0000ffffffffffffULL);count("steps",c.state->steps());
    scalar("device_ordinal",c.device);cudaDeviceProp properties{};cudaCheck(cudaGetDeviceProperties(&properties,c.device));std::string uuid;const char* hex="0123456789abcdef";for(unsigned char value:properties.uuid.bytes){uuid+=hex[value>>4];uuid+=hex[value&15];}put("device_uuid",mxCreateString(uuid.c_str()));
    put("material_mode",mxCreateString("element-esim-operators"));put("phasor_convention",mxCreateString("peak exp(+i omega t)"));put("native_build_id",mxCreateString("external exact-source MEX receipt required"));
    count("n_rows",c.a.rows);count("n_cols",c.a.columns);count("nnz",c.a.z.size());integer("csr_rowptr",c.a.rowptr);integer("csr_col",c.a.col);
    put("csr_layout",mxCreateString("zero-based sorted unique row-major; split real/imag FP64"));put("last_linear_operator_saved",mxCreateLogicalScalar(false));put("condition_estimate",mxCreateString("none; independent CPU validation only"));
-   scalar("controls_current",bank.meta().current);scalar("controls_ambient",bank.meta().ambient);scalar("linear_true_residual",bank.meta().linear);scalar("certified_true_residual_native",bank.meta().certified);scalar("field_fixed_point_residual",bank.meta().field);
+   scalar("linear_tolerance",bank.meta().linearTolerance);scalar("constitutive_tolerance",bank.meta().constitutiveTolerance);scalar("field_floor_A_per_m",bank.meta().fieldFloor);scalar("constitutive_relaxation",bank.meta().relaxation);count("linear_max_iterations",bank.meta().linearMaxIterations);count("constitutive_max_iterations",bank.meta().constitutiveMaxIterations);count("linear_iterations",bank.meta().linearIterations);count("constitutive_iterations",bank.meta().constitutiveIterations);scalar("controls_current",bank.meta().current);scalar("controls_ambient",bank.meta().ambient);scalar("linear_true_residual",bank.meta().linear);scalar("certified_true_residual_native",bank.meta().certified);scalar("field_fixed_point_residual",bank.meta().field);
    put("residual_definition",mxCreateString("certified norm(Ax-b)/norm(b), absolute norm(Ax) if b=0; linear residual belongs to unsaved lagged operator"));
    for(const auto& slot:bank.slots()){
     if(slot.kind==WorkSnapshot::Kind::Real)real(slot.name,bank.read<double>(slot));
@@ -288,10 +313,10 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
     else if(slot.kind==WorkSnapshot::Kind::Cells){auto values=bank.read<ESIMCellResult>(slot);std::vector<cuDoubleComplex> z;std::vector<double> r;std::vector<int32_t> status;for(const auto& cell:values){z.push_back(cell.impedance);r.push_back(cell.trueResidual);status.push_back(cell.status);}complex("Zs",z);real("cell_true_residual",r);integer("cell_status",status);}
     else{auto values=bank.read<ESIMCellParameters>(slot);std::vector<double> rho,omega,thickness,tolerance,relaxation,saturation;std::vector<int32_t> nodes,cylinder;std::vector<cuDoubleComplex> mu;for(const auto& cell:values){rho.push_back(cell.resistivity);omega.push_back(cell.omega);thickness.push_back(cell.halfThickness);tolerance.push_back(cell.tolerance);relaxation.push_back(cell.relaxation);saturation.push_back(cell.law.saturationMagnetization);nodes.push_back(cell.nodes);cylinder.push_back(cell.cylinder?1:0);mu.push_back(cell.law.initialMu);}real("evaluated_resistivity_ohm_m",rho);real("omega",omega);real("cell_half_thickness_m",thickness);real("cell_tolerance",tolerance);real("cell_relaxation",relaxation);real("saturation_magnetization_A_per_m",saturation);integer("cell_nodes",nodes);integer("cell_cylinder",cylinder);complex("initial_mu",mu);}
    }
-   integer("loss_projection_rowptr",c.p.rowptr);integer("loss_projection_col",c.p.col);complex("loss_projection",c.p.z);count("loss_projection_rows",c.p.rows);count("loss_projection_cols",c.p.columns);count("loss_components",c.p.rows/c.material->evaluation.rows);integer("port_indices",c.snapshotIndices);complex("supplied_coil_impedance",std::vector<cuDoubleComplex>{c.suppliedCoilImpedance});
+   integer("loss_projection_rowptr",c.p.rowptr);integer("loss_projection_col",c.p.col);complex("loss_projection",c.p.z);count("loss_projection_rows",c.p.rows);count("loss_projection_cols",c.p.columns);count("loss_components",c.p.rows/c.material->evaluation.rows);integer("port_indices",c.snapshotIndices);integer("block_dims",c.snapshotBlockDims);auto* units=mxCreateCellMatrix(c.snapshotUnits.size(),1);for(std::size_t index=0;index<c.snapshotUnits.size();++index)mxSetCell(units,index,mxCreateString(c.snapshotUnits[index].c_str()));put("block_units",units);complex("supplied_coil_impedance",std::vector<cuDoubleComplex>{c.suppliedCoilImpedance});
    integer("temperature_evaluation_rowptr",c.material->evaluation.rowptr);integer("temperature_evaluation_col",c.material->evaluation.col);real("temperature_evaluation",c.material->evaluation.real);
-   std::vector<double> base(c.p.rows);cudaCheck(cudaMemcpy(base.data(),c.material->baseWeights.p,base.size()*sizeof(double),cudaMemcpyDeviceToHost));real("base_loss_weights",base);
-   count("snapshot_bytes",bank.bytes());count("atomicity_fix_bytes",c.state->atomicityBytes()+c.material->coupling->atomicityBytes());count("owned_device_bytes",c.owned);put("owned_setup_peak_bytes",mxCreateDoubleMatrix(0,0,mxREAL));put("setup_peak_applicability",mxCreateString("not yet instrumented; owned_device_bytes excludes freed setup temporaries"));scalar("t_d2d_sync_s",bank.meta().stageSeconds);scalar("t_d2d_gpu_s",bank.meta().gpuCopySeconds);scalar("t_d2h_s",std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count());return;
+   std::vector<double> base(c.p.rows);cudaCheck(cudaMemcpy(base.data(),c.material->baseWeights.p,base.size()*sizeof(double),cudaMemcpyDeviceToHost));real("base_loss_weights",base);std::vector<double> areas;const auto components=c.p.rows/c.material->evaluation.rows;for(std::size_t element=0;element<c.material->evaluation.rows;++element)areas.push_back(2.*base[element*components]);real("face_areas_m2",areas);count("temperature_evaluation_rows",c.material->evaluation.rows);count("temperature_evaluation_cols",c.material->evaluation.columns);
+   count("snapshot_bytes",bank.bytes());count("atomicity_fix_bytes",c.state->atomicityBytes()+c.material->coupling->atomicityBytes());count("owned_device_bytes",c.owned);put("owned_setup_peak_bytes",mxCreateDoubleMatrix(0,0,mxREAL));put("setup_peak_applicability",mxCreateString("not yet instrumented; owned_device_bytes excludes freed setup temporaries"));scalar("t_d2d_sync_s",bank.meta().stageSeconds);scalar("t_d2d_gpu_s",bank.meta().gpuCopySeconds);std::size_t transferCount=1,transferBytes=base.size()*sizeof(double);for(const auto& slot:bank.slots())if(slot.bytes){++transferCount;transferBytes+=slot.bytes;}count("d2h_transfer_count",transferCount);count("d2h_transfer_bytes",transferBytes);scalar("t_d2h_s",std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count());return;
   }
   if(command=="diagnostic_operator"){
    if(nrhs!=2||nlhs!=1)throw std::invalid_argument("diagnostic_operator returns candidate operator, not accepted state");
@@ -300,7 +325,7 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
    out[0]=mxCreateDoubleMatrix(c.a.rows,c.a.columns,mxCOMPLEX);
    for(size_t row=0;row<c.a.rows;++row)for(int32_t k=c.a.rowptr[row];k<c.a.rowptr[row+1];++k){auto& z=mxGetComplexDoubles(out[0])[row+c.a.rows*c.a.col[k]];z.real=cuCreal(values[k]);z.imag=cuCimag(values[k]);}return;
   }
-  if(command=="update"){if(nrhs!=4||nlhs)throw std::invalid_argument("update requires current and ambient");c.state->update(number(in[2]),number(in[3]),c.solveTolerance);return;}
+  if(command=="update"){if(nrhs!=4||nlhs)throw std::invalid_argument("update requires current and ambient");try{c.state->update(number(in[2]),number(in[3]),c.solveTolerance);}catch(...){c.recoverFailure();throw;}return;}
   if(command=="element_impedance"){
    if(nrhs!=2||nlhs!=1||!c.material)throw std::invalid_argument("element_impedance requires element material context and one output");
    const auto values=c.material->coupling->acceptedCells();out[0]=mxCreateDoubleMatrix(values.size(),1,mxCOMPLEX);

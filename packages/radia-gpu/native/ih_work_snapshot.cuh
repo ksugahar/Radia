@@ -3,24 +3,29 @@
 #include "ih_complex_solver.cuh"
 #include "ih_esim_cell.cuh"
 #include <vector>
+#include <utility>
 #include <cstdint>
 #include <string>
 #include <chrono>
 namespace radia_ih_cuda {
+__global__ void workSnapshotNorms(const cuDoubleComplex* rhs,const cuDoubleComplex* x,const cuDoubleComplex* ax,std::size_t n,double* out){
+ if(blockIdx.x||threadIdx.x)return;double b=0,r=0,v=0;for(std::size_t i=0;i<n;++i){const auto z=cuCsub(ax[i],rhs[i]);b+=cuCreal(rhs[i])*cuCreal(rhs[i])+cuCimag(rhs[i])*cuCimag(rhs[i]);r+=cuCreal(z)*cuCreal(z)+cuCimag(z)*cuCimag(z);v+=cuCreal(x[i])*cuCreal(x[i])+cuCimag(x[i])*cuCimag(x[i]);}out[0]=sqrt(b);out[1]=sqrt(r);out[2]=sqrt(v);
+}
 class WorkSnapshot {
 public:
     enum class Kind {Real,Complex,Cells,Parameters};
     struct Slot {std::string name;std::size_t count,offset,bytes;Kind kind;};
-    struct Meta {std::size_t step=0;double current=0,ambient=0,linear=0,certified=0,field=0,stageSeconds=0,gpuCopySeconds=0;};
+    struct Meta {std::size_t step=0;double current=0,ambient=0,linear=0,certified=0,field=0,stageSeconds=0,gpuCopySeconds=0,linearTolerance=0,constitutiveTolerance=0,fieldFloor=0,relaxation=0;unsigned linearIterations=0,constitutiveIterations=0,linearMaxIterations=0,constitutiveMaxIterations=0;};
 private:
     std::vector<Slot> slots_;void* bank_[2]={nullptr,nullptr};std::size_t bankBytes_=0;
+    cuDoubleComplex* normAx_=nullptr;double* normValues_=nullptr;std::size_t scratchBytes_=0;
     unsigned accepted_=0;bool valid_=false;std::uint64_t epoch_=0;Meta metadata_[2];
     std::chrono::steady_clock::time_point stageStart_;
     cudaEvent_t start_=nullptr,stop_=nullptr;
 public:
     WorkSnapshot()=default;
     WorkSnapshot(const WorkSnapshot&)=delete;WorkSnapshot& operator=(const WorkSnapshot&)=delete;
-    ~WorkSnapshot(){for(auto p:bank_)if(p)cudaFree(p);if(start_)cudaEventDestroy(start_);if(stop_)cudaEventDestroy(stop_);}
+    ~WorkSnapshot(){if(normAx_)cudaFree(normAx_);if(normValues_)cudaFree(normValues_);for(auto p:bank_)if(p)cudaFree(p);if(start_)cudaEventDestroy(start_);if(stop_)cudaEventDestroy(stop_);}
     void add(const char* name,std::size_t count,Kind kind){
         const std::size_t width=kind==Kind::Real?sizeof(double):kind==Kind::Complex?sizeof(cuDoubleComplex):kind==Kind::Cells?sizeof(ESIMCellResult):sizeof(ESIMCellParameters);
         if(count>SIZE_MAX/width||bankBytes_>SIZE_MAX-15)throw std::overflow_error("Snapshot shape overflow");
@@ -28,11 +33,13 @@ public:
         if(bytes>SIZE_MAX-offset)throw std::overflow_error("Snapshot byte overflow");
         slots_.push_back({name,count,offset,bytes,kind});bankBytes_=offset+bytes;
     }
-    void allocate(std::size_t otherRequired){
+    void allocate(std::size_t otherRequired,std::size_t n){
+        scratchBytes_=n*sizeof(cuDoubleComplex)+3*sizeof(double);
         if(!bankBytes_||bankBytes_>(2ULL<<30)||bankBytes_>SIZE_MAX/2)throw std::overflow_error("Snapshot direct payload budget exceeded");
         std::size_t available,total;cudaCheck(cudaMemGetInfo(&available,&total));const auto reserve=std::max<std::size_t>(2ULL<<30,total/5);
-        if(available<=reserve||2*bankBytes_>available-reserve||otherRequired>available-reserve-2*bankBytes_)throw std::runtime_error("Atomicity and snapshot banks exceed GPU reserve");
-        cudaCheck(cudaMalloc(&bank_[0],bankBytes_));cudaCheck(cudaMalloc(&bank_[1],bankBytes_));
+        if(available<=reserve||2*bankBytes_>available-reserve||scratchBytes_>available-reserve-2*bankBytes_||otherRequired>available-reserve-2*bankBytes_-scratchBytes_)throw std::runtime_error("Atomicity and snapshot banks exceed GPU reserve");
+        cudaCheck(cudaMalloc(&normAx_,n*sizeof(cuDoubleComplex)));cudaCheck(cudaMalloc(&normValues_,3*sizeof(double)));
+        cudaCheck(cudaMalloc(&bank_[0],bankBytes_));cudaCheck(cudaMalloc(&bank_[1],bankBytes_));cudaCheck(cudaMemset(bank_[0],0,bankBytes_));cudaCheck(cudaMemset(bank_[1],0,bankBytes_));
         cudaCheck(cudaEventCreate(&start_));cudaCheck(cudaEventCreate(&stop_));
     }
     void begin(cudaStream_t stream){stageStart_=std::chrono::steady_clock::now();cudaCheck(cudaEventRecord(start_,stream));}
@@ -40,13 +47,18 @@ public:
         for(const auto& slot:slots_)if(slot.name==name){if(slot.bytes&&!source)throw std::invalid_argument("Missing snapshot source");if(slot.bytes)cudaCheck(cudaMemcpyAsync(static_cast<char*>(bank_[1-accepted_])+slot.offset,source,slot.bytes,cudaMemcpyDeviceToDevice,stream));return;}
         throw std::invalid_argument("Unknown snapshot field");
     }
+    void norms(ComplexCSRView matrix,const cuDoubleComplex* x,const cuDoubleComplex* rhs,cudaStream_t stream){complexMatvec<<<unsigned((matrix.rows+127)/128),128,0,stream>>>(matrix,x,normAx_);workSnapshotNorms<<<1,1,0,stream>>>(rhs,x,normAx_,matrix.rows,normValues_);stage("certified_norms_b_r_x",normValues_,stream);}
     void end(cudaStream_t stream,Meta meta){metadata_[1-accepted_]=meta;cudaCheck(cudaEventRecord(stop_,stream));}
     void finish(){float ms;cudaCheck(cudaEventElapsedTime(&ms,start_,stop_));metadata_[1-accepted_].gpuCopySeconds=double(ms)*1e-3;metadata_[1-accepted_].stageSeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-stageStart_).count();}
     void commit(bool resetting)noexcept{if(resetting){valid_=false;++epoch_;}else{accepted_=1-accepted_;valid_=true;}}
     static_assert(noexcept(std::declval<WorkSnapshot&>().commit(false)),"Snapshot commit must not throw");
-    void abandon()noexcept{bank_[0]=bank_[1]=nullptr;start_=stop_=nullptr;valid_=false;}
+    void abandon()noexcept{normAx_=nullptr;normValues_=nullptr;bank_[0]=bank_[1]=nullptr;start_=stop_=nullptr;valid_=false;}
     bool valid()const noexcept{return valid_;}std::uint64_t epoch()const noexcept{return epoch_;}
-    std::size_t bytes()const noexcept{return 2*bankBytes_;}
+    std::size_t bytes()const noexcept{return 2*bankBytes_+scratchBytes_;}
+#ifdef RADIA_IH_TRANSACTION_TEST
+    const void* testAcceptedBank()const noexcept{return bank_[accepted_];}
+    std::size_t testBankBytes()const noexcept{return bankBytes_;}
+#endif
     const Meta& meta()const{return metadata_[accepted_];}
     const std::vector<Slot>& slots()const noexcept{return slots_;}
     template<class T>std::vector<T> read(const Slot& slot)const{

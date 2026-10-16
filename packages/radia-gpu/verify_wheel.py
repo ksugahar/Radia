@@ -120,6 +120,8 @@ def verify(path: Path) -> dict:
             if not ih_files <= set(manifest['files']):
                 raise ValueError('Incomplete IH research payload')
             ih = json.loads(archive.read('radia_gpu/ih-build.json'))
+            if ih.get('transaction_test_build') is not False or ih.get('distribution_eligible') is not True:
+                raise ValueError('IH test or unclassified build is not distribution eligible')
             if (ih.get('schema') != 'radia.gpu.ih-research-payload.v1'
                     or ih.get('source_dirty') is not False
                     or ih.get('source_commit') != manifest['source_commit']

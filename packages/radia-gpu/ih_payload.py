@@ -28,7 +28,8 @@ SAMPLES = ('makeTemperatureBHConfig.m', 'runTemperatureBHResearch.m')
 def stage(root, package, commit, folder):
     root, package, folder = Path(root), Path(package), Path(folder)
     receipt = json.loads((folder / 'build.json').read_text(encoding='utf-8'))
-    if (receipt.get('accepted') is not True or receipt.get('source_dirty') is not False
+    if (receipt.get('transaction_test_build') is not False or receipt.get('distribution_eligible') is not True
+            or receipt.get('accepted') is not True or receipt.get('source_dirty') is not False
             or receipt.get('source_commit') != commit
             or receipt.get('taskmanager_regions') is not False
             or receipt.get('python_runtime_required') is not False
@@ -64,7 +65,8 @@ def stage(root, package, commit, folder):
     public = {key: receipt[key] for key in
               ('source_commit', 'source_dirty', 'source_sha256', 'binary_sha256',
                'matlab', 'cuda_targets', 'taskmanager_regions',
-               'python_runtime_required', 'cpu_fallback', 'features')}
+               'python_runtime_required', 'cpu_fallback', 'features',
+               'transaction_test_build', 'distribution_eligible')}
     public.update(schema='radia.gpu.ih-research-payload.v1', research_only=True,
                   experimental_validation=False, independent_fem_validation=False)
     (package / 'ih-build.json').write_text(json.dumps(public, indent=2)+'\n', encoding='utf-8')

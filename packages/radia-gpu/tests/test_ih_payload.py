@@ -10,7 +10,7 @@ payload=importlib.util.module_from_spec(spec);spec.loader.exec_module(payload)
 
 
 @pytest.mark.parametrize('fault',[None,'commit','dirty','binary','source',
-                                  'python','taskmanager','features','sample','missing-source'])
+                                  'python','taskmanager','features','sample','missing-source','test-build','ineligible','missing-eligibility'])
 def test_ih_exact_research_staging(tmp_path,fault):
     root=tmp_path/'source';folder=tmp_path/'build';folder.mkdir()
     sources={}
@@ -23,11 +23,14 @@ def test_ih_exact_research_staging(tmp_path,fault):
         p=root/'validation_test/ih_cuda'/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('% fixture')
     doc=root/'packages/radia-gpu/docs/IH_TEMPERATURE_BH.md';doc.parent.mkdir();doc.write_text('Research only')
     binary=folder/'radia_cuda_ih.mexw64';binary.write_bytes(b'fixture artifact')
-    receipt=dict(accepted=True,source_commit='a'*40,source_dirty=False,
+    receipt=dict(accepted=True,transaction_test_build=False,distribution_eligible=True,source_commit='a'*40,source_dirty=False,
                  taskmanager_regions=False,python_runtime_required=False,cpu_fallback=False,
                  features=sorted(payload.FEATURES),source_sha256=sources,
                  binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                  matlab='fixture',cuda_targets=['fixture'])
+    if fault=='test-build':receipt['transaction_test_build']=True
+    if fault=='ineligible':receipt['distribution_eligible']=False
+    if fault=='missing-eligibility':receipt.pop('distribution_eligible')
     if fault=='commit':receipt['source_commit']='b'*40
     if fault=='dirty':receipt['source_dirty']=True
     if fault=='binary':binary.write_bytes(b'changed')
