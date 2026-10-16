@@ -262,9 +262,11 @@
         "src/radia/ih_heat_transient.py",
         "tools/sparsesolv_ci_impact.py",
         "tools/ci_distribution_contract.py",
-        "tools/ci_distribution_manifest.json"
+        "tools/ci_distribution_manifest.json",
+        "tools/pre_push_check.py",
+        "tools/local_push_checks.py"
       ],
-      "audit_sha256": "a59cb49889451ce172b56e73d69d604263b763321b91f61d8051f5ed8c430a97",
+      "audit_sha256": "bd027da993279ab331445bb34d8eb74a34064c2e3aa186a00b7073a777045094",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

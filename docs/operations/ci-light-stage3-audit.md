@@ -77,3 +77,15 @@ exception; restoring the label belongs to the management executor only after
 all local jobs use capabilities. GPU exclusivity, memory/CPU admission and
 uncontended timing windows remain later operational gates, not claims made by
 this source-only PR.
+
+## Integration with the strengthened pre-push checks
+
+The stage-3 branch merges main's pre-push change rather than replacing its
+lower CI policy test or impact rules. The additional eligible tests load
+`tools/pre_push_check.py` and `tools/local_push_checks.py` through explicit
+file loaders. Both helpers use standard-library source/Git inspection; their
+tests mock remote dispatch and subprocess execution, so no SSH, live hook,
+package build or numerical runtime is invoked by this lane. Both helper files
+are now part of the reviewed execution closure. The latest worst-case selector
+contains 447 cases, including the added pre-push contracts; the earlier 424-case
+record describes the pre-integration selector, not a skipped subset.
