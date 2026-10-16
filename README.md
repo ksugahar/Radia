@@ -63,9 +63,8 @@ orchestration around that foundation.
 
 > **Radia extends NGSolve; it does not compete with it.**
 
-[Quick start](#quick-start) | [NGSolve from MATLAB](#ngsolve-from-matlab) | [Capabilities](#capabilities) |
+[Quick start](#quick-start) | [Capabilities](#capabilities) |
 [Simulink](#simulink) | [MCP](#python-and-mcp) |
-[Eqnedit64](#eqnedit64) |
 [Documentation](#documentation) | [Contributing](#contributing)
 
 ## Find your next engineering workflow
@@ -86,24 +85,6 @@ and application cases with numerical evidence.
 | [Inspect the numerical evidence](docs/VALIDATION_GUIDE.md) | Analytical references, force checks, holdout comparisons and their limits |
 | [Choose an interface and get help](docs/START_HERE.md#choose-how-you-want-to-work) | Python/MCP, MATLAB/Simulink, installation and reproducible issue reports |
 
-## NGSolve from MATLAB
-
-CPU execution belongs to `radia` through Python/pybind11/NGSolve.
-GPU execution belongs to `radia-gpu` through MATLAB mexcuda.
-CPU Radia MEX is unsupported. NGSolve owns FE assembly; the initial GPU
-kernel accepts assembled CSR operators and verifies the true residual.
-
-MATLAB, Simulink and LTspice integration source, builds and distribution live
-in [radia-gpu](packages/radia-gpu/README.md), within this monorepo.
-`radia-mcp` provides cross-package knowledge and operation. The independently
-released `radia-optuna` retains its own MATLAB optimization API and MEX.
-
-The initial GPU alpha supports CSR Jacobi-PCG, its readable Simulink block
-and LTspice integration. Historical CPU MEX models are source-only until
-ported and validated. Poisson acceptance does not certify AMS, ICCG or HDiv-MMM.
-Deploy GPU artifacts to 100 and A100, never 102. A100 acceptance stays pending
-while unavailable.
-
 ## Why Radia?
 
 - **Operate CAE through an AI assistant.** Use MCP to invoke supported operations
@@ -119,9 +100,9 @@ while unavailable.
   model reduction without automatically surrounding every problem with a
   large air mesh.
 - **AI and humans share the engineering contract.** Python and MCP are the
-  first-class AI surface; MATLAB and masked Simulink blocks are the production
-  human surface; both produce inspectable artifacts rather than hidden GUI
-  state.
+  first-class AI surface; supported MATLAB and masked Simulink blocks provide
+  human-facing composition through the independent GPU package. Each workflow
+  has its own validation scope and inspectable artifacts.
 - **The numerical backend stays visible.** NGSolve owns finite-element
   mathematics. Radia supplies the missing physical operator or coupling and
   keeps independent analytical or integral routes where they improve trust.
@@ -233,26 +214,11 @@ source-build paths.
 
 ## Eqnedit64
 
-[Eqnedit64](tools/eqnedit64) is a portable Windows x64 equation editor and a
-browser edition maintained together in Radia. The native application connects
-fast structural input directly to UTF-8 TeX. Its structural canvas
-and live TeX pane are both editable, `Tab` traverses template slots, and the
-palette teaches the TeX spelling of inserted structures without a separate
-command-entry mode.
-
-The single executable needs no installer, Python runtime, or file-type
-registration. Copy places equivalent TeX, editable Office Math, EMF, and
-opaque bitmap representations on the clipboard; Google Slides and headless
-TeX-to-PNG paths are included. Eqnedit64 is released independently from Radia:
-the Python/API distribution is on [PyPI](https://pypi.org/project/eqnedit64/),
-and the matching signed standalone binary is published in the
-[Eqnedit64 3.1.3 release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.1.3).
-`radia-mcp.presentation` discovers that installation as an optional rendering
-and clipboard backend; neither package depends on the other at runtime.
-
-The laboratory homepage publishes the browser edition, while
-[`tools/eqnedit64/web`](tools/eqnedit64/web) remains its source of truth. Native
-and Web changes share the same TeX-learning and Office Math parity policy.
+[Eqnedit64](tools/eqnedit64) is an independently released Windows equation
+editor with a browser edition and Python API. It connects structural input to
+UTF-8 TeX and editable Office Math or image export. See the
+[3.1.4 release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.1.4)
+and [package documentation](packages/eqnedit64/README.md).
 
 ## Architecture
 
@@ -291,6 +257,20 @@ the source of numerical truth.
 
 ## Capabilities
 
+### Executed feature notebooks
+
+These existing notebooks contain saved code outputs. Their linked derivations
+and validation records define the evidence scope; saved output is not a new
+release acceptance run.
+
+| Feature | Executed introduction | Method and evidence reference |
+| :--- | :--- | :--- |
+| HDiv-MMM topology optimization | [Density adjoints and exact-void checks](docs/hdiv_vim/isochronous_topopt.ipynb) | [Formulation and verification scope](docs/hdiv_vim/TOPOLOGY_OPTIMIZATION_ISOCHRONOUS.md) |
+| NGSolve integration | [Spaces and field evaluation](docs/ngsolve_integration/integration_basics.ipynb) | [NGSolve](https://ngsolve.org/) |
+| Stream-function coil design | [Regularization](docs/stream_function/regularization.ipynb) | [Stream-function methods](docs/stream_function/README.md) |
+| Spatial effective surface impedance | [ESIM demonstration](docs/esim_spatial/esim_spatial_demo.ipynb) | [ESIM formulation](docs/esim/README.md) |
+| Field visualization and trajectories | [Particle orbits](docs/gmsh_post/em_particle_orbits.ipynb) | [Gmsh post-processing](docs/gmsh_post/README.md) |
+
 ### Analytical and open-boundary magnetics
 
 Radia retains the analytical magnetostatic strengths of the original Radia
@@ -315,13 +295,17 @@ and accelerator-magnet workflows.
 - [Clebsch-Hodograph documentation](docs/clebsch_hodograph/README.md)
 - [Result-bearing accelerator design notebooks](docs/clebsch_hodograph/demos/README.md)
 
-### HDiv-VIM and magnetic materials
+### HDiv-MMM topology optimization and magnetic materials
+
+HDiv-MMM (the HDiv magnetic-moment method) is the priority development route
+for material topology optimization. Its density adjoints, constrained design
+loops and exact-void checks are demonstrated on verification-scale models;
+these do not establish engineering-scale optimization acceptance.
 
 The HDiv Volume Integral Method uses NGSolve meshes and finite-element spaces
 while Radia supplies the magnetic charge-Gram and open-boundary interaction.
 The C++ HACApK path provides compressed operators for large repeated actions,
-and the Python surface stays compatible with NGSolve's field and space
-vocabulary.
+and the Python surface uses NGSolve's field and space vocabulary.
 
 This is Radia's forward path for soft magnetic materials, nonlinear
 magnetization, demagnetizing fields, topology-aware material design, and
@@ -359,7 +343,9 @@ effects, shield coupling, circuit assembly, and SPICE-compatible extraction.
 PRIMA, block Lanczos, Foster modal models, and universal relaxation networks provide reusable
 reduced models for circuit and transient studies.
 
-The independent `radia_gpu.ltspice` package connects SPICE netlists, editable LTspice
+The `radia-gpu` distribution owns LTspice integration, including
+`radia_gpu.ltspice` and the MATLAB `radia.ltspice` namespace. It connects
+SPICE netlists, editable LTspice
 schematics, KiCad-derived circuits, RAW results, and sampled-data Simulink
 plants. Circuit conversion has one Python source of truth and exposes checked
 MATLAB adapters.
@@ -427,10 +413,11 @@ return inspectable artifacts. Tool execution can be automated; responsibility
 for the analysis plan and engineering judgement remains with the user.
 
 The [radia-mcp package](packages/radia-mcp/) provides domain servers for Radia,
-NGSolve, Cubit, Gmsh, build123d, PEEC, induction heating, optimization,
+NGSolve, Gmsh, build123d, PEEC, induction heating, optimization,
 materials, electric machines, accelerator magnets, and supporting engineering
 knowledge. It is intentionally lightweight at import time: knowledge and
 contract tools can run without loading the full native Radia/NGSolve stack.
+`cubit-mesh-export` independently owns the Cubit MCP server.
 
 ```powershell
 python -m pip install radia-mcp
@@ -449,8 +436,18 @@ operation.
 
 Use the independently distributed [radia-gpu](packages/radia-gpu/README.md).
 Its supported solver route is MATLAB mexcuda, with explicit transfer and
-numerical validation against Python CPU execution. Build on 100 with
-`Build.ps1 -CudaMexOnly -RequireNativeProvenance`.
+numerical validation against Python CPU execution.
+CPU execution belongs to `radia` through Python/pybind11/NGSolve.
+GPU execution belongs to `radia-gpu` through MATLAB mexcuda.
+CPU Radia MEX is unsupported. NGSolve owns finite-element assembly.
+Choose Visual Studio Build Tools and CUDA versions supported by the target
+MATLAB mexcuda release; do not override unsupported compiler checks.
+Build with `Build.ps1 -CudaMexOnly -RequireNativeProvenance`.
+
+`radia-gpu` is under active development: acceptance is specific to the solver
+and model tested. Poisson validation does not certify AMS, ICCG or HDiv-MMM.
+See its [package guide](packages/radia-gpu/README.md) for current build and
+validation scope.
 
 MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit own generic
 MATLAB/Simulink operations; `radia-mcp` adds domain and distribution contracts.
@@ -459,9 +456,9 @@ MATLAB/Simulink operations; `radia-mcp` adds domain and distribution contracts.
 
 `radia-gpu` owns the readable CUDA PCG Level-2 S-Function, typed ports and
 lifecycle checks. Standalone numerical MEX remains independently callable.
-`radia-optuna` independently owns its optimization blocks. Historical library
-models remain in the owning package's source tree and require migration and
-validation before GPU release; they are not supported CPU MEX routes.
+`radia-optuna` independently owns its optimization blocks. Use only models
+covered by the owning distribution's current native and Simulink validation;
+a source file alone does not establish supported GPU execution.
 
 ### Documentation and visualization
 
@@ -510,31 +507,29 @@ explicit configuration.
 | NGSolve / Netgen | 6.2.2607 |
 | MATLAB / Simulink package | R2026a, Windows x64 |
 | Coreform Cubit | 2026.8, optional |
-| Native build | Visual Studio 2022, CMake/Ninja, pip `mkl-devel` oneMKL |
+| cubit-mesh-export Python | >=3.12,<3.13 |
+| Native build | Visual Studio Build Tools, CMake/Ninja, pip `mkl-devel` oneMKL; mexcuda toolchain follows MATLAB support |
 
 ### Python packages
 
-This monorepo contains five independently versioned distributions. SPICE/LTspice
-integration ships inside `radia`; its extra only adds schemdraw support.
+This monorepo contains six independently versioned distributions. MATLAB,
+Simulink and LTspice integration belongs to `radia-gpu`, including its
+Python circuit-conversion and parser modules.
 
 | Package or extra | Install | Purpose |
 | :--- | :--- | :--- |
 | `radia` | `python -m pip install radia` | C++ core, Python APIs, NGSolve integration, physical methods, and application logic |
+| `radia-gpu` (source version 0.1.5rc1) | `python -m pip install radia-gpu` | MATLAB mexcuda solvers, Simulink and LTspice integrations; external products installed separately |
 | `radia-mcp` | `python -m pip install radia-mcp` | AI-facing MCP servers and executable domain knowledge |
-| `cubit-mesh-export` | `python -m pip install cubit-mesh-export` | Solver-neutral high-order Cubit export, `check-vol`, plugin, and independently owned Cubit MCP |
+| `cubit-mesh-export` (2.2.3) | `python -m pip install cubit-mesh-export` | Solver-neutral high-order Cubit export, `check-vol`, plugin, and independently owned Cubit MCP |
 | `radia-optuna` | `python -m pip install radia-optuna` | Standalone MATLAB Optuna namespace and 21-command native gateway; no Radia solver, NGSolve, or MKL runtime |
-| `eqnedit64` | `python -m pip install eqnedit64` | Windows equation editor, structural Python API, native TeX/MathML/SVG/clipboard backend, and Web assets |
-| `radia[optuna]` | `python -m pip install "radia[optuna]"` | Radia plus the independently versioned, validated native MATLAB/Simulink `radia-optuna` release |
-| `radia[optuna-upstream]` | `python -m pip install "radia[optuna-upstream]"` | Also installs pinned upstream Python/SciPy/PyTorch paths used by GP, scrambled QMC, and importance parity |
-| `radia[ltspice]` | `python -m pip install "radia[ltspice]"` | Radia plus schemdraw support for built-in SPICE/LTspice conversion and circuit coupling |
+| `eqnedit64` (3.1.4) | `python -m pip install eqnedit64` | Windows equation editor, structural Python API, native TeX/MathML/SVG/clipboard backend, and Web assets |
+| `radia[optuna]` | `python -m pip install "radia[optuna]"` | Radia plus pinned upstream Python `optuna==5.0.0`; MATLAB optimization requires the separate `radia-optuna` distribution |
 
-The separately verified `radia-optuna` wheel is also emitted as a CI artifact.
-Release-quad validates that exact candidate on four hosts; the dedicated release
-workflow publishes the verified artifact without rebuilding it.
-
-Pin release versions together when reproducing a validated deployment. Release
-notes and immutable native/Simulink assets are published on the
-[GitHub Releases page](https://github.com/ksugahar/Radia/releases).
+Each distribution has its own release and validation gates. Record exact
+package versions when reproducing a calculation. See the
+[GitHub Releases page](https://github.com/ksugahar/Radia/releases) for artifacts
+and release notes; the source version above is not a claim of a stable GPU release.
 
 ### Build from source
 
@@ -554,18 +549,17 @@ See [BUILD.md](BUILD.md) for compiler, NGSolve, MKL, and packaging details.
 
 ```text
 src/core/                       C++ Radia and native electromagnetic kernels
-src/radia/                      Python package, NGSolve integration, methods
-src/radia/ltspice/              SPICE, LTspice, KiCad, and circuit workflows
-packages/radia-gpu/matlab/+radia/                  MATLAB API, MEX wrappers, Simulink builders
+src/radia/                      CPU Python package and NGSolve integration
+packages/radia-gpu/             CUDA MEX, MATLAB, Simulink and LTspice integration
 packages/radia-mcp/             MCP servers and executable domain knowledge
-packages/cubit-mesh-export/     Cubit exporters, plugin, and check-vol
-packages/radia-optuna/          Standalone MATLAB/Simulink Optuna package
+packages/cubit-mesh-export/     Cubit exporters, plugin and check-vol
+packages/radia-optuna/          Independent MATLAB/Simulink Optuna package
 packages/eqnedit64/             Windows Eqnedit64 Python/API distribution
-tools/eqnedit64/                Canonical native and browser editor source
+tools/eqnedit64/                Native and browser equation editor source
 tests/                          Small executable samples and fast regressions
 validation_test/                Physics/application samples and validation gates
 docs/                           Feature introductions, saved results and theory
-tools/                          Build, policy, release, and verification tools
+tools/                          Build, policy, release and verification tools
 ```
 
 Loose `examples/` scripts are retired. New experiments begin outside the
@@ -635,9 +629,10 @@ paths are expected to fail loudly rather than select a weaker substitute.
 
 Current priorities are:
 
-1. strengthen HDiv-VIM, topology optimization, and scalable open-boundary
-   operators;
-2. complete robust Hodograph and accelerator-magnet design workflows;
+1. complete and validate HDiv-MMM topology optimization, including scalable
+   open-boundary operators and independent numerical checks;
+2. improve repository and `radia-mcp` quality, maintenance, validation,
+   build, CI, packaging, and release operation;
 3. deepen Eddy, SIBC/ESIM, PEEC, Foster reduction, and thermal coupling;
 4. expand measured Python/MATLAB/MEX parity and native Simulink dynamics;
 5. improve executed documentation, independent validation, and reproducible
