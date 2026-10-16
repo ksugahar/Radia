@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -49,6 +50,8 @@ def git(root, *args):
     return subprocess.check_output(['git', '-c', f'safe.directory={root}', *args], cwd=root, text=True, encoding='utf-8').strip()
 
 def plan(root, base, candidate):
+    if not re.fullmatch(r'[0-9a-f]{40}', candidate):
+        raise ValueError('candidate must be a full immutable Git SHA')
     actual = git(root, 'rev-parse', 'HEAD')
     if actual != candidate or git(root, 'status', '--porcelain', '--untracked-files=no'):
         raise ValueError('local push checks require a clean tracked checkout at exact candidate SHA')
@@ -80,4 +83,6 @@ def run(root, base, candidate):
     for command in commands:
         completed = subprocess.run(command, cwd=root, timeout=180)
         if completed.returncode: return completed.returncode
+    if git(root, 'rev-parse', 'HEAD') != candidate or git(root, 'status', '--porcelain', '--untracked-files=no'):
+        raise ValueError('candidate checkout changed during local checks')
     return 0
