@@ -14,6 +14,15 @@ from pathlib import Path
 
 import pytest
 
+_SOURCE_ONLY = os.environ.get("RADIA_SOURCE_ONLY_CONTRACTS") == "1"
+if _SOURCE_ONLY:
+    class _RejectNativeImports:
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname.split(".")[0] in {"ngsolve", "netgen", "cubit", "matlab", "cupy", "_radia_pybind"}:
+                raise RuntimeError(f"native dependency forbidden in source-only contracts: {fullname}")
+            return None
+    sys.meta_path.insert(0, _RejectNativeImports())
+
 
 def setup_radia_path():
     """Add the repository's package roots without exposing package internals."""
@@ -70,8 +79,11 @@ def _check_module(name):
 # reaches this import first and used to kill the session with a raw traceback,
 # ahead of the check below that can actually say what to fix.
 try:
-    from cubit_mesh_export.toolbar_install import find_cubit_bin
-    _cubit_path = find_cubit_bin()
+    if _SOURCE_ONLY:
+        _cubit_path = None
+    else:
+        from cubit_mesh_export.toolbar_install import find_cubit_bin
+        _cubit_path = find_cubit_bin()
 except BaseException:
     _cubit_path = None
 if _cubit_path and _cubit_path not in sys.path:
@@ -89,7 +101,7 @@ _OPTIONAL_MODULES = ("magpylib", "cubit")
 ALLOW_PARTIAL_ENV = "RADIA_TESTS_ALLOW_PARTIAL"
 
 _IMPORT_FAILURES = {
-    name: _check_module(name)
+    name: (None if _SOURCE_ONLY else _check_module(name))
     for name in _REQUIRED_MODULES + _OPTIONAL_MODULES
 }
 _OPTIONAL_DEPS = {
