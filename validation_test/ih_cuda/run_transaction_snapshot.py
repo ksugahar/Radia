@@ -17,16 +17,30 @@ def main():
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--reviewed-block-units', type=Path, required=True,
                         help='IH-reviewed JSON list in complete assembler block order')
+    parser.add_argument('--binary-source-sha', required=True,
+                        help='Exact reviewed native build commit; independently bound to harness HEAD')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     head = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
     if subprocess.check_output(['git', '-C', str(root), 'status', '--porcelain'], text=True).strip():
         raise RuntimeError('Clean reviewed source required')
+    binary_source = subprocess.check_output(
+        ['git', '-C', str(root), 'rev-parse', args.binary_source_sha + '^{commit}'], text=True).strip()
+    if binary_source != args.binary_source_sha:
+        raise RuntimeError('Full exact binary source SHA required')
+    allowed_diagnostic_changes = {
+        'validation_test/ih_cuda/checkTransactionSnapshot.m',
+        'validation_test/ih_cuda/run_transaction_snapshot.py',
+    }
+    changed = set(subprocess.check_output(
+        ['git', '-C', str(root), 'diff', '--name-only', binary_source, head], text=True).splitlines())
+    if not changed <= allowed_diagnostic_changes:
+        raise RuntimeError('Unreviewed binary/harness source differences: ' + ', '.join(sorted(changed)))
     receipts = []
     for path, test in [(args.test_artifact, True), (args.production_artifact, False)]:
         receipt = json.loads((path / 'build.json').read_text())
         if (receipt.get('accepted') is not True or receipt.get('source_dirty') is not False
-                or receipt.get('source_commit') != head
+                or receipt.get('source_commit') != binary_source
                 or receipt.get('transaction_test_build') is not test
                 or receipt.get('distribution_eligible') is not (not test)):
             raise RuntimeError('Receipt source/classification mismatch')
@@ -41,7 +55,9 @@ def main():
         raise RuntimeError('Reviewed complete-block unknown units mismatch')
     fixture = root / 'validation_test/ih_cuda'
     wrappers = root / 'packages/radia-gpu/matlab'
-    identity = dict(source_commit=head, route='official Engine; fresh operation-owned session',
+    identity = dict(source_commit=head, validation_harness_sha=head, binary_source_sha=binary_source,
+                    allowed_diagnostic_changes=sorted(changed),
+                    route='official Engine; fresh operation-owned session',
                     receipts=receipts, block_units_sha256=sha(args.reviewed_block_units),
                     row_units=['V', 'A', 'A', 'A', 'A m^2', 'A m^2', 'A m', 'V', 'V'],
                     gauge_interpretation='Scaled Lagrange multipliers; not independently measured physical potentials',
