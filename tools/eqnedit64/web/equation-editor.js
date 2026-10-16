@@ -21,7 +21,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "3.1.4 (2026-10-14 candidate)";
+  var BUILD = "3.1.5 (2026-10-14 candidate)";
 
   // BEGIN GENERATED PALETTES
   var PALETTES = [
@@ -3572,9 +3572,14 @@
       // MathJax aligned/align rows: retain one editable equation array.
       return "<m:eqArr><m:eqArrPr><m:baseJc m:val=\"left\"/>" +
         "</m:eqArrPr>" + children.map(function (row) {
-          return "<m:e>" + Array.from(row.children).map(function (cell, index) {
+          var cells = Array.from(row.children);
+          var content = cells.map(function (cell, index) {
             return (index % 2 === 1 ? officeAlignmentPoint() : "") + officeOmmlNode(cell);
-          }).join("") + "</m:e>";
+          }).join("");
+          // Other rows have explicit anchors. A one-cell row occupies the
+          // right-aligned left column, so its marker belongs at the end.
+          if (cells.length === 1) content += officeAlignmentPoint();
+          return "<m:e>" + content + "</m:e>";
         }).join("") + "</m:eqArr>";
     }
     if (name === "mtable") {

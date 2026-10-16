@@ -3,7 +3,8 @@ param(
     [string]$PowerPointPngArtifact,
     [string]$PowerPointPptxArtifact,
     [string]$AppPath,
-    [string]$PowerPointColourArtifact
+    [string]$PowerPointColourArtifact,
+    [string]$PowerPoint315Artifact
 )
 
 $ErrorActionPreference = 'Stop'
@@ -707,7 +708,7 @@ function Assert-PowerPointMathRowsShareLeftEdge([string]$Path) {
         $lefts = @($bands | ForEach-Object { [int]$_.Left })
         $spread = ($lefts | Measure-Object -Maximum).Maximum -
             ($lefts | Measure-Object -Minimum).Minimum
-        if ($spread -gt 4) {
+        if ($spread -gt 0) {
             throw ("PowerPoint math rows do not share a left edge: " +
                 "lefts=$($lefts -join ',') px, spread=$spread px.")
         }
@@ -728,6 +729,51 @@ function Assert-PowerPointMathRowsShareLeftEdge([string]$Path) {
     } finally {
         $bitmap.Dispose()
     }
+}
+
+function Get-PowerPoint315Positions($Range, $Shape, [string]$Image, [string]$Id) {
+    $bitmap = [Drawing.Bitmap]::FromFile($Image)
+    try { $scale = $bitmap.Width / [double]$Shape.Width } finally { $bitmap.Dispose() }
+    $text = [string]$Range.Text
+    $equals = @()
+    for ($i = 0; $i -lt $text.Length; $i++) {
+        if ($text[$i] -eq '=') {
+            $character = $Range.Characters($i + 1, 1)
+            $equals += [int][Math]::Round(([double]$character.BoundLeft - [double]$Shape.Left) * $scale)
+            Release-ComObject $character
+        }
+    }
+    $result = [ordered]@{method='PowerPoint character bounds scaled to exported PNG pixels';
+        equals_px=$equals; scale_px_per_pt=$scale; tolerance_px=0}
+    if ($Id -eq 'H6-anchored') {
+        if ($equals.Count -ne 2 -or $equals[0] -ne $equals[1]) {
+            throw "H6 anchored equals positions differ: $($equals -join ',')"
+        }
+    }
+    if ($Id -eq 'mixed-nested') {
+        if ($equals.Count -ne 3) { throw 'Mixed nested equation must expose three editable equals characters.' }
+        if ($equals[0] -ne $equals[1]) { throw "Inner equals positions differ: $($equals -join ',')" }
+        $z = $text.LastIndexOf('z')
+        if ($z -le 0) { throw 'Mixed outer second row z is missing.' }
+        $first = $Range.Characters(1, $z)
+        $right = [int][Math]::Round(([double]$first.BoundLeft + [double]$first.BoundWidth - [double]$Shape.Left) * $scale)
+        Release-ComObject $first
+        $result.outer_first_right_px = $right
+        if ($right -ne $equals[2]) { throw "Mixed row-end position differs from outer equals: $right / $($equals[2]) px" }
+    }
+    if ($Id -eq 'pure-nested') {
+        $lefts = @()
+        foreach ($letter in @('a','b','c')) {
+            $at = $text.IndexOf($letter)
+            if ($at -lt 0) { throw "Pure nested editable row missing: $letter" }
+            $character = $Range.Characters($at + 1, 1)
+            $lefts += [int][Math]::Round(([double]$character.BoundLeft - [double]$Shape.Left) * $scale)
+            Release-ComObject $character
+        }
+        $result.lefts_px = $lefts
+        if (($lefts | Select-Object -Unique).Count -ne 1) { throw "Pure nested left edges differ: $($lefts -join ',')" }
+    }
+    return $result
 }
 
 function Assert-ImageHasInk([string]$Path, [string]$Label = 'Image') {
@@ -1174,6 +1220,101 @@ try {
         }
         $tableSlide.Shapes.Item(1).Export($tablePowerPointPngOutput, 2)
         $null = Assert-ImageHasInk $tablePowerPointPngOutput 'PowerPoint table paste'
+    }
+
+    # 3.1.5 fixtures use the same real clipboard Paste path as the core suite.
+    $contract315Path = Join-Path $PSScriptRoot '..\tests\office_315_contract.json'
+    $contract315 = Get-Content -LiteralPath $contract315Path -Raw | ConvertFrom-Json
+    if ($contract315.position_tolerance_px -ne 0) { throw '3.1.5 position tolerance must be frozen at 0 px.' }
+    $observations315 = @()
+    $corpus315 = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\tests\office_bit_corpus.json') -Raw | ConvertFrom-Json
+    $fixtures315 = @($contract315.fixtures) + @($corpus315 | Where-Object { $_.id -in @('H6-anchored','H6-unanchored') })
+    foreach ($fixture315 in $fixtures315) {
+        [IO.File]::WriteAllText($tableCliTexInput, $fixture315.tex, [Text.UTF8Encoding]::new($false))
+        $publisher315 = Start-Process -FilePath $app -ArgumentList @($tableCliTexInput, 'office') `
+            -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
+        if ($publisher315.ExitCode -ne 0) { throw "3.1.5 publication failed: $($fixture315.id)" }
+        $number315 = $presentation.Slides.Count + 1
+        $slide315 = $presentation.Slides.Add($number315, 12)
+        $powerPointWindow.View.GotoSlide($number315)
+        $slide315.Select()
+        Start-Sleep -Milliseconds 100
+        $powerPoint.CommandBars.ExecuteMso('Paste')
+        Start-Sleep -Milliseconds 150
+        if ($slide315.Shapes.Count -ne 1) { throw "3.1.5 paste shape count: $($fixture315.id)" }
+        $shape315 = $slide315.Shapes.Item(1)
+        $range315 = $shape315.TextFrame2.TextRange
+        $math315 = $range315.MathZones()
+        if ($math315.Length -le 0) { throw "3.1.5 paste is not editable math: $($fixture315.id)" }
+        $text315 = [string]$range315.Text
+        $image315 = "C:\temp\Eqnedit64-315-$runId-$($fixture315.id).png"
+        $shape315.Export($image315, 2)
+        $null = Assert-ImageHasInk $image315 "3.1.5 $($fixture315.id)"
+        $measure315 = Get-PowerPoint315Positions $range315 $shape315 $image315 $fixture315.id
+        $presentation.Save()
+        $xml315 = Get-SlideXml $pptxOutput $number315
+        if ($xml315 -notmatch '<m:oMath(?:\s|>)') { throw "Missing saved editable math: $($fixture315.id)" }
+        [xml]$document315 = $xml315
+        $namespaces315 = [Xml.XmlNamespaceManager]::new($document315.NameTable)
+        $namespaces315.AddNamespace('m','http://schemas.openxmlformats.org/officeDocument/2006/math')
+        if ($document315.SelectNodes('//m:r[m:t="&" and not(m:rPr/m:aln)]', $namespaces315).Count) {
+            throw "Unmarked ampersand in saved equation: $($fixture315.id)"
+        }
+        $observation315 = [ordered]@{id=$fixture315.id; slide=$number315; text=$text315;
+            image_sha256=(Get-FileHash -LiteralPath $image315 -Algorithm SHA256).Hash;
+            position=$measure315; editable_math_length=$math315.Length; reopened=$false; edit_roundtrip=$false}
+        if ($PowerPoint315Artifact) {
+            $folder315 = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($PowerPoint315Artifact))
+            [IO.Directory]::CreateDirectory($folder315) | Out-Null
+            Copy-Item -LiteralPath $image315 -Destination (Join-Path $folder315 "$($fixture315.id).png")
+        }
+        Remove-Item -LiteralPath $image315
+        $observations315 += [pscustomobject]$observation315
+        Release-ComObject $math315; Release-ComObject $range315
+        Release-ComObject $shape315; Release-ComObject $slide315
+    }
+    # Save, close, and reopen the exact file before checking retained markers.
+    $presentation.Save()
+    $presentation.Close()
+    Release-ComObject $powerPointWindow; $powerPointWindow = $null
+    Release-ComObject $presentation
+    $presentation = $powerPoint.Presentations.Open($pptxOutput, 0, 0, 0)
+    foreach ($observation315 in $observations315) {
+        $shape315 = $presentation.Slides.Item($observation315.slide).Shapes.Item(1)
+        $range315 = $shape315.TextFrame2.TextRange
+        $math315 = $range315.MathZones()
+        if ($math315.Length -le 0 -or [string]$range315.Text -cne $observation315.text) {
+            throw "3.1.5 save/reopen changed editable text: $($observation315.id)"
+        }
+        $observation315.reopened = $true
+        if ($observation315.id -eq 'single-anchored') {
+            $xml315 = Get-SlideXml $pptxOutput $observation315.slide
+            if ($xml315 -notmatch '<m:aln(?:\s|/|>)') { throw 'Single anchored marker lost after reopening.' }
+            $x315 = ([string]$range315.Text).IndexOf('x')
+            if ($x315 -lt 0) { throw 'Single anchored editable x is missing.' }
+            $character315 = $range315.Characters($x315 + 1, 1)
+            $character315.Text = 'X'
+            Release-ComObject $character315
+            $presentation.Save()
+            $observation315.edit_roundtrip = $true
+        }
+        Release-ComObject $math315; Release-ComObject $range315; Release-ComObject $shape315
+    }
+    $presentation.Close(); Release-ComObject $presentation
+    $presentation = $powerPoint.Presentations.Open($pptxOutput, 0, 0, 0)
+    $single315 = $observations315 | Where-Object id -eq 'single-anchored'
+    $shape315 = $presentation.Slides.Item($single315.slide).Shapes.Item(1)
+    $range315 = $shape315.TextFrame2.TextRange
+    if (-not ([string]$range315.Text).Contains('X') -or
+        (Get-SlideXml $pptxOutput $single315.slide) -notmatch '<m:aln(?:\s|/|>)') {
+        throw 'Single anchored edit/marker did not survive second save/reopen.'
+    }
+    Release-ComObject $range315; Release-ComObject $shape315
+    if ($PowerPoint315Artifact) {
+        [ordered]@{schema='eqnedit64.office315.v1'; tolerance_px=0;
+            fixture_sha256=(Get-FileHash -LiteralPath $contract315Path -Algorithm SHA256).Hash;
+            observations=$observations315} | ConvertTo-Json -Depth 8 |
+            Set-Content -LiteralPath $PowerPoint315Artifact -Encoding utf8
     }
 
     $googlePublisher = Start-Process -FilePath $app `
