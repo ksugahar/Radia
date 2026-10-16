@@ -21,7 +21,7 @@ permissions:
   actions: write
 
 # Native packaging is a named release gate. Fast source/contract CI lives in
-# radia-fast.yml; package workflows own their separate distribution lanes.
+# radia.yml; package workflows own their separate distribution lanes.
 concurrency:
   group: radia-native-${{ github.sha }}
   cancel-in-progress: false

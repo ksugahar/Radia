@@ -227,7 +227,7 @@ class FakeAPI:
             "git/tags/" + "c" * 40: {"object": {"type": "commit", "sha": "a" * 40}},
         }
 
-        for workflow in ("radia-fast.yml", "policy-lint.yml"):
+        for workflow in ("radia.yml", "policy-lint.yml"):
             self.records[f"actions/workflows/{workflow}/runs?head_sha={'b' * 40}&event=push&per_page=100"] = {
                 "workflow_runs": [{"head_sha": "b" * 40, "head_branch": "main",
                                    "run_number": 1, "run_attempt": 1,
@@ -262,7 +262,7 @@ def test_acceptance_commit_and_tag_identity():
 
 
 def test_publication_has_no_automatic_bypass():
-    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
     before, publish = workflow.split("  publish-pypi:")
     assert "id-token: write" not in before
     assert "pypa/gh-action-pypi-publish" not in before
@@ -409,7 +409,7 @@ def test_new_releases_require_the_strengthened_focused_suite():
                                                ("completed", "cancelled"), ("completed", "skipped")])
 def test_publication_waits_for_acceptance_commit_ci(status, conclusion):
     api = FakeAPI()
-    key = f"actions/workflows/radia-fast.yml/runs?head_sha={'b' * 40}&event=push&per_page=100"
+    key = f"actions/workflows/radia.yml/runs?head_sha={'b' * 40}&event=push&per_page=100"
     api.records[key]["workflow_runs"][0].update(status=status, conclusion=conclusion)
     with pytest.raises(ValueError, match="Acceptance CI not successful"):
         gate.verify_run(api, 9, "b" * 40)
@@ -417,7 +417,7 @@ def test_publication_waits_for_acceptance_commit_ci(status, conclusion):
 
 def test_old_success_cannot_hide_a_failed_ci_rerun():
     api = FakeAPI()
-    key = f"actions/workflows/radia-fast.yml/runs?head_sha={'b' * 40}&event=push&per_page=100"
+    key = f"actions/workflows/radia.yml/runs?head_sha={'b' * 40}&event=push&per_page=100"
     failed = dict(api.records[key]["workflow_runs"][0], run_attempt=2, conclusion="failure")
     api.records[key]["workflow_runs"].append(failed)
     with pytest.raises(ValueError, match="Acceptance CI not successful"):
