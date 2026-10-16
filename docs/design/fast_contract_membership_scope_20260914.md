@@ -1,8 +1,13 @@
 # Fast-contract profile membership scope
 
-Current policy (2026-10-09): fast-contracts has a 120-second elapsed-time
-budget. The 60-second results below describe the historical policy and are
-preserved as measured; profile membership and required tests remain unchanged.
+Current policy (2026-10-16): `radia.yml` runs CPU `fast-contracts` with a
+120-second budget. Cross-distribution source and release-tool contracts run in
+the always-on policy lane's `repo-contracts` profile. The router contract runs
+once in the Ubuntu policy job. Global audits belong to that policy lane;
+the CPU TaskManager audit selects files by distribution ownership.
+
+The measurements below describe the earlier selector study, not current
+profile membership. Numerical records remain unchanged.
 
 ## Failure and cause
 
@@ -13,7 +18,7 @@ the unchanged 60-second tier budget: 67.56 seconds. Its preceding PR run
 The first BH/PCHIP test took 11.66 seconds on main versus 6.64 seconds on the PR;
 this includes first-use SciPy work, not a separately measured import benchmark.
 
-The expansion to 31 files was not caused directly by editing radia-fast.yml.
+The expansion to 31 files was not caused directly by editing radia.yml.
 Adding a BH test to fast-contracts.paths changed the profile structure.
 `changed_impact_tests` therefore returned unknown and selected every registered
 impact, including unrelated solver, build, release-packaging and subprocess tests.
@@ -34,7 +39,7 @@ impact, including unrelated solver, build, release-packaging and subprocess test
   retained in native-smoke, and selected by the actual helper, production
   `_nonlinear.py`, shipped BH table, native fixture, audit runner, tracked
   qualified result, the BH test itself, and fast-CI workflow changes.
-- radia-fast.yml changes explicitly select the BH dependency check and the
+- radia.yml changes explicitly select the BH dependency check and the
   shared CI, profile-policy and selector contracts. SciPy remains declared in
   that existing isolated environment. No new lane, budget increase, solver
   change, numerical fixture edit or test duplication is introduced.

@@ -140,7 +140,7 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     '.agents/skills/verify-deploy/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.github/workflows/build-test.yml': 'Existing CI runner routing and runner-local scratch commands; phase 2.',
     '.github/workflows/matlab-engine-diagnostic.yml': 'Existing CI runner routing and runner-local scratch commands; phase 2.',
-    '.github/workflows/radia-fast.yml': 'Existing CI runner routing and runner-local scratch commands; phase 2.',
+    '.github/workflows/radia.yml': 'Existing CI runner routing and runner-local scratch commands; phase 2.',
     '.github/workflows/release.yml': 'Existing CI runner routing and runner-local scratch commands; phase 2.',
     'AGENTS.md': 'Routing policy retained verbatim until phase 2; result publication is not exempt.',
     'CLAUDE.md': 'Routing policy retained verbatim until phase 2; result publication is not exempt.',
