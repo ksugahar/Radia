@@ -63,7 +63,7 @@ def main():
         eng.workspace['production_artifact'] = str(args.production_artifact.resolve())
         eng.workspace['output_directory'] = str(args.out.resolve())
         eng.eval('transaction_result=checkTransactionSnapshot(test_artifact,production_artifact,output_directory,reviewed_units);', nargout=0)
-        result = json.loads((args.out / 'result.json').read_text())
+        result = json.loads((args.out / 'result.json').read_text(encoding='utf-8'))
         if result.get('accepted') is not True:
             raise RuntimeError('Native transaction/schema result rejected; see owned result.json')
     finally:

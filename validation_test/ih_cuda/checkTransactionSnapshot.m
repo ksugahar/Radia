@@ -153,7 +153,7 @@ end
 end
 function message=expectFailure(action,word)
 message='';failed=false;try,action();catch err,message=err.message;failed=contains(lower(err.message),lower(word));end
-assert(failed,['Expected failure: ',word]);
+assert(failed,['Expected failure: ',word,'; actual message: ',message]);
 end
 function expectSnapshotFailure(h)
 failed=false;try,s=radia_cuda_ih('accepted_work_snapshot',h);catch,failed=true;end %#ok<NASGU>
