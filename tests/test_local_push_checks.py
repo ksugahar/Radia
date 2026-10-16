@@ -39,3 +39,27 @@ def test_existing_router_preserves_cpu_owner():
         assert not required
     finally:
         sys.path.pop(0)
+
+def test_rename_retains_old_lane_input(tmp_path):
+    import subprocess
+    import sys
+    root = Path(__file__).parents[1]
+    sys.path.insert(0, str(root/'tools'))
+    try:
+        impact = m.load(root/'tools/sparsesolv_ci_impact.py', 'rename_impact')
+        subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+        def git(*args):
+            return subprocess.check_output(['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', *args], cwd=tmp_path, text=True).strip()
+        old = tmp_path/'src/radia/solver.py'
+        old.parent.mkdir(parents=True)
+        old.write_text('unchanged numerical source\n')
+        git('add', '.')
+        git('commit', '-qm', 'base')
+        base = git('rev-parse', 'HEAD')
+        git('mv', 'src/radia/solver.py', 'retired.txt')
+        git('commit', '-qm', 'rename')
+        paths = impact.changed_paths(git('diff', '--name-status', '-z', '-M', f'{base}...HEAD'))
+        assert paths == {'src/radia/solver.py', 'retired.txt'}
+        assert impact.lane_required('radia', paths, lambda _: ('', ''), impact.manifest())[0]
+    finally:
+        sys.path.pop(0)

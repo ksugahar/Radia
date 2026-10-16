@@ -55,8 +55,13 @@ def plan(root, base, candidate):
     actual = git(root, 'rev-parse', 'HEAD')
     if actual != candidate or git(root, 'status', '--porcelain', '--untracked-files=no'):
         raise ValueError('local push checks require a clean tracked checkout at exact candidate SHA')
-    paths = git(root, 'diff', '--name-only', f'{base}...{candidate}').splitlines()
     impact = load(root / 'tools/sparsesolv_ci_impact.py', 'local_impact')
+    try:
+        git(root, 'cat-file', '-e', f'{base}^{{commit}}')
+        raw = git(root, 'diff', '--name-status', '-z', '-M', f'{base}...{candidate}')
+    except subprocess.CalledProcessError as exc:
+        raise ValueError(f'cannot compare base {base}; fetch the remote base commit/history and retry') from exc
+    paths = sorted(impact.changed_paths(raw)) if raw else []
     data = impact.manifest()
     def blobs(path):
         return git(root, 'show', f'{base}:{path}'), git(root, 'show', f'{candidate}:{path}')

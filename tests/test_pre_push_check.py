@@ -107,7 +107,7 @@ def test_local_checker_uses_detached_candidate_and_cleans_only_its_tree(monkeypa
     monkeypatch.setattr(check.subprocess, "run", run)
     assert REAL_LOCAL(A, B) == code
     assert not parent.exists()
-    assert "--detach" in calls[0][0]
+    assert any("--detach" in command for command, _ in calls)
 
 
 def test_local_cleanup_failure_blocks_and_retains_owned_path(monkeypatch, tmp_path):
@@ -121,3 +121,31 @@ def test_local_cleanup_failure_blocks_and_retains_owned_path(monkeypatch, tmp_pa
     monkeypatch.setattr(check.subprocess, "run", run)
     assert REAL_LOCAL(A, B) == 1
     assert (parent / "candidate").is_dir()
+
+def test_cleanup_exception_preserves_original_failure(monkeypatch, tmp_path, capsys):
+    parent = tmp_path/'owned'
+    parent.mkdir()
+    monkeypatch.setattr(check.tempfile, 'mkdtemp', lambda **kw: str(parent))
+    def run(command, **kw):
+        if 'add' in command:
+            (parent/'candidate').mkdir()
+        if '--local-push-candidate' in command:
+            raise OSError('original check failure')
+        if 'remove' in command:
+            raise ValueError('cleanup refusal')
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(check.subprocess, 'run', run)
+    assert REAL_LOCAL(A, B) == 1
+    error = capsys.readouterr().err
+    assert 'original check failure' in error and 'cleanup refusal' in error
+    assert (parent/'candidate').exists()
+
+
+def test_missing_base_suggests_fetch_without_checkout(monkeypatch, capsys):
+    import subprocess
+    def run(command, **kw):
+        assert 'cat-file' in command
+        raise subprocess.CalledProcessError(128, command)
+    monkeypatch.setattr(check.subprocess, 'run', run)
+    assert REAL_LOCAL(A, B) == 1
+    assert 'fetch the remote base commit/history' in capsys.readouterr().err
