@@ -224,6 +224,15 @@
     ],
     "src/radia/patch_recovery.py": [
       "tests/test_patch_recovery.py"
+    ],
+    "tools/pre_push_check.py": [
+      "tests/test_pre_push_check.py"
+    ],
+    "tools/git-hooks/pre-push": [
+      "tests/test_pre_push_check.py"
+    ],
+    "tools/install_git_hooks.py": [
+      "tests/test_pre_push_check.py"
     ]
   },
   "profiles": {
