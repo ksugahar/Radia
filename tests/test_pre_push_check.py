@@ -10,6 +10,12 @@ spec = importlib.util.spec_from_file_location(
 check = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(check)
 A, B, ZERO = "a" * 40, "b" * 40, "0" * 40
+REAL_LOCAL = check.run_local_candidate
+
+
+@pytest.fixture(autouse=True)
+def isolate_local_checks(monkeypatch):
+    monkeypatch.setattr(check, "run_local_candidate", lambda base, head: 0)
 
 
 def record(ref, head=B, base=A):
@@ -62,3 +68,56 @@ def test_success_dispatches_every_distinct_candidate(monkeypatch):
 def test_missing_helper_blocks_push(monkeypatch, tmp_path):
     monkeypatch.setattr(check, "ROOT", tmp_path)
     assert check.main([record("refs/heads/new")]) == 1
+
+
+def test_local_failure_blocks_remote_transport(monkeypatch):
+    monkeypatch.setattr(check, "run_local_candidate", lambda base, head: 5)
+    monkeypatch.setattr(check.subprocess, "run", lambda *a, **kw: pytest.fail("SSH launched"))
+    assert check.main([record("refs/heads/new")]) == 5
+
+
+def test_local_candidate_precedes_each_remote_preflight(monkeypatch):
+    events = []
+    monkeypatch.setattr(check, "run_local_candidate", lambda base, head:
+                        events.append(("local", base, head)) or 0)
+    monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw:
+                        events.append(("remote", cmd[-3], cmd[-1])) or SimpleNamespace(returncode=0))
+    assert check.main([record("refs/heads/main"), record("refs/heads/new", base=ZERO)]) == 0
+    assert events == [("local", A, B), ("remote", A, B),
+                      ("local", ZERO, B), ("remote", ZERO, B)]
+
+
+@pytest.mark.parametrize("code", [0, 7])
+def test_local_checker_uses_detached_candidate_and_cleans_only_its_tree(monkeypatch, tmp_path, code):
+    parent = tmp_path / "owned"
+    parent.mkdir()
+    monkeypatch.setattr(check.tempfile, "mkdtemp", lambda **kw: str(parent))
+    calls = []
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        if "worktree" in command and "add" in command:
+            (parent / "candidate").mkdir()
+        elif "--local-push-candidate" in command:
+            assert kwargs["cwd"] == parent / "candidate"
+            assert command[-4:] == ["--local-push-candidate", B, "--local-push-base", A]
+            return SimpleNamespace(returncode=code)
+        elif "worktree" in command and "remove" in command:
+            (parent / "candidate").rmdir()
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(check.subprocess, "run", run)
+    assert REAL_LOCAL(A, B) == code
+    assert not parent.exists()
+    assert "--detach" in calls[0][0]
+
+
+def test_local_cleanup_failure_blocks_and_retains_owned_path(monkeypatch, tmp_path):
+    parent = tmp_path / "owned"
+    parent.mkdir()
+    monkeypatch.setattr(check.tempfile, "mkdtemp", lambda **kw: str(parent))
+    def run(command, **kwargs):
+        if "add" in command:
+            (parent / "candidate").mkdir()
+        return SimpleNamespace(returncode=2 if "remove" in command else 0)
+    monkeypatch.setattr(check.subprocess, "run", run)
+    assert REAL_LOCAL(A, B) == 1
+    assert (parent / "candidate").is_dir()
