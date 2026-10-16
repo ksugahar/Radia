@@ -100,9 +100,9 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - CPU: Python (pybind11)/NGSolve, built with Visual Studio 2026 Build Tools on Windows; NGSolve TaskManager owns CPU parallel execution. CPU MEX is unsupported.
 - GPU: `radia-gpu` uses MATLAB mexcuda (optional Simulink/LTspice adapters, no external products). GPU setup, preconditioners and execution stay in MATLAB/mexcuda without Python adapters or snapshots. NGSolve-inherited DLLs are permitted. Python provides independent CPU accuracy validation, never a GPU-user prerequisite.
 - mexcuda modules may retain CPU host control. Never include, link, or use NGSolve TaskManager in mexcuda builds, except a read-only guard that fails if a foreign TaskManager is active. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing.
-- MSVC 2026 only on both hosts; retire VS 2022. Match CUDA to MATLAB/mexcuda. No manual unsupported flags. Authorized installed vendor/config routes need provenance and ABI/numerical checks; smoke is not official support.
+- radia: portability. radia-gpu: newer validated tools. VS2026/CUDA13.4.2 adoption requires AMS/IH parity/lifecycle PASS on A100/Quadro RTX 5000. No old fallback or unsupported flags (XML/env too); record versions. Smoke is not vendor support.
 - No implicit CPU/GPU/Python fallback. When both routes exist, select explicitly (`Backend="gpu"|"cpu"`), record the backend and raise on failure. Internal CPU/GPU agreement does not replace Python CPU validation. Measure host setup and CPU solves separately.
-- Active GPU development/builds/validation: NGSolve A100. Local development/same-wheel RTX 5000 acceptance: 100, with independent review. No mandatory A100 publication gate or radia-gpu on 102.
+- Active GPU development/builds/validation: NGSolve A100. Local development/same-wheel RTX 5000 acceptance: 100, with independent review. No A100 release gate; no GPU on 102.
 - Record parity, artifact hashes and validation JSON. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### GPU Kernel Research Strategy (2026-10-11)
