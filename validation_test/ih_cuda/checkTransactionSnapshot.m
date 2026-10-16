@@ -10,6 +10,8 @@ arguments
  outdir (1,:) char
  blockUnits cell
 end
+assert(evalin('base','exist(''radia_transaction_owned_session'',''var'')==1 && isequal(radia_transaction_owned_session,true)'),...
+ 'Fresh operation-owned launcher session required');
 assert(~isfolder(outdir),'New evidence directory required');mkdir(outdir);
 result=struct('accepted',false,'b1_closed',false,'release_accepted',false,...
  'timing_classification','transaction/schema diagnostics; not performance acceptance',...
@@ -31,12 +33,16 @@ try
  assert(strcmp(result.production_mex_sha256,productionReceipt.binary_sha256));
  switchArtifact(testArtifact);
  [cfg,assembly]=makeTemperatureBHConfig();
- fields=fieldnames(assembly.unknown_indices);dims=zeros(1,numel(fields));
- for k=1:numel(fields),dims(k)=numel(assembly.unknown_indices.(fields{k}));end
+ fields=fieldnames(assembly.ordered_unknown_indices);dims=zeros(1,numel(fields));ordered=[];
+ for k=1:numel(fields)
+  indices=assembly.ordered_unknown_indices.(fields{k});dims(k)=numel(indices);ordered=[ordered,indices]; %#ok<AGROW>
+ end
+ assert(isequal(ordered,1:size(cfg.eddy,1)),'Complete ordered unknown partition required');
  assert(numel(blockUnits)==numel(dims),'Reviewed physical block units required');
  cfg.validation_work_snapshot=true;
  cfg.validation_work_coil_port_indices=[assembly.unknown_indices.coil,assembly.unknown_indices.port];
  cfg.validation_work_block_dims=dims;cfg.validation_work_block_units=blockUnits;
+ result.block_names=fields;result.block_dims=dims;result.block_units=blockUnits;
  h=ownedCreate(cfg);radia_cuda_ih('update',h,1e4,300);
  before=radia_cuda_ih('transaction_test_capture',h);save(fullfile(outdir,'before.mat'),'before');
  keys={'em','temperature','heat','cells','loss_weights','matrix_values','snapshot_bank'};
@@ -82,14 +88,21 @@ try
  [~,~,onInfo]=radia_cuda_ih('outputs',h);result.on_info=onInfo;
  radia_cuda_ih('transaction_test_poison',h);
  expectSnapshotFailure(h);expectFailure(@()radia_cuda_ih('update',h,1e4,300),'poisoned');
+ for command={'outputs','reset','electromagnetic_state','element_impedance','diagnostic_operator','transaction_test_capture'}
+  expectFailure(@()poisonCommand(command{1},h),'poisoned');
+ end
  radia_cuda_ih('destroy',h);h=[];owner('h')=[];assert(radia_cuda_ih('live_count')==0);
- memoryBefore=gpuDevice().AvailableMemory;
+ memoryBefore=gpuDevice().AvailableMemory;memorySamples=zeros(1,8);
  for k=1:8
   h=ownedCreate(cfg);radia_cuda_ih('update',h,1e4,300);
   radia_cuda_ih('destroy',h);h=[];owner('h')=[];assert(radia_cuda_ih('live_count')==0);
+  assert(~mislocked('radia_cuda_ih'));memorySamples(k)=gpuDevice().AvailableMemory;
  end
  memoryAfter=gpuDevice().AvailableMemory;assert(memoryBefore-memoryAfter<=64*1024^2);
  result.warm_available_memory_before=memoryBefore;result.warm_available_memory_after=memoryAfter;
+ result.cycle_available_memory=memorySamples;
+ result.memory_strictly_decreasing=all(diff(memorySamples)<0);
+ assert(~result.memory_strictly_decreasing,'Strict per-cycle memory loss requires investigation');
  switchArtifact(productionArtifact);cfg.validation_work_snapshot=false;
  h=ownedCreate(cfg);radia_cuda_ih('update',h,1e4,300);
  [~,~,offInfo]=radia_cuda_ih('outputs',h);result.off_info=offInfo;
@@ -125,6 +138,15 @@ finish();
   destroyOwned(owner);
   f=fopen(fullfile(outdir,'result.json'),'w');assert(f>=0);writer=onCleanup(@()fclose(f));fprintf(f,'%s\n',jsonencode(result));
  end
+end
+function poisonCommand(command,h)
+if strcmp(command,'outputs')
+ [~,~,~]=radia_cuda_ih(command,h);
+elseif strcmp(command,'reset')
+ radia_cuda_ih(command,h);
+else
+ unused=radia_cuda_ih(command,h); %#ok<NASGU>
+end
 end
 function message=expectFailure(action,word)
 message='';failed=false;try,action();catch err,message=err.message;failed=contains(lower(err.message),lower(word));end

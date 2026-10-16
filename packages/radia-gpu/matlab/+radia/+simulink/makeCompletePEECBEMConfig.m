@@ -39,5 +39,10 @@ cfg.loss_components=3;cfg.loss_weights=repelem(.5*area,3);
 cfg.rhs_per_amp=zeros(n,1);cfg.rhs_per_amp(port)=1;
 fields=fieldnames(material);for k=1:numel(fields),cfg.(fields{k})=material.(fields{k});end
 assembly.unknown_indices=struct('coil',coil,'port',port,'incident_potential',psi,'body_potential',phi,'mass_flux',flux,'reaction_potential',reaction);
+% Complete matrix-order partition, including interleaved gauge multipliers.
+assembly.ordered_unknown_indices=struct('coil',coil,'port',port,...
+ 'incident_potential',psi,'incident_gauge',psiGauge,...
+ 'body_potential',phi,'body_gauge',bodyGauge,'mass_flux',flux,...
+ 'reaction_potential',reaction,'reaction_gauge',reactionGauge);
 assembly.complete_reaction='magnetic plus surface-Poisson transpose work, bilinear phasors';
 end
