@@ -3107,7 +3107,7 @@
     }
 
     var leafCells = [];
-    if (!collectLeafCells(table, leafCells) || leafCells.length < 2) return null;
+    if (!collectLeafCells(table, leafCells) || leafCells.length < 1) return null;
 
     var serializer = new window.XMLSerializer();
     return leafCells.map(function (cell) {
@@ -3637,7 +3637,7 @@
     var doc = new window.DOMParser().parseFromString(mml, "application/xml");
     if (doc.querySelector("parsererror, merror")) throw new Error("invalid MathML");
     var rows = splitUnanchoredOfficeRows(doc.documentElement);
-    var body = rows ? "<m:eqArr><m:eqArrPr><m:baseJc m:val=\"left\"/>" +
+    var body = rows && rows.length === 1 ? officeOmml(rows[0]) : rows ? "<m:eqArr><m:eqArrPr><m:baseJc m:val=\"left\"/>" +
       "</m:eqArrPr>" + rows.map(function (row) {
         return "<m:e>" + officeAlignmentPoint() + officeOmml(row) + "</m:e>";
       }).join("") + "</m:eqArr>" : officeOmml(mml);

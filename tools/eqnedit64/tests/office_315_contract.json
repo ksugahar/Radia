@@ -1,5 +1,5 @@
 {
-  "status": "proposed_pending_final_review",
+  "status": "R2_contract_GO_implementation_in_progress",
   "fixtures": [
     {
       "id": "single-unanchored",
@@ -49,5 +49,7 @@
     "H6-anchored",
     "H6-unanchored",
     "three-row-unanchored"
-  ]
+  ],
+  "position_tolerance_px": 0,
+  "position_tolerance_policy": "Fixed before any measurement; no post-result relaxation."
 }
