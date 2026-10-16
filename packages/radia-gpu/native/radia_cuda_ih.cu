@@ -158,7 +158,7 @@ struct Context {
  static bool sticky(cudaError_t status)noexcept{return status==cudaErrorIllegalAddress||status==cudaErrorLaunchFailure||status==cudaErrorAssert||status==cudaErrorECCUncorrectable||status==cudaErrorLaunchTimeout||status==cudaErrorUnknown;}
  void noteFailure()noexcept{const auto last=cudaPeekAtLastError();const auto status=guard?cudaStreamQuery(guard):cudaSuccess;if(sticky(last)||sticky(status))poisoned=true;}
  void recoverFailure()noexcept{noteFailure();if(!poisoned&&state){const auto status=state->drainCandidateWork();if(sticky(status))poisoned=true;}}
- void check(){if(poisoned)throw std::runtime_error("IH context poisoned; destroy only");noteFailure();if(poisoned)throw std::runtime_error("IH context poisoned; destroy only");int current;cudaCheck(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("IH context belongs to another GPU");cudaCheck(cudaStreamQuery(guard));}
+ void check(){if(poisoned)throw std::runtime_error("IH context poisoned; destroy only");int current;cudaCheck(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("IH context belongs to another GPU");noteFailure();if(poisoned)throw std::runtime_error("IH context poisoned; destroy only");cudaCheck(cudaStreamQuery(guard));}
  explicit Context(const mxArray* cfg){
   if(number(field(cfg,"schema_version"))!=1.)throw std::invalid_argument("Unsupported IH operator schema");
   const auto materialMode=text(field(cfg,"material_mode"));if(materialMode!="fixed"&&materialMode!="element-esim-operators")throw std::invalid_argument("Unsupported IH material frontend");
