@@ -134,7 +134,7 @@ struct ElementMaterial {
  static bool cellFiniteHost(cuDoubleComplex z){return std::isfinite(cuCreal(z))&&std::isfinite(cuCimag(z));}
 };
 struct Context {
- int device=0;cudaStream_t guard=nullptr;
+ int device=0;cudaStream_t guard=nullptr;bool poisoned=false;
  double solveTolerance=1e-10;
  Matrix a,p,system,k,c,projection,preconditioner;
  PreconditionerPrecision precision=PreconditionerPrecision::None;Buffer rhs,weights,ones,initial;
@@ -154,7 +154,9 @@ struct Context {
   for(auto* b:{&rhs,&weights,&ones,&initial}){if(b->p)cudaFree(b->p);b->p=nullptr;}
   if(guard)cudaStreamDestroy(guard);if(previous!=device)cudaSetDevice(previous);
  }
- void check(){int current;cudaCheck(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("IH context belongs to another GPU");cudaCheck(cudaStreamQuery(guard));}
+ static bool sticky(cudaError_t status)noexcept{return status==cudaErrorIllegalAddress||status==cudaErrorLaunchFailure||status==cudaErrorAssert||status==cudaErrorECCUncorrectable||status==cudaErrorLaunchTimeout||status==cudaErrorUnknown;}
+ void noteFailure()noexcept{const auto last=cudaPeekAtLastError();const auto status=guard?cudaStreamQuery(guard):cudaSuccess;if(sticky(last)||sticky(status))poisoned=true;}
+ void check(){if(poisoned)throw std::runtime_error("IH context poisoned; destroy only");noteFailure();if(poisoned)throw std::runtime_error("IH context poisoned; destroy only");int current;cudaCheck(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("IH context belongs to another GPU");cudaCheck(cudaStreamQuery(guard));}
  explicit Context(const mxArray* cfg){
   if(number(field(cfg,"schema_version"))!=1.)throw std::invalid_argument("Unsupported IH operator schema");
   const auto materialMode=text(field(cfg,"material_mode"));if(materialMode!="fixed"&&materialMode!="element-esim-operators")throw std::invalid_argument("Unsupported IH material frontend");
@@ -211,7 +213,9 @@ struct Context {
    material=std::make_unique<ElementMaterial>(cfg,a,p,weights,w,n,unsigned(components));owned+=material->owned;op.dynamicMaterial=true;op.materialOwner=material->coupling.get();
    op.updateMaterial=[](void* owner,cudaStream_t stream,const double* t,double current){static_cast<ESIMCoupling*>(owner)->prepare(stream,t,current);};
    op.solveMaterial=[](void* owner,ComplexSolver& solver,double tolerance,int iterations){return static_cast<ESIMCoupling*>(owner)->solve(solver,tolerance,iterations);};
-   op.commitMaterial=[](void* owner){static_cast<ESIMCoupling*>(owner)->commit();};op.resetMaterial=[](void* owner){static_cast<ESIMCoupling*>(owner)->reset();};
+   static_assert(noexcept(std::declval<ESIMCoupling&>().commit()),"ESIM commit must be noexcept");
+   op.stageMaterial=[](void* owner,cudaStream_t stream,bool reset){static_cast<ESIMCoupling*>(owner)->stageAccepted(stream,reset);};
+   op.commitMaterial=[](void* owner)noexcept{static_cast<ESIMCoupling*>(owner)->commit();};
    op.validateCandidateTemperature=[](void* owner,cudaStream_t stream,const double* t){static_cast<ESIMCoupling*>(owner)->validateTemperature(stream,t);};
   }
   state=std::make_unique<CoupledState>(op);owned+=state->ownedBytes();
@@ -226,7 +230,12 @@ mxArray* vectorOut(const std::vector<double>& v){auto* a=mxCreateDoubleMatrix(v.
 }
 void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
  try{
-  mxInitGPU();if(!nrhs)throw std::invalid_argument("Missing IH command");const auto command=text(in[0]);
+  if(!nrhs)throw std::invalid_argument("Missing IH command");const auto command=text(in[0]);
+  if(command=="destroy"){
+   if(nrhs!=2||nlhs)throw std::invalid_argument("destroy requires handle and no output");const auto h=handle(in[1]);
+   if(!contexts.erase(h))throw std::invalid_argument("IH stale or wrong-type handle");mexUnlock();return;
+  }
+  mxInitGPU();
   if(command=="assemble_peec_bem"){if(nrhs!=2||nlhs!=1)throw std::invalid_argument("assemble_peec_bem requires geometry and one output");out[0]=assemblePEECBEM(in[1]);return;}
   if(command=="create"){
    if(nrhs!=2||nlhs!=1)throw std::invalid_argument("create requires config and one output");
@@ -236,12 +245,8 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
    contexts.emplace(h,std::move(context));mexLock();mexAtExit(cleanup);return;
   }
   if(command=="live_count"){if(nrhs!=1||nlhs!=1)throw std::invalid_argument("live_count takes no arguments");out[0]=mxCreateDoubleScalar(double(contexts.size()));return;}
-  if(command=="destroy"){
-   if(nrhs!=2||nlhs)throw std::invalid_argument("destroy requires handle and no output");const auto h=handle(in[1]);
-   if(!contexts.erase(h))throw std::invalid_argument("IH stale or wrong-type handle");mexUnlock();return;
-  }
   if(nrhs<2)throw std::invalid_argument("Missing IH handle");auto& c=get(in[1]);
-  if(command=="reset"){if(nrhs!=2||nlhs)throw std::invalid_argument("reset signature mismatch");c.state->reset();return;}
+  if(command=="reset"){if(nrhs!=2||nlhs)throw std::invalid_argument("reset signature mismatch");try{c.state->reset();}catch(...){c.noteFailure();throw;}return;}
   if(command=="diagnostic_operator"){
    if(nrhs!=2||nlhs!=1)throw std::invalid_argument("diagnostic_operator returns candidate operator, not accepted state");
    std::vector<cuDoubleComplex> values(c.a.z.size());

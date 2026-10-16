@@ -5,6 +5,8 @@
 #include <memory>
 #include <climits>
 #include <vector>
+#include <type_traits>
+#include <utility>
 namespace radia_ih_cuda {
 struct CoupledOperators {
     ComplexCSRView eddy,lossProjection,thermalSystem;
@@ -21,8 +23,9 @@ struct CoupledOperators {
     void (*updateMaterial)(void*,cudaStream_t,const double*,double);
     void* materialOwner;
     ComplexSolver::Result (*solveMaterial)(void*,ComplexSolver&,double,int)=nullptr;
-    void (*commitMaterial)(void*)=nullptr;
-    void (*resetMaterial)(void*)=nullptr;
+    void (*stageMaterial)(void*,cudaStream_t,bool)=nullptr;
+    void (*commitMaterial)(void*) noexcept=nullptr;
+
     void (*validateCandidateTemperature)(void*,cudaStream_t,const double*)=nullptr;
 };
 class CoupledState {
@@ -30,6 +33,7 @@ class CoupledState {
     std::unique_ptr<ComplexSolver> eddy_,thermal_;
     double *heat_=nullptr,*candidateHeat_=nullptr,*load_=nullptr,*temperature_=nullptr,*candidate_=nullptr,*controls_=nullptr;
     cuDoubleComplex* acceptedElectromagnetic_=nullptr;
+    cuDoubleComplex* candidateElectromagnetic_=nullptr;
     int* invalid_=nullptr;
     cudaEvent_t heatReady_=nullptr;
     std::size_t steps_=0;
@@ -39,7 +43,7 @@ class CoupledState {
         thermal_.reset();eddy_.reset();
         if(heatReady_)cudaEventDestroy(heatReady_);
         for(auto* p:{heat_,candidateHeat_,load_,temperature_,candidate_,controls_})if(p)cudaFree(p);
-        if(acceptedElectromagnetic_)cudaFree(acceptedElectromagnetic_);
+        if(acceptedElectromagnetic_)cudaFree(acceptedElectromagnetic_);if(candidateElectromagnetic_)cudaFree(candidateElectromagnetic_);
         if(invalid_)cudaFree(invalid_);
     }
 public:
@@ -59,11 +63,12 @@ public:
         std::size_t available,total;cudaCheck(cudaMemGetInfo(&available,&total));
         const auto reserve=std::max<std::size_t>(2ULL<<30,total/5);
         // Includes solver workspaces, state and controls, not caller-owned operators.
-        const auto need=(op.eddy.rows*(op.eddyPreconditioner.precision==PreconditionerPrecision::None?10:12)+op.thermalSystem.rows*9+2)*sizeof(cuDoubleComplex)+
-            (2*op.heatSamples+3*op.thermalSystem.rows+2)*sizeof(double)+2*sizeof(BiCGState)+sizeof(int);
+        const auto need=((op.eddy.rows)*(op.eddyPreconditioner.precision==PreconditionerPrecision::None?10:12)+op.thermalSystem.rows*9+2)*sizeof(cuDoubleComplex)+
+            (2*op.heatSamples+3*op.thermalSystem.rows+2)*sizeof(double)+2*sizeof(BiCGState)+sizeof(int)+op.eddy.rows*sizeof(cuDoubleComplex);
         if(available<=reserve||need>available-reserve)throw std::runtime_error("IH resident state exceeds GPU memory budget");
         try {
             eddy_=std::make_unique<ComplexSolver>(op.eddy,op.eddyPreconditioner);thermal_=std::make_unique<ComplexSolver>(op.thermalSystem);
+            cudaCheck(cudaMalloc(&candidateElectromagnetic_,op.eddy.rows*sizeof(cuDoubleComplex)));
             cudaCheck(cudaMalloc(&acceptedElectromagnetic_,op.eddy.rows*sizeof(cuDoubleComplex)));
             cudaCheck(cudaMalloc(&heat_,op.heatSamples*sizeof(double)));
             cudaCheck(cudaMalloc(&candidateHeat_,op.heatSamples*sizeof(double)));
@@ -78,18 +83,29 @@ public:
         if(eddy_)eddy_->abandonAfterDeviceReset();
         if(thermal_)thermal_->abandonAfterDeviceReset();
         heat_=candidateHeat_=load_=temperature_=candidate_=controls_=nullptr;
-        acceptedElectromagnetic_=nullptr;invalid_=nullptr;heatReady_=nullptr;
+        acceptedElectromagnetic_=candidateElectromagnetic_=nullptr;invalid_=nullptr;heatReady_=nullptr;
     }
     std::size_t ownedBytes()const {
-        return eddy_->ownedBytes()+thermal_->ownedBytes()+op_.eddy.rows*sizeof(cuDoubleComplex)+
+        return eddy_->ownedBytes()+thermal_->ownedBytes()+2*op_.eddy.rows*sizeof(cuDoubleComplex)+
             (2*op_.heatSamples+3*op_.thermalSystem.rows+2)*sizeof(double)+sizeof(int);
     }
+    std::size_t atomicityBytes()const noexcept{return op_.eddy.rows*sizeof(cuDoubleComplex);}
     ~CoupledState(){release();}
+    void commitAccepted(const ComplexSolver::Result& em,const ComplexSolver::Result& thermal,bool resetting)noexcept{
+        static_assert(noexcept(std::declval<CoupledOperators>().commitMaterial(nullptr)),"Material commit must be noexcept");
+        if(op_.commitMaterial)op_.commitMaterial(op_.materialOwner);
+        std::swap(acceptedElectromagnetic_,candidateElectromagnetic_);
+        std::swap(temperature_,candidate_);std::swap(heat_,candidateHeat_);
+        lastEddy_=em;lastThermal_=thermal;if(resetting)steps_=0;else ++steps_;
+    }
+    static_assert(noexcept(std::declval<CoupledState&>().commitAccepted({}, {}, false)),"Commit must not throw");
     void reset() {
-        cudaCheck(cudaMemcpyAsync(temperature_,op_.initialTemperature,op_.thermalSystem.rows*sizeof(double),cudaMemcpyDeviceToDevice,thermal_->stream()));
-        cudaCheck(cudaMemsetAsync(heat_,0,op_.heatSamples*sizeof(double),thermal_->stream()));
-        cudaCheck(cudaMemsetAsync(acceptedElectromagnetic_,0,op_.eddy.rows*sizeof(cuDoubleComplex),thermal_->stream()));
-        cudaCheck(cudaStreamSynchronize(thermal_->stream()));if(op_.resetMaterial)op_.resetMaterial(op_.materialOwner);steps_=0;lastEddy_={};lastThermal_={};
+        cudaCheck(cudaMemcpyAsync(candidate_,op_.initialTemperature,op_.thermalSystem.rows*sizeof(double),cudaMemcpyDeviceToDevice,thermal_->stream()));
+        cudaCheck(cudaMemsetAsync(candidateHeat_,0,op_.heatSamples*sizeof(double),thermal_->stream()));
+        cudaCheck(cudaMemsetAsync(candidateElectromagnetic_,0,op_.eddy.rows*sizeof(cuDoubleComplex),thermal_->stream()));
+        if(op_.stageMaterial)op_.stageMaterial(op_.materialOwner,thermal_->stream(),true);
+        cudaCheck(cudaStreamSynchronize(thermal_->stream()));cudaCheck(cudaGetLastError());
+        commitAccepted({}, {}, true);
     }
     // Called only at the Simulink discrete Update boundary. Outputs observes
     // accepted state; no thermal vector is returned merely to re-upload it.
@@ -113,10 +129,10 @@ public:
         cudaCheck(cudaStreamSynchronize(thermal_->stream()));
         if(invalid)throw std::runtime_error("IH candidate temperature rejected; accepted state preserved");
         if(op_.validateCandidateTemperature)op_.validateCandidateTemperature(op_.materialOwner,thermal_->stream(),candidate_);
-        cudaCheck(cudaMemcpyAsync(acceptedElectromagnetic_,eddy_->solution(),op_.eddy.rows*sizeof(cuDoubleComplex),cudaMemcpyDeviceToDevice,thermal_->stream()));
-        cudaCheck(cudaStreamSynchronize(thermal_->stream()));
-        if(op_.commitMaterial)op_.commitMaterial(op_.materialOwner);
-        std::swap(temperature_,candidate_);std::swap(heat_,candidateHeat_);lastEddy_=eddyResult;lastThermal_=thermalResult;++steps_;
+        cudaCheck(cudaMemcpyAsync(candidateElectromagnetic_,eddy_->solution(),op_.eddy.rows*sizeof(cuDoubleComplex),cudaMemcpyDeviceToDevice,thermal_->stream()));
+        if(op_.stageMaterial)op_.stageMaterial(op_.materialOwner,thermal_->stream(),false);
+        cudaCheck(cudaStreamSynchronize(thermal_->stream()));cudaCheck(cudaGetLastError());
+        commitAccepted(eddyResult,thermalResult,false);
     }
     // Explicit observation only; never an intermediate Simulink transfer.
     std::vector<cuDoubleComplex> electromagneticState() {
