@@ -1,9 +1,9 @@
 """Build the isolated numeric Laplace FMM through Build.ps1 -FmmCudaOnly."""
 from pathlib import Path
-from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
 import argparse,ctypes,hashlib,json,os,socket,subprocess,tempfile,sys
 
 def main():
+    from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
     parser=argparse.ArgumentParser();parser.add_argument('--require-clean-source',action='store_true');args=parser.parse_args()
     root=Path(__file__).resolve().parents[3]
     if socket.gethostname().lower()!='t7920':raise RuntimeError('Candidate builds belong to 100')

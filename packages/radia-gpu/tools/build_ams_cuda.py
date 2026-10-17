@@ -1,6 +1,5 @@
 """Build the experimental AMS bridge through Build.ps1 -AmsCudaOnly on 100."""
 from pathlib import Path
-from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
 import argparse
 import hashlib
 import json
@@ -12,6 +11,7 @@ import sysconfig
 import ctypes
 
 def main(args):
+    from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
     import netgen
     import matlab.engine
     package=Path(__file__).resolve().parents[1]

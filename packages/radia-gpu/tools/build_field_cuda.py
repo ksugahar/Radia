@@ -1,6 +1,5 @@
 """Stage the experimental RadFld cloud CUDA module on the designated build host."""
 from pathlib import Path
-from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
 import argparse
 import hashlib
 import json
@@ -12,6 +11,7 @@ import ctypes
 
 
 def main():
+    from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--require-clean-source', action='store_true')
     args = parser.parse_args()
