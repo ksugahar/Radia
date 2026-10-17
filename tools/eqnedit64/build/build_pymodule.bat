@@ -2,22 +2,9 @@
 setlocal enabledelayedexpansion
 REM Build the TeX-only Eqnedit64 core module for background tests.
 
-where cl >nul 2>&1
-if not errorlevel 1 goto have_cl
+call "%~dp0select_vs2022.bat"
+if errorlevel 1 exit /b 1
 
-set "PFX86=%ProgramFiles(x86)%"
-set "VSWHERE=!PFX86!\Microsoft Visual Studio\Installer\vswhere.exe"
-set "VCVARS="
-if exist "!VSWHERE!" for /f "usebackq delims=" %%I in (`"!VSWHERE!" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (
-    if exist "%%I\VC\Auxiliary\Build\vcvars64.bat" set "VCVARS=%%I\VC\Auxiliary\Build\vcvars64.bat"
-)
-if not defined VCVARS (
-    echo [ERROR] vcvars64.bat not found. Install the Visual Studio C++ build tools.
-    exit /b 1
-)
-call "!VCVARS!" >nul 2>&1
-
-:have_cl
 cd /d "%~dp0.."
 for /f "usebackq delims=" %%I in (`python -c "import sysconfig;print(sysconfig.get_paths()['include'])"`) do set "PYINC=%%I"
 for /f "usebackq delims=" %%I in (`python -c "import pybind11;print(pybind11.get_include())"`) do set "PYBIND=%%I"
