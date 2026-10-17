@@ -1,6 +1,5 @@
 """Build the experimental NGSolve projection mexcuda bridge in an owned job."""
 from pathlib import Path
-from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
 import argparse,ctypes,hashlib,json,os,socket,subprocess,sys,tempfile
 import importlib.util
 import importlib.metadata
@@ -23,6 +22,7 @@ def projection_dependencies():
     return prefix,netgen,identity
 
 def main():
+    from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
     parser=argparse.ArgumentParser();parser.add_argument('--require-clean-source',action='store_true');args=parser.parse_args()
     root=Path(__file__).resolve().parents[3]
     dirty=bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip())
