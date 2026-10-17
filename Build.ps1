@@ -298,12 +298,12 @@ if (-not (Test-Path "$NetgenPackageDir\include")) {
 
 $PythonCMakeArgs = " ^`n    -DPython3_EXECUTABLE=`"$PythonExecutable`" ^`n    -Dpybind11_DIR=`"$Pybind11CMakeDir`""
 
-# Visual Studio (any version) via vswhere
+# CPU toolchain follows the MATLAB-compatible VS2022 / MSVC 14.44 policy.
 $VS_PATH = $null
 $CMAKE_EXE = $null
 $VSWHERE = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (Test-Path $VSWHERE) {
-    $VS_PATH = & $VSWHERE -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+    $VS_PATH = & $VSWHERE -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
     if ($VS_PATH) {
         $CMAKE_CANDIDATE = "$VS_PATH\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
         if (Test-Path $CMAKE_CANDIDATE) {
@@ -312,9 +312,17 @@ if (Test-Path $VSWHERE) {
     }
 }
 if (-not $VS_PATH) {
-    Write-Host "ERROR: Visual Studio (with VC x86/x64 tools) not found via vswhere." -ForegroundColor Red
-    Write-Host "Install Visual Studio Build Tools (any version)." -ForegroundColor Yellow
+    Write-Host "ERROR: Visual Studio Build Tools 2022 not found via vswhere." -ForegroundColor Red
     exit 1
+}
+$ToolsetVersionFile = Join-Path $VS_PATH 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt'
+if (-not (Test-Path -LiteralPath $ToolsetVersionFile)) {
+    throw "MSVC default toolset identity is missing: $ToolsetVersionFile"
+}
+$ToolsetVersion = (Get-Content -LiteralPath $ToolsetVersionFile -Raw).Trim()
+if ($ToolsetVersion -notmatch '^14\.44\.[0-9]+$' -or
+    -not (Test-Path -LiteralPath (Join-Path $VS_PATH "VC/Tools/MSVC/$ToolsetVersion/bin/Hostx64/x64/cl.exe"))) {
+    throw "Build requires the default MSVC 14.44 x64 toolset; found '$ToolsetVersion' at '$VS_PATH'"
 }
 if (-not $CMAKE_EXE) {
     # Fallback: pip-installed cmake
