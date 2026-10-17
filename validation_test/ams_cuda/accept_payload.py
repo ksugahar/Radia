@@ -4,6 +4,10 @@ Third-party DLLs are a private acceptance bundle, not a published wheel payload.
 No installation or source/runtime replacement occurs.
 """
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-gpu/tools'))
+from vs2022_toolchain import discover_vs, compiler_bin
+SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-gpu/tools/vs2022_toolchain.py"
 import argparse,hashlib,json,re,shutil,subprocess,sys
 import numpy as np
 from scipy.io import loadmat,savemat
@@ -36,7 +40,8 @@ def stage(out):
     net=Path(netgen.__file__).parent
     roots=[net,Path(sys.prefix)/'bin',net.parent/'ngsolve_openblas',Path(sys.base_prefix)]
     available={p.name.lower():p for r in roots for p in r.glob('*.dll') if not p.name.lower().startswith(('vcruntime','msvcp','vcomp'))}
-    dump=Path('C:/BuildTools/VS2022-CUDA/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/dumpbin.exe')
+    dump=compiler_bin(discover_vs())/'dumpbin.exe'
+    if not dump.is_file():raise RuntimeError('Selected VS2022 dumpbin.exe missing')
     queue=list(out.glob('*.mexw64'));imports={};external=set();done=set()
     while queue:
         p=queue.pop();name=p.name.lower()

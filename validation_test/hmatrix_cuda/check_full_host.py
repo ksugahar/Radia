@@ -1,5 +1,9 @@
 """Build full existing C HACApK with supported isolated MKL, no TaskManager."""
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-gpu/tools'))
+from vs2022_toolchain import discover_vs, compiler_bin
+SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-gpu/tools/vs2022_toolchain.py"
 import argparse, ctypes, hashlib, json, os, socket, subprocess
 
 def main():
@@ -7,8 +11,9 @@ def main():
     if socket.gethostname().lower()!='t7920':raise RuntimeError('Build belongs to 100')
     root=Path(__file__).resolve().parents[2];a.out.mkdir(parents=True,exist_ok=False)
     sources=[Path(__file__).with_suffix('.c'),root/'packages/radia-gpu/native/hmatrix_serial_host.c']+[root/'src/ext/HACApK'/s for s in ['cHACApK_base.c','cHACApK_cpp_impl.c','cHACApK_lib.c','cHACApK_pca_cluster.c']]
-    tracked=sources+[Path(__file__),root/'src/ext/HACApK/cHACApK_aca.inc']+list((root/'src/ext/HACApK').glob('*.h'))+[root/'src/core/rad_hacapk_parallel.h']
+    tracked=sources+[SELECTOR,Path(__file__),root/'src/ext/HACApK/cHACApK_aca.inc']+list((root/'src/ext/HACApK').glob('*.h'))+[root/'src/core/rad_hacapk_parallel.h']
     result=dict(schema='radia.hacapk-full-host.v1',accepted=False,scope='Synthetic full native cluster/leaf/ACA infrastructure; not CUDA or HDiv physical acceptance',source_commit=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip(),source_sha256={s.relative_to(root).as_posix():hashlib.sha256(s.read_bytes()).hexdigest() for s in tracked},cases={},timing_measured=False)
+    vs=discover_vs()
     try:
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
         if not (a.mkl_root/'include/mkl.h').is_file() or not (a.mkl_root/'lib/mkl_rt.lib').is_file():raise RuntimeError('Supported mkl-devel headers and import library required')
@@ -20,7 +25,7 @@ def main():
             exe=a.out/(mode+'.exe');batch=a.out/(mode+'.cmd')
             inputs=' '.join('"'+str(s)+'"' for s in sources)
             define='/DRAD_HACAPK_BATCH_ENTRIES' if mode=='batch' else ''
-            batch.write_text('@echo off\ncall "C:/BuildTools/VS2022-CUDA/VC/Auxiliary/Build/vcvars64.bat" >nul\n'+f'cl /nologo /TC /MD /O2 /Gy {define} /I"{root/"src/ext/HACApK"}" /I"{root/"src/core"}" /I"{a.mkl_root/"include"}" {inputs} /Fo:"{a.out}/" /Fe:"{exe}" /link /OPT:REF /LIBPATH:"{a.mkl_root/"lib"}" mkl_rt.lib\n',encoding='utf-8')
+            batch.write_text('@echo off\ncall "'+str(vs/'VC/Auxiliary/Build/vcvars64.bat')+'" >nul\n'+f'cl /nologo /TC /MD /O2 /Gy {define} /I"{root/"src/ext/HACApK"}" /I"{root/"src/core"}" /I"{a.mkl_root/"include"}" {inputs} /Fo:"{a.out}/" /Fe:"{exe}" /link /OPT:REF /LIBPATH:"{a.mkl_root/"lib"}" mkl_rt.lib\n',encoding='utf-8')
             built=subprocess.run(['cmd','/c',str(batch)],cwd=a.out,env=env,capture_output=True)
             (a.out/(mode+'-build.log')).write_bytes(built.stdout+built.stderr);built.check_returncode()
             run=subprocess.run([str(exe)],cwd=a.out,env=env,capture_output=True)

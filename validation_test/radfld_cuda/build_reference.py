@@ -1,5 +1,9 @@
 """Build an independent CPU pybind oracle from an explicit pre-CUDA Git commit."""
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-gpu/tools'))
+from vs2022_toolchain import discover_vs, compiler_bin
+SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-gpu/tools/vs2022_toolchain.py"
 import argparse
 import hashlib
 import json
@@ -28,7 +32,7 @@ def main():
         (out/name).write_bytes(data)
         hashes[name] = hashlib.sha256(data).hexdigest()
     net = Path(netgen.__file__).parent
-    vs = Path('C:/BuildTools/VS2022-CUDA')
+    vs = discover_vs()
     binary = out/'_radia_field_reference.pyd'
     adapter = Path(__file__).with_name('field_reference.cpp').read_bytes()
     source = out/'field_reference.cpp'
@@ -50,6 +54,7 @@ def main():
         subprocess.run(['cmd', '/c', str(batch)], stdout=log, stderr=subprocess.STDOUT, check=True)
     receipt = dict(schema='radia.field-cpu-reference.v1', source_commit=revision, source_sha256=hashes,
                    adapter_sha256=hashlib.sha256(adapter).hexdigest(),
+                   toolchain_selector_sha256=hashlib.sha256(SELECTOR.read_bytes()).hexdigest(),
                    binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                    ngsolve=__import__('ngsolve').__version__, python=sys.version)
     (out/'reference.json').write_text(json.dumps(receipt, indent=2)+'\n', encoding='utf-8')
