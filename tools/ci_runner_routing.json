@@ -264,9 +264,10 @@
         "tools/ci_distribution_contract.py",
         "tools/ci_distribution_manifest.json",
         "tools/pre_push_check.py",
-        "tools/local_push_checks.py"
+        "tools/local_push_checks.py",
+        "tools/validation_source_gate.py"
       ],
-      "audit_sha256": "bd027da993279ab331445bb34d8eb74a34064c2e3aa186a00b7073a777045094",
+      "audit_sha256": "fc3df4ac3f0f7a4fe2e067a42575e5332441fe111cb520596f4955cac8815758",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

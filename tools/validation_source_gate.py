@@ -28,7 +28,7 @@ SCHEMA = 'radia.validated-source.v1'
 MAX_AGE = timedelta(days=30)
 ROOT_INPUTS = {'CMakeLists.txt','Build.ps1','setup.py','pyproject.toml','MANIFEST.in',
                'tools/run_test_tier.py','tools/native_build_provenance.ps1',
-               'tools/validation_source_gate.py','tests/conftest.py','conftest.py'}
+               'tools/validation_source_gate.py','tests/conftest.py','conftest.py','.gitignore'}
 
 
 def digest(data):
@@ -71,13 +71,22 @@ def source_fingerprint(root, environment):
         profiles[name]=manifest['profiles'][name]
         name=profiles[name].get('extends')
     tracked=git(root,'ls-files','-z').split('\0')
+    # Inspect ignored as well as ordinary untracked input. Only reconstructible
+    # compiler/Python cache outputs are excluded; unknown inputs force execution.
+    untracked=git(root,'ls-files','--others','-z','--','src','validation_test','packages').split('\0')
+    generated={'.pyd','.dll','.lib','.obj','.exp','.pdb','.ilk','.pyc'}
+    for path in untracked:
+        if not path or any(part in {'__pycache__','.pytest_cache'} for part in Path(path).parts):
+            continue
+        if Path(path).suffix.lower() not in generated:
+            raise ValueError('untracked validation input: '+path)
     selected=[]
     def test_input(path):
         return path.startswith('tests/') and not (path.startswith(('tests/policy/','tests/ci_routing/','tests/validation_gate/','tests/test_ci_'))
             or path in {'tests/test_local_push_checks.py','tests/test_pre_push_check.py','tests/test_sparsesolv_ci_contract.py','tests/test_tier_manifest.json'})
     for path in tracked:
         if (path in ROOT_INPUTS or test_input(path) or path.startswith(('src/','validation_test/'))
-                or (path.startswith('packages/') and not any(x in path.split('/') for x in ('tests','docs')))):
+                or (path.startswith('packages/') and 'docs' not in path.split('/'))):
             selected.append(path)
     # All production, validation inputs/helpers/fixtures and relevant build files.
     # CI workflow routing and unrelated compact-test changes are not numerical inputs.
