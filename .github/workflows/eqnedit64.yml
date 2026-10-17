@@ -253,7 +253,11 @@ jobs:
           if ((Get-FileHash diagnostic-font.ttf -Algorithm SHA256).Hash -ne $expected -or (Get-FileHash assets/eqnedit-math.ttf -Algorithm SHA256).Hash -ne $expected) { throw 'Unexpected or non-reproducible product font.' }
 
       - name: Configure native build
-        run: cmake -S . -B build_cmake -G "Visual Studio 17 2022" -T "v143,version=14.44.35207" -A x64
+        run: |
+          cmake -S . -B build_cmake -G "Visual Studio 17 2022" -T "v143,version=14.44.35207" -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File build/assert_msvc1944.ps1 -BuildDirectory build_cmake
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build native targets
         run: cmake --build build_cmake --config Release --parallel 2
@@ -507,6 +511,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake -S . -B build_cmake -G "Visual Studio 17 2022" -T "v143,version=14.44.35207" -A x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File build/assert_msvc1944.ps1 -BuildDirectory build_cmake
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build_cmake --config Release --target Eqnedit64 --parallel 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmd.exe /d /c build\build_pymodule.bat
@@ -560,6 +566,8 @@ jobs:
             [ordered]@{diagnostic_only=$true;source_sha256=$original;output_sha256=$original;conversion='none';license='GUST Font License / LPPL'} | ConvertTo-Json | Set-Content diagnostic-font.json -Encoding utf8
           }
           cmake -S . -B build_cmake -G "Visual Studio 17 2022" -T "v143,version=14.44.35207" -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File build/assert_msvc1944.ps1 -BuildDirectory build_cmake
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build_cmake --config Release --target Eqnedit64 --parallel 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -677,6 +685,8 @@ jobs:
       - name: Build one standalone probe without running fonts
         run: |
           cmake -S . -B build_cmake -G "Visual Studio 17 2022" -T "v143,version=14.44.35207" -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File build/assert_msvc1944.ps1 -BuildDirectory build_cmake
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build_cmake --config Release --target font_lifecycle_probe --parallel 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

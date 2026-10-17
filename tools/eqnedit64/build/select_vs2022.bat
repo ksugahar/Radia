@@ -12,7 +12,10 @@ if not defined EQN_VSROOT (
     echo [ERROR] Visual Studio 2022 C++ tools are required. No older fallback.
     exit /b 1
 )
-if not exist "%EQN_VSROOT%\VC\Auxiliary\Build\vcvars64.bat" exit /b 1
+if not exist "%EQN_VSROOT%\VC\Auxiliary\Build\vcvars64.bat" (
+    echo [ERROR] vcvars64.bat is missing from the selected VS2022 installation.
+    exit /b 1
+)
 call "%EQN_VSROOT%\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.44.35207 >nul 2>&1
 if errorlevel 1 exit /b 1
 if not "%VisualStudioVersion%"=="17.0" (
@@ -30,6 +33,6 @@ if /I not "%EQN_FIRST_CL%"=="%VCToolsInstallDir%bin\Hostx64\x64\cl.exe" (
     exit /b 1
 )
 echo [INFO] VS2022 compiler: %EQN_FIRST_CL%
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; (Get-FileHash -LiteralPath $env:EQN_FIRST_CL -Algorithm SHA256).Hash"
+pwsh -NoProfile -File "%~dp0assert_msvc1944.ps1" -Compiler "%EQN_FIRST_CL%"
 if errorlevel 1 exit /b 1
 exit /b 0
