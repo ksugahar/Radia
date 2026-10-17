@@ -51,7 +51,7 @@ def test_untrusted_run_rejected(monkeypatch,tmp_path,field,value):
     with pytest.raises(ValueError):gate.verified_receipt(tmp_path,artifact(data),run,data,'fingerprint',NOW)
 
 
-@pytest.mark.parametrize('change',['archive','expired','expirytime','old','wrong-input','wrong-sha','failed-evidence','missing-digest','boolean-count'])
+@pytest.mark.parametrize('change',['archive','expired','expirytime','old','wrong-input','wrong-sha','failed-evidence','missing-digest','boolean-count','unknown-expiry','nonboolean-expiry'])
 def test_bad_artifact_rejected(monkeypatch,tmp_path,change):
     receipt,run=proof();xml=XML
     if change=='wrong-sha':receipt['source_sha']='b'*40
@@ -60,6 +60,8 @@ def test_bad_artifact_rejected(monkeypatch,tmp_path,change):
     data=archive(receipt,xml);meta=artifact(data)
     if change=='archive':data+=b'corrupt'
     if change=='expired':meta['expired']=True
+    if change=='unknown-expiry':meta.pop('expired')
+    if change=='nonboolean-expiry':meta['expired']=0
     if change=='expirytime':meta['expires_at']=NOW.isoformat()
     if change=='old':run['updated_at']=(NOW-timedelta(days=31)).isoformat()
     if change=='missing-digest':meta.pop('digest')
@@ -77,17 +79,17 @@ def test_main_ancestry_required(monkeypatch,tmp_path):
 
 def test_source_scope_includes_physics_inputs_but_not_workflow_routing(tmp_path,monkeypatch):
     files={'src/solver.py':'physics','validation_test/case/input.vol':'mesh','tests/conftest.py':'fixture',
-           'Build.ps1':'build','.github/workflows/sparsesolv.yml':'routing','tools/validation_source_gate.py':'gate'}
+           'packages/demo/tests/fixture.h5':'fixture-bytes','Build.ps1':'build','.github/workflows/sparsesolv.yml':'routing','tools/validation_source_gate.py':'gate'}
     for path,text in files.items():
         p=tmp_path/path;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(text)
     manifest=tmp_path/'tests/test_tier_manifest.json'
     manifest.write_text(json.dumps({'profiles':{'solver-heavy':{'paths':['validation_test/case/test.py']}}}))
     test=tmp_path/'validation_test/case/test.py';test.write_text('assert True');files[str(test.relative_to(tmp_path))]='assert True'
-    monkeypatch.setattr(gate,'git',lambda root,*args:'\0'.join(files) if args[0]=='ls-files' else '')
+    monkeypatch.setattr(gate,'git',lambda root,*args:'\0'.join(files) if args[0]=='ls-files' and '--others' not in args else '')
     initial,_=gate.source_fingerprint(tmp_path,{'deps':'1'})
     (tmp_path/'.github/workflows/sparsesolv.yml').write_text('new routing')
     assert gate.source_fingerprint(tmp_path,{'deps':'1'})[0]==initial
-    for path in ['src/solver.py','validation_test/case/input.vol','Build.ps1','tests/conftest.py']:
+    for path in ['src/solver.py','validation_test/case/input.vol','Build.ps1','tests/conftest.py','packages/demo/tests/fixture.h5']:
         p=tmp_path/path;p.write_text(files[path]+'changed')
         assert gate.source_fingerprint(tmp_path,{'deps':'1'})[0]!=initial
         p.write_text(files[path])
@@ -161,3 +163,16 @@ def test_old_xml_cannot_turn_empty_execution_into_pass(tmp_path,monkeypatch):
     monkeypatch.setattr(gate.subprocess,'run',lambda *a,**k:type('Result',(),{'returncode':0})())
     assert gate.run(tmp_path,out)==1
     assert not json.loads((out/'verification.json').read_text())['accepted']
+
+
+@pytest.mark.parametrize('input_path', ['src/extra.py', 'validation_test/case/generated.h5',
+                                       'packages/demo/tests/new_fixture.vol'])
+def test_unknown_untracked_inputs_prevent_reuse(tmp_path, monkeypatch, input_path):
+    manifest=tmp_path/'tests/test_tier_manifest.json'
+    manifest.parent.mkdir()
+    manifest.write_text(json.dumps({'profiles':{'solver-heavy':{'paths':[]}}}))
+    def files(root, *args):
+        return input_path if '--others' in args else 'src/solver.py'
+    monkeypatch.setattr(gate, 'git', files)
+    with pytest.raises(ValueError, match='untracked validation input'):
+        gate.source_fingerprint(tmp_path, {})
