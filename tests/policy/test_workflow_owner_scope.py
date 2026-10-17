@@ -13,7 +13,7 @@ SPEC = importlib.util.spec_from_file_location("ci_distribution_contract", ROOT /
 CONTRACT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CONTRACT)
 MANIFEST = CONTRACT.load(ROOT)
-SOLVER = {"radia-fast.yml", "build-test.yml", "release.yml"}
+SOLVER = {"radia.yml", "build-test.yml", "release.yml"}
 INDEPENDENT = {Path(lane["workflow"]).name for lane in MANIFEST["lanes"].values()} - SOLVER
 
 
@@ -47,17 +47,23 @@ def test_tracked_coverage_and_target_contract_with_explicit_debt():
 
 
 def test_exception_removal_is_allowed_but_growth_and_stale_entries_fail():
-    exceptions = MANIFEST["migration_exceptions"]
-    CONTRACT.check_shrink_only(exceptions[1:], EXCEPTION_CEILING)
-    expanded = copy.deepcopy(exceptions)
-    expanded[0]["pattern"] = "**"
+    # Production debt is now empty; exercise the algorithm with an isolated fixture.
+    fixture = {"id": "FIXTURE", "lane": "radia", "kind": "foreign_trigger",
+               "pattern": "unowned/**", "current": "fixture", "target": "remove",
+               "owner": "radia", "follow_up": "fixture only"}
+    ceiling = {fixture["id"]: CONTRACT.exception_digest(fixture)}
+    CONTRACT.check_shrink_only([], ceiling)
+    CONTRACT.check_shrink_only(MANIFEST["migration_exceptions"], EXCEPTION_CEILING)
+    expanded = copy.deepcopy(fixture); expanded["pattern"] = "**"
     with pytest.raises(ValueError, match="new or expanded"):
-        CONTRACT.check_shrink_only(expanded, EXCEPTION_CEILING)
-    new = copy.deepcopy(exceptions[0]); new["id"] = "UNAPPROVED"
+        CONTRACT.check_shrink_only([expanded], ceiling)
+    new = copy.deepcopy(fixture); new["id"] = "UNAPPROVED"
     with pytest.raises(ValueError, match="new or expanded"):
-        CONTRACT.check_shrink_only([new], EXCEPTION_CEILING)
+        CONTRACT.check_shrink_only([new], ceiling)
+    candidate = copy.deepcopy(MANIFEST)
+    candidate["migration_exceptions"] = [fixture]
     with pytest.raises(ValueError, match="resolved/unused"):
-        CONTRACT.exception_coverage(MANIFEST, set())
+        CONTRACT.exception_coverage(candidate, set())
 
 
 @pytest.mark.parametrize("change", ["owner", "reason", "selection", "root_catchall", "duplicate", "empty_attribution", "unknown_attribution"])
@@ -195,7 +201,16 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         "validation_test/radia_mcp/test_eddy_driven_region.py",
         "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
     }
-    assert shared == expected
+    routing_files = {"tools/ci_runner_routing.py", "tools/ci_runner_routing.json"}
+    # The common runner contract covers every distribution's actual jobs;
+    # the Radia source lane is its executing consumer, not new migration debt.
+    fast = yaml.safe_load((ROOT / ".github/workflows/radia.yml").read_text(encoding="utf-8"))
+    assert any("tools/ci_runner_routing.py" in step.get("run", "")
+               for step in fast["jobs"]["fast-contracts"]["steps"])
+    routing_source = (ROOT / "tools/ci_runner_routing.py").read_text(encoding="utf-8")
+    assert "tools/ci_runner_routing.json" in routing_source
+    expected |= routing_files
+    assert shared == expected | set(RADIA_LANE_READS)
     # The shared IH contracts execute the GPU package adapter against CPU Radia solvers.
     for path in ("tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
                  "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
@@ -237,30 +252,27 @@ def test_root_prose_and_release_events_do_not_become_native_path_gates():
     assert MANIFEST["root_content_diff"]["prose"] == "no_native_build"
 
 
-def test_solver_triggers_exclude_only_independent_workflows_and_policy_tests():
-    workflow = yaml.load((ROOT / ".github/workflows/radia-fast.yml").read_text(), Loader=yaml.BaseLoader)
+def test_solver_triggers_only_cpu_inputs_and_declared_consumers():
+    workflow = yaml.load((ROOT / ".github/workflows/radia.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
     for event in ("push", "pull_request"):
-        ignored = workflow["on"][event]["paths-ignore"]
-        excluded = lambda path: any(fnmatchcase(path, pattern) for pattern in ignored)
-        assert all(excluded(".github/workflows/" + name) for name in INDEPENDENT)
-        assert all(not excluded(".github/workflows/" + name) for name in SOLVER)
-        assert excluded("tests/policy/test_release_workflow_ref_gate.py")
-        assert excluded("packages/eqnedit64/src/eqnedit64/api.py")
-        assert excluded("tools/eqnedit64/src/office_html.cpp")
-        assert excluded("packages/radia-mcp/src/radia_mcp/presentation/tools.py")
-        for path in ("src/radia/__init__.py", "Build.ps1", "tests/test_wheel_package_policy.py", "tools/ci_preflight.py"):
-            assert not excluded(path), path
+        projection = CONTRACT.workflow_events(workflow)[event]
+        assert "paths-ignore" not in projection
+        for path in ("src/radia/__init__.py", "Build.ps1", "tests/test_wheel_package_policy.py", "tools/run_test_tier.py"):
+            assert CONTRACT.selected(path, projection), path
+        for path in ("packages/eqnedit64/src/eqnedit64/api.py", "tools/eqnedit64/src/office_html.cpp",
+                     "packages/radia-mcp/src/radia_mcp/presentation/tools.py", "README.md"):
+            assert not CONTRACT.selected(path, projection), path
 
 
 def test_policy_contracts_run_in_policy_lane():
-    workflow = (ROOT / ".github/workflows/policy-lint.yml").read_text()
+    workflow = (ROOT / ".github/workflows/policy-lint.yml").read_text(encoding="utf-8")
     assert "python -m pytest tests/policy/ tests/test_sparsesolv_ci_contract.py -q" in workflow
-    manifest = (ROOT / "tests/test_tier_manifest.json").read_text()
+    manifest = (ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8")
     assert "test_release_workflow_ref_gate.py" not in manifest
 
 
 def test_policy_lane_runs_for_every_distribution():
-    workflow = yaml.load((ROOT / ".github/workflows/policy-lint.yml").read_text(), Loader=yaml.BaseLoader)
+    workflow = yaml.load((ROOT / ".github/workflows/policy-lint.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
     for event in ("push", "pull_request"):
         assert "paths-ignore" not in workflow["on"][event]
         assert "paths" not in workflow["on"][event]
@@ -382,3 +394,42 @@ def test_cubit_lane_reincludes_every_packaged_markdown_pattern():
         paths = MANIFEST["lanes"]["cubit-mesh-export"]["events"][event]["paths"]
         assert "!**/*.md" in paths
         assert expected <= set(paths[paths.index("!**/*.md") + 1:]), event
+
+
+RADIA_LANE_READS = {'AGENTS.md': ('tests/test_wheel_package_policy.py', 'AGENTS.md'),
+ 'tools/git-hooks/pre-push': ('tests/test_wheel_package_policy.py', 'pre-push'),
+ 'tools/policy_lint.py': ('tests/test_radia_promotion_gate.py', 'policy_lint.py'),
+ 'tests/test_mcp_residual_vendor_contract.py': ('tests/test_mcp_residual_vendor_contract.py',
+                                                'src/radia/_residual_gate.py'),
+ 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py': ('tests/test_mcp_residual_vendor_contract.py',
+                                                                             'packages/radia-mcp'),
+ 'validation_test/radia_mcp/privacy_source_contract.py': ('tests/test_trace_reuse_evidence_contract.py',
+                                                          'privacy_source_contract.py'),
+ 'CLAUDE.md': ('tests/test_three_engine_agreement_gate.py', 'CLAUDE.md')}
+
+def test_radia_shared_inputs_have_readers_and_start_both_events():
+    for path, (reader, text) in RADIA_LANE_READS.items():
+        assert text in (ROOT / reader).read_text(encoding="utf-8"), (path, reader)
+        rule = CONTRACT.owner_rule(MANIFEST, path)
+        assert "radia" in rule["owners"] and rule["reason"]["kind"] == "integration"
+        assert all(CONTRACT.selected(path, MANIFEST["lanes"]["radia"]["events"][event])
+                   for event in ("push", "pull_request")), path
+
+
+def test_removed_cpu_contracts_keep_an_executable_repository_home():
+    import json
+    tiers = json.loads((ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8"))
+    transferred = tiers["profiles"]["repo-contracts"]["paths"]
+    expected = {
+        "tests/test_ci_execution_policy.py", "tests/test_ci_monitor.py",
+        "tests/test_release_quad_optuna_candidate.py", "tests/test_test_tier_policy.py",
+        "tests/test_run_test_tier.py", "tests/test_docs_notebook_contract.py",
+        "tests/test_application_interface_manifest.py", "tests/test_matlab_python_parity_manifest.py",
+        "tests/test_mdx_runner_pool.py",
+    }
+    assert expected <= set(transferred)
+    workflow = (ROOT / ".github/workflows/policy-lint.yml").read_text(encoding="utf-8")
+    assert "tools/run_test_tier.py --profile repo-contracts" in workflow
+    assert not set(transferred) & set(tiers["profiles"]["fast-contracts"]["paths"])
+    assert all((ROOT / path).is_file() for path in transferred)
+

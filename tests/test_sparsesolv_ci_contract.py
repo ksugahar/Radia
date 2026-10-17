@@ -24,7 +24,7 @@ beam = ["scipy"]
 
 
 def test_sparsesolv_is_in_native_release_and_focused_tiers_only():
-    profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["profiles"]
+    profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8"))["profiles"]
     assert SUITE in profiles["native-smoke"]["paths"]
     parallel = "tests/test_ams_internal_setup_parallel.py"
     additional = ["src/ext/sparsesolv/tests/test_hermitian_iccg.py",
@@ -36,7 +36,7 @@ def test_sparsesolv_is_in_native_release_and_focused_tiers_only():
 
 
 def test_solver_workflow_builds_before_testing_on_mdx():
-    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text(encoding="utf-8"))
     triggers = workflow.get("on", workflow.get(True))
     for event in ("push", "pull_request"):
         assert "src/ext/sparsesolv/**" in triggers[event]["paths"]
@@ -53,7 +53,7 @@ def test_solver_workflow_builds_before_testing_on_mdx():
 
 
 def test_ams_unavailable_is_not_a_silent_skip():
-    source = (ROOT / SUITE).read_text()
+    source = (ROOT / SUITE).read_text(encoding="utf-8")
     assert "pytest.skip(" not in source
     assert source.count("assert has_compact_ams()") == 3
 
@@ -118,12 +118,12 @@ def test_unknown_native_impact_fails_closed(tmp_path, monkeypatch, error):
         raise error
     monkeypatch.setattr(IMPACT, "required_for_event", fail)
     IMPACT.main([])
-    assert output.read_text().startswith("required=true\nreason=")
-    assert "fail closed" in output.read_text()
+    assert output.read_text(encoding="utf-8").startswith("required=true\nreason=")
+    assert "fail closed" in output.read_text(encoding="utf-8")
 
 
 def test_native_impact_gates_expensive_steps_and_watches_itself():
-    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text(encoding="utf-8"))
     triggers = workflow.get("on", workflow.get(True))
     for event in ("push", "pull_request"):
         assert "tools/sparsesolv_ci_impact.py" in triggers[event]["paths"]
@@ -216,7 +216,7 @@ def test_mixed_manifest_and_runtime_dependency_change_still_runs():
 def test_numerical_source_changes_select_built_ngsolve_lane(source):
     assert IMPACT.native_required("push", {"before": "a" * 40},
                                   lambda *args: source + "\0")[0]
-    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text(encoding="utf-8"))
     steps = workflow["jobs"]["ams-regression"]["steps"]
     numerical = next(s for s in steps if s.get("name") == "Run required NGSolve numerical contracts")
     assert "--profile solver-numerics" in numerical["run"]
@@ -226,7 +226,7 @@ def test_numerical_source_changes_select_built_ngsolve_lane(source):
 
 
 def test_ih_thermal_and_complex_ams_contracts_run_with_ngsolve():
-    profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["profiles"]
+    profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8"))["profiles"]
     required = {"tests/test_ih_axisym_coupled.py", "tests/test_ih_thermal_transfer.py",
                 "tests/test_ih_thermal_exposure.py",
                 "validation_test/induction_heating/test_fem_ams_parity.py"}
@@ -242,14 +242,18 @@ def test_numerical_tier_changes_cannot_skip_native_lane():
 
 def test_heavy_derivative_validation_remains_required_after_tier_split():
     path = "validation_test/topology_optimization/test_hex_cluster_derivative.py"
-    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text(encoding="utf-8"))
     steps = workflow["jobs"]["ams-regression"]["steps"]
-    heavy = next(s for s in steps if s.get("name") == "Run required heavier numerical validation")
-    assert "--profile solver-heavy" in heavy["run"]
+    heavy = next(s for s in steps if s.get("id") == "heavy-validation")
+    assert "tools/validation_source_gate.py" in heavy["run"]
+    gate = (ROOT / "tools/validation_source_gate.py").read_text(encoding="utf-8")
+    assert "PROFILE = 'solver-heavy'" in gate
+    assert "'tools/run_test_tier.py','--profile',PROFILE" in gate
     assert heavy["env"]["RADIA_TESTS_ALLOW_PARTIAL"] == "0"
-    assert "find('skipped') is None" in heavy["run"]
+    assert "('failure','error','skipped')" in gate
+    assert "if not cases or any" in gate
     assert "steps.native-impact.outputs.required == 'true'" in heavy["if"]
-    profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["profiles"]
+    profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8"))["profiles"]
     assert path in profiles["solver-heavy"]["paths"]
     assert path not in profiles["solver-numerics"]["paths"]
     assert IMPACT.native_required("push", {"before": "a" * 40},
@@ -260,7 +264,7 @@ def test_heavy_derivative_validation_remains_required_after_tier_split():
 
 
 def test_cpu_lane_excludes_foreign_runtime_and_integration_gates():
-    workflow = yaml.load((ROOT / ".github/workflows/sparsesolv.yml").read_text(), Loader=yaml.BaseLoader)
+    workflow = yaml.load((ROOT / ".github/workflows/sparsesolv.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
     excluded = [
         "src/runtime/ih/radia_ih_thermal.cpp",
         "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
@@ -269,7 +273,7 @@ def test_cpu_lane_excludes_foreign_runtime_and_integration_gates():
     for event in ("push", "pull_request"):
         for path in excluded:
             assert not IMPACT.CONTRACT.selected(path, workflow["on"][event]), path
-    profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["profiles"]
+    profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8"))["profiles"]
     for name in ("solver-numerics", "solver-heavy", "native-build-contracts"):
         assert set(excluded).isdisjoint(profiles[name]["paths"])
     steps = workflow["jobs"]["ams-regression"]["steps"]
@@ -281,7 +285,7 @@ def test_cpu_lane_excludes_foreign_runtime_and_integration_gates():
 
 
 def test_native_solver_lane_builds_required_axisymmetric_extension():
-    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text(encoding="utf-8"))
     steps = workflow["jobs"]["ams-regression"]["steps"]
     build = next(s for s in steps if s.get("name") == "Build current package and SparseSolv")
     assert ".\\Build.ps1 -AxiFemOnly" in build["run"]
@@ -301,7 +305,7 @@ def test_axifem_build_links_python_from_the_base_interpreter():
 
 @pytest.mark.parametrize("changed", ["src/radia/p1_linear.py", "tests/test_p1_linear.py"])
 def test_p1_linear_routes_to_solver_numerics_and_native_ci(changed):
-    manifest = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())
+    manifest = json.loads((ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8"))
     test = "tests/test_p1_linear.py"
     assert test in manifest["impact_rules"]["src/radia/p1_linear.py"]
     assert test in manifest["profiles"]["solver-numerics"]["paths"]
@@ -309,7 +313,7 @@ def test_p1_linear_routes_to_solver_numerics_and_native_ci(changed):
     assert IMPACT.native_required(
         "push", {"before": "a" * 40}, lambda *args: changed + "\0"
     )[0]
-    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text(encoding="utf-8"))
     triggers = workflow.get("on", workflow.get(True))
     for event in ("push", "pull_request"):
         assert changed in triggers[event]["paths"]
@@ -623,7 +627,15 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
             if lane == "sparsesolv":
                 profiles = [name for name in ("solver-numerics", "solver-heavy")
                             if path in tier[name]["paths"]]
-                assert profiles and all("--profile " + name in scripts for name in profiles)
+                assert profiles
+                for name in profiles:
+                    if name == "solver-heavy":
+                        assert "tools/validation_source_gate.py" in scripts
+                        gate = (ROOT / "tools/validation_source_gate.py").read_text(encoding="utf-8")
+                        assert "PROFILE = 'solver-heavy'" in gate
+                        assert "'tools/run_test_tier.py','--profile',PROFILE" in gate
+                    else:
+                        assert "--profile " + name in scripts
             elif lane == "radia-gpu":
                 project = (ROOT / "packages/radia-gpu/tests/native/CMakeLists.txt").read_text(encoding="utf-8")
                 assert path in project
@@ -652,17 +664,14 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
                        for e in ("push", "pull_request")), (lane, path)
     mcp_workflow = yaml.load((ROOT / ".github/workflows/radia-mcp-matrix.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
     assert "numerical-validation" not in mcp_workflow["jobs"]
-    # The lightweight router contract remains in the repository impact lane.
+    # #421 runs the router contract once in the always-on Ubuntu policy job.
     spec = importlib.util.spec_from_file_location("tier_coverage", ROOT / "tools/run_test_tier.py")
     tier_router = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tier_router)
     router_test = "tests/test_sparsesolv_ci_contract.py"
     selected = tier_router.select_impact_tests(tier["fast-contracts"]["paths"], [router_test],
                                                profile_name="fast-contracts")
-    assert router_test in selected
-    repo_workflow = yaml.load((ROOT / ".github/workflows/radia-fast.yml").read_text(), Loader=yaml.BaseLoader)
-    repo_scripts = "\n".join(step.get("run", "") for job in repo_workflow["jobs"].values()
-                             for step in job.get("steps", []))
-    assert "--profile fast-contracts" in repo_scripts and "--since" in repo_scripts
-    assert all(IMPACT.CONTRACT.selected(router_test, data["lanes"]["radia-fast"]["events"][e])
-               for e in ("push", "pull_request"))
+    assert router_test not in selected
+    assert router_test not in tier["repo-contracts"]["paths"]
+    assert all(IMPACT.CONTRACT.selected(router_test, data["lanes"]["policy-lint"]["events"][event])
+               for event in ("push", "pull_request"))

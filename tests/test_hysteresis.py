@@ -5,6 +5,7 @@ Tests Play model creation, Forward/Inverse, state management,
 solver integration, and round-trip accuracy.
 """
 
+from pathlib import Path
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
@@ -253,25 +254,23 @@ class TestShapeFunctionIdentificationRegression:
     """Regression tests for the JMAG shape function identification pipeline.
 
     These tests would have caught the three hysteresis_io.py bugs fixed on
-    2026-05-02 (load_mat .flat[0] bug, sort direction inverted, r=0 anchor
+    2026-05-02 (branch reader .flat[0] bug, sort direction inverted, r=0 anchor
     lost to fp rounding). Each bug produced shape functions that
     individually look reasonable but fail to reproduce the input descending
     branches when fed back through the Play model.
     """
 
-    def test_load_mat_preserves_full_branch(self):
-        """load_mat must return all H/B values, not just the first scalar."""
-        from radia.hysteresis_io import load_mat
-        mat_file = (r"W:\999_菅原賢悟\19_磁気ヒステリシス\2024_IGTE_共同研究"
-                    r"\2024_03_08_H-input_B-input\Potter_Schmulian\B_input.mat")
-        if not os.path.exists(mat_file):
-            pytest.skip("Potter-Schmulian B_input.mat not available")
-        loops, dB, BMax = load_mat(mat_file)
+    def test_load_hdf5_preserves_full_branch(self):
+        """load_hdf5 must return all H/B values, not just the first scalar."""
+        from radia.hysteresis_io import load_hdf5
+        hdf5_file = str(Path(__file__).resolve().parents[1] / "validation_test/hysteresis/fixtures/potter_schmulian/B_input.hdf5")
+        assert Path(hdf5_file).is_file(), "Required HDF5 fixture missing"
+        loops, dB, BMax = load_hdf5(hdf5_file)
         # Each loop must have B and H of length > 1; the .flat[0] bug
         # produced single-element arrays.
         for i, loop in enumerate(loops):
             assert len(loop['B']) > 1, \
-                f"loop[{i}] has only {len(loop['B'])} B-points (load_mat regression)"
+                f"loop[{i}] has only {len(loop['B'])} B-points (load_hdf5 regression)"
             assert len(loop['H']) == len(loop['B']), \
                 f"loop[{i}]: H/B length mismatch"
 
@@ -282,14 +281,12 @@ class TestShapeFunctionIdentificationRegression:
         finite-difference operator). Forward-evaluating the identified Play
         model on the same B trajectory must reconstruct H to machine
         precision (< 1e-9 A/m). Any deviation indicates a bug in
-        build_shape_functions, load_mat, or the Play evaluator.
+        build_shape_functions, load_hdf5, or the Play evaluator.
         """
-        from radia.hysteresis_io import load_mat, build_shape_functions
-        mat_file = (r"W:\999_菅原賢悟\19_磁気ヒステリシス\2024_IGTE_共同研究"
-                    r"\2024_03_08_H-input_B-input\Potter_Schmulian\B_input.mat")
-        if not os.path.exists(mat_file):
-            pytest.skip("Potter-Schmulian B_input.mat not available")
-        loops, dB, BMax = load_mat(mat_file)
+        from radia.hysteresis_io import load_hdf5, build_shape_functions
+        hdf5_file = str(Path(__file__).resolve().parents[1] / "validation_test/hysteresis/fixtures/potter_schmulian/B_input.hdf5")
+        assert Path(hdf5_file).is_file(), "Required HDF5 fixture missing"
+        loops, dB, BMax = load_hdf5(hdf5_file)
         eta, f_tables, _ = build_shape_functions(loops, dB)
         K = len(eta)
 
@@ -343,7 +340,7 @@ class TestShapeFunctionIdentificationRegression:
         assert max_err < 1e-9, \
             (f"JMAG identification reconstruction error {max_err:.3e} A/m "
              f"exceeds 1e-9 tolerance — possible regression in "
-             f"hysteresis_io.build_shape_functions or load_mat.")
+             f"hysteresis_io.build_shape_functions or load_hdf5.")
 
     def test_inverse_monotone_continuous_sweep(self, full_fixture):
         """Virgin Play material driven by continuous ascending H sweep should
@@ -548,12 +545,10 @@ class TestShapeFunctionIdentificationRegression:
         noise caused `Bplay >= 0` to drop the middle index, leaving
         f_k tables that started at r = dB/2 instead of 0.
         """
-        from radia.hysteresis_io import load_mat, build_shape_functions
-        mat_file = (r"W:\999_菅原賢悟\19_磁気ヒステリシス\2024_IGTE_共同研究"
-                    r"\2024_03_08_H-input_B-input\Potter_Schmulian\B_input.mat")
-        if not os.path.exists(mat_file):
-            pytest.skip("Potter-Schmulian B_input.mat not available")
-        loops, dB, BMax = load_mat(mat_file)
+        from radia.hysteresis_io import load_hdf5, build_shape_functions
+        hdf5_file = str(Path(__file__).resolve().parents[1] / "validation_test/hysteresis/fixtures/potter_schmulian/B_input.hdf5")
+        assert Path(hdf5_file).is_file(), "Required HDF5 fixture missing"
+        loops, dB, BMax = load_hdf5(hdf5_file)
         _, f_tables, _ = build_shape_functions(loops, dB)
         for k, (r, f) in enumerate(f_tables):
             r0 = float(np.asarray(r)[0])

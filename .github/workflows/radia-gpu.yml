@@ -149,8 +149,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $nativeBuild = Join-Path $env:RUNNER_TEMP "radia-gpu-native-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vs = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+          $vs = (& $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
           if ($LASTEXITCODE -ne 0 -or -not $vs) { throw 'MSVC installation not found' }
+          $toolset = (Get-Content -LiteralPath (Join-Path $vs 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
+          if ($toolset -notmatch '^14\.44\.[0-9]+$') { throw "MSVC 14.44 required, found $toolset" }
+          $compiler = Join-Path $vs "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/cl.exe"
+          if ((Get-Item -LiteralPath $compiler).VersionInfo.FileVersion -notmatch '^19\.44\.') { throw 'cl.exe 19.44 required' }
           $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
           & cmd.exe /d /c "call `"$vcvars`" && cmake -S packages/radia-gpu/tests/native -B `"$nativeBuild`" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

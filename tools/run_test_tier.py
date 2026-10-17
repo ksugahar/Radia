@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -80,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     command = [sys.executable, "-m", "pytest", *paths]
+    if args.profile == "repo-contracts":
+        command.extend(("-p", "repository_contract_scratch"))
     if args.collect_only:
         command.append("--collect-only")
     if not args.verbose:
@@ -92,7 +95,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Radia test tier {args.profile}: {len(paths)} files", flush=True)
     started = time.monotonic()
-    result = subprocess.run(command, cwd=ROOT)
+    environment = dict(os.environ)
+    if args.profile == "repo-contracts":
+        environment["PYTHONPATH"] = str(ROOT / "tools") + os.pathsep + environment.get("PYTHONPATH", "")
+    result = subprocess.run(command, cwd=ROOT, env=environment)
     elapsed = time.monotonic() - started
     print(f"Radia test tier {args.profile}: elapsed={elapsed:.2f}s", flush=True)
     if result.returncode == 0 and not args.collect_only and budget is not None:
@@ -208,9 +214,13 @@ def select_impact_tests(
     current_references = {test for tests in rules.values() for test in tests}
     current_references.update(test for profile in manifest.get('profiles', {}).values()
                               for test in profile.get('paths', []))
+    repository_paths = set(manifest.get("profiles", {}).get("repo-contracts", {}).get("paths", []))
+    policy_paths = {"tests/test_sparsesolv_ci_contract.py"}
     runnable = []
     numerical_paths = set(manifest.get('profiles', {}).get('solver-numerics', {}).get('paths', []))
     for path in selected:
+        if profile_name == "fast-contracts" and path in repository_paths | policy_paths:
+            continue  # These exact tests run in the always-on repository lane.
         if not (ROOT / path).is_file():
             if path in manifest_tests and path not in current_references:
                 print(f'Retired test removed from manifest and checkout: {path}')

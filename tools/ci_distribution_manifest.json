@@ -206,6 +206,9 @@
         ],
         "sparsesolv": [
           "radia"
+        ],
+        "repo-contracts": [
+          "repo"
         ]
       }
     }
@@ -293,11 +296,12 @@
       "pattern": "AGENTS.md",
       "owners": [
         "repo",
-        "radia-mcp"
+        "radia-mcp",
+        "radia"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "radia-mcp Optuna oracle audit checks that the Optuna policy blocks of both agent policies stay identical."
+        "detail": "radia-mcp Optuna oracle audit checks that the Optuna policy blocks of both agent policies stay identical. CPU contract tests/test_wheel_package_policy.py consumes this input."
       },
       "selection": "all_owners"
     },
@@ -329,11 +333,12 @@
       "pattern": "CLAUDE.md",
       "owners": [
         "repo",
-        "radia-mcp"
+        "radia-mcp",
+        "radia"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "radia-mcp Optuna oracle audit checks that the Optuna policy blocks of both agent policies stay identical."
+        "detail": "radia-mcp Optuna oracle audit checks that the Optuna policy blocks of both agent policies stay identical. CPU contract tests/test_three_engine_agreement_gate.py consumes this input."
       },
       "selection": "all_owners"
     },
@@ -1028,7 +1033,7 @@
       ]
     },
     {
-      "pattern": ".github/workflows/radia-fast.yml",
+      "pattern": ".github/workflows/radia.yml",
       "owners": [
         "radia"
       ]
@@ -1658,7 +1663,7 @@
       ],
       "reason": {
         "kind": "integration",
-        "detail": "MCP NGSolve numerical consumer contracts require the CPU Radia build and run in the solver integration profiles."
+        "detail": "MCP NGSolve numerical consumer contracts require the CPU Radia build and run in the solver integration profiles. CPU contract tests/test_mcp_residual_vendor_contract.py consumes this input."
       },
       "selection": "all_owners"
     },
@@ -1901,6 +1906,100 @@
         "detail": "The repository .msh audit validates radia mesh assets with the radia-mcp Gmsh validator."
       },
       "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/git-hooks/pre-push",
+      "owners": [
+        "repo",
+        "radia"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "CPU contract tests/test_wheel_package_policy.py consumes this input."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/policy_lint.py",
+      "owners": [
+        "repo",
+        "radia"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "CPU contract tests/test_radia_promotion_gate.py consumes this input."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tests/test_mcp_residual_vendor_contract.py",
+      "owners": [
+        "radia-mcp",
+        "radia"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "CPU contract tests/test_mcp_residual_vendor_contract.py consumes this input."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "validation_test/radia_mcp/privacy_source_contract.py",
+      "owners": [
+        "radia-mcp",
+        "radia"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "CPU contract tests/test_trace_reuse_evidence_contract.py consumes this input."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/ci_runner_routing.py",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64",
+        "repo"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Cross-distribution workflow capability routing is checked by the source-contract lane before local execution; unknown jobs and unaudited lightweight execution fail closed."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/ci_runner_routing.json",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64",
+        "repo"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Cross-distribution workflow capability routing is checked by the source-contract lane before local execution; unknown jobs and unaudited lightweight execution fail closed."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/validation_source_gate.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tests/validation_gate/**",
+      "owners": [
+        "radia"
+      ]
     }
   ],
   "shared_include_closures": [
@@ -2296,8 +2395,8 @@
       "content_diff_active": [],
       "required_paths": []
     },
-    "radia-fast": {
-      "workflow": ".github/workflows/radia-fast.yml",
+    "radia": {
+      "workflow": ".github/workflows/radia.yml",
       "owners": [
         "radia"
       ],
@@ -2308,52 +2407,206 @@
           "branches": [
             "main"
           ],
-          "paths-ignore": [
-            "packages/radia-mcp/**",
-            "tests/mcp_server/**",
-            "packages/cubit-mesh-export/**",
-            "packages/radia-optuna/**",
-            "packages/radia-gpu/**",
-            "packages/eqnedit64/**",
-            "tools/eqnedit64/**",
-            "tests/policy/**",
-            ".github/workflows/eqnedit64.yml",
-            ".github/workflows/release-eqnedit64-pypi.yml",
-            ".github/workflows/radia-mcp-matrix.yml",
-            ".github/workflows/cubit-mesh-export.yml",
-            ".github/workflows/radia-optuna.yml",
-            ".github/workflows/release-radia-optuna.yml",
-            ".github/workflows/radia-gpu.yml",
-            ".github/workflows/radia-gpu-release.yml",
-            ".github/workflows/sparsesolv.yml",
-            ".github/workflows/policy-lint.yml",
-            ".github/workflows/ltspice-data-safety.yml"
+          "paths": [
+            "src/radia/**",
+            "src/core/**",
+            "src/lib/**",
+            "src/ext/HACApK/**",
+            "src/ext/sparsesolv/**",
+            "src/radia.cpp",
+            "tests/conftest.py",
+            "tests/test_three_engine_agreement_gate.py",
+            "tests/test_omega_quadrature_plateau.py",
+            "tests/test_esrf6_repaired_acceptance_record.py",
+            "tests/test_radia_promotion_gate.py",
+            "tests/test_mcp_residual_vendor_contract.py",
+            "tests/test_trace_reuse_evidence_contract.py",
+            "tests/test_ih_energy_audit_contract.py",
+            "tests/test_wheel_package_policy.py",
+            "tests/axifem/test_docs_notebook_evidence.py",
+            "tests/showcase/test_result_readers.py",
+            "tests/test_version_consistency.py",
+            "tests/test_bem_complete_reaction.py",
+            "tests/test_bem_loop_hacapk.py",
+            "tests/test_bem_loop_panel_impedance.py",
+            "tests/test_bem_loop_work_pairings.py",
+            "tests/test_bem_sibc_acceptance.py",
+            "tests/test_bem_strong_panel_impedance.py",
+            "tests/test_bh_law.py",
+            "tests/test_build_failure_propagation.py",
+            "tests/test_calc_fem_kelvin_fail_loud.py",
+            "tests/test_element_line_quadrature_contract.py",
+            "tests/test_envelope_stop_core.py",
+            "tests/test_esrf6_mesh_identity.py",
+            "tests/test_esrf_mixed_quadrature_wiring.py",
+            "tests/test_esrf_three_engine_finite_gate.py",
+            "tests/test_hdiv_bh_table_saturation_contract.py",
+            "tests/test_hdiv_energy_material_consistency.py",
+            "tests/test_hdiv_newton_failure_contract.py",
+            "tests/test_ih_heat_boundaries.py",
+            "tests/test_ih_panel_esim_assembly.py",
+            "tests/test_lamination_api.py",
+            "tests/test_maglev_sphere_golden.py",
+            "tests/test_omega_block_action_diagnostics.py",
+            "tests/test_p1_linear.py",
+            "tests/test_panel_esim_complete_state.py",
+            "tests/test_patch_recovery.py",
+            "tests/test_public_runtime_privacy.py",
+            "tests/test_rotating_magnet_eddy_golden.py",
+            "tests/test_surface_rom_linear_gate_contract.py",
+            "tests/test_team21a_geometry_source.py",
+            "tests/test_team28_arnoldi_golden.py",
+            "tests/test_wedge_charge_pullback_contract.py",
+            "validation_test/esrf_three_engine/**",
+            "validation_test/c_type_three_engine/**",
+            "validation_test/omega_quadrature/**",
+            "validation_test/mixed_omega_trace_reuse/**",
+            "validation_test/showcase/**",
+            "validation_test/feec/**",
+            "validation_test/quadrupole_cefc2020/**",
+            "validation_test/accelerator/**",
+            "docs/axifem/**",
+            "docs/complex_coil_geometry/complex_coil.ipynb",
+            "docs/electric_machine/cogging_skew_demo.ipynb",
+            "docs/stream_function/theory.ipynb",
+            "docs/maglev/maglev_showcase.ipynb",
+            "docs/gmsh_post/em_particle_orbits.ipynb",
+            "docs/esim_spatial/esim_spatial_demo.ipynb",
+            "Build_Wheel.ps1",
+            "setup.py",
+            ".github/workflows/radia.yml",
+            ".github/workflows/build-test.yml",
+            ".github/workflows/release.yml",
+            "CMakeLists.txt",
+            "Build.ps1",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/run_test_tier.py",
+            "tools/validation_source_gate.py",
+            "tests/validation_gate/**",
+            "tools/audit_taskmanager.py",
+            "tools/verify_cpu_wheel.py",
+            "tools/verify_radia_promotion.py",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_runner_routing.py",
+            "tools/ci_runner_routing.json",
+            "tests/ci_routing/**",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "tools/git-hooks/pre-push",
+            "tools/policy_lint.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
+            "validation_test/radia_mcp/privacy_source_contract.py",
+            "validation_test/axifem/axifem_element_evidence.json",
+            "!**/*.md",
+            "AGENTS.md",
+            "CLAUDE.md"
           ]
         },
         "pull_request": {
           "branches": [
             "main"
           ],
-          "paths-ignore": [
-            "packages/radia-mcp/**",
-            "tests/mcp_server/**",
-            "packages/cubit-mesh-export/**",
-            "packages/radia-optuna/**",
-            "packages/radia-gpu/**",
-            "packages/eqnedit64/**",
-            "tools/eqnedit64/**",
-            "tests/policy/**",
-            ".github/workflows/eqnedit64.yml",
-            ".github/workflows/release-eqnedit64-pypi.yml",
-            ".github/workflows/radia-mcp-matrix.yml",
-            ".github/workflows/cubit-mesh-export.yml",
-            ".github/workflows/radia-optuna.yml",
-            ".github/workflows/release-radia-optuna.yml",
-            ".github/workflows/radia-gpu.yml",
-            ".github/workflows/radia-gpu-release.yml",
-            ".github/workflows/sparsesolv.yml",
-            ".github/workflows/policy-lint.yml",
-            ".github/workflows/ltspice-data-safety.yml"
+          "paths": [
+            "src/radia/**",
+            "src/core/**",
+            "src/lib/**",
+            "src/ext/HACApK/**",
+            "src/ext/sparsesolv/**",
+            "src/radia.cpp",
+            "tests/conftest.py",
+            "tests/test_three_engine_agreement_gate.py",
+            "tests/test_omega_quadrature_plateau.py",
+            "tests/test_esrf6_repaired_acceptance_record.py",
+            "tests/test_radia_promotion_gate.py",
+            "tests/test_mcp_residual_vendor_contract.py",
+            "tests/test_trace_reuse_evidence_contract.py",
+            "tests/test_ih_energy_audit_contract.py",
+            "tests/test_wheel_package_policy.py",
+            "tests/axifem/test_docs_notebook_evidence.py",
+            "tests/showcase/test_result_readers.py",
+            "tests/test_version_consistency.py",
+            "tests/test_bem_complete_reaction.py",
+            "tests/test_bem_loop_hacapk.py",
+            "tests/test_bem_loop_panel_impedance.py",
+            "tests/test_bem_loop_work_pairings.py",
+            "tests/test_bem_sibc_acceptance.py",
+            "tests/test_bem_strong_panel_impedance.py",
+            "tests/test_bh_law.py",
+            "tests/test_build_failure_propagation.py",
+            "tests/test_calc_fem_kelvin_fail_loud.py",
+            "tests/test_element_line_quadrature_contract.py",
+            "tests/test_envelope_stop_core.py",
+            "tests/test_esrf6_mesh_identity.py",
+            "tests/test_esrf_mixed_quadrature_wiring.py",
+            "tests/test_esrf_three_engine_finite_gate.py",
+            "tests/test_hdiv_bh_table_saturation_contract.py",
+            "tests/test_hdiv_energy_material_consistency.py",
+            "tests/test_hdiv_newton_failure_contract.py",
+            "tests/test_ih_heat_boundaries.py",
+            "tests/test_ih_panel_esim_assembly.py",
+            "tests/test_lamination_api.py",
+            "tests/test_maglev_sphere_golden.py",
+            "tests/test_omega_block_action_diagnostics.py",
+            "tests/test_p1_linear.py",
+            "tests/test_panel_esim_complete_state.py",
+            "tests/test_patch_recovery.py",
+            "tests/test_public_runtime_privacy.py",
+            "tests/test_rotating_magnet_eddy_golden.py",
+            "tests/test_surface_rom_linear_gate_contract.py",
+            "tests/test_team21a_geometry_source.py",
+            "tests/test_team28_arnoldi_golden.py",
+            "tests/test_wedge_charge_pullback_contract.py",
+            "validation_test/esrf_three_engine/**",
+            "validation_test/c_type_three_engine/**",
+            "validation_test/omega_quadrature/**",
+            "validation_test/mixed_omega_trace_reuse/**",
+            "validation_test/showcase/**",
+            "validation_test/feec/**",
+            "validation_test/quadrupole_cefc2020/**",
+            "validation_test/accelerator/**",
+            "docs/axifem/**",
+            "docs/complex_coil_geometry/complex_coil.ipynb",
+            "docs/electric_machine/cogging_skew_demo.ipynb",
+            "docs/stream_function/theory.ipynb",
+            "docs/maglev/maglev_showcase.ipynb",
+            "docs/gmsh_post/em_particle_orbits.ipynb",
+            "docs/esim_spatial/esim_spatial_demo.ipynb",
+            "Build_Wheel.ps1",
+            "setup.py",
+            ".github/workflows/radia.yml",
+            ".github/workflows/build-test.yml",
+            ".github/workflows/release.yml",
+            "CMakeLists.txt",
+            "Build.ps1",
+            "pyproject.toml",
+            "MANIFEST.in",
+            "tests/test_tier_manifest.json",
+            "tools/run_test_tier.py",
+            "tools/validation_source_gate.py",
+            "tests/validation_gate/**",
+            "tools/audit_taskmanager.py",
+            "tools/verify_cpu_wheel.py",
+            "tools/verify_radia_promotion.py",
+            "tools/sparsesolv_ci_impact.py",
+            "tools/ci_runner_routing.py",
+            "tools/ci_runner_routing.json",
+            "tests/ci_routing/**",
+            "tools/ci_distribution_contract.py",
+            "tools/ci_distribution_manifest.json",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "tools/git-hooks/pre-push",
+            "tools/policy_lint.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
+            "validation_test/radia_mcp/privacy_source_contract.py",
+            "validation_test/axifem/axifem_element_evidence.json",
+            "!**/*.md",
+            "AGENTS.md",
+            "CLAUDE.md"
           ]
         },
         "workflow_dispatch": {}
@@ -2362,7 +2615,10 @@
         "tools/run_test_tier.py",
         "tools/sparsesolv_ci_impact.py:required_for_event"
       ],
-      "markdown_inputs": [],
+      "markdown_inputs": [
+        "AGENTS.md",
+        "CLAUDE.md"
+      ],
       "content_diff_active": [
         "CMakeLists.txt",
         "Build.ps1",
@@ -3055,8 +3311,12 @@
             "tests/test_native_build_provenance.py",
             "tools/sparsesolv_ci_impact.py",
             ".github/workflows/sparsesolv.yml",
+            "tools/validation_source_gate.py",
+            "tests/validation_gate/**",
             "pyproject.toml",
             "tests/test_tier_manifest.json",
+            "src/radia/lamination.py",
+            "tests/test_lamination_api.py",
             "MANIFEST.in",
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
@@ -3230,8 +3490,12 @@
             "tests/test_native_build_provenance.py",
             "tools/sparsesolv_ci_impact.py",
             ".github/workflows/sparsesolv.yml",
+            "tools/validation_source_gate.py",
+            "tests/validation_gate/**",
             "pyproject.toml",
             "tests/test_tier_manifest.json",
+            "src/radia/lamination.py",
+            "tests/test_lamination_api.py",
             "MANIFEST.in",
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
@@ -3253,7 +3517,15 @@
             "!**/*.md"
           ]
         },
-        "workflow_dispatch": {}
+        "workflow_dispatch": {
+          "inputs": {
+            "force_validation": {
+              "description": "Execute full solver-heavy validation without receipt reuse",
+              "type": "boolean",
+              "default": "true"
+            }
+          }
+        }
       },
       "selector_refs": [
         "tools/sparsesolv_ci_impact.py:native_required",
@@ -3276,226 +3548,5 @@
       ]
     }
   },
-  "migration_exceptions": [
-    {
-      "id": "CI-MIG-023",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": ".agents/**",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-024",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": ".claude/**",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-025",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": ".gitattributes",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-026",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": ".github/**",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-027",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": ".gitignore",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-028",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": ".pre-commit-config.yaml",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-029",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": ".satk/**",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-030",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "AGENTS.md",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-031",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "BUILD.md",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-032",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "CHANGELOG.md",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-033",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "CLAUDE.md",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-034",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "CONTRIBUTING.md",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-035",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "COPYRIGHT.txt",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-036",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "LICENSE",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-038",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "README.md",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-039",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "ROADMAP.md",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-040",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "SECURITY.md",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-041",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "docs/**",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-043",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "src/**",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-044",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "tests/**",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-045",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "tools/**",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    },
-    {
-      "id": "CI-MIG-046",
-      "lane": "radia-fast",
-      "kind": "foreign_trigger",
-      "pattern": "validation_test/**",
-      "current": "Current envelope admits a foreign-owned input.",
-      "target": "Restrict triggers to owners or narrow consumer contracts, without fake sharing.",
-      "owner": "radia",
-      "follow_up": "radia-fast owner lane PR; repository management owns shared routing"
-    }
-  ]
+  "migration_exceptions": []
 }
