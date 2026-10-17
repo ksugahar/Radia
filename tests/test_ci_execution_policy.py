@@ -320,8 +320,8 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     normalized = " ".join(policy.split())
     assert "with the `100` runner label" in normalized
     assert "LAB/102 tests radia and radia-mcp wheels without radia-gpu" in normalized
-    assert "A100 owns GPU development (mexcuda only)" in normalized
-    assert "Retired targets are excluded from deployment, CI and computation" in normalized
+    assert "Use the on-demand GPU worker only for mexcuda GPU work" in normalized
+    assert "Retired execution targets are excluded from deployment, CI and computation" in normalized
     assert "`NGSolve` A100 validation runs without Cubit" in normalized
     assert "NGSolve hosts start from checked exported .vol files, without Cubit" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized

@@ -102,7 +102,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - mexcuda modules may retain CPU host control. Never include, link, or use NGSolve TaskManager in mexcuda builds, except a read-only guard that fails if a foreign TaskManager is active. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing.
 - All builds: VS2022/MSVC14.44, mexcuda-selected. CUDA: MATLAB-bundled12.8 only; no external CUDA/unsupported flags. Order: MATLAB, supported compiler/CUDA, all hosts; update MATLAB together and rebuild. Verify interop and AMS/IH on both GPUs.
 - No implicit CPU/GPU/Python fallback. When both routes exist, select explicitly (`Backend="gpu"|"cpu"`), record the backend and raise on failure. Internal CPU/GPU agreement does not replace Python CPU validation. Measure host setup and CPU solves separately.
-- GPU development/builds/validation: A100, MATLAB-bundled CUDA only. Keep NGSolve off. 100 prioritizes CI/debt and same-wheel RTX 5000 release acceptance, with independent review; no new GPU development there. No GPU on 102.
+- GPU development/builds/validation: A100, MATLAB-bundled CUDA only. Keep NGSolve off. 100 prioritizes CI/debt and same-wheel RTX 5000 release acceptance, with independent review; no GPU dev on 100. No GPU on 102.
 - Record parity, artifact hashes and validation JSON. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### GPU Kernel Research Strategy (2026-10-11)
