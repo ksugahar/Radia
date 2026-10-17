@@ -108,8 +108,9 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 ### GPU Kernel Research Strategy (2026-10-11)
 
 - Use mexcuda for GPU kernels with explicit assumptions. Implement missing Radia singular/near-field kernels in CUDA; preserve NGSolve FE ownership and HACApK policy.
-- MAT/HDF5 exchange may support independent validation, never a mandatory GPU adapter. Record units, numbering, labels and ABI.
-- Above 2 GB, use HDF5 (MAT v7.3 permitted), precheck size and validate readers/writers. Never split to bypass limits; format capacity is not GPU capacity.
+- Use HDF5 exclusively for new data exchange and persisted numerical data. Preserve native NGSolve `.vol` meshes and `.sol` solutions. MAT files, including temporary MATLAB MAT v7.3, are unsupported; do not retain a MAT read/write fallback. HDF5 exchange may support independent validation, never a mandatory GPU adapter. Record schema/version, units, numbering/index base, labels, array layout/dtypes, string encoding (UTF-8), and ABI where applicable.
+- Migrate existing MAT data and its owning readers/writers to HDF5 in package-scoped changes. Verify every numerical field bit-for-bit, including shape and dtype, with hashes and source/conversion provenance before adoption or deletion. Retain original results only as identified migration/provenance evidence with an owner and cleanup condition; they are not operational inputs or fallback reserves.
+- Precheck HDF5 sizes and validate readers/writers, including above 2 GB. Never split to bypass limits; format capacity is not GPU capacity.
 - Reuse gpuArray/BLAS where they implement the declared formulation. Keep GPU kernels independently callable. Validate iterative solvers for the actual operator.
 - Establish CPU/GPU agreement and performance on small publishable cases on the local RTX GPU before scaling; save timings, transfers, memory, versions and true residuals in JSON. Backend names are not speedup evidence.
 - Humans alone start/stop A100. Bounded jobs require resource admission and evidence recovery. Offline: explicit failure, no host fallback or indefinite PR queue.
