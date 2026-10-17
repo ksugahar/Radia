@@ -754,7 +754,10 @@ private:
 
         /* \| is TeX's short spelling of \Vert; canonicalise so the double bar
          * survives instead of decaying to a single one. */
-        const std::string named = (cmd == "\\|") ? std::string("\\Vert") : cmd;
+        // Normalize short relation aliases to the established saved spelling.
+        const std::string named = cmd == "\\|" ? "\\Vert"
+            : cmd == "\\le" ? "\\leq" : cmd == "\\ge" ? "\\geq"
+            : cmd == "\\ne" ? "\\neq" : cmd;
         int code = latex_symbol_codepoint(named);
         if (code >= 0) {
             auto ch = make_char(typeface_for_code(uint32_t(code)), uint32_t(code));
