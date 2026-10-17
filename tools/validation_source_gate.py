@@ -111,6 +111,22 @@ def validated_native_inputs(root):
     return allowed
 
 
+def mkl_build_copy(root):
+    """Accept one CMake runtime copy only against its installed venv owner."""
+    package=importlib.metadata.distribution('mkl')
+    files=[file for file in (package.files or ()) if Path(str(file)).name.lower()=='mkl_rt.3.dll']
+    if len(files)!=1 or not package.version: raise ValueError('MKL runtime owner unknown')
+    source=Path(package.locate_file(files[0]))
+    prefix=Path(sys.prefix).resolve()
+    if (source.is_symlink() or not source.is_file() or not source.resolve().is_relative_to(prefix)):
+        raise ValueError('MKL runtime is not owned by the active venv')
+    copied=root/'build-msvc/mkl_rt.3.dll'
+    if copied.is_symlink() or not copied.is_file(): raise ValueError('MKL build copy missing/linked')
+    sha=digest(source.read_bytes())
+    if digest(copied.read_bytes())!=sha: raise ValueError('MKL build copy mismatch')
+    return {'package':'mkl','version':package.version,'sha256':sha}
+
+
 def generated_build_metadata(root, path):
     parts=Path(path).parts
     if not parts or parts[0]!='build-msvc': return False
@@ -132,6 +148,7 @@ def generated_build_metadata(root, path):
 
 def environment_contract(root):
     validated_native_inputs(root)
+    mkl_runtime=mkl_build_copy(root)
     compiler = []
     for file in (root/'build-msvc/CMakeFiles').glob('*/CMakeCXXCompiler.cmake'):
         text=file.read_text(encoding='utf-8')
@@ -159,6 +176,7 @@ def environment_contract(root):
     return {'python':sys.version,'platform':platform.platform(),'machine':platform.machine(),
             'processor':platform.processor(),'compiler':compiler,'windows_sdk_versions':sdk_versions,'threads':threads,
             'compiler_options':build_options,'numerical_environment':numerical_environment(),
+            'mkl_runtime':mkl_runtime,
             'packages':sorted((d.metadata['Name'].lower(),d.version) for d in importlib.metadata.distributions())}
 
 
@@ -176,14 +194,25 @@ def source_fingerprint(root, environment):
     untracked=git(root,'ls-files','--others','-z').split('\0')
     generated={'.lib','.obj','.exp','.pdb','.ilk','.pyc'}
     native_inputs=None
+    rejected=[]
     for path in untracked:
-        if not path or any(part in {'__pycache__','.pytest_cache'} for part in Path(path).parts):
+        parts=Path(path).parts
+        suffix=Path(path).suffix.lower()
+        if (not path or '__pycache__' in parts and suffix=='.pyc'
+                or '.pytest_cache' in parts and suffix not in {'.py','.pth','.pyd','.dll'}):
             continue
         if path.startswith('build-msvc/') or path in {f'src/radia/{name}{suffix}' for name in NATIVE_NAMES for suffix in ('','.build.json')}:
             if native_inputs is None: native_inputs=validated_native_inputs(root)
             if path in native_inputs or generated_build_metadata(root,path): continue
-        if Path(path).suffix.lower() not in generated:
-            raise ValueError('untracked validation input: '+path)
+            if path=='build-msvc/mkl_rt.3.dll':
+                mkl_build_copy(root)
+                continue
+        if not (parts[0]=='build-msvc' and suffix in generated):
+            rejected.append(path)
+    if rejected:
+        error=ValueError('untracked validation inputs: '+', '.join(rejected))
+        error.paths=rejected
+        raise error
     selected=[]
     def test_input(path):
         return path.startswith('tests/') and not (path.startswith(('tests/policy/','tests/ci_routing/','tests/validation_gate/','tests/test_ci_'))
@@ -294,10 +323,15 @@ def run(root, out, force=False, client=None):
     result['job_context']={key:os.environ[key] for key in JOB_CONTEXT_KEYS if key in os.environ}
     fingerprint=None
     try:
-        fingerprint,count=source_fingerprint(root,environment_contract(root))
+        environment=environment_contract(root)
+        result['mkl_runtime']=environment.get('mkl_runtime')
+        fingerprint,count=source_fingerprint(root,environment)
         result.update(fingerprint=fingerprint,source_count=count)
     except Exception as error:
         result['reuse_reason']='unknown fingerprint: '+type(error).__name__
+        result['reuse_detail']=str(error)
+        result['rejected_untracked_paths']=getattr(error,'paths',[])
+        print(result['reuse_reason']+': '+result['reuse_detail'],flush=True)
     found=None
     if not force and fingerprint and client:
         try: found=client.find(root,fingerprint)
