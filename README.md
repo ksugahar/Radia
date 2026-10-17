@@ -434,6 +434,9 @@ keep field-projection error separate from Lie truncation error.
 This monorepo independently releases `radia`, `radia-mcp`, `cubit-mesh-export`,
 `radia-gpu`, `radia-optuna`, and `eqnedit64`.
 
+CPU execution belongs to `radia` through Python/pybind11 and NGSolve.
+GPU execution belongs to `radia-gpu` through MATLAB mexcuda.
+
 [`radia-gpu`](packages/radia-gpu/README.md) owns MATLAB, Simulink, LTspice
 integration, and MATLAB mexcuda development. GPU support is under development;
 consult that package for validated capabilities. It does not yet provide a GPU
