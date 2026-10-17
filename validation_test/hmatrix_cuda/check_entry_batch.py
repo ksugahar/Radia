@@ -1,5 +1,9 @@
 """Compile both C dispatch contracts on 100; no GPU/physical acceptance claim."""
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-gpu/tools'))
+from vs2022_toolchain import discover_vs, compiler_bin
+SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-gpu/tools/vs2022_toolchain.py"
 import argparse,ctypes,hashlib,json,socket,subprocess
 
 def main():
@@ -15,13 +19,14 @@ def main():
     if a.serial_host:dependencies=extra+[root/'src/core/rad_hacapk_parallel.h']
     result=dict(schema='radia.hacapk-entry-batch-contract.v1',accepted=False,a100_used=False,
                 scope='Serial MATLAB host scheduler contract only; not full assembly' if a.serial_host else 'Shared C ACA search regression only; no CUDA/whole solver acceptance' if a.compression else 'C active entry extraction only; no CUDA callback/ACA compression/physics acceptance',cases={},
-                source_sha256={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in [source,header,Path(__file__)]+dependencies})
+                source_sha256={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in [source,header,SELECTOR,Path(__file__)]+dependencies})
+    vs=discover_vs()
     try:
         for mode in (['serial'] if a.serial_host else ['scalar','batch']):
             define='/DRAD_HACAPK_BATCH_ENTRIES' if mode=='batch' else ''
             exe=a.out/(mode+'.exe');batch=a.out/(mode+'.cmd')
             inputs=' '.join('"'+str(p)+'"' for p in [source]+extra)
-            batch.write_text('@echo off\ncall "C:/BuildTools/VS2022-CUDA/VC/Auxiliary/Build/vcvars64.bat" >nul\n'
+            batch.write_text('@echo off\ncall "'+str(vs/'VC/Auxiliary/Build/vcvars64.bat')+'" >nul\n'+
                 f'cl /nologo /TC /MD /O2 {define} /I"{header.parent}" /I"{root/'src/core'}" {inputs} /Fe:"{exe}" /Fo:"{a.out}/"\n',encoding='utf-8')
             build=subprocess.run(['cmd','/c',str(batch)],capture_output=True)
             (a.out/(mode+'-build.log')).write_bytes(build.stdout+build.stderr);build.check_returncode()
