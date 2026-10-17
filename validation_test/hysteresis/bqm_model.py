@@ -945,13 +945,13 @@ def play_hysteron(f_interps, Bx, By, eta, px0, py0):
     return hx, hy
 
 
-def load_binput_data(mat_file):
-    """Load B-input descending branch data from .mat file.
+def load_binput_data(hdf5_file):
+    """Load B-input descending branch data from HDF5.
 
     Parameters
     ----------
-    mat_file : str
-        Path to B_input.mat file (from CASE_02.m).
+    hdf5_file : str
+        Path to B_input.hdf5 file (from CASE_02.m).
 
     Returns
     -------
@@ -963,21 +963,12 @@ def load_binput_data(mat_file):
         'Bplay': ndarray, play grid (descending from Bmax to -Bmax)
         'eta': ndarray, play thresholds [T]
     """
-    import scipy.io as sio
+    from radia.hysteresis_io import load_hdf5
 
-    d = sio.loadmat(mat_file)
-    BH_raw = d['BH']
-    dB = float(d['dB'].item())
-    BMax = d['BMax'].flatten()
-
-    K = BH_raw.shape[1]  # number of BMax levels
-
-    # Extract BH curves
-    BH_curves = []
-    for i in range(K):
-        H = BH_raw[0, i]['H'].flatten()
-        B = BH_raw[0, i]['B'].flatten()
-        BH_curves.append((H, B))
+    loops, dB, BMax = load_hdf5(hdf5_file)
+    # LUT branches retain descending maximum-flux order.
+    BH_curves = [(loop['H'], loop['B']) for loop in loops]
+    K = len(BH_curves)
 
     # Build HdataLUT: shape (max_nB, K)
     max_nB = len(BH_curves[0][0])  # largest curve has most points
