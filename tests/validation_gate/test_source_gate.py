@@ -176,3 +176,23 @@ def test_unknown_untracked_inputs_prevent_reuse(tmp_path, monkeypatch, input_pat
     monkeypatch.setattr(gate, 'git', files)
     with pytest.raises(ValueError, match='untracked validation input'):
         gate.source_fingerprint(tmp_path, {})
+
+
+@pytest.mark.parametrize('failure', [None, 'schema', 'source_commit', 'source_dirty',
+                                     'source_change_fingerprint_sha256', 'binary_name',
+                                     'binary_bytes', 'binary_sha256'])
+def test_current_native_sidecar_is_hash_and_source_bound(tmp_path, monkeypatch, failure):
+    binary=tmp_path/'src/radia/_radia_pybind.pyd'
+    binary.parent.mkdir(parents=True)
+    data=b'current test binary';binary.write_bytes(data)
+    record=dict(schema='radia.native-build-provenance.v1',source_commit='a'*40,
+                source_dirty=False,source_change_fingerprint_sha256=gate.digest(b'\0'),
+                binary_name=binary.name,binary_bytes=len(data),binary_sha256=gate.digest(data))
+    if failure:record[failure]='wrong'
+    Path(str(binary)+'.build.json').write_text(json.dumps(record))
+    monkeypatch.setattr(gate, 'git', lambda *a:'a'*40)
+    if failure:
+        with pytest.raises(ValueError, match='native provenance mismatch'):
+            gate.validate_native_sidecar(tmp_path)
+    else:
+        gate.validate_native_sidecar(tmp_path)
