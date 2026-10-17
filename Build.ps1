@@ -320,9 +320,14 @@ if (-not (Test-Path -LiteralPath $ToolsetVersionFile)) {
     throw "MSVC default toolset identity is missing: $ToolsetVersionFile"
 }
 $ToolsetVersion = (Get-Content -LiteralPath $ToolsetVersionFile -Raw).Trim()
+$CompilerPath = Join-Path $VS_PATH "VC/Tools/MSVC/$ToolsetVersion/bin/Hostx64/x64/cl.exe"
 if ($ToolsetVersion -notmatch '^14\.44\.[0-9]+$' -or
-    -not (Test-Path -LiteralPath (Join-Path $VS_PATH "VC/Tools/MSVC/$ToolsetVersion/bin/Hostx64/x64/cl.exe"))) {
+    -not (Test-Path -LiteralPath $CompilerPath)) {
     throw "Build requires the default MSVC 14.44 x64 toolset; found '$ToolsetVersion' at '$VS_PATH'"
+}
+$CompilerVersion = (Get-Item -LiteralPath $CompilerPath).VersionInfo.FileVersion
+if ($CompilerVersion -notmatch '^19\.44\.') {
+    throw "Build requires cl.exe 19.44; found '$CompilerVersion' at '$CompilerPath'"
 }
 if (-not $CMAKE_EXE) {
     # Fallback: pip-installed cmake
