@@ -2,6 +2,8 @@
 
 ## 3.1.5 review candidate
 
+- Preserve relation aliases `\le`, `\ge`, and `\ne` through parse/save/reopen, using canonical `\leq`, `\geq`, and `\neq` output.
+
 - Emit a single unanchored aligned row as ordinary Office math.
 - Preserve explicit and nested anchors, including row-end alignment in mixed arrays.
 - Extend native/Web byte checks with seven fixtures and immutable 3.1.4 baselines.

@@ -392,5 +392,17 @@
     "id": "colour-parentheses",
     "tex": "\\color{red}{(x)}",
     "coverage": "covered"
+  },
+  {
+    "id": "relation-alias-le",
+    "tex": "x\\le 0"
+  },
+  {
+    "id": "relation-alias-ge",
+    "tex": "x\\ge 0"
+  },
+  {
+    "id": "relation-alias-ne",
+    "tex": "x\\ne 0"
   }
 ]
