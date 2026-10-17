@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import importlib.util
 import hashlib
+import html
 import ast
 import json
+import os
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 import sys
+
+import pytest
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parents[1]
@@ -243,7 +248,7 @@ def test_focused_optuna_build_uses_mexcuda_without_solver_runtime():
     assert "'14.44.35207'" in compiler
     assert "'sys', 'cuda', 'win64', 'cuda'" in compiler
     assert r"release 12\.8[,\s]" in compiler
-    for variable in ("VCROOT", "VCINSTALLDIR", "VCVARSALLDIR", "COMPILER",
+    for variable in ("VCROOT", "VCINSTALLDIR", "VCVARSALLDIR",
                      "CUDA_ROOT", "CUDA_LIB_PATH", "LIBDEVICE"):
         assert f"'{variable}=" in compiler
     for variable in ("CUDA_PATH", "MW_NVCC_PATH", "MW_ALLOW_ANY_CUDA",
@@ -255,11 +260,59 @@ def test_focused_optuna_build_uses_mexcuda_without_solver_runtime():
     assert "xmlwrite(" not in compiler
     assert "radia-gpu" not in compiler
     assert "py." not in compiler
+    assert "['COMPILER=" not in compiler
     native = (PACKAGE_ROOT / "native/optuna_mex.cpp").read_text(encoding="utf-8")
     assert "TaskManager" not in native
     assert "ngsolve" not in native.lower()
     assert "RADIA_OPTUNA_MEX_ONLY" not in native
     assert "radia_add_optuna_mex" not in (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows CMD path-resolution contract")
+def test_stock_nvcc_command_resolves_bundled_path_with_spaces(tmp_path):
+    """Exercise stock CMDLINE100 under CMD without invoking a CUDA compiler."""
+    configurations = sorted(
+        (Path(os.environ["ProgramFiles"]) / "MATLAB").glob(
+            "R*/toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml"
+        )
+    )
+    if not configurations:
+        pytest.skip("Stock MATLAB mexcuda XML is unavailable")
+    # Read only the stock template attributes: MEX configurations can contain
+    # raw shell && inside attributes and are not strict XML documents.
+    xml = configurations[-1].read_text(encoding="utf-8-sig")
+    xml = re.sub(r"<!--.*?-->", "", xml, flags=re.S)
+    def attributes(tag):
+        body = re.search(rf"<{tag}\s+(.*?)/>", xml, flags=re.S).group(1)
+        return {key: html.unescape(value) for key, value in
+                re.findall(r'([A-Z_0-9]+)="([^"]*)"', body)}
+    variables = attributes("vars")
+    assert variables["COMPILER"] == "nvcc"
+    # Stand-ins distinguish bundled lookup from an external nvcc later on PATH.
+    cuda = tmp_path / "Program Files" / "MATLAB" / "sys" / "cuda"
+    bundled = cuda / "bin"
+    external = tmp_path / "external"
+    for directory, marker in ((bundled, "BUNDLED_NVCC"), (external, "EXTERNAL_NVCC")):
+        directory.mkdir(parents=True)
+        (directory / "nvcc.cmd").write_text(f"@echo {marker}\n@exit /b 0\n")
+    prefix = attributes("env")["PATH"].split(";")[:2]
+    assert prefix == [r"$CUDA_ROOT\nvvm\bin", r"$CUDA_ROOT\bin"]
+    env = dict(os.environ, PATH=";".join(
+        [part.replace("$CUDA_ROOT", str(cuda)) for part in prefix] + [str(external)]
+    ))
+    command = variables["CMDLINE100"].replace("$COMPILER", variables["COMPILER"])
+    command = re.sub(r"\$[A-Z_]+", "", command)
+    shell = os.environ.get("COMSPEC", r"C:\Windows\System32\cmd.exe")
+    result = subprocess.run([shell, "/d", "/c", command], env=env,
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert "BUNDLED_NVCC" in result.stdout
+    assert "EXTERNAL_NVCC" not in result.stdout
+    # Negative control reproduces the CI's unquoted absolute compiler command.
+    broken = command.replace("nvcc", str(bundled / "nvcc.cmd"), 1)
+    result = subprocess.run([shell, "/d", "/c", broken], env=env,
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode != 0
 
 
 def test_wheel_verifier_rejects_solver_boundary_leaks():
