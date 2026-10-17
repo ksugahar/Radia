@@ -201,6 +201,15 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         "validation_test/radia_mcp/test_eddy_driven_region.py",
         "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
     }
+    routing_files = {"tools/ci_runner_routing.py", "tools/ci_runner_routing.json"}
+    # The common runner contract covers every distribution's actual jobs;
+    # the Radia source lane is its executing consumer, not new migration debt.
+    fast = yaml.safe_load((ROOT / ".github/workflows/radia.yml").read_text(encoding="utf-8"))
+    assert any("tools/ci_runner_routing.py" in step.get("run", "")
+               for step in fast["jobs"]["fast-contracts"]["steps"])
+    routing_source = (ROOT / "tools/ci_runner_routing.py").read_text(encoding="utf-8")
+    assert "tools/ci_runner_routing.json" in routing_source
+    expected |= routing_files
     assert shared == expected | set(RADIA_LANE_READS)
     # The shared IH contracts execute the GPU package adapter against CPU Radia solvers.
     for path in ("tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
