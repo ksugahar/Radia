@@ -22,7 +22,8 @@ def test_selector_rejects_inherited_or_older_compilers():
     assert "-prerelease" not in text
     assert "-vcvars_ver=14.44.35207" in text
     assert '"%VCToolsVersion%"=="14.44.35207"' in text
-    assert "Get-FileHash -LiteralPath $env:EQN_FIRST_CL -Algorithm SHA256" in text
+    assert 'assert_msvc1944.ps1" -Compiler "%EQN_FIRST_CL%"' in text
+    assert "vcvars64.bat is missing" in text
 
 
 def test_each_ci_cmake_configure_selects_pinned_vs2022_explicitly():
@@ -31,3 +32,10 @@ def test_each_ci_cmake_configure_selects_pinned_vs2022_explicitly():
     assert commands
     assert all('-G "Visual Studio 17 2022"' in line and '-T "v143,version=14.44.35207"' in line for line in commands)
 
+
+
+def test_every_cmake_configure_checks_actual_compiler():
+    workflow = (ROOT / ".github/workflows/eqnedit64.yml").read_text()
+    configurations = workflow.count("cmake -S . -B build_cmake")
+    assert configurations == 4
+    assert workflow.count("assert_msvc1944.ps1 -BuildDirectory build_cmake") == configurations
