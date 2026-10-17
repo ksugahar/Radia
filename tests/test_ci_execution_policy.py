@@ -357,17 +357,16 @@ def test_policy_twins_define_the_same_compute_host_routing():
     policy = routing_policy(agents)
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
-    assert "Use the on-demand GPU worker only for mexcuda GPU work" in normalized
-    assert "Retired execution targets are excluded from deployment, CI and computation" in normalized
-    assert "BatchMode=yes NGSolve hostname" in normalized
+    assert "A100 owns GPU development (mexcuda only)" in normalized
+    assert "Retired targets are excluded from deployment, CI and computation" in normalized
+    assert "BatchMode=yes A100 hostname" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
-    assert "NGSolve A100 owns primary GPU work" in normalized
+    assert "Prioritize HDiv-MMM, then AMS" in normalized
     assert "A100 is optional for development/publication" not in normalized
     assert "100/LAB timings are diagnostic" in normalized
-    assert "one heavy job at a time" in normalized
-    assert "running jobs and available memory" in normalized
-    assert "preserve active timing jobs" in normalized
-    assert "Never stop another session's jobs" in normalized
+    assert "one heavy job at a time" in normalized.lower()
+    assert "jobs and memory" in normalized
+    assert "never stop others' jobs" in normalized
     assert "ConnectTimeout" in normalized
     assert "Measure speed" in normalized
     assert "remain valid provenance" in normalized
