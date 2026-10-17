@@ -2,8 +2,7 @@
 
 Investigations remain in Git.
 ## Mission
-Radia is an AI-native electromagnetic CAE platform.
-Position Radia as AI-operable CAE through MCP: users define the analysis plan, physical assumptions and acceptance criteria; AI assists tool operation and execution.
+Radia is AI-native, AI-operable electromagnetic CAE through MCP. Users set analysis plans, physical assumptions and acceptance criteria; AI assists tool operation and execution.
 Do not market autonomous AI design. Extend NGSolve only for missing engineering capability.
 
 Scope:
@@ -100,7 +99,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - CPU: Python (pybind11)/NGSolve, built with Visual Studio 2022 Build Tools on Windows; NGSolve TaskManager owns CPU parallel execution. CPU MEX is unsupported.
 - GPU: `radia-gpu` uses MATLAB mexcuda (optional Simulink/LTspice adapters, no external products). GPU setup, preconditioners and execution stay in MATLAB/mexcuda without Python adapters or snapshots. NGSolve-inherited DLLs are permitted. Python provides independent CPU accuracy validation, never a GPU-user prerequisite.
 - mexcuda modules may retain CPU host control. Never include, link, or use NGSolve TaskManager in mexcuda builds, except a read-only guard that fails if a foreign TaskManager is active. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing.
-- All builds: VS2022/MSVC14.44, mexcuda-selected. CUDA: MATLAB-bundled12.8 only; no external CUDA/unsupported flags. Order: MATLAB, supported compiler/CUDA, all hosts; update MATLAB together and rebuild. Verify interop and AMS/IH on both GPUs.
+- All builds: VS2022/MSVC14.44, mexcuda-selected. CUDA: MATLAB-bundled12.8 only; no external CUDA/unsupported flags. Order: MATLAB 'a' release (no 'b'), supported compiler/CUDA, all hosts; upgrade yearly together, same Update, and rebuild. Verify interop and AMS/IH on both GPUs.
 - No implicit CPU/GPU/Python fallback. When both routes exist, select explicitly (`Backend="gpu"|"cpu"`), record the backend and raise on failure. Internal CPU/GPU agreement does not replace Python CPU validation. Measure host setup and CPU solves separately.
 - GPU development/builds/validation: A100, MATLAB-bundled CUDA only. Keep NGSolve off. 100 prioritizes CI/debt and same-wheel RTX 5000 release acceptance, with independent review; no GPU dev on 100. No GPU on 102.
 - Record parity, artifact hashes and validation JSON. Poisson does not certify ICCG/AMS/HDiv-MMM.
@@ -277,18 +276,18 @@ radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and 
 - Commit only reviewed files owned by the task; use clean integration worktrees.
 - Inspect branches, PRs and remote main before merge or rebase.
 - Do not finish while required tests, CI, build, or release commands run.
-- Run each task in its same-named Claude/Codex sessions. The Claude and Codex
-  レポジトリ管理 sessions coordinate, each directing its own tool's sessions;
-  Claude–Codex exchange occurs only between these two hubs.
+- Only Codex has task sessions, directed by its レポジトリ管理 hub.
+  Claude Code has one レポジトリ管理 session, with read-only reviewer agents
+  for deep reviews. Cross-platform exchange is only between these hubs.
 
-Defaults: Codex implements and validates numerics. After review, the レポジトリ管理
-hubs merge and run CI; Claude fixes forward, tags, publishes, deploys, owns release gates.
+Codex implements and validates. Claude owns independent review, GitHub
+integration/CI/merge, release/deploy, `C:\temp` deletion and user decisions.
+Domain knowledge lives in repo knowledge/skills, not session memory.
 User assignments prevail.
 
 ## Detailed Guidance
 
-Use focused skills and `packages/radia-mcp/src/radia_mcp/**/knowledge/` for detail; correct policy conflicts there with a focused regression.
-Do not expand this file into a second manual.
+Details: focused skills and `packages/radia-mcp/src/radia_mcp/**/knowledge/`. Fix conflicts with focused regressions. Do not expand this file into a second manual.
 
 ## Private Commercial Reference Comparisons (2026-10-07)
 
