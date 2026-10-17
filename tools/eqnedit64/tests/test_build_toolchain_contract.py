@@ -16,7 +16,7 @@ def test_every_batch_build_uses_the_same_mandatory_selector():
 
 def test_selector_rejects_inherited_or_older_compilers():
     text = (BUILD / "select_vs2022.bat").read_text()
-    assert '-version "[17.0,18.0)"' in text
+    assert "-version '[17.0,18.0)'" in text
     assert 'if not "%VisualStudioVersion%"=="17.0"' in text
     assert 'if /I not "%EQN_FIRST_CL%"=="%VCToolsInstallDir%bin\\Hostx64\\x64\\cl.exe"' in text
     assert "-prerelease" not in text
