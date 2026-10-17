@@ -265,7 +265,7 @@ defaults, extension points, and random consumption match upstream-generated fixt
 Handwritten MATLAB output is not compatibility truth.
 Adopt the Optuna 5 design in place: delete active optuna49 fixtures/pins, removed APIs/options,
 legacy sampler-state restore and public multi-objective TPE; unified TPESampler owns both objectives.
-Table/MAT storage, Simulink, parallelism and MEX are extensions, not algorithm changes.
+Table/HDF5 storage, Simulink, parallelism and MEX are extensions, not algorithm changes.
 Native acceleration requires correct differential results; maintain API/oracle manifests and fail loudly.
 Fast deterministic tests belong in tests; long performance/scaling/parallel/dimension work in validation_test.
 Released optuna-mcp==0.2.0 owns generic Study/Trial MCP for Optuna 5.0.0; 0.3.0.dev is not a stable release.
