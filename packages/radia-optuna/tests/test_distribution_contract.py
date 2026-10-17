@@ -231,6 +231,30 @@ def test_focused_optuna_build_uses_mexcuda_without_solver_runtime():
     assert "optuna_cuda.cu" in compiler
     assert "optuna_mex.cpp" in compiler
     assert "-allow-unsupported-compiler" not in compiler
+    # The standalone build must pin both compiler and CUDA provenance before
+    # creating output or invoking mexcuda; global environment/XML is untouched.
+    assert compiler.index("toolchain = pinnedToolchain;") < compiler.index("mkdir(")
+    assert compiler.index("toolchain = pinnedToolchain;") < compiler.index("mexcuda(")
+    assert "nvcc_msvcpp2022.xml" in compiler
+    assert "nvcc_msvcpp2026.xml" not in compiler
+    assert "Microsoft.VisualStudio.Product.BuildTools" in compiler
+    assert '[17.0,18.0)' in compiler
+    assert "Microsoft.VCToolsVersion.default.txt" in compiler
+    assert "'14.44.35207'" in compiler
+    assert "'sys', 'cuda', 'win64', 'cuda'" in compiler
+    assert r"release 12\.8[,\s]" in compiler
+    for variable in ("VCROOT", "VCINSTALLDIR", "VCVARSALLDIR", "COMPILER",
+                     "CUDA_ROOT", "CUDA_LIB_PATH", "LIBDEVICE"):
+        assert f"'{variable}=" in compiler
+    for variable in ("CUDA_PATH", "MW_NVCC_PATH", "MW_ALLOW_ANY_CUDA",
+                     "MW_ALLOW_ANY_COMPILER", "NVCC_CCBIN",
+                     "NVCC_PREPEND_FLAGS", "NVCC_APPEND_FLAGS", "NVCC_FLAGS"):
+        assert f"'{variable}'" in compiler
+    assert "isempty(getenv(conflicting{k}))" in compiler
+    assert "setenv(" not in compiler
+    assert "xmlwrite(" not in compiler
+    assert "radia-gpu" not in compiler
+    assert "py." not in compiler
     native = (PACKAGE_ROOT / "native/optuna_mex.cpp").read_text(encoding="utf-8")
     assert "TaskManager" not in native
     assert "ngsolve" not in native.lower()
