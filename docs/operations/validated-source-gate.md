@@ -13,21 +13,31 @@ verifies a prior PASS for exactly the same conservative input fingerprint:
   sources; numerical test helpers; root build/dependency declarations;
 - the relevant validation profile and inheritance, the gate and tier runner;
 - actual Python/platform/processor, installed distribution versions, MSVC and
-  Windows SDK identity, and fixed one-thread/non-partial environment contract.
+  Windows SDK identity, all CMake C++ flags and build type, and fixed
+  one-thread/non-partial environment contract, including numerical environment
+  variables with RADIA_, NGS, MKL_, KMP_ and OMP_ prefixes.
 
 Source and input file bytes are hashed. Relevant dirty/missing/linked inputs or
 unknown compiler/SDK/environment facts disable reuse and execute validation.
 Workflow routing and unrelated CI-only tests are not numerical inputs. The
 closure is intentionally conservative: unrelated validation evidence changes
-can cause execution; untracked runtime inputs are not claimed to be covered.
+can cause execution. Untracked and ignored inputs are inspected across the
+whole repository; unknown inputs and unverified native libraries force execution.
 Native builds and their source/provenance checks continue to protect current
 artifacts. Reusing source evidence never certifies a new wheel or native binary.
+The native binary hash is deliberately not part of the source fingerprint:
+reuse assumes identical sources, dependency versions, compiler/toolchain,
+compiler flags and numerical environment preserve the validated computation.
+Each current native binary must still pass its own hash-bound, clean-source
+build provenance checks and mandatory numerical tests. A source receipt does
+not prove bit-identical compiler output or certify that binary for release.
 
 ## Trust and failure behavior
 
 A receipt is accepted only with authoritative GitHub metadata identifying a
 successful, completed `main` push/manual run of the same CPU workflow. Its
-commit must be an ancestor of fetched `origin/main`, its run/attempt and source
+commit must be an ancestor of fetched `origin/main` (the validation job uses a
+full-history checkout), its run/attempt and source
 SHA must agree with the receipt, and its live artifact must be unexpired and at
 most 30 days old. The API archive SHA-256, exact archive entries, evidence hash,
 profile fingerprint, case count and no-failure/no-skip JUnit checks must agree.

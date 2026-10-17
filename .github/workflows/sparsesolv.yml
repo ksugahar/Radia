@@ -401,7 +401,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          # Receipt trust requires ancestry against fetched origin/main.
+          fetch-depth: 0
 
       - name: Select native AMS impact
         id: native-impact

@@ -135,6 +135,14 @@ def test_workflow_keeps_ordinary_and_release_gates_separate():
     assert "steps.heavy-validation.outputs.mode == 'execute'" in workflow
     assert 'actions: read' in workflow
 
+
+def test_validation_job_fetches_main_ancestry():
+    import yaml
+    workflow=yaml.safe_load((ROOT/'.github/workflows/sparsesolv.yml').read_text())
+    checkout=next(step for step in workflow['jobs']['ams-regression']['steps']
+                  if step.get('uses','').startswith('actions/checkout@'))
+    assert checkout['with']['fetch-depth']==0
+
 def test_redirect_does_not_forward_token_to_artifact_storage():
     request=gate.urllib.request.Request('https://api.github.com/repos/example/repo/actions/artifacts/1/zip',headers={'Authorization':'Bearer secret'})
     redirect=gate._SafeRedirect().redirect_request(request,None,302,'redirect',{},'https://storage.example/signed-archive')
