@@ -226,7 +226,7 @@ def test_git_scan_covers_whole_repository_and_ignored_inputs(tmp_path, ignored):
 
 
 def build_environment(tmp_path, monkeypatch, flags=''):
-    monkeypatch.setattr(gate,'validate_native_sidecar',lambda root:None)
+    monkeypatch.setattr(gate,'validated_native_inputs',lambda root:set())
     monkeypatch.setattr(gate.importlib.metadata,'distributions',lambda:[])
     for key in ('RADIA_TEST_NGSOLVE_THREADS','OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS'):
         monkeypatch.setenv(key,'1')
@@ -263,6 +263,25 @@ def test_numerical_environment_changes_are_bound(tmp_path,monkeypatch,key):
     after=gate.environment_contract(tmp_path)
     assert before['numerical_environment'] != after['numerical_environment']
     assert after['numerical_environment'][key]=='changed'
+
+
+@pytest.mark.parametrize('key', sorted(gate.JOB_CONTEXT_KEYS))
+def test_reviewed_job_paths_normalize_only_inside_runner_temp(tmp_path,monkeypatch,key):
+    monkeypatch.setenv('RUNNER_TEMP',str(tmp_path))
+    monkeypatch.setenv(key,str(tmp_path/'run-one'))
+    before=gate.numerical_environment()
+    monkeypatch.setenv(key,str(tmp_path/'run-two'))
+    assert gate.numerical_environment()==before
+    monkeypatch.setenv(key,str(tmp_path.parent/'outside-runner-temp'))
+    assert gate.numerical_environment()!=before
+
+
+def test_other_numerical_paths_are_not_normalized(tmp_path,monkeypatch):
+    monkeypatch.setenv('RUNNER_TEMP',str(tmp_path))
+    monkeypatch.setenv('RADIA_OTHER_PATH',str(tmp_path/'one'))
+    before=gate.numerical_environment()
+    monkeypatch.setenv('RADIA_OTHER_PATH',str(tmp_path/'two'))
+    assert gate.numerical_environment()!=before
 
 
 @pytest.mark.parametrize('mode', ['hit','miss','bad-then-hit'])
@@ -304,3 +323,55 @@ def test_find_bounds_search_to_thirty_candidates(tmp_path):
             raise OSError('untrusted or unavailable')
     assert Client('example/repo','unused').find(tmp_path,'fingerprint') is None
     assert len(calls)==30
+
+
+def native_tree(tmp_path,monkeypatch):
+    monkeypatch.setattr(gate,'git',lambda *a:'a'*40)
+    build=tmp_path/'build-msvc';build.mkdir()
+    for name in gate.NATIVE_NAMES:
+        binary=tmp_path/'src/radia'/name;binary.parent.mkdir(parents=True,exist_ok=True)
+        binary.write_bytes(('current '+name).encode())
+        (build/name).write_bytes(binary.read_bytes())
+        record=dict(schema='radia.native-build-provenance.v1',source_commit='a'*40,
+            source_dirty=False,source_change_fingerprint_sha256=gate.digest(b'\0'),
+            binary_name=name,binary_bytes=binary.stat().st_size,
+            binary_sha256=gate.digest(binary.read_bytes()),build_directory='build-msvc')
+        Path(str(binary)+'.build.json').write_text(json.dumps(record))
+    return build
+
+
+def test_validated_build_copies_and_generated_metadata(tmp_path,monkeypatch):
+    build=native_tree(tmp_path,monkeypatch)
+    allowed=gate.validated_native_inputs(tmp_path)
+    assert all('build-msvc/'+name in allowed for name in gate.NATIVE_NAMES)
+    metadata=build/'CMakeFiles/4.0/CMakeCXXCompiler.cmake'
+    metadata.parent.mkdir(parents=True);metadata.write_text('generated')
+    assert gate.generated_build_metadata(tmp_path,metadata.relative_to(tmp_path).as_posix())
+    for name in ('extra.pyd','extra.dll','inject.pth','conftest.py'):
+        assert not gate.generated_build_metadata(tmp_path,'build-msvc/CMakeFiles/'+name)
+    assert not gate.generated_build_metadata(tmp_path,'build-msvc/CMakeFiles/arbitrary-input.h')
+    assert not gate.generated_build_metadata(tmp_path,'other/CMakeFiles/generated.txt')
+
+
+@pytest.mark.parametrize('change',['old-sidecar','different-dir','copied-bytes','missing-copy','different-native'])
+def test_unqualified_build_context_cannot_exempt_scratch(tmp_path,monkeypatch,change):
+    build=native_tree(tmp_path,monkeypatch)
+    name=gate.NATIVE_NAMES[0];sidecar=tmp_path/'src/radia'/f'{name}.build.json'
+    record=json.loads(sidecar.read_text())
+    if change=='old-sidecar':record.pop('build_directory')
+    if change=='different-dir':record['build_directory']='other-build'
+    if change=='copied-bytes':(build/name).write_bytes(b'different copied native')
+    if change=='missing-copy':(build/name).unlink()
+    if change=='different-native':(tmp_path/'src/radia'/gate.NATIVE_NAMES[1]).write_bytes(b'stale')
+    sidecar.write_text(json.dumps(record))
+    with pytest.raises(ValueError):gate.validated_native_inputs(tmp_path)
+
+
+def test_unknown_native_inside_declared_build_forces_execution(tmp_path,monkeypatch):
+    build=native_tree(tmp_path,monkeypatch)
+    (build/'unexpected.pyd').write_bytes(b'unknown module')
+    tests=tmp_path/'tests';tests.mkdir()
+    (tests/'test_tier_manifest.json').write_text(json.dumps({'profiles':{'solver-heavy':{'paths':[]}}}))
+    monkeypatch.setattr(gate,'git',lambda root,*a:'build-msvc/unexpected.pyd' if '--others' in a else 'a'*40)
+    with pytest.raises(ValueError,match='untracked validation input'):
+        gate.source_fingerprint(tmp_path,{})

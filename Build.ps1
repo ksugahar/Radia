@@ -791,6 +791,7 @@ try {
     Write-NativeBuildProvenance `
         -BinaryPath "$PROJECT_DIR\src\radia\_radia_pybind.pyd" `
         -RepoRoot $PROJECT_DIR `
+        -BuildDirectory 'build-msvc' `
         -StartIdentity $NativeBuildSourceIdentity
 
     # A copied .pyd is not necessarily usable: changing the pinned NGSolve

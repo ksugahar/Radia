@@ -64,7 +64,8 @@ function Write-NativeBuildProvenance {
     param(
         [Parameter(Mandatory)][string]$BinaryPath,
         [Parameter(Mandatory)][string]$RepoRoot,
-        [Parameter(Mandatory)]$StartIdentity
+        [Parameter(Mandatory)]$StartIdentity,
+        [string]$BuildDirectory
     )
 
     Set-StrictMode -Version Latest
@@ -102,6 +103,14 @@ function Write-NativeBuildProvenance {
             binary_sha256 = (Get-FileHash -LiteralPath $binary.FullName `
                 -Algorithm SHA256).Hash.ToLowerInvariant()
             generated_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
+        }
+        if ($BuildDirectory) {
+            $resolvedBuild = [IO.Path]::GetFullPath((Join-Path $RepoRoot $BuildDirectory))
+            $relativeBuild = [IO.Path]::GetRelativePath([IO.Path]::GetFullPath($RepoRoot), $resolvedBuild).Replace('\', '/')
+            if ($relativeBuild -ne 'build-msvc' -or -not (Test-Path -LiteralPath $resolvedBuild -PathType Container)) {
+                throw 'Provenance build directory must be this checkout''s build-msvc'
+            }
+            $manifest.build_directory = $relativeBuild
         }
         $json = $manifest | ConvertTo-Json -Depth 3
         [IO.File]::WriteAllText($temporaryPath, $json + [Environment]::NewLine,

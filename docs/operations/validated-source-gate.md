@@ -80,6 +80,20 @@ Untracked production/validation inputs, including ignored inputs, prevent reuse;
 ordinary generated compiler and Python cache outputs do not certify a new
 artifact. The known `_radia_pybind.pyd.build.json` sidecar is accepted only after
 checking its clean current-commit provenance, binary name, length and SHA-256.
+The exact required native set additionally includes `sparsesolv_ngsolve.pyd`,
+`peec_matrices.pyd` and `axifem.pyd`, each with the same independently checked
+current-build sidecar. Auxiliary source identity is captured before the build.
+Each sidecar must declare the checkout-relative `build-msvc` directory, and
+the copied module must match the actual build output's bytes. Missing fields,
+old sidecars, mismatched copies or unexpected native modules disable reuse.
+Only explicitly enumerated generated CMake/Ninja metadata in that validated
+directory is exempt; links, arbitrary files and native libraries are not
+covered by a blanket directory exclusion.
+
+Only `RADIA_CI_VENV` and `RADIA_CI_OUTPUT_DIR` may be normalized as per-run job
+context, and only when they resolve beneath the absolute `RUNNER_TEMP` root.
+Their actual values remain in verification JSON. Outside that root, or for
+any other numerical environment name, values remain fingerprint inputs.
 Package test fixtures are included in the source fingerprint. This is separate
 from the mandatory native build and solver-numerics checks; a matching source
 receipt never certifies a newly built binary. Live main cache-hit and cache-miss
