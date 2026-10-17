@@ -1,0 +1,570 @@
+{
+  "schema": "radia.hysteresis-hdf5-migration.v1",
+  "source_mat_sha256": "9f9ff054db68196f5a4ec5afa491343ec694e72d8c9f59224bf462f34732ba03",
+  "hdf5_sha256": "fac1ae075860e72576fdcf246e6e2fd7621c41d9bbef432cc6e3bab8cfc31361",
+  "byte_hash_order": "C",
+  "numeric_arrays": [
+    {
+      "dataset": "BMax",
+      "shape": [
+        1,
+        20
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "8ddd09dbfc9a1260985ccc80539ebae15c0436bdaced03faa2688cf2c98fee51",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "dB",
+      "shape": [
+        1,
+        1
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "fd82b044cdcab491a3873a17739c347020c681d992d14b0c18c7c839a2389ee8",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0000/H",
+      "shape": [
+        1,
+        41
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "c1dff43d0f2b9ab80322cb73cd3a6dff64acce2234c4ec66b5432ed69fb36469",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0000/B",
+      "shape": [
+        1,
+        41
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "cc4f29453eb152b335dd11fb1d831b4c0bbc26d88b4321fdec3e5ec4209e8cd0",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0001/H",
+      "shape": [
+        1,
+        39
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "80245a67ee206e9f73a880c0ecb0c2139808c6092df61bad2d7a1b2e497061a5",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0001/B",
+      "shape": [
+        1,
+        39
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "0adbbbfc32817b293c1b84fc2dc76dcd9e8401a91ee68ec2e6695d48db18e445",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0002/H",
+      "shape": [
+        1,
+        37
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "42ad3b816b02bebe7e496ec2e709f95c7d6b0c811af43d0dddbb84973cd28152",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0002/B",
+      "shape": [
+        1,
+        37
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "4bff5af44554e5cd2c36048e63b7235ea27e0b67aafbf88ac9ad0402e2f375fb",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0003/H",
+      "shape": [
+        1,
+        35
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "aaa6cb80c5a91add45e5fae4c487cef2bd0e73f964d3d5c81506b166c7018a19",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0003/B",
+      "shape": [
+        1,
+        35
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "6f808e5fddb45a6a97f40382f9907e11708815ed61244a4c5f7faebdf9f60d17",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0004/H",
+      "shape": [
+        1,
+        33
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "89d5717e83fa590ed11f47f0c92e31f6f0a4e5d78818fe399b966af20054c83a",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0004/B",
+      "shape": [
+        1,
+        33
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "7b4424bb7e2c69d3f2b177b1f56614d7aa2138cd55ec2cc43e016940e6f8d1ce",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0005/H",
+      "shape": [
+        1,
+        31
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "b9e3139d7f14ec2c35c82f2ce138ceffe309b6d1962e5899906e9d81c7581b9d",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0005/B",
+      "shape": [
+        1,
+        31
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "9aa427bbebceff5a1c2ed2ccc2e88864e896fd5c4fbf6472a7bfffd8378c3209",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0006/H",
+      "shape": [
+        1,
+        29
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "bf9677c6995ef4164ea881e4204a711809bc2c6c3759769ab68cc4b5133caa58",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0006/B",
+      "shape": [
+        1,
+        29
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "cb008224be6228bf143385555a72309ecbc4bfd874cd5de74d45b76a11b37083",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0007/H",
+      "shape": [
+        1,
+        27
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "f26316b0b46caa513a69201c34ab225e967127f38f69951972165830bf404ed4",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0007/B",
+      "shape": [
+        1,
+        27
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "f6c6dcc5e5b58def567fedaf95f32cabf60dbf6c6f0d74ae33a64b3c279899c2",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0008/H",
+      "shape": [
+        1,
+        25
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "2ea7bd2e9b9171c53d8edef6436993a31ddd02b87650d74db85e19885d7e3a3f",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0008/B",
+      "shape": [
+        1,
+        25
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "bed5209f284e4a275fda52e82985bc0f050a34d120e6739ebde2f0e2130bb016",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0009/H",
+      "shape": [
+        1,
+        23
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "9b856f99a68b39a13e8dcebafb9e6adc717cb614f9f87cad0720472bbe48c92e",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0009/B",
+      "shape": [
+        1,
+        23
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "336608430fdf62c4f59411ae5c99baec78a50aeaf8f76b88dd74e74f9a79f1c6",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0010/H",
+      "shape": [
+        1,
+        21
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "55003b2d54f806ec519de92d225d83c45716faedecfd8ffaf22834068d51a668",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0010/B",
+      "shape": [
+        1,
+        21
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "8a1c519e58e67668a8045563422fc68e51f3c791dd1762cab48b86c998288d03",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0011/H",
+      "shape": [
+        1,
+        19
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "5b642f7026a51038e767f0547fa6e7c765a39ca86e4d65df2afa1d153d98e82a",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0011/B",
+      "shape": [
+        1,
+        19
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "151206c3dfa9a94e3e3007e5305c41981e8957691683d81a4ba5dd029b834598",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0012/H",
+      "shape": [
+        1,
+        17
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "97ef8d2748aad5d6db2f4e3e381d3e5a09c6d841292f36bd8463c36e934ba702",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0012/B",
+      "shape": [
+        1,
+        17
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "29a43a3481b0796d81000dbc6cfaa0af49c291a08a4ddf2b6057f5e6b450244f",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0013/H",
+      "shape": [
+        1,
+        15
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "1c53b11ec837990d4d04bf00eaab731339f048986fcc0dfe129bc6cf8264dc4f",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0013/B",
+      "shape": [
+        1,
+        15
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "20e0473de4bc958b2f20b475efff766994eab3f0a028c819837c0897ba18b1a6",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0014/H",
+      "shape": [
+        1,
+        13
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "43b3164b4c4f3a4365bfac76883dd8e05cbbbf392228063bffbfcc3071b0e88b",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0014/B",
+      "shape": [
+        1,
+        13
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "649d79ad9f4cb8fdcae82cd70e56da69ddfaa8ec46645452609cb3b28851c386",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0015/H",
+      "shape": [
+        1,
+        11
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "a7ce0be008b3d877a9f845579ac655abd7d24fe220ec99afd04634ac706016d6",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0015/B",
+      "shape": [
+        1,
+        11
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "c91ef04d16cd6f16fdccd44241d7f0acd5b96493459e7d42989c41c9a93f2ed0",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0016/H",
+      "shape": [
+        1,
+        9
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "29fd9a49d6699bb3309db2479cdbff614d7a0c269f317d9d80b6c56d9b39635f",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0016/B",
+      "shape": [
+        1,
+        9
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "55c739712a473ed6ac568098475a7eb3d955b0bb6f8fc738a2ddc7d2ee3e1412",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0017/H",
+      "shape": [
+        1,
+        7
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "4ffb187087d4446e468f2809c758674c613e0dd104284cac82a2fca0b4db420e",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0017/B",
+      "shape": [
+        1,
+        7
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "65f7e43bcae8f0c5524e14f47f58fc55cac6701090e5e58c5a72b756b64fb93b",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0018/H",
+      "shape": [
+        1,
+        5
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "40d8c5f8a3a11b06e6af357ca7fd0739403bde5c9c814148714b7bb8234152bd",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0018/B",
+      "shape": [
+        1,
+        5
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "0af346b6e36dcbcc815aba435a470a3fbb175eff7642627559a94a1fbd4e4aca",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0019/H",
+      "shape": [
+        1,
+        3
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "54a12e2829d67498eed2874f8825bcfa5621e933332622c33c5e90fd2cd2b119",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    },
+    {
+      "dataset": "BH/0019/B",
+      "shape": [
+        1,
+        3
+      ],
+      "dtype": "<f8",
+      "raw_sha256": "a1830ffae1388a6663915dde99821dae2f87c5e3c54e15e8be12511e2f52ac94",
+      "identical": true,
+      "negative_zero_count": 0,
+      "nan_count": 0,
+      "complex": false
+    }
+  ],
+  "passed": true,
+  "scope": "Numeric fixture migration only; no physics solve or MATLAB regeneration",
+  "runtime": {
+    "python": "3.12.10",
+    "numpy": "2.5.3",
+    "h5py": "3.16.0",
+    "route": "isolated venv; Python-only source readers; no native numerical solver"
+  },
+  "checks": {
+    "hdf5_reader_contract_pytest": "2 passed",
+    "lineage_fields": 128,
+    "lineage_max_absolute_difference": 0.0,
+    "native_hysteresis_suite": "unverified: collection failed because isolated checkout has no _radia_pybind.pyd",
+    "matlab_generator_execution": "unverified: generation algorithm unchanged; HDF5 output code not executed in MATLAB"
+  },
+  "historical_generator_sha256": "4dccffb650cc88460229ba0d84120ee01b5f8fcf9143a5db55296a5ac85121b4"
+}
