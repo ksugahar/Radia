@@ -3,22 +3,9 @@ setlocal enabledelayedexpansion
 REM Build the native 64-bit Eqnedit64 application.
 REM ASCII ONLY: cmd.exe reads batch files using the active ANSI code page.
 
-where cl >nul 2>&1
-if not errorlevel 1 goto have_cl
+call "%~dp0select_vs2022.bat"
+if errorlevel 1 exit /b 1
 
-set "PFX86=%ProgramFiles(x86)%"
-set "VSWHERE=!PFX86!\Microsoft Visual Studio\Installer\vswhere.exe"
-set "VCVARS="
-if exist "!VSWHERE!" for /f "usebackq delims=" %%I in (`"!VSWHERE!" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (
-    if exist "%%I\VC\Auxiliary\Build\vcvars64.bat" set "VCVARS=%%I\VC\Auxiliary\Build\vcvars64.bat"
-)
-if not defined VCVARS (
-    echo [ERROR] vcvars64.bat not found. Install the Visual Studio C++ build tools.
-    exit /b 1
-)
-call "!VCVARS!" >nul 2>&1
-
-:have_cl
 cd /d "%~dp0.."
 pwsh -NoProfile -ExecutionPolicy Bypass -File build\stop_running_release.ps1
 if errorlevel 1 ( echo [ERROR] running Eqnedit64 cleanup failed & exit /b 1 )
