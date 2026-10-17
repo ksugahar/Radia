@@ -89,3 +89,17 @@ package build or numerical runtime is invoked by this lane. Both helper files
 are now part of the reviewed execution closure. The latest worst-case selector
 contains 447 cases, including the added pre-push contracts; the earlier 424-case
 record describes the pre-integration selector, not a skipped subset.
+
+## Current-main conflict resolution (2026-10-17)
+
+The integration retains main's CPU/GPU ownership, isolated GPU source and
+HDF5 migration, and preserves stage 3's capability-isolated lightweight route.
+Only the two policy documents conflicted. Their shared body remains identical
+and below the policy size limit. No runner registration or runtime is changed.
+
+A fresh isolated environment containing exactly the declared lightweight
+requirements passed the worst-case fast selector: 447 passed, zero skipped.
+The routing, policy, workflow-owner and release-ref contracts passed 68 tests.
+All 45 workflow jobs still pass the stage-3 routing audit. The reviewed
+execution-closure digest remains unchanged; no newly merged solver or HDF5
+fixture test was silently added to the lightweight execution closure.
