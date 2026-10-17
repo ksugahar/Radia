@@ -109,3 +109,56 @@ names in the CI paragraph and its contract refer to A100, distinct from the
 NGSolve host. Updated policy/owner/ref contracts passed 49 tests.
 The 45-job execution-closure audit is unchanged, so the completed 447-case
 lightweight execution remains applicable without repeating solver-free tests.
+
+
+## Follow-up validation-source gate closure (2026-10-17)
+
+The validation-source reuse candidate adds 39 deterministic metadata/trust
+contracts to fast-contracts. Its dynamically loaded
+`tools/validation_source_gate.py` is explicitly part of the audited closure.
+A fresh Python 3.12.10 venv containing only pytest, PyYAML, NumPy, SciPy,
+setuptools and wheel executed **486 tests, zero skips**, in 13.50 seconds
+(14.28 seconds through the tier runner). No NGSolve, MATLAB Engine, Cubit,
+CUDA toolkit, h5py or MCP dependency was installed in that audit environment.
+The 51-file execution closure digest is
+`bd004bc5dd2dcd23a3a1a6bf3e679eb17e6d25a681b071a419bbdb1f12119e5b`.
+This audit does not certify a live validation cache hit, native artifacts or
+physics results; those remain separate acceptance gates.
+
+## Validation-reuse review amendments (2026-10-17)
+
+The reviewed changes inspect untracked inputs repository-wide, bind compiler
+flags and numerical environment variables, and exercise the actual receipt
+search. The validation job now fetches complete main ancestry. In the same
+isolated lightweight environment, the worst-case fast selector executed
+**505 tests, zero skips**, in 29.84 seconds (30.98 seconds through the runner).
+Only the declared lightweight dependencies listed above were installed; no
+solver, MATLAB Engine or GPU compilation was used. The 51-file closure digest
+after these execution changes is
+`8dee341aab927e5fc050b1025d53fa98ee7f3b44ac59fe9a9bdf8c363431bc2f`.
+All 45 workflow jobs pass the routing audit. This repeats the execution audit,
+rather than updating a stale digest alone. Live main receipt hit/miss and
+current native artifact checks remain separate required evidence.
+
+## Bound native build metadata and job-context audit (2026-10-17)
+
+The follow-up binds four exact-name native modules and copied build outputs
+to current clean-source sidecars with a declared build directory. Only known
+CMake/Ninja metadata there and two reviewed runner-temp context paths are
+normalized; unknown native and runtime inputs still force execution.
+The isolated lightweight worst-case selector passed **515 tests, zero skips**,
+in 23.71 seconds (24.58 seconds through the runner). Its 51-file digest is
+`07d599ee89666da020d2d6fefc4583358ac0ef101245a41357537c10d9fa0f0e`. No solver or MATLAB dependency was installed for this audit.
+Real native-build lanes and main hit/miss evidence remain required separately.
+
+## Installed runtime-copy and rejection diagnostics audit (2026-10-17)
+
+The explicit MKL runtime-copy check binds its installed package version and
+DLL hash. Rejected untracked paths are now retained in verification JSON, and
+compiler-output suffix exemptions are limited to the declared build directory.
+The isolated lightweight selector passed **520 tests, zero skips**, in 23.77
+seconds (24.72 seconds through the runner). The 51-file digest is
+`eae589c6e263d297e8533035bbde26e0950a67ec0093a0dca10c52447f4b15fb`. A read-only observation of the actual native CI build found
+no persistent extra per-target response files or manifests requiring a broader
+exemption; its complete observed file list is retained as private operations
+evidence. Real main receipt hit/miss acceptance remains a separate gate.
