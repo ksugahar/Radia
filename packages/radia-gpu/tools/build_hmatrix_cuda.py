@@ -1,10 +1,10 @@
 """Isolated resident HACApK algebra CUDA build, not a physical solver release."""
 from pathlib import Path
-from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
 import argparse,ctypes,hashlib,json,os,socket,subprocess,tempfile
 
 
 def main():
+    from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
     parser=argparse.ArgumentParser();parser.add_argument('--require-clean-source',action='store_true');parser.add_argument('--mkl-root',type=Path);args=parser.parse_args()
     root=Path(__file__).resolve().parents[3]
     if socket.gethostname().lower()!='t7920':raise RuntimeError('CUDA build belongs to 100')

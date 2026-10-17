@@ -1954,6 +1954,40 @@
         "detail": "CPU contract tests/test_trace_reuse_evidence_contract.py consumes this input."
       },
       "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/ci_runner_routing.py",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64",
+        "repo"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Cross-distribution workflow capability routing is checked by the source-contract lane before local execution; unknown jobs and unaudited lightweight execution fail closed."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/ci_runner_routing.json",
+      "owners": [
+        "radia",
+        "radia-gpu",
+        "radia-mcp",
+        "radia-optuna",
+        "cubit-mesh-export",
+        "eqnedit64",
+        "repo"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Cross-distribution workflow capability routing is checked by the source-contract lane before local execution; unknown jobs and unaudited lightweight execution fail closed."
+      },
+      "selection": "all_owners"
     }
   ],
   "shared_include_closures": [
@@ -2441,6 +2475,9 @@
             "tools/verify_cpu_wheel.py",
             "tools/verify_radia_promotion.py",
             "tools/sparsesolv_ci_impact.py",
+            "tools/ci_runner_routing.py",
+            "tools/ci_runner_routing.json",
+            "tests/ci_routing/**",
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
             "AGENTS.md",
@@ -2539,6 +2576,9 @@
             "tools/verify_cpu_wheel.py",
             "tools/verify_radia_promotion.py",
             "tools/sparsesolv_ci_impact.py",
+            "tools/ci_runner_routing.py",
+            "tools/ci_runner_routing.json",
+            "tests/ci_routing/**",
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
             "AGENTS.md",
@@ -3257,6 +3297,8 @@
             ".github/workflows/sparsesolv.yml",
             "pyproject.toml",
             "tests/test_tier_manifest.json",
+            "src/radia/lamination.py",
+            "tests/test_lamination_api.py",
             "MANIFEST.in",
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
@@ -3432,6 +3474,8 @@
             ".github/workflows/sparsesolv.yml",
             "pyproject.toml",
             "tests/test_tier_manifest.json",
+            "src/radia/lamination.py",
+            "tests/test_lamination_api.py",
             "MANIFEST.in",
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
