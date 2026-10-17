@@ -4,12 +4,13 @@ import argparse,ctypes,hashlib,json,os,socket,subprocess,tempfile
 
 
 def main():
+    from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
     parser=argparse.ArgumentParser();parser.add_argument('--require-clean-source',action='store_true');parser.add_argument('--mkl-root',type=Path);args=parser.parse_args()
     root=Path(__file__).resolve().parents[3]
     if socket.gethostname().lower()!='t7920':raise RuntimeError('CUDA build belongs to 100')
     dirty=bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip())
     if args.require_clean_source and dirty:raise RuntimeError('Clean source required')
-    files=[root/'packages/radia-gpu/native/radia_cuda_hmatrix.cu',root/'packages/radia-gpu/native/hmatrix_resident.cuh',root/'packages/radia-gpu/native/hmatrix_hacapk_pack.cuh',root/'packages/radia-gpu/native/hmatrix_entry_oracle.cuh',root/'packages/radia-gpu/native/hmatrix_aca_callback.cuh',root/'src/ext/HACApK/cHACApK_calc_entry_ij.h',root/'src/ext/HACApK/cHACApK_base.h',root/'packages/radia-gpu/native/analytic_matrix_build.cuh',root/'packages/radia-gpu/native/radia_field_exact.cuh',root/'src/core/rad_charge_quadrature.h',root/'src/core/rad_hdiv_vim.h',root/'src/core/rad_field_cloud_kernel.h',root/'src/core/rad_hdiv_field_math.inc',root/'src/core/rad_hdiv_field_kernel_api.inc',root/'src/core/rad_field_source_kernel.inc',Path(__file__),root/'Build.ps1']
+    files=[root/'packages/radia-gpu/native/radia_cuda_hmatrix.cu',root/'packages/radia-gpu/native/hmatrix_resident.cuh',root/'packages/radia-gpu/native/hmatrix_hacapk_pack.cuh',root/'packages/radia-gpu/native/hmatrix_entry_oracle.cuh',root/'packages/radia-gpu/native/hmatrix_aca_callback.cuh',root/'src/ext/HACApK/cHACApK_calc_entry_ij.h',root/'src/ext/HACApK/cHACApK_base.h',root/'packages/radia-gpu/native/analytic_matrix_build.cuh',root/'packages/radia-gpu/native/radia_field_exact.cuh',root/'src/core/rad_charge_quadrature.h',root/'src/core/rad_hdiv_vim.h',root/'src/core/rad_field_cloud_kernel.h',root/'src/core/rad_hdiv_field_math.inc',root/'src/core/rad_hdiv_field_kernel_api.inc',root/'src/core/rad_field_source_kernel.inc',Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__),root/'Build.ps1']
     files += [root/'src/ext/HACApK/cHACApK_base.c',root/'src/ext/HACApK/cHACApK_aca.inc',root/'packages/radia-gpu/native/hmatrix_aca_host.c',root/'src/ext/HACApK/cHACApK_lib.c',root/'src/core/rad_hacapk_parallel.h'] + sorted((root/'src/ext/HACApK').glob('*.h'))
     files += [root/'packages/radia-gpu/native/hmatrix_material_solver.cuh',root/'packages/radia-gpu/native/hdiv_curved_gram.cuh']
     if args.mkl_root:
@@ -21,7 +22,7 @@ def main():
     eng=None
     try:
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
-        cc=Path('C:/BuildTools/VS2022-CUDA/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64');os.environ['NVCC_CCBIN']=str(cc)
+        vs=discover_vs();cc=supported_compiler_bin(vs);os.environ['NVCC_CCBIN']=str(cc)
         objects=[]
         full=bool(args.mkl_root);extra=[]
         if full:
@@ -34,7 +35,7 @@ def main():
             obj=out/(name+'.obj');batch=out/(name+'.cmd');objects.append(str(obj))
             source=root/('packages/radia-gpu/native' if name.startswith('hmatrix_') else 'src/ext/HACApK')/(name+'.c')
             include=f'/I"{args.mkl_root/"include"}"' if full else ''
-            batch.write_text('@echo off\ncall "C:/BuildTools/VS2022-CUDA/VC/Auxiliary/Build/vcvars64.bat" >nul\n'+f'cl /nologo /c /TC /MD /O2 /Gy /DRAD_HACAPK_BATCH_ENTRIES {include} /I"{root/"src/core"}" /I"{root/"src/ext/HACApK"}" "{source}" /Fo:"{obj}"\n',encoding='utf-8')
+            batch.write_text('@echo off\ncall "'+str(vs/'VC/Auxiliary/Build/vcvars64.bat')+'" >nul\n'+f'cl /nologo /c /TC /MD /O2 /Gy /DRAD_HACAPK_BATCH_ENTRIES {include} /I"{root/"src/core"}" /I"{root/"src/ext/HACApK"}" "{source}" /Fo:"{obj}"\n',encoding='utf-8')
             compiled=subprocess.run(['cmd','/c',str(batch)],capture_output=True)
             (out/(name+'-compile.log')).write_bytes(compiled.stdout+compiled.stderr);compiled.check_returncode()
         import matlab.engine
