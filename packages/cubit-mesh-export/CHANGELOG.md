@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.4 - Pinned native build toolchain
+
+- Require Visual Studio Build Tools 2022 with MSVC 14.44.35207 for native builds and reject mismatched compiler caches.
+- Rebuild native payloads with the pinned toolchain and require explicit runtime ABI qualification.
+
 ## 2.2.3 - Curve sideset BBND labels
 
 - Preserve curve sideset names as Netgen CD2/NGSolve BBND labels on exported volume-mesh edges.
