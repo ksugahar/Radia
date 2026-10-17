@@ -89,7 +89,7 @@ CPP_SDK_PREREQUISITES = """
 | Cubit       | 2026.8+ recommended| SDK directory shipped + supported   |
 | CMake       | 3.20+               | Cross-platform build system Cubit uses |
 | C++ compiler| C++17 minimum       | Cubit headers require it            |
-|   Windows   | Visual Studio 2022  | MSVC 19.30+ (vcvarsx64 environment) |
+|   Windows   | Build Tools 2022 | MSVC toolset 14.44.35207, x64; no other toolset fallback |
 |   Linux     | GCC 13+ or Clang 16+| Either works                        |
 | Qt          | 6.8 (LGPL OK)       | Cubit links against 6.8 exactly     |
 
@@ -114,7 +114,7 @@ The canonical pattern (taken from the components example) is:
 ```cmake
 set(Cubit_DIR "C:/Program Files/Coreform Cubit 2026.8/cmake"
     CACHE PATH "Cubit cmake config dir")
-set(Qt6_DIR   "C:/Qt/6.8.0/msvc2022_64/lib/cmake/Qt6"
+set(Qt6_DIR   "<compatible-Qt6-install>/lib/cmake/Qt6"
     CACHE PATH "Qt6 cmake config dir")
 
 find_package(Cubit REQUIRED)
@@ -142,7 +142,7 @@ From `build-my-plugin/`:
 
 ```
 # Windows (from an x64 Native Tools Command Prompt):
-cmake -G "Visual Studio 17 2022" -A x64 ../my-plugin
+cmake -G "Visual Studio 17 2022" -A x64 -T version=14.44.35207 ../my-plugin
 cmake --build . --config Release
 
 # Linux:

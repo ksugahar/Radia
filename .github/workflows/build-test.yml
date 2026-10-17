@@ -21,7 +21,7 @@ permissions:
   actions: write
 
 # Native packaging is a named release gate. Fast source/contract CI lives in
-# radia-fast.yml; package workflows own their separate distribution lanes.
+# radia.yml; package workflows own their separate distribution lanes.
 concurrency:
   group: radia-native-${{ github.sha }}
   cancel-in-progress: false
@@ -187,6 +187,10 @@ jobs:
           }
           & $ciPython -c "import os,sys; assert sys.prefix != sys.base_prefix and os.path.samefile(sys.prefix, os.environ['RADIA_CI_VENV']), 'CI Python must belong to RADIA_CI_VENV'"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $hdf5Requirement = & $ciPython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); r=[x for x in d['project']['dependencies'] if x.startswith('h5py')]; assert len(r)==1; print(r[0])"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $ciPython -m pip install "$hdf5Requirement"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython -m pip install build wheel pytest mcp "trimesh>=4.0" twine==6.2.0 --quiet
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Import every dependency here, at the top of the run. `pip install`
@@ -195,7 +199,7 @@ jobs:
           # step that needs it -- which is how 4.95.86..4.95.89 spent four
           # release tags discovering `pytest`, then `build`, then `wheel` one
           # at a time. Fail here instead, before the tag is worth anything.
-          & $ciPython -c "import build, wheel, pytest, mcp, trimesh, twine; print('isolated env imports OK')"
+          & $ciPython -c "import build, wheel, pytest, mcp, trimesh, twine, h5py; print('isolated env imports OK')"
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Isolated CI environment is missing a dependency listed above."
             exit $LASTEXITCODE

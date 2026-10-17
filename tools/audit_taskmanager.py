@@ -544,9 +544,17 @@ def main():
                     help="suppress 'clean' output")
     p.add_argument("--json", action="store_true",
                     help="emit machine-readable JSON to stdout")
+    p.add_argument("--distribution", choices=["radia"], help="Audit only CPU-distribution files")
     args = p.parse_args()
 
     files = _gather_files()
+    if args.distribution:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("ci_distribution_contract", ROOT / "tools/ci_distribution_contract.py")
+        contract = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(contract)
+        manifest = contract.load(ROOT)
+        files = [f for f in files if args.distribution in contract.owner_rule(manifest, f.relative_to(ROOT).as_posix())["owners"]]
     helpers = [f for f in files if _classify(f) == "helper"]
     callers = [f for f in files if _classify(f) == "caller"]
 

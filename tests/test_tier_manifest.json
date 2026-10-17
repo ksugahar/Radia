@@ -1,32 +1,87 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
-    "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py": ["tests/test_ih_panel_esim_assembly.py", "tests/test_ih_operator_assembly.py"],
-    "src/radia/bem_complete_reaction.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py"],
-    "src/radia/bem_coupled_solver.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py", "validation_test/panels/test_strong_coupling_cli_contract.py"],
-    "src/radia/peec_coupled_bem_solver.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py", "validation_test/panels/test_strong_coupling_cli_contract.py"],
-    "src/radia/bem_loop_work.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_loop_work_pairings.py"],
-    "src/radia/bem_loop_extension.py": ["tests/test_bem_loop_hacapk.py","tests/test_bem_strong_panel_impedance.py", "tests/test_bem_loop_work_pairings.py", "tests/test_bem_loop_panel_impedance.py", "validation_test/bem/test_loop_extension_ring.py"],
-    "src/radia/panels/calc_inductance.py": ["tests/test_panel_esim_complete_state.py", "tests/test_bem_strong_panel_impedance.py", "tests/test_bem_loop_panel_impedance.py"],
-    "src/radia/esim_panel_evaluator.py": ["tests/test_panel_esim_complete_state.py", "validation_test/induction_heating/test_esim_panel_evaluator.py"],
-    "src/radia/bem_sibc_solver.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_sibc_acceptance.py"],
-    "src/radia/p1_linear.py": ["tests/test_p1_linear.py"],
-    "src/radia/lamination.py": ["tests/test_lamination_api.py"],
-    "docs/maglev/demos/sphere/maglev_sphere_force.py": ["tests/test_maglev_sphere_golden.py"],
-    "docs/maglev/demos/team28/team28_arnoldi_force.py": ["tests/test_team28_arnoldi_golden.py"],
-    "docs/maglev/demos/rotating_magnet_eddy.py": ["tests/test_rotating_magnet_eddy_golden.py"],
+    "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py": [
+      "tests/test_ih_panel_esim_assembly.py",
+      "tests/test_ih_operator_assembly.py"
+    ],
+    "src/radia/bem_complete_reaction.py": [
+      "tests/test_bem_strong_panel_impedance.py",
+      "tests/test_bem_complete_reaction.py"
+    ],
+    "src/radia/bem_coupled_solver.py": [
+      "tests/test_bem_strong_panel_impedance.py",
+      "tests/test_bem_complete_reaction.py",
+      "validation_test/panels/test_strong_coupling_cli_contract.py"
+    ],
+    "src/radia/peec_coupled_bem_solver.py": [
+      "tests/test_bem_strong_panel_impedance.py",
+      "tests/test_bem_complete_reaction.py",
+      "validation_test/panels/test_strong_coupling_cli_contract.py"
+    ],
+    "src/radia/bem_loop_work.py": [
+      "tests/test_bem_strong_panel_impedance.py",
+      "tests/test_bem_loop_work_pairings.py"
+    ],
+    "src/radia/bem_loop_extension.py": [
+      "tests/test_bem_loop_hacapk.py",
+      "tests/test_bem_strong_panel_impedance.py",
+      "tests/test_bem_loop_work_pairings.py",
+      "tests/test_bem_loop_panel_impedance.py",
+      "validation_test/bem/test_loop_extension_ring.py"
+    ],
+    "src/radia/panels/calc_inductance.py": [
+      "tests/test_panel_esim_complete_state.py",
+      "tests/test_bem_strong_panel_impedance.py",
+      "tests/test_bem_loop_panel_impedance.py"
+    ],
+    "src/radia/esim_panel_evaluator.py": [
+      "tests/test_panel_esim_complete_state.py",
+      "validation_test/induction_heating/test_esim_panel_evaluator.py"
+    ],
+    "src/radia/bem_sibc_solver.py": [
+      "tests/test_bem_strong_panel_impedance.py",
+      "tests/test_bem_sibc_acceptance.py"
+    ],
+    "src/radia/p1_linear.py": [
+      "tests/test_p1_linear.py"
+    ],
+    "src/radia/lamination.py": [
+      "tests/test_lamination_api.py"
+    ],
+    "docs/maglev/demos/sphere/maglev_sphere_force.py": [
+      "tests/test_maglev_sphere_golden.py"
+    ],
+    "docs/maglev/demos/team28/team28_arnoldi_force.py": [
+      "tests/test_team28_arnoldi_golden.py"
+    ],
+    "docs/maglev/demos/rotating_magnet_eddy.py": [
+      "tests/test_rotating_magnet_eddy_golden.py"
+    ],
     "validation_test/surface_rom_team10/transient.py": [
       "tests/test_surface_rom_linear_gate_contract.py"
     ],
-    "validation_test/team21/": ["tests/test_team21a_geometry_source.py"],
-    "src/radia/kelvin_solver.py": ["validation_test/open_boundary/test_kelvin_vector_direct_gate.py"],
-    "src/radia/ih_heat_transient.py": ["tests/test_ih_energy_audit_contract.py"],
-    "src/radia/ih_heat_boundaries.py": ["tests/test_ih_heat_boundaries.py"],
-    "src/radia/vim/_envelope_stop.py": ["tests/test_envelope_stop_core.py"],
+    "validation_test/team21/": [
+      "tests/test_team21a_geometry_source.py"
+    ],
+    "src/radia/kelvin_solver.py": [
+      "validation_test/open_boundary/test_kelvin_vector_direct_gate.py"
+    ],
+    "src/radia/ih_heat_transient.py": [
+      "tests/test_ih_energy_audit_contract.py"
+    ],
+    "src/radia/ih_heat_boundaries.py": [
+      "tests/test_ih_heat_boundaries.py"
+    ],
+    "src/radia/vim/_envelope_stop.py": [
+      "tests/test_envelope_stop_core.py"
+    ],
     "validation_test/mixed_omega_trace_reuse/": [
       "tests/test_trace_reuse_evidence_contract.py"
     ],
-    "src/radia/_residual_gate.py": ["tests/test_mcp_residual_vendor_contract.py"],
+    "src/radia/_residual_gate.py": [
+      "tests/test_mcp_residual_vendor_contract.py"
+    ],
     "src/radia/panels/calc_fem_kelvin.py": [
       "tests/test_element_line_quadrature_contract.py",
       "tests/test_calc_fem_kelvin_fail_loud.py"
@@ -55,9 +110,9 @@
     "validation_test/feec/run_energy_newton_audit.py": [
       "tests/test_hdiv_bh_table_saturation_contract.py"
     ],
-    ".github/workflows/radia-fast.yml": [
+    ".github/workflows/radia.yml": [
       "tests/test_ci_execution_policy.py",
-        "tests/test_public_runtime_privacy.py",
+      "tests/test_public_runtime_privacy.py",
       "tests/test_privacy_source_contract.py",
       "tests/test_run_test_tier.py",
       "tests/test_test_tier_policy.py",
@@ -159,7 +214,9 @@
       "tests/test_audit_taskmanager.py"
     ],
     "tools/ci_preflight.py": [
-      "tests/test_ci_preflight_scope.py"
+      "tests/test_ci_preflight_scope.py",
+      "tests/test_local_push_checks.py",
+      "tests/test_pre_push_check.py"
     ],
     "tools/run_test_tier.py": [
       "tests/test_run_test_tier.py"
@@ -169,6 +226,22 @@
     ],
     "src/radia/patch_recovery.py": [
       "tests/test_patch_recovery.py"
+    ],
+    "tools/pre_push_check.py": [
+      "tests/test_pre_push_check.py"
+    ],
+    "tools/git-hooks/pre-push": [
+      "tests/test_pre_push_check.py"
+    ],
+    "tools/install_git_hooks.py": [
+      "tests/test_pre_push_check.py"
+    ],
+    "tools/local_push_checks.py": [
+      "tests/test_local_push_checks.py",
+      "tests/test_pre_push_check.py"
+    ],
+    "tools/validation_source_gate.py": [
+      "tests/validation_gate/test_source_gate.py"
     ]
   },
   "profiles": {
@@ -184,22 +257,13 @@
       "max_elapsed_seconds": 120,
       "paths": [
         "tests/test_three_engine_agreement_gate.py",
-        "tests/test_ci_execution_policy.py",
         "tests/test_omega_quadrature_plateau.py",
         "tests/test_esrf6_repaired_acceptance_record.py",
-        "tests/test_ci_monitor.py",
-        "tests/test_mdx_runner_pool.py",
-        "tests/test_release_quad_optuna_candidate.py",
-        "tests/test_test_tier_policy.py",
-        "tests/test_run_test_tier.py",
-        "tests/test_docs_notebook_contract.py",
         "tests/test_radia_promotion_gate.py",
         "tests/test_mcp_residual_vendor_contract.py",
         "tests/test_trace_reuse_evidence_contract.py",
         "tests/test_ih_energy_audit_contract.py",
         "tests/test_wheel_package_policy.py",
-        "tests/test_application_interface_manifest.py",
-        "tests/test_matlab_python_parity_manifest.py",
         "tests/axifem/test_docs_notebook_evidence.py"
       ]
     },
@@ -280,7 +344,7 @@
         "tests/test_c_type_p1_box_lane.py",
         "tests/test_meshed_current.py",
         "tests/test_p1_newton.py",
-      "tests/test_p1_linear.py",
+        "tests/test_p1_linear.py",
         "tests/test_arc_far_rule.py",
         "tests/test_radiafield_cache_parallel.py",
         "tests/test_radiafield_memoize.py",
@@ -328,7 +392,8 @@
         "tests/test_ih_thermal_exposure.py",
         "tests/test_ih_thermal_transfer.py",
         "validation_test/panels/test_heat_boundary_roles.py",
-        "validation_test/induction_heating/test_fem_ams_parity.py"
+        "validation_test/induction_heating/test_fem_ams_parity.py",
+        "tests/test_lamination_api.py"
       ]
     },
     "sparsesolv": {
@@ -339,6 +404,34 @@
         "src/ext/sparsesolv/tests/test_hermitian_iccg.py",
         "src/ext/sparsesolv/tests/test_ams_repeatability.py",
         "tests/test_ams_internal_setup_parallel.py"
+      ]
+    },
+    "repo-contracts": {
+      "description": "Cross-distribution source and release-tool contracts in the always-on repository policy lane.",
+      "paths": [
+        "tests/test_ci_execution_policy.py",
+        "tests/test_ci_monitor.py",
+        "tests/test_release_quad_optuna_candidate.py",
+        "tests/test_test_tier_policy.py",
+        "tests/test_run_test_tier.py",
+        "tests/test_docs_notebook_contract.py",
+        "tests/test_application_interface_manifest.py",
+        "tests/test_matlab_python_parity_manifest.py",
+        "tests/test_mdx_runner_pool.py",
+        "tests/test_ci_preflight_lab.py",
+        "tests/test_ci_preflight_scope.py",
+        "tests/test_ltspice_ci_scope.py",
+        "tests/test_simulink_release_package.py",
+        "tests/test_sparsesolv_matlab_contract.py",
+        "tests/test_beam_transfer_mex_pybind_validation.py",
+        "tests/test_editable_intent.py",
+        "tests/test_privacy_source_contract.py",
+        "tests/test_audit_taskmanager.py",
+        "tests/test_release_quad_editable_intent.py",
+        "tests/test_release_quad_editable_source.py",
+        "tests/test_release_quad_evidence_motor.py",
+        "tests/test_release_quad_phase9_contract.py",
+        "tests/test_release_quad_state.py"
       ]
     }
   }

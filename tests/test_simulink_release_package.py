@@ -14,6 +14,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 
+import importlib.util as _scratch_import
+_scratch_spec = _scratch_import.spec_from_file_location(
+    "repository_contract_scratch", Path(__file__).resolve().parents[1] / "tools/repository_contract_scratch.py")
+_scratch_module = _scratch_import.module_from_spec(_scratch_spec)
+_scratch_spec.loader.exec_module(_scratch_module)
+isolated_engine_contract_scratch = _scratch_module.isolated_controller_scratch
+
+
 def test_mex_build_verifier_rejects_missing_and_changed_binaries(tmp_path):
     verifier = load_module(
         "verify_radia_mex_build_test",

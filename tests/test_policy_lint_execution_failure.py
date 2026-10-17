@@ -81,3 +81,25 @@ def test_git_trust_is_scoped_to_the_active_checkout(monkeypatch):
     assert lint._sh(["git", "grep", "needle"]) == (128, "git diagnostic")
     assert calls[0][0] == ["git", "-c", f"safe.directory={lint.REPO}", "grep", "needle"]
     assert calls[0][1]["cwd"] == lint.REPO
+
+@pytest.mark.parametrize('private_text', [
+    '10.' + '99.88.77',
+    'C:' + '/Users/SyntheticOperator/scratch',
+    chr(92) * 2 + 'synthetic-server' + chr(92) + 'share',
+])
+def test_exporter_release_skill_is_scanned_for_runtime_identity(monkeypatch, tmp_path, private_text):
+    """The release guide must not regain a blanket operational exemption."""
+    lint = _load()
+    relative = '.agents/skills/release-cubit-mesh-export/SKILL.md'
+    source = tmp_path / relative
+    source.parent.mkdir(parents=True)
+    source.write_text('Run on ' + private_text, encoding='utf-8')
+    monkeypatch.setattr(lint, 'REPO', str(tmp_path))
+    monkeypatch.setattr(lint, '_git_grep', lambda *a, **k: [relative + ':1:synthetic identity'])
+    monkeypatch.setattr(lint, '_git_ls_files', lambda *a: [relative])
+    monkeypatch.setattr(lint, 'check_bare_mdx_growth', lambda: [])
+    assert lint.check_public_runtime_privacy()
+    source.write_text('Use the editable development host and wheel acceptance host. '
+                      'Resolve SSH aliases and absolute paths from private configuration.',
+                      encoding='utf-8')
+    assert lint.check_public_runtime_privacy() == []

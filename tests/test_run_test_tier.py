@@ -88,7 +88,7 @@ def test_additive_manifest_selects_new_rules_and_ordinary_impacts(monkeypatch, t
     previous = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
     current = copy.deepcopy(previous)
     # Source need not change: adding a mapping must exercise its tests anyway.
-    current['impact_rules']['src/new_gate.py'] = ['tests/test_ci_monitor.py']
+    current['impact_rules']['src/new_gate.py'] = ['tests/test_ih_energy_audit_contract.py']
     manifest = tmp_path / 'manifest.json'
     manifest.write_text(json.dumps(current), encoding='utf-8')
     monkeypatch.setattr(runner, 'MANIFEST', manifest)
@@ -98,7 +98,7 @@ def test_additive_manifest_selects_new_rules_and_ordinary_impacts(monkeypatch, t
         previous_manifest=previous,
     )
     assert set(selected) == {
-        'tests/test_test_tier_policy.py', 'tests/test_ci_monitor.py',
+        'tests/test_test_tier_policy.py', 'tests/test_ih_energy_audit_contract.py',
         'tests/test_ci_preflight_lab.py',
     }
 
@@ -114,11 +114,11 @@ def test_changed_manifest_rule_selects_only_old_and_new_tests(change, monkeypatc
         del current['impact_rules'][source]
         expected = set(old_tests)
     elif change == 'replace_tests':
-        current['impact_rules'][source] = ['tests/test_ci_monitor.py']
-        expected = {*old_tests, 'tests/test_ci_monitor.py'}
+        current['impact_rules'][source] = ['tests/test_ih_energy_audit_contract.py']
+        expected = {*old_tests, 'tests/test_ih_energy_audit_contract.py'}
     else:
-        current['impact_rules'][source].append('tests/test_ci_monitor.py')
-        expected = {*old_tests, 'tests/test_ci_monitor.py'}
+        current['impact_rules'][source].append('tests/test_ih_energy_audit_contract.py')
+        expected = {*old_tests, 'tests/test_ih_energy_audit_contract.py'}
     manifest = tmp_path / 'manifest.json'
     manifest.write_text(json.dumps(current), encoding='utf-8')
     monkeypatch.setattr(runner, 'MANIFEST', manifest)
@@ -170,9 +170,9 @@ def test_profile_membership_only_selects_changed_tests(change, monkeypatch, tmp_
     if change == 'add':
         paths.append('tests/test_ci_preflight_lab.py')
     elif change == 'remove':
-        paths.remove('tests/test_ci_monitor.py')
+        paths.remove('tests/test_ih_energy_audit_contract.py')
     elif change == 'replace':
-        paths.remove('tests/test_ci_monitor.py')
+        paths.remove('tests/test_ih_energy_audit_contract.py')
         paths.append('tests/test_ci_preflight_lab.py')
     else:
         paths.reverse()
@@ -232,7 +232,7 @@ def test_new_missing_profile_member_fails_before_pytest(monkeypatch, tmp_path):
     'validation_test/feec/test_hdiv_vim_energy_newton.py',
     'validation_test/feec/run_energy_newton_audit.py',
     'validation_test/feec/results/bh_saturation_20260914/qualified/result.json',
-    '.github/workflows/radia-fast.yml', 'tests/test_hdiv_bh_table_saturation_contract.py',
+    '.github/workflows/radia.yml', 'tests/test_hdiv_bh_table_saturation_contract.py',
 ])
 def test_bh_dependency_changes_select_bh_contract(changed):
     runner = runner_module()
@@ -247,7 +247,7 @@ def test_bh_dependency_changes_select_bh_contract(changed):
 def test_fast_workflow_checks_dependencies_without_unrelated_impacts():
     runner = runner_module()
     base, _ = runner.load_profile('fast-contracts')
-    selected = runner.select_impact_tests(base, ['.github/workflows/radia-fast.yml'])
+    selected = runner.select_impact_tests(base, ['.github/workflows/radia.yml'])
     assert set(base) <= set(selected)
     assert 'tests/test_hdiv_bh_table_saturation_contract.py' in selected
     assert 'tests/test_simulink_release_package.py' not in selected
@@ -282,7 +282,8 @@ def test_cli_passes_exact_base_manifest_to_selection(monkeypatch):
     assert runner.main(['--since', 'exact-base', '--collect-only']) == 0
     selected = calls[-1]
     assert 'tests/test_ci_preflight_lab.py' not in selected
-    assert 'tests/test_run_test_tier.py' in selected
+    assert 'tests/test_run_test_tier.py' not in selected
+    assert 'tests/test_run_test_tier.py' in runner.load_profile('repo-contracts')[0]
 
 
 def test_previous_manifest_timeout_remains_unknown(monkeypatch):
@@ -340,9 +341,9 @@ def test_scoped_native_lane_still_checks_changed_parent_profile():
     runner = runner_module()
     current = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
     previous = copy.deepcopy(current)
-    previous['profiles']['fast-contracts']['paths'].remove('tests/test_ci_monitor.py')
+    previous['profiles']['fast-contracts']['paths'].remove('tests/test_ih_energy_audit_contract.py')
     assert runner.changed_impact_tests(
-        current, previous, profile_name='native-smoke') == {'tests/test_ci_monitor.py'}
+        current, previous, profile_name='native-smoke') == {'tests/test_ih_energy_audit_contract.py'}
 
 def test_axisymmetric_mcp_checks_use_numerical_lane_and_trace_is_fast():
     runner = runner_module()
@@ -396,3 +397,13 @@ def test_strong_cli_manifest_split_does_not_collect_native_in_fast_lane():
         previous_manifest=previous, profile_name='fast-contracts')
     assert required not in selected and not (set(old) & set(selected))
     assert set(fast) <= set(selected)
+
+
+def test_fast_selection_hands_repository_contracts_to_the_always_on_lanes():
+    runner = runner_module()
+    cpu, _ = runner.load_profile("fast-contracts")
+    repository, _ = runner.load_profile("repo-contracts")
+    selected = runner.select_impact_tests(cpu, None, profile_name="fast-contracts")
+    assert set(cpu) <= set(selected)
+    assert not set(selected) & set(repository)
+    assert "tests/test_sparsesolv_ci_contract.py" not in selected

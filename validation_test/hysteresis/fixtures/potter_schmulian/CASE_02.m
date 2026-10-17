@@ -70,7 +70,28 @@ a2 = axes('Units','Pixels','Position',[800,80,500,500],'FontName','Times New Rom
 		h(1) = plot( BH(n).H, BH(n).B, 'r-');
 		h(2) = plot(-BH(n).H,-BH(n).B, 'b-');
 	end
-	save(sprintf('B_input.mat'),'BH','dB','BMax');
+    % HDF5 disk axes retain the original MATLAB logical array shapes.
+    output = 'B_input.hdf5';
+    if isfile(output)
+        error('Refusing to overwrite existing HDF5 fixture');
+    end
+    write_numeric(output, '/dB', dB, 'T');
+    write_numeric(output, '/BMax', BMax, 'T');
+    for branch = 1:length(BH)
+        prefix = sprintf('/BH/%04d', branch-1);
+        write_numeric(output, [prefix '/H'], BH(branch).H, 'A/m');
+        write_numeric(output, [prefix '/B'], BH(branch).B, 'T');
+    end
+    h5writeatt(output, '/', 'schema', 'radia.hysteresis-branches.v1');
+    h5writeatt(output, '/', 'unit_system', 'SI');
+    h5writeatt(output, '/', 'text_encoding', 'UTF-8');
+    h5writeatt(output, '/', 'branch_count', int64(length(BH)));
+    h5writeatt(output, '/', 'branch_numbering', 'zero-based, original struct-column order');
+    h5writeatt(output, '/', 'array_layout', 'original MATLAB logical shape; C-order byte hashing');
+    h5writeatt(output, '/', 'labels', 'BH/H magnetic field; BH/B flux density; BMax branch levels; dB spacing');
+    h5writeatt(output, '/', 'coordinate_system', 'not applicable: scalar material curves');
+    h5writeatt(output, '/', 'unknown_metadata', 'generation timestamp not recorded');
+    h5writeatt(output, '/BH', 'source_shape', int64(size(BH)));
 
 	legend(h, {sprintf('Descending'), sprintf('Ascending\n ({\\Delta}{\\itB}=%.3f T) ',dB)}, 'box','off', 'location','northwest');
 	set(gca,'XLim',[-2000, 2000]);
@@ -91,4 +112,12 @@ function dM = match_Mmax(M, H, a, S, Ms, Hc);
 	a = -a;
 	M2 = Ms*(sign(a) - a*(1+tanh((Hc-sign(a)*H)/Hc*atanh(S))));
 	dM = (M - M1)^2 + (M - M2)^2;;
+end
+
+function write_numeric(output, name, values, units)
+    % MATLAB's high-level HDF5 API reverses disk dimensions. Compensate
+    % explicitly so Python reads the original logical row/column shape.
+    h5create(output, name, fliplr(size(values)), 'Datatype', 'double');
+    h5write(output, name, permute(values, ndims(values):-1:1));
+    h5writeatt(output, name, 'units', units);
 end

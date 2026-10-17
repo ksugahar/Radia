@@ -18,15 +18,18 @@ def _preflight_module():
 
 
 def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
-    fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(encoding="utf-8")
+    fast = (ROOT / ".github" / "workflows" / "radia.yml").read_text(encoding="utf-8")
     native = (ROOT / ".github" / "workflows" / "build-test.yml").read_text(encoding="utf-8")
     optuna = (ROOT / ".github" / "workflows" / "radia-optuna.yml").read_text(encoding="utf-8")
     release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
 
     assert "name: Radia\n" in fast
-    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in fast
+    import yaml
+    labels = yaml.safe_load(fast)['jobs']['fast-contracts']['runs-on']
+    assert labels == ['self-hosted', 'Windows', 'X64', 'ci-light']
+    assert '100' not in labels
     assert "Build with MSVC" not in fast
-    assert "validation_test/" not in fast
+    assert "validation_test/" not in fast.split("jobs:", 1)[1]
     assert "name: Radia Native Release" in native
     assert 'runs-on: [self-hosted, Windows, X64, "100"]' in native
     assert "mkl-devel" in native
@@ -55,7 +58,7 @@ def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
 def test_fast_ci_declares_bh_and_wheel_contract_dependencies():
     import yaml
 
-    workflow = yaml.safe_load((ROOT / '.github/workflows/radia-fast.yml').read_text(encoding='utf-8'))
+    workflow = yaml.safe_load((ROOT / '.github/workflows/radia.yml').read_text(encoding='utf-8'))
     steps = workflow['jobs']['fast-contracts']['steps']
     setup = next(step['run'] for step in steps
                  if step.get('name') == 'Create isolated fast-CI environment')
@@ -114,7 +117,7 @@ def test_policy_lint_enforces_the_retired_examples_boundary():
 
 
 def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
-    fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(
+    fast = (ROOT / ".github" / "workflows" / "radia.yml").read_text(
         encoding="utf-8"
     )
     mcp = (ROOT / ".github" / "workflows" / "radia-mcp-matrix.yml").read_text(
@@ -127,7 +130,7 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
         "packages/radia-optuna/**",
         "packages/eqnedit64/**",
     ):
-        assert independent_path in fast
+        assert independent_path not in fast
 
     # Universal Policy Lint triggers are owned by the workflow-owner contract
     # in tests/policy/test_workflow_owner_scope.py.
@@ -288,7 +291,9 @@ def test_pre_push_runs_the_unpushed_candidate_on_lab():
     hook = (ROOT / "tools" / "git-hooks" / "pre-push").read_text(encoding="utf-8")
     helper = (ROOT / "tools" / "ci_preflight_lab.py").read_text(encoding="utf-8")
 
-    assert "ci_preflight_lab.py --base \"$remote_sha\" --head \"$local_sha\"" in hook
+    dispatcher = (ROOT / "tools" / "pre_push_check.py").read_text(encoding="utf-8")
+    assert "python tools/pre_push_check.py" in hook
+    assert '"--base", base, "--head", head' in dispatcher
     assert '"bundle", "create"' in helper
     assert 'git_output("merge-base", head, main_ref)' in helper
     assert "$base = '{effective_base}'" in helper
@@ -298,7 +303,7 @@ def test_pre_push_runs_the_unpushed_candidate_on_lab():
     assert "numpy scipy pytest pyyaml setuptools wheel 'mcp>=1.0,<2'" in helper
     assert 'import mcp, numpy, pytest, scipy, setuptools, wheel, yaml' in helper
     assert "tools/run_test_tier.py --profile fast-contracts" in helper
-    assert "LAB preflight helper missing" in hook
+    assert "candidate preflight helper is missing" in dispatcher
     assert '&& [ -f tools/ci_preflight_lab.py ]' not in hook
     assert "upload_release_asset.py" not in hook
     assert "developer push must never upload mutable" in hook
@@ -320,7 +325,7 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert "LAB/102 tests radia and radia-mcp wheels without radia-gpu" in normalized
     assert "Use the on-demand GPU worker only for mexcuda GPU work" in normalized
     assert "Retired execution targets are excluded from deployment, CI and computation" in normalized
-    assert "`NGSolve` A100 validation runs without Cubit" in normalized
+    assert "`A100` validation runs without Cubit" in normalized
     assert "NGSolve hosts start from checked exported .vol files, without Cubit" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
     assert "each server's live `tools/list` response are the tool-discovery source of truth" in normalized
@@ -355,16 +360,16 @@ def test_policy_twins_define_the_same_compute_host_routing():
     policy = routing_policy(agents)
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
-    assert "Use the on-demand GPU worker only for mexcuda GPU work" in normalized
-    assert "Retired execution targets are excluded from deployment, CI and computation" in normalized
-    assert "BatchMode=yes NGSolve hostname" in normalized
+    assert "A100 owns GPU development (mexcuda only)" in normalized
+    assert "Retired targets are excluded from deployment, CI and computation" in normalized
+    assert "BatchMode=yes A100 hostname" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
-    assert "A100 is optional for development/publication" in normalized
+    assert "Prioritize HDiv-MMM, then AMS" in normalized
+    assert "A100 is optional for development/publication" not in normalized
     assert "100/LAB timings are diagnostic" in normalized
-    assert "one heavy job at a time" in normalized
-    assert "running jobs and available memory" in normalized
-    assert "preserve active timing jobs" in normalized
-    assert "Never stop another session's jobs" in normalized
+    assert "one heavy job at a time" in normalized.lower()
+    assert "jobs and memory" in normalized
+    assert "never stop others' jobs" in normalized
     assert "ConnectTimeout" in normalized
     assert "Measure speed" in normalized
     assert "remain valid provenance" in normalized
@@ -470,6 +475,27 @@ def test_host_roles_agree_across_deployment_skills():
     assert "LAB/100 editable sources" not in build
     assert "LAB/100 must remain verified editable" not in build
     assert "LAB uses verified wheels and only 100号機 uses an editable development install" in build
-    assert "test host with verified wheels" in cubit
-    assert "LAB `wheel`, 100 `editable`" in cubit
-    assert "release-quad must not install, repoint or gate it" in cubit
+    # The public role table documents CLI identifiers, not physical host names.
+    # Bind its tiers to the actual deployment source instead of historical prose.
+    guide = root / ".agents/skills/release-cubit-mesh-export/SKILL.md"
+    documented_tiers = {}
+    for line in guide.read_text(encoding="utf-8").splitlines():
+        cells = [cell.strip().strip("`") for cell in line.strip("|").split("|")]
+        if len(cells) == 3 and cells[2] in {"editable", "wheel"}:
+            assert cells[1] not in documented_tiers, "duplicate deployment target"
+            documented_tiers[cells[1]] = cells[2]
+    source = root / "tools/release_cubit_dual.py"
+    spec = importlib.util.spec_from_file_location("cubit_dual_policy_contract", source)
+    assert spec and spec.loader
+    dual = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(dual)
+    assert documented_tiers == dual.TIERS == {"100": "editable", "lab": "wheel"}
+    assert set(documented_tiers) == set(dual.TARGETS)
+    assert "`tools/release_cubit_dual.py`" in cubit
+    assert "solver releases must not install, repoint or version-gate it" in cubit
+    # Both release agents use the same portable acceptance/cleanup contract.
+    import re
+    links = re.findall(r"\]\((\.\./[^)]+)\)", guide.read_text(encoding="utf-8"))
+    assert any((guide.parent / link).resolve() ==
+               (root / ".agents/skills/cubit-toolbar-acceptance/SKILL.md").resolve()
+               and (guide.parent / link).is_file() for link in links)

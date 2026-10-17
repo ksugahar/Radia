@@ -129,6 +129,25 @@ def test_manifest_is_emitted_only_when_start_and_end_identity_match(tmp_path):
     assert len(manifest["source_change_fingerprint_sha256"]) == 64
 
 
+@pytest.mark.parametrize('directory', ['build-msvc', 'outside'])
+def test_optional_build_directory_is_explicit_and_checkout_bound(tmp_path,directory):
+    repo,binary=_repo(tmp_path)
+    (repo/directory).mkdir()
+    path=Path(str(binary)+'.build.json')
+    command=(f"$ErrorActionPreference='Stop'; . {_quote(SCRIPT)}; "
+             f"$start=Get-NativeBuildSourceIdentity -RepoRoot {_quote(repo)}; "
+             f"Write-NativeBuildProvenance -BinaryPath {_quote(binary)} -RepoRoot {_quote(repo)} "
+             f"-StartIdentity $start -BuildDirectory '{directory}'; "
+             f"Get-Content -Raw -LiteralPath {_quote(path)}")
+    result=_pwsh(command)
+    if directory=='outside':
+        assert result.returncode!=0 and not path.exists()
+    else:
+        assert result.returncode==0,result.stderr
+        record=json.loads(result.stdout[result.stdout.index('{'):])
+        assert record['build_directory']=='build-msvc'
+
+
 def test_selected_checkout_trust_is_invocation_local(tmp_path):
     repo, _ = _repo(tmp_path)
     isolated_config = tmp_path / "global.gitconfig"

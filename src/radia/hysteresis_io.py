@@ -1,12 +1,12 @@
 """Hysteresis material data I/O and shape function construction.
 
-Reads various input formats (.hys, .mat, B-H loops) and constructs
+Reads various input formats (.hys, .hdf5, B-H loops) and constructs
 B-input Play model shape functions. Converts to energy-based parameters
 for EnergyBasedHysteresis.
 
 Functions:
     load_hys(filepath)              - JMAG .hys file reader
-    load_mat(filepath)              - MATLAB .mat file reader (Potter-Schmulian)
+    load_hdf5(filepath)              - HDF5 branch reader (Potter-Schmulian)
     build_shape_functions(loops, K) - ShapeFunction.m port
     play_hysteron(f_k, Bx, By, eta, px, py) - PlayHysteron.m port (verification)
     convert_play_to_energy(eta, f_k_tables)  - B-input Play -> energy params
@@ -84,45 +84,42 @@ def load_hys(filepath):
     return loops
 
 
-def load_mat(filepath, bh_var='BH', db_var='dB', bmax_var='BMax'):
-    """Read MATLAB .mat file (Potter-Schmulian B_input.mat format).
+def load_hdf5(filepath):
+    """Read SI scalar branches from radia.hysteresis-branches.v1 HDF5.
 
-    Parameters
-    ----------
-    filepath : str or Path
-        Path to .mat file.
-
-    Returns
-    -------
-    loops : list of dict
-        Each: {'B': ndarray, 'H': ndarray, 'Bmax': float}
-    dB : float
-        B step size.
-    BMax : ndarray
-        Array of Bmax values.
+    Datasets retain original logical shapes. Branches are numbered from zero
+    in source order; returned loops are sorted by decreasing Bmax, as required
+    by shape-function construction. Unsupported schemas fail explicitly.
     """
-    from scipy.io import loadmat
-    data = loadmat(filepath, squeeze_me=True)
+    import h5py
 
-    BH_struct = data[bh_var]
-    dB = float(data[db_var])
-    BMax = np.asarray(data[bmax_var])
-
-    loops = []
-    for item in BH_struct:
-        # Bug fix 2026-05-02: previous version did `item['B'].flat[0]` which
-        # returns only the FIRST scalar element of the flat iterator, not the
-        # whole branch. This produced HdataLUT with a single non-zero row per
-        # column, breaking the JMAG identification at the input stage.
-        B = np.asarray(item['B']).flatten()
-        H = np.asarray(item['H']).flatten()
-        loops.append({
-            'B': B,
-            'H': H,
-            'Bmax': float(np.max(np.abs(B)))
-        })
-
-    loops.sort(key=lambda x: x['Bmax'], reverse=True)
+    with h5py.File(filepath, 'r') as data:
+        if data.attrs.get('schema') != 'radia.hysteresis-branches.v1':
+            raise ValueError('Unsupported hysteresis HDF5 schema')
+        if data.attrs.get('unit_system') != 'SI':
+            raise ValueError('Hysteresis branches require SI units')
+        count = int(data.attrs['branch_count'])
+        expected = {f'{i:04d}' for i in range(count)}
+        if count < 1 or set(data['BH']) != expected:
+            raise ValueError('Invalid HDF5 branch numbering')
+        dB = float(data['dB'][...].item())
+        BMax = data['BMax'][...].squeeze()
+        loops = []
+        for i in range(count):
+            group = data['BH'][f'{i:04d}']
+            B, H = group['B'][...].flatten(), group['H'][...].flatten()
+            if (group['B'].attrs.get('units') != 'T'
+                    or group['H'].attrs.get('units') != 'A/m'
+                    or B.shape != H.shape or B.size < 2
+                    or not np.isfinite(B).all() or not np.isfinite(H).all()):
+                raise ValueError('Invalid SI B/H branch arrays')
+            loops.append({'B': B, 'H': H, 'Bmax': float(np.max(np.abs(B)))})
+        if (data['dB'].attrs.get('units') != 'T'
+                or data['BMax'].attrs.get('units') != 'T'
+                or not np.isfinite(dB) or dB <= 0
+                or np.size(BMax) != count or not np.isfinite(BMax).all()):
+            raise ValueError('Invalid SI branch spacing or levels')
+    loops.sort(key=lambda item: item['Bmax'], reverse=True)
     return loops, dB, BMax
 
 
@@ -402,15 +399,15 @@ def hys_to_radia(filepath, K=None, eps=1e-8):
             'f_k_tables': p['f_k_tables'], 'eps': eps}
 
 
-def mat_to_radia(filepath, eps=1e-8):
-    """Convert MATLAB .mat file (Potter-Schmulian) to energy-based params.
+def hdf5_to_radia(filepath, eps=1e-8):
+    """Convert HDF5 branches (Potter-Schmulian) to energy-based params.
 
     Returns a dict of parameters ready for rad.MatEnergyHysteresis().
 
     Parameters
     ----------
     filepath : str or Path
-        Path to B_input.mat.
+        Path to B_input.hdf5.
 
     Returns
     -------
@@ -418,7 +415,7 @@ def mat_to_radia(filepath, eps=1e-8):
         Keys: 'K', 'chi', 'f_k_tables', 'eps'.
         Usage: rad.MatEnergyHysteresis(**params)
     """
-    loops, dB, BMax = load_mat(filepath)
+    loops, dB, BMax = load_hdf5(filepath)
     eta, f_k_tables, Bplay = build_shape_functions(loops, dB=dB)
 
     p = convert_play_to_energy(eta, f_k_tables)
@@ -462,15 +459,15 @@ def hys_to_play_radia(filepath, K=None):
     return len(f_k_tables), eta, f_k_tables
 
 
-def mat_to_play_radia(filepath):
-    """Convert MATLAB .mat file (Potter-Schmulian) to Play model parameters.
+def hdf5_to_play_radia(filepath):
+    """Convert HDF5 branches (Potter-Schmulian) to Play model parameters.
 
     Returns (K, eta, f_k_tables) ready for rad.MatPlayHysteresis().
 
     Parameters
     ----------
     filepath : str or Path
-        Path to B_input.mat.
+        Path to B_input.hdf5.
 
     Returns
     -------
@@ -481,6 +478,6 @@ def mat_to_play_radia(filepath):
     f_k_tables : list of (r_array, f_array) tuples
         Shape function tables.
     """
-    loops, dB, BMax = load_mat(filepath)
+    loops, dB, BMax = load_hdf5(filepath)
     eta, f_k_tables, Bplay = build_shape_functions(loops, dB=dB)
     return len(f_k_tables), eta, f_k_tables

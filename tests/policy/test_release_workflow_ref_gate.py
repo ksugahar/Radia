@@ -25,7 +25,7 @@ PACKAGE_CI_CONTEXTS=(
 
 def test_pypi_distributions_have_independent_ci_boundaries():
     workflows={
-        "Radia": ROOT/".github"/"workflows"/"radia-fast.yml",
+        "Radia": ROOT/".github"/"workflows"/"radia.yml",
         "Radia Native Release": ROOT/".github"/"workflows"/"build-test.yml",
         "radia-mcp": ROOT/".github"/"workflows"/"radia-mcp-matrix.yml",
         "cubit-mesh-export": ROOT/".github"/"workflows"/"cubit-mesh-export.yml",
@@ -40,7 +40,10 @@ def test_pypi_distributions_have_independent_ci_boundaries():
     fast=texts["Radia"]
     native=texts["Radia Native Release"]
     assert "workflow_dispatch:" in fast
-    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in fast
+    import yaml
+    labels = yaml.safe_load(fast)['jobs']['fast-contracts']['runs-on']
+    assert labels == ['self-hosted', 'Windows', 'X64', 'ci-light']
+    assert '100' not in labels
     assert "Build with MSVC" not in fast
     assert "compileall -q src/radia" in fast
     assert "compileall -q src/radia packages/radia-mcp/src" not in fast
@@ -226,7 +229,7 @@ def test_eqnedit64_release_requires_exact_successful_tag_ci():
 
 def test_eqnedit64_ci_is_separate_from_radia_mcp_ci():
     ci = EQNEDIT64_WORKFLOW.read_text(encoding="utf-8")
-    radia_fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(
+    radia_fast = (ROOT / ".github" / "workflows" / "radia.yml").read_text(
         encoding="utf-8"
     )
     policy = (ROOT / ".github" / "workflows" / "policy-lint.yml").read_text(
@@ -240,7 +243,7 @@ def test_eqnedit64_ci_is_separate_from_radia_mcp_ci():
     assert "packages/radia-mcp/tests/test_presentation_markdown_math.py" in ci
     for path in ("packages/eqnedit64/**", "tools/eqnedit64/**"):
         assert path in ci
-        assert path in radia_fast
+        assert path not in radia_fast
     assert "paths-ignore:" not in policy
 
 

@@ -24,6 +24,14 @@ release_quad = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(release_quad)
 
 
+import importlib.util as _scratch_import
+_scratch_spec = _scratch_import.spec_from_file_location(
+    "repository_contract_scratch", Path(__file__).resolve().parents[1] / "tools/repository_contract_scratch.py")
+_scratch_module = _scratch_import.module_from_spec(_scratch_spec)
+_scratch_spec.loader.exec_module(_scratch_module)
+isolated_ssh_contract_scratch = _scratch_module.isolated_controller_scratch
+
+
 def test_release_quad_tracks_the_independent_optuna_version():
     versions = release_quad._read_repo_versions()
     package = TOOL.parents[1] / "packages/radia-optuna/pyproject.toml"
@@ -633,4 +641,4 @@ def test_owned_scratch_refuses_a_junction(tmp_path):
     ])))
     assert result.returncode == 0, result.stderr
     assert "refused-junction" in result.stdout
-    assert (tmp_path / "outside" / "keep.txt").read_text().strip() == "keep"
+    assert (tmp_path / "outside" / "keep.txt").read_text(encoding="utf-8").strip() == "keep"

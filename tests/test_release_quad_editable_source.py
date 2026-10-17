@@ -823,7 +823,7 @@ def test_cpu_release_does_not_wait_for_independent_distribution_ci(
     assert release_quad.cmd_ci_verify(None) == 0
 
 
-@pytest.mark.parametrize("workflow_path", [".github/workflows/radia-fast.yml", "unknown-shared-check.yml"])
+@pytest.mark.parametrize("workflow_path", [".github/workflows/radia.yml", "unknown-shared-check.yml"])
 def test_cpu_release_still_rejects_cpu_and_unclassified_failures(monkeypatch, workflow_path):
     sha = "a" * 40
     failed = dict(id=2, name="shared-contracts", status="completed", conclusion="failure",

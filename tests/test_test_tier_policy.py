@@ -50,7 +50,7 @@ def test_fast_ci_profiles_have_explicit_paths_and_runtime_budgets():
         for path in profile["paths"]:
             assert (ROOT / path).is_file(), (name, path)
 
-    fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(
+    fast = (ROOT / ".github" / "workflows" / "radia.yml").read_text(
         encoding="utf-8"
     )
     native = (ROOT / ".github" / "workflows" / "build-test.yml").read_text(
@@ -72,8 +72,9 @@ def test_release_gate_contracts_do_not_trigger_optuna_rebuilds():
         assert contract not in events[event]['paths']
         assert 'packages/radia-optuna/**' in events[event]['paths']
         assert 'Build.ps1' in events[event]['paths']
-    manifest = json.loads((ROOT / 'tests/test_tier_manifest.json').read_text())
-    assert contract in manifest['profiles']['fast-contracts']['paths']
+    manifest = json.loads((ROOT / 'tests/test_tier_manifest.json').read_text(encoding="utf-8"))
+    assert contract in manifest['profiles']['repo-contracts']['paths']
+    assert contract not in manifest['profiles']['fast-contracts']['paths']
     # The installed-wheel route runs MATLAB through the solver Engine worker;
     # a worker change reruns the Optuna contract without a wheel rebuild.
     worker = 'tools/verify_simulink_release.py'

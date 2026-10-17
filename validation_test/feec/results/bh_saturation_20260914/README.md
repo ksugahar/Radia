@@ -111,7 +111,7 @@ No other job directory was removed. Final local checks: 8 focused tests PASS,
 Ruff F/E9 clean. This work does not merge main, tag, or publish a release.
 
 CI follow-up: run 34771540139 exposed a missing SciPy dependency in the
-minimal fast-CI venv (five BH audit failures). `radia-fast.yml` now explicitly
+minimal fast-CI venv (five BH audit failures). `radia.yml` now explicitly
 installs SciPy for production PCHIP evaluation, with a workflow regression
 test. A fresh venv containing only the declared fast-lane dependencies passed
 all eight BH checks and all fourteen CI-policy checks; the complete tier passed

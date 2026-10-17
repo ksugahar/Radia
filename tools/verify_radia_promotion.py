@@ -112,7 +112,7 @@ class GitHub:
 
 def verify_acceptance_ci(api, commit):
     """Require successful main CI on the commit containing acceptance records."""
-    for workflow in ("radia-fast.yml", "policy-lint.yml"):
+    for workflow in ("radia.yml", "policy-lint.yml"):
         query = f"actions/workflows/{workflow}/runs?head_sha={commit}&event=push&per_page=100"
         runs = api.get(query).get("workflow_runs", [])
         matching = [run for run in runs if run.get("head_sha") == commit

@@ -2693,26 +2693,45 @@ RADIA_BUILD_AND_RELEASE = """
 ## Build Pipeline
 
 ```
-Build.ps1 (MSVC + MKL + NGSolve)
+radia CPU: Build.ps1 / CMake (supported MSVC + MKL + NGSolve)
   |-> _radia_pybind.pyd       (main C++ extension, required)
   |-> peec_matrices.pyd        (PEEC matrix assembly, required in full build)
   |-> sparsesolv_ngsolve.pyd   (NGSolve sparse solvers, optional)
-  |-> axifem.pyd               (axisymmetric FE, optional)
-  |-> radia_mex / optuna_mex   (MATLAB gateways)
-  +-> cubit_mesh_curver.pyd    (Cubit package candidate when Cubit is present)
+  +-> axifem.pyd               (axisymmetric FE, optional)
+
+radia-gpu: independent package-owned MATLAB mexcuda targets
+radia-optuna: independent Build.ps1 -OptunaMexOnly -> optuna_mex
+cubit-mesh-export: independent Cubit export-backend build
 ```
+
+CPU `radia` contains Python/pybind11 artifacts only. CPU MEX is unsupported;
+MATLAB/Simulink/LTspice artifacts belong to `radia-gpu`, while the Optuna
+gateway belongs to `radia-optuna`. Selecting a package target does not make
+its artifacts part of another distribution or satisfy another release gate.
 
 ### Prerequisites
 
-- **Visual Studio 2022** (MSVC compiler)
+- **Visual Studio Build Tools / MSVC** selected by supported MATLAB mexcuda
+  compatibility and the canonical CPU/GPU execution policy in `AGENTS.md`.
+  Use the current Build.ps1/CMake selectors and package metadata; do not select
+  a newer installed compiler merely because it is available.
+- **MATLAB-bundled CUDA only** for mexcuda targets. Follow the supported MATLAB
+  release and toolchain policy, not an external CUDA Toolkit installation.
+  Unsupported compiler XML edits or environment overrides are not permitted.
 - **Intel MKL** from `python -m pip install mkl-devel`
 - **NGSolve / Netgen** at the exact versions pinned in `pyproject.toml`
 - **Python 3.12** with pybind11
 
+Physical toolchain installation and a stock tiny-MEX interoperability pass
+establish only that installation's basic interoperability. They do not prove
+production selectors have adopted it, nor numerical qualification of AMS/IH.
+Record source adoption and each workflow's numerical acceptance separately.
+Do not relabel historical build or validation evidence after a toolchain change.
+
 ### Build Commands
 
 ```powershell
-# Standard build
+# CPU radia build (no MATLAB gateways)
 pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1
 
 # Clean rebuild
@@ -2721,12 +2740,17 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Rebuild
 # Build + focused source-tree tests
 pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Test
 
-# Focused native lanes
+# Focused CPU native lanes
 pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly
 pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -AxiFemOnly
-pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -MatlabMexOnly
+
+# Independent radia-optuna mexcuda target; not part of the CPU radia build
 pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -OptunaMexOnly
 ```
+
+For `radia-gpu`, select the current package-owned target and its independent
+build/validation lane. A compiler smoke pass does not authorize a production
+solver build or waive its declared artifact and numerical gates.
 
 ### NGSolve for CI Runner
 
@@ -2742,7 +2766,7 @@ Routine source CI and native release CI are deliberately separate:
 
 | Lane | Trigger | Scope |
 |------|---------|-------|
-| `radia-fast.yml` | affected pushes/PRs | development/build host fast policy and regression gates |
+| `radia.yml` | affected pushes/PRs | development/build host fast policy and regression gates |
 | `policy-lint.yml` | non-MCP pushes/PRs | portable source-policy checks |
 | `radia-mcp-matrix.yml` | MCP changes | impact-selected MCP tests/selftests |
 | `build-test.yml` | `v*` tag or manual dispatch | isolated native build, bounded tests, wheel candidate |
