@@ -1988,6 +1988,18 @@
         "detail": "Cross-distribution workflow capability routing is checked by the source-contract lane before local execution; unknown jobs and unaudited lightweight execution fail closed."
       },
       "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/validation_source_gate.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tests/validation_gate/**",
+      "owners": [
+        "radia"
+      ]
     }
   ],
   "shared_include_closures": [
@@ -2471,6 +2483,8 @@
             "MANIFEST.in",
             "tests/test_tier_manifest.json",
             "tools/run_test_tier.py",
+            "tools/validation_source_gate.py",
+            "tests/validation_gate/**",
             "tools/audit_taskmanager.py",
             "tools/verify_cpu_wheel.py",
             "tools/verify_radia_promotion.py",
@@ -2572,6 +2586,8 @@
             "MANIFEST.in",
             "tests/test_tier_manifest.json",
             "tools/run_test_tier.py",
+            "tools/validation_source_gate.py",
+            "tests/validation_gate/**",
             "tools/audit_taskmanager.py",
             "tools/verify_cpu_wheel.py",
             "tools/verify_radia_promotion.py",
@@ -3295,6 +3311,8 @@
             "tests/test_native_build_provenance.py",
             "tools/sparsesolv_ci_impact.py",
             ".github/workflows/sparsesolv.yml",
+            "tools/validation_source_gate.py",
+            "tests/validation_gate/**",
             "pyproject.toml",
             "tests/test_tier_manifest.json",
             "src/radia/lamination.py",
@@ -3472,6 +3490,8 @@
             "tests/test_native_build_provenance.py",
             "tools/sparsesolv_ci_impact.py",
             ".github/workflows/sparsesolv.yml",
+            "tools/validation_source_gate.py",
+            "tests/validation_gate/**",
             "pyproject.toml",
             "tests/test_tier_manifest.json",
             "src/radia/lamination.py",
@@ -3497,7 +3517,15 @@
             "!**/*.md"
           ]
         },
-        "workflow_dispatch": {}
+        "workflow_dispatch": {
+          "inputs": {
+            "force_validation": {
+              "description": "Execute full solver-heavy validation without receipt reuse",
+              "type": "boolean",
+              "default": "true"
+            }
+          }
+        }
       },
       "selector_refs": [
         "tools/sparsesolv_ci_impact.py:native_required",
