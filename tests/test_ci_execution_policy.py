@@ -24,7 +24,10 @@ def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
     release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
 
     assert "name: Radia\n" in fast
-    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in fast
+    import yaml
+    labels = yaml.safe_load(fast)['jobs']['fast-contracts']['runs-on']
+    assert labels == ['self-hosted', 'Windows', 'X64', 'ci-light']
+    assert '100' not in labels
     assert "Build with MSVC" not in fast
     assert "validation_test/" not in fast.split("jobs:", 1)[1]
     assert "name: Radia Native Release" in native
@@ -322,7 +325,7 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert "LAB/102 tests radia and radia-mcp wheels without radia-gpu" in normalized
     assert "Use the on-demand GPU worker only for mexcuda GPU work" in normalized
     assert "Retired execution targets are excluded from deployment, CI and computation" in normalized
-    assert "`NGSolve` A100 validation runs without Cubit" in normalized
+    assert "`A100` validation runs without Cubit" in normalized
     assert "NGSolve hosts start from checked exported .vol files, without Cubit" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
     assert "each server's live `tools/list` response are the tool-discovery source of truth" in normalized
@@ -357,17 +360,16 @@ def test_policy_twins_define_the_same_compute_host_routing():
     policy = routing_policy(agents)
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
-    assert "Use the on-demand GPU worker only for mexcuda GPU work" in normalized
-    assert "Retired execution targets are excluded from deployment, CI and computation" in normalized
-    assert "BatchMode=yes NGSolve hostname" in normalized
+    assert "A100 owns GPU development (mexcuda only)" in normalized
+    assert "Retired targets are excluded from deployment, CI and computation" in normalized
+    assert "BatchMode=yes A100 hostname" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
-    assert "NGSolve A100 owns primary GPU work" in normalized
+    assert "Prioritize HDiv-MMM, then AMS" in normalized
     assert "A100 is optional for development/publication" not in normalized
     assert "100/LAB timings are diagnostic" in normalized
-    assert "one heavy job at a time" in normalized
-    assert "running jobs and available memory" in normalized
-    assert "preserve active timing jobs" in normalized
-    assert "Never stop another session's jobs" in normalized
+    assert "one heavy job at a time" in normalized.lower()
+    assert "jobs and memory" in normalized
+    assert "never stop others' jobs" in normalized
     assert "ConnectTimeout" in normalized
     assert "Measure speed" in normalized
     assert "remain valid provenance" in normalized

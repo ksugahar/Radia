@@ -1,0 +1,281 @@
+{
+  "schema": 1,
+  "mode": "stage3",
+  "jobs": {
+    "build-test.yml:build-test": {
+      "owner": "radia",
+      "target": "ci-native",
+      "legacy_100": true
+    },
+    "cubit-mesh-export.yml:ci-impact": {
+      "owner": "cubit-mesh-export",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "cubit-mesh-export.yml:build-test": {
+      "owner": "cubit-mesh-export",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "cubit-mesh-export.yml:publish": {
+      "owner": "cubit-mesh-export",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "eqnedit64.yml:ci-impact": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "eqnedit64.yml:docs": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "eqnedit64.yml:web": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "eqnedit64.yml:build-test": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "eqnedit64.yml:font-boundary-diagnostic": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "eqnedit64.yml:font-dump-build": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "eqnedit64.yml:font-dump-trial": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "eqnedit64.yml:font-probe-build": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "eqnedit64.yml:font-probe-trial": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "eqnedit64.yml:font-prefix-trial": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "ltspice-data-safety.yml:ci-impact": {
+      "owner": "radia-gpu",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "ltspice-data-safety.yml:matlab-data-contracts": {
+      "owner": "radia-gpu",
+      "target": "ci-matlab-gpu",
+      "legacy_100": true
+    },
+    "policy-lint.yml:policy-checks": {
+      "owner": "shared",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "policy-lint.yml:repository-contracts": {
+      "owner": "shared",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia-gpu-release.yml:qualify": {
+      "owner": "radia-gpu",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia-gpu-release.yml:publish": {
+      "owner": "radia-gpu",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia-gpu-release.yml:github-release": {
+      "owner": "radia-gpu",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia-gpu.yml:ci-impact": {
+      "owner": "radia-gpu",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia-gpu.yml:cuda-mex": {
+      "owner": "radia-gpu",
+      "target": "ci-matlab-gpu",
+      "legacy_100": true
+    },
+    "radia-mcp-matrix.yml:ci-impact": {
+      "owner": "radia-mcp",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia-mcp-matrix.yml:scope": {
+      "owner": "radia-mcp",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia-mcp-matrix.yml:minimum-sdk": {
+      "owner": "radia-mcp",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia-mcp-matrix.yml:selftest": {
+      "owner": "radia-mcp",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia-mcp-matrix.yml:release-evidence": {
+      "owner": "radia-mcp",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia-mcp-matrix.yml:publish": {
+      "owner": "radia-mcp",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia-optuna.yml:ci-impact": {
+      "owner": "radia-optuna",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia-optuna.yml:build-test": {
+      "owner": "radia-optuna",
+      "target": "ci-matlab-gpu",
+      "legacy_100": true
+    },
+    "radia-optuna.yml:installed-wheel-matlab-e2e": {
+      "owner": "radia-optuna",
+      "target": "ci-matlab-gpu",
+      "legacy_100": true
+    },
+    "radia.yml:ci-impact": {
+      "owner": "radia",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "radia.yml:fast-contracts": {
+      "owner": "radia",
+      "target": "ci-light",
+      "legacy_100": false
+    },
+    "release-eqnedit64-pypi.yml:qualify": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "release-eqnedit64-pypi.yml:signed-standalone": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "release-eqnedit64-pypi.yml:build-wheels": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "release-eqnedit64-pypi.yml:publish": {
+      "owner": "eqnedit64",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "release-radia-optuna.yml:publish": {
+      "owner": "radia-optuna",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "release.yml:upload-binaries": {
+      "owner": "radia",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "release.yml:publication-hold": {
+      "owner": "radia",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "release.yml:verify-promotion": {
+      "owner": "radia",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "release.yml:publish-pypi": {
+      "owner": "radia",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "sparsesolv.yml:ci-impact": {
+      "owner": "radia",
+      "target": "github-hosted",
+      "legacy_100": false
+    },
+    "sparsesolv.yml:ams-regression": {
+      "owner": "radia",
+      "target": "ci-native",
+      "legacy_100": true
+    }
+  },
+  "light": {
+    "radia.yml:fast-contracts": {
+      "requirements": [
+        "python",
+        "pytest",
+        "pyyaml",
+        "numpy",
+        "scipy",
+        "setuptools",
+        "wheel"
+      ],
+      "entrypoints": [
+        "tools/audit_taskmanager.py",
+        "tools/run_test_tier.py",
+        "tests/test_version_consistency.py",
+        "tests/showcase/test_result_readers.py",
+        "tests/ci_routing/test_runner_routing.py"
+      ],
+      "test_profile": "fast-contracts",
+      "audited_dynamic_sources": [
+        "validation_test/esrf_three_engine/check_case6_inputs.py",
+        "validation_test/feec/bh_saturation_audit.py",
+        "src/radia/ih_heat_boundaries.py",
+        "validation_test/omega_quadrature/assess_plateau.py",
+        "tools/policy_lint.py",
+        "tools/verify_radia_promotion.py",
+        "src/radia/_residual_gate.py",
+        "validation_test/surface_rom_team10/transient.py",
+        "validation_test/radia_mcp/privacy_source_contract.py",
+        "validation_test/feec/check_wedge_charge_pullback.py",
+        "tools/verify_cpu_wheel.py",
+        "src/radia/ih_heat_transient.py",
+        "tools/sparsesolv_ci_impact.py",
+        "tools/ci_distribution_contract.py",
+        "tools/ci_distribution_manifest.json",
+        "tools/pre_push_check.py",
+        "tools/local_push_checks.py",
+        "tools/validation_source_gate.py"
+      ],
+      "audit_sha256": "eae589c6e263d297e8533035bbde26e0950a67ec0093a0dca10c52447f4b15fb",
+      "deferred_or_mocked_imports": {
+        "validation_test/surface_rom_team10/transient.py": [
+          "ngsolve"
+        ],
+        "src/radia/ih_heat_transient.py": [
+          "ngsolve"
+        ]
+      }
+    }
+  }
+}

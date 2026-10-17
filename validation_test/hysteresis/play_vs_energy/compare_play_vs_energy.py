@@ -44,13 +44,13 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from pathlib import Path
 import radia as rad
-from radia.hysteresis_io import load_mat, build_shape_functions
+from radia.hysteresis_io import load_hdf5, build_shape_functions
 
 MU_0 = 4 * np.pi * 1e-7
 
-DATA = (r"W:\999_菅原賢悟\19_磁気ヒステリシス\2024_IGTE_共同研究"
-        r"\2024_03_08_H-input_B-input\Potter_Schmulian\B_input.mat")
+DATA = str(Path(__file__).resolve().parents[1] / "fixtures/potter_schmulian/B_input.hdf5")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FIG_DIR = os.path.join(SCRIPT_DIR, "figures")
@@ -60,7 +60,7 @@ os.makedirs(FIG_DIR, exist_ok=True)
 
 def main():
     print("Loading Potter-Schmulian shape functions...")
-    loops, dB, BMax = load_mat(DATA)
+    loops, dB, BMax = load_hdf5(DATA)
     eta, f_tables, _ = build_shape_functions(loops, dB)
     K = len(eta)
     print(f"  K = {K} Play operators, B_sat = {max(np.abs(BMax)):.3f} T")

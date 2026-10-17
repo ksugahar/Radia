@@ -27,7 +27,7 @@ from bqm_model import (
 
 DATA_DIR = (r'W:\999_菅原賢悟\19_磁気ヒステリシス'
             r'\2024_IGTE_共同研究\2024_03_08_H-input_B-input')
-MAT_FILE = os.path.join(DATA_DIR, 'Potter_Schmulian', 'B_input.mat')
+MAT_FILE = os.path.join(os.path.dirname(__file__), 'fixtures', 'potter_schmulian', 'B_input.hdf5')
 
 # =====================================================================
 # 1. Load data and compute JMAG shape functions (reference play model)
