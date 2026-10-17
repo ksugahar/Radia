@@ -22,3 +22,13 @@ analytical generator is a flux-density-scale quantity, not magnetization A/m.
 `../../verify_fixture_lineage.py` reidentifies all 128 committed NPZ fields using
 the HDF5-only reader. `../../fixture_lineage.json` records that verification.
 The migration and lineage checks do not qualify a coupled field solve.
+
+## Publication provenance status
+
+The existing lineage establishes model-generated numerical data and identifies
+the source generator; it does not establish that generator's authorship,
+license or explicit permission for redistribution of collaborative source.
+Those permissions are unverified in the records inspected for this migration.
+Tracked status is not clearance. Publication of this migration requires the
+repository-management lead to resolve that permission; no license or permission
+is inferred or granted by the HDF5 conversion.

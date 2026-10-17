@@ -50,6 +50,7 @@ def verify(output):
         "sha256": {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
                    for p in [source, generator, fixture, implementation]},
         "historical_source_mat_sha256": json.loads((here / "hdf5_fixture_migration.json").read_text(encoding="utf-8"))["source_mat_sha256"],
+        "publication_permission": "unverified: generator authorship/license/redistribution permission not established by numerical lineage",
         "passed": True,
     }
     Path(output).write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")

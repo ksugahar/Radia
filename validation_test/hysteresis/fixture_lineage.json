@@ -19,5 +19,6 @@
     "src\\radia\\hysteresis_io.py": "9d651e45b5cdcbedb74a4d665a254eba221e71418dba71802025f8867b130729"
   },
   "historical_source_mat_sha256": "9f9ff054db68196f5a4ec5afa491343ec694e72d8c9f59224bf462f34732ba03",
-  "passed": true
+  "passed": true,
+  "publication_permission": "unverified: generator authorship/license/redistribution permission not established by numerical lineage"
 }
