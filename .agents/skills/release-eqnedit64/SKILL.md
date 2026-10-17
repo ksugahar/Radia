@@ -246,3 +246,13 @@ version, and signer status. A hand-test update is not a public release.
 Report the pushed main SHA, O: manifest, tag, GitHub Release URL, PyPI version,
 destination path, SHA-256, product version, signer status, homepage URL,
 published JS SHA-256, and public browser verification result.
+
+
+## Pinned compiler policy
+New Eqnedit64 native, headless-module and ASan builds require Visual Studio
+Build Tools 2022 with MSVC 14.44.35207. The shared selector always initializes
+that exact toolset, validates the first cl.exe path and records its SHA-256;
+VS2026 and other compiler/toolset fallbacks are forbidden. CMake explicitly
+selects VS17 and v143 version14.44.35207. An unavailable toolchain blocks the
+build rather than changing compilers. Signing retains its Windows SDK and
+certificate policy. Historical artifacts and evidence remain immutable.
