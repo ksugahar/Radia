@@ -124,3 +124,18 @@ The 51-file execution closure digest is
 `bd004bc5dd2dcd23a3a1a6bf3e679eb17e6d25a681b071a419bbdb1f12119e5b`.
 This audit does not certify a live validation cache hit, native artifacts or
 physics results; those remain separate acceptance gates.
+
+## Validation-reuse review amendments (2026-10-17)
+
+The reviewed changes inspect untracked inputs repository-wide, bind compiler
+flags and numerical environment variables, and exercise the actual receipt
+search. The validation job now fetches complete main ancestry. In the same
+isolated lightweight environment, the worst-case fast selector executed
+**505 tests, zero skips**, in 29.84 seconds (30.98 seconds through the runner).
+Only the declared lightweight dependencies listed above were installed; no
+solver, MATLAB Engine or GPU compilation was used. The 51-file closure digest
+after these execution changes is
+`8dee341aab927e5fc050b1025d53fa98ee7f3b44ac59fe9a9bdf8c363431bc2f`.
+All 45 workflow jobs pass the routing audit. This repeats the execution audit,
+rather than updating a stale digest alone. Live main receipt hit/miss and
+current native artifact checks remain separate required evidence.
