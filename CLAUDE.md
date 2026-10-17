@@ -102,7 +102,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - mexcuda modules may retain CPU host control. Never include, link, or use NGSolve TaskManager in mexcuda builds, except a read-only guard that fails if a foreign TaskManager is active. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing.
 - All builds: VS2022/MSVC14.44, mexcuda-selected. CUDA: MATLAB-bundled12.8 only; no external CUDA/unsupported flags. Order: MATLAB, supported compiler/CUDA, all hosts; update MATLAB together and rebuild. Verify interop and AMS/IH on both GPUs.
 - No implicit CPU/GPU/Python fallback. When both routes exist, select explicitly (`Backend="gpu"|"cpu"`), record the backend and raise on failure. Internal CPU/GPU agreement does not replace Python CPU validation. Measure host setup and CPU solves separately.
-- Active GPU development/builds/validation: A100; keep NGSolve off while A100 is active. Local development/same-wheel RTX 5000 acceptance: 100, with independent review. No A100 release gate; no GPU on 102.
+- GPU development/builds/validation: A100, MATLAB-bundled CUDA only. Keep NGSolve off. 100 prioritizes CI/debt and same-wheel RTX 5000 release acceptance, with independent review; no new GPU development there. No GPU on 102.
 - Record parity, artifact hashes and validation JSON. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### GPU Kernel Research Strategy (2026-10-11)
@@ -215,7 +215,7 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 `jmag`: JMAG evaluation only. Keep Python 3.12.10, SSH service/config/keys, VC++ runtime and `inetpub` for control from 100. No Radia deployment, builds, CI/preflight, solver runs, validation or timing.
 
-**POLICY**: CPU work stays on 100; A100 owns primary GPU work. Prioritize HDiv-MMM, then AMS; compare AMS/ICCG on the same operator and true-residual gate, including setup/transfers. Use the on-demand GPU worker only for mexcuda GPU work. Retired execution targets are excluded from deployment, CI and computation.
+**POLICY**: 100 owns CPU CI/debt; A100 owns GPU development. Prioritize HDiv-MMM, then AMS. Compare AMS/ICCG on the same operator/residual gate, including setup/transfers. Retired targets are excluded from deployment, CI and computation.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes A100 hostname`; check running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs. Never stop another session's jobs.
 Compare CPU/GPU on the same host with fixed, recorded threads (16-thread baseline where supported). Measure speed, scaling, setup, transfers and total time; save hardware, memory and versions in JSON.
 100: CPU development/builds/CI and GPU acceptance; 100/LAB timings are diagnostic. Gmsh needs a desktop.
