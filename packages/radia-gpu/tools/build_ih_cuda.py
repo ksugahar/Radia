@@ -1,5 +1,6 @@
 """Isolated, low-priority persistent IH mexcuda build on 100."""
 from pathlib import Path
+from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
 import argparse,ctypes,hashlib,json,socket,subprocess,tempfile
 
 def main():
@@ -12,14 +13,14 @@ def main():
         record['source_commit']=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
         record['source_dirty']=bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip())
         if args.require_clean_source and record['source_dirty']:raise RuntimeError('Clean source required')
-        sources=[package/'native'/name for name in ('radia_cuda_ih.cu','ih_coupled_state.cuh','ih_complex_solver.cuh','ih_bicgstab_kernels.cuh','ih_thermal_kernels.cuh','ih_resident_kernels.cuh','ih_preconditioner.cuh','ih_esim_coupling.cuh','ih_temperature_material.cuh','ih_esim_cell.cuh','ih_peec_bem_assembly.cuh')]+[root/'src/core'/name for name in ('rad_bem_galerkin.cpp','rad_bem_galerkin.h','rad_biot_savart_filaments.cpp','rad_biot_savart_filaments.h','rad_host_parallel.h')]+[Path(__file__),root/'Build.ps1']
+        sources=[package/'native'/name for name in ('radia_cuda_ih.cu','ih_coupled_state.cuh','ih_complex_solver.cuh','ih_bicgstab_kernels.cuh','ih_thermal_kernels.cuh','ih_resident_kernels.cuh','ih_preconditioner.cuh','ih_esim_coupling.cuh','ih_temperature_material.cuh','ih_esim_cell.cuh','ih_peec_bem_assembly.cuh')]+[root/'src/core'/name for name in ('rad_bem_galerkin.cpp','rad_bem_galerkin.h','rad_biot_savart_filaments.cpp','rad_biot_savart_filaments.h','rad_host_parallel.h')]+[Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__),root/'Build.ps1']
         hashes=lambda:{p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
         record['source_sha256']=hashes()
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
         import matlab.engine
         eng=matlab.engine.start_matlab('-nodesktop -nosplash');pid=int(eng.feature('getpid'))
         subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)
-        compiler='C:/BuildTools/VS2022-CUDA/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64'
+        compiler=str(supported_compiler_bin(discover_vs()))
         eng.setenv('NVCC_CCBIN',compiler,nargout=0);eng.setenv('PATH',compiler+';'+eng.getenv('PATH'),nargout=0)
         config=Path(eng.matlabroot())/'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml'
         flags='NVCCFLAGS=--std=c++17 --fmad=false -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'

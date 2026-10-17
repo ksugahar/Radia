@@ -1,5 +1,6 @@
 """Stage the experimental RadFld cloud CUDA module on the designated build host."""
 from pathlib import Path
+from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
 import argparse
 import hashlib
 import json
@@ -27,15 +28,15 @@ def main():
                core/'rad_hdiv_field_evaluator.h', core/'rad_hdiv_vim.h', core/'rad_field_cloud_kernel.h',
                core/'rad_field_sources.h', core/'rad_field_source_kernel.inc', core/'rad_hdiv_field_math.inc',
                core/'rad_hdiv_field_kernel_api.inc',
-               package/'native/radia_cuda_field.cu', package/'native/radia_field_exact.cuh', Path(__file__), root/'Build.ps1']
+               package/'native/radia_cuda_field.cu', package/'native/radia_field_exact.cuh', Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__), root/'Build.ps1']
     hashes = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     base = root/'build-field-cuda'
     base.mkdir(exist_ok=True)
     out = Path(tempfile.mkdtemp(prefix='job-',dir=base))
     print(str(out),flush=True)
     ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
-    vs = Path('C:/BuildTools/VS2022-CUDA')
-    compiler_bin = vs/'VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64'
+    vs = discover_vs()
+    compiler_bin = supported_compiler_bin(vs)
     os.environ['NVCC_CCBIN'] = str(compiler_bin)
     os.environ['PATH'] = str(compiler_bin)+os.pathsep+os.environ['PATH']
     import matlab.engine
