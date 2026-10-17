@@ -7,7 +7,7 @@ if not exist "%EQN_VSWHERE%" (
     echo [ERROR] vswhere.exe is required for Visual Studio 2022 discovery.
     exit /b 1
 )
-for /f "usebackq delims=" %%I in (`"%EQN_VSWHERE%" -latest -products * -version "[17.0,18.0)" -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "EQN_VSROOT=%%I"
+for /f "usebackq delims=" %%I in (`""%EQN_VSWHERE%" -latest -products * -version "[17.0,18.0)" -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath"`) do set "EQN_VSROOT=%%I"
 if not defined EQN_VSROOT (
     echo [ERROR] Visual Studio 2022 C++ tools are required. No older fallback.
     exit /b 1
