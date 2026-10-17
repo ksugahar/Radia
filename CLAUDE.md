@@ -215,8 +215,8 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 `jmag`: JMAG evaluation only. Keep Python 3.12.10, SSH service/config/keys, VC++ runtime and `inetpub` for control from 100. No Radia deployment, builds, CI/preflight, solver runs, validation or timing.
 
-**POLICY**: 100 owns CPU CI/debt; A100 owns GPU development. Prioritize HDiv-MMM, then AMS. Compare AMS/ICCG on the same operator/residual gate, including setup/transfers. Retired targets are excluded from deployment, CI and computation.
-Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes A100 hostname`; check running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs. Never stop another session's jobs.
+**POLICY**: 100 owns CPU CI/debt; A100 owns GPU development (mexcuda only). Prioritize HDiv-MMM, then AMS. Compare AMS/ICCG on the same operator/residual gate, including setup/transfers. Retired targets are excluded from deployment, CI and computation.
+Before A100 work, verify `ssh -o ConnectTimeout=6 -o BatchMode=yes A100 hostname`, jobs and memory. One heavy job at a time; never stop others' jobs.
 Compare CPU/GPU on the same host with fixed, recorded threads (16-thread baseline where supported). Measure speed, scaling, setup, transfers and total time; save hardware, memory and versions in JSON.
 100: CPU development/builds/CI and GPU acceptance; 100/LAB timings are diagnostic. Gmsh needs a desktop.
 Measurements remain valid provenance: publish neutral roles, not hosts/IPs/paths; keep maps/originals/hashes private. Never relabel hosts. Recover unique work before authorized VM/disk deletion.
