@@ -73,13 +73,27 @@ def environment_contract(root):
     if len(compiler)!=1 or any(len(v)!=1 for v in compiler[0].values()):
         raise ValueError('compiler identity unknown')
     cache=(root/'build-msvc/CMakeCache.txt').read_text(encoding='utf-8')
+    # Keep value contents (including quoted flag spacing) intact. CMake cache
+    # comments and entry ordering do not define the compiler contract.
+    build_options={}
+    for line in cache.splitlines():
+        match=re.match(r'(CMAKE_CXX_FLAGS(?:_[A-Z0-9_]+)?|CMAKE_BUILD_TYPE):[^=]+=(.*)$',line)
+        if match:
+            key,value=match.groups()
+            if key in build_options: raise ValueError('duplicate compiler option')
+            build_options[key]=value.strip()
+    if 'CMAKE_CXX_FLAGS' not in build_options or 'CMAKE_BUILD_TYPE' not in build_options:
+        raise ValueError('compiler options unknown')
     sdk_versions=sorted(set(re.findall(r'10\.0\.\d+\.\d+',cache)))
     if not sdk_versions: raise ValueError('Windows SDK version unknown')
     if os.environ.get('RADIA_TESTS_ALLOW_PARTIAL')!='0': raise ValueError('partial validation context')
     threads={key:os.environ.get(key) for key in ('RADIA_TEST_NGSOLVE_THREADS','OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS')}
     if set(threads.values())!={'1'}: raise ValueError('unbounded or changed thread contract')
+    numerical_environment={key.upper():value for key,value in sorted(os.environ.items())
+                           if key.upper().startswith(('RADIA_','NGS','MKL_','KMP_','OMP_'))}
     return {'python':sys.version,'platform':platform.platform(),'machine':platform.machine(),
             'processor':platform.processor(),'compiler':compiler,'windows_sdk_versions':sdk_versions,'threads':threads,
+            'compiler_options':build_options,'numerical_environment':numerical_environment,
             'packages':sorted((d.metadata['Name'].lower(),d.version) for d in importlib.metadata.distributions())}
 
 
@@ -94,12 +108,12 @@ def source_fingerprint(root, environment):
     tracked=git(root,'ls-files','-z').split('\0')
     # Inspect ignored as well as ordinary untracked input. Only reconstructible
     # compiler/Python cache outputs are excluded; unknown inputs force execution.
-    untracked=git(root,'ls-files','--others','-z','--','src','validation_test','packages').split('\0')
-    generated={'.pyd','.dll','.lib','.obj','.exp','.pdb','.ilk','.pyc'}
+    untracked=git(root,'ls-files','--others','-z').split('\0')
+    generated={'.lib','.obj','.exp','.pdb','.ilk','.pyc'}
     for path in untracked:
         if not path or any(part in {'__pycache__','.pytest_cache'} for part in Path(path).parts):
             continue
-        if path=='src/radia/_radia_pybind.pyd.build.json':
+        if path in {'src/radia/_radia_pybind.pyd','src/radia/_radia_pybind.pyd.build.json'}:
             validate_native_sidecar(root)
             continue
         if Path(path).suffix.lower() not in generated:
@@ -190,7 +204,7 @@ class GitHub:
     def find(self, root, fingerprint):
         # Bounded search; pagination/cache miss safely executes validation.
         artifacts=self.get('/actions/artifacts?name='+ARTIFACT+'&per_page=30')['artifacts']
-        for artifact in artifacts:
+        for artifact in artifacts[:30]:
             try:
                 run=self.get('/actions/runs/'+str(artifact['workflow_run']['id']))
                 if run.get('head_branch')!='main' or run.get('conclusion')!='success': continue

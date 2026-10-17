@@ -166,7 +166,9 @@ def test_old_xml_cannot_turn_empty_execution_into_pass(tmp_path,monkeypatch):
 
 
 @pytest.mark.parametrize('input_path', ['src/extra.py', 'validation_test/case/generated.h5',
-                                       'packages/demo/tests/new_fixture.vol'])
+                                       'packages/demo/tests/new_fixture.vol',
+                                       'tests/local/conftest.py', 'local.pth',
+                                       'src/radia/radia_motor_rom.dll', 'src/radia/extra.pyd'])
 def test_unknown_untracked_inputs_prevent_reuse(tmp_path, monkeypatch, input_path):
     manifest=tmp_path/'tests/test_tier_manifest.json'
     manifest.parent.mkdir()
@@ -196,3 +198,101 @@ def test_current_native_sidecar_is_hash_and_source_bound(tmp_path, monkeypatch, 
             gate.validate_native_sidecar(tmp_path)
     else:
         gate.validate_native_sidecar(tmp_path)
+
+
+@pytest.mark.parametrize('ignored', [False, True])
+def test_git_scan_covers_whole_repository_and_ignored_inputs(tmp_path, ignored):
+    import subprocess
+    subprocess.run(['git','init','-q',str(tmp_path)],check=True)
+    if ignored:
+        (tmp_path/'.gitignore').write_text('tests/local/\n')
+    path=tmp_path/'tests/local/conftest.py'
+    path.parent.mkdir(parents=True);path.write_text('fixture code')
+    # Real Git, including an ignored file, must return an input outside the old
+    # src/validation_test/packages pathspec. No native build is required.
+    manifest=tmp_path/'tests/test_tier_manifest.json'
+    manifest.write_text(json.dumps({'profiles':{'solver-heavy':{'paths':[]}}}))
+    with pytest.raises(ValueError,match='untracked validation input'):
+        gate.source_fingerprint(tmp_path,{})
+    assert 'tests/local/conftest.py' in gate.git(tmp_path,'ls-files','--others','-z')
+
+
+def build_environment(tmp_path, monkeypatch, flags=''):
+    monkeypatch.setattr(gate,'validate_native_sidecar',lambda root:None)
+    monkeypatch.setattr(gate.importlib.metadata,'distributions',lambda:[])
+    for key in ('RADIA_TEST_NGSOLVE_THREADS','OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS'):
+        monkeypatch.setenv(key,'1')
+    monkeypatch.setenv('RADIA_TESTS_ALLOW_PARTIAL','0')
+    compiler=tmp_path/'build-msvc/CMakeFiles/4.0/CMakeCXXCompiler.cmake'
+    compiler.parent.mkdir(parents=True,exist_ok=True)
+    compiler.write_text('set(CMAKE_CXX_COMPILER_ID "MSVC")\nset(CMAKE_CXX_COMPILER_VERSION "19.44")\n')
+    cache=tmp_path/'build-msvc/CMakeCache.txt'
+    cache.write_text('SDK:STRING=10.0.26100.0\nCMAKE_BUILD_TYPE:STRING=Release\n'
+                     'CMAKE_CXX_FLAGS:STRING='+flags+'\nCMAKE_CXX_FLAGS_RELEASE:STRING=/O2\n')
+    return gate.environment_contract(tmp_path)
+
+
+@pytest.mark.parametrize('setting', ['/fp:fast','/arch:AVX2'])
+def test_compiler_flags_change_environment_fingerprint(tmp_path,monkeypatch,setting):
+    before=build_environment(tmp_path,monkeypatch)
+    after=build_environment(tmp_path,monkeypatch,setting)
+    assert gate.digest(gate.canonical(before)) != gate.digest(gate.canonical(after))
+
+
+def test_build_type_and_config_flags_are_bound(tmp_path,monkeypatch):
+    before=build_environment(tmp_path,monkeypatch)
+    cache=tmp_path/'build-msvc/CMakeCache.txt'
+    for old,new in [('=Release','=Debug'),('/O2','/O1 /fp:fast')]:
+        original=cache.read_text();cache.write_text(original.replace(old,new))
+        assert gate.environment_contract(tmp_path)['compiler_options'] != before['compiler_options']
+        cache.write_text(original)
+
+
+@pytest.mark.parametrize('key', ['RADIA_OPTION','NGSOLVE_NUM_THREADS','MKL_CBWR','KMP_AFFINITY','OMP_PROC_BIND'])
+def test_numerical_environment_changes_are_bound(tmp_path,monkeypatch,key):
+    before=build_environment(tmp_path,monkeypatch)
+    monkeypatch.setenv(key,'changed')
+    after=gate.environment_contract(tmp_path)
+    assert before['numerical_environment'] != after['numerical_environment']
+    assert after['numerical_environment'][key]=='changed'
+
+
+@pytest.mark.parametrize('mode', ['hit','miss','bad-then-hit'])
+def test_find_executes_real_filter_and_verification(tmp_path,monkeypatch,mode):
+    receipt,run=proof();run['updated_at']=datetime.now(timezone.utc).isoformat()
+    data=archive(receipt);meta=artifact(data)
+    meta['id']=99
+    meta['expires_at']=(datetime.now(timezone.utc)+timedelta(days=1)).isoformat()
+    bad=copy.deepcopy(meta);bad['id']=98;bad['workflow_run']={'id':11}
+    calls=[]
+    class Client(gate.GitHub):
+        def get(self,path,binary=False):
+            calls.append(path)
+            if path.startswith('/actions/artifacts?'):
+                return {'artifacts':[bad,meta] if mode=='bad-then-hit' else [meta]}
+            if path=='/actions/runs/11':raise OSError('unavailable run')
+            if path=='/actions/runs/12':
+                return {**run,'head_branch':'feature'} if mode=='miss' else run
+            if path=='/actions/artifacts/99/zip':return data
+            raise AssertionError(path)
+    monkeypatch.setattr(gate.subprocess,'run',lambda *a,**kw:None)
+    found=Client('example/repo','unused').find(tmp_path,'fingerprint')
+    if mode=='miss':
+        assert found is None
+        assert not any(p.endswith('/zip') for p in calls)
+    else:
+        assert found[1]==receipt and found[2]==XML
+        if mode=='bad-then-hit':assert '/actions/runs/11' in calls
+
+
+def test_find_bounds_search_to_thirty_candidates(tmp_path):
+    calls=[]
+    class Client(gate.GitHub):
+        def get(self,path,binary=False):
+            if path.startswith('/actions/artifacts?'):
+                assert 'per_page=30' in path
+                return {'artifacts':[{'workflow_run':{'id':i}} for i in range(35)]}
+            calls.append(path)
+            raise OSError('untrusted or unavailable')
+    assert Client('example/repo','unused').find(tmp_path,'fingerprint') is None
+    assert len(calls)==30
