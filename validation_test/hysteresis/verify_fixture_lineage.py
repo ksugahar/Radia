@@ -50,6 +50,11 @@ def verify(output):
         "sha256": {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
                    for p in [source, generator, fixture, implementation]},
         "historical_source_mat_sha256": json.loads((here / "hdf5_fixture_migration.json").read_text(encoding="utf-8"))["source_mat_sha256"],
+        "publication_authorization": {
+            "date": "2026-10-17", "authority": "explicit human user instruction via repository-management lead",
+            "scope": ["CASE_02.m analytical generation code, including its local helper functions", "generated Potter-Schmulian branch data in B_input.hdf5"],
+            "limits": "No permission inferred for unrelated code or third-party licenses; numerical acceptance remains separate",
+        },
         "publication_permission": "verified: lab-authored B_input data and CASE_02 generator; public redistribution explicitly authorized by user on 2026-10-17; named author and SPDX license not supplied",
         "passed": True,
     }

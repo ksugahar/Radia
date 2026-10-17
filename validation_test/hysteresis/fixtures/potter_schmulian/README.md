@@ -31,3 +31,11 @@ permission is independent of the numerical lineage and tracked-file status.
 No named author or SPDX license identifier was supplied; neither is inferred
 by this migration. Numerical, MATLAB, wheel and deployment acceptance remain
 separate from this publication permission.
+
+The additional user clarification explicitly includes the MATLAB generation
+code and its generated data. The identified code in this fixture is
+`CASE_02.m`, including local `match_Hmax`, `match_Mmax` and HDF5-writing helper
+functions. These code and data artifacts are included in the publication review.
+This is not a blanket license for unrelated scripts. Original source identities
+remain in the migration record; the analytical generation algorithm is unchanged
+and its current output is HDF5 only, with no MAT fallback.
