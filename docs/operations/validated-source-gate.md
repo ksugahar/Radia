@@ -89,6 +89,14 @@ old sidecars, mismatched copies or unexpected native modules disable reuse.
 Only explicitly enumerated generated CMake/Ninja metadata in that validated
 directory is exempt; links, arbitrary files and native libraries are not
 covered by a blanket directory exclusion.
+The sole dependency-copy exception is `build-msvc/mkl_rt.3.dll`: its bytes
+must match the DLL owned by the installed `mkl` distribution inside the active
+virtual environment. The package version and DLL SHA-256 are bound into the
+fingerprint and recorded in verification JSON. Other DLLs are not exempt.
+Compiler-object suffixes are exempt only inside `build-msvc`; ordinary Python
+bytecode caches are handled separately. Rejected untracked paths and a precise
+reuse diagnostic are recorded in JSON and logged. Unexpected per-target
+response files or manifests are not allowed by a broad wildcard.
 
 Only `RADIA_CI_VENV` and `RADIA_CI_OUTPUT_DIR` may be normalized as per-run job
 context, and only when they resolve beneath the absolute `RUNNER_TEMP` root.

@@ -150,3 +150,15 @@ The isolated lightweight worst-case selector passed **515 tests, zero skips**,
 in 23.71 seconds (24.58 seconds through the runner). Its 51-file digest is
 `07d599ee89666da020d2d6fefc4583358ac0ef101245a41357537c10d9fa0f0e`. No solver or MATLAB dependency was installed for this audit.
 Real native-build lanes and main hit/miss evidence remain required separately.
+
+## Installed runtime-copy and rejection diagnostics audit (2026-10-17)
+
+The explicit MKL runtime-copy check binds its installed package version and
+DLL hash. Rejected untracked paths are now retained in verification JSON, and
+compiler-output suffix exemptions are limited to the declared build directory.
+The isolated lightweight selector passed **520 tests, zero skips**, in 23.77
+seconds (24.72 seconds through the runner). The 51-file digest is
+`eae589c6e263d297e8533035bbde26e0950a67ec0093a0dca10c52447f4b15fb`. A read-only observation of the actual native CI build found
+no persistent extra per-target response files or manifests requiring a broader
+exemption; its complete observed file list is retained as private operations
+evidence. Real main receipt hit/miss acceptance remains a separate gate.

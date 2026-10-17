@@ -227,6 +227,7 @@ def test_git_scan_covers_whole_repository_and_ignored_inputs(tmp_path, ignored):
 
 def build_environment(tmp_path, monkeypatch, flags=''):
     monkeypatch.setattr(gate,'validated_native_inputs',lambda root:set())
+    monkeypatch.setattr(gate,'mkl_build_copy',lambda root:{'package':'mkl','version':'test','sha256':'a'*64})
     monkeypatch.setattr(gate.importlib.metadata,'distributions',lambda:[])
     for key in ('RADIA_TEST_NGSOLVE_THREADS','OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS'):
         monkeypatch.setenv(key,'1')
@@ -375,3 +376,34 @@ def test_unknown_native_inside_declared_build_forces_execution(tmp_path,monkeypa
     monkeypatch.setattr(gate,'git',lambda root,*a:'build-msvc/unexpected.pyd' if '--others' in a else 'a'*40)
     with pytest.raises(ValueError,match='untracked validation input'):
         gate.source_fingerprint(tmp_path,{})
+
+
+@pytest.mark.parametrize('change',[None,'copy','outside-venv','unknown-owner'])
+def test_mkl_copy_is_bound_to_installed_venv_package(tmp_path,monkeypatch,change):
+    prefix=tmp_path/'venv';source=prefix/'Library/bin/mkl_rt.3.dll'
+    source.parent.mkdir(parents=True);source.write_bytes(b'installed MKL runtime')
+    copied=tmp_path/'build-msvc/mkl_rt.3.dll'
+    copied.parent.mkdir();copied.write_bytes(source.read_bytes())
+    class Package:
+        version='2026.test'
+        files=['Library/bin/mkl_rt.3.dll']
+        def locate_file(self,file):return prefix/file
+    package=Package()
+    monkeypatch.setattr(gate.sys,'prefix',str(prefix))
+    monkeypatch.setattr(gate.importlib.metadata,'distribution',lambda name:package)
+    if change=='copy':copied.write_bytes(b'unverified runtime')
+    if change=='outside-venv':monkeypatch.setattr(gate.sys,'prefix',str(tmp_path/'other-venv'))
+    if change=='unknown-owner':package.files=[]
+    if change:
+        with pytest.raises(ValueError):gate.mkl_build_copy(tmp_path)
+    else:
+        assert gate.mkl_build_copy(tmp_path)==dict(package='mkl',version='2026.test',sha256=gate.digest(source.read_bytes()))
+
+
+def test_untracked_rejection_reports_all_paths_including_root_compiler_objects(tmp_path,monkeypatch):
+    manifest=tmp_path/'tests/test_tier_manifest.json';manifest.parent.mkdir()
+    manifest.write_text(json.dumps({'profiles':{'solver-heavy':{'paths':[]}}}))
+    paths=['tests/inject.pth','root.lib','root.pyc']
+    monkeypatch.setattr(gate,'git',lambda root,*args:'\0'.join(paths) if '--others' in args else 'src/solver.py')
+    with pytest.raises(ValueError) as caught:gate.source_fingerprint(tmp_path,{})
+    assert caught.value.paths==paths

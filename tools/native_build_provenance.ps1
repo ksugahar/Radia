@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 function Invoke-NativeProvenanceGit {
     param(
         [Parameter(Mandatory)][string]$RepoRoot,
