@@ -113,14 +113,14 @@ lightweight execution remains applicable without repeating solver-free tests.
 
 ## Follow-up validation-source gate closure (2026-10-17)
 
-The validation-source reuse candidate adds 31 deterministic metadata/trust
+The validation-source reuse candidate adds 39 deterministic metadata/trust
 contracts to fast-contracts. Its dynamically loaded
 `tools/validation_source_gate.py` is explicitly part of the audited closure.
 A fresh Python 3.12.10 venv containing only pytest, PyYAML, NumPy, SciPy,
-setuptools and wheel executed **478 tests, zero skips**, in 26.99 seconds
-(27.91 seconds through the tier runner). No NGSolve, MATLAB Engine, Cubit,
+setuptools and wheel executed **486 tests, zero skips**, in 13.50 seconds
+(14.28 seconds through the tier runner). No NGSolve, MATLAB Engine, Cubit,
 CUDA toolkit, h5py or MCP dependency was installed in that audit environment.
 The 51-file execution closure digest is
-`fc3df4ac3f0f7a4fe2e067a42575e5332441fe111cb520596f4955cac8815758`.
+`bd004bc5dd2dcd23a3a1a6bf3e679eb17e6d25a681b071a419bbdb1f12119e5b`.
 This audit does not certify a live validation cache hit, native artifacts or
 physics results; those remain separate acceptance gates.

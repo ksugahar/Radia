@@ -64,3 +64,13 @@ retain all workflow projections, add this gate to the light lane's reviewed
 dynamic-loader closure (its tests load this file), and repeat the light F2 audit
 before updating that closure digest. Do not automatically regenerate signatures
 as a substitute for reviewing execution changes.
+
+
+Untracked production/validation inputs, including ignored inputs, prevent reuse;
+ordinary generated compiler and Python cache outputs do not certify a new
+artifact. The known `_radia_pybind.pyd.build.json` sidecar is accepted only after
+checking its clean current-commit provenance, binary name, length and SHA-256.
+Package test fixtures are included in the source fingerprint. This is separate
+from the mandatory native build and solver-numerics checks; a matching source
+receipt never certifies a newly built binary. Live main cache-hit and cache-miss
+acceptance remains required before declaring the reuse feature operational.

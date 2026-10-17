@@ -43,7 +43,28 @@ def git(root, *args):
     return subprocess.check_output(['git','-c',f'safe.directory={root}',*args],cwd=root).decode('utf-8').strip()
 
 
+
+def validate_native_sidecar(root):
+    """Verify current native provenance; this is not prior source certification."""
+    binary=root/'src/radia/_radia_pybind.pyd'
+    sidecar=Path(str(binary)+'.build.json')
+    if binary.is_symlink() or sidecar.is_symlink():
+        raise ValueError('linked native provenance')
+    record=json.loads(sidecar.read_text(encoding='utf-8'))
+    data=binary.read_bytes()
+    if (record.get('schema')!='radia.native-build-provenance.v1'
+            or record.get('source_commit')!=git(root,'rev-parse','HEAD')
+            or record.get('source_dirty') is not False
+            or record.get('source_change_fingerprint_sha256')!=digest(b'\0')
+            or record.get('binary_name')!=binary.name
+            or type(record.get('binary_bytes')) is not int
+            or record['binary_bytes']!=len(data)
+            or record.get('binary_sha256')!=digest(data)):
+        raise ValueError('current native provenance mismatch')
+
+
 def environment_contract(root):
+    validate_native_sidecar(root)
     compiler = []
     for file in (root/'build-msvc/CMakeFiles').glob('*/CMakeCXXCompiler.cmake'):
         text=file.read_text(encoding='utf-8')
@@ -77,6 +98,9 @@ def source_fingerprint(root, environment):
     generated={'.pyd','.dll','.lib','.obj','.exp','.pdb','.ilk','.pyc'}
     for path in untracked:
         if not path or any(part in {'__pycache__','.pytest_cache'} for part in Path(path).parts):
+            continue
+        if path=='src/radia/_radia_pybind.pyd.build.json':
+            validate_native_sidecar(root)
             continue
         if Path(path).suffix.lower() not in generated:
             raise ValueError('untracked validation input: '+path)
