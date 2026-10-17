@@ -5,17 +5,26 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Visual Studio + CMake discovery via vswhere (matches Build.ps1 +
-# tools/_build_cubit_plugin.ps1 pattern). Was hardcoded
-# `Microsoft Visual Studio\2022\BuildTools\...` until 2026-05-25;
-# that broke on LAB whose VS BuildTools installs as
-# `Microsoft Visual Studio\18\BuildTools\...` (the directory name uses
-# the major-version "18", not marketing year "2022"). Auto-discover so
-# future VS upgrades do not re-break this.
+# Select only Visual Studio Build Tools 2022 (major 17), with no older compiler fallback.
+function Find-CubitVisualStudio2022([string]$VswherePath) {
+    $instances = & $VswherePath -latest -products '*' -version '[17,18)' `
+        -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json
+    if ($LASTEXITCODE -ne 0) { throw "Visual Studio Build Tools 2022 discovery failed via vswhere." }
+    $selected = @($instances | ConvertFrom-Json)
+    if ($selected.Count -ne 1 -or
+        -not $selected[0].installationPath -or
+        ([version]$selected[0].installationVersion).Major -ne 17) {
+        throw "Visual Studio Build Tools 2022 (17.x) with VC x86/x64 tools is required; no older-version fallback."
+    }
+    $requiredCompiler = Join-Path $selected[0].installationPath 'VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64\cl.exe'
+    if (-not (Test-Path -LiteralPath $requiredCompiler)) {
+        throw "Required MSVC toolset 14.44.35207 is missing; no alternate toolset fallback."
+    }
+    return $selected[0].installationPath
+}
 $VSWHERE = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $VSWHERE)) { throw "vswhere.exe not found at $VSWHERE" }
-$vsPath = & $VSWHERE -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
-if (-not $vsPath) { throw "Visual Studio with VC x86/x64 tools not found via vswhere." }
+$vsPath = Find-CubitVisualStudio2022 $VSWHERE
 $vcvarsBat = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
 $cmake     = "$vsPath\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 if (-not (Test-Path $vcvarsBat)) { throw "vcvars64.bat not found at $vcvarsBat" }
@@ -66,17 +75,38 @@ function Reset-BuildDirectory([string]$Path) {
 }
 
 # Pull vcvars env into pwsh
-& cmd /c "`"$vcvarsBat`" && set" | ForEach-Object {
+& cmd /c "`"$vcvarsBat`" -vcvars_ver=14.44.35207 && set" | ForEach-Object {
   if ($_ -match "^([^=]+)=(.*)$") { Set-Item -Path "env:$($matches[1])" -Value $matches[2] }
+}
+
+if ($LASTEXITCODE -ne 0) { throw "Visual Studio Build Tools 2022 vcvars64 initialization failed." }
+$compilerPath = (Get-Command cl.exe -ErrorAction Stop).Source
+$requiredCompiler = Join-Path $vsPath 'VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64\cl.exe'
+if ([System.IO.Path]::GetFullPath($compilerPath) -ne [System.IO.Path]::GetFullPath($requiredCompiler)) {
+    throw "cl.exe does not match the pinned MSVC toolset 14.44.35207."
+}
+
+function Assert-CubitCompilerCache([string]$Directory, [string]$Compiler) {
+    $cache = Join-Path $Directory 'CMakeCache.txt'
+    if (-not (Test-Path -LiteralPath $cache)) { return }
+    foreach ($line in Get-Content -LiteralPath $cache) {
+        if ($line -match '^CMAKE_C(?:XX)?_COMPILER:[^=]+=(.+)$') {
+            if ([System.IO.Path]::GetFullPath($matches[1]) -ne [System.IO.Path]::GetFullPath($Compiler)) {
+                throw "CMake compiler cache differs from the pinned toolchain; rebuild explicitly with -Rebuild."
+            }
+        }
+    }
 }
 
 # build-pyd
 $buildPyd = Join-Path $src "build-pyd"
+if (-not $Rebuild) { Assert-CubitCompilerCache $buildPyd $compilerPath }
 Reset-BuildDirectory $buildPyd
 if (-not (Test-Path $buildPyd)) { New-Item -ItemType Directory -Path $buildPyd | Out-Null }
 Push-Location $buildPyd
 try {
     & $cmake -G Ninja -DCMAKE_BUILD_TYPE=Release `
+        "-DCMAKE_C_COMPILER=$compilerPath" "-DCMAKE_CXX_COMPILER=$compilerPath" `
         "-DCMAKE_MAKE_PROGRAM=$ninja" `
         "-DPython3_EXECUTABLE=$pythonExecutable" `
         "-Dpybind11_DIR=$pybind11CmakeDir" `
@@ -92,12 +122,13 @@ try {
 
 # build-ccm
 $buildCcm = Join-Path $src "build-ccm"
+if (-not $Rebuild) { Assert-CubitCompilerCache $buildCcm $compilerPath }
 Reset-BuildDirectory $buildCcm
 if (-not (Test-Path $buildCcm)) { New-Item -ItemType Directory -Path $buildCcm | Out-Null }
 Push-Location $buildCcm
 try {
     & $cmake -G Ninja -DCMAKE_BUILD_TYPE=Release `
-        -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl `
+        "-DCMAKE_C_COMPILER=$compilerPath" "-DCMAKE_CXX_COMPILER=$compilerPath" `
         "-DCMAKE_MAKE_PROGRAM=$ninja" `
         "-DPython3_EXECUTABLE=$pythonExecutable" `
         "-Dpybind11_DIR=$pybind11CmakeDir" `

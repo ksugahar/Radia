@@ -44,6 +44,19 @@ deployment through the counterpart hub. Agree one executor per outward action.
 2. Use current `src/cubit_plugin/cubit_build.ps1 -Rebuild`. Commit the `.ccm`
    and `native_payloads.json`; its source commit identifies the native inputs.
    After rewritten commits, reconcile provenance and verify it again.
+   After each native rebuild, inspect both the `.ccm` and curver `.pyd` with
+   `dumpbin /dependents` and `dumpbin /imports`. Record the imported VC runtime
+   DLLs/symbols and prove they resolve against the runtime shipped with Cubit
+   2026.8 and Python 3.12 (the reviewed baseline is VC runtime 14.42 in both).
+   Keep actual runtime versions, loaded paths and hashes in the evidence; the
+   selected compiler/toolset alone does not prove runtime ABI compatibility.
+   On both deployment host roles, require normal plugin loading, all six export
+   formats, check-vol, curver import and actual curving, and `.vol` byte parity
+   against the previous published release for the declared unchanged cases.
+   Use isolated candidate runtimes and the shared handler-equivalence contract;
+   do not replace the deployed release to probe compatibility. Any failure is a
+   blocker: report it to management and never silently change the pinned
+   toolset, substitute a backend or replace Cubit's bundled runtime DLLs.
 3. Claude uploads the content-addressed pyd asset named by the manifest to
    the `binaries` release, downloads it back and verifies size/SHA-256. CI needs
    that exact asset. Use an operator-selected scratch path, not a fixed host path.

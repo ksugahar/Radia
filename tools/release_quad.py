@@ -308,6 +308,16 @@ def _solver_dependency_pins() -> dict[str, str]:
     return pins
 
 
+def _solver_hdf5_requirement() -> str:
+    """Read the required HDF5 reader dependency from package metadata."""
+    with (REPO / "pyproject.toml").open("rb") as stream:
+        dependencies = tomllib.load(stream)["project"]["dependencies"]
+    requirements = [item for item in dependencies if item.startswith("h5py")]
+    if len(requirements) != 1 or not re.fullmatch(r"h5py[<>=!0-9.,]+", requirements[0]):
+        raise ValueError("pyproject.toml must declare one bounded h5py requirement")
+    return requirements[0]
+
+
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -1192,6 +1202,10 @@ if ($LASTEXITCODE -ne 0 -or $sourceDirty) {{
 & {' '.join('"' + part.replace('"', '`"') + '"' for part in _solver_abi_probe_command(python_path))}
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 {_solver_install_guard_powershell(python)}
+{python} -m pip install "{_solver_hdf5_requirement()}"
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+{python} -c "import h5py; print(h5py.__version__)"
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 {python} -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 & {' '.join('"' + part.replace('"', '`"') + '"' for part in _editable_release_verify_command(repo, expected_sha, python_path))}
@@ -1248,6 +1262,10 @@ def _deploy_pypi(ssh_host, label, *, python_cmd="python"):
 $ErrorActionPreference = 'Stop'
 {_solver_install_guard_powershell(python_cmd)}
 {python_cmd} -c "import importlib.metadata as m, ngsolve; assert ngsolve.__version__ == '{ngsolve_version}'; assert m.version('netgen-mesher') == '{netgen_version}'"
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+{python_cmd} -m pip install "{_solver_hdf5_requirement()}"
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+{python_cmd} -c "import h5py; print(h5py.__version__)"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 {python_cmd} -m pip install --upgrade --force-reinstall --no-cache-dir --no-deps --only-binary=:all: "radia=={v_radia}"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
