@@ -196,12 +196,22 @@ def check_serialisation_traps(failures: list) -> None:
         failures.append(f"a braced matrix is not a fixed point: {plain!r}")
 
 
+def check_relation_aliases(failures: list) -> None:
+    for alias, canonical in ((r"\le", r"\leq"), (r"\ge", r"\geq"), (r"\ne", r"\neq")):
+        for context in ("x%s 0", r"\begin{cases}x&x>0\\0&x%s 0\end{cases}"):
+            actual = tex_normalize(context % alias)
+            expected = tex_normalize(context % canonical)
+            if actual != expected or canonical not in actual or tex_normalize(actual) != actual:
+                failures.append(f"Relation alias lost or unstable: {alias!r}: {actual!r}, expected {expected!r}")
+
+
 def main() -> int:
     failures: list = []
     count = sweep_symbols(failures)
     check_serialisation_traps(failures)
     check_named_glyphs_beat_operator_names(failures)
     check_structures(failures)
+    check_relation_aliases(failures)
     if failures:
         print(f"FAIL  {len(failures)}")
         for failure in failures[:40]:
