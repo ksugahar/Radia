@@ -1,5 +1,6 @@
 """Build the experimental AMS bridge through Build.ps1 -AmsCudaOnly on 100."""
 from pathlib import Path
+from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
 import argparse
 import hashlib
 import json
@@ -23,10 +24,10 @@ def main(args):
     ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
     out=root/'build-ams-cuda';out.mkdir(exist_ok=True)
     net=Path(netgen.__file__).parent
-    vs=Path('C:/BuildTools/VS2022-CUDA')
+    vs=discover_vs()
     vcvars=vs/'VC/Auxiliary/Build/vcvars64.bat'
     if not vcvars.is_file():raise RuntimeError('CUDA-compatible VS2022 toolchain required')
-    os.environ['NVCC_CCBIN']=str(vs/'VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64')
+    os.environ['NVCC_CCBIN']=str(supported_compiler_bin(vs))
     os.environ['PATH']=os.environ['NVCC_CCBIN']+os.pathsep+os.environ['PATH']
     source=package/'native/ams_snapshot_module.cpp'
     sources=[source,package/'native/ams_cpu_reference.cpp',package/'native/ams_resident.cuh',package/'native/ams_nonlinear.cuh',package/'native/radia_cuda_ams.cu',package/'native/ams_matlab_setup.cpp',
@@ -36,7 +37,7 @@ def main(args):
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp',
-             Path(__file__),root/'Build.ps1']
+             Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__),root/'Build.ps1']
     hashes={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     obj=out/'snapshot.obj';binary=out/'_radia_ams_snapshot.pyd'
     python_lib=Path(sys.base_prefix)/'libs'/f'python{sys.version_info.major}{sys.version_info.minor}.lib'
