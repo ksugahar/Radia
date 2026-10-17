@@ -97,22 +97,21 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
 ### CPU / GPU Execution Policy (2026-10-11)
-- CPU: Python (pybind11)/NGSolve, built with Visual Studio Build Tools on Windows; NGSolve TaskManager owns CPU parallel execution. CPU MEX is unsupported.
+- CPU: Python (pybind11)/NGSolve, built with Visual Studio 2022 Build Tools on Windows; NGSolve TaskManager owns CPU parallel execution. CPU MEX is unsupported.
 - GPU: `radia-gpu` uses MATLAB mexcuda (optional Simulink/LTspice adapters, no external products). GPU setup, preconditioners and execution stay in MATLAB/mexcuda without Python adapters or snapshots. NGSolve-inherited DLLs are permitted. Python provides independent CPU accuracy validation, never a GPU-user prerequisite.
 - mexcuda modules may retain CPU host control. Never include, link, or use NGSolve TaskManager in mexcuda builds, except a read-only guard that fails if a foreign TaskManager is active. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing.
-- Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
+- All builds: VS2022/MSVC14.44, mexcuda-selected. CUDA: MATLAB-bundled12.8 only; no external CUDA/unsupported flags. Order: MATLAB, supported compiler/CUDA, all hosts; update MATLAB together and rebuild. Verify interop and AMS/IH on both GPUs.
 - No implicit CPU/GPU/Python fallback. When both routes exist, select explicitly (`Backend="gpu"|"cpu"`), record the backend and raise on failure. Internal CPU/GPU agreement does not replace Python CPU validation. Measure host setup and CPU solves separately.
-- Develop/build radia-gpu on 100; release acceptance uses 100 RTX 5000 and independent review; `NGSolve` A100 is optional. Never deploy to 102.
+- Active GPU development/builds/validation: NGSolve A100. Local development/same-wheel RTX 5000 acceptance: 100, with independent review. No A100 release gate; no GPU on 102.
 - Record parity, artifact hashes and validation JSON. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### GPU Kernel Research Strategy (2026-10-11)
 
 - Use mexcuda for GPU kernels with explicit assumptions. Implement missing Radia singular/near-field kernels in CUDA; preserve NGSolve FE ownership and HACApK policy.
-- MAT/HDF5 exchange may support independent validation, never a mandatory GPU adapter. Record units, numbering, labels and ABI.
-- Above 2 GB, use HDF5 (MAT v7.3 permitted), precheck size and validate readers/writers. Never split to bypass limits; format capacity is not GPU capacity.
+- Data: HDF5 only (schema/version, SI units, index base, labels, dtypes, UTF-8); keep NGSolve `.vol`/`.sol`. No MAT or MAT fallback; migrate existing MAT per package, bit-exact with hashes. Never a mandatory GPU adapter; validate readers/writers above 2 GB, never split.
 - Reuse gpuArray/BLAS where they implement the declared formulation. Keep GPU kernels independently callable. Validate iterative solvers for the actual operator.
 - Establish CPU/GPU agreement and performance on small publishable cases on the local RTX GPU before scaling; save timings, transfers, memory, versions and true residuals in JSON. Backend names are not speedup evidence.
-- Paid A100 is human-started only: prepare inputs, commands, acceptance criteria and bounded runtime, batch measurements and recover evidence.
+- Humans alone start/stop A100. Bounded jobs require resource admission and evidence recovery. Offline: explicit failure, no host fallback or indefinite PR queue.
 - Target development and compute GPU architectures with validated PTX compatibility; rebuild per OS/MATLAB ABI and verify before claiming portability or scaling.
 
 ### MATLAB And Simulink
@@ -172,14 +171,14 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: CI/builds use 100号機 with the `100` runner label. Stage3: fast-contracts uses `ci-light`, no `100`; heavy jobs keep `100`. Final: `100` + one capability; see routing manifest.
+**POLICY**: Shared CPU CI/builds use 100号機 with the `100` runner label; GPU development/builds use NGSolve A100. Stage3: fast-contracts uses `ci-light`, no `100`; heavy jobs keep `100`. Final: `100` + one capability.
 100号機 permits isolated heavy validation.
 Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
 LAB owns SSH preflight. Use the on-demand GPU worker only for mexcuda GPU work; Retired execution targets are excluded from deployment, CI and computation.
 Release-quad: same commit on 102号機 and 100号機; NGSolve timing is separate.
-Editable: 100号機 development venv, isolated from releases. LAB and NGSolve use verified wheels.
+CPU editable: dedicated 100 venv; LAB wheels. A100 GPU: isolated reviewed source; deploy verified artifacts.
 `cubit-mesh-export`: tests on 100 and LAB/102; solver releases never install, uninstall, repoint or version-gate it.
-NGSolve hosts start from checked exported .vol files, without Cubit (never install or run Cubit there; `NGSolve` A100 validation runs without Cubit); Cubit-independent checker tests may run in isolated CI. No silent uninstalls.
+NGSolve hosts start from checked exported .vol files, without Cubit; `NGSolve` A100 validation runs without Cubit. Never install/run Cubit there; checker unit tests may use isolated CI; no silent uninstalls.
 
 MATLAB-capable runners use a MATLAB-authenticated account and pass an Engine
 startup/calculation/shutdown check in the actual runner context. SYSTEM and SSH
@@ -216,11 +215,11 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 `jmag`: JMAG evaluation only. Keep Python 3.12.10, SSH service/config/keys, VC++ runtime and `inetpub` for control from 100. No Radia deployment, builds, CI/preflight, solver runs, validation or timing.
 
-**POLICY (2026-10-14)**: Development completes on 100号機 (CPU time within ~20% of A100 host; CPU work stays local). Use the on-demand GPU worker only for mexcuda GPU work. Retired execution targets are excluded from deployment, CI and computation.
+**POLICY**: CPU work stays on 100; NGSolve A100 owns primary GPU work. Use the on-demand GPU worker only for mexcuda GPU work. Retired execution targets are excluded from deployment, CI and computation.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes NGSolve hostname`; check running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs. Never stop another session's jobs.
 Compare CPU/GPU on the same host with fixed, recorded threads (16-thread baseline where supported). Measure speed, scaling, setup, transfers and total time; save hardware, memory and versions in JSON.
-100 owns development, builds/CI and isolated numerical validation; 100/LAB timings are diagnostic. A100 is optional for development/publication. Gmsh rendering needs a desktop.
-Historical measurements remain valid provenance: public evidence uses neutral roles; role-to-host maps, originals and hashes stay in private storage. Never relabel to another host. Keep hosts/IPs/paths private. Recover unique work before separately authorized VM/disk deletion.
+100: CPU development/builds/CI and GPU acceptance; 100/LAB timings are diagnostic. Gmsh needs a desktop.
+Measurements remain valid provenance: publish neutral roles, not hosts/IPs/paths; keep maps/originals/hashes private. Never relabel hosts. Recover unique work before authorized VM/disk deletion.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
 
@@ -239,13 +238,11 @@ Historical measurements remain valid provenance: public evidence uses neutral ro
 
 ## Build And Release
 
-- Build ownership (2026-10-06): 100号機 is the build host. Build numerical
-  solver candidates and release artifacts there from an isolated reviewed
-  checkout using current `Build.ps1`/CMake. 100号機 also owns source
-  development; LAB and compute hosts consume the same hash-verified artifacts.
-  Do not route an ad-hoc candidate build to LAB or a compute host merely
-  because it has free resources. Never replace another session's runtime.
-- Dependency versions live in package metadata and CI; do not duplicate pins here.
+- Build ownership: CPU artifacts on 100; GPU artifacts on NGSolve A100, using
+  reviewed isolated source and current `Build.ps1`/CMake; 100 owns local source.
+  Consumers use hash-verified artifacts. No CPU builds on LAB or
+  compute hosts; preserve others' runtimes. Reuse immutable verified-source evidence.
+- Upgrade tools/dependencies and validate; no backward compatibility. Retire old builds/fallbacks/toolchains after consumer/unique-work checks; no rollback reserves. History is provenance, not runtime. Pins: metadata/CI.
 - Install MKL from its supported package dependency. Do not bundle MKL or an
   Intel-specific NumPy build; preserve user NumPy ownership.
 - `radia_motor_rom.dll` is Radia-owned. Release wheels contain no third-party DLLs
@@ -268,7 +265,7 @@ defaults, extension points, and random consumption match upstream-generated fixt
 Handwritten MATLAB output is not compatibility truth.
 Adopt the Optuna 5 design in place: delete active optuna49 fixtures/pins, removed APIs/options,
 legacy sampler-state restore and public multi-objective TPE; unified TPESampler owns both objectives.
-Table/MAT storage, Simulink, parallelism and MEX are extensions, not algorithm changes.
+Table/HDF5 storage, Simulink, parallelism and MEX are extensions, not algorithm changes.
 Native acceleration requires correct differential results; maintain API/oracle manifests and fail loudly.
 Fast deterministic tests belong in tests; long performance/scaling/parallel/dimension work in validation_test.
 Released optuna-mcp==0.2.0 owns generic Study/Trial MCP for Optuna 5.0.0; 0.3.0.dev is not a stable release.
