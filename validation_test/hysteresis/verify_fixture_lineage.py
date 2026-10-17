@@ -18,10 +18,10 @@ def verify(output):
     spec = importlib.util.spec_from_file_location("lineage_hysteresis_io", implementation)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    source = here / "fixtures/potter_schmulian/B_input.mat"
+    source = here / "fixtures/potter_schmulian/B_input.hdf5"
     generator = source.with_name("CASE_02.m")
     fixture = here / "binput_play_fixture.npz"
-    loops, db, bmax = module.load_mat(source)
+    loops, db, bmax = module.load_hdf5(source)
     eta, tables, bplay = module.build_shape_functions(loops, db)
     reconstructed = {"K": len(eta), "eta": eta, "chi": eta,
                      "dB": db, "Bplay": bplay,
@@ -44,11 +44,12 @@ def verify(output):
         "platform_class": platform.system(), "python": platform.python_version(), "numpy": np.__version__,
         "source_kind": "analytical Potter-Schmulian branch data; not a measured specimen",
         "source_generator": "CASE_02.m uses S=0.9, Ms=1.91, Hc=500; fminsearch and makima interpolation",
-        "verification_scope": "Reidentification from preserved MAT branches, not a rerun of MATLAB generation or the coupled field solve",
+        "verification_scope": "Reidentification from preserved HDF5 branches, not a rerun of MATLAB generation or the coupled field solve",
         "loops": len(loops), "dB_T": db, "Bmax_T": float(np.max(bmax)),
         "K": len(eta), "verified_fields": len(errors), "max_absolute_difference": max(errors.values()),
         "sha256": {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
                    for p in [source, generator, fixture, implementation]},
+        "historical_source_mat_sha256": json.loads((here / "hdf5_fixture_migration.json").read_text(encoding="utf-8"))["source_mat_sha256"],
         "passed": True,
     }
     Path(output).write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
