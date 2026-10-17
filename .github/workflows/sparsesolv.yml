@@ -439,6 +439,8 @@ jobs:
         if: steps.native-impact.outputs.required == 'true'
         shell: pwsh
         run: |
+          . ./tools/native_build_provenance.ps1
+          $auxiliarySource = Get-NativeBuildSourceIdentity -RepoRoot $PWD.Path
           # The package facade requires _radia_pybind; never borrow a developer binary.
           # Bound MSVC commit usage on shared runners (C1060 at four jobs).
           & .\Build.ps1 -RadiaOnly -BuildJobs 2
@@ -457,6 +459,9 @@ jobs:
           $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
           & cmd.exe /d /c "call `"$vcvars`" && cmake --build build-msvc --config Release --target sparsesolv_ngsolve peec_matrices --parallel 2"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($name in @('sparsesolv_ngsolve.pyd', 'peec_matrices.pyd', 'axifem.pyd')) {
+            Write-NativeBuildProvenance -BinaryPath (Join-Path $PWD.Path "src/radia/$name") -RepoRoot $PWD.Path -StartIdentity $auxiliarySource -BuildDirectory 'build-msvc'
+          }
 
       - name: Verify source provenance and run required AMS tests
         if: steps.native-impact.outputs.required == 'true'

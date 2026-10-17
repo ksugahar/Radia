@@ -26,6 +26,11 @@ WORKFLOW = '.github/workflows/sparsesolv.yml'
 ARTIFACT = 'solver-heavy-validation-v1'
 SCHEMA = 'radia.validated-source.v1'
 MAX_AGE = timedelta(days=30)
+JOB_CONTEXT_KEYS = frozenset({'RADIA_CI_VENV', 'RADIA_CI_OUTPUT_DIR'})
+NATIVE_NAMES = ('_radia_pybind.pyd', 'sparsesolv_ngsolve.pyd', 'peec_matrices.pyd', 'axifem.pyd')
+BUILD_METADATA = frozenset({'CMakeCache.txt', '.ninja_deps', '.ninja_log',
+    'build.ninja', 'build_temp_msvc.bat', 'build.log', 'cmake_install.cmake',
+    'CTestTestfile.cmake', 'DartConfiguration.tcl'})
 ROOT_INPUTS = {'CMakeLists.txt','Build.ps1','setup.py','pyproject.toml','MANIFEST.in',
                'tools/run_test_tier.py','tools/native_build_provenance.ps1',
                'tools/validation_source_gate.py','tests/conftest.py','conftest.py','.gitignore'}
@@ -39,14 +44,31 @@ def canonical(data):
     return json.dumps(data, sort_keys=True, separators=(',',':')).encode()
 
 
+def numerical_environment():
+    """Normalize only reviewed per-run paths inside the runner scratch root."""
+    values={key.upper():value for key,value in sorted(os.environ.items())
+            if key.upper().startswith(('RADIA_','NGS','MKL_','KMP_','OMP_'))}
+    temporary=os.environ.get('RUNNER_TEMP')
+    if temporary and Path(temporary).is_absolute():
+        scratch=Path(temporary).resolve()
+        for key in JOB_CONTEXT_KEYS:
+            value=values.get(key)
+            if value and Path(value).is_absolute():
+                resolved=Path(value).resolve()
+                if resolved!=scratch and resolved.is_relative_to(scratch):
+                    values[key]='<runner-job-context>'
+    return values
+
+
 def git(root, *args):
     return subprocess.check_output(['git','-c',f'safe.directory={root}',*args],cwd=root).decode('utf-8').strip()
 
 
 
-def validate_native_sidecar(root):
+def validate_native_sidecar(root, name='_radia_pybind.pyd'):
     """Verify current native provenance; this is not prior source certification."""
-    binary=root/'src/radia/_radia_pybind.pyd'
+    if name not in NATIVE_NAMES: raise ValueError('unreviewed native module')
+    binary=root/'src/radia'/name
     sidecar=Path(str(binary)+'.build.json')
     if binary.is_symlink() or sidecar.is_symlink():
         raise ValueError('linked native provenance')
@@ -61,10 +83,55 @@ def validate_native_sidecar(root):
             or record['binary_bytes']!=len(data)
             or record.get('binary_sha256')!=digest(data)):
         raise ValueError('current native provenance mismatch')
+    return record
+
+
+def validated_native_inputs(root):
+    """Bind the exact required modules, build directory and copied outputs."""
+    build=root/'build-msvc'
+    if build.is_symlink() or build.is_junction() or build.resolve()!=root.resolve()/'build-msvc':
+        raise ValueError('linked build directory')
+    allowed=set()
+    for name in NATIVE_NAMES:
+        record=validate_native_sidecar(root,name)
+        if record.get('build_directory')!='build-msvc':
+            raise ValueError('native build directory missing/mismatched')
+        binary=root/'src/radia'/name
+        stem=Path(name).stem
+        choices=[parent/file for parent in (build,build/'Release')
+                 for file in (name,stem+'.cp312-win_amd64.pyd')]
+        outputs=[p for p in dict.fromkeys(choices) if p.exists()]
+        if not outputs: raise ValueError('native build output missing')
+        for output in outputs:
+            if (output.is_symlink() or output.parent.is_symlink() or output.parent.is_junction()
+                    or not output.is_file() or digest(output.read_bytes())!=record['binary_sha256']):
+                raise ValueError('native build/copy mismatch')
+            allowed.add(output.relative_to(root).as_posix())
+        allowed.update({binary.relative_to(root).as_posix(),binary.relative_to(root).as_posix()+'.build.json'})
+    return allowed
+
+
+def generated_build_metadata(root, path):
+    parts=Path(path).parts
+    if not parts or parts[0]!='build-msvc': return False
+    if Path(path).suffix.lower() in {'.pyd','.dll','.pth','.py'}: return False
+    cmake_metadata=re.fullmatch(
+        r'CMakeFiles/(?:(?:[0-9][^/]+/)?(?:CMake(?:C|CXX|RC)Compiler\.cmake|CMakeSystem\.cmake|'
+        r'CMakeDetermineCompilerABI_(?:C|CXX)\.bin)|'
+        r'[0-9][^/]+/CompilerId(?:C|CXX)/CMake(?:C|CXX)CompilerId\.(?:c|cpp|exe)|'
+        r'ShowIncludes/(?:foo\.h|main\.c)|CMakeConfigureLog\.yaml|'
+        r'CMake(?:Output|Error)\.log|TargetDirectories\.txt|cmake\.check_cache|rules\.ninja)',
+        '/'.join(parts[1:]))
+    if not (len(parts)==2 and parts[1] in BUILD_METADATA or cmake_metadata):
+        return False
+    file=root/path
+    if not file.is_file() or any(p.is_symlink() or p.is_junction() for p in (file,*file.parents) if p!=root.parent):
+        raise ValueError('linked build metadata')
+    return True
 
 
 def environment_contract(root):
-    validate_native_sidecar(root)
+    validated_native_inputs(root)
     compiler = []
     for file in (root/'build-msvc/CMakeFiles').glob('*/CMakeCXXCompiler.cmake'):
         text=file.read_text(encoding='utf-8')
@@ -89,11 +156,9 @@ def environment_contract(root):
     if os.environ.get('RADIA_TESTS_ALLOW_PARTIAL')!='0': raise ValueError('partial validation context')
     threads={key:os.environ.get(key) for key in ('RADIA_TEST_NGSOLVE_THREADS','OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS')}
     if set(threads.values())!={'1'}: raise ValueError('unbounded or changed thread contract')
-    numerical_environment={key.upper():value for key,value in sorted(os.environ.items())
-                           if key.upper().startswith(('RADIA_','NGS','MKL_','KMP_','OMP_'))}
     return {'python':sys.version,'platform':platform.platform(),'machine':platform.machine(),
             'processor':platform.processor(),'compiler':compiler,'windows_sdk_versions':sdk_versions,'threads':threads,
-            'compiler_options':build_options,'numerical_environment':numerical_environment,
+            'compiler_options':build_options,'numerical_environment':numerical_environment(),
             'packages':sorted((d.metadata['Name'].lower(),d.version) for d in importlib.metadata.distributions())}
 
 
@@ -110,12 +175,13 @@ def source_fingerprint(root, environment):
     # compiler/Python cache outputs are excluded; unknown inputs force execution.
     untracked=git(root,'ls-files','--others','-z').split('\0')
     generated={'.lib','.obj','.exp','.pdb','.ilk','.pyc'}
+    native_inputs=None
     for path in untracked:
         if not path or any(part in {'__pycache__','.pytest_cache'} for part in Path(path).parts):
             continue
-        if path in {'src/radia/_radia_pybind.pyd','src/radia/_radia_pybind.pyd.build.json'}:
-            validate_native_sidecar(root)
-            continue
+        if path.startswith('build-msvc/') or path in {f'src/radia/{name}{suffix}' for name in NATIVE_NAMES for suffix in ('','.build.json')}:
+            if native_inputs is None: native_inputs=validated_native_inputs(root)
+            if path in native_inputs or generated_build_metadata(root,path): continue
         if Path(path).suffix.lower() not in generated:
             raise ValueError('untracked validation input: '+path)
     selected=[]
@@ -223,6 +289,9 @@ def run(root, out, force=False, client=None):
     result={'schema':SCHEMA,'profile':PROFILE,'current':identity,'accepted':False,
             'current_artifact_certified':False,'mode':'execute','reuse_reason':None,
             'verified_at':datetime.now(timezone.utc).isoformat()}
+    # Operational paths remain observable without making each run a new
+    # numerical environment. No other RADIA/NGS/library variable is normalized.
+    result['job_context']={key:os.environ[key] for key in JOB_CONTEXT_KEYS if key in os.environ}
     fingerprint=None
     try:
         fingerprint,count=source_fingerprint(root,environment_contract(root))

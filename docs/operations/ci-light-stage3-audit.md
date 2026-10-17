@@ -139,3 +139,14 @@ after these execution changes is
 All 45 workflow jobs pass the routing audit. This repeats the execution audit,
 rather than updating a stale digest alone. Live main receipt hit/miss and
 current native artifact checks remain separate required evidence.
+
+## Bound native build metadata and job-context audit (2026-10-17)
+
+The follow-up binds four exact-name native modules and copied build outputs
+to current clean-source sidecars with a declared build directory. Only known
+CMake/Ninja metadata there and two reviewed runner-temp context paths are
+normalized; unknown native and runtime inputs still force execution.
+The isolated lightweight worst-case selector passed **515 tests, zero skips**,
+in 23.71 seconds (24.58 seconds through the runner). Its 51-file digest is
+`07d599ee89666da020d2d6fefc4583358ac0ef101245a41357537c10d9fa0f0e`. No solver or MATLAB dependency was installed for this audit.
+Real native-build lanes and main hit/miss evidence remain required separately.
