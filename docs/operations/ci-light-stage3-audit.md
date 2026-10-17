@@ -103,3 +103,9 @@ The routing, policy, workflow-owner and release-ref contracts passed 68 tests.
 All 45 workflow jobs still pass the stage-3 routing audit. The reviewed
 execution-closure digest remains unchanged; no newly merged solver or HDF5
 fixture test was silently added to the lightweight execution closure.
+
+The follow-up merge includes main's A100 routing policy (#440). GPU host
+names in the CI paragraph and its contract refer to A100, distinct from the
+NGSolve host. Updated policy/owner/ref contracts passed 49 tests.
+The 45-job execution-closure audit is unchanged, so the completed 447-case
+lightweight execution remains applicable without repeating solver-free tests.
