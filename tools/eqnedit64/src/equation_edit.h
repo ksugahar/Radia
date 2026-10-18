@@ -1,7 +1,7 @@
 /*
  * equation_edit.h -- the equation editing model
  *
- * What makes Equation Editor 3.0 pleasant is not its renderer, it is the way
+ * Structural editing keeps the caret inside each expression and defines how
  * typing works: an insertion point that lives *inside* the structure, templates
  * whose empty slots you tab through, and backspace that unwraps a template
  * instead of deleting a character you cannot see.  That behaviour is a data
@@ -158,7 +158,7 @@ public:
                   bool text_as_outlines = false) const;
 #endif
 
-    /* The Equation Editor 3.0 key chords, as name/chord pairs.  Kept here so
+    /* The structural editing key chords, as name/chord pairs.  Kept here so
      * the familiar chords survive into the new editor rather than being
      * reinvented per front end. */
     struct Binding {

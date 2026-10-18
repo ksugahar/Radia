@@ -1,5 +1,5 @@
 {
-  "status": "R2_contract_GO_implementation_in_progress",
+  "status": "ready_for_Opus_findings_only_re_review",
   "fixtures": [
     {
       "id": "single-unanchored",
@@ -33,8 +33,9 @@
     },
     {
       "id": "cases",
-      "tex": "\\begin{cases}x&x>0\\\\0&x\\leq0\\end{cases}",
-      "expected": "preserve cases delimiter and two-row two-cell structure"
+      "tex": "\\begin{cases}x&x>0\\\\0&x\\le0\\end{cases}",
+      "expected": "preserve cases delimiter and two-row two-cell structure",
+      "baseline_tex": "\\begin{cases}x&x>0\\\\0&x\\leq0\\end{cases}"
     }
   ],
   "normalization": [
@@ -52,7 +53,7 @@
   ],
   "position_tolerance_px": 0,
   "position_tolerance_policy": "Fixed before any measurement; no post-result relaxation.",
-  "fixture_revision": 2,
-  "amendment": "cases uses equivalent supported \\leq instead of legacy unsupported \\le; original mismatch retained privately; product alias support unchanged",
+  "fixture_revision": 3,
+  "amendment": "Parser-only relation aliases; cases exercises le. Immutable cases baseline retains original leq input explicitly.",
   "measurement_method": "PowerPoint character COM bounding coordinates rounded to exported PNG pixel scale; tolerance 0 px fixed before measurement; original unequal-I raster regression also requires zero spread."
 }

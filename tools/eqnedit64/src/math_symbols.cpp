@@ -42,7 +42,7 @@ constexpr Entry kSymbols[] = {
     {"\\emptyset", 0x2205}, {"\\epsilon", 0x03F5},
     {"\\equiv", 0x2261}, {"\\eta", 0x03B7}, {"\\exists", 0x2203},
     {"\\forall", 0x2200}, {"\\frown", 0x2322},
-    {"\\gamma", 0x03B3}, {"\\geq", 0x2265}, {"\\ge", 0x2265}, {"\\gg", 0x226B},
+    {"\\gamma", 0x03B3}, {"\\geq", 0x2265}, {"\\gg", 0x226B},
     /* No card suits.  They are not mathematics, the user asked them gone,
      * and a pasted \heartsuit degrading to its letters is an acceptable
      * price for a palette that holds only working symbols. */
@@ -53,11 +53,11 @@ constexpr Entry kSymbols[] = {
     {"\\langle", 0x27E8}, {"\\lceil", 0x2308},
     {"\\ldots", 0x2026}, {"\\leftarrow", 0x2190},
     {"\\leftharpoondown", 0x21BD}, {"\\leftharpoonup", 0x21BC},
-    {"\\leftrightarrow", 0x2194}, {"\\leq", 0x2264}, {"\\le", 0x2264},
+    {"\\leftrightarrow", 0x2194}, {"\\leq", 0x2264},
     {"\\lfloor", 0x230A}, {"\\ll", 0x226A}, {"\\mapsto", 0x21A6},
     {"\\mid", 0x2223}, {"\\models", 0x22A8}, {"\\mp", 0x2213},
     {"\\mu", 0x03BC}, {"\\nabla", 0x2207}, {"\\nearrow", 0x2197},
-    {"\\neg", 0x00AC}, {"\\neq", 0x2260}, {"\\ne", 0x2260}, {"\\nexists", 0x2204},
+    {"\\neg", 0x00AC}, {"\\neq", 0x2260}, {"\\nexists", 0x2204},
     {"\\ni", 0x220B}, {"\\not", 0x0338}, {"\\notin", 0x2209},
     /* LaTeX has no \nsubset, in any package -- it was emitted for years and
      * would not compile.  The way to spell U+2284 is \not applied to a

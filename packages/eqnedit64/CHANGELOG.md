@@ -2,6 +2,8 @@
 
 ## 3.1.5 review candidate
 
+- Match native Office text-group relation glyphs in the Web edition for `\le`, `\leq`, `\ge`, `\geq`, `\ne` and `\neq`, preserving other command spellings.
+
 - Preserve relation aliases `\le`, `\ge`, and `\ne` through parse/save/reopen, using canonical `\leq`, `\geq`, and `\neq` output.
 
 - Emit a single unanchored aligned row as ordinary Office math.

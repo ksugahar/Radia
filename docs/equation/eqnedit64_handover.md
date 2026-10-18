@@ -718,7 +718,7 @@ O:の正式配布物は`Eqnedit64.release.json`を正とし、候補専用の
 次を完成条件や互換目標へ戻さない。
 
 - `.eqn`入力または保存。
-- Equation Editor 3.0のOLE/ActiveX互換。
+- 外部OLE/ActiveX埋め込みオブジェクトとの互換。
 - Inno Setupまたは別のGUIインストーラー。
 - standalone EXEにPythonを要求すること。
 - nativeをKaTeX/MathJaxへ置き換えること。
