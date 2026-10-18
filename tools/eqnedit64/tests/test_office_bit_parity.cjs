@@ -309,7 +309,9 @@ function officeBytes(html) {
       let baselineHash = null;
       let baselineEqual = null;
       if (baselineProbe && immutable314) {
-        const baseline = execFileSync(baselineProbe, [input], {encoding: "utf8"});
+        const baselineInput = path.join(scratch, fixture.id + ".baseline314.tex");
+        fs.writeFileSync(baselineInput, fixture.baseline_tex || fixture.tex);
+        const baseline = execFileSync(baselineProbe, [baselineInput], {encoding: "utf8"});
         fs.writeFileSync(path.join(scratch, fixture.id + ".baseline314.html"), baseline);
         const baselineBytes = officeBytes(baseline);
         baselineHash = crypto.createHash("sha256").update(baselineBytes).digest("hex");

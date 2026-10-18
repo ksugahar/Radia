@@ -3160,6 +3160,13 @@
     var math = doc.documentElement;
     math.setAttribute("display", "inline");
     math.setAttribute("mathsize", "18pt");
+    // Native text groups retain these supported relation commands as upright
+    // glyphs. MathJax leaves their spelling in mtext; match that Office route.
+    Array.prototype.forEach.call(math.querySelectorAll("mtext"), function (node) {
+      var relations = {le:"≤", leq:"≤", ge:"≥", geq:"≥", ne:"≠", neq:"≠"};
+      node.textContent = node.textContent.replace(/\\(leq?|geq?|neq?)(?![A-Za-z])/g,
+        function (_, command) { return relations[command]; });
+    });
 
     // MathJax's four big-family classes use font-specific heights. Convert
     // only explicit single-token ORD/OPEN/CLOSE/REL wrappers to the shared
