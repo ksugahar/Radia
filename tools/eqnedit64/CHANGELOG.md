@@ -1,6 +1,17 @@
 # Eqnedit64 changelog
 
-## 3.1.4 review candidate
+## 3.1.5 review candidate
+
+- Match native Office text-group relation glyphs in the Web edition for `\le`, `\leq`, `\ge`, `\geq`, `\ne` and `\neq`, preserving other command spellings.
+
+- Preserve relation aliases `\le`, `\ge`, and `\ne` through parse/save/reopen, using canonical `\leq`, `\geq`, and `\neq` output.
+
+- Emit a single unanchored aligned row as ordinary Office math.
+- Preserve explicit and nested anchors, including row-end alignment in mixed arrays.
+- Extend native/Web byte checks with seven fixtures and immutable 3.1.4 baselines.
+
+
+## 3.1.4
 
 - Add strict native PowerPoint OOXML math export (.pptxmath) and a checked subprocess helper.
 - Share structural Office emission with the existing RichEdit clipboard route.

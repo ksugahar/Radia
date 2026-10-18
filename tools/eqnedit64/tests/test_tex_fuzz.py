@@ -182,8 +182,8 @@ def main() -> int:
     # Pathologically deep nesting must not take the process down.  Parse,
     # layout, and emit are all recursive over the tree, so a deep enough paste
     # overflowed the stack -- measured fine to ~1200 levels of \sqrt and dead
-    # by ~1400.  The parser now caps nesting (Equation Editor 3.0 does the
-    # same, its string 16044), so every depth here must return, not crash.
+    # by ~1400.  The parser now caps nesting, so every depth here must
+    # return rather than terminate the process.
     # A crash shows up as this test's process dying, not as an assertion.
     for depth in (500, 2000, 20000):
         deep = "x"

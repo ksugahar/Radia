@@ -17,7 +17,10 @@ if not exist "%EQN_VSROOT%\VC\Auxiliary\Build\vcvars64.bat" (
     exit /b 1
 )
 call "%EQN_VSROOT%\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.44.35207 >nul 2>&1
-if errorlevel 1 exit /b 1
+if errorlevel 1 (
+    echo [ERROR] vcvars64.bat failed to initialize MSVC 14.44.35207.
+    exit /b 1
+)
 if not "%VisualStudioVersion%"=="17.0" (
     echo [ERROR] The selected developer environment is not Visual Studio 2022.
     exit /b 1
