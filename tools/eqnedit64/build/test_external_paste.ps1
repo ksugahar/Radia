@@ -731,10 +731,38 @@ function Assert-PowerPointMathRowsShareLeftEdge([string]$Path) {
     }
 }
 
+function Find-PowerPointMathLetter([string]$Text, [char]$Letter) {
+    # Office exposes mathematical italic letters as supplementary Unicode
+    # characters. Keep the original UTF-16 offsets used by COM Characters.
+    $at = $Text.IndexOf($Letter)
+    if ($at -ge 0) { return $at }
+    $italic = if ([char]::IsUpper($Letter)) {
+        [char]::ConvertFromUtf32(0x1D434 + [int]$Letter - [int][char]'A')
+    } else {
+        [char]::ConvertFromUtf32(0x1D44E + [int]$Letter - [int][char]'a')
+    }
+    return $Text.IndexOf($italic, [StringComparison]::Ordinal)
+}
+
 function Get-PowerPoint315Positions($Range, $Shape, [string]$Image, [string]$Id) {
     $bitmap = [Drawing.Bitmap]::FromFile($Image)
     try { $scale = $bitmap.Width / [double]$Shape.Width } finally { $bitmap.Dispose() }
     $text = [string]$Range.Text
+    if ($PowerPoint315Artifact) {
+        $diagnostic315 = @()
+        for ($offset315 = 0; $offset315 -lt $text.Length; $offset315++) {
+            if ([char]::IsLowSurrogate($text[$offset315])) { continue }
+            $length315 = if ([char]::IsHighSurrogate($text[$offset315])) { 2 } else { 1 }
+            $token315 = $Range.Characters($offset315 + 1, $length315)
+            $diagnostic315 += [ordered]@{offset_utf16=$offset315; input=$text.Substring($offset315,$length315);
+                returned_text=[string]$token315.Text; left=[double]$token315.BoundLeft;
+                width=[double]$token315.BoundWidth; top=[double]$token315.BoundTop}
+            Release-ComObject $token315
+        }
+        [ordered]@{text=$text; shape_left=[double]$Shape.Left; shape_width=[double]$Shape.Width;
+            scale=$scale; characters=$diagnostic315} | ConvertTo-Json -Depth 6 |
+            Set-Content -LiteralPath ($PowerPoint315Artifact + ".$Id.bounds.json") -Encoding utf8
+    }
     $equals = @()
     for ($i = 0; $i -lt $text.Length; $i++) {
         if ($text[$i] -eq '=') {
@@ -753,18 +781,30 @@ function Get-PowerPoint315Positions($Range, $Shape, [string]$Image, [string]$Id)
     if ($Id -eq 'mixed-nested') {
         if ($equals.Count -ne 3) { throw 'Mixed nested equation must expose three editable equals characters.' }
         if ($equals[0] -ne $equals[1]) { throw "Inner equals positions differ: $($equals -join ',')" }
-        $z = $text.LastIndexOf('z')
+        $z = Find-PowerPointMathLetter $text 'z'
         if ($z -le 0) { throw 'Mixed outer second row z is missing.' }
-        $first = $Range.Characters(1, $z)
-        $right = [int][Math]::Round(([double]$first.BoundLeft + [double]$first.BoundWidth - [double]$Shape.Left) * $scale)
-        Release-ComObject $first
+        # A range spanning Office's structural spaces expands to the whole
+        # equation, including the second row. Measure actual first-row glyphs.
+        $firstRight = [double]::NegativeInfinity
+        for ($at315 = 0; $at315 -lt $z; $at315++) {
+            if ([char]::IsLowSurrogate($text[$at315]) -or
+                [char]::IsWhiteSpace($text[$at315]) -or $text[$at315] -eq '&') { continue }
+            $count315 = if ([char]::IsHighSurrogate($text[$at315])) { 2 } else { 1 }
+            $first = $Range.Characters($at315 + 1, $count315)
+            if ([string]$first.Text -cne $text.Substring($at315,$count315)) {
+                throw 'First-row character range expanded beyond its exact token.'
+            }
+            $firstRight = [Math]::Max($firstRight, [double]$first.BoundLeft + [double]$first.BoundWidth)
+            Release-ComObject $first
+        }
+        $right = [int][Math]::Round(($firstRight - [double]$Shape.Left) * $scale)
         $result.outer_first_right_px = $right
         if ($right -ne $equals[2]) { throw "Mixed row-end position differs from outer equals: $right / $($equals[2]) px" }
     }
     if ($Id -eq 'pure-nested') {
         $lefts = @()
         foreach ($letter in @('a','b','c')) {
-            $at = $text.IndexOf($letter)
+            $at = Find-PowerPointMathLetter $text $letter
             if ($at -lt 0) { throw "Pure nested editable row missing: $letter" }
             $character = $Range.Characters($at + 1, 1)
             $lefts += [int][Math]::Round(([double]$character.BoundLeft - [double]$Shape.Left) * $scale)
@@ -1290,9 +1330,10 @@ try {
         if ($observation315.id -eq 'single-anchored') {
             $xml315 = Get-SlideXml $pptxOutput $observation315.slide
             if ($xml315 -notmatch '<m:aln(?:\s|/|>)') { throw 'Single anchored marker lost after reopening.' }
-            $x315 = ([string]$range315.Text).IndexOf('x')
+            $x315 = Find-PowerPointMathLetter ([string]$range315.Text) 'x'
             if ($x315 -lt 0) { throw 'Single anchored editable x is missing.' }
-            $character315 = $range315.Characters($x315 + 1, 1)
+            $xLength315 = if ([char]::IsHighSurrogate(([string]$range315.Text)[$x315])) { 2 } else { 1 }
+            $character315 = $range315.Characters($x315 + 1, $xLength315)
             $character315.Text = 'X'
             Release-ComObject $character315
             $presentation.Save()
@@ -1305,7 +1346,7 @@ try {
     $single315 = $observations315 | Where-Object id -eq 'single-anchored'
     $shape315 = $presentation.Slides.Item($single315.slide).Shapes.Item(1)
     $range315 = $shape315.TextFrame2.TextRange
-    if (-not ([string]$range315.Text).Contains('X') -or
+    if ((Find-PowerPointMathLetter ([string]$range315.Text) 'X') -lt 0 -or
         (Get-SlideXml $pptxOutput $single315.slide) -notmatch '<m:aln(?:\s|/|>)') {
         throw 'Single anchored edit/marker did not survive second save/reopen.'
     }
