@@ -446,12 +446,13 @@ native出力は `tools/eqnedit64/dist/Eqnedit64.exe`。ビルド前に同じ出�
 2. PR CIを通し、同じcommitから署名済み候補EXEをビルドして`sync_handtest_to_o.ps1`で
    `O:\Eqnedit64.exe`へ置く。
 3. 菅原のハンドテストを通す。
-4. **正式公開前に、候補commitと仕様差分へClaude Code Fableレビューを一度行う。**
+4. **正式公開前に、候補commitと仕様差分へClaude Code Opus 5.5（`claude-opus-5-5`）レビューを一度行う。**
+   Codex側の作業はSol 6.1を使う（2026-10-18ユーザー決定。従来のFableゲートを置き換える）。
    レビュー結果をPRまたは引継書へ残し、指摘を回収した場合はcommit、O:候補、自動試験、
-   ハンドテストを更新する。Fableレビュー未実施のまま`main`統合、release tag、PyPI公開を
+   ハンドテストを更新する。Opus 5.5レビュー未実施のまま`main`統合、release tag、PyPI公開を
    行わない。レビュー済みSHAと指摘回収commitを併記する。回収commitが記録済み指摘と
    その試験だけなら一度のレビューを満たすが、無関係なモデル／仕様変更を加えた場合は
-   新しい候補としてFableレビューをやり直す。
+   新しい候補としてOpus 5.5レビューをやり直す。
 5. 承認された候補を`main`へ統合してpushし、Eqnedit64専用main CIがgreenであることを確認する。
 6. exact `origin/main`からdevelopment host（development host）でrelease EXEをビルドし、
    `CN=ksugahar`で署名する。validation hostは検証専用で、正式リリースのビルド・署名には使わない。

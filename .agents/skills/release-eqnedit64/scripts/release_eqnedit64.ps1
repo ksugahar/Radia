@@ -1,6 +1,6 @@
 # One command for the mechanical half of an Eqnedit64 release: the steps from
 # "main is green" to "the tag is pushed".  It does not replace the judgement
-# steps before it - the hand test, the Fable review, the merge to main - which
+# steps before it - the hand test, the Opus 5.5 review, the merge to main - which
 # stay in SKILL.md.
 #
 # Run this build and signing phase on the current 100号機 build host. LAB is reserved for

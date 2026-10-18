@@ -51,7 +51,9 @@ assets and Web JavaScript are correct.
 ## Release invariants
 
 - Before merging the release candidate to `main`, require one Claude Code
-  Fable review of the candidate commit and its specification diff. Record the
+  Opus 5.5 review (`claude-opus-5-5`) of the candidate commit and its
+  specification diff. Codex work on the candidate uses Sol 6.1 (user decision
+  2026-10-18; replaces the earlier Fable gate). Record the
   result in the PR or handover. Address findings and repeat the affected tests
   and O: hand test before formal publication; do not create a tag from an
   unreviewed candidate.
@@ -59,7 +61,7 @@ assets and Web JavaScript are correct.
   commit limited to the recorded findings and their tests completes the one
   review gate after affected CI and hand testing pass. Any unrelated model or
   specification change creates a new candidate and requires another review.
-- After the hand-test and Fable gates, push the approved release commit to
+- After the hand-test and Opus 5.5 review gates, push the approved release commit to
   `main` and require the main Eqnedit64 CI to pass. Do not create or push the
   release tag yet.
 - Build and sign the standalone executable on the current 100号機 build host from that
@@ -108,7 +110,7 @@ assets and Web JavaScript are correct.
    candidate, and stage it with `sync_handtest_to_o.ps1`.
 3. Complete the background O: hand-test gates above. Record user feedback when
    provided; do not stop and request human execution of covered automated checks.
-4. Run one Claude Code Fable review on that candidate and its specification
+4. Run one Claude Code Opus 5.5 review on that candidate and its specification
    diff. Record and resolve the findings, then refresh affected tests and O:
    hand testing. Do not merge to `main` before this gate is recorded.
 5. Merge the approved release commit to `main` and push it.
