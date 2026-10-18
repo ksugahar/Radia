@@ -247,7 +247,7 @@ def test_eqnedit64_ci_is_separate_from_radia_mcp_ci():
     assert "paths-ignore:" not in policy
 
 
-def test_eqnedit64_release_order_is_handtest_fable_main_o_drive_then_tag():
+def test_eqnedit64_release_order_is_handtest_review_main_o_drive_then_tag():
     root = Path(__file__).resolve().parents[2]
     skill = (root / ".agents/skills/release-eqnedit64/SKILL.md").read_text(
         encoding="utf-8")
@@ -259,13 +259,13 @@ def test_eqnedit64_release_order_is_handtest_fable_main_o_drive_then_tag():
     push_candidate = required.index(
         "Commit and push the versioned release candidate branch.")
     sync_handtest = required.index("sync_handtest_to_o.ps1")
-    fable_review = required.index("Run one Claude Code Fable review")
+    release_review = required.index("Run one Claude Code Opus 5.5 review")
     push_main = required.index(
         "Merge the approved release commit to `main` and push it.")
     sync_release = required.index("sync_to_o.ps1")
     push_tag = required.index("Create the annotated tag")
     assert (
-        push_candidate < sync_handtest < fable_review < push_main <
+        push_candidate < sync_handtest < release_review < push_main <
         sync_release < push_tag
     )
     assert "Do not merge to `main` before this gate is recorded." in required
