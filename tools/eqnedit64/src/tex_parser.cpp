@@ -118,8 +118,8 @@ private:
     /* Parse, layout, and emit are all recursive over the tree, so a deeply
      * nested paste -- \sqrt{\sqrt{...}} thousands deep -- overflowed the
      * stack and took the process down (measured: fine to ~1200, crash by
-     * ~1400).  Equation Editor 3.0 caps nesting and refuses with a message
-     * rather than crashing (its string 16044); this is the same finite cap,
+     * ~1400).  A finite nesting cap prevents recursive stack exhaustion,
+     * rather than allowing an uncontrolled process failure; the cap is
      * set well above any real equation and well below the crash.  Content
      * past the cap is dropped, not built. */
     /* Consume the body of the current group without building it, so the
@@ -754,7 +754,10 @@ private:
 
         /* \| is TeX's short spelling of \Vert; canonicalise so the double bar
          * survives instead of decaying to a single one. */
-        const std::string named = (cmd == "\\|") ? std::string("\\Vert") : cmd;
+        // Normalize short relation aliases to the established saved spelling.
+        const std::string named = cmd == "\\|" ? "\\Vert"
+            : cmd == "\\le" ? "\\leq" : cmd == "\\ge" ? "\\geq"
+            : cmd == "\\ne" ? "\\neq" : cmd;
         int code = latex_symbol_codepoint(named);
         if (code >= 0) {
             auto ch = make_char(typeface_for_code(uint32_t(code)), uint32_t(code));

@@ -173,13 +173,13 @@ jobs:
       - name: Install test dependencies
         # fonttools reads the shipped math font's cmap so the palette-face
         # contract can be checked without a compiler or a registered font.
-        run: python -m pip install pytest fonttools
+        run: python -m pip install pytest fonttools pyyaml
 
       - name: Check Eqnedit64 Web contract
         run: |
           python build/generate_palettes.py --check
           python build/generate_office_alphabets.py --check
-          python -m pytest tests/test_web_contract.py tests/test_node_dispatch.py tests/test_version_contract.py tests/test_palette_faces.py tests/test_palette_intent.py tests/test_build_toolchain_contract.py -q
+          python -m pytest tests/test_web_contract.py tests/test_node_dispatch.py tests/test_version_contract.py tests/test_palette_faces.py tests/test_palette_intent.py tests/test_build_toolchain_contract.py tests/test_public_names.py -q
 
       - name: Check shipped TrueType conversion without font registration
         run: python tests/test_truetype_conversion.py
@@ -256,7 +256,7 @@ jobs:
         run: |
           cmake -S . -B build_cmake -G "Visual Studio 17 2022" -T "v143,version=14.44.35207" -A x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pwsh -NoProfile -File build/assert_msvc1944.ps1 -BuildDirectory build_cmake
+          pwsh -NoProfile -File build/assert_msvc1944.ps1 -BuildDirectory build_cmake -ReportPath build_cmake/compiler-identity.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build native targets
@@ -485,6 +485,14 @@ jobs:
           path: ${{ runner.temp }}/eqnedit64-font-trace/
           if-no-files-found: warn
 
+      - name: Upload actual compiler identity
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-msvc-build-test-${{ matrix.flavor || 'default' }}
+          path: tools/eqnedit64/build_cmake/compiler-identity.json
+          if-no-files-found: error
+
   font-boundary-diagnostic:
     needs: [ci-impact]
     if: ${{ needs.ci-impact.outputs.required == 'true' && (inputs.font_diagnostic == true && inputs.font_dump != true && inputs.font_probe != true && inputs.font_prefix != true) }}
@@ -511,7 +519,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake -S . -B build_cmake -G "Visual Studio 17 2022" -T "v143,version=14.44.35207" -A x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pwsh -NoProfile -File build/assert_msvc1944.ps1 -BuildDirectory build_cmake
+          pwsh -NoProfile -File build/assert_msvc1944.ps1 -BuildDirectory build_cmake -ReportPath build_cmake/compiler-identity.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build_cmake --config Release --target Eqnedit64 --parallel 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -529,6 +537,14 @@ jobs:
           name: font-boundary-${{ matrix.arm }}
           path: ${{ runner.temp }}/font-boundary/
           if-no-files-found: warn
+
+      - name: Upload actual compiler identity
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-msvc-font-boundary-diagnostic-${{ matrix.flavor || 'default' }}
+          path: tools/eqnedit64/build_cmake/compiler-identity.json
+          if-no-files-found: error
 
   font-dump-build:
     needs: [ci-impact]
@@ -567,7 +583,7 @@ jobs:
           }
           cmake -S . -B build_cmake -G "Visual Studio 17 2022" -T "v143,version=14.44.35207" -A x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pwsh -NoProfile -File build/assert_msvc1944.ps1 -BuildDirectory build_cmake
+          pwsh -NoProfile -File build/assert_msvc1944.ps1 -BuildDirectory build_cmake -ReportPath build_cmake/compiler-identity.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build_cmake --config Release --target Eqnedit64 --parallel 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -591,6 +607,14 @@ jobs:
             tools/eqnedit64/assets/latinmodern-math.otf
             tools/eqnedit64/assets/GUST-FONT-LICENSE.txt
             tools/eqnedit64/assets/THIRD_PARTY_NOTICES.md
+
+      - name: Upload actual compiler identity
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-msvc-font-dump-build-${{ matrix.flavor || 'default' }}
+          path: tools/eqnedit64/build_cmake/compiler-identity.json
+          if-no-files-found: error
 
   font-dump-trial:
     needs: [ci-impact, font-dump-build]
@@ -686,7 +710,7 @@ jobs:
         run: |
           cmake -S . -B build_cmake -G "Visual Studio 17 2022" -T "v143,version=14.44.35207" -A x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pwsh -NoProfile -File build/assert_msvc1944.ps1 -BuildDirectory build_cmake
+          pwsh -NoProfile -File build/assert_msvc1944.ps1 -BuildDirectory build_cmake -ReportPath build_cmake/compiler-identity.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build_cmake --config Release --target font_lifecycle_probe --parallel 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -705,6 +729,14 @@ jobs:
             tools/eqnedit64/assets/GUST-FONT-LICENSE.txt
             tools/eqnedit64/assets/THIRD_PARTY_NOTICES.md
             tools/eqnedit64/font-probe-manifest.json
+
+      - name: Upload actual compiler identity
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-msvc-font-probe-build-${{ matrix.flavor || 'default' }}
+          path: tools/eqnedit64/build_cmake/compiler-identity.json
+          if-no-files-found: error
 
   font-probe-trial:
     needs: [ci-impact, font-probe-build]

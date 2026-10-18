@@ -179,7 +179,9 @@ def test_office_mathml_is_validated_and_styles_survive_to_omml() -> None:
     assert 'setAttribute("largeop", "true")' in canonical
     assert 'cells[0].textContent.trim() === ""' in SOURCE
     assert "collectLeafCells(nested, output)" in SOURCE
-    assert "leafCells.length < 2" in SOURCE
+    # Single-row ordinary math and multirow arrays are behavior-checked by
+    # test_office_bit_parity.cjs using office_315_contract.json. Do not pin
+    # an internal row-count threshold here.
 
 
 def test_autoloaded_macros_are_warmed_before_the_first_office_copy() -> None:
@@ -244,3 +246,21 @@ def test_homepage_publication_imports_radia_source() -> None:
     assert "Do not retain or edit an independent homepage source copy" in normalized
     assert "run_eqnedit64_release_qa.ps1" in WEB_README
     assert "does not require the Mathematica, NGSolve" in normalized
+
+
+def test_office_text_relation_mapping_preserves_command_boundaries():
+    import json
+    import subprocess
+    start = SOURCE.index("var relations = {le:")
+    end = SOURCE.index("\n    });", start)
+    actual_mapper = SOURCE[start:end]
+    cases = [
+        (r"\le \leq \ge \geq \ne \neq", "≤ ≤ ≥ ≥ ≠ ≠"),
+        (r"\leftarrow \neqword \leqword", r"\leftarrow \neqword \leqword"),
+        (r"\textbackslash le", r"\textbackslash le"),
+        ("left leqword neqword", "left leqword neqword"),
+    ]
+    script = "const inputs=" + json.dumps([x for x, _ in cases]) + "; const output=inputs.map(text=>{const node={textContent:text};" + actual_mapper + ";return node.textContent;});process.stdout.write(JSON.stringify(output));"
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True,
+                            encoding="utf-8", check=True)
+    assert json.loads(result.stdout) == [expected for _, expected in cases]

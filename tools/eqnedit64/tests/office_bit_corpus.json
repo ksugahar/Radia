@@ -392,5 +392,29 @@
     "id": "colour-parentheses",
     "tex": "\\color{red}{(x)}",
     "coverage": "covered"
+  },
+  {
+    "id": "relation-alias-le",
+    "tex": "x\\le 0"
+  },
+  {
+    "id": "relation-alias-ge",
+    "tex": "x\\ge 0"
+  },
+  {
+    "id": "relation-alias-ne",
+    "tex": "x\\ne 0"
+  },
+  {
+    "id": "relation-alias-text",
+    "tex": "\\text{\\le \\ge \\ne}"
+  },
+  {
+    "id": "relation-alias-aligned",
+    "tex": "\\begin{aligned}x&\\le 1\\\\y&\\leq 2\\end{aligned}"
+  },
+  {
+    "id": "relation-alias-text-literal",
+    "tex": "\\text{le ge ne left leqword}"
   }
 ]

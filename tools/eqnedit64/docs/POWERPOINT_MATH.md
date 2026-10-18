@@ -1,6 +1,6 @@
 # Native PowerPoint math export
 
-Version 3.1.4 is a review candidate, not a published release.
+Version 3.1.5 is a review candidate. Version 3.1.4 is the published release.
 
 ```text
 Eqnedit64.exe equation.tex equation.pptxmath

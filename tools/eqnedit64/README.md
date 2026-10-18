@@ -1,6 +1,6 @@
 # Eqnedit64 — 数式入力に特化したTeXエディタ
 
-Source version: **3.1.4** (review candidate; released version remains 3.1.3).
+Source version: **3.1.5** (review candidate; released version remains 3.1.4).
 
 Candidate native OOXML export: `Eqnedit64.exe equation.tex equation.pptxmath`.
 The checked Python helper is `eqnedit64.export_powerpoint_math(tex, output)`.

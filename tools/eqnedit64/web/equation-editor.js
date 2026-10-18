@@ -21,7 +21,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "3.1.4 (2026-10-14 candidate)";
+  var BUILD = "3.1.5 (2026-10-16 candidate)";
 
   // BEGIN GENERATED PALETTES
   var PALETTES = [
@@ -3107,7 +3107,7 @@
     }
 
     var leafCells = [];
-    if (!collectLeafCells(table, leafCells) || leafCells.length < 2) return null;
+    if (!collectLeafCells(table, leafCells) || leafCells.length < 1) return null;
 
     var serializer = new window.XMLSerializer();
     return leafCells.map(function (cell) {
@@ -3160,6 +3160,13 @@
     var math = doc.documentElement;
     math.setAttribute("display", "inline");
     math.setAttribute("mathsize", "18pt");
+    // Native text groups retain these supported relation commands as upright
+    // glyphs. MathJax leaves their spelling in mtext; match that Office route.
+    Array.prototype.forEach.call(math.querySelectorAll("mtext"), function (node) {
+      var relations = {le:"≤", leq:"≤", ge:"≥", geq:"≥", ne:"≠", neq:"≠"};
+      node.textContent = node.textContent.replace(/\\(leq?|geq?|neq?)(?![A-Za-z])/g,
+        function (_, command) { return relations[command]; });
+    });
 
     // MathJax's four big-family classes use font-specific heights. Convert
     // only explicit single-token ORD/OPEN/CLOSE/REL wrappers to the shared
@@ -3572,9 +3579,14 @@
       // MathJax aligned/align rows: retain one editable equation array.
       return "<m:eqArr><m:eqArrPr><m:baseJc m:val=\"left\"/>" +
         "</m:eqArrPr>" + children.map(function (row) {
-          return "<m:e>" + Array.from(row.children).map(function (cell, index) {
+          var cells = Array.from(row.children);
+          var content = cells.map(function (cell, index) {
             return (index % 2 === 1 ? officeAlignmentPoint() : "") + officeOmmlNode(cell);
-          }).join("") + "</m:e>";
+          }).join("");
+          // Other rows have explicit anchors. A one-cell row occupies the
+          // right-aligned left column, so its marker belongs at the end.
+          if (cells.length === 1) content += officeAlignmentPoint();
+          return "<m:e>" + content + "</m:e>";
         }).join("") + "</m:eqArr>";
     }
     if (name === "mtable") {
@@ -3637,7 +3649,7 @@
     var doc = new window.DOMParser().parseFromString(mml, "application/xml");
     if (doc.querySelector("parsererror, merror")) throw new Error("invalid MathML");
     var rows = splitUnanchoredOfficeRows(doc.documentElement);
-    var body = rows ? "<m:eqArr><m:eqArrPr><m:baseJc m:val=\"left\"/>" +
+    var body = rows && rows.length === 1 ? officeOmml(rows[0]) : rows ? "<m:eqArr><m:eqArrPr><m:baseJc m:val=\"left\"/>" +
       "</m:eqArrPr>" + rows.map(function (row) {
         return "<m:e>" + officeAlignmentPoint() + officeOmml(row) + "</m:e>";
       }).join("") + "</m:eqArr>" : officeOmml(mml);
