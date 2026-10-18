@@ -96,6 +96,8 @@ def main():
         raise FileNotFoundError("Required native fixture binaries are missing")
     args.output.mkdir(parents=True, exist_ok=True)
     corpus = json.loads((COMPONENT / "tests/office_bit_corpus.json").read_text("utf-8"))
+    contract315 = json.loads((COMPONENT / "tests/office_315_contract.json").read_text("utf-8"))
+    corpus.extend(dict(fixture, id="315-" + fixture["id"]) for fixture in contract315["fixtures"])
     report = {"schema": "eqnedit64.powerpoint-math.v1", "covered": 0, "rejected": 0,
               "failures": [], "powerpoint": "NOT RUN: separate approved desktop acceptance required",
               "release_acceptance": False,
@@ -109,7 +111,15 @@ def main():
                               text=True, encoding="utf-8", errors="replace", timeout=30)
     try:
         excluded = {f["id"] for f in corpus if f.get("coverage") == "excluded"}
-        assert excluded == {"boxed", "binom", "cancel"} and len(corpus) == 66
+        assert excluded == {"boxed", "binom", "cancel"} and len(corpus) == 79
+        ids = [fixture["id"] for fixture in corpus]
+        assert len(set(ids)) == len(ids), "Duplicate corpus fixture ID"
+        assert {"relation-alias-le", "relation-alias-ge", "relation-alias-ne",
+                "relation-alias-text", "relation-alias-aligned",
+                "relation-alias-text-literal", "H6-anchored", "H6-unanchored",
+                "three-rows", "cases", "japanese-text", "315-single-unanchored",
+                "315-single-anchored", "315-pure-nested", "315-mixed-nested",
+                "315-matrix-one-cell", "315-matrix-multi", "315-cases"} <= set(ids), "Missing mandatory fixture"
         ooxml_rejected = {f["id"] for f in corpus if f.get("ooxml_rejected")}
         assert not ooxml_rejected
         for fixture in corpus:
@@ -168,7 +178,7 @@ def main():
                     following = siblings[siblings.index(nary) + 1:]
                     assert any("".join(node.itertext()).endswith(tail) for node in following), fixture["id"]
             report["covered"] += 1
-        assert report["covered"] == 63 and report["rejected"] == 3
+        assert report["covered"] == 76 and report["rejected"] == 3
         for i, tex in enumerate([r"\unknown{x}", r"\begin{unknown}x\end{unknown}",
                                  r"\frac{x}{y", r"\begin{aligned}x\end{matrix}"]):
             source = args.output / f"invalid-{i}.tex"
