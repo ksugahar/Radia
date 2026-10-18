@@ -39,3 +39,22 @@ def test_every_cmake_configure_checks_actual_compiler():
     configurations = workflow.count("cmake -S . -B build_cmake")
     assert configurations == 4
     assert workflow.count("assert_msvc1944.ps1 -BuildDirectory build_cmake") == configurations
+
+
+def test_each_native_configure_preserves_compiler_identity_artifact():
+    import yaml
+    jobs = yaml.safe_load((ROOT / ".github/workflows/eqnedit64.yml").read_text())["jobs"]
+    checked = 0
+    for job in jobs.values():
+        steps = job.get("steps", [])
+        checks = [step for step in steps if "assert_msvc1944.ps1 -BuildDirectory" in step.get("run", "")]
+        if not checks:
+            continue
+        checked += 1
+        assert all("-ReportPath build_cmake/compiler-identity.json" in step["run"] for step in checks)
+        uploads = [step for step in steps if step.get("name") == "Upload actual compiler identity"]
+        assert len(uploads) == 1
+        assert uploads[0]["if"] == "always()"
+        assert uploads[0]["with"]["path"] == "tools/eqnedit64/build_cmake/compiler-identity.json"
+        assert uploads[0]["with"]["if-no-files-found"] == "error"
+    assert checked == 4

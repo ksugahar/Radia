@@ -1,7 +1,8 @@
 [CmdletBinding(DefaultParameterSetName='Direct')]
 param(
     [Parameter(Mandatory, ParameterSetName='Direct')][string]$Compiler,
-    [Parameter(Mandatory, ParameterSetName='CMake')][string]$BuildDirectory
+    [Parameter(Mandatory, ParameterSetName='CMake')][string]$BuildDirectory,
+    [string]$ReportPath
 )
 $ErrorActionPreference = 'Stop'
 $cmakeVersion = $null
@@ -25,6 +26,13 @@ try {
 } finally { $ErrorActionPreference = $oldPreference }
 $actual = [regex]::Match($banner, '(?<![0-9])19\.44\.[0-9.]+')
 if (-not $actual.Success) { throw 'Actual cl.exe banner is not MSVC 19.44.*.' }
-[ordered]@{compiler_path=[IO.Path]::GetFullPath($Compiler);
+$identity = [ordered]@{compiler_path=[IO.Path]::GetFullPath($Compiler);
     compiler_sha256=(Get-FileHash -LiteralPath $Compiler -Algorithm SHA256).Hash;
-    compiler_banner_version=$actual.Value; cmake_compiler_version=$cmakeVersion} | ConvertTo-Json
+    compiler_banner_version=$actual.Value; cmake_compiler_version=$cmakeVersion}
+$json = $identity | ConvertTo-Json
+if ($ReportPath) {
+    $parent = Split-Path -Parent ([IO.Path]::GetFullPath($ReportPath))
+    [IO.Directory]::CreateDirectory($parent) | Out-Null
+    $json | Set-Content -LiteralPath $ReportPath -Encoding utf8
+}
+$json
