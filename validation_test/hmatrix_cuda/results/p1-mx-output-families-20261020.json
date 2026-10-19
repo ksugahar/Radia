@@ -1,0 +1,402 @@
+{
+  "schema": "radia.hmatrix.mx-output-sites.v1",
+  "run_seconds": 26.077999999994063,
+  "failure_class_slope_limit_bytes_per_run": 1048576,
+  "warm_failure_events": 165,
+  "native_source_commit": "6f938e13eafbb46a46630311bb27152f7ce5d082",
+  "p1_complete": false,
+  "helper_correction": "Original driver passed an int64 injection selector; it was rejected before any injected attempt. Corrected driver passes double. Original failed result retained.",
+  "raw_result_sha256": "7bede99f1edda9b13d49a155ee8ed25e8c22100c5c92b733af94a7442e464cf0",
+  "enumeration_sha256": "5a6ea13b4ff27346566e7f426bc5cd7a105961de68cfb18b251352940c9c24ee",
+  "groups": [
+    {
+      "family": "analytic_entry_batch",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 524288.0,
+      "target": 1,
+      "slope_bytes_per_failure": 56003.490909090906,
+      "max_cpu_error": 5.923942688463094E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_vector",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 589824.0,
+      "target": 1,
+      "slope_bytes_per_failure": 65536.0,
+      "max_cpu_error": 9.68786813520323E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_compress",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 593920.0,
+      "target": 1,
+      "slope_bytes_per_failure": 66057.3090909091,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_compress",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 589824.0,
+      "target": 2,
+      "slope_bytes_per_failure": 65536.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_compress",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 589824.0,
+      "target": 3,
+      "slope_bytes_per_failure": 65536.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_compress",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 593920.0,
+      "target": 4,
+      "slope_bytes_per_failure": 66156.60606060606,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_compress",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 65536.0,
+      "target": 5,
+      "slope_bytes_per_failure": 3574.690909090909,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_compress",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 0.0,
+      "target": 6,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_compress",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 0.0,
+      "target": 7,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_compressed",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 0.0,
+      "target": 1,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_compressed",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 536576.0,
+      "target": 2,
+      "slope_bytes_per_failure": 29267.78181818182,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_compressed",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 0.0,
+      "target": 3,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_compressed",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 0.0,
+      "target": 4,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_compressed",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 0.0,
+      "target": 5,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_compressed",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 0.0,
+      "target": 6,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_compressed",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 450560.0,
+      "target": 7,
+      "slope_bytes_per_failure": 54811.92727272727,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_promoted",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 0.0,
+      "target": 1,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_promoted",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 0.0,
+      "target": 2,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_promoted",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": -143360.0,
+      "target": 3,
+      "slope_bytes_per_failure": -21050.957575757577,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_promoted",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": -102400.0,
+      "target": 4,
+      "slope_bytes_per_failure": -13032.727272727272,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_promoted",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 0.0,
+      "target": 5,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_promoted",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": -53248.0,
+      "target": 6,
+      "slope_bytes_per_failure": -8067.878787878788,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_promoted",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 0.0,
+      "target": 7,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "analytic_aca_leaf_promoted",
+      "warm_failures": 5,
+      "max_independent_true_residual": null,
+      "delta_bytes": 0.0,
+      "target": 8,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.4034375488003454E-16,
+      "measured_failures": 10
+    },
+    {
+      "family": "solve_linear_material",
+      "warm_failures": 5,
+      "max_independent_true_residual": 1.3440496909367178E-15,
+      "delta_bytes": 0.0,
+      "target": 1,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.0302340608294064E-15,
+      "measured_failures": 10
+    },
+    {
+      "family": "solve_linear_material",
+      "warm_failures": 5,
+      "max_independent_true_residual": 1.3440496909367178E-15,
+      "delta_bytes": 0.0,
+      "target": 2,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.0302340608294064E-15,
+      "measured_failures": 10
+    },
+    {
+      "family": "solve_linear_material",
+      "warm_failures": 5,
+      "max_independent_true_residual": 1.3440496909367178E-15,
+      "delta_bytes": 0.0,
+      "target": 3,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.0302340608294064E-15,
+      "measured_failures": 10
+    },
+    {
+      "family": "solve_linear_material",
+      "warm_failures": 5,
+      "max_independent_true_residual": 1.3440496909367178E-15,
+      "delta_bytes": 0.0,
+      "target": 4,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.0302340608294064E-15,
+      "measured_failures": 10
+    },
+    {
+      "family": "solve_linear_material",
+      "warm_failures": 5,
+      "max_independent_true_residual": 1.3440496909367178E-15,
+      "delta_bytes": 0.0,
+      "target": 5,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.0302340608294064E-15,
+      "measured_failures": 10
+    },
+    {
+      "family": "solve_linear_material",
+      "warm_failures": 5,
+      "max_independent_true_residual": 1.3440496909367178E-15,
+      "delta_bytes": 0.0,
+      "target": 6,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.0302340608294064E-15,
+      "measured_failures": 10
+    },
+    {
+      "family": "solve_linear_material",
+      "warm_failures": 5,
+      "max_independent_true_residual": 1.3440496909367178E-15,
+      "delta_bytes": 0.0,
+      "target": 7,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.0302340608294064E-15,
+      "measured_failures": 10
+    },
+    {
+      "family": "solve_linear_material",
+      "warm_failures": 5,
+      "max_independent_true_residual": 1.3440496909367178E-15,
+      "delta_bytes": 0.0,
+      "target": 8,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.0302340608294064E-15,
+      "measured_failures": 10
+    },
+    {
+      "family": "solve_linear_material",
+      "warm_failures": 5,
+      "max_independent_true_residual": 1.3440496909367178E-15,
+      "delta_bytes": 0.0,
+      "target": 9,
+      "slope_bytes_per_failure": 0.0,
+      "max_cpu_error": 1.0302340608294064E-15,
+      "measured_failures": 10
+    }
+  ],
+  "binary_sha256": "cd2ab5d9ef2ca667266396e4a7c5e96b0527fbcfa2a4d559ac1d9f3f24007811",
+  "scope": "New explicit output allocation families on existing fault build; excludes opaque MATLAB allocation failures and other command families",
+  "enumerated_families": [
+    {
+      "numerical": {
+        "relative_error": 5.923942688463094E-16
+      },
+      "family": "analytic_entry_batch",
+      "allocation_sites": 1
+    },
+    {
+      "numerical": {
+        "relative_error": 9.68786813520323E-16
+      },
+      "family": "analytic_aca_vector",
+      "allocation_sites": 1
+    },
+    {
+      "numerical": {
+        "relative_error": 1.4034375488003454E-16
+      },
+      "family": "analytic_aca_compress",
+      "allocation_sites": 7
+    },
+    {
+      "numerical": {
+        "relative_error": 1.4034375488003454E-16
+      },
+      "family": "analytic_aca_leaf_compressed",
+      "allocation_sites": 7
+    },
+    {
+      "numerical": {
+        "relative_error": 1.4034375488003454E-16
+      },
+      "family": "analytic_aca_leaf_promoted",
+      "allocation_sites": 8
+    },
+    {
+      "numerical": {
+        "relative_error": 1.0302340608294064E-15,
+        "independent_true_residual": 1.3440496909367178E-15,
+        "solver_true_residual": 1.545351921618523E-15
+      },
+      "family": "solve_linear_material",
+      "allocation_sites": 9
+    }
+  ],
+  "remaining": [
+    "Curved entry/cache output branches",
+    "Full unaccepted current-binary C/host/device/resource ranges",
+    "Release-specific native and package gates"
+  ],
+  "new_sites": 33,
+  "accepted": true,
+  "peak_job_commit_bytes": 1934254080,
+  "helper_source_commit": "a2e05377d",
+  "measured_failure_events": 330,
+  "failure_class_delta_limit_bytes": 16777216
+}

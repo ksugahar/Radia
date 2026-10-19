@@ -1,6 +1,6 @@
 """CPU descriptor port models and exact pole-residue reconstruction.
 
-Integration writers are owned by radia_gpu.ports.
+Integration writers are owned by radia_simulink.ports.
 """
 from __future__ import annotations
 

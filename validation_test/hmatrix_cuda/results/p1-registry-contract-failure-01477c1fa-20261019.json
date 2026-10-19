@@ -1,0 +1,15 @@
+{
+  "schema": "radia.p1-host-contract-failure.v1",
+  "accepted": false,
+  "p1_complete": false,
+  "source_commit": "01477c1fa8665cca786c540844cd9c9540eb63f1",
+  "failure_stage": "standalone host allocator contract",
+  "exit_code": "3221226505",
+  "diagnosis": "Registry test configured fail-at-1 before constructing a counted map outside its catch; MSVC empty-map sentinel allocation must be inside owned construction scope",
+  "fix_commit": "8486f7e9373c47404cbbcb7730da57faad16a8cc",
+  "fix_accepted": false,
+  "cuda_compile_started": false,
+  "gpu_run_started": false,
+  "recovery_sha256": "448479a8717461375fc77560c1b598d62a15487efe384ba04624e47a854f8591",
+  "source_payload_sha256": "b6d91c99fe485e437cb8ca06220b100b2543cf026ddfcd3c8303cbd6419735ef"
+}

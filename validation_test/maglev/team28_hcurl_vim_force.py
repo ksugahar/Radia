@@ -9,7 +9,7 @@ host; ``--maxh 0.025`` is the smaller developer smoke.
 """
 
 from __future__ import annotations
-import radia_gpu.vim as gpu_vim
+import radia_simulink.vim as gpu_vim
 
 import argparse
 import json

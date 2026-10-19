@@ -1,0 +1,45 @@
+{
+  "schema": "radia.hdiv.borrowed-pack-full-solve.v1",
+  "bounded_numerical_accepted": true,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "bc6b78a143bfd882e29413cc133e4736bfb6d626",
+      "binary_sha256": "dcc88c79c71446e351dc981db7e726e7d274ad08c41ebf1cdd15831920cd125c"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "455daee0425e071d83fbc3dd7894217dfdcf58d2",
+      "binary_sha256": "ed52a73c0c56d351a840d237bfd94cd96befeedd906974219367888681d95b42"
+    }
+  },
+  "cases": [
+    {
+      "case": "288-strong",
+      "mesh_sha256": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50",
+      "cpu_fixture_sha256": "28676c133a850c86c79aa5632a705612114db02c1c9676a8ce2619644dd072c5",
+      "cpu_coefficient_relative_error": 4.4440597626676314e-14,
+      "nonlinear_relative_residual": 2.056520864639619e-14,
+      "nonlinear_iterations": 11,
+      "live_count": 0,
+      "invalid_input_rejected": true,
+      "early_material_budget_rejected": true,
+      "combined_array_bound_bytes": 217304272.0,
+      "memory_limitations": "Native owned counters and conservative MATLAB array bound; no CUDA/library/host/global peak"
+    },
+    {
+      "case": "10344-moderate",
+      "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+      "cpu_fixture_sha256": "5237d738506c36eb493a6b380f18154f658de5409678be798ef9f7c5dc798800",
+      "cpu_coefficient_relative_error": 1.478028426462856e-09,
+      "nonlinear_relative_residual": 1.1736131099589784e-14,
+      "nonlinear_iterations": 2,
+      "live_count": 0,
+      "invalid_input_rejected": true,
+      "early_material_budget_rejected": true,
+      "combined_array_bound_bytes": 2068412007.0,
+      "memory_limitations": "Native owned counters and conservative MATLAB array bound; no CUDA/library/host/global peak"
+    }
+  ],
+  "limits": "Single ordered diagnostic calls on RTX, not ABBA or CPU speed comparison. Native residual recertification and independent frozen CPU coefficients; no fresh independent CPU residual reconstruction. No capacity increase or A100 acceptance."
+}

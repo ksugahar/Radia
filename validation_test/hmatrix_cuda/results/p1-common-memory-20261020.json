@@ -1,0 +1,277 @@
+{
+  "projection_diagnostic": {
+    "lifetime_raw_sha256": "18e8b1b052d2bc5427511122682aa47b960d187fbc61c9dac0343c8a9388583e",
+    "reuse_raw_sha256": "9200f12c5ea90af398021c0cd03687f633ab26ae1100561f281c6289464d4661",
+    "create_destroy_1000_delta_bytes": 43249664,
+    "reuse_final_25_delta_bytes": 0,
+    "status": "Open memory gate; continuing retention owner unresolved"
+  },
+  "method": "Initialize and retain gpuDevice before baseline; preallocated in-process .NET PrivateMemorySize64 snapshots; identical frozen limits for all gateways",
+  "ih_union": {
+    "raw_negative_helper_error": "Expected error identifier had transposed cuda/ih components; original failed wrapper preserved",
+    "negative_control_sha256": "e5ade08839f624b217905678b538b7163ccf98cc67aca558bdac481930b58d7a",
+    "status": "positive regression and memory pass linked to corrected standalone old-binary negative control"
+  },
+  "schema": "radia.p1.common-memory.v1",
+  "warmups": 5,
+  "ih_regression": {
+    "accepted": true,
+    "temperature_relative_error": 4.450901475799918E-14,
+    "heat_relative_error": 3.1849496201346424E-16,
+    "complex_eddy_relative_error": 1.5662502409997538E-16,
+    "independent_eddy_true_residual": 1.5301659707183198E-16,
+    "independent_thermal_true_residuals": [
+      1.940749110514267E-12,
+      1.9337036504867233E-12,
+      1.9349758310804584E-12,
+      1.9247154401355664E-12,
+      1.9187580332338886E-12
+    ],
+    "complex_eddy_path_checked": true,
+    "live_count": 0,
+    "scope": "Synthetic fixed coupled algebra only"
+  },
+  "p1_complete": false,
+  "results": [
+    {
+      "artifact": [
+        {
+          "source_commit": "d6aecefeb81bf6c44768748e0d342db06136ffd6",
+          "binary_sha256": "89c7bddb49f4a6cc3ee05903a594678804d09ebde6216725730fb6635197ba46",
+          "module": "radia_cuda_csr_pcg"
+        }
+      ],
+      "final_25": {
+        "count": 25,
+        "positive_slope_bytes_per_run": 3374.4738461538464,
+        "delta_bytes": 69632.0,
+        "range_bytes": 69632.0
+      },
+      "memory_gate_passed": true,
+      "gateway": "csr-pcg",
+      "raw_sha256": "1614bc3197f7deaad3c462e0006121bf42417e0f11c31bf54e9c0cf442c394ec",
+      "full_series": {
+        "count": 100,
+        "positive_slope_bytes_per_run": 39648.6901170117,
+        "delta_bytes": 3756032.0,
+        "range_bytes": 3756032.0
+      },
+      "raw_accepted": true
+    },
+    {
+      "artifact": [
+        {
+          "source_commit": "d6aecefeb81bf6c44768748e0d342db06136ffd6",
+          "binary_sha256": "f1a630ae65755761f93c309c9d088c0e88ea52cfe566a771db20142addda4dce",
+          "module": "radia_cuda_ic"
+        }
+      ],
+      "final_25": {
+        "count": 25,
+        "positive_slope_bytes_per_run": 0.0,
+        "delta_bytes": 0.0,
+        "range_bytes": 0.0
+      },
+      "memory_gate_passed": true,
+      "gateway": "ic",
+      "raw_sha256": "f50dab5f51219e9e1d1f243ec65b9f706cae89b27c72f15fb4970837314b4468",
+      "full_series": {
+        "count": 100,
+        "positive_slope_bytes_per_run": 37257.5502670267,
+        "delta_bytes": 3547136.0,
+        "range_bytes": 3547136.0
+      },
+      "raw_accepted": true
+    },
+    {
+      "artifact": [
+        {
+          "source_commit": "d6aecefeb81bf6c44768748e0d342db06136ffd6",
+          "binary_sha256": "f1a630ae65755761f93c309c9d088c0e88ea52cfe566a771db20142addda4dce",
+          "module": "radia_cuda_ic"
+        }
+      ],
+      "final_25": {
+        "count": 25,
+        "positive_slope_bytes_per_run": 0.0,
+        "delta_bytes": 0.0,
+        "range_bytes": 0.0
+      },
+      "memory_gate_passed": true,
+      "gateway": "ic-harness",
+      "raw_sha256": "633798ddde02c89e0166bb77bfb6f95c81c7733220002897559bfd1e5d7a35fd",
+      "full_series": {
+        "count": 100,
+        "positive_slope_bytes_per_run": 32502.872175217522,
+        "delta_bytes": 4497408.0,
+        "range_bytes": 4497408.0
+      },
+      "raw_accepted": true
+    },
+    {
+      "artifact": [
+        {
+          "source_commit": "d6aecefeb81bf6c44768748e0d342db06136ffd6",
+          "binary_sha256": "931e8efb6f914541c2cc18453a35fad8bc18ed8fbc6da36f07e6092449e405a3",
+          "module": "radia_cuda_field"
+        }
+      ],
+      "final_25": {
+        "count": 25,
+        "positive_slope_bytes_per_run": 0.0,
+        "delta_bytes": 0.0,
+        "range_bytes": 0.0
+      },
+      "memory_gate_passed": true,
+      "gateway": "field",
+      "raw_sha256": "213bda46b12262402c6249654b8e16b79e54678c195fef2727ebde8317ea7b85",
+      "full_series": {
+        "count": 100,
+        "positive_slope_bytes_per_run": 36100.39647164717,
+        "delta_bytes": 3547136.0,
+        "range_bytes": 3547136.0
+      },
+      "raw_accepted": true
+    },
+    {
+      "artifact": [
+        {
+          "source_commit": "d6aecefeb81bf6c44768748e0d342db06136ffd6",
+          "binary_sha256": "2db2ce82a07a4f42684639eefdd75e35e0ee609ba3f0a92e48d5dc9709c536b3",
+          "module": "radia_cuda_fmm"
+        }
+      ],
+      "final_25": {
+        "count": 25,
+        "positive_slope_bytes_per_run": 2678.153846153846,
+        "delta_bytes": 69632.0,
+        "range_bytes": 69632.0
+      },
+      "memory_gate_passed": true,
+      "gateway": "fmm",
+      "raw_sha256": "7e54dbb8de59a8625a96140e914e4792f399c17443fb51b161b5933b91eca0b8",
+      "full_series": {
+        "count": 100,
+        "positive_slope_bytes_per_run": 36247.277335733575,
+        "delta_bytes": 3612672.0,
+        "range_bytes": 3612672.0
+      },
+      "raw_accepted": true
+    },
+    {
+      "artifact": [
+        {
+          "source_commit": "f525af9afc10c2857b06cad85fdd5ee72596a3c8",
+          "binary_sha256": "fe786dd3275aa96006161c707ab37b0b42aa1c71ac750ff36c7a667d9328476c",
+          "module": "radia_cuda_ams"
+        }
+      ],
+      "final_25": {
+        "count": 25,
+        "positive_slope_bytes_per_run": 3642.289230769231,
+        "delta_bytes": 69632.0,
+        "range_bytes": 69632.0
+      },
+      "memory_gate_passed": true,
+      "gateway": "ams",
+      "raw_sha256": "dfbb13d77b36b70a52e030d72a48e528962c8243f10c4bcd62b7ab9247741432",
+      "full_series": {
+        "count": 100,
+        "positive_slope_bytes_per_run": 36355.27507950795,
+        "delta_bytes": 3612672.0,
+        "range_bytes": 3612672.0
+      },
+      "raw_accepted": true
+    },
+    {
+      "artifact": [
+        {
+          "source_commit": "3a8a00df3743178d506eb61efe4f1e09814ed0e5",
+          "binary_sha256": "12b70c5018ab238b427d5b39f41b23a0ee0ac72af6e166be34409d1e79aae89f",
+          "module": "radia_cuda_ih"
+        }
+      ],
+      "final_25": {
+        "count": 25,
+        "positive_slope_bytes_per_run": 0.0,
+        "delta_bytes": 0.0,
+        "range_bytes": 0.0
+      },
+      "memory_gate_passed": true,
+      "gateway": "ih",
+      "raw_sha256": "64c5da737878ff453b69b95fa0c9223e6e9b28349a416b329a56ad4146bcf10e",
+      "full_series": {
+        "count": 100,
+        "positive_slope_bytes_per_run": 37223.85320132013,
+        "delta_bytes": 3543040.0,
+        "range_bytes": 3543040.0
+      },
+      "raw_accepted": false
+    },
+    {
+      "artifact": [
+        {
+          "source_commit": "6f938e13eafbb46a46630311bb27152f7ce5d082",
+          "binary_sha256": "cd2ab5d9ef2ca667266396e4a7c5e96b0527fbcfa2a4d559ac1d9f3f24007811",
+          "module": "radia_cuda_hmatrix"
+        },
+        {
+          "source_commit": "6f938e13eafbb46a46630311bb27152f7ce5d082",
+          "binary_sha256": "8604c46af8b4e44134f9645e0527f5463ed6ddfe37baab7078a706ab92542fd2",
+          "module": "radia_cuda_projection"
+        }
+      ],
+      "final_25": {
+        "count": 25,
+        "positive_slope_bytes_per_run": 0.0,
+        "delta_bytes": 0.0,
+        "range_bytes": 0.0
+      },
+      "memory_gate_passed": true,
+      "gateway": "hmatrix",
+      "raw_sha256": "7e1d35d13e46a9bb0e2f6c1b6cd4c695fe23c2e7c19fea345e260d112ce808c2",
+      "full_series": {
+        "count": 100,
+        "positive_slope_bytes_per_run": 37165.52852085209,
+        "delta_bytes": 3616768.0,
+        "range_bytes": 3616768.0
+      },
+      "raw_accepted": true
+    },
+    {
+      "artifact": [
+        {
+          "source_commit": "6f938e13eafbb46a46630311bb27152f7ce5d082",
+          "binary_sha256": "8604c46af8b4e44134f9645e0527f5463ed6ddfe37baab7078a706ab92542fd2",
+          "module": "radia_cuda_projection"
+        }
+      ],
+      "final_25": {
+        "count": 25,
+        "positive_slope_bytes_per_run": 55995.47076923077,
+        "delta_bytes": 1155072.0,
+        "range_bytes": 1155072.0
+      },
+      "memory_gate_passed": false,
+      "gateway": "projection",
+      "raw_sha256": "6cb8f5b037ab78603f6773d9a78f4a0a3a6ad9b15a75ffb146a77d357c6ed485",
+      "full_series": {
+        "count": 100,
+        "positive_slope_bytes_per_run": 65745.75255925593,
+        "delta_bytes": 6758400.0,
+        "range_bytes": 6758400.0
+      },
+      "raw_accepted": false
+    }
+  ],
+  "scope": "Synthetic small-case gateway lifecycle diagnostics; no full solver or performance certification",
+  "runs": 100,
+  "protocol_sha256": "228189cd60c3fc2b7ffdda4a8ec27bd33db69ad7c292314934fa5a5727eb5c58",
+  "limitations": [
+    "Private commit includes opaque runtime caches; not exact native ownership or global peak",
+    "External observation controls showed runtime excursions; original failures remain preserved",
+    "Previous joint CSR/IC harness retention cannot be assigned to a particular allocator pool",
+    "Projection weak-owner instrumentation is unbuilt and unaccepted"
+  ],
+  "release_accepted": false
+}

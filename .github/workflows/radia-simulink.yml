@@ -1,0 +1,258 @@
+name: radia-simulink
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/radia-simulink/**'
+      - 'packages/radia-mcp/src/radia_mcp/ltspice/**'
+      - 'packages/radia-mcp/src/radia_mcp/common/__init__.py'
+      - 'packages/radia-mcp/src/radia_mcp/common/lazy_call.py'
+      - 'packages/radia-mcp/src/radia_mcp/common/status.py'
+      - 'validation_test/radia_simulink/**'
+      - 'validation_test/ams_cuda/**'
+      - 'validation_test/ic_cuda/**'
+      - 'validation_test/ngsolve_cuda_mex/**'
+      - 'validation_test/hmatrix_cuda/**'
+      - 'validation_test/fmm_cuda/**'
+      - 'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp'
+      - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
+      - 'src/ext/HACApK/**'
+      - 'src/core/rad_bem_galerkin.h'
+      - 'src/core/rad_bem_galerkin.cpp'
+      - 'src/core/rad_biot_savart_filaments.cpp'
+      - 'src/core/rad_host_parallel.h'
+      - 'src/core/rad_biot_savart_filaments.h'
+      - 'src/core/rad_charge_quadrature.h'
+      - 'src/core/rad_field_cloud_kernel.h'
+      - 'src/core/rad_field_source_kernel.inc'
+      - 'src/core/rad_field_sources.h'
+      - 'src/core/rad_hacapk_parallel.h'
+      - 'src/core/rad_hdiv_field_evaluator.h'
+      - 'src/core/rad_hdiv_field_kernel_api.inc'
+      - 'src/core/rad_hdiv_field_math.inc'
+      - 'src/core/rad_hdiv_vim.h'
+      - 'Build.ps1'
+      - '.github/workflows/radia-simulink.yml'
+      - 'CMakeLists.txt'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_distribution_contract.py'
+      - 'tools/ci_distribution_manifest.json'
+      - 'src/runtime/ih/**'
+      - 'tests/cpp/test_radia_ih_thermal_acceptance.cpp'
+      - 'tests/cpp/test_radia_mex_sparse_symmetry.cpp'
+      - 'src/core/radia_mex_sparse_symmetry.h'
+      - '!**/*.md'
+      - 'packages/radia-simulink/README.md'  # wheel metadata and payload
+      - 'docs/ltspice/README.md'  # CLI documentation contract
+  push:
+    branches: [main]
+    paths:
+      - 'packages/radia-simulink/**'
+      - 'packages/radia-mcp/src/radia_mcp/ltspice/**'
+      - 'packages/radia-mcp/src/radia_mcp/common/__init__.py'
+      - 'packages/radia-mcp/src/radia_mcp/common/lazy_call.py'
+      - 'packages/radia-mcp/src/radia_mcp/common/status.py'
+      - 'validation_test/radia_simulink/**'
+      - 'validation_test/ams_cuda/**'
+      - 'validation_test/ic_cuda/**'
+      - 'validation_test/ngsolve_cuda_mex/**'
+      - 'validation_test/hmatrix_cuda/**'
+      - 'validation_test/fmm_cuda/**'
+      - 'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp'
+      - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
+      - 'src/ext/HACApK/**'
+      - 'src/core/rad_bem_galerkin.h'
+      - 'src/core/rad_bem_galerkin.cpp'
+      - 'src/core/rad_biot_savart_filaments.cpp'
+      - 'src/core/rad_host_parallel.h'
+      - 'src/core/rad_biot_savart_filaments.h'
+      - 'src/core/rad_charge_quadrature.h'
+      - 'src/core/rad_field_cloud_kernel.h'
+      - 'src/core/rad_field_source_kernel.inc'
+      - 'src/core/rad_field_sources.h'
+      - 'src/core/rad_hacapk_parallel.h'
+      - 'src/core/rad_hdiv_field_evaluator.h'
+      - 'src/core/rad_hdiv_field_kernel_api.inc'
+      - 'src/core/rad_hdiv_field_math.inc'
+      - 'src/core/rad_hdiv_vim.h'
+      - 'Build.ps1'
+      - '.github/workflows/radia-simulink.yml'
+      - 'CMakeLists.txt'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'tests/test_tier_manifest.json'
+      - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_distribution_contract.py'
+      - 'tools/ci_distribution_manifest.json'
+      - 'src/runtime/ih/**'
+      - 'tests/cpp/test_radia_ih_thermal_acceptance.cpp'
+      - 'tests/cpp/test_radia_mex_sparse_symmetry.cpp'
+      - 'src/core/radia_mex_sparse_symmetry.h'
+      - '!**/*.md'
+      - 'packages/radia-simulink/README.md'  # wheel metadata and payload
+      - 'docs/ltspice/README.md'  # CLI documentation contract
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: radia-simulink-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci-impact:
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.route.outputs.required }}
+      reason: ${{ steps.route.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Route distribution impact
+        id: route
+        run: python tools/sparsesolv_ci_impact.py --lane radia-simulink
+
+  cuda-mex:
+    needs: [ci-impact]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: [self-hosted, Windows, X64, "100"]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare isolated mexcuda environment
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "radia-simulink-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $python = Join-Path $venv 'Scripts/python.exe'
+          $pins = @(& $python -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x for x in d['project']['dependencies'] if x.startswith(('ngsolve==','netgen-mesher=='))],sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $pins.Count -ne 2) { throw 'Expected exact FE reference pins' }
+          $matlab = Get-ChildItem "$env:ProgramFiles/MATLAB" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $matlab) { throw 'MATLAB is required for mexcuda CI' }
+          & $python -m pip install @pins numpy scipy h5py psutil build wheel pytest schemdraw mkl-devel "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Run owned C++ runtime and sparse symmetry acceptance
+        shell: pwsh
+        run: |
+          python -m pip install cmake ninja
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $nativeBuild = Join-Path $env:RUNNER_TEMP "radia-simulink-native-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = (& $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+          if ($LASTEXITCODE -ne 0 -or -not $vs) { throw 'MSVC installation not found' }
+          $toolset = (Get-Content -LiteralPath (Join-Path $vs 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
+          if ($toolset -notmatch '^14\.44\.[0-9]+$') { throw "MSVC 14.44 required, found $toolset" }
+          $compiler = Join-Path $vs "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/cl.exe"
+          if ((Get-Item -LiteralPath $compiler).VersionInfo.FileVersion -notmatch '^19\.44\.') { throw 'cl.exe 19.44 required' }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          & cmd.exe /d /c "call `"$vcvars`" && cmake -S packages/radia-simulink/tests/native -B `"$nativeBuild`" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & cmd.exe /d /c "call `"$vcvars`" && cmake --build `"$nativeBuild`" --config Release --target test_radia_mex_sparse_symmetry test_radia_ih_thermal_acceptance --parallel 2"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir $nativeBuild -C Release -R '^radia\.(mex_sparse_symmetry|ih_thermal_acceptance)\.cpp$' --output-on-failure --no-tests=error
+          exit $LASTEXITCODE
+      - name: Build GPU mexcuda gateway
+        shell: pwsh
+        run: |
+          & ./Build.ps1 -CudaMexOnly -RequireNativeProvenance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./Build.ps1 -AmsCudaOnly -RequireNativeProvenance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $mklRoot = python -c "import sys; from pathlib import Path; print(Path(sys.prefix)/'Library')"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./Build.ps1 -HMatrixCudaOnly -HMatrixMklRoot $mklRoot -RequireNativeProvenance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $projectionStart = [DateTime]::UtcNow
+          & ./Build.ps1 -ProjectionCudaOnly -RequireNativeProvenance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./Build.ps1 -FmmCudaOnly -RequireNativeProvenance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $commit = git rev-parse HEAD
+          function Select-ExactBuild($candidates) {
+            $accepted = @($candidates | Where-Object {
+              $receipt = Join-Path $_.FullName 'build.json'
+              if (-not (Test-Path -LiteralPath $receipt)) { return $false }
+              $record = Get-Content -LiteralPath $receipt -Raw | ConvertFrom-Json
+              return ($record.accepted -eq $true -and $record.source_dirty -eq $false -and $record.source_commit -eq $commit)
+            } | Sort-Object LastWriteTimeUtc -Descending)
+            if ($accepted.Count -eq 0) { throw 'Missing accepted exact-commit CUDA build' }
+            return $accepted[0].FullName
+          }
+          $hmatrix = Select-ExactBuild (Get-ChildItem build-hmatrix-cuda -Directory -Filter 'job-*')
+          $projection = Select-ExactBuild (Get-ChildItem C:/temp -Directory -Filter 'projection-cuda-*' | Where-Object LastWriteTimeUtc -ge $projectionStart)
+          $fmm = Select-ExactBuild (Get-ChildItem build-fmm-cuda -Directory -Filter 'job-*')
+          "RADIA_HDIV_HMATRIX_BUILD=$hmatrix" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RADIA_HDIV_PROJECTION_BUILD=$projection" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RADIA_FMM_BUILD=$fmm" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Verify GPU boundary and Poisson precision
+        shell: pwsh
+        run: |
+          # Small installation acceptance; CI timings are not performance claims.
+          python validation_test/ngsolve_cuda_mex/run_poisson.py --binary-dir build-cuda-mex --out "$env:RUNNER_TEMP/radia-simulink-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.24 --threads 1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/run.py --out "$env:RUNNER_TEMP/radia-ams-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.5 --threads 1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/setup_benchmark.py --out "$env:RUNNER_TEMP/radia-ams-setup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.08 --rounds 1 --setup-threads 4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/fmm_physics.py --binary "$env:RADIA_FMM_BUILD" --out "$env:RUNNER_TEMP/radia-fmm-physics-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
+      - name: Verify IC accuracy and device-switch release lifecycle
+        shell: pwsh
+        run: |
+          python validation_test/ic_cuda/run.py --binary-dir build-cuda-mex --matlab-dir packages/radia-simulink/matlab --out "$env:RUNNER_TEMP/radia-ic-accuracy-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ic_cuda/lifecycle_simulation.py --out "$env:RUNNER_TEMP/radia-ic-lifecycle-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
+      - name: Package and verify independent distribution
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "$PWD/packages/radia-simulink/src;$PWD/packages/radia-mcp/src"
+          python -m pytest packages/radia-simulink/tests -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m build --wheel --outdir "$env:RUNNER_TEMP/radia-simulink-wheel-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" packages/radia-simulink
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $wheels = @(Get-ChildItem "$env:RUNNER_TEMP/radia-simulink-wheel-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT/radia_simulink-*.whl")
+          if ($wheels.Count -ne 1) { throw 'Expected exactly one GPU wheel' }
+          $wheel = $wheels[0]
+          python packages/radia-simulink/verify_wheel.py $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installed = "$env:RUNNER_TEMP/radia-simulink-installed-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python -m venv $installed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installedPython = Join-Path $installed 'Scripts/python.exe'
+          & $installedPython -I -m pip install --no-deps $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/radia_simulink/run_installed.py --installed-python $installedPython --wheel $wheel.FullName --out "$env:RUNNER_TEMP/radia-simulink-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $gpuMatlab = & $installedPython -I -c "import radia_simulink; print(radia_simulink.matlab_path())"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/run.py --gpu-dir $gpuMatlab --matlab-dir $gpuMatlab --out "$env:RUNNER_TEMP/radia-ams-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.5 --threads 1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/nonlinear_resident.py --gpu-dir $gpuMatlab --matlab-dir $gpuMatlab --out "$env:RUNNER_TEMP/radia-ams-nonlinear-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.35 --threads 2 --setup-threads 2 --contract
+          exit $LASTEXITCODE
+      - name: Select public numerical evidence
+        if: always()
+        shell: pwsh
+        run: |
+          python packages/radia-simulink/prepare_ci_evidence.py --poisson "$env:RUNNER_TEMP/radia-simulink-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --ams "$env:RUNNER_TEMP/radia-ams-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --setup "$env:RUNNER_TEMP/radia-ams-setup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --nonlinear "$env:RUNNER_TEMP/radia-ams-nonlinear-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --fmm "$env:RUNNER_TEMP/radia-fmm-physics-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --output "$env:RUNNER_TEMP/radia-simulink-public-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: radia-simulink-cuda-evidence
+          path: |
+            ${{ runner.temp }}/radia-simulink-wheel-${{ github.run_id }}-${{ github.run_attempt }}/*.whl
+            ${{ runner.temp }}/radia-simulink-installed-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/result.json
+            ${{ runner.temp }}/radia-simulink-public-${{ github.run_id }}-${{ github.run_attempt }}/*.json
+          if-no-files-found: error

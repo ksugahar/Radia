@@ -1,0 +1,13 @@
+{
+ "schema":"radia.simulink.chebyshev-graph-stage.v1",
+ "source_implemented":true,
+ "native_built":false,
+ "numerical_accepted":false,
+ "performance_accepted":false,
+ "release_accepted":false,
+ "mode":"mass-chebyshev-graph",
+ "arithmetic":"Capture and direct submission share the same fixed Chebyshev lambda, degree and smoothing interval; no RHS-dependent stopping or original-equation change",
+ "bounds":{"maximum_degree":64,"maximum_graph_nodes":1024,"post_instantiation_device_reserve":"max(2GiB,total_device_memory/5)"},
+ "memory_limitations":"Driver graph allocations excluded from exact owned-buffer counters; device reserve queried after instantiation. These checks are unbuilt/unvalidated.",
+ "next_gates":["Clean canonical radia-simulink HMatrix native build on100","RTX independent CPU linear residual, direct/graph nonlinear parity, graph launches and lifecycle, existing polynomial graph regression","Same native artifact A100 strong10k direct-vs-graph transfer-inclusive ABBA and prepared timing"]
+}

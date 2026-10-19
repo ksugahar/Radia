@@ -11,8 +11,8 @@ from netgen.csg import unit_cube
 from scipy.sparse import coo_matrix
 from scipy.io import loadmat
 ROOT=Path(__file__).resolve().parents[2]
-sys.path.insert(0,str(ROOT/'packages/radia-gpu/src'))
-from radia_gpu.ams_exchange import write_exchange, file_sha256
+sys.path.insert(0,str(ROOT/'packages/radia-simulink/src'))
+from radia_simulink.ams_exchange import write_exchange, file_sha256
 
 def csr(matrix):
     i,j,v=matrix.COO()
@@ -82,7 +82,7 @@ def main(args):
                     continue
                 warmup=out/f'h{h}-c{cycle}-cold.mat'
                 eng.benchmark(str(path),str(warmup),str(ROOT/'build-ams-cuda'),
-                              str(ROOT/'packages/radia-gpu/matlab'),1.0,nargout=0)
+                              str(ROOT/'packages/radia-simulink/matlab'),1.0,nargout=0)
                 cold=loadmat(warmup,simplify_cells=True)
                 case['first_call']=dict(native_setup_seconds=float(cold['nativeSetupSeconds']),
                     gpu_solve_seconds=float(cold['coldSeconds']),
@@ -90,7 +90,7 @@ def main(args):
                 for index,threads in enumerate([1,args.threads,args.threads,1]*args.rounds):
                     target=out/f'h{h}-c{cycle}-{index}.mat'
                     eng.benchmark(str(path),str(target),str(ROOT/'build-ams-cuda'),
-                                  str(ROOT/'packages/radia-gpu/matlab'),float(threads),nargout=0)
+                                  str(ROOT/'packages/radia-simulink/matlab'),float(threads),nargout=0)
                     result=loadmat(target,simplify_cells=True)
                     actual=np.asarray(result['inclusiveSolution']).reshape(-1)
                     error=float(np.linalg.norm((actual-cpu)[free])/np.linalg.norm(cpu[free]))

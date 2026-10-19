@@ -9,7 +9,7 @@ Two checks repo-wide:
    composable building blocks; the caller wraps them.
 
 2. **Caller modules** -- ``src/radia/panels/calc_*.py``,
-   ``packages/radia-gpu/src/radia_gpu/simulink/*_operator_assembly.py``,
+   ``packages/radia-simulink/src/radia_simulink/simulink/*_operator_assembly.py``,
    ``validation_test/**.py``, ``tests/**.py``, and Python helpers under
    ``docs/`` -- that contain any
    NGSolve-parallel operation (``.Assemble()``,
@@ -57,12 +57,12 @@ from typing import NamedTuple
 ROOT = Path(__file__).absolute().parent.parent
 
 SERIAL_GPU_ROUTES = frozenset({
-    "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+    "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
     "validation_test/ams_cuda/run.py",
     "validation_test/ams_cuda/setup_benchmark.py",
     "validation_test/ams_cuda/native_setup_validation.py",
     "validation_test/ams_cuda/graph_validation.py",
-    "validation_test/radia_gpu/export_vol_reference.py",
+    "validation_test/radia_simulink/export_vol_reference.py",
     "validation_test/ngsolve_cuda_mex/run_poisson.py",
 })
 
@@ -70,14 +70,14 @@ SERIAL_GPU_ROUTES = frozenset({
 HELPER_GLOBS = ["src/radia/**/*.py"]
 HELPER_EXCLUDE = [
     "src/radia/panels/calc_*.py",
-    "packages/radia-gpu/src/radia_gpu/simulink/*_operator_assembly.py",
+    "packages/radia-simulink/src/radia_simulink/simulink/*_operator_assembly.py",
     "**/__pycache__/**",
 ]
 
 # Paths classified as CALLERS (MUST wrap when doing parallel ops).
 CALLER_GLOBS = [
     "src/radia/panels/calc_*.py",
-    "packages/radia-gpu/src/radia_gpu/simulink/*_operator_assembly.py",
+    "packages/radia-simulink/src/radia_simulink/simulink/*_operator_assembly.py",
     "validation_test/**/*.py",
     "tests/**/*.py",
     "docs/**/*.py",
@@ -143,7 +143,7 @@ def _gather_files() -> list[Path]:
     command = ["git", "grep", "--untracked", "-Il", "-F"]
     for token in _CANDIDATE_TOKENS:
         command.extend(("-e", token))
-    command.extend(("--", "src/radia", "packages/radia-gpu/src/radia_gpu/simulink", "validation_test", "tests", "docs"))
+    command.extend(("--", "src/radia", "packages/radia-simulink/src/radia_simulink/simulink", "validation_test", "tests", "docs"))
     proc = subprocess.run(
         command,
         cwd=ROOT,
@@ -198,7 +198,7 @@ def _classify(path: Path) -> str | None:
         and name.endswith(".py")
     )
     is_simulink_assembly_caller = (
-        rel.startswith("packages/radia-gpu/src/radia_gpu/simulink/")
+        rel.startswith("packages/radia-simulink/src/radia_simulink/simulink/")
         and name.endswith("_operator_assembly.py")
     )
     is_lane_caller = (

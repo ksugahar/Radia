@@ -129,7 +129,7 @@ def main() -> int:
             "source_sha256": {
                 path: _sha256(ROOT / path)
                 for path in (
-                    "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+                    "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
                     "validation_test/induction_heating/test_ih_operator_physics_golden.py",
                     "validation_test/induction_heating/generate_ih_operator_physics_results.py",
                     "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",

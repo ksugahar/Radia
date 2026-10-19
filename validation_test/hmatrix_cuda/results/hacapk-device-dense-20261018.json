@@ -1,0 +1,1179 @@
+{
+  "dofs": 5184,
+  "charges": 2496,
+  "cells": 246,
+  "mesh_sha256": "2ab17e73df34f4e110bace113a038f6686984f64b2b63cc53ba6590be340aacf",
+  "contract_sha256": "b99d4d42745581e2b1dcf44c0d797478f40c8f69a74fc95ccd873b2efe0dfa87",
+  "mex": {
+    "radia_cuda_projection": {
+      "sha256": "a19c563461d65293aceb791f9fe0f51ac32bb83388d9d735319bab403f8d7efa",
+      "source_commit": "95879f3a0d31f78a79621a04921b17523eb58a5e"
+    },
+    "radia_cuda_hmatrix": {
+      "sha256": "f0cd7a9911a1a386768ef8977f147e63a2eb3f0c316eea3e9dc364dc6bdad842",
+      "source_commit": "8caad2fd18ad9b47e83972295a69a627581110f4"
+    }
+  },
+  "native_sha256": "e59a0dd9bd41474edf587d87374bea80375676fdf2f46b6c176efa9546544053",
+  "frontend_sha256": "e03cdf61cd845984017c0a73f87f321db58bae9513f60d82a3d8c361c89b7dd5",
+  "threads": {
+    "cpu_ngsolve": 16,
+    "cpu_blas": 1,
+    "matlab_single_comp_thread": true,
+    "process_affinity_mask": 65535
+  },
+  "hacapk_options": {
+    "epsilon": 1e-10,
+    "leaf_size": 128,
+    "eta": 2.0,
+    "max_rank": 128,
+    "cache_bytes": 2147483648
+  },
+  "preconditioner": "mass-cholesky",
+  "staging_mode": "sparse",
+  "assembly_mode": "hacapk-device-dense",
+  "cpu_true_residual": 4.20035136266094e-12,
+  "native_setup_errors": {
+    "mass_error": 1.5417015164197795e-16,
+    "charge_error": 1.793430753724109e-14,
+    "rhs_error": 2.726485694462265e-16
+  },
+  "first_payload": {
+    "whole_seconds": 1.2012032,
+    "assembly_upload_seconds": 0.9152678,
+    "solve_transfer_seconds": 0.1786714,
+    "iterations": 12.0,
+    "owned_peak": 543239548.0,
+    "coefficient_error": 5.024371078972642e-13,
+    "mean_error": 9.75292722619907e-15,
+    "true_residual": 4.204842846511556e-12,
+    "operator_stats": {
+      "owned_device_bytes": 15442936.0,
+      "applications": 0,
+      "kernel_launches": 0,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 543239548.0,
+      "assembly_entry_batches": 2677,
+      "assembly_entry_count": 1557333.0,
+      "assembly_leaf_count": 227,
+      "assembly_lowrank_count": 1,
+      "assembly_cache_tile_loads": 1,
+      "assembly_cache_tile_hits": 2677,
+      "assembly_cache_full_tile_batches": 2677,
+      "assembly_cache_host_scratch_bytes": 49152,
+      "assembly_deferred_dense_leaves": 226,
+      "assembly_deferred_dense_coefficients": 1667312.0,
+      "assembly_coefficient_upload_bytes": 738816,
+      "stored_coefficient_count": 1759664.0,
+      "same_leaf_dense_coefficient_count": 3222112.0,
+      "lowrank_factor_coefficient_count": 92352,
+      "leaf_rank_sum": 37,
+      "max_leaf_rank": 37,
+      "storage_saving_lowrank_leaf_count": 1,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    }
+  },
+  "warm": {
+    "whole_seconds": 1.0543446,
+    "assembly_upload_seconds": 0.8297344,
+    "solve_transfer_seconds": 0.123828,
+    "iterations": 12.0,
+    "owned_peak": 543239548.0,
+    "coefficient_error": 5.024371078972642e-13,
+    "mean_error": 9.75292722619907e-15,
+    "true_residual": 4.204842846511556e-12,
+    "operator_stats": {
+      "owned_device_bytes": 15442936.0,
+      "applications": 0,
+      "kernel_launches": 0,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 543239548.0,
+      "assembly_entry_batches": 2677,
+      "assembly_entry_count": 1557333.0,
+      "assembly_leaf_count": 227,
+      "assembly_lowrank_count": 1,
+      "assembly_cache_tile_loads": 1,
+      "assembly_cache_tile_hits": 2677,
+      "assembly_cache_full_tile_batches": 2677,
+      "assembly_cache_host_scratch_bytes": 49152,
+      "assembly_deferred_dense_leaves": 226,
+      "assembly_deferred_dense_coefficients": 1667312.0,
+      "assembly_coefficient_upload_bytes": 738816,
+      "stored_coefficient_count": 1759664.0,
+      "same_leaf_dense_coefficient_count": 3222112.0,
+      "lowrank_factor_coefficient_count": 92352,
+      "leaf_rank_sum": 37,
+      "max_leaf_rank": 37,
+      "storage_saving_lowrank_leaf_count": 1,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    }
+  },
+  "operator_probes": {
+    "accepted": true,
+    "count": 3,
+    "seed": 20261018.0,
+    "relative_errors": [
+      2.4256342859026642e-12,
+      2.347048282051286e-12,
+      2.3257377925719965e-12
+    ],
+    "limit": 1e-08,
+    "true_relative_residual": [],
+    "residual_applicability": "not_applicable_operator",
+    "live_count": 0,
+    "operator_stats": {
+      "owned_device_bytes": 15442936.0,
+      "applications": 3,
+      "kernel_launches": 18,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 543239548.0,
+      "assembly_entry_batches": 2677,
+      "assembly_entry_count": 1557333.0,
+      "assembly_leaf_count": 227,
+      "assembly_lowrank_count": 1,
+      "assembly_cache_tile_loads": 1,
+      "assembly_cache_tile_hits": 2677,
+      "assembly_cache_full_tile_batches": 2677,
+      "assembly_cache_host_scratch_bytes": 49152,
+      "assembly_deferred_dense_leaves": 226,
+      "assembly_deferred_dense_coefficients": 1667312.0,
+      "assembly_coefficient_upload_bytes": 738816,
+      "stored_coefficient_count": 1759664.0,
+      "same_leaf_dense_coefficient_count": 3222112.0,
+      "lowrank_factor_coefficient_count": 92352,
+      "leaf_rank_sum": 37,
+      "max_leaf_rank": 37,
+      "storage_saving_lowrank_leaf_count": 1,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    },
+    "timing_scope": "Excluded from workflow benchmarks"
+  },
+  "operator_probe_input_sha256": "55d284b13adb616e3cb8f1d229bb63f74bb744bebabe09cc6771224f4b2b5477",
+  "gpu_pair_warm_api_medians": {
+    "hacapk-device-dense": 1.09168375,
+    "hacapk-cached": 1.2786529500000001
+  },
+  "gpu_pair_control_over_primary": 1.171266816053642,
+  "benchmark_warm_api_medians": {
+    "cpu": 10.008420650003245,
+    "gpu": 1.09393245
+  },
+  "benchmark_cpu_over_gpu": 9.1490298601191,
+  "benchmark_first_api_seconds": {
+    "cpu": 9.991997400007676,
+    "gpu": 1.1046844
+  },
+  "memory_limitations": "50ms sampled process RSS/private includes baseline/runtime and may miss spikes; CPU sampler is in controller process, GPU sampler observes separate MATLAB process, unquantified timing bias; exact GPU owned excludes CUDA/runtime/global peaks",
+  "benchmark_memory_scope": "Sampled process baselines include the retained independent CPU certification operator; not standalone application memory peaks",
+  "ratio_scope": "Fresh CPU and GPU complete linear workflows, same public mesh/physics, CPU mass-Riesz sparsecholesky versus GPU explicit chosen preconditioner; excludes interpreter/Engine startup, validation, HDF5 serialization and result transport from API totals",
+  "schema": "radia.hdiv-device-dense-research.v1",
+  "accepted": true,
+  "performance_accepted": true,
+  "release_accepted": false,
+  "formal_reference_accepted": false,
+  "cpu_source_commit": "54d10d11f465edb2d9f35aec28f15cf48c1525a3",
+  "validation_source_sha256": "25260e754c699af05e8394824b9f1592b946ff2ad5e77c4d30a0073b9edc6987",
+  "entry_batch_size": 1024,
+  "worker_role": "optional-gpu-measurement-worker",
+  "scope": "Independently authored separated public P2 spheres; linear HDiv order2, same-module direct GPU dense versus host-roundtrip cached HACApK, and independent CPU comparison",
+  "rtx_checks": [
+    {
+      "kind": "affine",
+      "charges": 28,
+      "relative_frobenius_error": 0,
+      "failed_construction_count": 2,
+      "stale_rejected": true,
+      "live_count": 0
+    },
+    {
+      "kind": "curved",
+      "charges": 160,
+      "relative_frobenius_error": 0,
+      "failed_construction_count": 2,
+      "stale_rejected": true,
+      "live_count": 0
+    }
+  ],
+  "gpu_pair_samples": [
+    {
+      "phase": "first_payload",
+      "assembly_mode": "hacapk-device-dense",
+      "outer_controller_seconds": 1.5711314999934984,
+      "idle_before": {
+        "cpu_percent": 0.26350461133070047,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39435, 40960",
+        "free_host_bytes": 48970055680,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1616297984,
+          "private_bytes": 2236260352,
+          "lifetime_peak_rss_bytes": 1836752896
+        },
+        "after": {
+          "rss_bytes": 1615806464,
+          "private_bytes": 2235445248,
+          "lifetime_peak_rss_bytes": 1840734208
+        },
+        "sample_count": 27,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1768054784,
+        "sampled_peak_private_bytes": 2462433280,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      },
+      "operator_stats": {
+        "owned_device_bytes": 15442936.0,
+        "applications": 0,
+        "kernel_launches": 0,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 543239548.0,
+        "assembly_entry_batches": 2677,
+        "assembly_entry_count": 1557333.0,
+        "assembly_leaf_count": 227,
+        "assembly_lowrank_count": 1,
+        "assembly_cache_tile_loads": 1,
+        "assembly_cache_tile_hits": 2677,
+        "assembly_cache_full_tile_batches": 2677,
+        "assembly_cache_host_scratch_bytes": 49152,
+        "assembly_deferred_dense_leaves": 226,
+        "assembly_deferred_dense_coefficients": 1667312.0,
+        "assembly_coefficient_upload_bytes": 738816,
+        "stored_coefficient_count": 1759664.0,
+        "same_leaf_dense_coefficient_count": 3222112.0,
+        "lowrank_factor_coefficient_count": 92352,
+        "leaf_rank_sum": 37,
+        "max_leaf_rank": 37,
+        "storage_saving_lowrank_leaf_count": 1,
+        "assembly_profile_enabled": false,
+        "profile_mapping_seconds": 0,
+        "profile_tet_potential_seconds": 0,
+        "profile_tri_potential_seconds": 0,
+        "profile_scalar_potential_seconds": 0,
+        "profile_contraction_seconds": 0,
+        "profile_finalize_seconds": 0
+      },
+      "whole_seconds": 1.0706614,
+      "assembly_upload_seconds": 0.8530674,
+      "solve_transfer_seconds": 0.1239273,
+      "iterations": 12.0,
+      "owned_peak": 543239548.0,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12
+    },
+    {
+      "phase": "first_payload",
+      "assembly_mode": "hacapk-cached",
+      "outer_controller_seconds": 1.786914500000421,
+      "idle_before": {
+        "cpu_percent": 0.48076923076922906,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39435, 40960",
+        "free_host_bytes": 48988725248,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1615597568,
+          "private_bytes": 2235158528,
+          "lifetime_peak_rss_bytes": 1840734208
+        },
+        "after": {
+          "rss_bytes": 1623236608,
+          "private_bytes": 2242572288,
+          "lifetime_peak_rss_bytes": 1848180736
+        },
+        "sample_count": 30,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1848180736,
+        "sampled_peak_private_bytes": 2469658624,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      },
+      "operator_stats": {
+        "owned_device_bytes": 15442936.0,
+        "applications": 0,
+        "kernel_launches": 0,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 527796612.0,
+        "assembly_entry_batches": 4417,
+        "assembly_entry_count": 3224645.0,
+        "assembly_leaf_count": 227,
+        "assembly_lowrank_count": 1,
+        "assembly_cache_tile_loads": 1,
+        "assembly_cache_tile_hits": 4416,
+        "assembly_cache_full_tile_batches": 4417,
+        "assembly_cache_host_scratch_bytes": 49152,
+        "assembly_deferred_dense_leaves": 0,
+        "assembly_deferred_dense_coefficients": 0,
+        "assembly_coefficient_upload_bytes": 14077312.0,
+        "stored_coefficient_count": 1759664.0,
+        "same_leaf_dense_coefficient_count": 3222112.0,
+        "lowrank_factor_coefficient_count": 92352,
+        "leaf_rank_sum": 37,
+        "max_leaf_rank": 37,
+        "storage_saving_lowrank_leaf_count": 1,
+        "assembly_profile_enabled": false,
+        "profile_mapping_seconds": 0,
+        "profile_tet_potential_seconds": 0,
+        "profile_tri_potential_seconds": 0,
+        "profile_scalar_potential_seconds": 0,
+        "profile_contraction_seconds": 0,
+        "profile_finalize_seconds": 0
+      },
+      "whole_seconds": 1.2999913,
+      "assembly_upload_seconds": 1.0784132,
+      "solve_transfer_seconds": 0.1264968,
+      "iterations": 12.0,
+      "owned_peak": 527796612.0,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12
+    },
+    {
+      "phase": "warm",
+      "assembly_mode": "hacapk-device-dense",
+      "outer_controller_seconds": 1.7163180000061402,
+      "idle_before": {
+        "cpu_percent": 0.21929824561403022,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39435, 40960",
+        "free_host_bytes": 48981409792,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1623240704,
+          "private_bytes": 2242572288,
+          "lifetime_peak_rss_bytes": 1848180736
+        },
+        "after": {
+          "rss_bytes": 1624219648,
+          "private_bytes": 2243620864,
+          "lifetime_peak_rss_bytes": 1848684544
+        },
+        "sample_count": 29,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1848684544,
+        "sampled_peak_private_bytes": 2470707200,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      },
+      "operator_stats": {
+        "owned_device_bytes": 15442936.0,
+        "applications": 0,
+        "kernel_launches": 0,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 543239548.0,
+        "assembly_entry_batches": 2677,
+        "assembly_entry_count": 1557333.0,
+        "assembly_leaf_count": 227,
+        "assembly_lowrank_count": 1,
+        "assembly_cache_tile_loads": 1,
+        "assembly_cache_tile_hits": 2677,
+        "assembly_cache_full_tile_batches": 2677,
+        "assembly_cache_host_scratch_bytes": 49152,
+        "assembly_deferred_dense_leaves": 226,
+        "assembly_deferred_dense_coefficients": 1667312.0,
+        "assembly_coefficient_upload_bytes": 738816,
+        "stored_coefficient_count": 1759664.0,
+        "same_leaf_dense_coefficient_count": 3222112.0,
+        "lowrank_factor_coefficient_count": 92352,
+        "leaf_rank_sum": 37,
+        "max_leaf_rank": 37,
+        "storage_saving_lowrank_leaf_count": 1,
+        "assembly_profile_enabled": false,
+        "profile_mapping_seconds": 0,
+        "profile_tet_potential_seconds": 0,
+        "profile_tri_potential_seconds": 0,
+        "profile_scalar_potential_seconds": 0,
+        "profile_contraction_seconds": 0,
+        "profile_finalize_seconds": 0
+      },
+      "whole_seconds": 1.0967136,
+      "assembly_upload_seconds": 0.8772405,
+      "solve_transfer_seconds": 0.122956,
+      "iterations": 12.0,
+      "owned_peak": 543239548.0,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12
+    },
+    {
+      "phase": "warm",
+      "assembly_mode": "hacapk-cached",
+      "outer_controller_seconds": 1.794850399994175,
+      "idle_before": {
+        "cpu_percent": 0.43591979075849885,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39435, 40960",
+        "free_host_bytes": 48979992576,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1624223744,
+          "private_bytes": 2243620864,
+          "lifetime_peak_rss_bytes": 1848684544
+        },
+        "after": {
+          "rss_bytes": 1625325568,
+          "private_bytes": 2244304896,
+          "lifetime_peak_rss_bytes": 1850257408
+        },
+        "sample_count": 30,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1850257408,
+        "sampled_peak_private_bytes": 2471391232,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      },
+      "operator_stats": {
+        "owned_device_bytes": 15442936.0,
+        "applications": 0,
+        "kernel_launches": 0,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 527796612.0,
+        "assembly_entry_batches": 4417,
+        "assembly_entry_count": 3224645.0,
+        "assembly_leaf_count": 227,
+        "assembly_lowrank_count": 1,
+        "assembly_cache_tile_loads": 1,
+        "assembly_cache_tile_hits": 4416,
+        "assembly_cache_full_tile_batches": 4417,
+        "assembly_cache_host_scratch_bytes": 49152,
+        "assembly_deferred_dense_leaves": 0,
+        "assembly_deferred_dense_coefficients": 0,
+        "assembly_coefficient_upload_bytes": 14077312.0,
+        "stored_coefficient_count": 1759664.0,
+        "same_leaf_dense_coefficient_count": 3222112.0,
+        "lowrank_factor_coefficient_count": 92352,
+        "leaf_rank_sum": 37,
+        "max_leaf_rank": 37,
+        "storage_saving_lowrank_leaf_count": 1,
+        "assembly_profile_enabled": false,
+        "profile_mapping_seconds": 0,
+        "profile_tet_potential_seconds": 0,
+        "profile_tri_potential_seconds": 0,
+        "profile_scalar_potential_seconds": 0,
+        "profile_contraction_seconds": 0,
+        "profile_finalize_seconds": 0
+      },
+      "whole_seconds": 1.2845344,
+      "assembly_upload_seconds": 1.0652288,
+      "solve_transfer_seconds": 0.1264899,
+      "iterations": 12.0,
+      "owned_peak": 527796612.0,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12
+    },
+    {
+      "phase": "warm",
+      "assembly_mode": "hacapk-cached",
+      "outer_controller_seconds": 1.8810988999903202,
+      "idle_before": {
+        "cpu_percent": 0.4784688995215336,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39435, 40960",
+        "free_host_bytes": 48981004288,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1625325568,
+          "private_bytes": 2244304896,
+          "lifetime_peak_rss_bytes": 1850257408
+        },
+        "after": {
+          "rss_bytes": 1626083328,
+          "private_bytes": 2244993024,
+          "lifetime_peak_rss_bytes": 1851125760
+        },
+        "sample_count": 31,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1737375744,
+        "sampled_peak_private_bytes": 2472079360,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      },
+      "operator_stats": {
+        "owned_device_bytes": 15442936.0,
+        "applications": 0,
+        "kernel_launches": 0,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 527796612.0,
+        "assembly_entry_batches": 4417,
+        "assembly_entry_count": 3224645.0,
+        "assembly_leaf_count": 227,
+        "assembly_lowrank_count": 1,
+        "assembly_cache_tile_loads": 1,
+        "assembly_cache_tile_hits": 4416,
+        "assembly_cache_full_tile_batches": 4417,
+        "assembly_cache_host_scratch_bytes": 49152,
+        "assembly_deferred_dense_leaves": 0,
+        "assembly_deferred_dense_coefficients": 0,
+        "assembly_coefficient_upload_bytes": 14077312.0,
+        "stored_coefficient_count": 1759664.0,
+        "same_leaf_dense_coefficient_count": 3222112.0,
+        "lowrank_factor_coefficient_count": 92352,
+        "leaf_rank_sum": 37,
+        "max_leaf_rank": 37,
+        "storage_saving_lowrank_leaf_count": 1,
+        "assembly_profile_enabled": false,
+        "profile_mapping_seconds": 0,
+        "profile_tet_potential_seconds": 0,
+        "profile_tri_potential_seconds": 0,
+        "profile_scalar_potential_seconds": 0,
+        "profile_contraction_seconds": 0,
+        "profile_finalize_seconds": 0
+      },
+      "whole_seconds": 1.2727715,
+      "assembly_upload_seconds": 1.0523849,
+      "solve_transfer_seconds": 0.1263416,
+      "iterations": 12.0,
+      "owned_peak": 527796612.0,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12
+    },
+    {
+      "phase": "warm",
+      "assembly_mode": "hacapk-device-dense",
+      "outer_controller_seconds": 1.6653862000093795,
+      "idle_before": {
+        "cpu_percent": 0.5249343832021025,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39435, 40960",
+        "free_host_bytes": 48981991424,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1626083328,
+          "private_bytes": 2244993024,
+          "lifetime_peak_rss_bytes": 1851125760
+        },
+        "after": {
+          "rss_bytes": 1626005504,
+          "private_bytes": 2245021696,
+          "lifetime_peak_rss_bytes": 1851125760
+        },
+        "sample_count": 28,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1850949632,
+        "sampled_peak_private_bytes": 2472079360,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      },
+      "operator_stats": {
+        "owned_device_bytes": 15442936.0,
+        "applications": 0,
+        "kernel_launches": 0,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 543239548.0,
+        "assembly_entry_batches": 2677,
+        "assembly_entry_count": 1557333.0,
+        "assembly_leaf_count": 227,
+        "assembly_lowrank_count": 1,
+        "assembly_cache_tile_loads": 1,
+        "assembly_cache_tile_hits": 2677,
+        "assembly_cache_full_tile_batches": 2677,
+        "assembly_cache_host_scratch_bytes": 49152,
+        "assembly_deferred_dense_leaves": 226,
+        "assembly_deferred_dense_coefficients": 1667312.0,
+        "assembly_coefficient_upload_bytes": 738816,
+        "stored_coefficient_count": 1759664.0,
+        "same_leaf_dense_coefficient_count": 3222112.0,
+        "lowrank_factor_coefficient_count": 92352,
+        "leaf_rank_sum": 37,
+        "max_leaf_rank": 37,
+        "storage_saving_lowrank_leaf_count": 1,
+        "assembly_profile_enabled": false,
+        "profile_mapping_seconds": 0,
+        "profile_tet_potential_seconds": 0,
+        "profile_tri_potential_seconds": 0,
+        "profile_scalar_potential_seconds": 0,
+        "profile_contraction_seconds": 0,
+        "profile_finalize_seconds": 0
+      },
+      "whole_seconds": 1.092553,
+      "assembly_upload_seconds": 0.8764611,
+      "solve_transfer_seconds": 0.1223943,
+      "iterations": 12.0,
+      "owned_peak": 543239548.0,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12
+    },
+    {
+      "phase": "warm",
+      "assembly_mode": "hacapk-device-dense",
+      "outer_controller_seconds": 1.5958057999960147,
+      "idle_before": {
+        "cpu_percent": 2.4836601307189565,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39435, 40960",
+        "free_host_bytes": 48927010816,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1626009600,
+          "private_bytes": 2245021696,
+          "lifetime_peak_rss_bytes": 1851125760
+        },
+        "after": {
+          "rss_bytes": 1625874432,
+          "private_bytes": 2244960256,
+          "lifetime_peak_rss_bytes": 1851125760
+        },
+        "sample_count": 27,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1737932800,
+        "sampled_peak_private_bytes": 2472046592,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      },
+      "operator_stats": {
+        "owned_device_bytes": 15442936.0,
+        "applications": 0,
+        "kernel_launches": 0,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 543239548.0,
+        "assembly_entry_batches": 2677,
+        "assembly_entry_count": 1557333.0,
+        "assembly_leaf_count": 227,
+        "assembly_lowrank_count": 1,
+        "assembly_cache_tile_loads": 1,
+        "assembly_cache_tile_hits": 2677,
+        "assembly_cache_full_tile_batches": 2677,
+        "assembly_cache_host_scratch_bytes": 49152,
+        "assembly_deferred_dense_leaves": 226,
+        "assembly_deferred_dense_coefficients": 1667312.0,
+        "assembly_coefficient_upload_bytes": 738816,
+        "stored_coefficient_count": 1759664.0,
+        "same_leaf_dense_coefficient_count": 3222112.0,
+        "lowrank_factor_coefficient_count": 92352,
+        "leaf_rank_sum": 37,
+        "max_leaf_rank": 37,
+        "storage_saving_lowrank_leaf_count": 1,
+        "assembly_profile_enabled": false,
+        "profile_mapping_seconds": 0,
+        "profile_tet_potential_seconds": 0,
+        "profile_tri_potential_seconds": 0,
+        "profile_scalar_potential_seconds": 0,
+        "profile_contraction_seconds": 0,
+        "profile_finalize_seconds": 0
+      },
+      "whole_seconds": 1.0908145,
+      "assembly_upload_seconds": 0.8680992,
+      "solve_transfer_seconds": 0.1255401,
+      "iterations": 12.0,
+      "owned_peak": 543239548.0,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12
+    },
+    {
+      "phase": "warm",
+      "assembly_mode": "hacapk-cached",
+      "outer_controller_seconds": 1.7992715000000317,
+      "idle_before": {
+        "cpu_percent": 0.4397537379067673,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39435, 40960",
+        "free_host_bytes": 48971710464,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1625874432,
+          "private_bytes": 2244960256,
+          "lifetime_peak_rss_bytes": 1851125760
+        },
+        "after": {
+          "rss_bytes": 1626259456,
+          "private_bytes": 2244960256,
+          "lifetime_peak_rss_bytes": 1851236352
+        },
+        "sample_count": 30,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1851236352,
+        "sampled_peak_private_bytes": 2472046592,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      },
+      "operator_stats": {
+        "owned_device_bytes": 15442936.0,
+        "applications": 0,
+        "kernel_launches": 0,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 527796612.0,
+        "assembly_entry_batches": 4417,
+        "assembly_entry_count": 3224645.0,
+        "assembly_leaf_count": 227,
+        "assembly_lowrank_count": 1,
+        "assembly_cache_tile_loads": 1,
+        "assembly_cache_tile_hits": 4416,
+        "assembly_cache_full_tile_batches": 4417,
+        "assembly_cache_host_scratch_bytes": 49152,
+        "assembly_deferred_dense_leaves": 0,
+        "assembly_deferred_dense_coefficients": 0,
+        "assembly_coefficient_upload_bytes": 14077312.0,
+        "stored_coefficient_count": 1759664.0,
+        "same_leaf_dense_coefficient_count": 3222112.0,
+        "lowrank_factor_coefficient_count": 92352,
+        "leaf_rank_sum": 37,
+        "max_leaf_rank": 37,
+        "storage_saving_lowrank_leaf_count": 1,
+        "assembly_profile_enabled": false,
+        "profile_mapping_seconds": 0,
+        "profile_tet_potential_seconds": 0,
+        "profile_tri_potential_seconds": 0,
+        "profile_scalar_potential_seconds": 0,
+        "profile_contraction_seconds": 0,
+        "profile_finalize_seconds": 0
+      },
+      "whole_seconds": 1.2887485,
+      "assembly_upload_seconds": 1.068798,
+      "solve_transfer_seconds": 0.1265762,
+      "iterations": 12.0,
+      "owned_peak": 527796612.0,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12
+    },
+    {
+      "phase": "warm",
+      "assembly_mode": "hacapk-cached",
+      "outer_controller_seconds": 1.7889253000030294,
+      "idle_before": {
+        "cpu_percent": 0.21758050478677404,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39435, 40960",
+        "free_host_bytes": 48977526784,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1626263552,
+          "private_bytes": 2244960256,
+          "lifetime_peak_rss_bytes": 1851236352
+        },
+        "after": {
+          "rss_bytes": 1626251264,
+          "private_bytes": 2244960256,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "sample_count": 30,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1736740864,
+        "sampled_peak_private_bytes": 2472046592,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      },
+      "operator_stats": {
+        "owned_device_bytes": 15442936.0,
+        "applications": 0,
+        "kernel_launches": 0,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 527796612.0,
+        "assembly_entry_batches": 4417,
+        "assembly_entry_count": 3224645.0,
+        "assembly_leaf_count": 227,
+        "assembly_lowrank_count": 1,
+        "assembly_cache_tile_loads": 1,
+        "assembly_cache_tile_hits": 4416,
+        "assembly_cache_full_tile_batches": 4417,
+        "assembly_cache_host_scratch_bytes": 49152,
+        "assembly_deferred_dense_leaves": 0,
+        "assembly_deferred_dense_coefficients": 0,
+        "assembly_coefficient_upload_bytes": 14077312.0,
+        "stored_coefficient_count": 1759664.0,
+        "same_leaf_dense_coefficient_count": 3222112.0,
+        "lowrank_factor_coefficient_count": 92352,
+        "leaf_rank_sum": 37,
+        "max_leaf_rank": 37,
+        "storage_saving_lowrank_leaf_count": 1,
+        "assembly_profile_enabled": false,
+        "profile_mapping_seconds": 0,
+        "profile_tet_potential_seconds": 0,
+        "profile_tri_potential_seconds": 0,
+        "profile_scalar_potential_seconds": 0,
+        "profile_contraction_seconds": 0,
+        "profile_finalize_seconds": 0
+      },
+      "whole_seconds": 1.2713875,
+      "assembly_upload_seconds": 1.0522836,
+      "solve_transfer_seconds": 0.1258286,
+      "iterations": 12.0,
+      "owned_peak": 527796612.0,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12
+    },
+    {
+      "phase": "warm",
+      "assembly_mode": "hacapk-device-dense",
+      "outer_controller_seconds": 1.5817484999861335,
+      "idle_before": {
+        "cpu_percent": 0.21834061135370675,
+        "gpu": "NVIDIA A100-SXM4-40GB, 591.59, 0, 39435, 40960",
+        "free_host_bytes": 48975192064,
+        "limitation": "System samples do not exclude every instantaneous external load"
+      },
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1626251264,
+          "private_bytes": 2244960256,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "after": {
+          "rss_bytes": 1626050560,
+          "private_bytes": 2244960256,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "sample_count": 27,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1786408960,
+        "sampled_peak_private_bytes": 2472046592,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      },
+      "operator_stats": {
+        "owned_device_bytes": 15442936.0,
+        "applications": 0,
+        "kernel_launches": 0,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 543239548.0,
+        "assembly_entry_batches": 2677,
+        "assembly_entry_count": 1557333.0,
+        "assembly_leaf_count": 227,
+        "assembly_lowrank_count": 1,
+        "assembly_cache_tile_loads": 1,
+        "assembly_cache_tile_hits": 2677,
+        "assembly_cache_full_tile_batches": 2677,
+        "assembly_cache_host_scratch_bytes": 49152,
+        "assembly_deferred_dense_leaves": 226,
+        "assembly_deferred_dense_coefficients": 1667312.0,
+        "assembly_coefficient_upload_bytes": 738816,
+        "stored_coefficient_count": 1759664.0,
+        "same_leaf_dense_coefficient_count": 3222112.0,
+        "lowrank_factor_coefficient_count": 92352,
+        "leaf_rank_sum": 37,
+        "max_leaf_rank": 37,
+        "storage_saving_lowrank_leaf_count": 1,
+        "assembly_profile_enabled": false,
+        "profile_mapping_seconds": 0,
+        "profile_tet_potential_seconds": 0,
+        "profile_tri_potential_seconds": 0,
+        "profile_scalar_potential_seconds": 0,
+        "profile_contraction_seconds": 0,
+        "profile_finalize_seconds": 0
+      },
+      "whole_seconds": 1.0729423,
+      "assembly_upload_seconds": 0.8554862,
+      "solve_transfer_seconds": 0.1239045,
+      "iterations": 12.0,
+      "owned_peak": 543239548.0,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12
+    }
+  ],
+  "benchmark_samples": [
+    {
+      "phase": "first_payload",
+      "backend": "cpu",
+      "user_api_total_seconds": 9.991997400007676,
+      "outer_controller_seconds": 9.992005399995833,
+      "iterations": 12,
+      "coefficient_error": 6.383376654957278e-14,
+      "mean_error": 1.2281402787550901e-15,
+      "true_residual": 4.200412734680772e-12,
+      "owned_peak_bytes": null,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 354185216,
+          "private_bytes": 2904150016,
+          "lifetime_peak_rss_bytes": 361709568
+        },
+        "after": {
+          "rss_bytes": 363196416,
+          "private_bytes": 2967601152,
+          "lifetime_peak_rss_bytes": 510455808
+        },
+        "sample_count": 158,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 499904512,
+        "sampled_peak_private_bytes": 3852713984,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "first_payload",
+      "backend": "gpu",
+      "user_api_total_seconds": 1.1046844,
+      "outer_controller_seconds": 1.5161103999998886,
+      "iterations": 12,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12,
+      "owned_peak_bytes": 543239548,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1625976832,
+          "private_bytes": 2244841472,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "after": {
+          "rss_bytes": 1626107904,
+          "private_bytes": 2244841472,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "sample_count": 26,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1850892288,
+        "sampled_peak_private_bytes": 2471927808,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "cpu",
+      "user_api_total_seconds": 9.990754800004652,
+      "outer_controller_seconds": 9.990762600005837,
+      "iterations": 12,
+      "coefficient_error": 5.655060787092784e-14,
+      "mean_error": 9.245303066787412e-16,
+      "true_residual": 4.2003513732319386e-12,
+      "owned_peak_bytes": null,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 355790848,
+          "private_bytes": 2906980352,
+          "lifetime_peak_rss_bytes": 510455808
+        },
+        "after": {
+          "rss_bytes": 363847680,
+          "private_bytes": 2975051776,
+          "lifetime_peak_rss_bytes": 511320064
+        },
+        "sample_count": 158,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 510488576,
+        "sampled_peak_private_bytes": 3863687168,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "gpu",
+      "user_api_total_seconds": 1.0969412,
+      "outer_controller_seconds": 2.421271400002297,
+      "iterations": 12,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12,
+      "owned_peak_bytes": 543239548,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1626107904,
+          "private_bytes": 2244841472,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "after": {
+          "rss_bytes": 1626005504,
+          "private_bytes": 2244907008,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "sample_count": 40,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1850998784,
+        "sampled_peak_private_bytes": 2471927808,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "gpu",
+      "user_api_total_seconds": 1.091303,
+      "outer_controller_seconds": 1.5032012000010582,
+      "iterations": 12,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12,
+      "owned_peak_bytes": 543239548,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1626005504,
+          "private_bytes": 2244907008,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "after": {
+          "rss_bytes": 1627353088,
+          "private_bytes": 2246115328,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "sample_count": 26,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1851011072,
+        "sampled_peak_private_bytes": 2471993344,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "cpu",
+      "user_api_total_seconds": 10.026086500001838,
+      "outer_controller_seconds": 10.02609419998771,
+      "iterations": 12,
+      "coefficient_error": 5.708833860083377e-14,
+      "mean_error": 9.239333861559433e-16,
+      "true_residual": 4.200365631483875e-12,
+      "owned_peak_bytes": null,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 364806144,
+          "private_bytes": 2925608960,
+          "lifetime_peak_rss_bytes": 511320064
+        },
+        "after": {
+          "rss_bytes": 366616576,
+          "private_bytes": 2978959360,
+          "lifetime_peak_rss_bytes": 512847872
+        },
+        "sample_count": 151,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 501534720,
+        "sampled_peak_private_bytes": 3855429632,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "cpu",
+      "user_api_total_seconds": 9.972683200001484,
+      "outer_controller_seconds": 9.972695200005546,
+      "iterations": 12,
+      "coefficient_error": 5.699898417127174e-14,
+      "mean_error": 9.28499969876225e-16,
+      "true_residual": 4.200364774194069e-12,
+      "owned_peak_bytes": null,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 366796800,
+          "private_bytes": 2929004544,
+          "lifetime_peak_rss_bytes": 512847872
+        },
+        "after": {
+          "rss_bytes": 364511232,
+          "private_bytes": 2916954112,
+          "lifetime_peak_rss_bytes": 512847872
+        },
+        "sample_count": 156,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 501252096,
+        "sampled_peak_private_bytes": 3804983296,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "gpu",
+      "user_api_total_seconds": 1.0965619,
+      "outer_controller_seconds": 1.4823878000024706,
+      "iterations": 12,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12,
+      "owned_peak_bytes": 543239548,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1618739200,
+          "private_bytes": 2246115328,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "after": {
+          "rss_bytes": 1608720384,
+          "private_bytes": 2246115328,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "sample_count": 25,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1833709568,
+        "sampled_peak_private_bytes": 2473201664,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "gpu",
+      "user_api_total_seconds": 1.0652283,
+      "outer_controller_seconds": 1.4642821000015829,
+      "iterations": 12,
+      "coefficient_error": 5.024371078972642e-13,
+      "mean_error": 9.75292722619907e-15,
+      "true_residual": 4.204842846511556e-12,
+      "owned_peak_bytes": 543239548,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1582788608,
+          "private_bytes": 2246115328,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "after": {
+          "rss_bytes": 1574789120,
+          "private_bytes": 2246115328,
+          "lifetime_peak_rss_bytes": 1851248640
+        },
+        "sample_count": 25,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1739431936,
+        "sampled_peak_private_bytes": 2473201664,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "cpu",
+      "user_api_total_seconds": 10.053938400000334,
+      "outer_controller_seconds": 10.05394480000541,
+      "iterations": 12,
+      "coefficient_error": 5.750759385126532e-14,
+      "mean_error": 9.279056030363492e-16,
+      "true_residual": 4.2003625522706414e-12,
+      "owned_peak_bytes": null,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 365133824,
+          "private_bytes": 2768379904,
+          "lifetime_peak_rss_bytes": 512847872
+        },
+        "after": {
+          "rss_bytes": 376459264,
+          "private_bytes": 2836090880,
+          "lifetime_peak_rss_bytes": 512847872
+        },
+        "sample_count": 158,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 510668800,
+        "sampled_peak_private_bytes": 3714752512,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    }
+  ],
+  "limitations": [
+    "Explicit full-cache-only path; insufficient cache rejected without fallback. Concurrent oracle plus Resident accounted owned <=2GiB; reserve=max(2GiB,total/5).",
+    "Dense coefficients remain row-major, factors retain external layout, permutation/normalization/symmetry/ACA order and tolerance unchanged.",
+    "Same-module GPU paired ABBA 2 cycles; CPU/GPU ABBA 2 cycles. API includes FE construction, assembly, all transfers, solve, recovery and destruction; excludes Engine, HDF5, validation and controller transport.",
+    "First payload follows initialization/parity and is not process cold. CPU16/BLAS1; MATLAB single computation thread.",
+    "Overlap increases accounted setup owned peak; no memory-reduction claim. Exact owned excludes CUDA/cuBLAS/cuSOLVER/global peaks; 50ms process samples include runtimes/baseline and can miss spikes.",
+    "Standalone applications/kernel counters do not include solver applyDevice. Operator probes have no solver residual.",
+    "Formal immutable CPU wheel adoption provisional; independent numerical comparison accepted. General geometry/nonlinear/topology optimization/100k and common-wheel release remain unaccepted.",
+    "Additional analytic CUDA regression remains pending because local isolated CPU reference module is absent."
+  ]
+}

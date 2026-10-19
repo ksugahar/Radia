@@ -25,7 +25,7 @@ isolated_engine_contract_scratch = _scratch_module.isolated_controller_scratch
 def test_mex_build_verifier_rejects_missing_and_changed_binaries(tmp_path):
     verifier = load_module(
         "verify_radia_mex_build_test",
-        ROOT / "packages/radia-gpu/matlab" / "verify_radia_mex_provenance.py",
+        ROOT / "packages/radia-simulink/matlab" / "verify_radia_mex_provenance.py",
     )
     mex = tmp_path / "radia_mex.mexw64"
     mex.write_bytes(fake_x64_pe())
@@ -48,7 +48,7 @@ def test_mex_build_verifier_rejects_missing_and_changed_binaries(tmp_path):
 
 def test_full_library_verifier_gates_optional_optimization_toolbox():
     verifier = (
-        ROOT / "packages/radia-gpu/matlab" / "verify_radia_simulink_release.m"
+        ROOT / "packages/radia-simulink/matlab" / "verify_radia_simulink_release.m"
     ).read_text(encoding="utf-8")
     assert "electromagnetTopologyExecuted = hasOptimizationToolbox();" in verifier
     assert "electromagnetStatus(end) ~= -1" in verifier
@@ -352,7 +352,7 @@ def test_slx_text_integrity_rejects_mojibake(damaged):
         model.writestr("simulink/blockdiagram.xml", damaged)
     with pytest.raises(RuntimeError, match="Replacement glyph|question-mark run"):
         verify_module._verify_slx_text_integrity(
-            payload.getvalue(), "packages/radia-gpu/matlab/damaged.slx"
+            payload.getvalue(), "packages/radia-simulink/matlab/damaged.slx"
         )
 
 
@@ -368,7 +368,7 @@ def test_slx_text_integrity_accepts_valid_utf8_and_single_question_mark():
             '<?xml version="1.0" encoding="utf-8"?><P>Ready?</P>',
         )
     verify_module._verify_slx_text_integrity(
-        payload.getvalue(), "packages/radia-gpu/matlab/valid.slx"
+        payload.getvalue(), "packages/radia-simulink/matlab/valid.slx"
     )
 
 

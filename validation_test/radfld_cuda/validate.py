@@ -113,8 +113,8 @@ def main():
                   build=receipt, cpu_reference=reference_receipt, threads=args.threads,
                   script_sha256=digest(__file__),
                   element_cases_sha256=digest(Path(__file__).with_name('element_cases.py')),
-                  element_wrapper_sha256=digest(ROOT/'packages/radia-gpu/matlab/+radia/+gpu/FieldElements.m'), matlab_script_sha256=digest(Path(__file__).with_name('runFieldCase.m')),
-                  matlab_wrapper_sha256=digest(ROOT/'packages/radia-gpu/matlab/+radia/+gpu/FieldCloud.m'),
+                  element_wrapper_sha256=digest(ROOT/'packages/radia-simulink/matlab/+radia/+gpu/FieldElements.m'), matlab_script_sha256=digest(Path(__file__).with_name('runFieldCase.m')),
+                  matlab_wrapper_sha256=digest(ROOT/'packages/radia-simulink/matlab/+radia/+gpu/FieldCloud.m'),
                   idle_guard_sha256=digest(ROOT/'validation_test/ams_cuda/graph_validation.py'),
                   validation_commit=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip(),
                   validation_dirty=bool(subprocess.check_output(['git','-C',str(ROOT),'status','--porcelain'],text=True).strip()),
@@ -128,7 +128,7 @@ def main():
         started = time.perf_counter()
         eng = matlab.engine.start_matlab('-nodesktop -nosplash')
         record['matlab_startup_seconds'] = time.perf_counter()-started
-        eng.addpath(str(binary.parent), str(ROOT/'packages/radia-gpu/matlab'), str(Path(__file__).parent), nargout=0)
+        eng.addpath(str(binary.parent), str(ROOT/'packages/radia-simulink/matlab'), str(Path(__file__).parent), nargout=0)
         record['matlab'] = eng.version()
         record['gpu'] = json.loads(eng.eval("jsonencode(struct('name',gpuDevice().Name,'total_memory',gpuDevice().TotalMemory,'available_memory',gpuDevice().AvailableMemory,'compute_capability',gpuDevice().ComputeCapability))"))
         guard.assert_idle_host()

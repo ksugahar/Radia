@@ -1,0 +1,87 @@
+{
+  "development_numerical_accepted": true,
+  "compute_gpu_accepted": false,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "applied_field_A_per_m": [
+    0,
+    0,
+    1000000.0
+  ],
+  "scope": "10344 DoF public P2 sphere; strong synthetic inverse-BH with declared finite barrier continuation, not measured steel",
+  "cpu_reference": {
+    "threads": 8,
+    "stats": {
+      "nonlinear_inner_preconditioner": "mass-riesz",
+      "nonlinear_inner_tol": "fixed",
+      "nonlinear_continuation_steps": 1,
+      "nonlinear_reuse_tangent_steps": 1,
+      "nonlinear_cg_x0": false,
+      "nonlinear_newton_iters": 14,
+      "nonlinear_warmstart_solves": 1,
+      "nonlinear_linear_inner_iters": 7024,
+      "nonlinear_line_search_backtracks": 17,
+      "nonlinear_tangent_assemblies": 14,
+      "nonlinear_tangent_reuses": 0,
+      "nonlinear_fresh_tangent_retries": 0,
+      "nonlinear_material_quadrature_order": 6,
+      "nonlinear_convergence_mode": "tolerance",
+      "nonlinear_line_search_exhausted": false,
+      "nonlinear_residual_tolerance": 1e-12,
+      "nonlinear_final_rel_step": 7.122819568233536e-10,
+      "nonlinear_final_relative_residual": 9.778235798327299e-14,
+      "nonlinear_final_settled_iters": 10,
+      "nonlinear_converged_final_stage": true
+    },
+    "whole_seconds_diagnostic": 103.6099022999988,
+    "scope": "Single CPU reference call; no same-boundary CPU/GPU speedup"
+  },
+  "gpu_numerical": {
+    "nonlinear_updates": 7,
+    "initial_linear_iterations": 360,
+    "inner_linear_iterations": 13326,
+    "line_search_backtracks": 1,
+    "nonlinear_relative_residual": 1.614749969268575e-13,
+    "cpu_coefficient_relative_error": 3.201834373655187e-10,
+    "maximum_material_magnetization_A_per_m": 991739.9310057813,
+    "barrier_cap_A_per_m": 990099.008910891,
+    "outer_tangent_evaluations": 7,
+    "residual_only_outer_evaluations": 1,
+    "single_whole_seconds_diagnostic": 41.0288426,
+    "combined_array_bound_bytes": 2068412007.0,
+    "maximum_solver_owned_device_bytes": 7753352.0,
+    "live_count": 0,
+    "scope": "RTX numerical first/sequential calls; no accepted performance ratio"
+  },
+  "independent_cpu": {
+    "threads": 8,
+    "residual_limit": 1e-06,
+    "maximum_original_nonlinear_relative_residual": 9.364743876744727e-12,
+    "expected_uniform_sphere_magnetization_A_per_m": [
+      0.0,
+      0.0,
+      990668.7861443803
+    ],
+    "maximum_ideal_mean_relative_error": 2.197697240386585e-06,
+    "mean_error_limit": 0.01
+  },
+  "native_binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "17cdc12c6c6c0e4be2bf82167983f00b004f6a57",
+      "binary_sha256": "5be43f64f0efdc52187021e00c9d40cdbee33401b33ee94f111abfd77d40c90f"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "a46a500398c6ece7f1c818c32101ae3b808deb0b",
+      "binary_sha256": "274329e7f97597d471e9ee7e2fe51740321a52af484d2253b3b23ddeeaf1bcf2"
+    }
+  },
+  "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+  "cpu_input_hdf5_sha256": "66b1a64d654744d150843a0903d42e8c834f853a9edf7bcf7238d37c2f40cb28",
+  "compute_gpu_status": "Connection timed out before verified staging or computation; only local payload generated; no host start/stop",
+  "limitations": [
+    "CPU fixed inner tolerance and GPU inexact Newton differ; update count is not hardware speedup",
+    "Synthetic finite barrier is active; this is not validation of measured saturation law",
+    "No A100 strong-case timing, ABBA, process cold or host/global memory peak acceptance",
+    "Controlled memory bound unchanged; larger DOF/source limits not raised"
+  ]
+}

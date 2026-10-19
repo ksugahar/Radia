@@ -1,0 +1,12 @@
+{
+  "schema": "radia.p1-build-failure.v1",
+  "accepted": false,
+  "source_commit": "055efe0ba40c2a5f41a3a5eb0355e65bda36b47f",
+  "failure_stage": "CUDA compilation",
+  "cause": "Unsupported-option messages attempted literal plus string_view concatenation",
+  "fix_commit": "84b52f37cf69fc709933d322be5c9168dc60d882",
+  "host_contracts_passed": true,
+  "gpu_run_started": false,
+  "recovery_sha256": "e8e8a0db08ac34327c9e4c6617422762a2a1cd439613a620a39eb569e8644462",
+  "source_payload_sha256": "88d53d5ee4b49a56b83428c9d41eb6a80b57b6f7393c3e1c7e04447eda48cb28"
+}

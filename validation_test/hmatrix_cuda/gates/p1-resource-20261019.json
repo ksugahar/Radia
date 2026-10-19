@@ -1,0 +1,16 @@
+{
+  "schema": "radia.p1-resource-gates.v1",
+  "scope": "Own CUDA stream, cuBLAS/cuSOLVER and graph API construction/cleanup on a frozen independent CPU algebra fixture; opaque library allocation internals are not enumerated",
+  "cpu_relative_error_limit": 1e-10,
+  "independent_true_residual_limit": 1e-10,
+  "solver_true_residual_limit": 1e-11,
+  "minimum_repeated_failures_per_class": 10,
+  "warmup_failures_per_class": 5,
+  "max_positive_private_slope_bytes_per_failure": 1048576,
+  "max_repeated_private_delta_bytes": 16777216,
+  "native_live_bytes_after_failed_call": 0,
+  "live_resources_after_failed_call": 0,
+  "resource_cleanup_errors": 0,
+  "live_handles_after_failed_call": 0,
+  "all_site_coverage_required_for_P1_exit": true
+}

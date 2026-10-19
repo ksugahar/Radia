@@ -130,7 +130,7 @@ def _write_results():
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "reference": {
             "python": "src/radia/acoustics/scattering.py (SciPy)",
-            "matlab": "packages/radia-gpu/matlab/+radia/+acoustic/*SphereScattering.m",
+            "matlab": "packages/radia-simulink/matlab/+radia/+acoustic/*SphereScattering.m",
             "independent_of": ["radia C++", "radia_mex", "ngsolve.bem"],
         },
         "problem": {"radius": d["R"], "wavenumber": d["k"], "convention": "e^{+ikr}",

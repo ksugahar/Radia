@@ -20,7 +20,7 @@ def main():
     root = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--mex-dir", type=Path, default=root / "packages/radia-gpu/matlab")
+    parser.add_argument("--mex-dir", type=Path, default=root / "packages/radia-simulink/matlab")
     parser.add_argument("--tests", action="store_true")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -37,9 +37,9 @@ def main():
             return 124
     import matlab.engine
     mex = args.mex_dir.resolve() / "radia_mex.mexw64"
-    sources = ["packages/radia-gpu/matlab/+radia/setup.m", "packages/radia-gpu/matlab/+radia/+internal/callMex.m",
-               "packages/radia-gpu/matlab/+radia/+internal/pythonProcessPath.m",
-               "packages/radia-gpu/matlab/+radia/+simulink/configureFileGeneration.m",
+    sources = ["packages/radia-simulink/matlab/+radia/setup.m", "packages/radia-simulink/matlab/+radia/+internal/callMex.m",
+               "packages/radia-simulink/matlab/+radia/+internal/pythonProcessPath.m",
+               "packages/radia-simulink/matlab/+radia/+simulink/configureFileGeneration.m",
                "tests/matlab/test_mex_runtime_setup.m", "validation_test/matlab_runtime/benchmark_setup.py"]
     record = dict(schema="radia.matlab-setup-overhead.v1", passed=False,
                   utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -58,8 +58,8 @@ def main():
         record["engine_start_seconds"] = time.perf_counter() - started
         eng.cd("C:/temp", nargout=0)
         eng.addpath(str(mex.parent), "-end", nargout=0)
-        eng.addpath(str(root / "packages/radia-gpu/matlab"), "-begin", nargout=0)
-        assert Path(eng.which("radia.setup")).resolve() == (root / "packages/radia-gpu/matlab/+radia/setup.m").resolve()
+        eng.addpath(str(root / "packages/radia-simulink/matlab"), "-begin", nargout=0)
+        assert Path(eng.which("radia.setup")).resolve() == (root / "packages/radia-simulink/matlab/+radia/setup.m").resolve()
         assert Path(eng.which("radia_mex")).resolve() == mex
         record["matlab"] = eng.version()
         eng.eval("tic; info=radia.setup(Force=true); cold=toc;", nargout=0)

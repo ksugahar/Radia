@@ -8,7 +8,7 @@ end
 if ~isfolder(outdir), mkdir(outdir); end
 addpath(artifact);
 root=fileparts(fileparts(fileparts(mfilename('fullpath'))));
-addpath(fullfile(root,'packages','radia-gpu','matlab'));
+addpath(fullfile(root,'packages','radia-simulink','matlab'));
 addpath(fileparts(mfilename('fullpath')));
 cfg=makeResidentAlgebraConfig();
 cfg.material_mode='element-esim-operators';

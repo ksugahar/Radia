@@ -36,6 +36,7 @@
 */
 #include "cHACApK_base.h"
 #include "cHACApK_calc_entry_ij.h"
+#include "cHACApK_dense_leaf_sink.h"
 #include "cHACApK_lib.h"
 #include "cHACApK_pca_cluster.h"   /* PCA cluster split for flat meshes */
 #include "hacapk_log.h"
@@ -704,6 +705,12 @@ static int fill_dense_leaf_exact(
   leaf->ltmtx = 2;
   leaf->kt = 0;
   leaf->a2 = NULL;
+#ifdef RAD_HACAPK_DENSE_LEAF_SINK
+  if(cHACApK_dense_leaf_sink(leaf,lodl,lodt,i_bemv)) {
+    leaf->a1 = NULL;
+    return 1;
+  }
+#endif
   leaf->a1 = (double *) calloc((size_t)ndt*(size_t)ndl, sizeof(double));
   if(leaf->a1 == NULL) {
     fprintf(stderr, "sub cHACApK_fill_leafmtx_hyp; dense a1 allocation failed !\n");
@@ -714,10 +721,10 @@ static int fill_dense_leaf_exact(
   /* Preserve row-major dense storage and exact entries while amortizing the
    * CUDA callback transfer/synchronization across contiguous leaf entries. */
   {
-    int rows[256], columns[256];
+    int rows[RAD_HACAPK_BATCH_SIZE], columns[RAD_HACAPK_BATCH_SIZE];
     const size_t total=(size_t)ndl*(size_t)ndt;
-    for(size_t start=0;start<total;start+=256) {
-      const int count=(int)((total-start)<256 ? total-start : 256);
+    for(size_t start=0;start<total;start+=RAD_HACAPK_BATCH_SIZE) {
+      const int count=(int)((total-start)<RAD_HACAPK_BATCH_SIZE ? total-start : RAD_HACAPK_BATCH_SIZE);
       for(int k=0;k<count;++k) {
         const size_t index=start+(size_t)k;
         rows[k]=lodl[nstrtl+(int)(index/(size_t)ndt)];

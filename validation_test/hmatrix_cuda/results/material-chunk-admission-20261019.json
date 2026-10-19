@@ -1,0 +1,43 @@
+{
+  "schema": "radia.hdiv.material-chunk-admission.v1",
+  "development_numerical_accepted": true,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "scope": "Early rejection of running material array allowance before retaining additional host FE chunks",
+  "binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "6dec804471fc2af01cd63c7503d21c3187c3289e",
+      "binary_sha256": "5e9608958159b276a58013a80a866db6007ed3b870da457d598e569bd0411df4"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "a46a500398c6ece7f1c818c32101ae3b808deb0b",
+      "binary_sha256": "274329e7f97597d471e9ee7e2fe51740321a52af484d2253b3b23ddeeaf1bcf2"
+    }
+  },
+  "dofs": 288,
+  "cpu_coefficient_relative_error": 4.740723746361489e-14,
+  "early_material_budget_rejected": true,
+  "invalid_initial_recovery": true,
+  "live_count": 0,
+  "owned_engine_quit": true,
+  "cases": {
+    "baseline": {
+      "nonlinear_iterations": 11,
+      "nonlinear_relative_residual": 3.8519178271857604e-14
+    },
+    "candidate": {
+      "nonlinear_iterations": 11,
+      "nonlinear_relative_residual": 3.2627584398054323e-14
+    },
+    "repeated": {
+      "nonlinear_iterations": 11,
+      "nonlinear_relative_residual": 3.947241268746706e-14
+    }
+  },
+  "limitations": [
+    "Current native chunk is staged before the running check; native chunk limits remain required.",
+    "Running partial array allowance does not measure host/global/device peak.",
+    "No budget or element/DOF/source cap raised.",
+    "Large-case or A100 revalidation and performance measurement not performed for this wrapper revision."
+  ]
+}

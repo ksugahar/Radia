@@ -1,0 +1,51 @@
+{
+  "schema": "radia.p1.bounded-failure.v1",
+  "accepted": false,
+  "p1_complete": false,
+  "source_commit": "d748834542dbe8e5b585fd9e8c83f9e33fab2e6c",
+  "binary_sha256": "aedf107aece14e4ebe32414618d59c7e31b7168f38de2479f46c507d07543e52",
+  "gate_sha256": "244436edc90858c689ee919519c068b414cbaa6620265f2b0fe5b9e2c175490e",
+  "input_sha256": {
+    "cpu-reference.json": "d0d70563dcdaa5785bba659e1d3ae9251d41e861fb555cd2a21d11b0db0d2469",
+    "cpu.h5": "28676c133a850c86c79aa5632a705612114db02c1c9676a8ce2619644dd072c5",
+    "curved-cpu-reference.json": "70a29602ec917c04461a15259b835b63e791fb91dd7f36cd0e00a175752eec6e",
+    "curved-cpu.mat": "79c62c871d0d799c30ce449065f7095468e7ab31e9687d544a354006f1cc2da3",
+    "curved-sphere.vol": "a339966a361391ad2b64e7f57645336b3ac70fa549c7f08b2007875523d02236",
+    "exterior.vol": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50",
+    "inputs.mat": "6bfa403a0adc3c0dff9c24069b8167d161f4f65aff0079d88303744358f4ba90"
+  },
+  "build_accepted": true,
+  "host_fault_contracts": {
+    "check_c_memory_transaction": {
+      "accepted": true,
+      "sha256": "1a135e6ecd241a3000d45d8f20ad44befe1b71f91485212ca778753319f3de71",
+      "exit_code": 0
+    },
+    "check_host_fault_allocator": {
+      "accepted": true,
+      "sha256": "18ce2d3c3d492b5e30e623d097274c50a988a650b933ffa9340ed9e76017127a",
+      "exit_code": 0
+    }
+  },
+  "backend": "gpu",
+  "run_limits": {
+    "cpus": 2,
+    "host_bytes": 8589934592,
+    "device_bytes": 8589934592,
+    "seconds": 240
+  },
+  "timed_out": true,
+  "elapsed_seconds": 240.0,
+  "peak_job_commit_bytes": 1555435520,
+  "peak_counter_limitations": "May include failed allocation accounting above the limit; not a physical RSS peak",
+  "last_completed_phase": "F10 exact native resolution; resident precheck entered",
+  "resident_precheck_completed": false,
+  "curved_checks_executed": false,
+  "numerical_acceptance": "Unverified for this binary; no CPU error or residual result produced",
+  "cleanup": "Pending separately hash-verified recovery receipt",
+  "limitations": [
+    "Timeout location inside resident precheck is not yet isolated",
+    "No memory leak conclusion from forced termination",
+    "No performance or release acceptance"
+  ]
+}

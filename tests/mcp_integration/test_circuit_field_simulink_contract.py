@@ -5,8 +5,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_matlab_circuit_field_adapter_reuses_native_state_space_mex():
-    maker = ROOT / "packages/radia-gpu/matlab" / "+radia" / "+simulink" / "makeCircuitFieldStateSpace.m"
-    builder = ROOT / "packages/radia-gpu/matlab" / "+radia" / "+simulink" / "buildCircuitFieldStateSpaceModel.m"
+    maker = ROOT / "packages/radia-simulink/matlab" / "+radia" / "+simulink" / "makeCircuitFieldStateSpace.m"
+    builder = ROOT / "packages/radia-simulink/matlab" / "+radia" / "+simulink" / "buildCircuitFieldStateSpaceModel.m"
     maker_text = maker.read_text(encoding="utf-8")
     builder_text = builder.read_text(encoding="utf-8")
 

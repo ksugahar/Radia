@@ -1,4 +1,4 @@
-"""LTspice discovery stays usable without deploying radia-gpu to the client."""
+"""LTspice discovery stays usable without deploying radia-simulink to the client."""
 import os
 from pathlib import Path
 import subprocess
@@ -13,11 +13,11 @@ from radia_mcp.ltspice import server
 from radia_mcp.meta.catalog import get
 assert len(server.mcp._tool_manager._tools) == 33
 assert get('mcp-server-radia-ltspice')['subpackage'] == 'radia_mcp.ltspice'
-assert not any(n == 'radia_gpu' or n.startswith('radia_gpu.') for n in sys.modules)
+assert not any(n == 'radia_simulink' or n.startswith('radia_simulink.') for n in sys.modules)
 try:
     server.netlist_to_asc('R1 a 0 1k\\n.end\\n')
 except RuntimeError as exc:
-    assert 'independent radia-gpu' in str(exc)
+    assert 'independent radia-simulink' in str(exc)
 else:
     raise AssertionError('Absent backend must fail explicitly')
 """

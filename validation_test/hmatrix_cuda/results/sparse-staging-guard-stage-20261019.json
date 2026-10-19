@@ -1,0 +1,25 @@
+{
+  "schema": "radia.hdiv.sparse-staging-guard-stage.v1",
+  "implementation_staged": true,
+  "native_built": false,
+  "numerical_accepted": false,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "source_sha256": "99e33c40c17a1f250c4361efcf664d899b6ba41c745c1154b17c25303c08d5f5",
+  "change": "Use checked local FE contribution counts for sparse mass and charge allocation admission; dense copies retain equivalent previous limits.",
+  "unchanged_caps": {
+    "elements": 4096,
+    "dofs": 16384,
+    "charges": 8192
+  },
+  "limits": {
+    "per_component_staging_bytes": 4294967296,
+    "total_mass_charge_staging_bytes": 6442450944
+  },
+  "limitations": [
+    "128 bytes per symbolic contribution is a conservative admission allowance, not measured host peak.",
+    "No element/DOF/source cap raised.",
+    "Clean native compile, exact old/new sparse matrix parity, invalid input and lifecycle checks remain required.",
+    "No new A100 measurement."
+  ]
+}

@@ -10,7 +10,7 @@ if ~isfolder(output), mkdir(output); end
 addpath(payload);
 resolved = string(which('radia.gpu.csrPCG'));
 assert(startsWith(resolved,payload+filesep),'Checkout shadowed installed GPU code.');
-for entryPoint = ["radia.simulink.buildCudaPCGBlock","radia_gpu_pcg_sfun","radia.ltspice.run"]
+for entryPoint = ["radia.simulink.buildCudaPCGBlock","radia_simulink_pcg_sfun","radia.ltspice.run"]
     assert(startsWith(string(which(entryPoint)),payload+filesep),'Installed adapter resolved outside the wheel.');
 end
 radia.gpu.requireRuntime();
@@ -31,7 +31,7 @@ catch failure
     rejectedTinyRHS = contains(failure.message,'RHS norm is outside supported');
 end
 assert(rejectedTinyRHS,'Extreme RHS must fail explicitly rather than report false convergence.');
-model = 'radia_gpu_installed_acceptance';
+model = 'radia_simulink_installed_acceptance';
 assert(~bdIsLoaded(model),'Acceptance model already belongs to another operation.');
 cleanup = onCleanup(@() closeOwned(model));
 blockOutput = fullfile(output,'simulink');

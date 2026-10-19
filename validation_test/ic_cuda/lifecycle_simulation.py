@@ -10,7 +10,7 @@ def check(engine, out):
     root = Path(__file__).resolve().parents[2]
     out = Path(out).resolve()
     out.mkdir(parents=True, exist_ok=False)
-    source = root / 'packages/radia-gpu/native/radia_cuda_ic.cu'
+    source = root / 'packages/radia-simulink/native/radia_cuda_ic.cu'
     config = Path(engine.matlabroot()) / 'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml'
     if not config.is_file():
         raise RuntimeError('Supported mexcuda MSVC configuration missing')

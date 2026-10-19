@@ -1,0 +1,17 @@
+{
+  "schema": "radia.hmatrix.aca-frame-auxiliary-bound.v1",
+  "analytical_contract_accepted": true,
+  "native_mexcuda_accepted": false,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "scope": "Accumulate maximum serial upper-leaf ACA auxiliary allocation using transactional checked frame include",
+  "example_bytes": 88,
+  "exclusions": [
+    "Factors",
+    "Callback buffers",
+    "Tree/control/metadata",
+    "Allocator and library overhead",
+    "Plan/device overlap"
+  ],
+  "limits": "Pure C++ test; native build/integration pending; no admission or cap changes"
+}

@@ -1,0 +1,13 @@
+{
+  "schema": "radia.p1-build-failure.v1",
+  "accepted": false,
+  "p1_complete": false,
+  "source_commit": "caead38ff873dba239cfdf83f138df891975a409",
+  "failure_stage": "CUDA compilation",
+  "cause": "Single auto declaration combined vectors with different allocator types",
+  "fix_commit": "f11c6ba27e35491192a4b0d85f62ab5eb9d1ac86",
+  "gpu_run_started": false,
+  "binary_accepted": false,
+  "recovery_sha256": "584fe13092e03534eff25b8a627e2e497929ab1298beb915f7385e39af7fde6c",
+  "source_payload_sha256": "a84e27a7d04f84bccf74ecbc8b850330662285175dd663e4b5df6abfd765da03"
+}

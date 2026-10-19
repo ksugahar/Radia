@@ -1,0 +1,721 @@
+{
+  "accepted": true,
+  "scope": "Bounded public P2 sphere nonlinear BH, 10344 DoF; not general nonlinear or release acceptance",
+  "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+  "dofs": 10344,
+  "material_points": 176645,
+  "material_chunk_elements": 128,
+  "integration_profile": "all-high-order; independent CPU ho_far_factor=inf; not default CPU near/far split",
+  "matlab_source_commit": "a732f2ecb79f6162f643576085754d9de3e2c12c",
+  "matlab_source_hashes": {
+    "solveNonlinearHDivElements.m": "258ec78d87c211c2deddc6876d1befde85f3bfe5d289d3b6a6a64bbc04a55866",
+    "makeHDivBHMaterial.m": "fd23ec945c83613ebb261624405eab26a774a61a59815689dd455876612a6ee4",
+    "evaluateHDivBHMaterial.m": "da27bd9e8055b0e5279a4337587ef9fb5ae719965f0c6a9aaf9883bf3b68407d"
+  },
+  "native_binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "e8d798a86ad8c93d2b5731e22b429b6556f60d5b",
+      "binary_sha256": "d360dd3269deb4335a5e8d305af2105262d494c2fe63edcb81be561632c84531"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "13968403cc1100247c7bc26c4c4152b03bec028c",
+      "binary_sha256": "3ec8132b5e422df795420c59a0758b51ba84fc4ba7e2feb395bd10fd950a6d28"
+    }
+  },
+  "units": {
+    "magnetization": "A/m",
+    "applied_field": "A/m",
+    "BH_flux_density": "tesla",
+    "history_energy": "A^2*m; integrated coenergy with common mu0 omitted, multiply by mu0 for joules"
+  },
+  "cpu": {
+    "threads": 4,
+    "stats": {
+      "nonlinear_inner_preconditioner": "mass-riesz",
+      "nonlinear_inner_tol": "fixed",
+      "nonlinear_continuation_steps": 1,
+      "nonlinear_reuse_tangent_steps": 1,
+      "nonlinear_cg_x0": false,
+      "nonlinear_newton_iters": 2,
+      "nonlinear_warmstart_solves": 1,
+      "nonlinear_linear_inner_iters": 277,
+      "nonlinear_line_search_backtracks": 0,
+      "nonlinear_tangent_assemblies": 2,
+      "nonlinear_tangent_reuses": 0,
+      "nonlinear_fresh_tangent_retries": 0,
+      "nonlinear_material_quadrature_order": 6,
+      "nonlinear_convergence_mode": "tolerance",
+      "nonlinear_line_search_exhausted": false,
+      "nonlinear_residual_tolerance": 1e-12,
+      "nonlinear_final_rel_step": 1.339804716454233e-06,
+      "nonlinear_final_relative_residual": 6.398824256293385e-15,
+      "nonlinear_final_settled_iters": 1,
+      "nonlinear_converged_final_stage": true
+    }
+  },
+  "gpu_cases": {
+    "development_gpu": {
+      "cpu_errors": {
+        "coefficients": 1.4780446060799924e-09,
+        "mean": 3.0413098308205587e-13
+      },
+      "whole_seconds_diagnostic": 32.9324859,
+      "nonlinear_iterations": 2,
+      "nonlinear_relative_residual": 1.0422979717364775e-14,
+      "history": [
+        {
+          "relative_residual": 0.0013780585181869306,
+          "energy": -62566131499.166695,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 1375,
+          "inner_true_residual": 9.545934411720034e-13
+        },
+        {
+          "relative_residual": 2.7539718788702453e-09,
+          "energy": -62566250214.62528,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 1739,
+          "inner_true_residual": 9.717649008577137e-13
+        }
+      ],
+      "host_phase_seconds": {
+        "device_initialization": 0.9622648,
+        "fe_and_law": 6.525482,
+        "geometry_create": 16.2491746,
+        "material_upload_enqueue": 0.4749851,
+        "warmstart": 3.1326073,
+        "residual_tangent_and_demag": 1.0734766,
+        "newton_linear_solve": 4.4248085,
+        "line_search": 0.0742057,
+        "cleanup": 0.0105802
+      },
+      "combined_array_bound_bytes": 2068412007.0,
+      "material_array_bound_bytes": 599009200.0,
+      "maximum_solver_owned_device_bytes": 7670600.0,
+      "operator_stats": {
+        "owned_device_bytes": 78209352.0,
+        "applications": 5,
+        "kernel_launches": 30,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 1791115980.0,
+        "assembly_entry_batches": 4287,
+        "assembly_entry_count": 290347,
+        "assembly_leaf_count": 3211,
+        "assembly_lowrank_count": 32,
+        "assembly_cache_tile_loads": 1,
+        "assembly_cache_tile_hits": 4287,
+        "assembly_cache_full_tile_batches": 4287,
+        "assembly_cache_host_scratch_bytes": 49152,
+        "assembly_deferred_dense_leaves": 3179,
+        "assembly_deferred_dense_coefficients": 8685668.0,
+        "assembly_coefficient_upload_bytes": 1584848.0,
+        "stored_coefficient_count": 8883774.0,
+        "same_leaf_dense_coefficient_count": 8951208.0,
+        "lowrank_factor_coefficient_count": 198106,
+        "leaf_rank_sum": 1079,
+        "max_leaf_rank": 44,
+        "storage_saving_lowrank_leaf_count": 32,
+        "assembly_profile_enabled": false,
+        "profile_mapping_seconds": 0,
+        "profile_tet_potential_seconds": 0,
+        "profile_tri_potential_seconds": 0,
+        "profile_scalar_potential_seconds": 0,
+        "profile_contraction_seconds": 0,
+        "profile_finalize_seconds": 0
+      },
+      "maximum_material_magnetization": 322610.1664484267,
+      "material_barrier_cap": 990099.008910891,
+      "live_count": 0,
+      "owned_engine_quit": true,
+      "preconditioner": "mass-polynomial"
+    },
+    "compute_gpu": {
+      "cpu_errors": {
+        "coefficients": 1.4780632443011782e-09,
+        "mean": 3.035658228362673e-13
+      },
+      "whole_seconds_diagnostic": 12.5760586,
+      "nonlinear_iterations": 2,
+      "nonlinear_relative_residual": 1.1146061701345424e-14,
+      "history": [
+        {
+          "relative_residual": 0.0013780585181869332,
+          "energy": -62566131499.166695,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 1378,
+          "inner_true_residual": 9.17043651271206e-13
+        },
+        {
+          "relative_residual": 2.753971818550163e-09,
+          "energy": -62566250214.6253,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 1741,
+          "inner_true_residual": 9.705099991057068e-13
+        }
+      ],
+      "host_phase_seconds": {
+        "device_initialization": 0.4423663,
+        "fe_and_law": 5.5973831,
+        "geometry_create": 1.7697634,
+        "material_upload_enqueue": 0.3271703,
+        "warmstart": 1.6250201,
+        "residual_tangent_and_demag": 0.496651,
+        "newton_linear_solve": 2.2626739000000002,
+        "line_search": 0.0414228,
+        "cleanup": 0.0092535
+      },
+      "combined_array_bound_bytes": 2068412007.0,
+      "material_array_bound_bytes": 599009200.0,
+      "maximum_solver_owned_device_bytes": 7670600.0,
+      "operator_stats": {
+        "owned_device_bytes": 78209352.0,
+        "applications": 5,
+        "kernel_launches": 30,
+        "host_synchronizations_per_apply": 0,
+        "setup_peak_owned_device_bytes": 1791115980.0,
+        "assembly_entry_batches": 4287,
+        "assembly_entry_count": 290347,
+        "assembly_leaf_count": 3211,
+        "assembly_lowrank_count": 32,
+        "assembly_cache_tile_loads": 1,
+        "assembly_cache_tile_hits": 4287,
+        "assembly_cache_full_tile_batches": 4287,
+        "assembly_cache_host_scratch_bytes": 49152,
+        "assembly_deferred_dense_leaves": 3179,
+        "assembly_deferred_dense_coefficients": 8685668.0,
+        "assembly_coefficient_upload_bytes": 1584848.0,
+        "stored_coefficient_count": 8883774.0,
+        "same_leaf_dense_coefficient_count": 8951208.0,
+        "lowrank_factor_coefficient_count": 198106,
+        "leaf_rank_sum": 1079,
+        "max_leaf_rank": 44,
+        "storage_saving_lowrank_leaf_count": 32,
+        "assembly_profile_enabled": false,
+        "profile_mapping_seconds": 0,
+        "profile_tet_potential_seconds": 0,
+        "profile_tri_potential_seconds": 0,
+        "profile_scalar_potential_seconds": 0,
+        "profile_contraction_seconds": 0,
+        "profile_finalize_seconds": 0
+      },
+      "maximum_material_magnetization": 322610.166448811,
+      "material_barrier_cap": 990099.008910891,
+      "live_count": 0,
+      "owned_engine_quit": true,
+      "preconditioner": "mass-polynomial"
+    }
+  },
+  "material_subgate": {
+    "64": {
+      "accepted": true,
+      "chunks": 9,
+      "chunk_elements": 64,
+      "dofs": 10344,
+      "points": 176645,
+      "shape_entry_bound": 15898050.0,
+      "tangent_nonzero_bound": 463500,
+      "errors": {
+        "weights": 0,
+        "points": 0,
+        "values": 4.869897082925785e-16,
+        "energy": 2.1661331832874148e-16,
+        "gradient": 5.208840337407752e-16,
+        "tangent": 1.0658971412124005e-15
+      },
+      "invalid_ranges_rejected": 5,
+      "scope": "Material chunks only, no complete nonlinear solve or performance acceptance"
+    },
+    "128": {
+      "accepted": true,
+      "chunks": 5,
+      "chunk_elements": 128,
+      "dofs": 10344,
+      "points": 176645,
+      "shape_entry_bound": 15898050.0,
+      "tangent_nonzero_bound": 463500,
+      "errors": {
+        "weights": 0,
+        "points": 0,
+        "values": 4.869897082925785e-16,
+        "energy": 2.1661331832874148e-16,
+        "gradient": 5.299096423299685e-16,
+        "tangent": 1.0645138945669243e-15
+      },
+      "invalid_ranges_rejected": 5,
+      "scope": "Material chunks only, no complete nonlinear solve or performance acceptance"
+    }
+  },
+  "independent_cpu_residual": {
+    "accepted": true,
+    "scope": "Independent nonlinear residual and ideal-sphere mean check; no whole field certification",
+    "expected_uniform_sphere_magnetization_A_per_m": [
+      0.0,
+      0.0,
+      298691.4287041886
+    ],
+    "analytic_mean_limit": 0.01,
+    "cases": {
+      "cpu_reference": {
+        "nonlinear_relative_residual": 6.240079764922305e-15,
+        "sphere_mean_relative_error": 8.620699516417373e-05
+      },
+      "development_gpu": {
+        "nonlinear_relative_residual": 2.8632365851087736e-11,
+        "sphere_mean_relative_error": 8.620699487393635e-05
+      },
+      "compute_gpu": {
+        "nonlinear_relative_residual": 2.8632406453006033e-11,
+        "sphere_mean_relative_error": 8.620699487452054e-05
+      }
+    },
+    "threads": 16
+  },
+  "ideal_sphere_core_gate": {
+    "accepted": true,
+    "scope": "Ideal unit-sphere mean and declared core M stencil; no whole-field or operator-residual certification",
+    "units": "M and H A/m",
+    "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+    "expected_uniform_magnetization": [
+      0.0,
+      0.0,
+      298691.4287041886
+    ],
+    "core_points": [
+      [
+        -0.487,
+        -0.259,
+        -0.23299999999999998
+      ],
+      [
+        -0.487,
+        -0.259,
+        0.017
+      ],
+      [
+        -0.487,
+        -0.259,
+        0.267
+      ],
+      [
+        -0.487,
+        -0.009,
+        -0.23299999999999998
+      ],
+      [
+        -0.487,
+        -0.009,
+        0.017
+      ],
+      [
+        -0.487,
+        -0.009,
+        0.267
+      ],
+      [
+        -0.487,
+        0.241,
+        -0.23299999999999998
+      ],
+      [
+        -0.487,
+        0.241,
+        0.017
+      ],
+      [
+        -0.487,
+        0.241,
+        0.267
+      ],
+      [
+        -0.237,
+        -0.509,
+        -0.23299999999999998
+      ],
+      [
+        -0.237,
+        -0.509,
+        0.017
+      ],
+      [
+        -0.237,
+        -0.509,
+        0.267
+      ],
+      [
+        -0.237,
+        -0.259,
+        -0.483
+      ],
+      [
+        -0.237,
+        -0.259,
+        -0.23299999999999998
+      ],
+      [
+        -0.237,
+        -0.259,
+        0.017
+      ],
+      [
+        -0.237,
+        -0.259,
+        0.267
+      ],
+      [
+        -0.237,
+        -0.259,
+        0.517
+      ],
+      [
+        -0.237,
+        -0.009,
+        -0.483
+      ],
+      [
+        -0.237,
+        -0.009,
+        -0.23299999999999998
+      ],
+      [
+        -0.237,
+        -0.009,
+        0.017
+      ],
+      [
+        -0.237,
+        -0.009,
+        0.267
+      ],
+      [
+        -0.237,
+        -0.009,
+        0.517
+      ],
+      [
+        -0.237,
+        0.241,
+        -0.483
+      ],
+      [
+        -0.237,
+        0.241,
+        -0.23299999999999998
+      ],
+      [
+        -0.237,
+        0.241,
+        0.017
+      ],
+      [
+        -0.237,
+        0.241,
+        0.267
+      ],
+      [
+        -0.237,
+        0.241,
+        0.517
+      ],
+      [
+        -0.237,
+        0.491,
+        -0.23299999999999998
+      ],
+      [
+        -0.237,
+        0.491,
+        0.017
+      ],
+      [
+        -0.237,
+        0.491,
+        0.267
+      ],
+      [
+        0.013,
+        -0.509,
+        -0.23299999999999998
+      ],
+      [
+        0.013,
+        -0.509,
+        0.017
+      ],
+      [
+        0.013,
+        -0.509,
+        0.267
+      ],
+      [
+        0.013,
+        -0.259,
+        -0.483
+      ],
+      [
+        0.013,
+        -0.259,
+        -0.23299999999999998
+      ],
+      [
+        0.013,
+        -0.259,
+        0.017
+      ],
+      [
+        0.013,
+        -0.259,
+        0.267
+      ],
+      [
+        0.013,
+        -0.259,
+        0.517
+      ],
+      [
+        0.013,
+        -0.009,
+        -0.483
+      ],
+      [
+        0.013,
+        -0.009,
+        -0.23299999999999998
+      ],
+      [
+        0.013,
+        -0.009,
+        0.017
+      ],
+      [
+        0.013,
+        -0.009,
+        0.267
+      ],
+      [
+        0.013,
+        -0.009,
+        0.517
+      ],
+      [
+        0.013,
+        0.241,
+        -0.483
+      ],
+      [
+        0.013,
+        0.241,
+        -0.23299999999999998
+      ],
+      [
+        0.013,
+        0.241,
+        0.017
+      ],
+      [
+        0.013,
+        0.241,
+        0.267
+      ],
+      [
+        0.013,
+        0.241,
+        0.517
+      ],
+      [
+        0.013,
+        0.491,
+        -0.23299999999999998
+      ],
+      [
+        0.013,
+        0.491,
+        0.017
+      ],
+      [
+        0.013,
+        0.491,
+        0.267
+      ],
+      [
+        0.263,
+        -0.509,
+        -0.23299999999999998
+      ],
+      [
+        0.263,
+        -0.509,
+        0.017
+      ],
+      [
+        0.263,
+        -0.509,
+        0.267
+      ],
+      [
+        0.263,
+        -0.259,
+        -0.483
+      ],
+      [
+        0.263,
+        -0.259,
+        -0.23299999999999998
+      ],
+      [
+        0.263,
+        -0.259,
+        0.017
+      ],
+      [
+        0.263,
+        -0.259,
+        0.267
+      ],
+      [
+        0.263,
+        -0.259,
+        0.517
+      ],
+      [
+        0.263,
+        -0.009,
+        -0.483
+      ],
+      [
+        0.263,
+        -0.009,
+        -0.23299999999999998
+      ],
+      [
+        0.263,
+        -0.009,
+        0.017
+      ],
+      [
+        0.263,
+        -0.009,
+        0.267
+      ],
+      [
+        0.263,
+        -0.009,
+        0.517
+      ],
+      [
+        0.263,
+        0.241,
+        -0.483
+      ],
+      [
+        0.263,
+        0.241,
+        -0.23299999999999998
+      ],
+      [
+        0.263,
+        0.241,
+        0.017
+      ],
+      [
+        0.263,
+        0.241,
+        0.267
+      ],
+      [
+        0.263,
+        0.241,
+        0.517
+      ],
+      [
+        0.263,
+        0.491,
+        -0.23299999999999998
+      ],
+      [
+        0.263,
+        0.491,
+        0.017
+      ],
+      [
+        0.263,
+        0.491,
+        0.267
+      ],
+      [
+        0.513,
+        -0.259,
+        -0.23299999999999998
+      ],
+      [
+        0.513,
+        -0.259,
+        0.017
+      ],
+      [
+        0.513,
+        -0.259,
+        0.267
+      ],
+      [
+        0.513,
+        -0.009,
+        -0.23299999999999998
+      ],
+      [
+        0.513,
+        -0.009,
+        0.017
+      ],
+      [
+        0.513,
+        -0.009,
+        0.267
+      ],
+      [
+        0.513,
+        0.241,
+        -0.23299999999999998
+      ],
+      [
+        0.513,
+        0.241,
+        0.017
+      ],
+      [
+        0.513,
+        0.241,
+        0.267
+      ]
+    ],
+    "relative_limit": 0.01,
+    "cases": {
+      "cpu_reference": {
+        "core_relative_rms": 0.001201524542772871,
+        "mean_relative_error": 8.620699516417373e-05
+      },
+      "development_gpu": {
+        "core_relative_rms": 0.0012015245398825827,
+        "mean_relative_error": 8.620699487393635e-05
+      },
+      "compute_gpu": {
+        "core_relative_rms": 0.0012015245398837309,
+        "mean_relative_error": 8.620699487452054e-05
+      }
+    }
+  },
+  "performance_accepted": false,
+  "release_accepted": false,
+  "limitations": [
+    "Synthetic monotone BH, single-region P2 unit sphere, applied H=100000 A/m; no measured steel or IH validation",
+    "Explicit all-high-order operator, not default CPU near/far split",
+    "Single-call diagnostic times only; no ABBA or same-host CPU speed ratio or full-process cold claim",
+    "CPU solve timed on development host with four threads and different public postprocessing boundary; no CPU/GPU speedup inferred",
+    "Controlled allocation bounds exclude CUDA/library workspace, host and global peak",
+    "Geometry H-matrix reused inside Newton; fixed FE/maps rebuilt each full API call",
+    "No immutable common wheel, generic topology optimization, 100k DoF or release acceptance"
+  ]
+}

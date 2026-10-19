@@ -19,7 +19,7 @@ Simulink library owns EM, PCB, Motor, Stream Function, and IH human operation.
 All packaged analysis workbenches are removed, including IH.
 
 The source of truth is
-`packages/radia-gpu/application_interface_manifest.json`, each application's
+`packages/radia-simulink/application_interface_manifest.json`, each application's
 `DesignSpec`, and its `calc_*.py` argparse contract. Simulink must not import
 Cubit's Python runtime, and Cubit must not import normal `radia`/NGSolve.
 

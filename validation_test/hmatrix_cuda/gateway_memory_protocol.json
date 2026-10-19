@@ -1,0 +1,18 @@
+{
+  "schema": "radia.gateway-memory-protocol.v2",
+  "gateways": ["hmatrix", "projection", "csr-pcg", "ic", "fmm", "field", "ams", "ih"],
+  "initialization": "Fresh owned MATLAB; select and retain gpuDevice once; wait before baseline; load exact modules and retain declared fixture inputs; no device reset or cache flushing",
+  "warmup_iterations": 5,
+  "measurement_iterations": 100,
+  "sample_boundary": "Operation returned, temporary caller outputs released, all owned handles destroyed, wait on retained device; sample before writing progress/results",
+  "sampling_route": "One MATLAB loop per 100-run series. In-process Windows System.Diagnostics.Process.PrivateMemorySize64 and WorkingSet64 after Refresh; no Engine calls between operations. Preallocate sample buffers and warm the sampler five times before the five operation warmups. Durable progress is written after each sampled group of ten.",
+  "samples": ["Windows private committed bytes", "working-set bytes", "retained device AvailableMemory", "owned handles/counters where exposed"],
+  "observer_controls": "Preserve v1 external-Engine sampling failures and no-operation counterfactuals. Both showed approximately 50 MiB process excursions without gateway work. Test in-process observer-only control before attributing a retaining owner. MATLAB memory() is not called during a series. No limit, warmup count, iteration count or numerical gate is relaxed.",
+  "positive_slope_limit_bytes_per_run": 1048576,
+  "positive_total_delta_limit_bytes": 16777216,
+  "plateau_window_iterations": 25,
+  "plateau_positive_slope_limit_bytes_per_run": 65536,
+  "plateau_positive_delta_limit_bytes": 1048576,
+  "owner_investigation": "Separate CSR-only, IC-only and validation-harness/file-IO controls when retention is positive; do not label an opaque allocator or cache without evidence",
+  "interpretation": "Passing limits is not proof of zero leaks or exact global peak. Preserve all initial/cold and failed records. No Field-specific initialization, threshold, warmup or sampling exception. CPU and true-residual gates remain separate and unchanged."
+}
