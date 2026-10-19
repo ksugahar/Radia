@@ -12,9 +12,9 @@ parser.add_argument('--output',type=Path,default=Path('C:/temp/ih-axisym-native/
 parser.add_argument('--manufactured',action='store_true',help='quadratic radial temperature, insulated end caps, exact linear time evolution')
 args=parser.parse_args()
 radia.__path__.insert(0,str(root/'src/radia'))
-import radia_gpu.simulink
+import radia_simulink.simulink
 radia.simulink.__path__.insert(0,str(root/'src/radia/simulink'))
-from radia_gpu.simulink.ih_operator_assembly import IHOperatorAssemblyOptions,_assemble_thermal_operators
+from radia_simulink.simulink.ih_operator_assembly import IHOperatorAssemblyOptions,_assemble_thermal_operators
 from _axisym_test_mesh import make_axisymmetric_mesh
 mesh=make_axisymmetric_mesh()
 for i,name in enumerate(mesh.GetBoundaries()):
@@ -57,6 +57,6 @@ with ng.TaskManager():
 out=args.output;out.mkdir(parents=True,exist_ok=True)
 (out/'chain.json').write_text(json.dumps(dict(config=cfg,reference_K=history,current_A=1.,unit_power_W=op.heat_power_W,assembled_power_W=op.heat_power_W,nodes=mesh.nv,
     thermal_order=args.thermal_order,exact_temperature_rise_relative_L2=max(exact_errors) if exact_errors else None,source_sha256={
-    'ih_operator_assembly':hashlib.sha256((root/'packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py').read_bytes()).hexdigest(),
+    'ih_operator_assembly':hashlib.sha256((root/'packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py').read_bytes()).hexdigest(),
     'mesh_fixture':hashlib.sha256(Path(__file__).with_name('_axisym_test_mesh.py').read_bytes()).hexdigest(),
     'driver':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()},scope=('quadratic manufactured axisymmetric temperature' if args.manufactured else 'axisymmetric uniform boundary heat')+'; production thermal operators with in-memory boundary relabeling, not production VOL gate')))

@@ -16,8 +16,8 @@ import ngsolve as ng
 from netgen.csg import unit_cube
 from scipy.io import loadmat
 from scipy.sparse import coo_matrix
-sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'packages/radia-gpu/src'))
-from radia_gpu.ams_exchange import write_exchange, read_exchange, file_sha256
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'packages/radia-simulink/src'))
+from radia_simulink.ams_exchange import write_exchange, read_exchange, file_sha256
 
 def source_identity(root, manifest=None):
     if manifest:
@@ -47,7 +47,7 @@ def main(args):
     root=Path(__file__).resolve().parents[2]
     binary=root/'build-ams-cuda'
     gpu_dir=args.gpu_dir.resolve() if args.gpu_dir else binary
-    matlab_dir=args.matlab_dir.resolve() if args.matlab_dir else root/'packages/radia-gpu/matlab'
+    matlab_dir=args.matlab_dir.resolve() if args.matlab_dir else root/'packages/radia-simulink/matlab'
     sys.path.insert(0,str(binary))
     import _radia_ams_snapshot as bridge
     out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)

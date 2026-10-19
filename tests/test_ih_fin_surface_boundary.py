@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from radia_gpu.simulink import ih_operator_assembly as assembly
+from radia_simulink.simulink import ih_operator_assembly as assembly
 
 ROOT = Path(__file__).resolve().parents[1]
 

@@ -1,4 +1,4 @@
-"""Validate an installed radia-gpu wheel through an owned MATLAB Engine session."""
+"""Validate an installed radia-simulink wheel through an owned MATLAB Engine session."""
 import argparse
 import importlib.util
 import json
@@ -16,13 +16,13 @@ parser.add_argument('--gpu-simulink-only', action='store_true',
 args = parser.parse_args()
 report = json.loads(subprocess.check_output(
     [str(args.installed_python), '-I', '-c',
-     'import json,radia_gpu; print(json.dumps(radia_gpu.verify()))'], text=True))
+     'import json,radia_simulink; print(json.dumps(radia_simulink.verify()))'], text=True))
 if not report['passed']:
     raise RuntimeError('Installed payload verification failed')
 wheel_report = None
 if args.wheel:
-    verifier_path = Path(__file__).resolve().parents[2] / 'packages/radia-gpu/verify_wheel.py'
-    spec = importlib.util.spec_from_file_location('radia_gpu_wheel_verifier', verifier_path)
+    verifier_path = Path(__file__).resolve().parents[2] / 'packages/radia-simulink/verify_wheel.py'
+    spec = importlib.util.spec_from_file_location('radia_simulink_wheel_verifier', verifier_path)
     verifier = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(verifier)
     wheel_report = verifier.verify(args.wheel)

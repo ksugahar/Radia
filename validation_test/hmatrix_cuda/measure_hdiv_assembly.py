@@ -12,13 +12,13 @@ def main():
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
         spec=importlib.util.spec_from_file_location('guard',root/'validation_test/ams_cuda/graph_validation.py');guard=importlib.util.module_from_spec(spec);spec.loader.exec_module(guard)
         guard.assert_idle_host()
-        result['hashes']={k:sha(v) for k,v in [('mesh',a.mesh),('cpu_reference',a.reference),('projection',a.projection/'radia_cuda_projection.mexw64'),('wrapper',root/'packages/radia-gpu/matlab/+radia/+gpu/solveHDivRT0.m'),('matlab_runner',Path(__file__).with_suffix('.m').with_name('compareHDivAssembly.m')),('python_runner',Path(__file__))]}
+        result['hashes']={k:sha(v) for k,v in [('mesh',a.mesh),('cpu_reference',a.reference),('projection',a.projection/'radia_cuda_projection.mexw64'),('wrapper',root/'packages/radia-simulink/matlab/+radia/+gpu/solveHDivRT0.m'),('matlab_runner',Path(__file__).with_suffix('.m').with_name('compareHDivAssembly.m')),('python_runner',Path(__file__))]}
         for key in ['before','after']:
             artifact=getattr(a,key);receipt=json.loads((artifact/'build.json').read_text());assert receipt['accepted'] and sha(artifact/'radia_cuda_hmatrix.mexw64')==receipt['binary_sha256'];result[key+'_build']=receipt
         prefix=Path(sys.base_prefix);os.environ['PATH']=';'.join(map(str,[prefix,prefix/'bin',prefix/'Library/bin',prefix/'Lib/site-packages/netgen',prefix/'Lib/site-packages/netgen_mesher.libs',prefix/'Lib/site-packages/ngsolve.libs',prefix/'Lib/site-packages/ngsolve_openblas']))+';'+os.environ['PATH']
         os.environ['MKL_NUM_THREADS']='1';os.environ['MKL_THREADING_LAYER']='SEQUENTIAL'
         import matlab.engine
-        eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');eng.addpath(str(a.projection),str(Path(__file__).parent),str(root/'packages/radia-gpu/matlab'),nargout=0)
+        eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');eng.addpath(str(a.projection),str(Path(__file__).parent),str(root/'packages/radia-simulink/matlab'),nargout=0)
         guard.assert_idle_host();eng.compareHDivAssembly(str(a.mesh),str(a.reference),str(a.before),str(a.after),str(a.out/'matlab.json'),nargout=0);guard.assert_idle_host()
         r=json.loads((a.out/'matlab.json').read_text());assert r['accepted'];result['result']=r;result['matlab']=eng.version()
         result['median_whole_seconds']={str(k):statistics.median(s['whole_seconds'] for s in r['samples'] if s['mode']==k) for k in [1,2]};result['accepted']=True

@@ -1,9 +1,9 @@
 """Differential ESIM finite-cell physics check, not full PEEC-BEM acceptance."""
 from pathlib import Path
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-gpu/tools'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-simulink/tools'))
 from vs2022_toolchain import discover_vs, compiler_bin
-SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-gpu/tools/vs2022_toolchain.py"
+SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-simulink/tools/vs2022_toolchain.py"
 import tempfile
 import ctypes,hashlib,importlib.util,json,subprocess,sys,types
 import numpy as np
@@ -26,7 +26,7 @@ def main():
         compiler=str(compiler_bin(discover_vs()))
         eng.setenv('NVCC_CCBIN',compiler,nargout=0);eng.setenv('PATH',compiler+';'+eng.getenv('PATH'),nargout=0)
         config=Path(eng.matlabroot())/'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml'
-        src=Path(__file__).with_name('esim_cell_smoke.cu');header=ROOT/'packages/radia-gpu/native/ih_esim_cell.cuh'
+        src=Path(__file__).with_name('esim_cell_smoke.cu');header=ROOT/'packages/radia-simulink/native/ih_esim_cell.cuh'
         sources=[src,header,SELECTOR,Path(__file__),ROOT/'src/radia/esim_cell_problem.py',ROOT/'src/radia/bh_law.py']
         record.update(source_commit=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip(),source_dirty=bool(subprocess.check_output(['git','-C',str(ROOT),'status','--porcelain'],text=True).strip()),source_sha256={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources})
         eng.mexcuda('-v','-R2018a','-f',str(config),'NVCCFLAGS=--fmad=false -gencode=arch=compute_75,code=sm_75','-I'+str(header.parent),'-outdir',str(OUT),str(src),nargout=0)

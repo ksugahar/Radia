@@ -23,7 +23,7 @@ def main():
     parser_rank = a.full_max_rank
     record['full_max_rank']=parser_rank
     eng=None
-    source_files=(Path(__file__),Path(__file__).with_name('checkResidentHMatrix.m'),ROOT/'packages/radia-gpu/matlab/+radia/+gpu/HMatrixOperator.m')
+    source_files=(Path(__file__),Path(__file__).with_name('checkResidentHMatrix.m'),ROOT/'packages/radia-simulink/matlab/+radia/+gpu/HMatrixOperator.m')
     source_hashes={str(p.relative_to(ROOT)):sha(p) for p in source_files}
     try:
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
@@ -153,7 +153,7 @@ def main():
         inputfile=a.out/'inputs.mat';savemat(inputfile,payload);record['input_sha256']=sha(inputfile)
         import matlab.engine
         eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');pid=int(eng.feature('getpid'));subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)
-        eng.addpath(str(a.artifact),str(Path(__file__).parent),str(ROOT/'packages/radia-gpu/matlab'),nargout=0)
+        eng.addpath(str(a.artifact),str(Path(__file__).parent),str(ROOT/'packages/radia-simulink/matlab'),nargout=0)
         eng.checkResidentHMatrix(str(inputfile),str(a.out/'matlab.json'),nargout=0)
         result=json.loads((a.out/'matlab.json').read_text(encoding='utf-8'));assert result['accepted']
         if source_hashes!={str(p.relative_to(ROOT)):sha(p) for p in source_files}:raise RuntimeError('Validation source changed while running')

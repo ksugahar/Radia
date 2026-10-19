@@ -1,0 +1,24 @@
+{
+  "accepted": true,
+  "scope": "Symbolic coefficient/ACA payload lifetime bounds; production callback integration remains unbuilt and excludes host metadata/runtime",
+  "native_production_built": false,
+  "performance_accepted": false,
+  "source_commit": "99b225d371c8aaf07b354570b4a46cab11dc5c8b",
+  "source_sha256": {
+    "validation_test/hmatrix_cuda/check_leaf_bounds.cpp": "121927fb7281e1e38fc3d68c2738f9641f15d717b8368c5f68891682e85bbee7",
+    "packages/radia-simulink/native/hmatrix_leaf_bounds.h": "4d4ee2aebf706e7cda1b9d189a0d7b0a6e690455088d23f28128f08c67861477",
+    "validation_test/hmatrix_cuda/check_leaf_bounds.py": "5400cd5fcec3f50a39550e360af916df73ca6b2461d2b7b5cbc1d6dbf2c424a0",
+    "packages/radia-simulink/tools/vs2022_toolchain.py": "f80332db377b87480559a8fa0a1d691f669c2f500a0192f242c029c59540c47a"
+  },
+  "source_dirty": true,
+  "contract": {
+    "accepted": true,
+    "upper_dense_coefficients": 27,
+    "upper_storage_cap_coefficients": 30,
+    "lower_leaves_skipped": 1,
+    "invalid_or_overflow_rejected": 5,
+    "rejection_preserves_prior_bounds": true,
+    "dense_promotion_budgeted": true
+  },
+  "executable_sha256": "5aa13336cf517e6c65bf7d18788139f1b5761cd50fde6d98f19ca887af2297c1"
+}

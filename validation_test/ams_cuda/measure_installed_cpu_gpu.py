@@ -20,7 +20,7 @@ def main(a):
         if not checked['passed'] or checked['input_sha256']!=sha(j/'model.vol') or owner['vol_sha256']!=sha(j/'model.vol') or checked['contract_sha256']!=sha(j/'cube-labels.json'):raise RuntimeError('Versioned mesh check mismatch')
         spec=importlib.util.spec_from_file_location('wheel_verifier',j/'verify_wheel.py');verifier=importlib.util.module_from_spec(spec);spec.loader.exec_module(verifier)
         wheel=verifier.verify(a.wheel)
-        installed=json.loads(subprocess.check_output([str(a.installed_python),'-I','-c','import json,radia_gpu;print(json.dumps(radia_gpu.verify()))'],text=True));verifier.verify_installed_identity(installed,wheel)
+        installed=json.loads(subprocess.check_output([str(a.installed_python),'-I','-c','import json,radia_simulink;print(json.dumps(radia_simulink.verify()))'],text=True));verifier.verify_installed_identity(installed,wheel)
         payload=Path(installed['matlab_path']);record['wheel']=wheel;record['installed']=installed
         mex_hash=json.loads((payload.parent/'manifest.json').read_text())['files']['matlab/radia_cuda_ams.mexw64']
         os.environ.update(OMP_NUM_THREADS='1',MKL_NUM_THREADS='1',MKL_THREADING_LAYER='SEQUENTIAL',OPENBLAS_NUM_THREADS='1')

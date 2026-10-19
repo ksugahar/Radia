@@ -31,6 +31,7 @@
 #ifndef CHACAPK_CALC_ENTRY_IJ_H_INCLUDED
 #define CHACAPK_CALC_ENTRY_IJ_H_INCLUDED
 
+#include "cHACApK_batch_size.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -61,8 +62,8 @@ static inline void cHACApK_active_entry_vector(
     int i_bemv, const int *mask, int direction, double *vec)
 {
 #ifdef RAD_HACAPK_BATCH_ENTRIES
-    int rows[256], columns[256], positions[256], count=0;
-    double values[256];
+    int rows[RAD_HACAPK_BATCH_SIZE], columns[RAD_HACAPK_BATCH_SIZE], positions[RAD_HACAPK_BATCH_SIZE], count=0;
+    double values[RAD_HACAPK_BATCH_SIZE];
 #endif
     int ii;
     for(ii=0;ii<ndp;++ii){
@@ -71,7 +72,7 @@ static inline void cHACApK_active_entry_vector(
         const int column=lod[(direction==0?ii:ip)+nstrtt];
 #ifdef RAD_HACAPK_BATCH_ENTRIES
         rows[count]=row;columns[count]=column;positions[count]=ii;++count;
-        if(count==256){
+        if(count==RAD_HACAPK_BATCH_SIZE){
             int j;cHACApK_entry_batch(count,rows,columns,i_bemv,values);
             for(j=0;j<count;++j)vec[positions[j]]=values[j];count=0;
         }

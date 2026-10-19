@@ -1,0 +1,201 @@
+{
+  "schema": "radia.p1-individual-gateways.v1",
+  "source_commit": "d6aecefeb81bf6c44768748e0d342db06136ffd6",
+  "p1_complete": false,
+  "worker_role": "human-started-gpu-worker",
+  "timing_classification": "Bounded numerical and lifecycle diagnostics, not a performance claim",
+  "limits": {
+    "build_cpu_count": 4,
+    "build_host_bytes": 17179869184,
+    "build_seconds": 900,
+    "run_cpu_count": 2,
+    "run_host_bytes": 8589934592,
+    "run_device_bytes": 8589934592,
+    "run_seconds": 240,
+    "dof_ceiling_exclusive": 20000
+  },
+  "gateways": {
+    "csr-pcg-ic": {
+      "accepted": true,
+      "binary_sha256": {
+        "radia_cuda_csr_pcg.mexw64": "89c7bddb49f4a6cc3ee05903a594678804d09ebde6216725730fb6635197ba46",
+        "radia_cuda_ic.mexw64": "f1a630ae65755761f93c309c9d088c0e88ea52cfe566a771db20142addda4dce"
+      },
+      "cpu_fixture_sha256": "be163692a870f18a1d34824b6b5b86fedb317591e5ac0d5d1245e0168a0263ba",
+      "csr": {
+        "cpu_error": 1.6748768399512727e-16,
+        "independent_true_residual": 4.218157077937469e-16,
+        "reported_true_residual": 4.218157077937469e-16,
+        "iterations": 11,
+        "invalid_csr_rejected": true,
+        "zero_rhs_checked": true
+      },
+      "ic_apply_relative": 1.743608947116815e-16,
+      "ic_scaled_solve_errors": [
+        [
+          1.6314466480974827e-16,
+          1.3269703217737503e-16
+        ],
+        [
+          1.6314466480974827e-16,
+          1.3269703217737503e-16
+        ],
+        [
+          1.2888423398670571e-16,
+          1.3269703217737503e-16
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1.6314466480974827e-16,
+          1.3269703217737503e-16
+        ]
+      ],
+      "memory": {
+        "samples": [
+          1709699072,
+          1710141440,
+          1710583808,
+          1710587904,
+          1710583808,
+          1710825472,
+          1710821376,
+          1711337472,
+          1711570944,
+          1711570944
+        ],
+        "private_bytes_per_run": 191295.61212121212,
+        "private_delta_bytes": 1871872,
+        "available_device_bytes_samples": [
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0
+        ],
+        "sample_limitations": "Includes MATLAB, opaque runtime/library caches and caller gpuArrays; not exact owned or global peak buffers"
+      },
+      "scope": "Small independent CPU algebra, true residual, rejection, same-device recovery and repeated release; not multi-device or scaling acceptance"
+    },
+    "fmm": {
+      "accepted": true,
+      "binary_sha256": "2db2ce82a07a4f42684639eefdd75e35e0ee609ba3f0a92e48d5dc9709c536b3",
+      "numeric": {
+        "potential_relative_error": 6.241086306649151e-12,
+        "field_relative_error": 7.588653160864969e-10,
+        "far_pairs": 1,
+        "native_owned_geometry_bytes": 16791356.0,
+        "workspace_bytes": 1990656.0,
+        "output_bytes": 6144
+      },
+      "fixture_sha256": "f0870197e3dca41b74c8207317aacd1877bc750631816a2d88d7b02cabac9358",
+      "memory": {
+        "samples": [
+          1699684352,
+          1699684352,
+          1699684352,
+          1699684352,
+          1699684352,
+          1699684352,
+          1699684352,
+          1699684352,
+          1699684352,
+          1699684352
+        ],
+        "private_bytes_per_run": 0.0,
+        "private_delta_bytes": 0,
+        "available_device_bytes_samples": [
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0,
+          42175561728.0
+        ],
+        "sample_limitations": "MATLAB and library caches plus caller arrays; not global peak or exact owned buffers"
+      },
+      "scope": "Separated numeric point charge/dipole far-field operator, independent direct CPU sum and error recovery; no full analytic RadFld or singular Galerkin acceptance"
+    },
+    "field": {
+      "accepted": false,
+      "binary_sha256": "931e8efb6f914541c2cc18453a35fad8bc18ed8fbc6da36f07e6092449e405a3",
+      "lifecycle": {
+        "accepted": true,
+        "live_handles": 0,
+        "element_families": [
+          "tet",
+          "polynomial_tet",
+          "cubic_tet",
+          "sextic_quartic_tet",
+          "curved_tet"
+        ]
+      },
+      "numeric": {
+        "independent_direct_sum_relative_error": 2.456195459849777e-16,
+        "relative_limit": 1e-12
+      },
+      "original_memory_gate_passed": false,
+      "original_samples_unavailable": true,
+      "initialized_gpu_diagnostic": {
+        "passed": true,
+        "raw_result_sha256": "691389f94de175b72b0506f6f9792c2879e0777964bd92c18b8bacd60700dbb8",
+        "memory": {
+          "samples": [
+            1632342016,
+            1632382976,
+            1632382976,
+            1632382976,
+            1632382976,
+            1632382976,
+            1632382976,
+            1632382976,
+            1632382976,
+            1632382976
+          ],
+          "private_bytes_per_run": 2234.181818181818,
+          "private_delta_bytes": 40960,
+          "available_device_bytes_samples": [
+            39630929920.0,
+            39630929920.0,
+            39630929920.0,
+            39630929920.0,
+            39630929920.0,
+            39630929920.0,
+            39630929920.0,
+            39630929920.0,
+            39630929920.0,
+            39630929920.0
+          ],
+          "sample_limitations": "MATLAB and library caches plus caller arrays; not global peak or exact owned buffers"
+        }
+      },
+      "scope": "Functional lifecycle and independent point-sum pass; original host-memory gate failed, initialized-device diagnostic passes. No full element numerical or full RadFld acceptance."
+    },
+    "ams": {
+      "accepted": false,
+      "stage": "link",
+      "failure": "Four unresolved AMSSetupGPU external functions; implementation header omitted from CUDA translation unit",
+      "fix_commit": "f525af9afc10c2857b06cad85fdd5ee72596a3c8",
+      "fix_built": false
+    },
+    "ih": {
+      "accepted": false,
+      "stage": "unbuilt"
+    }
+  },
+  "recovery": {
+    "file_count": 566,
+    "archive_sha256": "b3b66d3584791e5882641d10dec516e8b50cf312a79de5b805f8e7f17cf19592"
+  }
+}

@@ -41,9 +41,9 @@ def test_radia_mex_contract_routes_only_to_supported_gpu_owner():
     assert contract["mex_entrypoint"] == "radia_cuda_csr_pcg"
     assert contract["optuna_mex_command_count"] == 22
     sections = contract["topic_data"]["sections"]
-    assert sections["mex"]["owner"] == "radia-gpu"
+    assert sections["mex"]["owner"] == "radia-simulink"
     assert sections["ngsolve"]["cpu_execution"] == "Python/pybind11/NGSolve"
-    assert sections["simulink"]["owner"] == "radia-gpu"
+    assert sections["simulink"]["owner"] == "radia-simulink"
     assert "No CPU Radia MEX" in sections["limitations"]["items"][0]
 
 
@@ -60,7 +60,7 @@ def test_acoustic_validation_references_stay_out_of_native_gateways(monkeypatch)
     assert "_Acoustic" not in (
         root / "src" / "lib" / "radia_pybind.cpp"
     ).read_text(encoding="utf-8")
-    for path in sorted((root / "packages/radia-gpu/matlab" / "+radia" / "+acoustic").glob("*.m")):
+    for path in sorted((root / "packages/radia-simulink/matlab" / "+radia" / "+acoustic").glob("*.m")):
         source = path.read_text(encoding="utf-8")
         assert "callMex" not in source
         assert "radia_mex" not in source
@@ -203,8 +203,10 @@ def test_root_readme_publishes_separate_cpu_and_gpu_ownership():
     root = Path(__file__).resolve().parents[2]
     readme = (root / "README.md").read_text(encoding="utf-8")
     assert "CPU execution belongs to `radia`" in readme
-    assert "GPU execution belongs to `radia-gpu`" in readme
-    assert "CPU Radia MEX is unsupported" in readme
+    assert "GPU kernels belong to `radia-simulink`" in readme
+    assert "explicitly selected CPU route compiled with mexcuda" in readme
+    assert "creates no CUDA context" in readme
+    assert "no implicit fallback" in readme
     assert "Build.ps1 -MatlabMexOnly" not in readme
 
 

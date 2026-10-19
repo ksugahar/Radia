@@ -1,0 +1,439 @@
+{
+  "schema": "radia.p1-selected-normalization-allocation.v1",
+  "accepted": true,
+  "p1_complete": false,
+  "source_commit": "24adf256406b6b3255659e99a6609ed2e2433e75",
+  "binary_sha256": "12167a3de82369d7f186310e1fcdc47e72ed1dd3becbb7320ed723b0138b1945",
+  "gate_sha256": "244436edc90858c689ee919519c068b414cbaa6620265f2b0fe5b9e2c175490e",
+  "helper_sha256": "4c1ea0804e3c698da15d359f45a5d66a42b482f71e7a639e0cc570db68a50c80",
+  "input_sha256": {
+    "cpu-reference.json": "d0d70563dcdaa5785bba659e1d3ae9251d41e861fb555cd2a21d11b0db0d2469",
+    "cpu.h5": "28676c133a850c86c79aa5632a705612114db02c1c9676a8ce2619644dd072c5",
+    "curved-cpu-reference.json": "70a29602ec917c04461a15259b835b63e791fb91dd7f36cd0e00a175752eec6e",
+    "curved-cpu.mat": "79c62c871d0d799c30ce449065f7095468e7ab31e9687d544a354006f1cc2da3",
+    "curved-sphere.vol": "a339966a361391ad2b64e7f57645336b3ac70fa549c7f08b2007875523d02236",
+    "exterior.vol": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50",
+    "inputs.mat": "6bfa403a0adc3c0dff9c24069b8167d161f4f65aff0079d88303744358f4ba90"
+  },
+  "event_count": 377,
+  "site_counts": {
+    "direct:normalization.rows": 1,
+    "direct:normalization.entries": 214,
+    "direct:normalization.column-input": 7,
+    "direct:normalization.row-input": 7,
+    "direct:cache.target-points": 0,
+    "direct:cache.target-spans": 0,
+    "direct:cache.source-groups": 0,
+    "direct:cache.group-ids": 0,
+    "direct:resident.target-points": 0,
+    "direct:resident.target-spans": 0,
+    "direct:resident.source-groups": 0,
+    "direct:resident.group-ids": 0,
+    "direct:resident.tile-offsets": 0,
+    "cached:normalization.rows": 1,
+    "cached:normalization.entries": 214,
+    "cached:normalization.column-input": 7,
+    "cached:normalization.row-input": 7,
+    "cached:cache.target-points": 26,
+    "cached:cache.target-spans": 1,
+    "cached:cache.source-groups": 10,
+    "cached:cache.group-ids": 10,
+    "cached:resident.target-points": 0,
+    "cached:resident.target-spans": 0,
+    "cached:resident.source-groups": 0,
+    "cached:resident.group-ids": 0,
+    "cached:resident.tile-offsets": 0,
+    "device-dense:normalization.rows": 1,
+    "device-dense:normalization.entries": 214,
+    "device-dense:normalization.column-input": 7,
+    "device-dense:normalization.row-input": 7,
+    "device-dense:cache.target-points": 26,
+    "device-dense:cache.target-spans": 1,
+    "device-dense:cache.source-groups": 10,
+    "device-dense:cache.group-ids": 10,
+    "device-dense:resident.target-points": 0,
+    "device-dense:resident.target-spans": 0,
+    "device-dense:resident.source-groups": 0,
+    "device-dense:resident.group-ids": 0,
+    "device-dense:resident.tile-offsets": 0
+  },
+  "failure_memory_slopes": [
+    {
+      "mode": "direct",
+      "site": "normalization.rows",
+      "samples": [
+        1413558272,
+        1413505024,
+        1413505024,
+        1413505024,
+        1413505024,
+        1413505024,
+        1413505024,
+        1413505024,
+        1413505024,
+        1413505024
+      ],
+      "private_bytes_per_failure": -2904.4363636363637,
+      "private_delta_bytes": -53248
+    },
+    {
+      "mode": "direct",
+      "site": "normalization.entries",
+      "samples": [
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "normalization.column-input",
+      "samples": [
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "normalization.row-input",
+      "samples": [
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968,
+        1413459968
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "normalization.rows",
+      "samples": [
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "normalization.entries",
+      "samples": [
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "normalization.column-input",
+      "samples": [
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "normalization.row-input",
+      "samples": [
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "cache.target-points",
+      "samples": [
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688,
+        1413234688
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "cache.target-spans",
+      "samples": [
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "cache.source-groups",
+      "samples": [
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "cache.group-ids",
+      "samples": [
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "normalization.rows",
+      "samples": [
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "normalization.entries",
+      "samples": [
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "normalization.column-input",
+      "samples": [
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "normalization.row-input",
+      "samples": [
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "cache.target-points",
+      "samples": [
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "cache.target-spans",
+      "samples": [
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "cache.source-groups",
+      "samples": [
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784,
+        1413238784
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "cache.group-ids",
+      "samples": [
+        1414291456,
+        1414291456,
+        1414291456,
+        1414291456,
+        1414291456,
+        1414291456,
+        1414291456,
+        1414291456,
+        1414291456,
+        1414291456
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    }
+  ],
+  "nonlinear": {
+    "cpu_error": 4.372578644249879E-14,
+    "true_residual": 3.104234165933951E-14,
+    "newton_iterations": 11,
+    "inner_iterations": 1580,
+    "accounted_array_bound_bytes": 217304272.0
+  },
+  "coverage_limits": [
+    "Selected tagged normalization and geometry sites; first and last counted allocation only, not all intermediate targets",
+    "Ordinary numeric input, geometry-owned containers, registry/text and explicit MATLAB output ownership remain incomplete",
+    "The seven other MEX modules were not built by this HMatrix-only target",
+    "Opaque library internals and global peaks are not owned-buffer counters"
+  ],
+  "recovery_sha256": "0117bff58dd27493b20621460bb0cb0675c25c61eb1e2706704485dc53fa1d95",
+  "source_payload_sha256": "f9418ff0aee681832d9d3f15bf2da68b144aec3798295f10c84931f489334031",
+  "elapsed_seconds": 76.48400000000402,
+  "elapsed_scope": "diagnostic checks, not solver performance"
+}

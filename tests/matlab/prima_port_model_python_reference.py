@@ -2,7 +2,7 @@
 
 The CPU reference models need only NumPy/SciPy and load their numerical source
 without the native package. Writing MATLAB exchanges requires the independently
-installed radia-gpu coupling adapter and its Radia dependency.
+installed radia-simulink coupling adapter and its Radia dependency.
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def rc_two_port_impedance():
 
 
 def write_all(directory: Path) -> None:
-    import radia_gpu.ports as gpu_ports
+    import radia_simulink.ports as gpu_ports
     directory.mkdir(parents=True, exist_ok=True)
     rl = coupled_rl_admittance()
     gpu_ports.export_prima_lti_json(rl, directory / "rl_admittance.json")

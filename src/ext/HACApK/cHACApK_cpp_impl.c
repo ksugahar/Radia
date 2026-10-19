@@ -10,6 +10,7 @@
  */
 
 #include "cHACApK_base.h"
+#include "cHACApK_frame_admission.h"
 #include "cHACApK_calc_entry_ij.h"
 #include "cHACApK_lib.h"
 #include "mpi_stub.h"
@@ -435,9 +436,15 @@ int HACApK_build_hmatrix_wrapper(
     }
 
     /* Allocate 2D coordinate array for HACApK [ndim+1][nofc+1] */
-    gmid_t = (double**)malloc(sizeof(double*) * (ndim + 1));
+    gmid_t = (double**)calloc((size_t)ndim + 1, sizeof(double*));
+    if (!gmid_t) return -1;
     for (il = 0; il <= ndim; il++) {
         gmid_t[il] = (double*)malloc(sizeof(double) * (nofc + 1));
+        if (!gmid_t[il]) {
+            for (ig = 0; ig < il; ++ig) free(gmid_t[ig]);
+            free(gmid_t);
+            return -1;
+        }
     }
 
     /* Fill coordinates (1-based indexing) */
@@ -449,6 +456,11 @@ int HACApK_build_hmatrix_wrapper(
 
     /* Allocate temporary element ordering array */
     lodfc = (int*)malloc(sizeof(int) * (nofc + 1));
+    if (!lodfc) {
+        for (il = 0; il <= ndim; ++il) free(gmid_t[il]);
+        free(gmid_t);
+        return -1;
+    }
     for (il = 1; il <= nofc; il++) {
         lodfc[il] = il;
     }
@@ -513,6 +525,12 @@ int HACApK_build_hmatrix_wrapper(
         st_leafmtx[ip] = (st_cHACApK_leafmtx)calloc(1, sizeof(st_cHACApK_leafmtx_t));
         if (!st_leafmtx[ip]) {
             fprintf(stderr, "[HACApK] Error: Memory allocation for leaf %d failed\n", ip);
+            for (il = 1; il < ip; ++il) free(st_leafmtx[il]);
+            free(st_leafmtx);
+            cHACApK_free_st_clt(st_clt);
+            free(lodfc);
+            for (il = 0; il <= ndim; ++il) free(gmid_t[il]);
+            free(gmid_t);
             return -1;
         }
     }
@@ -545,6 +563,20 @@ int HACApK_build_hmatrix_wrapper(
         printf("[HACApK] Sort completed\n");
         fflush(stdout);
     }
+
+#ifdef RAD_HACAPK_FRAME_ADMISSION
+    /* No leaf coefficient has been allocated/evaluated at this boundary.
+     * A rejecting consumer leaves output ownership unpublished. */
+    if (!cHACApK_frame_admission(st_leafmtx,nlf,nd,(int)ctl->param[63])) {
+        for (ip = 1; ip <= nlf; ++ip) free(st_leafmtx[ip]);
+        free(st_leafmtx);
+        cHACApK_free_st_clt(st_clt);
+        free(lodfc);
+        for (il = 0; il <= ndim; ++il) free(gmid_t[il]);
+        free(gmid_t);
+        return -2;
+    }
+#endif
 
     /*=========================================================================
      * Fill leaf matrices with values using ACA+

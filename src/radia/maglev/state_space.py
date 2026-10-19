@@ -1,6 +1,6 @@
 """CPU state-space realizations of conductor admittance.
 
-MATLAB export is independently owned by radia_gpu.maglev.
+MATLAB export is independently owned by radia_simulink.maglev.
 """
 from __future__ import annotations
 

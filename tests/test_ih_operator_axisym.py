@@ -3,7 +3,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 import ngsolve as ng
-from radia_gpu.simulink.ih_operator_assembly import IHOperatorAssemblyOptions, _assemble_thermal_operators
+from radia_simulink.simulink.ih_operator_assembly import IHOperatorAssemblyOptions, _assemble_thermal_operators
 
 
 def fixture():

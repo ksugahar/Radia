@@ -1,0 +1,156 @@
+{
+  "schema": "radia.hmatrix.curved-create-coverage.v1",
+  "p1_complete": false,
+  "native_source_commit": "6f938e13eafbb46a46630311bb27152f7ce5d082",
+  "binary_sha256": "cd2ab5d9ef2ca667266396e4a7c5e96b0527fbcfa2a4d559ac1d9f3f24007811",
+  "fixture_cells": 13,
+  "fixture_dofs": 105,
+  "scope": "Tracked create allocations for the declared direct, cached and device-dense fixture paths; not complete solver/graph or release coverage",
+  "normalization_new_positions": 693,
+  "other_new_positions": 1604,
+  "prior_accepted_cpp_positions": 41,
+  "memory_protocol": "Per failure class: 5 warm plus 10 measured failures, 1 MiB/failure slope and 16 MiB delta limits. Separate from the common 100-run gateway protocol.",
+  "ranges_memory_classes": 12,
+  "ranges_max_slope_bytes_per_failure": 66057.3090909091,
+  "recovery": [
+    {
+      "cpu_error": 3.625884014821222E-11,
+      "physical_error": 5.271144477297617E-13,
+      "independent_true_residual": 6.1869575708579964E-12,
+      "solver_true_residual": 6.1869385837220584E-12,
+      "iterations": 57,
+      "accepted": true
+    },
+    {
+      "cpu_error": 3.625884014821222E-11,
+      "physical_error": 5.271144477297617E-13,
+      "independent_true_residual": 6.1869575708579964E-12,
+      "solver_true_residual": 6.1869385837220584E-12,
+      "iterations": 57,
+      "accepted": true
+    },
+    {
+      "cpu_error": 3.625884014821222E-11,
+      "physical_error": 5.271144477297617E-13,
+      "independent_true_residual": 6.1869575708579964E-12,
+      "solver_true_residual": 6.1869385837220584E-12,
+      "iterations": 57,
+      "accepted": true
+    }
+  ],
+  "chunks": [
+    {
+      "accepted": true,
+      "bounded_chunk": false,
+      "can_resume": true,
+      "new_positions": 1038,
+      "remaining_positions": 0,
+      "seconds": 137.32800000000861
+    },
+    {
+      "accepted": false,
+      "bounded_chunk": true,
+      "can_resume": true,
+      "new_positions": 149,
+      "remaining_positions": 417,
+      "seconds": 185.59300000000803
+    },
+    {
+      "accepted": false,
+      "bounded_chunk": true,
+      "can_resume": true,
+      "new_positions": 123,
+      "remaining_positions": 294,
+      "seconds": 186.34299999999348
+    },
+    {
+      "accepted": false,
+      "bounded_chunk": true,
+      "can_resume": true,
+      "new_positions": 95,
+      "remaining_positions": 199,
+      "seconds": 186.93799999999464
+    },
+    {
+      "accepted": false,
+      "bounded_chunk": true,
+      "can_resume": true,
+      "new_positions": 86,
+      "remaining_positions": 113,
+      "seconds": 186.2340000000113
+    },
+    {
+      "accepted": true,
+      "bounded_chunk": false,
+      "can_resume": true,
+      "new_positions": 113,
+      "remaining_positions": 0,
+      "seconds": 102.71899999999732
+    }
+  ],
+  "raw_receipts": [
+    {
+      "sha256": "ee7923a488d7aead48ea38d744ca7d41191c71dafce48fe3c9b230c50d4fce0f",
+      "file": "v2-enumeration-result.json"
+    },
+    {
+      "sha256": "1625a02757c28a7ff6be5e6600a8a058ff55ddc81d4fe121e1edbb56f3c10b61",
+      "file": "v2-faults-v2-result.json"
+    },
+    {
+      "sha256": "4e9dfc4c8ad5baea28b37a5de3ab09b6aca2d3660470ed17e9a784580f75331e",
+      "file": "v2-host-catalog-result.json"
+    },
+    {
+      "sha256": "ada4d5fa0a6ee03e4e02077637784c4e53b25e4c60359e6aa969bec0cdd8f9b7",
+      "file": "v2-host-catalog-v2-result.json"
+    },
+    {
+      "sha256": "b403eb8fe460b3e1d2bcd95d5c31e277cdc48fe536dbfafb91d31b214017a431",
+      "file": "v2-normalization-result.json"
+    },
+    {
+      "sha256": "471cbde18f8a36c3a8b0df1cc7c97fbcc73f4dd96010079f38a9c1ad731f4840",
+      "file": "v2-ranges-cd001-result.json"
+    },
+    {
+      "sha256": "ca38b3b3598c948a5de5da83507464f2e184a3c17713e275fbd4477e69838bba",
+      "file": "v2-ranges-d001-result.json"
+    },
+    {
+      "sha256": "4389e5ea86f0df2231ca631cc65eafb40cd3d2e1eb3839b12560dd341dba6890",
+      "file": "v2-ranges-d002-result.json"
+    },
+    {
+      "sha256": "1d45474f06701b62638d109001bce9f9e5b5f683e972fbec23555c97544d9cbb",
+      "file": "v2-ranges-d003-result.json"
+    },
+    {
+      "sha256": "b72fe6640e37c93680dbb657f583c6d0f355324ebe891526f13ef6c8c529cd6e",
+      "file": "v2-ranges-d004-result.json"
+    },
+    {
+      "sha256": "5e3dad0be033ec667ee484a6676c5600c7b4d56f2589a9e88821852b214d8a9f",
+      "file": "v2-ranges-d005-result.json"
+    }
+  ],
+  "enumeration_correction": "Initial tag catalog omitted five geometry tags and failed its partition check. The immutable failed receipt is preserved. Hash-linked continuation completed missing counts without replaying accepted rows.",
+  "tracked_create_positions": 2338,
+  "new_create_positions": 2297,
+  "accepted_declared_create_scope": true,
+  "normalization_max_slope_bytes_per_failure": 73876.94545454545,
+  "all_recovered_owned_counters_zero": true,
+  "curved_output_families": {
+    "entry_comparison": "GPU-internal selected entries; independent CPU validation applies to the mapped FE operator",
+    "measured_failures": 110,
+    "new_sites": 11,
+    "warm_failures": 55,
+    "max_independent_mapped_operator_relative_error": 1.5948820416110819E-16,
+    "max_slope_bytes_per_failure": 66131.78181818181
+  },
+  "remaining": [
+    "Solver/CUDA Graph allocation paths audit and fault coverage",
+    "live_count scalar output injection (helper added, unexecuted)",
+    "Release-specific native, Python GPU, CPU no-context proof, wheel/install, official SLX, licensing and publication gates"
+  ]
+}

@@ -53,7 +53,7 @@ def test_legacy_cpp_solve_defaults_to_supported_lu(monkeypatch):
 def test_legacy_solver_default_matches_native_and_matlab_surfaces():
     root = Path(__file__).resolve().parents[1]
     native_doc = rad._radia_pybind.Solve.__doc__ or ""
-    matlab_source = (root / "packages/radia-gpu/matlab" / "+radia" / "Solve.m").read_text(
+    matlab_source = (root / "packages/radia-simulink/matlab" / "+radia" / "Solve.m").read_text(
         encoding="utf-8"
     )
 

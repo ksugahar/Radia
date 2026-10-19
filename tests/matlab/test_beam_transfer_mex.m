@@ -9,7 +9,7 @@ classdef test_beam_transfer_mex < matlab.unittest.TestCase
             testDir = fileparts(mfilename("fullpath"));
             repoRoot = fileparts(fileparts(testDir));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(repoRoot,'packages','radia-gpu','matlab')));
+                fullfile(repoRoot,'packages','radia-simulink','matlab')));
             radia.setup(Force=true);
             referencePath = string(tempname("C:\temp")) + ".mat";
             testCase.addTeardown(@() deleteReference(referencePath));

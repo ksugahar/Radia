@@ -1,0 +1,138 @@
+{
+  "accepted": true,
+  "scope": "Measured NGSolve FE counts and software capacity; no large GPU allocation or solve",
+  "base": {
+    "accepted": true,
+    "scope": "CPU FE metadata and current software capacity only; no solve, GPU allocation or timing prediction",
+    "ngsolve_version": "6.2.2607",
+    "threads": 1,
+    "refinements": 0,
+    "source_mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+    "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+    "curve_order": 2,
+    "elements": 515,
+    "boundary_elements": 358,
+    "dofs": 10344,
+    "charge_count": 4208,
+    "material_points": 176645,
+    "potential_material_shape_entries": 15898050,
+    "material_tangent_nonzero_bound": 463500,
+    "largest_chunk_points": 43904,
+    "dense_upper_triangle_coefficient_bytes": 70845888,
+    "current_material_array_bound_bytes": 599009200,
+    "current_resident_worst_case_bound_bytes": 350425088,
+    "current_solver_bound_bytes": 131732992,
+    "current_gates": {
+      "native_elements": true,
+      "native_dofs": true,
+      "fe_charge_count": true,
+      "resident_charge_count": true,
+      "hacapk_signed_product": true,
+      "hacapk_conservative_allocation": true,
+      "legacy_dense_mass_guard": true,
+      "legacy_dense_charge_guard": true,
+      "material_points": true,
+      "material_array_budget": true,
+      "material_solve_combined_array_budget": true
+    },
+    "current_pipeline_eligible": true,
+    "failed_current_gates": [],
+    "native_source_sha256": {
+      "packages/radia-gpu/native/hmatrix_full_assembly.cuh": "6356ad13ad2b172171d4164d320db8c0711645bbc725700f8c6537206c785b52",
+      "packages/radia-gpu/native/hdiv_element_setup.cuh": "e4e834879ad1e8d8ae5dff4f0f9a8679d3ad37fc4eb969fa3da5d3b3cd31ab96"
+    },
+    "limitations": [
+      "Bounds do not predict actual compressed storage or CUDA/host/global peak",
+      "Geometry cache capacity and work remain unestimated",
+      "Refined-mesh metadata does not certify physical FE error",
+      "Above-2GiB payloads would require HDF5 if actually exchanged; none are allocated here",
+      "No numerical acceptance or 100k-DoF performance claim"
+    ]
+  },
+  "refined": {
+    "accepted": true,
+    "scope": "CPU FE metadata and current software capacity only; no solve, GPU allocation or timing prediction",
+    "ngsolve_version": "6.2.2607",
+    "threads": 1,
+    "refinements": 1,
+    "source_mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+    "mesh_sha256": "1c9cde859cb8da8fae454d0bbd9b7acf5bad7c40a7eee4c81435afa1192c4427",
+    "curve_order": 2,
+    "elements": 4120,
+    "boundary_elements": 1432,
+    "dofs": 78456,
+    "charge_count": 25072,
+    "material_points": 1413160,
+    "potential_material_shape_entries": 127184400,
+    "material_tangent_nonzero_bound": 3708000,
+    "largest_chunk_points": 43904,
+    "dense_upper_triangle_coefficient_bytes": 2514521024,
+    "current_material_array_bound_bytes": 4204297600,
+    "current_resident_worst_case_bound_bytes": 10124791808,
+    "current_solver_bound_bytes": 581902336,
+    "current_gates": {
+      "native_elements": false,
+      "native_dofs": false,
+      "fe_charge_count": false,
+      "resident_charge_count": false,
+      "hacapk_signed_product": true,
+      "hacapk_conservative_allocation": false,
+      "legacy_dense_mass_guard": false,
+      "legacy_dense_charge_guard": false,
+      "material_points": true,
+      "material_array_budget": false,
+      "material_solve_combined_array_budget": false
+    },
+    "current_pipeline_eligible": false,
+    "failed_current_gates": [
+      "native_elements",
+      "native_dofs",
+      "fe_charge_count",
+      "resident_charge_count",
+      "hacapk_conservative_allocation",
+      "legacy_dense_mass_guard",
+      "legacy_dense_charge_guard",
+      "material_array_budget",
+      "material_solve_combined_array_budget"
+    ],
+    "native_source_sha256": {
+      "packages/radia-gpu/native/hmatrix_full_assembly.cuh": "6356ad13ad2b172171d4164d320db8c0711645bbc725700f8c6537206c785b52",
+      "packages/radia-gpu/native/hdiv_element_setup.cuh": "e4e834879ad1e8d8ae5dff4f0f9a8679d3ad37fc4eb969fa3da5d3b3cd31ab96"
+    },
+    "limitations": [
+      "Bounds do not predict actual compressed storage or CUDA/host/global peak",
+      "Geometry cache capacity and work remain unestimated",
+      "Refined-mesh metadata does not certify physical FE error",
+      "Above-2GiB payloads would require HDF5 if actually exchanged; none are allocated here",
+      "No numerical acceptance or 100k-DoF performance claim"
+    ]
+  },
+  "accepted_base_operator": {
+    "leaf_count": 3211,
+    "lowrank_leaf_count": 32,
+    "stored_coefficient_count": 8883774.0,
+    "same_leaf_dense_coefficient_count": 8951208.0,
+    "fraction_saved_against_same_leaf_dense": 0.0075335083264739255,
+    "owned_device_bytes": 78209352.0,
+    "setup_peak_owned_device_bytes": 1791115980.0,
+    "scope": "Existing accepted 10344 DoF sphere artifact only; compression at refined size unknown"
+  },
+  "compute_gpu_status": "Existing host connection remains unavailable; no startup or alternate-host routing attempted",
+  "next_implementation_requirements": [
+    "Replace dense-size-derived guards on sparse FE routes with verified sparse allocation/index bounds",
+    "Bound aggregate material evaluation maps or stream them without changing quadrature and nonlinear residual",
+    "Check actual HACApK leaf/factor/dense-sink allocation and index products before larger source caps",
+    "Use HDF5 for above-2GiB exchanged payloads; no such payload allocated by this probe",
+    "Revalidate small numerical/lifecycle gates before larger GPU work"
+  ],
+  "limitations": [
+    "No 78456/100000 timing inferred; actual refined DoF count is 78456",
+    "No refined-mesh physical accuracy or topology optimization acceptance",
+    "Worst-case bounds are not actual compressed storage or measured memory peaks"
+  ],
+  "derived_dense_guard_bytes": {
+    "mass": 49242751488,
+    "charge_map": 15736390656,
+    "scope": "Legacy dense-size guard values; not sparse allocation or GPU usage"
+  }
+}

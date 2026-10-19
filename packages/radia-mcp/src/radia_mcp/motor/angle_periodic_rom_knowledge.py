@@ -51,7 +51,7 @@ trial callback; commit its restart state only after the coupled step succeeds.
     "ports": """\
 # Simulink, C ABI, and FMI Boundary
 
-`radia_gpu.motor_rom_export.SaveMotorROMBundle` writes canonical NPZ arrays, a MAT
+`radia_simulink.motor_rom_export.SaveMotorROMBundle` writes canonical NPZ arrays, a MAT
 mirror and MATLAB loader, a JSON port/unit manifest, and an FMI 3.0.2 variable
 fragment.  `src/core/rad_motor_rom_c.h` is C ABI version 1 with row-major
 tables and an opaque handle.  The bundle is an FMI source boundary, not a

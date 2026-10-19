@@ -3,7 +3,7 @@
 Skipped unless LTspice.exe and an interactive Windows desktop are available.
 """
 from __future__ import annotations
-import radia_gpu.ports as gpu_ports
+import radia_simulink.ports as gpu_ports
 
 import math
 import re
@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from radia import prima_export as pe
-from radia_gpu.ltspice.parser.asc_parser import _find_ltspice_exe, _has_interactive_windows_desktop
+from radia_simulink.ltspice.parser.asc_parser import _find_ltspice_exe, _has_interactive_windows_desktop
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests/matlab"))
 from prima_port_model_python_reference import (  # noqa: E402

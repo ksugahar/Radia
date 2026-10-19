@@ -87,10 +87,10 @@ def test_schema_rejects_ambiguous_or_unjustified_ownership(change):
 
 
 def test_ordered_matching_preserves_actions_markdown_reinclusion():
-    projection = {"paths": ["packages/radia-gpu/**", "!**/*.md", "packages/radia-gpu/README.md"]}
-    assert CONTRACT.selected("packages/radia-gpu/native/solver.cu", projection)
-    assert CONTRACT.selected("packages/radia-gpu/README.md", projection)
-    assert not CONTRACT.selected("packages/radia-gpu/handover.md", projection)
+    projection = {"paths": ["packages/radia-simulink/**", "!**/*.md", "packages/radia-simulink/README.md"]}
+    assert CONTRACT.selected("packages/radia-simulink/native/solver.cu", projection)
+    assert CONTRACT.selected("packages/radia-simulink/README.md", projection)
+    assert not CONTRACT.selected("packages/radia-simulink/handover.md", projection)
     assert not CONTRACT.matches("packages/a/b.py", "packages/*.py")
     assert CONTRACT.matches("README.md", "**/*.md")
     assert CONTRACT.matches("docs/ltspice/README.md", "docs/**/*.md")
@@ -106,10 +106,10 @@ MCP_LANE_READS = {
     "CLAUDE.md": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "CLAUDE.md"),
     "README.md": ("tests/mcp_integration/test_matlab_source_contract.py", "README.md"),
     ".agents/skills/md2html/md2html.py": ("tests/mcp_integration/test_md2html_legacy_cli.py", "md2html.py"),
-    "packages/radia-gpu/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m": ("tests/mcp_integration/test_circuit_field_simulink_contract.py", "makeCircuitFieldStateSpace"),
-    "packages/radia-gpu/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m": ("tests/mcp_integration/test_circuit_field_simulink_contract.py", "buildCircuitFieldStateSpaceModel"),
-    "packages/radia-gpu/matlab/+radia/+acoustic/**": ("tests/mcp_integration/test_matlab_source_contract.py", "+acoustic"),
-    "packages/radia-gpu/native/radia_cuda_csr_pcg.cu": ("packages/radia-mcp/src/radia_mcp/matlab/runtime.py", "radia_cuda_csr_pcg.cu"),
+    "packages/radia-simulink/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m": ("tests/mcp_integration/test_circuit_field_simulink_contract.py", "makeCircuitFieldStateSpace"),
+    "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m": ("tests/mcp_integration/test_circuit_field_simulink_contract.py", "buildCircuitFieldStateSpaceModel"),
+    "packages/radia-simulink/matlab/+radia/+acoustic/**": ("tests/mcp_integration/test_matlab_source_contract.py", "+acoustic"),
+    "packages/radia-simulink/native/radia_cuda_csr_pcg.cu": ("packages/radia-mcp/src/radia_mcp/matlab/runtime.py", "radia_cuda_csr_pcg.cu"),
     "packages/radia-optuna/matlab/**": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "packages/radia-optuna/matlab"),
     "packages/radia-optuna/native/optuna_mex.cpp": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_quality.py", "optuna_mex.cpp"),
     "packages/radia-optuna/src/radia_optuna/manifest.json": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_quality.py", "manifest.json"),
@@ -142,35 +142,35 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     closure, = MANIFEST["shared_include_closures"]
     actual = CONTRACT.include_closure(ROOT, closure["seeds"], closure["prefix"])
     assert actual == closure["paths"]
-    build = (ROOT / "packages/radia-gpu/tools/build_ams_cuda.py").read_text(encoding="utf-8")
+    build = (ROOT / "packages/radia-simulink/tools/build_ams_cuda.py").read_text(encoding="utf-8")
     for seed in closure["seeds"]:
         assert seed in build
     shared = {r["pattern"] for r in MANIFEST["rules"] if len(r["owners"]) > 1}
     assert {p for p in shared if p.startswith("src/ext/sparsesolv/")} == set(actual)
     assert CONTRACT.owner_rule(MANIFEST, "src/ext/sparsesolv/include/sparsesolv/preconditioners/ic_preconditioner.hpp")["owners"] == ["radia"]
     helper = "tools/native_build_provenance.ps1"
-    assert helper in (ROOT / "packages/radia-gpu/matlab/verify_radia_mex_provenance.py").read_text(encoding="utf-8")
+    assert helper in (ROOT / "packages/radia-simulink/matlab/verify_radia_mex_provenance.py").read_text(encoding="utf-8")
     assert "$NativeBuildProvenanceScript" in (ROOT / "Build.ps1").read_text(encoding="utf-8")
-    assert CONTRACT.owner_rule(MANIFEST, helper)["owners"] == ["radia", "radia-gpu"]
+    assert CONTRACT.owner_rule(MANIFEST, helper)["owners"] == ["radia", "radia-simulink"]
     # Derive the shared core closure from real GPU quote includes and the build
     # receipt, rather than marking every CPU kernel as GPU-owned.
     seeds = set()
-    for source in (ROOT / "packages/radia-gpu/native").iterdir():
+    for source in (ROOT / "packages/radia-simulink/native").iterdir():
         if source.suffix not in (".cu", ".cuh", ".h", ".hpp", ".cpp", ".c"):
             continue
         for include in re.findall(r'^\s*#\s*include\s*"([^"]+)"', source.read_text(encoding="utf-8"), re.M):
             if (ROOT / "src/core" / include).is_file():
                 seeds.add("src/core/" + include)
-    hmatrix_build = (ROOT / "packages/radia-gpu/tools/build_hmatrix_cuda.py").read_text(encoding="utf-8")
+    hmatrix_build = (ROOT / "packages/radia-simulink/tools/build_hmatrix_cuda.py").read_text(encoding="utf-8")
     # Every GPU build script that names or compiles a src/core file seeds the closure.
-    for script in sorted((ROOT / "packages/radia-gpu/tools").glob("build_*_cuda.py")):
+    for script in sorted((ROOT / "packages/radia-simulink/tools").glob("build_*_cuda.py")):
         seeds.update("src/core/" + name for name in
                      re.findall(r"src/core/([A-Za-z0-9_.]+)", script.read_text(encoding="utf-8")))
     core = set(CONTRACT.include_closure(ROOT, sorted(seeds), "src/core"))
     assert {p for p in shared if p.startswith("src/core/")} == core | {"src/core/radia_mex_sparse_symmetry.h"}
     assert len(core) == 14
-    # The radia-gpu lane must start on every file its native build reads.
-    lane = MANIFEST["lanes"]["radia-gpu"]["events"]
+    # The radia-simulink lane must start on every file its native build reads.
+    lane = MANIFEST["lanes"]["radia-simulink"]["events"]
     for event in ("push", "pull_request"):
         missing = [p for p in sorted(core) if not CONTRACT.selected(p, lane[event])]
         assert not missing, (event, missing)
@@ -186,7 +186,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     expected |= {
         "src/core/radia_mex_sparse_symmetry.h",
         "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
-        "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+        "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
         "tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
         "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
         "validation_test/induction_heating/test_ih_operator_physics_golden.py",
@@ -215,12 +215,12 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     for path in ("tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
                  "tests/test_ih_fin_surface_boundary.py", "tests/test_ih_panel_esim_assembly.py",
                  "validation_test/induction_heating/test_ih_operator_physics_golden.py"):
-        assert "from radia_gpu.simulink" in (ROOT / path).read_text(encoding="utf-8")
-    adapter = (ROOT / "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py").read_text(encoding="utf-8")
+        assert "from radia_simulink.simulink" in (ROOT / path).read_text(encoding="utf-8")
+    adapter = (ROOT / "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py").read_text(encoding="utf-8")
     assert "radia.panels" in adapter
     assert "cubit_mesh_export.check" in (ROOT / "tests/test_ih_operator_assembly.py").read_text(encoding="utf-8")
-    # Integration evidence: radia-gpu LTspice tests cross-check the radia-mcp LTspice gates.
-    gpu_ltspice_tests = list((ROOT / "packages/radia-gpu/tests/ltspice").glob("test_*.py"))
+    # Integration evidence: radia-simulink LTspice tests cross-check the radia-mcp LTspice gates.
+    gpu_ltspice_tests = list((ROOT / "packages/radia-simulink/tests/ltspice").glob("test_*.py"))
     assert any("from radia_mcp.ltspice" in path.read_text(encoding="utf-8") for path in gpu_ltspice_tests)
     # The radia_mcp modules the LTspice server imports are part of that integration surface.
     server = (ROOT / "packages/radia-mcp/src/radia_mcp/ltspice/server.py").read_text(encoding="utf-8")
@@ -229,7 +229,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         f"packages/radia-mcp/src/radia_mcp/common/{name}.py" for name in imported if name}
     if "" in imported:  # package-level names resolve lazily through common/__init__.py
         modules.add("packages/radia-mcp/src/radia_mcp/common/status.py")
-    lane = MANIFEST["lanes"]["radia-gpu"]["events"]
+    lane = MANIFEST["lanes"]["radia-simulink"]["events"]
     for module in sorted(modules):
         assert module in shared, module
         assert all(CONTRACT.selected(module, lane[event]) for event in ("push", "pull_request")), module

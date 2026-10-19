@@ -1,0 +1,21 @@
+{
+  "schema": "radia.hdiv-indexed-entry-research.v1",
+  "accepted": true,
+  "scope": "Bounded GPU indexed entries versus existing direct dense GPU Gram only",
+  "source_commit": "90381a177792f6c0766d0f35541941a9afca1d22",
+  "binary_sha256": "892b042a127719e5aa182347cf9bfa480c942101a46ca619afc188ba910a9b67",
+  "mesh_sha256": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50",
+  "model": "Independent public P2 unit sphere, HDiv order 2",
+  "charges": 160,
+  "relative_frobenius_error": 1.1016030385600124e-16,
+  "batch_capacity": 256,
+  "checks": ["all matrix entries", "empty request", "invalid indices", "257 repeated requests", "live handles zero"],
+  "true_relative_residual": null,
+  "residual_applicability": "not_applicable_operator",
+  "independent_cpu_accepted": false,
+  "compressed_assembly_accepted": false,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "failures_retained": ["Short source ID rejected before compilation", "Initial numerical run failed required HDF5 label metadata at save"],
+  "limitations": "No high-order HACApK callback, compression, full solve or 100k capacity acceptance; existing selected full-solver performance artifact remains unchanged. Raw evidence retained privately."
+}

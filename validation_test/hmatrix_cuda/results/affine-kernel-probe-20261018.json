@@ -1,0 +1,38 @@
+{
+  "schema": "radia.hdiv-gpu-research.v1",
+  "numerical_accepted": true,
+  "performance_improvement_accepted": false,
+  "adopted": false,
+  "release_accepted": false,
+  "source_commit": "749e6fc12f42143e890e7623334d223c323239a9",
+  "binary_sha256": "f07c6e62a5537e7331aadaaf548b3255e0471faff3d97b05d3d41f9e1b35a620",
+  "scope": "Affine-vs-curved compile-time kernel partition, bounded public linear P2 sphere",
+  "dofs": 10344,
+  "warm_probe": {
+    "whole_seconds": 9.7410966,
+    "assembly_upload_seconds": 8.8560339,
+    "solve_transfer_seconds": 0.6769558,
+    "iterations": 8.0,
+    "owned_peak": 1006993428.0,
+    "coefficient_error": 5.42031825274221e-13,
+    "mean_error": 5.2653193143324385e-15,
+    "true_residual": 6.2471363748653504e-12
+  },
+  "baseline_gpu_abba_median_seconds": 9.65325015,
+  "comparison_limitations": "One numerical probe only; different runs, no paired old/new ABBA and no candidate CPU/GPU speedup claim. No clear improvement; rejected to avoid additional paid measurements.",
+  "operator_checks": [
+    {
+      "charges": 160,
+      "relative_frobenius_error": 0
+    },
+    {
+      "charges": 28,
+      "relative_frobenius_error": 0
+    }
+  ],
+  "oversized_group_rejected": true,
+  "live_count_after": 0,
+  "initial_build_failure": "Missing space in generated else branch; corrected before any numerical test; original failure retained privately.",
+  "formal_cpu_reference_accepted": false,
+  "memory_limitations": "50ms sampled process RSS/private includes baseline/runtime and may miss spikes; CPU sampler is in controller process, GPU sampler observes separate MATLAB process, unquantified timing bias; exact GPU owned excludes CUDA/runtime/global peaks"
+}

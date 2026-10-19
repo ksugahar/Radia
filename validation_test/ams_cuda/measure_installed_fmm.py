@@ -15,13 +15,13 @@ def main(args):
     from measure_native_cpu_gpu import Memory, idle, encode
     from fmm_numeric import direct
     import verify_wheel
-    import radia_gpu
+    import radia_simulink
     import numpy as np
     import scipy
     from scipy.io import loadmat
     import matlab.engine
     expected_identity = verify_wheel.verify(args.wheel)
-    verify_wheel.verify_installed_identity(radia_gpu.verify(), expected_identity)
+    verify_wheel.verify_installed_identity(radia_simulink.verify(), expected_identity)
     manifest = json.loads((job / 'manifest.json').read_text())
 
     def verify_inputs():
@@ -59,7 +59,7 @@ def main(args):
         start = time.perf_counter()
         engine = matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread')
         record['matlab_start_seconds'] = time.perf_counter() - start
-        payload = radia_gpu.matlab_path()
+        payload = radia_simulink.matlab_path()
         engine.addpath(str(payload), str(job), nargout=0)
         loaded = Path(engine.which('radia_cuda_fmm'))
         installed_manifest = json.loads((payload.parent / 'manifest.json').read_text())

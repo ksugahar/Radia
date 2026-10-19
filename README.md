@@ -74,7 +74,7 @@ Use the documentation to discover capabilities and inspect results. Carry out
 CPU analysis through Python or MCP, using checked CAD and mesh artifacts.
 Human–AI collaboration through Cubit and supported MATLAB/Simulink workflows
 is also available; MATLAB/Simulink belongs to the independent
-[radia-gpu package](packages/radia-gpu/README.md).
+[radia-simulink package](packages/radia-simulink/README.md).
 The executable samples live in [tests/](tests/README.md) for small usage and
 contract examples, and [validation_test/](validation_test/README.md) for physics
 and application cases with numerical evidence.
@@ -259,8 +259,8 @@ Unsupported inputs or unavailable backends must be resolved explicitly.
 flowchart TB
     AI["AI / LLM"] --> MCP["radia-mcp"]
     Human["Human engineer"] --> Python
-    Human --> Simulink["MATLAB / Simulink<br/>radia-gpu: separately validated workflows"]
-    Simulink --> GPU["radia-gpu MATLAB / mexcuda kernels"]
+    Human --> Simulink["MATLAB / Simulink<br/>radia-simulink: separately validated workflows"]
+    Simulink --> GPU["radia-simulink MATLAB / mexcuda kernels"]
     GPU --> Results
     Python["Python API"] --> Contract["DesignSpec + typed artifacts"]
     MCP --> Contract
@@ -285,7 +285,7 @@ through MCP. The physical model and numerical checks remain explicit.
 | :--- | :--- |
 | **NGSolve / ngsolve.bem** | FE spaces, element orientation, Piola maps, curved geometry, quadrature, weak-form assembly, GridFunctions, and BEM operators |
 | **Radia C++ and Python** | Analytical fields, electromagnetic physical methods, open-boundary operators, material/circuit coupling, reduced models, and artifact schemas |
-| **[MATLAB / Simulink (radia-gpu)](packages/radia-gpu/README.md)** | Human-facing composition, typed signals, lifecycle and CUDA MEX execution within the independently validated package scope |
+| **[MATLAB / Simulink (radia-simulink)](packages/radia-simulink/README.md)** | Human-facing composition, typed signals, lifecycle and CUDA MEX execution within the independently validated package scope |
 | **radia-mcp** | Executable domain knowledge, tool discovery, workflow selection, validation guidance, and AI orchestration |
 | **CAD and visualization tools** | Geometry/mesh authoring and durable inspection through explicit STEP, VOL, MSH, and result boundaries |
 
@@ -378,7 +378,7 @@ PRIMA, block Lanczos, Foster modal models, and universal relaxation networks pro
 reduced models for circuit and transient studies.
 
 LTspice and MATLAB/Simulink integration belong to the separate
-[radia-gpu distribution](packages/radia-gpu/README.md).
+[radia-simulink distribution](packages/radia-simulink/README.md).
 
 - [PEEC integration](docs/peec_integration/README.md)
 - [SPICE and LTspice integration](docs/ltspice/README.md)
@@ -432,15 +432,21 @@ keep field-projection error separate from Lie truncation error.
 ### Related distributions
 
 This monorepo independently releases `radia`, `radia-mcp`, `cubit-mesh-export`,
-`radia-gpu`, `radia-optuna`, and `eqnedit64`.
+`radia-simulink`, `radia-optuna`, and `eqnedit64`.
 
 CPU execution belongs to `radia` through Python/pybind11 and NGSolve.
-GPU execution belongs to `radia-gpu` through MATLAB mexcuda.
+GPU kernels belong to `radia-simulink`, are compiled with MATLAB mexcuda, and
+may be called from MATLAB or Python within each validated route.
 
-[`radia-gpu`](packages/radia-gpu/README.md) owns MATLAB, Simulink, LTspice
+[`radia-simulink`](packages/radia-simulink/README.md) owns MATLAB, Simulink, LTspice
 integration, and MATLAB mexcuda development. GPU support is under development;
 consult that package for validated capabilities. It does not yet provide a GPU
-equivalent of the full Python CPU feature set. CPU Radia MEX is unsupported.
+equivalent of the full Python CPU feature set.
+An explicitly selected CPU route compiled with mexcuda is permitted after API
+tracing proves that it creates no CUDA context, with and without a device.
+There is no separate CPU-only MEX build. CPU and GPU selection is explicit,
+with no implicit fallback. Python CPU accuracy checks remain independent of
+the shared CUDA kernels and are not a GPU-user prerequisite.
 The GPU toolchain uses MATLAB-bundled CUDA 12.8 and Visual Studio Build Tools
 2022 / MSVC 14.44; see the package guide for build and validation requirements.
 
@@ -500,7 +506,7 @@ explicit configuration.
 | Python core | 3.12 |
 | Lightweight radia-mcp | Python 3.10 or later |
 | NGSolve / Netgen | 6.2.2607 |
-| radia-gpu / radia-optuna MATLAB | R2026a (yearly a release only), Windows x64; separate package requirements apply |
+| radia-simulink / radia-optuna MATLAB | R2026a (yearly a release only), Windows x64; separate package requirements apply |
 | Coreform Cubit | 2026.8, optional |
 | cubit-mesh-export Python | >=3.12,<3.13 |
 | Native build | Visual Studio Build Tools 2022 / MSVC 14.44, CMake/Ninja, pip `mkl-devel` oneMKL |
@@ -508,13 +514,13 @@ explicit configuration.
 ### Python packages
 
 This monorepo contains six independently versioned distributions. MATLAB,
-Simulink and LTspice integration belongs to `radia-gpu`, including its
+Simulink and LTspice integration belongs to `radia-simulink`, including its
 Python circuit-conversion and parser modules.
 
 | Package or extra | Install | Purpose |
 | :--- | :--- | :--- |
 | `radia` | `python -m pip install radia` | C++ core, Python APIs, NGSolve integration, physical methods, and application logic |
-| `radia-gpu` (source version 0.1.5rc1) | `python -m pip install radia-gpu` | MATLAB mexcuda solvers, Simulink and LTspice integrations; external products installed separately |
+| `radia-simulink` (source version 0.1.5rc1) | `python -m pip install radia-simulink` | MATLAB mexcuda solvers, Simulink and LTspice integrations; external products installed separately |
 | `radia-mcp` | `python -m pip install radia-mcp` | AI-facing MCP servers and executable domain knowledge |
 | `cubit-mesh-export` (2.2.3) | `python -m pip install cubit-mesh-export` | Solver-neutral high-order Cubit export, `check-vol`, plugin, and independently owned Cubit MCP |
 | `radia-optuna` | `python -m pip install radia-optuna` | Standalone MATLAB Optuna namespace and 21-command native gateway; no Radia solver, NGSolve, or MKL runtime |
@@ -545,7 +551,7 @@ See [BUILD.md](BUILD.md) for compiler, NGSolve, MKL, and packaging details.
 ```text
 src/core/                       C++ Radia and native electromagnetic kernels
 src/radia/                      CPU Python package and NGSolve integration
-packages/radia-gpu/             CUDA MEX, MATLAB, Simulink and LTspice integration
+packages/radia-simulink/             CUDA MEX, MATLAB, Simulink and LTspice integration
 packages/radia-mcp/             MCP servers and executable domain knowledge
 packages/cubit-mesh-export/     Cubit exporters, plugin and check-vol
 packages/radia-optuna/          Independent MATLAB/Simulink Optuna package
@@ -578,7 +584,7 @@ Start with the path closest to your task:
 - [Electric machines](docs/electric_machine/README.md)
 - [Magnetic levitation](docs/maglev/demos/README.md)
 - [Gmsh post-processing](docs/gmsh_post/README.md)
-- [MATLAB and Simulink](packages/radia-gpu/matlab/README.md)
+- [MATLAB and Simulink](packages/radia-simulink/matlab/README.md)
 - [MCP servers and tools](packages/radia-mcp/README.md)
 - [Cubit mesh export](docs/cubit_mesh_export/README.md)
 

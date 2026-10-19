@@ -2,7 +2,7 @@
   "schema": "radia.ci-distributions.v1",
   "distributions": [
     "radia",
-    "radia-gpu",
+    "radia-simulink",
     "radia-mcp",
     "radia-optuna",
     "cubit-mesh-export",
@@ -75,8 +75,8 @@
           "radia": [
             "radia"
           ],
-          "radia-gpu": [
-            "radia-gpu"
+          "radia-simulink": [
+            "radia-simulink"
           ],
           "radia-mcp": [
             "radia-mcp"
@@ -90,8 +90,8 @@
           "cubit-mesh-export": [
             "cubit-mesh-export"
           ],
-          "radia_gpu": [
-            "radia-gpu"
+          "radia_simulink": [
+            "radia-simulink"
           ],
           "radia_mcp": [
             "radia-mcp"
@@ -105,7 +105,7 @@
         },
         "build_system": [
           "radia",
-          "radia-gpu",
+          "radia-simulink",
           "radia-mcp",
           "radia-optuna",
           "cubit-mesh-export",
@@ -146,7 +146,7 @@
         },
         "options": {
           "RADIA_BUILD_MATLAB_MEX": [
-            "radia-gpu"
+            "radia-simulink"
           ],
           "RADIA_BUILD_OPTUNA_MEX_ONLY": [
             "radia-optuna"
@@ -155,25 +155,25 @@
       },
       "Build.ps1": {
         "CudaMexOnly": [
-          "radia-gpu"
+          "radia-simulink"
         ],
         "AmsCudaOnly": [
-          "radia-gpu"
+          "radia-simulink"
         ],
         "HMatrixCudaOnly": [
-          "radia-gpu"
+          "radia-simulink"
         ],
         "ProjectionCudaOnly": [
-          "radia-gpu"
+          "radia-simulink"
         ],
         "IhCudaOnly": [
-          "radia-gpu"
+          "radia-simulink"
         ],
         "FieldCudaOnly": [
-          "radia-gpu"
+          "radia-simulink"
         ],
         "FmmCudaOnly": [
-          "radia-gpu"
+          "radia-simulink"
         ],
         "RadiaOnly": [
           "radia"
@@ -271,7 +271,7 @@
     {
       "pattern": ".satk/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
@@ -391,9 +391,9 @@
       ]
     },
     {
-      "pattern": "packages/radia-gpu/**",
+      "pattern": "packages/radia-simulink/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
@@ -406,11 +406,11 @@
       "pattern": "packages/radia-mcp/src/radia_mcp/ltspice/**",
       "owners": [
         "radia-mcp",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "radia-gpu LTspice tests import radia_mcp.ltspice.server and cross-check its gates against the GPU implementation"
+        "detail": "radia-simulink LTspice tests import radia_mcp.ltspice.server and cross-check its gates against the GPU implementation"
       },
       "selection": "all_owners"
     },
@@ -418,11 +418,11 @@
       "pattern": "packages/radia-mcp/src/radia_mcp/common/__init__.py",
       "owners": [
         "radia-mcp",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "imported by radia_mcp.ltspice.server, which radia-gpu LTspice tests cross-check"
+        "detail": "imported by radia_mcp.ltspice.server, which radia-simulink LTspice tests cross-check"
       },
       "selection": "all_owners"
     },
@@ -430,11 +430,11 @@
       "pattern": "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
       "owners": [
         "radia-mcp",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "imported by radia_mcp.ltspice.server, which radia-gpu LTspice tests cross-check"
+        "detail": "imported by radia_mcp.ltspice.server, which radia-simulink LTspice tests cross-check"
       },
       "selection": "all_owners"
     },
@@ -442,11 +442,11 @@
       "pattern": "packages/radia-mcp/src/radia_mcp/common/status.py",
       "owners": [
         "radia-mcp",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "imported by radia_mcp.ltspice.server, which radia-gpu LTspice tests cross-check"
+        "detail": "imported by radia_mcp.ltspice.server, which radia-simulink LTspice tests cross-check"
       },
       "selection": "all_owners"
     },
@@ -555,163 +555,163 @@
     {
       "pattern": "src/runtime/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "tests/matlab/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "tests/cpp/test_radia_mex*",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "tests/test_matlab*",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "tests/test_simulink*",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "tests/test_ih_operator*",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "tests/test_ltspice*",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "tests/test_kicad*",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "docs/simulink/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "docs/ltspice/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "docs/api/MATLAB*.md",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "docs/api_inventory/PYLTSPICE*.md",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "validation_test/ams_cuda/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "validation_test/hmatrix_cuda/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "validation_test/ic_cuda/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "validation_test/fmm_cuda/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "validation_test/ih_cuda/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "validation_test/ngsolve_cuda_mex/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "validation_test/radfld_cuda/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
-      "pattern": "validation_test/radia_gpu/**",
+      "pattern": "validation_test/radia_simulink/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "validation_test/matlab_mex_runtime/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "validation_test/matlab_runtime/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "validation_test/ngsolve_matlab_parity/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "validation_test/ltspice/**",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "tools/check_matlab_python_parity.py",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "tools/verify_simulink_release.py",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
       "pattern": "tools/audit_application_block_contract.py",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
@@ -1023,7 +1023,7 @@
     {
       "pattern": ".github/workflows/ltspice-data-safety.yml",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
@@ -1039,15 +1039,15 @@
       ]
     },
     {
-      "pattern": ".github/workflows/radia-gpu-release.yml",
+      "pattern": ".github/workflows/radia-simulink-release.yml",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
-      "pattern": ".github/workflows/radia-gpu.yml",
+      "pattern": ".github/workflows/radia-simulink.yml",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
@@ -1090,7 +1090,7 @@
       "pattern": "CMakeLists.txt",
       "owners": [
         "radia",
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
@@ -1106,7 +1106,7 @@
       "pattern": "Build.ps1",
       "owners": [
         "radia",
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
@@ -1122,7 +1122,7 @@
       "pattern": "pyproject.toml",
       "owners": [
         "radia",
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
@@ -1138,7 +1138,7 @@
       "pattern": "MANIFEST.in",
       "owners": [
         "radia",
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
@@ -1154,7 +1154,7 @@
       "pattern": "tests/test_tier_manifest.json",
       "owners": [
         "radia",
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
@@ -1170,7 +1170,7 @@
       "pattern": "src/ext/HACApK/**",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1182,7 +1182,7 @@
       "pattern": "src/core/rad_bem_galerkin.h",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1194,7 +1194,7 @@
       "pattern": "src/core/rad_bem_galerkin.cpp",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1206,7 +1206,7 @@
       "pattern": "src/core/rad_biot_savart_filaments.cpp",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1218,7 +1218,7 @@
       "pattern": "src/core/rad_host_parallel.h",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1230,7 +1230,7 @@
       "pattern": "src/core/rad_biot_savart_filaments.h",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1242,7 +1242,7 @@
       "pattern": "src/core/rad_charge_quadrature.h",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1254,7 +1254,7 @@
       "pattern": "src/core/rad_field_cloud_kernel.h",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1266,7 +1266,7 @@
       "pattern": "src/core/rad_field_source_kernel.inc",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1278,7 +1278,7 @@
       "pattern": "src/core/rad_field_sources.h",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1290,7 +1290,7 @@
       "pattern": "src/core/rad_hacapk_parallel.h",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1302,7 +1302,7 @@
       "pattern": "src/core/rad_hdiv_field_evaluator.h",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1314,7 +1314,7 @@
       "pattern": "src/core/rad_hdiv_field_kernel_api.inc",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1326,7 +1326,7 @@
       "pattern": "src/core/rad_hdiv_field_math.inc",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1338,7 +1338,7 @@
       "pattern": "src/core/rad_hdiv_vim.h",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1350,7 +1350,7 @@
       "pattern": "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1362,7 +1362,7 @@
       "pattern": "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1374,7 +1374,7 @@
       "pattern": "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1386,7 +1386,7 @@
       "pattern": "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_abi",
@@ -1398,7 +1398,7 @@
       "pattern": "tools/native_build_provenance.ps1",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1410,7 +1410,7 @@
       "pattern": "tests/test_native_build_provenance.py",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1421,7 +1421,7 @@
     {
       "pattern": "tests/matlab/fixtures/ltspice_rc.cir",
       "owners": [
-        "radia-gpu",
+        "radia-simulink",
         "radia-optuna"
       ],
       "reason": {
@@ -1434,7 +1434,7 @@
       "pattern": "tools/sparsesolv_ci_impact.py",
       "owners": [
         "radia",
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
@@ -1451,7 +1451,7 @@
       "pattern": "tools/ci_distribution_contract.py",
       "owners": [
         "radia",
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
@@ -1468,7 +1468,7 @@
       "pattern": "tools/ci_distribution_manifest.json",
       "owners": [
         "radia",
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
@@ -1485,7 +1485,7 @@
       "pattern": "tests/test_ih_operator_assembly.py",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "integration",
@@ -1497,7 +1497,7 @@
       "pattern": "tests/test_ih_operator_axisym.py",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "integration",
@@ -1509,7 +1509,7 @@
       "pattern": "tests/test_ih_fin_surface_boundary.py",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "integration",
@@ -1521,7 +1521,7 @@
       "pattern": "tests/test_ih_panel_esim_assembly.py",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "integration",
@@ -1533,7 +1533,7 @@
       "pattern": "validation_test/induction_heating/test_ih_operator_physics_golden.py",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "integration",
@@ -1542,10 +1542,10 @@
       "selection": "all_owners"
     },
     {
-      "pattern": "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+      "pattern": "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "integration",
@@ -1569,7 +1569,7 @@
       "pattern": "src/core/radia_mex_sparse_symmetry.h",
       "owners": [
         "radia",
-        "radia-gpu"
+        "radia-simulink"
       ],
       "reason": {
         "kind": "integration",
@@ -1580,7 +1580,7 @@
     {
       "pattern": "tests/cpp/test_radia_ih_thermal_acceptance.cpp",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ]
     },
     {
@@ -1692,50 +1692,50 @@
       "selection": "all_owners"
     },
     {
-      "pattern": "packages/radia-gpu/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m",
+      "pattern": "packages/radia-simulink/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m",
       "owners": [
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "radia-mcp MATLAB/Simulink/acoustic contracts and runtime read these radia-gpu sources."
+        "detail": "radia-mcp MATLAB/Simulink/acoustic contracts and runtime read these radia-simulink sources."
       },
       "selection": "all_owners"
     },
     {
-      "pattern": "packages/radia-gpu/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
+      "pattern": "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
       "owners": [
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "radia-mcp MATLAB/Simulink/acoustic contracts and runtime read these radia-gpu sources."
+        "detail": "radia-mcp MATLAB/Simulink/acoustic contracts and runtime read these radia-simulink sources."
       },
       "selection": "all_owners"
     },
     {
-      "pattern": "packages/radia-gpu/matlab/+radia/+acoustic/**",
+      "pattern": "packages/radia-simulink/matlab/+radia/+acoustic/**",
       "owners": [
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "radia-mcp MATLAB/Simulink/acoustic contracts and runtime read these radia-gpu sources."
+        "detail": "radia-mcp MATLAB/Simulink/acoustic contracts and runtime read these radia-simulink sources."
       },
       "selection": "all_owners"
     },
     {
-      "pattern": "packages/radia-gpu/native/radia_cuda_csr_pcg.cu",
+      "pattern": "packages/radia-simulink/native/radia_cuda_csr_pcg.cu",
       "owners": [
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "radia-mcp MATLAB/Simulink/acoustic contracts and runtime read these radia-gpu sources."
+        "detail": "radia-mcp MATLAB/Simulink/acoustic contracts and runtime read these radia-simulink sources."
       },
       "selection": "all_owners"
     },
@@ -1959,7 +1959,7 @@
       "pattern": "tools/ci_runner_routing.py",
       "owners": [
         "radia",
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
@@ -1976,7 +1976,7 @@
       "pattern": "tools/ci_runner_routing.json",
       "owners": [
         "radia",
-        "radia-gpu",
+        "radia-simulink",
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
@@ -2303,7 +2303,7 @@
     "ltspice-data-safety": {
       "workflow": ".github/workflows/ltspice-data-safety.yml",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ],
       "scope": "distribution",
       "native": true,
@@ -2313,8 +2313,8 @@
             "main"
           ],
           "paths": [
-            "packages/radia-gpu/matlab/+radia/+ltspice/readRaw*.m",
-            "packages/radia-gpu/matlab/+radia/+ltspice/*TransientState.m",
+            "packages/radia-simulink/matlab/+radia/+ltspice/readRaw*.m",
+            "packages/radia-simulink/matlab/+radia/+ltspice/*TransientState.m",
             "tests/matlab/test_ltspice_data_safety.m",
             "tests/matlab/fixtures/ltspice_numdgt7*",
             ".github/workflows/ltspice-data-safety.yml",
@@ -2334,8 +2334,8 @@
             "main"
           ],
           "paths": [
-            "packages/radia-gpu/matlab/+radia/+ltspice/readRaw*.m",
-            "packages/radia-gpu/matlab/+radia/+ltspice/*TransientState.m",
+            "packages/radia-simulink/matlab/+radia/+ltspice/readRaw*.m",
+            "packages/radia-simulink/matlab/+radia/+ltspice/*TransientState.m",
             "tests/matlab/test_ltspice_data_safety.m",
             "tests/matlab/fixtures/ltspice_numdgt7*",
             ".github/workflows/ltspice-data-safety.yml",
@@ -2634,10 +2634,10 @@
         "tests/test_tier_manifest.json"
       ]
     },
-    "radia-gpu-release": {
-      "workflow": ".github/workflows/radia-gpu-release.yml",
+    "radia-simulink-release": {
+      "workflow": ".github/workflows/radia-simulink-release.yml",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ],
       "scope": "distribution",
       "native": false,
@@ -2645,7 +2645,7 @@
         "workflow_dispatch": {
           "inputs": {
             "ci_run_id": {
-              "description": "Successful main radia-gpu CI run (publish its wheel without rebuilding)",
+              "description": "Successful main radia-simulink CI run (publish its wheel without rebuilding)",
               "required": "true",
               "type": "string"
             },
@@ -2662,10 +2662,10 @@
       "content_diff_active": [],
       "required_paths": []
     },
-    "radia-gpu": {
-      "workflow": ".github/workflows/radia-gpu.yml",
+    "radia-simulink": {
+      "workflow": ".github/workflows/radia-simulink.yml",
       "owners": [
-        "radia-gpu"
+        "radia-simulink"
       ],
       "scope": "distribution",
       "native": true,
@@ -2675,12 +2675,12 @@
             "main"
           ],
           "paths": [
-            "packages/radia-gpu/**",
+            "packages/radia-simulink/**",
             "packages/radia-mcp/src/radia_mcp/ltspice/**",
             "packages/radia-mcp/src/radia_mcp/common/__init__.py",
             "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
             "packages/radia-mcp/src/radia_mcp/common/status.py",
-            "validation_test/radia_gpu/**",
+            "validation_test/radia_simulink/**",
             "validation_test/ams_cuda/**",
             "validation_test/ic_cuda/**",
             "validation_test/ngsolve_cuda_mex/**",
@@ -2704,7 +2704,7 @@
             "src/core/rad_hdiv_field_math.inc",
             "src/core/rad_hdiv_vim.h",
             "Build.ps1",
-            ".github/workflows/radia-gpu.yml",
+            ".github/workflows/radia-simulink.yml",
             "CMakeLists.txt",
             "pyproject.toml",
             "MANIFEST.in",
@@ -2717,7 +2717,7 @@
             "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
             "src/core/radia_mex_sparse_symmetry.h",
             "!**/*.md",
-            "packages/radia-gpu/README.md",
+            "packages/radia-simulink/README.md",
             "docs/ltspice/README.md"
           ]
         },
@@ -2726,12 +2726,12 @@
             "main"
           ],
           "paths": [
-            "packages/radia-gpu/**",
+            "packages/radia-simulink/**",
             "packages/radia-mcp/src/radia_mcp/ltspice/**",
             "packages/radia-mcp/src/radia_mcp/common/__init__.py",
             "packages/radia-mcp/src/radia_mcp/common/lazy_call.py",
             "packages/radia-mcp/src/radia_mcp/common/status.py",
-            "validation_test/radia_gpu/**",
+            "validation_test/radia_simulink/**",
             "validation_test/ams_cuda/**",
             "validation_test/ic_cuda/**",
             "validation_test/ngsolve_cuda_mex/**",
@@ -2755,7 +2755,7 @@
             "src/core/rad_hdiv_field_math.inc",
             "src/core/rad_hdiv_vim.h",
             "Build.ps1",
-            ".github/workflows/radia-gpu.yml",
+            ".github/workflows/radia-simulink.yml",
             "CMakeLists.txt",
             "pyproject.toml",
             "MANIFEST.in",
@@ -2768,7 +2768,7 @@
             "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
             "src/core/radia_mex_sparse_symmetry.h",
             "!**/*.md",
-            "packages/radia-gpu/README.md",
+            "packages/radia-simulink/README.md",
             "docs/ltspice/README.md"
           ]
         },
@@ -2778,7 +2778,7 @@
         "tools/sparsesolv_ci_impact.py:required_for_event"
       ],
       "markdown_inputs": [
-        "packages/radia-gpu/README.md",
+        "packages/radia-simulink/README.md",
         "docs/ltspice/README.md"
       ],
       "content_diff_active": [
@@ -2848,10 +2848,10 @@
             "packages/radia-mcp/**",
             "tests/mcp_server/**",
             "tests/mcp_integration/**",
-            "packages/radia-gpu/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m",
-            "packages/radia-gpu/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
-            "packages/radia-gpu/matlab/+radia/+acoustic/**",
-            "packages/radia-gpu/native/radia_cuda_csr_pcg.cu",
+            "packages/radia-simulink/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m",
+            "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
+            "packages/radia-simulink/matlab/+radia/+acoustic/**",
+            "packages/radia-simulink/native/radia_cuda_csr_pcg.cu",
             "packages/radia-optuna/matlab/**",
             "packages/radia-optuna/native/optuna_mex.cpp",
             "packages/radia-optuna/src/radia_optuna/manifest.json",
@@ -2891,10 +2891,10 @@
             "packages/radia-mcp/**",
             "tests/mcp_server/**",
             "tests/mcp_integration/**",
-            "packages/radia-gpu/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m",
-            "packages/radia-gpu/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
-            "packages/radia-gpu/matlab/+radia/+acoustic/**",
-            "packages/radia-gpu/native/radia_cuda_csr_pcg.cu",
+            "packages/radia-simulink/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m",
+            "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
+            "packages/radia-simulink/matlab/+radia/+acoustic/**",
+            "packages/radia-simulink/native/radia_cuda_csr_pcg.cu",
             "packages/radia-optuna/matlab/**",
             "packages/radia-optuna/native/optuna_mex.cpp",
             "packages/radia-optuna/src/radia_optuna/manifest.json",
@@ -3325,7 +3325,7 @@
             "tests/test_ih_fin_surface_boundary.py",
             "tests/test_ih_panel_esim_assembly.py",
             "validation_test/induction_heating/test_ih_operator_physics_golden.py",
-            "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+            "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
             "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
             "validation_test/radia_mcp/test_aphi_gauge_point.py",
             "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
@@ -3504,7 +3504,7 @@
             "tests/test_ih_fin_surface_boundary.py",
             "tests/test_ih_panel_esim_assembly.py",
             "validation_test/induction_heating/test_ih_operator_physics_golden.py",
-            "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+            "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
             "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
             "validation_test/radia_mcp/test_aphi_gauge_point.py",
             "validation_test/radia_mcp/test_axi_eddy_current_drive.py",

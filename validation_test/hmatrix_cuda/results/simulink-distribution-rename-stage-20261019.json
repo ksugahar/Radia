@@ -1,0 +1,21 @@
+{
+  "schema": "radia.simulink.source-rename-stage.v1",
+  "source_rename_implemented": true,
+  "canonical_distribution": "radia-simulink",
+  "canonical_python_package": "radia_simulink",
+  "backward_compatibility": false,
+  "metadata_contract_tests_passed": 74,
+  "python_syntax_files_checked": 229,
+  "installed_wheel_accepted": false,
+  "slx_renamed_entry_points_accepted": false,
+  "matlab_cpu_solver_complete": false,
+  "direct_python_gpu_binding_complete": false,
+  "published": false,
+  "scope": "Breaking isolated source/import/CLI/build/CI-reference migration; historical numerical JSON and immutable artifacts retained",
+  "limits": [
+    "No old-name distribution/import/CLI shim",
+    "Existing tracked SLX models require official MATLAB edit/check/save/reopen for changed entry points; no XML patch",
+    "No new-name wheel has been built or installed",
+    "Current numerical measurements belong to recorded pre-rename source commits and binaries"
+  ]
+}

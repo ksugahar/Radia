@@ -35,7 +35,7 @@ def main():
   sys.path.insert(0,str(reference));import _radia_field_reference as oracle
   import matlab.engine
   import matlab
-  eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');eng.addpath(str(field),str(projection),str(ROOT/'packages/radia-gpu/matlab'),str(Path(__file__).parent),nargout=0)
+  eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');eng.addpath(str(field),str(projection),str(ROOT/'packages/radia-simulink/matlab'),str(Path(__file__).parent),nargout=0)
   if a.numerical_only:
    pid=int(eng.feature('getpid'));subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)
   eng.workspace['dependency_path']=os.pathsep.join(map(str,paths));eng.eval("setenv('PATH',[dependency_path pathsep getenv('PATH')]);",nargout=0)

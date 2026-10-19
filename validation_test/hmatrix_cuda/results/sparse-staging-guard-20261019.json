@@ -1,0 +1,79 @@
+{
+  "accepted": true,
+  "scope": "Exact old/new FE sparse allocation admission regression; not performance",
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "binaries": {
+    "previous": {
+      "source_commit": "17cdc12c6c6c0e4be2bf82167983f00b004f6a57",
+      "binary_sha256": "5be43f64f0efdc52187021e00c9d40cdbee33401b33ee94f111abfd77d40c90f"
+    },
+    "candidate": {
+      "source_commit": "6dec804471fc2af01cd63c7503d21c3187c3289e",
+      "binary_sha256": "5e9608958159b276a58013a80a866db6007ed3b870da457d598e569bd0411df4"
+    }
+  },
+  "cases": [
+    {
+      "accepted": true,
+      "dofs": 288.0,
+      "mass_nonzeros": 11088.0,
+      "charge_nonzeros": 1012.0,
+      "all_fields_exact": true,
+      "invalid_orders_rejected": 2.0,
+      "live_count": 0.0,
+      "scope": "Exact FE staging regression; no new solver or performance acceptance",
+      "mesh_sha256": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50"
+    },
+    {
+      "accepted": true,
+      "dofs": 2412.0,
+      "mass_nonzeros": 96552.0,
+      "charge_nonzeros": 7512.0,
+      "all_fields_exact": true,
+      "invalid_orders_rejected": 2.0,
+      "live_count": 0.0,
+      "scope": "Exact FE staging regression; no new solver or performance acceptance",
+      "mesh_sha256": "f577732dc8424288827f1f8d4385cbc2a994e1364907a204076b38170ffc8fc9"
+    },
+    {
+      "accepted": true,
+      "dofs": 6594.0,
+      "mass_nonzeros": 274998.0,
+      "charge_nonzeros": 16794.0,
+      "all_fields_exact": true,
+      "invalid_orders_rejected": 2.0,
+      "live_count": 0.0,
+      "scope": "Exact FE staging regression; no new solver or performance acceptance",
+      "mesh_sha256": "74da487538d92c370393f149cbff5fed0b3e89a28af8382e7fbb42e01cfacf77"
+    },
+    {
+      "accepted": true,
+      "dofs": 10344.0,
+      "mass_nonzeros": 432846.0,
+      "charge_nonzeros": 25730.0,
+      "all_fields_exact": true,
+      "invalid_orders_rejected": 2.0,
+      "live_count": 0.0,
+      "scope": "Exact FE staging regression; no new solver or performance acceptance",
+      "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb"
+    }
+  ],
+  "owned_engine_quit": true,
+  "schema": "radia.hdiv.sparse-staging-guard.v1",
+  "native_build_accepted": true,
+  "independent_cpu_recomputed": false,
+  "original_equation_residual": null,
+  "residual_applicability": "not_applicable_FE_staging_only",
+  "performance_accepted": false,
+  "release_accepted": false,
+  "unchanged_caps": {
+    "elements": 4096,
+    "dofs": 16384,
+    "charges": 8192
+  },
+  "limitations": [
+    "Exact parity against previously CPU-validated FE staging does not constitute a new full solver acceptance.",
+    "Symbolic sparse allocation allowance is not host/global peak memory.",
+    "No larger mesh capacity or speedup established; A100 evaluation pending."
+  ]
+}

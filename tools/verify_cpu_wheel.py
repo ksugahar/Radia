@@ -27,8 +27,8 @@ def verify(path: Path) -> dict:
                         and member.name.startswith('_equation')
                         and member.suffix in {'.pyd', '.so', '.dylib'})):
                 retired_equation.append(name)
-            if (set(member.parts) & {'matlab', 'simulink', 'ltspice', 'radia_gpu'}
-                    or member.stem in {'matlab', 'simulink', 'ltspice', 'radia_gpu'}
+            if (set(member.parts) & {'matlab', 'simulink', 'ltspice', 'radia_simulink'}
+                    or member.stem in {'matlab', 'simulink', 'ltspice', 'radia_simulink'}
                     or member.suffix in {'.m', '.mlx', '.slx', '.mdl', '.mexw64',
                                          '.mexa64', '.mexmaci64', '.mexmaca64', '.cu', '.cuh'}
                     or any(suffix.startswith('.mex') for suffix in member.suffixes)
@@ -38,12 +38,12 @@ def verify(path: Path) -> dict:
         for requirement in metadata.get_all('Requires-Dist', []):
             dependency = re.split(r'[\s\[<>=!~;(]', requirement, maxsplit=1)[0]
             dependency = re.sub(r'[-_.]+', '-', dependency).lower()
-            if dependency in {'radia-gpu', 'matlab', 'matlabengine', 'matlab-engine-for-python'}:
+            if dependency in {'radia-simulink', 'matlab', 'matlabengine', 'matlab-engine-for-python'}:
                 forbidden.append('Requires-Dist: ' + requirement)
         if retired_equation:
             raise ValueError('CPU wheel contains retired equation payload: ' + ', '.join(retired_equation))
         if forbidden:
-            raise ValueError('CPU wheel contains radia-gpu integration payload: ' + ', '.join(forbidden))
+            raise ValueError('CPU wheel contains radia-simulink integration payload: ' + ', '.join(forbidden))
     return dict(passed=True, distribution='radia', version=metadata['Version'],
                 gpu_integration_absent=True, retired_equation_absent=True, files=len(names))
 

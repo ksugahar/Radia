@@ -4,7 +4,7 @@ end
 
 function setupOnce(t)
 root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
-addpath(fullfile(root,'packages','radia-gpu','matlab'));
+addpath(fullfile(root,'packages','radia-simulink','matlab'));
 radia.setup(Force=true);
 folder = tempname('C:\temp');
 mkdir(folder);

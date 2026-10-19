@@ -1,0 +1,93 @@
+{
+  "schema": "radia.hacapk-deferred-dense-boundary.v1",
+  "accepted": true,
+  "stage": "C ownership boundary only",
+  "implementation_commit": "0e3302a8694c276ce6aa92d8a168655a692f581e",
+  "gpu_connected": false,
+  "production_build_enabled": false,
+  "gpu_numerical_accepted": false,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "timing_measured": false,
+  "true_relative_residual": null,
+  "residual_applicability": "not_applicable_operator",
+  "deferred": {
+    "deferred": {
+      "cases": 8,
+      "maximum_relative_difference": 2.2449620341728552e-13,
+      "deferred_leaves": 62,
+      "removed_host_entry_queries": 87120,
+      "permuted_indices": 784,
+      "gpu_connected": false,
+      "taskmanager_started": false,
+      "binary_sha256": "e68d513566dc97d2c5f8e3a8f88ea109fbe04c4f11b802ce60b63ab519c0b445"
+    }
+  },
+  "default_cpu_regression": {
+    "scalar": {
+      "cases": 2,
+      "maximum_relative_difference": 3.352302628071643e-13,
+      "lowrank_leaves": 4,
+      "taskmanager_started": false,
+      "binary_sha256": "836caa569bb002ce570ac8ac52bab09a86056de5b65ab0c148eb56470a2d759d"
+    },
+    "batch": {
+      "cases": 2,
+      "maximum_relative_difference": 3.352302628071643e-13,
+      "lowrank_leaves": 4,
+      "taskmanager_started": false,
+      "binary_sha256": "a4617781b24b25bfcf500fad45e8ce8a3dbfecd78c87c9dd5bdcf68d4995202c"
+    }
+  },
+  "source_sha256": {
+    "validation_test/hmatrix_cuda/check_full_host.c": "ac40ae75e89f66beb67c5ea9805fda41fa21c8f3dd6d56ef541dd646d94a1fc4",
+    "packages/radia-gpu/native/hmatrix_serial_host.c": "2d18961c058a624d9d4d5f0bff2bf65360e81ba61a1f086963a6985dab91f2e5",
+    "src/ext/HACApK/cHACApK_base.c": "9fc8efd28903c0760964dd94226f1194c7a8cc170264f4ab13d83696037f7289",
+    "src/ext/HACApK/cHACApK_cpp_impl.c": "daea8270a5204c366a68daf475e9a895757a4d71d71971c205a75ebf1140c8ee",
+    "src/ext/HACApK/cHACApK_lib.c": "94bcef9be652932b29785c417b446b91b984c5e92e41f8c55fb49a08df0e0cb8",
+    "src/ext/HACApK/cHACApK_pca_cluster.c": "f942f053d6742ce4a530a87cce6c2fba41bdbfdbdbc13032cb244cbc0eccb1d2",
+    "packages/radia-gpu/tools/vs2022_toolchain.py": "f80332db377b87480559a8fa0a1d691f669c2f500a0192f242c029c59540c47a",
+    "validation_test/hmatrix_cuda/check_full_host.py": "ec013cac63b9947bbc643652871772edea3b8166d13c788190800ac7c2efc4df",
+    "src/ext/HACApK/cHACApK_aca.inc": "72f78d46b4d4da59522faa6e3ff63b33597fa07bcddf5dd53530ef643fb14b7e",
+    "src/ext/HACApK/cHACApK_base.h": "0feb4603a640d028ff0cfc44ca1d0240552c3633f3fc4a3f33658ac7cac255c5",
+    "src/ext/HACApK/cHACApK_batch_size.h": "ab279ea49c8c73c71e787216d34224e14da3bf670a6cdba0522c25c1b1cda331",
+    "src/ext/HACApK/cHACApK_block_tree.h": "84ece12e48084b36cf209fc2bf9e85a319ce5f19fe2d07fc2d42c850c0f5209a",
+    "src/ext/HACApK/cHACApK_calc_entry_ij.h": "0476c35264ebb4626454baf5f20c89c0e711d029370458dbb9800cbdf66b7320",
+    "src/ext/HACApK/cHACApK_cpp.h": "a0d11801e0bcbb5f4faa893e994ba8f3bd3baf0aa203031124192c38c9034c86",
+    "src/ext/HACApK/cHACApK_dense_leaf_sink.h": "46fb854564af496e04c1933e65aaa0e4e9211df93688f0ae4f6e112e9807c43d",
+    "src/ext/HACApK/cHACApK_harith.h": "b8295d8c8fe427cef7517daa64e695b678302150f1b6a1306a5fd642fc71a18b",
+    "src/ext/HACApK/cHACApK_lib.h": "bd128cbf005444096be5a860bbbcaa23b57fac3f55890725ada5abf5646c9688",
+    "src/ext/HACApK/cHACApK_pca_cluster.h": "177ba81580c0ca5cec8996d32c55f17b3ecc224a21dd0296f05712b1d88a82ba",
+    "src/ext/HACApK/hacapk_log.h": "1b214205bf87ece8acb939c2a4694eea8466e22469ce4c4b2dc36eae2584b146",
+    "src/ext/HACApK/mpi_stub.h": "7f714678b49169e92b221f615d64e4c9f1192ba4bcda30fd7290cab2ad021dcf",
+    "src/core/rad_hacapk_parallel.h": "76a31060959b87db46dadeb247a4186b5a533ff7b1a742d27013fbc1c75ecf9d"
+  },
+  "test_protocol": {
+    "synthetic_points": 132,
+    "cluster_strategies": [
+      "BBOX",
+      "PCA"
+    ],
+    "rank_caps": [
+      1,
+      32
+    ],
+    "symmetric_fill": [
+      false,
+      true
+    ],
+    "aca_mode": 1,
+    "tolerance": 1e-10,
+    "materialized_cases": 8,
+    "unmaterialized_destroy_cases": 8,
+    "operator_relative_limit": 1e-08
+  },
+  "limitations": [
+    "No current mexcuda or CPU package build defines the new sink macro; no runtime acceleration or transfer saving is accepted.",
+    "The C fixture materializes deferred values on CPU before checking actions; this is not a GPU implementation or physical HDiv gate.",
+    "Original leaf metadata, permutation and low-rank factor bytes match the ordinary route; removed query count is a C-boundary observation, not timing.",
+    "The first sorted fixture failed its nonidentity-permutation assertion; a separate deterministic input permutation strengthens the retry, with original source/logs preserved.",
+    "Contracts ran from hashed WIP bytes; the implementation commit contains these sources, but no clean GPU or whole CPU-wheel build is certified.",
+    "Future device packing must account for simultaneous cache/resident allocation and must not publish incomplete contexts."
+  ]
+}

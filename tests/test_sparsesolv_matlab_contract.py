@@ -66,7 +66,7 @@ def test_parity_runner_waits_for_the_worker_with_the_configured_timeout(
 
 
 def test_sparsesolv_is_cpu_python_and_cuda_pcg_has_a_separate_owner():
-    manifest = json.loads((ROOT / "packages/radia-gpu/matlab/python_api_parity_manifest.json").read_text())
+    manifest = json.loads((ROOT / "packages/radia-simulink/matlab/python_api_parity_manifest.json").read_text())
     entry = next(e for e in manifest["binary_extensions"] if e["python"] == "sparsesolv_ngsolve.pyd")
     assert entry["classification"] == "cpu-python-only"
     assert entry["matlab"] == []
@@ -89,7 +89,7 @@ def test_cpu_build_rejects_retired_mex_switch():
 
 def test_gpu_ci_has_its_own_build_and_true_residual_acceptance():
     cpu = yaml.safe_load((ROOT/".github/workflows/sparsesolv.yml").read_text())
-    gpu = yaml.safe_load((ROOT/".github/workflows/radia-gpu.yml").read_text())
+    gpu = yaml.safe_load((ROOT/".github/workflows/radia-simulink.yml").read_text())
     steps = cpu["jobs"]["ams-regression"]["steps"]
     assert all(step.get("id") != "matlab-impact" for step in steps)
     assert "MatlabMexOnly" not in str(steps)
@@ -101,5 +101,5 @@ def test_gpu_ci_has_its_own_build_and_true_residual_acceptance():
     assert "--maxh 0.24" in commands
     assert "prepare_ci_evidence.py --poisson" in commands
     uploads = [step for step in job["steps"] if step.get("uses") == "actions/upload-artifact@v4"]
-    evidence = next(step for step in uploads if step["with"]["name"] == "radia-gpu-cuda-evidence")
-    assert "radia-gpu-public-" in evidence["with"]["path"]
+    evidence = next(step for step in uploads if step["with"]["name"] == "radia-simulink-cuda-evidence")
+    assert "radia-simulink-public-" in evidence["with"]["path"]

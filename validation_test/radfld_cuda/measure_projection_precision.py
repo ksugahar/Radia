@@ -29,7 +29,7 @@ def main():
   import matlab.engine
   import matlab
   started=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');record['matlab_startup_seconds']=time.perf_counter()-started
-  eng.addpath(str(a.field_build),str(a.projection_build),str(ROOT/'packages/radia-gpu/matlab'),str(Path(__file__).parent),nargout=0)
+  eng.addpath(str(a.field_build),str(a.projection_build),str(ROOT/'packages/radia-simulink/matlab'),str(Path(__file__).parent),nargout=0)
   eng.workspace['dependency_path']=os.pathsep.join(map(str,paths));eng.eval("setenv('PATH',[dependency_path pathsep getenv('PATH')]);",nargout=0)
   eng.workspace['check_path']=str(Path(__file__).with_name('compareProjectionPrecision.m'));record['code_analysis']=json.loads(eng.eval("jsonencode(checkcode(check_path,'-id'))"));assert not record['code_analysis']
   record['matlab']=eng.version();record['gpu']=json.loads(eng.eval("jsonencode(struct('name',gpuDevice().Name,'total_memory',gpuDevice().TotalMemory,'available_memory',gpuDevice().AvailableMemory))"))

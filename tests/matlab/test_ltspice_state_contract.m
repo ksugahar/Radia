@@ -4,7 +4,7 @@ tests = functiontests(localfunctions);
 end
 function setupOnce(t)
 t.TestData.OldPath=path;
-addpath(fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))),"packages","radia-gpu","matlab"));
+addpath(fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))),"packages","radia-simulink","matlab"));
 end
 function teardownOnce(t)
 path(t.TestData.OldPath);

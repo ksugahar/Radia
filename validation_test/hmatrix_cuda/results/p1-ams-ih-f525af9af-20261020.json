@@ -1,0 +1,77 @@
+{
+  "schema": "radia.p1-ams-ih-individual.v1",
+  "source_commit": "f525af9afc10c2857b06cad85fdd5ee72596a3c8",
+  "p1_complete": false,
+  "worker_role": "human-started-gpu-worker",
+  "timing_classification": "Numerical and lifecycle diagnostics; not performance acceptance",
+  "ams": {
+    "accepted": true,
+    "binary_sha256": "fe786dd3275aa96006161c707ab37b0b42aa1c71ac750ff36c7a667d9328476c",
+    "numeric": {
+      "dofs": 26,
+      "cpu_relative_error": 8.290057728681149e-12,
+      "independent_true_relative_residual": 7.0861045833698126e-12,
+      "reported": {
+        "iterations": 5,
+        "true_relative_residual": 7.086083450497344e-12,
+        "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+        "setup_execution": "Input hierarchy: MATLAB/mexcuda host setup or explicit validation fixture; no runtime Python fallback",
+        "workspace_sample_bytes": 1064,
+        "residual_checked": true,
+        "preconditioner_execution": "direct CUDA kernels"
+      }
+    },
+    "resident": {
+      "accepted": true,
+      "stale_handle_rejected": true,
+      "wrong_type_rejected": true,
+      "failed_update_preserves_context": true,
+      "caller_source_release_safe": true,
+      "workspace_survives_update": true,
+      "native_buffer_allocations_during_solve": 0,
+      "nan_rhs_rejected": true,
+      "nonpositive_curvature_rejected": true,
+      "breakdown_recovery": true
+    },
+    "memory": {
+      "samples": [
+        1733451776,
+        1733451776,
+        1733451776,
+        1733451776,
+        1733451776,
+        1733451776,
+        1733451776,
+        1733451776,
+        1733451776,
+        1733451776
+      ],
+      "private_bytes_per_run": 0.0,
+      "private_delta_bytes": 0,
+      "available_device_bytes_samples": [
+        42167173120.0,
+        42167173120.0,
+        42167173120.0,
+        42167173120.0,
+        42167173120.0,
+        42167173120.0,
+        42167173120.0,
+        42167173120.0,
+        42167173120.0,
+        42167173120.0
+      ]
+    },
+    "scope": "Small HCurl assembled operator, independent NGSolve CPU sparsecholesky and original-equation residual, resident recovery/lifecycle; not full nonlinear or scaling acceptance"
+  },
+  "ih": {
+    "accepted": false,
+    "binary_sha256": "205349770889dc0c59d068f3e46be47f0575c58581a79cfb32245b6dfbfa8bd1",
+    "failure": "Regular coupled update rejected candidate temperature; numerical qualification incomplete",
+    "fix_commit": "3a8a00df3743178d506eb61efe4f1e09814ed0e5",
+    "fix_built": false
+  },
+  "recovery": {
+    "file_count": 209,
+    "archive_sha256": "4595f7977365ab954a78172a3c26b69e8389e21fdb15d8a9fe9372d0c3e80bb1"
+  }
+}

@@ -10,8 +10,8 @@ import matlab.engine
 import importlib.metadata as md
 
 ROOT=Path(__file__).resolve().parents[2]
-sys.path.insert(0,str(ROOT/'packages/radia-gpu/src'))
-from radia_gpu.ams_exchange import write_exchange, file_sha256
+sys.path.insert(0,str(ROOT/'packages/radia-simulink/src'))
+from radia_simulink.ams_exchange import write_exchange, file_sha256
 
 
 def main(args):
@@ -22,7 +22,7 @@ def main(args):
     eng=None
     try:
         eng=matlab.engine.start_matlab('-nodesktop -nosplash')
-        eng.addpath(str(ROOT/'packages/radia-gpu/matlab'),nargout=0)
+        eng.addpath(str(ROOT/'packages/radia-simulink/matlab'),nargout=0)
         eng.addpath(str(Path(__file__).parent),nargout=0)
         record['matlab']=eng.version()
         for large in ([False,True] if args.large else [False]):

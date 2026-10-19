@@ -1,0 +1,26 @@
+{
+  "schema": "radia.simulink.renamed-matlab-rtx-smoke.v1",
+  "standalone_renamed_matlab_adapter_accepted": true,
+  "new_distribution_wheel_accepted": false,
+  "cpu_backend_accepted": false,
+  "direct_python_gpu_accepted": false,
+  "release_accepted": false,
+  "binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "bc6b78a143bfd882e29413cc133e4736bfb6d626",
+      "binary_sha256": "dcc88c79c71446e351dc981db7e726e7d274ad08c41ebf1cdd15831920cd125c"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "8b88cc9bda32a2c76b4ec333edf7cc52fe8112aa",
+      "binary_sha256": "2b9d2797ef3d7f0916edbf201d487f9b1605f51c31e066ccd4b5d649616bd94c"
+    }
+  },
+  "checks": {
+    "cpu_error": 4.870739100833117e-14,
+    "native_nonlinear_relative_residual": 3.9333602899475104e-14,
+    "degree": 8,
+    "lower_fraction": 0.1,
+    "live_count": 0
+  },
+  "scope": "288 DoF strong nonlinear CPU comparison and true residual through new source path with explicit current Chebyshev ABI; existing pre-rename numerical binary, not new-name wheel"
+}

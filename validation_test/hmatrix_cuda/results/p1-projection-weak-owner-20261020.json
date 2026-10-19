@@ -1,0 +1,74 @@
+{
+  "source_commit": "06aade0dd0c5538e5273a43fd386b10d10d1c6bc",
+  "post_destroy_100": {
+    "device_available_max": 42181853184.0,
+    "device_available_min": 42181853184.0,
+    "columns": [
+      "live_projection",
+      "live_material",
+      "mesh",
+      "space",
+      "gridfunction",
+      "targets"
+    ],
+    "cpu_coefficients_checked_each_iteration": true,
+    "max_counts": [
+      0,
+      0,
+      1,
+      0,
+      0,
+      0
+    ],
+    "raw_sha256": "12a3148bb2858c0bed44fd19855d8c0663f07a65ae6e72211a58d0ec79c2ce95",
+    "completed": true
+  },
+  "diagnostic_macro": "RADIA_PROJECTION_LIFECYCLE_TEST",
+  "memory_gate_closed": false,
+  "conclusions": [
+    "A released MeshAccess remains strongly owned after registry erase and after the next creation",
+    "Space, GridFunction and Targets do not remain strongly owned in these probes",
+    "Constant device available memory offers no evidence of accumulating device allocations in this CPU projection path",
+    "Exact surviving MeshAccess owner is unresolved; cannot yet classify as upstream design or Radia defect",
+    "Original memory failure and frozen gate remain unchanged"
+  ],
+  "previous_released_owner_after_next_create_16": {
+    "columns": [
+      "live_projection",
+      "live_material",
+      "mesh",
+      "space",
+      "gridfunction",
+      "targets"
+    ],
+    "interpretation": "Live_projection=1 is the newly created context; the old released mesh retains strong_count=1. Other old FE, GridFunction and Targets owners expire.",
+    "completed": true,
+    "max_counts": [
+      1,
+      0,
+      1,
+      0,
+      0,
+      0
+    ],
+    "raw_sha256": "7a9500c579a8de4e229b36001fb5d847611e3b9196ed71b3d496925dcf5998d5"
+  },
+  "binary_sha256": "a192eff7190dca66891929fce933f79292ab1f5895c36bc52fe19bd33d70e81d",
+  "run": {
+    "seconds": 12.203000000008615,
+    "job_commit_peak_bytes": 2009649152,
+    "host_limit_bytes": 8589934592,
+    "limit_seconds": 240,
+    "cores": 2
+  },
+  "schema": "radia.projection.weak-owner-diagnostic.v1",
+  "scope": "Small curved HDiv projection; diagnostics only, not lifecycle or release acceptance",
+  "p1_complete": false,
+  "build": {
+    "seconds": 32.828000000008615,
+    "job_commit_peak_bytes": 1540124672,
+    "host_limit_bytes": 17179869184,
+    "limit_seconds": 900,
+    "cores": 4
+  }
+}

@@ -1,0 +1,663 @@
+{
+  "dofs": 10344,
+  "charges": 4208,
+  "cells": 515,
+  "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+  "contract_sha256": "b99d4d42745581e2b1dcf44c0d797478f40c8f69a74fc95ccd873b2efe0dfa87",
+  "mex": {
+    "radia_cuda_projection": {
+      "sha256": "a19c563461d65293aceb791f9fe0f51ac32bb83388d9d735319bab403f8d7efa",
+      "source_commit": "95879f3a0d31f78a79621a04921b17523eb58a5e"
+    },
+    "radia_cuda_hmatrix": {
+      "sha256": "3ec8132b5e422df795420c59a0758b51ba84fc4ba7e2feb395bd10fd950a6d28",
+      "source_commit": "13968403cc1100247c7bc26c4c4152b03bec028c"
+    }
+  },
+  "native_sha256": "e59a0dd9bd41474edf587d87374bea80375676fdf2f46b6c176efa9546544053",
+  "frontend_sha256": "e03cdf61cd845984017c0a73f87f321db58bae9513f60d82a3d8c361c89b7dd5",
+  "threads": {
+    "cpu_ngsolve": 16,
+    "cpu_blas": 1,
+    "matlab_single_comp_thread": true,
+    "process_affinity_mask": 65535
+  },
+  "hacapk_options": {
+    "epsilon": 1e-10,
+    "leaf_size": 64,
+    "eta": 2.0,
+    "max_rank": 64,
+    "cache_bytes": 2147483648
+  },
+  "preconditioner": "mass-polynomial",
+  "staging_mode": "sparse",
+  "assembly_mode": "hacapk-device-dense",
+  "cpu_true_residual": 6.245893620508612e-12,
+  "native_setup_errors": {
+    "mass_error": 1.584716663014022e-16,
+    "charge_error": 1.8747862046227333e-14,
+    "rhs_error": 2.9556596482099965e-16
+  },
+  "first_payload": {
+    "whole_seconds": 2.1563813,
+    "assembly_upload_seconds": 1.7678823,
+    "solve_transfer_seconds": 0.1773803,
+    "iterations": 167.0,
+    "owned_peak": 1791115980.0,
+    "coefficient_error": 4.507392618854451e-10,
+    "mean_error": 2.1256314349106756e-14,
+    "true_residual": 8.686599207704219e-12,
+    "operator_stats": {
+      "owned_device_bytes": 78209352.0,
+      "applications": 0,
+      "kernel_launches": 0,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 1791115980.0,
+      "assembly_entry_batches": 4287,
+      "assembly_entry_count": 290347,
+      "assembly_leaf_count": 3211,
+      "assembly_lowrank_count": 32,
+      "assembly_cache_tile_loads": 1,
+      "assembly_cache_tile_hits": 4287,
+      "assembly_cache_full_tile_batches": 4287,
+      "assembly_cache_host_scratch_bytes": 49152,
+      "assembly_deferred_dense_leaves": 3179,
+      "assembly_deferred_dense_coefficients": 8685668.0,
+      "assembly_coefficient_upload_bytes": 1584848.0,
+      "stored_coefficient_count": 8883774.0,
+      "same_leaf_dense_coefficient_count": 8951208.0,
+      "lowrank_factor_coefficient_count": 198106,
+      "leaf_rank_sum": 1079,
+      "max_leaf_rank": 44,
+      "storage_saving_lowrank_leaf_count": 32,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    }
+  },
+  "warm": {
+    "whole_seconds": 2.0703664,
+    "assembly_upload_seconds": 1.717037,
+    "solve_transfer_seconds": 0.1566356,
+    "iterations": 167.0,
+    "owned_peak": 1791115980.0,
+    "coefficient_error": 4.507392618854451e-10,
+    "mean_error": 2.1256314349106756e-14,
+    "true_residual": 8.686599207704219e-12,
+    "operator_stats": {
+      "owned_device_bytes": 78209352.0,
+      "applications": 0,
+      "kernel_launches": 0,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 1791115980.0,
+      "assembly_entry_batches": 4287,
+      "assembly_entry_count": 290347,
+      "assembly_leaf_count": 3211,
+      "assembly_lowrank_count": 32,
+      "assembly_cache_tile_loads": 1,
+      "assembly_cache_tile_hits": 4287,
+      "assembly_cache_full_tile_batches": 4287,
+      "assembly_cache_host_scratch_bytes": 49152,
+      "assembly_deferred_dense_leaves": 3179,
+      "assembly_deferred_dense_coefficients": 8685668.0,
+      "assembly_coefficient_upload_bytes": 1584848.0,
+      "stored_coefficient_count": 8883774.0,
+      "same_leaf_dense_coefficient_count": 8951208.0,
+      "lowrank_factor_coefficient_count": 198106,
+      "leaf_rank_sum": 1079,
+      "max_leaf_rank": 44,
+      "storage_saving_lowrank_leaf_count": 32,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    }
+  },
+  "operator_probes": {
+    "accepted": true,
+    "count": 3,
+    "seed": 20261018.0,
+    "relative_errors": [
+      1.859547034069242e-11,
+      1.7170119749994966e-11,
+      1.7945836956052066e-11
+    ],
+    "limit": 1e-08,
+    "true_relative_residual": [],
+    "residual_applicability": "not_applicable_operator",
+    "live_count": 0,
+    "operator_stats": {
+      "owned_device_bytes": 78209352.0,
+      "applications": 3,
+      "kernel_launches": 18,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 1791115980.0,
+      "assembly_entry_batches": 4287,
+      "assembly_entry_count": 290347,
+      "assembly_leaf_count": 3211,
+      "assembly_lowrank_count": 32,
+      "assembly_cache_tile_loads": 1,
+      "assembly_cache_tile_hits": 4287,
+      "assembly_cache_full_tile_batches": 4287,
+      "assembly_cache_host_scratch_bytes": 49152,
+      "assembly_deferred_dense_leaves": 3179,
+      "assembly_deferred_dense_coefficients": 8685668.0,
+      "assembly_coefficient_upload_bytes": 1584848.0,
+      "stored_coefficient_count": 8883774.0,
+      "same_leaf_dense_coefficient_count": 8951208.0,
+      "lowrank_factor_coefficient_count": 198106,
+      "leaf_rank_sum": 1079,
+      "max_leaf_rank": 44,
+      "storage_saving_lowrank_leaf_count": 32,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    },
+    "timing_scope": "Excluded from workflow benchmarks"
+  },
+  "operator_probe_input_sha256": "814db5aa6de54c17d41688b2024e682345dc2cc1cf5739eeabac4da4d1843855",
+  "benchmark_warm_api_medians": {
+    "cpu": 21.151502049993724,
+    "gpu": 2.0613069
+  },
+  "benchmark_cpu_over_gpu": 10.26120955108321,
+  "benchmark_first_api_seconds": {
+    "cpu": 21.18179560000135,
+    "gpu": 2.0653253
+  },
+  "memory_limitations": "50ms sampled process RSS/private includes baseline/runtime and may miss spikes; CPU sampler is in controller process, GPU sampler observes separate MATLAB process, unquantified timing bias; exact GPU owned excludes CUDA/runtime/global peaks",
+  "benchmark_memory_scope": "Sampled process baselines include the retained independent CPU certification operator; not standalone application memory peaks",
+  "ratio_scope": "Fresh CPU and GPU complete linear workflows, same public mesh/physics, CPU mass-Riesz sparsecholesky versus GPU explicit chosen preconditioner; excludes interpreter/Engine startup, validation, HDF5 serialization and result transport from API totals",
+  "schema": "radia.hdiv-sparse-spd-reuse-research.v1",
+  "accepted": true,
+  "performance_accepted": true,
+  "release_accepted": false,
+  "formal_reference_accepted": false,
+  "nonlinear_accepted": false,
+  "scope": "Linear public P2 sphere 10344DoF, fixed degree8 sparse SPD mass polynomial and reusable resident H-matrix",
+  "cpu_source_commit": "54d10d11f465edb2d9f35aec28f15cf48c1525a3",
+  "validation_source_sha256": "2affb5edbbdb168d24a88e1474f1102ab42b34c3a32f805d0426ce8afacda131",
+  "benchmark_samples": [
+    {
+      "phase": "first_payload",
+      "backend": "cpu",
+      "user_api_total_seconds": 21.18179560000135,
+      "outer_controller_seconds": 21.18180370000482,
+      "iterations": 8,
+      "coefficient_error": 5.833719797866856e-14,
+      "mean_error": 3.284241494128989e-16,
+      "true_residual": 6.245825559726007e-12,
+      "owned_peak_bytes": null,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 513662976,
+          "private_bytes": 2474221568,
+          "lifetime_peak_rss_bytes": 709517312
+        },
+        "after": {
+          "rss_bytes": 507285504,
+          "private_bytes": 2518626304,
+          "lifetime_peak_rss_bytes": 923496448
+        },
+        "sample_count": 334,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 902529024,
+        "sampled_peak_private_bytes": 3660619776,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "first_payload",
+      "backend": "gpu",
+      "user_api_total_seconds": 2.0653253,
+      "outer_controller_seconds": 2.483138100011274,
+      "iterations": 167,
+      "coefficient_error": 4.507392618854451e-10,
+      "mean_error": 2.1256314349106756e-14,
+      "true_residual": 8.686599207704219e-12,
+      "owned_peak_bytes": 1791115980,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1589612544,
+          "private_bytes": 2208370688,
+          "lifetime_peak_rss_bytes": 1606180864
+        },
+        "after": {
+          "rss_bytes": 1590013952,
+          "private_bytes": 2208382976,
+          "lifetime_peak_rss_bytes": 1610735616
+        },
+        "sample_count": 41,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1610735616,
+        "sampled_peak_private_bytes": 2232123392,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "cpu",
+      "user_api_total_seconds": 21.141771299997345,
+      "outer_controller_seconds": 21.141778699995484,
+      "iterations": 8,
+      "coefficient_error": 5.6576483666904435e-14,
+      "mean_error": 4.656492641824379e-16,
+      "true_residual": 6.245850646892915e-12,
+      "owned_peak_bytes": null,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 508645376,
+          "private_bytes": 2471239680,
+          "lifetime_peak_rss_bytes": 923496448
+        },
+        "after": {
+          "rss_bytes": 507584512,
+          "private_bytes": 2514620416,
+          "lifetime_peak_rss_bytes": 925007872
+        },
+        "sample_count": 324,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 921460736,
+        "sampled_peak_private_bytes": 3680657408,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "gpu",
+      "user_api_total_seconds": 2.0539191,
+      "outer_controller_seconds": 2.4310881000128575,
+      "iterations": 167,
+      "coefficient_error": 4.507392618854451e-10,
+      "mean_error": 2.1256314349106756e-14,
+      "true_residual": 8.686599207704219e-12,
+      "owned_peak_bytes": 1791115980,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1578283008,
+          "private_bytes": 2208264192,
+          "lifetime_peak_rss_bytes": 1610735616
+        },
+        "after": {
+          "rss_bytes": 1578344448,
+          "private_bytes": 2208272384,
+          "lifetime_peak_rss_bytes": 1610735616
+        },
+        "sample_count": 40,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1599139840,
+        "sampled_peak_private_bytes": 2232016896,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "gpu",
+      "user_api_total_seconds": 2.0812972,
+      "outer_controller_seconds": 2.491542900010245,
+      "iterations": 167,
+      "coefficient_error": 4.507392618854451e-10,
+      "mean_error": 2.1256314349106756e-14,
+      "true_residual": 8.686599207704219e-12,
+      "owned_peak_bytes": 1791115980,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1578369024,
+          "private_bytes": 2208272384,
+          "lifetime_peak_rss_bytes": 1610735616
+        },
+        "after": {
+          "rss_bytes": 1579458560,
+          "private_bytes": 2209325056,
+          "lifetime_peak_rss_bytes": 1610735616
+        },
+        "sample_count": 41,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1599741952,
+        "sampled_peak_private_bytes": 2230697984,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "cpu",
+      "user_api_total_seconds": 21.153358199997456,
+      "outer_controller_seconds": 21.15336500000558,
+      "iterations": 8,
+      "coefficient_error": 5.670063874096966e-14,
+      "mean_error": 3.516988209093695e-16,
+      "true_residual": 6.245873642060968e-12,
+      "owned_peak_bytes": null,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 509091840,
+          "private_bytes": 2469412864,
+          "lifetime_peak_rss_bytes": 925007872
+        },
+        "after": {
+          "rss_bytes": 506593280,
+          "private_bytes": 2511466496,
+          "lifetime_peak_rss_bytes": 925241344
+        },
+        "sample_count": 330,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 913588224,
+        "sampled_peak_private_bytes": 3668959232,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "cpu",
+      "user_api_total_seconds": 21.14964589998999,
+      "outer_controller_seconds": 21.149663899996085,
+      "iterations": 8,
+      "coefficient_error": 6.216375083271419e-14,
+      "mean_error": 6.273214335485585e-16,
+      "true_residual": 6.245900576132933e-12,
+      "owned_peak_bytes": null,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 507576320,
+          "private_bytes": 2465071104,
+          "lifetime_peak_rss_bytes": 925241344
+        },
+        "after": {
+          "rss_bytes": 519524352,
+          "private_bytes": 2530209792,
+          "lifetime_peak_rss_bytes": 927469568
+        },
+        "sample_count": 336,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 921149440,
+        "sampled_peak_private_bytes": 3671638016,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "gpu",
+      "user_api_total_seconds": 2.0524693,
+      "outer_controller_seconds": 2.434881500012125,
+      "iterations": 167,
+      "coefficient_error": 4.507392618854451e-10,
+      "mean_error": 2.1256314349106756e-14,
+      "true_residual": 8.686599207704219e-12,
+      "owned_peak_bytes": 1791115980,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1509478400,
+          "private_bytes": 2209325056,
+          "lifetime_peak_rss_bytes": 1610735616
+        },
+        "after": {
+          "rss_bytes": 1509588992,
+          "private_bytes": 2209292288,
+          "lifetime_peak_rss_bytes": 1610735616
+        },
+        "sample_count": 40,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1530437632,
+        "sampled_peak_private_bytes": 2233044992,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "gpu",
+      "user_api_total_seconds": 2.0686947,
+      "outer_controller_seconds": 2.440371500008041,
+      "iterations": 167,
+      "coefficient_error": 4.507392618854451e-10,
+      "mean_error": 2.1256314349106756e-14,
+      "true_residual": 8.686599207704219e-12,
+      "owned_peak_bytes": 1791115980,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 1509588992,
+          "private_bytes": 2209292288,
+          "lifetime_peak_rss_bytes": 1610735616
+        },
+        "after": {
+          "rss_bytes": 1509699584,
+          "private_bytes": 2209292288,
+          "lifetime_peak_rss_bytes": 1610735616
+        },
+        "sample_count": 40,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 1530548224,
+        "sampled_peak_private_bytes": 2242916352,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    },
+    {
+      "phase": "warm",
+      "backend": "cpu",
+      "user_api_total_seconds": 21.170301599995582,
+      "outer_controller_seconds": 21.17030800000066,
+      "iterations": 8,
+      "coefficient_error": 6.06504970102894e-14,
+      "mean_error": 4.808184183387762e-16,
+      "true_residual": 6.245890155352667e-12,
+      "owned_peak_bytes": null,
+      "process_memory": {
+        "before": {
+          "rss_bytes": 520761344,
+          "private_bytes": 2481332224,
+          "lifetime_peak_rss_bytes": 927469568
+        },
+        "after": {
+          "rss_bytes": 521072640,
+          "private_bytes": 2526543872,
+          "lifetime_peak_rss_bytes": 927469568
+        },
+        "sample_count": 334,
+        "period_seconds": 0.05,
+        "sampled_peak_rss_bytes": 921927680,
+        "sampled_peak_private_bytes": 3683028992,
+        "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+      }
+    }
+  ],
+  "reuse_checks": [
+    {
+      "accepted": true,
+      "dofs": 288,
+      "relative_errors": [
+        5.792134109900388e-10,
+        5.792134109900388e-10,
+        5.792134109900388e-10,
+        0
+      ],
+      "true_residuals": [
+        8.634069986859078e-12,
+        8.634069986859078e-12,
+        8.634069986859078e-12,
+        0
+      ],
+      "iterations": [
+        132,
+        132,
+        132,
+        0
+      ],
+      "solver_owned_bytes": [
+        198152,
+        198152,
+        198152,
+        198152
+      ],
+      "reference_solver_owned_bytes": 862188,
+      "reference_preconditioner": "mass-cholesky",
+      "creation_seconds": 0.197445,
+      "reused_solve_seconds": [
+        0.0417211,
+        0.0366749,
+        0.0362098,
+        0.011787
+      ],
+      "invalid_mass_rejected": true,
+      "live_count": 0,
+      "scope": "One frozen geometry/operator, four explicit RHS scalings; no solver-workspace reuse or independent CPU certification; solve timings exclude FE/setup/destruction and are diagnostic only",
+      "label": "curved288"
+    },
+    {
+      "accepted": true,
+      "dofs": 10344,
+      "relative_errors": [
+        4.469911559332056e-10,
+        4.469911559332056e-10,
+        4.469911559332056e-10,
+        0
+      ],
+      "true_residuals": [
+        8.669611498377254e-12,
+        8.669611498377254e-12,
+        8.669611498377254e-12,
+        0
+      ],
+      "iterations": [
+        167,
+        167,
+        167,
+        0
+      ],
+      "solver_owned_bytes": [
+        7670312.0,
+        7670312.0,
+        7670312.0,
+        7670312.0
+      ],
+      "reference_solver_owned_bytes": 864077036.0,
+      "reference_preconditioner": "mass-cholesky",
+      "creation_seconds": 1.6845587,
+      "reused_solve_seconds": [
+        0.1089066,
+        0.106703,
+        0.1059922,
+        0.0320314
+      ],
+      "invalid_mass_rejected": true,
+      "live_count": 0,
+      "scope": "One frozen geometry/operator, four explicit RHS scalings; no solver-workspace reuse or independent CPU certification; solve timings exclude FE/setup/destruction and are diagnostic only",
+      "label": "sphere10344"
+    }
+  ],
+  "rtx_checks": [
+    {
+      "accepted": true,
+      "dofs": 30,
+      "relative_errors": [
+        1.9753088786375394e-11,
+        1.9753088786375394e-11,
+        1.9753088786375394e-11,
+        0
+      ],
+      "true_residuals": [
+        1.924868778029657e-13,
+        1.924868778029657e-13,
+        1.924868778029657e-13,
+        0
+      ],
+      "iterations": [
+        34,
+        34,
+        34,
+        0
+      ],
+      "solver_owned_bytes": [
+        15992,
+        15992,
+        15992,
+        15992
+      ],
+      "reference_solver_owned_bytes": 23356,
+      "reference_preconditioner": "mass-cholesky",
+      "creation_seconds": 0.7046651,
+      "reused_solve_seconds": [
+        0.0225082,
+        0.0211274,
+        0.0217141,
+        0.0147536
+      ],
+      "invalid_mass_rejected": true,
+      "live_count": 0,
+      "scope": "One frozen geometry/operator, four explicit RHS scalings; no solver-workspace reuse or independent CPU certification; solve timings exclude FE/setup/destruction and are diagnostic only",
+      "kind": "affine",
+      "mesh_sha256": "53a9cbe908a4660cf22d021d27f4171c2c4874ad2179d097bed5e5b0a7b286ad"
+    },
+    {
+      "accepted": true,
+      "dofs": 288,
+      "relative_errors": [
+        5.792094907778566e-10,
+        5.792094907778566e-10,
+        5.792094907778566e-10,
+        0
+      ],
+      "true_residuals": [
+        8.634069986859078e-12,
+        8.634069986859078e-12,
+        8.634069986859078e-12,
+        0
+      ],
+      "iterations": [
+        132,
+        132,
+        132,
+        0
+      ],
+      "solver_owned_bytes": [
+        198152,
+        198152,
+        198152,
+        198152
+      ],
+      "reference_solver_owned_bytes": 862188,
+      "reference_preconditioner": "mass-cholesky",
+      "creation_seconds": 0.3570413,
+      "reused_solve_seconds": [
+        0.0793954,
+        0.0772069,
+        0.0770907,
+        0.0022763
+      ],
+      "invalid_mass_rejected": true,
+      "live_count": 0,
+      "scope": "One frozen geometry/operator, four explicit RHS scalings; no solver-workspace reuse or independent CPU certification; solve timings exclude FE/setup/destruction and are diagnostic only",
+      "kind": "curved",
+      "mesh_sha256": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50"
+    }
+  ],
+  "corrected_upload_ordering": {
+    "scope": "Complete default-stream pageable H2D upload before nonblocking consumer stream",
+    "reference": "https://docs.nvidia.com/cuda/archive/12.8.1/cuda-runtime-api/api-sync-behavior.html",
+    "prior_failure_preserved": true,
+    "initial_breakdown_iteration": 0,
+    "initial_rPr": -1.4425237857084154e+27,
+    "initial_pAp": 4.4276504724780193e+58,
+    "limits_relaxed": false
+  },
+  "limitations": [
+    "Linear isotropic problem only; GPU nonlinear BH not implemented or accepted yet.",
+    "Fixed eight-step polynomial is an SPD approximate inverse action, not an exact mass solve or IC/AMG implementation; degree/damping fixed before PCG.",
+    "H-matrix geometry and charge map frozen during reuse; mass and RHS explicit each solve. Solver workspace is rebuilt per solve.",
+    "One solve per matrix reused RHS scaling positive, negative and zero, plus invalid-mass retention checks; not an arbitrary load/geometry validation.",
+    "2-cycle CPU/GPU ABBA whole API includes FE/setup/assembly/transfers/solve/recovery/destruction; excludes Engine/HDF5/validation/controller; first calls are warmed, not process cold.",
+    "Sparse solver-owned memory falls but whole accounted peak remains potential-cache dominated; no global peak or global memory reduction claim.",
+    "Older native Cholesky single-tet failure and new sparse first-solve negative inner product reproduced before synchronization fix; all originals retained, no fallback or relaxed threshold.",
+    "Prior 2.34-second artifact run is a different-session control; current 2.06-second run does not certify a causal old/new preconditioner speedup.",
+    "Formal immutable CPU wheel adoption provisional; no common-wheel/release/general/100k/topology-optimization/nonlinear acceptance."
+  ]
+}

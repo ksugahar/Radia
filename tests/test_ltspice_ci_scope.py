@@ -58,8 +58,8 @@ def test_markdown_inputs_are_explicitly_scoped():
           'packages/radia-optuna/MATLAB_README.md', 'packages/radia-optuna/THIRD_PARTY_NOTICES.md',
           'packages/radia-optuna/OPTUNA_SIMULINK_LAB.md'], ['packages/radia-optuna/HANDOVER.md']),
         ('ltspice-data-safety.yml', [], ['tests/matlab/fixtures/ltspice_numdgt7_README.md']),
-        ('radia-gpu.yml', ['docs/ltspice/README.md', 'packages/radia-gpu/README.md'],
-          ['packages/radia-gpu/HANDOVER.md']),
+        ('radia-simulink.yml', ['docs/ltspice/README.md', 'packages/radia-simulink/README.md'],
+          ['packages/radia-simulink/HANDOVER.md']),
     ):
         workflow = yaml.load((root / '.github/workflows' / name).read_text(), Loader=yaml.BaseLoader)
         for event in ('push', 'pull_request'):

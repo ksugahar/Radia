@@ -750,7 +750,7 @@ radia.simulink.writeApplicationConfig("em", struct(), config, ...
     PrimaryKey="B_origin_mag_T");
 decoded = jsondecode(fileread(config));
 verifyEqual(testCase, string(decoded.schema), ...
-    "radia_gpu.simulink.application_config.v1");
+    "radia_simulink.simulink.application_config.v1");
 verifyEqual(testCase, string(decoded.application), "em");
 
 streamConfig = fullfile(root, "streamfunction_config.json");
@@ -794,7 +794,7 @@ verifyTrue(testCase, isfile(result.log));
 verifyTrue(testCase, isfile(result.command_file));
 decoded = jsondecode(fileread(result.result_json));
 verifyEqual(testCase, string(decoded.radia_result.schema), ...
-    "radia_gpu.simulink.application_run.v1");
+    "radia_simulink.simulink.application_run.v1");
 verifyEqual(testCase, string(decoded.radia_result.status), "failed");
 end
 

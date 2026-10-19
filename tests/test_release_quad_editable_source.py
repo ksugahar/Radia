@@ -852,7 +852,7 @@ def test_cpu_release_cannot_ignore_unverified_workflow_ownership(monkeypatch, ow
         if ownership == "lookup-error":
             raise RuntimeError("ownership API unavailable")
         return dict(head_sha="b" * 40 if ownership == "wrong-sha" else sha,
-            path=None if ownership == "missing-path" else ".github/workflows/radia-gpu.yml"), {}
+            path=None if ownership == "missing-path" else ".github/workflows/radia-simulink.yml"), {}
     monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
     monkeypatch.setattr(release_quad, "gh_get", github)
     ok, _ = release_quad._check_github_hosted_workflows(sha,
@@ -869,7 +869,7 @@ def test_gpu_named_native_check_cannot_replace_cpu_native_acceptance(monkeypatch
     def github(path):
         if "/check-runs?" in path:
             return {"check_runs": [gpu]}, {}
-        return dict(head_sha=sha, path=".github/workflows/radia-gpu.yml"), {}
+        return dict(head_sha=sha, path=".github/workflows/radia-simulink.yml"), {}
     monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
     monkeypatch.setattr(release_quad, "gh_get", github)
     ok, message = release_quad._check_github_hosted_workflows(sha,

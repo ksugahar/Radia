@@ -1,0 +1,400 @@
+{
+  "schema": "radia.hdiv.chebyshev-graph-a100-comparison.v1",
+  "bounded_numerical_accepted": true,
+  "independent_original_residual_accepted": true,
+  "transfer_inclusive_comparison_accepted": true,
+  "release_accepted": false,
+  "new_distribution_wheel_accepted": false,
+  "binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "bc6b78a143bfd882e29413cc133e4736bfb6d626",
+      "binary_sha256": "dcc88c79c71446e351dc981db7e726e7d274ad08c41ebf1cdd15831920cd125c"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "51f4a9714003f8a7e5cf6966ac275ae1f31c0d23",
+      "binary_sha256": "d4238ab9af41fe384606bd50b644af3f1339b70b7a386c9128f8639904ac7032"
+    }
+  },
+  "artifact_scope": "Standalone clean canonical renamed HMatrix source51f4 with earlier separately identified Projection; not installed wheel acceptance",
+  "case": {
+    "dof": 10344,
+    "order": 2,
+    "geometry": "public P2 sphere",
+    "constitutive_model": "Synthetic finite-barrier continuation; not measured steel",
+    "applied_field_A_per_m": 1000000.0,
+    "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb"
+  },
+  "degree": 32,
+  "lower_fraction": 0.01,
+  "comparison": {
+    "baseline": "mass-chebyshev",
+    "candidate": "mass-chebyshev-graph",
+    "whole_baseline_median_seconds": 13.41903705,
+    "whole_candidate_median_seconds": 12.92132415,
+    "whole_reduction_fraction": 0.03709006079538324,
+    "prepared_baseline_median_seconds": 10.4722591,
+    "prepared_candidate_median_seconds": 10.0196431,
+    "prepared_reduction_fraction": 0.04322047379442706,
+    "protocol": "Two first protocol samples then two ABBA cycles, eight warm samples. Three zero-start prepared solves per mode; not ABBA for prepared series."
+  },
+  "samples": [
+    {
+      "preconditioner": "mass-chebyshev",
+      "graph_launches": 0,
+      "degree": 32,
+      "lower_fraction": 0.01,
+      "whole_seconds": 13.4556664,
+      "nonlinear_updates": 7,
+      "inner_linear_iterations": 5965,
+      "cpu_coefficient_relative_error": 3.2017817872668447e-10,
+      "native_nonlinear_relative_residual": 1.7955964122035114e-13,
+      "combined_array_bound_bytes": 2068412007.0,
+      "solver_owned_device_bytes": 7753352.0,
+      "mode": 1,
+      "cycle": 1
+    },
+    {
+      "preconditioner": "mass-chebyshev-graph",
+      "graph_launches": 6036,
+      "degree": 32,
+      "lower_fraction": 0.01,
+      "whole_seconds": 12.922315,
+      "nonlinear_updates": 7,
+      "inner_linear_iterations": 5965,
+      "cpu_coefficient_relative_error": 3.2017786368614724e-10,
+      "native_nonlinear_relative_residual": 1.807916902617885e-13,
+      "combined_array_bound_bytes": 2068412007.0,
+      "solver_owned_device_bytes": 7753352.0,
+      "mode": 2,
+      "cycle": 1
+    },
+    {
+      "preconditioner": "mass-chebyshev-graph",
+      "graph_launches": 6036,
+      "degree": 32,
+      "lower_fraction": 0.01,
+      "whole_seconds": 13.0015659,
+      "nonlinear_updates": 7,
+      "inner_linear_iterations": 5965,
+      "cpu_coefficient_relative_error": 3.2018470457558267e-10,
+      "native_nonlinear_relative_residual": 1.8232876626275328e-13,
+      "combined_array_bound_bytes": 2068412007.0,
+      "solver_owned_device_bytes": 7753352.0,
+      "mode": 2,
+      "cycle": 1
+    },
+    {
+      "preconditioner": "mass-chebyshev",
+      "graph_launches": 0,
+      "degree": 32,
+      "lower_fraction": 0.01,
+      "whole_seconds": 13.5237932,
+      "nonlinear_updates": 7,
+      "inner_linear_iterations": 5965,
+      "cpu_coefficient_relative_error": 3.2018134622350995e-10,
+      "native_nonlinear_relative_residual": 1.8175644266640735e-13,
+      "combined_array_bound_bytes": 2068412007.0,
+      "solver_owned_device_bytes": 7753352.0,
+      "mode": 1,
+      "cycle": 1
+    },
+    {
+      "preconditioner": "mass-chebyshev",
+      "graph_launches": 0,
+      "degree": 32,
+      "lower_fraction": 0.01,
+      "whole_seconds": 13.3824077,
+      "nonlinear_updates": 7,
+      "inner_linear_iterations": 5965,
+      "cpu_coefficient_relative_error": 3.2018629633322546e-10,
+      "native_nonlinear_relative_residual": 1.813297214825583e-13,
+      "combined_array_bound_bytes": 2068412007.0,
+      "solver_owned_device_bytes": 7753352.0,
+      "mode": 1,
+      "cycle": 2
+    },
+    {
+      "preconditioner": "mass-chebyshev-graph",
+      "graph_launches": 6036,
+      "degree": 32,
+      "lower_fraction": 0.01,
+      "whole_seconds": 12.9116575,
+      "nonlinear_updates": 7,
+      "inner_linear_iterations": 5965,
+      "cpu_coefficient_relative_error": 3.2018447115353406e-10,
+      "native_nonlinear_relative_residual": 1.8041668143148744e-13,
+      "combined_array_bound_bytes": 2068412007.0,
+      "solver_owned_device_bytes": 7753352.0,
+      "mode": 2,
+      "cycle": 2
+    },
+    {
+      "preconditioner": "mass-chebyshev-graph",
+      "graph_launches": 6036,
+      "degree": 32,
+      "lower_fraction": 0.01,
+      "whole_seconds": 12.9203333,
+      "nonlinear_updates": 7,
+      "inner_linear_iterations": 5965,
+      "cpu_coefficient_relative_error": 3.2018224662439593e-10,
+      "native_nonlinear_relative_residual": 1.8228239195017373e-13,
+      "combined_array_bound_bytes": 2068412007.0,
+      "solver_owned_device_bytes": 7753352.0,
+      "mode": 2,
+      "cycle": 2
+    },
+    {
+      "preconditioner": "mass-chebyshev",
+      "graph_launches": 0,
+      "degree": 32,
+      "lower_fraction": 0.01,
+      "whole_seconds": 13.3777226,
+      "nonlinear_updates": 7,
+      "inner_linear_iterations": 5965,
+      "cpu_coefficient_relative_error": 3.201803117725649e-10,
+      "native_nonlinear_relative_residual": 1.8011153576288692e-13,
+      "combined_array_bound_bytes": 2068412007.0,
+      "solver_owned_device_bytes": 7753352.0,
+      "mode": 1,
+      "cycle": 2
+    }
+  ],
+  "first_protocol_samples": [
+    {
+      "preconditioner": "mass-chebyshev",
+      "graph_launches": 0,
+      "degree": 32,
+      "lower_fraction": 0.01,
+      "whole_seconds": 14.077743,
+      "nonlinear_updates": 7,
+      "inner_linear_iterations": 5965,
+      "cpu_coefficient_relative_error": 3.2018361027639824e-10,
+      "native_nonlinear_relative_residual": 1.8202170265784075e-13,
+      "combined_array_bound_bytes": 2068412007.0,
+      "solver_owned_device_bytes": 7753352.0
+    },
+    {
+      "preconditioner": "mass-chebyshev-graph",
+      "graph_launches": 6036,
+      "degree": 32,
+      "lower_fraction": 0.01,
+      "whole_seconds": 12.9740122,
+      "nonlinear_updates": 7,
+      "inner_linear_iterations": 5965,
+      "cpu_coefficient_relative_error": 3.201802832080231e-10,
+      "native_nonlinear_relative_residual": 1.8250453350711896e-13,
+      "combined_array_bound_bytes": 2068412007.0,
+      "solver_owned_device_bytes": 7753352.0
+    }
+  ],
+  "prepared_samples": [
+    [
+      {
+        "preconditioner": "mass-chebyshev",
+        "graph_launches": 0,
+        "degree": 32,
+        "lower_fraction": 0.01,
+        "whole_seconds": 10.4722591,
+        "nonlinear_updates": 7,
+        "inner_linear_iterations": 5965,
+        "cpu_coefficient_relative_error": 3.2018026939769804e-10,
+        "native_nonlinear_relative_residual": 1.8108470767913915e-13,
+        "combined_array_bound_bytes": 2068412007.0,
+        "solver_owned_device_bytes": 7753352.0
+      },
+      {
+        "preconditioner": "mass-chebyshev",
+        "graph_launches": 0,
+        "degree": 32,
+        "lower_fraction": 0.01,
+        "whole_seconds": 10.5130354,
+        "nonlinear_updates": 7,
+        "inner_linear_iterations": 5965,
+        "cpu_coefficient_relative_error": 3.201826369660901e-10,
+        "native_nonlinear_relative_residual": 1.8126052954071927e-13,
+        "combined_array_bound_bytes": 2068412007.0,
+        "solver_owned_device_bytes": 7753352.0
+      },
+      {
+        "preconditioner": "mass-chebyshev",
+        "graph_launches": 0,
+        "degree": 32,
+        "lower_fraction": 0.01,
+        "whole_seconds": 10.4635741,
+        "nonlinear_updates": 7,
+        "inner_linear_iterations": 5965,
+        "cpu_coefficient_relative_error": 3.2018258630461025e-10,
+        "native_nonlinear_relative_residual": 1.8264168045064412e-13,
+        "combined_array_bound_bytes": 2068412007.0,
+        "solver_owned_device_bytes": 7753352.0
+      }
+    ],
+    [
+      {
+        "preconditioner": "mass-chebyshev-graph",
+        "graph_launches": 6036,
+        "degree": 32,
+        "lower_fraction": 0.01,
+        "whole_seconds": 10.0196431,
+        "nonlinear_updates": 7,
+        "inner_linear_iterations": 5965,
+        "cpu_coefficient_relative_error": 3.2017662839694207e-10,
+        "native_nonlinear_relative_residual": 1.8049027578981718e-13,
+        "combined_array_bound_bytes": 2068412007.0,
+        "solver_owned_device_bytes": 7753352.0
+      },
+      {
+        "preconditioner": "mass-chebyshev-graph",
+        "graph_launches": 6036,
+        "degree": 32,
+        "lower_fraction": 0.01,
+        "whole_seconds": 10.0128082,
+        "nonlinear_updates": 7,
+        "inner_linear_iterations": 5965,
+        "cpu_coefficient_relative_error": 3.201824909597112e-10,
+        "native_nonlinear_relative_residual": 1.816004582946776e-13,
+        "combined_array_bound_bytes": 2068412007.0,
+        "solver_owned_device_bytes": 7753352.0
+      },
+      {
+        "preconditioner": "mass-chebyshev-graph",
+        "graph_launches": 6036,
+        "degree": 32,
+        "lower_fraction": 0.01,
+        "whole_seconds": 10.0382868,
+        "nonlinear_updates": 7,
+        "inner_linear_iterations": 5965,
+        "cpu_coefficient_relative_error": 3.201849005979853e-10,
+        "native_nonlinear_relative_residual": 1.7906806046231958e-13,
+        "combined_array_bound_bytes": 2068412007.0,
+        "solver_owned_device_bytes": 7753352.0
+      }
+    ]
+  ],
+  "independent_cpu_original_equation": {
+    "accepted": true,
+    "scope": "Independent original nonlinear equation residual and ideal sphere mean; accuracy only",
+    "expected_uniform_sphere_magnetization_A_per_m": [
+      0.0,
+      0.0,
+      990668.7861443803
+    ],
+    "cases": {
+      "first_0": {
+        "preconditioner": "mass-chebyshev",
+        "nonlinear_relative_residual": 9.365975337714302e-12,
+        "sphere_mean_relative_error": 2.197697239734333e-06,
+        "cpu_coefficient_relative_error": 3.201836102763982e-10
+      },
+      "first_1": {
+        "preconditioner": "mass-chebyshev-graph",
+        "nonlinear_relative_residual": 9.366300796775068e-12,
+        "sphere_mean_relative_error": 2.197697241538958e-06,
+        "cpu_coefficient_relative_error": 3.2018028320802317e-10
+      },
+      "warm_0": {
+        "preconditioner": "mass-chebyshev",
+        "nonlinear_relative_residual": 9.365660750900698e-12,
+        "sphere_mean_relative_error": 2.1976972412502917e-06,
+        "cpu_coefficient_relative_error": 3.2017817872668457e-10
+      },
+      "warm_1": {
+        "preconditioner": "mass-chebyshev-graph",
+        "nonlinear_relative_residual": 9.365294334693225e-12,
+        "sphere_mean_relative_error": 2.197697241151092e-06,
+        "cpu_coefficient_relative_error": 3.201778636861473e-10
+      },
+      "warm_2": {
+        "preconditioner": "mass-chebyshev-graph",
+        "nonlinear_relative_residual": 9.366576485378943e-12,
+        "sphere_mean_relative_error": 2.1976972396297427e-06,
+        "cpu_coefficient_relative_error": 3.2018470457558267e-10
+      },
+      "warm_3": {
+        "preconditioner": "mass-chebyshev",
+        "nonlinear_relative_residual": 9.365376643840177e-12,
+        "sphere_mean_relative_error": 2.197697240490044e-06,
+        "cpu_coefficient_relative_error": 3.2018134622351006e-10
+      },
+      "warm_4": {
+        "preconditioner": "mass-chebyshev",
+        "nonlinear_relative_residual": 9.366757966879496e-12,
+        "sphere_mean_relative_error": 2.197697240973109e-06,
+        "cpu_coefficient_relative_error": 3.2018629633322556e-10
+      },
+      "warm_5": {
+        "preconditioner": "mass-chebyshev-graph",
+        "nonlinear_relative_residual": 9.364734969528814e-12,
+        "sphere_mean_relative_error": 2.1976972398402905e-06,
+        "cpu_coefficient_relative_error": 3.2018447115353416e-10
+      },
+      "warm_6": {
+        "preconditioner": "mass-chebyshev-graph",
+        "nonlinear_relative_residual": 9.365103541708031e-12,
+        "sphere_mean_relative_error": 2.1976972394493747e-06,
+        "cpu_coefficient_relative_error": 3.20182246624396e-10
+      },
+      "warm_7": {
+        "preconditioner": "mass-chebyshev",
+        "nonlinear_relative_residual": 9.36517133108682e-12,
+        "sphere_mean_relative_error": 2.1976972390698425e-06,
+        "cpu_coefficient_relative_error": 3.2018031177256493e-10
+      },
+      "prepared_0_0": {
+        "preconditioner": "mass-chebyshev",
+        "nonlinear_relative_residual": 9.36590206147784e-12,
+        "sphere_mean_relative_error": 2.197697239808326e-06,
+        "cpu_coefficient_relative_error": 3.201802693976982e-10
+      },
+      "prepared_0_1": {
+        "preconditioner": "mass-chebyshev",
+        "nonlinear_relative_residual": 9.365231864401962e-12,
+        "sphere_mean_relative_error": 2.1976972389644314e-06,
+        "cpu_coefficient_relative_error": 3.201826369660902e-10
+      },
+      "prepared_0_2": {
+        "preconditioner": "mass-chebyshev",
+        "nonlinear_relative_residual": 9.364862300397594e-12,
+        "sphere_mean_relative_error": 2.1976972401281636e-06,
+        "cpu_coefficient_relative_error": 3.201825863046103e-10
+      },
+      "prepared_1_0": {
+        "preconditioner": "mass-chebyshev-graph",
+        "nonlinear_relative_residual": 9.365323581658093e-12,
+        "sphere_mean_relative_error": 2.197697239449611e-06,
+        "cpu_coefficient_relative_error": 3.201766283969421e-10
+      },
+      "prepared_1_1": {
+        "preconditioner": "mass-chebyshev-graph",
+        "nonlinear_relative_residual": 9.366177911388572e-12,
+        "sphere_mean_relative_error": 2.1976972410613156e-06,
+        "cpu_coefficient_relative_error": 3.2018249095971123e-10
+      },
+      "prepared_1_2": {
+        "preconditioner": "mass-chebyshev-graph",
+        "nonlinear_relative_residual": 9.364341840850127e-12,
+        "sphere_mean_relative_error": 2.197697239524686e-06,
+        "cpu_coefficient_relative_error": 3.2018490059798534e-10
+      }
+    },
+    "threads": 8
+  },
+  "memory": {
+    "controlled_array_bound_bytes": 2068412007.0,
+    "available_device_memory_before_sample": 42181853184.0,
+    "available_device_memory_after_sample": 41251973405.0,
+    "limitations": "Controlled native/MATLAB bounds and device samples, not host/global/library/graph-driver peak",
+    "reserve": "Graph instantiation checks max(2GiB,20percent total); sampled global availability is not peak allocation accounting"
+  },
+  "measurement_scope": "Same binary preconditioner comparison; first calls plus two warm ABBA cycles; whole FE/HMatrix/transfers/nonlinear solve/recovery/release; prepared three zero-start solves exclude construction/release; no CPU speedup or process cold",
+  "measurement_hardware": "Single A100-SXM4-40GB; MATLAB R2026a; host control limited to two CPU cores, sequential BLAS; CPU recomputation on development host is accuracy only",
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "live_count": 0,
+  "limitations": [
+    "No 100k DoF or p>2 acceptance",
+    "No new default preconditioner selection",
+    "Native graph original PCG equation and stopping criteria unchanged",
+    "No process cold or fresh CPU/GPU speed ratio",
+    "Synthetic public sphere does not certify measured B-H or general geometry physics"
+  ]
+}

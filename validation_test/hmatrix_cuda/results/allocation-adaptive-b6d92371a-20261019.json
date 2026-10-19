@@ -1,0 +1,120 @@
+{
+  "source_commit": "b6d92371a84921c05589b7431d246feba917131b",
+  "binary_sha256": "a106c598b5966b27b8218e1080941523f13ad69bb0207991fbbf088318e9f5a5",
+  "gate_sha256": "3f1ece0aaf82a008e15a296e26432b7d33a1f3a3b92668f3305c67c8e7fd6972",
+  "nonlinear": {
+    "cpu_error": 4.4165783477545934e-14,
+    "true_residual": 3.1016459476724205e-14,
+    "newton_iterations": 11,
+    "inner_iterations": 1565,
+    "accounted_array_bound_bytes": 217304272.0
+  },
+  "failure_memory_slopes": [
+    {
+      "kind": "c",
+      "samples": [
+        1324138496,
+        1324138496,
+        1324138496,
+        1324138496,
+        1324138496,
+        1324138496,
+        1324138496,
+        1324138496,
+        1324138496,
+        1324138496
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "kind": "cpp",
+      "samples": [
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "kind": "gpu",
+      "samples": [
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "kind": "matlab",
+      "samples": [
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768,
+        1324064768
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    }
+  ],
+  "coverage_limits": [
+    "C++ normalization/oracle allocations outside the counted packing allocator are not exhausted",
+    "ACA/curved/reallocation branches require additional path-specific fault sweeps",
+    "Whole-process samples are not global device or library peaks"
+  ],
+  "p1_complete": false,
+  "schema": "radia.hmatrix-allocation-diagnostic.v1",
+  "accepted": true,
+  "allocation_path": "adaptive",
+  "observed_failure_sites": {
+    "c": 137,
+    "cpp": 442,
+    "gpu": 14
+  },
+  "verified_union_events": 656,
+  "initial_attempt": {
+    "accepted": false,
+    "error": "Diagnostic loop reserve reached",
+    "elapsed_seconds": 195.125,
+    "last_cpp_target": 389
+  },
+  "resume_attempt": {
+    "accepted": true,
+    "elapsed_seconds": 52.75,
+    "cpp_first_target": 390
+  },
+  "scope": "Fault-site coverage for the frozen public constant-tet adaptive assembly fixture; not all native allocation paths",
+  "performance_accepted": false,
+  "release_accepted": false,
+  "owned_engine_quit": true,
+  "resident_accepted": true,
+  "recovery_files_sha_verified": 483,
+  "input_sha256": {
+    "cpu-reference.json": "d0d70563dcdaa5785bba659e1d3ae9251d41e861fb555cd2a21d11b0db0d2469",
+    "cpu.h5": "28676c133a850c86c79aa5632a705612114db02c1c9676a8ce2619644dd072c5",
+    "exterior.vol": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50",
+    "inputs.mat": "6bfa403a0adc3c0dff9c24069b8167d161f4f65aff0079d88303744358f4ba90"
+  }
+}

@@ -1,4 +1,4 @@
-"""MCP server for :mod:`radia_gpu.ltspice`.
+"""MCP server for :mod:`radia_simulink.ltspice`.
 
 Exposes conversion, linting, topology comparison, and small circuit-design
 seed helpers as MCP tools so AI agents (Claude Code, Cursor, etc.) can
@@ -25,9 +25,9 @@ def _gpu_callable(module, attribute, package):
         try:
             return target(*args, **kwargs)
         except ModuleNotFoundError as exc:
-            if exc.name and exc.name.split(".")[0] == "radia_gpu":
+            if exc.name and exc.name.split(".")[0] == "radia_simulink":
                 raise RuntimeError(
-                    "This circuit operation requires the independent radia-gpu "
+                    "This circuit operation requires the independent radia-simulink "
                     "package on the execution host (100 or A100)."
                 ) from exc
             raise
@@ -36,40 +36,40 @@ def _gpu_callable(module, attribute, package):
 
 
 conversion = SimpleNamespace(
-    asc_to_netlist=_gpu_callable("radia_gpu.ltspice.conversion", "asc_to_netlist", __package__),
-    netlist_to_asc=_gpu_callable("radia_gpu.ltspice.conversion", "netlist_to_asc", __package__),
-    netlist_to_schemdraw=_gpu_callable("radia_gpu.ltspice.conversion", "netlist_to_schemdraw", __package__),
-    schemdraw_to_netlist=_gpu_callable("radia_gpu.ltspice.conversion", "schemdraw_to_netlist", __package__),
+    asc_to_netlist=_gpu_callable("radia_simulink.ltspice.conversion", "asc_to_netlist", __package__),
+    netlist_to_asc=_gpu_callable("radia_simulink.ltspice.conversion", "netlist_to_asc", __package__),
+    netlist_to_schemdraw=_gpu_callable("radia_simulink.ltspice.conversion", "netlist_to_schemdraw", __package__),
+    schemdraw_to_netlist=_gpu_callable("radia_simulink.ltspice.conversion", "schemdraw_to_netlist", __package__),
 )
 _cli = SimpleNamespace(
-    check_text=_gpu_callable("radia_gpu.ltspice.cli", "check_text", __package__),
-    info_text=_gpu_callable("radia_gpu.ltspice.cli", "info_text", __package__),
+    check_text=_gpu_callable("radia_simulink.ltspice.cli", "check_text", __package__),
+    info_text=_gpu_callable("radia_simulink.ltspice.cli", "info_text", __package__),
 )
-_buck_seed = _gpu_callable("radia_gpu.ltspice.knowledge", "buck_seed", __package__)
-_circuit_knowledge = _gpu_callable("radia_gpu.ltspice.knowledge", "circuit_knowledge", __package__)
-_build_balanced_learning_profile = _gpu_callable("radia_gpu.ltspice.learning_quality", "build_balanced_learning_profile", __package__)
-_summarize_measure_log = _gpu_callable("radia_gpu.ltspice.measure", "summarize_measure_log", __package__)
-_summarize_stepped_measure_log = _gpu_callable("radia_gpu.ltspice.measure", "summarize_stepped_measure_log", __package__)
-_patentability_search_plan = _gpu_callable("radia_gpu.ltspice.patentability", "patentability_search_plan", __package__)
-_sallen_key_filter_family_gate = _gpu_callable("radia_gpu.ltspice.filter_gates", "sallen_key_filter_family_gate", __package__)
-_hysteretic_inductor_cycle_gate = _gpu_callable("radia_gpu.ltspice.hysteresis_gate", "hysteretic_inductor_cycle_gate", __package__)
-_half_wave_rectifier_gate = _gpu_callable("radia_gpu.ltspice.rectifier_gate", "half_wave_rectifier_gate", __package__)
-_bridge_rectifier_gate = _gpu_callable("radia_gpu.ltspice.bridge_rectifier_gate", "bridge_rectifier_gate", __package__)
-_cockcroft_walton_stage_gate = _gpu_callable("radia_gpu.ltspice.voltage_multiplier_gate", "cockcroft_walton_stage_gate", __package__)
-_boost_converter_steady_state_gate = _gpu_callable("radia_gpu.ltspice.boost_gate", "boost_converter_steady_state_gate", __package__)
-_transient_psrr_gate = _gpu_callable("radia_gpu.ltspice.psrr_gate", "transient_psrr_gate", __package__)
-_measure_bandwidth_crossing_gate = _gpu_callable("radia_gpu.ltspice.bandwidth_gate", "measure_bandwidth_crossing_gate", __package__)
-_bipolar_supply_startup_gate = _gpu_callable("radia_gpu.ltspice.bipolar_startup_gate", "bipolar_supply_startup_gate", __package__)
-_monte_carlo_tolerance_family_gate = _gpu_callable("radia_gpu.ltspice.monte_carlo_gate", "monte_carlo_tolerance_family_gate", __package__)
-_bipolar_converter_efficiency_gate = _gpu_callable("radia_gpu.ltspice.bipolar_efficiency_gate", "bipolar_converter_efficiency_gate", __package__)
-_bipolar_rail_power_quality_gate = _gpu_callable("radia_gpu.ltspice.bipolar_rail_gate", "bipolar_rail_power_quality_gate", __package__)
-_series_rlc_complex_impedance_gate = _gpu_callable("radia_gpu.ltspice.series_rlc_gate", "series_rlc_complex_impedance_gate", __package__)
-_rc_thermal_noise_psd_gate = _gpu_callable("radia_gpu.ltspice.noise_gate", "rc_thermal_noise_psd_gate", __package__)
-_distributed_line_delay_loss_gate = _gpu_callable("radia_gpu.ltspice.distributed_line_gate", "distributed_line_delay_loss_gate", __package__)
-_second_order_allpass_gate = _gpu_callable("radia_gpu.ltspice.allpass_gate", "second_order_allpass_gate", __package__)
-_second_order_complex_zero_gate = _gpu_callable("radia_gpu.ltspice.complex_zero_gate", "second_order_complex_zero_gate", __package__)
-_balanced_three_phase_delta_rl_gate = _gpu_callable("radia_gpu.ltspice.three_phase_delta_gate", "balanced_three_phase_delta_rl_gate", __package__)
-_ideal_transformer_identity_gate = _gpu_callable("radia_gpu.ltspice.ideal_transformer_gate", "ideal_transformer_identity_gate", __package__)
+_buck_seed = _gpu_callable("radia_simulink.ltspice.knowledge", "buck_seed", __package__)
+_circuit_knowledge = _gpu_callable("radia_simulink.ltspice.knowledge", "circuit_knowledge", __package__)
+_build_balanced_learning_profile = _gpu_callable("radia_simulink.ltspice.learning_quality", "build_balanced_learning_profile", __package__)
+_summarize_measure_log = _gpu_callable("radia_simulink.ltspice.measure", "summarize_measure_log", __package__)
+_summarize_stepped_measure_log = _gpu_callable("radia_simulink.ltspice.measure", "summarize_stepped_measure_log", __package__)
+_patentability_search_plan = _gpu_callable("radia_simulink.ltspice.patentability", "patentability_search_plan", __package__)
+_sallen_key_filter_family_gate = _gpu_callable("radia_simulink.ltspice.filter_gates", "sallen_key_filter_family_gate", __package__)
+_hysteretic_inductor_cycle_gate = _gpu_callable("radia_simulink.ltspice.hysteresis_gate", "hysteretic_inductor_cycle_gate", __package__)
+_half_wave_rectifier_gate = _gpu_callable("radia_simulink.ltspice.rectifier_gate", "half_wave_rectifier_gate", __package__)
+_bridge_rectifier_gate = _gpu_callable("radia_simulink.ltspice.bridge_rectifier_gate", "bridge_rectifier_gate", __package__)
+_cockcroft_walton_stage_gate = _gpu_callable("radia_simulink.ltspice.voltage_multiplier_gate", "cockcroft_walton_stage_gate", __package__)
+_boost_converter_steady_state_gate = _gpu_callable("radia_simulink.ltspice.boost_gate", "boost_converter_steady_state_gate", __package__)
+_transient_psrr_gate = _gpu_callable("radia_simulink.ltspice.psrr_gate", "transient_psrr_gate", __package__)
+_measure_bandwidth_crossing_gate = _gpu_callable("radia_simulink.ltspice.bandwidth_gate", "measure_bandwidth_crossing_gate", __package__)
+_bipolar_supply_startup_gate = _gpu_callable("radia_simulink.ltspice.bipolar_startup_gate", "bipolar_supply_startup_gate", __package__)
+_monte_carlo_tolerance_family_gate = _gpu_callable("radia_simulink.ltspice.monte_carlo_gate", "monte_carlo_tolerance_family_gate", __package__)
+_bipolar_converter_efficiency_gate = _gpu_callable("radia_simulink.ltspice.bipolar_efficiency_gate", "bipolar_converter_efficiency_gate", __package__)
+_bipolar_rail_power_quality_gate = _gpu_callable("radia_simulink.ltspice.bipolar_rail_gate", "bipolar_rail_power_quality_gate", __package__)
+_series_rlc_complex_impedance_gate = _gpu_callable("radia_simulink.ltspice.series_rlc_gate", "series_rlc_complex_impedance_gate", __package__)
+_rc_thermal_noise_psd_gate = _gpu_callable("radia_simulink.ltspice.noise_gate", "rc_thermal_noise_psd_gate", __package__)
+_distributed_line_delay_loss_gate = _gpu_callable("radia_simulink.ltspice.distributed_line_gate", "distributed_line_delay_loss_gate", __package__)
+_second_order_allpass_gate = _gpu_callable("radia_simulink.ltspice.allpass_gate", "second_order_allpass_gate", __package__)
+_second_order_complex_zero_gate = _gpu_callable("radia_simulink.ltspice.complex_zero_gate", "second_order_complex_zero_gate", __package__)
+_balanced_three_phase_delta_rl_gate = _gpu_callable("radia_simulink.ltspice.three_phase_delta_gate", "balanced_three_phase_delta_rl_gate", __package__)
+_ideal_transformer_identity_gate = _gpu_callable("radia_simulink.ltspice.ideal_transformer_gate", "ideal_transformer_identity_gate", __package__)
 
 
 
@@ -471,7 +471,7 @@ def compare_topology(netlist_a: str, netlist_b: str) -> dict:
           pin-to-node connections on each side (a quick tell for added
           or dropped pins).
     """
-    topology_equivalent = _gpu_callable("radia_gpu.ltspice.topology", "topology_equivalent", __package__)
+    topology_equivalent = _gpu_callable("radia_simulink.ltspice.topology", "topology_equivalent", __package__)
     try:
         equal, info = topology_equivalent(netlist_a, netlist_b)
     except Exception as e:
@@ -619,10 +619,10 @@ def patentability_search_plan(
 from radia_mcp.common import register_status_tool
 register_status_tool(
     mcp, server_name="mcp-server-radia-ltspice",
-    description="LTspice integration with an optional radia-gpu backend",
+    description="LTspice integration with an optional radia-simulink backend",
     subpackage="radia_mcp.ltspice",
     related_servers=["radia-matlab", "radia-ngsolve"],
-    optional_deps=["radia_gpu"],
+    optional_deps=["radia_simulink"],
 )
 
 

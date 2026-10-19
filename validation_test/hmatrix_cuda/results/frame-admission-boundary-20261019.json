@@ -1,0 +1,66 @@
+{
+  "schema": "radia.hacapk.frame-admission-boundary.v1",
+  "c_contract_accepted": true,
+  "production_gpu_connected": false,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "source_commit": "20cda9d24b3f48dfc4a394b2874ea67022040702",
+  "scope": "Opt-in uniform-charge C frame boundary and default CPU regression; no CUDA numerical admission",
+  "frame_contract": {
+    "frame_rejections": 3,
+    "frame_acceptances": 2,
+    "entries_before_rejection": 0,
+    "output_ownership_unpublished_on_rejection": true,
+    "maximum_relative_difference": 3.352302628071643e-13,
+    "binary_sha256": "8877a3daa32f334bc5948631fb02fb8c4c9ca7087911233ddd1d68eb6b1d0327"
+  },
+  "default_regression": {
+    "scalar": {
+      "cases": 2,
+      "maximum_relative_difference": 3.352302628071643e-13,
+      "lowrank_leaves": 4,
+      "taskmanager_started": false,
+      "binary_sha256": "80b1c7d801d97bd905aa876a65b8b41da0a40090cf1c3c7bc0deb3c9ed860bb5"
+    },
+    "batch": {
+      "cases": 2,
+      "maximum_relative_difference": 3.352302628071643e-13,
+      "lowrank_leaves": 4,
+      "taskmanager_started": false,
+      "binary_sha256": "1c089ea3538f1d0640e6072d8c98378e666e2b993f82d9d1dfbc0eb3285ff9dd"
+    }
+  },
+  "source_sha256": {
+    "validation_test/hmatrix_cuda/check_full_host.c": "dc726ecde72e954149e15fbc84db2d28ab7212b6a3d42541e2a5ebf6fca4543e",
+    "packages/radia-gpu/native/hmatrix_serial_host.c": "2d18961c058a624d9d4d5f0bff2bf65360e81ba61a1f086963a6985dab91f2e5",
+    "src/ext/HACApK/cHACApK_base.c": "9fc8efd28903c0760964dd94226f1194c7a8cc170264f4ab13d83696037f7289",
+    "src/ext/HACApK/cHACApK_cpp_impl.c": "ea1281858a4974e3c9a544e4377f2edc34dbf17c66397d12f0f2571a55f0250e",
+    "src/ext/HACApK/cHACApK_lib.c": "94bcef9be652932b29785c417b446b91b984c5e92e41f8c55fb49a08df0e0cb8",
+    "src/ext/HACApK/cHACApK_pca_cluster.c": "f942f053d6742ce4a530a87cce6c2fba41bdbfdbdbc13032cb244cbc0eccb1d2",
+    "packages/radia-gpu/tools/vs2022_toolchain.py": "f80332db377b87480559a8fa0a1d691f669c2f500a0192f242c029c59540c47a",
+    "validation_test/hmatrix_cuda/check_full_host.py": "d0d6a15c50b21be1969eddd0c03a98aea497d2cf04af284e6c56f19522054aa6",
+    "src/ext/HACApK/cHACApK_aca.inc": "72f78d46b4d4da59522faa6e3ff63b33597fa07bcddf5dd53530ef643fb14b7e",
+    "src/ext/HACApK/cHACApK_base.h": "0feb4603a640d028ff0cfc44ca1d0240552c3633f3fc4a3f33658ac7cac255c5",
+    "src/ext/HACApK/cHACApK_batch_size.h": "ab279ea49c8c73c71e787216d34224e14da3bf670a6cdba0522c25c1b1cda331",
+    "src/ext/HACApK/cHACApK_block_tree.h": "84ece12e48084b36cf209fc2bf9e85a319ce5f19fe2d07fc2d42c850c0f5209a",
+    "src/ext/HACApK/cHACApK_calc_entry_ij.h": "0476c35264ebb4626454baf5f20c89c0e711d029370458dbb9800cbdf66b7320",
+    "src/ext/HACApK/cHACApK_cpp.h": "a0d11801e0bcbb5f4faa893e994ba8f3bd3baf0aa203031124192c38c9034c86",
+    "src/ext/HACApK/cHACApK_dense_leaf_sink.h": "46fb854564af496e04c1933e65aaa0e4e9211df93688f0ae4f6e112e9807c43d",
+    "src/ext/HACApK/cHACApK_frame_admission.h": "be8d34137de854c431e3540939ba971a684e877f97621e8a7e23f04275fd5fae",
+    "src/ext/HACApK/cHACApK_harith.h": "b8295d8c8fe427cef7517daa64e695b678302150f1b6a1306a5fd642fc71a18b",
+    "src/ext/HACApK/cHACApK_lib.h": "bd128cbf005444096be5a860bbbcaa23b57fac3f55890725ada5abf5646c9688",
+    "src/ext/HACApK/cHACApK_pca_cluster.h": "177ba81580c0ca5cec8996d32c55f17b3ecc224a21dd0296f05712b1d88a82ba",
+    "src/ext/HACApK/hacapk_log.h": "1b214205bf87ece8acb939c2a4694eea8466e22469ce4c4b2dc36eae2584b146",
+    "src/ext/HACApK/mpi_stub.h": "7f714678b49169e92b221f615d64e4c9f1192ba4bcda30fd7290cab2ad021dcf",
+    "src/core/rad_hacapk_parallel.h": "76a31060959b87db46dadeb247a4186b5a533ff7b1a742d27013fbc1c75ecf9d"
+  },
+  "true_relative_residual": null,
+  "residual_applicability": "not_applicable_synthetic_operator_contract",
+  "limitations": [
+    "Rejection happens after leaf-frame allocation but before numerical entry fill; pre-frame count/index limits remain mandatory.",
+    "Control allocation cleanup remains caller-owned; rejected frame/tree and temporary coordinates are freed in wrapper.",
+    "GPU callback, coefficient-bound accumulator connection and production mexcuda macro are not yet enabled.",
+    "No capacity cap, sparse FE semantics or ACA arithmetic changed.",
+    "No new timing, physical solver or large-memory acceptance."
+  ]
+}

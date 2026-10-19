@@ -1,0 +1,70 @@
+{
+  "schema": "radia.p1-ih-real-thermal.v1",
+  "source_commit": "3a8a00df3743178d506eb61efe4f1e09814ed0e5",
+  "binary_sha256": "12b70c5018ab238b427d5b39f41b23a0ee0ac72af6e166be34409d1e79aae89f",
+  "accepted": true,
+  "p1_complete": false,
+  "worker_role": "human-started-gpu-worker",
+  "timing_classification": "Small numerical and lifecycle diagnostics, not performance acceptance",
+  "numeric": {
+    "temperature_relative": 4.450901475799918e-14,
+    "heat_relative": 3.1849496201346424e-16,
+    "independent_eddy_true_residual": 1.5301659707183198e-16,
+    "reported": {
+      "steps": 5,
+      "owned_device_bytes": 2296,
+      "eddy_iterations": 3,
+      "eddy_true_residual": 1.6443140345003356e-16,
+      "thermal_iterations": 2,
+      "thermal_true_residual": 1.9235664984454183e-12,
+      "preconditioner_precision": "none",
+      "constitutive_iterations": 0,
+      "constitutive_true_residual": 0,
+      "constitutive_field_residual": 0,
+      "material_mode": "fixed"
+    }
+  },
+  "independent_thermal_true_residuals": [
+    1.9406750058863102e-12,
+    1.9337036908929348e-12,
+    1.9351304063693843e-12,
+    1.9247154401355664e-12,
+    1.9186771625844536e-12
+  ],
+  "memory": {
+    "samples": [
+      1624780800,
+      1624780800,
+      1624780800,
+      1624780800,
+      1624780800,
+      1624780800,
+      1624780800,
+      1624780800,
+      1624780800,
+      1624780800
+    ],
+    "private_bytes_per_run": 0.0,
+    "private_delta_bytes": 0,
+    "available_device_bytes_samples": [
+      42177658880.0,
+      42177658880.0,
+      42177658880.0,
+      42177658880.0,
+      42177658880.0,
+      42177658880.0,
+      42177658880.0,
+      42177658880.0,
+      42177658880.0,
+      42177658880.0
+    ]
+  },
+  "scope": "Synthetic fixed coupled algebra with independent NumPy solve, residuals, failed-update atomicity, reset, stale handles and repeated release; no physical ESIM/PEEC-BEM or Simulink acceptance",
+  "correction": "Real thermal Krylov subspace; complex eddy shadow unchanged; complex time-domain thermal operators rejected explicitly; residual and imaginary-state gates unchanged",
+  "prior_failed_source": "f525af9afc10c2857b06cad85fdd5ee72596a3c8",
+  "lifecycle_result_sha256": "c483a28df9ba31528c78d84c703427b019dbf236b0b3e4cb13bc226403200e4e",
+  "recovery": {
+    "file_count": 179,
+    "archive_sha256": "501c54aca05de1ab8ed0031c4bd42913fe00b1f520a98b6a85e3bbaa0986d31d"
+  }
+}

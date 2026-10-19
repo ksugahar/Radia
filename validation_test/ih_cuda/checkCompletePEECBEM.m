@@ -2,7 +2,7 @@ function result=checkCompletePEECBEM(artifact,out)
 if ~isfolder(out),mkdir(out);end
 result=struct('accepted',false,'research_only',true,'release_accepted',false);
 try
-root=fileparts(fileparts(fileparts(mfilename('fullpath'))));addpath(artifact);addpath(fullfile(root,'packages','radia-gpu','matlab'));addpath(fileparts(mfilename('fullpath')));
+root=fileparts(fileparts(fileparts(mfilename('fullpath'))));addpath(artifact);addpath(fullfile(root,'packages','radia-simulink','matlab'));addpath(fileparts(mfilename('fullpath')));
 g=struct('vertices_m',.01*[0,0,0;1,0,0;0,1,0;0,0,1],'triangles',[1,3,2;1,2,4;1,4,3;2,3,4],'regular_quad_degree',9,'singular_order',6);
 p=[-.02,-.02,.03;.03,-.02,.03;.03,.03,.03;-.02,.03,.03];g.segments_m=[p,p([2,3,4,1],:)];g.segment_coil=ones(4,1);
 t=makeResidentAlgebraConfig();t.thermal_system=speye(4);t.stiffness=sparse(4,4);t.convection=sparse(4,4);t.heat_projection=speye(4);t.initial_temperature_K=[300;310;320;330];t.sample_time_s=.001;t.constant_coefficients=ones(4,1);

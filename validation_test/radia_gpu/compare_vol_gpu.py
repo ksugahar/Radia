@@ -39,7 +39,7 @@ def main(args):
         raise RuntimeError('CPU reference provenance differs from exported system')
     installed = json.loads(subprocess.check_output(
         [str(args.installed_python), '-I', '-c',
-         'import json,radia_gpu; print(json.dumps(radia_gpu.verify()))'], text=True))
+         'import json,radia_simulink; print(json.dumps(radia_simulink.verify()))'], text=True))
     if not installed['passed']:
         raise RuntimeError('Installed payload verification failed')
     args.out.mkdir(parents=True, exist_ok=False)

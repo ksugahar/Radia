@@ -23,7 +23,7 @@ def audit_module(monkeypatch, tmp_path):
     [
         ("src/radia/solver.py", "helper"),
         ("src/radia/panels/calc_heat.py", "caller"),
-        ("packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py", "caller"),
+        ("packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py", "caller"),
         ("validation_test/heat/check_energy.py", "caller"),
         ("tests/test_heat.py", "caller"),
         ("docs/heat/notebook_helper.py", "caller"),
@@ -49,12 +49,12 @@ def test_classification_matches_repository_lanes(
 
 
 @pytest.mark.parametrize("relative_path", [
-    "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+    "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
     "validation_test/ams_cuda/run.py",
     "validation_test/ams_cuda/setup_benchmark.py",
     "validation_test/ams_cuda/native_setup_validation.py",
     "validation_test/ams_cuda/graph_validation.py",
-    "validation_test/radia_gpu/export_vol_reference.py",
+    "validation_test/radia_simulink/export_vol_reference.py",
     "validation_test/ngsolve_cuda_mex/run_poisson.py",
 ])
 @pytest.mark.parametrize("construction", ["TaskManager()", "ng.TaskManager()", "TM()"])

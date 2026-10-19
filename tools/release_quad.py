@@ -344,7 +344,7 @@ def _simulink_state_path(package_sha256: str) -> Path:
 
 def _simulink_mex_sha256(manifest: dict) -> str:
     matches = [row.get("sha256") for row in manifest.get("files", [])
-               if row.get("path") == "packages/radia-gpu/matlab/radia_mex.mexw64"]
+               if row.get("path") == "packages/radia-simulink/matlab/radia_mex.mexw64"]
     if len(matches) != 1 or not isinstance(matches[0], str) or len(matches[0]) != 64:
         raise ValueError("Simulink manifest must identify exactly one radia_mex hash")
     return matches[0].lower()
@@ -567,7 +567,7 @@ def _run_simulink_candidate_target(
 
 def cmd_simulink_candidate(args):
     """Reject the retired CPU MEX release route."""
-    fail("CPU MEX releases are unsupported; use the independent radia-gpu release workflow.")
+    fail("CPU MEX releases are unsupported; use the independent radia-simulink release workflow.")
     return 4
 
 
@@ -2071,8 +2071,8 @@ RELEASE_CHECK_RUN = "radia-native-release-build"
 # These independently released owners cannot block the CPU Radia distribution.
 # Keep shared/unknown checks required and the exact native release check mandatory.
 INDEPENDENT_DISTRIBUTION_WORKFLOWS = frozenset({
-    ".github/workflows/radia-gpu.yml",
-    ".github/workflows/radia-gpu-release.yml",
+    ".github/workflows/radia-simulink.yml",
+    ".github/workflows/radia-simulink-release.yml",
     ".github/workflows/ltspice-data-safety.yml",
     ".github/workflows/radia-optuna.yml",
     ".github/workflows/release-radia-optuna.yml",
@@ -2204,7 +2204,7 @@ def cmd_done(args):
         return rc
 
     if getattr(args, "simulink_package", None):
-        fail("MATLAB/Simulink artifacts belong to radia-gpu, not the CPU Radia release.")
+        fail("MATLAB/Simulink artifacts belong to radia-simulink, not the CPU Radia release.")
         return 4
 
     rc = _verify_final_pip_checks()

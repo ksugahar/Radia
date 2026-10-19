@@ -1,0 +1,149 @@
+{
+  "schema": "radia.hdiv.cuda-frame-admission.v1",
+  "production_mexcuda_connected": true,
+  "bounded_numerical_accepted": true,
+  "large_capacity_accepted": false,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "bc6b78a143bfd882e29413cc133e4736bfb6d626",
+      "binary_sha256": "dcc88c79c71446e351dc981db7e726e7d274ad08c41ebf1cdd15831920cd125c"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "baf0631d530da52d9fb90556070ee307277f2cb1",
+      "binary_sha256": "feff04ddc7cbed4bb66423047955983727e2faa0655a9e2e37f5334f7055e0ba"
+    }
+  },
+  "matlab_version": "26.1.0.3346908 (R2026a) Update 5",
+  "small_288": {
+    "cpu_coefficient_relative_error": 4.1407592469632287e-14,
+    "frame_coefficient_bounds_cover_stored_values": true,
+    "early_budget_error_released_context": true,
+    "invalid_initial_recovery": true,
+    "live_count": 0,
+    "cases": {
+      "baseline": {
+        "nonlinear_iterations": 11,
+        "nonlinear_relative_residual": 2.6873108796003683e-14,
+        "whole_seconds": 5.4656903,
+        "combined_array_bound_bytes": 217304272.0,
+        "maximum_solver_owned_device_bytes": 200456,
+        "frame": {
+          "owned_device_bytes": 185144,
+          "setup_peak_owned_device_bytes": 2407484.0,
+          "assembly_frame_leaf_count": 16,
+          "assembly_frame_upper_dense_coefficients": 16116,
+          "assembly_frame_storage_cap_coefficients": 16116,
+          "stored_coefficient_count": 16116
+        }
+      },
+      "candidate": {
+        "nonlinear_iterations": 11,
+        "nonlinear_relative_residual": 3.0009212043422785e-14,
+        "whole_seconds": 4.7463308,
+        "combined_array_bound_bytes": 217304272.0,
+        "maximum_solver_owned_device_bytes": 200456,
+        "frame": {
+          "owned_device_bytes": 185144,
+          "setup_peak_owned_device_bytes": 2407484.0,
+          "assembly_frame_leaf_count": 16,
+          "assembly_frame_upper_dense_coefficients": 16116,
+          "assembly_frame_storage_cap_coefficients": 16116,
+          "stored_coefficient_count": 16116
+        }
+      },
+      "repeated": {
+        "nonlinear_iterations": 11,
+        "nonlinear_relative_residual": 3.037520775287292e-14,
+        "whole_seconds": 4.3294815,
+        "combined_array_bound_bytes": 217304272.0,
+        "maximum_solver_owned_device_bytes": 200456,
+        "frame": {
+          "owned_device_bytes": 185144,
+          "setup_peak_owned_device_bytes": 2407484.0,
+          "assembly_frame_leaf_count": 16,
+          "assembly_frame_upper_dense_coefficients": 16116,
+          "assembly_frame_storage_cap_coefficients": 16116,
+          "stored_coefficient_count": 16116
+        }
+      }
+    }
+  },
+  "large_10344": {
+    "cpu_coefficient_relative_error": 1.4780625531232224e-09,
+    "frame_coefficient_bounds_cover_stored_values": true,
+    "early_budget_error_released_context": true,
+    "invalid_initial_recovery": true,
+    "live_count": 0,
+    "cases": {
+      "baseline": {
+        "nonlinear_iterations": 2,
+        "nonlinear_relative_residual": 1.0353820562720742e-14,
+        "whole_seconds": 22.4384886,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7753352.0,
+        "frame": {
+          "owned_device_bytes": 78209352.0,
+          "setup_peak_owned_device_bytes": 1791115980.0,
+          "assembly_frame_leaf_count": 6325,
+          "assembly_frame_upper_dense_coefficients": 8951208.0,
+          "assembly_frame_storage_cap_coefficients": 9059268.0,
+          "stored_coefficient_count": 8883774.0
+        }
+      },
+      "candidate": {
+        "nonlinear_iterations": 2,
+        "nonlinear_relative_residual": 1.1535024023565008e-14,
+        "whole_seconds": 21.9032361,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7753352.0,
+        "frame": {
+          "owned_device_bytes": 78209352.0,
+          "setup_peak_owned_device_bytes": 1791115980.0,
+          "assembly_frame_leaf_count": 6325,
+          "assembly_frame_upper_dense_coefficients": 8951208.0,
+          "assembly_frame_storage_cap_coefficients": 9059268.0,
+          "stored_coefficient_count": 8883774.0
+        }
+      },
+      "repeated": {
+        "nonlinear_iterations": 2,
+        "nonlinear_relative_residual": 1.1690285168824491e-14,
+        "whole_seconds": 4.1380413,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7753352.0,
+        "frame": {
+          "owned_device_bytes": 78209352.0,
+          "setup_peak_owned_device_bytes": 1791115980.0,
+          "assembly_frame_leaf_count": 6325,
+          "assembly_frame_upper_dense_coefficients": 8951208.0,
+          "assembly_frame_storage_cap_coefficients": 9059268.0,
+          "stored_coefficient_count": 8883774.0
+        }
+      }
+    }
+  },
+  "owned_engine_quit": true,
+  "coefficient_allowance_bytes": 2147483648,
+  "unchanged_pre_frame_caps": true,
+  "independent_cpu_residual_recomputed_this_run": false,
+  "limitations": [
+    "Frame coefficient allowance excludes frame metadata, ACA working arrays, host copies, sparse maps, oracle/cache and CUDA library memory.",
+    "All existing pre-frame dimensions/index/square guards and Resident memory reserve checks remain active.",
+    "C callback rejection/unwind was tested separately; deliberate rejection through the mexcuda TLS callback remains unexercised.",
+    "CPU comparisons use frozen independent nonlinear solutions; original nonlinear residual here is the native residual.",
+    "Both baseline and candidate use the same new frame-admission MEX; they compare final-tangent policy, not old/new frame code.",
+    "Single ordered RTX times are diagnostic, not ABBA, CPU speedup or A100 performance acceptance."
+  ],
+  "input_sha256": {
+    "small_288": {
+      "mesh": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50",
+      "cpu_fixture_hdf5": "28676c133a850c86c79aa5632a705612114db02c1c9676a8ce2619644dd072c5"
+    },
+    "large_10344": {
+      "mesh": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+      "cpu_fixture_hdf5": "5237d738506c36eb493a6b380f18154f658de5409678be798ef9f7c5dc798800"
+    }
+  }
+}
