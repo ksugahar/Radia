@@ -126,6 +126,8 @@ jobs:
     if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Windows, X64, "100"]
     timeout-minutes: 60
+    env:
+      RADIA_GPU_CI_BUILD: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Prepare isolated mexcuda environment
