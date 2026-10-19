@@ -54,7 +54,7 @@
       "scope": "FP64 CSR Jacobi-preconditioned CG; caller assembles the system. This does not certify AMS, ICCG or HDiv-MMM.",
       "source": "packages/radia-simulink/native/radia_cuda_csr_pcg.cu",
       "matlab": "packages/radia-simulink/matlab/+radia/+gpu/csrPCG.m",
-      "validation": "validation_test/radia_simulink/results/transfer-54a577e7f.json",
+      "validation": "validation_test/radia_gpu/results/transfer-54a577e7f.json",
       "cpu_fallback": false
     },
     {

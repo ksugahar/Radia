@@ -322,7 +322,7 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert policy == section(claude)
     normalized = " ".join(policy.split())
     assert "with the `100` runner label" in normalized
-    assert "LAB/102 tests radia and radia-mcp wheels without radia-simulink" in normalized
+    assert "LAB/102 tests radia and radia-mcp wheels without radia-gpu" in normalized
     assert "Use the on-demand GPU worker only for mexcuda GPU work" in normalized
     assert "Retired execution targets are excluded from deployment, CI and computation" in normalized
     assert "`A100` validation runs without Cubit" in normalized
