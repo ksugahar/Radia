@@ -18,7 +18,7 @@ def sibling_tool_import(monkeypatch):
 
 @pytest.mark.parametrize('key,value', [
     ('CUDA_PATH', 'C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8'),
-    ('RADIA_GPU_CUDA_ROOT', 'C:/temp/cuda134'),
+    ('RADIA_GPU_CUDA_ROOT', 'X:/external-toolkits/cuda134'),
     ('RADIA_MEXCUDA_CONFIG', 'private.xml'),
     ('NVCC_APPEND_FLAGS', '--allow-unsupported-compiler'),
     ('NVCC_PREPEND_FLAGS', '-ccbin other'),
