@@ -573,10 +573,10 @@ def test_matching_trace_condensation_rejects_unsupported_trace_and_order():
         mesh, order=2,
         definedon=mesh.Boundaries("source_total_interface"))
     trace = ng.GridFunction(trace_space)
-    with pytest.raises(ValueError, match="only order 1 or 2"):
+    with pytest.raises(ValueError, match="only order 1, 2 or 3"):
         solve_magnetostatic_matching_trace_total_reduced_omega(
             mesh, ng.CoefficientFunction((0.0, 0.0, 0.0)), trace,
-            order=3, **args)
+            order=4, **args)
 
 
 def test_mixed_omega_prescribed_reduced_normal_flux_recovers_uniform_source():
