@@ -19,9 +19,10 @@ def state(**targets):
             'mex_sha256': 'b' * 64, 'targets': targets}
 
 
-@pytest.mark.parametrize("key,controller,allowed", [("100", "T7920", True), ("lab", "INTEL11", True), ("lab", "T7920", False), ("100", "INTEL11", False), ("lab", "mdx1", False)])
+@pytest.mark.parametrize("key,controller,allowed", [("100", "build-machine", True), ("100", "other-machine", False)])
 def test_com_acceptance_never_labels_another_host_as_the_target(monkeypatch, tmp_path, key, controller, allowed):
     calls = []
+    monkeypatch.setenv("RADIA_ACCEPTANCE_HOSTNAME_100", "build-machine")
     monkeypatch.setattr(module.platform, "node", lambda: controller)
     def run(command, **kwargs):
         calls.append(command)
@@ -64,35 +65,6 @@ def test_remote_candidate_sends_powershell_as_encoded_argument(tmp_path, monkeyp
     assert 'New-Item' in scripts[0]
     assert "--engine-session 'MATLAB_13544'" in scripts[1]
     assert 'exit $LASTEXITCODE' in scripts[1]
-
-
-@pytest.mark.parametrize("lane", ["simulink", "optuna"])
-def test_lab_acceptance_from_another_controller_reaches_lab(tmp_path, monkeypatch, lane):
-    monkeypatch.setattr(module.platform, "node", lambda: "INTEL11")
-    calls = []
-    marker = 'RADIA_SIMULINK_RELEASE_OK RADIA_OPTUNA_WHEEL_SIMULINK_OK {"status": "passed"}'
-
-    def run(command, **kwargs):
-        calls.append(command)
-        if command[0] == "ssh":
-            assert command[command.index("pwsh") - 1] == "102"
-            kwargs["stdout"].write(marker.encode())
-        else:
-            assert command[0] == "scp"
-            assert command[-1].startswith("102:")
-        return subprocess.CompletedProcess(command, 0, "", "")
-
-    monkeypatch.setattr(module.subprocess, "run", run)
-    if lane == "simulink":
-        passed, _ = module._run_simulink_candidate_target(
-            "lab", tmp_path / "candidate.zip", "a" * 64, "RADIA_SIMULINK_RELEASE_OK")
-    else:
-        passed, _ = module._run_optuna_candidate_target(
-            "lab", tmp_path / "candidate.whl", "a" * 64)
-    assert passed is (lane == "simulink")
-    assert bool(calls) is (lane == "simulink")
-
-
 
 
 def test_remote_candidate_runs_the_selected_interpreter(tmp_path, monkeypatch):
@@ -153,38 +125,38 @@ def test_solver_dependency_versions_come_from_exact_metadata_pins():
 
 def test_stale_snapshot_does_not_erase_another_host(tmp_path):
     path = tmp_path / 'state.json'
-    module._write_simulink_state(path, state(lab={'status': 'passed'}), 'lab')
-    stale = state(**{'lab': {'status': 'passed'}, '100': {'status': 'passed'}})
-    module._write_simulink_state(path, state(lab={'status': 'failed'}), 'lab')
+    module._write_simulink_state(path, state(validation={'status': 'passed'}), 'validation')
+    stale = state(**{'validation': {'status': 'passed'}, '100': {'status': 'passed'}})
+    module._write_simulink_state(path, state(validation={'status': 'failed'}), 'validation')
     module._write_simulink_state(path, stale, '100')
     assert json.loads(path.read_text())['targets'] == {
-        'lab': {'status': 'failed'}, '100': {'status': 'passed'}}
+        'validation': {'status': 'failed'}, '100': {'status': 'passed'}}
 
 
 def test_identity_mismatch_preserves_evidence(tmp_path):
     path = tmp_path / 'state.json'
-    original = state(lab={'status': 'passed'})
-    module._write_simulink_state(path, original, 'lab')
+    original = state(validation={'status': 'passed'})
+    module._write_simulink_state(path, original, 'validation')
     changed = {**original, 'commit': 'b'}
     with pytest.raises(ValueError, match='identity mismatch'):
-        module._write_simulink_state(path, changed, 'lab')
+        module._write_simulink_state(path, changed, 'validation')
     assert json.loads(path.read_text()) == original
 
 
 def test_replace_failure_keeps_valid_json_and_releases_lock(tmp_path, monkeypatch):
     path = tmp_path / 'state.json'
-    original = state(lab={'status': 'passed'})
-    module._write_simulink_state(path, original, 'lab')
+    original = state(validation={'status': 'passed'})
+    module._write_simulink_state(path, original, 'validation')
     with monkeypatch.context() as patch:
         def fail(*args):
             raise OSError('replace failed')
         patch.setattr(module.os, 'replace', fail)
         with pytest.raises(OSError, match='replace failed'):
-            module._write_simulink_state(path, state(lab={'status': 'failed'}), 'lab')
+            module._write_simulink_state(path, state(validation={'status': 'failed'}), 'validation')
     assert json.loads(path.read_text()) == original
     assert not list(tmp_path.glob('*.tmp'))
-    module._write_simulink_state(path, state(lab={'status': 'failed'}), 'lab')
-    assert json.loads(path.read_text())['targets']['lab']['status'] == 'failed'
+    module._write_simulink_state(path, state(validation={'status': 'failed'}), 'validation')
+    assert json.loads(path.read_text())['targets']['validation']['status'] == 'failed'
 
 
 def test_independent_processes_preserve_both_targets(tmp_path):
@@ -201,7 +173,7 @@ for index in range(10):
     path = tmp_path / 'state.json'
     workers = []
     try:
-        for host in ('100', 'lab'):
+        for host in ('100', 'validation'):
             workers.append(subprocess.Popen([sys.executable, '-c', code, str(TOOL), str(path), host]))
         for worker in workers:
             assert worker.wait(timeout=60) == 0
@@ -211,7 +183,7 @@ for index in range(10):
                 worker.kill()
                 worker.wait()
     assert json.loads(path.read_text())['targets'] == {
-        '100': {'iteration': 9}, 'lab': {'iteration': 9}}
+        '100': {'iteration': 9}, 'validation': {'iteration': 9}}
 
 
 def test_cpu_mex_release_route_is_retired():

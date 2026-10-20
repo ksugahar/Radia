@@ -9,9 +9,9 @@ Usage:
     python tools/release_quad.py preflight
         Read-only: report current state and consistency. Use anytime.
 
-    python tools/release_quad.py phase8 [--target lab|100|all]
+    python tools/release_quad.py phase8 [--target validation|100|all]
         Install the numerical Radia solver by the target's tier: the published
-        wheel on LAB and 100号機's machine-default release runtime,
+        wheel on validation and 100号機's machine-default release runtime,
         and the release checkout editable in 100号機's development venv.
         Never change radia-mcp or cubit-mesh-export.
 
@@ -45,7 +45,7 @@ Usage:
         version. No runtime is changed.
 
     python tools/release_quad.py verify-editable
-        Read-only: verify LAB's fixed wheel and 100号機's development editable.
+        Read-only: verify validation's fixed wheel and 100号機's development editable.
 
     python tools/release_quad.py repoint --package <name> --source <path> --reason "..."
         On 100号機 only, move an editable pointer explicitly: record the
@@ -161,11 +161,11 @@ MATLAB_EXE = r"C:\Program Files\MATLAB\R2026a\bin\matlab.exe"
 SIMULINK_GATE_ROOT = Path(r"C:\temp\radia-release-quad")
 OPTUNA_GATE_ROOT = SIMULINK_GATE_ROOT / "radia-optuna"
 OPTUNA_SUCCESS_MARKER = "RADIA_OPTUNA_WHEEL_SIMULINK_OK"
-OPTUNA_TARGETS = {"100": ("100号機", SSH_100, "python")}
+OPTUNA_TARGETS = {"100": ("build", SSH_100, "python")}
 OPTUNA_WHEEL_RUNNER = REPO / "packages/radia-optuna/tests/run_installed_wheel_simulink.ps1"
-_KNOWN_SIMULINK_TARGETS = {
-    "lab": ("LAB", "102", "python"),
-    "100": ("100号機", SSH_100, "python"),
+_KNOWN_SOLVER_TARGETS = {
+    "validation": ("validation", "validation", "python"),
+    "100": ("build", SSH_100, "python"),
 }
 # The promotion gate imports the same tuple, so the machines that produce
 # release evidence and the machines the gate demands evidence from cannot
@@ -181,14 +181,17 @@ except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a
     RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
     RELEASE_ACCEPTANCE_HOST_LABELS = _acceptance_module.RELEASE_ACCEPTANCE_HOST_LABELS
 
-SIMULINK_TARGETS = {host: _KNOWN_SIMULINK_TARGETS[host]
+SOLVER_TARGETS = {host: _KNOWN_SOLVER_TARGETS[host]
                     for host in RELEASE_ACCEPTANCE_HOSTS}
 
-assert tuple(SIMULINK_TARGETS) == RELEASE_ACCEPTANCE_HOSTS, (
+assert tuple(SOLVER_TARGETS) == RELEASE_ACCEPTANCE_HOSTS, (
     "release_quad targets and the release acceptance hosts have drifted")
 # The promotion gate checks each stored row label against the same table.
-assert {key: row[0] for key, row in SIMULINK_TARGETS.items()} == RELEASE_ACCEPTANCE_HOST_LABELS, (
+assert {key: row[0] for key, row in SOLVER_TARGETS.items()} == RELEASE_ACCEPTANCE_HOST_LABELS, (
     "Simulink target labels and the release acceptance host labels have drifted")
+
+
+SIMULINK_TARGETS = {"100": SOLVER_TARGETS["100"]}
 
 
 def _editable_repo_100():
@@ -222,7 +225,7 @@ def _release_head():
 def cmd_deployment_plan(args):
     """Dry-run only: print solver runtime roles without imports or installs."""
     plans = [
-        {"host": "lab", "solver_runtime": "verified-wheel",
+        {"host": "validation", "solver_runtime": "verified-wheel",
          "solver_action": "verify-and-install", "independent_packages": "unchanged",
          "verified": False},
         {"host": "100", "solver_runtime": "release-wheel+development-editable",
@@ -463,7 +466,7 @@ def _run_ssh_powershell(host: str, script: str, timeout: int):
                "-EncodedCommand", encoded]
     # Use a file rather than inherited output pipes: Windows SSH/Engine
     # descendants can keep a pipe open after the command has exited.
-    with tempfile.TemporaryDirectory(prefix="radia-ssh-", dir=r"C:\temp") as scratch:
+    with tempfile.TemporaryDirectory(prefix="radia-ssh-", dir=tempfile.gettempdir()) as scratch:
         with (Path(scratch) / "output.log").open("w+b") as output:
             result = subprocess.run(command, stdin=subprocess.DEVNULL,
                                     stdout=output, stderr=subprocess.STDOUT,
@@ -492,8 +495,8 @@ def _local_com_target_error(key: str, session: str | None) -> str | None:
         return None
     if not re.fullmatch(r"com:[1-9][0-9]*", session):
         return "COM session must be com:<positive PID>"
-    expected = {"lab": "intel11", "100": "t7920"}.get(key)
-    if expected is None or platform.node().strip().lower() != expected:
+    expected = os.environ.get("RADIA_ACCEPTANCE_HOSTNAME_" + key.upper(), "").strip().lower()
+    if not expected or platform.node().strip().lower() != expected:
         return f"Run COM acceptance locally in the selected {key} desktop logon"
     return None
 
@@ -502,9 +505,9 @@ def _run_simulink_candidate_target(
         key: str, package: Path, package_sha256: str,
         success_marker: str, engine_session: str | None = None,
         python_executable: str | None = None) -> tuple[bool, str]:
+    if key not in SIMULINK_TARGETS:
+        return False, "unsupported Simulink target"
     label, host, python_command = SIMULINK_TARGETS[key]
-    if key == "lab" and platform.node().strip().lower() == "lab":
-        host = None
     if engine_session and engine_session.startswith("com:"):
         error = _local_com_target_error(key, engine_session)
         if error:
@@ -604,7 +607,7 @@ def _verify_simulink_candidate_state(package_arg: str) -> int:
         fail(message)
         return 4
     info(message)
-    ok("supplied Simulink candidate passed LAB / 100号機")
+    ok("supplied Simulink candidate passed on the build target")
     return 0
 
 
@@ -715,7 +718,7 @@ def _download_verified_optuna_ci_wheel(ci_run_id: str) -> tuple[dict | None, str
 
     Path(r"C:\temp").mkdir(parents=True, exist_ok=True)
     download_dir = Path(tempfile.mkdtemp(
-        prefix=f"radia-optuna-ci-{ci_run_id}-", dir=r"C:\temp"
+        prefix=f"radia-optuna-ci-{ci_run_id}-", dir=tempfile.gettempdir()
     ))
     downloaded = subprocess.run(
         [
@@ -856,7 +859,7 @@ def _run_optuna_candidate_target(
 
 def cmd_optuna_candidate(args):
     """Download one main-CI wheel and run it on both MATLAB machines."""
-    step("radia-optuna exact-wheel candidate gate (LAB / 100号機)")
+    step("radia-optuna exact-wheel candidate gate (build)")
     candidate, output = _download_verified_optuna_ci_wheel(args.ci_run_id)
     if candidate is None:
         fail(f"invalid radia-optuna CI candidate: {output}")
@@ -1089,7 +1092,7 @@ def _verify_final_pip_checks() -> int:
     failed = False
     # 100号機 has two runtimes: the development venv and the release default.
     for host, remote_script in (
-        ("102", "python -m pip check"),
+        ("validation", "python -m pip check"),
         (SSH_100, f"& {DEV_PYTHON_100_PS} -m pip check"),
         (SSH_100, "python -m pip check"),
     ):
@@ -1101,14 +1104,14 @@ def _verify_final_pip_checks() -> int:
         )
         failed = failed or result.returncode != 0
     if failed:
-        fail("pip check failed on LAB or 100; coordinated Radia/Cubit deployment is incomplete")
+        fail("pip check failed on validation or 100; coordinated Radia/Cubit deployment is incomplete")
         return 4
     return 0
 
 
-def _verify_lab_wheel():
-    """Verify LAB's installed solver wheel and every hashed RECORD payload."""
-    return _verify_wheel_runtime("102", "LAB")
+def _verify_validation_wheel():
+    """Verify validation's installed solver wheel and every hashed RECORD payload."""
+    return _verify_wheel_runtime("validation", "validation")
 
 
 def _verify_100_release_wheel():
@@ -1117,7 +1120,7 @@ def _verify_100_release_wheel():
     The editable development venv is checked separately; neither stands in
     for the other.
     """
-    return _verify_wheel_runtime(SSH_100, "100号機 release runtime")
+    return _verify_wheel_runtime(SSH_100, "build release runtime")
 
 
 def _wheel_runtime_probe_code(version, label):
@@ -1159,9 +1162,9 @@ def _verify_wheel_runtime(ssh_host, label):
     return 0
 
 
-def _deploy_lab():
-    """Deploy the published solver wheel to LAB; never recreate an editable."""
-    return _deploy_pypi("102", "LAB")
+def _deploy_validation():
+    """Deploy the published solver wheel to validation; never recreate an editable."""
+    return _deploy_pypi("validation", "validation")
 
 
 # Remote editable-deploy refusals, all before any install.  The guards write to
@@ -1285,14 +1288,14 @@ def _deploy_100():
     """Deploy both 100号機 runtimes: the release wheel, then the development editable.
 
     The machine-default Python is the student-facing release runtime and takes
-    the published wheel, as LAB does; the dedicated development venv takes the
+    the published wheel, as validation does; the dedicated development venv takes the
     editable release checkout.  Each is verified on its own.
     """
-    rc = _deploy_pypi(SSH_100, "100号機 release runtime")
+    rc = _deploy_pypi(SSH_100, "build release runtime")
     if rc != 0:
         return rc
     return _deploy_editable_remote(
-        SSH_100, "100号機", _editable_repo_100(), DEV_PYTHON_100
+        SSH_100, "build", _editable_repo_100(), DEV_PYTHON_100
     )
 
 
@@ -1304,26 +1307,24 @@ def _deploy_mdx(host):
 
 def cmd_phase8(args):
     """Deploy and verify the Radia solver on selected QUAD targets."""
+    targets = [t.strip().lower() for t in (args.target or "validation,100").split(",")]
+    if any(t not in (*SOLVER_TARGETS, "all") for t in targets):
+        fail("unsupported solver target")
+        return 2
     rc = cmd_preflight(args)
     if rc != 0:
-        fail("preflight failed; refusing Phase 8")
         return rc
-
-    targets = (
-        [t.strip().lower() for t in args.target.split(",")]
-        if args.target else ["lab", "100"]
-    )
     for t in targets:
-        if t == "lab":
-            rc = _deploy_lab()
+        if t == "validation":
+            rc = _deploy_validation()
             if rc != 0:
                 return rc
-        elif t in ("100", "100号機", "100goki"):
+        elif t == "100":
             rc = _deploy_100()
             if rc != 0:
                 return rc
         elif t == "all":
-            rc = _deploy_lab()
+            rc = _deploy_validation()
             if rc != 0:
                 return rc
             rc = _deploy_100()
@@ -1337,7 +1338,7 @@ def cmd_phase8(args):
 
 def cmd_phase8e(args):
     """Reject the retired optional compute refresh command."""
-    fail("Retired compute refresh is disabled; release targets are LAB and 100")
+    fail("Retired compute refresh is disabled; release targets are validation and 100")
     return 2
 
 
@@ -1431,7 +1432,7 @@ def _run_script_with_file_output(command, source, timeout):
         host, python, dash, *arguments = command[1:]
         if dash != "-":
             raise ValueError("Expected a Python stdin command")
-        with tempfile.TemporaryDirectory(prefix="radia-probe-", dir=r"C:\temp") as scratch:
+        with tempfile.TemporaryDirectory(prefix="radia-probe-", dir=tempfile.gettempdir()) as scratch:
             source_path = Path(scratch) / "probe.py"
             source_path.write_text(source, encoding="utf-8")
             remote = "C:/temp/" + Path(scratch).name + ".py"
@@ -1446,8 +1447,8 @@ def _run_script_with_file_output(command, source, timeout):
             return _run_script_with_file_output(
                 ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host,
                  "pwsh", "-NoProfile", "-EncodedCommand", encoded], None, timeout)
-    with tempfile.TemporaryFile(mode="w+b", dir=r"C:\temp") as output, \
-            tempfile.TemporaryFile(mode="w+b", dir=r"C:\temp") as errors:
+    with tempfile.TemporaryFile(mode="w+b", dir=tempfile.gettempdir()) as output, \
+            tempfile.TemporaryFile(mode="w+b", dir=tempfile.gettempdir()) as errors:
         result = subprocess.run(command, input=source.encode("utf-8") if source is not None else None,
                                 **({"stdin": subprocess.DEVNULL} if source is None else {}),
                                 stdout=output, stderr=errors, timeout=timeout,
@@ -1530,17 +1531,17 @@ def _parse_phase9_probe(label, output):
 
 def cmd_phase9(args):
     """Cross-machine consistency probe."""
-    # LAB holds the published wheel (phase8 installs it over `ssh 102`, as the
-    # LAB wheel check reads it), so it takes the installed-wheel probe; only
+    # validation holds the published wheel (phase8 installs it over SSH, as the
+    # validation wheel check reads it), so it takes the installed-wheel probe; only
     # 100号機 keeps an editable release checkout.
     targets = []
-    for host, (label, ssh_host, python) in SIMULINK_TARGETS.items():
+    for host, (label, ssh_host, python) in SOLVER_TARGETS.items():
         targets.append((label + " release" if host == "100" else label,
                         ["ssh", ssh_host, python, "-"], CROSS_MACHINE_PROBE))
         if host == "100":
             targets.append((label, ["ssh", ssh_host, DEV_PYTHON_100_PS, "-"],
                             CROSS_MACHINE_PROBE_100_EDITABLE))
-    step("Phase 9: cross-machine consistency (LAB / 100号機)")
+    step("Phase 9: cross-machine consistency (validation / 100号機)")
     outputs = []
     for label, cmd_prefix, probe_src in targets:
         out = _probe(label, cmd_prefix, probe_src)
@@ -1578,13 +1579,13 @@ def cmd_phase9(args):
         fail(f"{drift} field(s) drift across machines — release NOT done.")
         return 4
     print("")
-    ok("all fields match across LAB / 100号機 — release verified.")
+    ok("all fields match across validation / 100号機 — release verified.")
     return 0
 
 
 def cmd_all(args):
-    """Run the full deploy + verify chain (phase8 LAB+100, phase9)."""
-    rc = cmd_phase8(argparse.Namespace(target="lab,100"))
+    """Run the full deploy + verify chain (phase8 validation+100, phase9)."""
+    rc = cmd_phase8(argparse.Namespace(target="validation,100"))
     if rc != 0: return rc
     return cmd_phase9(args)
 
@@ -1682,12 +1683,7 @@ def _norm_path(p):
     """Lower-case + forward-slashes + strip trailing slash so a UNC and
     a drive-letter form of the same NAS path compare equal."""
     p = (p or "").replace("\\", "/").rstrip("/").lower()
-    # INTEL11 sees the LAB Radia share as W:\00_CAE\Radia while LAB records
-    # the same files through S:\Radia.  Editable imports may canonicalize to
-    # either mapped drive, so compare both spellings in the LAB namespace.
-    # Both UNC spellings resolve to the LAB S: drive.  Normalize the whole
-    # Radia namespace, not just 01_GitHub: release worktrees live under the
-    # same share and editable imports report their real UNC location.
+    # Normalize equivalent configured path spellings.
     for alias, canonical in _PATH_ALIASES:
         p = p.replace(alias, canonical)
     return p
@@ -1818,15 +1814,15 @@ def _verify_remote_editable(ssh_host, label, expected=None, report=None):
 
 
 def _verify_100_editable(expected=None, report=None):
-    return _verify_remote_editable(SSH_100, "100号機", expected, report)
+    return _verify_remote_editable(SSH_100, "build", expected, report)
 
 
 def cmd_verify_editable(args):
-    """Verify LAB's fixed wheel and 100号機's development editable.
+    """Verify validation's fixed wheel and 100号機's development editable.
 
-    Exit 0: both runtime roles match. No LAB editable source is accepted.
+    Exit 0: both runtime roles match. No validation editable source is accepted.
     """
-    wheel_failures = _verify_lab_wheel()
+    wheel_failures = _verify_validation_wheel()
     editable_failures = _verify_100_editable()
     return 0 if wheel_failures + editable_failures == 0 else 1
 
@@ -1859,7 +1855,7 @@ def _done_release_source(args):
 
     By default that is the controller itself, which must then sit at the tag.
     ``--release-source`` names a separate exact-tag checkout so a later,
-    repaired tooling controller can run `done`; LAB intent never selects it.
+    repaired tooling controller can run `done`; validation intent never selects it.
     """
     selected = getattr(args, "release_source", None)
     return str(Path(selected).resolve()) if selected else str(REPO)
@@ -1911,7 +1907,7 @@ def cmd_repoint(args):
         return 2
     host = (getattr(args, "host", None) or "100").strip().lower()
     argv = _repoint_argv(args)
-    if host in ("100", "100号機", "100goki"):
+    if host in ("100", "build", "100goki"):
         step("100号機 editable repoint over SSH (paths in the 100 namespace)")
         rc, result, text = _remote_editable_intent(SSH_100, ["--json", *argv])
         if result is not None:
@@ -2146,10 +2142,10 @@ def _run_retired_standalone_pyside_guard():
 
 
 def cmd_done(args):
-    """Verify the controller release source, LAB wheel and 100 editable runtime.
+    """Verify the controller release source, validation wheel and 100 editable runtime.
 
     Exact-tag, native/source, two-machine and Simulink gates remain mandatory.
-    LAB's installed wheel is independent of the controller checkout location.
+    validation's installed wheel is independent of the controller checkout location.
     """
     step("Definition-of-done check "
          "(preflight + editable tier + phase9 + retired standalone panel guard)")
@@ -2176,7 +2172,7 @@ def cmd_done(args):
         fail("release HEAD is not anchored by its declared Radia version tag.")
         return rc
 
-    drift = _verify_lab_wheel()
+    drift = _verify_validation_wheel()
     drift += _verify_100_release_wheel()
     drift += _verify_100_editable()
     if drift > 0:
@@ -2212,8 +2208,8 @@ def cmd_done(args):
         return rc
 
     print("")
-    ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機. "
-       "LAB and 100号機's release runtime use the verified wheel, "
+    ok("DEFINITION OF DONE met. Release is consistent across validation / 100号機. "
+       "validation and 100号機's release runtime use the verified wheel, "
        "100号機's development venv retains the verified editable source, and the retired standalone PySide panel surface is absent. "
        "The recorded editable intent names this release source; move it later "
        "only with an explicit `release_quad repoint --reason`.")
@@ -2443,20 +2439,20 @@ def main():
     sub.add_parser("preflight",
                     help="read-only state report (always safe)")
     s8 = sub.add_parser("phase8",
-                         help="deploy and verify the Radia solver on LAB / 100号機")
-    s8.add_argument("--target", default="lab,100",
-                     help="comma list: lab, 100, all (default lab,100)")
+                         help="deploy and verify the Radia solver on validation / 100号機")
+    s8.add_argument("--target", default="validation,100",
+                     help="comma list: validation, 100, all (default validation,100)")
     sub.add_parser("phase8e",
                     help="retired compute refresh; always rejected")
     sub.add_parser("phase9",
                     help="cross-machine consistency probe")
     ss = sub.add_parser(
         "simulink-candidate",
-        help="verify one extracted Simulink package on four MATLAB machines")
+        help="verify one extracted Simulink package on the build target")
     ss.add_argument("--package", required=True,
                     help="path to an IH preview or full Radia Simulink ZIP")
     ss.add_argument("--target", default="all",
-                    help="comma list: lab, 100, all")
+                    help="comma list: 100, all")
     ss.add_argument("--engine-session", action="append", metavar="HOST=NAME",
                     help="shared Engine name or com:<PID> in the selected host's desktop logon (repeatable)")
     ss.add_argument("--python", action="append", metavar="HOST=PATH",
@@ -2465,13 +2461,13 @@ def main():
                          "provide the package's radia release")
     optuna_candidate = sub.add_parser(
         "optuna-candidate",
-        help="download one main-CI radia-optuna wheel and verify it on four MATLAB machines")
+        help="download one main-CI radia-optuna wheel and verify it on the build target")
     optuna_candidate.add_argument(
         "--ci-run-id", required=True,
         help="successful main-push CI run containing radia-optuna-wheel")
     optuna_candidate.add_argument(
         "--target", default="all",
-        help="comma list: lab, 100, all")
+        help="comma list: 100, all")
     optuna_candidate.add_argument(
         "--engine-session", action="append", metavar="HOST=NAME",
         help="shared Engine name or com:<PID> in the selected host's desktop logon (repeatable); "
@@ -2485,13 +2481,13 @@ def main():
     sub.add_parser("all",
                     help="phase8 -> phase9 in one shot")
     sub.add_parser("verify-editable",
-                    help="verify LAB's fixed Radia wheel and 100号機's development editable")
+                    help="verify validation's fixed Radia wheel and 100号機's development editable")
     rp = sub.add_parser(
         "repoint",
         help=("explicit editable move: record previous pointer, pip install -e, "
               "verify, record intent (no process stop, no uninstall)"))
     rp.add_argument("--host", default="100",
-                    help="100 only; editable installs are not allowed on LAB")
+                    help="100 only; editable installs are not allowed on validation")
     rp.add_argument("--package", action="append", default=[],
                     help="package name (repeatable)")
     rp.add_argument("--source", action="append", default=[],

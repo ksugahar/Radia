@@ -6,8 +6,8 @@
 # (run once per clone).  Edit THIS file, not the installed copy, then re-run
 # the installer.
 #
-# CI preflight gate -- on every branch push, send the unpushed candidate to LAB
-# and run `tools/ci_preflight_lab.py`. It ABORTS the push if LAB reports a red
+# CI preflight gate -- on every branch push, send the unpushed candidate to the build target
+# and run `tools/ci_preflight_remote.py`. It ABORTS the push if the build target reports a red
 # fast contract gate. Native binaries are published only from the exact CI
 # artifact by the release workflow; a developer push must never upload mutable
 # workstation binaries. Bypass the preflight for an emergency with:

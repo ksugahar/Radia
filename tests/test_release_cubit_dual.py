@@ -14,11 +14,11 @@ spec.loader.exec_module(dual)
 
 def test_worker_compiles_and_targets_only_dual():
     compile(dual.WORKER, '<worker>', 'exec')
-    assert dual.TARGETS == ('lab', '100')
-    # AGENTS.md: LAB runs verified wheels, 100 keeps the editable install.
-    assert dual.TIERS == {'lab': 'wheel', '100': 'editable'}
+    assert dual.TARGETS == ('100',)
+    # AGENTS.md: validation runs verified wheels, 100 keeps the editable install.
+    assert dual.TIERS == {'100': 'editable'}
     assert "'-e', str(package)" in dual.WORKER
-    assert "'--force-reinstall'" in dual.WORKER
+    assert "'--force-reinstall'" not in dual.WORKER
     assert 'pip\', \'uninstall' not in dual.WORKER
     # Cubit is closed only on explicit request, and then everything closed
     # is recorded in the receipt.
@@ -29,14 +29,10 @@ def test_worker_compiles_and_targets_only_dual():
 
 def test_force_and_run_from_are_explicit_options():
     args = dual.build_parser().parse_args([
-        '--action', 'deploy', '--wheel', 'w.whl', '--source-sha', 'a' * 40,
-        '--source-root-lab', r'C:\\release-dual\\x', '--source-root-100', r'W:\\x',
-        '--evidence-lab', r'C:\\temp\\e', '--evidence-100', r'C:\\temp\\e'])
-    assert args.run_from == 'lab' and args.force_close_cubit is False
+        '--action', 'deploy', '--wheel', 'w.whl', '--source-sha', 'a' * 40, '--source-root-100', r'W:\\x', '--evidence-100', r'C:\\temp\\e'])
+    assert args.run_from == '100' and args.force_close_cubit is False
     args = dual.build_parser().parse_args([
-        '--action', 'deploy', '--wheel', 'w.whl', '--source-sha', 'a' * 40,
-        '--source-root-lab', r'C:\\release-dual\\x', '--source-root-100', r'W:\\x',
-        '--evidence-lab', r'C:\\temp\\e', '--evidence-100', r'C:\\temp\\e',
+        '--action', 'deploy', '--wheel', 'w.whl', '--source-sha', 'a' * 40, '--source-root-100', r'W:\\x', '--evidence-100', r'C:\\temp\\e',
         '--run-from', '100', '--force-close-cubit'])
     assert args.run_from == '100' and args.force_close_cubit is True
 
@@ -61,9 +57,7 @@ def test_dedicated_cli_owns_release_dual_entrypoint():
         '--action', 'preflight',
         '--wheel', 'candidate.whl',
         '--source-sha', 'a' * 40,
-        '--source-root-lab', r'S:\\synthetic-repo\\main-checkout',
         '--source-root-100', r'W:\\synthetic-repo\\main-checkout',
-        '--evidence-lab', r'C:\\temp\\cubit-dual',
         '--evidence-100', r'C:\\temp\\cubit-dual',
     ])
     assert args.action == 'preflight'
@@ -72,16 +66,16 @@ def test_dedicated_cli_owns_release_dual_entrypoint():
 
 def test_receipt_requires_every_acceptance_field():
     contract = dict(version='1.0.2', source_sha='a' * 40, wheel_sha256='b' * 64)
-    receipt = dict(contract, schema=dual.SCHEMA, target='lab', passed=True,
+    receipt = dict(contract, schema=dual.SCHEMA, target='100', passed=True,
                    unrelated_packages_unchanged=True, smoke_test=True, toolbar_smoke=True,
-                   mcp_selftest=True, mcp_cli_selftest=True, profile_scope=[],
-                   tier='wheel', installed_payload_verified=True)
-    assert dual.check_receipt(receipt, contract, 'lab')
+                   mcp_selftest=True, mcp_cli_selftest=True, profile_scope=['--all-users'],
+                   tier='editable')
+    assert dual.check_receipt(receipt, contract, '100')
     for key in receipt:
         damaged = {k: v for k, v in receipt.items() if k != key}
-        assert not dual.check_receipt(damaged, contract, 'lab'), key
-    assert not dual.check_receipt(receipt, contract, '100')
-    assert not dual.check_receipt(receipt, dict(contract, wheel_sha256='c' * 64), 'lab')
+        assert not dual.check_receipt(damaged, contract, '100'), key
+    assert not dual.check_receipt(receipt, contract, 'validation')
+    assert not dual.check_receipt(receipt, dict(contract, wheel_sha256='c' * 64), '100')
 
 
 def test_receipt_is_bound_to_the_target_tier():
@@ -89,31 +83,14 @@ def test_receipt_is_bound_to_the_target_tier():
     common = dict(contract, schema=dual.SCHEMA, passed=True,
                   unrelated_packages_unchanged=True, smoke_test=True, toolbar_smoke=True,
                   mcp_selftest=True, mcp_cli_selftest=True)
-    # An editable LAB receipt (the pre-v4 behaviour) no longer satisfies done.
-    lab_editable = dict(common, target='lab', profile_scope=[], tier='editable',
+    # An editable validation receipt (the pre-v4 behaviour) no longer satisfies done.
+    lab_editable = dict(common, target='validation', profile_scope=[], tier='editable',
                         installed_payload_verified=True)
-    assert not dual.check_receipt(lab_editable, contract, 'lab')
+    assert not dual.check_receipt(lab_editable, contract, 'validation')
     student_wheel = dict(common, target='100', profile_scope=['--all-users'], tier='wheel')
     assert not dual.check_receipt(student_wheel, contract, '100')
 
 
-def test_wheel_transport_is_local_or_hash_rechecked_remote_copy(monkeypatch, tmp_path):
-    wheel = tmp_path / 'cubit_mesh_export-1.0.2-cp312-cp312-win_amd64.whl'
-    wheel.write_bytes(b'wheel')
-    assert dual.transport_wheel(wheel, 'lab', 'lab', r'C:\temp\e') == str(wheel.resolve())
-    calls = []
-
-    def fake_run(command, **kwargs):
-        calls.append((command, kwargs.get('input')))
-        return None
-
-    monkeypatch.setattr(dual.subprocess, 'run', fake_run)
-    destination = dual.transport_wheel(wheel, 'lab', '100', r'C:\temp\e')
-    assert destination == r'C:\temp\e\lab\wheel' + '\\' + wheel.name
-    (mkdir, script), (copy, _) = calls
-    assert mkdir[:5] == ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10']
-    assert mkdir[5:8] == ['lab', 'python', '-'] and 'mkdir' in script
-    assert copy[-1] == 'lab:' + destination.replace('\\', '/')
 
 
 def _fake_cubit_wheel(path):
@@ -146,36 +123,6 @@ def _run_worker(cfg):
     return p.returncode, json.loads(lines[-1].partition('=')[2])
 
 
-@pytest.mark.parametrize('tamper', [False, True])
-def test_wheel_tier_preflight_reads_only_hash_checked_wheel_bytes(tmp_path, tamper):
-    from importlib import metadata
-    try:
-        pins = {name: metadata.version(name) for name in ('netgen-mesher', 'ngsolve')}
-    except metadata.PackageNotFoundError:
-        pytest.skip('worker dependency pins need netgen-mesher and ngsolve installed')
-    wheel = tmp_path / 'cubit_mesh_export-1.0.2-cp312-cp312-win_amd64.whl'
-    _fake_cubit_wheel(wheel)
-    contract = dual.wheel_contract(wheel)
-    if tamper:
-        contract['wheel_sha256'] = '0' * 64
-    out = tmp_path / 'evidence' / 'lab'
-    cfg = dict(contract, schema=dual.SCHEMA, source_sha='a' * 40, target='lab',
-               action='preflight', tier='wheel', source_root='', output=str(out),
-               wheel_path=str(wheel), dependencies=pins, force_close_cubit=False)
-    # A pre-existing tree under the evidence directory is never removed.
-    foreign = out / 'wheel_payload'
-    foreign.mkdir(parents=True)
-    (foreign / 'keep.txt').write_text('not ours')
-    returncode, result = _run_worker(cfg)
-    assert result['tier'] == 'wheel'
-    assert (foreign / 'keep.txt').read_text() == 'not ours'
-    assert not list(out.glob('cubit-dual-wheel-*'))
-    if tamper:
-        assert returncode == 1 and result['passed'] is False
-        assert 'Transported wheel differs' in result['error']
-    else:
-        assert returncode == 0 and result['passed'] is True, result.get('error')
-        assert result['staging_removed'] is True
 
 
 def _pins_or_skip():
@@ -186,26 +133,6 @@ def _pins_or_skip():
         pytest.skip('worker dependency pins need netgen-mesher and ngsolve installed')
 
 
-def test_wheel_tier_rejects_a_member_that_leaves_the_staging_tree(tmp_path):
-    pins = _pins_or_skip()
-    wheel = tmp_path / 'cubit_mesh_export-1.0.2-cp312-cp312-win_amd64.whl'
-    _fake_cubit_wheel(wheel)
-    contract = dual.wheel_contract(wheel)
-    with zipfile.ZipFile(wheel, 'a') as archive:
-        archive.writestr('../escape.txt', b'x')
-    contract['wheel_sha256'] = dual.digest(wheel.read_bytes())
-    out = tmp_path / 'evidence' / 'lab'
-    cfg = dict(contract, schema=dual.SCHEMA, source_sha='a' * 40, target='lab',
-               action='preflight', tier='wheel', source_root='', output=str(out),
-               wheel_path=str(wheel), dependencies=pins, force_close_cubit=False)
-    returncode, result = _run_worker(cfg)
-    assert returncode == 1 and 'Unsafe wheel member path' in result['error']
-    # The owned directory was recorded before extraction failed, so it is
-    # cleaned up and reported without replacing the original error.
-    assert result['staging'] and result['staging_removed'] is True
-    assert 'staging_cleanup_error' not in result
-    assert not (tmp_path / 'evidence' / 'escape.txt').exists()
-    assert not list(out.glob('cubit-dual-wheel-*'))
 
 
 def _installable_fake_wheel(path):
@@ -237,69 +164,6 @@ def _installable_fake_wheel(path):
             archive.writestr(name, data)
 
 
-def test_wheel_tier_verify_accepts_only_the_exact_installed_wheel(tmp_path):
-    """Install the wheel into an isolated venv and run the worker's verify phase."""
-    import os
-    import subprocess
-    # The deployment worker runs in the target's own interpreter environment.
-    # Test runners may export PYTHONPATH (the cubit-mesh-export workflow sets
-    # it to the package source), which would put the real source package in
-    # front of the installed wheel, so the isolated venv gets an explicit
-    # environment without interpreter path overrides.
-    isolated = {k: v for k, v in os.environ.items()
-                if k not in ('PYTHONPATH', 'PYTHONHOME', 'PYTHONSTARTUP', 'PYTHONUSERBASE',
-                             'PYTHONSAFEPATH', 'PYTHONNOUSERSITE')}
-    venv = tmp_path / 'venv'
-    subprocess.run([sys.executable, '-m', 'venv', '--system-site-packages', str(venv)],
-                   check=True, timeout=300, env=isolated)
-    python = venv / 'Scripts' / 'python.exe'
-    wheel = tmp_path / 'cubit_mesh_export-1.0.2-py3-none-any.whl'
-    _installable_fake_wheel(wheel)
-    subprocess.run([str(python), '-m', 'pip', 'install', '--no-deps', '--no-index', str(wheel)],
-                   check=True, capture_output=True, timeout=300, env=isolated)
-    import base64
-    import json
-    contract = dual.wheel_contract(wheel)
-    pins = {}
-    for name in ('netgen-mesher', 'ngsolve'):
-        probe = subprocess.run([str(python), '-c',
-                                'import importlib.metadata as m,sys;print(m.version(sys.argv[1]))', name],
-                               capture_output=True, text=True, env=isolated)
-        if probe.returncode:
-            pytest.skip('worker dependency pins need netgen-mesher and ngsolve installed')
-        pins[name] = probe.stdout.strip()
-
-    def verify(installed_wheel_name, env):
-        out = tmp_path / ('evidence-' + installed_wheel_name)
-        cfg = dict(contract, schema=dual.SCHEMA, source_sha='a' * 40, target='lab',
-                   action='verify', tier='wheel', source_root='', output=str(out),
-                   wheel_path=str(wheel), dependencies=pins, force_close_cubit=False)
-        encoded = base64.b64encode(json.dumps(cfg).encode()).decode()
-        p = subprocess.run([str(python), '-', encoded], input=_mock_process_worker(), text=True,
-                           capture_output=True, timeout=300, env=env)
-        line = [l for l in p.stdout.splitlines() if l.startswith('CUBIT_DUAL_RESULT=')][-1]
-        return json.loads(line.partition('=')[2])
-
-    # The exact wheel passes identity and payload verification; the run then
-    # stops at the MCP self-test that this synthetic wheel cannot provide.
-    result = verify('exact', isolated)
-    assert result.get('installed_payload_verified') is True, result.get('error')
-    assert result['installed']['direct_url']['archive_info'] is not None
-    assert 'mcp.server' in result['error']
-
-    # A source tree shadowing the installed wheel (the CI PYTHONPATH case) is
-    # refused by the fresh-interpreter identity check, not reported as the wheel.
-    shadow = dict(isolated, PYTHONPATH=str(ROOT / 'packages' / 'cubit-mesh-export' / 'src'))
-    result = verify('shadowed', shadow)
-    assert 'installed_payload_verified' not in result
-    assert 'Wrong installed version' in result.get('error', ''), result.get('error')
-
-    # A modified installed file is caught by the payload check.
-    site = venv / 'Lib' / 'site-packages' / 'cubit_mesh_export'
-    (site / 'toolbar_smoke.py').write_text('changed\n')
-    result = verify('modified', isolated)
-    assert 'installed_payload_verified' not in result
-    assert 'Published wheel/source mismatch: cubit_mesh_export/toolbar_smoke.py' in result['error']
 
 
 def test_wheel_contract_includes_embedded_probe_and_bytes(tmp_path):
@@ -446,7 +310,7 @@ def test_force_close_failure_stops_and_retains_completed_closures(monkeypatch):
     assert not any(call == ['taskkill', '/F', '/PID', '102'] for call in calls)
 
 
-@pytest.mark.parametrize('tier', ['wheel', 'editable'])
+@pytest.mark.parametrize('tier', ['editable'])
 def test_preflight_installer_imports_selected_helpers_before_stale_package(tmp_path, monkeypatch, tier):
     """Exercise the worker in a fresh process with a hostile old PYTHONPATH."""
     import subprocess
@@ -482,7 +346,7 @@ def test_preflight_installer_imports_selected_helpers_before_stale_package(tmp_p
             subprocess.run(['git', '-C', str(source), *args], check=True, capture_output=True)
         sha = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
     cfg = dict(dual.wheel_contract(wheel), schema=dual.SCHEMA, source_sha=sha,
-               target='100' if tier == 'editable' else 'lab', tier=tier,
+               target='100' if tier == 'editable' else 'validation', tier=tier,
                action='preflight', source_root=str(source) if tier == 'editable' else '',
                output=str(tmp_path / 'evidence'), wheel_path=str(wheel),
                dependencies=_pins_or_skip(), force_close_cubit=False)
@@ -490,86 +354,17 @@ def test_preflight_installer_imports_selected_helpers_before_stale_package(tmp_p
     assert code == 0 and result['passed'], result.get('error')
 
 
-def test_configured_ssh_alias_is_used_for_both_transports(monkeypatch, tmp_path):
-    calls = []
-    monkeypatch.setattr(dual.subprocess, 'run', lambda cmd, **kw: calls.append(cmd))
-    wheel = tmp_path / 'candidate.whl'
-    wheel.write_bytes(b'wheel')
-    dual.transport_wheel(wheel, 'lab', '100', r'C:\temp\e', '102')
-    assert calls[0][5] == '102'
-    assert calls[1][-1].startswith('102:')
-    args = dual.build_parser().parse_args([
-        '--action', 'preflight', '--wheel', str(wheel), '--source-sha', 'a' * 40,
-        '--source-root-100', 'release', '--evidence-lab', 'e', '--evidence-100', 'e',
-        '--ssh-alias-lab', '102'])
-    assert args.ssh_alias_lab == '102' and args.ssh_alias_100 == '100'
 
 
-@pytest.mark.parametrize('failure', ['dns', 'config', 'missing'])
-def test_ssh_alias_resolution_fails_clearly(monkeypatch, failure):
+
+
+
+
+
+
+
+@pytest.mark.parametrize("target", ["validation", "compute"])
+def test_compute_deployment_rejected_before_wheel_access(target):
     from types import SimpleNamespace
-    def fake_run(cmd, **kwargs):
-        assert cmd == ['ssh', '-G', 'configured-alias']
-        if failure == 'config':
-            raise dual.subprocess.CalledProcessError(255, cmd, stderr='Bad configuration')
-        return SimpleNamespace(stdout='' if failure == 'missing' else 'hostname remote.invalid\nport 22\n')
-    def dns(*args, **kwargs):
-        raise dual.socket.gaierror('host not found')
-    monkeypatch.setattr(dual.subprocess, 'run', fake_run)
-    monkeypatch.setattr(dual.socket, 'getaddrinfo', dns)
-    with pytest.raises(RuntimeError, match="lab: SSH alias 'configured-alias'.*--ssh-alias-lab"):
-        dual.check_ssh_alias('lab', 'configured-alias')
-
-
-def test_ssh_alias_checks_effective_hostname_not_alias(monkeypatch):
-    from types import SimpleNamespace
-    monkeypatch.setattr(dual.subprocess, 'run', lambda *a, **k: SimpleNamespace(
-        stdout='hostname remote.example\nport 2222\n'))
-    calls = []
-    monkeypatch.setattr(dual.socket, 'getaddrinfo', lambda *a, **k: calls.append(a))
-    assert dual.check_ssh_alias('lab', '102') == 'remote.example'
-    assert calls == [('remote.example', '2222')]
-
-@pytest.mark.parametrize('run_from', ['100', 'lab'])
-def test_orchestrator_checks_remote_alias_before_transport_and_uses_it_for_worker(monkeypatch, tmp_path, run_from):
-    import json
-    from types import SimpleNamespace
-    events = []
-    remote = next(t for t in dual.TARGETS if t != run_from)
-    alias = 'custom-' + remote
-    monkeypatch.setattr(dual, 'wheel_contract', lambda _: dict(version='1.0.2', files={}, requires=[]))
-    monkeypatch.setattr(dual, 'check_ssh_alias', lambda target, name: events.append(('check', target, name)))
-    def transport(wheel, target, local, output, name):
-        events.append(('transport', target, name))
-        return 'wheel.whl'
-    monkeypatch.setattr(dual, 'transport_wheel', transport)
-    def worker(cmd, **kwargs):
-        events.append(('worker', cmd))
-        return SimpleNamespace(returncode=0, stdout='CUBIT_DUAL_RESULT=' + json.dumps({'passed': True}), stderr='')
-    monkeypatch.setattr(dual.subprocess, 'run', worker)
-    args = dual.build_parser().parse_args([
-        '--action', 'preflight', '--wheel', 'wheel.whl', '--source-sha', 'a' * 40,
-        '--source-root-100', str(ROOT), '--source-root-lab', str(ROOT),
-        '--evidence-lab', str(tmp_path), '--evidence-100', str(tmp_path),
-        '--run-from', run_from, '--ssh-alias-' + remote, alias])
-    assert dual.run(args) == 0
-    assert events[0] == ('check', remote, alias)
-    commands = [event[1] for event in events if event[0] == 'worker']
-    ssh = next(cmd for cmd in commands if cmd[0] == 'ssh')
-    assert ssh[5] == alias
-    assert len(commands) == 2
-
-
-def test_unresolved_alias_aborts_orchestrator_before_transfer_or_workers(monkeypatch):
-    monkeypatch.setattr(dual, 'wheel_contract', lambda _: dict(version='1.0.2'))
-    def fail(*args):
-        raise RuntimeError('unresolved configured SSH alias')
-    monkeypatch.setattr(dual, 'check_ssh_alias', fail)
-    monkeypatch.setattr(dual.subprocess, 'run', lambda *a, **k: pytest.fail('started worker'))
-    monkeypatch.setattr(dual, 'transport_wheel', lambda *a: pytest.fail('transferred wheel'))
-    args = dual.build_parser().parse_args([
-        '--action', 'deploy', '--wheel', 'wheel.whl', '--source-sha', 'a' * 40,
-        '--source-root-100', 'missing', '--evidence-lab', 'e', '--evidence-100', 'e',
-        '--run-from', '100'])
-    with pytest.raises(RuntimeError, match='unresolved configured SSH alias'):
-        dual.run(args)
+    with pytest.raises(ValueError, match="forbidden"):
+        dual.run(SimpleNamespace(run_from=target))
