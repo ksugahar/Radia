@@ -1,5 +1,9 @@
 # Mixed scalar potential backend probes
 
+Overall formulation parity remains **OPEN**. Per-run pass flags apply only to
+the declared stencil and gate; they do not establish whole-interface equivalence
+or general solver qualification.
+
 These executable investigations preserve the matching-trace Python formulation
 while exercising the optional direct pybind11 CSR adapter in an isolated
 NGSolve 6.2.2608 environment. They do not qualify a complete native package or
@@ -181,3 +185,9 @@ fields, Hodge-projection data, prescribed fluxes and weak jump data retain
 their own integrals and accuracy gates. They are not silently interpolated or
 replaced by a discrete lift. Reassembling the regional lift operator is counted
 in RHS preparation, so previous preparation timings do not qualify this update.
+
+
+The separated-body adapter accepts `--threads` from 1 through 16 and records
+the requested count in each JSON result. The default remains one thread.
+Thread affinity and topology are supplied and recorded by the external run
+supervisor; selecting a thread count alone does not establish affinity.
