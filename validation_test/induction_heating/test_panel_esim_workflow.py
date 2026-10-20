@@ -115,7 +115,7 @@ def test_panel_esim_workflow_preserves_heat_and_panel_identity(tmp_path, monkeyp
         h.Load(result['ht_sol'])
         assert np.all(np.isfinite(h.vec.FV().NumPy()))
         if specified:
-            from radia_gpu.simulink import ih_operator_assembly as assembly
+            from radia_simulink.simulink import ih_operator_assembly as assembly
             options = assembly.IHOperatorAssemblyOptions(
                 frequency_hz=1000, workpiece_conductivity_S_per_m=5.8e7,
                 workpiece_relative_permeability=1, panel_zs_file=str(zs_file))

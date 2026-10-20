@@ -165,7 +165,7 @@ on:
       - 'tests/test_ih_fin_surface_boundary.py'
       - 'tests/test_ih_panel_esim_assembly.py'
       - 'validation_test/induction_heating/test_ih_operator_physics_golden.py'
-      - 'packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py'
+      - 'packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py'
       - 'packages/cubit-mesh-export/src/cubit_mesh_export/check.py'
       - 'validation_test/radia_mcp/test_aphi_gauge_point.py'
       - 'validation_test/radia_mcp/test_axi_eddy_current_drive.py'
@@ -340,7 +340,7 @@ on:
       - 'tests/test_ih_fin_surface_boundary.py'
       - 'tests/test_ih_panel_esim_assembly.py'
       - 'validation_test/induction_heating/test_ih_operator_physics_golden.py'
-      - 'packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py'
+      - 'packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py'
       - 'packages/cubit-mesh-export/src/cubit_mesh_export/check.py'
       - 'validation_test/radia_mcp/test_aphi_gauge_point.py'
       - 'validation_test/radia_mcp/test_axi_eddy_current_drive.py'
@@ -480,7 +480,7 @@ jobs:
         if: steps.native-impact.outputs.required == 'true'
         shell: pwsh
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-gpu\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
           RADIA_TESTS_ALLOW_PARTIAL: '0'
           RADIA_TEST_NGSOLVE_THREADS: '1'
           OMP_NUM_THREADS: '1'
@@ -500,7 +500,7 @@ jobs:
         if: steps.native-impact.outputs.required == 'true'
         shell: pwsh
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-gpu\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
           RADIA_TESTS_ALLOW_PARTIAL: '0'
           RADIA_TEST_NGSOLVE_THREADS: '1'
           OMP_NUM_THREADS: '1'

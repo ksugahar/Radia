@@ -1,0 +1,21 @@
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "hdiv_projection_handle_lifecycle",
+  "metadata": {
+    "length_unit": "m",
+    "unit_source": "Caller declaration; the VOL file has no unit tag"
+  },
+  "strict_labels": true,
+  "required": {
+    "materials": ["air"],
+    "boundaries": ["exterior"]
+  },
+  "allowed": {
+    "materials": ["air"],
+    "boundaries": ["exterior"]
+  },
+  "quality": {
+    "require_tetrahedra": true,
+    "min_curve_order": 1
+  }
+}

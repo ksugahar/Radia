@@ -1,0 +1,284 @@
+{
+  "scope": "Bounded public P2 sphere linear HDiv scaled whole-solve parity",
+  "dofs": 5184,
+  "charges": 2496,
+  "cells": 246,
+  "mesh_sha256": "2ab17e73df34f4e110bace113a038f6686984f64b2b63cc53ba6590be340aacf",
+  "contract_sha256": "b99d4d42745581e2b1dcf44c0d797478f40c8f69a74fc95ccd873b2efe0dfa87",
+  "mex": {
+    "radia_cuda_projection": {
+      "sha256": "a19c563461d65293aceb791f9fe0f51ac32bb83388d9d735319bab403f8d7efa",
+      "source_commit": "95879f3a0d31f78a79621a04921b17523eb58a5e"
+    },
+    "radia_cuda_hmatrix": {
+      "sha256": "8e9dcd8fcc78f03894619bc2aa49bee743d561818bfca4c901d64a16956ae4f6",
+      "source_commit": "f6f731843e1e6fe169b9964b42965fe9f83dd315"
+    }
+  },
+  "native_sha256": "e59a0dd9bd41474edf587d87374bea80375676fdf2f46b6c176efa9546544053",
+  "frontend_sha256": "e03cdf61cd845984017c0a73f87f321db58bae9513f60d82a3d8c361c89b7dd5",
+  "threads": {
+    "cpu_ngsolve": 16,
+    "cpu_blas": 1,
+    "matlab_single_comp_thread": true,
+    "process_affinity_mask": 65535
+  },
+  "hacapk_options": {
+    "epsilon": 1e-10,
+    "leaf_size": 128,
+    "eta": 2.0,
+    "max_rank": 128,
+    "cache_bytes": 2147483648
+  },
+  "preconditioner": "mass-cholesky",
+  "staging_mode": "sparse",
+  "assembly_mode": "hacapk-cached",
+  "cpu_true_residual": 4.2004218809776646e-12,
+  "native_setup_errors": {
+    "mass_error": 1.5417015164197795e-16,
+    "charge_error": 1.793430753724109e-14,
+    "rhs_error": 2.726485694462265e-16
+  },
+  "first_payload": {
+    "whole_seconds": 1.4913539,
+    "assembly_upload_seconds": 1.2059614,
+    "solve_transfer_seconds": 0.1766804,
+    "iterations": 12.0,
+    "owned_peak": 527796612.0,
+    "coefficient_error": 5.037221380556235e-13,
+    "mean_error": 9.403103691288246e-15,
+    "true_residual": 4.204842846511556e-12,
+    "operator_stats": {
+      "owned_device_bytes": 15442936.0,
+      "applications": 0,
+      "kernel_launches": 0,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 527796612.0,
+      "assembly_entry_batches": 4417,
+      "assembly_entry_count": 3224645.0,
+      "assembly_leaf_count": 227,
+      "assembly_lowrank_count": 1,
+      "assembly_cache_tile_loads": 1,
+      "assembly_cache_tile_hits": 4416,
+      "stored_coefficient_count": 1759664.0,
+      "same_leaf_dense_coefficient_count": 3222112.0,
+      "lowrank_factor_coefficient_count": 92352,
+      "leaf_rank_sum": 37,
+      "max_leaf_rank": 37,
+      "storage_saving_lowrank_leaf_count": 1,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    }
+  },
+  "warm": {
+    "whole_seconds": 1.3425744,
+    "assembly_upload_seconds": 1.1184638,
+    "solve_transfer_seconds": 0.123402,
+    "iterations": 12.0,
+    "owned_peak": 527796612.0,
+    "coefficient_error": 5.037221380556235e-13,
+    "mean_error": 9.403103691288246e-15,
+    "true_residual": 4.204842846511556e-12,
+    "operator_stats": {
+      "owned_device_bytes": 15442936.0,
+      "applications": 0,
+      "kernel_launches": 0,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 527796612.0,
+      "assembly_entry_batches": 4417,
+      "assembly_entry_count": 3224645.0,
+      "assembly_leaf_count": 227,
+      "assembly_lowrank_count": 1,
+      "assembly_cache_tile_loads": 1,
+      "assembly_cache_tile_hits": 4416,
+      "stored_coefficient_count": 1759664.0,
+      "same_leaf_dense_coefficient_count": 3222112.0,
+      "lowrank_factor_coefficient_count": 92352,
+      "leaf_rank_sum": 37,
+      "max_leaf_rank": 37,
+      "storage_saving_lowrank_leaf_count": 1,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    }
+  },
+  "operator_probes": {
+    "accepted": true,
+    "count": 3,
+    "seed": 20261018.0,
+    "relative_errors": [
+      2.4256342859026642e-12,
+      2.347048282051286e-12,
+      2.3257377925719965e-12
+    ],
+    "limit": 1e-08,
+    "true_relative_residual": [],
+    "residual_applicability": "not_applicable_operator",
+    "live_count": 0,
+    "operator_stats": {
+      "owned_device_bytes": 15442936.0,
+      "applications": 3,
+      "kernel_launches": 18,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 527796612.0,
+      "assembly_entry_batches": 4417,
+      "assembly_entry_count": 3224645.0,
+      "assembly_leaf_count": 227,
+      "assembly_lowrank_count": 1,
+      "assembly_cache_tile_loads": 1,
+      "assembly_cache_tile_hits": 4416,
+      "stored_coefficient_count": 1759664.0,
+      "same_leaf_dense_coefficient_count": 3222112.0,
+      "lowrank_factor_coefficient_count": 92352,
+      "leaf_rank_sum": 37,
+      "max_leaf_rank": 37,
+      "storage_saving_lowrank_leaf_count": 1,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    },
+    "timing_scope": "Excluded from workflow benchmarks"
+  },
+  "operator_probe_input_sha256": "55d284b13adb616e3cb8f1d229bb63f74bb744bebabe09cc6771224f4b2b5477",
+  "ratio_scope": "Fresh CPU and GPU complete linear workflows, same public mesh/physics, CPU mass-Riesz sparsecholesky versus GPU explicit chosen preconditioner; excludes interpreter/Engine startup, validation, HDF5 serialization and result transport from API totals",
+  "memory_limitations": "50ms sampled process RSS/private includes baseline/runtime and may miss spikes; CPU sampler is in controller process, GPU sampler observes separate MATLAB process, unquantified timing bias; exact GPU owned excludes CUDA/runtime/global peaks",
+  "benchmark_memory_scope": "Sampled process baselines include the retained independent CPU certification operator; not standalone application memory peaks",
+  "cpu_host_process_memory": {
+    "before": {
+      "rss_bytes": 142721024,
+      "private_bytes": 473767936,
+      "lifetime_peak_rss_bytes": 146657280
+    },
+    "after": {
+      "rss_bytes": 250535936,
+      "private_bytes": 2265452544,
+      "lifetime_peak_rss_bytes": 322502656
+    },
+    "sample_count": 160,
+    "period_seconds": 0.05,
+    "sampled_peak_rss_bytes": 320331776,
+    "sampled_peak_private_bytes": 3086090240,
+    "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+  },
+  "gpu_host_process_memory": {
+    "before": {
+      "rss_bytes": 1506013184,
+      "private_bytes": 2095861760,
+      "lifetime_peak_rss_bytes": 1506013184
+    },
+    "after": {
+      "rss_bytes": 1629548544,
+      "private_bytes": 2246107136,
+      "lifetime_peak_rss_bytes": 1853370368
+    },
+    "sample_count": 69,
+    "period_seconds": 0.05,
+    "sampled_peak_rss_bytes": 1853370368,
+    "sampled_peak_private_bytes": 2472763392,
+    "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+  },
+  "schema": "radia.hdiv-separated-spheres-research.v1",
+  "accepted": true,
+  "release_accepted": false,
+  "formal_reference_accepted": false,
+  "cpu_source_commit": "54d10d11f465edb2d9f35aec28f15cf48c1525a3",
+  "performance_accepted": false,
+  "aborted_benchmark": {
+    "reason": "Host CPU load exceeded idle guard during ABBA; partial samples rejected for performance acceptance",
+    "completed_samples": 9,
+    "speedup": null
+  },
+  "hardware": {
+    "gpu_model": "NVIDIA A100-SXM4-40GB",
+    "driver": "591.59",
+    "total_mib": 40960,
+    "matlab": "26.1.0.3346908 (R2026a) Update 5",
+    "role": "on-demand GPU worker"
+  },
+  "same_leaf_coefficient_reduction_fraction": 0.45387869819546933,
+  "public_geometry": {
+    "dofs": 5184,
+    "cells": 246,
+    "faces": 252,
+    "order": 2,
+    "charges": 2496,
+    "mass_dense_bytes": 214990848,
+    "charge_map_dense_bytes": 103514112,
+    "gram_dense_bytes": 49840128,
+    "potential_cache_bytes": 523680768,
+    "estimated_resident_potential_cache_bytes": 268344432,
+    "cache_source_tile_count": 1279,
+    "host_staging_two_copies_bytes": 637009920,
+    "factor_bytes": 214990848,
+    "device_lower_bound_bytes": 533175408,
+    "limitations": "Lower bounds exclude cuSOLVER workspace, sparse maps, allocator/runtime, geometry and host Python/MATLAB temporaries",
+    "native_dimension_gate": true,
+    "mass_cholesky_array_gate": true,
+    "dense_gram_array_gate": true,
+    "dense_array_gate": true,
+    "cache_workspace_lower_bound_gate": true,
+    "mesh": "two-spheres-0p6.vol",
+    "mesh_sha256": "2ab17e73df34f4e110bace113a038f6686984f64b2b63cc53ba6590be340aacf",
+    "maxh": 0.6,
+    "curve_order": 2,
+    "materials": [
+      "magnetic_body",
+      "magnetic_body"
+    ],
+    "boundaries": [
+      "exterior",
+      "exterior"
+    ],
+    "ngsolve": "6.2.2607",
+    "units": "SI; unit radius in metres",
+    "source": "Independently authored elementary CSG sphere geometry",
+    "sphere_centres_m": [
+      [
+        -4.0,
+        0,
+        0
+      ],
+      [
+        4.0,
+        0,
+        0
+      ]
+    ],
+    "sphere_radius_m": 1.0,
+    "hacapk_curved_charge_gate": true,
+    "full_potential_cache_2gib_lower_bound_gate": true
+  },
+  "generator_sha256": "c21d26bc9319c6cded222b0c31eb8076db6fd4cbe5d0355a2d582702c8748e1f",
+  "physics": {
+    "applied_field_A_per_m": [
+      1,
+      0.2,
+      0.1
+    ],
+    "inverse_susceptibility": 2.5,
+    "linear_isotropic": true
+  },
+  "limitations": [
+    "Independently authored two unit spheres, centres separated by eight metres. No engineering-model data used.",
+    "Coefficient reduction is relative to the same upper-leaf dense partition, not global peak memory. Cache dominates setup peak.",
+    "Random actions supplement one excitation; no full operator norm bound or mesh-convergence/experimental physics certification.",
+    "API excludes Engine, HDF5 and controller transport. First samples follow parity warm-up, not process cold.",
+    "Exact owned buffers exclude runtime/global peaks; sampled process baselines may miss spikes.",
+    "CPU immutable-wheel formal adoption remains provisional; modules have different recorded source commits, not an exact-commit common wheel.",
+    "Initial random-probe run failed required HDF5 label metadata before GPU; original failure preserved. No numeric threshold relaxed.",
+    "No release, general geometry, nonlinear/topology-optimization or 100k acceptance."
+  ]
+}

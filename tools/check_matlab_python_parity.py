@@ -11,7 +11,7 @@ from pathlib import Path
 
 def audit(repo_root: Path) -> dict:
     repo_root = repo_root.resolve()
-    manifest_path = repo_root / "packages/radia-gpu/matlab" / "python_api_parity_manifest.json"
+    manifest_path = repo_root / "packages/radia-simulink/matlab" / "python_api_parity_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     source_root = repo_root / manifest["source_root"]
     allowed = set(manifest["classifications"])
@@ -22,8 +22,8 @@ def audit(repo_root: Path) -> dict:
         errors.append("expected the CPU/GPU ownership contract")
     if manifest.get("cpu_mex_supported") is not False or manifest.get("implicit_cpu_fallback") is not False:
         errors.append("CPU MEX and implicit CPU fallback must remain unsupported")
-    expected_owners = {"cpu": "radia", "matlab": "radia-gpu", "simulink": "radia-gpu",
-                       "ltspice": "radia-gpu", "mcp": "radia-mcp", "optuna": "radia-optuna"}
+    expected_owners = {"cpu": "radia", "matlab": "radia-simulink", "simulink": "radia-simulink",
+                       "ltspice": "radia-simulink", "mcp": "radia-mcp", "optuna": "radia-optuna"}
     if manifest.get("owners") != expected_owners:
         errors.append("integration distribution owners differ from policy")
     rule_ids = [rule["id"] for rule in rules]
@@ -42,7 +42,7 @@ def audit(repo_root: Path) -> dict:
             resolved = (repo_root / relative).resolve()
             if not relative or not resolved.is_relative_to(repo_root) or not resolved.is_file():
                 errors.append(f"{feature['id']}: missing or escaping {field}: {relative}")
-            elif field != "validation" and not relative.startswith("packages/radia-gpu/"):
+            elif field != "validation" and not relative.startswith("packages/radia-simulink/"):
                 errors.append(f"{feature['id']}: {field} is not GPU-owned")
     for entry in manifest.get("binary_extensions", []):
         if entry.get("classification") != "cpu-python-only" or entry.get("matlab"):

@@ -1,0 +1,177 @@
+{
+  "schema": "radia.hdiv.chebyshev-settings-rtx.v1",
+  "native_built": true,
+  "bounded_numerical_accepted": true,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "bc6b78a143bfd882e29413cc133e4736bfb6d626",
+      "binary_sha256": "dcc88c79c71446e351dc981db7e726e7d274ad08c41ebf1cdd15831920cd125c"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "8b88cc9bda32a2c76b4ec333edf7cc52fe8112aa",
+      "binary_sha256": "2b9d2797ef3d7f0916edbf201d487f9b1605f51c31e066ccd4b5d649616bd94c"
+    }
+  },
+  "settings_checks": {
+    "accepted": true,
+    "linear": [
+      {
+        "case_index": 1,
+        "degree": 8,
+        "lower_fraction": 0.1,
+        "cpu_error": 1.326618744900019e-15,
+        "independent_true_residual": 7.482036631862885e-16,
+        "native_true_residual": 3.544153912952023e-16,
+        "iterations": 5
+      },
+      {
+        "case_index": 1,
+        "degree": 16,
+        "lower_fraction": 0.1,
+        "cpu_error": 1.181691971474674e-12,
+        "independent_true_residual": 5.990858775558706e-12,
+        "native_true_residual": 5.990770262184143e-12,
+        "iterations": 4
+      },
+      {
+        "case_index": 1,
+        "degree": 16,
+        "lower_fraction": 0.01,
+        "cpu_error": 1.317580048010653e-15,
+        "independent_true_residual": 1.1192733174664465e-15,
+        "native_true_residual": 8.722058253917446e-16,
+        "iterations": 5
+      },
+      {
+        "case_index": 1,
+        "degree": 32,
+        "lower_fraction": 0.01,
+        "cpu_error": 1.1245146362008805e-15,
+        "independent_true_residual": 9.863515975240485e-16,
+        "native_true_residual": 7.924171216241648e-16,
+        "iterations": 5
+      },
+      {
+        "case_index": 2,
+        "degree": 8,
+        "lower_fraction": 0.1,
+        "cpu_error": 1.2453644487902219e-16,
+        "independent_true_residual": 1.5260524186778483e-16,
+        "native_true_residual": 3.06004270469464e-16,
+        "iterations": 5
+      },
+      {
+        "case_index": 2,
+        "degree": 16,
+        "lower_fraction": 0.1,
+        "cpu_error": 2.108555623222599e-15,
+        "independent_true_residual": 2.1783028528020937e-15,
+        "native_true_residual": 2.2445597593400358e-15,
+        "iterations": 4
+      },
+      {
+        "case_index": 2,
+        "degree": 16,
+        "lower_fraction": 0.01,
+        "cpu_error": 2.690294689208354e-16,
+        "independent_true_residual": 1.8296725739307113e-16,
+        "native_true_residual": 2.652362224509009e-16,
+        "iterations": 5
+      },
+      {
+        "case_index": 2,
+        "degree": 32,
+        "lower_fraction": 0.01,
+        "cpu_error": 4.7747615110379796e-14,
+        "independent_true_residual": 4.909313734064469e-14,
+        "native_true_residual": 4.920941817618095e-14,
+        "iterations": 4
+      },
+      {
+        "case_index": 3,
+        "degree": 8,
+        "lower_fraction": 0.1,
+        "cpu_error": 1.727168520807459e-16,
+        "independent_true_residual": 1.7231198442351558e-16,
+        "native_true_residual": 6.334314525508456e-17,
+        "iterations": 4
+      },
+      {
+        "case_index": 3,
+        "degree": 16,
+        "lower_fraction": 0.1,
+        "cpu_error": 1.3130140003676681e-16,
+        "independent_true_residual": 5.665583147960492e-17,
+        "native_true_residual": 1.167989887488026e-16,
+        "iterations": 4
+      },
+      {
+        "case_index": 3,
+        "degree": 16,
+        "lower_fraction": 0.01,
+        "cpu_error": 1.652661499656503e-16,
+        "independent_true_residual": 1.699674944388148e-16,
+        "native_true_residual": 2.565201871846162e-16,
+        "iterations": 4
+      },
+      {
+        "case_index": 3,
+        "degree": 32,
+        "lower_fraction": 0.01,
+        "cpu_error": 2.6771654746693043e-16,
+        "independent_true_residual": 2.5495124165822216e-16,
+        "native_true_residual": 1.2018516789897273e-16,
+        "iterations": 4
+      }
+    ],
+    "nonlinear": [
+      {
+        "degree": 8,
+        "lower_fraction": 0.1,
+        "cpu_error": 4.748813614105942e-14,
+        "native_true_residual": 3.6596452659959656e-14,
+        "updates": 11,
+        "inner_iterations": 5142,
+        "whole_seconds_diagnostic": 6.1277027,
+        "combined_array_bound_bytes": 217304272.0
+      },
+      {
+        "degree": 16,
+        "lower_fraction": 0.1,
+        "cpu_error": 4.1742283635595146e-14,
+        "native_true_residual": 3.351160959160375e-14,
+        "updates": 11,
+        "inner_iterations": 3749,
+        "whole_seconds_diagnostic": 4.4449025,
+        "combined_array_bound_bytes": 217304272.0
+      },
+      {
+        "degree": 16,
+        "lower_fraction": 0.01,
+        "cpu_error": 4.4522026963452804e-14,
+        "native_true_residual": 2.8454363796964764e-14,
+        "updates": 11,
+        "inner_iterations": 2307,
+        "whole_seconds_diagnostic": 3.2197115,
+        "combined_array_bound_bytes": 217304272.0
+      },
+      {
+        "degree": 32,
+        "lower_fraction": 0.01,
+        "cpu_error": 3.9390970989551915e-14,
+        "native_true_residual": 4.172966895642619e-14,
+        "updates": 11,
+        "inner_iterations": 1572,
+        "whole_seconds_diagnostic": 3.0695187,
+        "combined_array_bound_bytes": 217304272.0
+      }
+    ],
+    "live_count": 0,
+    "scope": "RTX bounded algebra CPU original residual and 288 DoF strong nonlinear CPU coefficients; timings diagnostic"
+  },
+  "resident_suite_accepted": true,
+  "fixture_sha256": "6bfa403a0adc3c0dff9c24069b8167d161f4f65aff0079d88303744358f4ba90",
+  "limits": "Single diagnostic RTX timings, not comparative speed acceptance. Independent CPU original residual for small material cases; frozen CPU coefficients and native true nonlinear residual for 288 DoF."
+}

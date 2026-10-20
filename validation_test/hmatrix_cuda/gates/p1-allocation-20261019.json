@@ -1,0 +1,14 @@
+{
+  "schema": "radia.p1-allocation-gates.v1",
+  "scope": "Bounded two-charge allocation-path diagnostics plus existing numerical fixture; not all geometry/ACA branches",
+  "true_relative_residual_limit": 1e-6,
+  "small_nonlinear_cpu_relative_error_limit": 1e-10,
+  "minimum_repeated_failures_per_class": 10,
+  "warmup_failures_per_class": 5,
+  "max_positive_private_slope_bytes_per_failure": 1048576,
+  "max_repeated_private_delta_bytes": 16777216,
+  "native_live_bytes_after_failed_call": 0,
+  "live_handles_after_failed_call": 0,
+  "memory_measurement_limit": "Process samples and owned counters are distinct from global/device/runtime peaks",
+  "all_site_coverage_required_for_P1_exit": true
+}

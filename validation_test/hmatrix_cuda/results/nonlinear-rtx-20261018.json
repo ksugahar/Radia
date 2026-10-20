@@ -1,0 +1,346 @@
+{
+  "accepted": true,
+  "scope": "Experimental bounded 288DoF P2 sphere, single-region synthetic monotone BH; not large nonlinear or release acceptance",
+  "units": "SI",
+  "material": {
+    "accepted": true,
+    "dofs": 288,
+    "points": 4459,
+    "integration_order": 6,
+    "errors": {
+      "weights": 0,
+      "points": 0,
+      "values": 6.111843762110497e-16,
+      "energy": 0,
+      "gradient": 5.973416413064356e-16,
+      "tangent": 8.020862725866231e-16,
+      "energy_gradient": 1.9569463245511421e-10,
+      "gradient_hessian": 3.309092056341304e-10
+    },
+    "scope": "Independent CPU material subgate only, no complete nonlinear solve acceptance"
+  },
+  "binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "2c6df8640b786468ebb21cbd92279586d934b9cf",
+      "binary_sha256": "67d494692add16cf9c64594a47175b9d03152caf5c353d2c655b5c50498f35c8"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "13968403cc1100247c7bc26c4c4152b03bec028c",
+      "binary_sha256": "3ec8132b5e422df795420c59a0758b51ba84fc4ba7e2feb395bd10fd950a6d28"
+    }
+  },
+  "cases": [
+    {
+      "applied_field_A_per_m": [
+        0,
+        0,
+        100
+      ],
+      "cpu_relative_errors": {
+        "coefficients": 8.104816532096889e-11,
+        "mean": 2.828766951240681e-14
+      },
+      "nonlinear_relative_residual": 2.9610143903397178e-15,
+      "independent_cpu_residual": null,
+      "iterations": 1,
+      "history": {
+        "relative_residual": 7.990565406055596e-07,
+        "energy": -59282.28756255813,
+        "alpha": 1,
+        "backtracks": 0,
+        "inner_iterations": 75,
+        "inner_true_residual": 9.19117719808927e-11
+      },
+      "whole_seconds_diagnostic": 2.4349813,
+      "operator_owned_bytes": 185144,
+      "setup_owned_peak": 2407484.0,
+      "solver_owned_bytes": 862188,
+      "matlab_array_bound": 49264856.0,
+      "live_count": 0
+    },
+    {
+      "applied_field_A_per_m": [
+        0,
+        0,
+        100000.0
+      ],
+      "cpu_relative_errors": {
+        "coefficients": 4.974536189163104e-10
+      },
+      "nonlinear_relative_residual": 3.95674553456978e-11,
+      "independent_cpu_residual": 3.9567286259372713e-11,
+      "iterations": 3,
+      "history": [
+        {
+          "relative_residual": 0.001467704559629439,
+          "energy": -59221216904.235176,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 92,
+          "inner_true_residual": 8.291379795581209e-11
+        },
+        {
+          "relative_residual": 4.474869755036529e-06,
+          "energy": -59221384633.357635,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 92,
+          "inner_true_residual": 9.046187162471734e-11
+        },
+        {
+          "relative_residual": 9.02007869920572e-08,
+          "energy": -59221385017.31759,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 92,
+          "inner_true_residual": 7.792145860554054e-11
+        }
+      ],
+      "whole_seconds_diagnostic": 2.5905364,
+      "operator_owned_bytes": 185144,
+      "setup_owned_peak": 2407484.0,
+      "solver_owned_bytes": 862188,
+      "matlab_array_bound": 49264856.0,
+      "live_count": 0
+    },
+    {
+      "applied_field_A_per_m": [
+        0,
+        0,
+        1000000.0
+      ],
+      "cpu_relative_errors": {
+        "coefficients": 4.863311520483456e-14,
+        "mean": 4.1089107690875537e-16
+      },
+      "nonlinear_relative_residual": 3.186275406951148e-14,
+      "independent_cpu_residual": null,
+      "iterations": 26,
+      "history": [
+        {
+          "relative_residual": 2085.412483128334,
+          "energy": 8468513015453846.0,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 3,
+          "inner_true_residual": 2.3214431920877974e-12
+        },
+        {
+          "relative_residual": 5.966648112082622,
+          "energy": -2910865108695.1562,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 9,
+          "inner_true_residual": 2.8849584147278834e-11
+        },
+        {
+          "relative_residual": 2.3885951955534312,
+          "energy": -3152164194434.8096,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 11,
+          "inner_true_residual": 6.41473489356931e-11
+        },
+        {
+          "relative_residual": 0.815628647668034,
+          "energy": -3185397798067.805,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 12,
+          "inner_true_residual": 3.8412086570588374e-11
+        },
+        {
+          "relative_residual": 0.20418290856562654,
+          "energy": -3189488143481.4443,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 13,
+          "inner_true_residual": 5.6680312793545514e-11
+        },
+        {
+          "relative_residual": 0.05389859098437222,
+          "energy": -3190007844260.495,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 14,
+          "inner_true_residual": 5.82188805051474e-11
+        },
+        {
+          "relative_residual": 0.011561269446078815,
+          "energy": -3190067876813.3916,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 14,
+          "inner_true_residual": 7.710990214401972e-11
+        },
+        {
+          "relative_residual": 0.0014055686705270482,
+          "energy": -3190071072452.942,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 15,
+          "inner_true_residual": 2.608590994202932e-11
+        },
+        {
+          "relative_residual": 0.00039025931070919953,
+          "energy": -3190071378151.0693,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 14,
+          "inner_true_residual": 4.6912543060452314e-11
+        },
+        {
+          "relative_residual": 3.151317521509717e-06,
+          "energy": -3190071392600.658,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 14,
+          "inner_true_residual": 6.046382243962852e-11
+        },
+        {
+          "relative_residual": 5.624465773156122e-10,
+          "energy": -3190071392601.656,
+          "alpha": 0.25,
+          "backtracks": 2,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.836385070496174e-11
+        },
+        {
+          "relative_residual": 4.2183629515370003e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 0.0001220703125,
+          "backtracks": 13,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.834334462892514e-11
+        },
+        {
+          "relative_residual": 4.2179026457832725e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 0.03125,
+          "backtracks": 5,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.83250124610115e-11
+        },
+        {
+          "relative_residual": 4.0860904219051355e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 0.001953125,
+          "backtracks": 9,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.836908375307182e-11
+        },
+        {
+          "relative_residual": 4.078125297035166e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 0.25,
+          "backtracks": 2,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.833730008196315e-11
+        },
+        {
+          "relative_residual": 3.058560968559671e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 0.015625,
+          "backtracks": 6,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.835472467607387e-11
+        },
+        {
+          "relative_residual": 3.0108034325569854e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 0.03125,
+          "backtracks": 5,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.83628266844893e-11
+        },
+        {
+          "relative_residual": 2.9167274491496326e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 0.5,
+          "backtracks": 1,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.839209488910655e-11
+        },
+        {
+          "relative_residual": 1.4583980208384384e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 0.125,
+          "backtracks": 3,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.830832368502985e-11
+        },
+        {
+          "relative_residual": 1.2760994107066312e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 0.001953125,
+          "backtracks": 9,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.826569855887147e-11
+        },
+        {
+          "relative_residual": 1.2736972475232668e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 3.0517578125e-05,
+          "backtracks": 15,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.832627161826722e-11
+        },
+        {
+          "relative_residual": 1.273594366551392e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 0.0625,
+          "backtracks": 4,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.834803281279722e-11
+        },
+        {
+          "relative_residual": 1.193949074953717e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 0.0078125,
+          "backtracks": 7,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.836010239555603e-11
+        },
+        {
+          "relative_residual": 1.1846506171775691e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 0.001953125,
+          "backtracks": 9,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.833228762342829e-11
+        },
+        {
+          "relative_residual": 1.1822873646926112e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 3.0517578125e-05,
+          "backtracks": 15,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.834091239565088e-11
+        },
+        {
+          "relative_residual": 1.1822228953739684e-10,
+          "energy": -3190071392601.6562,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 14,
+          "inner_true_residual": 9.838427113151884e-11
+        }
+      ],
+      "whole_seconds_diagnostic": 4.2992792,
+      "operator_owned_bytes": 185144,
+      "setup_owned_peak": 2407484.0,
+      "solver_owned_bytes": 862188,
+      "matlab_array_bound": 49264856.0,
+      "live_count": 0
+    }
+  ],
+  "performance_accepted": false,
+  "limitations": [
+    "No ABBA or full process cold measurement; other host work precludes performance acceptance",
+    "Sparse GPU material evaluation gathers each gradient and tangent; law arrays uploaded per evaluation",
+    "CPU and GPU iteration counts differ in saturation: 11 versus 26; final coefficient parity passes",
+    "Only strong case has separately reconstructed independent CPU nonlinear residual so far",
+    "No CUDA library/global/host memory peak claim",
+    "Failed loose-tolerance comparisons retained privately; parity established at 1e-10 nonlinear tolerance; no parity threshold relaxed"
+  ]
+}

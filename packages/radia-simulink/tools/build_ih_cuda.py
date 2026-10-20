@@ -1,0 +1,40 @@
+"""Isolated, low-priority persistent IH mexcuda build on an explicitly admitted build host."""
+from pathlib import Path
+import argparse,ctypes,hashlib,json,socket,subprocess,tempfile
+
+def main():
+    from matlab_cuda_toolchain import require_build_admission
+    from check_mex_error_boundaries import require_boundaries
+    require_boundaries()
+    from vs2022_toolchain import discover_vs, compiler_bin as supported_compiler_bin
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--require-clean-source',action='store_true');parser.add_argument('--build-admission',type=Path);parser.add_argument('--build-admission-sha256');args=parser.parse_args()
+    root=Path(__file__).resolve().parents[3];package=root/'packages/radia-simulink';base=root/'build-ih-cuda';base.mkdir(exist_ok=True);out=Path(tempfile.mkdtemp(prefix='job-',dir=base));print('IH CUDA build directory: '+str(out),flush=True)
+    record=dict(schema='radia.ih-cuda-build.v1',accepted=False,scope='Persistent fixed operators; dynamic ESIM physical frontend pending')
+    eng=None
+    try:
+        admission=require_build_admission(root,'ih',args.build_admission,args.build_admission_sha256)
+        record['build_admission']=admission
+        record['source_commit']=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
+        record['source_dirty']=bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip())
+        if args.require_clean_source and record['source_dirty']:raise RuntimeError('Clean source required')
+        sources=[package/'native'/name for name in ('radia_cuda_ih.cu','ih_coupled_state.cuh','ih_complex_solver.cuh','ih_bicgstab_kernels.cuh','ih_thermal_kernels.cuh','ih_resident_kernels.cuh','ih_preconditioner.cuh','ih_esim_coupling.cuh','ih_temperature_material.cuh','ih_esim_cell.cuh','ih_peec_bem_assembly.cuh')]+[root/'src/core'/name for name in ('rad_bem_galerkin.cpp','rad_bem_galerkin.h','rad_biot_savart_filaments.cpp','rad_biot_savart_filaments.h','rad_host_parallel.h')]+[Path(__file__).with_name('matlab_cuda_toolchain.py'),Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__),root/'Build.ps1']
+        sources.append(root/'packages/radia-simulink/native/mex_error_boundary.hpp')
+        sources.append(Path(__file__).with_name('check_mex_error_boundaries.py'))
+        hashes=lambda:{p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
+        record['source_sha256']=hashes()
+        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
+        import matlab.engine
+        eng=matlab.engine.start_matlab('-nodesktop -nosplash');pid=int(eng.feature('getpid'))
+        subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)
+        compiler=str(supported_compiler_bin(discover_vs()))
+        eng.setenv('NVCC_CCBIN',compiler,nargout=0);eng.setenv('PATH',compiler+';'+eng.getenv('PATH'),nargout=0)
+        config=Path(eng.matlabroot())/'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml'
+        flags='NVCCFLAGS=--std=c++17 --fmad=false -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
+        eng.mexcuda('-v','-R2018a','-f',str(config),flags,'-I'+str(package/'native'),'-I'+str(root/'src/core'),'-DRAD_MATLAB_HOST','-lcublas','-outdir',str(out),str(sources[0]),str(root/'src/core/rad_bem_galerkin.cpp'),str(root/'src/core/rad_biot_savart_filaments.cpp'),nargout=0)
+        if hashes()!=record['source_sha256'] or subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()!=record['source_commit']:raise RuntimeError('Source changed during build')
+        record.update(accepted=True,matlab=eng.version(),binary_sha256=hashlib.sha256((out/'radia_cuda_ih.mexw64').read_bytes()).hexdigest(),cuda_targets=['sm_75','sm_80','compute_80 PTX'],cpu_fallback=False,python_runtime_required=False,taskmanager_regions=False)
+    except BaseException as error:record['error']=str(error);raise
+    finally:
+        if eng is not None:eng.quit()
+        (out/'build.json').write_text(json.dumps(record,indent=2)+'\n')
+if __name__=='__main__':main()

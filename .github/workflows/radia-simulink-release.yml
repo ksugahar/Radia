@@ -1,0 +1,122 @@
+name: Release radia-simulink
+
+on:
+  workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: Successful main radia-simulink CI run (publish its wheel without rebuilding)
+        required: true
+        type: string
+      wheel_sha256:
+        description: SHA-256 of that exact accepted wheel
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: radia-simulink-publication
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_id: ${{ steps.accepted.outputs.artifact-id }}
+      tag: ${{ steps.qualified.outputs.tag }}
+      sha: ${{ steps.qualified.outputs.sha }}
+      prerelease: ${{ steps.qualified.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read exact CI identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.ci_run_id }}
+        run: |
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || exit 1
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > run.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: radia-simulink-cuda-evidence
+          path: candidate
+          run-id: ${{ inputs.ci_run_id }}
+          github-token: ${{ github.token }}
+      - name: Qualify exact accepted release
+        id: qualified
+        env:
+          RUN_ID: ${{ inputs.ci_run_id }}
+          WHEEL_SHA256: ${{ inputs.wheel_sha256 }}
+        run: |
+          python packages/radia-simulink/release_gate.py --run-json run.json --repository "$GITHUB_REPOSITORY" --run-id "$RUN_ID" --artifact candidate --wheel-sha256 "$WHEEL_SHA256" --qualification-directory validation_test/radia_simulink/releases --output qualified.json
+          python - <<'PY'
+          import json,os,pathlib,shutil
+          r=json.loads(pathlib.Path('qualified.json').read_text())
+          pathlib.Path('dist').mkdir()
+          shutil.copy2(r['wheel'],'dist')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as out:
+              out.write('tag='+r['tag']+'\nsha='+r['source_commit']+'\n')
+              out.write('prerelease='+str(r['prerelease']).lower()+'\n')
+          PY
+      - name: Verify main ancestry and existing tag identity
+        env:
+          TAG: ${{ steps.qualified.outputs.tag }}
+          SHA: ${{ steps.qualified.outputs.sha }}
+        run: |
+          git merge-base --is-ancestor "$SHA" origin/main
+          TAG_SHA=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/$TAG" | cut -f1)
+          if [ -n "$TAG_SHA" ] && [ "$TAG_SHA" != "$SHA" ]; then
+            echo '::error::Existing GPU release tag points at another commit'
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        id: accepted
+        with:
+          name: accepted-radia-simulink-wheel
+          path: dist/*.whl
+          if-no-files-found: error
+
+  publish:
+    needs: qualify
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.qualify.outputs.artifact_id }}
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+
+  github-release:
+    needs: [qualify, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.qualify.outputs.artifact_id }}
+          path: dist
+          merge-multiple: true
+      - name: Publish exact accepted artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.qualify.outputs.tag }}
+          SHA: ${{ needs.qualify.outputs.sha }}
+          PRERELEASE: ${{ needs.qualify.outputs.prerelease }}
+        run: |
+          TAG_SHA=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/$TAG" | cut -f1)
+          if [ -n "$TAG_SHA" ] && [ "$TAG_SHA" != "$SHA" ]; then exit 1; fi
+          RELEASE_FLAGS=()
+          if [ "$PRERELEASE" = true ]; then RELEASE_FLAGS+=(--prerelease); fi
+          gh release create "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --target "$SHA" "${RELEASE_FLAGS[@]}" --title "$TAG" --notes 'Independent CUDA MEX, Simulink and LTspice adapters. Published from the exact accepted main CI wheel. Stable versions additionally require independent review and same-wheel 100 RTX 5000/CPU parity evidence in validation_test/radia_simulink/releases. External products are not bundled.'

@@ -51,7 +51,7 @@ def main():
     if not (root/"src/radia/_radia_pybind.pyd").is_file():
         raise RuntimeError("Build -RadiaOnly in this checkout before parity; do not borrow an editable binary")
     os.environ["PYTHONPATH"] = str(root/"src") + os.pathsep + os.environ.get("PYTHONPATH", "")
-    mex = root / "packages/radia-gpu/matlab/radia_mex.mexw64"
+    mex = root / "packages/radia-simulink/matlab/radia_mex.mexw64"
     record = dict(schema="radia.sparsesolv-matlab-parity.v1",
                   utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
                   platform_class=platform.system(), python=platform.python_version(),
@@ -61,34 +61,34 @@ def main():
                       "rev-parse", "HEAD"], cwd=root, text=True).strip(),
                   source_hashes={str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
                       for p in [root/"packages/radia-optuna/native/optuna_mex.cpp", root/"tests/matlab/test_sparsesolv_mex.m", root/"tests/matlab/test_ngsolve_sparsecholesky.m", root/"tests/matlab/test_setup_python_selection.m",
-                                root/"tests/matlab/test_mex_runtime_setup.m", root/"packages/radia-gpu/matlab/+radia/+internal/callMex.m",
-                                root/"packages/radia-gpu/matlab/+radia/setup.m",
+                                root/"tests/matlab/test_mex_runtime_setup.m", root/"packages/radia-simulink/matlab/+radia/+internal/callMex.m",
+                                root/"packages/radia-simulink/matlab/+radia/setup.m",
                                 root/"tests/matlab/sparsesolv_python_reference.py",
-                                root/"packages/radia-gpu/matlab/+radia/+sparsesolv/ICCG.m",
+                                root/"packages/radia-simulink/matlab/+radia/+sparsesolv/ICCG.m",
                                 root/"src/ext/sparsesolv/include/sparsesolv/sparsesolv.hpp",
                                 root/"src/ext/sparsesolv/include/sparsesolv/ngsolve/sparsesolv_solvers.hpp",
                                 root/"tests/matlab/test_beam_transfer_mex.m",
                                 root/"tests/matlab/test_hacapk_rank_cap.m",
                                 root/"tests/matlab/test_radiafield_mex.m",
-                                root/'packages/radia-gpu/native/legacy/radia_ih_mex_commands.cpp',
-                                root/'packages/radia-gpu/matlab/+radia/+simulink/validateIHNativeConfig.m',
+                                root/'packages/radia-simulink/native/legacy/radia_ih_mex_commands.cpp',
+                                root/'packages/radia-simulink/matlab/+radia/+simulink/validateIHNativeConfig.m',
                                 root/'tests/matlab/test_ih_sparse_inputs.m',
-                                root/'packages/radia-gpu/matlab/+radia/+internal/nextIHNativeHandle.m',
-                                root/'packages/radia-gpu/matlab/+radia/+internal/selectedPythonExecutable.m',
-                                root/'packages/radia-gpu/matlab/+radia/+internal/resolveAssemblyPython.m',
-                                root/'packages/radia-gpu/matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m',
-                                root/'packages/radia-gpu/matlab/+radia/+simulink/addIHGeometryUpdateBlock.m',
-                                root/'packages/radia-gpu/matlab/+radia/+simulink/updateIHGeometry.m',
+                                root/'packages/radia-simulink/matlab/+radia/+internal/nextIHNativeHandle.m',
+                                root/'packages/radia-simulink/matlab/+radia/+internal/selectedPythonExecutable.m',
+                                root/'packages/radia-simulink/matlab/+radia/+internal/resolveAssemblyPython.m',
+                                root/'packages/radia-simulink/matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m',
+                                root/'packages/radia-simulink/matlab/+radia/+simulink/addIHGeometryUpdateBlock.m',
+                                root/'packages/radia-simulink/matlab/+radia/+simulink/updateIHGeometry.m',
                                 root/'tests/matlab/test_ih_python_selection.m',
                                 root/'tests/matlab/test_ih_geometry_update.m',
-                                root/"packages/radia-gpu/matlab/+radia/RadiaField.m",
+                                root/"packages/radia-simulink/matlab/+radia/RadiaField.m",
                                 root/"src/core/rad_ngsolve_radia_field.h",
                                 root/"src/ext/HACApK/cHACApK_base.c",
                                 root/"src/core/rad_hacapk_hdiv.cpp",
                                 root/"tests/matlab/beam_transfer_python_reference.py",
                                 root/"src/core/rad_beam_transfer.cpp",
                                 root/"src/lib/rad_beam_transfer_pybind.cpp",
-                                root/"packages/radia-gpu/native/legacy/radia_beam_mex_commands.cpp",
+                                root/"packages/radia-simulink/native/legacy/radia_beam_mex_commands.cpp",
                                 *sorted((root/"src/ext/sparsesolv/include").rglob("*.hpp"))]},
                   passed=False)
     eng = None
@@ -100,7 +100,7 @@ def main():
         eng.setenv("RADIA_MEX_RELOAD_TEST", "1", nargout=0)
         eng.cd(str(root), nargout=0)
         eng.setenv("RADIA_PYTHON_EXECUTABLE", sys.executable, nargout=0)
-        eng.addpath(str(root / "packages/radia-gpu/matlab"), nargout=0)
+        eng.addpath(str(root / "packages/radia-simulink/matlab"), nargout=0)
         eng.setenv("RADIA_SPARSESOLV_METRICS", str(metrics), nargout=0)
         eng.eval("radia.setup(Force=true);", nargout=0)
         record["matlab"] = eng.version()

@@ -297,17 +297,17 @@ def test_previous_manifest_timeout_remains_unknown(monkeypatch):
 
 
 @pytest.mark.parametrize('changed,expected', [
-    ('packages/radia-gpu/matlab/+radia/+sparsesolv/AMS.m', 'tests/test_sparsesolv_matlab_contract.py'),
-    ('packages/radia-gpu/matlab/+radia/+sparsesolv/private/setup.m', 'tests/test_sparsesolv_matlab_contract.py'),
-    ('packages/radia-gpu/matlab/+radia/+python/sparsesolv.m', 'tests/test_matlab_python_parity_manifest.py'),
+    ('packages/radia-simulink/matlab/+radia/+sparsesolv/AMS.m', 'tests/test_sparsesolv_matlab_contract.py'),
+    ('packages/radia-simulink/matlab/+radia/+sparsesolv/private/setup.m', 'tests/test_sparsesolv_matlab_contract.py'),
+    ('packages/radia-simulink/matlab/+radia/+python/sparsesolv.m', 'tests/test_matlab_python_parity_manifest.py'),
 ])
 def test_directory_rules_select_descendant_changes(changed, expected):
     assert runner_module().select_impact_tests([], [changed]) == [expected]
 
 
 @pytest.mark.parametrize('changed', [
-    'packages/radia-gpu/matlab/+radia/+sparsesolv_extra/AMS.m',
-    'packages/radia-gpu/matlab/+radia/+python_extra/sparsesolv.m',
+    'packages/radia-simulink/matlab/+radia/+sparsesolv_extra/AMS.m',
+    'packages/radia-simulink/matlab/+radia/+python_extra/sparsesolv.m',
     'tools/release_quad.py.bak',
 ])
 def test_rules_do_not_select_similarly_named_siblings(changed):

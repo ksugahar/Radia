@@ -73,12 +73,12 @@
       "legacy_100": false
     },
     "ltspice-data-safety.yml:ci-impact": {
-      "owner": "radia-gpu",
+      "owner": "radia-simulink",
       "target": "github-hosted",
       "legacy_100": false
     },
     "ltspice-data-safety.yml:matlab-data-contracts": {
-      "owner": "radia-gpu",
+      "owner": "radia-simulink",
       "target": "ci-matlab-gpu",
       "legacy_100": true
     },
@@ -92,28 +92,28 @@
       "target": "github-hosted",
       "legacy_100": false
     },
-    "radia-gpu-release.yml:qualify": {
-      "owner": "radia-gpu",
+    "radia-simulink-release.yml:qualify": {
+      "owner": "radia-simulink",
       "target": "github-hosted",
       "legacy_100": false
     },
-    "radia-gpu-release.yml:publish": {
-      "owner": "radia-gpu",
+    "radia-simulink-release.yml:publish": {
+      "owner": "radia-simulink",
       "target": "github-hosted",
       "legacy_100": false
     },
-    "radia-gpu-release.yml:github-release": {
-      "owner": "radia-gpu",
+    "radia-simulink-release.yml:github-release": {
+      "owner": "radia-simulink",
       "target": "github-hosted",
       "legacy_100": false
     },
-    "radia-gpu.yml:ci-impact": {
-      "owner": "radia-gpu",
+    "radia-simulink.yml:ci-impact": {
+      "owner": "radia-simulink",
       "target": "github-hosted",
       "legacy_100": false
     },
-    "radia-gpu.yml:cuda-mex": {
-      "owner": "radia-gpu",
+    "radia-simulink.yml:cuda-mex": {
+      "owner": "radia-simulink",
       "target": "ci-matlab-gpu",
       "legacy_100": true
     },
@@ -267,7 +267,7 @@
         "tools/local_push_checks.py",
         "tools/validation_source_gate.py"
       ],
-      "audit_sha256": "eae589c6e263d297e8533035bbde26e0950a67ec0093a0dca10c52447f4b15fb",
+      "audit_sha256": "e0f823ec0563ecdfaf3305abca6b6994c206d8585fe1968f1ce037d6a9d38e23",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

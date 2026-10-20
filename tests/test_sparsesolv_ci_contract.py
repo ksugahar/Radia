@@ -180,7 +180,7 @@ def test_invalid_manifest_fails_closed(change):
     ("src/ext/sparsesolv/test.cpp\0", True),
     ("tests/matlab/test_beam_transfer_mex.m\0", False),
     ("src/core/rad_beam_transfer.cpp\0", True),
-    ("packages/radia-gpu/matlab/+radia/+internal/callMex.m\0", False),
+    ("packages/radia-simulink/matlab/+radia/+internal/callMex.m\0", False),
     ("tools/run_test_tier.py\0", True),
     (".github/workflows/sparsesolv.yml\0", True),
 ])
@@ -321,23 +321,23 @@ def test_p1_linear_routes_to_solver_numerics_and_native_ci(changed):
 
 ROOT_CASES = [
     ('pyproject.toml', '[project]\nversion="1"\n', '[project]\nversion="2"\n', {'radia'}),
-    ('pyproject.toml', '[tool.setuptools.package-data]\nradia_gpu=["*.m"]\n',
-     '[tool.setuptools.package-data]\nradia_gpu=["*.cu"]\n', {'radia-gpu'}),
+    ('pyproject.toml', '[tool.setuptools.package-data]\nradia_simulink=["*.m"]\n',
+     '[tool.setuptools.package-data]\nradia_simulink=["*.cu"]\n', {'radia-simulink'}),
     ('Build.ps1', "param()\nif ($OptunaMexOnly) { matlab -batch 'old' }\n",
      "param()\nif ($OptunaMexOnly) { matlab -batch 'new' }\n", {'radia-optuna'}),
     ('Build.ps1', 'if ($RadiaOnly) { python old }', 'if ($RadiaOnly) { python new }', {'radia'}),
-    ('Build.ps1', 'if ($AmsCudaOnly) { python old }', 'if ($AmsCudaOnly) { python new }', {'radia-gpu'}),
+    ('Build.ps1', 'if ($AmsCudaOnly) { python old }', 'if ($AmsCudaOnly) { python new }', {'radia-simulink'}),
     ('CMakeLists.txt', 'option(RADIA_BUILD_MATLAB_MEX "enable" OFF)',
-     'option(RADIA_BUILD_MATLAB_MEX "enable" ON)', {'radia-gpu'}),
+     'option(RADIA_BUILD_MATLAB_MEX "enable" ON)', {'radia-simulink'}),
     ('CMakeLists.txt', 'target_compile_definitions(_radia_pybind PRIVATE OLD)',
      'target_compile_definitions(_radia_pybind PRIVATE NEW)', {'radia'}),
-    ('MANIFEST.in', 'recursive-include packages/radia-gpu *.m\n',
-     'recursive-include packages/radia-gpu *.cu\n', {'radia-gpu'}),
+    ('MANIFEST.in', 'recursive-include packages/radia-simulink *.m\n',
+     'recursive-include packages/radia-simulink *.cu\n', {'radia-simulink'}),
     ('tests/test_tier_manifest.json',
      json.dumps({'schema':'radia.test-tier-manifest.v1','profiles':{'gpu-unit':{
-         'paths':['packages/radia-gpu/tests/test_ic_payload.py'],'max_elapsed_seconds':1}}}),
+         'paths':['packages/radia-simulink/tests/test_ic_payload.py'],'max_elapsed_seconds':1}}}),
      json.dumps({'schema':'radia.test-tier-manifest.v1','profiles':{'gpu-unit':{
-         'paths':['packages/radia-gpu/tests/test_ic_payload.py'],'max_elapsed_seconds':2}}}), {'radia-gpu'}),
+         'paths':['packages/radia-simulink/tests/test_ic_payload.py'],'max_elapsed_seconds':2}}}), {'radia-simulink'}),
 ]
 
 
@@ -393,18 +393,18 @@ def test_unparsable_deleted_or_unavailable_roots_fail_closed(path,broken):
 
 
 def test_rename_status_preserves_both_ownership_boundaries():
-    raw='R100\0packages/radia-gpu/old.py\0packages/radia-optuna/new.py\0D\0Build.ps1\0'
-    assert IMPACT.changed_paths(raw)=={'packages/radia-gpu/old.py','packages/radia-optuna/new.py','Build.ps1'}
+    raw='R100\0packages/radia-simulink/old.py\0packages/radia-optuna/new.py\0D\0Build.ps1\0'
+    assert IMPACT.changed_paths(raw)=={'packages/radia-simulink/old.py','packages/radia-optuna/new.py','Build.ps1'}
     with pytest.raises(ValueError): IMPACT.changed_paths('R100\0old\0')
     data=IMPACT.manifest()
-    for lane in ('radia-gpu','radia-optuna'):
+    for lane in ('radia-simulink','radia-optuna'):
         assert IMPACT.lane_required(lane,IMPACT.changed_paths(raw),lambda p:(None,None),data)[0]
 
 
 def test_directive_order_and_quoted_hash_are_not_comment_only_edits():
     data=IMPACT.manifest()
-    a='include packages/radia-gpu/source.m\nexclude packages/radia-gpu/source.m\n'
-    b='exclude packages/radia-gpu/source.m\ninclude packages/radia-gpu/source.m\n'
+    a='include packages/radia-simulink/source.m\nexclude packages/radia-simulink/source.m\n'
+    b='exclude packages/radia-simulink/source.m\ninclude packages/radia-simulink/source.m\n'
     for path, before, after in (('MANIFEST.in', a, b),
                                 ('CMakeLists.txt', 'option(RADIA_BUILD_MATLAB_MEX "a#b" OFF)',
                                  'option(RADIA_BUILD_MATLAB_MEX "a#c" OFF)')):
@@ -417,7 +417,7 @@ def test_ams_legacy_exemption_cannot_override_unparsable_or_unknown_content():
         lambda p:(json.dumps(before),json.dumps(after)),IMPACT.manifest())[0]
 
 
-@pytest.mark.parametrize('lane', ['radia-gpu','radia-optuna','sparsesolv','radia-mcp-matrix'])
+@pytest.mark.parametrize('lane', ['radia-simulink','radia-optuna','sparsesolv','radia-mcp-matrix'])
 def test_missing_base_or_blob_lookup_cannot_skip_a_lane(lane):
     data=IMPACT.manifest()
     assert IMPACT.required_for_event(lane,'push',{'before':'0'*40},None,data)[0]
@@ -435,7 +435,7 @@ def test_router_uses_full_push_range_or_pr_merge_base(event):
         if args[0]=='merge-base': return 'b'*40
         if args[0]=='diff': return 'M\0pyproject.toml\0'
         return '[project]\nversion="'+('1' if args[1].startswith(('a','b')) else '2')+'"\n'
-    assert not IMPACT.required_for_event('radia-gpu',event,payload,git,IMPACT.manifest())[0]
+    assert not IMPACT.required_for_event('radia-simulink',event,payload,git,IMPACT.manifest())[0]
     diff=next(c for c in calls if c[0]=='diff')
     assert diff[4]==('b'*40 if event=='pull_request' else base)
 
@@ -448,8 +448,8 @@ def _router_lane(command):
 
 
 def test_router_lane_is_matched_exactly():
-    assert _router_lane('python tools/sparsesolv_ci_impact.py --lane radia-gpu')=='radia-gpu'
-    assert _router_lane('python tools/sparsesolv_ci_impact.py --lane radia-gpu-release')!='radia-gpu'
+    assert _router_lane('python tools/sparsesolv_ci_impact.py --lane radia-simulink')=='radia-simulink'
+    assert _router_lane('python tools/sparsesolv_ci_impact.py --lane radia-simulink-release')!='radia-simulink'
     assert _router_lane('python tools/sparsesolv_ci_impact.py --lane a --lane b') is None
 
 
@@ -515,7 +515,7 @@ def test_typed_canonical_separates_dates_from_look_alike_strings():
 
 
 def test_malformed_event_payload_fails_closed():
-    assert IMPACT.required_for_event("radia-gpu", "push", [], None, {})[0] is True
+    assert IMPACT.required_for_event("radia-simulink", "push", [], None, {})[0] is True
 
 
 @pytest.mark.parametrize("value", [None, "tests/x.py", [1], {"a": []}])
@@ -542,7 +542,7 @@ def test_powershell_block_comment_is_not_a_cmake_comment():
     manifest = IMPACT.CONTRACT.load(ROOT)
     old = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
     new = old + "\n<# INVALID CMAKE #>\n"
-    required = IMPACT.lane_required("radia-gpu", {"CMakeLists.txt"}, lambda p: (old, new), manifest)
+    required = IMPACT.lane_required("radia-simulink", {"CMakeLists.txt"}, lambda p: (old, new), manifest)
     assert required[0] is True
     assert IMPACT.code_tokens(old, "cmake") != IMPACT.code_tokens(new, "cmake")
 
@@ -566,7 +566,7 @@ def test_joining_powershell_statements_is_a_change():
     assert marker in old
     head, tail = old.split(marker, 1)
     joined = head + marker + " " + tail.lstrip("\r\n")
-    assert IMPACT.lane_required("radia-gpu", {"Build.ps1"}, lambda p: (old, joined), manifest)[0] is True
+    assert IMPACT.lane_required("radia-simulink", {"Build.ps1"}, lambda p: (old, joined), manifest)[0] is True
     # Indentation and comment-only edits stay exempt.
     reindented = old.replace(marker, "    " + marker + "  # comment", 1)
     assert IMPACT.code_tokens(old, "powershell") == IMPACT.code_tokens(reindented, "powershell")
@@ -579,7 +579,7 @@ def test_powershell_formatting_change_selects_all_owners():
     line = next(l for l in old.splitlines() if l.rstrip().endswith("`"))
     new = old.replace(line, line.rstrip() + " ", 1)
     assert new != old
-    for lane in ("radia-gpu", "sparsesolv"):
+    for lane in ("radia-simulink", "sparsesolv"):
         assert IMPACT.lane_required(lane, {"Build.ps1"}, lambda p: (old, new), manifest)[0] is True
 
 
@@ -588,7 +588,7 @@ def test_cmake_variable_reference_split_selects_owners():
     old = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
     assert "${Python3_EXECUTABLE}" in old
     new = old.replace("${Python3_EXECUTABLE}", "$ {Python3_EXECUTABLE}", 1)
-    for lane in ("radia-gpu", "sparsesolv"):
+    for lane in ("radia-simulink", "sparsesolv"):
         assert IMPACT.lane_required(lane, {"CMakeLists.txt"}, lambda p: (old, new), manifest)[0] is True
 
 
@@ -612,7 +612,7 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
             "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
             "validation_test/radia_mcp/test_eddy_driven_region.py",
             "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py"],
-        "radia-gpu": ["tests/cpp/test_radia_ih_thermal_acceptance.cpp",
+        "radia-simulink": ["tests/cpp/test_radia_ih_thermal_acceptance.cpp",
                       "tests/cpp/test_radia_mex_sparse_symmetry.cpp"],
     }
     for lane, paths in homes.items():
@@ -636,8 +636,8 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
                         assert "'tools/run_test_tier.py','--profile',PROFILE" in gate
                     else:
                         assert "--profile " + name in scripts
-            elif lane == "radia-gpu":
-                project = (ROOT / "packages/radia-gpu/tests/native/CMakeLists.txt").read_text(encoding="utf-8")
+            elif lane == "radia-simulink":
+                project = (ROOT / "packages/radia-simulink/tests/native/CMakeLists.txt").read_text(encoding="utf-8")
                 assert path in project
                 assert Path(path).stem in scripts
                 assert "ctest --test-dir" in scripts and "--no-tests=error" in scripts
@@ -649,12 +649,12 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
                 assert '-G "Visual Studio' not in scripts
     inputs = {
         "sparsesolv": ["packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
-                       "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+                       "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py",
                        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py",
                        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
                        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
                        "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py"],
-        "radia-gpu": ["src/runtime/ih/radia_ih_thermal.cpp", "src/runtime/ih/radia_ih_runtime.cpp",
+        "radia-simulink": ["src/runtime/ih/radia_ih_thermal.cpp", "src/runtime/ih/radia_ih_runtime.cpp",
                       "src/runtime/ih/radia_ih_transport.cpp", "src/runtime/ih/radia_ih_thermal.h",
                       "src/core/radia_mex_sparse_symmetry.h"],
     }

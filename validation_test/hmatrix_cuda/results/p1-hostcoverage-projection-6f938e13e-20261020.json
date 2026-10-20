@@ -1,0 +1,663 @@
+{
+  "schema": "radia.p1-hostcoverage-and-projection.v1",
+  "accepted": true,
+  "p1_complete": false,
+  "source_commit": "6f938e13eafbb46a46630311bb27152f7ce5d082",
+  "hmatrix_binary_sha256": "cd2ab5d9ef2ca667266396e4a7c5e96b0527fbcfa2a4d559ac1d9f3f24007811",
+  "projection_binary_sha256": "8604c46af8b4e44134f9645e0527f5463ed6ddfe37baab7078a706ab92542fd2",
+  "gate_sha256": "244436edc90858c689ee919519c068b414cbaa6620265f2b0fe5b9e2c175490e",
+  "hmatrix_helper_sha256": "2e668cd8c084d3533efd095fb2c51d7784da1b5214c9a7a5ab1de2bea82e04fd",
+  "projection_helper_sha256": "ab03a6057382141e05695f8b383b50717d925ba7238636606b08064d4df042a1",
+  "input_sha256": {
+    "cpu-reference.json": "d0d70563dcdaa5785bba659e1d3ae9251d41e861fb555cd2a21d11b0db0d2469",
+    "cpu.h5": "28676c133a850c86c79aa5632a705612114db02c1c9676a8ce2619644dd072c5",
+    "curved-cpu-reference.json": "70a29602ec917c04461a15259b835b63e791fb91dd7f36cd0e00a175752eec6e",
+    "curved-cpu.mat": "79c62c871d0d799c30ce449065f7095468e7ab31e9687d544a354006f1cc2da3",
+    "curved-sphere.vol": "a339966a361391ad2b64e7f57645336b3ac70fa549c7f08b2007875523d02236",
+    "exterior.vol": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50",
+    "inputs.mat": "6bfa403a0adc3c0dff9c24069b8167d161f4f65aff0079d88303744358f4ba90"
+  },
+  "hmatrix_event_count": 515,
+  "site_counts": {
+    "direct:normalization.numeric-input": 4,
+    "direct:normalization.hosts": 1,
+    "direct:normalization.kinds": 1,
+    "direct:geometry.charges": 12,
+    "direct:geometry.tet-rule": 8,
+    "direct:geometry.tri-rule": 6,
+    "direct:geometry.gl": 1,
+    "direct:geometry.gw": 1,
+    "direct:oracle.shared": 1,
+    "direct:oracle.cached-object": 0,
+    "direct:leaf.a1": 0,
+    "direct:leaf.a2": 0,
+    "cached:normalization.numeric-input": 4,
+    "cached:normalization.hosts": 1,
+    "cached:normalization.kinds": 1,
+    "cached:geometry.charges": 12,
+    "cached:geometry.tet-rule": 8,
+    "cached:geometry.tri-rule": 6,
+    "cached:geometry.gl": 1,
+    "cached:geometry.gw": 1,
+    "cached:oracle.shared": 1,
+    "cached:oracle.cached-object": 1,
+    "cached:leaf.a1": 0,
+    "cached:leaf.a2": 0,
+    "device-dense:normalization.numeric-input": 4,
+    "device-dense:normalization.hosts": 1,
+    "device-dense:normalization.kinds": 1,
+    "device-dense:geometry.charges": 12,
+    "device-dense:geometry.tet-rule": 8,
+    "device-dense:geometry.tri-rule": 6,
+    "device-dense:geometry.gl": 1,
+    "device-dense:geometry.gw": 1,
+    "device-dense:oracle.shared": 1,
+    "device-dense:oracle.cached-object": 1,
+    "device-dense:leaf.a1": 0,
+    "device-dense:leaf.a2": 0
+  },
+  "hmatrix_failure_memory_slopes": [
+    {
+      "mode": "direct",
+      "site": "normalization.numeric-input",
+      "samples": [
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "normalization.hosts",
+      "samples": [
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "normalization.kinds",
+      "samples": [
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456,
+        1425555456
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "geometry.charges",
+      "samples": [
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "geometry.tet-rule",
+      "samples": [
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "geometry.tri-rule",
+      "samples": [
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "geometry.gl",
+      "samples": [
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "geometry.gw",
+      "samples": [
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "oracle.shared",
+      "samples": [
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496,
+        1425514496
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "normalization.numeric-input",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "normalization.hosts",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "normalization.kinds",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "geometry.charges",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "geometry.tet-rule",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "geometry.tri-rule",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "geometry.gl",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "geometry.gw",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "oracle.shared",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "oracle.cached-object",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "normalization.numeric-input",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "normalization.hosts",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "normalization.kinds",
+      "samples": [
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536,
+        1425473536
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "geometry.charges",
+      "samples": [
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "geometry.tet-rule",
+      "samples": [
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "geometry.tri-rule",
+      "samples": [
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "geometry.gl",
+      "samples": [
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426522112,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616
+      ],
+      "private_bytes_per_failure": -16135.757575757576,
+      "private_delta_bytes": -106496
+    },
+    {
+      "mode": "device-dense",
+      "site": "geometry.gw",
+      "samples": [
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "oracle.shared",
+      "samples": [
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "oracle.cached-object",
+      "samples": [
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616,
+        1426415616
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    }
+  ],
+  "mx_output": {
+    "accepted": true,
+    "commands": [
+      {
+        "command": "stats",
+        "allocation_sites": 33,
+        "failure_events": 330
+      },
+      {
+        "command": "download",
+        "allocation_sites": 1,
+        "failure_events": 10
+      }
+    ]
+  },
+  "nonlinear": {
+    "cpu_error": 4.388593069718514E-14,
+    "true_residual": 3.363566009989457E-14,
+    "newton_iterations": 11,
+    "inner_iterations": 1578,
+    "accounted_array_bound_bytes": 217304272.0
+  },
+  "projection": {
+    "cpu_oracle": {
+      "ngsolve_version": "6.2.2607",
+      "threads": 1,
+      "caller_owned_taskmanager": true,
+      "shared_cuda_kernels": false,
+      "json_sha256": "874d72eca110e6deea4a641c1b2f2ea6b20c83b2984f659ab41b1f500af336fe",
+      "mesh_sha256": "a339966a361391ad2b64e7f57645336b3ac70fa549c7f08b2007875523d02236"
+    },
+    "relative_error": 1.0577929166701728E-15,
+    "setup_relative_errors": [
+      1.282625527825611E-16,
+      2.899268745251847E-15,
+      2.358082554315868E-16
+    ],
+    "reload": {
+      "accepted": true,
+      "old_targets_rejected": true,
+      "old_destroy_rejected": true,
+      "live_count": 0,
+      "scope": "Checked handle lifecycle only; no GPU solver or performance acceptance"
+    },
+    "lifecycle_memory": {
+      "samples": [
+        949010432,
+        949010432,
+        949010432,
+        949010432,
+        949010432,
+        949010432,
+        949010432,
+        949010432,
+        949010432,
+        949010432
+      ],
+      "private_bytes_per_run": 0.0,
+      "private_delta_bytes": 0
+    },
+    "combined_curved_numerical": {
+      "cpu_error": 3.625884014821222E-11,
+      "physical_error": 5.271144477297617E-13,
+      "independent_true_residual": 6.1869575708579964E-12,
+      "solver_true_residual": 6.1869385837220584E-12,
+      "iterations": 57,
+      "accepted": true
+    }
+  },
+  "coverage_limits": [
+    "Selected tagged allocation endpoints and slopes, not exhaustive new-binary tracked ranges",
+    "MATLAB runtime and C++ exception internals remain opaque; explicit injection is not real runtime OOM",
+    "Projection accepted independently; the six other fenced gateways remain unbuilt and unaccepted",
+    "No global peak-memory or solver performance acceptance inferred"
+  ],
+  "recovery_sha256": "9ee945d1ec8f7fec74bfaa29333ae3000a7e925c978200c2e5d3826bdebbfe83",
+  "source_payload_sha256": "1adc1b109e19d2e8f1bf0c6a0dd83859955d24d467cda99b015fab7facfed5e3",
+  "elapsed_scope": "diagnostic checks, not solver performance",
+  "hmatrix_elapsed_seconds": 68.73400000000402,
+  "projection_elapsed_seconds": 13.640999999995984
+}

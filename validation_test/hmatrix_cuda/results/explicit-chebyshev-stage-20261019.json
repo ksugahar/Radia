@@ -1,0 +1,12 @@
+{
+ "schema":"radia.hdiv.explicit-chebyshev-stage.v1",
+ "source_implemented":true,
+ "native_mexcuda_built":false,
+ "numerical_accepted":false,
+ "performance_accepted":false,
+ "release_accepted":false,
+ "settings":{"degree_range":[1,64],"lower_fraction_open_interval":[0,1],"default_degree":8,"default_lower_fraction":0.1},
+ "scope":"Explicit fixed SPD polynomial parameters; original operator, PCG true residual, geometry and memory caps unchanged",
+ "compatibility":"Default wrapper retains original eight-input native call. Non-default settings require new native ABI and fail on old modules. No fallback.",
+ "next_gates":["Clean native build","RTX degree/fraction sweep with independent CPU small cases and nonlinear true residual","Invalid settings/state/lifecycle","Same-artifact A100 strong10k comparison, whole and prepared time, inner iterations and memory"]
+}

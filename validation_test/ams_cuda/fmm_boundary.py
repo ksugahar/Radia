@@ -31,7 +31,7 @@ def main(args):
         receipt=json.loads((args.binary/'build.json').read_text());record['build']=receipt
         if hashlib.sha256((args.binary/'radia_cuda_fmm.mexw64').read_bytes()).hexdigest()!=receipt['binary_sha256']:raise RuntimeError('Binary hash mismatch')
         engine=matlab.engine.start_matlab('-nodesktop -nosplash');engine.addpath(str(Path(__file__).parent),nargout=0)
-        engine.fmm_boundary(str(args.vol.resolve()),str(args.binary.resolve()),str(root/'packages/radia-gpu/matlab'),str(out/'native.mat'),nargout=0)
+        engine.fmm_boundary(str(args.vol.resolve()),str(args.binary.resolve()),str(root/'packages/radia-simulink/matlab'),str(out/'native.mat'),nargout=0)
         result=loadmat(out/'native.mat',simplify_cells=True);ids=np.asarray(result['global_dofs'],dtype=int);x=result['x'];expectedSL=SL[np.ix_(ids,ids)]@x;expectedDL=DL[np.ix_(ids,ids)]@x
         metrics=dict(SL_relative=float(np.linalg.norm(result['slResult']-expectedSL)/np.linalg.norm(expectedSL)),DL_relative=float(np.linalg.norm(result['dlResult']-expectedDL)/np.linalg.norm(expectedDL)))
         record.update(metrics=metrics,report=result['report']);print(json.dumps(metrics),flush=True)

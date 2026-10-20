@@ -81,7 +81,7 @@ def cpu_run(route,fes,form,rhs,gradient,coords,bridge,threads):
 def main(args):
     root=Path(__file__).resolve().parents[2];out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
     gpu_dir=(args.gpu_dir or root/'build-ams-cuda').resolve()
-    matlab_dir=(args.matlab_dir or root/'packages/radia-gpu/matlab').resolve()
+    matlab_dir=(args.matlab_dir or root/'packages/radia-simulink/matlab').resolve()
     record=dict(schema='radia.ams-nonlinear-sparse-resident.v2',accepted=False,host=socket.gethostname(),
         source_commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
         timing_classification='build-host diagnostic; not formal performance acceptance',a100_used=False,

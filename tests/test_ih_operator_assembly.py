@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from cubit_mesh_export.check import check_consistency as _required_check_consistency
 
-from radia_gpu.simulink import ih_operator_assembly as assembly
+from radia_simulink.simulink import ih_operator_assembly as assembly
 
 
 @pytest.fixture(autouse=True)

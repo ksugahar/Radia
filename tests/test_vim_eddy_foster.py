@@ -3,7 +3,7 @@
 Every check compares against an independent dense solve of
 ``(R + sL + Zs Ms) c = P u`` so the modal form is verified, not assumed.
 """
-import radia_gpu.vim as gpu_vim
+import radia_simulink.vim as gpu_vim
 
 import json
 

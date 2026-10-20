@@ -1,6 +1,6 @@
 """PRIMA port models: orientation, pole-residue form, LTspice text, LTI exchange."""
 from __future__ import annotations
-import radia_gpu.ports as gpu_ports
+import radia_simulink.ports as gpu_ports
 
 import json
 import math

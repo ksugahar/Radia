@@ -1,1 +1,1 @@
-"""LTspice MCP transport; optional implementation owned by radia-gpu."""
+"""LTspice MCP transport; optional implementation owned by radia-simulink."""

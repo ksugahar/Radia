@@ -4,7 +4,7 @@ from radia_mcp.matlab import matlab_simulink_library_contract
 def test_simulink_library_registration_and_ltspice_scope():
     contract = matlab_simulink_library_contract()
     assert contract["status"] == "source-only"
-    assert contract["distribution"] == "radia-gpu"
+    assert contract["distribution"] == "radia-simulink"
     assert contract["cpu_radia_mex_supported"] is False
     assert contract["runtime_checked"] is False
     assert contract["blocks"] == ["CUDA CSR PCG", "LTspice Circuit"]

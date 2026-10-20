@@ -12,7 +12,7 @@ import yaml
 
 CAPABILITIES = {'ci-light', 'ci-native', 'ci-matlab-gpu'}
 FORBIDDEN = re.compile(r'(?i)(?:matlab(?:engine)?|mexcuda|nvcc|simulink|cuda|cmake|msbuild|cl\.exe|build\.ps1)')
-OWNERS = {'radia', 'radia-gpu', 'radia-mcp', 'radia-optuna', 'cubit-mesh-export', 'eqnedit64', 'shared'}
+OWNERS = {'radia', 'radia-simulink', 'radia-mcp', 'radia-optuna', 'cubit-mesh-export', 'eqnedit64', 'shared'}
 DENIED_IMPORTS = {'matlab', 'cupy', 'torch', 'ngsolve', 'netgen', 'cubit', '_radia_pybind'}
 
 

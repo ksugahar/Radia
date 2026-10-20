@@ -33,7 +33,7 @@ def main(args):
         t=time.perf_counter();expectedP,expectedE=direct(sources,targets,charge,dipole);record['cpu_direct_seconds']=time.perf_counter()-t
         for order in args.orders:
             path=out/f'input-{order}.mat';savemat(path,dict(sources=sources,targets=targets,charge=charge,dipole=dipole,order=float(order),separation=args.separation,leaf=float(args.leaf)))
-            output=out/f'output-{order}.mat';engine.fmm_numeric(str(path),str(args.binary.resolve()),str(root/'packages/radia-gpu/matlab'),str(output),nargout=0)
+            output=out/f'output-{order}.mat';engine.fmm_numeric(str(path),str(args.binary.resolve()),str(root/'packages/radia-simulink/matlab'),str(output),nargout=0)
             result=loadmat(output,simplify_cells=True)
             p=float(np.linalg.norm(result['potential']-expectedP)/np.linalg.norm(expectedP));e=float(np.linalg.norm(result['field']-expectedE)/np.linalg.norm(expectedE))
             sample=dict(order=order,potential_relative=p,field_relative=e,report=result['report']);record['samples'].append(sample);print('order',order,'potential',p,'field',e,flush=True)

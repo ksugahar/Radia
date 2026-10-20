@@ -40,7 +40,7 @@ def main(a):
         if a.installed_python:
             spec=importlib.util.spec_from_file_location('wheel_verifier',job/'verify_wheel.py');verifier=importlib.util.module_from_spec(spec);spec.loader.exec_module(verifier)
             wheel=verifier.verify(a.wheel.resolve())
-            installed=json.loads(subprocess.check_output([str(a.installed_python.resolve()),'-I','-c','import json,radia_gpu;print(json.dumps(radia_gpu.verify()))'],text=True))
+            installed=json.loads(subprocess.check_output([str(a.installed_python.resolve()),'-I','-c','import json,radia_simulink;print(json.dumps(radia_simulink.verify()))'],text=True))
             verifier.verify_installed_identity(installed,wheel)
             record['installed_wheel']=dict(wheel=wheel,installed=installed)
             matlabPath=Path(installed['matlab_path']).resolve();tunedPath=matlabPath

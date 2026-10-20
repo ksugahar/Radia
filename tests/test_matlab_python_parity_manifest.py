@@ -27,7 +27,7 @@ def test_every_python_module_has_an_explicit_cpu_ownership_classification():
 
 def test_audit_rejects_reintroduced_cpu_mex_and_missing_gpu_source(tmp_path):
     import json
-    target = tmp_path / "packages/radia-gpu/matlab/python_api_parity_manifest.json"
+    target = tmp_path / "packages/radia-simulink/matlab/python_api_parity_manifest.json"
     target.parent.mkdir(parents=True)
     manifest = json.loads((ROOT / target.relative_to(tmp_path)).read_text())
     manifest["cpu_mex_supported"] = True

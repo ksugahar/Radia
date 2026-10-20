@@ -1,0 +1,61 @@
+{
+  "scope": "Ten repetitions per construction phase, independent coefficient oracle for full projection; no memory gate closure",
+  "source_commit": "617dad87d743d912183aa35a4162ab26a9e80baa",
+  "full_projection_cpu_oracle_repetitions": 10,
+  "diagnostic_completed": true,
+  "schema": "radia.projection.phase-owners.v1",
+  "max_released_counts_by_phase": {
+    "mesh-only": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "targets-cf": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "fespace-construct": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "fespace-update": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gridfunction-create": [
+      1,
+      0,
+      0,
+      0
+    ],
+    "gridfunction-update": [
+      1,
+      0,
+      0,
+      0
+    ],
+    "interpolate": [
+      1,
+      0,
+      0,
+      0
+    ]
+  },
+  "finding": "First retained MeshAccess is introduced by GridFunction construction, before update/interpolation",
+  "p1_complete": false,
+  "binary_sha256": "769f10aa017a88f97c798d9f00a0a5974e8a8a1df1c5637ccf254fcf4d1de11b",
+  "raw_sha256": "b073cb5497d65638d2c48157bb259cf6aa78678d3f5b1c5654c42aa203a5e998",
+  "columns": [
+    "MeshAccess",
+    "FESpace",
+    "GridFunction",
+    "Targets"
+  ]
+}

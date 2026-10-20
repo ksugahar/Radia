@@ -1,0 +1,244 @@
+{
+  "accepted": true,
+  "independent_residual_reconstruction_pending": false,
+  "release_accepted": false,
+  "scope": "Public P2 sphere 10344 DoF; moderate synthetic BH field 1e5 A/m, two Newton updates; same-source GPU/GPU optimization comparison, not CPU speedup",
+  "native_projection_source_commit": "17cdc12c6c6c0e4be2bf82167983f00b004f6a57",
+  "matlab_measurement_source_commit": "336a7e8c6",
+  "native_binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "17cdc12c6c6c0e4be2bf82167983f00b004f6a57",
+      "binary_sha256": "5be43f64f0efdc52187021e00c9d40cdbee33401b33ee94f111abfd77d40c90f"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "5fd05da1c2fbe1d601f3e1a8203038c2b58ba098",
+      "binary_sha256": "514971ac8adeb14206f71664cc22513f382ddce88f77f55ccc01b99ef7ef3549"
+    }
+  },
+  "change": "Replace per-entry ordered trees by per-column append/sort CSC staging; duplicate DOFs and entries rejected; unchanged NGSolve mapped shapes/weights and GPU evaluation",
+  "staging_bitwise_parity": {
+    "288": {
+      "accepted": true,
+      "dofs": 288,
+      "elements": 13,
+      "chunks": 1,
+      "nonzeros": 401310,
+      "evaluation_bitwise_equal": true,
+      "metadata_equal": true,
+      "invalid_intervals_rejected": 4
+    },
+    "2412": {
+      "accepted": true,
+      "dofs": 2412,
+      "elements": 114,
+      "chunks": 1,
+      "nonzeros": 3519180.0,
+      "evaluation_bitwise_equal": true,
+      "metadata_equal": true,
+      "invalid_intervals_rejected": 4
+    },
+    "6594": {
+      "accepted": true,
+      "dofs": 6594,
+      "elements": 327,
+      "chunks": 3,
+      "nonzeros": 10094490.0,
+      "evaluation_bitwise_equal": true,
+      "metadata_equal": true,
+      "invalid_intervals_rejected": 4
+    },
+    "10344": {
+      "accepted": true,
+      "dofs": 10344,
+      "elements": 515,
+      "chunks": 5,
+      "nonzeros": 15898050.0,
+      "evaluation_bitwise_equal": true,
+      "metadata_equal": true,
+      "invalid_intervals_rejected": 4
+    }
+  },
+  "compute_staging": {
+    "accepted": true,
+    "elements": 515,
+    "dofs": 10344,
+    "chunks": 5,
+    "nonzeros": 15898050.0,
+    "evaluation_bitwise_equal": true,
+    "metadata_equal": true,
+    "invalid_intervals_rejected": 4,
+    "previous_staging_seconds": 5.1877803,
+    "candidate_staging_seconds": 1.0675691,
+    "scope": "Ordered single-pass host staging diagnostic; not ABBA or GPU whole performance; temporary arrays released on return"
+  },
+  "benchmark": {
+    "accepted": true,
+    "first_calls": [
+      {
+        "variant": 1,
+        "whole_seconds": 9.7550941,
+        "prepare_seconds": 7.254814,
+        "fe_and_law_seconds": 5.2920909,
+        "solve_seconds": 2.4864261,
+        "cpu_coefficient_relative_error": 1.4780438037562941e-09,
+        "nonlinear_relative_residual": 1.0537348565581637e-14,
+        "nonlinear_iterations": 2,
+        "inner_iterations": 1963,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7670600.0
+      },
+      {
+        "variant": 2,
+        "whole_seconds": 5.5103428,
+        "prepare_seconds": 2.9978162,
+        "fe_and_law_seconds": 1.0638775,
+        "solve_seconds": 2.4809119,
+        "cpu_coefficient_relative_error": 1.4780705669481979e-09,
+        "nonlinear_relative_residual": 1.1660092143925744e-14,
+        "nonlinear_iterations": 2,
+        "inner_iterations": 1962,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7670600.0
+      }
+    ],
+    "samples": [
+      {
+        "variant": 1,
+        "whole_seconds": 9.7676195,
+        "prepare_seconds": 7.2840719,
+        "fe_and_law_seconds": 5.2922311,
+        "solve_seconds": 2.4716466,
+        "cpu_coefficient_relative_error": 1.478086778508947e-09,
+        "nonlinear_relative_residual": 1.1812511286348142e-14,
+        "nonlinear_iterations": 2,
+        "inner_iterations": 1963,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7670600.0,
+        "cycle": 1
+      },
+      {
+        "variant": 2,
+        "whole_seconds": 5.4317185,
+        "prepare_seconds": 2.9591515,
+        "fe_and_law_seconds": 1.0316839,
+        "solve_seconds": 2.4678812,
+        "cpu_coefficient_relative_error": 1.4780855903231836e-09,
+        "nonlinear_relative_residual": 1.1723273088038196e-14,
+        "nonlinear_iterations": 2,
+        "inner_iterations": 1962,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7670600.0,
+        "cycle": 1
+      },
+      {
+        "variant": 2,
+        "whole_seconds": 5.4359514,
+        "prepare_seconds": 2.9634873,
+        "fe_and_law_seconds": 1.0399784,
+        "solve_seconds": 2.467871,
+        "cpu_coefficient_relative_error": 1.4780657610706234e-09,
+        "nonlinear_relative_residual": 1.0747197200487959e-14,
+        "nonlinear_iterations": 2,
+        "inner_iterations": 1962,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7670600.0,
+        "cycle": 1
+      },
+      {
+        "variant": 1,
+        "whole_seconds": 9.772371,
+        "prepare_seconds": 7.2740687,
+        "fe_and_law_seconds": 5.3034541,
+        "solve_seconds": 2.4935855,
+        "cpu_coefficient_relative_error": 1.4780342680823874e-09,
+        "nonlinear_relative_residual": 1.0341541045403477e-14,
+        "nonlinear_iterations": 2,
+        "inner_iterations": 1963,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7670600.0,
+        "cycle": 1
+      },
+      {
+        "variant": 1,
+        "whole_seconds": 9.691921,
+        "prepare_seconds": 7.2050368,
+        "fe_and_law_seconds": 5.2189268,
+        "solve_seconds": 2.4822047,
+        "cpu_coefficient_relative_error": 1.478044633996094e-09,
+        "nonlinear_relative_residual": 1.1464645656219109e-14,
+        "nonlinear_iterations": 2,
+        "inner_iterations": 1963,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7670600.0,
+        "cycle": 2
+      },
+      {
+        "variant": 2,
+        "whole_seconds": 5.4312306,
+        "prepare_seconds": 2.9487325,
+        "fe_and_law_seconds": 1.0191977,
+        "solve_seconds": 2.4708988,
+        "cpu_coefficient_relative_error": 1.4780620897050842e-09,
+        "nonlinear_relative_residual": 1.1077171837612307e-14,
+        "nonlinear_iterations": 2,
+        "inner_iterations": 1961,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7670600.0,
+        "cycle": 2
+      },
+      {
+        "variant": 2,
+        "whole_seconds": 5.4698266,
+        "prepare_seconds": 2.9825567,
+        "fe_and_law_seconds": 1.0500806,
+        "solve_seconds": 2.4826072,
+        "cpu_coefficient_relative_error": 1.4780572441949125e-09,
+        "nonlinear_relative_residual": 1.0582515605450047e-14,
+        "nonlinear_iterations": 2,
+        "inner_iterations": 1963,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7670600.0,
+        "cycle": 2
+      },
+      {
+        "variant": 1,
+        "whole_seconds": 9.7156184,
+        "prepare_seconds": 7.1775661,
+        "fe_and_law_seconds": 5.2093206,
+        "solve_seconds": 2.5334167,
+        "cpu_coefficient_relative_error": 1.4780674443075673e-09,
+        "nonlinear_relative_residual": 1.0128183017277383e-14,
+        "nonlinear_iterations": 2,
+        "inner_iterations": 1962,
+        "combined_array_bound_bytes": 2068412007.0,
+        "maximum_solver_owned_device_bytes": 7670600.0,
+        "cycle": 2
+      }
+    ],
+    "previous_whole_median_seconds": 9.74161895,
+    "candidate_whole_median_seconds": 5.43383495,
+    "previous_fe_median_seconds": 5.25557895,
+    "candidate_fe_median_seconds": 1.03583115,
+    "previous_over_candidate": 1.7927704907562567,
+    "available_device_memory_before_sample": 41251973405.0,
+    "available_device_memory_after_sample": 41251973405.0,
+    "live_count": 0,
+    "scope": "Separate first call per MEX; warmed two-cycle ABBA whole MATLAB API including FE, geometry, transfers, nonlinear solve, recovery and destruction; path selection, clear/reload, Engine, HDF5 and validation excluded; not process cold",
+    "memory_limitations": "Controlled array bound and available-device-memory samples; host, CUDA library and global peaks unmeasured"
+  },
+  "whole_cpu_coefficient_relative_error": 1.4780770257915054e-09,
+  "whole_live_count": 0,
+  "memory_limitations": "Unchanged controlled device array bound; column-vector host staging temporary capacity, MATLAB/NGSolve/driver/library and global peaks not measured; no quantified host-memory reduction claim",
+  "limitations": [
+    "Bounded sphere and current native geometry/source/DOF budgets only",
+    "First calls separated; no complete process-cold measurement",
+    "Two ABBA cycles; no general nonlinear iteration-count claim",
+    "No common-wheel installed acceptance, release or topology optimization acceptance"
+  ],
+  "independent_cpu": {
+    "threads": 8,
+    "maximum_nonlinear_relative_residual": 2.86322437596749e-11,
+    "maximum_ideal_sphere_mean_relative_error": 8.620699516417373e-05,
+    "scope": "Independent nonlinear residual and ideal-sphere mean check; no whole field certification"
+  }
+}

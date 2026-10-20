@@ -1,0 +1,23 @@
+{
+  "schema": "radia.hmatrix.aca-auxiliary-bound.v1",
+  "analytical_contract_accepted": true,
+  "native_mexcuda_accepted": false,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "formula": "(rows+columns)*sizeof(int)+(rank_cap+rows+columns)*sizeof(double)",
+  "coverage": "Masks, rank workspace, maximum of ACA row bounds or ACA+ two reference vectors",
+  "exclusions": [
+    "Output factors",
+    "Callback buffers",
+    "C tree/control",
+    "Allocator overhead",
+    "Plan/device overlap"
+  ],
+  "status": "Pure checked helper only; not yet wired into native admission; no capacity changes",
+  "test_cases": [
+    "3x5 rank2 yields112 bytes",
+    "extent sum overflow rejected",
+    "zero extent rejected",
+    "Existing coefficient bounds regression passes"
+  ]
+}

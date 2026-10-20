@@ -539,10 +539,10 @@ def matlab_radia_mex_contract(topic="all"):
     if topic not in allowed:
         raise ValueError(f"unknown topic: {topic}; available: {', '.join(sorted(allowed))}")
     root, _ = _radia_repo_root()
-    source = root / "packages/radia-gpu/native/radia_cuda_csr_pcg.cu" if root else None
+    source = root / "packages/radia-simulink/native/radia_cuda_csr_pcg.cu" if root else None
     optuna_commands = _optuna_mex_commands()
     sections = {
-        "mex": {"owner": "radia-gpu", "entrypoint": "radia_cuda_csr_pcg",
+        "mex": {"owner": "radia-simulink", "entrypoint": "radia_cuda_csr_pcg",
                 "matlab_entrypoint": "radia.gpu.csrPCG", "kernel": "CUDA FP64 CSR Jacobi-PCG",
                 "argument_contract": "GPU int32 CSR indices, GPU FP64 values/RHS/inverse diagonal, host tolerance/max iterations",
                 "native_build": "Build.ps1 -CudaMexOnly -RequireNativeProvenance"},
@@ -552,19 +552,19 @@ def matlab_radia_mex_contract(topic="all"):
         "optimization": {"owner": "radia-optuna", "entrypoint": "optuna_mex",
                          "native_build": "Build.ps1 -OptunaMexOnly",
                          "health_tool": "matlab_optuna_health"},
-        "simulink": {"owner": "radia-gpu", "builder": "radia.simulink.buildCudaPCGBlock",
+        "simulink": {"owner": "radia-simulink", "builder": "radia.simulink.buildCudaPCGBlock",
                      "adapter": "readable Level-2 MATLAB S-Function",
                      "legacy_models": "Source-only until ported and validated; no CPU MEX support"},
         "limitations": {"items": ["No CPU Radia MEX support or implicit CPU/Python solver fallback.",
                                    "Poisson acceptance does not certify GPU AMS, ICCG or HDiv-MMM.",
                                    "External MATLAB, Simulink, LTspice and NVIDIA products are not bundled.",
-                                   "Deploy radia-gpu to 100 and A100, never 102; unavailable A100 remains pending."]},
+                                   "Deploy radia-simulink to 100 and A100, never 102; unavailable A100 remains pending."]},
     }
     return {"schema": "radia-mcp.matlab-radia-mex/v2", "topic": topic,
             "status": "source_available" if source and source.is_file() else "source_unavailable",
             "runtime_checked": False, "cpu_mex_supported": False,
             "parity_status": "unverified" if source and source.is_file() else "incomplete",
-            "source_of_truth": "packages/radia-gpu/native/radia_cuda_csr_pcg.cu",
+            "source_of_truth": "packages/radia-simulink/native/radia_cuda_csr_pcg.cu",
             "mex_entrypoint": "radia_cuda_csr_pcg", "command_count": 0, "command_names": [],
             "optuna_mex_entrypoint": "optuna_mex", "optuna_mex_command_count": len(optuna_commands),
             "optuna_mex_command_names": optuna_commands,
@@ -653,7 +653,7 @@ def matlab_optuna_simulink_contract():
         },
         "hcurl_eddy_foster": {
             "package": "radia.simulink",
-            "workflow": "NGSolve radia_gpu.vim.ExportHCurlEddyFosterJSON -> MATLAB loadHCurlEddyFosterModel -> solveHCurlEddyFosterHarmonic/buildHCurlEddyFosterModel",
+            "workflow": "NGSolve radia_simulink.vim.ExportHCurlEddyFosterJSON -> MATLAB loadHCurlEddyFosterModel -> solveHCurlEddyFosterHarmonic/buildHCurlEddyFosterModel",
             "equation": "(R+sL)c=-sPi diagonalised by R v = lambda L v (V'LV=I): z_dot=-diag(lambda)z+Bm u, y=Bm'z, Bm=V'P, u=-di/dt.",
             "harmonic_solve": "diagonal modal solve z_j=-s(Bm i)_j/(s+lambda_j); no MEX kernel is required",
             "force": "Optional modal K(k,j,b) force operator: evaluateHCurlEddyFosterForce gives the phasor time average 0.5*real(K z conj(i)); the Simulink block outputs the instantaneous K*z(t)*i(t).",
@@ -836,17 +836,17 @@ def matlab_optuna_simulink_contract():
     # Preserve their descriptions as provenance, separate from the active surface.
     historical = result["simulink_blocks"][:7]
     result["simulink_blocks"] = result["simulink_blocks"][7:]
-    result["integration_owner"] = "radia-gpu"
+    result["integration_owner"] = "radia-simulink"
     result["runtime_checked"] = False
     result["cpu_radia_mex_supported"] = False
     result["legacy_domain_models"] = {
         "status": "source-only; unsupported CPU Radia MEX",
-        "distribution": "radia-gpu",
+        "distribution": "radia-simulink",
         "descriptions": historical,
     }
     for key in ("team28", "hcurl_eddy_foster", "cad_topology_optimization"):
-        result[key]["distribution"] = "radia-gpu"
-        result[key]["support_status"] = "historical source; not accepted by radia-gpu release"
+        result[key]["distribution"] = "radia-simulink"
+        result[key]["support_status"] = "historical source; not accepted by radia-simulink release"
     native_family = result["hcurl_eddy_foster"]["native_motor_angle_family"]
     native_family["status"] = "unsupported-cpu-mex"
     native_family["evidence_status"] = (
@@ -890,7 +890,7 @@ def matlab_simulink_library_contract():
             "Optimization/Optuna Monitor",
         ],
         "applications": {
-            "runner": "radia_gpu.simulink.application",
+            "runner": "radia_simulink.simulink.application",
             "matlab_entry_point": "radia.simulink.runApplication",
             "config_writer": "radia.simulink.writeApplicationConfig",
             "config_schema": "radia.simulink.application_config.v1",
@@ -1050,7 +1050,7 @@ def matlab_simulink_library_contract():
         "execute_with": "official MATLAB MCP evaluate_matlab_code",
     }
     result["status"] = "source-only"
-    result["distribution"] = "radia-gpu"
+    result["distribution"] = "radia-simulink"
     result["runtime_checked"] = False
     result["cpu_radia_mex_supported"] = False
     result["historical_library"] = {

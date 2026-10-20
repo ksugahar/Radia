@@ -66,7 +66,7 @@ def main():
       create="gpu_field=radia.gpu.FieldElements(element_source,LeafSize=8);"
      else:
       eng.workspace['source_xyz']=matlab.double(xyz.tolist());eng.workspace['source_q']=matlab.double(q[:,None].tolist());create="gpu_field=radia.gpu.FieldCloud(source_xyz,source_q,LeafSize=8);"
-     eng.workspace['field_algorithm']=a.algorithm;eng.addpath(str(a.field_build),str(root/'packages/radia-gpu/matlab'),nargout=0)
+     eng.workspace['field_algorithm']=a.algorithm;eng.addpath(str(a.field_build),str(root/'packages/radia-simulink/matlab'),nargout=0)
      eng.eval("[cpu_vector,~]=radia_cuda_projection('project',h,cpu_values);"+create,nargout=0)
      try:
       eng.eval('[probe_values,device_memory]=gpu_field.field(mapped_targets,field_algorithm);',nargout=0)

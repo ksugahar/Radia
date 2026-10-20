@@ -1,0 +1,24 @@
+{
+  "accepted": true,
+  "scope": "Symbolic coefficient bounds only; not connected to HACApK frame admission or a GPU memory budget",
+  "native_production_built": false,
+  "performance_accepted": false,
+  "source_commit": "b86f0672d98c9443acfeedfae1462f9520c6236e",
+  "source_sha256": {
+    "validation_test/hmatrix_cuda/check_leaf_bounds.cpp": "869cc994b2815bb5e211a0bcf14f1fc2823497236c4fa687f5093d6d78fdcc6b",
+    "packages/radia-gpu/native/hmatrix_leaf_bounds.h": "a88893e93dcab701a38721d550a5bb061da8058370cc956ce940b50b18aa2f13",
+    "validation_test/hmatrix_cuda/check_leaf_bounds.py": "b0eb108414507cfd488d374273ad2af3d6808009f946f39fe55dfc39b8e75906",
+    "packages/radia-gpu/tools/vs2022_toolchain.py": "f80332db377b87480559a8fa0a1d691f669c2f500a0192f242c029c59540c47a"
+  },
+  "contract": {
+    "accepted": true,
+    "upper_dense_coefficients": 27,
+    "upper_storage_cap_coefficients": 30,
+    "lower_leaves_skipped": 1,
+    "invalid_or_overflow_rejected": 5,
+    "rejection_preserves_prior_bounds": true,
+    "dense_promotion_budgeted": true
+  },
+  "executable_sha256": "6677d7a6f1d39c66fd4273fd02f9ce1dd6a2fdb01b0252028d771dc1d33c1d8d",
+  "release_accepted": false
+}

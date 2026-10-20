@@ -1,7 +1,7 @@
 function result = validate_ltspice_coil_geometry_resonance
 %VALIDATE_LTSPICE_COIL_GEOMETRY_RESONANCE Freeze fixed-C geometry tuning.
 repoRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
-addpath(fullfile(repoRoot,'packages','radia-gpu','matlab'));
+addpath(fullfile(repoRoot,'packages','radia-simulink','matlab'));
 resultDirectory = fullfile(repoRoot,"validation_test","optimization");
 result = runLtspiceCoilGeometryResonanceOptimization( ...
     NumTrials=36,Seed=42,ResetStudy=true, ...

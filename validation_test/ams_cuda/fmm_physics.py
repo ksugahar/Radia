@@ -23,7 +23,7 @@ def main(args):
         import netgen,matlab.engine
         net=Path(netgen.__file__).parent;os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),str(net.parent/'ngsolve_openblas'),str(Path(sys.base_prefix)),os.environ['PATH']])
         engine=matlab.engine.start_matlab('-nodesktop -nosplash');engine.addpath(str(Path(__file__).parent),nargout=0)
-        engine.fmm_physics(str(out/'input.mat'),str(args.binary.resolve()),str(root/'packages/radia-gpu/matlab'),str(out/'output.mat'),nargout=0)
+        engine.fmm_physics(str(out/'input.mat'),str(args.binary.resolve()),str(root/'packages/radia-simulink/matlab'),str(out/'output.mat'),nargout=0)
         result=loadmat(out/'output.mat',simplify_cells=True);r=np.linalg.norm(targets,axis=1)
         expectedSL=np.where(r>1,1/r,1.);expectedDL=np.where(r>1,0.,-1.)
         expectedB=np.column_stack([np.zeros(64),np.zeros(64),1.25663706212e-6/(2*(1+height**2)**1.5)])

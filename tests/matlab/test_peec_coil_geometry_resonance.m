@@ -4,7 +4,7 @@ end
 
 function setupOnce(testCase)
 repoRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
-addpath(fullfile(repoRoot,'packages','radia-gpu','matlab'));
+addpath(fullfile(repoRoot,'packages','radia-simulink','matlab'));
 testCase.TestData.netlist = fullfile(repoRoot,"matlab","samples", ...
     "ltspice_rlc_resonance_ac.cir");
 testCase.TestData.outputRoot = "C:\temp\radia_peec_coil_geometry_test";

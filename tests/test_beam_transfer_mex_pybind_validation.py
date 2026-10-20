@@ -208,7 +208,7 @@ def test_matlab_runner_hashes_mex_and_avoids_simulink_setup_mutation():
 def test_current_native_api_retains_canonical_h5_and_f4_outputs():
     python_api = (ROOT / "src" / "radia" / "beam.py").read_text(encoding="utf-8")
     matlab_api = (
-        ROOT / "packages/radia-gpu/matlab" / "+radia" / "+beam" / "canonicalBodyHamiltonianJet.m"
+        ROOT / "packages/radia-simulink/matlab" / "+radia" / "+beam" / "canonicalBodyHamiltonianJet.m"
     ).read_text(encoding="utf-8")
 
     assert "H2/H3/H4/H5" in python_api

@@ -21,8 +21,8 @@ from netgen.csg import unit_cube
 from scipy.io import loadmat
 
 ROOT=Path(__file__).resolve().parents[2]
-sys.path.insert(0,str(ROOT/'packages/radia-gpu/src'))
-from radia_gpu.ams_exchange import write_exchange, file_sha256
+sys.path.insert(0,str(ROOT/'packages/radia-simulink/src'))
+from radia_simulink.ams_exchange import write_exchange, file_sha256
 from run import source_identity, jsonable
 
 def same_snapshot(reference, actual):
@@ -120,7 +120,7 @@ def main(args):
                     sample['hdf5_bytes']=path.stat().st_size
                     if eng is not None:
                         target=directory/'gpu.mat'
-                        eng.benchmark(str(path),str(target),str(ROOT/'build-ams-cuda'),str(ROOT/'packages/radia-gpu/matlab'),nargout=0)
+                        eng.benchmark(str(path),str(target),str(ROOT/'build-ams-cuda'),str(ROOT/'packages/radia-simulink/matlab'),nargout=0)
                         gpu=loadmat(target,simplify_cells=True)
                         actual=np.asarray(gpu['inclusiveSolution']).reshape(-1)
                         cpu=solution.FV().NumPy().copy()

@@ -1,0 +1,31 @@
+{
+  "schema": "radia.p1.bounded-failure.v1",
+  "accepted": false,
+  "p1_complete": false,
+  "source_commit": "8778500783c2d57e9e1d9bf97d8e35c41acbc2b7",
+  "binary_sha256": "059e705498938a1bb4a1a60e78ac2484963775a018335f273b58f746b17308ce",
+  "gate_sha256": "244436edc90858c689ee919519c068b414cbaa6620265f2b0fe5b9e2c175490e",
+  "build_accepted": true,
+  "elapsed_seconds": 29.094,
+  "timed_out": false,
+  "first_command": "create_analytic_hacapk",
+  "input_case": "Intentional struct-array rejection",
+  "matlab_progress": [
+    "enter"
+  ],
+  "native_progress": [
+    "command.enter",
+    "command.scope_exit",
+    "error.catch_enter",
+    "error.before_matlab_exit"
+  ],
+  "failure": "MATLAB Engine Unknown exception followed by failed owned Engine shutdown",
+  "numerical_acceptance": "No numerical gate completed",
+  "inference": "Failure localized to MATLAB error-return boundary before publication; exact underlying cause still unverified",
+  "prior_crash_evidence": "Prior source d748 showed access violation during C++ unwind following mexErrMsgIdAndTxt",
+  "limitations": [
+    "No GPU synchronization stall evidenced",
+    "No leak or performance acceptance",
+    "Prior crash belongs to prior binary, not this binary"
+  ]
+}

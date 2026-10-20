@@ -1,0 +1,97 @@
+{
+  "schema": "radia.hdiv.frame-budget-rejection.v1",
+  "native_mexcuda_accepted": true,
+  "bounded_numerical_accepted": true,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "scope": "Real analytic frame coefficient allowance rejection/unwind/retry, resident reference suite and 288-DoF nonlinear recovery",
+  "binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "bc6b78a143bfd882e29413cc133e4736bfb6d626",
+      "binary_sha256": "dcc88c79c71446e351dc981db7e726e7d274ad08c41ebf1cdd15831920cd125c"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "9336f33d2459f5c0900ec9a2071636e53c9ae5f5",
+      "binary_sha256": "5bfc3653e28e7e738e4143e296fedf372f85140cc3b8e080c038c7f1634a6add"
+    }
+  },
+  "matlab_version": "26.1.0.3346908 (R2026a) Update 5",
+  "independent_fixture_mat_sha256": "6bfa403a0adc3c0dff9c24069b8167d161f4f65aff0079d88303744358f4ba90",
+  "input_sha256": {
+    "mesh": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50",
+    "cpu_fixture_hdf5": "28676c133a850c86c79aa5632a705612114db02c1c9676a8ce2619644dd072c5"
+  },
+  "frame_budget_rejection": {
+    "attempts": 3,
+    "invalid_budget_values_rejected": 5,
+    "live_count_after_rejection": 0,
+    "scope": "Real module TLS callback and C frame unwind, not pre-parser rejection"
+  },
+  "resident_case_count": 10,
+  "maximum_resident_relative_error": 7.222706075575992e-16,
+  "full_analytic_relative_error": 1.4393232540254754e-11,
+  "material_solver": [
+    {
+      "relative_error": 1.0302340608294064e-15,
+      "independent_true_residual": 1.3440496909367178e-15,
+      "solver_true_residual": 1.545351921618523e-15,
+      "iterations": 5,
+      "solver_owned_device_bytes": 768,
+      "scope": "Sampled-Gram material algebra",
+      "mean_magnetization_relative_error": 0
+    },
+    {
+      "relative_error": 2.384691364615577e-16,
+      "independent_true_residual": 2.7511301222944107e-16,
+      "solver_true_residual": 2.066284742804406e-16,
+      "iterations": 5,
+      "solver_owned_device_bytes": 768,
+      "scope": "Sampled-Gram material algebra",
+      "mean_magnetization_relative_error": 0
+    },
+    {
+      "relative_error": 2.6407397573069986e-16,
+      "independent_true_residual": 2.5652018718461626e-16,
+      "solver_true_residual": 1.2018516789897273e-16,
+      "iterations": 4,
+      "solver_owned_device_bytes": 552,
+      "scope": "Public affine tetra RT0 FE material solve; Python-generated FE validation fixture, not native MATLAB setup",
+      "mean_magnetization_relative_error": 1.711050598723625e-16
+    }
+  ],
+  "reload_stale_handle_rejected": true,
+  "invalid_create_released": true,
+  "wrapper_checked": true,
+  "nonlinear": {
+    "cpu_coefficient_relative_error": 4.2581045225659337e-14,
+    "cases": {
+      "baseline": {
+        "nonlinear_iterations": 11,
+        "nonlinear_relative_residual": 2.6254111910405457e-14,
+        "whole_seconds": 5.4142844
+      },
+      "candidate": {
+        "nonlinear_iterations": 11,
+        "nonlinear_relative_residual": 2.851799254992507e-14,
+        "whole_seconds": 4.7327946
+      },
+      "repeated": {
+        "nonlinear_iterations": 11,
+        "nonlinear_relative_residual": 2.89810686922387e-14,
+        "whole_seconds": 4.3143297
+      }
+    },
+    "early_material_budget_rejected": true,
+    "invalid_initial_recovered": true,
+    "live_count": 0
+  },
+  "owned_engine_quit": true,
+  "limitations": [
+    "frame_coefficient_budget_bytes is optional only in the native analytic HACApK configuration; range 1..2 GiB, default 2 GiB.",
+    "This is a coefficient allowance, not a total oracle/setup/device memory limit; normalization may occur before frame rejection.",
+    "No source, DoF, square allocation or combined reserve cap was raised.",
+    "Reference operators and CPU solutions are frozen independent fixtures, not fresh CPU performance measurements.",
+    "Full 10k solve on this new binary and A100 measurements remain pending; previous bounded results belong to their recorded binaries.",
+    "Ordered small-call timings are diagnostic; host/global/CUDA library peaks remain unmeasured."
+  ]
+}

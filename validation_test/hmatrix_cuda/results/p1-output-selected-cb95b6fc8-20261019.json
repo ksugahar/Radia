@@ -1,0 +1,457 @@
+{
+  "schema": "radia.p1-selected-output-and-registry.v1",
+  "accepted": true,
+  "p1_complete": false,
+  "source_commit": "cb95b6fc8a85793fed3c839afd196d0e8a4f6141",
+  "binary_sha256": "13edf147e8aa086d216f2075adc51d8905daae6c472312024dd65ae4fbea280c",
+  "gate_sha256": "244436edc90858c689ee919519c068b414cbaa6620265f2b0fe5b9e2c175490e",
+  "helper_sha256": "a22db68cb60fd312d6ca7f59f76c762916773150d27705ade0a56e56954cdc8d",
+  "helper_delta_sha256": "5e8edebf33173b5afcf4f6f5c9836e739149b68d8c29affe5c289b3c05e4278a",
+  "resident_reuse_sha256": "60541e3645195bc3dbbd38e5c4aebff7a50c5e1787b3b28c478e86d35e83a462",
+  "input_sha256": {
+    "cpu-reference.json": "d0d70563dcdaa5785bba659e1d3ae9251d41e861fb555cd2a21d11b0db0d2469",
+    "cpu.h5": "28676c133a850c86c79aa5632a705612114db02c1c9676a8ce2619644dd072c5",
+    "curved-cpu-reference.json": "70a29602ec917c04461a15259b835b63e791fb91dd7f36cd0e00a175752eec6e",
+    "curved-cpu.mat": "79c62c871d0d799c30ce449065f7095468e7ab31e9687d544a354006f1cc2da3",
+    "curved-sphere.vol": "a339966a361391ad2b64e7f57645336b3ac70fa549c7f08b2007875523d02236",
+    "exterior.vol": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50",
+    "inputs.mat": "6bfa403a0adc3c0dff9c24069b8167d161f4f65aff0079d88303744358f4ba90"
+  },
+  "mx_output": {
+    "accepted": true,
+    "commands": [
+      {
+        "command": "stats",
+        "allocation_sites": 33,
+        "failure_events": 330
+      },
+      {
+        "command": "download",
+        "allocation_sites": 1,
+        "failure_events": 10
+      }
+    ]
+  },
+  "event_count": 372,
+  "site_counts": {
+    "direct:resident.object": 1,
+    "direct:registry.object": 1,
+    "direct:registry.node": 2,
+    "direct:normalization.rows": 1,
+    "direct:normalization.entries": 214,
+    "direct:normalization.column-input": 7,
+    "direct:normalization.row-input": 7,
+    "cached:resident.object": 1,
+    "cached:registry.object": 1,
+    "cached:registry.node": 2,
+    "cached:normalization.rows": 1,
+    "cached:normalization.entries": 214,
+    "cached:normalization.column-input": 7,
+    "cached:normalization.row-input": 7,
+    "device-dense:resident.object": 1,
+    "device-dense:registry.object": 1,
+    "device-dense:registry.node": 2,
+    "device-dense:normalization.rows": 1,
+    "device-dense:normalization.entries": 214,
+    "device-dense:normalization.column-input": 7,
+    "device-dense:normalization.row-input": 7
+  },
+  "failure_memory_slopes": [
+    {
+      "mode": "direct",
+      "site": "resident.object",
+      "samples": [
+        1424580608,
+        1424580608,
+        1424580608,
+        1424580608,
+        1424580608,
+        1424580608,
+        1424580608,
+        1424535552,
+        1424535552,
+        1424535552
+      ],
+      "private_bytes_per_failure": -5734.4,
+      "private_delta_bytes": -45056
+    },
+    {
+      "mode": "direct",
+      "site": "registry.object",
+      "samples": [
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "registry.node",
+      "samples": [
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "normalization.rows",
+      "samples": [
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "normalization.entries",
+      "samples": [
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "normalization.column-input",
+      "samples": [
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "normalization.row-input",
+      "samples": [
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056,
+        1424429056
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "resident.object",
+      "samples": [
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "registry.object",
+      "samples": [
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "registry.node",
+      "samples": [
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "normalization.rows",
+      "samples": [
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152,
+        1424433152
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "normalization.entries",
+      "samples": [
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "normalization.column-input",
+      "samples": [
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288,
+        1424396288
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "normalization.row-input",
+      "samples": [
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "resident.object",
+      "samples": [
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "registry.object",
+      "samples": [
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "registry.node",
+      "samples": [
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "normalization.rows",
+      "samples": [
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "normalization.entries",
+      "samples": [
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "normalization.column-input",
+      "samples": [
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "normalization.row-input",
+      "samples": [
+        1425448960,
+        1425448960,
+        1425448960,
+        1425448960,
+        1425305600,
+        1425305600,
+        1425305600,
+        1425305600,
+        1425305600,
+        1425305600
+      ],
+      "private_bytes_per_failure": -20852.363636363636,
+      "private_delta_bytes": -143360
+    }
+  ],
+  "nonlinear": {
+    "cpu_error": 4.157650139931017E-14,
+    "true_residual": 2.6678080041310877E-14,
+    "newton_iterations": 11,
+    "inner_iterations": 1576,
+    "accounted_array_bound_bytes": 217304272.0
+  },
+  "coverage_limits": [
+    "Selected tagged host allocations test first and last attempts, not all intermediate targets",
+    "Explicit MATLAB API allocation probes are not real opaque MATLAB runtime OOM tests",
+    "MATLAB-output tests preserve handle liveness and recovery; global runtime memory is not exact owned-buffer accounting",
+    "Ordinary numeric and geometry-owned containers and further output command families remain incomplete",
+    "The seven other MEX gateways were not built by HMatrixCudaOnly"
+  ],
+  "recovery_sha256": "6f82c5a750b317fce3042c1b2065329c068a0121e65529c50e10ff11f82958a4",
+  "source_payload_sha256": "040c1e5d44ad8f0568f1adb6fa3c7f794c13bb2ba150d31585e9474d67315954",
+  "elapsed_seconds": 138.98500000000058,
+  "elapsed_scope": "diagnostic checks, not solver performance"
+}

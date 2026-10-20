@@ -19,8 +19,8 @@ def _source(path: str) -> str:
 
 
 def test_retired_cpu_gateway_cannot_be_loaded_by_matlab_setup():
-    setup = _source("packages/radia-gpu/matlab/+radia/setup.m")
-    boundary = _source("packages/radia-gpu/matlab/+radia/+internal/callMex.m")
+    setup = _source("packages/radia-simulink/matlab/+radia/setup.m")
+    boundary = _source("packages/radia-simulink/matlab/+radia/+internal/callMex.m")
     for source in (setup, boundary):
         assert "radia:mex:Retired" in source
         assert "radia_mex(" not in source

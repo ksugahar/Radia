@@ -71,7 +71,7 @@ to PyPI. Each distribution follows its own declared verification targets:
 |                   |                         | Cubit MCP is distributed by cubit-mesh-export     |
 | radia-optuna      | `radia-optuna-v`        | Standalone MATLAB Optuna + lightweight MEX and    |
 |                   |                         | generic Simulink optimization support             |
-| radia-gpu | `radia-gpu-v` | Independently released mexcuda, MATLAB, LTspice and Simulink support |
+| radia-simulink | `radia-simulink-v` | Independently released mexcuda, MATLAB, LTspice and Simulink support |
 
 Packages are independently released. radia-mcp and cubit-mesh-export use
 release-dual (LAB and 100); Radia's solver QUAD covers LAB, 100, mdx1 and mdx2.
@@ -137,7 +137,7 @@ the AI-readable summary; independent package lanes are excluded.
 | Phase | Action | Mandatory? | Notes |
 |------:|--------|-----------|-------|
 | Pre | `sync-main`: fetch -> twin-aware rebase (`--empty=drop` skips commits whose patches landed on origin as rebased twins) -> impact preflight -> push | when NAS main diverged from origin/main | added 2026-08-07 after the recurring 40-min manual rebase-archaeology sessions; refuses on a dirty tree, leaves genuine conflicts in place with instructions |
-| Pre | `evidence-motor [--check|--force]`: rebuild the MEX, ship the snapshot closure to HIBINO over scp, run the MATLAB generator SYNCHRONOUSLY over ssh, fetch the artifact, verify SHA pins, align the pytest test-count | whenever `packages/radia-optuna/native/optuna_mex.cpp` / `packages/radia-gpu/matlab/+radia/setup.m` / the generator changed | Windows OpenSSH reaps detached children on session exit — the run MUST stay synchronous; snapshot closure = matlab/, src/matlab/, tests/matlab/, validation_test/{radia_mcp,maglev}/, docs/maglev/demos/team28/, pyproject.toml |
+| Pre | `evidence-motor [--check|--force]`: rebuild the MEX, ship the snapshot closure to HIBINO over scp, run the MATLAB generator SYNCHRONOUSLY over ssh, fetch the artifact, verify SHA pins, align the pytest test-count | whenever `packages/radia-optuna/native/optuna_mex.cpp` / `packages/radia-simulink/matlab/+radia/setup.m` / the generator changed | Windows OpenSSH reaps detached children on session exit — the run MUST stay synchronous; snapshot closure = matlab/, src/matlab/, tests/matlab/, validation_test/{radia_mcp,maglev}/, docs/maglev/demos/team28/, pyproject.toml |
 | 1 | Decide the solver minor vs patch increment | always | inspect solver changes since the last Radia tag |
 | 2 | Bump the Radia solver's own metadata/runtime version pair | always | independent distributions keep their own version pairs and release lanes |
 | **2.5** | **Pre-flight CI validation (4 gates) — ADDED 2026-05-03** | **always** | local equivalent of CI; saves 2-3 round-trips |
@@ -156,8 +156,8 @@ the AI-readable summary; independent package lanes are excluded.
 
 Normal CPU `radia` does not ship mexcuda, MATLAB, LTspice or Simulink.
 `simulink-candidate` and `done --simulink-package` are retired CPU routes.
-Use the independent `packages/radia-gpu` build, installed-wheel acceptance
-and `radia-gpu-release.yml` publication workflow. Do not attach its artifacts
+Use the independent `packages/radia-simulink` build, installed-wheel acceptance
+and `radia-simulink-release.yml` publication workflow. Do not attach its artifacts
 or CI requirements to a CPU Radia release.
 
 The solver candidate lane never installs, uninstalls, repoints or reconnects

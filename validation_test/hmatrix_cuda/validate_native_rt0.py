@@ -15,7 +15,7 @@ def main():
         os.environ['PATH']=os.pathsep.join(map(str,paths))+os.pathsep+os.environ['PATH']
         import matlab.engine
         eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');result['matlab']=eng.version()
-        eng.addpath(str(a.projection),str(a.hmatrix),str(Path(__file__).resolve().parents[2]/'packages/radia-gpu/matlab'),nargout=0)
+        eng.addpath(str(a.projection),str(a.hmatrix),str(Path(__file__).resolve().parents[2]/'packages/radia-simulink/matlab'),nargout=0)
         eng.workspace['mesh_path']=str(a.mesh);eng.workspace['reference_path']=str(a.reference);eng.workspace['output_path']=str(a.out/'matlab.json')
         eng.workspace['assembly_mode']=a.assembly
         eng.eval("inputs=load(reference_path);test=inputs.solver_cases(end);setup=radia_cuda_projection('assemble_hdiv_rt0',mesh_path,[1 .2 .1]);mass_error=norm(setup.mass-full(test.mass),'fro')/norm(full(test.mass),'fro');rhs_error=norm(setup.rhs-test.rhs)/norm(test.rhs);mean_error=norm(setup.mean_operator-test.mean_operator,'fro')/norm(test.mean_operator,'fro');assert(max([mass_error rhs_error mean_error])<1e-12);",nargout=0)

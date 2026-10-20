@@ -361,7 +361,7 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
             f"requires all of {', '.join(RELEASE_ACCEPTANCE_HOSTS)} at {prefix}")
     if public:
         verify_private_batch(private_proofs)
-    # MATLAB/Simulink acceptance belongs to the independent radia-gpu publisher.
+    # MATLAB/Simulink acceptance belongs to the independent radia-simulink publisher.
     roles = ({"execution_roles": list(PUBLIC_RELEASE_ACCEPTANCE_ROLES.values())} if public
              else {"hosts": list(RELEASE_ACCEPTANCE_HOSTS)})
     return dict(identity, acceptance_commit=commit, **roles, passed=True)

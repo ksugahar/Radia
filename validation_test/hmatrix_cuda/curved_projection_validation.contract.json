@@ -1,0 +1,9 @@
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "hdiv_public_p2_sphere_validation",
+  "metadata": {"length_unit": "m", "unit_source": "Caller declaration; independent public unit sphere"},
+  "strict_labels": true,
+  "required": {"materials": ["magnetic_body"], "boundaries": ["exterior"]},
+  "allowed": {"materials": ["magnetic_body"], "boundaries": ["exterior"]},
+  "quality": {"require_tetrahedra": true, "min_curve_order": 2}
+}

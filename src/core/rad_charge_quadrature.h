@@ -1,7 +1,8 @@
 // Exact charge-Gram quadrature shared by CPU and mexcuda host setup.
 #pragma once
 #include <vector>
-static void rad_gl4_duffy_tet(std::vector<double>& pts, std::vector<double>& w)
+template<class PointAllocator,class WeightAllocator>
+static void rad_gl4_duffy_tet(std::vector<double,PointAllocator>& pts, std::vector<double,WeightAllocator>& w)
 {
     static const double GL4x[4] = {0.06943184420297371, 0.33000947820757187,
                                    0.66999052179242813, 0.93056815579702629};   // 4-pt Gauss-Legendre on [0,1]

@@ -5,9 +5,9 @@ No installation or source/runtime replacement occurs.
 """
 from pathlib import Path
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-gpu/tools'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-simulink/tools'))
 from vs2022_toolchain import discover_vs, compiler_bin
-SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-gpu/tools/vs2022_toolchain.py"
+SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-simulink/tools/vs2022_toolchain.py"
 import argparse,hashlib,json,re,shutil,subprocess,sys
 import numpy as np
 from scipy.io import loadmat,savemat
@@ -24,7 +24,7 @@ def stage(out):
     if sha(fmm/'radia_cuda_fmm.mexw64')!=f['binary_sha256']:raise RuntimeError('FMM build identity mismatch')
     copy(ams/'radia_cuda_ams.mexw64','radia_cuda_ams.mexw64');copy(fmm/'radia_cuda_fmm.mexw64','radia_cuda_fmm.mexw64')
     copy(ams/'build.json','ams-build.json');copy(fmm/'build.json','fmm-build.json')
-    for p in (ROOT/'packages/radia-gpu/matlab/+radia/+gpu').glob('*.m'):copy(p,Path('matlab/+radia/+gpu')/p.name)
+    for p in (ROOT/'packages/radia-simulink/matlab/+radia/+gpu').glob('*.m'):copy(p,Path('matlab/+radia/+gpu')/p.name)
     for name in ['accept_payload.m','run_payload.ps1','native_hcurl.m','fmm_numeric.m','fmm_physics.m','fmm_boundary.m']:copy(Path(__file__).with_name(name),name)
     cases=Path('C:/temp')
     copy(cases/'ams-native-hcurl-warm-20261013/model.vol','model.vol')
@@ -96,7 +96,7 @@ def verify(job,out,baseline_root):
         with ng.TaskManager():f.Assemble();a.Apply(x.vec,res)
         free=np.asarray(list(fes.FreeDofs()),dtype=bool);residual=float(np.linalg.norm((res.FV().NumPy()-f.vec.FV().NumPy())[free])/np.linalg.norm(f.vec.FV().NumPy()[free]))
         if residual>1e-9:raise RuntimeError('Independent nonlinear true residual failed')
-        r.update(accepted=True,cross_host_relative=differences,independent_cpu_true_residual=residual,native_dll_sha256={p.name:sha(p) for p in (job/'runtime').glob('*.dll')},scope='Exact native candidate payload; not complete installed radia-gpu wheel')
+        r.update(accepted=True,cross_host_relative=differences,independent_cpu_true_residual=residual,native_dll_sha256={p.name:sha(p) for p in (job/'runtime').glob('*.dll')},scope='Exact native candidate payload; not complete installed radia-simulink wheel')
     except BaseException as e:r['error']=repr(e);raise
     finally:out.write_text(json.dumps(r,indent=2)+'\n')
     print('Accepted; independent CPU true residual',residual)
