@@ -96,3 +96,9 @@ def test_admission_excludes_only_exact_parent_launcher(tmp_path):
     assert [p['pid'] for p in conflicts] == [11, 12]
     wrong_parent = dict(launcher, cmdline=launcher['cmdline'][:-1] + [str(tmp_path/'other')])
     assert runtime.admission_conflicts([wrong_parent], tmp_path, own_pid=10, parent_pid=9)
+
+
+def test_compute_runtime_rejects_cad_distribution():
+    with pytest.raises(ValueError, match="forbidden"):
+        runtime.validate_distributions([{"name": "cubit_mesh_export"}])
+    runtime.validate_distributions([{"name": "radia"}, {"name": "radia-mcp"}])
