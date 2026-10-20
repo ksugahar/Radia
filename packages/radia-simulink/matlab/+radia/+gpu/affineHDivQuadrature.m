@@ -1,9 +1,10 @@
 function q=affineHDivQuadrature(order)
-% Existing CPU near rule: symmetric degree 5 for p1/p2, Gauss-Duffy5 for p3.
+% CPU near rules: symmetric degree 5 for p1, degree 10 for p2; p3 Gauss-Duffy5.
+% P2 energy operators require the CPU quad=6 rule; degree 5 underintegrates N.
 arguments
     order (1,1) double {mustBeMember(order,[1 2 3])}
 end
-q=radia.gpu.curvedHDivQuadrature(1);
+q=radia.gpu.curvedHDivQuadrature(min(order,2));
 if order==3
     n=5;k=(1:n-1)';beta=k./sqrt(4*k.^2-1);
     [V,D]=eig(diag(beta,1)+diag(beta,-1));[x,ix]=sort(diag(D));x=(x+1)/2;w=V(1,ix)'.^2;

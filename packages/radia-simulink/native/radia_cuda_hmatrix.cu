@@ -5,6 +5,7 @@
 #include "hmatrix_curved_entry_oracle.cuh"
 #include "hmatrix_aca_callback.cuh"
 #include "hmatrix_material_solver.cuh"
+#include "hmatrix_nonlinear_material.cuh"
 #ifdef RADIA_HMATRIX_FULL_HOST
 #include "hmatrix_full_assembly.cuh"
 #endif
@@ -47,8 +48,10 @@ struct CommandTrace {
 };
 using ContextMap=HostMap<std::uint64_t,HostUnique<Resident>>;
 HostUnique<ContextMap> contexts;
+using MaterialContextMap=HostMap<std::uint64_t,HostUnique<radia_hdiv_bh::MappedMaterial>>;
+HostUnique<MaterialContextMap> materialContexts;
 std::uint64_t generation=std::uint64_t(std::chrono::steady_clock::now().time_since_epoch().count())&0x00007fffffffffffULL;
-void cleanup(){contexts.reset();}
+void cleanup(){materialContexts.reset();contexts.reset();}
 std::size_t ownedPublicationArrays=0;
 #ifdef RADIA_HMATRIX_FAULT_INJECTION
 unsigned publicationFailureStage=0,publicationReachedStage=0;
@@ -85,6 +88,32 @@ void publishContext(HostUnique<Resident> context,mxArray* output[]){
         try{publicationProbe(3);}
         catch(...){contexts->erase(inserted.first);throw;}
     }catch(...){if(contexts&&contexts->empty())contexts.reset();throw;}
+    // Publish ownership and lock only after all throwing preparation is complete.
+    mexLock();mexAtExit(cleanup);output[0]=array.release();--ownedPublicationArrays;
+    diagnosticTrace("publication.return");
+}
+void publishMaterialContext(HostUnique<radia_hdiv_bh::MappedMaterial> context,mxArray* output[]){
+    diagnosticTrace("publication.enter");
+    if(generation==0x0000ffffffffffffULL)throw std::overflow_error("Handle generation exhausted");
+    const auto id=0x4248000000000000ULL|++generation;
+    publicationProbe(1);
+    auto* value=checkedArray(&mxCreateNumericMatrix,1,1,mxUINT64_CLASS,mxREAL);
+    diagnosticTrace("publication.array_created");
+    if(!value)throw std::bad_alloc();
+    ++ownedPublicationArrays;
+    std::unique_ptr<mxArray,PublicationArrayDeleter> array(value);
+    *static_cast<std::uint64_t*>(mxGetData(value))=id;
+    publicationProbe(2);
+    // MSVC maps allocate a sentinel even when empty. Own the whole registry
+    // only while handles exist, including its object, sentinel and nodes.
+    try{
+        if(!materialContexts)materialContexts=makeHostUnique<MaterialContextMap>("bh.registry.object",std::less<std::uint64_t>{},MaterialContextMap::allocator_type("bh.registry.node"));
+        auto inserted=materialContexts->emplace(id,std::move(context));
+        diagnosticTrace("publication.map_inserted");
+        if(!inserted.second)throw std::runtime_error("Handle collision");
+        try{publicationProbe(3);}
+        catch(...){materialContexts->erase(inserted.first);throw;}
+    }catch(...){if(materialContexts&&materialContexts->empty())materialContexts.reset();throw;}
     // Publish ownership and lock only after all throwing preparation is complete.
     mexLock();mexAtExit(cleanup);output[0]=array.release();--ownedPublicationArrays;
     diagnosticTrace("publication.return");
@@ -214,9 +243,11 @@ void checkPayload(const mxArray* a,std::size_t& bytes,int depth=0){
     if(mxIsSparse(a)){const auto columns=mxGetN(a);add(mxGetJc(a)[columns],mxGetElementSize(a)+sizeof(mwIndex));add(columns+1,sizeof(mwIndex));}
     else add(mxGetNumberOfElements(a),mxGetElementSize(a));
 }
-Plan read(const mxArray* cfg){
-    if(mxGetNumberOfElements(cfg)!=1||integer(field(cfg,0,"schema_version"),true)!=1)throw std::invalid_argument("Unsupported leaf schema");
-    const auto n=integer(field(cfg,0,"dimension"),true);auto values=numbers(field(cfg,0,"permutation"));
+Plan read(const mxArray* cfg,bool normalized=false){
+    if(mxGetNumberOfElements(cfg)!=1||integer(field(cfg,0,"schema_version"),true)!=(normalized?2:1))throw std::invalid_argument("Unsupported leaf schema");
+    const auto n=integer(field(cfg,0,"dimension"),true);
+    if(normalized&&n>4608)throw std::invalid_argument("Normalized dimension budget exceeded");
+    auto values=numbers(field(cfg,0,"permutation"));
     if(values.size()!=n)throw std::invalid_argument("Permutation size mismatch");HostVector<std::size_t> permutation(n);
     for(std::size_t i=0;i<n;++i){if(values[i]<1||values[i]>n||std::floor(values[i])!=values[i])throw std::invalid_argument("Permutation is one-based");permutation[i]=std::size_t(values[i])-1;}
     auto* blocks=field(cfg,0,"leaves");if(!mxIsStruct(blocks))throw std::invalid_argument("Expected leaves struct array");
@@ -225,6 +256,26 @@ Plan read(const mxArray* cfg){
         Leaf leaf;leaf.row=integer(field(blocks,i,"row"),true)-1;leaf.column=integer(field(blocks,i,"column"),true)-1;
         leaf.rows=integer(field(blocks,i,"rows"),true);leaf.columns=integer(field(blocks,i,"columns"),true);leaf.rank=integer(field(blocks,i,"rank"));
         const auto a1=numbers(field(blocks,i,"a1")),a2=numbers(field(blocks,i,"a2"));leaf.a1.assign(a1.begin(),a1.end());leaf.a2.assign(a2.begin(),a2.end());leaves.push_back(std::move(leaf));
+    }
+    // Schema 2 already carries normalized factors. Preserve their values,
+    // leaf order, permutation and physical scale through the Python packer.
+    // Bypass the legacy cHACApK struct/int conversion, without changing math.
+    // The existing fromHacapk adapter also preserves factor values.
+    if(normalized){
+        if(n>4608||leaves.empty()||leaves.size()>65536)throw std::invalid_argument("Normalized leaf budget exceeded");
+        for(int f=0;f<mxGetNumberOfFields(cfg);++f){const std::string_view key=mxGetFieldNameByNumber(cfg,f);
+            if(key!="schema_version"&&key!="dimension"&&key!="permutation"&&key!="scale"&&key!="leaves"&&key!="operator_kind"&&key!="charge_map"&&key!="assembly")throw std::invalid_argument("Unsupported normalized leaf option");
+        }
+        if(text(field(cfg,0,"assembly"))!="normalized_leaves")throw std::invalid_argument("Explicit normalized assembly required");
+        std::size_t partials=0;
+        for(const auto& leaf:leaves){
+            if(!leaf.rows||!leaf.columns||leaf.rows>n||leaf.columns>n)throw std::invalid_argument("Invalid normalized leaf dimensions");
+            const auto count=leaf.rows+(leaf.row==leaf.column?0:leaf.columns);
+            if(count>(std::size_t(1)<<24)-partials)throw std::invalid_argument("Normalized partial workspace budget exceeded");
+            partials+=count;
+        }
+        requireUpperLeafPartition(n,leaves,HostFaultAllocator<std::uint64_t>("normalized.coverage"));
+        return pack(n,leaves,permutation,numbers(field(cfg,0,"scale")));
     }
     if(leaves.size()>2147483647u)throw std::overflow_error("Too many native leaves");
     HostVector<st_cHACApK_leafmtx_t> native(leaves.size());
@@ -240,6 +291,28 @@ Plan read(const mxArray* cfg){
     return fromHacapk(matrix,control,numbers(field(cfg,0,"scale")));
 }
 }
+
+std::pair<radia_hdiv_bh::MaterialInput,radia_hdiv_bh::Law> readMaterialConfig(const mxArray* E,const mxArray* weightArray,const mxArray* cfg){
+    const auto nq=mxGetNumberOfElements(weightArray),nd=mxGetN(E);
+    if(!nq||nq>65536||!nd||nd>16384||!mxIsSparse(E)||mxGetM(E)!=3*nq||mxGetJc(E)[nd]>4000000)throw std::invalid_argument("Mapped material payload shape or budget exceeded");
+        if(mxGetNumberOfElements(cfg)!=1)throw std::invalid_argument("Expected one inverse BH law");const auto* ka=field(cfg,0,"knots");const auto* ca=field(cfg,0,"coefficients");const auto* ba=field(cfg,0,"integral_base");const auto nk=mxGetNumberOfElements(ka);
+        if(nk<2||nk>4096||mxGetM(ca)!=nk-1||mxGetN(ca)!=4||mxGetNumberOfElements(ba)!=nk)throw std::invalid_argument("Inverse BH law shape exceeded");
+        const auto knots=numbers(ka),coefficients=rowNumbers(ca,4),base=numbers(ba);
+        radia_hdiv_bh::Law law{{knots.begin(),knots.end()},{coefficients.begin(),coefficients.end()},{base.begin(),base.end()},scalarNumber(field(cfg,0,"cap")),scalarNumber(field(cfg,0,"barrier_slope")),scalarNumber(field(cfg,0,"last_field")),scalarNumber(field(cfg,0,"initial_reluctivity"))};
+        const auto map=readChargeMap(E,3*nq);const auto w=numbers(weightArray);
+        radia_hdiv_bh::MaterialInput input{nq,nd,{map.offsets.begin(),map.offsets.end()},{map.indices.begin(),map.indices.end()},{map.values.begin(),map.values.end()},{w.begin(),w.end()}};
+    return {std::move(input),std::move(law)};
+}
+std::uint64_t materialToken(const mxArray* a){
+    if(!mxIsUint64(a)||mxIsSparse(a)||mxIsComplex(a)||mxGetNumberOfElements(a)!=1)throw std::invalid_argument("Expected checked material uint64 handle");
+    const auto id=*static_cast<const std::uint64_t*>(mxGetData(a));if(!materialContexts||!materialContexts->count(id))throw std::invalid_argument("Wrong type, stale generation or dead material handle");return id;
+}
+mxArray* publishMaterialEvaluation(const radia_hdiv_bh::MaterialEvaluation& result){
+    const char* names[]={"gradient","tangent_action","energy","maximum_magnetization","device_payload_bound_bytes","linearization_epoch"};auto* out=checkedArray(&mxCreateStructMatrix,1,1,6,names);++ownedPublicationArrays;
+    std::unique_ptr<mxArray,PublicationArrayDeleter> owner(out);
+    const radia_hdiv_bh::BoundaryVector<double>* arrays[]={&result.gradient,&result.tangentAction};for(int i=0;i<2;++i){auto* a=checkedArray(&mxCreateDoubleMatrix,arrays[i]->size(),1,mxREAL);std::copy(arrays[i]->begin(),arrays[i]->end(),mxGetDoubles(a));mxSetField(out,0,names[i],a);}
+    mxSetField(out,0,names[2],checkedArray(&mxCreateDoubleScalar,result.energy));mxSetField(out,0,names[3],checkedArray(&mxCreateDoubleScalar,result.maximumMagnetization));mxSetField(out,0,names[4],checkedArray(&mxCreateDoubleScalar,double(result.ownedDeviceBytes)));auto* stamp=checkedArray(&mxCreateNumericMatrix,1,1,mxUINT64_CLASS,mxREAL);*static_cast<std::uint64_t*>(mxGetData(stamp))=result.linearizationEpoch;mxSetField(out,0,names[5],stamp);--ownedPublicationArrays;return owner.release();
+}
 void dispatchCommand(int nl,mxArray* out[],int nr,const mxArray* in[]){
     diagnosticTrace("command.enter");CommandTrace trace;
     #ifdef RADIA_HMATRIX_FAULT_INJECTION
@@ -247,7 +320,76 @@ void dispatchCommand(int nl,mxArray* out[],int nr,const mxArray* in[]){
     #endif
     if(!nr)throw std::invalid_argument("Command required");auto command=text(in[0]);
     #ifdef RADIA_HMATRIX_FAULT_INJECTION
+    // Enable before every numerical command, including the BH/Newton branches.
     mxProbeActive=command.rfind("diagnostic_",0)!=0;
+    #endif
+    if(command=="linearize_bh_material"){
+        arity(nr,3,nl,1);auto& material=*materialContexts->at(materialToken(in[1]));if(mxGetNumberOfElements(in[2])!=material.dofs())throw std::invalid_argument("Material state dimension mismatch");
+        const auto x=numbers(in[2]);out[0]=publishMaterialEvaluation(material.linearize(x));return;
+    }
+    if(command=="apply_bh_tangent"){
+        arity(nr,4,nl,1);auto& material=*materialContexts->at(materialToken(in[1]));if(mxGetNumberOfElements(in[2])!=material.dofs()||!mxIsUint64(in[3])||mxIsSparse(in[3])||mxIsComplex(in[3])||mxGetNumberOfElements(in[3])!=1)throw std::invalid_argument("Expected direction and uint64 linearization epoch");
+        const auto d=numbers(in[2]);const auto result=material.tangentAction({d.begin(),d.end()},*static_cast<const std::uint64_t*>(mxGetData(in[3])));
+        out[0]=checkedArray(&mxCreateDoubleMatrix,result.size(),1,mxREAL);std::copy(result.begin(),result.end(),mxGetDoubles(out[0]));return;
+    }
+    if(command=="solve_nonlinear_material"){
+        arity(nr,7,nl,1);auto& op=*contexts->at(token(in[1]));auto& material=*materialContexts->at(materialToken(in[2]));const auto n=op.dimension();
+        std::size_t payload=0;for(int i=3;i<7;++i)checkPayload(in[i],payload);
+        if(!mxIsSparse(in[3])||mxGetM(in[3])!=n||mxGetN(in[3])!=n||mxGetJc(in[3])[n]>4000000||mxGetNumberOfElements(in[4])!=n||mxGetNumberOfElements(in[5])!=n)throw std::invalid_argument("Newton input dimension or payload exceeded");
+        const auto* cfg=in[6];if(mxGetNumberOfElements(cfg)!=1)throw std::invalid_argument("Expected one explicit Newton options struct");
+        const auto pre=text(field(cfg,0,"preconditioner"));int mode;if(pre=="reference-diagonal")mode=0;else if(pre=="reference-chebyshev")mode=1;else if(pre=="reference-chebyshev-graph")mode=2;else throw std::invalid_argument("Unsupported explicit Newton reference preconditioner");
+        radia_hdiv_python::NewtonOptions options{scalarNumber(field(cfg,0,"nonlinear_tolerance")),scalarNumber(field(cfg,0,"linear_tolerance")),int(integer(field(cfg,0,"maximum_iterations"),true)),int(integer(field(cfg,0,"maximum_linear_iterations"),true)),mode,int(integer(field(cfg,0,"degree"),true)),scalarNumber(field(cfg,0,"lower_fraction"))};
+        const auto mass=readChargeMap(in[3],n);const auto rhs=numbers(in[4]),initial=numbers(in[5]);
+        const auto result=solveNonlinearMaterial(op,material,mass,rhs,initial,options);
+        const char* names[]={"x","relative_residual","energy","newton_iterations","preconditioner_graph_launches","history"};out[0]=checkedArray(&mxCreateStructMatrix,1,1,6,names);
+        auto* x=checkedArray(&mxCreateDoubleMatrix,n,1,mxREAL);std::copy(result.x.begin(),result.x.end(),mxGetDoubles(x));mxSetField(out[0],0,names[0],x);
+        const double scalars[]={result.residual,result.energy,double(result.history.size()),double(result.graphLaunches)};for(int i=1;i<=4;++i)mxSetField(out[0],0,names[i],checkedArray(&mxCreateDoubleScalar,scalars[i-1]));
+        const char* fields[]={"relative_residual","energy","alpha","linear_relative_residual","linear_iterations","backtracks","original_residual_certified"};auto* history=checkedArray(&mxCreateStructMatrix,1,result.history.size(),7,fields);
+        // Attach the root before filling it so dispatchChecked owns every partial row.
+        mxSetField(out[0],0,names[5],history);
+        for(std::size_t i=0;i<result.history.size();++i){const auto& row=result.history[i];const double values[]={row.residual,row.energy,row.alpha,row.linearResidual,double(row.linearIterations),double(row.backtracks),row.residualCertified?1.:0.};for(int f=0;f<7;++f)mxSetField(history,i,fields[f],checkedArray(&mxCreateDoubleScalar,values[f]));}
+        return;
+    }
+    if(command=="create_bh_material"){
+        arity(nr,4,nl,1);std::size_t payload=0;for(int i=1;i<4;++i)checkPayload(in[i],payload);
+        if(materialContexts&&materialContexts->size()>=2)throw std::invalid_argument("Material context count budget exceeded");
+        auto config=readMaterialConfig(in[1],in[2],in[3]);
+        publishMaterialContext(makeHostUnique<radia_hdiv_bh::MappedMaterial>("bh.material.owner",config.first,config.second),out);return;
+    }
+    if(command=="evaluate_bh_material_context"){
+        arity(nr,4,nl,1);auto& context=*materialContexts->at(materialToken(in[1]));
+        if(mxGetNumberOfElements(in[2])!=context.dofs()||(mxGetNumberOfElements(in[3])&&mxGetNumberOfElements(in[3])!=context.dofs()))throw std::invalid_argument("Material state or direction mismatch");
+        const auto x=numbers(in[2]),d=numbers(in[3]);out[0]=publishMaterialEvaluation(context.evaluate(x,d));return;
+    }
+    if(command=="destroy_bh_material"){
+        arity(nr,2,nl,0);materialContexts->erase(materialToken(in[1]));if(materialContexts->empty())materialContexts.reset();mexUnlock();return;
+    }
+    if(command=="bh_material_stats"){
+        arity(nr,2,nl,1);const auto stats=materialContexts->at(materialToken(in[1]))->stats();
+        const char* names[]={"device_payload_bound_bytes","setup_upload_bytes","state_upload_bytes","evaluations","epoch"};out[0]=checkedArray(&mxCreateStructMatrix,1,1,5,names);
+        const double values[]={double(stats.devicePayloadBound),double(stats.setupUploadBytes),double(stats.stateUploadBytes),double(stats.evaluations),double(stats.epoch)};
+        for(int i=0;i<5;++i)mxSetField(out[0],0,names[i],checkedArray(&mxCreateDoubleScalar,values[i]));return;
+    }
+    if(command=="evaluate_bh_material"){
+        arity(nr,6,nl,1);std::size_t payload=0;for(int i=1;i<6;++i)checkPayload(in[i],payload);
+        auto config=readMaterialConfig(in[1],in[2],in[5]);if(mxGetNumberOfElements(in[3])!=config.first.dofs||(mxGetNumberOfElements(in[4])&&mxGetNumberOfElements(in[4])!=config.first.dofs))throw std::invalid_argument("Material state or direction mismatch");
+        const auto state=numbers(in[3]),direction=numbers(in[4]);out[0]=publishMaterialEvaluation(radia_hdiv_bh::evaluateMappedMaterial(config.first,config.second,{state.begin(),state.end()},{direction.begin(),direction.end()}));return;
+    }
+    if(command=="inverse_bh_samples"){
+        arity(nr,9,nl,1);std::size_t payload=0;for(int i=1;i<9;++i)checkPayload(in[i],payload);
+        const auto nk=mxGetNumberOfElements(in[1]),ns=mxGetNumberOfElements(in[4]);
+        if(nk<2||nk>4096||mxGetNumberOfElements(in[2])!=4*(nk-1)||mxGetNumberOfElements(in[3])!=nk||ns<1||ns>65536)
+            throw std::invalid_argument("Inverse BH payload shape or budget exceeded");
+        const auto k=numbers(in[1]),c=numbers(in[2]),b=numbers(in[3]),a=numbers(in[4]);
+        radia_hdiv_bh::Law law{{k.begin(),k.end()},{c.begin(),c.end()},{b.begin(),b.end()},scalarNumber(in[5]),scalarNumber(in[6]),scalarNumber(in[7]),scalarNumber(in[8])};
+        const auto result=radia_hdiv_bh::evaluateInverseBH(law,{a.begin(),a.end()});
+        const char* names[]={"secant","tangent","energy","owned_device_payload_bytes"};
+        out[0]=checkedArray(&mxCreateStructMatrix,1,1,4,names);
+        const radia_hdiv_bh::BoundaryVector<double>* arrays[]={&result.secant,&result.tangent,&result.energy};
+        for(int i=0;i<3;++i){auto* value=checkedArray(&mxCreateDoubleMatrix,a.size(),1,mxREAL);std::copy(arrays[i]->begin(),arrays[i]->end(),mxGetDoubles(value));mxSetField(out[0],0,names[i],value);}
+        mxSetField(out[0],0,names[3],checkedArray(&mxCreateDoubleScalar,double(result.ownedDeviceBytes)));return;
+    }
+    #ifdef RADIA_HMATRIX_FAULT_INJECTION
     if(command=="diagnostic_mx_allocation_failure"){arity(nr,2,nl,0);mxFailureAt=integer(in[1]);mxAttempts=0;return;}
     if(command=="diagnostic_mx_allocation_report"){arity(nr,1,nl,1);const char* names[]={"attempts","fail_at"};out[0]=checkedArray(&mxCreateStructMatrix,1,1,2,names);mxSetField(out[0],0,names[0],checkedArray(&mxCreateDoubleScalar,double(mxAttempts)));mxSetField(out[0],0,names[1],checkedArray(&mxCreateDoubleScalar,double(mxFailureAt)));return;}
     #endif
@@ -255,12 +397,12 @@ void dispatchCommand(int nl,mxArray* out[],int nr,const mxArray* in[]){
 #ifdef RADIA_HMATRIX_FAULT_INJECTION
     if(command=="diagnostic_trapped_frame_exception"){
         arity(nr,2,nl,0);
-        if((contexts&&!contexts->empty()))throw std::invalid_argument("Fault injection requires no live operators");
+        if(((contexts&&!contexts->empty())||(materialContexts&&!materialContexts->empty())))throw std::invalid_argument("Fault injection requires no live operators");
         const auto enabled=integer(in[1]);if(enabled>1)throw std::invalid_argument("Expected zero or one");
         frameExceptionProbe=enabled?trappedFrameException:nullptr;return;
     }
     if(command=="diagnostic_publication_failure"){
-        arity(nr,2,nl,0);if((contexts&&!contexts->empty())||ownedPublicationArrays)throw std::invalid_argument("Publication diagnostics require no live owners");
+        arity(nr,2,nl,0);if(((contexts&&!contexts->empty())||(materialContexts&&!materialContexts->empty()))||ownedPublicationArrays)throw std::invalid_argument("Publication diagnostics require no live owners");
         const auto stage=integer(in[1]);if(stage>3)throw std::invalid_argument("Expected publication stage zero through three");
         publicationFailureStage=unsigned(stage);publicationReachedStage=0;return;
     }
@@ -268,12 +410,12 @@ void dispatchCommand(int nl,mxArray* out[],int nr,const mxArray* in[]){
         arity(nr,1,nl,1);const char* names[]={"owned_output_arrays","live_handles","stage","reached_stage"};
         out[0]=checkedArray(&mxCreateStructMatrix,1,1,4,names);
         mxSetField(out[0],0,names[0],checkedArray(&mxCreateDoubleScalar,ownedPublicationArrays));
-        mxSetField(out[0],0,names[1],checkedArray(&mxCreateDoubleScalar,(contexts?contexts->size():0)));
+        mxSetField(out[0],0,names[1],checkedArray(&mxCreateDoubleScalar,((contexts?contexts->size():0)+(materialContexts?materialContexts->size():0))));
         mxSetField(out[0],0,names[2],checkedArray(&mxCreateDoubleScalar,publicationFailureStage));
         mxSetField(out[0],0,names[3],checkedArray(&mxCreateDoubleScalar,publicationReachedStage));return;
     }
     if(command=="diagnostic_resource_failure"){
-        arity(nr,2,nl,0);if((contexts&&!contexts->empty()))throw std::invalid_argument("Resource diagnostics require no live operators");
+        arity(nr,2,nl,0);if(((contexts&&!contexts->empty())||(materialContexts&&!materialContexts->empty())))throw std::invalid_argument("Resource diagnostics require no live operators");
         configureResourceFault(integer(in[1]));return;
     }
     if(command=="diagnostic_resource_report"){
@@ -286,7 +428,7 @@ void dispatchCommand(int nl,mxArray* out[],int nr,const mxArray* in[]){
     }
     if(command=="diagnostic_device_allocation_failure"){
         arity(nr,2,nl,0);
-        if((contexts&&!contexts->empty()))throw std::invalid_argument("Fault injection requires no live operators");
+        if(((contexts&&!contexts->empty())||(materialContexts&&!materialContexts->empty())))throw std::invalid_argument("Fault injection requires no live operators");
         configureDeviceFault(integer(in[1]));return;
     }
     if(command=="diagnostic_device_allocation_report"){
@@ -298,7 +440,7 @@ void dispatchCommand(int nl,mxArray* out[],int nr,const mxArray* in[]){
     }
     if(command=="diagnostic_host_allocation_failure"){
         if(nl||nr<2||nr>3)throw std::invalid_argument("Host allocation failure expects target and optional site");
-        if((contexts&&!contexts->empty()))throw std::invalid_argument("Fault injection requires no live operators");
+        if(((contexts&&!contexts->empty())||(materialContexts&&!materialContexts->empty())))throw std::invalid_argument("Fault injection requires no live operators");
         const auto target=integer(in[1]);
         if(nr==3){const auto site=text(in[2]);configureHostFaultSite(target,site.c_str());}
         else configureHostFault(target);return;
@@ -313,7 +455,7 @@ void dispatchCommand(int nl,mxArray* out[],int nr,const mxArray* in[]){
     }
     if(command=="diagnostic_c_allocation_failure"){
         arity(nr,2,nl,0);
-        if((contexts&&!contexts->empty()))throw std::invalid_argument("Fault injection requires no live operators");
+        if(((contexts&&!contexts->empty())||(materialContexts&&!materialContexts->empty())))throw std::invalid_argument("Fault injection requires no live operators");
         rad_hmatrix_c_memory_configure(integer(in[1]));return;
     }
     if(command=="diagnostic_c_allocation_report"){
@@ -553,9 +695,9 @@ void dispatchCommand(int nl,mxArray* out[],int nr,const mxArray* in[]){
         auto c=makeHostUnique<Resident>("resident.object",plan,&map);c->assembleCurved(block);
         publishContext(std::move(c),out);return;
     }
-    if(command=="create"||command=="create_analytic_constant_block"){
+    if(command=="create"||command=="create_normalized"||command=="create_analytic_constant_block"){
         arity(nr,2,nl,1);if(!mxIsStruct(in[1])||mxGetNumberOfElements(in[1])!=1)throw std::invalid_argument("Expected scalar H-matrix configuration");std::size_t payloadBytes=0;checkPayload(in[1],payloadBytes);Plan plan;AnalyticBlock block;
-        if(command=="create")plan=read(in[1]);
+        if(command=="create"||command=="create_normalized")plan=read(in[1],command=="create_normalized");
         else{
             if(const auto* assembly=mxGetField(in[1],0,"assembly")){if(text(assembly)!="analytic_constant_block")throw std::invalid_argument("Unsupported analytic assembly mode");}
             if(integer(field(in[1],0,"schema_version"),true)!=1)throw std::invalid_argument("Unsupported analytic block schema");
@@ -578,7 +720,7 @@ void dispatchCommand(int nl,mxArray* out[],int nr,const mxArray* in[]){
         auto c=makeHostUnique<Resident>("resident.object",plan,mode=="demag"?&map:nullptr);if(command=="create_analytic_constant_block")c->assemble(block);
         publishContext(std::move(c),out);return;
     }
-    if(command=="live_count"){arity(nr,1,nl,1);out[0]=checkedArray(&mxCreateDoubleScalar,(contexts?contexts->size():0));return;}
+    if(command=="live_count"){arity(nr,1,nl,1);out[0]=checkedArray(&mxCreateDoubleScalar,((contexts?contexts->size():0)+(materialContexts?materialContexts->size():0)));return;}
     if(command=="destroy"){arity(nr,2,nl,0);diagnosticTrace("destroy.before_erase");contexts->erase(token(in[1]));if(contexts->empty())contexts.reset();diagnosticTrace("destroy.after_erase");mexUnlock();return;}
     if(command=="upload"){arity(nr,3,nl,0);contexts->at(token(in[1]))->upload(numbers(in[2]));return;}
     if(command=="apply"){arity(nr,3,nl,0);contexts->at(token(in[1]))->apply(integer(in[2],true));return;}

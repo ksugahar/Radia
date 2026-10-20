@@ -1,6 +1,7 @@
 // NGSolve-owned high-order basis staging. Not a charge map or material solver.
 #pragma once
 #include "hdiv_rt0_host.cuh"
+#include "hdiv_material_staging.hpp"
 #include <l2hofespace.hpp>
 #include <scalarfe.hpp>
 #include <calcinverse.hpp>
@@ -168,93 +169,25 @@ inline mxArray* inspectElements(const std::string& path,int order,const std::arr
     mxSetField(out,0,"rhs",radia::rt0_cuda::matrix(nd,1,rhs));mxSetField(out,0,"mean_operator",radia::rt0_cuda::matrix(3,nd,mean));
     if(sparseCharge)mxSetField(out,0,"charge_map",sparseRowsMatrix(chargeRows,nd));else mxSetField(out,0,"charge_map",radia::rt0_cuda::matrix(hosts.size(),nd,B));mxSetField(out,0,"host",radia::rt0_cuda::matrix(hosts.size(),1,hosts));mxSetField(out,0,"kind",radia::rt0_cuda::matrix(kinds.size(),1,kinds));mxSetField(out,0,"expo",radia::rt0_cuda::matrix(hosts.size(),3,expo));return out;
 }
-// NGSolve owns the material integration rule and mapped HDiv shapes.
-// Numeric component-major evaluation map, not nodal interpolation.
-struct MaterialStagingContext {
-    std::shared_ptr<ngcomp::MeshAccess> mesh;
-    std::shared_ptr<ngcomp::HDivHighOrderFESpace> space;
-    std::shared_ptr<ngcomp::FESpace> materialSpace;
-    std::size_t ne=0,nd=0,totalPoints=0;
-    int degree=0;
-    MaterialStagingContext(const std::string& path,int order){
-        mesh=std::make_shared<ngcomp::MeshAccess>(path);ne=std::size_t(mesh->GetNE(ngfem::VOL));
-        if(mesh->GetDimension()!=3||!ne||ne>4096||mesh->GetDeformation()||mesh->GetCurveOrder()>2||order<1||order>2)
-            throw std::invalid_argument("Material quadrature requires bounded P1/P2 tetrahedral HDiv");
-        ngcore::Flags flags;flags.SetFlag("order",order);space=std::make_shared<ngcomp::HDivHighOrderFESpace>(mesh,flags);space->Update();space->FinalizeUpdate();
-        nd=std::size_t(space->GetNDof());if(!nd||nd>16384)throw std::invalid_argument("Material DOF budget exceeded");
-        degree=std::max(6,2*order+2);ngcore::Flags irFlags;irFlags.SetFlag("order",degree);
-        materialSpace=ngcomp::CreateFESpace("irspace",mesh,irFlags);if(!materialSpace)throw std::runtime_error("NGSolve integration space unavailable");materialSpace->Update();materialSpace->FinalizeUpdate();
-        // NGSolve v6.2.2607 IntegrationRuleSpace uses IntegrationRule(type,2*order).
-        // https://github.com/NGSolve/ngsolve/blob/v6.2.2607/comp/irspace.cpp
-        // Retain the exported factory; its constructor is not a Windows DLL export.
-        totalPoints=std::size_t(materialSpace->GetNDof());
-        ngfem::IntegrationRule rule(ngfem::ET_TET,2*degree);
-        if(!totalPoints||totalPoints>2000000||rule.Size()<1||rule.Size()>4096)throw std::invalid_argument("Material total-point budget exceeded");
-        for(std::size_t e=0;e<ne;++e)if(mesh->GetElType(ngfem::ElementId(ngfem::VOL,int(e)))!=ngfem::ET_TET)
-            throw std::invalid_argument("Material quadrature rejects non-tetrahedra");
-    }
-};
+// The publisher owns MATLAB allocations; staging above it owns no MATLAB ABI.
 inline mxArray* materialQuadrature(MaterialStagingContext& context,std::size_t first=0,std::size_t count=std::numeric_limits<std::size_t>::max()){
-    const auto& mesh=context.mesh;const auto& space=context.space;const auto& materialSpace=context.materialSpace;
-    const auto ne=context.ne,nd=context.nd,totalPoints=context.totalPoints;const int degree=context.degree;
-    ngfem::IntegrationRule rule(ngfem::ET_TET,2*degree);
-    if(count==std::numeric_limits<std::size_t>::max())count=std::size_t(ne);
-    if(first>=std::size_t(ne)||!count||count>std::size_t(ne)-first)throw std::invalid_argument("Invalid material element interval");
-    std::size_t entries=0,tangentBound=0;std::vector<std::size_t> globalPoints;ngstd::LocalHeap heap(1<<24,"radia_hdiv_material_quadrature");
-    for(std::size_t e=first;e<first+count;++e){ngstd::HeapReset reset(heap);ngfem::ElementId eid(ngfem::VOL,int(e));
-        const auto& fe=dynamic_cast<const ngfem::HDivFiniteElement<3>&>(space->GetFE(eid,heap));
-        if(fe.GetNDof()<1||fe.GetNDof()>256)throw std::invalid_argument("Material local shape budget exceeded");
-        const auto local=std::size_t(fe.GetNDof()),points=std::size_t(rule.Size());
-        if(local>(4000000-entries)/(points*3))throw std::invalid_argument("Material sparse staging budget exceeded");
-        entries+=local*points*3;tangentBound+=local*local;
-        ngstd::Array<int> sampleDofs;materialSpace->GetDofNrs(eid,sampleDofs);
-        if(sampleDofs.Size()!=rule.Size())throw std::runtime_error("Material rule point count mismatch");
-        if(std::size_t(sampleDofs.Size())>65536-globalPoints.size())throw std::invalid_argument("Material point budget exceeded");
-        for(auto index:sampleDofs){if(index<0||std::size_t(index)>=totalPoints)throw std::runtime_error("Invalid material global sample index");globalPoints.push_back(std::size_t(index));}
-    }
-    std::sort(globalPoints.begin(),globalPoints.end());
-    if(std::adjacent_find(globalPoints.begin(),globalPoints.end())!=globalPoints.end())throw std::runtime_error("Material samples are not element-disjoint");
-    const auto nq=globalPoints.size();
-    if(first==0&&count==std::size_t(ne)&&nq!=totalPoints)throw std::runtime_error("Material global sample coverage mismatch");
-    // Each global material point belongs to one element. Its local HDiv DOFs
-    // are unique, so no arithmetic reduction is needed for this evaluation
-    // map. Append by column rather than allocating a tree node per nonzero.
-    std::vector<std::vector<std::pair<mwIndex,double>>> columns(nd);
-    std::vector<double> weights(nq),points(3*nq),elements(nq);
-    for(std::size_t e=first;e<first+count;++e){ngstd::HeapReset reset(heap);ngfem::ElementId eid(ngfem::VOL,int(e));
-        auto& trafo=mesh->GetTrafo(eid,heap);const auto& fe=dynamic_cast<const ngfem::HDivFiniteElement<3>&>(space->GetFE(eid,heap));
-        ngstd::Array<int> dofs;space->GetDofNrs(eid,dofs);if(dofs.Size()!=fe.GetNDof())throw std::runtime_error("Material local DOF mismatch");
-        for(auto d:dofs)if(d<0||std::size_t(d)>=nd)throw std::invalid_argument("Constrained material DOF unsupported");
-        std::vector<int> uniqueDofs(dofs.begin(),dofs.end());std::sort(uniqueDofs.begin(),uniqueDofs.end());
-        if(std::adjacent_find(uniqueDofs.begin(),uniqueDofs.end())!=uniqueDofs.end())throw std::runtime_error("Duplicate material local DOF unsupported");
-        ngbla::Matrix<> shape(fe.GetNDof(),3);
-        ngstd::Array<int> sampleDofs;materialSpace->GetDofNrs(eid,sampleDofs);if(sampleDofs.Size()!=rule.Size())throw std::runtime_error("Material rule point count mismatch");
-        int localPoint=0;
-        for(const auto& ip:rule){const auto index=sampleDofs[localPoint++];if(index<0)throw std::runtime_error("Invalid material sample index");
-            const auto pos=std::lower_bound(globalPoints.begin(),globalPoints.end(),std::size_t(index));
-            if(pos==globalPoints.end()||*pos!=std::size_t(index))throw std::runtime_error("Unmapped material sample index");const auto q=std::size_t(pos-globalPoints.begin());
-            ngfem::MappedIntegrationPoint<3,3> mip(ip,trafo);fe.CalcMappedShape(mip,shape);
-            const double w=mip.GetWeight();if(!std::isfinite(w)||w<=0)throw std::runtime_error("Invalid material measure");
-            weights[q]=w;elements[q]=double(e);for(int c=0;c<3;++c){points[3*q+c]=mip.GetPoint()[c];for(int i=0;i<dofs.Size();++i){const double v=shape(i,c);if(!std::isfinite(v))throw std::runtime_error("Nonfinite material shape");if(v!=0.)columns[dofs[i]].emplace_back(mwIndex(c*nq+q),v);}}
-        }
-    }
+    const auto payload=stageMaterialQuadrature(context,first,count);
+    const auto nq=payload.weights.size(),nd=payload.dofs;
+    if(nd>std::numeric_limits<mwIndex>::max()||3*nq>std::numeric_limits<mwIndex>::max()||payload.values.size()>std::numeric_limits<mwIndex>::max())
+        throw std::overflow_error("Material MATLAB index width exceeded");
     const char* names[]={"evaluation","weights","points","element","integration_order","dofs","scope","global_point_indices","total_points","total_elements","first_element","element_count","potential_shape_entries","tangent_nonzero_bound"};auto* out=mxCreateStructMatrix(1,1,14,names);
-    std::size_t nonzeros=0;
-    for(auto& column:columns){
-        std::sort(column.begin(),column.end(),[](const auto& a,const auto& b){return a.first<b.first;});
-        if(std::adjacent_find(column.begin(),column.end(),[](const auto& a,const auto& b){return a.first==b.first;})!=column.end())throw std::runtime_error("Duplicate material evaluation entry");
-        if(column.size()>entries-nonzeros)throw std::runtime_error("Material evaluation entry budget exceeded");nonzeros+=column.size();
-    }
-    auto* evaluation=mxCreateSparse(3*nq,nd,nonzeros,mxREAL);auto* jc=mxGetJc(evaluation);auto* ir=mxGetIr(evaluation);auto* values=mxGetDoubles(evaluation);std::size_t offset=0;
-    for(std::size_t col=0;col<nd;++col){jc[col]=offset;for(const auto& entry:columns[col]){ir[offset]=entry.first;values[offset]=entry.second;++offset;}}jc[nd]=offset;
-    mxSetField(out,0,"evaluation",evaluation);mxSetField(out,0,"weights",radia::rt0_cuda::matrix(nq,1,weights));
-    mxSetField(out,0,"points",radia::rt0_cuda::matrix(nq,3,points));mxSetField(out,0,"element",radia::rt0_cuda::matrix(nq,1,elements));
-    mxSetField(out,0,"integration_order",mxCreateDoubleScalar(degree));mxSetField(out,0,"dofs",mxCreateDoubleScalar(double(nd)));
-    std::vector<double> indices(globalPoints.begin(),globalPoints.end());
+    auto* evaluation=mxCreateSparse(3*nq,nd,payload.values.size(),mxREAL);
+    auto* jc=mxGetJc(evaluation);auto* ir=mxGetIr(evaluation);auto* values=mxGetDoubles(evaluation);
+    for(std::size_t i=0;i<payload.columnOffsets.size();++i)jc[i]=mwIndex(payload.columnOffsets[i]);
+    for(std::size_t i=0;i<payload.values.size();++i){ir[i]=mwIndex(payload.rowIndices[i]);values[i]=payload.values[i];}
+    mxSetField(out,0,"evaluation",evaluation);mxSetField(out,0,"weights",radia::rt0_cuda::matrix(nq,1,payload.weights));
+    mxSetField(out,0,"points",radia::rt0_cuda::matrix(nq,3,payload.points));mxSetField(out,0,"element",radia::rt0_cuda::matrix(nq,1,payload.elements));
+    mxSetField(out,0,"integration_order",mxCreateDoubleScalar(payload.integrationOrder));mxSetField(out,0,"dofs",mxCreateDoubleScalar(double(nd)));
+    std::vector<double> indices(payload.globalPointIndices.begin(),payload.globalPointIndices.end());
     mxSetField(out,0,"global_point_indices",radia::rt0_cuda::matrix(nq,1,indices));
-    mxSetField(out,0,"total_points",mxCreateDoubleScalar(double(totalPoints)));mxSetField(out,0,"total_elements",mxCreateDoubleScalar(double(ne)));
-    mxSetField(out,0,"first_element",mxCreateDoubleScalar(double(first)));mxSetField(out,0,"element_count",mxCreateDoubleScalar(double(count)));
-    mxSetField(out,0,"potential_shape_entries",mxCreateDoubleScalar(double(entries)));mxSetField(out,0,"tangent_nonzero_bound",mxCreateDoubleScalar(double(tangentBound)));
+    mxSetField(out,0,"total_points",mxCreateDoubleScalar(double(payload.totalPoints)));mxSetField(out,0,"total_elements",mxCreateDoubleScalar(double(payload.totalElements)));
+    mxSetField(out,0,"first_element",mxCreateDoubleScalar(double(payload.firstElement)));mxSetField(out,0,"element_count",mxCreateDoubleScalar(double(payload.elementCount)));
+    mxSetField(out,0,"potential_shape_entries",mxCreateDoubleScalar(double(payload.potentialShapeEntries)));mxSetField(out,0,"tangent_nonzero_bound",mxCreateDoubleScalar(double(payload.tangentNonzeroBound)));
     mxSetField(out,0,"scope",mxCreateString("NGSolve mapped material quadrature; component-major evaluation, zero-based elements; no nonlinear solve acceptance"));return out;
 }
 

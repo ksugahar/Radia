@@ -1,0 +1,140 @@
+{
+  "schema": "radia.hdiv-matlab-prepared-shared.v1",
+  "accepted": true,
+  "scope": "Bounded MATLAB prepared shared-native tet1/2 workflow, not mixed geometry or final release",
+  "prepare_source": "81684cf72c16674fedd9b09f8447d80826c7c6ef",
+  "p2_quadrature_source": "9218561e8356ee904d5b58590d60ebe9dfbca1dc",
+  "hmatrix_native_source": "7995b719cf02653bd08c90b1d0d10efa87007a23",
+  "hmatrix_mex_sha256": "af9610e732ca6d0d80906162c11b5dafbbb4a3d9abce6c36a0f6cb05018ea88e",
+  "projection_native_source": "7c96d79f6f13363592bf51ddbd088cf54a9d93a7",
+  "projection_mex_sha256": "a46681a206651da1b2ba6040d30cbddbf4458950397a34a0ae57e66776bf11e0",
+  "cpu_native_source": "b32faf7127fe86f9253bdeaf5f9c37fe8bdaaf8a",
+  "cpu_pyd_sha256": "f919392052ced87556a49074154fa2e830b785fff69b3823c3b85f689fc3e897",
+  "tet1_certificates": [
+    {
+      "order": 1,
+      "preconditioner_index": 0,
+      "coefficient_error": 1.4932073871700926e-14,
+      "independent_original_residual": 3.864974225853519e-15,
+      "gram_profile": "all-high-order",
+      "historical_cpu_target_reused": true
+    },
+    {
+      "order": 1,
+      "preconditioner_index": 1,
+      "coefficient_error": 1.4775307792408634e-14,
+      "independent_original_residual": 3.780178533915143e-15,
+      "gram_profile": "all-high-order",
+      "historical_cpu_target_reused": true
+    }
+  ],
+  "tet2_certificates": [
+    {
+      "order": 2,
+      "preconditioner_index": 0,
+      "coefficient_error": 2.823558063182995e-13,
+      "independent_original_residual": 3.3233820942801735e-14,
+      "gram_profile": "all-high-order",
+      "historical_cpu_target_reused": true
+    },
+    {
+      "order": 2,
+      "preconditioner_index": 1,
+      "coefficient_error": 2.840920118418596e-13,
+      "independent_original_residual": 3.3593848852005213e-14,
+      "gram_profile": "all-high-order",
+      "historical_cpu_target_reused": true
+    }
+  ],
+  "prior_failure": {
+    "accepted": false,
+    "source": "30550ad83bc80ab823f523baa628563a30ac3c30",
+    "case": {
+      "order": 2,
+      "preconditioner_index": 0,
+      "coefficient_error": 0.1699187917887357,
+      "independent_original_residual": 0.02119156582821583,
+      "gram_profile": "all-high-order",
+      "historical_cpu_target_reused": true
+    },
+    "root_cause": "Affine P2 outer near rule used degree5 instead of CPU degree10; gradient and RHS matched CPU while demag differed2.8percent",
+    "resolution": "Align symmetric degree10 near rule; fixed thresholds unchanged"
+  },
+  "simplex_degree10_moment_test_passed": true,
+  "common_memory_protocol": {
+    "warm": 5,
+    "measured": 100,
+    "final25_slope_limit_bytes_per_run": 65536,
+    "final25_delta_limit_bytes": 1048576
+  },
+  "cohorts": [
+    {
+      "create_destroy": false,
+      "preconditioner": "reference-diagonal",
+      "host": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    },
+    {
+      "create_destroy": false,
+      "preconditioner": "reference-chebyshev-graph",
+      "host": {
+        "final25_slope_bytes_per_run": -36633.99384615385,
+        "final25_delta_bytes": -626688,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    },
+    {
+      "create_destroy": true,
+      "preconditioner": "reference-diagonal",
+      "host": {
+        "final25_slope_bytes_per_run": 242.60923076923078,
+        "final25_delta_bytes": 4096,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    }
+  ],
+  "memory_solution_certificates": [
+    {
+      "certified_solutions": 100,
+      "maximum_coefficient_error": 2.823558063182995e-13,
+      "maximum_independent_original_residual": 3.3233820942801735e-14
+    },
+    {
+      "certified_solutions": 100,
+      "maximum_coefficient_error": 2.840920118418596e-13,
+      "maximum_independent_original_residual": 3.3593848852005213e-14
+    },
+    {
+      "certified_solutions": 100,
+      "maximum_coefficient_error": 2.823558063182995e-13,
+      "maximum_independent_original_residual": 3.3233820942801735e-14
+    }
+  ],
+  "final_live_handles": 0,
+  "packaging_tests_passed": 50,
+  "limitations": [
+    "Host create-close slope242.6bytes/run is not zero",
+    "Opaque runtime and global peak not certified",
+    "New physical MATLAB scope is tet only; hex and pyramid charge unsupported",
+    "Reused diagnostic native artifacts are separately pinned, not same-final-source release",
+    "Default native wheel install context SLX licensing CI and reciprocal review remain gates"
+  ]
+}

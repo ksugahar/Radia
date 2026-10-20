@@ -1,0 +1,123 @@
+{
+  "accepted": true,
+  "scope": "Applied-field physical hex order2 CPU explicit compensated PCG versus GPU shared Newton; component passed, separate random-RHS native unit still failed",
+  "cases": [
+    {
+      "topology": "hex",
+      "order": 2,
+      "dofs": 108,
+      "cpu_original_residual": 1.67343288242414e-14,
+      "cpu_iterations": 3,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 1.956335898892654e-12,
+      "independent_original_residual": 1.0647805934823521e-14,
+      "reported_residual": 1.064716550214502e-14,
+      "newton_iterations": 3,
+      "graph_launches": 0,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81"
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "dofs": 108,
+      "cpu_original_residual": 1.67343288242414e-14,
+      "cpu_iterations": 3,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 8.010659185477604e-13,
+      "independent_original_residual": 1.228762519786873e-14,
+      "reported_residual": 1.2287584895287258e-14,
+      "newton_iterations": 3,
+      "graph_launches": 145,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81"
+    }
+  ],
+  "release_accepted": false,
+  "cpu_oracle_arithmetic": "explicit compensated CPU factors and sparse maps; original fast CPU differences recorded separately",
+  "ngsolve": "6.2.2608",
+  "native_source_commit": "f4f7266debd42ed2ced0dd67c71b4a0de6ae68b4",
+  "binary_sha256": "2d0d8eadb1ff42ed5848e8191c58321df171d245aa97e7d78a476a38f2c39531",
+  "cpu_source_commit": "d2edbaf1ebcba1c44a1c124d1c20f4938b96d0a3",
+  "cpu_binary_sha256": "9b205d425c6244c25e0c8f995c0ed9c4da9b409e186391cf5e98b45c08fbaa5a",
+  "fixture_source_sha256": "ad0d4091cf3b212196602fa201bbaf0e4783fb586eb91132737bdf7c23260720",
+  "validator_sha256": "8e5aaf31d43de4206f358e82feff1fc74d87a2cfb1d16015bf9597ae1cce608a",
+  "relative_application_error_limit": 1e-11,
+  "production_law_source_sha256": {
+    "bh_law": "baa389dd6e4de70f349d318df46ac80fa7baaf6a83d5dbea0ad3d4d33be6daae",
+    "nonlinear": "2d3a70ccf7f6b4f75ba5e20c359ecfa8ea93806dd84042dd8416327829e00dc8"
+  },
+  "cpu_python_candidate": {
+    "source_commit": "e73a7a9ca97f0b1e569235a5e2ce45d284a3cd55",
+    "sha256": "98ebc6547995032c6ec68c1cfbfc449ff653227b4bb32db2ef08ee1a8fa09001",
+    "native_source": "d2edbaf1ebcba1c44a1c124d1c20f4938b96d0a3"
+  },
+  "cpu_physical_residual": 1.67343288242414e-14,
+  "applied_H_A_per_m": [
+    1000.0,
+    -2000.0,
+    5000.0
+  ],
+  "cpu_native_source_commit": "d2edbaf1ebcba1c44a1c124d1c20f4938b96d0a3",
+  "captured_inner_cases": [
+    {
+      "preconditioner": "mass-riesz",
+      "arithmetic": "explicit compensated16MiB",
+      "independent_original_residual": 3.97678332533234e-14,
+      "iterations": 9,
+      "timings": {
+        "solve_total_s": 0.004050000000000001,
+        "solve_factor_s": 0.0016785,
+        "solve_prec_s": 0.00021630000000000003,
+        "solve_bx_s": 0.0,
+        "solve_gmatvec_s": 0.0,
+        "solve_btx_s": 0.0,
+        "solve_mass_s": 0.0,
+        "solve_dot_s": 1.2400000000000002e-05,
+        "solve_ax_total_s": 0.0,
+        "solve_ax_other_s": 0.0,
+        "solve_pcg_update_s": 0.0001774,
+        "mass_riesz_local_blocks": 0.0,
+        "mass_riesz_max_block": 0.0,
+        "mass_riesz_geometry_preconditioner": 1.0,
+        "solve_apply_count": 10.0,
+        "solve_prec_count": 10.0,
+        "solve_dot_count": 31.0,
+        "last_solve_converged": 1.0,
+        "last_solve_final_relative_residual": 3.9767847299971194e-14,
+        "hmatvec_total_s": 0.0,
+        "hmatvec_zero_s": 0.0,
+        "hmatvec_permute_s": 0.0,
+        "hmatvec_leaf_s": 0.0,
+        "hmatvec_reduce_s": 0.0,
+        "hmatvec_meta_s": 0.0,
+        "hmatvec_lowrank_flop_est": 0.0,
+        "hmatvec_dense_flop_est": 0.0,
+        "hmatvec_calls": 0.0,
+        "hmatvec_lowrank_leaves": 0.0,
+        "hmatvec_dense_leaves": 0.0,
+        "hmatvec_mirrored_upper_leaves": 0.0,
+        "hmatvec_diagonal_leaves": 0.0,
+        "hmatvec_skipped_lower_leaves": 0.0,
+        "hmatvec_last_nd": 0.0,
+        "hmatvec_last_nthr": 0.0,
+        "hmatvec_lowrank_upper_leaves": 0.0,
+        "hmatvec_dense_upper_leaves": 0.0,
+        "hmatvec_inactive_skipped_leaves": 0.0,
+        "hmatvec_lowrank_directions": 0.0,
+        "hmatvec_dense_directions": 0.0,
+        "hmatvec_gemm_calls": 0.0,
+        "hmatvec_lowrank_rank_sum": 0.0,
+        "hmatvec_lowrank_rank_max": 0.0,
+        "hmatvec_lowrank_rank_le4": 0.0,
+        "hmatvec_lowrank_rank_le8": 0.0,
+        "hmatvec_lowrank_rank_le16": 0.0,
+        "hmatvec_lowrank_rank_le32": 0.0
+      }
+    }
+  ],
+  "native_unit_gate": {
+    "accepted": false,
+    "passed": 1,
+    "failed": 1,
+    "error": "new explicit compensated PCG random-RHS unit reached 10000 iterations; strict requested5e-14 unchanged"
+  }
+}

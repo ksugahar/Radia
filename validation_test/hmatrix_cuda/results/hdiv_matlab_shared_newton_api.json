@@ -1,0 +1,21 @@
+{
+  "schema": "radia.hdiv-matlab-shared-newton-api.v1",
+  "accepted": true,
+  "scope": "Small MATLAB shared Newton public adapter and lifecycle, not FE or release acceptance",
+  "adapter_source_commit": "eb4674c9ceba882178fbbecfff78ed8b62cc9f9b",
+  "native_source_commit": "7995b719cf02653bd08c90b1d0d10efa87007a23",
+  "native_mex_sha256": "af9610e732ca6d0d80906162c11b5dafbbb4a3d9abce6c36a0f6cb05018ea88e",
+  "native_fault_injection": true,
+  "worker_role": "gpu-validation-worker",
+  "matlab": "R2026a Update 5",
+  "cases": [
+    {"preconditioner": "reference-diagonal", "coefficient_error": 7.4179896090271874e-17, "independent_original_residual": 0},
+    {"preconditioner": "reference-chebyshev-graph", "coefficient_error": 7.4179896090271874e-17, "independent_original_residual": 0}
+  ],
+  "unsupported_preconditioner_rejected": true,
+  "failure_recovery": true,
+  "setup_uploaded_once": true,
+  "final_live_handles": 0,
+  "bounded_job": {"cpu_count": 2, "memory_limit_bytes": 8589934592, "wall_limit_seconds": 240, "elapsed_seconds": 12.844, "exit_code": 0},
+  "limitations": ["Diagnostic native payload, not a release wheel", "PreparedHDivNonlinear FE workflow still needs shared-route integration", "No new physical, mixed-mesh or memory-plateau certification"]
+}

@@ -1,0 +1,191 @@
+{
+  "schema": "radia.hdiv-resident-bh-material-component.v1",
+  "source_sha": "64e928dc1dfe9df70cc08bf087242872eea78d0f",
+  "python_binary_sha256": "38f1f8b2316dc96dbeab6ecf187880007c6b5d2ba2afbe61467de2797538523c",
+  "mex_binary_sha256": "39484193c3cbdf67f12c129b554af3489254f7b27eb3219b41c36483924ebd7a",
+  "accepted": true,
+  "scope": "Persistent shared GPU mapped BH energy gradient Hessian-vector owner; not Newton solve",
+  "configuration_epoch": 1,
+  "max_live_material_contexts": 2,
+  "setup_immutable": true,
+  "setup_upload_once_verified": true,
+  "python_cases": [
+    "tet1",
+    "tet2",
+    "hex1",
+    "hex2"
+  ],
+  "mex_cases": [
+    {
+      "family": "tet",
+      "order": 2,
+      "errors": [
+        6.323361054240798e-16,
+        3.682708012522447e-16,
+        1.1727965196324417e-16
+      ],
+      "setup_upload_bytes": 889424,
+      "device_payload_bound_bytes": 937052,
+      "epoch": 1
+    },
+    {
+      "family": "hex",
+      "order": 2,
+      "errors": [
+        9.856980298786298e-16,
+        8.295120064403858e-16,
+        0
+      ],
+      "setup_upload_bytes": 2442464.0,
+      "device_payload_bound_bytes": 2492588.0,
+      "epoch": 1
+    }
+  ],
+  "memory_protocol": {
+    "warm": 5,
+    "measured": 100,
+    "window": 25,
+    "slope_limit": 65536,
+    "delta_limit": 1048576,
+    "cuda_initialized_before_baseline": true,
+    "observer_not_subtracted": true
+  },
+  "python_memory": [
+    {
+      "mode": "tangent",
+      "host": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "median_seconds": 0.0005617000060738064,
+      "observer_host": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "observer_device": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    },
+    {
+      "mode": "gradient-only",
+      "host": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "median_seconds": 0.0003329499959363602,
+      "observer_host": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "observer_device": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    },
+    {
+      "mode": "create-evaluate-close",
+      "host": {
+        "final25_slope_bytes_per_run": 601.7969230769231,
+        "final25_delta_bytes": -446464,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    }
+  ],
+  "mex_memory": [
+    {
+      "mode": 1,
+      "host": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "median_seconds": 0.00062935,
+      "observer_host": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "observer_device": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    },
+    {
+      "mode": 2,
+      "host": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "median_seconds": 0.00403505,
+      "observer_host": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "observer_device": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    }
+  ],
+  "python_owner_stats_before_close": {
+    "dofs": 108,
+    "points": 343,
+    "device_payload_bound_bytes": 2492588,
+    "setup_upload_bytes": 2442464,
+    "state_upload_bytes": 324000,
+    "evaluations": 225,
+    "epoch": 1,
+    "closed": false
+  },
+  "python_closed": true,
+  "overflow_recovery": {
+    "kind": "post-allocation arithmetic overflow with valid recovery",
+    "warm": 5,
+    "measured": 10,
+    "host_delta": 0,
+    "device_delta": 0
+  },
+  "limitations": [
+    "No shared Newton or nonlinear original-equation residual acceptance on this source",
+    "No speedup inference from unmatched artifacts or tiny timings",
+    "Fixed device payload bound excludes opaque runtime context and is not global peak",
+    "Not exhaustive constructor fail-N or clear-mex fault coverage",
+    "No pyramid mixed charge Gram, wheel or release acceptance"
+  ]
+}

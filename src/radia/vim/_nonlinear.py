@@ -223,6 +223,32 @@ def _bh_inverse_funcs(Harr, Barr):
     is undefined, so H(M) is extended continuously with a steep linear barrier (slope Kbar = 1/_CHI_DIFF_FLOOR).
     Its energy is C1; the tangent can jump at the barrier -> the energy form is repelled from the unphysical |M| > Mmax region (without
     it, the M-iterates overshoot Msat and the Newton wanders / limit-cycles)."""
+    Hof,Wco,Hder,Mmax,Kbar,Mcap,Hlast,Wzero = _bh_inverse_data(Harr,Barr)
+
+    def fields(Mmag):
+        Mmag = np.asarray(Mmag, float)
+        Mm = np.minimum(Mmag, Mcap)
+        h = Hof(Mm)
+        nu_diff = Hder(Mm)
+        nu_sec = np.divide(h, Mmag, out=np.full_like(Mmag, float(Hder(0.0))),
+                           where=Mmag > 0)
+        over = Mmag > Mcap
+        if np.any(over):
+            nu_sec[over] = (Hlast + Kbar * (Mmag[over] - Mcap)) / Mmag[over]
+            nu_diff[over] = Kbar
+        return nu_sec, nu_diff
+
+    def wco(Mmag):
+        Mmag = np.asarray(Mmag, float)
+        Mm = np.minimum(Mmag, Mcap)
+        d = np.maximum(Mmag - Mcap, 0.0)
+        return Wco(Mm) - Wzero + Hlast * d + 0.5 * Kbar * d * d
+
+    return fields, wco, Mmax
+
+
+def _bh_inverse_data(Harr, Barr):
+    """Single construction of the CPU inverse polynomial and barrier data."""
     from scipy.interpolate import PchipInterpolator
     Mof, _, _, Hmax, Mmax = _bh_table_funcs(Harr, Barr)
     Hs = np.concatenate([[0.0], np.logspace(-2, np.log10(max(Hmax, 1.0)), 800)])
@@ -247,26 +273,18 @@ def _bh_inverse_funcs(Harr, Barr):
     Hlast = float(Hof(Mcap))
     Wzero = float(Wco(0.0))
 
-    def fields(Mmag):
-        Mmag = np.asarray(Mmag, float)
-        Mm = np.minimum(Mmag, Mcap)
-        h = Hof(Mm)
-        nu_diff = Hder(Mm)
-        nu_sec = np.divide(h, Mmag, out=np.full_like(Mmag, float(Hder(0.0))),
-                           where=Mmag > 0)
-        over = Mmag > Mcap
-        if np.any(over):                                      # continuous H, C1 energy beyond Mcap
-            nu_sec[over] = (Hlast + Kbar * (Mmag[over] - Mcap)) / Mmag[over]
-            nu_diff[over] = Kbar
-        return nu_sec, nu_diff
+    return Hof,Wco,Hder,Mmax,Kbar,Mcap,Hlast,Wzero
 
-    def wco(Mmag):
-        Mmag = np.asarray(Mmag, float)
-        Mm = np.minimum(Mmag, Mcap)
-        d = np.maximum(Mmag - Mcap, 0.0)
-        return Wco(Mm) - Wzero + Hlast * d + 0.5 * Kbar * d * d
 
-    return fields, wco, Mmax
+def _bh_inverse_payload(Harr, Barr):
+    # Per-interval coefficients are highest-degree first (PCHIP c.T order).
+    """Owned numeric payload for shared native BH evaluation; no new fit."""
+    Hof,Wco,Hder,_,Kbar,Mcap,Hlast,Wzero = _bh_inverse_data(Harr,Barr)
+    return dict(knots=np.ascontiguousarray(Hof.x),
+                coefficients=np.ascontiguousarray(Hof.c.T.ravel()),
+                integral_base=np.ascontiguousarray(Wco(Hof.x)-Wzero),
+                cap=Mcap,barrier_slope=Kbar,last_field=Hlast,
+                initial_reluctivity=float(Hder(0.0)))
 
 
 class _EnergyMaterialQuadrature:

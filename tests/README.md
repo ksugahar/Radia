@@ -53,6 +53,40 @@ The default `pytest` configuration discovers only `tests/`.  Run
 `validation_test/` explicitly when doing release validation or research-grade
 checks.
 
+## HDiv-MMM mesh families and CPU/GPU test tiers
+
+HDiv-MMM requires three separate mesh families:
+
+| Required family | Lightweight coverage in `tests/` | Larger coverage in `validation_test/` |
+| --- | --- | --- |
+| Tetrahedra only (`tet only`) | Minimal HDiv assembly and solve, orientation, true residual and a small independent reference | Physical convergence, nonlinear BH, reuse and scaling |
+| Hexahedra only (`hex only`) | The same small numerical checks for hexahedra | Physical convergence, nonlinear BH, reuse and scaling |
+| Tetrahedra and hexahedra joined through pyramids (`tet-hex mixed thru pyramid`) | A connected transition patch containing all three element types; shared-face orientation and normal-flux continuity, assembly, solve and true residual | A connected mixed-mesh physical model, mesh/order convergence, nonlinear BH and scaling |
+
+A disconnected collection of elements or a single pyramid does not satisfy the
+mixed transition case. NGSolve owns the HDiv basis, Piola maps, orientation and
+quadrature. An unsupported upstream operation must have a reproducible explicit
+failure; record that family's status as unsupported or unaccepted, never passed.
+Pyramid-specific defects are reported upstream with the exact version and a
+minimal reproducer. Waiting for their fix must not block the other validated mesh
+families or the AMS, CompactAMG and CSR GPU development work.
+
+Apply the same division to GPU testing. Small, deterministic GPU numerical,
+backend-selection, error and lifecycle checks belong in `tests/` (or the owning
+package's lightweight tests). Use an explicit GPU lane with declared prerequisites;
+CPU-only CI must not silently substitute a host backend. Large GPU physics,
+scaling, transfer-inclusive timing, peak-memory, repeated-run plateau and fault
+sweeps belong in `validation_test/`, with machine-readable JSON evidence.
+GPU HDiv-MMM coverage must track the same three mesh families, with independent
+CPU agreement and original-equation true residuals. A source contract or mocked
+backend test does not replace a numerical run. A missing required fixture fails;
+only explicitly optional hardware checks may report a visible skip.
+
+These are required coverage categories, not a claim that all three families or
+both execution routes are currently implemented or accepted. Large Cubit-generated
+mixed meshes and their export/checking workflows belong in `validation_test/`;
+lightweight tests consume small checked fixtures.
+
 ## Running Lightweight Tests
 
 ```powershell

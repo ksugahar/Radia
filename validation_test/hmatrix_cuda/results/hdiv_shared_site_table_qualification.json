@@ -1,0 +1,144 @@
+{
+  "accepted": true,
+  "adapter_source": "ccf22993a",
+  "cpu_native_source": "6af6c786763ab34f1c6fdfc8a1e36861d2e1e840",
+  "native_source": "7995b719cf02653bd08c90b1d0d10efa87007a23",
+  "maximum_coefficient_error": 2.142578895767253e-12,
+  "maximum_original_residual": 1.685448249535868e-14,
+  "opaque_runtime_retention_zero": false,
+  "owners": {
+    "host_attempts": 0,
+    "host_live_bytes": 0,
+    "device_attempts": 0,
+    "device_live_bytes": 0,
+    "device_free_errors": 0,
+    "resource_attempts": 0,
+    "live_resources": 0,
+    "resource_free_errors": 0,
+    "publication_attempts": 2314
+  },
+  "no_engine": true,
+  "elapsed_seconds": 119.92200000000594,
+  "cpu_binary_sha256": "b5ad680c47e64b2c0850535cf651404aee99c2640164d3242906eec06bde6736",
+  "build_seconds": 138.92199999999139,
+  "unit_tests_passed": 4,
+  "scope": "Fresh shared HEX table CPU component plus historical GPU7995 physical hex2 BH and common100 memory, not final same-SHA release",
+  "cohorts": [
+    {
+      "scope": "Python persistent physical BH Newton",
+      "preconditioner": "reference-diagonal",
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope_bytes_per_run": [
+        0.0,
+        0.0
+      ],
+      "final_25_delta_bytes": [
+        0.0,
+        0.0
+      ],
+      "full_100_delta_bytes": [
+        0.0,
+        0.0
+      ],
+      "full_100_ols_slope_bytes_per_run": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scope": "Python persistent physical BH Newton",
+      "preconditioner": "reference-chebyshev-graph",
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope_bytes_per_run": [
+        0.0,
+        0.0
+      ],
+      "final_25_delta_bytes": [
+        0.0,
+        0.0
+      ],
+      "full_100_delta_bytes": [
+        0.0,
+        0.0
+      ],
+      "full_100_ols_slope_bytes_per_run": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scope": "MCP physical BH prepare-solve-publish-close",
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope_bytes_per_run": [
+        -143221.36615384615,
+        0.0
+      ],
+      "final_25_delta_bytes": [
+        0.0,
+        0.0
+      ],
+      "full_100_delta_bytes": [
+        9289728.0,
+        0.0
+      ],
+      "full_100_ols_slope_bytes_per_run": [
+        78963.48188418841,
+        0.0
+      ]
+    }
+  ],
+  "fixed_input_lifetime_control": {
+    "completed": true,
+    "scope": "Fresh CPU6af immutable-table native Gram fixed-input constructor vs retained-object statecheck, not release",
+    "cohorts": [
+      {
+        "scope": "constructor-destroy-fixed-input",
+        "warm": 5,
+        "measured": 1000,
+        "minimum": [
+          935743488.0,
+          446758912.0
+        ],
+        "maximum": [
+          937676800.0,
+          446758912.0
+        ],
+        "final_25_slope": [
+          0.0,
+          0.0
+        ],
+        "final_25_delta": [
+          0.0,
+          0.0
+        ],
+        "within_frozen_memory_bounds": true
+      },
+      {
+        "scope": "statecheck-retained-object",
+        "warm": 5,
+        "measured": 1000,
+        "minimum": [
+          937676800.0,
+          446758912.0
+        ],
+        "maximum": [
+          937676800.0,
+          446758912.0
+        ],
+        "final_25_slope": [
+          0.0,
+          0.0
+        ],
+        "final_25_delta": [
+          0.0,
+          0.0
+        ],
+        "within_frozen_memory_bounds": true
+      }
+    ],
+    "elapsed_seconds": 33.5
+  }
+}

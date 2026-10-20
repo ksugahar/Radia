@@ -1,0 +1,45 @@
+{
+  "schema": "radia.hdiv-bh-constructor-fault-component.v1",
+  "accepted": true,
+  "native_source": "f4f7266debd42ed2ced0dd67c71b4a0de6ae68b4",
+  "binary_sha256": "79551161b96b8e50a7ae00886b1a248972db882e2c1cd81c5e8e6918f17c50dd",
+  "fault_injection": true,
+  "release_artifact": false,
+  "events": 12189,
+  "seconds": 97.6388617,
+  "cases": [
+    {
+      "kind": "host",
+      "enumerated_sites": 12118,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        524288,
+        0
+      ]
+    },
+    {
+      "kind": "device",
+      "enumerated_sites": 23,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        589824,
+        0
+      ]
+    },
+    {
+      "kind": "publication",
+      "enumerated_sites": 3,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        524288,
+        0
+      ]
+    }
+  ],
+  "stale_after_reload_rejected": true,
+  "scope": "Tracked constructor host/device allocations and publication unwind only; ordinary STL boundary allocations and full Newton fault coverage remain pending",
+  "opaque_runtime_retention_zero": false
+}

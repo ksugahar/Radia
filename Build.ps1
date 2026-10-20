@@ -44,6 +44,7 @@ param(
     [switch]$HMatrixCudaOnly,    # isolated resident HACApK leaf application
     [string]$HMatrixMklRoot,     # explicit isolated MKL for complete C HACApK assembly
     [switch]$HMatrixFaultInjection, # isolated diagnostic hooks, never a release default
+    [switch]$HDivPythonBindings,  # MEX-free shared resident operator component
     [string]$GpuBuildAdmission,  # private reviewed HDiv GPU worker/task/source admission
     [string]$GpuBuildAdmissionSha256,
     [switch]$ProjectionCudaOnly, # experimental NGSolve target replay bridge
@@ -53,6 +54,7 @@ param(
     [switch]$FmmCudaOnly,         # isolated numeric Laplace FMM CUDA gateway
     [switch]$AmsCudaOnly,         # experimental AMS snapshot adapter + CUDA MEX
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
+    [switch]$CsrPythonBindings,     # optional direct Python CSR CUDA binding
     [switch]$CudaMexOnly,          # isolated CUDA-only assembled-operator gateway
     [switch]$OptunaMexOnly,        # mexcuda kernels + CPU host control
     [switch]$RequireNativeProvenance, # reject dirty source before a provenance-bearing build
@@ -60,6 +62,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($CsrPythonBindings -and -not $CudaMexOnly) { throw '-CsrPythonBindings requires -CudaMexOnly' }
+if ($HDivPythonBindings -and -not $HMatrixCudaOnly) { throw '-HDivPythonBindings requires -HMatrixCudaOnly' }
 if ($ProjectionLifecycleDiagnostic -and -not $ProjectionCudaOnly) { throw 'Projection lifecycle diagnostic requires the isolated Projection target' }
 if ([bool]$GpuBuildAdmission -ne [bool]$GpuBuildAdmissionSha256) { throw 'GPU build admission and hash must be supplied together' }
 if ($GpuBuildAdmission -and -not ($HMatrixCudaOnly -or $ProjectionCudaOnly -or $FmmCudaOnly -or $FieldCudaOnly -or $IhCudaOnly -or $AmsCudaOnly -or $CudaMexOnly)) { throw 'GPU build admission requires an isolated native CUDA target' }
@@ -87,6 +91,7 @@ if ($HMatrixCudaOnly) {
     $hMatrixBuildArgs = @()
     if ($HMatrixMklRoot) { $hMatrixBuildArgs += @('--mkl-root', $HMatrixMklRoot) }
     if ($HMatrixFaultInjection) { $hMatrixBuildArgs += '--fault-injection' }
+    if ($HDivPythonBindings) { $hMatrixBuildArgs += '--python-bindings' }
     if ($RequireNativeProvenance) { $hMatrixBuildArgs += '--require-clean-source' }
     if ($GpuBuildAdmission) { $hMatrixBuildArgs += @('--build-admission', $GpuBuildAdmission, '--build-admission-sha256', $GpuBuildAdmissionSha256) }
     & python (Join-Path $PSScriptRoot 'packages/radia-simulink/tools/build_hmatrix_cuda.py') @hMatrixBuildArgs
@@ -175,6 +180,7 @@ if ($CudaMexOnly) {
         if ($LASTEXITCODE -ne 0 -or $cudaStatus) { throw 'CUDA native provenance requires a clean source checkout' }
     }
     $cudaMexBuildArgs = @()
+    if ($CsrPythonBindings) { $cudaMexBuildArgs += '--python-bindings' }
     if ($GpuBuildAdmission) { $cudaMexBuildArgs += @('--build-admission', $GpuBuildAdmission, '--build-admission-sha256', $GpuBuildAdmissionSha256) }
     & python (Join-Path $cudaRoot 'packages/radia-simulink/tools/build_cuda_mex.py') --out (Join-Path $cudaRoot 'build-cuda-mex') @cudaMexBuildArgs
     if ($LASTEXITCODE -ne 0) { throw 'CUDA MEX build failed' }

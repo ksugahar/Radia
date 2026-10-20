@@ -110,6 +110,24 @@
       "validation": "validation_test/hmatrix_cuda/validate_curved_hdiv.py",
       "cpu_reference": "Independent Python/pybind11 NGSolve charge map, mass, sparsecholesky and original-equation true residual",
       "cpu_fallback": false
+    },
+    {
+      "id": "normalized-leaf-resident-boundary",
+      "scope": "Experimental schema-2 upper/diagonal normalized factors, explicit one-based ordering and physical scale; direct shared Python/MEX packer. Numeric boundary only, not FE geometry or release acceptance.",
+      "source": "packages/radia-simulink/native/radia_cuda_hmatrix.cu",
+      "matlab": "packages/radia-simulink/matlab/+radia/+gpu/HMatrixOperator.m",
+      "validation": "tests/matlab/test_hmatrix_normalized_leaves.m",
+      "cpu_reference": "Explicit normalized matrix action with nontrivial scale, permutation and low-rank off-diagonal leaf",
+      "cpu_fallback": false
+    },
+    {
+      "id": "explicit-ng-host-hdiv-bh",
+      "scope": "Experimental explicit NGSolve/Radia CPU host assembly and shared GPU BH frozen-tangent Newton, selected affine hex orders1/2 physically certified. No CPU solve prerequisite, Engine or required file exchange. No mixed/pyramid or CUDA geometry assembly claim.",
+      "source": "packages/radia-simulink/native/hmatrix_nonlinear_material.cuh",
+      "matlab": "packages/radia-simulink/matlab/+radia/+gpu/PreparedHDivNonlinear.m",
+      "validation": "validation_test/hmatrix_cuda/results/hdiv_host_setup_workflow.json",
+      "cpu_reference": "Independent CPU compensated demag action and production inverse BH with original-equation residual; all 300 measured solutions certified",
+      "cpu_fallback": false
     }
   ],
   "legacy_matlab_sources": "Historical sources remain under their integration owner but are not claims of supported CPU MEX or included wholesale in the GPU wheel."

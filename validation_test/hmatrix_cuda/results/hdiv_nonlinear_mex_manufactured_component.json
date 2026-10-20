@@ -1,0 +1,177 @@
+{
+  "accepted": true,
+  "scope": "MATLAB manufactured connected tet/hex nonlinear FE roots with independent CPU factor certification; not physical excitation, mixed MMM or release acceptance",
+  "cases": [
+    {
+      "topology": "tet",
+      "order": 1,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 1.1501807433894124e-15,
+      "reported_residual": 8.340646741992424e-17,
+      "newton_iterations": 4
+    },
+    {
+      "topology": "tet",
+      "order": 1,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 1.3632946259168387e-15,
+      "reported_residual": 5.369700416591319e-17,
+      "newton_iterations": 4
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 1.513037348543248e-14,
+      "reported_residual": 1.2530868139800894e-16,
+      "newton_iterations": 4
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 1.2435202862975195e-14,
+      "reported_residual": 1.9179013050486687e-16,
+      "newton_iterations": 4
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 6.981710057937321e-15,
+      "reported_residual": 1.5468393288395163e-16,
+      "newton_iterations": 5
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 7.191085053834663e-15,
+      "reported_residual": 9.149463102275325e-17,
+      "newton_iterations": 5
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 9.393082213578424e-14,
+      "reported_residual": 2.2965757052035375e-15,
+      "newton_iterations": 6
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 1.9487877864770085e-13,
+      "reported_residual": 1.2862698215058384e-15,
+      "newton_iterations": 6
+    }
+  ],
+  "native_source_commit": "f4f7266debd42ed2ced0dd67c71b4a0de6ae68b4",
+  "mex_sha256": "f12cd8fcb49f01eea3e1f14f759fb29d2dec2f3da5d2b948ecffd88e441c2151",
+  "cpu_source_commit": "ba94077fd68c940386e9de2134095cf29232d384",
+  "cpu_binary_sha256": "ac9cdf61eae530c1c3f8ac0f077c2479841a509388964850a5b6fadbc61b6afa",
+  "independent_certificates": [
+    {
+      "topology": "tet",
+      "order": 1,
+      "solution_sha256": "28fb8b1f45d21b6437541b4ec3d6f85152e9a6ac779b650d7e363eb82374aae1",
+      "certificates": [
+        {
+          "index": 0,
+          "coefficient_error": 1.1501807433894124e-15,
+          "independent_original_residual": 7.707411596410068e-16
+        },
+        {
+          "index": 1,
+          "coefficient_error": 1.3632946259168387e-15,
+          "independent_original_residual": 8.194705551712647e-16
+        }
+      ]
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "solution_sha256": "b1af94dab3915fb39f10d7e4b47e2d95b91c6d5f7afff2090a09e3f38dcb80f5",
+      "certificates": [
+        {
+          "index": 0,
+          "coefficient_error": 1.513037348543248e-14,
+          "independent_original_residual": 4.0712686735231646e-16
+        },
+        {
+          "index": 1,
+          "coefficient_error": 1.2435202862975195e-14,
+          "independent_original_residual": 3.5649408350821567e-16
+        }
+      ]
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "solution_sha256": "c9eee2b0e99806432f06a4690114d3876ab7b251a1a6357662afbdf75fc587ed",
+      "certificates": [
+        {
+          "index": 0,
+          "coefficient_error": 6.981710057937319e-15,
+          "independent_original_residual": 4.46183035464359e-16
+        },
+        {
+          "index": 1,
+          "coefficient_error": 7.191085053834662e-15,
+          "independent_original_residual": 4.313745532048012e-16
+        }
+      ]
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "solution_sha256": "4e36cbf788043f8a69bad48dd04f8a638edba39d3f634c5e5963719f226d5e19",
+      "certificates": [
+        {
+          "index": 0,
+          "coefficient_error": 9.393082213578426e-14,
+          "independent_original_residual": 2.5012401474160805e-15
+        },
+        {
+          "index": 1,
+          "coefficient_error": 1.948787786477009e-13,
+          "independent_original_residual": 1.4762716324134627e-15
+        }
+      ]
+    }
+  ],
+  "memory": [
+    {
+      "preconditioner": "reference-diagonal",
+      "host": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    },
+    {
+      "preconditioner": "reference-chebyshev-graph",
+      "host": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    }
+  ],
+  "memory_warm": 5,
+  "memory_runs": 100,
+  "memory_independent_cpu_certified_solutions": 200,
+  "memory_max_independent_original_residual": 2.5012401474160805e-15,
+  "release_accepted": false
+}

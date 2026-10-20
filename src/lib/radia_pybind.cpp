@@ -4042,6 +4042,29 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "Materialize a bounded exact normalized Gram for medium-mesh validation.")
         .def_property_readonly("uses_exact_dense_normalized_gram",
              &RadHACApKChargeGram::UsesExactDenseNormalizedGram)
+        .def("_resident_leaf_snapshot", [](const RadHACApKChargeGram& s,py::object memory_budget) {
+                 if(py::isinstance<py::bool_>(memory_budget))throw py::value_error("Resident leaf snapshot budget must not be bool");
+                 const auto maximum_memory_mb=py::cast<std::size_t>(memory_budget);
+                 if (!maximum_memory_mb || maximum_memory_mb>512)
+                     throw std::invalid_argument("Resident leaf snapshot budget must be 1..512 MiB");
+                 // Retain the GIL: this copies an exclusively owned immutable tree.
+                 // The caller must not rebuild/mutate it from another native call.
+                 const auto snapshot=s.ResidentLeafSnapshot(maximum_memory_mb*(1024ULL*1024ULL));
+                 py::dict result;result["schema"]="radia.normalized-hacapk-leaves.v1";
+                 result["dimension"]=snapshot.dimension;result["normalization_active"]=snapshot.normalization_active;
+                 result["owned_cpp_payload_upper_bound_bytes"]=snapshot.owned_bytes;
+                 result["permutation"]=to_numpy_1d(snapshot.permutation);
+                 result["scale"]=to_numpy_1d(snapshot.scale);
+                 py::list leaves;
+                 for (const auto& leaf:snapshot.leaves) {
+                     py::dict value;value["row"]=leaf.row;value["column"]=leaf.column;
+                     value["rows"]=leaf.rows;value["columns"]=leaf.columns;value["rank"]=leaf.rank;
+                     value["a1"]=to_numpy_1d(leaf.a1);value["a2"]=to_numpy_1d(leaf.a2);
+                     leaves.append(std::move(value));
+                 }
+                 result["leaves"]=std::move(leaves);return result;
+             },py::arg("maximum_memory_mb")=256,
+             "Private bounded deep copy of normalized upper HACApK factors. Caller-exclusive; no pointer or dense reconstruction.")
         .def("charge_sigma",
              [](const RadHACApKChargeGram& s) {
                  return to_numpy_1d(s.ChargeSigma());
@@ -4267,6 +4290,23 @@ PYBIND11_MODULE(_radia_pybind, m) {
                      std::move(s));
              },
              "Return the persistent C++ N=B^T G B operator as an NGSolve BaseMatrix.")
+        .def("_apply_configured_demag_compensated",
+             [](const RadHACApKChargeGram& s, F64Array x, py::object memory_budget) {
+                 if(py::isinstance<py::bool_>(memory_budget))throw py::value_error("Compensated demag budget must not be bool");
+                 const auto maximum_memory_mb=py::cast<std::size_t>(memory_budget);
+                 const auto input=x.request();
+                 if (input.ndim!=1 || input.shape[0]!=s.ConfiguredNFace())
+                     throw std::invalid_argument("Compensated demag input size mismatch");
+                 if (!maximum_memory_mb || maximum_memory_mb>512)
+                     throw std::invalid_argument("Compensated demag budget must be 1..512 MiB");
+                 const auto budget=maximum_memory_mb<<20;
+                 if (static_cast<std::size_t>(input.shape[0])>budget/(16*sizeof(double)))
+                     throw std::runtime_error("Compensated demag adapter copy exceeds budget");
+                 const auto* data=static_cast<const double*>(input.ptr);
+                 std::vector<double> values(data,data+input.shape[0]);
+                 return to_numpy_1d(s.ApplyConfiguredDemagCompensated(values,budget));
+             },py::arg("x"),py::arg("maximum_memory_mb")=32,
+             "Explicit bounded independent CPU compensated-factor oracle, not an automatic solver fallback.")
         .def("apply_configured_demag",
              [](RadHACApKChargeGram& s, F64Array x_a, bool symmetric) {
                  auto input = x_a.request();
@@ -4511,7 +4551,10 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "Apply the configured persistent mass-Riesz map in C++.")
         .def("solve_configured_linear_material_mass_riesz",
              [](RadHACApKChargeGram& s, double inv_chi, F64Array rhs_a,
-                double tol, int maxit, bool symmetric, py::object x0_obj) {
+                double tol, int maxit, bool symmetric, py::object x0_obj, py::object memory_budget) {
+                 if(py::isinstance<py::bool_>(memory_budget))throw py::value_error("Compensated memory budget must not be bool");
+                 const auto compensated_memory_mb=py::cast<std::size_t>(memory_budget);
+                 if(compensated_memory_mb>512)throw py::value_error("Compensated memory budget exceeds 512 MiB");
                  const auto rhs_view = array_1d_view<double>(rhs_a, "rhs");
                  Array1DView<double> x0_view;
                  std::optional<F64Array> x0_array;
@@ -4531,7 +4574,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          x0_ptr = &x0;
                      }
                      m = s.SolveConfiguredLinearMaterial(inv_chi, rhs, tol, maxit, iters,
-                                                         /*mass_riesz=*/true, symmetric, x0_ptr);
+                                                         /*mass_riesz=*/true, symmetric, x0_ptr, compensated_memory_mb*(std::size_t(1)<<20));
                  }
                  py::dict d;
                  d["m"] = to_numpy_1d(m);
@@ -4540,7 +4583,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  return d;
              },
              py::arg("inv_chi"), py::arg("rhs"), py::arg("tol") = 1e-8,
-             py::arg("maxit") = 5000, py::arg("symmetric") = true, py::arg("x0") = py::none(),
+             py::arg("maxit") = 5000, py::arg("symmetric") = true, py::arg("x0") = py::none(), py::arg("compensated_memory_mb") = 0,
              "Solve with the configured charge map and mass matrix; only vectors cross Python.")
         .def("solve_configured_linear_material_auto_prec",
              [](RadHACApKChargeGram& s, double inv_chi, F64Array rhs_a,

@@ -1,0 +1,196 @@
+{
+  "schema": "radia.csr-bounded-components.v1",
+  "source_commit": "e7afd9754be9ee8971978aeb162dabd0d15f8de0",
+  "scope": "real SPD CSR algebra only; 3 and 64 rows; not HDiv/nonlinear/release acceptance",
+  "units": "dimensionless algebra",
+  "mex_binary_sha256": "4e63a2f2284516f40104b1398ea2f7831da2d4d0384d108ccb385e3d5e0b4351",
+  "python_binary_sha256": "40328a42d767a12f168677e7456cd3fba8e27a6942d25c627fd8fb6c0b2ff420",
+  "python_binding_abi": "cp312-win_amd64",
+  "pybind11_headers": {
+    "MAJOR": "3",
+    "MINOR": "1",
+    "PATCH": "0"
+  },
+  "toolchain": {
+    "msvc": "14.44.35207",
+    "matlab": "R2026a Update 5",
+    "cuda": "MATLAB bundled 12.8"
+  },
+  "build": {
+    "seconds": 53.171999999991385,
+    "peak_job_commit_bytes": 2423021568,
+    "cpus": 4,
+    "job_commit_limit_bytes": 17179869184
+  },
+  "run_envelope": {
+    "cpus": 2,
+    "host_job_commit_bytes": 8589934592,
+    "device_limit_bytes": 8589934592,
+    "seconds": 240
+  },
+  "numerical": {
+    "python": {
+      "accepted": true,
+      "cases": [
+        {
+          "backend": "cpu",
+          "relative_l2": 0.0,
+          "true_relative_residual": 0.0,
+          "transfer_inclusive_seconds": 0.05529089999618009
+        },
+        {
+          "backend": "gpu",
+          "relative_l2": 1.1000965454846568e-16,
+          "true_relative_residual": 1.7000656293592631e-16,
+          "transfer_inclusive_seconds": 0.17349679999460932
+        },
+        {
+          "backend": "cpu",
+          "relative_l2": 2.5968405904592014e-17,
+          "true_relative_residual": 1.834069853664808e-16,
+          "transfer_inclusive_seconds": 0.11019130000204314
+        },
+        {
+          "backend": "gpu",
+          "relative_l2": 1.8070770441339566e-13,
+          "true_relative_residual": 2.8920038103596993e-13,
+          "transfer_inclusive_seconds": 0.06069559999741614
+        }
+      ],
+      "receipt_sha256": "947286340b64d8f0ea22aaf586b27405d87c4959063f3e92ab5b64368dbbdcc1"
+    },
+    "matlab-cpu": {
+      "accepted": true,
+      "cases": [
+        {
+          "relative_l2": 1.555771454544192e-16,
+          "true_relative_residual": 1.8895173057237605e-16,
+          "iterations": 3,
+          "call_seconds_excluding_input_upload": 0.0154705
+        },
+        {
+          "relative_l2": 1.8071979701608208e-13,
+          "true_relative_residual": 2.892003558060421e-13,
+          "iterations": 21,
+          "call_seconds_excluding_input_upload": 0.0009408
+        }
+      ],
+      "receipt_sha256": "39eae822d9fe728cd4a5c7f87e3b3870343e7bd250a57e2ad5e11d5ce4c48d4a"
+    },
+    "matlab-gpu": {
+      "accepted": true,
+      "cases": [
+        {
+          "relative_l2": 1.1000965454846568e-16,
+          "true_relative_residual": 1.700065629359263e-16,
+          "iterations": 3,
+          "call_seconds_excluding_input_upload": 0.0216339
+        },
+        {
+          "relative_l2": 1.8070732190740806e-13,
+          "true_relative_residual": 2.8920038103596993e-13,
+          "iterations": 21,
+          "call_seconds_excluding_input_upload": 0.0026145
+        }
+      ],
+      "receipt_sha256": "3207f447d488db4c6854281fb0e5a93720b3b0aaa3cc91d9c6e3bb62987f4c47"
+    }
+  },
+  "memory": {
+    "matlab-cpu": {
+      "warm_runs": 5,
+      "measured_runs": 100,
+      "final25_host_slope_bytes": -1.8342652651102635e-08,
+      "final25_host_delta_bytes": 0
+    },
+    "matlab-gpu": {
+      "warm_runs": 5,
+      "measured_runs": 100,
+      "final25_host_slope_bytes": -3.5310086538833085e-08,
+      "final25_host_delta_bytes": 0
+    },
+    "python-gpu": {
+      "warm_runs": 5,
+      "measured_runs": 100,
+      "final25_host_slope_bytes": 0.0,
+      "final25_host_delta_bytes": 0,
+      "final25_device_free_range_bytes": 0
+    }
+  },
+  "context_trace": {
+    "observer": {
+      "gate": "observer-control-no-observed-context",
+      "context_api_calls": 0,
+      "opaque_export_tables": 0,
+      "observer_errors": 0,
+      "hook_errors": 0,
+      "collector_dropped_events": 0,
+      "script_sha256": "fd351d8c36fe7a4767521850ad77cd2946a66a1c2a4478f8750b0d52c9357d34",
+      "receipt_sha256": "093650bafc304aa64bc27824f14acd3d596cc68dfe74a4c13105c5efd99df9aa"
+    },
+    "gpu": {
+      "gate": "positive-control-detected",
+      "context_api_calls": 12,
+      "opaque_export_tables": 6,
+      "observer_errors": 0,
+      "hook_errors": 0,
+      "collector_dropped_events": 0,
+      "script_sha256": "fd351d8c36fe7a4767521850ad77cd2946a66a1c2a4478f8750b0d52c9357d34",
+      "receipt_sha256": "4b85c9fce0f57963522568b67eda5628f56997358d8932f13df1799aa41ed32f"
+    },
+    "cpu": {
+      "gate": "no-observed-context-API-in-measured-interval",
+      "context_api_calls": 0,
+      "opaque_export_tables": 0,
+      "observer_errors": 0,
+      "hook_errors": 0,
+      "collector_dropped_events": 0,
+      "script_sha256": "fd351d8c36fe7a4767521850ad77cd2946a66a1c2a4478f8750b0d52c9357d34",
+      "receipt_sha256": "e4c50e0ea8f123dbd45781259953e49da0674bf23d4bce594ab527cf2337e916"
+    },
+    "visibility": {
+      "gate": "process-visible-device-count-zero",
+      "context_api_calls": 0,
+      "opaque_export_tables": 0,
+      "observer_errors": 0,
+      "hook_errors": 0,
+      "collector_dropped_events": 0,
+      "script_sha256": "fd351d8c36fe7a4767521850ad77cd2946a66a1c2a4478f8750b0d52c9357d34",
+      "receipt_sha256": "6c6d4df8a9c04f2276a7da00368e81eace366ecf8af8806e551b670ad869823a"
+    },
+    "cpu-hidden": {
+      "gate": "no-observed-context-API-in-measured-interval",
+      "context_api_calls": 0,
+      "opaque_export_tables": 0,
+      "observer_errors": 0,
+      "hook_errors": 0,
+      "collector_dropped_events": 0,
+      "script_sha256": "fd351d8c36fe7a4767521850ad77cd2946a66a1c2a4478f8750b0d52c9357d34",
+      "receipt_sha256": "00200d543cfd31a18d9908909c8c04702b55de522517e9883cb3eb612e9fc0e1"
+    },
+    "limitations": [
+      "Read-only Frida 17.24.3 export/dynamic-entrypoint observation with positive and observer controls",
+      "Zero CUDA-visible devices uses a process-only visibility mask, not physically GPU-absent hardware",
+      "Historical trace binding is supported by immutable recovered module paths and hashes; final candidate adds explicit pre/post binary hashing"
+    ]
+  },
+  "runtime_redistribution_accepted": false,
+  "release_accepted": false,
+  "python_direct_dll_dependencies": [
+    "python312.dll",
+    "cudart64_12.dll",
+    "MSVCP140.dll",
+    "KERNEL32.dll",
+    "VCRUNTIME140.dll",
+    "VCRUNTIME140_1.dll",
+    "api-ms-win-crt-runtime-l1-1-0.dll",
+    "api-ms-win-crt-string-l1-1-0.dll",
+    "api-ms-win-crt-heap-l1-1-0.dll",
+    "api-ms-win-crt-stdio-l1-1-0.dll",
+    "api-ms-win-crt-math-l1-1-0.dll"
+  ],
+  "timing_limitations": [
+    "Historical MATLAB case timer started after gpuArray upload; raw field was misnamed transfer_inclusive_seconds. Export relabels the unchanged value and final candidate moves timer before uploads.",
+    "Python case times include explicit native host/device transfers; all small-case times are diagnostic, not speedup evidence."
+  ]
+}

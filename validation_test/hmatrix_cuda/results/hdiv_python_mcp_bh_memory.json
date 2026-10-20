@@ -1,0 +1,58 @@
+{
+  "accepted": false,
+  "adapter_source": "ccf22993a",
+  "native_source": "7995b719cf02653bd08c90b1d0d10efa87007a23",
+  "cpu_native_source": "b32faf7127fe86f9253bdeaf5f9c37fe8bdaaf8a",
+  "scope": "Python physical hex2 BH persistent Newton and MCP prepare-solve-publish-close; not release",
+  "quadrature_orders_regression": {
+    "accepted": true,
+    "orders": [
+      1,
+      2,
+      3
+    ]
+  },
+  "maximum_coefficient_error": 2.142578895767253e-12,
+  "maximum_original_residual": 1.685448249535868e-14,
+  "cohorts": [
+    {
+      "scope": "Python persistent physical BH Newton",
+      "preconditioner": "reference-diagonal",
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope_bytes_per_run": [
+        0.0,
+        0.0
+      ],
+      "final_25_delta_bytes": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scope": "Python persistent physical BH Newton",
+      "preconditioner": "reference-chebyshev-graph",
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope_bytes_per_run": [
+        0.0,
+        0.0
+      ],
+      "final_25_delta_bytes": [
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "failure": {
+    "scope": "MCP prepare-solve-publish-close",
+    "final_25_host_slope_bytes_per_run": -33990.49846154,
+    "final_25_host_delta_bytes": 12054528,
+    "device_slope": 0,
+    "device_delta": 0,
+    "limit_host_delta_bytes": 1048576,
+    "raw_samples_preserved": false,
+    "limitation": "Helper asserted before publishing failed cohort samples; exception metrics and all 105 MCP case JSONs preserved. Next instrumented attempt must checkpoint each sample and native-owner counters before applying gate."
+  },
+  "opaque_runtime_retention_zero": false
+}

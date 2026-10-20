@@ -1,0 +1,93 @@
+{
+  "accepted": false,
+  "scope": "Uniform applied H nonlinear connected tet/hex; production CPU reference and original residual; not mixed MMM or release acceptance",
+  "cases": [
+    {
+      "topology": "tet",
+      "order": 2,
+      "dofs": 30,
+      "cpu_original_residual": 2.5074770891650483e-15,
+      "cpu_iterations": 3,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 9.414984646965996e-14,
+      "independent_original_residual": 5.530465525528689e-16,
+      "reported_residual": 5.530248368723898e-16,
+      "newton_iterations": 3,
+      "graph_launches": 0,
+      "mesh_sha256": "07c678502fe9a4618684408f3502393b4ecb6246c250a5c4d2922a0ea3039798"
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "dofs": 30,
+      "cpu_original_residual": 2.5074770891650483e-15,
+      "cpu_iterations": 3,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 9.542955452301457e-14,
+      "independent_original_residual": 5.339881284720496e-16,
+      "reported_residual": 5.340981176384983e-16,
+      "newton_iterations": 3,
+      "graph_launches": 102,
+      "mesh_sha256": "07c678502fe9a4618684408f3502393b4ecb6246c250a5c4d2922a0ea3039798"
+    }
+  ],
+  "release_accepted": false,
+  "cpu_oracle_arithmetic": "explicit compensated CPU factors and sparse maps; original fast CPU differences recorded separately",
+  "ngsolve": "6.2.2608",
+  "native_source_commit": "f4f7266debd42ed2ced0dd67c71b4a0de6ae68b4",
+  "binary_sha256": "2d0d8eadb1ff42ed5848e8191c58321df171d245aa97e7d78a476a38f2c39531",
+  "cpu_source_commit": "ba94077fd68c940386e9de2134095cf29232d384",
+  "cpu_binary_sha256": "ac9cdf61eae530c1c3f8ac0f077c2479841a509388964850a5b6fadbc61b6afa",
+  "fixture_source_sha256": "ad0d4091cf3b212196602fa201bbaf0e4783fb586eb91132737bdf7c23260720",
+  "validator_sha256": "f4c4bdd602f616ba9860bae645cbaaad00027e95087bef57f346f3d04d321393",
+  "relative_application_error_limit": 1e-11,
+  "production_law_source_sha256": {
+    "bh_law": "baa389dd6e4de70f349d318df46ac80fa7baaf6a83d5dbea0ad3d4d33be6daae",
+    "nonlinear": "2d3a70ccf7f6b4f75ba5e20c359ecfa8ea93806dd84042dd8416327829e00dc8"
+  },
+  "cpu_python_candidate": {
+    "source_commit": "f8d1535869fc7e0b0395f02eb039ab95c425c1f5",
+    "sha256": "29576187e0d7a14d7a10320e8088243e7be49db68289373958e17e258adf12e5",
+    "native_source_unchanged": "ba94077fd68c940386e9de2134095cf29232d384"
+  },
+  "cpu_physical_residual": 2.5074770891650483e-15,
+  "applied_H_A_per_m": [
+    1000.0,
+    -2000.0,
+    5000.0
+  ],
+  "error": "RuntimeError('vim.Solve (energy-Newton inner W-CG): did NOT converge in 10000 iters (n_face=108, context=newton_stage_1_iteration_1, target=5.000e-14, preconditioner=mass-riesz); inspect tangent conditioning, Gram accuracy and the iteration limit.')",
+  "cpu_stall_diagnostic": {
+    "error": "vim.Solve (energy-Newton): did NOT converge -- relative residual=4.93e-12 (tol 5.0e-14), 38 settled iters after 40 (returning M would be a silent wrong result).  For an extreme-saturation / ill-conditioned case, increase continuation or use the mass-Riesz preconditioner.",
+    "topology": "tet",
+    "order": 2,
+    "iterations": 40,
+    "last_alpha": 2.384185791015625e-07,
+    "relative_step": 5.906618697567099e-16,
+    "last_decrement": 1.5197956794313484e-13,
+    "diagnostics": [
+      {
+        "state": "rejected_reference_state",
+        "original_residual": 4.931617594101208e-12,
+        "production_residual": 4.9303556039505826e-12,
+        "material_discrepancy": 6.189059863327164e-18,
+        "factor_discrepancy": 3.1033143027128733e-15
+      },
+      {
+        "state": "full_Newton_step",
+        "original_residual": 3.174803773931409e-15,
+        "production_residual": 3.6584790982003815e-15,
+        "material_discrepancy": 2.5767733081163374e-18,
+        "factor_discrepancy": 2.301496936509851e-15
+      },
+      {
+        "state": "previous_best",
+        "original_residual": 4.931617594101208e-12,
+        "production_residual": 4.9303556039505826e-12,
+        "material_discrepancy": 6.189059863327164e-18,
+        "factor_discrepancy": 3.1033143027128733e-15
+      }
+    ]
+  },
+  "accepted_scope": "tet order2 applied field with CPU Python candidate root certificate; hex order2 CPU inner solve failed before GPU"
+}

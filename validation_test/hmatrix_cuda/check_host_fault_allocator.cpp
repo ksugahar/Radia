@@ -1,5 +1,7 @@
 /* Host container unwind contract; not an independent numerical oracle. */
 #include "hmatrix_host_fault.hpp"
+#include "hdiv_inverse_bh.hpp"
+#include "hdiv_resident_python_api.hpp"
 #include <cassert>
 #include <cmath>
 #include "rad_charge_quadrature.h"
@@ -26,7 +28,65 @@ static void workload(){
     for(int i=0;i<4;++i){tiles[i].push_back(i);tiles[i].reserve(20);}
     assert(tiles.at(3)[0]==3);
 }
+static void materialBoundaryWorkload(){
+    radia_hdiv_bh::Law law{{0.,1.},{0.,0.,1.,0.},{0.,.5},1.,1.,1.,1.};
+    radia_hdiv_bh::MaterialInput input{1,1,{0,1,1,1},{0},{1.},{1.}};
+    auto copiedLaw=law;auto copiedInput=input;
+    radia_hdiv_bh::Samples scalar;scalar.secant.resize(1);scalar.tangent.resize(1);scalar.energy.resize(1);
+    radia_hdiv_bh::MaterialEvaluation output;output.gradient.resize(1);output.tangentAction.resize(1);
+    assert(copiedLaw.knots[1]==1. && copiedInput.values[0]==1.);
+}
+static void newtonBoundaryWorkload(){
+    radia_hdiv_python::NewtonResult result;result.x.resize(4);result.history.push_back({});
+    auto saved=result;result.history.reserve(40);result.x.assign(saved.x.begin(),saved.x.end());
+    assert(result.history.size()==1 && saved.x.size()==4);
+}
+static void adapterBoundaryWorkload(){
+    radia_hdiv_python::LeafInput leaf{0,0,1,1,0,{2.},{}};
+    radia_hdiv_python::MapInput map{1,1,{0,1},{0},{1.}};
+    radia_hdiv_python::MaterialResult result{{3.},1,0.,8,0};
+    HostVector<radia_hdiv_python::LeafInput> leaves;leaves.push_back(leaf);
+    auto saved=map;HostVector<double> state{.2},direction{.1};
+    assert(leaves[0].a1[0]==2. && saved.values[0]==1. && result.x[0]==3.);
+}
+static void sharedOwnerWorkload(){
+    auto owner=std::allocate_shared<OwnedTest>(HostFaultAllocator<OwnedTest>("test.shared-owner"),false);
+    std::weak_ptr<OwnedTest> weak=owner;
+    assert(owner.use_count()==1);owner.reset();assert(weak.expired());weak.reset();
+}
 int main(){
+    configureHostFault(0);sharedOwnerWorkload();const auto sharedCount=hostFaultState.attempts;
+    assert(sharedCount==2 && hostFaultState.liveBytes==0);
+    for(std::size_t at=1;at<=sharedCount;++at)for(int repeat=0;repeat<10;++repeat){
+        configureHostFault(at);bool caught=false;
+        try{sharedOwnerWorkload();}catch(const std::bad_alloc&){caught=true;}
+        assert(caught && hostFaultState.attempts==at && hostFaultState.liveBytes==0);
+    }
+
+    configureHostFault(0);adapterBoundaryWorkload();const auto adapterCount=hostFaultState.attempts;
+    assert(adapterCount>=10 && hostFaultState.liveBytes==0);
+    for(std::size_t at=1;at<=adapterCount;++at)for(int repeat=0;repeat<10;++repeat){
+        configureHostFault(at);bool caught=false;
+        try{adapterBoundaryWorkload();}catch(const std::bad_alloc&){caught=true;}
+        assert(caught && hostFaultState.attempts==at && hostFaultState.liveBytes==0);
+    }
+
+    configureHostFault(0);newtonBoundaryWorkload();const auto newtonCount=hostFaultState.attempts;
+    assert(newtonCount>=5 && hostFaultState.liveBytes==0);
+    for(std::size_t at=1;at<=newtonCount;++at)for(int repeat=0;repeat<10;++repeat){
+        configureHostFault(at);bool caught=false;
+        try{newtonBoundaryWorkload();}catch(const std::bad_alloc&){caught=true;}
+        assert(caught && hostFaultState.attempts==at && hostFaultState.liveBytes==0);
+    }
+
+    configureHostFault(0);materialBoundaryWorkload();const auto boundaryCount=hostFaultState.attempts;
+    assert(boundaryCount==19 && hostFaultState.liveBytes==0);
+    for(std::size_t at=1;at<=boundaryCount;++at)for(int repeat=0;repeat<10;++repeat){
+        configureHostFault(at);bool caught=false;
+        try{materialBoundaryWorkload();}catch(const std::bad_alloc&){caught=true;}
+        assert(caught && hostFaultState.attempts==at && hostFaultState.liveBytes==0);
+    }
+
     auto registryWorkload=[](){
         using Map=HostMap<int,int>;
         auto registry=makeHostUnique<Map>("test.registry-object",std::less<int>{},Map::allocator_type("test.registry"));

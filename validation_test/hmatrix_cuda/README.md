@@ -1,3 +1,12 @@
+## HDiv-MMM test tiers
+
+The required mesh matrix is **tet only**, **hex only**, and **tet-hex mixed through
+pyramids**. See the canonical [HDiv-MMM CPU/GPU test policy](../../tests/README.md#hdiv-mmm-mesh-families-and-cpugpu-test-tiers).
+Small numerical and lifecycle regressions belong in the lightweight test tier;
+large physical, nonlinear, mixed-mesh and GPU performance studies belong here
+with JSON evidence. Existing tetrahedral results do not certify the other two
+families. Pyramid-specific upstream defects do not suspend the other GPU work.
+
 ## 2026-10-18 bounded scale research candidate
 
 The native MATLAB route has explicit experimental options:

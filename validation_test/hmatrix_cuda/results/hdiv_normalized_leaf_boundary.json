@@ -1,0 +1,44 @@
+{
+  "schema": "radia.hdiv-normalized-leaf-boundary.v1",
+  "accepted_scope": "small numeric schema-2 MEX boundary only",
+  "native_source": "c55cd5798ec0303838172015f994e66e44bcec9a",
+  "mex_sha256": "41a7c59165f71a94afa112a4b5554f8977dc022184234aa4867e55245f78e388",
+  "build": {
+    "accepted": true,
+    "seconds": 162.266,
+    "cpu_count": 4,
+    "memory_limit_bytes": 17179869184,
+    "wall_limit_seconds": 900,
+    "msvc": "14.44.35207",
+    "matlab": "R2026a Update 5",
+    "cuda": "MATLAB-bundled 12.8",
+    "fault_injection": false
+  },
+  "run": {
+    "accepted": true,
+    "seconds": 13.375,
+    "cpu_count": 2,
+    "threads": 1,
+    "memory_limit_bytes": 8589934592,
+    "wall_limit_seconds": 240,
+    "relative_error": 0,
+    "final_live_handles": 0
+  },
+  "coverage": [
+    "nontrivial permutation and physical scale",
+    "dense diagonal and low-rank off-diagonal leaf",
+    "invalid schema/options/permutation/lower-leaf/factor length",
+    "recovery after rejection and destroy"
+  ],
+  "limits": [
+    "Not FE or physical HDiv certification",
+    "Not common100 memory or allocation fault enumeration",
+    "Not final same-SHA wheel/install/release acceptance",
+    "Legacy schema1 also preserves factors; no normalization bug claim"
+  ],
+  "local_contract": {
+    "passed": 1,
+    "failed": 1,
+    "reason": "Owner checkout retains validation_test/radia_gpu while parity manifest references main renamed radia_simulink; preserve public main migration at integration"
+  }
+}
