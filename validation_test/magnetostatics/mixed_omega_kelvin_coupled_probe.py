@@ -34,6 +34,11 @@ def main():
     p.add_argument('--crosscheck-mmm',action='store_true',help='Independent two-body all-MMM solution')
     p.add_argument('--harmonic-source-degree',type=int,choices=(0,4,6,8),default=0,
                    help='Explicit local harmonic source representation, independently gated against native samples')
+    p.add_argument('--lift-bonus-offset',type=int,choices=range(9),default=0)
+    p.add_argument('--lift-load-route',choices=('integrated','assembled'),default='assembled')
+    p.add_argument('--quadrature-audit',action='store_true')
+    p.add_argument('--operator-audit',action='store_true')
+    p.add_argument('--reference-source-load',choices=('volume','surface_flux'),default='volume')
     p.add_argument('--refinement-steps',type=int,choices=(0,1,2,3,4,5),default=0)
     p.add_argument('--condition-estimate',action='store_true')
     p.add_argument('--parity-trace',choices=('projected','copied'),default='projected')
@@ -42,6 +47,11 @@ def main():
     p.add_argument('--gpu-dll-directory',type=Path,action='append',default=[])
     p.add_argument('--native-dll-directory',type=Path,action='append',default=[])
     args=p.parse_args()
+    if args.quadrature_audit and not args.operator_audit:raise ValueError('Quadrature audit requires operator audit')
+    if args.lift_bonus_offset and args.lift_load_route!='integrated':raise ValueError('Lift quadrature offset requires integrated diagnostic route')
+    if args.reference_source_load!='volume' and args.mode!='parity':raise ValueError('Reference source route is a parity diagnostic')
+    if (args.operator_audit or args.condition_estimate or args.refinement_steps) and args.mode!='parity':raise ValueError('Operator diagnostics require parity mode')
+    if args.operator_audit and not args.reuse_surface_load:raise ValueError('Operator audit requires explicit surface-load route')
     import numpy as np
     import ngsolve as ng
     if ng.__version__!='6.2.2608':raise RuntimeError('This probe requires the qualified 6.2.2608 ABI')
@@ -70,6 +80,9 @@ def main():
     if args.mode!='parity' and (args.parity_trace!='projected' or args.parity_flux!='mean-corrected'):raise ValueError('Parity route changes require parity mode')
     if args.parity_flux=='raw' and not args.reuse_surface_load:raise ValueError('Raw parity flux requires explicit surface-load route')
     record['cpu_solver']=args.cpu_solver
+    record['reference_source_load']=args.reference_source_load
+    record['lift_load_route']=args.lift_load_route
+    record['lift_bonus_offset']=args.lift_bonus_offset
     if args.backend=='gpu' and args.cpu_solver!='direct':raise ValueError('CPU preconditioning is not a GPU fallback')
     record['source_hashes']={str(path):hashlib.sha256(path.read_bytes()).hexdigest()
                             for path in (Path(__file__),candidate,Path(radia._radia_pybind.__file__))}
@@ -103,6 +116,11 @@ def main():
                 else:
                     preconditioner=ng.Preconditioner(a,args.cpu_solver[3:],inverse='sparsecholesky')
             a.Assemble()
+            iron_matrix=None
+            if args.lift_load_route=='assembled' or args.operator_audit:
+                iron_matrix=ng.BilinearForm(fes,symmetric=True)
+                iron_matrix+=mu*ng.grad(u)*ng.grad(v)*ng.dx(definedon=mesh.Materials('iron'),bonus_intorder=args.bonus_intorder)
+                iron_matrix.Assemble()
         mask=np.array(list(fes.FreeDofs()),dtype=bool)
         n=int(mask.sum())
         matrix=None
@@ -166,8 +184,9 @@ def main():
                         mesh,source,{'interface':source_sign},v.Trace(),materials=('air',),
                         order=args.order,bonus_intorder=args.bonus_intorder,scale=MU_0)
                     load+=boundary_load
-                load+=-mu*ng.grad(lift)*ng.grad(v)*ng.dx(definedon=mesh.Materials('iron'),bonus_intorder=args.bonus_intorder)
+                if args.lift_load_route=='integrated':load+=-mu*ng.grad(lift)*ng.grad(v)*ng.dx(definedon=mesh.Materials('iron'),bonus_intorder=args.bonus_intorder+args.lift_bonus_offset)
                 load.Assemble()
+                if args.lift_load_route=='assembled':load.vec.data-=iron_matrix.mat*lift.vec
                 if source_values is not None:load.vec.FV().NumPy()[:]+=source_values
                 rhs=load.vec.CreateVector() if matrix is None else matrix.CreateColVector()
                 rhs.FV().NumPy()[:]=load.vec.FV().NumPy() if matrix is None else load.vec.FV().NumPy()[mask]
@@ -245,7 +264,8 @@ def main():
                     reduced_materials=('air',),total_materials=('iron','kelvin'),
                     interface_boundary='interface',kelvin_interface_boundary='kelvin_int',
                     kelvin_source_potential=ng.CF(0),order=args.order,bonus_intorder=args.bonus_intorder,return_system=True,
-                    reduced_normal_flux=MU_0*normal[2],reduced_flux_boundary='kelvin_int')
+                    reduced_normal_flux=MU_0*normal[2],reduced_flux_boundary='kelvin_int',
+                    reduced_source_load=args.reference_source_load)
             with ng.TaskManager():
                 system=reference['system'];saddle=system['bilinear_form'];saddle_load=system['linear_form']
                 saddle_state=reference['solution'];saddle_space=saddle_state.space
@@ -264,6 +284,94 @@ def main():
                     record['saddle_refinement_residuals'].append(relative)
                     if step<args.refinement_steps:saddle_state.vec.data+=inverse*residual
                 record['reference_refined_block_residual']=omega._report_direct_solve_residual(saddle,saddle_load,saddle_state,saddle_space,block_names=('phi_reduced','phi_total','interface_constraint'))
+                if args.operator_audit:
+                    from scipy.sparse import coo_matrix,diags
+                    from scipy.sparse.linalg import norm as sparse_norm
+                    def csr(original):
+                        rows,cols,vals=original.COO()
+                        result=coo_matrix((np.asarray(vals),(np.asarray(rows),np.asarray(cols))),shape=(original.height,original.width)).tocsr()
+                        if isinstance(original,ng.la.SparseMatrixSymmetricdouble):result=result+result.T-diags(result.diagonal())
+                        return result
+                    locations={};ranges=[saddle_space.Range(i).start for i in (0,1)]
+                    entities=((ng.VERTEX,mesh.vertices),(ng.EDGE,mesh.edges),(ng.FACE,mesh.faces))
+                    for kind,group in entities:
+                        for entity in group:
+                            node=ng.NodeId(kind,entity.nr)
+                            global_ids=[x for x in fes.GetDofNrs(node) if x>=0]
+                            for component in (0,1):
+                                local_ids=[x for x in saddle_space.components[component].GetDofNrs(node) if x>=0]
+                                if not local_ids:continue
+                                if len(local_ids)!=len(global_ids):raise RuntimeError('Nonmatching audit entity modes')
+                                for local_id,global_id in zip(local_ids,global_ids):
+                                    row=ranges[component]+local_id
+                                    if not saddle_free[row]:continue
+                                    if row in locations and locations[row]!=global_id:raise RuntimeError('Ambiguous audit mapping')
+                                    locations[row]=global_id
+                    primal_end=saddle_space.Range(2).start
+                    needed=set(np.flatnonzero(saddle_free[:primal_end]))
+                    if set(locations)!=needed:raise RuntimeError('Unmapped active audit primal modes')
+                    rr=np.array(list(locations));cc=np.array([locations[x] for x in rr])
+                    transform=coo_matrix((np.ones(len(rr)),(rr,cc)),shape=(saddle_space.ndof,fes.ndof)).tocsr()
+                    k=csr(saddle.mat);ag=csr(a.mat)
+                    effective=(transform.T@k@transform).tocsr()
+                    lifted=np.zeros(saddle_space.ndof)
+                    total_rows=rr[rr>=ranges[1]];total_cols=np.array([locations[x] for x in total_rows])
+                    lifted[total_rows]=lift.vec.FV().NumPy()[total_cols]
+                    target=np.asarray(saddle_load.vec.FV().NumPy())
+                    condensed_rhs=np.asarray(transform.T@(target-k@lifted))
+                    # Reassemble the declared SPD load on this very same mesh.
+                    own=ng.LinearForm(fes)
+                    own+=MU_0*source_sign*ng.InnerProduct(applied,normal)*v.Trace()*interface_measure
+                    own+=-mu*ng.grad(lift)*ng.grad(v)*ng.dx(definedon=mesh.Materials('iron'),bonus_intorder=args.bonus_intorder+args.lift_bonus_offset)
+                    own.Assemble();own_rhs=np.array(own.vec.FV().NumPy(),copy=True)
+                    if args.parity_flux=='mean-corrected':
+                        flux_vector=ng.LinearForm(fes);flux_vector+=MU_0*source_sign*ng.InnerProduct(applied,normal)*v.Trace()*interface_measure;flux_vector.Assemble()
+                        net=float(np.dot(constant_values,flux_vector.vec.FV().NumPy()))
+                        own_rhs-=net/interface_area*mass_values
+                    consistent=own.vec.CreateVector();consistent.data=-iron_matrix.mat*lift.vec
+                    flux_only=ng.LinearForm(fes);flux_only+=MU_0*source_sign*ng.InnerProduct(applied,normal)*v.Trace()*interface_measure;flux_only.Assemble()
+                    consistent.data+=flux_only.vec
+                    consistent_rhs=np.array(consistent.FV().NumPy(),copy=True)
+                    if args.parity_flux=='mean-corrected':consistent_rhs-=net/interface_area*mass_values
+                    record['lift_load_audit']=dict(integrated_vs_assembled_l2=float(np.linalg.norm((own_rhs-consistent_rhs)[mask])),assembled_vs_reference_l2=float(np.linalg.norm((condensed_rhs-consistent_rhs)[mask])))
+                    if args.quadrature_audit:
+                        record['shared_quadrature_lift_audit']=[]
+                        for rule_order in (12,20,30):
+                            measure=ng.dx(definedon=mesh.Materials('iron'),intrules={ng.ET.TET:ng.IntegrationRule(ng.ET.TET,rule_order)})
+                            operator=ng.BilinearForm(fes,symmetric=True);operator+=mu*ng.grad(u)*ng.grad(v)*measure;operator.Assemble()
+                            form=ng.LinearForm(fes);form+=mu*ng.grad(lift)*ng.grad(v)*measure;form.Assemble()
+                            action=form.vec.CreateVector();action.data=operator.mat*lift.vec
+                            delta=form.vec.FV().NumPy()-action.FV().NumPy()
+                            record['shared_quadrature_lift_audit'].append(dict(rule_order=rule_order,absolute_difference=float(np.linalg.norm(delta[mask])),relative_difference=float(np.linalg.norm(delta[mask])/np.linalg.norm(action.FV().NumPy()[mask]))))
+
+                    paired_state=ng.GridFunction(fes)
+                    paired_rhs=own.vec.CreateVector();paired_rhs.FV().NumPy()[:]=consistent_rhs
+                    paired_inverse=a.mat.Inverse(fes.FreeDofs(),inverse='sparsecholesky')
+                    paired_state.vec.data=paired_inverse*paired_rhs
+                    paired_points=[(0,0,0),(.1,0,0),(.3,.1,.1),(1.6,.1,.2)]
+                    def sample(field_state):
+                        result=[]
+                        for xyz in paired_points:
+                            point=mesh(*xyz)
+                            cf=ng.grad(field_state) if xyz[0]>1 else (-ng.grad(field_state)-ng.grad(lift) if np.linalg.norm(xyz)<.2 else applied-ng.grad(field_state))
+                            result.append(np.array(cf(point)).tolist())
+                        return result
+                    paired_reference=[list(reference['H_cf'](mesh(*xyz))) for xyz in paired_points]
+                    paired_actual=sample(paired_state);paired_existing=sample(state)
+                    paired_max=float(max(np.linalg.norm(np.array(x)-y) for x,y in zip(paired_actual,paired_reference)))
+                    record['same_mesh_lift_comparison']=dict(mesh_scope='single in-memory mesh and identical source lift for every compared state',points=paired_points,existing_H=paired_existing,assembled_lift_H=paired_actual,reference_H=paired_reference,assembled_max_absolute_difference=paired_max,passed=paired_max<1e-8,gate=1e-8)
+                    if args.lift_load_route=='assembled':own_rhs=consistent_rhs
+                    delta_matrix=(effective-ag)[mask][:,mask]
+                    defect=k@lifted-target
+                    lm_rows=np.arange(primal_end,saddle_space.ndof)[saddle_free[primal_end:]]
+                    record['operator_audit']=dict(
+                        matrix_relative_frobenius=float(sparse_norm(delta_matrix)/sparse_norm(ag[mask][:,mask])),
+                        rhs_relative_difference=float(np.linalg.norm((condensed_rhs-own_rhs)[mask])/np.linalg.norm(own_rhs[mask])),
+                        rhs_absolute_difference=float(np.linalg.norm((condensed_rhs-own_rhs)[mask])),
+                        copied_lift_constraint_relative_defect=float(np.linalg.norm(defect[lm_rows])/np.linalg.norm(target[lm_rows])),
+                        projected_state_reduced_residual=float(np.linalg.norm((condensed_rhs-effective@state.vec.FV().NumPy())[mask])/np.linalg.norm(condensed_rhs[mask])),
+                        reference_trace_jump_l2=float(np.sqrt(abs(ng.Integrate((reference['phi_total']-reference['phi_reduced']-projection['potential'])**2*interface_measure,mesh)))))
+
                 if args.condition_estimate:
                     from scipy.sparse.linalg import LinearOperator,onenormest
                     def estimate(original,free,apply_inverse):
@@ -289,6 +397,8 @@ def main():
                     field=np.array((-ng.grad(state)-ng.grad(lift))(point))
                 else:field=np.array((applied-ng.grad(state))(point))
                 errors.append(float(np.linalg.norm(field-reference['H_cf'](point))))
+            record['evaluation_points']=[list(x) for x in points]
+            record['evaluation_metric']='max Euclidean absolute H vector difference in A/m'
             record.update(max_absolute_field_difference=max(errors),field_errors=errors,mean_H=mean.tolist(),
                           analytic_mean_H=[0,0,3/102],passed=max(errors)<1e-8)
         else:

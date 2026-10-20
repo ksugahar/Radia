@@ -108,7 +108,8 @@ still used for explicit direct/GPU routes.
 
 The coarse P2 parity PASS (1353 free DOFs, q20, about 6.95e-9 A/m)
 is not a baseline for the P3 FAIL (4425 free DOFs, about 1.58e-7 A/m).
-P3 has never passed the 1e-8 A/m gate; no native-copy regression is established.
+With the historical independently integrated lift load, P3 had not passed the
+1e-8 A/m gate; no native-copy regression was established.
 P2 q10 already failed at about 1.1e-7 A/m. Quadrature sensitivity is therefore
 open, and the absolute gate was retained from the P2 q20 experiment rather
 than derived from an error bound. Analytical accuracy, unchanged-operator
@@ -125,8 +126,8 @@ while P3 differences are nonmonotonic (about 1.41e-8, 1.58e-7, 4.11e-8,
 2.03e-7 A/m). At q40 the copied interface trace has zero L2 difference;
 removing mean-flux correction changes the maximum difference by less than
 2e-16 A/m. Neither trace copying nor that compatibility correction explains
-this discrepancy in the tested case. P3 formulation equivalence stays OPEN;
-quadrature convergence is not established. Every run retains its original
+this discrepancy in the tested independently integrated-load case. Those runs
+remain failed; increasing quadrature alone did not establish equivalence. Every run retains its original
 pass/fail gate and separate JSON; no threshold was relaxed.
 
 For linear-algebra diagnostics, `--refinement-steps` retains the full assembled
@@ -139,3 +140,44 @@ On the coarse P3 q20 case, refinement reduces the full free residual from about
 1.46e-12 to 5.53e-14 without reducing the field discrepancy. Estimated unscaled
 conditioning alone therefore does not establish the cause. Both fields use the
 same mesh point evaluator and physical reconstruction convention.
+
+
+## P3 parity resolved for the declared stencil
+
+Mechanism: load/operator quadrature consistency.
+
+The remaining coarse P3 discrepancy is localized to the independently
+integrated iron lift load. On the same mesh the condensed reference matrix
+matches the common-H1 matrix to about 1e-16, and the copied lift satisfies the
+multiplier constraints to roundoff. The right-hand sides differ by about
+4.24e-10 in Euclidean norm. Building the lift contribution as
+`-A_iron * lift`, with the same assembled iron operator used by the solve,
+reduces the reference right-hand-side difference to about 1e-21 and the
+four-point maximum field difference from 1.58e-7 to 3.76e-14 A/m. The original
+1e-8 A/m gate is unchanged. Both comparisons use the same in-memory mesh,
+source, projection and point-evaluation operator.
+
+An additional check gives both the linear and bilinear lift expressions the
+same explicit NGSolve integration rule. Their relative differences then fall
+to approximately 1e-15. Equal `bonus_intorder` alone had not guaranteed an
+identical discrete lift integral in the two forms. This is a load/operator
+consistency issue in this probe, not evidence of defective interface matching
+or an indefinite Cholesky factorization.
+
+The probe now defaults to `--lift-load-route assembled`; the independently
+integrated route remains an explicit attribution experiment. `--operator-audit`
+records matrix, load and constraint defects and a paired solve on one mesh.
+`--quadrature-audit` additionally compares shared explicit integration rules.
+The declared P3 stencil passes for direct, BDDC/H1-AMG and explicit GPU solves;
+this does not establish a whole-interface error theorem, analytical accuracy
+on all meshes, or a new timing certificate. Earlier failures remain preserved.
+
+
+The production matching-trace driver's reduced lift and the general driver's
+Kelvin lift also use original-operator actions. Curved P2/P3 regression tests
+pin their assembled right-hand sides against the corresponding stiffness
+contributions; both old implementations fail these tests. Physical source
+fields, Hodge-projection data, prescribed fluxes and weak jump data retain
+their own integrals and accuracy gates. They are not silently interpolated or
+replaced by a discrete lift. Reassembling the regional lift operator is counted
+in RHS preparation, so previous preparation timings do not qualify this update.
