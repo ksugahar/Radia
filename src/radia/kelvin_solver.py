@@ -450,7 +450,7 @@ def _evaluate_cf_at_points(mesh, field, points):
     return np.asarray(field(located), dtype=float).reshape(len(points), -1)
 
 
-def interpolate_source_field(mesh, H_s, region, *, order=2):
+def interpolate_source_field(mesh, H_s, region, *, order=2, point_evaluator=None):
     """Nodal H1 interpolant of a smooth vector source on ``region``.
 
     ``region`` is a material or boundary region (``mesh.Materials(...)`` or
@@ -464,6 +464,11 @@ def interpolate_source_field(mesh, H_s, region, *, order=2):
     The interpolant carries an ``O(h^{order+1})`` error that the exact source
     does not: use it for loads, and the exact source where a field is reported.
     Returns the vector coefficient, its space, the node count and timings.
+    An explicit ``point_evaluator(points)`` may supply the same source through
+    its native batch interface. It must return finite real values with shape
+    (number of points, 3). When supplied, it replaces evaluation of ``H_s``;
+    the caller must ensure both describe the same source. No consistency check
+    against ``H_s`` or implicit alternative evaluator is performed.
     """
     from ngsolve import EDGE, VERTEX, NodeId, x, y, z
 
@@ -526,7 +531,13 @@ def interpolate_source_field(mesh, H_s, region, *, order=2):
     geometry_seconds = time.perf_counter() - started
 
     started = time.perf_counter()
-    values = _evaluate_cf_at_points(mesh, H_s, points)
+    if point_evaluator is None:
+        values = _evaluate_cf_at_points(mesh, H_s, points)
+    else:
+        values = np.asarray(point_evaluator(points))
+        if (values.shape != (len(points), 3) or values.dtype.kind not in 'fi'
+                or not np.isfinite(values).all()):
+            raise ValueError('point_evaluator must return finite real (N,3) source values')
     evaluation_seconds = time.perf_counter() - started
 
     components = []
@@ -1665,8 +1676,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
                          if str(face.mat) in surface_values.get(region, {})
                          for vertex in face.vertices}
                 for region in ("reduced", "total")}
-            if nodes["reduced"] & nodes["total"]:
-                raise ValueError("surface Dirichlet on both sides of an interface junction is not supported")
+            if nodes["reduced"] & nodes["total"] and int(order) != 1:
+                raise ValueError("surface Dirichlet interface junction currently supports only matching P1 traces")
 
     if kelvin_selector is None:
         def _dirichlet_labels(*parts):
@@ -1878,6 +1889,34 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
                     solution.components[index].Set(
                         mesh.BoundaryCF(values, default=0),
                         definedon=mesh.Boundaries(surface_labels[region]))
+            if all(surface_labels.values()) and nodes["reduced"] & nodes["total"]:
+                # A junction fixed in both potentials must already satisfy the
+                # prescribed jump. For P1 its vertex coefficients determine the
+                # complete junction trace. Keep every multiplier row in the
+                # assembled residual: this audit does not drop constraints.
+                from ngsolve import NodeId, VERTEX
+                source_lift = GridFunction(fes_total)
+                source_lift.Set(source_potential, definedon=interface_selector)
+                rv = solution.components[0].vec.FV().NumPy()
+                tv = solution.components[1].vec.FV().NumPy()
+                sv = source_lift.vec.FV().NumPy()
+                # A true zero at a junction can carry interpolation roundoff.
+                # Scale against the prescribed data, not that zero itself.
+                data_scale = max(float(np.max(np.abs(rv))),
+                                 float(np.max(np.abs(tv))),
+                                 float(np.max(np.abs(sv))), 1e-300)
+                for vertex in nodes["reduced"] & nodes["total"]:
+                    node = NodeId(VERTEX, vertex)
+                    rd = [d for d in fes_reduced.GetDofNrs(node) if d >= 0]
+                    td = [d for d in fes_total.GetDofNrs(node) if d >= 0]
+                    if len(rd) != 1 or len(td) != 1:
+                        raise ValueError("surface Dirichlet junction requires one matching P1 vertex DOF")
+                    r, t = rd[0], td[0]
+                    defect = float(tv[t] - rv[r] - sv[t])
+                    if abs(defect) > 1e-11 * data_scale:
+                        raise ValueError(
+                            "incompatible total/reduced surface Dirichlet values at interface junction: "
+                            f"vertex={vertex}, defect={defect:.17g}, data_scale={data_scale:.17g}")
         else:
             solution.components[1].Set(
                 total_dirichlet_cf, definedon=mesh.BBBoundaries(dirichlet_bbbnd))
@@ -1997,7 +2036,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
 
 def _map_matching_h1_load_to_global(
         mesh, source_space, target_space, source_values, *, order):
-    """Map an uncompressed P1/P2 H1 load by shared mesh entities.
+    """Map an uncompressed P1/P2/P3 H1 load by shared mesh entities.
 
     The helper is deliberately narrower than a generic prolongation.  It is
     the numbering bridge needed when a reduced-region surface-source load was
@@ -2007,8 +2046,8 @@ def _map_matching_h1_load_to_global(
     import ngsolve as ng
 
     order = int(order)
-    if order not in (1, 2):
-        raise ValueError("matching H1 load mapping supports only order 1 or 2")
+    if order not in (1, 2, 3):
+        raise ValueError("matching H1 load mapping supports only order 1, 2 or 3")
     values = np.asarray(source_values, dtype=float)
     if values.ndim != 1 or not np.isfinite(values).all():
         raise ValueError(
@@ -2030,8 +2069,11 @@ def _map_matching_h1_load_to_global(
     # global-numbered vector handled above.
     mapped = np.zeros(target_space.ndof, dtype=float)
     node_groups = [(ng.VERTEX, mesh.vertices)]
-    if order == 2:
+    if order >= 2:
         node_groups.append((ng.EDGE, mesh.edges))
+    if order >= 3:
+        node_groups.append((ng.FACE, mesh.faces))
+    # P3 tetrahedra have no cell-interior DOFs; order 4 is rejected above.
     seen_source = set()
     for node_type, entities in node_groups:
         for entity in entities:
@@ -2040,13 +2082,11 @@ def _map_matching_h1_load_to_global(
             if not source_dofs:
                 continue
             target_dofs = tuple(d for d in target_space.GetDofNrs(node) if d >= 0)
-            if len(source_dofs) != 1 or len(target_dofs) != 1:
+            if len(source_dofs) != len(target_dofs):
                 raise ValueError(
-                    "matching H1 load mapping requires one uncompressed DOF "
-                    "per active vertex/edge")
-            source_dof, target_dof = source_dofs[0], target_dofs[0]
-            seen_source.add(source_dof)
-            mapped[target_dof] += values[source_dof]
+                    "matching H1 load mapping requires matching entity DOFs")
+            seen_source.update(source_dofs)
+            mapped[list(target_dofs)] += values[list(source_dofs)]
     if not set(np.flatnonzero(np.abs(values) > 1.0e-30)).issubset(seen_source):
         raise ValueError("source load contains unmapped active H1 DOFs")
     return mapped
@@ -2057,17 +2097,26 @@ def _copy_matching_h1_trace_to_global(
     """Copy projected trace coefficients without re-projecting through Set."""
     import ngsolve as ng
 
+    if int(order) not in (1, 2, 3):
+        raise ValueError('matching trace copy supports only order 1, 2 or 3')
     vertex_ids = set()
     edge_ids = set()
+    face_ids = set()
+    if source_trace.space.mesh != mesh:
+        raise ValueError("source trace must use the same mesh")
     for element in mesh.Elements(ng.BND):
         if element.mat != interface_boundary:
             continue
         vertex_ids.update(vertex.nr for vertex in element.vertices)
-        if int(order) == 2:
+        if int(order) >= 2:
             edge_ids.update(edge.nr for edge in element.edges)
+        if int(order) >= 3:
+            face_ids.update(face.nr for face in element.faces)
     groups = [(ng.VERTEX, sorted(vertex_ids))]
-    if int(order) == 2:
+    if int(order) >= 2:
         groups.append((ng.EDGE, sorted(edge_ids)))
+    if int(order) >= 3:
+        groups.append((ng.FACE, sorted(face_ids)))
     target_values = target.vec.FV().NumPy()
     source_values = source_trace.vec.FV().NumPy()
     for node_type, entity_ids in groups:
@@ -2078,30 +2127,33 @@ def _copy_matching_h1_trace_to_global(
             target_dofs = tuple(
                 dof for dof in target.space.GetDofNrs(
                     ng.NodeId(node_type, entity_id)) if dof >= 0)
-            if len(source_dofs) != 1 or len(target_dofs) != 1:
+            if not source_dofs or len(source_dofs) != len(target_dofs):
                 raise ValueError(
-                    "matching trace condensation requires one projected "
-                    "P1/P2 DOF per interface vertex/edge")
-            target_values[target_dofs[0]] = source_values[source_dofs[0]]
+                    "matching trace condensation requires matching projected "
+                    "P1/P2/P3 entity DOFs")
+            if not np.isfinite(source_values[list(source_dofs)]).all():
+                raise ValueError("source trace coefficients must be finite")
+            target_values[list(target_dofs)] = source_values[list(source_dofs)]
 
 
 def _zero_h1_boundary_dofs(mesh, grid_function, boundary, *, order):
-    """Zero P1/P2 boundary entities, including interface/Dirichlet junctions."""
+    """Zero P1/P2/P3 boundary entities, including interface junctions."""
     import ngsolve as ng
 
     boundary_names = set(str(boundary).split("|"))
     vertex_ids = set()
     edge_ids = set()
+    face_ids = set()
     for element in mesh.Elements(ng.BND):
         if element.mat not in boundary_names:
             continue
         vertex_ids.update(vertex.nr for vertex in element.vertices)
-        if int(order) == 2:
+        if int(order) >= 2:
             edge_ids.update(edge.nr for edge in element.edges)
+        if int(order) >= 3:
+            face_ids.update(face.nr for face in element.faces)
     values = grid_function.vec.FV().NumPy()
-    for node_type, entity_ids in ((ng.VERTEX, vertex_ids), (ng.EDGE, edge_ids)):
-        if node_type == ng.EDGE and int(order) != 2:
-            continue
+    for node_type, entity_ids in ((ng.VERTEX, vertex_ids), (ng.EDGE, edge_ids), (ng.FACE, face_ids)):
         for entity_id in entity_ids:
             for dof in grid_function.space.GetDofNrs(
                     ng.NodeId(node_type, entity_id)):
@@ -2171,21 +2223,34 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
         reduced_flux_boundary=None, solver="direct", inverse="sparsecholesky",
         cg_preconditioner="local", cg_tolerance=1.0e-10,
         cg_max_iterations=2000, return_system=False,
-        dirichlet_bbbnd=None, total_source_h=None, total_source_materials=()):
+        dirichlet_bbbnd=None, total_source_h=None, total_source_materials=(),
+        surface_dirichlet=None):
     """Solve the finite-domain matching-trace mixed Omega problem as SPD.
 
     This is a strict acceleration path for a joined, non-periodic mesh whose
-    total and reduced potentials have the same P1/P2 trace space.  With a
+    total and reduced potentials have the same P1/P2/P3 trace space.  With a
     projected interface lift ``L`` the constrained variables are
     ``phi_total = u`` and ``phi_reduced = u - L``.  The Lagrange multiplier is
     therefore eliminated exactly and the remaining global H1 system is SPD,
     allowing CG.  Kelvin exteriors, periodic/compressed spaces, nonmatching
-    traces, nonlinear permeability and orders above two stay on the general
+    traces, nonlinear permeability and orders above three stay on the general
     saddle-point driver.
 
     ``source_trace`` must be an NGSolve GridFunction.  Accepting an arbitrary
     CoefficientFunction would silently change the projection used by the
     multiplier formulation and has been observed to change P1 fields.
+
+    ``surface_dirichlet`` maps ``"total"`` and ``"reduced"`` to
+    boundary-name / value mappings of physical potentials. Values are zero
+    or projected global H1 GridFunctions of the selected order on this mesh. The reduced data
+    are lifted to the common unknown before imposing them. Conflicting
+    values at shared junctions raise; no boundary projection is performed.
+    This option cannot be combined with the homogeneous boundary/gauge
+    selectors. Choose ``solver="cg", cg_preconditioner="h1amg"`` for
+    NGSolve H1-AMG, or ``"local"`` for its local preconditioner. AMG setup
+    happens during assembly and is included in the assembly timing.
+    ``"bddc_h1amg"`` uses element-wise BDDC for the high-order modes and
+    H1-AMG on the vertex wirebasket (``wb_withedges=False``).
     """
     if inverse != "sparsecholesky":
         raise ValueError("direct FE solves require inverse='sparsecholesky'")
@@ -2194,8 +2259,8 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     function_started = time.perf_counter()
 
     order = int(order)
-    if order not in (1, 2):
-        raise ValueError("matching-trace condensation supports only order 1 or 2")
+    if order not in (1, 2, 3):
+        raise ValueError("matching-trace condensation supports only order 1, 2 or 3")
     if not isinstance(source_trace, GridFunction):
         raise TypeError(
             "source_trace must be a projected NGSolve GridFunction, not an "
@@ -2222,6 +2287,32 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
             "reduced_normal_flux and reduced_flux_boundary must be supplied together")
     if solver not in ("direct", "cg"):
         raise ValueError("solver must be 'direct' or 'cg'")
+    if solver == "cg":
+        if cg_preconditioner not in ("local", "h1amg", "bddc_h1amg"):
+            raise ValueError("cg_preconditioner must be 'local', 'h1amg' or 'bddc_h1amg'")
+        if (not math.isfinite(float(cg_tolerance)) or not 0 < cg_tolerance < 1
+                or int(cg_max_iterations) != cg_max_iterations
+                or cg_max_iterations < 1):
+            raise ValueError("CG requires a finite tolerance in (0,1) and positive iteration limit")
+    surface_data = None
+    if surface_dirichlet is not None:
+        if dirichlet_boundary or dirichlet_bbbnd:
+            raise ValueError("surface_dirichlet requires no other Dirichlet selectors")
+        surface_data = dict(surface_dirichlet)
+        if not surface_data or not set(surface_data) <= {"total", "reduced"}:
+            raise ValueError("surface_dirichlet must map total/reduced boundary values")
+        labels = []
+        for region, data in surface_data.items():
+            materials = total_materials if region == "total" else reduced_materials
+            for name in data:
+                if name not in mesh.GetBoundaries() or "|" in name:
+                    raise ValueError("surface_dirichlet requires individual existing boundary names")
+                if name not in boundaries_touching_materials(mesh, [name], materials):
+                    raise ValueError("surface Dirichlet boundary does not touch its material region")
+                labels.append(name)
+        if not labels:
+            raise ValueError("surface_dirichlet requires at least one prescribed boundary")
+        dirichlet_boundary = "|".join(sorted(set(labels)))
 
     material_mu = {}
     supplied_mu = dict(mu_r_by_material or {})
@@ -2235,6 +2326,7 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     interface_selector = mesh.Boundaries(interface_boundary)
     fes = H1(
         mesh, order=order,
+        **({"wb_withedges": False} if solver == "cg" and cg_preconditioner == "bddc_h1amg" else {}),
         **({"dirichlet_bbbnd": dirichlet_bbbnd} if dirichlet_bbbnd else {}),
         **({"dirichlet": dirichlet_boundary} if dirichlet_boundary else {}))
     if all(fes.FreeDofs()):
@@ -2248,7 +2340,7 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     lift.vec[:] = 0.0
     _copy_matching_h1_trace_to_global(
         mesh, source_trace, lift, interface_boundary, order=order)
-    if dirichlet_boundary:
+    if dirichlet_boundary and surface_data is None:
         # The multiplier formulation omits the jump equation where both
         # scalar potentials are already fixed.  Zeroing the lift on that
         # junction is its exact eliminated counterpart.
@@ -2263,7 +2355,10 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     preconditioner = None
     if solver == "cg":
         from ngsolve import Preconditioner
-        preconditioner = Preconditioner(a_bf, cg_preconditioner)
+        if cg_preconditioner == "bddc_h1amg":
+            preconditioner = Preconditioner(a_bf, "bddc", coarsetype="h1amg")
+        else:
+            preconditioner = Preconditioner(a_bf, cg_preconditioner)
     f_lf = LinearForm(fes)
     if source_rhs_reduced is None:
         f_lf += mu_cf * H_s * grad(v) * dx(
@@ -2297,9 +2392,44 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
         f_lf.vec.FV().NumPy()[:] += mapped
     rhs_assembly = time.perf_counter() - started
 
+    boundary_started = time.perf_counter()
     solution = GridFunction(fes, name="phi_total_condensed")
+    if surface_data is not None:
+        assigned = np.zeros(fes.ndof, dtype=bool)
+        values = solution.vec.FV().NumPy()
+        lift_values = lift.vec.FV().NumPy()
+        for region, data in surface_data.items():
+            for name, value in data.items():
+                if isinstance(value, GridFunction):
+                    if value.space.mesh != mesh or value.space.ndof != fes.ndof:
+                        raise ValueError("surface values must use global H1 of the selected order on this mesh")
+                    # Boundary element DOFs include vertices, all edge modes
+                    # and face modes; NGSolve owns their orientation/order.
+                    for element in mesh.Elements(ng.BND):
+                        if element.mat != name:
+                            continue
+                        eid = ng.ElementId(ng.BND, element.nr)
+                        if value.space.GetDofNrs(eid) != fes.GetDofNrs(eid):
+                            raise ValueError("surface value space has incompatible H1 numbering")
+                    prescribed = value.vec.FV().NumPy()
+                elif np.isscalar(value) and value == 0:
+                    prescribed = np.zeros(fes.ndof)
+                else:
+                    raise TypeError("surface values must be zero or projected global H1 GridFunctions")
+                mask = np.asarray(list(fes.GetDofs(mesh.Boundaries(name))), dtype=bool)
+                transformed = prescribed + (lift_values if region == "reduced" else 0)
+                if not np.all(np.isfinite(transformed[mask])):
+                    raise ValueError("surface Dirichlet values must be finite")
+                overlap = mask & assigned
+                if not np.allclose(values[overlap], transformed[overlap], rtol=1e-11, atol=1e-11):
+                    raise ValueError("incompatible total/reduced surface Dirichlet junction")
+                values[mask] = transformed[mask]
+                assigned |= mask
     residual = solution.vec.CreateVector()
     residual.data = f_lf.vec - a_bf.mat * solution.vec
+    free_mask = np.asarray(list(fes.FreeDofs()), dtype=bool)
+    effective_load_norm = float(np.linalg.norm(residual.FV().NumPy()[free_mask]))
+    boundary_seconds = time.perf_counter() - boundary_started
     started = time.perf_counter()
     iterations = None
     if solver == "direct":
@@ -2342,11 +2472,12 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     residual_values = final_residual.FV().NumPy()[free]
     rhs_values = f_lf.vec.FV().NumPy()[free]
     relative_residual = float(
-        np.linalg.norm(residual_values) / max(np.linalg.norm(rhs_values), 1.0e-30))
+        np.linalg.norm(residual_values) / max(effective_load_norm, 1.0e-30))
     linear_residual = {
         "free_dofs": {
             "l2": float(np.linalg.norm(residual_values)),
             "rhs_l2": float(np.linalg.norm(rhs_values)),
+            "effective_load_l2": effective_load_norm,
             "relative": relative_residual,
         }
     }
@@ -2381,11 +2512,14 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
         "linear_residual": linear_residual,
         "linear_residual_relative": relative_residual,
         "solver": solver,
+        "cg_preconditioner": cg_preconditioner if solver == "cg" else None,
+        "assembly_includes_preconditioner_setup": solver == "cg",
         "iterations": iterations,
         "phase_timings_seconds": {
             "setup_before_assembly": setup_before_assembly,
             "matrix_assembly": matrix_assembly,
             "source_rhs_assembly": rhs_assembly,
+            "boundary_lift": boundary_seconds,
             "preconditioner_or_factorization": setup_seconds,
             "backsolve": solve_seconds,
             "solver_postprocess": postprocess_seconds,
