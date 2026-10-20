@@ -40,6 +40,32 @@ from ngsolve import (H1, HCurl, BilinearForm, LinearForm, GridFunction,
 from radia.kelvin_material import make_kelvin_mu_cf, make_kelvin_nu_cf, MU_0, NU_0, _is_kelvin_material
 
 
+def _scalar_lift_operator_action(space, potential, mu_cf, region, *, bonus_intorder):
+    """Apply the scalar stiffness contribution to a discrete source lift.
+
+    A separately integrated LinearForm need not select the same quadrature as
+    its BilinearForm even with equal bonus_intorder. Keep NGSolve's operator
+    assembly authoritative; this is an algebraic lift, not a new source-field
+    interpolation. The caller owns TaskManager.
+    """
+    if not isinstance(potential, GridFunction) or potential.space != space:
+        raise ValueError("a discrete scalar lift must use the operator's space")
+    action = potential.vec.CreateVector()
+    action[:] = 0.0
+    values = potential.vec.FV().NumPy()
+    if not np.isfinite(values).all():
+        raise ValueError("scalar lift coefficients must be finite")
+    if not np.any(values):
+        return action
+    trial, test = space.TnT()
+    operator = BilinearForm(space, symmetric=True)
+    operator += mu_cf * grad(trial) * grad(test) * dx(
+        definedon=region, bonus_intorder=bonus_intorder)
+    operator.Assemble()
+    action.data = operator.mat * potential.vec
+    return action
+
+
 def _constrains_point_gauge(mesh, selector, dirichlet_bbbnd):
     """Does a space on ``selector`` own the ``dirichlet_bbbnd`` point gauge?
 
@@ -1802,12 +1828,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         fixed_rhs += -BoundaryFromVolumeCF(mu_cf) * InnerProduct(H_s, specialcf.normal(3)) * test_reduced.Trace() * ds(
             definedon=mesh.Boundaries(reduced_zero_normal_boundary),
             bonus_intorder=bonus_intorder)
-    if kelvin_lift is not None:
-        # Exterior equation for Omega_t = phi_reduced + lift, tested with the
-        # same continuous space; the lift moves to the right-hand side.
-        fixed_rhs += -mu_cf * grad(kelvin_lift) * grad(test_reduced) * dx(
-            definedon=kelvin_selector, bonus_intorder=bonus_intorder)
-    elif kelvin_selector is not None:
+    # The discrete Kelvin lift is applied through its original operator in
+    # assemble_rhs below. An exact source field remains a physical CF load.
+    if kelvin_lift is None and kelvin_selector is not None:
         # Same right-hand side with the exact source in place of the lift:
         # grad of the exact lift IS the pulled-back exterior source field.
         fixed_rhs += -mu_cf * kelvin_source_h * grad(test_reduced) * dx(
@@ -1866,6 +1889,11 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
 
     def assemble_rhs():
         fixed_rhs.Assemble()
+        if kelvin_lift is not None:
+            lift_action = _scalar_lift_operator_action(
+                fes_reduced, kelvin_lift, mu_cf, kelvin_selector,
+                bonus_intorder=bonus_intorder)
+            fixed_rhs.vec.FV().NumPy()[:fes_reduced.ndof] -= lift_action.FV().NumPy()
         f_lf.Assemble()
         f_lf.vec.data += fixed_rhs.vec
         if source_values is not None:
@@ -2363,8 +2391,6 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     if source_rhs_reduced is None:
         f_lf += mu_cf * H_s * grad(v) * dx(
             definedon=reduced_selector, bonus_intorder=bonus_intorder)
-    f_lf += mu_cf * grad(lift) * grad(v) * dx(
-        definedon=reduced_selector, bonus_intorder=bonus_intorder)
     if total_source_h is not None:
         f_lf += mu_cf * total_source_h * grad(v) * dx(
             definedon=mesh.Materials("|".join(total_source_materials)),
@@ -2386,6 +2412,8 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     matrix_assembly = time.perf_counter() - started
     started = time.perf_counter()
     f_lf.Assemble()
+    f_lf.vec.data += _scalar_lift_operator_action(
+        fes, lift, mu_cf, reduced_selector, bonus_intorder=bonus_intorder)
     if source_rhs_reduced is not None:
         mapped = _map_matching_h1_load_to_global(
             mesh, reduced_space, fes, source_rhs_reduced, order=order)
