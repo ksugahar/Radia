@@ -1,9 +1,9 @@
 """Small non-timing IH CUDA algebra check; always retains a JSON result."""
 from pathlib import Path
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-gpu/tools'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-simulink/tools'))
 from vs2022_toolchain import discover_vs, compiler_bin
-SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-gpu/tools/vs2022_toolchain.py"
+SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-simulink/tools/vs2022_toolchain.py"
 import tempfile
 import ctypes,hashlib,json,os,subprocess,time
 import numpy as np
@@ -28,7 +28,7 @@ def main():
         eng.setenv('PATH',str(compiler)+';'+eng.getenv('PATH'),nargout=0)
         config=Path(eng.matlabroot())/'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml'
         src=Path(__file__).with_name('resident_smoke.cu')
-        header=ROOT/'packages/radia-gpu/native/ih_resident_kernels.cuh'
+        header=ROOT/'packages/radia-simulink/native/ih_resident_kernels.cuh'
         record['source_dirty']=bool(subprocess.check_output(['git','-C',str(ROOT),'status','--porcelain'],text=True).strip())
         record['source_commit']=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip()
         record['source_sha256']={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in (src,header,header.with_name("ih_bicgstab_kernels.cuh"),header.with_name("ih_complex_solver.cuh"),header.with_name("ih_thermal_kernels.cuh"),header.with_name("ih_coupled_state.cuh"),header.with_name("ih_preconditioner.cuh"),SELECTOR,Path(__file__))}

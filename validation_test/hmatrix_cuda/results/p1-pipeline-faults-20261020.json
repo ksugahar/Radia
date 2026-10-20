@@ -1,0 +1,127 @@
+{
+  "schema": "radia.hmatrix.pipeline-faults.v1",
+  "accepted": true,
+  "p1_complete": false,
+  "native_source_commit": "6f938e13eafbb46a46630311bb27152f7ce5d082",
+  "binary_sha256": "cd2ab5d9ef2ca667266396e4a7c5e96b0527fbcfa2a4d559ac1d9f3f24007811",
+  "helper_source_commits": [
+    "e371e20ea",
+    "fc09d4450",
+    "21cbe6f73"
+  ],
+  "solve_preconditioners": [
+    "mass-diagonal",
+    "mass-cholesky",
+    "mass-polynomial",
+    "mass-polynomial-graph",
+    "mass-chebyshev",
+    "mass-chebyshev-graph"
+  ],
+  "new_solve_positions": 418,
+  "new_numeric_create_positions": 126,
+  "new_resident_host_positions": 50,
+  "new_lowrank_factor_positions": 3,
+  "failure_memory_classes": 27,
+  "failure_memory_protocol": "5 warm and 10 measured failures per class; slope <=1 MiB/failure and delta <=16 MiB; distinct from 100-run gateway protocol",
+  "max_failure_class_slope_bytes_per_failure": 75862.88484848484,
+  "live_count_output_site": 1,
+  "live_count_warm_failures": 5,
+  "live_count_measured_failures": 10,
+  "all_owned_counters_zero": true,
+  "solve_recovery": [
+    {
+      "preconditioner": "mass-diagonal",
+      "independent_true_residual": 1.3440496909367178E-15,
+      "cpu_relative_error": 1.0302340608294064E-15
+    },
+    {
+      "preconditioner": "mass-cholesky",
+      "independent_true_residual": 8.09025746483184E-15,
+      "cpu_relative_error": 1.560305180771636E-15
+    },
+    {
+      "preconditioner": "mass-polynomial",
+      "independent_true_residual": 6.345623935675564E-16,
+      "cpu_relative_error": 1.5547251711925315E-15
+    },
+    {
+      "preconditioner": "mass-polynomial-graph",
+      "independent_true_residual": 6.345623935675564E-16,
+      "cpu_relative_error": 1.5547251711925315E-15
+    },
+    {
+      "preconditioner": "mass-chebyshev",
+      "independent_true_residual": 7.482036631862885E-16,
+      "cpu_relative_error": 1.326618744900019E-15
+    },
+    {
+      "preconditioner": "mass-chebyshev-graph",
+      "independent_true_residual": 7.482036631862885E-16,
+      "cpu_relative_error": 1.326618744900019E-15
+    }
+  ],
+  "resident_cpu_recovery": [
+    {
+      "cpu_error": 3.62413251958028E-11,
+      "physical_error": 4.982864462319963E-13,
+      "independent_true_residual": 6.241068156713748E-12,
+      "solver_true_residual": 6.241072531288342E-12,
+      "iterations": 57,
+      "accepted": true
+    },
+    {
+      "cpu_error": 3.62413251958028E-11,
+      "physical_error": 4.982864462319963E-13,
+      "independent_true_residual": 6.241068156713748E-12,
+      "solver_true_residual": 6.241072531288342E-12,
+      "iterations": 57,
+      "accepted": true
+    },
+    {
+      "cpu_error": 3.62413251958028E-11,
+      "physical_error": 4.982864462319963E-13,
+      "independent_true_residual": 6.241068156713748E-12,
+      "solver_true_residual": 6.241072531288342E-12,
+      "iterations": 57,
+      "accepted": true
+    }
+  ],
+  "numeric_lowrank_apply_error": 1.1054564207825698E-16,
+  "run_seconds": {
+    "solve": 38.25,
+    "resident": 18.531000000002678,
+    "lowrank": 13.514999999999418,
+    "numeric_create": 20.827999999994063
+  },
+  "helper_correction": "Final enumeration-only char/string selector refusal preserved accepted=false. Hash-linked closure reuses six complete baselines and the complete scalar-output fault group, without replaying that prefix.",
+  "remaining": [
+    "Optional assembly profiler has untracked Sample/vector/event allocations. Protection patch committed but not built or accepted.",
+    "Fresh release-native build, Python GPU, explicit CPU no-context trace, wheel/install, SLX, licensing, integration and publication gates."
+  ],
+  "raw_receipts": [
+    {
+      "file": "v2-enum-closure-result.json",
+      "sha256": "2abcc42a9543d429959d28e1d741fb2c98b8fb6f0ba8d2c10e90e16d35e381c3"
+    },
+    {
+      "file": "v2-enum-result.json",
+      "sha256": "8c0bd77a2322b19dfa0be9bbc439388d19e52bb8b3092ab57a02ba8388c2ba9e"
+    },
+    {
+      "file": "v2-fault-001-result.json",
+      "sha256": "f56d59f16feefc9156361df3d960b30a81a0cbbbdb54bbeaa8e613ec3ee21e09"
+    },
+    {
+      "file": "v2-leaf-result.json",
+      "sha256": "aa1777e8a11286c932f3c5d6eaa8c5120146a46ec4f17d18314dba5473d00d1f"
+    },
+    {
+      "file": "v2-prefix-001-result.json",
+      "sha256": "6a259ce74b53b32559717bd374012430ba47399dd6e376c6047cbdd96cfa5828"
+    },
+    {
+      "file": "v2-resident-result.json",
+      "sha256": "d7ba8a69c4c8678ce31859f1dfbae9230c989f32e6a44ace9c50c1049c8cd531"
+    }
+  ]
+}

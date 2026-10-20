@@ -4,7 +4,7 @@ end
 
 function setupOnce(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
-matlabDirectory=fullfile(root,'packages','radia-gpu','matlab');
+matlabDirectory=fullfile(root,'packages','radia-simulink','matlab');
 entries=string(strsplit(path,pathsep));
 testCase.TestData.RemoveMatlabDirectory= ...
     ~any(strcmpi(entries,string(matlabDirectory)));

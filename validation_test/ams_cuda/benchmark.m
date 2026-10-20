@@ -3,7 +3,7 @@ addpath(binaryDir);
 if nargin<6;useGraph=false;end
 if nargin<7;setupOnGPU=true;end
 repo=fileparts(fileparts(fileparts(mfilename('fullpath'))));
-if nargin<4;matlabDir=fullfile(repo,'packages','radia-gpu','matlab');end
+if nargin<4;matlabDir=fullfile(repo,'packages','radia-simulink','matlab');end
 addpath(matlabDir);
 readTimer=tic;d=radia.gpu.readAMSExchange(inputPath);readSeconds=toc(readTimer);
 nativeSetupSeconds=0;nativeSetupInfo=struct();hierarchyMaxRelativeDifference=0;

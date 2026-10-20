@@ -48,9 +48,9 @@ def cpu_oracle(path,oracle_dir=ROOT/'build-ams-cuda'):
     """Independent Python/NGSolve solve from the identical checked operators."""
     import ngsolve as ng
     from pyngcore import Array_I_S,Array_D_S
-    sys.path.insert(0,str(ROOT/'packages/radia-gpu/src'))
+    sys.path.insert(0,str(ROOT/'packages/radia-simulink/src'))
     sys.path.insert(0,str(oracle_dir))
-    from radia_gpu.ams_exchange import read_exchange
+    from radia_simulink.ams_exchange import read_exchange
     import _radia_ams_snapshot as bridge
     ng.SetNumThreads(1)
     data=read_exchange(path);model=data['model']
@@ -183,7 +183,7 @@ if __name__=='__main__':
     p.add_argument('--comparison',choices=['graph','generation'],default='graph')
     p.add_argument('--rounds',type=int,default=1)
     p.add_argument('--binary-dir',type=Path,default=ROOT/'build-ams-cuda')
-    p.add_argument('--matlab-dir',type=Path,default=ROOT/'packages/radia-gpu/matlab')
+    p.add_argument('--matlab-dir',type=Path,default=ROOT/'packages/radia-simulink/matlab')
     p.add_argument('--build-receipt',type=Path,default=ROOT/'build-ams-cuda/build.json')
     p.add_argument('--oracle-dir',type=Path,default=ROOT/'build-ams-cuda')
     p.add_argument('--require-idle-host',action='store_true',help='Reject CI/compute/GPU contention between measured calls')

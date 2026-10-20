@@ -1,0 +1,104 @@
+{
+  "schema": "radia.hdiv.borrowed-factor-pack.v1",
+  "native_mexcuda_accepted": true,
+  "bounded_numerical_accepted": true,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "bc6b78a143bfd882e29413cc133e4736bfb6d626",
+      "binary_sha256": "dcc88c79c71446e351dc981db7e726e7d274ad08c41ebf1cdd15831920cd125c"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "455daee0425e071d83fbc3dd7894217dfdcf58d2",
+      "binary_sha256": "ed52a73c0c56d351a840d237bfd94cd96befeedd906974219367888681d95b42"
+    }
+  },
+  "fixture_sha256": "6bfa403a0adc3c0dff9c24069b8167d161f4f65aff0079d88303744358f4ba90",
+  "resident_case_count": 10,
+  "full_assembly": {
+    "relative_difference": 1.4393232540254754e-11,
+    "stats": {
+      "owned_device_bytes": 99688,
+      "applications": 1,
+      "kernel_launches": 4,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 310756,
+      "assembly_entry_batches": 80,
+      "assembly_entry_count": 14272,
+      "assembly_leaf_count": 7,
+      "assembly_lowrank_count": 0,
+      "assembly_frame_leaf_count": 10,
+      "assembly_frame_upper_dense_coefficients": 10908,
+      "assembly_frame_storage_cap_coefficients": 10908,
+      "assembly_cache_tile_loads": 0,
+      "assembly_cache_tile_hits": 0,
+      "assembly_cache_full_tile_batches": 0,
+      "assembly_cache_host_scratch_bytes": 0,
+      "assembly_deferred_dense_leaves": 0,
+      "assembly_deferred_dense_coefficients": 0,
+      "assembly_coefficient_upload_bytes": 87264,
+      "stored_coefficient_count": 10908,
+      "same_leaf_dense_coefficient_count": 10908,
+      "lowrank_factor_coefficient_count": 0,
+      "leaf_rank_sum": 0,
+      "max_leaf_rank": 0,
+      "storage_saving_lowrank_leaf_count": 0,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    },
+    "scope": "Constant affine tetra charges; full native hierarchy and CUDA entries; not general HDiv physics"
+  },
+  "material_solver": [
+    {
+      "relative_error": 1.0302340608294064e-15,
+      "independent_true_residual": 1.3440496909367178e-15,
+      "solver_true_residual": 1.545351921618523e-15,
+      "iterations": 5,
+      "solver_owned_device_bytes": 768,
+      "scope": "Sampled-Gram material algebra",
+      "mean_magnetization_relative_error": 0
+    },
+    {
+      "relative_error": 2.384691364615577e-16,
+      "independent_true_residual": 2.7511301222944107e-16,
+      "solver_true_residual": 2.066284742804406e-16,
+      "iterations": 5,
+      "solver_owned_device_bytes": 768,
+      "scope": "Sampled-Gram material algebra",
+      "mean_magnetization_relative_error": 0
+    },
+    {
+      "relative_error": 2.6407397573069986e-16,
+      "independent_true_residual": 2.5652018718461626e-16,
+      "solver_true_residual": 1.2018516789897273e-16,
+      "iterations": 4,
+      "solver_owned_device_bytes": 552,
+      "scope": "Public affine tetra RT0 FE material solve; Python-generated FE validation fixture, not native MATLAB setup",
+      "mean_magnetization_relative_error": 1.711050598723625e-16
+    }
+  ],
+  "frame_budget_rejection": {
+    "attempts": 3,
+    "invalid_budget_values_rejected": 5,
+    "live_count_after_rejection": 0,
+    "scope": "Real module TLS callback and C frame unwind, not pre-parser rejection"
+  },
+  "cpu_coefficient_relative_error": 4.141350781095116e-14,
+  "nonlinear_relative_residual": 2.5858461399392182e-14,
+  "nonlinear_iterations": 11,
+  "live_count": 0,
+  "owned_engine_quit": true,
+  "limitations": [
+    "288 DoF nonlinear and bounded resident operator cases only; new binary not tested at 10344 DoF or A100",
+    "Borrowed C factors live only during synchronous packing; final Plan owns coefficients",
+    "One intermediate host coefficient copy removed by source design, not a measured speedup or peak-memory saving",
+    "GPU coefficient storage and numerical kernels unchanged",
+    "No fresh independent CPU nonlinear residual reconstruction in this run; independent frozen CPU coefficients compared"
+  ]
+}

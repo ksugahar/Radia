@@ -134,7 +134,7 @@ test requirement for every documentation change.
 
 ## MathWorks implementation comparison
 
-Inspected the official `packages/radia-gpu/matlab/matlab-mcp-server`, formerly MCP Core Server,
+Inspected the official `packages/radia-simulink/matlab/matlab-mcp-server`, formerly MCP Core Server,
 at commit `2e44b0ac789f43083cc29f5dce9079244b081a4c` (2026-09-07).
 
 | Official source | Adopted Radia principle |

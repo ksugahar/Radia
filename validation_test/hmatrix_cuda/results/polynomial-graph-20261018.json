@@ -1,0 +1,222 @@
+{
+  "accepted": false,
+  "status": "Optional graph candidate not accepted after nonlinear line-search failure",
+  "performance_accepted": false,
+  "release_accepted": false,
+  "default_enabled": false,
+  "native_binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "e8d798a86ad8c93d2b5731e22b429b6556f60d5b",
+      "binary_sha256": "d360dd3269deb4335a5e8d305af2105262d494c2fe63edcb81be561632c84531"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "5fd05da1c2fbe1d601f3e1a8203038c2b58ba098",
+      "binary_sha256": "514971ac8adeb14206f71664cc22513f382ddce88f77f55ccc01b99ef7ef3549"
+    }
+  },
+  "native_source_commit": "5fd05da1c2fbe1d601f3e1a8203038c2b58ba098",
+  "matlab_validation_source_commit": "cccc07307",
+  "diagnostic_source_commit": "a230eeb223e3e88203235b69137ee6eaa85c2cdd",
+  "scope": "Same fixed eight-step SPD polynomial; graph captures memset and sixteen kernels, not PCG reductions or full solver",
+  "small_saturation": {
+    "cpu_coefficient_relative_error": 3.777222540566448e-14,
+    "graph_to_original_error": 2.7454496001829748e-14,
+    "original_newton": 11,
+    "graph_newton": 22,
+    "limitation": "Graph trajectory slower on this single saturation example; no performance acceptance"
+  },
+  "linear_identical_system": {
+    "development_gpu": {
+      "accepted": true,
+      "rows": [
+        {
+          "scale": 1,
+          "relative_error": 0,
+          "true_residual": 8.669611498377254e-12,
+          "original_iterations": 167,
+          "graph_iterations": 167,
+          "graph_launches": 167
+        },
+        {
+          "scale": 0.5,
+          "relative_error": 0,
+          "true_residual": 8.669611498377254e-12,
+          "original_iterations": 167,
+          "graph_iterations": 167,
+          "graph_launches": 167
+        },
+        {
+          "scale": -1,
+          "relative_error": 0,
+          "true_residual": 8.669611498377254e-12,
+          "original_iterations": 167,
+          "graph_iterations": 167,
+          "graph_launches": 167
+        },
+        {
+          "scale": 0,
+          "relative_error": 0,
+          "true_residual": 0,
+          "original_iterations": 0,
+          "graph_iterations": 0,
+          "graph_launches": 0
+        }
+      ],
+      "invalid_mass_rejected": true,
+      "live_count": 0,
+      "scope": "Graph versus original polynomial on identical G/mass/RHS; independent CPU acceptance is a separate whole-solve gate"
+    },
+    "compute_gpu": {
+      "accepted": true,
+      "rows": [
+        {
+          "scale": 1,
+          "relative_error": 0,
+          "true_residual": 8.669611498377254e-12,
+          "original_iterations": 167,
+          "graph_iterations": 167,
+          "graph_launches": 167
+        },
+        {
+          "scale": 0.5,
+          "relative_error": 0,
+          "true_residual": 8.669611498377254e-12,
+          "original_iterations": 167,
+          "graph_iterations": 167,
+          "graph_launches": 167
+        },
+        {
+          "scale": -1,
+          "relative_error": 0,
+          "true_residual": 8.669611498377254e-12,
+          "original_iterations": 167,
+          "graph_iterations": 167,
+          "graph_launches": 167
+        },
+        {
+          "scale": 0,
+          "relative_error": 0,
+          "true_residual": 0,
+          "original_iterations": 0,
+          "graph_iterations": 0,
+          "graph_launches": 0
+        }
+      ],
+      "invalid_mass_rejected": true,
+      "live_count": 0,
+      "scope": "Graph versus original polynomial on identical G/mass/RHS; independent CPU acceptance is a separate whole-solve gate"
+    }
+  },
+  "nonlinear_single_pass": {
+    "development_gpu": {
+      "cpu_coefficient_relative_error": 1.4780372879682315e-09,
+      "graph_to_original_error": 6.456322937376105e-13,
+      "graph_launches": 2449,
+      "graph_nonlinear_residual": 1.0654100333766026e-14,
+      "invalid_input_rejected": true,
+      "live_count": 0,
+      "owned_engine_quit": true
+    },
+    "compute_gpu": {
+      "cpu_coefficient_relative_error": 1.478057685853303e-09,
+      "graph_to_original_error": 6.949731040608367e-13,
+      "graph_launches": 2449,
+      "graph_nonlinear_residual": 1.154021565504995e-14,
+      "invalid_input_rejected": true,
+      "live_count": 0,
+      "owned_engine_quit": true
+    }
+  },
+  "independent_cpu": {
+    "accepted": true,
+    "scope": "Independent nonlinear residual and ideal-sphere mean check; no whole field certification",
+    "expected_uniform_sphere_magnetization_A_per_m": [
+      0.0,
+      0.0,
+      298691.4287041886
+    ],
+    "analytic_mean_limit": 0.01,
+    "cases": {
+      "cpu_reference": {
+        "nonlinear_relative_residual": 5.9023652041016544e-15,
+        "sphere_mean_relative_error": 8.620699516417373e-05,
+        "cpu_coefficient_relative_error": 0.0
+      },
+      "development_gpu_baseline": {
+        "nonlinear_relative_residual": 2.8632563108589827e-11,
+        "sphere_mean_relative_error": 8.620699487529968e-05,
+        "cpu_coefficient_relative_error": 1.4780597297253279e-09
+      },
+      "development_gpu_graph": {
+        "nonlinear_relative_residual": 2.8632061578196572e-11,
+        "sphere_mean_relative_error": 8.620699487490996e-05,
+        "cpu_coefficient_relative_error": 1.4780372879682315e-09
+      },
+      "development_gpu_repeated": {
+        "nonlinear_relative_residual": 2.863176623280259e-11,
+        "sphere_mean_relative_error": 8.620699487627241e-05,
+        "cpu_coefficient_relative_error": 1.4780666528772892e-09
+      },
+      "compute_gpu_baseline": {
+        "nonlinear_relative_residual": 2.863162680993897e-11,
+        "sphere_mean_relative_error": 8.62069948766619e-05,
+        "cpu_coefficient_relative_error": 1.4780545335237392e-09
+      },
+      "compute_gpu_graph": {
+        "nonlinear_relative_residual": 2.8631928283323367e-11,
+        "sphere_mean_relative_error": 8.620699487452114e-05,
+        "cpu_coefficient_relative_error": 1.4780576858533033e-09
+      },
+      "compute_gpu_repeated": {
+        "nonlinear_relative_residual": 2.8632170982979953e-11,
+        "sphere_mean_relative_error": 8.620699487607801e-05,
+        "cpu_coefficient_relative_error": 1.478042941865115e-09
+      }
+    },
+    "threads": 8
+  },
+  "failed_measurement": {
+    "accepted": false,
+    "stage": "First graph solve after original warmup; ABBA samples not accepted",
+    "error": "Energy line search failed; accepted state unchanged",
+    "owned_engine_quit": true,
+    "residual_at_failure_not_captured": true
+  },
+  "bounded_diagnostic": {
+    "accepted": false,
+    "attempts": [
+      {
+        "attempt": 1,
+        "completed": true,
+        "relative": 1.2283081767937666e-14,
+        "cpu_error": 1.4780617818842027e-09,
+        "whole_seconds": 9.8398244
+      },
+      {
+        "attempt": 2,
+        "completed": true,
+        "relative": 1.1277385513232847e-14,
+        "cpu_error": 1.4780386349353133e-09,
+        "whole_seconds": 9.8009381
+      },
+      {
+        "attempt": 3,
+        "completed": true,
+        "relative": 1.0908515948444836e-14,
+        "cpu_error": 1.4780450917414025e-09,
+        "whole_seconds": 9.7190331
+      }
+    ],
+    "failure_reproduced": false,
+    "status": "Failure not reproduced in bounded attempts; not fixed or performance accepted",
+    "owned_engine_quit": true
+  },
+  "limitations": [
+    "Original polynomial remains default; existing accepted linear/nonlinear records are unchanged",
+    "Independent CPU agreement of successful solutions does not certify repeated nonlinear reliability",
+    "Cause of intermittent energy line-search failure is unresolved; roundoff sensitivity is a hypothesis, not an established diagnosis",
+    "No tolerance relaxation, rejected-step acceptance or CPU fallback",
+    "CUDA graph driver allocations are excluded from owned buffer counts; no global/host/library peak claim",
+    "No formal graph speedup, release or general nonlinear acceptance"
+  ]
+}

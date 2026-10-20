@@ -66,8 +66,8 @@ def main(a):
         owner=json.loads((job/'owner.json').read_text())
         if sha(ic_native.__file__)!=owner['cpu_ic_origin']['sha256']:raise RuntimeError('IC native identity')
         spec=importlib.util.spec_from_file_location('wheel_verifier',job/'verify_wheel.py');verifier=importlib.util.module_from_spec(spec);spec.loader.exec_module(verifier)
-        wheel=verifier.verify(a.wheel);import radia_gpu
-        installed=radia_gpu.verify();verifier.verify_installed_identity(installed,wheel)
+        wheel=verifier.verify(a.wheel);import radia_simulink
+        installed=radia_simulink.verify();verifier.verify_installed_identity(installed,wheel)
         if wheel['version'] not in ('0.1.4','0.1.5rc1') or wheel['wheel_sha256']!=owner['wheel_sha256']:raise RuntimeError('Selected wheel identity')
         payload=Path(installed['matlab_path']);mex_hash=json.loads((payload.parent/'manifest.json').read_text())['files']['matlab/radia_cuda_ams.mexw64']
         ic_hash=None

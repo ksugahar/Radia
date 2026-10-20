@@ -1,0 +1,103 @@
+{
+  "accepted": true,
+  "scope": "Immutable native NGSolve mesh/space reuse across material chunks; standalone parity and small nonlinear integration",
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "binaries": {
+    "previous": {
+      "source_commit": "6dec804471fc2af01cd63c7503d21c3187c3289e",
+      "binary_sha256": "5e9608958159b276a58013a80a866db6007ed3b870da457d598e569bd0411df4"
+    },
+    "candidate": {
+      "source_commit": "bc6b78a143bfd882e29413cc133e4736bfb6d626",
+      "binary_sha256": "dcc88c79c71446e351dc981db7e726e7d274ad08c41ebf1cdd15831920cd125c"
+    }
+  },
+  "cases": [
+    {
+      "accepted": true,
+      "dofs": 288.0,
+      "elements": 13.0,
+      "chunks": 1.0,
+      "all_fields_exact": true,
+      "invalid_and_wrong_type_rejected": 6.0,
+      "stale_after_destroy_rejected": true,
+      "stale_after_reload_rejected": true,
+      "live_count": 0.0,
+      "scope": "Native immutable material staging context; no PreparedHDiv integration or performance acceptance",
+      "mesh_sha256": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50"
+    },
+    {
+      "accepted": true,
+      "dofs": 2412.0,
+      "elements": 114.0,
+      "chunks": 1.0,
+      "all_fields_exact": true,
+      "invalid_and_wrong_type_rejected": 6.0,
+      "stale_after_destroy_rejected": true,
+      "stale_after_reload_rejected": true,
+      "live_count": 0.0,
+      "scope": "Native immutable material staging context; no PreparedHDiv integration or performance acceptance",
+      "mesh_sha256": "f577732dc8424288827f1f8d4385cbc2a994e1364907a204076b38170ffc8fc9"
+    },
+    {
+      "accepted": true,
+      "dofs": 6594.0,
+      "elements": 327.0,
+      "chunks": 3.0,
+      "all_fields_exact": true,
+      "invalid_and_wrong_type_rejected": 6.0,
+      "stale_after_destroy_rejected": true,
+      "stale_after_reload_rejected": true,
+      "live_count": 0.0,
+      "scope": "Native immutable material staging context; no PreparedHDiv integration or performance acceptance",
+      "mesh_sha256": "74da487538d92c370393f149cbff5fed0b3e89a28af8382e7fbb42e01cfacf77"
+    },
+    {
+      "accepted": true,
+      "dofs": 10344.0,
+      "elements": 515.0,
+      "chunks": 5.0,
+      "all_fields_exact": true,
+      "invalid_and_wrong_type_rejected": 6.0,
+      "stale_after_destroy_rejected": true,
+      "stale_after_reload_rejected": true,
+      "live_count": 0.0,
+      "scope": "Native immutable material staging context; no PreparedHDiv integration or performance acceptance",
+      "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb"
+    }
+  ],
+  "owned_engine_quit": true,
+  "schema": "radia.hdiv.material-staging-context.v1",
+  "native_build_accepted": true,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "small_nonlinear": {
+    "dofs": 288,
+    "cpu_coefficient_relative_error": 5.161343044151245e-14,
+    "cases": {
+      "baseline": {
+        "nonlinear_iterations": 11,
+        "nonlinear_relative_residual": 2.2312367910321877e-14
+      },
+      "candidate": {
+        "nonlinear_iterations": 11,
+        "nonlinear_relative_residual": 3.0632127558158016e-14
+      },
+      "repeated": {
+        "nonlinear_iterations": 11,
+        "nonlinear_relative_residual": 2.8490608061956256e-14
+      }
+    },
+    "early_budget_error_released_context": true,
+    "invalid_initial_recovery": true,
+    "live_count": 0,
+    "owned_engine_quit": true
+  },
+  "limitations": [
+    "Context retains the immutable loaded mesh; file changes require explicit destroy and recreate.",
+    "Context count is capped at two per module; NGSolve allocator/runtime peaks are not measured.",
+    "Material maps, ordering, quadrature, shape and weight arithmetic are unchanged.",
+    "No full 10k solve acceptance or A100 timing for this wrapper revision yet.",
+    "No cap increase, larger-capacity, speedup or release claim."
+  ]
+}

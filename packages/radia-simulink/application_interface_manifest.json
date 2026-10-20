@@ -1,0 +1,135 @@
+{
+  "schema": "radia.application_interface_manifest.v2",
+  "generated_at_utc": "2026-07-22T00:00:00Z",
+  "policy": "The final human production interface is a masked block in the single Radia Simulink library. Notebook workbenches are retired for every application, including IH. Python and MCP remain the AI interface, executed docs notebooks with parameterized saved WebGUI scenes are the repository example and documentation layer, field-producing Simulink runs emit GMSH .msh v4.1 post-processing artifacts, and the Cubit Export Mesh toolbar remains a Cubit-embedded surface.",
+  "library": {
+    "artifact": "packages/radia-simulink/matlab/radia_simulink_library.slx",
+    "builder": "radia.simulink.buildLibrary",
+    "runner": "radia.simulink.application",
+    "backend": "python-headless-cli",
+    "backend_policy": "MEX or ROM may replace a block backend only after numerical parity, error propagation, lifecycle, and long-run stability tests.",
+    "spatial_artifact": {
+      "format": "GMSH .msh v4.1",
+      "location": "application run directory",
+      "required_when": "the selected mode computes a spatial field",
+      "scalar_only": "not-applicable",
+      "purpose": "visualization and post-processing only"
+    },
+    "mesh_preflight": {
+      "input_format": "Netgen .vol",
+      "checker": "check-vol",
+      "timing": "after mesh export and before solver initialization",
+      "label_contract_schema": "radia.vol-label-contract.v1",
+      "report_schema": "cubit-mesh-export.vol-check.v1",
+      "report_location": "application run directory",
+      "required_when": "the selected mode consumes one or more .vol meshes",
+      "material_constants": "validated by DesignSpec/configuration, never inferred from labels"
+    }
+  },
+  "applications": [
+    {
+      "id": "radia-em",
+      "title": "Electromagnet",
+      "state": "active-simulink-block",
+      "block": "radia_simulink_library/Applications/Electromagnet",
+      "optimization_block": "radia_simulink_library/Applications/Electromagnet Topology Optimization",
+      "optimization_sample": "packages/radia-simulink/matlab/radia_electromagnet.slx",
+      "optimization_generator": "radia.simulink.buildElectromagnetOptimizationModel",
+      "optimization_backend": "MATLAB-native VIM density adjoint with one state solve and one adjoint solve per gradient evaluation, followed by MMA or SQP. The explicit batch-analysis trigger remains separate.",
+      "design": "radia.em_design.EMDesignSpec",
+      "notebook": null,
+      "headless": [
+        "src/radia/panels/calc_accel_magnet.py",
+        "src/radia/panels/calc_accel_hdiv.py",
+        "src/radia/panels/calc_kelvin_benchmark.py"
+      ]
+    },
+    {
+      "id": "radia-pcb",
+      "title": "PCB PEEC",
+      "state": "active-simulink-block",
+      "block": "radia_simulink_library/Applications/PCB PEEC",
+      "design": "radia.pcb_design.PCBDesignSpec",
+      "notebook": null,
+      "headless": [
+        "src/radia/panels/calc_pcb_peec.py"
+      ]
+    },
+    {
+      "id": "radia-motor",
+      "title": "Motor",
+      "state": "active-simulink-block",
+      "block": "radia_simulink_library/Applications/Motor",
+      "design": "radia.motor_design.MotorDesignSpec",
+      "notebook": null,
+      "headless": [
+        "src/radia/panels/calc_motor_transient.py",
+        "src/radia/panels/calc_motor_lamination.py",
+        "src/radia/panels/calc_motor_hdiv_reduced.py"
+      ]
+    },
+    {
+      "id": "radia-streamfunction",
+      "title": "Stream Function",
+      "state": "active-simulink-block",
+      "block": "radia_simulink_library/Applications/Stream Function",
+      "optimization_block": "radia_simulink_library/Applications/Stream Function Optimization",
+      "optuna_block": "radia_simulink_library/Applications/Stream Function Optuna",
+      "optimization_sample": "packages/radia-simulink/matlab/radia_streamfunction_optimization.slx",
+      "optimization_generator": "radia.simulink.buildStreamFunctionOptimizationModel",
+      "optimization_backend": "Explicit Python/headless design or Pareto batch followed by MATLAB-native analytic-gradient MMA/SQP over preassembled stream-function coefficients, or a MATLAB-native Optuna outer loop with one explicit ACA+/QR/TSVD batch analysis per trial.",
+      "design": "radia.streamfunction_design.StreamFunctionDesignSpec",
+      "notebook": null,
+      "headless": [
+        "src/radia/panels/calc_streamfunction.py",
+        "src/radia/panels/calc_streamfunction_volume.py"
+      ]
+    },
+    {
+      "id": "radia-ih",
+      "title": "Induction Heating",
+      "state": "active-simulink-block",
+      "block": "radia_simulink_library/Applications/Induction Heating",
+      "design": "radia.ih_design.IHDesignSpec",
+      "backend": "matlab-level2+radia-mex-handles",
+      "backend_policy": "Readable Level-2 MATLAB Eddy and Thermal S-Functions own ports and lifecycle; separate checked radia_mex object handles own native numerical state. Initialization may locate NGSolve runtime DLLs through the configured Python installation, but Python is not a per-step fallback.",
+      "notebook": null,
+      "headless": [
+        "src/radia/panels/calc_inductance.py",
+        "src/radia/panels/calc_fem_kelvin.py",
+        "src/radia/panels/calc_fem_coilmesh.py",
+        "src/radia/panels/calc_heat.py",
+        "src/radia/panels/calc_heat_axisym.py"
+      ]
+    },
+    {
+      "id": "radia-maglev",
+      "title": "Magnetic Levitation",
+      "state": "active-simulink-block",
+      "block": "radia_simulink_library/Applications/Magnetic Levitation",
+      "sample": "packages/radia-simulink/matlab/radia_maglev.slx",
+      "generator": "radia.simulink.buildMagLevModel",
+      "design": "radia.maglev.MovingHCurlFosterFamily",
+      "backend": "matlab-level2-shared-mode-foster",
+      "backend_policy": "A readable Level-2 MATLAB S-Function advances a position-dependent HCurl reduced state in Foster modal form with one mode set shared by every height and evaluates the exported modal Lorentz-force operator. Family assembly occurs before simulation and Python is never called per step.",
+      "optimization_scope": "control optimization only; material topology optimization belongs to radia-em",
+      "notebook": null,
+      "headless": [
+        "src/radia/vim/_matlab_bridge.py",
+        "src/radia/maglev/position_foster.py"
+      ]
+    },
+    {
+      "id": "radia-export-menu",
+      "title": "Cubit Export Mesh",
+      "state": "active-cubit-toolbar",
+      "block": null,
+      "notebook": null,
+      "adapter": null,
+      "headless": [
+        "src/radia/panels/check_vol_consistency.py"
+      ]
+    }
+  ],
+  "inventory_scope": "Source-only legacy application inventory. Entries describe the retained source models, not accepted CUDA runtime support. See README.md and SIMULINK_SOURCE.md."
+}

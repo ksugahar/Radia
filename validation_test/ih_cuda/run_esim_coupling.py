@@ -1,9 +1,9 @@
 """Element-specific ESIM material plumbing; no independent physics certification."""
 from pathlib import Path
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-gpu/tools'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-simulink/tools'))
 from vs2022_toolchain import discover_vs, compiler_bin
-SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-gpu/tools/vs2022_toolchain.py"
+SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-simulink/tools/vs2022_toolchain.py"
 import argparse,ctypes,hashlib,json,os,socket,subprocess
 
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -18,7 +18,7 @@ def main():
         if socket.gethostname().lower()!='t7920':raise RuntimeError('CUDA builds belong to 100')
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
         os.environ.update(OMP_NUM_THREADS='1',MKL_NUM_THREADS='1')
-        header=root/'packages/radia-gpu/native';src=Path(__file__).with_name('esim_coupling_smoke.cu')
+        header=root/'packages/radia-simulink/native';src=Path(__file__).with_name('esim_coupling_smoke.cu')
         sources=[src,SELECTOR,Path(__file__)]+[header/n for n in ['ih_temperature_material.cuh','ih_esim_cell.cuh','ih_thermal_kernels.cuh','ih_resident_kernels.cuh','ih_esim_coupling.cuh','ih_coupled_state.cuh','ih_complex_solver.cuh','ih_bicgstab_kernels.cuh','ih_preconditioner.cuh']]
         hashes={str(s.relative_to(root)):sha(s) for s in sources};r['source_sha256']=hashes
         r['source_commit']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()

@@ -1,0 +1,42 @@
+{
+  "schema": "radia.hdiv-gpu-research.v1",
+  "accepted": true,
+  "release_accepted": false,
+  "formal_cpu_reference_accepted": false,
+  "scope": "Independently authored unit sphere, P2 geometry, HDiv order 2, linear susceptibility 0.4; bounded dense Gram",
+  "optimization": "Geometry-specific fused Duffy moment kernels; original quadrature and per-component summation order retained",
+  "source_commit": "c67c31341226821f42c349628d11ddb9c2e63ead",
+  "hmatrix_binary_sha256": "d4e8d8112ed6bfe694b5aebd0b70711536c3d1bab3fa68f5fe9c45683c2ec5a2",
+  "projection_binary_sha256": "a19c563461d65293aceb791f9fe0f51ac32bb83388d9d735319bab403f8d7efa",
+  "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+  "dofs": 10344,
+  "charges": 4208,
+  "cells": 515,
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "cpu_threads": 16,
+  "abba_cycles": 2,
+  "samples": 10,
+  "warm_api_median_seconds": {
+    "cpu": 21.26348164999945,
+    "gpu": 9.65325015
+  },
+  "cpu_over_gpu": 2.2027277154937757,
+  "max_gpu_coefficient_relative_error": 5.385096436355245e-13,
+  "max_gpu_true_relative_residual": 6.2471363748653504e-12,
+  "max_cpu_true_relative_residual": 6.245933959398676e-12,
+  "exact_gpu_owned_peak_bytes": 1006993428,
+  "gpu_iteration_counts": [
+    8
+  ],
+  "full_160_charge_operator_relative_frobenius_error": 0,
+  "oversized_group_rejected": true,
+  "live_handles_after": 0,
+  "limits": [
+    "Research artifacts, not a common installed release wheel. CPU reference build-source adoption remains provisional.",
+    "API total includes FE setup, assembly, transfers, solve, result recovery and object destruction; Engine initialization and HDF5 controller transport measured separately.",
+    "First benchmark follows parity warmups; no full-process cold-start claim.",
+    "Exact owned buffers exclude CUDA/library/global peaks; 50 ms process samples include baseline and retained CPU certification operator and can miss spikes.",
+    "CPU sampler runs in the solver process; GPU process sampler runs in the controller, so instrumentation cost is asymmetric.",
+    "No nonlinear BH, general FE, IH, large adaptive compression or release qualification claim."
+  ]
+}

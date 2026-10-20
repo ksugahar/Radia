@@ -128,7 +128,7 @@ def test_optuna_matlab_difference_support_is_allowed(tmp_path):
         tmp_path,
         {"mcp-server-radia-matlab": "radia_mcp.matlab.server:main"},
         token_files={
-            "packages/radia-gpu/matlab/optuna_boundary.py": (
+            "packages/radia-simulink/matlab/optuna_boundary.py": (
                 "def matlab_optuna_mcp_route():\n"
                 "    return {'owner': 'optuna/optuna-mcp', "
                 "'difference': 'MATLAB table/MAT and Simulink'}\n"

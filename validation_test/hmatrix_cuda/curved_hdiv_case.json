@@ -1,0 +1,15 @@
+{
+  "case": "public_unit_sphere_linear_hdiv",
+  "geometry": {"length_unit": "m", "shape": "unit sphere", "cells": 13, "geometry_order": 2},
+  "material": {
+    "region": "magnetic_body",
+    "law": "uniform linear isotropic susceptibility",
+    "inverse_susceptibility": 2.5,
+    "susceptibility": 0.4,
+    "note": "Physical coefficients are declared here; the mesh label contract validates names and topology only."
+  },
+  "excitation": {"applied_H_A_per_m": [1.0, 0.2, 0.1]},
+  "discretization": {"space": "NGSolve HDiv", "order": 2},
+  "solver": {"tolerance": 1e-11, "max_iterations": 1000},
+  "scope": "Bounded CPU/GPU parity and performance case; not an air-property, nonlinear or general mesh acceptance."
+}

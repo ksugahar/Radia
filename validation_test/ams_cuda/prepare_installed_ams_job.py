@@ -6,7 +6,7 @@ def main(a):
     root=Path(__file__).resolve().parents[2];out=a.out.resolve();out.mkdir(parents=True,exist_ok=False)
     for n in ('ams_tuning.py','ams_tuning_sample.m','ams_loaded_module.ps1','nonlinear_resident.py','measure_native_cpu_gpu.py'):
         shutil.copy2(Path(__file__).parent/n,out/n)
-    shutil.copy2(root/'packages/radia-gpu/verify_wheel.py',out/'verify_wheel.py')
+    shutil.copy2(root/'packages/radia-simulink/verify_wheel.py',out/'verify_wheel.py')
     shutil.copy2(a.wheel,out/a.wheel.name)
     (out/'baseline').mkdir();shutil.copy2(a.baseline_binary,out/'baseline/radia_cuda_ams.mexw64')
     (out/'cpu').mkdir();shutil.copy2(a.cpu_reference,out/'cpu/_radia_ams_cpu_reference.pyd')

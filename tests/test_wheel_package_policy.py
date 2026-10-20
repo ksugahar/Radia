@@ -10,11 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.mark.parametrize('foreign', [
     'radia/matlab/entry.py', 'radia/simulink/entry.py', 'radia/ltspice/entry.py',
-    'radia_gpu/__init__.py', 'radia/ltspice.py', 'radia/matlab_bridge.py',
+    'radia_simulink/__init__.py', 'radia/ltspice.py', 'radia/matlab_bridge.py',
     'radia/kernel.m', 'radia/model.slx', 'radia/kernel.mexw64',
     'radia/kernel.mexw64.build.json', 'radia/kernel.cu',
     'radia/panels/application_interface_manifest.json',
-    'Requires-Dist: radia-gpu>=0.1.0', 'Requires-Dist: matlabengine; extra == "matlab"',
+    'Requires-Dist: radia-simulink>=0.1.0', 'Requires-Dist: matlabengine; extra == "matlab"',
     'radia/equation/__init__.py', 'radia/_equation.cp312-win_amd64.pyd',
     'radia/_equation.cpython-312-x86_64-linux-gnu.so',
 ])
@@ -40,7 +40,7 @@ def test_cpu_wheel_rejects_foreign_product_payloads(tmp_path, foreign):
     assert guard.verify(wheel)['gpu_integration_absent'] is True
     write(foreign)
     expected = ('retired equation payload' if foreign.startswith(('radia/equation/', 'radia/_equation'))
-                else 'radia-gpu integration payload')
+                else 'radia-simulink integration payload')
     with pytest.raises(ValueError, match=expected):
         guard.verify(wheel)
 

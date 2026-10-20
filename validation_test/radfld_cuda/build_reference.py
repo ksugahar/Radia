@@ -1,9 +1,9 @@
 """Build an independent CPU pybind oracle from an explicit pre-CUDA Git commit."""
 from pathlib import Path
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-gpu/tools'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'packages/radia-simulink/tools'))
 from vs2022_toolchain import discover_vs, compiler_bin
-SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-gpu/tools/vs2022_toolchain.py"
+SELECTOR = Path(__file__).resolve().parents[2] / "packages/radia-simulink/tools/vs2022_toolchain.py"
 import argparse
 import hashlib
 import json

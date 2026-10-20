@@ -1,7 +1,7 @@
 # Radia Application Interface Conventions
 
 The canonical human-facing Radia applications are masked blocks in
-`packages/radia-gpu/matlab/radia_simulink_library.slx`. No application, including IH, has a
+`packages/radia-simulink/matlab/radia_simulink_library.slx`. No application, including IH, has a
 notebook workbench.
 
 Python and MCP are the first-class AI interfaces. Result-bearing notebooks

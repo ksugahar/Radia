@@ -100,7 +100,7 @@ is added, it should be treated as an independent extraction cross-check of the
 
 ## Simulink integration
 
-The packaged `packages/radia-gpu/matlab/radia_maglev.slx` model is the human-facing dynamic
+The packaged `packages/radia-simulink/matlab/radia_maglev.slx` model is the human-facing dynamic
 interface. Open it with `radia.simulink.openMagLev()`. Its masked MagLev plant
 accepts `-dI/dt`, mechanical height, and coil current, then advances a
 shared-mode Foster HCurl family and returns the induced port response and the

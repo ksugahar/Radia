@@ -1,0 +1,234 @@
+{
+  "scope": "Bounded public P2 sphere linear HDiv scaled whole-solve parity",
+  "dofs": 5184,
+  "charges": 2496,
+  "cells": 246,
+  "mesh_sha256": "2ab17e73df34f4e110bace113a038f6686984f64b2b63cc53ba6590be340aacf",
+  "contract_sha256": "b99d4d42745581e2b1dcf44c0d797478f40c8f69a74fc95ccd873b2efe0dfa87",
+  "mex": {
+    "radia_cuda_projection": {
+      "sha256": "a19c563461d65293aceb791f9fe0f51ac32bb83388d9d735319bab403f8d7efa",
+      "source_commit": "95879f3a0d31f78a79621a04921b17523eb58a5e"
+    },
+    "radia_cuda_hmatrix": {
+      "sha256": "ac9eb71fa9296dab12f299a7ee537828766c3e02d0d62b97dda93d7aae64259f",
+      "source_commit": "fc56ff8afb369827a14e46a96bb0f9672f3d38e5"
+    }
+  },
+  "native_sha256": "e59a0dd9bd41474edf587d87374bea80375676fdf2f46b6c176efa9546544053",
+  "frontend_sha256": "e03cdf61cd845984017c0a73f87f321db58bae9513f60d82a3d8c361c89b7dd5",
+  "threads": {
+    "cpu_ngsolve": 16,
+    "cpu_blas": 1,
+    "matlab_single_comp_thread": true,
+    "process_affinity_mask": 65535
+  },
+  "hacapk_options": {
+    "epsilon": 1e-10,
+    "leaf_size": 128,
+    "eta": 2.0,
+    "max_rank": 128,
+    "cache_bytes": 2147483648
+  },
+  "preconditioner": "mass-cholesky",
+  "staging_mode": "sparse",
+  "assembly_mode": "hacapk-cached",
+  "cpu_true_residual": 4.200384053227866e-12,
+  "native_setup_errors": {
+    "mass_error": 1.5417015164197795e-16,
+    "charge_error": 1.793430753724109e-14,
+    "rhs_error": 2.726485694462265e-16
+  },
+  "first_payload": {
+    "whole_seconds": 1.4911571,
+    "assembly_upload_seconds": 1.1901574,
+    "solve_transfer_seconds": 0.1806396,
+    "iterations": 12.0,
+    "owned_peak": 527796612.0,
+    "coefficient_error": 5.027069869343676e-13,
+    "mean_error": 9.279690203038746e-15,
+    "true_residual": 4.204842846511556e-12,
+    "operator_stats": {
+      "owned_device_bytes": 15442936.0,
+      "applications": 0,
+      "kernel_launches": 0,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 527796612.0,
+      "assembly_entry_batches": 4417,
+      "assembly_entry_count": 3224645.0,
+      "assembly_leaf_count": 227,
+      "assembly_lowrank_count": 1,
+      "assembly_cache_tile_loads": 1,
+      "assembly_cache_tile_hits": 4416,
+      "stored_coefficient_count": 1759664.0,
+      "same_leaf_dense_coefficient_count": 3222112.0,
+      "lowrank_factor_coefficient_count": 92352,
+      "leaf_rank_sum": 37,
+      "max_leaf_rank": 37,
+      "storage_saving_lowrank_leaf_count": 1,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    }
+  },
+  "warm": {
+    "whole_seconds": 1.3956753,
+    "assembly_upload_seconds": 1.1642918,
+    "solve_transfer_seconds": 0.1276522,
+    "iterations": 12.0,
+    "owned_peak": 527796612.0,
+    "coefficient_error": 5.027069869343676e-13,
+    "mean_error": 9.279690203038746e-15,
+    "true_residual": 4.204842846511556e-12,
+    "operator_stats": {
+      "owned_device_bytes": 15442936.0,
+      "applications": 0,
+      "kernel_launches": 0,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 527796612.0,
+      "assembly_entry_batches": 4417,
+      "assembly_entry_count": 3224645.0,
+      "assembly_leaf_count": 227,
+      "assembly_lowrank_count": 1,
+      "assembly_cache_tile_loads": 1,
+      "assembly_cache_tile_hits": 4416,
+      "stored_coefficient_count": 1759664.0,
+      "same_leaf_dense_coefficient_count": 3222112.0,
+      "lowrank_factor_coefficient_count": 92352,
+      "leaf_rank_sum": 37,
+      "max_leaf_rank": 37,
+      "storage_saving_lowrank_leaf_count": 1,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    }
+  },
+  "operator_probes": {
+    "accepted": true,
+    "count": 3,
+    "seed": 20261018.0,
+    "relative_errors": [
+      2.4256342859026642e-12,
+      2.347048282051286e-12,
+      2.3257377925719965e-12
+    ],
+    "limit": 1e-08,
+    "true_relative_residual": [],
+    "residual_applicability": "not_applicable_operator",
+    "live_count": 0,
+    "operator_stats": {
+      "owned_device_bytes": 15442936.0,
+      "applications": 3,
+      "kernel_launches": 18,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 527796612.0,
+      "assembly_entry_batches": 4417,
+      "assembly_entry_count": 3224645.0,
+      "assembly_leaf_count": 227,
+      "assembly_lowrank_count": 1,
+      "assembly_cache_tile_loads": 1,
+      "assembly_cache_tile_hits": 4416,
+      "stored_coefficient_count": 1759664.0,
+      "same_leaf_dense_coefficient_count": 3222112.0,
+      "lowrank_factor_coefficient_count": 92352,
+      "leaf_rank_sum": 37,
+      "max_leaf_rank": 37,
+      "storage_saving_lowrank_leaf_count": 1,
+      "assembly_profile_enabled": false,
+      "profile_mapping_seconds": 0,
+      "profile_tet_potential_seconds": 0,
+      "profile_tri_potential_seconds": 0,
+      "profile_scalar_potential_seconds": 0,
+      "profile_contraction_seconds": 0,
+      "profile_finalize_seconds": 0
+    },
+    "timing_scope": "Excluded from workflow benchmarks"
+  },
+  "operator_probe_input_sha256": "55d284b13adb616e3cb8f1d229bb63f74bb744bebabe09cc6771224f4b2b5477",
+  "memory_limitations": "50ms sampled process RSS/private includes baseline/runtime and may miss spikes; CPU sampler is in controller process, GPU sampler observes separate MATLAB process, unquantified timing bias; exact GPU owned excludes CUDA/runtime/global peaks",
+  "cpu_host_process_memory": {
+    "before": {
+      "rss_bytes": 142155776,
+      "private_bytes": 473280512,
+      "lifetime_peak_rss_bytes": 146038784
+    },
+    "after": {
+      "rss_bytes": 250462208,
+      "private_bytes": 2267648000,
+      "lifetime_peak_rss_bytes": 322736128
+    },
+    "sample_count": 160,
+    "period_seconds": 0.05,
+    "sampled_peak_rss_bytes": 319893504,
+    "sampled_peak_private_bytes": 3085791232,
+    "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+  },
+  "gpu_host_process_memory": {
+    "before": {
+      "rss_bytes": 1467424768,
+      "private_bytes": 2172350464,
+      "lifetime_peak_rss_bytes": 1467424768
+    },
+    "after": {
+      "rss_bytes": 1587011584,
+      "private_bytes": 2277232640,
+      "lifetime_peak_rss_bytes": 1810800640
+    },
+    "sample_count": 76,
+    "period_seconds": 0.05,
+    "sampled_peak_rss_bytes": 1769086976,
+    "sampled_peak_private_bytes": 2503999488,
+    "limitation": "Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak"
+  },
+  "schema": "radia.hdiv-cached-entry-sync-research.v1",
+  "accepted": true,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "formal_reference_accepted": false,
+  "cpu_source_commit": "54d10d11f465edb2d9f35aec28f15cf48c1525a3",
+  "validation_source_sha256": "5cfcafeb9a38107aca11d8c6dfb924c284473c125d0285c9f1d78566ca463e5f",
+  "entry_batch_size": 1024,
+  "rtx_operator_checks": [
+    {
+      "kind": "affine",
+      "charges": 28,
+      "cached_relative_error": 1.1789702464632094e-16,
+      "evicted_relative_error": 1.1789702464632094e-16,
+      "wide_relative_error": 1.1789702464632094e-16,
+      "live_count": 0
+    },
+    {
+      "kind": "curved",
+      "charges": 160,
+      "cached_relative_error": 1.1016030385600124e-16,
+      "evicted_relative_error": 1.1016030385600124e-16,
+      "wide_relative_error": 1.1016030385600124e-16,
+      "live_count": 0
+    }
+  ],
+  "hardware": {
+    "gpu_model": "NVIDIA A100-SXM4-40GB",
+    "driver": "591.59",
+    "total_mib": 40960,
+    "matlab": "26.1.0.3346908 (R2026a) Update 5",
+    "role": "on-demand GPU worker"
+  },
+  "change": "Copy the sticky CUDA error flag with the final entry tile output before its existing stream synchronization; no extra terminal wait and no numerical arithmetic changes.",
+  "limitations": [
+    "All entries remain withheld from ACA until the copied sticky error flag is checked. Empty requests and unsupported inputs retain explicit handling.",
+    "Whole first/warm samples are numerical diagnostics only; no new old/new or CPU/GPU performance acceptance or speedup ratio.",
+    "Initial RTX mesh-check child failed its bounded job due to automatic NGSolve heap allocation; a separate retry explicitly sets one NGSolve thread in the unchanged canonical checker. Memory limits and mesh/label gates unchanged.",
+    "Random actions supplement one linear excitation, not a full operator norm or physical convergence proof.",
+    "Owned buffers exclude runtime/global peaks; process samples include baselines and can miss spikes.",
+    "CPU formal immutable-wheel adoption remains provisional; different module source commits are not a common release wheel.",
+    "No general geometry, nonlinear/topology-optimization, 100k or release acceptance."
+  ]
+}

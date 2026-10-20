@@ -1,0 +1,676 @@
+{
+  "accepted": true,
+  "scope": "Bounded public P2 sphere, 6594DoF nonlinear BH; not general nonlinear/10k/release acceptance",
+  "mesh_sha256": "74da487538d92c370393f149cbff5fed0b3e89a28af8382e7fbb42e01cfacf77",
+  "dofs": 6594,
+  "material_points": 112161,
+  "material_chunk_elements": 128,
+  "integration_profile": "all-high-order; independent CPU ho_far_factor=inf; not default CPU near/far split",
+  "matlab_source_commit": "6213e63ca2c0dd2abee68e385879e9fccbaffdd2",
+  "native_binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "e8d798a86ad8c93d2b5731e22b429b6556f60d5b",
+      "binary_sha256": "d360dd3269deb4335a5e8d305af2105262d494c2fe63edcb81be561632c84531"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "13968403cc1100247c7bc26c4c4152b03bec028c",
+      "binary_sha256": "3ec8132b5e422df795420c59a0758b51ba84fc4ba7e2feb395bd10fd950a6d28"
+    }
+  },
+  "units": {
+    "magnetization": "A/m",
+    "applied_field": "A/m",
+    "BH_flux_density": "tesla",
+    "history_energy": "A^2*m; integrated coenergy with common mu0 omitted, multiply by mu0 for joules"
+  },
+  "cpu": {
+    "threads": 4,
+    "stats": {
+      "nonlinear_inner_preconditioner": "mass-riesz",
+      "nonlinear_inner_tol": "fixed",
+      "nonlinear_continuation_steps": 1,
+      "nonlinear_reuse_tangent_steps": 1,
+      "nonlinear_cg_x0": false,
+      "nonlinear_newton_iters": 2,
+      "nonlinear_warmstart_solves": 1,
+      "nonlinear_linear_inner_iters": 274,
+      "nonlinear_line_search_backtracks": 0,
+      "nonlinear_tangent_assemblies": 2,
+      "nonlinear_tangent_reuses": 0,
+      "nonlinear_fresh_tangent_retries": 0,
+      "nonlinear_material_quadrature_order": 6,
+      "nonlinear_convergence_mode": "tolerance",
+      "nonlinear_line_search_exhausted": false,
+      "nonlinear_residual_tolerance": 1e-12,
+      "nonlinear_final_rel_step": 1.6131227213134841e-06,
+      "nonlinear_final_relative_residual": 5.607717367340933e-15,
+      "nonlinear_final_settled_iters": 1,
+      "nonlinear_converged_final_stage": true
+    }
+  },
+  "gpu_cases": {
+    "development_gpu": {
+      "cpu_errors": {
+        "coefficients": 1.4071208853336606e-09,
+        "mean": 9.31641863153159e-14
+      },
+      "nonlinear_relative_residual": 8.46578515573142e-15,
+      "newton_iterations": 2,
+      "history": [
+        {
+          "relative_residual": 0.0013780422844847057,
+          "energy": -62548876251.05181,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 54,
+          "inner_true_residual": 7.342560754275589e-13
+        },
+        {
+          "relative_residual": 2.8343999613461027e-09,
+          "energy": -62548994955.452446,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 59,
+          "inner_true_residual": 7.999541331302209e-13
+        }
+      ],
+      "maximum_inner_original_true_residual": 7.999541331302209e-13,
+      "maximum_magnetization_A_per_m": 325517.38724111294,
+      "barrier_cap_A_per_m": 990099.008910891,
+      "whole_seconds_diagnostic": 18.2711968,
+      "host_phase_seconds": {
+        "device_initialization": 0.8148031,
+        "fe_and_law": 3.9824316,
+        "geometry_create": 9.4634206,
+        "material_upload_enqueue": 0.3313098,
+        "warmstart": 1.3561201,
+        "residual_tangent_and_demag": 0.7110373000000001,
+        "newton_linear_solve": 1.5442768999999998,
+        "line_search": 0.0522594,
+        "cleanup": 0.0106255
+      },
+      "material_chunk_count": 3,
+      "material_shape_entries": 10094490.0,
+      "tangent_nonzero_bound": 294300,
+      "operator_owned_bytes": 33546984.0,
+      "setup_peak_owned_bytes": 744054028.0,
+      "solver_owned_bytes": 352893084.0,
+      "material_array_bound_bytes": 410994160.0,
+      "combined_array_bound_bytes": 1988212592.0,
+      "live_count": 0
+    },
+    "compute_gpu": {
+      "cpu_errors": {
+        "coefficients": 1.4071237492234459e-09,
+        "mean": 9.450387304569735e-14
+      },
+      "nonlinear_relative_residual": 7.734816145216093e-15,
+      "newton_iterations": 2,
+      "history": [
+        {
+          "relative_residual": 0.0013780422844847555,
+          "energy": -62548876251.05184,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 54,
+          "inner_true_residual": 7.342410872010558e-13
+        },
+        {
+          "relative_residual": 2.8344000496837594e-09,
+          "energy": -62548994955.452446,
+          "alpha": 1,
+          "backtracks": 0,
+          "inner_iterations": 59,
+          "inner_true_residual": 8.003169294994685e-13
+        }
+      ],
+      "maximum_inner_original_true_residual": 8.003169294994685e-13,
+      "maximum_magnetization_A_per_m": 325517.3872411037,
+      "barrier_cap_A_per_m": 990099.008910891,
+      "whole_seconds_diagnostic": 7.0460992,
+      "host_phase_seconds": {
+        "device_initialization": 0.4315221,
+        "fe_and_law": 3.8305894,
+        "geometry_create": 0.9178129,
+        "material_upload_enqueue": 0.2524916,
+        "warmstart": 0.7129184,
+        "residual_tangent_and_demag": 0.3149001,
+        "newton_linear_solve": 0.5432913,
+        "line_search": 0.029785,
+        "cleanup": 0.0086107
+      },
+      "material_chunk_count": 3,
+      "material_shape_entries": 10094490.0,
+      "tangent_nonzero_bound": 294300,
+      "operator_owned_bytes": 33546984.0,
+      "setup_peak_owned_bytes": 744054028.0,
+      "solver_owned_bytes": 352893084.0,
+      "material_array_bound_bytes": 410994160.0,
+      "combined_array_bound_bytes": 1988212592.0,
+      "live_count": 0
+    }
+  },
+  "independent_cpu_checks": {
+    "accepted": true,
+    "scope": "Independent nonlinear residual and ideal-sphere mean check; no whole field certification",
+    "expected_uniform_sphere_magnetization_A_per_m": [
+      0.0,
+      0.0,
+      298691.4287041886
+    ],
+    "analytic_mean_limit": 0.01,
+    "cases": {
+      "cpu_reference": {
+        "nonlinear_relative_residual": 5.385735531479715e-15,
+        "sphere_mean_relative_error": 0.00010639530653321275
+      },
+      "development_gpu": {
+        "nonlinear_relative_residual": 2.414519160641948e-11,
+        "sphere_mean_relative_error": 0.00010639530644361568
+      },
+      "compute_gpu": {
+        "nonlinear_relative_residual": 2.414519754234985e-11,
+        "sphere_mean_relative_error": 0.00010639530644226246
+      }
+    },
+    "threads": 16
+  },
+  "ideal_sphere_physical_check": {
+    "accepted": true,
+    "scope": "Ideal unit-sphere mean and declared core M stencil; no whole-field or operator-residual certification",
+    "units": "M and H A/m",
+    "mesh_sha256": "74da487538d92c370393f149cbff5fed0b3e89a28af8382e7fbb42e01cfacf77",
+    "expected_uniform_magnetization": [
+      0.0,
+      0.0,
+      298691.4287041886
+    ],
+    "core_points": [
+      [
+        -0.487,
+        -0.259,
+        -0.23299999999999998
+      ],
+      [
+        -0.487,
+        -0.259,
+        0.017
+      ],
+      [
+        -0.487,
+        -0.259,
+        0.267
+      ],
+      [
+        -0.487,
+        -0.009,
+        -0.23299999999999998
+      ],
+      [
+        -0.487,
+        -0.009,
+        0.017
+      ],
+      [
+        -0.487,
+        -0.009,
+        0.267
+      ],
+      [
+        -0.487,
+        0.241,
+        -0.23299999999999998
+      ],
+      [
+        -0.487,
+        0.241,
+        0.017
+      ],
+      [
+        -0.487,
+        0.241,
+        0.267
+      ],
+      [
+        -0.237,
+        -0.509,
+        -0.23299999999999998
+      ],
+      [
+        -0.237,
+        -0.509,
+        0.017
+      ],
+      [
+        -0.237,
+        -0.509,
+        0.267
+      ],
+      [
+        -0.237,
+        -0.259,
+        -0.483
+      ],
+      [
+        -0.237,
+        -0.259,
+        -0.23299999999999998
+      ],
+      [
+        -0.237,
+        -0.259,
+        0.017
+      ],
+      [
+        -0.237,
+        -0.259,
+        0.267
+      ],
+      [
+        -0.237,
+        -0.259,
+        0.517
+      ],
+      [
+        -0.237,
+        -0.009,
+        -0.483
+      ],
+      [
+        -0.237,
+        -0.009,
+        -0.23299999999999998
+      ],
+      [
+        -0.237,
+        -0.009,
+        0.017
+      ],
+      [
+        -0.237,
+        -0.009,
+        0.267
+      ],
+      [
+        -0.237,
+        -0.009,
+        0.517
+      ],
+      [
+        -0.237,
+        0.241,
+        -0.483
+      ],
+      [
+        -0.237,
+        0.241,
+        -0.23299999999999998
+      ],
+      [
+        -0.237,
+        0.241,
+        0.017
+      ],
+      [
+        -0.237,
+        0.241,
+        0.267
+      ],
+      [
+        -0.237,
+        0.241,
+        0.517
+      ],
+      [
+        -0.237,
+        0.491,
+        -0.23299999999999998
+      ],
+      [
+        -0.237,
+        0.491,
+        0.017
+      ],
+      [
+        -0.237,
+        0.491,
+        0.267
+      ],
+      [
+        0.013,
+        -0.509,
+        -0.23299999999999998
+      ],
+      [
+        0.013,
+        -0.509,
+        0.017
+      ],
+      [
+        0.013,
+        -0.509,
+        0.267
+      ],
+      [
+        0.013,
+        -0.259,
+        -0.483
+      ],
+      [
+        0.013,
+        -0.259,
+        -0.23299999999999998
+      ],
+      [
+        0.013,
+        -0.259,
+        0.017
+      ],
+      [
+        0.013,
+        -0.259,
+        0.267
+      ],
+      [
+        0.013,
+        -0.259,
+        0.517
+      ],
+      [
+        0.013,
+        -0.009,
+        -0.483
+      ],
+      [
+        0.013,
+        -0.009,
+        -0.23299999999999998
+      ],
+      [
+        0.013,
+        -0.009,
+        0.017
+      ],
+      [
+        0.013,
+        -0.009,
+        0.267
+      ],
+      [
+        0.013,
+        -0.009,
+        0.517
+      ],
+      [
+        0.013,
+        0.241,
+        -0.483
+      ],
+      [
+        0.013,
+        0.241,
+        -0.23299999999999998
+      ],
+      [
+        0.013,
+        0.241,
+        0.017
+      ],
+      [
+        0.013,
+        0.241,
+        0.267
+      ],
+      [
+        0.013,
+        0.241,
+        0.517
+      ],
+      [
+        0.013,
+        0.491,
+        -0.23299999999999998
+      ],
+      [
+        0.013,
+        0.491,
+        0.017
+      ],
+      [
+        0.013,
+        0.491,
+        0.267
+      ],
+      [
+        0.263,
+        -0.509,
+        -0.23299999999999998
+      ],
+      [
+        0.263,
+        -0.509,
+        0.017
+      ],
+      [
+        0.263,
+        -0.509,
+        0.267
+      ],
+      [
+        0.263,
+        -0.259,
+        -0.483
+      ],
+      [
+        0.263,
+        -0.259,
+        -0.23299999999999998
+      ],
+      [
+        0.263,
+        -0.259,
+        0.017
+      ],
+      [
+        0.263,
+        -0.259,
+        0.267
+      ],
+      [
+        0.263,
+        -0.259,
+        0.517
+      ],
+      [
+        0.263,
+        -0.009,
+        -0.483
+      ],
+      [
+        0.263,
+        -0.009,
+        -0.23299999999999998
+      ],
+      [
+        0.263,
+        -0.009,
+        0.017
+      ],
+      [
+        0.263,
+        -0.009,
+        0.267
+      ],
+      [
+        0.263,
+        -0.009,
+        0.517
+      ],
+      [
+        0.263,
+        0.241,
+        -0.483
+      ],
+      [
+        0.263,
+        0.241,
+        -0.23299999999999998
+      ],
+      [
+        0.263,
+        0.241,
+        0.017
+      ],
+      [
+        0.263,
+        0.241,
+        0.267
+      ],
+      [
+        0.263,
+        0.241,
+        0.517
+      ],
+      [
+        0.263,
+        0.491,
+        -0.23299999999999998
+      ],
+      [
+        0.263,
+        0.491,
+        0.017
+      ],
+      [
+        0.263,
+        0.491,
+        0.267
+      ],
+      [
+        0.513,
+        -0.259,
+        -0.23299999999999998
+      ],
+      [
+        0.513,
+        -0.259,
+        0.017
+      ],
+      [
+        0.513,
+        -0.259,
+        0.267
+      ],
+      [
+        0.513,
+        -0.009,
+        -0.23299999999999998
+      ],
+      [
+        0.513,
+        -0.009,
+        0.017
+      ],
+      [
+        0.513,
+        -0.009,
+        0.267
+      ],
+      [
+        0.513,
+        0.241,
+        -0.23299999999999998
+      ],
+      [
+        0.513,
+        0.241,
+        0.017
+      ],
+      [
+        0.513,
+        0.241,
+        0.267
+      ]
+    ],
+    "relative_limit": 0.01,
+    "cases": {
+      "cpu_reference": {
+        "core_relative_rms": 0.0022500657293255924,
+        "mean_relative_error": 0.00010639530653321275
+      },
+      "development_gpu": {
+        "core_relative_rms": 0.0022500657314835667,
+        "mean_relative_error": 0.00010639530644361568
+      },
+      "compute_gpu": {
+        "core_relative_rms": 0.0022500657314845707,
+        "mean_relative_error": 0.00010639530644226246
+      }
+    }
+  },
+  "chunk_material_subgates": {
+    "small": {
+      "1": {
+        "weights": 0,
+        "points": 0,
+        "values": 8.541783137730719e-16,
+        "energy": 0,
+        "gradient": 4.942569432250082e-16,
+        "tangent": 7.997617550964023e-16
+      },
+      "2": {
+        "weights": 0,
+        "points": 0,
+        "values": 7.433246099895156e-16,
+        "energy": 0,
+        "gradient": 4.2898713295060156e-16,
+        "tangent": 7.958570106320027e-16
+      },
+      "7": {
+        "weights": 0,
+        "points": 0,
+        "values": 6.123874595798558e-16,
+        "energy": 0,
+        "gradient": 4.436224836154384e-16,
+        "tangent": 8.122616524098245e-16
+      },
+      "13": {
+        "weights": 0,
+        "points": 0,
+        "values": 6.111843762110497e-16,
+        "energy": 0,
+        "gradient": 5.928615298964778e-16,
+        "tangent": 8.020862725866231e-16
+      }
+    },
+    "large": {
+      "64": {
+        "weights": 0,
+        "points": 0,
+        "values": 4.3696727310358704e-16,
+        "energy": 1.269602576662325e-16,
+        "gradient": 4.75829206415847e-16,
+        "tangent": 1.1423837189937807e-15
+      },
+      "128": {
+        "weights": 0,
+        "points": 0,
+        "values": 4.3140756354911183e-16,
+        "energy": 0,
+        "gradient": 4.998509599646126e-16,
+        "tangent": 1.1428854243301975e-15
+      }
+    },
+    "invalid_ranges_rejected_per_case": 5,
+    "legacy_unchunked_budget_rejected": true
+  },
+  "performance_accepted": false,
+  "limitations": [
+    "Single-call diagnostics, no ABBA or same-host CPU speedup claim; Engine transport/startup and validation outside MATLAB API timer",
+    "Host phase times are not CUDA kernel times; asynchronous upload can carry into warmstart",
+    "Controlled-array estimates and exact native owned counters exclude CUDA-library/host/global peaks",
+    "This moderate-field case takes two Newton updates; the 2412DoF case required44 and iterations are not determined by DoF alone",
+    "Ideal-sphere check certifies declared81-point core stencil and mean only; not arbitrary geometry or near-surface whole field",
+    "CPU frozen binary and separate native artifacts are research provenance, not accepted common wheel"
+  ]
+}

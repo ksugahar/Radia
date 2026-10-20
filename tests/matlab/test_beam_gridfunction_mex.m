@@ -4,7 +4,7 @@ end
 
 function setupOnce(testCase)
 repoRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
-matlabRoot = fullfile(repoRoot,'packages','radia-gpu','matlab');
+matlabRoot = fullfile(repoRoot,'packages','radia-simulink','matlab');
 if ~contains(path,matlabRoot)
     addpath(matlabRoot);
 end

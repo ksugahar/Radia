@@ -14,7 +14,7 @@ import re
 import subprocess
 
 SCHEMA = "radia.ci-distributions.v1"
-DISTRIBUTIONS = ("radia", "radia-gpu", "radia-mcp", "radia-optuna",
+DISTRIBUTIONS = ("radia", "radia-simulink", "radia-mcp", "radia-optuna",
                  "cubit-mesh-export", "eqnedit64")
 ROOT_CONFIGS = ("CMakeLists.txt", "Build.ps1", "pyproject.toml", "MANIFEST.in",
                 "tests/test_tier_manifest.json")

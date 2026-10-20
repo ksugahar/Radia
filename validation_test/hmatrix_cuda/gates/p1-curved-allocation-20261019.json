@@ -1,0 +1,16 @@
+{
+  "schema": "radia.p1-curved-allocation-gates.v1",
+  "scope": "Frozen public 13-cell curved sphere, P1 HDiv, direct/cached/device-dense HACApK; no point-cloud substitution",
+  "native_setup_mass_charge_rhs_relative_limit": 1e-11,
+  "cpu_coefficient_relative_limit": 1e-8,
+  "cpu_mean_field_relative_limit": 1e-8,
+  "independent_original_true_residual_limit": 1e-10,
+  "solver_true_residual_limit": 1e-11,
+  "minimum_repeated_failures_per_class": 10,
+  "warmup_failures_per_class": 5,
+  "max_positive_private_slope_bytes_per_failure": 1048576,
+  "max_repeated_private_delta_bytes": 16777216,
+  "live_native_handles_resources_and_owned_bytes_after_call": 0,
+  "all_site_coverage_required_for_P1_exit": true,
+  "limits_origin": "Existing validate_curved_hdiv.py physical gates and frozen P1 memory slopes"
+}

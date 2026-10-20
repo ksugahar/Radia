@@ -7,7 +7,7 @@ without a hidden state transfer and can drive an averaged mechanical plant.
 """
 
 from __future__ import annotations
-import radia_gpu.vim as gpu_vim
+import radia_simulink.vim as gpu_vim
 
 import argparse
 import json

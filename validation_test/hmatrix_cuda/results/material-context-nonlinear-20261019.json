@@ -1,0 +1,101 @@
+{
+  "schema": "radia.hdiv.material-context-nonlinear.v1",
+  "development_numerical_accepted": true,
+  "compute_gpu_accepted": false,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "scope": "Immutable FE material context in full bounded nonlinear 10344-DoF pipeline",
+  "matlab_version": "26.1.0.3346908 (R2026a) Update 5",
+  "binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "bc6b78a143bfd882e29413cc133e4736bfb6d626",
+      "binary_sha256": "dcc88c79c71446e351dc981db7e726e7d274ad08c41ebf1cdd15831920cd125c"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "a46a500398c6ece7f1c818c32101ae3b808deb0b",
+      "binary_sha256": "274329e7f97597d471e9ee7e2fe51740321a52af484d2253b3b23ddeeaf1bcf2"
+    }
+  },
+  "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+  "dofs": 10344,
+  "cpu_coefficient_relative_error": 1.4780685190206892e-09,
+  "independent_residual_recomputed_this_run": false,
+  "previous_independent_residual_evidence": "sparse-staging-nonlinear-20261019.json",
+  "cases": {
+    "baseline": {
+      "nonlinear_iterations": 2,
+      "nonlinear_relative_residual": 1.1937866596696244e-14,
+      "whole_seconds": 22.8969284,
+      "prepare_phase_seconds": {
+        "device_initialization": 0.0013738,
+        "fe_and_law": 1.4240913,
+        "geometry_create": 16.0933531,
+        "material_upload_enqueue": 0.4496213
+      },
+      "host_phase_seconds": {
+        "warmstart": 1.3489154,
+        "residual_tangent_and_demag": 1.072399,
+        "newton_linear_solve": 2.3846517,
+        "line_search": 0.069415,
+        "cleanup": 0.0014538
+      },
+      "combined_array_bound_bytes": 2068412007.0,
+      "maximum_solver_owned_device_bytes": 7753352.0,
+      "outer_tangent_evaluations": 3,
+      "residual_only_outer_evaluations": 0,
+      "warmstart_iterations": 360
+    },
+    "candidate": {
+      "nonlinear_iterations": 2,
+      "nonlinear_relative_residual": 1.247894756214246e-14,
+      "whole_seconds": 21.9134306,
+      "prepare_phase_seconds": {
+        "device_initialization": 0.001285,
+        "fe_and_law": 1.3532635,
+        "geometry_create": 16.0830491,
+        "material_upload_enqueue": 0.3094811
+      },
+      "host_phase_seconds": {
+        "warmstart": 0.9484755,
+        "residual_tangent_and_demag": 0.7293784,
+        "newton_linear_solve": 2.4017772,
+        "line_search": 0.0584394,
+        "cleanup": 0.0006616
+      },
+      "combined_array_bound_bytes": 2068412007.0,
+      "maximum_solver_owned_device_bytes": 7753352.0,
+      "outer_tangent_evaluations": 2,
+      "residual_only_outer_evaluations": 1,
+      "warmstart_iterations": 360
+    },
+    "repeated": {
+      "nonlinear_iterations": 2,
+      "nonlinear_relative_residual": 1.1363053066487776e-14,
+      "whole_seconds": 4.1400409,
+      "host_phase_seconds": {
+        "warmstart": 0.9469937,
+        "residual_tangent_and_demag": 0.7308401000000001,
+        "newton_linear_solve": 2.3915100000000002,
+        "line_search": 0.0641244,
+        "cleanup": 0.0011634
+      },
+      "combined_array_bound_bytes": 2068412007.0,
+      "maximum_solver_owned_device_bytes": 7753352.0,
+      "outer_tangent_evaluations": 2,
+      "residual_only_outer_evaluations": 1,
+      "warmstart_iterations": 360
+    }
+  },
+  "early_budget_error_released_context": true,
+  "invalid_initial_recovery": true,
+  "live_count": 0,
+  "owned_engine_quit": true,
+  "limitations": [
+    "CPU coefficient comparison uses frozen independent CPU result; original residual here is the native full nonlinear residual.",
+    "Material staging equality was established separately; no new independent CPU residual reconstruction in this run.",
+    "Single ordered RTX times are diagnostic, not ABBA or speedup evidence.",
+    "Prepared repeated solve excludes FE/operator construction.",
+    "Controlled array bounds are not host, CUDA library or global peaks.",
+    "No larger-capacity or A100 performance acceptance."
+  ]
+}

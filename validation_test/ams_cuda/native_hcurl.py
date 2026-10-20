@@ -83,7 +83,7 @@ def main(args):
         startup=time.perf_counter();engine=matlab.engine.start_matlab('-nodesktop -nosplash')
         record['matlab_startup_seconds']=time.perf_counter()-startup
         engine.addpath(str(Path(__file__).parent),nargout=0)
-        engine.native_hcurl(str(vol),str(root/'build-ams-cuda'),str(root/'packages/radia-gpu/matlab'),str(out/'native.mat'),float(args.gamma),nargout=0)
+        engine.native_hcurl(str(vol),str(root/'build-ams-cuda'),str(root/'packages/radia-simulink/matlab'),str(out/'native.mat'),float(args.gamma),nargout=0)
         native=loadmat(out/'native.mat',simplify_cells=True);model=native['model']
         actual=decoded(model['A']);actualG=decoded(model['G'])
         if not np.array_equal(actual.indptr,A.indptr) or not np.array_equal(actual.indices,A.indices):raise RuntimeError('Native CSR topology differs from NGSolve')

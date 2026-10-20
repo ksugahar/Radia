@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_level2_sfunctions_own_native_handle_lifecycle():
-    package = ROOT / "packages/radia-gpu/matlab" / "+radia" / "+simulink"
+    package = ROOT / "packages/radia-simulink/matlab" / "+radia" / "+simulink"
     for name, prefix in (("ihEddySFunction.m", "ih.eddy"),
                          ("ihThermalSFunction.m", "ih.thermal")):
         text = (package / name).read_text(encoding="utf-8")
@@ -20,7 +20,7 @@ def test_level2_sfunctions_own_native_handle_lifecycle():
 
 
 def test_thermal_sfunction_updates_once_per_discrete_step_and_transports_rotation():
-    wrapper = (ROOT / "packages/radia-gpu/matlab" / "+radia" / "+simulink" / "ihThermalSFunction.m").read_text(encoding="utf-8")
+    wrapper = (ROOT / "packages/radia-simulink/matlab" / "+radia" / "+simulink" / "ihThermalSFunction.m").read_text(encoding="utf-8")
     runtime = (ROOT / "src/runtime/ih/radia_ih_runtime.cpp").read_text(encoding="utf-8")
     outputs = wrapper.split("function outputs", 1)[1].split("function update", 1)[0]
     update = wrapper.split("function update", 1)[1].split("function terminate", 1)[0]
@@ -39,7 +39,7 @@ def test_eddy_sfunction_rotates_heat_and_rejects_implicit_angle_support():
 
 
 def test_vol_checker_is_a_native_simulink_preflight_dependency():
-    text = (ROOT / "packages/radia-gpu/matlab" / "+radia" / "+simulink" / "validateVolFiles.m").read_text(encoding="utf-8")
+    text = (ROOT / "packages/radia-simulink/matlab" / "+radia" / "+simulink" / "validateVolFiles.m").read_text(encoding="utf-8")
     assert "check-vol" in text
     assert "VolCheckFailed" in text
     assert "--report-json" in text
@@ -81,7 +81,7 @@ def test_legacy_ih_lut_and_lumped_interfaces_are_removed():
         "simulateIHDrive.m",
         "simulateIHWaveform.m",
     )
-    package = ROOT / "packages/radia-gpu/matlab" / "+radia" / "+simulink"
+    package = ROOT / "packages/radia-simulink/matlab" / "+radia" / "+simulink"
     assert all(not (package / name).exists() for name in legacy)
-    assert not (ROOT / "packages/radia-gpu/matlab" / "radia_ih_plant_sfunction.m").exists()
-    assert not (ROOT / "packages/radia-gpu/matlab" / "+radia" / "+rl" / "makeIHEnvironment.m").exists()
+    assert not (ROOT / "packages/radia-simulink/matlab" / "radia_ih_plant_sfunction.m").exists()
+    assert not (ROOT / "packages/radia-simulink/matlab" / "+radia" / "+rl" / "makeIHEnvironment.m").exists()

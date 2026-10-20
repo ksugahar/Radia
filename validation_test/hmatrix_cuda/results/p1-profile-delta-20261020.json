@@ -1,0 +1,132 @@
+{
+  "schema": "radia.hmatrix.p1-profile-delta.v1",
+  "accepted": true,
+  "p1_bounded_component_scope_self_validated": true,
+  "release_accepted": false,
+  "native_source_commit": "5dfdc13574efd35b771b312791edbb35e228a10b",
+  "binary_sha256": "2b18e37ec8c13600ad4c8b757145c7a380401ea2ed1f3e93461e7002ac984b75",
+  "helper_source_commit": "55b977c86",
+  "validation_method": "Incremental component acceptance. Historical fault receipts remain bound to their original binaries. Native build source hashes match the prior accepted kernel set except hdiv_assembly_profile.cuh; Build.ps1 also changed isolated target admission. Fresh numerical precheck and affected-path faults run on this new binary.",
+  "changed_native_files": [
+    "packages/radia-simulink/native/hdiv_assembly_profile.cuh"
+  ],
+  "historical_native_source_commit": "6f938e13eafbb46a46630311bb27152f7ce5d082",
+  "historical_binary_sha256": "cd2ab5d9ef2ca667266396e4a7c5e96b0527fbcfa2a4d559ac1d9f3f24007811",
+  "build": {
+    "matlab": "R2026a Update 5",
+    "cuda": "MATLAB-bundled 12.8",
+    "host_fault_contracts": {
+      "check_c_memory_transaction": {
+        "accepted": true,
+        "sha256": "bd5db7c1a36c8d667ff890fcd98515a03dd24a6d635e03519daa3b95a8365990",
+        "exit_code": 0
+      },
+      "check_host_fault_allocator": {
+        "accepted": true,
+        "sha256": "23ac140e269365c1721187c9e9033f0dcc5792e5bb8a777644f3f10859307ad9",
+        "exit_code": 0
+      }
+    },
+    "wall_limit_seconds": 900,
+    "seconds": 162.82800000000861,
+    "cores": 4,
+    "external_cuda": false,
+    "msvc": "14.44.35207",
+    "job_commit_limit_bytes": 17179869184,
+    "peak_job_commit_bytes": 1726218240
+  },
+  "precheck": {
+    "seconds": 20.640999999988708,
+    "max_solver_independent_true_residual": 8.09025746483184E-15,
+    "curved_modes": [
+      "resident",
+      "resident-cache",
+      "resident-moments",
+      "resident-profile"
+    ],
+    "resident_accepted": true,
+    "max_curved_cpu_relative_error": 3.62413251958028E-11,
+    "max_solver_cpu_relative_error": 1.560305180771636E-15,
+    "max_curved_independent_true_residual": 6.241068156713748E-12
+  },
+  "faults": {
+    "seconds": 15.812000000005355,
+    "max_class_slope_bytes_per_failure": 65759.41818181818,
+    "unique_positions": 61,
+    "extra_warm_failures": 20,
+    "all_owned_counters_zero": true,
+    "extra_measured_failures": 40,
+    "protocol": "5 warm plus 10 measured failures per class, slope <=1 MiB/failure, delta <=16 MiB. Not the common 100-run memory gate.",
+    "sites": [
+      {
+        "kind": "cpp",
+        "site": "profile.sample",
+        "attempts": 5
+      },
+      {
+        "kind": "cpp",
+        "site": "profile.samples",
+        "attempts": 5
+      },
+      {
+        "kind": "gpu",
+        "site": "",
+        "attempts": 29
+      },
+      {
+        "kind": "resource",
+        "site": "",
+        "attempts": 22
+      }
+    ]
+  },
+  "common_memory": {
+    "warmup_iterations": 5,
+    "kind": "hmatrix-profile",
+    "final_live_count": 0.0,
+    "metrics": {
+      "full_slope_bytes_per_run": 36244.37707770777,
+      "full_delta_bytes": 3608576.0,
+      "tail25_slope_bytes_per_run": 0.0,
+      "tail25_delta_bytes": 0.0,
+      "device_delta_bytes": 0.0
+    },
+    "interpretation": "Positive full-series opaque process retention is quantified; zero final-25 slope/delta is not a proof of zero opaque leaks or global peak.",
+    "seconds": 16.75,
+    "protocol_sha256": "d815b44888b69572f68ba3d9987e9b74e550189bd3266b587f5281e1c9cafdb8",
+    "measurement_iterations": 100
+  },
+  "linked_scope_results": [
+    "p1-curved-output-ranges-20261020.json",
+    "p1-pipeline-faults-20261020.json",
+    "p1-other-gateways-d6aecefeb-20261020.json",
+    "p1-common-memory-20261020.json"
+  ],
+  "remaining_release_gates": [
+    "Clean public integration commit and scope audit",
+    "Same release source native/wheel/install acceptance",
+    "Explicit mexcuda CPU no-CUDA-context API trace with and without a device",
+    "Direct Python GPU binding and redistribution/toolchain acceptance",
+    "Official Toolkit SLX checks",
+    "Manager-owned CI, merge and first publication"
+  ],
+  "raw_receipts": [
+    {
+      "file": "build.json",
+      "sha256": "95fde0c4f439c481ce39bbf12f99b8d334288bcc9913f4ed148f8fddc73f6c15"
+    },
+    {
+      "file": "precheck-result.json",
+      "sha256": "03ed2ed404ed792d2e951e23952ed7cf7dd396156d286736975c3c0ac6869dc6"
+    },
+    {
+      "file": "profile-fault-result.json",
+      "sha256": "e5a78e4c2c46305ed4906d7fdea64e048f34e62f114a63f13e6a0014af2d76b9"
+    },
+    {
+      "file": "memory-result.json",
+      "sha256": "f1b9d8d15d7bad8683625a79a8e9cdc7cd4546ca552df3edcfc8e4a3bd52fc7f"
+    }
+  ],
+  "source_summary_sha256": "45790dd79b0a3393a1f737751b790bd8e6893accfa5be9a940d4e9b36035006b"
+}

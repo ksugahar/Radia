@@ -1,0 +1,196 @@
+{
+  "schema": "radia.p1.curved-partial.v1",
+  "accepted": false,
+  "p1_complete": false,
+  "source_commit": "efff99e12433958061644611e202e202f50c325d",
+  "binary_sha256": "0db4c2530b9f145c9afcb7bf625168b0186b2af49d90282cdbe3228c4ff6de3d",
+  "gate_sha256": "244436edc90858c689ee919519c068b414cbaa6620265f2b0fe5b9e2c175490e",
+  "accepted_precheck_sha256": "3d534d0fc5ade0a0deefa620600af3426d06cc153b8731ac8e155a1e95b557f2",
+  "elapsed_seconds": 24.25,
+  "owned_engine_quit": true,
+  "events": [
+    {
+      "mode": "direct",
+      "kind": "baseline",
+      "target": 0,
+      "accepted": true,
+      "failed": false,
+      "numerical": {
+        "cpu_error": 3.625884014821222E-11,
+        "physical_error": 5.271144477297617E-13,
+        "independent_true_residual": 6.1869575708579964E-12,
+        "solver_true_residual": 6.1869385837220584E-12,
+        "iterations": 57,
+        "accepted": true
+      },
+      "setup_relative_errors": [
+        1.282625527825611E-16,
+        2.899268745251847E-15,
+        2.358082554315868E-16
+      ],
+      "gpu_attempts": 35,
+      "gpu_live_bytes": 0,
+      "gpu_free_errors": 0,
+      "live_count": 0,
+      "owned_output_arrays": 0,
+      "resource_live_count": 0,
+      "c_live_bytes": 0,
+      "cpp_live_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "kind": "publication",
+      "target": 1,
+      "accepted": true,
+      "failed": true,
+      "numerical": {},
+      "setup_relative_errors": [
+        1.282625527825611E-16,
+        2.899268745251847E-15,
+        2.358082554315868E-16
+      ],
+      "gpu_attempts": 24,
+      "gpu_live_bytes": 0,
+      "gpu_free_errors": 0,
+      "live_count": 0,
+      "owned_output_arrays": 0,
+      "resource_live_count": 0,
+      "c_live_bytes": 0,
+      "cpp_live_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "kind": "publication",
+      "target": 2,
+      "accepted": true,
+      "failed": true,
+      "numerical": {},
+      "setup_relative_errors": [
+        1.282625527825611E-16,
+        2.899268745251847E-15,
+        2.358082554315868E-16
+      ],
+      "gpu_attempts": 24,
+      "gpu_live_bytes": 0,
+      "gpu_free_errors": 0,
+      "live_count": 0,
+      "owned_output_arrays": 0,
+      "resource_live_count": 0,
+      "c_live_bytes": 0,
+      "cpp_live_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "kind": "publication",
+      "target": 3,
+      "accepted": true,
+      "failed": true,
+      "numerical": {},
+      "setup_relative_errors": [
+        1.282625527825611E-16,
+        2.899268745251847E-15,
+        2.358082554315868E-16
+      ],
+      "gpu_attempts": 24,
+      "gpu_live_bytes": 0,
+      "gpu_free_errors": 0,
+      "live_count": 0,
+      "owned_output_arrays": 0,
+      "resource_live_count": 0,
+      "c_live_bytes": 0,
+      "cpp_live_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "kind": "c",
+      "target": 1,
+      "accepted": true,
+      "failed": true,
+      "numerical": {},
+      "setup_relative_errors": [
+        1.282625527825611E-16,
+        2.899268745251847E-15,
+        2.358082554315868E-16
+      ],
+      "gpu_attempts": 8,
+      "gpu_live_bytes": 0,
+      "gpu_free_errors": 0,
+      "live_count": 0,
+      "owned_output_arrays": 0,
+      "resource_live_count": 0,
+      "c_live_bytes": 0,
+      "cpp_live_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "kind": "c",
+      "target": 73,
+      "accepted": true,
+      "failed": true,
+      "numerical": {},
+      "setup_relative_errors": [
+        1.282625527825611E-16,
+        2.899268745251847E-15,
+        2.358082554315868E-16
+      ],
+      "gpu_attempts": 8,
+      "gpu_live_bytes": 0,
+      "gpu_free_errors": 0,
+      "live_count": 0,
+      "owned_output_arrays": 0,
+      "resource_live_count": 0,
+      "c_live_bytes": 0,
+      "cpp_live_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "kind": "gpu",
+      "target": 1,
+      "accepted": true,
+      "failed": true,
+      "numerical": {},
+      "setup_relative_errors": [
+        1.282625527825611E-16,
+        2.899268745251847E-15,
+        2.358082554315868E-16
+      ],
+      "gpu_attempts": 1,
+      "gpu_live_bytes": 0,
+      "gpu_free_errors": 0,
+      "live_count": 0,
+      "owned_output_arrays": 0,
+      "resource_live_count": 0,
+      "c_live_bytes": 0,
+      "cpp_live_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "kind": "gpu",
+      "target": 35,
+      "accepted": false,
+      "failed": false,
+      "numerical": {},
+      "setup_relative_errors": [
+        1.282625527825611E-16,
+        2.899268745251847E-15,
+        2.358082554315868E-16
+      ],
+      "gpu_attempts": 24,
+      "gpu_live_bytes": 0,
+      "gpu_free_errors": 0,
+      "live_count": 0,
+      "owned_output_arrays": 0,
+      "resource_live_count": 0,
+      "c_live_bytes": 0,
+      "cpp_live_bytes": 0
+    }
+  ],
+  "failure": "Diagnostic enumeration used create-plus-solve baseline GPU count35 for create-only route with24 allocations; requested site35 was not reached",
+  "numerical_mismatch": false,
+  "limitations": [
+    "Direct curved baseline and selected publication/C/GPU endpoints only",
+    "Cached/device-dense and remaining allocation sites not executed",
+    "Create-count capture correction not yet run",
+    "Not release or full P1 acceptance"
+  ]
+}

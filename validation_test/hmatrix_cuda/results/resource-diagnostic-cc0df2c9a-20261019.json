@@ -1,0 +1,118 @@
+{
+  "accepted": true,
+  "p1_complete": false,
+  "source_commit": "cc0df2c9a6b3220367fddd2869fb64f194bb7f4c",
+  "binary_sha256": "d13253e08e48d7e37a9eccae7ab4c7174217fb0b4b6435ea5ff6636e69b0506f",
+  "gate_sha256": "41659c3e4086f61281bf1c7038802530ce07c250bba232924b923ec91180ed3f",
+  "resource_sites": {
+    "mass-chebyshev-graph": 8,
+    "mass-cholesky": 6
+  },
+  "failure_memory_slopes": [
+    {
+      "preconditioner": "mass-chebyshev-graph",
+      "samples": [
+        1340977152,
+        1340977152,
+        1340977152,
+        1340977152,
+        1340977152,
+        1340977152,
+        1340977152,
+        1340977152,
+        1340977152,
+        1340977152
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "preconditioner": "mass-cholesky",
+      "samples": [
+        1359327232,
+        1359327232,
+        1359327232,
+        1359327232,
+        1359327232,
+        1359327232,
+        1359327232,
+        1359327232,
+        1359327232,
+        1359327232
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    }
+  ],
+  "nonlinear": {
+    "cpu_error": 5.551286578792311e-14,
+    "true_residual": 3.2704909363763436e-14,
+    "newton_iterations": 11,
+    "inner_iterations": 1572,
+    "accounted_array_bound_bytes": 217304272.0
+  },
+  "coverage_limits": [
+    "Normalization/oracle STL and curved/cache branches remain incomplete",
+    "Opaque CUDA library internals are not own-resource counters",
+    "Whole-process samples are not global device or library peaks"
+  ],
+  "owned_engine_quit": true,
+  "schema": "radia.hmatrix-resource-diagnostic.v1",
+  "scope": "Own CUDA resource API construction/exception cleanup plus frozen independent CPU algebra and small nonlinear gates; not opaque library allocations",
+  "resource_baselines": [
+    {
+      "accepted": true,
+      "preconditioner": "mass-chebyshev-graph",
+      "target": 0,
+      "failed": false,
+      "identifier": "",
+      "message": "",
+      "resources": {
+        "attempts": 8,
+        "live_resources": 0,
+        "free_errors": 0,
+        "fail_at": 0,
+        "site": "graph.after-instantiate"
+      },
+      "gpu": {
+        "attempts": 28,
+        "live_bytes": 0,
+        "peak_bytes": 3296,
+        "fail_at": 0,
+        "free_errors": 0
+      },
+      "live_count": 0,
+      "cpu_error": 1.326618744900019e-15,
+      "independent_true_residual": 7.482036631862885e-16
+    },
+    {
+      "accepted": true,
+      "preconditioner": "mass-cholesky",
+      "target": 0,
+      "failed": false,
+      "identifier": "",
+      "message": "",
+      "resources": {
+        "attempts": 6,
+        "live_resources": 0,
+        "free_errors": 0,
+        "fail_at": 0,
+        "site": "cusolver.after-create"
+      },
+      "gpu": {
+        "attempts": 30,
+        "live_bytes": 0,
+        "peak_bytes": 3620,
+        "fail_at": 0,
+        "free_errors": 0
+      },
+      "live_count": 0,
+      "cpu_error": 1.560305180771636e-15,
+      "independent_true_residual": 8.09025746483184e-15
+    }
+  ],
+  "verified_events": 46,
+  "all_live_handles_resources_and_device_buffers_released": true,
+  "performance_accepted": false,
+  "release_accepted": false
+}

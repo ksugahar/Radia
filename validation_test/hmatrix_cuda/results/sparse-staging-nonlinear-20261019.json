@@ -1,0 +1,103 @@
+{
+  "schema": "radia.hdiv.sparse-staging-nonlinear.v1",
+  "development_numerical_accepted": true,
+  "compute_gpu_accepted": false,
+  "performance_accepted": false,
+  "release_accepted": false,
+  "scope": "New sparse allocation admission binary in bounded 10344-DoF synthetic nonlinear sphere; original equation independently checked",
+  "matlab_version": "26.1.0.3346908 (R2026a) Update 5",
+  "binaries": {
+    "radia_cuda_projection": {
+      "source_commit": "6dec804471fc2af01cd63c7503d21c3187c3289e",
+      "binary_sha256": "5e9608958159b276a58013a80a866db6007ed3b870da457d598e569bd0411df4"
+    },
+    "radia_cuda_hmatrix": {
+      "source_commit": "a46a500398c6ece7f1c818c32101ae3b808deb0b",
+      "binary_sha256": "274329e7f97597d471e9ee7e2fe51740321a52af484d2253b3b23ddeeaf1bcf2"
+    }
+  },
+  "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+  "cpu_fixture_sha256": "5237d738506c36eb493a6b380f18154f658de5409678be798ef9f7c5dc798800",
+  "cpu_coefficient_relative_error": 1.478059497734233e-09,
+  "independent_cpu": {
+    "accepted": true,
+    "scope": "Independent nonlinear residual and ideal-sphere mean check; no whole field certification",
+    "expected_uniform_sphere_magnetization_A_per_m": [
+      0.0,
+      0.0,
+      298691.4287041886
+    ],
+    "analytic_mean_limit": 0.01,
+    "cases": {
+      "cpu_reference": {
+        "nonlinear_relative_residual": 5.9023652041016544e-15,
+        "sphere_mean_relative_error": 8.620699516417373e-05,
+        "cpu_coefficient_relative_error": 0.0
+      },
+      "development_gpu_baseline": {
+        "nonlinear_relative_residual": 2.863140243611298e-11,
+        "sphere_mean_relative_error": 8.62069948731592e-05,
+        "cpu_coefficient_relative_error": 1.4780579307767752e-09
+      },
+      "development_gpu_candidate": {
+        "nonlinear_relative_residual": 2.863224606228813e-11,
+        "sphere_mean_relative_error": 8.620699487198949e-05,
+        "cpu_coefficient_relative_error": 1.4780594977342332e-09
+      },
+      "development_gpu_repeated": {
+        "nonlinear_relative_residual": 2.863215225865467e-11,
+        "sphere_mean_relative_error": 8.620699487568914e-05,
+        "cpu_coefficient_relative_error": 1.4780473294537311e-09
+      }
+    },
+    "threads": 8
+  },
+  "cases": {
+    "baseline": {
+      "nonlinear_iterations": 2,
+      "nonlinear_relative_residual": 1.1429245740246964e-14,
+      "outer_tangent_evaluations": 3,
+      "residual_only_outer_evaluations": 0,
+      "whole_seconds": 27.0232287,
+      "maximum_solver_owned_device_bytes": 7753352.0,
+      "material_array_bound_bytes": 599009200.0,
+      "combined_array_bound_bytes": 2068412007.0,
+      "warmstart_iterations": 360,
+      "memory_limitations": "Native owned counters and conservative MATLAB array bound; no CUDA/library/host/global peak"
+    },
+    "candidate": {
+      "nonlinear_iterations": 2,
+      "nonlinear_relative_residual": 1.0935099562196589e-14,
+      "outer_tangent_evaluations": 2,
+      "residual_only_outer_evaluations": 1,
+      "whole_seconds": 21.9026759,
+      "maximum_solver_owned_device_bytes": 7753352.0,
+      "material_array_bound_bytes": 599009200.0,
+      "combined_array_bound_bytes": 2068412007.0,
+      "warmstart_iterations": 360,
+      "memory_limitations": "Native owned counters and conservative MATLAB array bound; no CUDA/library/host/global peak"
+    },
+    "repeated": {
+      "nonlinear_iterations": 2,
+      "nonlinear_relative_residual": 1.075750737200022e-14,
+      "outer_tangent_evaluations": 2,
+      "residual_only_outer_evaluations": 1,
+      "whole_seconds": 4.0761659,
+      "maximum_solver_owned_device_bytes": 7753352.0,
+      "material_array_bound_bytes": 599009200.0,
+      "combined_array_bound_bytes": 2068412007.0,
+      "warmstart_iterations": 360,
+      "memory_limitations": "Native owned counters and conservative MATLAB array bound; no CUDA/library/host/global peak"
+    }
+  },
+  "invalid_input_rejected": true,
+  "live_count": 0,
+  "owned_engine_quit": true,
+  "limitations": [
+    "Single ordered whole-call times are diagnostic, not ABBA or CPU speed comparison.",
+    "Prepared repeated time excludes immutable FE/operator preparation.",
+    "Native controlled allocation bounds, job commit, host RSS and global/device library peaks are distinct.",
+    "No cap increase, 100k capability, material certification or release acceptance.",
+    "A100 connection unavailable; strong-case A100 run remains pending."
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "schema": "radia.hdiv-assembly-profile.v1",
+  "accepted": true,
+  "release_accepted": false,
+  "scope": "Optional CUDA event diagnostic for bounded public linear P2 sphere; no new performance claim",
+  "source_commit": "5d5f38c2d40f2006ffa52c811f0887d282ad3607",
+  "binary_sha256": "066821b37cd382efb487eddbceea40a0b9e73861c3afff952ae60391d37edcb1",
+  "dofs": 10344,
+  "charges": 4208,
+  "profile_enabled": true,
+  "stage_stream_seconds": {
+    "profile_mapping_seconds": 6.246399879455566e-05,
+    "profile_tet_potential_seconds": 8.222948245201259,
+    "profile_tri_potential_seconds": 0.2662184976753779,
+    "profile_scalar_potential_seconds": 0,
+    "profile_contraction_seconds": 0.027520000100135805,
+    "profile_finalize_seconds": 0.0010833920240402221
+  },
+  "stage_stream_total_seconds": 8.517832598999608,
+  "tet_fraction": 0.9653803534677375,
+  "coefficient_relative_error": 5.43638873305199e-13,
+  "true_relative_residual": 6.2471363748653504e-12,
+  "iterations": 8.0,
+  "exact_owned_peak_bytes": 1006993428.0,
+  "operator_checks": {
+    "charges": 160,
+    "relative_frobenius_error": 0,
+    "disabled_event_seconds_all_zero": true,
+    "enabled_event_seconds_finite": true,
+    "live_count_after": 0
+  },
+  "formal_cpu_reference_accepted": false,
+  "limits": [
+    "Event stream spans include host launch gaps and event overhead, not pure kernel active time or transfer-inclusive performance.",
+    "Default profiling is disabled. Event/runtime storage is excluded from exact owned-buffer bytes.",
+    "Same numerical kernels as accepted baseline; this diagnostic is not a new ABBA result or same-wheel release gate.",
+    "CPU reference remains provisional. Bounded linear sphere only; no nonlinear/IH/general FE claim."
+  ],
+  "initial_runtime_failure": "Optional profile field was rejected by unchanged option allowlist before GPU assembly; allowlist corrected, failed attempt preserved privately.",
+  "next_candidate": "Investigate larger fused-potential launch batches to improve occupancy across source groups, preserving every independent point calculation. Not implemented or validated.",
+  "mesh_sha256": "681e3d16060a9ecb34d968923c960104f3eac6986848b57275beda80b150b6cb",
+  "contract_sha256": "b99d4d42745581e2b1dcf44c0d797478f40c8f69a74fc95ccd873b2efe0dfa87",
+  "projection_binary_sha256": "a19c563461d65293aceb791f9fe0f51ac32bb83388d9d735319bab403f8d7efa"
+}

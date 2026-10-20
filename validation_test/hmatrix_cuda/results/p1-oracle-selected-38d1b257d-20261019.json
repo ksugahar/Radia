@@ -1,0 +1,252 @@
+{
+  "schema": "radia.p1-selected-oracle-allocation.v1",
+  "accepted": true,
+  "p1_complete": false,
+  "source_commit": "38d1b257d694d21b792f34b68e165cfb61718808",
+  "binary_sha256": "21ab4cbcc67781dd7d37566b259ed5a3307c79869f4766ab8ad591cf4b9ad1b4",
+  "gate_sha256": "244436edc90858c689ee919519c068b414cbaa6620265f2b0fe5b9e2c175490e",
+  "helper_sha256": "bcfbe871dc8898f916fc5429c0eaa0f3a6f5d87157f22381590fab2a62adacf1",
+  "input_sha256": {
+    "cpu-reference.json": "d0d70563dcdaa5785bba659e1d3ae9251d41e861fb555cd2a21d11b0db0d2469",
+    "cpu.h5": "28676c133a850c86c79aa5632a705612114db02c1c9676a8ce2619644dd072c5",
+    "curved-cpu-reference.json": "70a29602ec917c04461a15259b835b63e791fb91dd7f36cd0e00a175752eec6e",
+    "curved-cpu.mat": "79c62c871d0d799c30ce449065f7095468e7ab31e9687d544a354006f1cc2da3",
+    "curved-sphere.vol": "a339966a361391ad2b64e7f57645336b3ac70fa549c7f08b2007875523d02236",
+    "exterior.vol": "3ec7ee99b2963371792a7525e7e809982b007c089cf63a6b578cfda74ed32f50",
+    "inputs.mat": "6bfa403a0adc3c0dff9c24069b8167d161f4f65aff0079d88303744358f4ba90"
+  },
+  "event_count": 199,
+  "site_counts": {
+    "direct:oracle.request": 207,
+    "direct:oracle.result": 15,
+    "direct:cache.full-indices": 0,
+    "direct:cache.full-terms": 0,
+    "direct:cache.result": 0,
+    "cached:oracle.request": 207,
+    "cached:oracle.result": 15,
+    "cached:cache.full-indices": 1,
+    "cached:cache.full-terms": 1,
+    "cached:cache.result": 15,
+    "device-dense:oracle.request": 0,
+    "device-dense:oracle.result": 1,
+    "device-dense:cache.full-indices": 1,
+    "device-dense:cache.full-terms": 1,
+    "device-dense:cache.result": 1
+  },
+  "failure_memory_slopes": [
+    {
+      "mode": "direct",
+      "site": "oracle.request",
+      "samples": [
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "direct",
+      "site": "oracle.result",
+      "samples": [
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600,
+        1411481600
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "oracle.request",
+      "samples": [
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "oracle.result",
+      "samples": [
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "cache.full-indices",
+      "samples": [
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411485696,
+        1411489792,
+        1411489792,
+        1411489792
+      ],
+      "private_bytes_per_failure": 521.3090909090909,
+      "private_delta_bytes": 4096
+    },
+    {
+      "mode": "cached",
+      "site": "cache.full-terms",
+      "samples": [
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "cached",
+      "site": "cache.result",
+      "samples": [
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "oracle.result",
+      "samples": [
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "cache.full-indices",
+      "samples": [
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "cache.full-terms",
+      "samples": [
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    },
+    {
+      "mode": "device-dense",
+      "site": "cache.result",
+      "samples": [
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792,
+        1411489792
+      ],
+      "private_bytes_per_failure": 0.0,
+      "private_delta_bytes": 0
+    }
+  ],
+  "nonlinear": {
+    "cpu_error": 5.043646204815413E-14,
+    "true_residual": 2.3516912698317708E-14,
+    "newton_iterations": 11,
+    "inner_iterations": 1577,
+    "accounted_array_bound_bytes": 217304272.0
+  },
+  "coverage_limits": [
+    "Selected tagged oracle sites and class slopes; full new binary allocation ranges are not exhausted",
+    "Normalization/oracle STL allocation coverage remains incomplete",
+    "Opaque library internals and global device peaks are not owned-buffer counters"
+  ],
+  "recovery_sha256": "41100c8c35906deec5398fe5b04ed206a9816821b505c2439727b8c5a3f82b18",
+  "source_payload_sha256": "e4c1786d537eba86df31f3dc1ddd8ce9fee4de00d91868c2ee5a2444d89b7723",
+  "elapsed_seconds": 43.625,
+  "elapsed_scope": "diagnostic checks, not solver performance"
+}

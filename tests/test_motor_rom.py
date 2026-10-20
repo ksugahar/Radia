@@ -16,7 +16,7 @@ from radia.motor_rom import (
     PeriodicAngleTable,
     ProjectRigidRotationMotionalFluxGradient,
 )
-from radia_gpu.motor_rom_export import (
+from radia_simulink.motor_rom_export import (
     MotorROMPortManifest,
     SaveMotorROMBundle,
     ValidateMotorROMBundle,
