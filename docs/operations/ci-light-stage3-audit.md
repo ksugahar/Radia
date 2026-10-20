@@ -162,3 +162,15 @@ seconds (24.72 seconds through the runner). The 51-file digest is
 no persistent extra per-target response files or manifests requiring a broader
 exemption; its complete observed file list is retained as private operations
 evidence. Real main receipt hit/miss acceptance remains a separate gate.
+
+## Distribution rename and admission changes (2026-10-20)
+
+The lightweight closure changed with the distribution rename (wheel and
+TaskManager audit tooling paths) and the explicit build-admission tests. In the
+isolated lightweight environment (only the declared dependencies), the
+fast-contracts job steps passed: source compilation, the caller-owned
+TaskManager audit, the routing contract (19 tests), the version check, and the
+worst-case fast selector (137 tests, zero skips, 15.3 s). No solver, MATLAB
+Engine or GPU compilation was used. The 51-file closure digest is now
+`e0f823ec0563ecdfaf3305abca6b6994c206d8585fe1968f1ce037d6a9d38e23`.
+All 45 workflow jobs pass the routing audit.
