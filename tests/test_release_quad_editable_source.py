@@ -100,8 +100,8 @@ def test_release_head_uses_version_tag_commit(monkeypatch):
     assert calls == [(('rev-list', '-n', '1', 'v5.1.0'), {'check': False})]
 
 
-@pytest.mark.parametrize("controller", ["INTEL11", "LAB"])
-@pytest.mark.parametrize("targets", ["lab,100", "all"])
+@pytest.mark.parametrize("controller", ["build-machine", "validation-machine"])
+@pytest.mark.parametrize("targets", ["validation,100", "all"])
 def test_phase8_routes_explicit_hosts_independently_of_controller(monkeypatch, controller, targets):
     from argparse import Namespace
 
@@ -112,7 +112,7 @@ def test_phase8_routes_explicit_hosts_independently_of_controller(monkeypatch, c
     monkeypatch.setattr(release_quad, "_deploy_pypi", lambda host, label: calls.append(host) or 0)
     monkeypatch.setattr(release_quad, "_deploy_editable_remote", lambda host, *args: calls.append((host, "development")) or 0)
     assert release_quad.cmd_phase8(Namespace(target=targets)) == 0
-    expected = ["102", release_quad.SSH_100, (release_quad.SSH_100, "development")]
+    expected = ["validation", release_quad.SSH_100, (release_quad.SSH_100, "development")]
     assert calls == expected
 
 
@@ -155,8 +155,8 @@ def test_lab_deploy_routes_wheel_to_lab_and_propagates_failure(monkeypatch, rc):
     calls = []
     monkeypatch.setattr(release_quad, "_deploy_pypi",
                         lambda host, label: calls.append((host, label)) or rc)
-    assert release_quad._deploy_lab() == rc
-    assert calls == [("102", "LAB")]
+    assert release_quad._deploy_validation() == rc
+    assert calls == [("validation", "validation")]
 
 @pytest.mark.parametrize("drift", [0, 1])
 def test_remote_deploy_changes_only_radia(monkeypatch, drift):
@@ -214,7 +214,7 @@ def test_done_checks_lab_wheel_and_100_editable_only(monkeypatch, tmp_path):
     monkeypatch.setattr(release_quad, "_verify_local_release_source",
                         lambda root, sha: calls.append((root, sha)) or 0)
     monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: calls.append("tag") or 0)
-    monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda: calls.append("lab-wheel") or 0)
+    monkeypatch.setattr(release_quad, "_verify_validation_wheel", lambda: calls.append("lab-wheel") or 0)
     monkeypatch.setattr(release_quad, "_verify_100_release_wheel",
                         lambda: calls.append("100-release") or 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable",
@@ -232,7 +232,7 @@ def test_cpu_release_does_not_require_matlab_candidate(monkeypatch, tmp_path):
     monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda *_a: 0)
     monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _a: 0)
     monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: 0)
-    monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda: 0)
+    monkeypatch.setattr(release_quad, "_verify_validation_wheel", lambda: 0)
     monkeypatch.setattr(release_quad, "_verify_100_release_wheel", lambda: 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable", lambda: 0)
     monkeypatch.setattr(release_quad, "cmd_phase9", lambda _a: 0)
@@ -258,7 +258,7 @@ def test_done_pip_check_checks_all_declared_runtimes_over_ssh(monkeypatch, failu
     monkeypatch.setattr(release_quad, "run", fake_run)
     assert release_quad._verify_final_pip_checks() == (0 if failure is None else 4)
     assert [call[:2] for call in calls] == [
-        ["ssh", "102"], ["ssh", release_quad.SSH_100], ["ssh", release_quad.SSH_100]]
+        ["ssh", "validation"], ["ssh", release_quad.SSH_100], ["ssh", release_quad.SSH_100]]
     remote = [base64.b64decode(call[-1]).decode("utf-16le") for call in calls]
     assert remote == ["python -m pip check", f"& '{release_quad.DEV_PYTHON_100}' -m pip check", "python -m pip check"]
 
@@ -292,11 +292,11 @@ def test_100_deploy_updates_release_wheel_then_development_editable(monkeypatch,
                         lambda *args: called.append(("editable", *args)) or 0)
     monkeypatch.setattr(release_quad, "_editable_repo_100", lambda: "W:/release")
     assert release_quad._deploy_100() == wheel_rc
-    assert called[0] == ("wheel", "100", "100号機 release runtime", {})
+    assert called[0] == ("wheel", "100", "build release runtime", {})
     if wheel_rc:
         assert len(called) == 1
     else:
-        assert called[1] == ("editable", "100", "100号機", "W:/release",
+        assert called[1] == ("editable", "100", "build", "W:/release",
                              release_quad.DEV_PYTHON_100)
 
 
@@ -575,7 +575,7 @@ def test_lab_wheel_deploy_stops_before_ssh_when_unpublished(monkeypatch):
     monkeypatch.setattr(release_quad, "_read_repo_versions", lambda *_: {"radia": "5.2.0"})
     monkeypatch.setattr(release_quad, "_check_pypi_propagation", lambda *_: 2)
     monkeypatch.setattr(release_quad, "run", lambda *_a, **_k: pytest.fail("No SSH before wheel availability"))
-    assert release_quad._deploy_lab() == 2
+    assert release_quad._deploy_validation() == 2
 
 
 def test_lab_wheel_deploy_has_guard_no_editable_and_pip_check(monkeypatch):
@@ -583,8 +583,8 @@ def test_lab_wheel_deploy_has_guard_no_editable_and_pip_check(monkeypatch):
     monkeypatch.setattr(release_quad, "_read_repo_versions", lambda *_: {"radia": "5.1.0"})
     monkeypatch.setattr(release_quad, "_check_pypi_propagation", lambda *_: 0)
     monkeypatch.setattr(release_quad, "run", lambda command, **kw: calls.append(command) or subprocess.CompletedProcess(command, 0))
-    assert release_quad._deploy_lab() == 0
-    assert calls[0][:2] == ["ssh", "102"]
+    assert release_quad._deploy_validation() == 0
+    assert calls[0][:2] == ["ssh", "validation"]
     script = base64.b64decode(calls[0][-1]).decode("utf-16le")
     assert script.index("base64") < script.index("pip install")
     assert "--only-binary=:all:" in script
@@ -633,7 +633,7 @@ def test_done_keeps_lab_wheel_and_100_editable_checks_after_all_gates(monkeypatc
     monkeypatch.setattr(release_quad, "_verify_local_release_source",
                         lambda _repo, _sha: calls.append("source") or 0)
     monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: calls.append("tag") or 0)
-    monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda *_args: calls.append("lab") or 0)
+    monkeypatch.setattr(release_quad, "_verify_validation_wheel", lambda *_args: calls.append("validation") or 0)
     monkeypatch.setattr(release_quad, "_verify_100_release_wheel",
                         lambda *_args: calls.append("100-release") or 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable", lambda *_args: calls.append("100") or 0)
@@ -646,7 +646,7 @@ def test_done_keeps_lab_wheel_and_100_editable_checks_after_all_gates(monkeypatc
     monkeypatch.setattr(release_quad, "_verify_final_pip_checks", lambda: calls.append("pip-check") or 0)
     args = type("Args", (), {"simulink_package": None})()
     assert release_quad.cmd_done(args) == 0
-    assert calls == ["preflight", "source", "tag", "lab", "100-release", "100",
+    assert calls == ["preflight", "source", "tag", "validation", "100-release", "100",
                      "phase9", "guard", "main", "pip-check"]
 
 def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch):
@@ -657,7 +657,7 @@ def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatc
                         lambda _root, _sha: calls.append("source") or 4)
     def unexpected_machine_check(*_args, **_kwargs):
         raise AssertionError("machine checks must not run from a stale source")
-    monkeypatch.setattr(release_quad, "_verify_lab_wheel", unexpected_machine_check)
+    monkeypatch.setattr(release_quad, "_verify_validation_wheel", unexpected_machine_check)
     monkeypatch.setattr(release_quad, "_verify_100_release_wheel", unexpected_machine_check)
     monkeypatch.setattr(release_quad, "_verify_100_editable", unexpected_machine_check)
     args = type("Args", (), {"simulink_package": None})()
@@ -889,8 +889,8 @@ def test_explicit_editable_root_does_not_resolve_controller_version_tag(monkeypa
 
 
 @pytest.mark.parametrize("verifier,host,label", [
-    ("_verify_lab_wheel", "102", "LAB"),
-    ("_verify_100_release_wheel", "100", "100号機 release runtime"),
+    ("_verify_validation_wheel", "validation", "validation"),
+    ("_verify_100_release_wheel", "100", "build release runtime"),
 ])
 @pytest.mark.parametrize("rc,expected", [(0, 0), (1, 4)])
 def test_wheel_verifiers_use_remote_record_gate(monkeypatch, verifier, host, label, rc, expected):
@@ -912,7 +912,7 @@ def test_wheel_verifiers_use_remote_record_gate(monkeypatch, verifier, host, lab
 @pytest.mark.parametrize(
     "expected_version,shadow,wrong_root,expected_rc,expected_message",
     [
-        ("5.1.0", False, False, 0, "LAB wheel verified"),
+        ("5.1.0", False, False, 0, "validation wheel verified"),
         ("5.1.1", False, False, 1, "Radia version mismatch"),
         ("5.1.0", True, False, 1, "Shadowed Radia import"),
         ("5.1.0", False, True, 1, "Radia wheel must be under site-packages"),
@@ -922,7 +922,7 @@ def test_wheel_runtime_probe_checks_installed_version_and_import_origin(
     tmp_path, expected_version, shadow, wrong_root, expected_rc, expected_message
 ):
     env = _fake_wheel_site(tmp_path, shadow=shadow)
-    code = release_quad._wheel_runtime_probe_code(expected_version, "LAB")
+    code = release_quad._wheel_runtime_probe_code(expected_version, "validation")
     # Model the interpreter's install scheme without installing a test package
     # into the real environment; the production probe itself runs unchanged.
     install_root = str(tmp_path / ("other-site" if wrong_root else "site"))

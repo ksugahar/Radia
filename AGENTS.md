@@ -75,7 +75,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 `cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; the only GUI run is the separately scoped human-facing release test, while journal/checkpoint handoff remains artifact-only.
 
 ### Shared MCP Runtime Ownership
-- radia-mcp releases independently of Radia: release-dual targets LAB (wheel) and 100 (editable). Never deploy radia-mcp to the JMAG evaluation host or retired execution targets; isolated CI tests are not deployment. Do not wait for a solver release.
+- radia-mcp releases independently of Radia: targets build (editable) and NGSolve compute validation (wheel). Never deploy radia-mcp to the JMAG evaluation host or retired execution targets; isolated CI tests are not deployment. Do not wait for a solver release.
 - Routine editable updates: update the usual source, reconnect, check the live source and one harmless affected tool. Pure Python edits need no reinstall; relocation or dependency/metadata changes do. No new daemon or mandatory ledger.
 - MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version or keep rollback copies; remove obsolete copies after consumer and unique-work checks.
 - MCP is experimental development tooling, not a numerical solver release. Developers may edit live MCP source and change its editable source with
@@ -172,11 +172,11 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 **POLICY**: Shared CPU CI/builds use 100号機 with the `100` runner label; GPU development/builds use A100. Stage3: fast-contracts uses `ci-light`, no `100`; heavy jobs keep `100`. Final: `100` + one capability.
 100号機 permits isolated heavy validation.
-Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
-LAB owns SSH preflight. Use the on-demand GPU worker only for mexcuda GPU work; Retired execution targets are excluded from deployment, CI and computation.
-Release-quad: same commit on 102号機 and 100号機; NGSolve timing is separate.
-CPU editable: dedicated 100 venv; LAB wheels. A100 GPU: isolated reviewed source; deploy verified artifacts.
-`cubit-mesh-export`: tests on 100 and LAB/102; solver releases never install, uninstall, repoint or version-gate it.
+Isolate CI from user runtimes. NGSolve compute validation consumes radia/radia-mcp wheels, never Cubit.
+Build runs SSH preflight. Use the on-demand GPU worker only for mexcuda GPU work; Retired execution targets are excluded from deployment, CI and computation.
+Release-quad: same SHA on build/validation; separate NGSolve timing.
+CPU: build editable, NGSolve compute validation wheels. GPU: isolated reviewed source and verified artifacts.
+`cubit-mesh-export`: build only, never compute validation; solver releases do not manage it.
 NGSolve hosts start from checked exported .vol files, without Cubit; `A100` validation runs without Cubit. Never install/run Cubit there; checker unit tests may use isolated CI; no silent uninstalls.
 
 MATLAB-capable runners use a MATLAB-authenticated account and pass an Engine
@@ -202,7 +202,7 @@ an adjacent JSON and a runtime gate are not required. A docs-only contract lane
 parses changed notebooks. Public examples include saved parameterized WebGUI
 geometry/mesh and primary-field scenes.
 
-Developer pre-push hooks run only the impact-scoped LAB preflight. Release
+Pre-push runs only impact-scoped build-target preflight. Release
 workflows, never developer hooks, publish immutable artifacts.
 
 No workflow selects a LAB runner. EqnEdit64 signed executables reach GitHub-hosted CI
@@ -252,7 +252,7 @@ Measurements remain valid provenance: publish neutral roles, not hosts/IPs/paths
 
 Use `tools/release_quad.py` and the `release-quad` skill. Publish only when
 CI, exact package hashes, native/MEX/SLX checks, and required machine gates pass
-for the same commit. MCP/Cubit deploy LAB as wheels; verify fresh imports
+for the same commit. MCP: compute validation wheels; Cubit: build only. Verify fresh imports
 and live sources.
 Before tagging, dispatch `Radia Native Release` on the exact release SHA; `ci-verify` requires its successful native check.
 
