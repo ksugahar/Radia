@@ -3134,7 +3134,7 @@
               "type": "string"
             },
             "wheel_sha256": {
-              "description": "SHA-256 of the wheel accepted on 102 and 100",
+              "description": "SHA-256 of the wheel accepted on build and validation targets",
               "required": "true",
               "type": "string"
             },

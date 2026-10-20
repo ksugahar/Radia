@@ -190,8 +190,8 @@
     ".github/workflows/radia-optuna.yml": [
       "tests/test_ltspice_ci_scope.py"
     ],
-    "tools/ci_preflight_lab.py": [
-      "tests/test_ci_preflight_lab.py"
+    "tools/ci_preflight_remote.py": [
+      "tests/test_ci_preflight_remote.py"
     ],
     "tools/release_quad.py": [
       "tests/test_release_quad_state.py",
@@ -418,7 +418,7 @@
         "tests/test_application_interface_manifest.py",
         "tests/test_matlab_python_parity_manifest.py",
         "tests/test_mdx_runner_pool.py",
-        "tests/test_ci_preflight_lab.py",
+        "tests/test_ci_preflight_remote.py",
         "tests/test_ci_preflight_scope.py",
         "tests/test_ltspice_ci_scope.py",
         "tests/test_simulink_release_package.py",

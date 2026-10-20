@@ -36,23 +36,23 @@ def test_required_keys_match_both_actual_probe_file_lists():
             key for key in quad._PHASE9_FIELDS if key.startswith("SHA radia/")}
         assert "cubit_mesh_export" not in script
         assert "radia-mcp" not in script
-    assert set(quad._parse_phase9_probe("LAB", probe())) == set(quad._PHASE9_FIELDS)
+    assert set(quad._parse_phase9_probe("validation", probe())) == set(quad._PHASE9_FIELDS)
 
 
 def test_phase9_probes_wheel_hosts_as_wheels_and_100_as_editable(monkeypatch):
-    # LAB holds the published wheel since phase8 installs it; the git-show
-    # probe only works from an editable checkout and failed on LAB.
+    # validation holds the published wheel since phase8 installs it; the git-show
+    # probe only works from an editable checkout and failed on validation.
     seen = {}
     def record(label, cmd_prefix, probe_src):
         seen[label] = (cmd_prefix, probe_src)
         return probe()
     monkeypatch.setattr(quad, "_probe", record)
     assert quad.cmd_phase9(None) == 0
-    assert seen["LAB"] == (["ssh", "102", "python", "-"], quad.CROSS_MACHINE_PROBE)
-    assert seen["100号機"] == (["ssh", "100", quad.DEV_PYTHON_100_PS, "-"],
+    assert seen["validation"] == (["ssh", "validation", "python", "-"], quad.CROSS_MACHINE_PROBE)
+    assert seen["build"] == (["ssh", "100", quad.DEV_PYTHON_100_PS, "-"],
                                quad.CROSS_MACHINE_PROBE_100_EDITABLE)
     # 100号機's release runtime is a wheel and is compared on its own.
-    assert seen["100号機 release"] == (["ssh", "100", "python", "-"], quad.CROSS_MACHINE_PROBE)
+    assert seen["build release"] == (["ssh", "100", "python", "-"], quad.CROSS_MACHINE_PROBE)
     assert "mdx1" not in seen and "mdx2" not in seen
 
 
@@ -91,7 +91,7 @@ def test_independent_package_drift_is_not_part_of_solver_probe(monkeypatch):
 def test_failed_host_cannot_be_omitted(monkeypatch, failure):
     monkeypatch.setattr(
         quad, "_probe",
-        lambda label, *_args: failure if label == "LAB" else probe())
+        lambda label, *_args: failure if label == "validation" else probe())
     assert quad.cmd_phase9(None) == 4
 
 
@@ -101,7 +101,7 @@ def test_probe_launch_failure_is_not_acceptance(monkeypatch, error):
     def run(*_args, **_kwargs):
         raise error
     monkeypatch.setattr(quad.subprocess, "run", run)
-    assert quad._probe("LAB", ["python", "-"]) is None
+    assert quad._probe("validation", ["python", "-"]) is None
 
 
 def test_failed_exit_rejects_even_complete_stdout(monkeypatch):
@@ -109,7 +109,7 @@ def test_failed_exit_rejects_even_complete_stdout(monkeypatch):
         quad, "_run_script_with_file_output",
         lambda *args, **_kwargs: subprocess.CompletedProcess(
             args, 1, stdout=probe(), stderr="failed after output"))
-    assert quad._probe("LAB", ["python", "-"]) is None
+    assert quad._probe("validation", ["python", "-"]) is None
 
 
 def test_script_output_uses_files_and_preserves_utf8_and_exit(monkeypatch):
@@ -163,4 +163,4 @@ def test_missing_version_parser_fails_closed(monkeypatch):
 
 def test_pep440_versions_are_accepted():
     text = probe().replace("4.95.91", "5.0rc1")
-    assert quad._parse_phase9_probe("LAB", text)["VER radia"] == "5.0rc1"
+    assert quad._parse_phase9_probe("validation", text)["VER radia"] == "5.0rc1"
