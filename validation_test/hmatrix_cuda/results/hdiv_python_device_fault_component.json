@@ -1,0 +1,85 @@
+{
+  "schema": "radia.hdiv-python-device-fault-component.v1",
+  "accepted": true,
+  "scope": "Declared shared device allocation probes only, after required positive enumeration; other 0120 host/resource/publication results stay separate",
+  "native_source": "48fd9c21eb84dab9bb179014d1085c6f1949b802",
+  "python_sha256": "1c3d54c5e276f5b55d8e997fbbdc922ace40f5a0f2dd971becfdbc8d3c700e7b",
+  "mex_built_sha256": "d25037391580821e8aa5641ccdd583bb0df099b77f0bbab62f9bd9d766251dd0",
+  "mex_runtime_accepted": false,
+  "fault_injection": true,
+  "device_fault_injection": true,
+  "release_acceptance": false,
+  "events": 211,
+  "seconds": 0.875,
+  "maximum_coefficient_error": 7.417989609027186e-17,
+  "maximum_original_residual": 1.3115280561459954e-16,
+  "matlab_engine_required": false,
+  "cases": [
+    {
+      "scope": "resident_create",
+      "kind": "device",
+      "first_site": 1,
+      "last_site": 16,
+      "sites": 16,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "material_create",
+      "kind": "device",
+      "first_site": 1,
+      "last_site": 23,
+      "sites": 23,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "scalar",
+      "kind": "device",
+      "first_site": 1,
+      "last_site": 5,
+      "sites": 5,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-diagonal",
+      "kind": "device",
+      "first_site": 40,
+      "last_site": 83,
+      "sites": 44,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-graph",
+      "kind": "device",
+      "first_site": 40,
+      "last_site": 87,
+      "sites": 48,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    }
+  ],
+  "opaque_runtime_retention_zero": false
+}

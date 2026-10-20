@@ -1,0 +1,39 @@
+{
+  "accepted": true,
+  "scope": "Controlled CPU factor arithmetic diagnostic on captured hex2 Newton inner system, same SciPy CG recurrence/diagonal/CSR application; not production solver replacement",
+  "cases": [
+    {
+      "arithmetic": "fast",
+      "controlled_solver": "SciPy CG validation only",
+      "info": 0,
+      "operator_calls": 31,
+      "independent_original_residual": 1.4020888590513108e-12,
+      "strict_residual_pass": false
+    },
+    {
+      "arithmetic": "compensated",
+      "controlled_solver": "SciPy CG validation only",
+      "info": 0,
+      "operator_calls": 31,
+      "independent_original_residual": 2.4979414534563738e-14,
+      "strict_residual_pass": true
+    }
+  ],
+  "release_accepted": false,
+  "cpu_oracle_arithmetic": "explicit compensated CPU factors and sparse maps; original fast CPU differences recorded separately",
+  "ngsolve": "6.2.2608",
+  "native_source_commit": "f4f7266debd42ed2ced0dd67c71b4a0de6ae68b4",
+  "binary_sha256": "2d0d8eadb1ff42ed5848e8191c58321df171d245aa97e7d78a476a38f2c39531",
+  "cpu_source_commit": "ba94077fd68c940386e9de2134095cf29232d384",
+  "cpu_binary_sha256": "ac9cdf61eae530c1c3f8ac0f077c2479841a509388964850a5b6fadbc61b6afa",
+  "fixture_source_sha256": "ad0d4091cf3b212196602fa201bbaf0e4783fb586eb91132737bdf7c23260720",
+  "validator_sha256": "3d86e3fc89a262d7e0f7e9ee4704b367c65e7161cab8002bf251e904c04f7663",
+  "relative_application_error_limit": 1e-11,
+  "acceptance_meaning": "Diagnostic experiment completed; production CPU solver remains unaccepted for this case",
+  "production_alternative_preconditioner": [
+    {
+      "iterations": 10000,
+      "independent_original_residual": 3.789751589794057e-12
+    }
+  ]
+}

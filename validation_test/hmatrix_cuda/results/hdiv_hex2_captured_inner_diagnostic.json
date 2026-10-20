@@ -1,0 +1,46 @@
+{
+  "accepted": true,
+  "scope": "Captured failed CPU hex2 first Newton linear system, shared compensated GPU operator; not full physical hex2 nonlinear acceptance",
+  "cases": [
+    {
+      "preconditioner": "diagonal",
+      "graph": false,
+      "independent_original_residual": 2.233267452828262e-14,
+      "reported_residual": 2.2332663897244863e-14,
+      "iterations": 61
+    },
+    {
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "independent_original_residual": 4.3545135541862586e-14,
+      "reported_residual": 4.354516103060807e-14,
+      "iterations": 31
+    }
+  ],
+  "release_accepted": false,
+  "cpu_oracle_arithmetic": "explicit compensated CPU factors and sparse maps; original fast CPU differences recorded separately",
+  "ngsolve": "6.2.2608",
+  "native_source_commit": "f4f7266debd42ed2ced0dd67c71b4a0de6ae68b4",
+  "binary_sha256": "2d0d8eadb1ff42ed5848e8191c58321df171d245aa97e7d78a476a38f2c39531",
+  "cpu_source_commit": "ba94077fd68c940386e9de2134095cf29232d384",
+  "cpu_binary_sha256": "ac9cdf61eae530c1c3f8ac0f077c2479841a509388964850a5b6fadbc61b6afa",
+  "fixture_source_sha256": "ad0d4091cf3b212196602fa201bbaf0e4783fb586eb91132737bdf7c23260720",
+  "validator_sha256": "e56506cc322b1af1ca4170fd1603cd92a7139d0bdb766435074a63aa8dd7767e",
+  "relative_application_error_limit": 1e-11,
+  "captured_cpu_failure": {
+    "iterations": 10000,
+    "requested_tolerance": 5e-14,
+    "compensated_true_residual": 1.8894389701400234e-12,
+    "fast_true_residual": 2.1570118153348144e-12,
+    "condition": 19190.23976856938,
+    "relative_symmetry": 9.625152875678957e-15,
+    "returned_scalar_fields": {
+      "iters": 10000.0
+    }
+  },
+  "limitations": [
+    "CPU material-mass-Riesz solver did not pass",
+    "Different PCG/preconditioner implementations do not alone prove the root cause",
+    "No tolerance or iteration-cap changes; original CPU failure retained"
+  ]
+}

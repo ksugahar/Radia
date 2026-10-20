@@ -18,8 +18,12 @@ classdef HMatrixOperator < handle
             end
             command='create';
             if isfield(config,'assembly')
-                assert(strcmp(config.assembly,'analytic_constant_block'),'radia:cuda:hmatrix','Unsupported assembly');
-                command='create_analytic_constant_block';
+                if strcmp(config.assembly,'normalized_leaves')
+                    command='create_normalized';
+                else
+                    assert(strcmp(config.assembly,'analytic_constant_block'),'radia:cuda:hmatrix','Unsupported assembly');
+                    command='create_analytic_constant_block';
+                end
             end
             obj.Token=radia_cuda_hmatrix(command,config);
         end
@@ -65,6 +69,21 @@ classdef HMatrixOperator < handle
                 assert(chebyshevDegree==8 && chebyshevLowerFraction==.1,'Chebyshev settings require mass-chebyshev');
                 result=radia_cuda_hmatrix('solve_linear_material',obj.Token,mass,rhs,invChi,tolerance,maxIterations,preconditioner);
             end
+        end
+        function result=solveNonlinearMaterial(obj,material,mass,rhs,initial,options)
+            % Shared frozen-tangent Newton and line search; no MATLAB math copy.
+            arguments
+                obj (1,1) radia.gpu.HMatrixOperator
+                material (1,1) radia.gpu.HDivBHMaterial
+                mass double {mustBeReal,mustBeFinite}
+                rhs (:,1) double {mustBeReal,mustBeFinite}
+                initial (:,1) double {mustBeReal,mustBeFinite}
+                options (1,1) struct
+            end
+            assert(issparse(mass),'radia:gpu:HDivNewton','Expected NGSolve sparse reference mass');
+            % Native validation owns option bounds, typed handles and epochs.
+            % In particular no mass-cholesky -> diagonal substitution occurs.
+            result=radia_cuda_hmatrix('solve_nonlinear_material',obj.Token,material.nativeToken(),mass,rhs,initial,options);
         end
         function delete(obj)
             if obj.Token~=0

@@ -22,6 +22,7 @@ def test_every_python_module_has_an_explicit_cpu_ownership_classification():
     assert [item["id"] for item in result["gpu_features"]] == [
         "csr-pcg", "ams-experimental", "native-hcurl-newton-ams", "reusable-linear-hcurl-ams",
         "reusable-gpu-ic0", "laplace-fmm-operators", "bounded-hdiv-mmm",
+        "normalized-leaf-resident-boundary", "explicit-ng-host-hdiv-bh",
     ]
 
 

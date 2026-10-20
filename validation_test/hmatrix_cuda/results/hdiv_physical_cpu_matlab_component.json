@@ -1,0 +1,217 @@
+{
+  "accepted": true,
+  "scope": "Uniform applied-field production BH connected tet/hex orders1/2 MATLAB shared nonlinear component with independent CPU certification",
+  "cases": [
+    {
+      "topology": "tet",
+      "order": 1,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 8.094209364742026e-16,
+      "reported_residual": 1.124201914990146e-16,
+      "newton_iterations": 3
+    },
+    {
+      "topology": "tet",
+      "order": 1,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 7.75392360308209e-16,
+      "reported_residual": 2.3175826060567617e-16,
+      "newton_iterations": 3
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 1.300081585425193e-14,
+      "reported_residual": 5.530248368723898e-16,
+      "newton_iterations": 3
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 7.549162189074367e-15,
+      "reported_residual": 5.340981176384983e-16,
+      "newton_iterations": 3
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 2.312615014622816e-15,
+      "reported_residual": 8.32086498827223e-16,
+      "newton_iterations": 2
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 4.131249380537588e-15,
+      "reported_residual": 8.817054941262748e-16,
+      "newton_iterations": 2
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 1.234353143604001e-12,
+      "reported_residual": 1.064716550214502e-14,
+      "newton_iterations": 3
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 1.4327488815475775e-12,
+      "reported_residual": 1.2287584895287258e-14,
+      "newton_iterations": 3
+    }
+  ],
+  "cpu_native_source_commit": "5f5cf3ef652459e3580d764f25ac787081c4e075",
+  "cpu_binary_sha256": "008295b9305c0dbf7b91f39cc21e8313c7c1f6ca5c6a9db7fee49a38ca3426bf",
+  "mex_source_commit": "f4f7266debd42ed2ced0dd67c71b4a0de6ae68b4",
+  "mex_binary_sha256": "f12cd8fcb49f01eea3e1f14f759fb29d2dec2f3da5d2b948ecffd88e441c2151",
+  "applied_H_A_per_m": [
+    1000.0,
+    -2000.0,
+    5000.0
+  ],
+  "independent_cpu_certificates": [
+    {
+      "topology": "tet",
+      "order": 1,
+      "fixture_sha256": "84ff8c9323cf3080a3c51b1327532b825c72b235a81ac1a8eba494c04a664954",
+      "solutions_sha256": "63a583fbdb0bbf400a13649e0252b4cca454bb82720a6fe9fca8b5609a49c7db",
+      "certificates": [
+        {
+          "index": 0,
+          "coefficient_error": 8.094209364742026e-16,
+          "independent_original_residual": 9.830016764869692e-17
+        },
+        {
+          "index": 1,
+          "coefficient_error": 7.75392360308209e-16,
+          "independent_original_residual": 1.9577375130382964e-16
+        }
+      ]
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "fixture_sha256": "d3d58e34521a369706518affe6516e7505efdbe61d3ceff5103d9b5f91077057",
+      "solutions_sha256": "f025310447bc8b376f10a0a7de24259eef8a36ba58ce0289096ff4716b1e1f40",
+      "certificates": [
+        {
+          "index": 0,
+          "coefficient_error": 1.300081585425193e-14,
+          "independent_original_residual": 5.000364659963956e-16
+        },
+        {
+          "index": 1,
+          "coefficient_error": 7.549162189074367e-15,
+          "independent_original_residual": 3.1598001278555247e-16
+        }
+      ]
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "fixture_sha256": "48cdf214eea9e96000fe173f39e290096bd0bfa4370bc0da592257dd18cf9108",
+      "solutions_sha256": "f5945c0eb02ea03b8db420f1f82b5e2d6d7a1f0882427d56b38787545b6d6c41",
+      "certificates": [
+        {
+          "index": 0,
+          "coefficient_error": 2.3126150146228162e-15,
+          "independent_original_residual": 7.233523558061013e-16
+        },
+        {
+          "index": 1,
+          "coefficient_error": 4.1312493805375885e-15,
+          "independent_original_residual": 7.285183589525326e-16
+        }
+      ]
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "fixture_sha256": "a77ab6ea41e0f340ea15f30059816e6ee539e7064bf4d2c6a8e45f13fc419faf",
+      "solutions_sha256": "5b2ac17533a2847a9f4179276817b2c8bed273a72713d51b47682354b7bd5efd",
+      "certificates": [
+        {
+          "index": 0,
+          "coefficient_error": 1.2343531436040013e-12,
+          "independent_original_residual": 1.171819313761201e-14
+        },
+        {
+          "index": 1,
+          "coefficient_error": 1.4327488815475775e-12,
+          "independent_original_residual": 1.3661743155212008e-14
+        }
+      ]
+    }
+  ],
+  "memory_warm": 5,
+  "memory_runs": 100,
+  "memory": [
+    {
+      "preconditioner": "reference-diagonal",
+      "host": {
+        "final25_slope_bytes_per_run": -20940.01230769231,
+        "final25_delta_bytes": -622592,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    },
+    {
+      "preconditioner": "reference-chebyshev-graph",
+      "host": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    }
+  ],
+  "memory_cpu_certified_solutions": 200,
+  "memory_max_independent_original_residual": 1.3661743155212008e-14,
+  "public_cpu_workflow": {
+    "accepted": true,
+    "scope": "Public CPU HDiv workflow explicit compensated option, no CUDA backend",
+    "python_source_commit": "6ee157dde",
+    "candidate_sha256": "dd186062e007b06522da5ebf9150bfa869c02455744a9cb5757606aa459da29c",
+    "native_source_commit": "5f5cf3ef652459e3580d764f25ac787081c4e075",
+    "native_sha256": "008295b9305c0dbf7b91f39cc21e8313c7c1f6ca5c6a9db7fee49a38ca3426bf",
+    "cases": [
+      {
+        "topology": "tet",
+        "order": 1,
+        "coefficient_error": 8.431845072086199e-15,
+        "independent_original_residual": 1.3734907470503903e-15,
+        "iterations": 3
+      },
+      {
+        "topology": "hex",
+        "order": 2,
+        "coefficient_error": 0.0,
+        "independent_original_residual": 1.4812536007982156e-16,
+        "iterations": 3
+      }
+    ]
+  },
+  "release_accepted": false,
+  "limits": [
+    "Independent native artifact identities, not same-release-SHA acceptance",
+    "CPU public option validated in isolated candidate module, not installed release",
+    "Common100 physical Newton reuse is MATLAB hex2 scope",
+    "Fault-site constructor/unwind coverage, fresh context traces and mixed MMM remain pending",
+    "Opaque runtime retention is not zero; no speedup claim"
+  ]
+}

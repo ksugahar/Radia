@@ -1,0 +1,26 @@
+{
+  "schema": "radia.hdiv-simulink-sample-qualification.v1",
+  "model": "radia_hdiv_gpu_workflow.slx",
+  "model_sha256": "4ac5387893d6c000a418f03d12efbdfe23753c9c81ff4e61e727fbd0c45efee2",
+  "matlab": "R2026a Update5",
+  "toolkit": "2026.10.a",
+  "matlab_mcp_server": "0.14.0",
+  "matlab_mcp_toolbox": "0.4.0",
+  "native_source": "947db66639d977a6388d6faf910ccc6c9bf387d1",
+  "wrapper_source": "14cc09523052d5660507a16709a73e77c8649914",
+  "scope": "standalone shared GPU field workflow sample; not coil circuit or mixed MMM",
+  "official_read_edit_check_save_close_reopen": true,
+  "private_path_hits": 0,
+  "triggered_solves": 2,
+  "successful_samples": 4,
+  "owner_released": true,
+  "coefficient_difference_to_cpu_certified_root": 0.0,
+  "independent_original_residual": 7.850158153611594e-15,
+  "solver_threads": 1,
+  "physical_cores": 2,
+  "limits": {
+    "coefficient": 1e-10,
+    "original_residual": 1e-11
+  },
+  "release_accepted": false
+}

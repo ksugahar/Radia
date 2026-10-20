@@ -2,15 +2,18 @@
 from pathlib import Path
 import hashlib
 import json
+import math
 import shutil
 import subprocess
 import os
+import sys
+import sysconfig
 import importlib.util
 try:
     import tomllib
 except ModuleNotFoundError:  # Python 3.10 build hosts
     import tomli as tomllib
-from setuptools import setup
+from setuptools import setup, Distribution
 from setuptools.command.build_py import build_py as _build_py
 from setuptools.command.bdist_wheel import bdist_wheel as _bdist_wheel
 
@@ -18,6 +21,7 @@ PACKAGE = Path(__file__).resolve().parent
 ROOT = PACKAGE.parents[1]
 MATLAB = PACKAGE / "matlab"
 SIMULINK_FILES = (
+    "+radia/csrPCG.m",
     "+radia/+simulink/cudaPCGSFunction.m", "+radia/+simulink/buildCudaPCGBlock.m",
     "+radia/+simulink/buildLTspiceBlock.m", "+radia/+simulink/ltspiceSFunction.m",
     "+radia/+simulink/runLTspice.m", "+radia/+simulink/runLTspiceInterval.m",
@@ -70,20 +74,55 @@ class build_py(_build_py):
         staged.mkdir(parents=True, exist_ok=True)
         expected = {p.relative_to(PACKAGE / "src/radia_simulink").as_posix() for p in (PACKAGE / "src/radia_simulink").rglob("*") if p.is_file() and "__pycache__" not in p.parts}
         expected.update({"LICENSE", "README.md", "build.json", "ams-build.json", "ic-build.json"})
+        python_binding = receipt.get('python_binding')
+        if python_binding:
+            name = '_csr_cuda'+sysconfig.get_config_var('EXT_SUFFIX')
+            native = build / name
+            if (python_binding.get('binary') != name
+                    or hashlib.sha256(native.read_bytes()).hexdigest() != python_binding.get('binary_sha256')):
+                raise RuntimeError('Python CUDA binding ABI or provenance mismatch')
+            runtime_path=build/'python-result.json'
+            runtime=json.loads(runtime_path.read_text())
+            gpu_cases=[case for case in runtime.get('cases',[]) if case.get('backend')=='gpu']
+            if (runtime.get('accepted') is not True or runtime.get('source_commit')!=commit
+                    or runtime.get('binary_sha256')!=python_binding['binary_sha256'] or not gpu_cases
+                    or not runtime.get('runtime_identity',{}).get('sha256')):
+                raise RuntimeError('Exact-source Python GPU runtime acceptance required')
+            for case in gpu_cases:
+                for key,limit in (('relative_l2',1e-8),('true_relative_residual',1e-6)):
+                    value=case.get(key)
+                    if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or value<0 or value>limit:
+                        raise RuntimeError('Python GPU runtime numerical gate failed')
+            shutil.copy2(native, package / name)
+            public_python = {key: python_binding[key] for key in (
+                'schema','binary','binary_sha256','extension_suffix','pybind11_version',
+                'pybind_header_sha256','ngsolve_version','matlab_engine_user_dependency',
+                'runtime_import_checked','redistribution_accepted')}
+            public_python['source_commit']=commit
+            public_python['runtime_import_checked']=True
+            public_python['runtime_validation_sha256']=hashlib.sha256(runtime_path.read_bytes()).hexdigest()
+            public_python['loaded_runtime_sha256']=runtime['runtime_identity']['sha256']
+            (package/'python-build.json').write_text(json.dumps(public_python,indent=2)+'\n')
+            expected.update({name,'python-build.json'})
         hmatrix = os.environ.get('RADIA_HDIV_HMATRIX_BUILD')
         projection = os.environ.get('RADIA_HDIV_PROJECTION_BUILD')
         if bool(hmatrix) != bool(projection):
             raise RuntimeError('Select both HDiv HMatrix and projection build directories')
         if hmatrix:
             expected.update(payload_module().stage(ROOT, package, commit, hmatrix, projection))
+        hdiv_python_runtime=os.environ.get('RADIA_HDIV_PYTHON_RUNTIME')
+        if hdiv_python_runtime:
+            if not hmatrix:raise RuntimeError('HDiv Python payload requires selected HDiv build directories')
+            expected.update(payload_module().stage_python(ROOT,package,commit,hmatrix,hdiv_python_runtime))
         fmm = os.environ.get('RADIA_FMM_BUILD')
         if fmm:
             expected.update(payload_module().stage_fmm(ROOT, package, commit, fmm))
+        hdiv_wrappers = set(payload_module().WRAPPERS)
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
                 if path.name == 'LaplaceFMM.m' and not fmm:
                     continue
-                if path.name in {"FieldCloud.m", "FieldElements.m", "HMatrixOperator.m", "solveHDivRT0.m", "solveCurvedHDiv.m", "curvedHDivQuadrature.m", "solveHDivElements.m", "affineHDivQuadrature.m"}:
+                if path.name in hdiv_wrappers or path.name in {"FieldCloud.m", "FieldElements.m", "solveHDivRT0.m", "solveCurvedHDiv.m", "evaluateHDivBHMaterial.m", "evaluateHDivBHChunks.m"}:
                     continue  # Experimental field/H-matrix modules require separate acceptance.
                 if path.name in ("runRLCResonanceOptimizationDemo.m", "rlcResonanceObjective.m"):
                     continue  # Independent Optuna-dependent examples are not a runtime dependency.
@@ -121,6 +160,7 @@ class build_py(_build_py):
         (package / "ams-build.json").write_text(json.dumps(public_ams, indent=2)+"\n", encoding="utf-8")
         shutil.copy2(ROOT / "LICENSE", package / "LICENSE")
         shutil.copy2(PACKAGE / "README.md", package / "README.md")
+        expected.update(payload_module().stage_documentation(PACKAGE, package))
         # Public provenance deliberately omits private host/interpreter/install paths.
         public_build = {key: receipt[key] for key in (
             "schema", "source_commit", "source_dirty", "source_sha256", "binary_sha256",
@@ -133,16 +173,35 @@ class build_py(_build_py):
         payload = {p.relative_to(package).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                    for p in package.rglob("*") if p.is_file() and p.name != "manifest.json"}
         metadata = tomllib.loads((PACKAGE / "pyproject.toml").read_text())
+        runtime_common, runtime_interfaces = payload_module().runtime_contract(
+            bool(python_binding or hdiv_python_runtime))
         manifest = dict(schema="radia.gpu.distribution.v1", version=metadata["project"]["version"],
                         source_commit=commit, files=payload,
-                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "Experimental reusable CUDA FP64 IC(0)-PCG", "Reusable affine linear HCurl matrix and AMS hierarchy", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Bounded affine/P2 HDiv orders 1/2"] if hmatrix else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
-                        runtime_requirements=["Windows x64", "MATLAB R2026a", "Parallel Computing Toolbox", "NVIDIA GPU/driver", "Simulink for blocks", "User-installed LTspice for circuit execution"])
+                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "Experimental reusable CUDA FP64 IC(0)-PCG", "Reusable affine linear HCurl matrix and AMS hierarchy", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Explicit CSR CPU MEX and direct Python CUDA adapter (qualification required)"] if python_binding else []) + (["Bounded affine/P2 HDiv orders 1/2"] if hmatrix else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
+                        runtime_requirements=runtime_common,
+                        runtime_requirements_by_interface=runtime_interfaces)
         (package / "manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")
 
 
 class bdist_wheel(_bdist_wheel):
+    def finalize_options(self):
+        super().finalize_options()
+        receipt_path=ROOT/'build-cuda-mex/build.json'
+        if ((receipt_path.is_file() and json.loads(receipt_path.read_text()).get('python_binding'))
+                or os.environ.get('RADIA_HDIV_PYTHON_RUNTIME')):
+            self.root_is_pure=False
+
     def get_tag(self):
-        return "py3", "none", "win_amd64"
+        receipt_path=ROOT/'build-cuda-mex/build.json'
+        python_selected = bool(os.environ.get('RADIA_HDIV_PYTHON_RUNTIME') or
+            (receipt_path.is_file() and json.loads(receipt_path.read_text()).get('python_binding')))
+        return payload_module().wheel_tag(python_selected, sys.platform, sys.version_info)
 
 
-setup(cmdclass={"build_py": build_py, "bdist_wheel": bdist_wheel})
+class BinaryDistribution(Distribution):
+    """MEX and optional Python extensions belong in the platform library root."""
+    def has_ext_modules(self):
+        return True
+
+
+setup(distclass=BinaryDistribution, cmdclass={"build_py": build_py, "bdist_wheel": bdist_wheel})

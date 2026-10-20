@@ -1,0 +1,81 @@
+{
+  "accepted": true,
+  "scope": "Uniform applied H=(1000,-2000,5000) A/m, production CPU inverse BH and nonlinear solver versus shared GPU Newton; order1 only accepted; not mixed MMM/release",
+  "cases": [
+    {
+      "topology": "tet",
+      "order": 1,
+      "dofs": 12,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 8.005015805719472e-15,
+      "independent_original_residual": 1.124201914990146e-16,
+      "reported_residual": 1.124201914990146e-16,
+      "newton_iterations": 3,
+      "graph_launches": 0,
+      "mesh_sha256": "07c678502fe9a4618684408f3502393b4ecb6246c250a5c4d2922a0ea3039798"
+    },
+    {
+      "topology": "tet",
+      "order": 1,
+      "dofs": 12,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 8.071417946175283e-15,
+      "independent_original_residual": 2.317582606056761e-16,
+      "reported_residual": 2.3175826060567617e-16,
+      "newton_iterations": 3,
+      "graph_launches": 36,
+      "mesh_sha256": "07c678502fe9a4618684408f3502393b4ecb6246c250a5c4d2922a0ea3039798"
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "dofs": 36,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 3.038431680768596e-14,
+      "independent_original_residual": 8.320554917661761e-16,
+      "reported_residual": 8.32086498827223e-16,
+      "newton_iterations": 2,
+      "graph_launches": 0,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81"
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "dofs": 36,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 2.5086115836949625e-14,
+      "independent_original_residual": 8.817521803444768e-16,
+      "reported_residual": 8.817054941262748e-16,
+      "newton_iterations": 2,
+      "graph_launches": 23,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81"
+    }
+  ],
+  "release_accepted": false,
+  "cpu_oracle_arithmetic": "explicit compensated CPU factors and sparse maps; original fast CPU differences recorded separately",
+  "ngsolve": "6.2.2608",
+  "native_source_commit": "f4f7266debd42ed2ced0dd67c71b4a0de6ae68b4",
+  "binary_sha256": "2d0d8eadb1ff42ed5848e8191c58321df171d245aa97e7d78a476a38f2c39531",
+  "cpu_source_commit": "ba94077fd68c940386e9de2134095cf29232d384",
+  "cpu_binary_sha256": "ac9cdf61eae530c1c3f8ac0f077c2479841a509388964850a5b6fadbc61b6afa",
+  "fixture_source_sha256": "ad0d4091cf3b212196602fa201bbaf0e4783fb586eb91132737bdf7c23260720",
+  "validator_sha256": "f17a1714d62cc757bde3134fea9c20c63c2e99519d8b08be9e54a702670f043d",
+  "relative_application_error_limit": 1e-11,
+  "production_law_source_sha256": {
+    "bh_law": "baa389dd6e4de70f349d318df46ac80fa7baaf6a83d5dbea0ad3d4d33be6daae",
+    "nonlinear": "2d3a70ccf7f6b4f75ba5e20c359ecfa8ea93806dd84042dd8416327829e00dc8"
+  },
+  "cpu_physical_residual": 3.103881235731381e-15,
+  "raw_scope_metadata_correction": "v1 helper retained manufactured-scope wording; actual RHS is NGSolve applied-field LinearForm, raw artifact unchanged",
+  "order2_gate": {
+    "accepted": false,
+    "stage": "independent CPU reference before GPU order2 solve",
+    "error": "RuntimeError('vim.Solve (energy-Newton): did NOT converge -- relative residual=4.93e-12 (tol 5.0e-14), 38 settled iters after 40 (returning M would be a silent wrong result).  For an extreme-saturation / ill-conditioned case, increase continuation or use the mass-Riesz preconditioner.')",
+    "source": "ba94077fd68c940386e9de2134095cf29232d384",
+    "cpu_binary_sha256": "ac9cdf61eae530c1c3f8ac0f077c2479841a509388964850a5b6fadbc61b6afa",
+    "solver_requested_tolerance": 5e-14,
+    "maximum_iterations": 40,
+    "failed_topology": "tet",
+    "order": 2
+  }
+}

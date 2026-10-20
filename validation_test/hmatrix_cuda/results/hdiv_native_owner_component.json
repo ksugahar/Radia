@@ -1,0 +1,401 @@
+{
+  "schema": "radia.hdiv-native-owner-component.v1",
+  "accepted": true,
+  "scope": "Fresh allocator-aware owner/control-block plus declared adapter buffer/resource/publication faults; not CPython allocator internals or every stdfunction allocation",
+  "native_source": "7995b719cf02653bd08c90b1d0d10efa87007a23",
+  "python_sha256": "4aac3c5e6db47d8f06546f8841575a57c045d5478d1ab36b32d761bbd744ed94",
+  "mex_built_sha256": "af9610e732ca6d0d80906162c11b5dafbbb4a3d9abce6c36a0f6cb05018ea88e",
+  "mex_runtime_accepted": false,
+  "fault_injection": true,
+  "release_acceptance": false,
+  "events": 810,
+  "enumerated_sites": 420,
+  "seconds": 2.547000000005937,
+  "maximum_coefficient_error": 7.417989609027186e-17,
+  "maximum_original_residual": 1.3115280561459954e-16,
+  "matlab_engine_required": false,
+  "fault_cases": [
+    {
+      "scope": "resident_create",
+      "kind": "host",
+      "first_site": 1,
+      "last_site": 37,
+      "sites": 37,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "resident_create",
+      "kind": "device",
+      "first_site": 1,
+      "last_site": 16,
+      "sites": 16,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "resident_create",
+      "kind": "resource",
+      "first_site": 1,
+      "last_site": 2,
+      "sites": 2,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "resident_create",
+      "kind": "publication",
+      "first_site": 1,
+      "last_site": 1,
+      "sites": 1,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "material_create",
+      "kind": "host",
+      "first_site": 1,
+      "last_site": 19,
+      "sites": 19,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "material_create",
+      "kind": "device",
+      "first_site": 1,
+      "last_site": 23,
+      "sites": 23,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "material_create",
+      "kind": "publication",
+      "first_site": 1,
+      "last_site": 1,
+      "sites": 1,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "scalar",
+      "kind": "host",
+      "first_site": 1,
+      "last_site": 8,
+      "sites": 8,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "scalar",
+      "kind": "device",
+      "first_site": 1,
+      "last_site": 5,
+      "sites": 5,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "scalar",
+      "kind": "publication",
+      "first_site": 1,
+      "last_site": 4,
+      "sites": 4,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "apply",
+      "kind": "host",
+      "first_site": 38,
+      "last_site": 40,
+      "sites": 3,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "apply",
+      "kind": "publication",
+      "first_site": 2,
+      "last_site": 2,
+      "sites": 1,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "evaluate",
+      "kind": "host",
+      "first_site": 20,
+      "last_site": 23,
+      "sites": 4,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "evaluate",
+      "kind": "publication",
+      "first_site": 2,
+      "last_site": 4,
+      "sites": 3,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "linearize",
+      "kind": "host",
+      "first_site": 20,
+      "last_site": 21,
+      "sites": 2,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "linearize",
+      "kind": "publication",
+      "first_site": 2,
+      "last_site": 3,
+      "sites": 2,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "tangent",
+      "kind": "host",
+      "first_site": 22,
+      "last_site": 23,
+      "sites": 2,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "tangent",
+      "kind": "publication",
+      "first_site": 4,
+      "last_site": 4,
+      "sites": 1,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-diagonal",
+      "kind": "host",
+      "first_site": 57,
+      "last_site": 130,
+      "sites": 74,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-diagonal",
+      "kind": "device",
+      "first_site": 40,
+      "last_site": 83,
+      "sites": 44,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-diagonal",
+      "kind": "resource",
+      "first_site": 3,
+      "last_site": 10,
+      "sites": 8,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-diagonal",
+      "kind": "publication",
+      "first_site": 3,
+      "last_site": 9,
+      "sites": 7,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-graph",
+      "kind": "host",
+      "first_site": 57,
+      "last_site": 130,
+      "sites": 74,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-graph",
+      "kind": "device",
+      "first_site": 40,
+      "last_site": 87,
+      "sites": 48,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-graph",
+      "kind": "resource",
+      "first_site": 3,
+      "last_site": 26,
+      "sites": 24,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-graph",
+      "kind": "publication",
+      "first_site": 3,
+      "last_site": 9,
+      "sites": 7,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    }
+  ],
+  "memory_cohorts": [
+    {
+      "scope": "newton-diagonal",
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope_bytes_per_run": [
+        0.0,
+        0.0
+      ],
+      "final_25_delta_bytes": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scope": "newton-graph",
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope_bytes_per_run": [
+        0.0,
+        0.0
+      ],
+      "final_25_delta_bytes": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scope": "material-create-close-drop",
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope_bytes_per_run": [
+        0.0,
+        0.0
+      ],
+      "final_25_delta_bytes": [
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "closed_holder_bytes": 304,
+  "drop_releases_all_tracked_owners": true,
+  "opaque_runtime_retention_zero": false
+}

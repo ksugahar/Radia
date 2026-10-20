@@ -15,6 +15,27 @@ SPEC.loader.exec_module(AUDIT)
 MU0 = 4e-7 * np.pi
 
 
+def test_shared_payload_preserves_cpu_field_energy_and_barrier():
+    from scipy.interpolate import PPoly
+    h = np.array([0., 10., 100., 500., 2000., 10000.])
+    b = MU0*(h+1e6*np.tanh(h/1000.))
+    helpers = AUDIT.load_curve_helpers()
+    fields, energy, _ = helpers['_bh_inverse_funcs'](h, b)
+    payload = helpers['_bh_inverse_payload'](h, b)
+    poly = PPoly(payload['coefficients'].reshape(-1, 4).T, payload['knots'])
+    amplitudes = np.array([0., 1., .2*payload['cap'], payload['cap'], 1.01*payload['cap']])
+    clipped = np.minimum(amplitudes, payload['cap'])
+    over = np.maximum(amplitudes-payload['cap'], 0.)
+    expected_h = poly(clipped)+payload['barrier_slope']*over
+    expected_energy = poly.antiderivative()(clipped)-poly.antiderivative()(0.)
+    expected_energy += payload['last_field']*over+.5*payload['barrier_slope']*over**2
+    secant, _ = fields(amplitudes)
+    np.testing.assert_allclose(secant*amplitudes, expected_h, rtol=2e-14, atol=1e-12)
+    np.testing.assert_allclose(energy(amplitudes), expected_energy, rtol=2e-14, atol=1e-12)
+    assert payload['initial_reluctivity'] == poly.derivative()(0.)
+    assert not np.shares_memory(payload['coefficients'], poly.c)
+
+
 def test_synthetic_table_cap_below_interpolated_peak():
     report = AUDIT.saturation_report(AUDIT.regression_table())
     assert report['interpolated_M_nondecreasing'] is False

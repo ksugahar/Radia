@@ -1,0 +1,27 @@
+{
+  "schema": "radia.hdiv-material-staging-component.v1",
+  "native_source_sha": "7c96d79f6f13363592bf51ddbd088cf54a9d93a7",
+  "python_binary_sha256": "9c27294f44cc37c982507e3fad9c0a87b41944d4ab5a89a6532f63eebd8f992e",
+  "projection_binary_sha256": "a46681a206651da1b2ba6040d30cbddbf4458950397a34a0ae57e66776bf11e0",
+  "ngsolve_version": "6.2.2608",
+  "accepted": true,
+  "scope": "Small tetrahedral material quadrature staging and publisher parity; not nonlinear MMM or release",
+  "python_tet_order1": {
+    "independent_ngsolve_mass_relative_limit": 1e-12,
+    "owned_copy_isolation": true,
+    "invalid_interval_rejected": true,
+    "closed_context_rejected": true
+  },
+  "tet_order2_publisher_parity": {
+    "exact_evaluation_values": true,
+    "exact_row_indices": true,
+    "exact_points_and_weights": true,
+    "points": 343,
+    "evaluation_nonzeros": 27440,
+    "stale_matlab_handle_rejected": true
+  },
+  "shared_numeric_unit": "PASS including analytic sum/product cancellation, material PCG and Graph, forced failure/recovery and close",
+  "common100_memory": "NOT repeated on this artifact",
+  "hex_mixed_nonlinear": "NOT accepted",
+  "release_accepted": false
+}

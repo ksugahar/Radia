@@ -1,0 +1,45 @@
+{
+  "schema": "radia.hdiv-python-resident-component.v1",
+  "accepted": false,
+  "release_accepted": false,
+  "native_source_commit": "c2a2c701f7c3c97ccd5051469c298f374bbf3894",
+  "python_binary_sha256": "6f2de1e69a90bf4daefb37d631249d450e72b73e8bbc96f680747d114f109c8f",
+  "numeric_component": {
+    "accepted": true,
+    "shared_kernel": "hmatrix_resident.cuh; B^T G B",
+    "checks": [
+      "dense and rank-one leaves",
+      "nonidentity permutation and physical scaling",
+      "100 retained applications with fixed owned device bytes",
+      "wrong backend and dtype rejected",
+      "dimension rejection preserves object",
+      "close, double close and use after close"
+    ],
+    "matlab_engine_imported": false,
+    "direct_dependencies": "Python, CUDA runtime and MSVC runtime only; no MEX or MATLAB Engine DLL"
+  },
+  "physical_application": {
+    "relative_limit": 1e-11,
+    "tet_order1_max_relative_error": 9.759183139933654e-16,
+    "tet_order2_max_relative_error": 1.2521509729785967e-14,
+    "hex_order1_max_relative_error": 3.897648231982153e-14,
+    "hex_order2_accepted": false,
+    "hex_order2_normalized_fixture_relative_error": 2.7021078745416002e-11
+  },
+  "failed_fixture_diagnostic": {
+    "charges": 81,
+    "dofs": 108,
+    "cpu_dense_fixture_vs_configured_cpu": 1.0477878596306341e-10,
+    "gpu_vs_configured_cpu": 2.7021078745416002e-11,
+    "gpu_vs_cpu_dense_fixture": 7.877297423385081e-11,
+    "charge_map_max_abs": 3456.0000010278786,
+    "forward_roundoff_amplification_estimate": 3332578.001170364,
+    "conclusion": "Dense re-materialization is itself outside the independent CPU gate; this fixture does not certify the higher-order hex application. Preserve normalized HACApK factors and reduction structure before further acceptance.",
+    "threshold_relaxed": false
+  },
+  "limitations": [
+    "Private numeric component, not complete Python HDiv-MMM solver",
+    "CPU-densified matrices are tiny validation fixtures only, not product assembly or a fallback",
+    "No mixed MMM, nonlinear Python GPU, common100 context memory, wheel or release acceptance"
+  ]
+}

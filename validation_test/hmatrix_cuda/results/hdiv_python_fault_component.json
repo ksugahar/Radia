@@ -1,0 +1,309 @@
+{
+  "schema": "radia.hdiv-python-fault-component.v1",
+  "accepted": true,
+  "scope": "Declared owned adapter buffers, GPU resources and explicit Python publication probes; not CPython/NumPy allocator internals or every std function/object allocation",
+  "native_source": "0120fbc0b76661c9b3229498bf84c9cb17dd6900",
+  "python_sha256": "0373ec83592df75761402e0a83802a4fce59b96e62950d22051491dcbde2f6b2",
+  "mex_sha256": "6b4d1daca76147070c95f905d7fed6b32f647ab3ab023162265c17d12bc58a4e",
+  "fault_injection": true,
+  "release_acceptance": false,
+  "device_allocation_fault_accepted": false,
+  "device_coverage_disposition": "Standalone device diagnostic define missing; fresh candidate required. No device attempts were counted in this artifact.",
+  "events": 595,
+  "seconds": 1.9219999999913853,
+  "maximum_coefficient_error": 7.417989609027186e-17,
+  "maximum_original_residual": 1.3115280561459954e-16,
+  "matlab_engine_required": false,
+  "cases": [
+    {
+      "scope": "resident_create",
+      "kind": "host",
+      "first_site": 1,
+      "last_site": 35,
+      "sites": 35,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "resident_create",
+      "kind": "resource",
+      "first_site": 1,
+      "last_site": 2,
+      "sites": 2,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "resident_create",
+      "kind": "publication",
+      "first_site": 1,
+      "last_site": 1,
+      "sites": 1,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "material_create",
+      "kind": "host",
+      "first_site": 1,
+      "last_site": 17,
+      "sites": 17,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "material_create",
+      "kind": "publication",
+      "first_site": 1,
+      "last_site": 1,
+      "sites": 1,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "scalar",
+      "kind": "host",
+      "first_site": 1,
+      "last_site": 8,
+      "sites": 8,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "scalar",
+      "kind": "publication",
+      "first_site": 1,
+      "last_site": 4,
+      "sites": 4,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "apply",
+      "kind": "host",
+      "first_site": 36,
+      "last_site": 38,
+      "sites": 3,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "apply",
+      "kind": "publication",
+      "first_site": 2,
+      "last_site": 2,
+      "sites": 1,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "evaluate",
+      "kind": "host",
+      "first_site": 18,
+      "last_site": 21,
+      "sites": 4,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "evaluate",
+      "kind": "publication",
+      "first_site": 2,
+      "last_site": 4,
+      "sites": 3,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "linearize",
+      "kind": "host",
+      "first_site": 18,
+      "last_site": 19,
+      "sites": 2,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "linearize",
+      "kind": "publication",
+      "first_site": 2,
+      "last_site": 3,
+      "sites": 2,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "tangent",
+      "kind": "host",
+      "first_site": 20,
+      "last_site": 21,
+      "sites": 2,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "tangent",
+      "kind": "publication",
+      "first_site": 4,
+      "last_site": 4,
+      "sites": 1,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-diagonal",
+      "kind": "host",
+      "first_site": 53,
+      "last_site": 126,
+      "sites": 74,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-diagonal",
+      "kind": "resource",
+      "first_site": 3,
+      "last_site": 10,
+      "sites": 8,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-diagonal",
+      "kind": "publication",
+      "first_site": 3,
+      "last_site": 9,
+      "sites": 7,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-graph",
+      "kind": "host",
+      "first_site": 53,
+      "last_site": 126,
+      "sites": 74,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-graph",
+      "kind": "resource",
+      "first_site": 3,
+      "last_site": 26,
+      "sites": 24,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "newton-graph",
+      "kind": "publication",
+      "first_site": 3,
+      "last_site": 9,
+      "sites": 7,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        0,
+        0
+      ]
+    }
+  ],
+  "mex_algebra_cases": [
+    {
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 7.417989609027187e-17,
+      "independent_original_residual": 0,
+      "newton_iterations": 4,
+      "graph_launches": 0
+    },
+    {
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 7.417989609027187e-17,
+      "independent_original_residual": 0,
+      "newton_iterations": 4,
+      "graph_launches": 12
+    }
+  ],
+  "opaque_runtime_retention_zero": false
+}

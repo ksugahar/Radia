@@ -1,0 +1,15 @@
+{
+  "native_source": "e2ccc299a9e5615347daceeced8d11af9dc32e24",
+  "test_source": "f4178a58d",
+  "binary_sha256": "beadf1df7d8dca5945776b27e6a258d6858c97c37d01b47c0c842bc3c01a4985",
+  "test_sha256": "00746f31ca2f3f3d6d7a6de6346ac26c39c1c4f4fa239bb59b97f1607de451b0",
+  "constructor_threads": 2,
+  "ngsolve_threads": 1,
+  "cpu_cap": 2,
+  "accepted": true,
+  "test_count": 2,
+  "test_seconds": 1.21,
+  "bounded_job_seconds": 1.937999999994645,
+  "rounds": 4,
+  "scope": "Two synchronized native constructor workers, cold different weight keys, serial reference checks and live-instance canaries; not concurrency performance or sanitizer proof"
+}

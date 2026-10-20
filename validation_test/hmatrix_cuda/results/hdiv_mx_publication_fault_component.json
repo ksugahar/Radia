@@ -1,0 +1,52 @@
+{
+  "schema": "radia.hdiv-mx-publication-fault-component.v1",
+  "accepted": true,
+  "native_source": "a47102fcd3ccd83d460fa7d5cb186d024a594052",
+  "mex_sha256": "a3f4d5151f1d49040023c5cc344c3d469ec6c3a6d092573808f0e2d363accc33",
+  "fault_injection": true,
+  "release_acceptance": false,
+  "events": 95,
+  "seconds": 0.6634777,
+  "fault_preconditioner": "reference-diagonal",
+  "checked_commands": [
+    "linearize_bh_material",
+    "evaluate_bh_material_context",
+    "solve_nonlinear_material"
+  ],
+  "coefficient_gate": 1e-10,
+  "independent_original_residual_gate": 1e-11,
+  "cases": [
+    {
+      "family": 1,
+      "allocation_sites": 7,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        593920,
+        0
+      ]
+    },
+    {
+      "family": 2,
+      "allocation_sites": 7,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        524288,
+        0
+      ]
+    },
+    {
+      "family": 3,
+      "allocation_sites": 36,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        528384,
+        0
+      ]
+    }
+  ],
+  "scope": "Checked MATLAB output/text allocation failures in BH linearize/evaluate and Newton command; not MATLAB allocator internals or Python publication",
+  "opaque_runtime_retention_zero": false
+}

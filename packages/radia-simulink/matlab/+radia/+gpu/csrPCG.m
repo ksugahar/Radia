@@ -7,5 +7,5 @@ if isempty(configured)
     radia.gpu.requireRuntime();
     configured = true;
 end
-[solution, info] = radia_cuda_csr_pcg(rowPointers, columns, values, rhs, inverseDiagonal, tolerance, maxIterations);
+[solution, info] = radia_cuda_csr_pcg(rowPointers, columns, values, rhs, inverseDiagonal, tolerance, maxIterations, 'gpu');
 end

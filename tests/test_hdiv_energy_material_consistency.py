@@ -10,10 +10,19 @@ ng = pytest.importorskip("ngsolve")
 from ngsolve.meshes import MakeStructured3DMesh
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location(
-    "energy_material_under_test", ROOT / "src/radia/vim/_nonlinear.py")
-material_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(material_module)
+# Load the real pure-Python law directly, avoiding radia.__init__ and its
+# native extension in a clean, unbuilt checkout. No constitutive math is mocked.
+law_spec = importlib.util.spec_from_file_location("energy_bh_law", ROOT / "src/radia/bh_law.py")
+law_module = importlib.util.module_from_spec(law_spec)
+law_spec.loader.exec_module(law_module)
+source = ROOT / "src/radia/vim/_nonlinear.py"
+tree = ast.parse(source.read_text(encoding="utf-8"))
+tree.body = [node for node in tree.body if not (
+    isinstance(node, ast.ImportFrom) and node.module == "radia.bh_law")]
+from types import ModuleType
+material_module = ModuleType("energy_material_under_test")
+material_module.monotone_bh_pchip = law_module.monotone_bh_pchip
+exec(compile(tree, str(source), "exec"), material_module.__dict__)
 
 
 def _table():
@@ -45,11 +54,11 @@ def test_discrete_material_energy_gradient_and_hessian(kind, order, curved):
     kwargs = {"hexes": kind == "hex", "prism": kind == "wedge"}
     mesh = MakeStructured3DMesh(nx=1, ny=1, nz=1, **kwargs)
     if curved:
-        deformation = ng.GridFunction(ng.VectorH1(mesh, order=2))
+        deformation = ng.GridFunction(ng.VectorH1(mesh, order=2), novisual=True)
         deformation.Set(ng.CF((.05*ng.x*ng.z, .04*ng.x*ng.y, .03*ng.y*ng.z)))
         mesh.SetDeformation(deformation)
     fes = ng.HDiv(mesh, order=order)
-    field, direction = ng.GridFunction(fes), ng.GridFunction(fes)
+    field, direction = ng.GridFunction(fes, novisual=True), ng.GridFunction(fes, novisual=True)
     with ng.TaskManager():
         field.Set(ng.CF((2e5+1e5*ng.x, 1e5*ng.y, 1e5*ng.z)))
         direction.Set(ng.CF((1e5*ng.y, 1e5*ng.x, 1e5*(1+ng.z))))
@@ -99,7 +108,7 @@ def test_distinct_materials_and_zero_field_tangent(monkeypatch):
             tensor = law.tensor_samples.vec.FV().NumPy().reshape(9, law.npoints).T
             np.testing.assert_allclose(tensor[law.regions == i],
                                        np.tile((slope*np.eye(3)).ravel(), ((law.regions == i).sum(), 1)))
-        g = ng.GridFunction(fes)
+        g = ng.GridFunction(fes, novisual=True)
         g.Set(ng.CF((2e5, 1e5*ng.x, 0.)))
         m = g.vec.FV().NumPy().copy()
         law.update(m)
@@ -118,7 +127,12 @@ def _line_search(energy):
                  and n.name == "_solve_nonlinear_energy_cpp")
     inner = next(n for n in outer.body if isinstance(n, ast.FunctionDef)
                  and n.name == "_line_search")
-    namespace = {"np": np, "_energy": energy}
+    from types import SimpleNamespace
+    # Keep a non-root residual so these tests isolate Armijo. Root-certificate
+    # acceptance is covered separately by the Newton residual regression.
+    namespace = dict(np=np, _energy=energy, material=SimpleNamespace(field=None),
+                     _bH=lambda field: np.ones(2), _N_apply=lambda trial: np.zeros(2),
+                     nl_tol=1e-8, residual_scale=1., stats={})
     exec(compile(ast.Module(body=[inner], type_ignores=[]), str(source), "exec"), namespace)
     return namespace["_line_search"]
 
@@ -126,7 +140,7 @@ def _line_search(energy):
 @pytest.mark.parametrize("value", [2., float("nan"), float("inf")])
 def test_armijo_exhaustion_never_returns_a_step(value):
     search = _line_search(lambda m, rhs: value)
-    step, energy, count = search(np.ones(2), -np.ones(2), None, 1., 1.)
+    step, energy, count = search(np.ones(2), -np.ones(2), np.zeros(2), 1., 1.)
     assert step is None and energy is None and count == 34
 
 
@@ -138,7 +152,7 @@ def test_armijo_requires_a_finite_descent_direction(decrement):
 
 def test_armijo_accepts_an_evaluated_step():
     search = _line_search(lambda m, rhs: float(m@m)/2)
-    assert search(np.ones(2), -np.ones(2), None, 1., 2.) == (1., 0., 0)
+    assert search(np.ones(2), -np.ones(2), np.zeros(2), 1., 2.) == (1., 0., 0)
 
 
 def _outer_solver(mass, *, reject_steps=False):
@@ -170,7 +184,9 @@ def _outer_solver(mass, *, reject_steps=False):
                      _capture_cpp_solve_timings=lambda result: None,
                      _capture_nonlinear_solve_stats=lambda stats: captured.append(dict(stats)),
                      _f64=lambda v: np.asarray(v, dtype=float))
-    exec(compile(ast.Module(body=[outer], type_ignores=[]), str(source), "exec"), namespace)
+    checked_budget = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                          and n.name == "_checked_compensated_memory_mb")
+    exec(compile(ast.Module(body=[checked_budget, outer], type_ignores=[]), str(source), "exec"), namespace)
     return namespace[outer.name], Demag(), captured, calls
 
 
@@ -187,7 +203,7 @@ def test_production_newton_requires_a_residual_root(mode):
         rows, cols, values = a.mat.COO()
         mass = sparse.coo_matrix((values, (rows, cols)), shape=(fes.ndof, fes.ndof)).toarray()
         solve, demag, captured, calls = _outer_solver(mass, reject_steps=mode == "reject")
-        source = ng.GridFunction(fes)
+        source = ng.GridFunction(fes, novisual=True)
         source.Set(ng.CF((0., 0., 0.)) if mode == "zero"
                    else ng.CF((1000.+100.*ng.x, 0., 100.*ng.z)))
         h = source.vec.FV().NumPy().copy()

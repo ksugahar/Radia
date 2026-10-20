@@ -1,0 +1,17 @@
+{
+  "source_commit": "e2ccc299a9e5615347daceeced8d11af9dc32e24",
+  "binary_sha256": "beadf1df7d8dca5945776b27e6a258d6858c97c37d01b47c0c842bc3c01a4985",
+  "test_sha256": "f94f8ef9c0927fd9dcf87dc6d05dd671ec495139388e7e11d74b8021b3071b8f",
+  "accepted": true,
+  "scope": "Fresh CPU build and four snapshot/PCG/rule-key lifetime units after review guard/readability changes; not new physical/common100 or release acceptance",
+  "build_seconds": 140.21899999999732,
+  "unit_tests_passed": 4,
+  "prior_physical_native_source": "6af6c786763ab34f1c6fdfc8a1e36861d2e1e840",
+  "review_conditions": {
+    "cold_build_serialization_documented": true,
+    "null_table_dereference_guarded": true,
+    "value_key_nan_signed_zero_documented": true,
+    "local_aliases_renamed": true,
+    "concurrent_constructor_test": false
+  }
+}

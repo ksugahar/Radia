@@ -17,8 +17,38 @@ def verify_installed_identity(installed: dict, wheel: dict) -> None:
         raise ValueError('Installed distribution differs from release wheel')
 
 
+def verify_python_binding(path, names, archive, manifest):
+    """Check the optional native adapter ABI; this is not runtime qualification."""
+    python_binaries=[n for n in names if n.startswith('radia_simulink/') and n.endswith('.pyd')]
+    tag=re.search(r'-(cp\d+)-(cp\d+)-win_amd64\.whl$',path.name)
+    seen=set()
+    for binary in python_binaries:
+        filename=PurePosixPath(binary).name
+        native_tag=re.fullmatch(r'_(csr|hdiv)_cuda\.(cp\d+)-win_amd64\.pyd',filename)
+        if not tag or not native_tag or tag[1]!=tag[2] or tag[1]!=native_tag[2] or native_tag[1] in seen:
+            raise ValueError('Python CUDA binding wheel ABI mismatch')
+        component=native_tag[1];seen.add(component)
+        receipt_name='python-build.json' if component=='csr' else 'hdiv-python-build.json'
+        if 'radia_simulink/'+receipt_name not in names:raise ValueError('Python CUDA native receipt required')
+        binding=json.loads(archive.read('radia_simulink/'+receipt_name))
+        if (binding.get('schema')!='radia.'+component+'-python-build.v1'
+                or binding.get('source_commit')!=manifest['source_commit']
+                or binding.get('matlab_engine_user_dependency') is not False
+                or binding.get('binary')!=filename
+                or binding.get('binary_sha256')!=manifest['files'].get(filename)):
+            raise ValueError('Python CUDA binding wheel ABI or hash mismatch')
+        if component=='hdiv' and (binding.get('fault_injection') is not False
+                or binding.get('device_fault_injection') is not False
+                or binding.get('runtime_import_checked') is not True
+                or binding.get('redistribution_accepted') is not True
+                or not re.fullmatch(r'[0-9a-f]{64}',binding.get('redistribution_reference_sha256',''))):
+            raise ValueError('HDiv Python runtime or redistribution evidence missing')
+    if not python_binaries and '-py3-none-' not in path.name:
+        raise ValueError('Native ABI wheel is missing its Python binding')
+
+
 def verify(path: Path) -> dict:
-    if not re.fullmatch(r"radia_simulink-[^-]+-py3-none-win_amd64\.whl",path.name):
+    if not re.fullmatch(r"radia_simulink-[^-]+-(?:py3-none|cp\d+-cp\d+)-win_amd64\.whl",path.name):
         raise ValueError("Expected a Windows x64 radia-simulink wheel")
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
@@ -28,7 +58,8 @@ def verify(path: Path) -> dict:
             parsed = PurePosixPath(name)
             if parsed.is_absolute() or ".." in parsed.parts or "\\" in name:
                 raise ValueError("Unsafe archive member")
-            if name.endswith((".dll", ".exe", ".pyd")) or "radia_mex.mexw64" in name:
+            if (name.endswith((".dll", ".exe")) or "radia_mex.mexw64" in name
+                    or (name.endswith(".pyd") and not re.fullmatch(r"radia_simulink/_(?:csr|hdiv)_cuda\.cp\d+-win_amd64\.pyd",name))):
                 raise ValueError("CPU solver or external executable in GPU wheel")
             if not (name.startswith("radia_simulink/") or re.match(r"radia_simulink-[^/]+\.dist-info/",name)):
                 raise ValueError("Foreign package in GPU wheel")
@@ -39,7 +70,7 @@ def verify(path: Path) -> dict:
         if metadata["Name"] != "radia-simulink" or metadata.get_all("Requires-Dist"):
             # Test extras are allowed but runtime solver dependencies are not.
             requirements = metadata.get_all("Requires-Dist",[])
-            if metadata["Name"] != "radia-simulink" or any(not any(f'extra == "{extra}"' in r for extra in ('test', 'exchange', 'ltspice', 'coupling')) for r in requirements):
+            if metadata["Name"] != "radia-simulink" or any(not any(f'extra == "{extra}"' in r for extra in ('test', 'exchange', 'ltspice', 'coupling', 'gpu')) for r in requirements):
                 raise ValueError("Unexpected GPU distribution identity/dependency")
         manifest_bytes = archive.read("radia_simulink/manifest.json")
         manifest = json.loads(manifest_bytes)
@@ -52,6 +83,7 @@ def verify(path: Path) -> dict:
         for relative, digest in manifest["files"].items():
             if hashlib.sha256(archive.read("radia_simulink/"+relative)).hexdigest() != digest:
                 raise ValueError(f"GPU payload hash mismatch: {relative}")
+        verify_python_binding(path,names,archive,manifest)
         binary = "matlab/radia_cuda_csr_pcg.mexw64"
         receipt = json.loads(archive.read("radia_simulink/build.json"))
         if receipt["source_dirty"] or receipt["source_commit"] != manifest["source_commit"]:
@@ -80,18 +112,13 @@ def verify(path: Path) -> dict:
         if hdiv_binaries.intersection(manifest['files']) or 'hdiv-build.json' in manifest['files']:
             required = hdiv_binaries | {'hdiv-build.json'} | {
                 'matlab/+radia/+gpu/' + name for name in
-                ('solveHDivElements.m', 'affineHDivQuadrature.m', 'curvedHDivQuadrature.m')}
+                ('solveHDivElements.m', 'affineHDivQuadrature.m', 'curvedHDivQuadrature.m',
+                 'HMatrixOperator.m', 'HDivBHMaterial.m', 'PreparedHDivNonlinear.m',
+                 'makeHDivBHMaterial.m', 'solveNonlinearHDivElements.m')}
             if not required.issubset(manifest['files']):
                 raise ValueError('Incomplete HDiv CUDA payload')
             hdiv = json.loads(archive.read('radia_simulink/hdiv-build.json'))
-            if hdiv.get('schema') != 'radia.gpu.hdiv-payload.v1':
-                raise ValueError('Invalid HDiv payload schema')
-            for name in ('hmatrix', 'projection'):
-                native = hdiv['artifacts'][name]
-                if (native['source_dirty'] or native['source_commit'] != manifest['source_commit']
-                        or native['taskmanager_started']
-                        or native['binary_sha256'] != manifest['files']['matlab/radia_cuda_' + name + '.mexw64']):
-                    raise ValueError('HDiv CUDA binary receipt mismatch')
+            verify_hdiv_receipt(manifest, hdiv)
         fmm_files = {'fmm-build.json', 'matlab/radia_cuda_fmm.mexw64', 'matlab/+radia/+gpu/LaplaceFMM.m'}
         if fmm_files & set(manifest['files']):
             if not fmm_files <= set(manifest['files']):
@@ -112,6 +139,21 @@ def verify(path: Path) -> dict:
                 wheel_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), files=len(expected),
                 manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
                 cuda_solvers=sorted(solvers))
+
+
+def verify_hdiv_receipt(manifest, receipt):
+    """Unknown diagnostic mode is not evidence of a release build."""
+    if receipt.get('schema') != 'radia.gpu.hdiv-payload.v1':
+        raise ValueError('Invalid HDiv payload schema')
+    for name in ('hmatrix', 'projection'):
+        native = receipt.get('artifacts', {}).get(name, {})
+        if (native.get('source_dirty') is not False
+                or native.get('source_commit') != manifest['source_commit']
+                or native.get('taskmanager_started') is not False
+                or native.get('fault_injection') is not False
+                or (name == 'projection' and native.get('lifecycle_diagnostic') is not False)
+                or native.get('binary_sha256') != manifest['files']['matlab/radia_cuda_' + name + '.mexw64']):
+            raise ValueError('HDiv CUDA binary receipt mismatch')
 
 
 def verify_ic_receipt(manifest, receipt):

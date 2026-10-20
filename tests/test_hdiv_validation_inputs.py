@@ -83,3 +83,19 @@ def test_process_memory_reports_owned_process_samples():
 @pytest.mark.skipif(os.name!='nt',reason='Windows process affinity')
 def test_observed_process_affinity(inputs):
     assert inputs.process_affinity(os.getpid()) > 0
+
+
+def test_memory_checkpoint_survives_failed_gate(tmp_path):
+    import importlib.util
+    import json
+    path=Path(__file__).resolve().parents[1]/'validation_test/hmatrix_cuda/hdiv_process_memory.py'
+    spec=importlib.util.spec_from_file_location('memory_checkpoint',path)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    output=tmp_path/'samples.jsonl'
+    def reject(sample):
+        assert json.loads(output.read_text()) == sample
+        raise AssertionError('memory gate failed')
+    with output.open('x') as stream:
+        with pytest.raises(AssertionError,match='memory gate failed'):
+            module.checkpoint_sample(stream,dict(iteration=99,host_bytes=12054528),reject)
+    assert json.loads(output.read_text())['iteration']==99

@@ -1,0 +1,167 @@
+{
+  "schema": "radia.hdiv-connected-hex-validation.v1",
+  "accepted_scope": "One conforming pair of affine HEX cells, orders1/2 physical BH; not mixed/pyramid or release",
+  "source_commit": "bdc51e20b8b91c15f7c918454cd6d06ca493400c",
+  "production_adapter": "27dd891c25586288dd6bc97d4bcf7778d8883e6a",
+  "mesh": {
+    "elements": 2,
+    "internal_quad_facets": 1,
+    "exterior_quad_facets": 10,
+    "sha256": "44aa95ac2ac30d0e325e327f048f73ddb7bc9b8390bb4252ff18adfe4fe59f44"
+  },
+  "dimensions": [
+    {
+      "order": 1,
+      "dofs": 68,
+      "charges": 56.0,
+      "mesh_sha256": "44aa95ac2ac30d0e325e327f048f73ddb7bc9b8390bb4252ff18adfe4fe59f44"
+    },
+    {
+      "order": 2,
+      "dofs": 207,
+      "charges": 144.0,
+      "mesh_sha256": "44aa95ac2ac30d0e325e327f048f73ddb7bc9b8390bb4252ff18adfe4fe59f44"
+    }
+  ],
+  "ng_prerequisite": {
+    "selected_tests": 2,
+    "deselected_historical_tests": 6,
+    "passed": true,
+    "gridfunction_novisual": true,
+    "scope": "Mass projection and flux balance only; not MMM certification"
+  },
+  "numerics": {
+    "accepted": true,
+    "scope": "Post-GPU independent production CPU Solve and original demag plus inverseBH residual",
+    "cases": [
+      {
+        "order": 1,
+        "route": "MATLAB-0",
+        "field_scale": 1.0,
+        "coefficient_error": 1.0600965500554243e-14,
+        "independent_original_residual": 1.1757548885166492e-15
+      },
+      {
+        "order": 1,
+        "route": "MATLAB-1",
+        "field_scale": 1.0,
+        "coefficient_error": 1.511341517006079e-14,
+        "independent_original_residual": 1.9324670431917866e-15
+      },
+      {
+        "order": 1,
+        "route": "Python-reference-diagonal",
+        "field_scale": 1.0,
+        "coefficient_error": 1.0446651441475376e-14,
+        "independent_original_residual": 1.1694149925114108e-15
+      },
+      {
+        "order": 1,
+        "route": "Python-reference-chebyshev-graph",
+        "field_scale": 1.0,
+        "coefficient_error": 1.2011992759672437e-14,
+        "independent_original_residual": 1.374074305817079e-15
+      },
+      {
+        "order": 2,
+        "route": "MATLAB-0",
+        "field_scale": 1.0,
+        "coefficient_error": 2.370863409234102e-12,
+        "independent_original_residual": 3.562863819932991e-14
+      },
+      {
+        "order": 2,
+        "route": "MATLAB-1",
+        "field_scale": 1.0,
+        "coefficient_error": 2.2893235429403445e-12,
+        "independent_original_residual": 4.0832985007568957e-14
+      },
+      {
+        "order": 2,
+        "route": "Python-reference-diagonal",
+        "field_scale": 1.0,
+        "coefficient_error": 2.5089658725919702e-12,
+        "independent_original_residual": 4.242144641226478e-14
+      },
+      {
+        "order": 2,
+        "route": "Python-reference-chebyshev-graph",
+        "field_scale": 1.0,
+        "coefficient_error": 3.513563368760289e-12,
+        "independent_original_residual": 5.108642984579093e-14
+      },
+      {
+        "order": 2,
+        "route": "MCP-0",
+        "field_scale": 1.0,
+        "coefficient_error": 2.5089658725919702e-12,
+        "independent_original_residual": 4.242144641226478e-14
+      },
+      {
+        "order": 2,
+        "route": "MCP-1",
+        "field_scale": 0.9,
+        "coefficient_error": 5.900575523707154e-13,
+        "independent_original_residual": 1.688785678329812e-14
+      }
+    ],
+    "cpu_targets": [
+      {
+        "order": 1,
+        "iterations": 3,
+        "original_residual": 1.9067054280262842e-16
+      },
+      {
+        "order": 2,
+        "iterations": 3,
+        "original_residual": 2.2981844872006824e-16
+      }
+    ],
+    "elapsed_seconds": 4.125
+  },
+  "mcp": {
+    "handler_batch_fields": 2,
+    "closed": true,
+    "live_client_tested": false
+  },
+  "artifacts": {
+    "cpu_source": "6af6c7867",
+    "cpu_sha256": "b5ad680c47e64b2c0850535cf651404aee99c2640164d3242906eec06bde6736",
+    "python_gpu_source": "7995b719c",
+    "python_gpu_sha256": "4aac3c5e6db47d8f06546f8841575a57c045d5478d1ab36b32d761bbd744ed94",
+    "mex_source": "c55cd5798",
+    "mex_sha256": "41a7c59165f71a94afa112a4b5554f8977dc022184234aa4867e55245f78e388"
+  },
+  "execution": {
+    "prepare": {
+      "elapsed_seconds": 10.39100000000326,
+      "accepted": true,
+      "cpu_count": 2,
+      "wall_limit_seconds": 240,
+      "memory_limit_bytes": 8589934592
+    },
+    "matlab": {
+      "elapsed_seconds": 15.327999999994063,
+      "accepted": true,
+      "cpu_count": 2,
+      "wall_limit_seconds": 240,
+      "memory_limit_bytes": 8589934592
+    },
+    "certify": {
+      "elapsed_seconds": 5.562000000005355,
+      "accepted": true,
+      "cpu_count": 2,
+      "wall_limit_seconds": 240,
+      "memory_limit_bytes": 8589934592
+    }
+  },
+  "limits": [
+    "CPU Solve references computed after GPU execution, not a GPU preparation prerequisite",
+    "No full common100 memory protocol on this connected pair; prior one-HEX memory receipt keeps its identity",
+    "Tracked diagnostic report zero without fault-probe enumeration is not all-allocation proof",
+    "No live MCP client, mixed/pyramid charge, general geometry, speedup or same-final-SHA release acceptance"
+  ],
+  "coefficient_gate": 1e-10,
+  "independent_original_residual_gate": 1e-11,
+  "requested_solver_tolerances": 5e-14
+}
