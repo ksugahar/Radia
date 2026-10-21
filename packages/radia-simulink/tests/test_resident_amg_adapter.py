@@ -60,7 +60,7 @@ def test_owner_reuse_errors_and_idempotent_close(adapter, monkeypatch):
 @pytest.mark.parametrize('mutation', [
     'none', 'source', 'binary', 'dirty', 'fault-missing', 'fault-true',
     'device-fault', 'diagnostic', 'engine', 'runtime', 'redistribution', 'proof',
-    'receipt-missing', 'binary-missing',
+    'receipt-missing', 'binary-missing', 'dll-search', 'dll-loaded',
 ])
 def test_receipt_admission_precedes_cuda_loading(adapter, monkeypatch, tmp_path, mutation):
     package = ModuleType('resident_receipt_contract')
@@ -78,9 +78,12 @@ def test_receipt_admission_precedes_cuda_loading(adapter, monkeypatch, tmp_path,
                    fault_injection=False, device_fault_injection=False,
                    lifecycle_diagnostic=False, matlab_engine_user_dependency=False,
                    runtime_import_checked=True, redistribution_accepted=True,
+                   matlab_dll_search_excluded=True, matlab_dlls_loaded=False,
                    runtime_validation_sha256='2' * 64, loaded_runtime_sha256='3' * 64,
                    redistribution_reference_sha256='4' * 64)
     changes = {
+        'dll-search': ('matlab_dll_search_excluded', False),
+        'dll-loaded': ('matlab_dlls_loaded', True),
         'source': ('source_commit', '5' * 40), 'binary': ('binary_sha256', '0' * 64),
         'dirty': ('source_dirty', True), 'fault-true': ('fault_injection', True),
         'device-fault': ('device_fault_injection', True),

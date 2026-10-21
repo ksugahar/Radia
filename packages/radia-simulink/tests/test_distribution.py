@@ -263,3 +263,25 @@ def test_resident_wheel_rejects_unpaired_payload(tmp_path, binary, receipt):
         with pytest.raises(ValueError, match='Resident AMG'):
             module.verify_python_binding(wheel, archive.namelist(), archive,
                                          dict(source_commit='a'*40, files={}))
+
+
+@pytest.mark.parametrize('companion', ['pure', 'csr'])
+def test_resident_orphan_receipt_cannot_hide_in_other_wheel(tmp_path, companion):
+    import zipfile
+    spec = importlib.util.spec_from_file_location('resident_orphan_contract', ROOT/'verify_wheel.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    tag = 'py3-none' if companion == 'pure' else 'cp312-cp312'
+    wheel = tmp_path/f'radia_simulink-0.1.5rc1-{tag}-win_amd64.whl'
+    name = '_csr_cuda.cp312-win_amd64.pyd'
+    manifest = dict(source_commit='a'*40, files={name: 'b'*64})
+    with zipfile.ZipFile(wheel, 'w') as archive:
+        archive.writestr('radia_simulink/resident-amg-build.json', '{}')
+        if companion == 'csr':
+            archive.writestr('radia_simulink/'+name, b'synthetic CSR packaging fixture')
+            archive.writestr('radia_simulink/python-build.json', json.dumps(dict(
+                schema='radia.csr-python-build.v1', source_commit='a'*40,
+                binary=name, binary_sha256='b'*64, matlab_engine_user_dependency=False)))
+    with zipfile.ZipFile(wheel) as archive:
+        with pytest.raises(ValueError, match='Resident AMG receipt requires'):
+            module.verify_python_binding(wheel, archive.namelist(), archive, manifest)
