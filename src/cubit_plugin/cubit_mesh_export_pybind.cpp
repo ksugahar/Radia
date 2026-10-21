@@ -186,11 +186,9 @@ PYBIND11_MODULE(cubit_mesh_curver, m)
 
             // --- split_quads: split quad surface elements into triangles ---
             if (split_quads) {
-                int nse = ng_mesh->GetNSE();
                 std::vector<ng::Element2d> new_tris;
 
-                for (int sei = 1; sei <= nse; sei++) {
-                    auto & el = ng_mesh->SurfaceElement(sei);
+                for (auto & el : ng_mesh->SurfaceElements()) {
                     if (el.GetType() == ng::QUAD || el.GetType() == ng::QUAD6
                         || el.GetType() == ng::QUAD8) {
                         ng::Element2d tri1(ng::TRIG);
