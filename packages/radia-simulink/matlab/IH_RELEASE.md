@@ -6,6 +6,30 @@ to that state. Publication requires the native and Simulink acceptance gates.
 
 ## Validated scope and review limitations
 
+The four-property implementation candidate adds a separate explicit
+`thermal_material_mode='quadrature-enthalpy-v1'` standalone IH CUDA route.
+It contracts caller/NGSolve-owned basis and gradient samples with cp(T),
+kappa(T), enthalpy and emissivity(T), and accepts and validates the input shape of temperature-dependent
+nonlinear BH coefficient tables. `require_four_property_coupling=1` rejects
+missing nonlinear BH/rho, dynamic thermal or independent port-power inputs.
+There is no fixed-property substitution in that requested mode.
+
+This candidate has not yet passed native compilation, GPU, independent FEM or
+production SLX acceptance. The existing geometry assembler and legacy Thermal
+S-Function still describe the fixed-property preview below. A supplied
+`native_config()` quadrature fragment is not a complete physical model or a
+validated Simulink adapter. No four-property release claim is made here.
+
+Port voltage must come from an independent reaction/port projection, not from
+the heat loss under test. Both EM port/heat balance and nonlinear thermal
+enthalpy/boundary balance gate state acceptance at relative error <=1e-6,
+with normalization floor no larger than 1e-12 W. Heat projection applies its
+volume or surface measure exactly once. Backward-Euler heat uses candidate
+temperature; EM material evaluation uses the previous accepted temperature,
+so the partitioned method requires a time-step study. The thermal energy gate
+is a projection of the assembled residual and is a consistency guard, not
+independent physical evidence.
+
 The current input port is a peak-current amplitude in amperes, not an RMS
 current. Convert an RMS amplitude to peak by multiplying by sqrt(2).
 

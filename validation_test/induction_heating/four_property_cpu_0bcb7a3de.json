@@ -1,0 +1,104 @@
+{
+  "schema": "radia.ih.four-property-cpu-validation.v1",
+  "accepted": true,
+  "source_sha": "0bcb7a3de5a0085bde95e019a059f9312b006581",
+  "source_sha256": "21c2121d87ccab6f822c135eca813996e02f16b30425aa17d621a4b03faf42ea",
+  "scope": "independent CPU thermal and energy references; no native/GPU/FEM claim",
+  "limits": {
+    "energy_relative": 1e-06,
+    "linear_true_residual": 1e-06,
+    "power_floor_W": 1e-12
+  },
+  "gpu_executed": false,
+  "engine_started": false,
+  "native_compiled": false,
+  "release_accepted": false,
+  "checks": {
+    "variable_cp_analytic_energy": {
+      "status": "PASS",
+      "defect_W": -1.4551915228366852e-11
+    },
+    "variable_kappa_and_enthalpy_quadrature": {
+      "status": "PASS",
+      "jacobian_relative_error": 1.6650211862364337e-11,
+      "energy": {
+        "input_power_W": 16100.0,
+        "storage_power_W": 16099.99999999999,
+        "boundary_loss_W": 0.0,
+        "defect_W": 9.094947017729282e-12,
+        "relative_defect": 5.649035414738685e-16,
+        "limit": 1e-06,
+        "power_floor_W": 1e-12,
+        "residual_scale_W": 11448.2031583806
+      }
+    },
+    "radiation_and_time_step_order": {
+      "status": "PASS",
+      "rk4_reference_K": 329.36225593979503,
+      "rows": [
+        {
+          "dt_s": 1.0,
+          "temperature_K": 329.231888419977,
+          "error_K": 0.13036751981803718,
+          "max_independent_energy_defect": 1.0530243343964685e-14
+        },
+        {
+          "dt_s": 0.5,
+          "temperature_K": 329.2968606890325,
+          "error_K": 0.06539525076254904,
+          "max_independent_energy_defect": 2.088995643134651e-14
+        },
+        {
+          "dt_s": 0.25,
+          "temperature_K": 329.32950514091993,
+          "error_K": 0.03275079887509946,
+          "max_independent_energy_defect": 5.290701210469426e-14
+        }
+      ],
+      "error_ratios": [
+        1.993531920099263,
+        1.9967528429442147
+      ]
+    },
+    "independent_port_sign_and_peak_factor": {
+      "status": "PASS",
+      "accepted": {
+        "input_power_W": 8.0,
+        "coil_loss_W": 1.0,
+        "heat_power_W": 7.0,
+        "defect_W": 0.0,
+        "relative_defect": 0.0,
+        "limit": 1e-06
+      },
+      "wrong_sign_rejected": true
+    },
+    "invalid_inputs_rejected": {
+      "status": "PASS"
+    },
+    "zero_and_small_load_cooling": {
+      "status": "PASS",
+      "rows": [
+        {
+          "load_W": 0.0,
+          "temperature_K": 399.5400446564008,
+          "independent_energy_relative_defect": 6.18278711685189e-15,
+          "true_residual": 5.1935411781553494e-14
+        },
+        {
+          "load_W": 0.001,
+          "temperature_K": 399.54004590175293,
+          "independent_energy_relative_defect": 1.1051746851258592e-14,
+          "true_residual": 1.75306744158642e-14
+        }
+      ]
+    },
+    "newton_iteration_failure_preserves_accepted_state": {
+      "status": "PASS",
+      "max_iterations": 1,
+      "accepted_temperature_K": [
+        400.0
+      ]
+    }
+  },
+  "elapsed_seconds": 0.2517064000130631
+}
