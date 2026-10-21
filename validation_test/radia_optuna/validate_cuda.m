@@ -1,9 +1,10 @@
-function receipt = validate_cuda(checkout, binaryDirectory, outputJson)
+function receipt = validate_cuda(checkout, binaryDirectory, outputJson, densitySamples)
 %VALIDATE_CUDA Reproduce focused upstream parity and transfer-inclusive diagnostics.
 arguments
     checkout (1,1) string
     binaryDirectory (1,1) string
     outputJson (1,1) string
+    densitySamples (1,1) double {mustBeInteger,mustBePositive} = 16384
 end
 binaryDirectory=string(java.io.File(binaryDirectory).getCanonicalPath());
 addpath(fullfile(checkout,'packages','radia-optuna','matlab'));
@@ -30,7 +31,7 @@ gpuResults=run([selected(:);extra(:)]);
 results=[cpuResults(:);historyResults(:);gpuResults(:)];
 device=gpuDevice;
 % Diagnostic timings on 100 are not formal performance acceptance.
-samples=linspace(-2,3,16384)';
+samples=linspace(-2,3,densitySamples)';
 weights=ones(64,1)/64; mu=linspace(-1,2,64)'; sigma=ones(64,1);
 call=@()optuna_mex('optuna.parzen.log_pdf_numerical',samples,weights,mu,sigma,-2,3,false,NaN);
 t=tic; values=call(); first=toc(t);

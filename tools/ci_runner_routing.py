@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import yaml
 
-CAPABILITIES = {'ci-light', 'ci-native', 'ci-matlab-gpu'}
+CAPABILITIES = {'ci-light', 'ci-native', 'gpu-rtx', 'gpu-a100'}
 FORBIDDEN = re.compile(r'(?i)(?:matlab(?:engine)?|mexcuda|nvcc|simulink|cuda|cmake|msbuild|cl\.exe|build\.ps1)')
 OWNERS = {'radia', 'radia-simulink', 'radia-mcp', 'radia-optuna', 'cubit-mesh-export', 'eqnedit64', 'shared'}
 DENIED_IMPORTS = {'matlab', 'cupy', 'torch', 'ngsolve', 'netgen', 'cubit', '_radia_pybind'}
@@ -113,7 +113,7 @@ def validate(root, manifest=None, mode=None):
             if labels != ['self-hosted', 'Windows', 'X64', '100']: raise ValueError(f'legacy exception mismatch: {key}')
             continue
         expected = {'self-hosted', 'Windows', 'X64', rule['target']}
-        if mode == 'final': expected.add('100')
+        if rule['target'] == 'gpu-rtx' or (mode == 'final' and rule['target'] != 'gpu-a100'): expected.add('100')
         if len(caps) != 1 or set(labels) != expected or len(labels) != len(expected):
             raise ValueError(f'capability mismatch: {key}')
         if rule['target'] == 'ci-light':

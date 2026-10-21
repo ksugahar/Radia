@@ -252,3 +252,21 @@ and the full numerical audit schedule.
 After merging current main (CI throughput routing) into the NGSolve 6.2.2608
 migration, the shared precheck passed on the merged tree. The 54-file closure
 digest is now `12f26b1613e69e623b4314a92af07c7d2ad10e14a91a8c8b2f2bf9148f7e8c71`.
+
+## GPU capability routing (2026-10-21)
+
+Re-audited the 54-file light execution closure after adding `gpu-rtx` and
+`gpu-a100` routing and the compute-only distribution ownership declarations.
+The routing mutations check missing GPU capabilities and reject PR-triggered
+A100 validation or compiler commands. No MATLAB, CUDA, native solver or network
+execution enters light contracts; workflow commands are inspected as strings.
+The artifact helper is standard-library code tested separately using local
+wheel fixtures and an injected empty Actions response. Light requirements and
+execution steps remain unchanged. The reviewed closure digest is
+`2b4544a4d0a685032d07845b89e869e378c84944ad8b1bcf7d63fcd7c755fef2`.
+
+Re-audited after the GPU nightly amendment and rebase: the routing contracts
+inspect selected-SHA workflow strings, separate dispatch concurrency and
+failure-only reporting without adding executable GPU or network dependencies.
+The closure remains source-only; the current digest is
+`7c7b29639ad0c648e648be3dec79ef43a02445054a65f3fcdbe305da3311edfa`.
