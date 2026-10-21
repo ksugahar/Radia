@@ -23,12 +23,6 @@ def test_ih_resident_start_requires_explicit_magnetic_mode_without_rewriting_it(
     assert "cfg.('bh_mode')=" not in source
 
 
-
-
-
-
-
-
 import importlib.util as _scratch_import
 _scratch_spec = _scratch_import.spec_from_file_location(
     "repository_contract_scratch", Path(__file__).resolve().parents[1] / "tools/repository_contract_scratch.py")
@@ -429,3 +423,9 @@ def test_ih_direct_create_checks_linear_mode_before_gpu_initialization():
     guard = dispatch.index('text(field(in[1],"bh_mode"))!="linear"')
     assert dispatch.index('if(command=="create")') < guard < dispatch.index("mxInitGPU();")
     assert guard < dispatch.index("std::make_unique<Context>")
+    bh_fields = dispatch.index('mxGetField(in[1],0,"bh_knots")||mxGetField(in[1],0,"bh_coefficients")')
+    assert guard < bh_fields < dispatch.index("mxInitGPU();")
+    assert bh_fields < dispatch.index("std::make_unique<Context>")
+    context = source[source.index("struct ElementMaterial {"):source.index("struct QuadratureThermal {")]
+    assert 'mxGetField(cfg,0,"bh_knots")' not in context
+    assert 'mxGetField(cfg,0,"bh_coefficients")' not in context

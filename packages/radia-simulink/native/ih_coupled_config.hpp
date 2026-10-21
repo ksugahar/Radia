@@ -54,7 +54,6 @@ struct MagneticMaterialConfig {
     OwnedDense resistivity_ohm_m; // [element,T]
     // Linear route: [element,T], exp(+iwt), passive imag(mu)<=0.
     std::vector<std::complex<double>> linear_permeability_H_per_m;
-
 };
 struct HarmonicOperator {
     std::uint32_t harmonic_index{};
@@ -259,8 +258,6 @@ inline ConfigValidation validate_config(const CoupledConfig& cfg) {
         csr(op.base_operator,ne,ne,bytes);csr(op.boundary_E_to_rhs,ne,nb,bytes);csr(op.state_to_boundary_H,nb,ne,bytes);
         vector(op.coil_rhs_per_A,ne,bytes);vector(op.coil_boundary_H_per_A,nb,bytes);vector(op.port_voltage_projection,ne,bytes);
         if(!finite(op.coil_resistance_ohm)||op.coil_resistance_ohm<0.)bad("Invalid coil resistance");
-        if(k)for(auto value:op.coil_rhs_per_A)if(value!=std::complex<double>{})bad("Sinusoidal source has no imposed higher-harmonic current");
-        if(k)for(auto value:op.coil_boundary_H_per_A)if(value!=std::complex<double>{})bad("Sinusoidal source has no imposed higher-harmonic boundary field");
     }
     limit(em.linear_true_residual_limit,1e-6);limit(em.port_energy_relative_limit,1e-6);limit(em.power_floor_W,1e-12);
     if(!em.max_linear_iterations||em.max_linear_iterations>10000)bad("Invalid IH EM iteration budget");
