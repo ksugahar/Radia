@@ -8,6 +8,57 @@ import re
 import zipfile
 
 
+# Full LGPL 2.1 text retained from the qualified upstream dependency wheels;
+# normalize only CRLF so source checkout line-ending settings do not alter it.
+_LGPL21_SHA256 = 'a190dc9c8043755d90f8b0a75fa66b9e42d4af4c980bf5ddc633f0124db3cee7'
+_SEPARATE_GPU_DEPENDENCIES = (
+    'ngsolve', 'netgen-mesher', 'nvidia-cuda-runtime-cu12',
+    'nvidia-cublas-cu12', 'nvidia-cusolver-cu12', 'nvidia-cusparse-cu12',
+    'nvidia-nvjitlink-cu12',
+)
+
+
+def audit_dependency_distribution(archive, metadata):
+    """Check the user's dependency-only distribution conditions, not legal advice.
+
+    A success applies to this archive alone; it does not authorize other builds
+    or replace native, installed-runtime, licensing-provenance or release gates.
+    """
+    names = archive.namelist()
+    if any(name.casefold().endswith('.dll') for name in names):
+        raise ValueError('Dependency DLL bundling is forbidden')
+    prefix = 'radia_simulink/'
+    required = ('THIRD_PARTY_NOTICES.md', 'licenses/NGSOLVE-LICENSE.txt',
+                'licenses/NETGEN-LICENSE.txt')
+    if not all(prefix + name in names for name in required):
+        raise ValueError('Dependency notice and full licenses required')
+    notice = archive.read(prefix + required[0]).decode('utf-8')
+    for url in ('https://github.com/NGSolve/ngsolve', 'https://github.com/NGSolve/netgen'):
+        if url not in notice:
+            raise ValueError('Dependency upstream source links required')
+    for name in required[1:]:
+        text = archive.read(prefix + name).decode('utf-8').replace('\r\n', '\n')
+        if hashlib.sha256(text.encode('utf-8')).hexdigest() != _LGPL21_SHA256:
+            raise ValueError('Dependency full LGPL 2.1 license text mismatch')
+    requirements = metadata.get_all('Requires-Dist', [])
+    pins = {}
+    for name in _SEPARATE_GPU_DEPENDENCIES:
+        entries = [value for value in requirements
+                   if re.match(r'^' + re.escape(name) + r'\b', value, re.I)]
+        if len(entries) != 1:
+            raise ValueError('One exact separate GPU dependency pin required: ' + name)
+        match = re.fullmatch(re.escape(name) + r'\s*(?:\(\s*)?==\s*'
+                             r'([0-9][0-9A-Za-z.+-]*)\s*\)?\s*;\s*(.+)', entries[0], re.I)
+        if match is None or not re.search(r'''extra\s*==\s*["']gpu["']''', match[2]):
+            raise ValueError('Exact optional GPU dependency pin required: ' + name)
+        pins[name] = match[1]
+    if pins['ngsolve'] != pins['netgen-mesher']:
+        raise ValueError('NGSolve and Netgen dependency ABI pins differ')
+    return dict(passed=True, dependency_dlls_bundled=False,
+                full_lgpl21_texts_checked=True, upstream_sources_checked=True,
+                separate_dependency_pins=pins)
+
+
 def verify_installed_identity(installed: dict, wheel: dict) -> None:
     """Reject a different build even when its source and version are identical."""
     digest = wheel.get('manifest_sha256', '')
@@ -58,7 +109,7 @@ def verify(path: Path) -> dict:
             parsed = PurePosixPath(name)
             if parsed.is_absolute() or ".." in parsed.parts or "\\" in name:
                 raise ValueError("Unsafe archive member")
-            if (name.endswith((".dll", ".exe")) or "radia_mex.mexw64" in name
+            if (name.casefold().endswith((".dll", ".exe")) or "radia_mex.mexw64" in name
                     or (name.endswith(".pyd") and not re.fullmatch(r"radia_simulink/_(?:csr|hdiv)_cuda\.cp\d+-win_amd64\.pyd",name))):
                 raise ValueError("CPU solver or external executable in GPU wheel")
             if not (name.startswith("radia_simulink/") or re.match(r"radia_simulink-[^/]+\.dist-info/",name)):
@@ -67,6 +118,7 @@ def verify(path: Path) -> dict:
         if len(metadata_paths) != 1:
             raise ValueError("Expected one distribution metadata record")
         metadata = BytesParser().parsebytes(archive.read(metadata_paths[0]))
+        distribution_audit = audit_dependency_distribution(archive, metadata)
         if metadata["Name"] != "radia-simulink" or metadata.get_all("Requires-Dist"):
             # Test extras are allowed but runtime solver dependencies are not.
             requirements = metadata.get_all("Requires-Dist",[])
@@ -138,7 +190,7 @@ def verify(path: Path) -> dict:
     return dict(passed=True, version=metadata["Version"], source_commit=manifest["source_commit"],
                 wheel_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), files=len(expected),
                 manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
-                cuda_solvers=sorted(solvers))
+                cuda_solvers=sorted(solvers), distribution_audit=distribution_audit)
 
 
 def verify_hdiv_receipt(manifest, receipt):
