@@ -624,3 +624,8 @@ mexcuda alone does not certify speedup or every sampler's GPU acceleration.
 ## TPE estimator contract
 
 Optuna 5 unified TPESampler owns both objective modes. Use shared weighted Parzen mixtures, hypervolume-contribution below weights, explicit prior, below-mixture sampling and log l(x)-log g(x) selection. Never restore scalar-bandwidth KDE or legacy MOTPE fallback. Joint sampling follows upstream bandwidth and RNG oracles; conditional/changed distributions outside the intersection sample independently.
+
+
+Owner-authored code is licensed under Apache-2.0 from the next releases.
+See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
+retain their original licenses; previously published artifacts are unchanged.

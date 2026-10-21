@@ -1,5 +1,5 @@
 # Cubit-owned implementation; intentionally maintained independently of Radia MCP.
-# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
+# SPDX-License-Identifier: Apache-2.0
 """
 server_hardening.py — shared MCP-server hardening infrastructure.
 

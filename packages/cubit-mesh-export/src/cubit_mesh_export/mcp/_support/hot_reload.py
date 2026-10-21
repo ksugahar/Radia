@@ -1,5 +1,5 @@
 # Cubit-owned implementation; intentionally maintained independently of Radia MCP.
-# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
+# SPDX-License-Identifier: Apache-2.0
 """Reload changed product modules and re-register their tools without a restart.
 
 Development Cubit MCP servers may use editable installs. An editable install only tells

@@ -318,3 +318,8 @@ Machine-readable qualification is in
 `validation_test/radia_simulink/releases/0.1.3.json`; measured samples, input/source/
 binary hashes and memory limits are in
 `validation_test/radia_simulink/results/0.1.3-performance.json`.
+
+
+Owner-authored code is licensed under Apache-2.0 from the next releases.
+See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
+retain their original licenses; previously published artifacts are unchanged.
