@@ -467,3 +467,4 @@ memory/
 *.radia-write-lock
 
 ci-precheck-report.json
+ci-precheck-report-logs/
