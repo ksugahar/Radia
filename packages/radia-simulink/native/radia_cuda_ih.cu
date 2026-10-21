@@ -87,35 +87,6 @@ struct ElementMaterial {
   if(!mxIsDouble(inputMu)||mxIsSparse(inputMu)||mxGetM(inputMu)!=elements||mxGetN(inputMu)!=nt)throw std::invalid_argument("Permeability table shape/type mismatch");
   std::vector<cuDoubleComplex> permeability(elements*nt);for(size_t e=0;e<elements;++e)for(size_t t=0;t<nt;++t){auto j=e+elements*t;auto z=mxIsComplex(inputMu)?make_cuDoubleComplex(mxGetComplexDoubles(inputMu)[j].real,mxGetComplexDoubles(inputMu)[j].imag):make_cuDoubleComplex(mxGetDoubles(inputMu)[j],0.);if(!cellFiniteHost(z)||cuCreal(z)<=0.||cuCimag(z)>0.)throw std::invalid_argument("Permeability must be finite and passive");permeability[e*nt+t]=z;}
   std::vector<double> bhKnots,bhCoefficients;int knotCount=0;
-  if(mxGetField(cfg,0,"bh_knots")||mxGetField(cfg,0,"bh_coefficients")){
-   const auto* inputKnots=field(cfg,"bh_knots");const auto count=mxGetNumberOfElements(inputKnots);
-   if(count<2||count>256)throw std::invalid_argument("BH requires 2..256 H knots");
-   bhKnots=realVector(inputKnots,count);if(bhKnots[0]!=0.)throw std::invalid_argument("BH H knots must start at zero");
-   for(size_t i=1;i<count;++i)if(bhKnots[i]<=bhKnots[i-1])throw std::invalid_argument("BH H knots must increase");
-   const size_t intervals=count-1,stride=intervals*4;
-   if(elements*nt>(2ULL<<30)/sizeof(double)/stride)throw std::overflow_error("BH coefficient payload exceeds 2 GiB");
-   const auto* input=field(cfg,"bh_coefficients");const auto* shape=mxGetDimensions(input);
-   if(mxGetNumberOfDimensions(input)!=4||shape[0]!=elements||shape[1]!=nt||shape[2]!=intervals||shape[3]!=4)
-    throw std::invalid_argument("BH coefficients require [element,temperature,interval,4] descending powers");
-   auto raw=realVector(input,elements*nt*stride);bhCoefficients.resize(raw.size());
-   for(size_t e=0;e<elements;++e)for(size_t t=0;t<nt;++t)for(size_t i=0;i<intervals;++i)for(size_t c=0;c<4;++c)
-    bhCoefficients[(e*nt+t)*stride+4*i+c]=raw[e+elements*(t+nt*(i+intervals*c))];
-   for(size_t row=0;row<elements*nt;++row){
-    const auto* coeff=bhCoefficients.data()+row*stride;
-    if(fabs(coeff[3])>1e-12||fabs(coeff[2]-cuCreal(permeability[row]))>1e-8*fmax(1e-12,fabs(coeff[2]))||cuCimag(permeability[row])!=0.)
-     throw std::invalid_argument("Nonlinear BH must start at B=0 and match real initial permeability");
-    for(size_t i=0;i<intervals;++i){const auto* c=coeff+4*i;double h=bhKnots[i+1]-bhKnots[i];
-     auto derivative=[&](double x){return (3*c[0]*x+2*c[1])*x+c[2];};
-     double smallest=std::min(derivative(0.),derivative(h));
-     if(c[0]!=0.){double x=-c[1]/(3*c[0]);if(x>0.&&x<h)smallest=std::min(smallest,derivative(x));}
-     if(!std::isfinite(smallest)||smallest<=0.)throw std::invalid_argument("BH differential permeability must remain finite and positive");
-     double end=((c[0]*h+c[1])*h+c[2])*h+c[3];
-     double next=i+1<intervals?coeff[4*(i+1)+3]:1.2566370614359172954e-6*(bhKnots.back()+sat[row]);
-     if(!std::isfinite(end)||!std::isfinite(next)||fabs(end-next)>1e-8*fmax(1e-12,std::max(fabs(end),fabs(next))))throw std::invalid_argument("BH interval/saturation continuity mismatch");
-    }
-   }
-   knotCount=int(count);
-  }
   const auto* inputGeometry=field(cfg,"esim_cell_parameters");if(mxGetM(inputGeometry)!=elements||mxGetN(inputGeometry)!=7)throw std::invalid_argument("ESIM cells require element by 7 parameters");auto values=realVector(inputGeometry,elements*7);
   std::vector<ESIMCellParameters> cells(elements);int maxNodes=0;for(size_t e=0;e<elements;++e){auto at=[&](size_t k){return values[e+elements*k];};auto& cell=cells[e];
    if(at(0)<3||at(0)>4096||at(0)!=int(at(0))||at(1)<1||at(1)>10000||at(1)!=int(at(1))||(at(2)!=0.&&at(2)!=1.)||at(3)<=0.||at(4)<=0.||at(5)<=0.||at(5)>1e-6||at(6)<=0.||at(6)>1.)throw std::invalid_argument("Invalid ESIM cell geometry/iteration contract");
@@ -304,7 +275,13 @@ Context& get(const mxArray* a){auto h=handle(a);auto it=contexts.find(h);if(it==
 mxArray* vectorOut(const std::vector<double>& v){auto* a=mxCreateDoubleMatrix(v.size(),1,mxREAL);std::copy(v.begin(),v.end(),mxGetDoubles(a));return a;}
 }
 void dispatchIh(int nlhs,mxArray** out,int nrhs,const mxArray** in){
-  mxInitGPU();if(!nrhs)throw std::invalid_argument("Missing IH command");const auto command=text(in[0]);
+  if(!nrhs)throw std::invalid_argument("Missing IH command");const auto command=text(in[0]);
+  if(command=="create"){
+   if(nrhs!=2||nlhs!=1)throw std::invalid_argument("create requires config and one output");
+   if(text(field(in[1],"bh_mode"))!="linear")throw std::invalid_argument("This IH MEX requires explicit bh_mode=linear; nonlinear periodic BH is unsupported");
+   if(mxGetField(in[1],0,"bh_knots")||mxGetField(in[1],0,"bh_coefficients"))throw std::invalid_argument("Linear IH config must not contain nonlinear BH fields");
+  }
+  mxInitGPU();
   if(command=="assemble_peec_bem"){if(nrhs!=2||nlhs!=1)throw std::invalid_argument("assemble_peec_bem requires geometry and one output");out[0]=assemblePEECBEM(in[1]);return;}
   if(command=="create"){
    if(nrhs!=2||nlhs!=1)throw std::invalid_argument("create requires config and one output");

@@ -102,6 +102,7 @@ res=f.matrix*x-f.rhs;assert(norm(res(free))/norm(f.rhs(free))<=1e-10 && info.tru
 clear owner;assert(all(structfun(@(v)v==0,radia_cuda_ams('resident_status'))));
 end
 function ihStep(f)
+f.config.bh_mode='linear';
 h=radia_cuda_ih('create',f.config);owner=onCleanup(@()radia_cuda_ih('destroy',h));
 for step=1:5,radia_cuda_ih('update',h,1,300);end
 [temperature,heat,info]=radia_cuda_ih('outputs',h);

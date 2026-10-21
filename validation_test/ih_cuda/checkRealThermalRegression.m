@@ -2,6 +2,7 @@ function result=checkRealThermalRegression(fixturePath)
 % Real thermal Krylov regression with a genuinely complex eddy system.
 reference=jsondecode(fileread(fixturePath));cfg=makeResidentAlgebraConfig();
 assert(radia_cuda_ih('live_count')==0);
+cfg.bh_mode='linear';
 h=radia_cuda_ih('create',cfg);owner=onCleanup(@()radia_cuda_ih('destroy',h));
 temperature=zeros(6,3);heat=zeros(6,2);residuals=zeros(5,1);
 for step=0:5
