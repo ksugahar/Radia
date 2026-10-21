@@ -9906,8 +9906,8 @@ class LocalESIMSurfaceModel:
         max_iterations = int(self.cell_max_iterations)
         if bins < 2:
             raise ValueError("bins must be >= 2")
-        if n_nodes < 3:
-            raise ValueError("n_nodes must be >= 3")
+        if isinstance(self.n_nodes, bool) or n_nodes != self.n_nodes or n_nodes < 4:
+            raise ValueError("n_nodes must be an integer >= 4")
         if max_iterations < 1:
             raise ValueError("cell_max_iterations must be >= 1")
         for name in (
@@ -9931,6 +9931,8 @@ class LocalESIMSurfaceModel:
             if isinstance(value, bool) or int(value) != value or value < minimum:
                 raise ValueError(f"{name} must be an integer >= {minimum}")
             object.__setattr__(self, name, int(value))
+        if n_nodes > self.max_nodes:
+            raise ValueError("n_nodes must not exceed max_nodes")
         relaxation = float(self.cell_relaxation)
         if not np.isfinite(relaxation) or not 0.0 < relaxation <= 1.0:
             raise ValueError("cell_relaxation must be in (0, 1]")
@@ -10118,7 +10120,7 @@ class LocalESIMSurfaceModel:
         if np.min(values.real) < -1.0e-12:
             raise RuntimeError("ESIM cell interpolation produced a non-passive impedance")
         return values, {
-            "cell_model": "semi-infinite-geometrically-graded-1d-esim",
+            "cell_model": "semi-infinite-conservative-adaptive-depth-1d-esim",
             "frequency_Hz": frequency,
             "bins": int(h_nodes.size),
             "cell_iterations_max": int(table.cell_iterations_max),

@@ -70,6 +70,7 @@ from calc_common import setup_paths, progress, calc_main  # noqa: E402
 
 setup_paths()
 from em_material import EMMaterial  # noqa: E402
+from em_table import EM_TABLE_SCHEMA_VERSION  # noqa: E402
 from esim_cell_problem import ESIMCellProblemSolver  # noqa: E402
 
 
@@ -260,7 +261,7 @@ def run(args):
         "esim_cell_controls": depth_controls(args),
         "num_skin_depths": args.num_skin_depths,
         "build_time_s": build_time_s,
-        "schema_version": 1,
+        "schema_version": EM_TABLE_SCHEMA_VERSION,
     }
     np.savez(out_path,
              H_grid=H_grid, T_grid=T_grid,

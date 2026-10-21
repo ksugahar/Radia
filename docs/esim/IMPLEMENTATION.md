@@ -182,7 +182,7 @@ $$
 
 ```python
 # Seed
-Z_s = esim_solver.get_linear_sibc()               # declared low-field linear seed
+Z_s = esim_solver.solve(5.0)['Z']                 # fully converged low-field cell seed
 
 for k in range(max_iter):                            # outer Karl loop
     res = outer_solve(Z_s)                           # BEM / FEM solve

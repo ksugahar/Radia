@@ -448,7 +448,7 @@ class ESIMFiniteSlabSolver(AdaptiveDepth):
         # xi parameter
         self.xi = half_thickness / self.delta if self.delta < float('inf') else 0
 
-        # Create uniform mesh from surface (z=0) to center (z=a)
+        # Create physically graded nonuniform depth mesh; cylinder runs axis to surface.
         self.mesh_points = depth_mesh(half_thickness, self.delta, n_nodes, geometry == 'cylinder')
         self.n_elements = n_nodes - 1
 
@@ -854,8 +854,8 @@ class ESIMCellProblemSolver(AdaptiveDepth):
         """
         Solve the Cell Problem for given surface field H0.
 
-        Uses Picard iteration for the nonlinear problem with finite difference
-        discretization.
+        Uses Picard iteration for the nonlinear problem with conservative
+        control volumes on a nonuniform depth mesh.
 
         The governing equation:
             rho * d^2H/ds^2 - j*omega*mu(|H|)*H = 0
@@ -864,8 +864,8 @@ class ESIMCellProblemSolver(AdaptiveDepth):
             rho * d^2H/ds^2 - j*omega*(mu' - j*mu")*H = 0
             rho * d^2H/ds^2 - (j*omega*mu' + omega*mu")*H = 0
 
-        Discretized using central differences:
-            rho * (H_{i+1} - 2*H_i + H_{i-1}) / h^2 - j*omega*mu_i*H_i = 0
+        Discretized with face fluxes rho * (H[i+1]-H[i]) / dx and
+        control-volume reaction integrals; see esim_depth.linear_cell.
 
         Parameters:
             H0: Surface tangential field amplitude [A/m] (real, positive)

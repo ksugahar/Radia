@@ -1021,7 +1021,7 @@ reviewers, prefer "Hollaus-type Picard relaxation" or
 The outer Karl loop wraps the BEM/FEM solve:
 
 ```python
-Z_s = esim.get_linear_sibc()        # seed at small H_t
+Z_s = esim.solve(5.0)['Z']        # converged cell seed at small H_t
 for k in range(max_iter):
     res = solve_outer(Z_s=Z_s)                # BEM/FEM solve
     H_t = res['H_t_rms']                       # mesh-RMS
@@ -1048,13 +1048,14 @@ ESIM Z_s near the BH knee, `L` can approach 1; `relax = 0.5` gives
 on the steel sample.  For sharper saturation (e.g. SUS430 above 30
 kHz) drop to `--esim-relax 0.3`.
 
-### 6.2 Linear initial impedance
+### 6.2 Converged low-field cell seed
 
-Production outer iterations start with `esim.get_linear_sibc()`. This uses
-the declared low-field constitutive slope without an unconverged five-iteration
-nonlinear solve. Subsequent nonlinear cell evaluations must satisfy both
-iteration and adaptive-depth gates; exhaustion raises rather than supplying
-a table entry.
+Production outer iterations using `ESIMFiniteSlabSolver` start with
+`esim.solve(5.0)['Z']`. The solve uses the configured nonlinear iteration
+limit and adaptive-depth gates; it is not capped at five iterations.
+`get_linear_sibc()` belongs to the separate half-space
+`ESIMCellProblemSolver` API and is not a finite-slab method. A failed seed
+raises rather than supplying an unconverged impedance to the outer loop.
 
 ### 6.3 Convergence guarantees
 
