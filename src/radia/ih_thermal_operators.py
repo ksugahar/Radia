@@ -12,6 +12,23 @@ import math
 import numpy as np
 
 
+def nonlinear_thermal_quadrature(*, basis, gradient, volume_weights, density,
+                                boundary_basis, boundary_weights, convection,
+                                constant_coefficients, kelvin, cp, kappa,
+                                emissivity):
+    """Validate NGSolve-owned sample maps for the explicit nonlinear IH route.
+
+    The caller must evaluate its own space at the declared mapped quadrature
+    points. This function does not infer element numbering, mass lumping,
+    gradients, rotation or a nodal representation from an exported matrix.
+    Returned ``native_config`` is a fragment, not a complete EM configuration.
+    """
+    from .ih_thermal_coupling import ThermalLaw, ThermalQuadrature
+    return ThermalQuadrature(basis, gradient, volume_weights, density,
+        boundary_basis, boundary_weights, convection, constant_coefficients,
+        ThermalLaw(kelvin, cp, kappa, emissivity))
+
+
 class ThermalAssemblyOptions(Protocol):
     axisymmetric_thermal_vol: str | None
     density_kg_per_m3: float
