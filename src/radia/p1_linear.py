@@ -96,7 +96,8 @@ def solve_p1_linear(mesh, *, current_cf, current_materials, mu_r_dict=None,
     timings = {}
     t0 = time.perf_counter()
     elements = mesh.ngmesh.Elements3D().NumPy()
-    if len(elements) != mesh.ne or np.any(elements["np"] != 4):
+    # Netgen 2608 exposes ElementType, not a point-count field; TET excludes TET10.
+    if len(elements) != mesh.ne or np.any((elements["type"] != int(ng.ET.TET)) | elements["curved"]):
         raise ValueError("solve_p1_linear requires straight tetrahedra")
     material_index = np.asarray(elements["index"], dtype=np.int64) - 1
     if np.any(material_index < 0) or np.any(material_index >= len(materials)):
@@ -121,9 +122,11 @@ def solve_p1_linear(mesh, *, current_cf, current_materials, mu_r_dict=None,
         gradient = native.LowestOrderGradient(fes)
         timings["gradient_s"] = time.perf_counter() - t0
         t0 = time.perf_counter()
+        # Cubic divergence-free currents require exact quartic load integration;
+        # the default P1 rule in Netgen 2608 is insufficient.
         current_form = ng.LinearForm(fes)
         current_form += ng.InnerProduct(current_cf, fes.TestFunction()) * ng.dx(
-            definedon=mesh.Materials("|".join(map(re.escape, names))))
+            definedon=mesh.Materials("|".join(map(re.escape, names))), bonus_intorder=2)
         current_form.Assemble()
         rhs = current_form.vec
         load = rhs.FV().NumPy()

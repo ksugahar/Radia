@@ -65,7 +65,7 @@ def test_one_pcg_call_and_independent_matrix_equation(linear_mesh, monkeypatch):
     form = ng.BilinearForm(fes, symmetric=False)
     form += nu*ng.curl(u)*ng.curl(v)*ng.dx
     rhs = ng.LinearForm(fes)
-    rhs += ng.InnerProduct(current(), v)*ng.dx("coil")
+    rhs += ng.InnerProduct(current(), v)*ng.dx("coil", bonus_intorder=4)
     with ng.TaskManager():
         form.Assemble()
         rhs.Assemble()
@@ -93,7 +93,7 @@ def test_matches_tight_newton_and_independent_gauged_direct(linear_mesh):
     matrix = ng.BilinearForm(fes, symmetric=True)
     matrix += nu*ng.curl(u)*ng.curl(v)*ng.dx + 1e-8/MU0*u*v*ng.dx
     rhs = ng.LinearForm(fes)
-    rhs += current()*v*ng.dx("coil")
+    rhs += current()*v*ng.dx("coil", bonus_intorder=4)
     a = ng.GridFunction(fes)
     with ng.TaskManager():
         matrix.Assemble()
