@@ -26,6 +26,7 @@ def test_release_rejects_foreign_ci_and_mismatched_installed_artifact(tmp_path,m
     evidence.write_text(json.dumps(record))
     qualify=lambda candidate=run:gate.qualify(candidate,'owner/repository',42,tmp_path,'b'*64)
     assert qualify()['tag']=='radia-simulink-v0.1.0a1'
+    assert qualify(dict(run, event='workflow_dispatch'))['tag']=='radia-simulink-v0.1.0a1'
     for overrides in ({'conclusion':'failure'},{'head_branch':'feature'},{'event':'pull_request'},
                       {'head_repository':{'full_name':'foreign/repository'}},
                       {'path':'.github/workflows/radia-optuna.yml'}):

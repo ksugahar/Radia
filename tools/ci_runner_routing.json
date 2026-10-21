@@ -226,6 +226,11 @@
       "owner": "radia",
       "target": "ci-native",
       "legacy_100": true
+    },
+    "sparsesolv.yml:nightly-failure": {
+      "target": "github-hosted",
+      "owner": "radia",
+      "legacy_100": false
     }
   },
   "light": {
@@ -265,9 +270,11 @@
         "tools/ci_distribution_manifest.json",
         "tools/pre_push_check.py",
         "tools/local_push_checks.py",
-        "tools/validation_source_gate.py"
+        "tools/validation_source_gate.py",
+        "tools/ci_ams_inputs.py",
+        "tools/ci_tree_receipt.py"
       ],
-      "audit_sha256": "5c09e40975578268d3b75f49e4ccf2f7c50884692d62d9f3270fd0ab4c096e56",
+      "audit_sha256": "12f26b1613e69e623b4314a92af07c7d2ad10e14a91a8c8b2f2bf9148f7e8c71",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

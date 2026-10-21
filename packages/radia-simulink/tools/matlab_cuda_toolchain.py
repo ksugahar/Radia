@@ -9,6 +9,14 @@ import subprocess
 from vs2022_toolchain import discover_vs, compiler_bin
 
 
+# Declared task envelopes, not caller-selected resource overrides. Enforcement
+# remains with the external owned Job Object; values here bind its receipt.
+_BUILD_TASK_LIMITS = {
+    'hdiv-mmm': {'cpu_count': 4, 'job_commit_bytes': 16 * 2**30, 'wall_seconds': 900},
+    'ih': {'cpu_count': 4, 'job_commit_bytes': 8 * 2**30, 'wall_seconds': 1800},
+}
+
+
 def require_build_admission(root, lane, path, expected_sha256):
     """Bind a GPU build to a reviewed private host/task/source admission."""
     if path is None and expected_sha256 is None:
@@ -21,10 +29,22 @@ def require_build_admission(root, lane, path, expected_sha256):
     path = Path(path).resolve(strict=True)
     if path.is_relative_to(root):
         raise RuntimeError('Private build admission must be outside the source checkout')
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    payload = path.read_bytes()
+    digest = hashlib.sha256(payload).hexdigest()
     if digest != expected_sha256:
         raise RuntimeError('GPU build admission hash mismatch')
-    record = json.loads(path.read_text(encoding='utf-8'))
+    record = json.loads(payload.decode('utf-8'))
+    task = record.get('task')
+    limits = _BUILD_TASK_LIMITS.get(task) if isinstance(task, str) else None
+    declared_limits = record.get('limits')
+    # bool and float compare equal to some integers: do not admit them as
+    # resource declarations, or let an unknown task choose its own envelope.
+    if (limits is None or not isinstance(declared_limits, dict)
+            or set(declared_limits) != set(limits)
+            or any(type(declared_limits[key]) is not int or declared_limits[key] != value
+                   for key, value in limits.items())
+            or ((task == 'ih') != (lane == 'ih'))):
+        raise RuntimeError('GPU build task/resource admission mismatch')
     commit = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
     if subprocess.check_output(['git', '-C', str(root), 'status', '--porcelain'], text=True).strip():
         raise RuntimeError('Admitted GPU source must be clean')
@@ -32,12 +52,11 @@ def require_build_admission(root, lane, path, expected_sha256):
             or record.get('draft_only') is not False
             or not (record.get('review_accepted') is True or
                     (record.get('execution_authorized') is True and record.get('authorization_kind') == 'explicit-user'))
-            or record.get('package') != 'radia-simulink' or record.get('task') != 'hdiv-mmm'
+            or record.get('package') != 'radia-simulink'
             or record.get('lane') != lane or record.get('worker_role') != 'gpu-build-worker'
             or record.get('execution_host', '').casefold() != socket.gethostname().casefold()
             or record.get('source_commit') != commit
-            or record.get('msvc_toolset') != '14.44' or record.get('cuda_route') != 'MATLAB-bundled-12.8'
-            or record.get('limits') != {'cpu_count': 4, 'job_commit_bytes': 16 * 2**30, 'wall_seconds': 900}):
+            or record.get('msvc_toolset') != '14.44' or record.get('cuda_route') != 'MATLAB-bundled-12.8'):
         raise RuntimeError('GPU build host/task/source/toolchain admission mismatch')
     return dict(admission_sha256=digest, admission=record,
                 resource_enforcement='Required external owned Job Object; this record is not an actuator')

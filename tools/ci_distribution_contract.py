@@ -128,7 +128,11 @@ def validate_schema(manifest):
             raise ValueError(f"invalid lane owners: {name}")
         if lane["workflow"] != f".github/workflows/{name}.yml":
             raise ValueError(f"invalid workflow: {name}")
-        for projection in lane["events"].values():
+        for event, projection in lane["events"].items():
+            if event == "schedule":
+                if not isinstance(projection, list) or not all(set(x) == {"cron"} for x in projection):
+                    raise ValueError("invalid schedule")
+                continue
             if "paths" in projection and "paths-ignore" in projection:
                 raise ValueError("paths and paths-ignore cannot coexist")
             for key in ("paths", "paths-ignore"):
@@ -158,6 +162,18 @@ def workflow_events(document):
     return {name: value or {} for name, value in events.items()}
 
 
+def numerical_environment_input(path):
+    """Cross-distribution environment edits require full CPU numerical validation.
+
+    This safety gate does not transfer distribution or release ownership.
+    """
+    name = Path(path).name.lower()
+    return (name in {'pyproject.toml', 'build.ps1', 'cmakelists.txt', 'test_tier_manifest.json'}
+            or name.startswith(('requirements', 'constraints'))
+            or path.startswith(('.github/workflows/', '.github/actions/', 'cmake/'))
+            or path.endswith(('.cmake', '.toolchain')))
+
+
 def issues(manifest, files):
     """Target-contract violations as (lane, kind, path), with no runtime routing."""
     result = set()
@@ -170,7 +186,8 @@ def issues(manifest, files):
             owners = owner_rule(manifest, path)["owners"]
             triggered = any(selected(path, event) for event in branch_events)
             if triggered and lane["scope"] != "repository_contract" and not set(owners).intersection(lane["owners"]):
-                result.add((name, "foreign_trigger", path))
+                if not (name == "sparsesolv" and numerical_environment_input(path)):
+                    result.add((name, "foreign_trigger", path))
             if triggered and lane["native"] and path.endswith(".md") and path not in lane["markdown_inputs"]:
                 result.add((name, "markdown_native", path))
             if triggered and path in ROOT_CONFIGS and lane["native"] and path not in lane["content_diff_active"]:
