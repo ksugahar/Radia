@@ -25,7 +25,10 @@ def test_unadmitted_worker_and_hash_rejected(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('change', [{}, {'lane':'projection'}, {'source_commit':'other'},
-                                  {'execution_host':'other'}, {'review_accepted':False}])
+                                  {'execution_host':'other'}, {'review_accepted':False},
+                                  {'task':'unknown'}, {'task':[]},
+                                  {'limits':dict(cpu_count=4, job_commit_bytes=8*2**30, wall_seconds=1800)},
+                                  {'limits':dict(cpu_count=4, job_commit_bytes=16*2**30, wall_seconds=901)}])
 def test_exact_reviewed_binding(tmp_path, monkeypatch, change):
     monkeypatch.setattr(mod.socket, 'gethostname', lambda: 'new-worker')
     monkeypatch.setattr(mod.subprocess, 'check_output',
@@ -44,6 +47,41 @@ def test_exact_reviewed_binding(tmp_path, monkeypatch, change):
             mod.require_build_admission(root,'hmatrix',file,digest)
     else:
         assert mod.require_build_admission(root,'hmatrix',file,digest)['admission_sha256']==digest
+
+@pytest.mark.parametrize('change', [
+    {}, {'task':'hdiv-mmm'}, {'task':'unknown'}, {'lane':'hmatrix'},
+    {'task':'hdiv-mmm',
+     'limits':dict(cpu_count=4, job_commit_bytes=16*2**30, wall_seconds=900)},
+    {'limits':dict(cpu_count=5, job_commit_bytes=8*2**30, wall_seconds=1800)},
+    {'limits':dict(cpu_count=4, job_commit_bytes=16*2**30, wall_seconds=1800)},
+    {'limits':dict(cpu_count=4, job_commit_bytes=8*2**30, wall_seconds=1801)},
+    {'limits':dict(cpu_count=4.0, job_commit_bytes=8*2**30, wall_seconds=1800)},
+    {'limits':dict(cpu_count=True, job_commit_bytes=8*2**30, wall_seconds=1800)},
+    {'limits':dict(cpu_count=4, job_commit_bytes=8*2**30)},
+    {'limits':dict(cpu_count=4, job_commit_bytes=8*2**30, wall_seconds=1800, extra=1)},
+])
+def test_ih_declared_envelope_does_not_weaken_hdiv(tmp_path, monkeypatch, change):
+    monkeypatch.setattr(mod.socket, 'gethostname', lambda: 'new-worker')
+    monkeypatch.setattr(mod.subprocess, 'check_output',
+                        lambda args, **kwargs: '' if 'status' in args else 'abc123\n')
+    record = dict(schema='radia.gpu-build-admission.v1', draft_only=False,
+                  execution_authorized=True, authorization_kind='explicit-user',
+                  package='radia-simulink', task='ih', lane='ih',
+                  worker_role='gpu-build-worker', execution_host='new-worker', source_commit='abc123',
+                  msvc_toolset='14.44', cuda_route='MATLAB-bundled-12.8',
+                  limits=dict(cpu_count=4, job_commit_bytes=8*2**30, wall_seconds=1800))
+    record.update(change)
+    file = tmp_path/'admission.json'; file.write_text(json.dumps(record))
+    digest = hashlib.sha256(file.read_bytes()).hexdigest()
+    root = tmp_path/'source'; root.mkdir()
+    if change:
+        with pytest.raises(RuntimeError, match='mismatch'):
+            mod.require_build_admission(root, 'ih', file, digest)
+    else:
+        result = mod.require_build_admission(root, 'ih', file, digest)
+        assert result['admission']['limits'] == record['limits']
+        assert result['admission_sha256'] == digest
+
 
 def test_explicit_ci_route_has_no_host_bypass(tmp_path, monkeypatch):
     monkeypatch.delenv('RADIA_GPU_CI_BUILD', raising=False)
