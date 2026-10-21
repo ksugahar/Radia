@@ -29,7 +29,7 @@ uses `python tools/release_cubit_dual.py`, not the Radia solver's release-quad
 commands.
 
 The supported binary runtime is 64-bit Windows, CPython 3.12, Coreform Cubit
-2026.8, and Netgen/NGSolve 6.2.2607.  These solver versions are exact pins in
+2026.8, and Netgen/NGSolve 6.2.2608.  These solver versions are exact pins in
 package metadata because `cubit_mesh_curver.pyd` links against the Netgen C++
 ABI.  The separately loaded `cubit_mesh_export.ccm` plugin embeds Compact
 Netgen and does not link against the Python solver wheels.

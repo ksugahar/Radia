@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 PACKAGE = Path(__file__).resolve().parents[1]
-PINNED_NETGEN = "6.2.2607"
+PINNED_NETGEN = "6.2.2608"
 
 
 def test_distribution_version_and_netgen_abi_contract_are_aligned():
@@ -28,8 +28,8 @@ def test_distribution_version_and_netgen_abi_contract_are_aligned():
         ).read_text(encoding="utf-8")
     )
 
-    assert project["version"] == "2.2.4"
-    assert '__version__ = "2.2.4"' in package_source
+    assert project["version"] == "2.2.5"
+    assert '__version__ = "2.2.5"' in package_source
     assert f"netgen-mesher=={PINNED_NETGEN}" in dependencies
     assert f"ngsolve=={PINNED_NETGEN}" in dependencies
     assert (
@@ -37,6 +37,16 @@ def test_distribution_version_and_netgen_abi_contract_are_aligned():
         == PINNED_NETGEN
     )
     assert "netgen_version" not in manifest["payloads"]["cubit_mesh_export.ccm"]
+
+    # Import the real mandatory payload in the selected external Netgen runtime.
+    # Metadata agreement alone cannot detect an extension built for an old ABI.
+    import importlib.metadata as metadata
+    from cubit_mesh_export import cubit_mesh_curver
+
+    assert metadata.version("netgen-mesher") == PINNED_NETGEN
+    assert metadata.version("ngsolve") == PINNED_NETGEN
+    assert cubit_mesh_curver.__version__ == project["version"]
+    assert cubit_mesh_curver.has_netgen is True
 
 
 def test_readme_states_the_native_abi_boundary_and_supported_runtime():
