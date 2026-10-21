@@ -4669,7 +4669,8 @@ def main():
         use_utf8_stdout()
         _selftest()
     else:
-        mcp.run(transport="stdio")
+        from radia_mcp.common.windows_stdio import run_stdio
+        run_stdio(mcp)
 
 
 if __name__ == '__main__':
