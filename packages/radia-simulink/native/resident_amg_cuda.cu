@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: Apache-2.0
 // No FE or TaskManager ownership: uploaded algebraic Galerkin hierarchy only.
 #include "resident_amg_host.hpp"
 #include <algorithm>
