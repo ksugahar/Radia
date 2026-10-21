@@ -5,6 +5,21 @@ import numpy as np
 from scipy.linalg import solve_banded
 
 
+def add_depth_arguments(parser):
+    parser.add_argument('--esim-cell-max-iter', type=int, default=200,
+                        help='Bounded nonlinear iterations per ESIM depth mesh')
+    parser.add_argument('--esim-cell-mesh-tol', type=float, default=1e-3,
+                        help='Relative nested depth Z and power convergence')
+    parser.add_argument('--esim-cell-max-nodes', type=int, default=32769,
+                        help='Maximum ESIM probe mesh nodes; unresolved cells fail')
+
+
+def depth_controls(args):
+    return dict(cell_max_iter=getattr(args, 'esim_cell_max_iter', 200),
+                mesh_tol=getattr(args, 'esim_cell_mesh_tol', 1e-3),
+                max_nodes=getattr(args, 'esim_cell_max_nodes', 32769))
+
+
 def depth_mesh(length, delta, count, cylinder=False):
     """Fixed physical grading strength; increasing count never collapses cells."""
     if not np.isfinite(length) or length <= 0 or int(count) != count or count < 4:
@@ -58,7 +73,7 @@ def linear_cell(solver, H0, mu):
     residual = diagonal*field-rhs
     residual[1:] += lower*field[:-1]
     residual[:-1] += upper*field[1:]
-    denominator = np.linalg.norm(rhs) + np.linalg.norm(diagonal*field)
+    denominator = np.linalg.norm(rhs)
     relative = np.linalg.norm(residual)/max(denominator, np.finfo(float).tiny)
     if not np.all(np.isfinite(field)) or relative > 1e-6:
         raise RuntimeError(f'ESIM algebraic residual failed: {relative:g}')

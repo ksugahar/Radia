@@ -82,3 +82,18 @@ def test_panel_evaluator_identity_stays_stable_after_adaptive_solve():
     evaluator._fields(np.array([1000.]))
     second = evaluator._direct(1000., 'certification_cell_calls')
     assert first == second
+
+
+@pytest.mark.parametrize('kelvin', [False, True])
+def test_designspec_cell_controls_reach_the_cli_parser(kelvin):
+    import argparse
+    from radia.ih_design import IHDesignSpec
+    from radia.esim_depth import add_depth_arguments, depth_controls
+    spec = IHDesignSpec(impedance_model='Nonlinear ESIM', bh_file='synthetic.txt',
+        esim_cell_max_iter=157, esim_cell_mesh_tol=.0004, esim_cell_max_nodes=5000)
+    command = []
+    spec._append_esim_args(command, include_anderson=False, kelvin=kelvin)
+    parser = argparse.ArgumentParser()
+    add_depth_arguments(parser)
+    args, _ = parser.parse_known_args(command)
+    assert depth_controls(args) == dict(cell_max_iter=157, mesh_tol=.0004, max_nodes=5000)

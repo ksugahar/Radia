@@ -49,6 +49,8 @@ import os
 import sys
 import time
 
+from radia.esim_depth import add_depth_arguments, depth_controls
+
 import numpy as np
 
 
@@ -1263,7 +1265,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         # cylindrical workpiece slice of radius `half_thickness`.
         # The converged H0=5 A/m seed initializes the outer Karl loop.
         esim_solver = mat_wp.create_esim_solver(
-            args.frequency, args.half_thickness, geometry='cylinder')
+            args.frequency, args.half_thickness, geometry='cylinder', **depth_controls(args))
         from radia.esim_cell_problem import require_esim_converged
         seed_started = time.perf_counter()
         seed_result = require_esim_converged(
@@ -2080,7 +2082,7 @@ def _strong_panel_esim(args, mesh, solve_em, *, field_scale):
     material = EMMaterial(name='wp', sigma=args.sigma, mu_r=args.mu_r,
                           bh_curve=load_bh_file(args.bh_file))
     cell = material.create_esim_solver(args.frequency, args.half_thickness,
-                                      geometry='cylinder')
+                                      geometry='cylinder', **depth_controls(args))
     seed = complex(require_esim_converged(cell.solve(5.), 'Strong ESIM seed')['Z'])
     evaluator = PanelESIMEvaluator(cell, mode=getattr(args, 'esim_panel_evaluator', 'table'),
         interpolation_tol=float(args.esim_tol)/10,
@@ -3061,6 +3063,7 @@ def build_argparser():
                              "--bh-file.")
     parser.add_argument('--panel-zs-file', default='',
                         help='Mesh-bound per-triangle Zs JSON [ohm], weak P1 SIBC; genus-0 or one supported flux-linked handle with dense flat-triangle loop work')
+    add_depth_arguments(parser)
     parser.add_argument("--esim-max-iter", type=int, default=15)
     parser.add_argument("--esim-tol", type=float, default=1e-3)
     parser.add_argument("--esim-relax", type=float, default=0.5,

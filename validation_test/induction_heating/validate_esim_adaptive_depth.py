@@ -46,7 +46,7 @@ def main():
                     mesh_history=result['mesh_history'], depth_history=result.get('depth_history', []),
                     linear_residual=result['linear_residual']))
     nonlinear_rows = []
-    for field in (200., 1000., 4000., 8000., 20000.):
+    for field in (200., 1000., 4000., 8000., 20000., 50000., 100000.):
         values = []
         for nodes in (24, 60, 200):
             result = ESIMFiniteSlabSolver(.005, bh_curve=nonlinear, sigma=5e6,
@@ -60,10 +60,22 @@ def main():
         nonlinear_rows.append(dict(H_peak_A_per_m=field, values=values,
             impedance_seed_relative_error=error, power_seed_relative_error=power_error,
             accepted=bool(max(error, power_error) <= gates['seed_relative_limit'])))
+    iteration_limits = []
+    for field in (50000., 100000.):
+        cell = ESIMFiniteSlabSolver(.005, bh_curve=nonlinear, sigma=5e6,
+            frequency=222e3, n_nodes=60, geometry='cylinder')
+        try:
+            limited = cell.solve(field, max_iter=50)
+            iteration_limits.append(dict(field_A_per_m=field, cap=50,
+                status='converged', iterations=limited['iterations']))
+        except RuntimeError as error:
+            iteration_limits.append(dict(field_A_per_m=field, cap=50,
+                status='failed_loudly', error=str(error)))
     source_root = Path(__file__).resolve().parents[2]
     sources = {p: hashlib.sha256((source_root/p).read_bytes()).hexdigest() for p in
         ('src/radia/esim_cell_problem.py', 'src/radia/esim_depth.py')}
     report = dict(gates=gates, linear=rows, synthetic_nonlinear=nonlinear_rows,
+        iteration_limits=iteration_limits,
         accepted=all(r['accepted'] for r in rows+nonlinear_rows),
         elapsed_seconds=time.perf_counter()-started, source_hashes=sources,
         versions=dict(python=platform.python_version(), numpy=np.__version__, scipy=scipy.__version__),

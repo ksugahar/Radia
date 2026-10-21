@@ -10,7 +10,7 @@ Reference:
     2025, DOI: 10.1109/TMAG.2025.3613932
 
 The Cell Problem:
-    rho * d^2H/ds^2 + j*omega*mu(|H|)*H = 0    for s in [0, infinity)
+    rho * d^2H/ds^2 - j*omega*mu(|H|)*H = 0    for s in [0, infinity)
 
     Boundary conditions:
         H(0) = H0         (surface tangential field)
@@ -860,14 +860,14 @@ class ESIMCellProblemSolver(AdaptiveDepth):
         discretization.
 
         The governing equation:
-            rho * d^2H/ds^2 + j*omega*mu(|H|)*H = 0
+            rho * d^2H/ds^2 - j*omega*mu(|H|)*H = 0
 
         For complex mu = mu' - j*mu":
-            rho * d^2H/ds^2 + j*omega*(mu' - j*mu")*H = 0
-            rho * d^2H/ds^2 + (j*omega*mu' + omega*mu")*H = 0
+            rho * d^2H/ds^2 - j*omega*(mu' - j*mu")*H = 0
+            rho * d^2H/ds^2 - (j*omega*mu' + omega*mu")*H = 0
 
         Discretized using central differences:
-            rho * (H_{i+1} - 2*H_i + H_{i-1}) / h^2 + j*omega*mu_i*H_i = 0
+            rho * (H_{i+1} - 2*H_i + H_{i-1}) / h^2 - j*omega*mu_i*H_i = 0
 
         Parameters:
             H0: Surface tangential field amplitude [A/m] (real, positive)
@@ -1009,7 +1009,7 @@ class ESIMCellProblemSolver(AdaptiveDepth):
 
         return float(P_prime), float(Q_prime), float(P_magnetic)
 
-    def generate_esi_table(self, H0_values, tol=1e-6, max_iter=100):
+    def generate_esi_table(self, H0_values, tol=1e-6, max_iter=None):
         """
         Generate ESI table for a range of H0 values.
 
@@ -1017,10 +1017,8 @@ class ESIMCellProblemSolver(AdaptiveDepth):
             H0_values: List or array of surface field amplitudes [A/m]
             tol: Convergence tolerance for each solve
             max_iter: Maximum iterations for each solve.  Table generation
-                uses a larger budget than the interactive single-cell default
-                because the saturated high-field rows of a monotone B-H law
-                can require more than 50 Picard steps at the unchanged
-                nonlinear tolerance.
+                overrides the bounded single-cell budget when supplied.
+                None uses cell_max_iter; nonlinear and depth gates both apply.
 
         Returns:
             table: numpy array with columns:
