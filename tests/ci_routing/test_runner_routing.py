@@ -96,7 +96,8 @@ def test_final_requires_host_and_exact_capability(tree):
         for name,job in data['jobs'].items():
             rule=m['jobs'][f'{file.name}:{name}']
             if rule['target']!='github-hosted':
-                job['runs-on']=['self-hosted','Windows','X64','100',rule['target']]
+                job['runs-on']=['self-hosted','Windows','X64',rule['target']]
+                if rule['target'] != 'gpu-a100': job['runs-on'].insert(3,'100')
         file.write_text(yaml.safe_dump(data))
     assert routing.validate(root,m,'final')['mode']=='final'
 
@@ -137,3 +138,26 @@ def test_lamination_native_coverage_is_retained(changed):
         mutant['lanes']['sparsesolv']['events'][event]['paths'].remove(changed)
         mutant['lanes']['sparsesolv']['events'][event]['paths'].append('!' + changed)
     assert not impact.lane_required('sparsesolv',{changed},lambda p:(None,None),mutant)[0]
+
+@pytest.mark.parametrize('key', ['radia-simulink.yml:cuda-mex', 'radia-optuna.yml:build-test', 'radia-optuna.yml:installed-wheel-matlab-e2e'])
+def test_gpu_jobs_cannot_lose_rtx_capability(tree, key):
+    root, manifest = tree
+    filename, name = key.split(':')
+    path = root / '.github/workflows' / filename
+    document = yaml.safe_load(path.read_text(encoding='utf-8'))
+    document['jobs'][name]['runs-on'].remove('gpu-rtx')
+    path.write_text(yaml.safe_dump(document), encoding='utf-8')
+    with pytest.raises(ValueError, match='capability'):
+        routing.validate(root, manifest)
+
+
+def test_a100_is_compute_only_and_never_a_pr_gate():
+    workflow = yaml.safe_load((ROOT / '.github/workflows/gpu-validation.yml').read_text(encoding='utf-8'))
+    assert set(workflow[True]) == {'schedule', 'workflow_dispatch'}
+    job = workflow['jobs']['validate']
+    assert job['runs-on'] == ['self-hosted', 'Windows', 'X64', 'gpu-a100']
+    commands = '\n'.join(step.get('run', '') for step in job['steps'])
+    assert 'ci_gpu_artifact.py fetch' in commands
+    assert '--sha ${{ github.sha }}' in commands
+    assert not any(token in commands.lower() for token in ['build.ps1', 'mexcuda', 'cmake', 'pip install build'])
+    assert 'issues: write' in (ROOT / '.github/workflows/gpu-validation.yml').read_text(encoding='utf-8')

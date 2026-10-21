@@ -79,7 +79,7 @@
     },
     "ltspice-data-safety.yml:matlab-data-contracts": {
       "owner": "radia-simulink",
-      "target": "ci-matlab-gpu",
+      "target": "ci-native",
       "legacy_100": true
     },
     "policy-lint.yml:policy-checks": {
@@ -114,8 +114,8 @@
     },
     "radia-simulink.yml:cuda-mex": {
       "owner": "radia-simulink",
-      "target": "ci-matlab-gpu",
-      "legacy_100": true
+      "target": "gpu-rtx",
+      "legacy_100": false
     },
     "radia-mcp-matrix.yml:ci-impact": {
       "owner": "radia-mcp",
@@ -154,13 +154,13 @@
     },
     "radia-optuna.yml:build-test": {
       "owner": "radia-optuna",
-      "target": "ci-matlab-gpu",
-      "legacy_100": true
+      "target": "gpu-rtx",
+      "legacy_100": false
     },
     "radia-optuna.yml:installed-wheel-matlab-e2e": {
       "owner": "radia-optuna",
-      "target": "ci-matlab-gpu",
-      "legacy_100": true
+      "target": "gpu-rtx",
+      "legacy_100": false
     },
     "radia.yml:ci-impact": {
       "owner": "radia",
@@ -231,6 +231,16 @@
       "target": "github-hosted",
       "owner": "radia",
       "legacy_100": false
+    },
+    "gpu-validation.yml:validate": {
+      "target": "gpu-a100",
+      "owner": "radia-simulink",
+      "legacy_100": false
+    },
+    "gpu-validation.yml:nightly-failure": {
+      "target": "github-hosted",
+      "owner": "radia-simulink",
+      "legacy_100": false
     }
   },
   "light": {
@@ -274,7 +284,7 @@
         "tools/ci_ams_inputs.py",
         "tools/ci_tree_receipt.py"
       ],
-      "audit_sha256": "12f26b1613e69e623b4314a92af07c7d2ad10e14a91a8c8b2f2bf9148f7e8c71",
+      "audit_sha256": "2b4544a4d0a685032d07845b89e869e378c84944ad8b1bcf7d63fcd7c755fef2",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

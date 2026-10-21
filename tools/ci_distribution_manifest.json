@@ -2098,6 +2098,42 @@
         "detail": "Imported by the required CPU solver numerical test closure."
       },
       "selection": "all_owners"
+    },
+    {
+      "pattern": ".github/workflows/gpu-validation.yml",
+      "owners": [
+        "radia-simulink",
+        "radia-optuna"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Compute-only validation consumes both independently built GPU wheels."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/ci_gpu_artifact.py",
+      "owners": [
+        "radia-simulink",
+        "radia-optuna"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Exact-SHA wheel sealing and compute-only recovery for GPU validation."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tests/test_ci_gpu_artifact.py",
+      "owners": [
+        "radia-simulink",
+        "radia-optuna"
+      ],
+      "reason": {
+        "kind": "shared_build",
+        "detail": "Checks exact-SHA artifact recovery for both GPU distributions."
+      },
+      "selection": "all_owners"
     }
   ],
   "shared_include_closures": [
@@ -2830,6 +2866,8 @@
             "tools/ci_tree_receipt.py",
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
+            "tools/ci_gpu_artifact.py",
+            "tests/test_ci_gpu_artifact.py",
             "src/runtime/ih/**",
             "tests/cpp/test_radia_ih_thermal_acceptance.cpp",
             "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
@@ -2930,6 +2968,8 @@
             "tools/ci_tree_receipt.py",
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
+            "tools/ci_gpu_artifact.py",
+            "tests/test_ci_gpu_artifact.py",
             "src/runtime/ih/**",
             "tests/cpp/test_radia_ih_thermal_acceptance.cpp",
             "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
@@ -3179,6 +3219,8 @@
             "tools/ci_tree_receipt.py",
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
+            "tools/ci_gpu_artifact.py",
+            "tests/test_ci_gpu_artifact.py",
             "!**/*.md",
             "packages/radia-optuna/README.md",
             "packages/radia-optuna/MATLAB_README.md",
@@ -3209,6 +3251,8 @@
             "tools/ci_tree_receipt.py",
             "tools/ci_distribution_contract.py",
             "tools/ci_distribution_manifest.json",
+            "tools/ci_gpu_artifact.py",
+            "tests/test_ci_gpu_artifact.py",
             "!**/*.md",
             "packages/radia-optuna/README.md",
             "packages/radia-optuna/MATLAB_README.md",
@@ -3941,6 +3985,27 @@
         "tests/validation_gate/**",
         "validation_test/panels/fixtures/**"
       ]
+    },
+    "gpu-validation": {
+      "workflow": ".github/workflows/gpu-validation.yml",
+      "owners": [
+        "radia-simulink",
+        "radia-optuna"
+      ],
+      "scope": "distribution",
+      "native": false,
+      "events": {
+        "schedule": [
+          {
+            "cron": "43 17 * * *"
+          }
+        ],
+        "workflow_dispatch": {}
+      },
+      "selector_refs": [],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": []
     }
   },
   "migration_exceptions": []
