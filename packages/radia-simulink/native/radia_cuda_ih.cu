@@ -304,7 +304,12 @@ Context& get(const mxArray* a){auto h=handle(a);auto it=contexts.find(h);if(it==
 mxArray* vectorOut(const std::vector<double>& v){auto* a=mxCreateDoubleMatrix(v.size(),1,mxREAL);std::copy(v.begin(),v.end(),mxGetDoubles(a));return a;}
 }
 void dispatchIh(int nlhs,mxArray** out,int nrhs,const mxArray** in){
-  mxInitGPU();if(!nrhs)throw std::invalid_argument("Missing IH command");const auto command=text(in[0]);
+  if(!nrhs)throw std::invalid_argument("Missing IH command");const auto command=text(in[0]);
+  if(command=="create"){
+   if(nrhs!=2||nlhs!=1)throw std::invalid_argument("create requires config and one output");
+   if(text(field(in[1],"bh_mode"))!="linear")throw std::invalid_argument("This IH MEX requires explicit bh_mode=linear; nonlinear periodic BH is unsupported");
+  }
+  mxInitGPU();
   if(command=="assemble_peec_bem"){if(nrhs!=2||nlhs!=1)throw std::invalid_argument("assemble_peec_bem requires geometry and one output");out[0]=assemblePEECBEM(in[1]);return;}
   if(command=="create"){
    if(nrhs!=2||nlhs!=1)throw std::invalid_argument("create requires config and one output");

@@ -29,9 +29,9 @@ template<class T> OwnedCSR<T> empty_matrix(std::uint32_t r,std::uint32_t c) {
 CoupledConfig fixture() {
     CoupledConfig c{};
     c.identity={std::string(40,'a'),std::string(40,'b'),std::string(64,'c'),
-                std::string(64,'d'),std::string(64,'e'),std::string(64,'f')};
-    c.backend=ConfigBackend::gpu;c.magnetic_mode=MagneticMode::resolved_periodic_bh;
-    c.budgets={16ULL<<20,16ULL<<20,16ULL<<20};
+                std::string(64,'d'),std::string(64,'e')};
+    c.backend=ConfigBackend::independent_cpu;c.magnetic_mode=MagneticMode::linear_temperature;
+    c.budgets={16ULL<<20,16ULL<<20};
     auto& t=c.thermal;t.coefficients=t.volume_samples=t.boundary_samples=t.dimension=1;
     t.temperature_axis_K={300.,500.};t.basis=dense(1,1,1.);
     t.gradient=dense(1,1,0.);t.boundary_basis=dense(1,1,1.);
@@ -46,10 +46,10 @@ CoupledConfig fixture() {
     auto& m=c.magnetic;m.elements=2;m.element_ids={10,11};
     m.temperature_evaluation={2,1,{0,1,2},{0,0},{1.,1.}};
     m.temperature_axis_K={300.,500.};m.resistivity_ohm_m=dense(2,2,1.);
-    m.H_axis_A_per_m={0.,1.};m.B_T={0.,1.,0.,1.,0.,1.,0.,1.};
+    m.linear_permeability_H_per_m.assign(4,{1.,0.});
     auto& e=c.em;e.unknowns=e.field_components=1;
     e.unknown_units={"A"};e.equation_units={"V"};
-    for(std::uint32_t h:{1u,3u,5u}) {
+    for(std::uint32_t h:{1u}) {
         HarmonicOperator op{};op.harmonic_index=h;
         op.base_operator={1,1,{0,1},{0},{{1.,0.}}};
         op.boundary_E_to_rhs=empty_matrix<std::complex<double>>(1,4);
@@ -59,8 +59,6 @@ CoupledConfig fixture() {
         op.port_voltage_projection={{1.,0.}};op.coil_resistance_ohm=0.;
         e.harmonics.push_back(std::move(op));
     }
-    e.cells_per_element=128;e.thickness_m={1.,1.};e.face_area_m2={1.,1.};
-    e.initial_cell_B_T.resize(256);e.initial_cell_H_A_per_m.resize(256);
     e.linear_true_residual_limit=1e-6;e.port_energy_relative_limit=1e-6;
     e.power_floor_W=1e-12;e.max_linear_iterations=100;
     auto& heat=c.heat;heat.measure=HeatMeasure::volume_m3;heat.samples=256;heat.components=1;
@@ -69,7 +67,9 @@ CoupledConfig fixture() {
     heat.to_thermal_load.row_offsets={0,256};
     for(std::int32_t i=0;i<256;++i)heat.to_thermal_load.column_indices.push_back(i);
     heat.to_thermal_load.values=heat.measure_weights;
-    c.drive={1.,1.,16,20,1e-6,1e-6,1e-10};
+    e.linear_loss_projection=empty_matrix<std::complex<double>>(256,1);
+    e.linear_loss_coefficient.assign(256,1.);
+    c.frequency_Hz=1.;c.thermal_macro_dt_s=1.;
     return c;
 }
 void rejects_without_scratch(CoupledConfig& c,const char* expected) {
@@ -108,8 +108,6 @@ int main() {
     rejects_without_scratch(tiny_input,"exceeds declared byte budgets");
     auto tiny_host=valid;tiny_host.budgets.domain_host_bytes=1;
     rejects_without_scratch(tiny_host,"exceeds declared byte budgets");
-    auto tiny_device=valid;tiny_device.budgets.device_bytes=1;
-    rejects_without_scratch(tiny_device,"exceeds declared byte budgets");
     auto duplicate=valid;duplicate.magnetic.element_ids[1]=duplicate.magnetic.element_ids[0];
     rejects_without_scratch(duplicate,"Duplicate IH magnetic element identifier");
     auto repeated=valid;auto& t=repeated.thermal;
@@ -122,20 +120,11 @@ int main() {
     t.volume_points_m=t.boundary_points_m={0.,1.};
     (void)validate_config(repeated); // Repeated QUADRATURE provenance is valid.
 
-    // Build the actual logical snapshot layout, rather than mirror a size formula.
-    CommittedSnapshot snapshot;
-    snapshot.temperature_coefficients_K.resize(1);snapshot.heat_samples.resize(256);
-    snapshot.eddy_solution.resize(3);auto& cycle=snapshot.cycle;
-    cycle.endpoint_B_T.resize(256);cycle.endpoint_H_A_per_m.resize(256);
-    cycle.waveform_B_T.resize(256*16);cycle.waveform_H_A_per_m.resize(256*16);
-    cycle.harmonic_indices={1,3,5};cycle.harmonic_B_T.resize(256*3);
-    const auto one=sizeof(snapshot)+payload(snapshot.temperature_coefficients_K)+
-        payload(snapshot.heat_samples)+payload(snapshot.eddy_solution)+
-        payload(cycle.endpoint_B_T)+payload(cycle.endpoint_H_A_per_m)+
-        payload(cycle.waveform_B_T)+payload(cycle.waveform_H_A_per_m)+
-        payload(cycle.harmonic_indices)+payload(cycle.harmonic_B_T);
-    require(info.host_reserve_bytes>=2*one+info.input_bytes+256*sizeof(double));
+    auto invalid_mode=valid;invalid_mode.magnetic_mode=MagneticMode::invalid;
+    rejects_without_scratch(invalid_mode,"Explicit linear temperature");
+    auto invalid_backend=valid;invalid_backend.backend=ConfigBackend::invalid;
+    rejects_without_scratch(invalid_backend,"Explicit independent CPU");
     auto one_short=valid;one_short.budgets.domain_host_bytes=info.host_reserve_bytes-1;
     rejects_without_scratch(one_short,"exceeds declared byte budgets");
-    std::cout<<"IH config budget/ID/snapshot contracts PASS (host only; no physics)\n";
+    std::cout<<"IH config CPU config budget/ID contracts PASS (host only; no physics)\n";
 }

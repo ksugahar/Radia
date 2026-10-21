@@ -27,7 +27,7 @@ gpu = ["numpy>=1.26", "ngsolve==6.2.2608", "netgen-mesher==6.2.2608",
        "nvidia-cusparse-cu12==12.5.7.53; sys_platform == 'win32'",
        "nvidia-nvjitlink-cu12==12.8.61; sys_platform == 'win32'"]
 exchange = ["numpy>=1.26", "h5py>=3.10"]
-coupling = ["radia>=5.3.3"]
+coupling = ["radia>=5.3.1"]
 ltspice = ["schemdraw>=0.18"]
 test = ["pytest>=8", "build>=1.2", "numpy>=1.26", "h5py>=3.10", "schemdraw>=0.18", "mcp>=1.21.1,<2"]
 

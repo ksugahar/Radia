@@ -421,3 +421,11 @@ def fake_x64_pe():
     payload[128:132] = b"PE\0\0"
     payload[132:134] = (0x8664).to_bytes(2, "little")
     return bytes(payload)
+
+
+def test_ih_direct_create_checks_linear_mode_before_gpu_initialization():
+    source = (ROOT / "packages/radia-simulink/native/radia_cuda_ih.cu").read_text(encoding="utf-8")
+    dispatch = source[source.index("void dispatchIh("):]
+    guard = dispatch.index('text(field(in[1],"bh_mode"))!="linear"')
+    assert dispatch.index('if(command=="create")') < guard < dispatch.index("mxInitGPU();")
+    assert guard < dispatch.index("std::make_unique<Context>")
