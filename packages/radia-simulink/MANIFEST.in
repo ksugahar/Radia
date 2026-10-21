@@ -1,2 +1,3 @@
 include hdiv_payload.py
 include native_payload.py
+include resident_amg_payload.py

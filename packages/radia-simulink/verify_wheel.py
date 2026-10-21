@@ -75,6 +75,29 @@ def verify_python_binding(path, names, archive, manifest):
     seen=set()
     for binary in python_binaries:
         filename=PurePosixPath(binary).name
+        resident_tag = re.fullmatch(r'_resident_amg\.(cp\d+)-win_amd64\.pyd', filename)
+        if resident_tag:
+            if (not tag or tag[1] != tag[2] or tag[1] != resident_tag[1]
+                    or 'resident-amg' in seen):
+                raise ValueError('Resident AMG Python wheel ABI mismatch')
+            seen.add('resident-amg')
+            binding = json.loads(archive.read('radia_simulink/resident-amg-build.json'))
+            if (binding.get('schema') != 'radia.resident-amg-python-build.v1'
+                    or binding.get('source_commit') != manifest['source_commit']
+                    or binding.get('binary') != filename
+                    or binding.get('binary_sha256') != manifest['files'].get(filename)
+                    or binding.get('extension_suffix') != '.' + resident_tag[1] + '-win_amd64.pyd'
+                    or any(binding.get(key) is not False for key in (
+                        'source_dirty', 'fault_injection', 'device_fault_injection',
+                        'lifecycle_diagnostic', 'matlab_engine_user_dependency'))
+                    or any(binding.get(key) is not True for key in (
+                        'runtime_import_checked', 'redistribution_accepted'))
+                    or any(not isinstance(binding.get(key), str) or not re.fullmatch(
+                        r'[0-9a-f]{64}', binding[key]) for key in (
+                            'runtime_validation_sha256', 'loaded_runtime_sha256',
+                            'redistribution_reference_sha256'))):
+                raise ValueError('Resident AMG runtime or provenance qualification missing')
+            continue
         native_tag=re.fullmatch(r'_(csr|hdiv)_cuda\.(cp\d+)-win_amd64\.pyd',filename)
         if not tag or not native_tag or tag[1]!=tag[2] or tag[1]!=native_tag[2] or native_tag[1] in seen:
             raise ValueError('Python CUDA binding wheel ABI mismatch')
@@ -110,7 +133,7 @@ def verify(path: Path) -> dict:
             if parsed.is_absolute() or ".." in parsed.parts or "\\" in name:
                 raise ValueError("Unsafe archive member")
             if (name.casefold().endswith((".dll", ".exe")) or "radia_mex.mexw64" in name
-                    or (name.endswith(".pyd") and not re.fullmatch(r"radia_simulink/_(?:csr|hdiv)_cuda\.cp\d+-win_amd64\.pyd",name))):
+                    or (name.casefold().endswith(".pyd") and not re.fullmatch(r"radia_simulink/_(?:(?:csr|hdiv)_cuda|resident_amg)\.cp\d+-win_amd64\.pyd",name))):
                 raise ValueError("CPU solver or external executable in GPU wheel")
             if not (name.startswith("radia_simulink/") or re.match(r"radia_simulink-[^/]+\.dist-info/",name)):
                 raise ValueError("Foreign package in GPU wheel")
