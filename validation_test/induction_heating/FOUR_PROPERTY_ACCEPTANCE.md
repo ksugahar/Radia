@@ -2,10 +2,7 @@
 
 Start source: `54612dfd70cc729db8cc20734dc902ac8d1a8ea7`.
 
-This preregisters the CPU validation before execution. The validation is one
-bounded run, four physical cores on one NUMA node, one hardware thread per
-core, 8 GiB, 1800 seconds. It runs no GPU or A100 computation. A failed gate
-is reported without automatic retry.
+This preregisters the CPU validation before execution. The validation is a bounded CPU reference run. It runs no GPU computation.
 
 The contract is `radia.ih.four-property.v1`. Temperature is absolute kelvin;
 electrical resistivity and constant mass density have distinct units. NGSolve
@@ -23,7 +20,10 @@ is bounded to 256 coefficients; it is not a scalability claim or a CPU fallback.
   plus integrated body heat, relative defect <=1e-6 using the same floor.
   The voltage projection must be independent of heat weights.
 - Linear true residual <=1e-6; nonlinear true residual <=1e-6 and energy gate
-  are separate. The reference uses the stricter nonlinear tolerance 1e-10.
+  are separate. Normalize the nonlinear residual by the maximum Euclidean
+  norm of load, assembled storage, conduction and boundary vectors, with a
+  1e-12 W floor. The reference uses the stricter nonlinear tolerance 1e-10.
+  Include cooling at zero and small positive load.
 - Piecewise-linear cp(T) is integrated exactly for enthalpy, including partial
   intervals. Compare against an independent polynomial primitive.
 - Nonuniform kappa(T) conduction and the full Newton Jacobian are checked
@@ -48,11 +48,12 @@ geometry producer and legacy Thermal S-Function remain fixed-property paths;
 they are not evidence for this explicit new route. Production SLX wiring and
 Toolkit lifecycle acceptance remain a separate stage.
 
-The current shared build-admission helper hard-codes task `hdiv-mmm` and limits
-4 CPUs/16 GiB/900 s for every CUDA lane. The assigned IH gate is 4 physical
-cores/8 GiB/1800 s. An IH build must not impersonate HDiv or claim a false
-16 GiB admission. Shared build-helper changes require the manager/owner;
-until corrected, native build is blocked and must be reported unverified.
+Native build has not been performed and remains unverified.
 
 GPU numerical agreement, independent FEM cross-validation, native artifacts
 and release acceptance follow implementation review and new resource slots.
+
+The production thermal energy gate is a constant-field projection of the
+assembled residual. It is a consistency guard, not independent evidence.
+Independent evidence here comes from analytical enthalpy/boundary expressions
+and the separate RK4 reference; port voltage must be independently assembled.

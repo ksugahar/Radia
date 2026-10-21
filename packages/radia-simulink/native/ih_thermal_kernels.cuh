@@ -92,12 +92,20 @@ __global__ void thermalAssembleQuadrature(ThermalQuadratureView v,const double* 
 __global__ void thermalQuadratureBalance(ThermalQuadratureView v,const double* volume,
         const double* boundary,const double* load,const double* constant,const cuDoubleComplex* rhs,
         double floor,double* result,int* invalid) {
-    if(blockIdx.x||threadIdx.x)return;double input=0.,storage=0.,loss=0.,rr=0.,ff=0.;
-    for(std::size_t i=0;i<v.n;++i){input+=constant[i]*load[i];rr+=cuCreal(rhs[i])*cuCreal(rhs[i]);ff+=load[i]*load[i];}
+    if(blockIdx.x||threadIdx.x)return;double input=0.,storage=0.,loss=0.,rr=0.,ff=0.,ss=0.,cc=0.,bb=0.;
+    for(std::size_t i=0;i<v.n;++i){
+        input+=constant[i]*load[i];rr+=cuCreal(rhs[i])*cuCreal(rhs[i]);ff+=load[i]*load[i];
+        double storageRow=0.,conductionRow=0.,boundaryRow=0.;
+        for(std::size_t q=0;q<v.q;++q){const auto* a=volume+q*(4+v.dimension);
+            storageRow+=v.basis[q*v.n+i]*a[0];
+            for(int d=0;d<v.dimension;++d)conductionRow+=v.volume[q]*a[2]*v.gradient[(q*v.dimension+d)*v.n+i]*a[4+d];}
+        for(std::size_t q=0;q<v.b;++q)boundaryRow+=v.area[q]*v.boundaryBasis[q*v.n+i]*boundary[2*q];
+        ss+=storageRow*storageRow;cc+=conductionRow*conductionRow;bb+=boundaryRow*boundaryRow;
+    }
     for(std::size_t q=0;q<v.q;++q)storage+=volume[q*(4+v.dimension)];
     for(std::size_t q=0;q<v.b;++q)loss+=v.area[q]*boundary[2*q];
     const double scale=fmax(fmax(fabs(input),fabs(storage)+fabs(loss)),floor);
-    result[0]=sqrt(rr)/fmax(sqrt(ff),floor);result[1]=fabs(input-storage-loss)/scale;
+    result[0]=sqrt(rr)/fmax(fmax(fmax(sqrt(ff),sqrt(ss)),fmax(sqrt(cc),sqrt(bb))),floor);result[1]=fabs(input-storage-loss)/scale;
     result[2]=input;result[3]=storage;result[4]=loss;result[5]=input-storage-loss;
     for(int i=0;i<6;++i)if(!isfinite(result[i]))atomicExch(invalid,1);
 }
