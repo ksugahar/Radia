@@ -13,6 +13,7 @@
 
 #include <cstdio>
 #include <stdexcept>
+#include <string>
 
 namespace ng = netgen;
 
@@ -66,12 +67,24 @@ bool NetgenCurverPure::build_netgen_mesh(
   // Add nodes
   std::unordered_map<int, ng::PointIndex> cubit_nid_to_ng_pi_;
   for (int i = 0; i < num_nodes; i++) {
+    if (cubit_nid_to_ng_pi_.find(node_ids[i]) != cubit_nid_to_ng_pi_.end())
+      throw std::invalid_argument("NetgenCurverPure: duplicate node ID " + std::to_string(node_ids[i]));
     ng::PointIndex pi = ng_mesh_->AddPoint(
         ng::MeshPoint(ng::Point<3>(node_coords[3*i],
                                     node_coords[3*i+1],
                                     node_coords[3*i+2])));
     cubit_nid_to_ng_pi_[node_ids[i]] = pi;
   }
+
+  auto point_index = [&](int node_id, const std::string& kind, size_t element, int local_node) {
+    auto it = cubit_nid_to_ng_pi_.find(node_id);
+    if (it == cubit_nid_to_ng_pi_.end())
+      throw std::invalid_argument(
+          std::string("NetgenCurverPure: ") + kind + " element " +
+          std::to_string(element + 1) + " references unknown node ID " +
+          std::to_string(node_id) + " at local node " + std::to_string(local_node + 1));
+    return it->second;
+  };
 
   // Build UV lookup: (surface_fd_index, cubit_node_id) -> (u, v)
   std::unordered_map<int, std::unordered_map<int, std::array<double,2>>> uv_map;
@@ -89,13 +102,12 @@ bool NetgenCurverPure::build_netgen_mesh(
     }
 
     // Add triangles
-    for (auto& tri : surf.tris) {
+    for (size_t t = 0; t < surf.tris.size(); t++) {
+      const auto& tri = surf.tris[t];
       ng::Element2d el(ng::TRIG);
       el.SetIndex(ng::FaceRegionIndex::FromNr1(fd_idx));
       for (int k = 0; k < 3; k++) {
-        auto it = cubit_nid_to_ng_pi_.find(tri[k]);
-        if (it == cubit_nid_to_ng_pi_.end()) return false;
-        el[k] = it->second;
+        el[k] = point_index(tri[k], "surface " + std::to_string(surf.id) + " triangle", t, k);
 
         // Set GeomInfo (UV)
         ng::PointGeomInfo gi;
@@ -113,13 +125,12 @@ bool NetgenCurverPure::build_netgen_mesh(
     }
 
     // Add quads
-    for (auto& quad : surf.quads) {
+    for (size_t q = 0; q < surf.quads.size(); q++) {
+      const auto& quad = surf.quads[q];
       ng::Element2d el(ng::QUAD);
       el.SetIndex(ng::FaceRegionIndex::FromNr1(fd_idx));
       for (int k = 0; k < 4; k++) {
-        auto it = cubit_nid_to_ng_pi_.find(quad[k]);
-        if (it == cubit_nid_to_ng_pi_.end()) return false;
-        el[k] = it->second;
+        el[k] = point_index(quad[k], "surface " + std::to_string(surf.id) + " quadrilateral", q, k);
 
         ng::PointGeomInfo gi;
         gi.trignum = fd_idx;
@@ -139,7 +150,8 @@ bool NetgenCurverPure::build_netgen_mesh(
   }
 
   // Add volume elements (domain index from ve.domain, 1-based)
-  for (auto& ve : vol_elems) {
+  for (size_t v = 0; v < vol_elems.size(); v++) {
+    const auto& ve = vol_elems[v];
     int nnodes = 0;
     ng::ELEMENT_TYPE etype = ng::TET;
     switch (ve.type) {
@@ -147,11 +159,20 @@ bool NetgenCurverPure::build_netgen_mesh(
       case PURE_HEX:     nnodes = 8; etype = ng::HEX;     break;
       case PURE_PRISM:   nnodes = 6; etype = ng::PRISM;   break;
       case PURE_PYRAMID: nnodes = 5; etype = ng::PYRAMID; break;
+      default:
+        throw std::invalid_argument("NetgenCurverPure: unsupported volume element type " +
+                                    std::to_string(static_cast<int>(ve.type)));
     }
-    if ((int)ve.conn.size() < nnodes) continue;
+    if ((int)ve.conn.size() != nnodes)
+      throw std::invalid_argument("NetgenCurverPure: volume element " +
+                                  std::to_string(v + 1) + " requires " +
+                                  std::to_string(nnodes) + " node IDs; got " +
+                                  std::to_string(ve.conn.size()));
+    if (ve.domain < 1)
+      throw std::invalid_argument("NetgenCurverPure: volume element " + std::to_string(v + 1) + " domain must be >= 1");
     ng::Element el(etype);
     for (int k = 0; k < nnodes; k++)
-      el[k] = cubit_nid_to_ng_pi_[ve.conn[k]];
+      el[k] = point_index(ve.conn[k], "volume", v, k);
     el.SetIndex(ng::VolumeRegionIndex::FromNr1(ve.domain));
     ng_mesh_->AddVolumeElement(el);
   }
@@ -167,10 +188,8 @@ bool NetgenCurverPure::build_netgen_mesh(
           ng::EdgeDescriptor(edgenr, ei.surfnr1, ei.surfnr2));
       for (size_t s = 0; s < ei.segments.size(); s++) {
         auto& seg = ei.segments[s];
-        auto it0 = cubit_nid_to_ng_pi_.find(seg[0]);
-        auto it1 = cubit_nid_to_ng_pi_.find(seg[1]);
-        if (it0 == cubit_nid_to_ng_pi_.end() || it1 == cubit_nid_to_ng_pi_.end())
-          continue;
+        const auto p0 = point_index(seg[0], "edge " + std::to_string(edgenr) + " segment", s, 0);
+        const auto p1 = point_index(seg[1], "edge " + std::to_string(edgenr) + " segment", s, 1);
 
         double dist0 = 0, dist1 = 0;
         if (s < ei.dists.size()) {
@@ -179,8 +198,8 @@ bool NetgenCurverPure::build_netgen_mesh(
         }
 
         ng::Segment nseg;
-        nseg[0] = it0->second;
-        nseg[1] = it1->second;
+        nseg[0] = p0;
+        nseg[1] = p1;
         nseg.SetIndex(edge_descriptor_index);
         nseg.EPGeomInfo(0).dist = dist0;
         nseg.EPGeomInfo(1).dist = dist1;
