@@ -313,7 +313,10 @@ def test_force_close_failure_stops_and_retains_completed_closures(monkeypatch):
 @pytest.mark.parametrize('tier', ['editable'])
 def test_preflight_installer_imports_selected_helpers_before_stale_package(tmp_path, monkeypatch, tier):
     """Exercise the worker in a fresh process with a hostile old PYTHONPATH."""
+    import shutil
     import subprocess
+    git = shutil.which('git')
+    assert git is not None, 'Git is required to create the editable-source fixture'
     stale = tmp_path / 'stale' / 'cubit_mesh_export'
     stale.mkdir(parents=True)
     (stale / '__init__.py').write_text('')
@@ -343,8 +346,8 @@ def test_preflight_installer_imports_selected_helpers_before_stale_package(tmp_p
             archive.extractall(src)
         for args in (['init'], ['add', '.'], ['-c', 'user.name=Test', '-c',
                      'user.email=test@example.invalid', 'commit', '-m', 'fixture']):
-            subprocess.run(['git', '-C', str(source), *args], check=True, capture_output=True)
-        sha = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
+            subprocess.run([git, '-C', str(source), *args], check=True, capture_output=True)
+        sha = subprocess.check_output([git, '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
     cfg = dict(dual.wheel_contract(wheel), schema=dual.SCHEMA, source_sha=sha,
                target='100' if tier == 'editable' else 'validation', tier=tier,
                action='preflight', source_root=str(source) if tier == 'editable' else '',
