@@ -203,9 +203,10 @@ class IronJacobian:
 
 def _material_numbers(mesh, names) -> np.ndarray:
     elements = mesh.ngmesh.Elements3D().NumPy()
+    # Netgen 2608 exposes ElementType, not a point-count field; TET excludes TET10.
     wanted = [index + 1 for index, name in enumerate(mesh.GetMaterials()) if name in set(names)]
     numbers = np.flatnonzero(np.isin(elements["index"], wanted)).astype(np.int64)
-    if np.any(elements["np"][numbers] != 4):
+    if np.any((elements["type"][numbers] != int(ng.ET.TET)) | elements["curved"][numbers]):
         raise ValueError("the first-order Newton requires straight tetrahedra")
     return numbers
 
@@ -308,9 +309,11 @@ def solve_p1_newton(mesh, bh_table, *, iron=("iron",), source_cf=None, current_c
             if not set(names) <= set(mesh.GetMaterials()):
                 raise ValueError(f"current materials {names} not all in the mesh")
             v = fes.TestFunction()
+            # Cubic divergence-free currents require exact quartic load integration;
+            # the default P1 rule in Netgen 2608 is insufficient.
             current_form = ng.LinearForm(fes)
             current_form += ng.InnerProduct(current_cf, v) * ng.dx(
-                definedon=mesh.Materials("|".join(map(re.escape, names))))
+                definedon=mesh.Materials("|".join(map(re.escape, names))), bonus_intorder=2)
             current_form.Assemble()
             load = current_form.vec.FV().NumPy().copy()
             if gauge_epsilon == 0.0:

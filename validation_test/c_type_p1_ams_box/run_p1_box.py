@@ -136,11 +136,12 @@ def iron_elements_with_centroids(mesh: ng.Mesh) -> tuple[np.ndarray, np.ndarray]
     ``mesh.Elements(VOL)``, hence bit-identical centroids.
     """
     elements = mesh.ngmesh.Elements3D().NumPy()
+    # Netgen 2608 exposes ElementType, not a point-count field; TET excludes TET10.
     iron_index = [index + 1 for index, name in enumerate(mesh.GetMaterials()) if name == "iron"]
     numbers = np.flatnonzero(np.isin(elements["index"], iron_index)).astype(np.int64)
     if numbers.size == 0:
         raise RuntimeError("mesh has no iron elements")
-    if np.any(elements["np"][numbers] != 4):
+    if np.any((elements["type"][numbers] != int(ng.ET.TET)) | elements["curved"][numbers]):
         raise RuntimeError("this lane uses straight tetrahedra only")
     nodes = elements["nodes"][numbers][:, :4].astype(np.int64) - 1
     points = np.array([point.p for point in mesh.ngmesh.Points()], dtype=float)
