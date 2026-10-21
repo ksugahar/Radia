@@ -466,3 +466,4 @@ memory/
 # Stable advisory-lock sidecars for canonical bibliography writers (not content).
 *.radia-write-lock
 
+ci-precheck-report.json
