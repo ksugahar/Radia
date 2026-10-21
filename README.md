@@ -653,5 +653,10 @@ and the broader Python/MATLAB scientific ecosystems.
 
 The repository contains components under different compatible terms,
 including the BSD-style Radia core, MIT-licensed HACApK, MPL-2.0 sparseSolv
-integration, and redistributable runtime notices. See [LICENSE](LICENSE) for
+integration, and external runtime dependency notices. See [LICENSE](LICENSE) for
 the complete terms.
+
+
+Owner-authored code is licensed under Apache-2.0 from the next releases.
+See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
+retain their original licenses; previously published artifacts are unchanged.

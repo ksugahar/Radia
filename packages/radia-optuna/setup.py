@@ -71,7 +71,7 @@ class build_py(_build_py):
         for source in DOC_SOURCES:
             shutil.copy2(source, matlab_dir / source.name)
         shutil.copy2(PACKAGE_ROOT / "MATLAB_README.md", matlab_dir / "README.md")
-        shutil.copy2(REPO_ROOT / "LICENSE", matlab_dir / "LICENSE")
+        shutil.copy2(PACKAGE_ROOT / "LICENSE", matlab_dir / "LICENSE")
         shutil.copy2(
             PACKAGE_ROOT / "THIRD_PARTY_NOTICES.md",
             matlab_dir / "THIRD_PARTY_NOTICES.md",

@@ -63,7 +63,7 @@ def test_support_ownership_notices_and_product_identity():
     from cubit_mesh_export.mcp import _support
     from cubit_mesh_export.mcp._support import examples, web_docs
     root = Path(_support.__file__).parent
-    assert 'BSD 3-Clause License' in (root / 'LICENSE-BSD-3-Clause.txt').read_text()
+    assert 'Apache License' in (root / 'LICENSE-APACHE-2.0.txt').read_text()
     assert 'intentionally independent implementations' in (root / 'OWNERSHIP.md').read_text()
     for path in root.glob('*.py'):
         text = path.read_text(encoding='utf-8')

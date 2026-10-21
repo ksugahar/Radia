@@ -45,7 +45,7 @@ motion-coupling, mixed-omega, technical-writing
 | PyPI | https://pypi.org/project/radia-mcp/ |
 | Source | https://github.com/ksugahar/Radia/tree/main/packages/radia-mcp |
 | Install | `pip install radia-mcp` |
-| License | BSD-3-Clause |
+| License | Apache-2.0 |
 
 ## Discovery and representative entry points
 
@@ -103,3 +103,8 @@ STEP-to-Cubit workflows, but its own wheel must not contain the retired
 
 Kengo Sugahara (ksugahar@ele.kindai.ac.jp)
 Kindai University, Sugahara Laboratory
+
+
+Owner-authored code is licensed under Apache-2.0 from the next releases.
+See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
+retain their original licenses; previously published artifacts are unchanged.

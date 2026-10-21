@@ -1,5 +1,5 @@
 # Cubit-owned implementation; intentionally maintained independently of Radia MCP.
-# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
+# SPDX-License-Identifier: Apache-2.0
 """Shared subprocess runner for gmsh-API-backed checks and rendering.
 
 gmsh keeps process-global state and can hard-crash on corrupt input, so
