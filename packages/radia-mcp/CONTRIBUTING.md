@@ -239,7 +239,7 @@ including verification of the actual import path and affected live clients.
 
 ## License
 
-By contributing you agree your contribution is BSD-3-Clause licensed
+By contributing you agree your contribution is Apache-2.0 licensed
 (matching the project license).
 
 ## Stance reminder
@@ -282,3 +282,8 @@ Where the line falls, because it is easy to breach by accident:
 
 `tools/policy_lint.py` Policy 10 checks public catalog entries; the package
 policy guard checks imports and distribution contents.
+
+
+Owner-authored code is licensed under Apache-2.0 from the next releases.
+See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
+retain their original licenses; previously published artifacts are unchanged.

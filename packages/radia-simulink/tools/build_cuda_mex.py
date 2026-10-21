@@ -15,6 +15,7 @@ def main():
     from check_mex_error_boundaries import require_boundaries
     require_boundaries()
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--resident-amg-python', action='store_true')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--python-bindings',action='store_true')
     parser.add_argument('--build-admission',type=Path);parser.add_argument('--build-admission-sha256')
@@ -22,6 +23,10 @@ def main():
     package = Path(__file__).resolve().parents[1]
     root = package.parents[1]
     admission=require_build_admission(root,'csr-ic',args.build_admission,args.build_admission_sha256)
+    if args.resident_amg_python:
+        from build_resident_amg_python import build
+        build(package, args.out.resolve(), admission)
+        return
     sources = [package / 'native/radia_cuda_csr_pcg.cu', package / 'native/radia_cuda_ic.cu']
     source_inputs = sources + [package/'native/csr_pcg_host.hpp',package/'native/csr_pcg_cuda.cuh']
     if args.python_bindings:

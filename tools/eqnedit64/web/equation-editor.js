@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: BSD-2-Clause
+/* SPDX-License-Identifier: Apache-2.0
  * Canonical source: ksugahar/Radia tools/eqnedit64/web/equation-editor.js
  *
  * 数式エディタ（Web版） --- 3Dで学ぶ電磁気学 トップページ

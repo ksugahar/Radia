@@ -51,7 +51,7 @@ Only UTF-8 TeX is a source format. Current wheels target 64-bit Windows and Pyth
 
 The wheel embeds the signed executable produced for the matching
 `eqnedit64-v3.1.3` GitHub Release; it does not build a second application
-implementation. The package is BSD 2-Clause licensed. The embedded Eqnedit
+implementation. The package is Apache-2.0 licensed. The embedded Eqnedit
 Math font is a TrueType-outline derivative of Latin Modern Math under the
 GUST Font License. Its license and derivation manifest are included in the wheel.
 
@@ -93,3 +93,8 @@ Full arbitrary-TeX or Office/browser parity is not established.
 ## PowerPoint normal paste
 
 Ctrl+V must produce editable inline m:oMath on the slide (no m:oMathPara there), left aligned, with 18 pt equation, trailing character and insertion point in a blank presentation. EXE/Web put RichEdit OMML in the CF_HTML msEquation block as the primary payload, with MathML only as fallback. Test Application.CommandBars.ExecuteMso("Paste"), never substitute Shapes.Paste(). Refuse attachment to user processes, inspect saved OMML/rendering, restore clipboard and close owned resources only. Slides image copy remains 300 dpi / 24 pt.
+
+
+Owner-authored code is licensed under Apache-2.0 from the next releases.
+See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
+retain their original licenses; previously published artifacts are unchanged.

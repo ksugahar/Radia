@@ -4,7 +4,7 @@ Eqnedit64's application icon incorporates the **Superscript** glyph from
 [Bootstrap Icons](https://icons.getbootstrap.com/icons/superscript/).
 
 Bootstrap Icons is Copyright (c) 2019-2025 The Bootstrap Authors and is
-licensed under the MIT License. The full license is available at
+licensed under the MIT License. The full license is included in BOOTSTRAP-ICONS-LICENSE.txt and available at
 <https://github.com/twbs/icons/blob/main/LICENSE>.
 
 The icon's background, colors, composition, and rasterization are specific to

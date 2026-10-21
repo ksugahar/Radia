@@ -210,6 +210,26 @@ source compilation, caller-owned TaskManager audit, version check, fast
 selector (135 tests) and showcase readers (6 tests). The 51-file closure digest
 is now `c59f7d870b417d07d7de003cdd27bdc1c3bec3e53a06646203029acbcf437e9e`.
 
+## License metadata contract (2026-10-21)
+
+Added source-only SPDX expression, packaging metadata and external DLL boundary
+checks. Policy lint, repository contracts (481 tests), caller-owned TaskManager
+audit and fast contracts (142 tests) passed without native builds. The metadata
+check uses setuptools configuration and metadata/file selectors; it does not
+execute package setup scripts or compile solvers. Updated the light closure
+digest after these checks: `9bfbe0f4f595e581cc5d3ae297ad0a21ebd0cf46316def46dad1aeed22e335cf`.
+
+After registering the new root license files (LICENSE-APACHE-2.0, NOTICE,
+THIRD_PARTY_NOTICES.md) in the distribution manifest, the isolated fast-contracts
+steps passed again (routing contract 19 tests, TaskManager audit, version check,
+fast selector 142 tests, showcase readers 6 tests). The 52-file closure digest is
+now `2d6f0f35bf7de375a25bd0e7dd86fe24c26180af43cbb4c0e84403f74938e94e`.
 After merging the Newton budget fix with current main, the combined 51-file
 closure digest is `0d933121845010f273cd88353a810aa7253f472f539f56783a19471ae4e7f26d`; the isolated fast-contracts steps were re-run on the
 merged tree.
+
+After merging current main (resident AMG build switch, Apache-2.0 relicensing)
+into the HDiv runtime candidate with the setuptools-free distribution contract,
+the shared precheck passed (light fast-contracts steps in an isolated venv,
+policy checks, repository contracts). The 52-file closure digest is now
+`2b7175ea2d8a8b081d2419d4bd549de6a8d04766abd285f78919b1f5f989df2d`.
