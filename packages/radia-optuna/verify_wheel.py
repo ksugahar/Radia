@@ -106,7 +106,7 @@ def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
         member = MATLAB_PREFIX / PurePosixPath(str(relative))
         payloads[str(member)] = matlab_root / str(relative)
     payloads[str(MATLAB_PREFIX / "README.md")] = PACKAGE_ROOT / "MATLAB_README.md"
-    payloads[str(MATLAB_PREFIX / "LICENSE")] = REPO_ROOT / "LICENSE"
+    payloads[str(MATLAB_PREFIX / "LICENSE")] = PACKAGE_ROOT / "LICENSE"
     payloads[str(MATLAB_PREFIX / "THIRD_PARTY_NOTICES.md")] = (
         PACKAGE_ROOT / "THIRD_PARTY_NOTICES.md"
     )
