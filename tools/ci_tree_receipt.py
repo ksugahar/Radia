@@ -49,10 +49,39 @@ def pages(path, key=None):
     raise ValueError('pagination limit; execute instead')
 
 
+def numerical_test_set(root):
+    profiles = json.loads((root / 'tests/test_tier_manifest.json').read_text(encoding='utf-8'))['profiles']
+    selected = {}
+    for name in ('native-build-contracts', 'sparsesolv', 'solver-numerics', 'solver-heavy'):
+        paths = set()
+        current = name
+        visited = set()
+        while current:
+            if current in visited:
+                raise ValueError('cyclic numerical profile inheritance')
+            visited.add(current)
+            paths.update(profiles[current].get('paths', []))
+            current = profiles[current].get('extends')
+        selected[name] = sorted(paths)
+    return selected
+
+
+def profile_matches(lane, prior, current):
+    if lane != 'sparsesolv':
+        return True
+    # A skipped or compact PR cannot certify the full post-merge lane.
+    return (prior.get('impact_required') is True
+            and prior.get('test_set') == current.get('test_set')
+            and bool(current.get('test_set')))
+
+
 def identity(lane, git):
-    return dict(schema='radia.ci-tree.v1', lane=lane, repository=os.environ['GITHUB_REPOSITORY'],
+    result = dict(schema='radia.ci-tree.v1', lane=lane, repository=os.environ['GITHUB_REPOSITORY'],
                 commit=git('rev-parse', 'HEAD').strip(), tree=git('rev-parse', 'HEAD^{tree}').strip(),
                 run_id=int(os.environ['GITHUB_RUN_ID']))
+    if lane == 'sparsesolv':
+        result['test_set'] = numerical_test_set(Path(__file__).resolve().parents[1])
+    return result
 
 
 def reuse(lane, event, current, get=api, listing=pages):
@@ -93,6 +122,8 @@ def reuse(lane, event, current, get=api, listing=pages):
             with zipfile.ZipFile(io.BytesIO(get(f'actions/artifacts/{candidates[0]["id"]}/zip', True))) as archive:
                 prior = json.loads(archive.read('ci-tree-receipt.json'))
             if any(prior.get(k) != current[k] for k in ('schema', 'lane', 'repository', 'tree')) or prior.get('run_id') != run['id']:
+                continue
+            if not profile_matches(lane, prior, current):
                 continue
             commit = get('git/commits/' + prior['commit'])
             if (commit['tree']['sha'] != current['tree'] or len(commit['parents']) != 2

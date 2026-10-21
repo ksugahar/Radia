@@ -210,6 +210,11 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     routing_source = (ROOT / "tools/ci_runner_routing.py").read_text(encoding="utf-8")
     assert "tools/ci_runner_routing.json" in routing_source
     expected |= routing_files | {'tools/ci_tree_receipt.py', 'packages/radia-simulink/src/radia_simulink/simulink/__init__.py', 'packages/cubit-mesh-export/src/cubit_mesh_export/toolbar_install.py', 'packages/cubit-mesh-export/src/cubit_mesh_export/_layout.py'}
+    # The complete numerical closure imports these MCP domain adapters too.
+    expected |= {
+        'packages/radia-mcp/src/radia_mcp/optimization/constraints.py',
+        'packages/radia-mcp/src/radia_mcp/radia_ngsolve/air_gap.py',
+    }
     assert shared == expected | set(RADIA_LANE_READS)
     # The shared IH contracts execute the GPU package adapter against CPU Radia solvers.
     for path in ("tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",

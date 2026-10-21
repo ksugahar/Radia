@@ -95,18 +95,14 @@ def ams_manifest_unchanged(before: str, after: str) -> bool:
             name = profile.get("extends")
             if name is not None and not isinstance(name, str):
                 raise ValueError("invalid AMS parent")
-        for profile_name in ("solver-numerics", "solver-heavy", "solver-pr"):
+        for profile_name in ("solver-numerics", "solver-heavy"):
             if profile_name in profiles:
                 selected[profile_name] = profiles[profile_name]
         data["profiles"] = selected
-        # solver-pr intentionally references a subset of solver-numerics.
-        paths = [path for name, profile in selected.items() if name != 'solver-pr'
+        paths = [path for name, profile in selected.items()
                  for path in profile.get("paths", [])]
         if not paths or len(paths) != len(set(paths)):
             raise ValueError("empty or duplicate AMS test paths")
-        representative = selected.get('solver-pr', {}).get('paths', [])
-        if len(representative) != len(set(representative)):
-            raise ValueError('duplicate representative paths')
         return data
     return _canonical(relevant(before)) == _canonical(relevant(after))
 
@@ -448,8 +444,9 @@ def _required_for_event(lane,event_name,event,git,data):
             spec = importlib.util.spec_from_file_location('ci_ams_inputs', ROOT / 'tools/ci_ams_inputs.py')
             inputs = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(inputs)
-            if changed and not inputs.required(ROOT, changed, CONTRACT, data):
-                return False, 'outside compact AMS build/test closure; full numerical suite is nightly'
+            if changed and inputs.required(ROOT, changed, CONTRACT, data):
+                return True, 'full numerical/build input closure'
+            # Preserve every parent workflow input in addition to the derived closure.
         return lane_required(lane,changed,lambda p:(git('show',f'{base}:{p}'),git('show',f'HEAD:{p}')),data)
     except Exception as exc:  # any unanticipated failure must select the lane
         return True,f'impact unknown ({type(exc).__name__}); fail closed'
