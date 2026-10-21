@@ -126,5 +126,5 @@ int main() {
     rejects_without_scratch(invalid_backend,"Explicit independent CPU");
     auto one_short=valid;one_short.budgets.domain_host_bytes=info.host_reserve_bytes-1;
     rejects_without_scratch(one_short,"exceeds declared byte budgets");
-    std::cout<<"IH config CPU config budget/ID contracts PASS (host only; no physics)\n";
+    std::cout<<"IH CPU config budget/ID contracts PASS (host only; no physics)\n";
 }

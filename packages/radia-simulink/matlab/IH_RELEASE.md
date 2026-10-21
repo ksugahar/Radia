@@ -132,7 +132,7 @@ linear solve.
 The standalone C++ configuration regression checks typed input shapes,
 identifiers, constant-field maps and byte budgets without CUDA or MATLAB.
 Its type declarations do not supply an executable coupled-domain backend or
-certify nonlinear periodic response. Native numerical and model acceptance
+certify nonlinear BH. Native numerical and model acceptance
 remain separate requirements. The CPU ESIM method remains an independent
 analysis route; no new coupled route silently falls back to it or uses its
 output as evidence of its own accuracy.
