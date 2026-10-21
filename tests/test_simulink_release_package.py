@@ -8,6 +8,21 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_ih_resident_start_requires_explicit_magnetic_mode_without_rewriting_it():
+    """Source boundary contract; does not claim MATLAB or native execution."""
+    source = (ROOT / "packages/radia-simulink/matlab/+radia/+simulink/ihResidentSFunction.m").read_text(encoding="utf-8")
+    start = source.split("function start(block)\n", 1)[1].split("\nfunction ", 1)[0]
+    assert "cfg=block.DialogPrm(1).Data;" in start
+    guard = "if ~isfield(cfg,'bh_mode')\n    error('radia:ih:MissingMagneticMode','Explicit bh_mode is required.');\nend"
+    assert guard in start
+    assert start.index(guard) < start.index("radia_cuda_ih('create',cfg)")
+    # Any explicit mode, including nonlinear, reaches native unchanged.
+    # Its runtime acceptance/rejection remains a separate native gate.
+    assert start.count("cfg=") == 1
+    assert "cfg.bh_mode=" not in source
+    assert "cfg.('bh_mode')=" not in source
+
+
 
 
 

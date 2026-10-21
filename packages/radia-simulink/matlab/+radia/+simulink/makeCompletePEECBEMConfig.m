@@ -31,7 +31,7 @@ for face=1:faces
  derivative=complex(zeros(n));derivative(flux,phi)=-kz/(1i*omega*mu0);derivative(reaction,phi)=-kz;
  entryMap(:,face)=reshape(derivative.',[],1); % native dense CSR is row-major
 end
-cfg=thermal;cfg.schema_version=1;cfg.material_mode='element-esim-operators';
+cfg=thermal;cfg.bh_mode='linear';cfg.schema_version=1;cfg.material_mode='element-esim-operators';
 cfg.eddy=a;cfg.operator_impedance_map=entryMap;
 cfg.preconditioner_precision='fp64';cfg.preconditioner_block_ends=[port;n];
 cfg.loss_projection=sparse(size(f,1),n);cfg.loss_projection(:,phi)=f;
