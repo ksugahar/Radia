@@ -70,8 +70,14 @@ def _light_python(directory, steps):
     try:
         venv.EnvBuilder(with_pip=True, clear=True).create(directory)
     except Exception as error:  # recorded, then reported as a failed step
+        log = None
+        if LOG_DIR is not None:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            log = LOG_DIR / f"{len(steps) + 1:02d}-create-isolated-venv.log"
+            log.write_text(repr(error), encoding="utf-8", errors="replace")
         steps.append({"name": "create isolated venv", "command": [], "returncode": 1,
-                      "seconds": round(time.perf_counter() - started, 3), "tail": [repr(error)]})
+                      "seconds": round(time.perf_counter() - started, 3), "tail": [repr(error)],
+                      "log": str(log) if log else None})
         print(f"[FAIL] create isolated venv: {error!r}", flush=True)
         return None
     scripts = "Scripts" if os.name == "nt" else "bin"
