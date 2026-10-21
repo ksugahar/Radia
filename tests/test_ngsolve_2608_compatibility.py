@@ -31,7 +31,7 @@ MakeStructured3DMesh = _mesh_helpers.MakeStructured3DMesh
 from radia.vim._vim import _curve_mesh
 
 ROOT = Path(__file__).resolve().parents[1]
-PINNED_VERSION = "6.2.2607"
+PINNED_VERSION = "6.2.2608"
 
 
 def _dependencies(path: Path) -> set[str]:
@@ -49,6 +49,28 @@ def test_ngsolve_netgen_runtime_matches_radia_exact_package_pins():
         f"netgen-mesher=={PINNED_VERSION}",
     }
     assert expected <= radia_dependencies
+
+
+
+def test_cpu_gpu_extra_and_matlab_expect_one_ngsolve_netgen_abi():
+    """Independent distributions must not request conflicting FE runtime ABIs."""
+    cpu = _dependencies(ROOT / "pyproject.toml")
+    gpu_project = tomllib.loads(
+        (ROOT / "packages/radia-simulink/pyproject.toml").read_text(encoding="utf-8")
+    )["project"]
+    gpu = set(gpu_project["optional-dependencies"]["gpu"])
+    names = ("ngsolve", "netgen-mesher")
+    cpu_pins = {name: [item for item in cpu if item.startswith(name + "==")]
+                for name in names}
+    gpu_pins = {name: [item for item in gpu if item.startswith(name + "==")]
+                for name in names}
+    assert cpu_pins == gpu_pins == {
+        name: [f"{name}=={PINNED_VERSION}"] for name in names
+    }
+    expected_runtime = (
+        ROOT / "packages/radia-simulink/matlab/+radia/+internal/expectedNGSolveVersion.m"
+    ).read_text(encoding="utf-8")
+    assert f'value = "{PINNED_VERSION}";' in expected_runtime
 
 
 def test_self_hosted_ci_keeps_the_ngsolve_abi_in_a_run_local_environment():
@@ -172,7 +194,7 @@ def test_supported_hdiv_order2_spaces_assemble_and_reproduce_constants(
     assert error2 < 1e-24, (family, error2)
 
 
-def test_hdiv_pyramid_remains_an_explicit_upstream_tripwire():
+def test_upstream_hdiv_pyramid_passes_the_existing_functional_probe():
     module_path = ROOT / "tools" / "probe_hdiv_pyramid.py"
     spec = importlib.util.spec_from_file_location("probe_hdiv_pyramid", module_path)
     assert spec is not None and spec.loader is not None
@@ -183,7 +205,9 @@ def test_hdiv_pyramid_remains_an_explicit_upstream_tripwire():
     result = module.probe()
     assert result["ngsolve_version"] == PINNED_VERSION
     assert result["detail"]["mesh_valid_h1"] is True
-    assert result["verdict"] == "NOT_IMPLEMENTED", result
+    assert result["verdict"] == "IMPLEMENTED", result
+    assert result["detail"]["const_field_L2err"] < module.TOL_CONST_REPRO
+    # This upstream check does not enable Radia pyramid charge-Gram support.
 
 
 @pytest.mark.parametrize(
@@ -206,18 +230,14 @@ def test_programmatic_structured_meshes_are_curve_safe(family, factory):
     assert mesh.ngmesh.EdgeDescriptors(), family
 
 
-def test_programmatic_2d_mesh_has_2607_edge_descriptors_before_vol_save(tmp_path):
+def test_programmatic_2d_mesh_has_edge_descriptors_before_vol_save(tmp_path):
     mesh = NetgenMesh(dim=2)
     mesh.SetMaterial(1, "domain")
     mesh.Add(FaceDescriptor(surfnr=1, domin=0, bc=1))
     mesh.SetBCName(0, "outer")
-    edge = EdgeDescriptor()
-    edge.edgenr = 1
-    edge.surfnr = (1, -1)
-    edge.domin = 1
-    edge.domout = 0
-    edge.name = "outer"
-    assert mesh.Add(edge) == 1
+    # SetBCName now creates the 2D edge descriptor; adding another duplicates it.
+    assert len(mesh.EdgeDescriptors()) == 1
+    assert mesh.EdgeDescriptors()[0].name == "outer"
 
     points = [
         mesh.Add(MeshPoint(Pnt(x, y, 0.0)))
@@ -227,7 +247,7 @@ def test_programmatic_2d_mesh_has_2607_edge_descriptors_before_vol_save(tmp_path
     for first, second in ((0, 1), (1, 2), (2, 3), (3, 0)):
         mesh.Add(Element1D([points[first], points[second]], index=1))
 
-    path = tmp_path / "ngsolve_2607_edge_descriptor.vol"
+    path = tmp_path / "ngsolve_edge_descriptor.vol"
     mesh.Save(str(path))
     loaded = ng.Mesh(str(path))
     assert loaded.GetMaterials() == ("domain",)

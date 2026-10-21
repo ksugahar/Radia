@@ -118,8 +118,8 @@ def test_compute_host_install_resolves_and_checks_native_dependencies():
 
 def test_solver_dependency_versions_come_from_exact_metadata_pins():
     assert module._solver_dependency_pins() == {
-        "ngsolve": "6.2.2607",
-        "netgen-mesher": "6.2.2607",
+        "ngsolve": "6.2.2608",
+        "netgen-mesher": "6.2.2608",
     }
 
 
