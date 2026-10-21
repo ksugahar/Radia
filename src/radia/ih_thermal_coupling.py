@@ -146,7 +146,12 @@ class ThermalQuadrature:
         boundary = self.convection*(tb-ambient) + eps*SIGMA*(tb**4-ambient**4)
         dboundary = self.convection + SIGMA*(deps*(tb**4-ambient**4)+4*eps*tb**3)
         conduction = np.einsum('qdi,qd,q->i', g, grad, self.volume_weights*k)
-        r = e.T@de + conduction + b.T@(self.boundary_weights*boundary) - f
+        storage_vector = e.T@de
+        boundary_vector = b.T@(self.boundary_weights*boundary)
+        r = storage_vector + conduction + boundary_vector - f
+        residual_scale = max(float(np.linalg.norm(v)) for v in
+            (f, storage_vector, conduction, boundary_vector))
+        residual_scale = max(residual_scale, POWER_FLOOR_W)
         j = e.T@((self.volume_weights*self.density*cp/dt)[:, None]*e)
         j += np.einsum('qdi,qdj,q->ij', g, g, self.volume_weights*k)
         j += np.einsum('qdi,qd,qj,q->ij', g, grad, e, self.volume_weights*dk)
@@ -158,7 +163,8 @@ class ThermalQuadrature:
         scale = max(abs(power), abs(storage)+abs(loss), POWER_FLOOR_W)
         balance = dict(input_power_W=power, storage_power_W=storage, boundary_loss_W=loss,
             defect_W=defect, relative_defect=abs(defect)/scale,
-            limit=ENERGY_RELATIVE_LIMIT, power_floor_W=POWER_FLOOR_W)
+            limit=ENERGY_RELATIVE_LIMIT, power_floor_W=POWER_FLOOR_W,
+            residual_scale_W=residual_scale)
         return r, j, balance
 
     def step(self, accepted, load, ambient, dt, *, tolerance=1e-10, max_iterations=30):
@@ -166,10 +172,9 @@ class ThermalQuadrature:
         if not 0 < tolerance <= 1e-6 or not 1 <= max_iterations <= 100:
             raise ValueError("Invalid nonlinear tolerance/iteration bound")
         x = np.array(accepted, float, copy=True)
-        scale = max(float(np.linalg.norm(load)), POWER_FLOOR_W)
         for iteration in range(max_iterations):
             r, j, balance = self.residual(x, accepted, load, ambient, dt)
-            relative = float(np.linalg.norm(r))/scale
+            relative = float(np.linalg.norm(r))/balance['residual_scale_W']
             if relative <= tolerance and balance['relative_defect'] <= ENERGY_RELATIVE_LIMIT:
                 return x, dict(iterations=iteration, true_residual=relative, balance=balance,
                     scheme='backward-Euler enthalpy; EM load evaluated at accepted previous temperature')

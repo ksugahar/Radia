@@ -110,7 +110,32 @@ def run():
         try: invoke()
         except ValueError: rejected=True
         assert rejected,label
-    checks['failure_preserves_accepted_state'] = dict(status='PASS', accepted_temperature_K=old.tolist())
+    checks['invalid_inputs_rejected'] = dict(status='PASS')
+
+    cooling_rows = []
+    for power in (0., 1e-3):
+        prior = np.array([400.]); dt = .5
+        value, info = cooled.step(prior, np.array([power]), 290., dt)
+        temp = float(value[0])
+        storage = .5*(temp*temp-400.**2)/dt
+        boundary = .5*(5*(temp-290.)+(.1+.0002*temp)*5.670374419e-8*(temp**4-290.**4))
+        defect = abs(power-storage-boundary)/max(abs(power),abs(storage)+abs(boundary),1e-12)
+        assert 290. < temp < 400. and defect <= 1e-6
+        assert info['true_residual'] <= 1e-10 and prior[0] == 400.
+        cooling_rows.append(dict(load_W=power,temperature_K=temp,
+            independent_energy_relative_defect=defect,true_residual=info['true_residual']))
+    checks['zero_and_small_load_cooling'] = dict(status='PASS', rows=cooling_rows)
+
+    # A valid starting state and material law reach a real Newton increment,
+    # then the deliberately insufficient iteration budget fails to converge.
+    prior = np.array([400.]); saved = prior.copy(); rejected = False
+    try: cooled.step(prior, np.zeros(1), 290., .5, max_iterations=1)
+    except ValueError as error:
+        assert 'Thermal Newton failed' in str(error)
+        rejected = True
+    assert rejected and np.array_equal(prior, saved)
+    checks['newton_iteration_failure_preserves_accepted_state'] = dict(
+        status='PASS', max_iterations=1, accepted_temperature_K=prior.tolist())
     return checks
 
 
