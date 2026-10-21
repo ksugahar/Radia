@@ -11,23 +11,16 @@ on:
       - 'tests/matlab/fixtures/ltspice_rc.cir'
       - 'tests/matlab/test_optuna*.m'
       - 'tests/matlab/private/optuna*.m'
-      - 'packages/radia-optuna/matlab/+radia/+optuna/**'
-      - 'packages/radia-optuna/matlab/+radia/+simulink/buildOptunaBlock.m'
-      - 'packages/radia-optuna/matlab/+radia/+simulink/optunaSFunction.m'
-      - 'packages/radia-optuna/matlab/+radia/+simulink/optunaRuntimeStore.m'
-      - 'packages/radia-optuna/matlab/+radia/+simulink/addOptunaMonitor.m'
-      - 'packages/radia-optuna/matlab/radia_optuna_sfun.m'
-      - 'packages/radia-optuna/matlab/optuna_upstream_compatibility.json'
-      - 'packages/radia-optuna/matlab/optuna50_api_coverage.json'
-      - 'packages/radia-optuna/native/optuna_mex.cpp'
       - 'Build.ps1'
       - 'CMakeLists.txt'
       - 'validation_test/optimization/validate_optuna_cuda.m'
+      - 'validation_test/radia_optuna/validate_cuda.m'
       - '.github/workflows/radia-optuna.yml'
       - 'pyproject.toml'
       - 'MANIFEST.in'
       - 'tests/test_tier_manifest.json'
       - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_tree_receipt.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
       - '!**/*.md'
@@ -44,23 +37,16 @@ on:
       - 'tests/matlab/fixtures/ltspice_rc.cir'
       - 'tests/matlab/test_optuna*.m'
       - 'tests/matlab/private/optuna*.m'
-      - 'packages/radia-optuna/matlab/+radia/+optuna/**'
-      - 'packages/radia-optuna/matlab/+radia/+simulink/buildOptunaBlock.m'
-      - 'packages/radia-optuna/matlab/+radia/+simulink/optunaSFunction.m'
-      - 'packages/radia-optuna/matlab/+radia/+simulink/optunaRuntimeStore.m'
-      - 'packages/radia-optuna/matlab/+radia/+simulink/addOptunaMonitor.m'
-      - 'packages/radia-optuna/matlab/radia_optuna_sfun.m'
-      - 'packages/radia-optuna/matlab/optuna_upstream_compatibility.json'
-      - 'packages/radia-optuna/matlab/optuna50_api_coverage.json'
-      - 'packages/radia-optuna/native/optuna_mex.cpp'
       - 'Build.ps1'
       - 'CMakeLists.txt'
       - 'validation_test/optimization/validate_optuna_cuda.m'
+      - 'validation_test/radia_optuna/validate_cuda.m'
       - '.github/workflows/radia-optuna.yml'
       - 'pyproject.toml'
       - 'MANIFEST.in'
       - 'tests/test_tier_manifest.json'
       - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_tree_receipt.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
       - '!**/*.md'
@@ -72,6 +58,9 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  checks: read
+  pull-requests: read
 
 concurrency:
   group: radia-optuna-${{ github.ref }}
@@ -92,7 +81,16 @@ jobs:
           python-version: '3.12'
       - name: Route distribution impact
         id: route
-        run: python tools/sparsesolv_ci_impact.py --lane radia-optuna
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/sparsesolv_ci_impact.py --lane radia-optuna --tree-reuse
+      - name: Record tested tree or verified reuse
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-optuna-tree-identity
+          path: ci-tree-receipt.json
+          if-no-files-found: error
+          retention-days: 30
 
   build-test:
     needs: [ci-impact]
