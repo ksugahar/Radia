@@ -68,58 +68,27 @@ Two classes ship in [`src/radia/esim_cell_problem.py`](../../src/radia/esim_cell
 
 ### 2.1 ESIMFiniteSlabSolver — discretisation
 
-**PDE family** (lines 352, 573):
+For `exp(+j omega t)`, the slab equation is
+`rho H'' - j omega mu H = 0`; the cylindrical scalar equation is
+`(rho/r) d_r(r d_r H) - j omega mu H = 0`. The surface field is
+Dirichlet, while the slab midplane and cylindrical axis have zero flux.
+The scalar cylinder geometry is not an azimuthal vector-field model.
 
-- Slab: $\rho\,\partial_z^2 H + j\omega\mu(|H|)\,H = 0$ on $z \in [0, a]$,
-  BCs $H(0) = H_t$ (driven), $H'(a) = 0$ (insulated)
-- Cylinder: $(\rho/r)\,\partial_r[r\,\partial_r H] + j\omega\mu(|H|)\,H = 0$
-  on $r \in [0, R]$, BCs $H'(0) = 0$ (regularity), $H(R) = H_t$
-- Finite-slab (2-sided): as slab + Robin / mirror BC
+The shared [depth kernel](../../src/radia/esim_depth.py) uses nonuniform
+control volumes and physical grading `log1p(length/delta)`, independent
+of seed node count. Face conductance is `rho/dx` for slabs and
+`rho*r_face/dx` for cylinders; reaction terms use the corresponding
+control-volume measure. The assembled negative strong form has positive
+diffusion diagonal and reaction `+j omega mu`, consistent with passive
+`mu = mu' - j mu''`.
 
-**Mesh** (line 428):
-
-```python
-self.mesh_points = np.linspace(0, half_thickness, n_nodes)
-```
-
-Default `n_nodes = 100` (line 366).  Uniform; geometric grading is a
-roadmap item (see [`MATHEMATICAL_ANALYSIS.md`](MATHEMATICAL_ANALYSIS.md)
-§ 2.1).
-
-**Finite-difference stencil — interior node (cylinder)**:
-
-```python
-r_ip = r[i] + h/2                  # r_{i+1/2}
-r_im = r[i] - h/2                  # r_{i-1/2}
-coef_p = ρ * r_ip / (r[i] * h²)
-coef_m = ρ * r_im / (r[i] * h²)
-diag_main[i] = -(coef_p + coef_m) + jω * μ_dist[i]
-diag_upper[i] = coef_p
-diag_lower[i-1] = coef_m
-```
-
-(Lines 594-602.) This is the **standard finite-volume conservative
-scheme** on a uniform radial mesh, with cell-centred fluxes at
-$r_{i\pm 1/2}$ — provably second-order accurate in the smooth interior.
-
-**Finite-difference stencil — axis at r = 0**:
-
-```python
-coef_0 = 4 * ρ / h²                # L'Hôpital limit of (1/r) ∂_r[r ∂_r]
-diag_main[0] = -coef_0 + jω * μ_dist[0]
-diag_upper[0] = coef_0
-```
-
-(Lines 609-611.)  Symmetry `H'(0) = 0` is imposed via the ghost-cell
-identity `H[-1] = H[1]`, which combined with `(1/r)∂_r[r∂_r H] → 2∂_r^2 H`
-as `r → 0` gives the `4ρ/h²` coefficient.  This is essential to
-recover the analytical Bessel solution (§ 3.1 of
-[`CROSS_VALIDATION.md`](CROSS_VALIDATION.md)).
-
-**Linear solve.**  The tridiagonal system is assembled as a `scipy.sparse`
-CSR matrix and solved with `scipy.sparse.linalg.spsolve`.  Memory and
-work scale linearly in `n_nodes`; one solve is `~50 μs` at
-`n_nodes = 100`.
+Nested midpoint probes compare impedance and power, marking intervals for
+refinement until the declared tolerance is met. Node/refinement exhaustion
+raises; half-space cells also check domain-depth convergence independently.
+The estimator is empirical, not a rigorous global bound. The row-scaled
+tridiagonal system is solved with `scipy.linalg.solve_banded`; a measured
+algebraic relative residual above `1e-6` raises. The old uniform-grid axis
+ghost stencil and unbounded geometric ratio are not used.
 
 ### 2.2 Inner Picard iteration (cell-internal nonlinearity)
 
@@ -138,7 +107,9 @@ for iteration in range(max_iter):
 
 (Lines 508-541 of [`esim_cell_problem.py`](../../src/radia/esim_cell_problem.py).)
 
-**Defaults**: `tol = 1e-6`, `max_iter = 50`, `relaxation = 0.5`.
+**Defaults**: `tol = 1e-6`, `cell_max_iter = 200`, `relaxation = 0.5`.
+An omitted solve-level `max_iter` uses the configured cell limit. Exhausting
+that limit raises; the outer Picard budget is a separate control.
 
 For monotone BH curves (all production materials), Picard converges
 linearly with rate ≤ `relaxation × L_local` where `L_local` is the
@@ -211,7 +182,7 @@ $$
 
 ```python
 # Seed
-Z_s = esim_solver.solve(H0=5.0, max_iter=5)['Z']    # conservative low-H seed
+Z_s = esim_solver.get_linear_sibc()               # declared low-field linear seed
 
 for k in range(max_iter):                            # outer Karl loop
     res = outer_solve(Z_s)                           # BEM / FEM solve
