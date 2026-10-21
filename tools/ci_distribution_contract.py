@@ -128,7 +128,11 @@ def validate_schema(manifest):
             raise ValueError(f"invalid lane owners: {name}")
         if lane["workflow"] != f".github/workflows/{name}.yml":
             raise ValueError(f"invalid workflow: {name}")
-        for projection in lane["events"].values():
+        for event, projection in lane["events"].items():
+            if event == "schedule":
+                if not isinstance(projection, list) or not all(set(x) == {"cron"} for x in projection):
+                    raise ValueError("invalid schedule")
+                continue
             if "paths" in projection and "paths-ignore" in projection:
                 raise ValueError("paths and paths-ignore cannot coexist")
             for key in ("paths", "paths-ignore"):

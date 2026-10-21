@@ -4,6 +4,63 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'src/core/**'
+      - 'src/lib/**'
+      - 'src/ext/**'
+      - 'cmake/**'
+      - 'src/radia/analysis.py'
+      - 'src/radia/analytical_formulas/conductor_impedance.py'
+      - 'src/radia/bh_law.py'
+      - 'src/radia/biot_savart.py'
+      - 'src/radia/esim_workpiece.py'
+      - 'src/radia/lanczos_reduction.py'
+      - 'src/radia/magnet.py'
+      - 'src/radia/netgen_mesh_import.py'
+      - 'src/radia/planar_charges.py'
+      - 'src/radia/planar_materials.py'
+      - 'src/radia/soft_iron.py'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/_layout.py'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/toolbar_install.py'
+      - 'packages/radia-simulink/src/radia_simulink/simulink/__init__.py'
+      - 'src/radia/_b3d_shim.py'
+      - 'src/radia/bem/coil_inductance_ngsolve.py'
+      - 'src/radia/bem_complete_reaction.py'
+      - 'src/radia/bem_coupled_solver.py'
+      - 'src/radia/bem_loop_extension.py'
+      - 'src/radia/bem_loop_work.py'
+      - 'src/radia/cohomology.py'
+      - 'src/radia/coil_builder.py'
+      - 'src/radia/coil_from_step.py'
+      - 'src/radia/coil_profile.py'
+      - 'src/radia/coil_topology.py'
+      - 'src/radia/esim_panel_evaluator.py'
+      - 'src/radia/fin_section.py'
+      - 'src/radia/fin_surface_solver.py'
+      - 'src/radia/fin_sweep.py'
+      - 'src/radia/force.py'
+      - 'src/radia/kelvin_geometry.py'
+      - 'src/radia/kelvin_source.py'
+      - 'src/radia/mesh_curve.py'
+      - 'src/radia/panel_design_common.py'
+      - 'src/radia/panels/calc_accel_hdiv.py'
+      - 'src/radia/panels/calc_clebsch_hodograph.py'
+      - 'src/radia/panels/panel_log.py'
+      - 'src/radia/peec_bundle.py'
+      - 'src/radia/peec_coupled_bem_solver.py'
+      - 'src/radia/peec_fin_topology.py'
+      - 'src/radia/peec_hacapk_solver.py'
+      - 'src/radia/peec_matrices.py'
+      - 'src/radia/peec_proximity.py'
+      - 'src/radia/peec_topology.py'
+      - 'src/radia/surface_impedance.py'
+      - 'src/radia/workpiece_surface.py'
+      - 'validation_test/induction_heating/aphi_beak_section_sweep.py'
+      - 'validation_test/induction_heating/make_beak_fin_step.py'
+      - 'validation_test/panels/fixtures/**'
+      - 'tools/ci_ams_inputs.py'
+      - 'tests/conftest.py'
+      - 'tests/test_direct_residual_gate.py'
+      - 'validation_test/induction_heating/aphi_round_wire_validation.py'
       - 'src/radia/_residual_gate.py'
       - 'validation_test/open_boundary/test_kelvin_vector_direct_gate.py'
       - 'validation_test/team21/**'
@@ -150,6 +207,7 @@ on:
       - 'tools/native_build_provenance.ps1'
       - 'tests/test_native_build_provenance.py'
       - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_tree_receipt.py'
       - '.github/workflows/sparsesolv.yml'
       - 'tools/validation_source_gate.py'
       - 'tests/validation_gate/**'
@@ -179,6 +237,63 @@ on:
   push:
     branches: [main]
     paths:
+      - 'src/core/**'
+      - 'src/lib/**'
+      - 'src/ext/**'
+      - 'cmake/**'
+      - 'src/radia/analysis.py'
+      - 'src/radia/analytical_formulas/conductor_impedance.py'
+      - 'src/radia/bh_law.py'
+      - 'src/radia/biot_savart.py'
+      - 'src/radia/esim_workpiece.py'
+      - 'src/radia/lanczos_reduction.py'
+      - 'src/radia/magnet.py'
+      - 'src/radia/netgen_mesh_import.py'
+      - 'src/radia/planar_charges.py'
+      - 'src/radia/planar_materials.py'
+      - 'src/radia/soft_iron.py'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/_layout.py'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/toolbar_install.py'
+      - 'packages/radia-simulink/src/radia_simulink/simulink/__init__.py'
+      - 'src/radia/_b3d_shim.py'
+      - 'src/radia/bem/coil_inductance_ngsolve.py'
+      - 'src/radia/bem_complete_reaction.py'
+      - 'src/radia/bem_coupled_solver.py'
+      - 'src/radia/bem_loop_extension.py'
+      - 'src/radia/bem_loop_work.py'
+      - 'src/radia/cohomology.py'
+      - 'src/radia/coil_builder.py'
+      - 'src/radia/coil_from_step.py'
+      - 'src/radia/coil_profile.py'
+      - 'src/radia/coil_topology.py'
+      - 'src/radia/esim_panel_evaluator.py'
+      - 'src/radia/fin_section.py'
+      - 'src/radia/fin_surface_solver.py'
+      - 'src/radia/fin_sweep.py'
+      - 'src/radia/force.py'
+      - 'src/radia/kelvin_geometry.py'
+      - 'src/radia/kelvin_source.py'
+      - 'src/radia/mesh_curve.py'
+      - 'src/radia/panel_design_common.py'
+      - 'src/radia/panels/calc_accel_hdiv.py'
+      - 'src/radia/panels/calc_clebsch_hodograph.py'
+      - 'src/radia/panels/panel_log.py'
+      - 'src/radia/peec_bundle.py'
+      - 'src/radia/peec_coupled_bem_solver.py'
+      - 'src/radia/peec_fin_topology.py'
+      - 'src/radia/peec_hacapk_solver.py'
+      - 'src/radia/peec_matrices.py'
+      - 'src/radia/peec_proximity.py'
+      - 'src/radia/peec_topology.py'
+      - 'src/radia/surface_impedance.py'
+      - 'src/radia/workpiece_surface.py'
+      - 'validation_test/induction_heating/aphi_beak_section_sweep.py'
+      - 'validation_test/induction_heating/make_beak_fin_step.py'
+      - 'validation_test/panels/fixtures/**'
+      - 'tools/ci_ams_inputs.py'
+      - 'tests/conftest.py'
+      - 'tests/test_direct_residual_gate.py'
+      - 'validation_test/induction_heating/aphi_round_wire_validation.py'
       - 'src/radia/_residual_gate.py'
       - 'validation_test/open_boundary/test_kelvin_vector_direct_gate.py'
       - 'validation_test/team21/**'
@@ -325,6 +440,7 @@ on:
       - 'tools/native_build_provenance.ps1'
       - 'tests/test_native_build_provenance.py'
       - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_tree_receipt.py'
       - '.github/workflows/sparsesolv.yml'
       - 'tools/validation_source_gate.py'
       - 'tests/validation_gate/**'
@@ -351,6 +467,8 @@ on:
       - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py'
       - 'packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py'
       - '!**/*.md'
+  schedule:
+    - cron: '17 16 * * *'
   workflow_dispatch:
     inputs:
       force_validation:
@@ -362,6 +480,8 @@ on:
 permissions:
   contents: read
   actions: read
+  checks: read
+  pull-requests: read
 
 concurrency:
   group: sparsesolv-${{ github.ref }}
@@ -382,7 +502,16 @@ jobs:
           python-version: '3.12'
       - name: Route distribution impact
         id: route
-        run: python tools/sparsesolv_ci_impact.py --lane sparsesolv
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/sparsesolv_ci_impact.py --lane sparsesolv --tree-reuse
+      - name: Record tested tree or verified reuse
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparsesolv-tree-identity
+          path: ci-tree-receipt.json
+          if-no-files-found: error
+          retention-days: 30
 
   ams-regression:
     needs: [ci-impact]
@@ -476,8 +605,27 @@ jobs:
           python tools/run_test_tier.py --profile sparsesolv --junitxml "$env:RUNNER_TEMP\sparsesolv-results.xml"
           exit $LASTEXITCODE
 
+      - name: Run representative PR numerical contracts
+        if: steps.native-impact.outputs.required == 'true' && github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          RADIA_TESTS_ALLOW_PARTIAL: '0'
+          RADIA_TEST_NGSOLVE_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_test_tier.py --profile solver-pr --junitxml "$env:RUNNER_TEMP\solver-pr.xml"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-pr.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
+          exit $LASTEXITCODE
+
       - name: Run required NGSolve numerical contracts
-        if: steps.native-impact.outputs.required == 'true'
+        if: steps.native-impact.outputs.required == 'true' && github.event_name != 'pull_request'
         shell: pwsh
         env:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'

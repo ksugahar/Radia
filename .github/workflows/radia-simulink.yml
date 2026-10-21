@@ -9,12 +9,31 @@ on:
       - 'packages/radia-mcp/src/radia_mcp/common/__init__.py'
       - 'packages/radia-mcp/src/radia_mcp/common/lazy_call.py'
       - 'packages/radia-mcp/src/radia_mcp/common/status.py'
-      - 'validation_test/radia_simulink/**'
-      - 'validation_test/ams_cuda/**'
-      - 'validation_test/ic_cuda/**'
-      - 'validation_test/ngsolve_cuda_mex/**'
-      - 'validation_test/hmatrix_cuda/**'
-      - 'validation_test/fmm_cuda/**'
+      - 'validation_test/radia_simulink/**/*.py'
+      - 'validation_test/radia_simulink/**/*.m'
+      - 'validation_test/radia_simulink/**/*.vol'
+      - 'validation_test/radia_simulink/**/*.h5'
+      - 'validation_test/radia_simulink/**/*.json'
+      - 'validation_test/ams_cuda/**/*.py'
+      - 'validation_test/ams_cuda/**/*.m'
+      - 'validation_test/ams_cuda/**/*.vol'
+      - 'validation_test/ams_cuda/**/*.h5'
+      - 'validation_test/ic_cuda/**/*.py'
+      - 'validation_test/ic_cuda/**/*.m'
+      - 'validation_test/ic_cuda/**/*.vol'
+      - 'validation_test/ic_cuda/**/*.h5'
+      - 'validation_test/ngsolve_cuda_mex/**/*.py'
+      - 'validation_test/ngsolve_cuda_mex/**/*.m'
+      - 'validation_test/ngsolve_cuda_mex/**/*.vol'
+      - 'validation_test/ngsolve_cuda_mex/**/*.h5'
+      - 'validation_test/hmatrix_cuda/**/*.py'
+      - 'validation_test/hmatrix_cuda/**/*.m'
+      - 'validation_test/hmatrix_cuda/**/*.vol'
+      - 'validation_test/hmatrix_cuda/**/*.h5'
+      - 'validation_test/fmm_cuda/**/*.py'
+      - 'validation_test/fmm_cuda/**/*.m'
+      - 'validation_test/fmm_cuda/**/*.vol'
+      - 'validation_test/fmm_cuda/**/*.h5'
       - 'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp'
       - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
       - 'src/ext/HACApK/**'
@@ -39,6 +58,7 @@ on:
       - 'MANIFEST.in'
       - 'tests/test_tier_manifest.json'
       - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_tree_receipt.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
       - 'src/runtime/ih/**'
@@ -56,12 +76,31 @@ on:
       - 'packages/radia-mcp/src/radia_mcp/common/__init__.py'
       - 'packages/radia-mcp/src/radia_mcp/common/lazy_call.py'
       - 'packages/radia-mcp/src/radia_mcp/common/status.py'
-      - 'validation_test/radia_simulink/**'
-      - 'validation_test/ams_cuda/**'
-      - 'validation_test/ic_cuda/**'
-      - 'validation_test/ngsolve_cuda_mex/**'
-      - 'validation_test/hmatrix_cuda/**'
-      - 'validation_test/fmm_cuda/**'
+      - 'validation_test/radia_simulink/**/*.py'
+      - 'validation_test/radia_simulink/**/*.m'
+      - 'validation_test/radia_simulink/**/*.vol'
+      - 'validation_test/radia_simulink/**/*.h5'
+      - 'validation_test/radia_simulink/**/*.json'
+      - 'validation_test/ams_cuda/**/*.py'
+      - 'validation_test/ams_cuda/**/*.m'
+      - 'validation_test/ams_cuda/**/*.vol'
+      - 'validation_test/ams_cuda/**/*.h5'
+      - 'validation_test/ic_cuda/**/*.py'
+      - 'validation_test/ic_cuda/**/*.m'
+      - 'validation_test/ic_cuda/**/*.vol'
+      - 'validation_test/ic_cuda/**/*.h5'
+      - 'validation_test/ngsolve_cuda_mex/**/*.py'
+      - 'validation_test/ngsolve_cuda_mex/**/*.m'
+      - 'validation_test/ngsolve_cuda_mex/**/*.vol'
+      - 'validation_test/ngsolve_cuda_mex/**/*.h5'
+      - 'validation_test/hmatrix_cuda/**/*.py'
+      - 'validation_test/hmatrix_cuda/**/*.m'
+      - 'validation_test/hmatrix_cuda/**/*.vol'
+      - 'validation_test/hmatrix_cuda/**/*.h5'
+      - 'validation_test/fmm_cuda/**/*.py'
+      - 'validation_test/fmm_cuda/**/*.m'
+      - 'validation_test/fmm_cuda/**/*.vol'
+      - 'validation_test/fmm_cuda/**/*.h5'
       - 'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_*.hpp'
       - 'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp'
       - 'src/ext/HACApK/**'
@@ -86,6 +125,7 @@ on:
       - 'MANIFEST.in'
       - 'tests/test_tier_manifest.json'
       - 'tools/sparsesolv_ci_impact.py'
+      - 'tools/ci_tree_receipt.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
       - 'src/runtime/ih/**'
@@ -99,6 +139,9 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  checks: read
+  pull-requests: read
 
 concurrency:
   group: radia-simulink-${{ github.ref }}
@@ -119,7 +162,16 @@ jobs:
           python-version: '3.12'
       - name: Route distribution impact
         id: route
-        run: python tools/sparsesolv_ci_impact.py --lane radia-simulink
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/sparsesolv_ci_impact.py --lane radia-simulink --tree-reuse
+      - name: Record tested tree or verified reuse
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-simulink-tree-identity
+          path: ci-tree-receipt.json
+          if-no-files-found: error
+          retention-days: 30
 
   cuda-mex:
     needs: [ci-impact]
