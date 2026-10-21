@@ -1,0 +1,95 @@
+{
+  "schema": "radia.hdiv-mmm-tet2608-component.v1",
+  "accepted": true,
+  "release_accepted": false,
+  "native_source_commit": "83fef31265a784a9052329fc41e7389afd7ab453",
+  "ngsolve": "6.2.2608",
+  "geometry": "P2 curved single-region tetrahedral unit sphere",
+  "cells": 13,
+  "dofs": 288,
+  "units": "SI",
+  "material": "Independently authored monotone synthetic saturation BH table",
+  "cpu_route": "Python NGSolve and independent Radia CPU charge Gram; no shared CUDA kernels",
+  "gpu_route": "MATLAB mexcuda with NGSolve-owned FE staging",
+  "cpu_coefficient_relative_errors": [
+    4.3174360571559606e-14,
+    3.693995802862301e-14,
+    5.314523935811775e-14,
+    5.314523935811775e-14,
+    3.852088055927196e-14,
+    3.717816296720756e-14,
+    3.717816296720756e-14
+  ],
+  "independent_original_nonlinear_residuals": [
+    6.80720669183622e-14,
+    6.855031187677289e-14,
+    6.996551404843215e-14,
+    6.996551404843215e-14,
+    8.631204152713573e-14,
+    5.5966573410220373e-14,
+    5.5966573410220373e-14
+  ],
+  "limits": {
+    "coefficient_relative": 1e-08,
+    "independent_original_residual": 1e-08,
+    "internal_nonlinear_residual": 1e-10,
+    "inner_true_residual": 1e-06
+  },
+  "memory": {
+    "protocol": "5warm+100; final25 slope<=64KiB/run and delta<=1MiB for host and device",
+    "reuse": {
+      "final25_host_slope_bytes_per_run": -2079.5076922937874,
+      "final25_host_delta_bytes": -225280,
+      "final25_device_used_slope_bytes_per_run": -4.631394790318755e-07,
+      "final25_device_used_delta_bytes": 0
+    },
+    "material_context_create_destroy": {
+      "final25_host_slope_bytes_per_run": 2.6303817265287063e-08,
+      "final25_host_delta_bytes": 0,
+      "final25_device_used_slope_bytes_per_run": -4.1341317321131377e-07,
+      "final25_device_used_delta_bytes": 0
+    },
+    "hmatrix_live": 0,
+    "projection_live": 0
+  },
+  "peak_job_commit_bytes": 2879033344,
+  "reuse100_explicit_initial_seconds": 2.8672218,
+  "native_binary_sha256": {
+    "_radia_pybind.pyd": "1e9f8d9b0457b0798f43d3e753301183fe4a79137bdd28413b56eb0eb9ac6071",
+    "radia_cuda_hmatrix.mexw64": "932613f14416d2b21f0c0236daad6dadf973dcc1053a6ffac2f8c0c8f7fcb6a8",
+    "radia_cuda_projection.mexw64": "efcfeff600d37671ea6998a0c85971c7c1b8ea84bf503b7866e6cdca36a4f821"
+  },
+  "helper_sha256": {
+    "check_tet2608_v2.py": "c545678b107bac504721b3cdc32838d5c9e87c2f72806269e29528f8f809e3eb",
+    "checkTetMemory.m": "199b3662e63b35e94ca96224ddf2f6a4fa89b934d973a40f89f4b068fda6b0f2",
+    "check_tet_memory.py": "d6ac832fbe29c17c09620ec4f0d88f47363cf125d3bc82ffbe12c5fda5411032"
+  },
+  "limitations": [
+    "tet only; no hex or mixed GPU acceptance",
+    "100 prepared explicit-initial reuse solves, not100 fresh Newton solves",
+    "100 material-context cycles, not100 whole prepared-object constructions",
+    "sampled memory and diagnostic timings; no global-peak or speedup claim",
+    "no Python GPU binding, wheel or release acceptance"
+  ],
+  "connected_fe_prerequisites": {
+    "accepted": true,
+    "test_source_sha256": "a3ffb82bd6bf2011bfc7f0a8eccaf3ef257a74c9d73dec2ab34c0f9cfc85d57b",
+    "cases": 6,
+    "ngsolve": "6.2.2608",
+    "families": [
+      "tet",
+      "hex",
+      "tet-pyramid-hex"
+    ],
+    "orders": [
+      1,
+      2
+    ],
+    "gates": [
+      "mass assembly finite",
+      "constant vector L2 mass projection, squared error<1e-20",
+      "four deterministic random fields: divergence integral equals exterior normal flux within1e-10 relative"
+    ],
+    "limitations": "NGSolve FE prerequisite only, not Radia mixed charge-Gram or GPU certification"
+  }
+}

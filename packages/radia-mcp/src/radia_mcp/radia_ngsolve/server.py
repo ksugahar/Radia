@@ -975,6 +975,27 @@ def hdiv_vim(topic: str = "overview") -> str:
 
 
 @mcp.tool()
+def hdiv_nonlinear_gpu_run(vol_path: str, label_contract: str, law_path: str,
+                           applied_fields: list[list[float]], result_path: str,
+                           backend: str, order: int = 1,
+                           preconditioner: str = "reference-diagonal",
+                           tolerance: float = 5e-14, linear_tolerance: float = 5e-14) -> str:
+    """Run shared GPU HDiv-MMM Newton for uniform H cases, reusing one owner.
+
+    Select backend='gpu' explicitly. Provide a checked body .vol label contract
+    and inverse-BH law JSON or radia.bh-table.v1 {table:[[H,B],...]}; H is A/m,
+    B is tesla. Uses existing Radia law construction. Saves owned
+    coefficients, native original-equation residuals and histories, closes all
+    GPU owners on success or error. This does not certify CPU parity or mixed
+    geometry. CPU analysis uses hdiv_vim_demag_eval, without a silent fallback.
+    """
+    from .hdiv_gpu import hdiv_nonlinear_gpu_run as run
+    return json.dumps(run(vol_path, label_contract, law_path, applied_fields,
+                          result_path, backend, order, preconditioner,
+                          tolerance, linear_tolerance))
+
+
+@mcp.tool()
 def hdiv_vim_demag_eval(vol_path: str, mu_r: str = "1000.0",
                         h_ext: str = "0,0,1e5", order: int = 1,
                         tol: float = 1e-9) -> str:

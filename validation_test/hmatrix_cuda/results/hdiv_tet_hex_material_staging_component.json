@@ -1,0 +1,88 @@
+{
+  "schema": "radia.hdiv-tet-hex-material-staging.v1",
+  "source_sha": "5e029ab8d45e69e85d9f80a61a54f7e42cafc6d9",
+  "python_binary_sha256": "1fa6e98487caba49df7ca6f020a01d240e4e6d91cd6fe782129ac3cca287cdb6",
+  "projection_binary_sha256": "1d7bf9073aa45040d3f007a43fed19e65981f4da1e5352caa1d95b1ecf0dea6b",
+  "ngsolve_version": "6.2.2608",
+  "accepted": true,
+  "scope": "Affine tet and hex orders1/2 material staging component; no full nonlinear MMM or release acceptance",
+  "independent_mass": {
+    "relative_limit": 1e-12,
+    "cases": [
+      "tet1",
+      "tet2",
+      "hex1",
+      "hex2"
+    ],
+    "passed": true
+  },
+  "hex2_python_matlab_parity": {
+    "accepted": true,
+    "evaluation_nonzeros": 75953,
+    "points": 343
+  },
+  "staging_common100": {
+    "warm": 5,
+    "measured": 100,
+    "window": 25,
+    "host_slope_limit": 65536,
+    "delta_limit": 1048576,
+    "modes": [
+      {
+        "mode": "reuse",
+        "host": {
+          "final25_slope_bytes_per_run": 29119.40923076923,
+          "final25_delta_bytes": 0,
+          "accepted": true
+        },
+        "device": {
+          "final25_slope_bytes_per_run": 0.0,
+          "final25_delta_bytes": 0,
+          "accepted": true
+        },
+        "median_seconds": 0.004747500002849847,
+        "observer_host": {
+          "final25_slope_bytes_per_run": 0.0,
+          "final25_delta_bytes": 0,
+          "accepted": true
+        },
+        "observer_device": {
+          "final25_slope_bytes_per_run": 0.0,
+          "final25_delta_bytes": 0,
+          "accepted": true
+        }
+      },
+      {
+        "mode": "recreate",
+        "host": {
+          "final25_slope_bytes_per_run": -1928.2707692307692,
+          "final25_delta_bytes": -4096,
+          "accepted": true
+        },
+        "device": {
+          "final25_slope_bytes_per_run": 0.0,
+          "final25_delta_bytes": 0,
+          "accepted": true
+        },
+        "median_seconds": 0.005367949997889809,
+        "observer_host": {
+          "final25_slope_bytes_per_run": 0.0,
+          "final25_delta_bytes": 0,
+          "accepted": true
+        },
+        "observer_device": {
+          "final25_slope_bytes_per_run": 0.0,
+          "final25_delta_bytes": 0,
+          "accepted": true
+        }
+      }
+    ],
+    "opaque_runtime_retention_is_not_zero": true
+  },
+  "limitations": [
+    "No pyramid charge Gram or mixed MMM acceptance",
+    "No nonlinear BH solve acceptance on this source",
+    "Staging repetition is not full nonlinear workflow or solver memory acceptance",
+    "No wheel or release acceptance"
+  ]
+}

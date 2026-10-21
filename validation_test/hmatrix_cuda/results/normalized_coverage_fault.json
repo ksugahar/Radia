@@ -1,0 +1,35 @@
+{
+  "accepted": true,
+  "site": "normalized.coverage",
+  "enumerated_fault_points": 1,
+  "memory_fault_repeats": 15,
+  "warmup": 5,
+  "measured": 10,
+  "slopes_bytes_per_run": [
+    66057.30909097259,
+    5.39415223445255e-09
+  ],
+  "deltas_bytes": [
+    593920,
+    0
+  ],
+  "scope": "New bitmap allocation only; not all-site faults or common100",
+  "schema": "radia.normalized-coverage-fault.v1",
+  "artifact": {
+    "native_source": "9091af701fa519d2e8fa54d54c19b95bd8f0771f",
+    "mex_sha256": "95ff751676c501decdceb6f36ecd89468af26adfa5cb63cbd429a71de8c94e81",
+    "diagnostic_only": true,
+    "helper_sha256": "3f78067563fb4cf81f41834a2645e567cbb07ebea2f0b84b1b49d29b35dd8863"
+  },
+  "build_seconds": 167.031,
+  "run_seconds": 19.156,
+  "reachable_targets": [
+    1
+  ],
+  "unreachable_next_target": 2,
+  "unwind": "Host/device/resource/publication owners zero after every injected failure, followed by successful independent numeric recovery <=1e-14; clear MEX after final live0.",
+  "memory_limit_bytes_per_run": 1048576,
+  "memory_delta_limit_bytes": 1048576,
+  "retention": "Host slope66057B/run and delta593920B pass the frozen5+10failure class, but are not zero opaque retention, not plateau or common100 evidence. Device samples constant; OLS tiny numerical roundoff.",
+  "release_accepted": false
+}

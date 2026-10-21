@@ -48,3 +48,18 @@ class ProcessMemory:
                     sampled_peak_rss_bytes=max(s['rss_bytes'] for s in self.samples),
                     sampled_peak_private_bytes=max(s['private_bytes'] for s in self.samples),
                     limitation='Process samples include baseline and imported runtimes, may miss short spikes; lifetime RSS peak is not a phase peak; no global host/device peak')
+
+
+def checkpoint_sample(stream, sample, judge=None):
+    """Persist one JSONL sample before any assertion; retain no sample history.
+
+    The caller owns an exclusively created stream. A failed write prevents the
+    judge from running; a failed judge leaves its input durably inspectable.
+    """
+    import json
+    import os
+    stream.write(json.dumps(sample, allow_nan=False) + "\n")
+    stream.flush()
+    os.fsync(stream.fileno())
+    if judge is not None:
+        return judge(sample)

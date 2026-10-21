@@ -1,0 +1,633 @@
+{
+  "completed": true,
+  "frozen_protocol_accepted": false,
+  "scope": "Fresh-process 1000-cycle charge preparation controls; no mass materialization or H-matrix build",
+  "cpu_native_source": "b32faf7127fe86f9253bdeaf5f9c37fe8bdaaf8a",
+  "controls": [
+    {
+      "taskmanager": "per-cycle caller-owned region",
+      "completed": true,
+      "scope": "Fresh-process charge basis bounded 1000-cycle plateau diagnostic; not frozen MCP gate",
+      "windows": [
+        {
+          "end_iteration": 99,
+          "minimum": [
+            892231680.0,
+            446758912.0
+          ],
+          "maximum": [
+            934662144.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            82017.67384615385,
+            0.0
+          ],
+          "final_25_delta": [
+            282624.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": false
+        },
+        {
+          "end_iteration": 199,
+          "minimum": [
+            893284352.0,
+            446758912.0
+          ],
+          "maximum": [
+            939073536.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            12351.015384615384,
+            0.0
+          ],
+          "final_25_delta": [
+            -1949696.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 299,
+          "minimum": [
+            894648320.0,
+            446758912.0
+          ],
+          "maximum": [
+            939405312.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            -222872.8123076923,
+            0.0
+          ],
+          "final_25_delta": [
+            -3457024.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 399,
+          "minimum": [
+            894738432.0,
+            446758912.0
+          ],
+          "maximum": [
+            938196992.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            -235129.3046153846,
+            0.0
+          ],
+          "final_25_delta": [
+            0.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 499,
+          "minimum": [
+            894779392.0,
+            446758912.0
+          ],
+          "maximum": [
+            936329216.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            -82799.06461538462,
+            0.0
+          ],
+          "final_25_delta": [
+            -36343808.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 599,
+          "minimum": [
+            895062016.0,
+            446758912.0
+          ],
+          "maximum": [
+            940191744.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            -192379.6676923077,
+            0.0
+          ],
+          "final_25_delta": [
+            3739648.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": false
+        },
+        {
+          "end_iteration": 699,
+          "minimum": [
+            895361024.0,
+            446758912.0
+          ],
+          "maximum": [
+            940232704.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            105872.1476923077,
+            0.0
+          ],
+          "final_25_delta": [
+            5214208.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": false
+        },
+        {
+          "end_iteration": 799,
+          "minimum": [
+            895291392.0,
+            446758912.0
+          ],
+          "maximum": [
+            940244992.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            -230904.12307692308,
+            0.0
+          ],
+          "final_25_delta": [
+            1028096.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 899,
+          "minimum": [
+            895504384.0,
+            446758912.0
+          ],
+          "maximum": [
+            940236800.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            370429.63692307693,
+            0.0
+          ],
+          "final_25_delta": [
+            0.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": false
+        },
+        {
+          "end_iteration": 999,
+          "minimum": [
+            895705088.0,
+            446758912.0
+          ],
+          "maximum": [
+            940339200.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            -188145.03384615385,
+            0.0
+          ],
+          "final_25_delta": [
+            4616192.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": false
+        }
+      ],
+      "elapsed_seconds": 58.84399999999732
+    },
+    {
+      "taskmanager": "one caller-owned region",
+      "completed": true,
+      "scope": "Fresh-process charge basis 1000-cycle caller-owned persistent TaskManager control; not frozen MCP gate",
+      "windows": [
+        {
+          "end_iteration": 99,
+          "minimum": [
+            893247488.0,
+            446758912.0
+          ],
+          "maximum": [
+            933851136.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            14392.713846153847,
+            0.0
+          ],
+          "final_25_delta": [
+            -1163264.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 199,
+          "minimum": [
+            893566976.0,
+            446758912.0
+          ],
+          "maximum": [
+            939077632.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            239603.3969230769,
+            0.0
+          ],
+          "final_25_delta": [
+            348160.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": false
+        },
+        {
+          "end_iteration": 299,
+          "minimum": [
+            896303104.0,
+            446758912.0
+          ],
+          "maximum": [
+            939409408.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            -89002.92923076924,
+            0.0
+          ],
+          "final_25_delta": [
+            -1597440.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 399,
+          "minimum": [
+            894984192.0,
+            446758912.0
+          ],
+          "maximum": [
+            939470848.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            -308825.7969230769,
+            0.0
+          ],
+          "final_25_delta": [
+            -34500608.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 499,
+          "minimum": [
+            895893504.0,
+            446758912.0
+          ],
+          "maximum": [
+            939859968.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            -140615.68,
+            0.0
+          ],
+          "final_25_delta": [
+            -7344128.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 599,
+          "minimum": [
+            896253952.0,
+            446758912.0
+          ],
+          "maximum": [
+            940150784.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            153968.64,
+            0.0
+          ],
+          "final_25_delta": [
+            37687296.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": false
+        },
+        {
+          "end_iteration": 699,
+          "minimum": [
+            895348736.0,
+            446758912.0
+          ],
+          "maximum": [
+            940150784.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            271177.2553846154,
+            0.0
+          ],
+          "final_25_delta": [
+            -102400.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": false
+        },
+        {
+          "end_iteration": 799,
+          "minimum": [
+            895315968.0,
+            446758912.0
+          ],
+          "maximum": [
+            940150784.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            274035.0030769231,
+            0.0
+          ],
+          "final_25_delta": [
+            -278528.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": false
+        },
+        {
+          "end_iteration": 899,
+          "minimum": [
+            895320064.0,
+            446758912.0
+          ],
+          "maximum": [
+            940466176.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            -30357.66153846154,
+            0.0
+          ],
+          "final_25_delta": [
+            327680.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 999,
+          "minimum": [
+            895676416.0,
+            446758912.0
+          ],
+          "maximum": [
+            940646400.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            -188378.19076923077,
+            0.0
+          ],
+          "final_25_delta": [
+            -33927168.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        }
+      ],
+      "elapsed_seconds": 59.32799999999406
+    },
+    {
+      "taskmanager": "per-cycle caller-owned region, NG basis only without native Gram object",
+      "completed": true,
+      "scope": "Fresh-process NG hex charge-basis only 1000-cycle diagnostic, no HACApK Gram object; not frozen MCP gate",
+      "windows": [
+        {
+          "end_iteration": 99,
+          "minimum": [
+            892289024.0,
+            446758912.0
+          ],
+          "maximum": [
+            892411904.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            1455.6553846153847,
+            0.0
+          ],
+          "final_25_delta": [
+            24576.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 199,
+          "minimum": [
+            892411904.0,
+            446758912.0
+          ],
+          "maximum": [
+            892653568.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            2731.716923076923,
+            0.0
+          ],
+          "final_25_delta": [
+            61440.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 299,
+          "minimum": [
+            892653568.0,
+            446758912.0
+          ],
+          "maximum": [
+            894722048.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            0.0,
+            0.0
+          ],
+          "final_25_delta": [
+            0.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 399,
+          "minimum": [
+            894722048.0,
+            446758912.0
+          ],
+          "maximum": [
+            894722048.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            0.0,
+            0.0
+          ],
+          "final_25_delta": [
+            0.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 499,
+          "minimum": [
+            894722048.0,
+            446758912.0
+          ],
+          "maximum": [
+            894722048.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            0.0,
+            0.0
+          ],
+          "final_25_delta": [
+            0.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 599,
+          "minimum": [
+            894722048.0,
+            446758912.0
+          ],
+          "maximum": [
+            894722048.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            0.0,
+            0.0
+          ],
+          "final_25_delta": [
+            0.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 699,
+          "minimum": [
+            894722048.0,
+            446758912.0
+          ],
+          "maximum": [
+            894722048.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            0.0,
+            0.0
+          ],
+          "final_25_delta": [
+            0.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 799,
+          "minimum": [
+            894722048.0,
+            446758912.0
+          ],
+          "maximum": [
+            894722048.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            0.0,
+            0.0
+          ],
+          "final_25_delta": [
+            0.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 899,
+          "minimum": [
+            894722048.0,
+            446758912.0
+          ],
+          "maximum": [
+            894722048.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            0.0,
+            0.0
+          ],
+          "final_25_delta": [
+            0.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        },
+        {
+          "end_iteration": 999,
+          "minimum": [
+            894722048.0,
+            446758912.0
+          ],
+          "maximum": [
+            894722048.0,
+            446758912.0
+          ],
+          "final_25_slope": [
+            0.0,
+            0.0
+          ],
+          "final_25_delta": [
+            0.0,
+            0.0
+          ],
+          "within_frozen_memory_bounds": true
+        }
+      ],
+      "elapsed_seconds": 16.203999999997905
+    }
+  ],
+  "limitation": "Host oscillations persist with one TaskManager; wrapper expiration and zero GPU counters do not prove C++ MeshAccess or CPU heap ownership. No frozen gate relaxation."
+}

@@ -1,0 +1,11 @@
+# HEX reference-table lifetime
+
+HEX static-site radial shape, monomial and quadrature arrays depend only on the exact inner-rule nodes and weights. They contain no mesh, FE space or physical mapped sites. Rebuilding these large immutable arrays for every Gram object causes allocation churn; this is distinct from proving unbounded retention.
+
+The candidate shares these arrays through const ownership. A mutex-protected process cache retains one complete rule entry. Its key includes every node and weight. Publication is transactional; a failed construction leaves the old entry intact. Live Gram objects retain their own shared reference after cache eviction. Mapped site positions remain per instance. Quadrature loops and arithmetic are unchanged.
+
+The cache intentionally retains one rule's reference arrays after the last Gram is destroyed; this is bounded owned storage, not zero runtime overhead. Different simultaneously live rules can retain additional arrays until their owners are released. Validate numerical parity, rule eviction and bounded repeated construction before acceptance. CPU source `6af6c7867` was freshly built and its rule-key/lifetime and independent Decimal snapshot tests passed. The physical HEX2 and common-100 workflow evidence is recorded in `results/hdiv_shared_site_table_qualification.json`; the GPU artifact has a separate historical source identity. This is working-component evidence, not final same-source release acceptance.
+
+Cold reference-table construction runs while holding the cache mutex. Concurrent Gram constructors therefore wait behind a cold build, including when requesting another rule; this correct serialization can add constructor latency. No concurrent-constructor performance claim is made. Key comparison uses element-wise double equality: NaN prevents reuse, while signed zeros compare equal and may differ only in zero sign.
+
+The concurrent-constructor correctness canary uses two barrier-synchronized workers and four pairs of cold, different-weight rules. Each result matches its serial reference and older live instances keep their canary checksums after eviction. It passed on native `e2ccc299a`; this does not measure constructor throughput or replace race sanitization.

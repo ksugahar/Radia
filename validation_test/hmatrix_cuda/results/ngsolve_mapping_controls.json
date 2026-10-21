@@ -1,0 +1,203 @@
+{
+  "schema": "radia.ngsolve-mapping-controls.v1",
+  "helper_source": "7f43c6ffb",
+  "results": [
+    {
+      "schema": "ngsolve.mapping-probe.v2",
+      "ngsolve": "6.2.2607",
+      "rows": [
+        {
+          "family": "tet",
+          "analytic_volume": 0.16666666666666666,
+          "order": 12,
+          "rule_points": 343,
+          "rule_weight_sum": 0.1666666666666638,
+          "point_mapped_volume": 0.1666666666666638,
+          "whole_rule_scalar_volume": 0.16666666666666366,
+          "whole_rule_simd_volume": 0.16666666666666377,
+          "explicit_rule_dx_volume": 0.16666666666666377,
+          "integrate_volume": 0.16666666666666377,
+          "signed_relative_errors_vs_analytic": {
+            "rule_weight_sum": -1.715294573045867e-14,
+            "point_mapped_volume": -1.715294573045867e-14,
+            "whole_rule_scalar_volume": -1.7985612998927536e-14,
+            "whole_rule_simd_volume": -1.7319479184152442e-14,
+            "explicit_rule_dx_volume": -1.7319479184152442e-14,
+            "integrate_volume": -1.7319479184152442e-14
+          },
+          "signed_relative_errors_vs_rule_weights": {
+            "rule_weight_sum": 0.0,
+            "point_mapped_volume": 0.0,
+            "whole_rule_scalar_volume": -8.326672684688817e-16,
+            "whole_rule_simd_volume": -1.6653345369377634e-16,
+            "explicit_rule_dx_volume": -1.6653345369377634e-16,
+            "integrate_volume": -1.6653345369377634e-16
+          },
+          "whole_rule_method": "SymbolicLFI P0 constant-one, explicit same intrule, scalar and SIMD",
+          "point_vs_whole_scalar_relative": 8.326672684688674e-16
+        },
+        {
+          "family": "hex",
+          "analytic_volume": 1.0,
+          "order": 12,
+          "rule_points": 343,
+          "rule_weight_sum": 0.9999999999999787,
+          "point_mapped_volume": 0.9999999999999787,
+          "whole_rule_scalar_volume": 0.9999999999999757,
+          "whole_rule_simd_volume": 0.9999999999999787,
+          "explicit_rule_dx_volume": 0.9999999999999785,
+          "integrate_volume": 0.9999999999999785,
+          "signed_relative_errors_vs_analytic": {
+            "rule_weight_sum": -2.1316282072803006e-14,
+            "point_mapped_volume": -2.1316282072803006e-14,
+            "whole_rule_scalar_volume": -2.4313884239290928e-14,
+            "whole_rule_simd_volume": -2.1316282072803006e-14,
+            "explicit_rule_dx_volume": -2.1538326677728037e-14,
+            "integrate_volume": -2.1538326677728037e-14
+          },
+          "signed_relative_errors_vs_rule_weights": {
+            "rule_weight_sum": 0.0,
+            "point_mapped_volume": 0.0,
+            "whole_rule_scalar_volume": -2.9976021664879866e-15,
+            "whole_rule_simd_volume": 0.0,
+            "explicit_rule_dx_volume": -2.2204460492503604e-16,
+            "integrate_volume": -2.2204460492503604e-16
+          },
+          "whole_rule_method": "SymbolicLFI P0 constant-one, explicit same intrule, scalar and SIMD",
+          "point_vs_whole_scalar_relative": 2.9976021664879227e-15
+        },
+        {
+          "family": "pyramid",
+          "analytic_volume": 0.3333333333333333,
+          "order": 12,
+          "rule_points": 392,
+          "rule_weight_sum": 0.3333333333333255,
+          "point_mapped_volume": 0.3333333333333255,
+          "whole_rule_scalar_volume": 0.3333333332999921,
+          "whole_rule_simd_volume": 0.333333333299992,
+          "explicit_rule_dx_volume": 0.33333333329999204,
+          "integrate_volume": 0.33333333329999204,
+          "signed_relative_errors_vs_analytic": {
+            "rule_weight_sum": -2.348121697082206e-14,
+            "point_mapped_volume": -2.348121697082206e-14,
+            "whole_rule_scalar_volume": -1.0002365602446162e-10,
+            "whole_rule_simd_volume": -1.00023989091369e-10,
+            "explicit_rule_dx_volume": -1.0002382255791531e-10,
+            "integrate_volume": -1.0002382255791531e-10
+          },
+          "signed_relative_errors_vs_rule_weights": {
+            "rule_weight_sum": 0.0,
+            "point_mapped_volume": 0.0,
+            "whole_rule_scalar_volume": -1.0000017480749315e-10,
+            "whole_rule_simd_volume": -1.0000050787440053e-10,
+            "explicit_rule_dx_volume": -1.0000034134094684e-10,
+            "integrate_volume": -1.0000034134094684e-10
+          },
+          "whole_rule_method": "SymbolicLFI P0 constant-one, explicit same intrule, scalar and SIMD",
+          "point_vs_whole_scalar_relative": 1.000001748074908e-10
+        }
+      ],
+      "scope": "Unit straight tet/hex/PYR, explicit order12 shared rule. Diagnostic only; parity is not geometric exactness."
+    },
+    {
+      "schema": "ngsolve.mapping-probe.v2",
+      "ngsolve": "6.2.2608",
+      "rows": [
+        {
+          "family": "tet",
+          "analytic_volume": 0.16666666666666666,
+          "order": 12,
+          "rule_points": 343,
+          "rule_weight_sum": 0.1666666666666638,
+          "point_mapped_volume": 0.1666666666666638,
+          "whole_rule_scalar_volume": 0.16666666666666366,
+          "whole_rule_simd_volume": 0.16666666666666377,
+          "explicit_rule_dx_volume": 0.16666666666666377,
+          "integrate_volume": 0.16666666666666377,
+          "signed_relative_errors_vs_analytic": {
+            "rule_weight_sum": -1.715294573045867e-14,
+            "point_mapped_volume": -1.715294573045867e-14,
+            "whole_rule_scalar_volume": -1.7985612998927536e-14,
+            "whole_rule_simd_volume": -1.7319479184152442e-14,
+            "explicit_rule_dx_volume": -1.7319479184152442e-14,
+            "integrate_volume": -1.7319479184152442e-14
+          },
+          "signed_relative_errors_vs_rule_weights": {
+            "rule_weight_sum": 0.0,
+            "point_mapped_volume": 0.0,
+            "whole_rule_scalar_volume": -8.326672684688817e-16,
+            "whole_rule_simd_volume": -1.6653345369377634e-16,
+            "explicit_rule_dx_volume": -1.6653345369377634e-16,
+            "integrate_volume": -1.6653345369377634e-16
+          },
+          "whole_rule_method": "SymbolicLFI P0 constant-one, explicit same intrule, scalar and SIMD",
+          "point_vs_whole_scalar_relative": 8.326672684688674e-16
+        },
+        {
+          "family": "hex",
+          "analytic_volume": 1.0,
+          "order": 12,
+          "rule_points": 343,
+          "rule_weight_sum": 0.9999999999999787,
+          "point_mapped_volume": 0.9999999999999787,
+          "whole_rule_scalar_volume": 0.9999999999999757,
+          "whole_rule_simd_volume": 0.9999999999999787,
+          "explicit_rule_dx_volume": 0.9999999999999785,
+          "integrate_volume": 0.9999999999999785,
+          "signed_relative_errors_vs_analytic": {
+            "rule_weight_sum": -2.1316282072803006e-14,
+            "point_mapped_volume": -2.1316282072803006e-14,
+            "whole_rule_scalar_volume": -2.4313884239290928e-14,
+            "whole_rule_simd_volume": -2.1316282072803006e-14,
+            "explicit_rule_dx_volume": -2.1538326677728037e-14,
+            "integrate_volume": -2.1538326677728037e-14
+          },
+          "signed_relative_errors_vs_rule_weights": {
+            "rule_weight_sum": 0.0,
+            "point_mapped_volume": 0.0,
+            "whole_rule_scalar_volume": -2.9976021664879866e-15,
+            "whole_rule_simd_volume": 0.0,
+            "explicit_rule_dx_volume": -2.2204460492503604e-16,
+            "integrate_volume": -2.2204460492503604e-16
+          },
+          "whole_rule_method": "SymbolicLFI P0 constant-one, explicit same intrule, scalar and SIMD",
+          "point_vs_whole_scalar_relative": 2.9976021664879227e-15
+        },
+        {
+          "family": "pyramid",
+          "analytic_volume": 0.3333333333333333,
+          "order": 12,
+          "rule_points": 392,
+          "rule_weight_sum": 0.3333333333333255,
+          "point_mapped_volume": 0.3333333333333255,
+          "whole_rule_scalar_volume": 0.3333333332999921,
+          "whole_rule_simd_volume": 0.333333333299992,
+          "explicit_rule_dx_volume": 0.33333333329999204,
+          "integrate_volume": 0.33333333329999204,
+          "signed_relative_errors_vs_analytic": {
+            "rule_weight_sum": -2.348121697082206e-14,
+            "point_mapped_volume": -2.348121697082206e-14,
+            "whole_rule_scalar_volume": -1.0002365602446162e-10,
+            "whole_rule_simd_volume": -1.00023989091369e-10,
+            "explicit_rule_dx_volume": -1.0002382255791531e-10,
+            "integrate_volume": -1.0002382255791531e-10
+          },
+          "signed_relative_errors_vs_rule_weights": {
+            "rule_weight_sum": 0.0,
+            "point_mapped_volume": 0.0,
+            "whole_rule_scalar_volume": -1.0000017480749315e-10,
+            "whole_rule_simd_volume": -1.0000050787440053e-10,
+            "explicit_rule_dx_volume": -1.0000034134094684e-10,
+            "integrate_volume": -1.0000034134094684e-10
+          },
+          "whole_rule_method": "SymbolicLFI P0 constant-one, explicit same intrule, scalar and SIMD",
+          "point_vs_whole_scalar_relative": 1.000001748074908e-10
+        }
+      ],
+      "scope": "Unit straight tet/hex/PYR, explicit order12 shared rule. Diagnostic only; parity is not geometric exactness."
+    }
+  ],
+  "conclusion": "Whole-rule scalar/SIMD mapping underestimates straight pyramid volume by about1e-10; point-wise mapping and weight sum are closer to exact geometry. Tet/hex controls differ between paths only at roundoff. The shared PYR staging path matches NG mass assembly for parity, not greater geometry accuracy.",
+  "whole_rule_measure_access": "Python trafo(rule) exposes coordinates, not mapped measures; SymbolicLFI P0 constant-one with explicit same rule directly exercises scalar/SIMD assembly-rule mapping. Integrate(default order) is reported separately, never the sole rule-path witness.",
+  "external_send": false
+}

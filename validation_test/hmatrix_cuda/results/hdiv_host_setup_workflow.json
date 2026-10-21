@@ -1,0 +1,159 @@
+{
+  "schema": "radia.hdiv-host-setup-validation.v1",
+  "accepted_scope": "Bounded affine hex orders1/2 physical BH via explicit NG host setup; not mixed geometry or release",
+  "adapter_source": "bb665f9860e2350467cc07ccc95fd72fb43ce6ce",
+  "memory_helper_source": "4ff039f65",
+  "followup_source": "32c4a27379a218b6f8458c26af523eb14dd331e8",
+  "artifacts": {
+    "cpu_source": "6af6c786763ab34f1c6fdfc8a1e36861d2e1e840",
+    "cpu_sha256": "b5ad680c47e64b2c0850535cf651404aee99c2640164d3242906eec06bde6736",
+    "python_gpu_source": "7995b719cf02653bd08c90b1d0d10efa87007a23",
+    "python_gpu_sha256": "4aac3c5e6db47d8f06546f8841575a57c045d5478d1ab36b32d761bbd744ed94",
+    "mex_source": "c55cd5798ec0303838172015f994e66e44bcec9a",
+    "mex_sha256": "41a7c59165f71a94afa112a4b5554f8977dc022184234aa4867e55245f78e388"
+  },
+  "numerics": {
+    "accepted": true,
+    "cpu_source": "6af6c7867",
+    "mex_source": "c55cd5798",
+    "python_native_source": "7995b719c",
+    "cases": [
+      {
+        "order": 1,
+        "route": "MATLAB-0",
+        "coefficient_error": 1.2023413127606566e-14,
+        "independent_original_residual": 9.085429235154658e-16
+      },
+      {
+        "order": 1,
+        "route": "MATLAB-1",
+        "coefficient_error": 1.2837637619536646e-14,
+        "independent_original_residual": 8.694985926425682e-16
+      },
+      {
+        "order": 2,
+        "route": "MATLAB-0",
+        "coefficient_error": 6.20643450579759e-13,
+        "independent_original_residual": 7.850158153611594e-15
+      },
+      {
+        "order": 2,
+        "route": "MATLAB-1",
+        "coefficient_error": 1.8135256841212449e-13,
+        "independent_original_residual": 3.904094061271178e-15
+      },
+      {
+        "order": 2,
+        "route": "Python-reference-diagonal",
+        "coefficient_error": 1.8485122620611018e-12,
+        "independent_original_residual": 1.5616694469018664e-14
+      },
+      {
+        "order": 2,
+        "route": "Python-reference-chebyshev-graph",
+        "coefficient_error": 2.142578895767253e-12,
+        "independent_original_residual": 1.685448249535868e-14
+      }
+    ]
+  },
+  "full_newton_memory": {
+    "accepted": true,
+    "scope": "Explicit host setup hex2 full Newton common100",
+    "warm": 5,
+    "measured": 100,
+    "opaque_runtime_retention_zero": false,
+    "cohorts": [
+      {
+        "preconditioner": "reference-diagonal",
+        "create_solve_destroy": false,
+        "baseline": [
+          1508016128.0,
+          453050368.0
+        ],
+        "final25_slope_bytes_per_run": [
+          -24342.843076923076,
+          0
+        ],
+        "final25_delta_bytes": [
+          -733184,
+          0
+        ],
+        "full100_delta_bytes": [
+          2961408.0,
+          0
+        ]
+      },
+      {
+        "preconditioner": "reference-chebyshev-graph",
+        "create_solve_destroy": false,
+        "baseline": [
+          1516949504.0,
+          453050368.0
+        ],
+        "final25_slope_bytes_per_run": [
+          0,
+          0
+        ],
+        "final25_delta_bytes": [
+          0,
+          0
+        ],
+        "full100_delta_bytes": [
+          454656,
+          0
+        ]
+      },
+      {
+        "preconditioner": "reference-diagonal",
+        "create_solve_destroy": true,
+        "baseline": [
+          1521823744.0,
+          448856064.0
+        ],
+        "final25_slope_bytes_per_run": [
+          4366.966153846154,
+          0
+        ],
+        "final25_delta_bytes": [
+          73728,
+          0
+        ],
+        "full100_delta_bytes": [
+          1269760.0,
+          0
+        ]
+      }
+    ],
+    "elapsed_seconds": 44.7443383
+  },
+  "all_measured_solution_cpu_certificate": {
+    "accepted": true,
+    "scope": "Every measured MATLAB host setup common100 solution independently certified",
+    "count": 300,
+    "maximum_coefficient_error": 6.20643450579759e-13,
+    "maximum_original_residual": 7.850158153611594e-15
+  },
+  "limits": [
+    "Not same-source release artifacts",
+    "Host setup uses NG and Radia CPU assembly, not a CPU solve or CUDA geometry assembly",
+    "Unsupported mixed/pyramid charge guards remain",
+    "No long-loop boundedness or zero opaque runtime retention claim",
+    "15 negative-iteration observer markers were placeholders, excluded; all 300 measured samples and gate arrays actual. Followup fixes observer markers, no raw rewrite.",
+    "MCP uses the refactored Python workflow; mock/cold contracts do not certify a live client or its new common100 lifecycle"
+  ],
+  "checks": {
+    "python_workflow_contracts": 20,
+    "packaging_contracts": 50
+  },
+  "execution": {
+    "cpus": 2,
+    "threads": 1,
+    "host_memory_limit_bytes": 8589934592,
+    "device_limit_bytes": 8589934592,
+    "wall_limit_seconds": 240,
+    "requested_nonlinear_tolerance": 5e-14,
+    "requested_linear_tolerance": 5e-14,
+    "coefficient_gate": 1e-10,
+    "original_residual_gate": 1e-11
+  }
+}

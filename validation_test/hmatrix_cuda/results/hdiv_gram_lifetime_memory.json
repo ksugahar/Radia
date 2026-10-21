@@ -1,0 +1,54 @@
+{
+  "completed": true,
+  "scope": "Native Gram fixed-input constructor vs retained-object statecheck, not frozen MCP gate",
+  "cohorts": [
+    {
+      "scope": "constructor-destroy-fixed-input",
+      "warm": 5,
+      "measured": 1000,
+      "minimum": [
+        892018688.0,
+        446758912.0
+      ],
+      "maximum": [
+        933863424.0,
+        446758912.0
+      ],
+      "final_25_slope": [
+        298144.68923076923,
+        0.0
+      ],
+      "final_25_delta": [
+        38432768.0,
+        0.0
+      ],
+      "within_frozen_memory_bounds": false
+    },
+    {
+      "scope": "statecheck-retained-object",
+      "warm": 5,
+      "measured": 1000,
+      "minimum": [
+        937730048.0,
+        446758912.0
+      ],
+      "maximum": [
+        937848832.0,
+        446758912.0
+      ],
+      "final_25_slope": [
+        0.0,
+        0.0
+      ],
+      "final_25_delta": [
+        0.0,
+        0.0
+      ],
+      "within_frozen_memory_bounds": true
+    }
+  ],
+  "elapsed_seconds": 64.48400000001129,
+  "frozen_protocol_accepted": false,
+  "cpu_native_source": "b32faf7127fe86f9253bdeaf5f9c37fe8bdaaf8a",
+  "limitation": "Fixed input arrays, no FE recreation or H-matrix build. Constructor/destructor churn isolated, exact allocating member requires source inspection; no release acceptance."
+}

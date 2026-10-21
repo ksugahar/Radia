@@ -22,7 +22,8 @@ SOURCE = ROOT / 'src/radia/vim/_nonlinear.py'
 def load_curve_helpers(source=SOURCE):
     """Execute selected production scalar helpers, not a second implementation."""
     tree = ast.parse(Path(source).read_text(encoding='utf-8'))
-    functions = {'_validate_bh_table', '_bh_table_funcs', '_bh_inverse_funcs'}
+    functions = {'_validate_bh_table', '_bh_table_funcs', '_bh_inverse_funcs',
+                 '_bh_inverse_data', '_bh_inverse_payload'}
     constants = {'_MU0', '_CHI_DIFF_FLOOR'}
     nodes = [node for node in tree.body if
              (isinstance(node, ast.FunctionDef) and node.name in functions)

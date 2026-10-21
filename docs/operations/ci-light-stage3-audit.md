@@ -175,6 +175,32 @@ Engine or GPU compilation was used. The 51-file closure digest is now
 `e0f823ec0563ecdfaf3305abca6b6994c206d8585fe1968f1ce037d6a9d38e23`.
 All 45 workflow jobs pass the routing audit.
 
+
+## HDiv BH contract and Newton budget repair (2026-10-21)
+
+The changed `tests/test_hdiv_bh_table_saturation_contract.py` and its dynamic
+source `validation_test/feec/bh_saturation_audit.py` were re-audited in a fresh
+isolated Python 3.12.10 venv containing only pytest, PyYAML, NumPy, SciPy,
+setuptools, wheel and their lightweight dependencies. The curve test executes
+selected scalar production helpers and SciPy interpolation; it does not import
+NGSolve or a native solver. No MATLAB Engine, Cubit, GPU or solver dependency
+was installed in this environment.
+
+All F2 steps passed: routing (45 jobs), routing mutations (19 tests), source
+compilation, caller-owned TaskManager audit, CPU version (1 test), the actual
+fast selector with `--since origin/main` (342 tests, zero skips, 24.31 seconds;
+25.28 seconds through the tier runner), and showcase readers (6 tests).
+The Newton inner-solve failure contract also passed 16 tests, including the
+explicit compensated-budget forwarding regression. This is source-contract
+coverage, not native numerical or release acceptance.
+
+The 51-file execution closure digest is
+`519820bd4a6447418bdbd59ce3fec8ec393ad63d76a4cbad56fa65ef520ee345`.
+The single audit used two physical cores on one NUMA node, one library thread,
+BelowNormal priority, an 8 GiB job-commit cap and a 240-second wall cap, with no
+GPU and no retry. It completed in 81.14 seconds with a peak job commit of
+132526080 bytes. Exact topology, affinity, dependency versions and raw outputs
+are retained privately; no runner or shared environment was changed.
 Re-audit after the execution-role change. The closure files changed were
 tests/test_public_runtime_privacy.py, tests/test_radia_promotion_gate.py,
 tools/ci_distribution_manifest.json, tools/policy_lint.py, tools/pre_push_check.py
@@ -198,3 +224,12 @@ THIRD_PARTY_NOTICES.md) in the distribution manifest, the isolated fast-contract
 steps passed again (routing contract 19 tests, TaskManager audit, version check,
 fast selector 142 tests, showcase readers 6 tests). The 52-file closure digest is
 now `2d6f0f35bf7de375a25bd0e7dd86fe24c26180af43cbb4c0e84403f74938e94e`.
+After merging the Newton budget fix with current main, the combined 51-file
+closure digest is `0d933121845010f273cd88353a810aa7253f472f539f56783a19471ae4e7f26d`; the isolated fast-contracts steps were re-run on the
+merged tree.
+
+After merging current main (resident AMG build switch, Apache-2.0 relicensing)
+into the HDiv runtime candidate with the setuptools-free distribution contract,
+the shared precheck passed (light fast-contracts steps in an isolated venv,
+policy checks, repository contracts). The 52-file closure digest is now
+`2b7175ea2d8a8b081d2419d4bd549de6a8d04766abd285f78919b1f5f989df2d`.

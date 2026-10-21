@@ -62,3 +62,38 @@ and actual measured thread usage remain separate evidence.
 
 P1 remains the bounded memory/failure-lifecycle qualification. This study does
 not expand its execution scope, add production Python GPU or enable NVRTC.
+
+
+## CPU context trace acceptance protocol
+
+Status: proposed protocol; no CPU MEX no-context acceptance is claimed.
+The current CSR gateway calls `mxInitGPU()` at the start of `dispatchCsr`.
+A CPU selector inside that initialized GPU path cannot satisfy the contract.
+Separate host argument checking and CPU computation from GPU initialization,
+array conversion, device allocation and launches before qualifying either route.
+
+Observe fresh owned MATLAB processes from before MEX loading through explicit
+CPU execution, invalid-input handling, repeated calls, `clear mex` and shutdown.
+Run separately with a device present and genuinely absent. Hiding a device with
+an environment variable is not evidence of physical absence; changing a shared
+device or driver is outside this protocol.
+
+The observer must report its version, driver/runtime API coverage, dynamically
+resolved entrypoint coverage, dropped events and the complete observation
+interval. Capture context creation and primary-context retention, including
+transitive calls. An empty or incomplete trace is inconclusive. CUDA DLL loading
+alone is not evidence that a context exists, and device-monitor absence alone
+is not proof that no context was created.
+
+Use a separate explicit GPU process as a positive control: the same observer
+must detect its context. Observer-only controls must establish that tracing
+does not itself initialize CUDA inside the CPU target. Do not call `gpuDevice`,
+`gpuArray` or GPU initialization/probing routines merely to test the CPU route.
+No compatible observer has yet been qualified for this protocol.
+
+Bind raw traces, commands, observer configuration and numerical results to the
+same source and binary hashes. Require independent CPU agreement and the true
+original-system residual in addition to the context result. Distinguish PASS,
+FAIL and INCONCLUSIVE; unsupported tracing never becomes a pass. Keep requested
+MATLAB computational threads, native effective threads and pool-worker counts
+separate, as above. These checks do not establish runtime redistribution rights.

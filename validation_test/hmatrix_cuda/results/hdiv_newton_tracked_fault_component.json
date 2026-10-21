@@ -1,0 +1,70 @@
+{
+  "schema": "radia.hdiv-newton-tracked-fault-component.v1",
+  "accepted": true,
+  "native_source": "e88ba9d3e4ea237b1a7a30765a0a3428c58fa25f",
+  "mex_sha256": "5aeda2fddb35fb4c71ba9ffb5c00996763554431e322f4d02da19ce8b4377701",
+  "python_sha256": "69b52d802ed1e7b9fb8782b9b54985aa1172c5c113a270ae3ec2e96bd93c4354",
+  "fault_injection": true,
+  "release_acceptance": false,
+  "python_cases": [
+    {
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 7.417989609027186E-17,
+      "original_residual": 1.3115280561459954E-16
+    },
+    {
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 7.417989609027186E-17,
+      "original_residual": 1.3115280561459954E-16
+    }
+  ],
+  "python_engine_required": false,
+  "python_failure_recovery": true,
+  "events": 174,
+  "seconds": 1.262954,
+  "stale_after_clear_rejected": true,
+  "cases": [
+    {
+      "family": 1,
+      "first_site": 82,
+      "last_site": 158,
+      "sites": 77,
+      "repeat_site": 158,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        593920,
+        0
+      ]
+    },
+    {
+      "family": 2,
+      "first_site": 40,
+      "last_site": 83,
+      "sites": 44,
+      "repeat_site": 83,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        524288,
+        0
+      ]
+    },
+    {
+      "family": 3,
+      "first_site": 3,
+      "last_site": 10,
+      "sites": 8,
+      "repeat_site": 10,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        524288,
+        0
+      ]
+    }
+  ],
+  "scope": "Tracked shared Newton host/device/resource fault sites after constructor prefix; MATLAB output allocation and Python faults not covered",
+  "opaque_runtime_retention_zero": false,
+  "fault_preconditioner": "reference-diagonal"
+}

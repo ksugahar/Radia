@@ -1,0 +1,21 @@
+{
+  "accepted": false,
+  "scope": "Instrumented MCP physical hex2 create-close memory isolation",
+  "adapter_source": "ccf22993a",
+  "native_source": "7995b719cf02653bd08c90b1d0d10efa87007a23",
+  "completed": true,
+  "elapsed_seconds": 97.65600000000268,
+  "final_25_slope": [
+    512708.92307692306,
+    0.0
+  ],
+  "final_25_delta": [
+    3358720.0,
+    0.0
+  ],
+  "no_engine": true,
+  "measured": 100,
+  "warm": 5,
+  "post_drop_tracked_owners_zero": true,
+  "limitation": "Stage instrumentation retains event dictionaries and serializes growing progress JSON; observer allocation affects host measurements. Diagnostic only, not release acceptance or proven leak attribution."
+}

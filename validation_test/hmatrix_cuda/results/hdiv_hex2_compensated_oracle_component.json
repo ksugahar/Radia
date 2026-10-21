@@ -1,0 +1,42 @@
+{
+  "accepted": true,
+  "scope": "actual HDiv matvec with owned normalized HACApK factors; CPU assembly explicit; no complete GPU solver acceptance",
+  "cases": [
+    {
+      "topology": "hex",
+      "order": 2,
+      "dofs": 108,
+      "charges": 81,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81",
+      "relative_errors": [
+        2.9045242469012674e-12,
+        2.619371564327128e-12,
+        1.7187584412180574e-12
+      ],
+      "owned_device_bytes": 95912,
+      "closed": true,
+      "seconds_diagnostic": 0.8756463999889093
+    }
+  ],
+  "release_accepted": false,
+  "cpu_oracle_arithmetic": "explicit compensated CPU factors and sparse maps; original fast CPU differences recorded separately",
+  "ngsolve": "6.2.2608",
+  "native_source_commit": "c2a2c701f7c3c97ccd5051469c298f374bbf3894",
+  "binary_sha256": "6f2de1e69a90bf4daefb37d631249d450e72b73e8bbc96f680747d114f109c8f",
+  "cpu_source_commit": "67f1556d504dcf909b2b1f34c8fd687cc98b621f",
+  "cpu_binary_sha256": "058b4a4f9f917b588ce271be1ec7c8256a40bc5d320f06adfd5f57b2812a78e4",
+  "fixture_source_sha256": "ad0d4091cf3b212196602fa201bbaf0e4783fb586eb91132737bdf7c23260720",
+  "validator_sha256": "fa44b1682868528968e75ad74cf05a0901c83cc950d2f69c041b737a40fc9259",
+  "relative_application_error_limit": 1e-11,
+  "original_fast_cpu_relative_errors": [
+    2.7241555419394368e-11,
+    8.249015177448703e-12,
+    5.52111577792406e-12
+  ],
+  "acceptance_limitations": [
+    "Compensated CPU oracle is explicit and bounded; fast CPU implementation is unchanged and seed10 still differs above 1e-11.",
+    "Separate CPU/GPU source and binary identities; not same-release-SHA acceptance.",
+    "No full hex nonlinear MMM, connected mixed MMM, common-100 memory gate, or release acceptance.",
+    "Later precision-order and workspace guard source revisions are not attached to this binary."
+  ]
+}

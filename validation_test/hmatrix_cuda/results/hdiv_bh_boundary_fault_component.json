@@ -1,0 +1,53 @@
+{
+  "schema": "radia.hdiv-bh-boundary-fault-component.v1",
+  "accepted": true,
+  "native_source": "ab4fe2d3949cf43ec113d8f8c7d4be2743900c87",
+  "mex_sha256": "ea454c9a99ba3fa4b2e17b1f3a5143c250f3cc156685d014d6fa4d59ba045c16",
+  "python_sha256": "68527f6fc53d518f432fed1c0832e01838e0e7992814f4ac29fed0266dba9111",
+  "fault_injection": true,
+  "release_acceptance": false,
+  "host_contract_sites": 19,
+  "host_contract_repeats_per_site": 10,
+  "python_analytic_error": 3.469446951953614e-18,
+  "python_engine_required": false,
+  "events": 12200,
+  "seconds": 97.2577012,
+  "stale_after_reload_rejected": true,
+  "cases": [
+    {
+      "kind": "host",
+      "enumerated_sites": 12129,
+      "repeat_site": 12129,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        528384,
+        0
+      ]
+    },
+    {
+      "kind": "device",
+      "enumerated_sites": 23,
+      "repeat_site": 23,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        589824,
+        0
+      ]
+    },
+    {
+      "kind": "publication",
+      "enumerated_sites": 3,
+      "repeat_site": 3,
+      "warm": 5,
+      "measured": 10,
+      "delta_bytes": [
+        528384,
+        0
+      ]
+    }
+  ],
+  "scope": "Tracked BH payload, constructor and evaluation host/device sites plus publication unwind; Newton and runtime-owned publication allocations not exhausted",
+  "opaque_runtime_retention_zero": false
+}

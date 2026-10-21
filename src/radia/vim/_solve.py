@@ -368,12 +368,12 @@ def _h_solve_auto_prec(H, mass, n_face, inv_chi, rhs, tol, maxit, *, x0=None):
 
 
 def _h_solve_mass_riesz(H, mass, n_face, inv_chi, rhs, tol, maxit, *,
-                        symmetric=True, x0=None):
+                        symmetric=True, x0=None, compensated_memory_mb=0):
     if mass is not None:
         _configure_cpp_mass(H, mass, n_face)
     kwargs = {"x0": None if x0 is None else _f64(x0)}
     return H.solve_configured_linear_material_mass_riesz(
-        float(inv_chi), _f64(rhs), float(tol), int(maxit), bool(symmetric), **kwargs)
+        float(inv_chi), _f64(rhs), float(tol), int(maxit), bool(symmetric), compensated_memory_mb=compensated_memory_mb, **kwargs)
 
 
 def _resolve_gram_params(*, gram_eps, far_quad, ho_far_factor):
@@ -468,6 +468,13 @@ def _solve_linear_W_cpp(H, W, n_face, h_ext, tol, maxit):
     return np.asarray(res["m"], float), iters
 
 
+def _checked_compensated_memory_mb(value):
+    if (isinstance(value, bool) or not isinstance(value, (int, np.integer))
+            or not 0 <= int(value) <= 512):
+        raise ValueError("vim.Solve: compensated memory budget must be an integer in [0,512] MiB")
+    return int(value)
+
+
 def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                      magnetization_sources=None, magnets=None,
                      image=None, image_cyclic=None, image_cyclic_alternating=False,
@@ -480,7 +487,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                      curve_order=None, curve_gauss=8, ho_far_factor=None,
                      newton_inner_tol="auto", newton_warmstart="linear",
                      newton_continuation=1, newton_reuse_tangent_steps=1,
-                     newton_cg_x0=False, gram_backend="hmat",
+                     newton_cg_x0=False, newton_compensated_memory_mb=0, gram_backend="hmat",
                      exact_dense_memory_mb=None, _operator_cache=None,
                      hex_glpair_n=None, hex_glpair_affine_n=None):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
@@ -534,9 +541,26 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
     near/far Gram-build tuning:
       ho_far_factor -- the HDiv near/far separation threshold (pass inf to force the all-high-order
                        reference build).
+    ``newton_compensated_memory_mb>0`` explicitly retains compensated factor
+    intermediates under that extra memory cap (at most512 MiB). It requires
+    a BH energy solver and explicit ``preconditioner="mass-riesz"``; zero keeps
+    the existing fast arithmetic. Pairing ends at the demag N boundary:
+    demag and mass outputs are rounded before their sum forms A. The default
+    arithmetic is unchanged, but the fresh original-residual certificate before
+    Armijo changes Newton step acceptance and evaluation cost on that path too.
+    Each outer compensated N evaluation rebuilds its bounded factor snapshot
+    and workspace; trial energy and residual certification evaluate N twice.
+    Inner accurate PCG instead retains one snapshot/workspace for that solve.
+    No automatic retry or alternate backend.
+
     Returns dict: M (n_el,3) per-element magnetization, M_avg (3,), iters, demag (Rayleigh factor),
     ndof, n_el, n_charge, nonlinear(bool).  The caller must open `with ng.TaskManager():`.
     """
+    newton_compensated_memory_mb = _checked_compensated_memory_mb(newton_compensated_memory_mb)
+    if newton_compensated_memory_mb and (
+            bh_table is None or nonlinear_solver not in ("energy-newton", "picard-energy")
+            or preconditioner != "mass-riesz"):
+        raise ValueError("vim.Solve: compensated arithmetic requires a BH energy solver and explicit mass-riesz preconditioning")
     from ._magnetization_source import MagnetizationSource
     if magnetization_sources is None:
         sources = ()
@@ -660,6 +684,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                 ("newton_continuation", newton_continuation, 1),
                 ("newton_reuse_tangent_steps", newton_reuse_tangent_steps, 1),
                 ("newton_cg_x0", newton_cg_x0, False),
+                ("newton_compensated_memory_mb", newton_compensated_memory_mb, 0),
                 ("leaf", leaf, 64),
                 ("curve_gauss", curve_gauss, 8),
                 ("hex_glpair_n", hex_glpair_n, None),
@@ -752,6 +777,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                               nonlinear_solver, preconditioner, newton_inner_tol, newton_warmstart,
                               newton_continuation, newton_reuse_tangent_steps, newton_cg_x0,
                               vertex_counts=_vtx, magnetization_sources=sources,
+                              newton_compensated_memory_mb=newton_compensated_memory_mb,
                               gram_backend=gram_backend,
                               exact_dense_memory_mb=exact_dense_memory_mb,
                               operator_cache=_operator_cache,
@@ -780,7 +806,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                       exact_dense_memory_mb=None, operator_cache=None,
                       image_cyclic=None, image_cyclic_alternating=False,
                       cyclic_periodic_boundaries=None,
-                      hex_glpair_n=None, hex_glpair_affine_n=None):
+                      hex_glpair_n=None, hex_glpair_affine_n=None,
+                      newton_compensated_memory_mb=0):
     """BDM1/BDM2 HDiv soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
     a VALID demag operator since the per-element change-of-basis fix (2026-06-28,
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
@@ -1055,7 +1082,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                                                  continuation_steps=newton_continuation,
                                                  reuse_tangent_steps=newton_reuse_tangent_steps,
                                                  cg_x0=bool(newton_cg_x0),
-                                                 inner_preconditioner=preconditioner)
+                                                 inner_preconditioner=preconditioner,
+                                                 compensated_memory_mb=newton_compensated_memory_mb)
             iters = int(it0) + int(it1)
             solver_used = "picard-energy-cpp"
         else:                                                   # energy-Newton on the same charge Gram
@@ -1075,7 +1103,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                                                    continuation_steps=newton_continuation,
                                                    reuse_tangent_steps=newton_reuse_tangent_steps,
                                                    cg_x0=bool(newton_cg_x0),
-                                                   inner_preconditioner=preconditioner)
+                                                   inner_preconditioner=preconditioner,
+                                                   compensated_memory_mb=newton_compensated_memory_mb)
             iters = int(warm_iters) + int(iters)
             solver_used = "energy-newton-cpp"
     elif isinstance(mu_r, dict):                                # per-region linear: W = 1/chi-weighted HDiv mass
@@ -1352,7 +1381,7 @@ def _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, n_face, h_ext
 def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, cg_maxit,
                                 nl_maxit, nl_tol, m0=None, *, inner_tol="auto", warmstart="linear",
                                 continuation_steps=1, reuse_tangent_steps=1, cg_x0=False,
-                                inner_preconditioner="mass-riesz"):
+                                inner_preconditioner="mass-riesz", compensated_memory_mb=0):
     """SYMMETRIC ENERGY-NEWTON with an all-C++ inner solve -- the production nonlinear soft-iron path (brings
     the nonlinear solve to C++ parity with the linear mass-Riesz CG; the default for iron-only nonlinear,
     replacing the former Python nonlinear Newton path).
@@ -1378,6 +1407,9 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
     bh_table) AND per-region (dict) iron; prescribed fixed-M sources enter through h_ext before this
     constitutive solve.  CALLER opens TaskManager."""
     from ._nonlinear import _EnergyMaterialQuadrature
+    compensated_memory_mb = _checked_compensated_memory_mb(compensated_memory_mb)
+    if compensated_memory_mb and inner_preconditioner != "mass-riesz":
+        raise ValueError("vim.Solve: compensated arithmetic requires explicit mass-riesz preconditioning")
 
     rhs_src = _geometry_mass_apply(H, h_ext)
     Id = ng.Id(3); uf, vf = fes.TnT()
@@ -1389,6 +1421,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
         return material.field, material.tangent
 
     def _N_apply(v):
+        if compensated_memory_mb:
+            return np.asarray(H._apply_configured_demag_compensated(_f64(v), int(compensated_memory_mb)), float)
         return np.asarray(H.apply_configured_demag(_f64(v), True), float)
 
     def _bH(H_cf):
@@ -1407,14 +1441,15 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
                          "(got %r)" % (inner_preconditioner,))
 
     def _solve_W(W_matrix, rhs, *, tol_override=None, x0=None,
-                 context="unspecified"):
+                 context="unspecified", compensated_memory_mb=0):
         solve_tol = float(cg_tol if tol_override is None else max(float(cg_tol), float(tol_override)))
         if inner_preconditioner == "jacobi":
             res = _h_solve_auto_prec(
                 H, W_matrix, int(n_face), 1.0, rhs, solve_tol, int(cg_maxit), x0=x0)
         else:
             res = _h_solve_mass_riesz(
-                H, W_matrix, int(n_face), 1.0, rhs, solve_tol, int(cg_maxit), x0=x0)
+                H, W_matrix, int(n_face), 1.0, rhs, solve_tol, int(cg_maxit), x0=x0,
+                compensated_memory_mb=int(compensated_memory_mb))
         _capture_cpp_solve_timings(res)
         it = int(res["iters"])
         if it >= int(cg_maxit):
@@ -1438,7 +1473,17 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
             return None, None, 0
         lam, backtracks = 1.0, 0
         while lam > 1e-10:
-            trial_energy = _energy(m + lam * dm, rhs)
+            trial = m + lam * dm
+            trial_energy = _energy(trial, rhs)
+            # Near a root, the energy decrement can be below subtraction
+            # precision. Accept only a fresh original-equation certificate,
+            # never a small step or an energy plateau as convergence evidence.
+            trial_R = _bH(material.field) + _N_apply(trial) - rhs
+            if (np.isfinite(trial_energy) and np.isfinite(trial_R).all()
+                    and float(np.linalg.norm(trial_R)) <= nl_tol * residual_scale):
+                stats["nonlinear_residual_certified_trials"] = (
+                    stats.get("nonlinear_residual_certified_trials", 0) + 1)
+                return lam, trial_energy, backtracks
             if np.isfinite(trial_energy) and trial_energy <= energy - 1e-4 * lam * decrement:
                 return lam, trial_energy, backtracks
             lam *= 0.5
@@ -1500,7 +1545,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
             invchi0.Set(material.initial_reluctivity)
             m, it0 = _solve_W(
                 _W_matrix(invchi0, tensor=False), rhs_stage, tol_override=max(cg_tol, 1e-6),
-                context="linear_warmstart_stage_1")
+                context="linear_warmstart_stage_1", compensated_memory_mb=compensated_memory_mb)
             stats["nonlinear_warmstart_solves"] += 1
             stats["nonlinear_linear_inner_iters"] += int(it0)
 
@@ -1540,7 +1585,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
             solve_tol = _forcing_tol(rel_step, stage_final)
             dm, itlin = _solve_W(cached_W, -R, tol_override=solve_tol,
                                  x0=dm_prev if (cg_x0 and dm_prev is not None) else None,
-                                 context="newton_stage_%d_iteration_%d" % (istage + 1, it + 1))
+                                 context="newton_stage_%d_iteration_%d" % (istage + 1, it + 1),
+                                 compensated_memory_mb=compensated_memory_mb)
             stats["nonlinear_linear_inner_iters"] += int(itlin)
             dec = float(-dm @ R)                             # dm.(-R) = dm^T J dm >= 0
             E0 = E
@@ -1556,7 +1602,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
                 stats["nonlinear_fresh_tangent_retries"] += 1
                 dm, itlin = _solve_W(cached_W, -R, tol_override=max(cg_tol, min(1e-4, solve_tol)),
                                      x0=dm_prev if (cg_x0 and dm_prev is not None) else None,
-                                     context="fresh_tangent_stage_%d_iteration_%d" % (istage + 1, it + 1))
+                                     context="fresh_tangent_stage_%d_iteration_%d" % (istage + 1, it + 1),
+                                     compensated_memory_mb=compensated_memory_mb)
                 stats["nonlinear_linear_inner_iters"] += int(itlin)
                 dec = float(-dm @ R)
                 lam, trial_energy, backtracks = _line_search(m, dm, rhs_stage, E0, dec)

@@ -1,0 +1,27 @@
+{
+  "accepted": true,
+  "cpu_source": "6af6c786763ab34f1c6fdfc8a1e36861d2e1e840",
+  "gpu_source": "7995b719cf02653bd08c90b1d0d10efa87007a23",
+  "scope": "One affine tet order2 linear isotropic invChi1 uniformH, degree10 near rule; not other meshes or final release",
+  "coefficient_error": 4.10326157441777e-13,
+  "independent_original_residual": 5.525212510487746e-15,
+  "dofs": 30,
+  "cpu_iterations": 14,
+  "wrapper_source": "8ab8d9cdb",
+  "native_projection_source": "7c96d79f6f13363592bf51ddbd088cf54a9d93a7",
+  "native_binary_sha256": {
+    "hmatrix": "af9610e732ca6d0d80906162c11b5dafbbb4a3d9abce6c36a0f6cb05018ea88e",
+    "projection": "a46681a206651da1b2ba6040d30cbddbf4458950397a34a0ae57e66776bf11e0"
+  },
+  "matlab_report": {
+    "accepted": true,
+    "reported_residual": 1.2350447957342987e-15,
+    "final_live_count": 0
+  },
+  "wrapper_sha256": {
+    "solveHDivElements.m": "40ddad95d33806c455a629fc31ae9a066cbac31e1ffbe80e7a4f9b10ffca4627",
+    "affineHDivQuadrature.m": "603713a407e4d8c7c4b2d3061db91d8739d76a3a04f9bb138a62cc8e07732956",
+    "curvedHDivQuadrature.m": "da2cca32bfa95ba0866728248a24ef1a8897f5ccd12aa5997fb71e7bab618ab0"
+  },
+  "limitation": "Recertifies this 30-DoF affine P2 tet linear isotropic case with all-high-order near integration only; historical degree-5 evidence stays unchanged and does not certify the new rule elsewhere. No final same-SHA release acceptance."
+}

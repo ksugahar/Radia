@@ -1,0 +1,112 @@
+{
+  "accepted": true,
+  "scope": "New Python/MCP table-driven physical BH adapter, not default release or mixed geometry",
+  "cases": [
+    {
+      "topology": "tet",
+      "order": 1,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 1.29971003331443e-15,
+      "independent_original_residual": 2.8033930914729433e-16,
+      "fixture_sha256": "84ff8c9323cf3080a3c51b1327532b825c72b235a81ac1a8eba494c04a664954",
+      "reported_residual": 2.415380849921566e-16
+    },
+    {
+      "topology": "tet",
+      "order": 1,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 7.762788550803151e-16,
+      "independent_original_residual": 1.867419091919529e-16,
+      "fixture_sha256": "84ff8c9323cf3080a3c51b1327532b825c72b235a81ac1a8eba494c04a664954",
+      "reported_residual": 1.3608286408817958e-16
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 1.1359875592037759e-14,
+      "independent_original_residual": 5.029071020953077e-16,
+      "fixture_sha256": "d3d58e34521a369706518affe6516e7505efdbe61d3ceff5103d9b5f91077057",
+      "reported_residual": 5.512125808968438e-16
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 1.1113030332705659e-14,
+      "independent_original_residual": 3.249931342914482e-16,
+      "fixture_sha256": "d3d58e34521a369706518affe6516e7505efdbe61d3ceff5103d9b5f91077057",
+      "reported_residual": 2.515308808901461e-16
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 1.2025648919966877e-14,
+      "independent_original_residual": 9.085309366767375e-16,
+      "fixture_sha256": "48cdf214eea9e96000fe173f39e290096bd0bfa4370bc0da592257dd18cf9108",
+      "reported_residual": 1.269906958790001e-15
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 1.2837397469844055e-14,
+      "independent_original_residual": 8.694428851439282e-16,
+      "fixture_sha256": "48cdf214eea9e96000fe173f39e290096bd0bfa4370bc0da592257dd18cf9108",
+      "reported_residual": 8.471242862949607e-16
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 1.8485122620611018e-12,
+      "independent_original_residual": 1.5616694469018664e-14,
+      "fixture_sha256": "a77ab6ea41e0f340ea15f30059816e6ee539e7064bf4d2c6a8e45f13fc419faf",
+      "reported_residual": 1.0973547345773458e-14
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 2.142578895767253e-12,
+      "independent_original_residual": 1.685448249535868e-14,
+      "fixture_sha256": "a77ab6ea41e0f340ea15f30059816e6ee539e7064bf4d2c6a8e45f13fc419faf",
+      "reported_residual": 1.5753111291837114e-14
+    }
+  ],
+  "native_source": "7995b719cf02653bd08c90b1d0d10efa87007a23",
+  "adapter_source": "89badb4115d461949353fc1cc4b81ee1942905d8",
+  "cpu_native_source": "b32faf7127fe86f9253bdeaf5f9c37fe8bdaaf8a",
+  "owners": {
+    "host_attempts": 0,
+    "host_live_bytes": 0,
+    "device_attempts": 0,
+    "device_live_bytes": 0,
+    "device_free_errors": 0,
+    "resource_attempts": 0,
+    "live_resources": 0,
+    "resource_free_errors": 0,
+    "publication_attempts": 78
+  },
+  "no_engine": true,
+  "schema": "radia.hdiv-python-mcp-bh-workflow.v1",
+  "worker_role": "gpu-validation-worker",
+  "native_python_sha256": "4aac3c5e6db47d8f06546f8841575a57c045d5478d1ab36b32d761bbd744ed94",
+  "cpu_python_sha256": "f919392052ced87556a49074154fa2e830b785fff69b3823c3b85f689fc3e897",
+  "focused_contract_tests_passed": 15,
+  "energy_unit_total_passed": 26,
+  "energy_unit_protocol": "14 passed initially; 3 passed after staging missing source; remaining9 passed after stale AST fixtures updated; raw failures retained",
+  "test_fixture_revision": "b8d93d948",
+  "historical_cpu_targets_reused": true,
+  "common100_acceptance": false,
+  "release_acceptance": false,
+  "live_mcp_acceptance": false,
+  "bounded_job": {
+    "cpu_count": 2,
+    "memory_limit_bytes": 8589934592,
+    "wall_limit_seconds": 240,
+    "elapsed_seconds": 8.671999999991385,
+    "exit_code": 0
+  }
+}

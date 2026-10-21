@@ -38,7 +38,8 @@ def main():
     receipt.pop('a100_used')
     receipt['build_admission']=admission
     receipt['lifecycle_diagnostic']=args.lifecycle_diagnostic
-    sources=[source,source.with_name('radia_projection_host.cpp'),source.with_name('radia_projection_host.cuh'),source.with_name('hdiv_rt0_host.cuh'),source.with_name('hdiv_element_setup.cuh'),Path(__file__).with_name('matlab_cuda_toolchain.py'),Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__),root/'Build.ps1']
+    receipt['fault_injection']=False  # This builder exposes no allocation-fault mode.
+    sources=[source,source.with_name('radia_projection_host.cpp'),source.with_name('radia_projection_host.cuh'),source.with_name('hdiv_rt0_host.cuh'),source.with_name('hdiv_element_setup.cuh'),source.with_name('hdiv_material_staging.hpp'),Path(__file__).with_name('matlab_cuda_toolchain.py'),Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__),root/'Build.ps1']
     sources.append(source.with_name('mex_error_boundary.hpp'))
     sources.append(Path(__file__).with_name('check_mex_error_boundaries.py'))
     receipt['source_dirty']=dirty

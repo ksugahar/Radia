@@ -1,0 +1,116 @@
+{
+  "accepted": true,
+  "scope": "Manufactured connected tet/hex nonlinear roots with pinned production inverse BH law, independent CPU factor and constitutive oracle; not physical excitation or mixed MMM acceptance",
+  "cases": [
+    {
+      "topology": "tet",
+      "order": 1,
+      "dofs": 12,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 1.2504240074816925e-15,
+      "independent_original_residual": 2.1549346508130666e-16,
+      "reported_residual": 2.1047678130201072e-16,
+      "newton_iterations": 2,
+      "graph_launches": 0,
+      "mesh_sha256": "07c678502fe9a4618684408f3502393b4ecb6246c250a5c4d2922a0ea3039798"
+    },
+    {
+      "topology": "tet",
+      "order": 1,
+      "dofs": 12,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 1.6147332143225212e-15,
+      "independent_original_residual": 2.5833802417557575e-16,
+      "reported_residual": 2.5899893439745923e-16,
+      "newton_iterations": 2,
+      "graph_launches": 24,
+      "mesh_sha256": "07c678502fe9a4618684408f3502393b4ecb6246c250a5c4d2922a0ea3039798"
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "dofs": 30,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 7.588631405874972e-15,
+      "independent_original_residual": 7.08561369868483e-16,
+      "reported_residual": 7.086488194375623e-16,
+      "newton_iterations": 2,
+      "graph_launches": 0,
+      "mesh_sha256": "07c678502fe9a4618684408f3502393b4ecb6246c250a5c4d2922a0ea3039798"
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "dofs": 30,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 3.4807885866185637e-15,
+      "independent_original_residual": 4.229111259814423e-16,
+      "reported_residual": 4.229111587672509e-16,
+      "newton_iterations": 2,
+      "graph_launches": 68,
+      "mesh_sha256": "07c678502fe9a4618684408f3502393b4ecb6246c250a5c4d2922a0ea3039798"
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "dofs": 36,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 5.107516147017654e-14,
+      "independent_original_residual": 7.588532858046147e-16,
+      "reported_residual": 7.57968588184931e-16,
+      "newton_iterations": 2,
+      "graph_launches": 0,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81"
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "dofs": 36,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 5.136169769882465e-14,
+      "independent_original_residual": 7.369681055129182e-16,
+      "reported_residual": 7.338190320474352e-16,
+      "newton_iterations": 2,
+      "graph_launches": 49,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81"
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "dofs": 108,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 2.0891421246751675e-13,
+      "independent_original_residual": 1.6252537086164987e-14,
+      "reported_residual": 1.6252627240774245e-14,
+      "newton_iterations": 2,
+      "graph_launches": 0,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81"
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "dofs": 108,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 3.9007819296822875e-13,
+      "independent_original_residual": 1.0888266452003067e-14,
+      "reported_residual": 1.0885699286603583e-14,
+      "newton_iterations": 2,
+      "graph_launches": 125,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81"
+    }
+  ],
+  "release_accepted": false,
+  "cpu_oracle_arithmetic": "Independent compensated CPU factors plus pinned production CPU inverse BH functions",
+  "ngsolve": "6.2.2608",
+  "native_source_commit": "f4f7266debd42ed2ced0dd67c71b4a0de6ae68b4",
+  "binary_sha256": "2d0d8eadb1ff42ed5848e8191c58321df171d245aa97e7d78a476a38f2c39531",
+  "cpu_source_commit": "ba94077fd68c940386e9de2134095cf29232d384",
+  "cpu_binary_sha256": "ac9cdf61eae530c1c3f8ac0f077c2479841a509388964850a5b6fadbc61b6afa",
+  "fixture_source_sha256": "ad0d4091cf3b212196602fa201bbaf0e4783fb586eb91132737bdf7c23260720",
+  "validator_sha256": "214cdc5dfa047cabd6ae2809dd0b0495b8348a42e57092c3053a580f6304f96b",
+  "relative_application_error_limit": 1e-11,
+  "production_law_source_sha256": {
+    "bh_law": "baa389dd6e4de70f349d318df46ac80fa7baaf6a83d5dbea0ad3d4d33be6daae",
+    "nonlinear": "2d3a70ccf7f6b4f75ba5e20c359ecfa8ea93806dd84042dd8416327829e00dc8"
+  }
+}
