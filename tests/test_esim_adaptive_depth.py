@@ -72,3 +72,13 @@ def test_lossy_material_sign_and_halfspace_depth_are_checked():
     assert abs(result['Z']/expected-1) < .003
     assert len(result['depth_history']) > 1
     assert result['P_magnetic'] > 0
+
+
+def test_panel_evaluator_identity_stays_stable_after_adaptive_solve():
+    cell = ESIMFiniteSlabSolver(.005, mu_r=100, sigma=5e6,
+                               frequency=222e3, n_nodes=24)
+    evaluator = PanelESIMEvaluator(cell)
+    first = evaluator._direct(1000., 'iteration_cell_calls')
+    evaluator._fields(np.array([1000.]))
+    second = evaluator._direct(1000., 'certification_cell_calls')
+    assert first == second
