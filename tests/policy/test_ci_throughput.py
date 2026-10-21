@@ -19,7 +19,8 @@ spec.loader.exec_module(impact)
 
 def fixture():
     current = dict(schema='radia.ci-tree.v1', lane='sparsesolv', repository='owner/repo', commit='main', tree='tree', run_id=22)
-    prior = dict(current, commit='merge-ref', run_id=11)
+    current['test_set'] = receipt.numerical_test_set(ROOT)
+    prior = dict(current, commit='merge-ref', run_id=11, impact_required=True)
     data = {
         'commits/main/pulls': [dict(number=7, merged_at='today', merge_commit_sha='main',
             base=dict(ref='main', repo=dict(full_name='owner/repo')),
@@ -71,14 +72,19 @@ def test_unprotected_branch_still_requires_successful_observed_checks_and_lane()
     assert evaluate(current, prior, data) is None
 
 
-def test_verified_nonimpact_pr_does_not_create_postmerge_heavy_work():
+def test_skipped_pr_cannot_certify_full_postmerge_lane():
     current, prior, data = fixture()
     prior['impact_required'] = False
-    data['branches/main/protection/required_status_checks'] = dict(contexts=[], checks=[])
-    data['commits/head/check-runs?filter=latest'][0]['conclusion'] = 'skipped'
-    data['actions/runs/11/jobs?filter=latest'][0]['conclusion'] = 'skipped'
-    assert evaluate(current, prior, data)
-    del prior['impact_required']
+    assert evaluate(current, prior, data) is None
+
+
+def test_solver_pr_only_receipt_cannot_certify_main():
+    current, prior, data = fixture()
+    prior['test_set'] = {'solver-pr': ['tests/test_ih_thermal.py']}
+    assert evaluate(current, prior, data) is None
+    prior['test_set'] = {**current['test_set'], 'solver-numerics': []}
+    assert evaluate(current, prior, data) is None
+    del prior['test_set']
     assert evaluate(current, prior, data) is None
 
 
@@ -119,11 +125,11 @@ def test_every_declared_existing_input_selects_its_lane(lane):
 def test_numerical_tests_are_retained_and_full_release_is_mandatory():
     tiers = json.loads((ROOT / 'tests/test_tier_manifest.json').read_text())['profiles']
     assert len(tiers['solver-numerics']['paths']) == 91
-    assert set(tiers['solver-pr']['paths']) < set(tiers['solver-numerics']['paths'])
+    assert 'solver-pr' not in tiers
     workflow = yaml.load((ROOT / '.github/workflows/sparsesolv.yml').read_text(), Loader=yaml.BaseLoader)
     assert workflow['on']['schedule'] and 'workflow_dispatch' in workflow['on']
     full = next(s for s in workflow['jobs']['ams-regression']['steps'] if s.get('name') == 'Run required NGSolve numerical contracts')
-    assert "github.event_name != 'pull_request'" in full['if']
+    assert "github.event_name" not in full['if']
     native = (ROOT / '.github/workflows/build-test.yml').read_text()
     assert '--profile solver-numerics' in native
     assert 'Run full release numerical contracts\n        if:' not in native
@@ -134,19 +140,20 @@ def test_evidence_changes_do_not_build_gpu_but_executable_helpers_do():
     for path in ('validation_test/ams_cuda/run.py', 'validation_test/ams_cuda/setup_benchmark.py', 'validation_test/radia_optuna/validate_cuda.m'):
         lane = 'radia-optuna' if 'radia_optuna' in path else 'radia-simulink'
         assert impact.lane_required(lane, {path}, None, data)[0]
-    assert not impact.lane_required('radia-simulink', {'validation_test/ams_cuda/result.json'}, None, data)[0]
+    assert impact.lane_required('radia-simulink', {'validation_test/ams_cuda/input.json'}, None, data)[0]
 
 
 @pytest.mark.parametrize('path,expected', [
-    ('src/radia/ih_axisym_coupled.py', False),
+    ('src/radia/ih_axisym_coupled.py', True),
     ('src/radia/ih_thermal.py', True),
     ('src/radia/vim/_nonlinear.py', True),
     ('src/core/rad_parallel.h', True),
     ('Build.ps1', True),
+    ('packages/cubit-mesh-export/src/cubit_mesh_export/toolbar_install.py', True),
     ('packages/radia-simulink/matlab/change.m', False),
-    ('validation_test/maglev/test_demo_evidence.py', False),
+    ('validation_test/maglev/test_demo_evidence.py', True),
 ])
-def test_compact_pr_dependency_closure(path, expected):
+def test_full_pr_dependency_closure(path, expected):
     def git(*args):
         if args[0] == 'merge-base': return 'base'
         if args[0] == 'diff': return 'M\0' + path + '\0'
@@ -179,8 +186,61 @@ def test_python_closure_and_all_native_inputs_have_workflow_admission():
         assert impact.CONTRACT.selected(path, lane['events']['pull_request']), path
 
 
-def test_representative_profile_changes_cannot_be_exempted_as_unrelated():
+def test_full_profile_changes_cannot_be_exempted_as_unrelated():
     before = (ROOT / 'tests/test_tier_manifest.json').read_text()
     after = json.loads(before)
-    after['profiles']['solver-pr']['paths'].append('tests/new_numerical_contract.py')
+    after['profiles']['solver-numerics']['paths'].append('tests/new_numerical_contract.py')
     assert not impact.ams_manifest_unchanged(before, json.dumps(after))
+
+
+@pytest.mark.parametrize('path', [
+    'src/radia/p1_newton.py', 'src/radia/p1_linear.py',
+    'src/radia/topology_optimization.py', 'src/radia/kelvin_solver.py',
+    'pyproject.toml', 'packages/radia-mcp/pyproject.toml',
+    'requirements-ci.txt', '.github/workflows/radia.yml',
+    'tests/fixtures/input.h5',
+])
+def test_full_numerics_pr_admission(path):
+    def git(*args):
+        if args[0] == 'merge-base': return 'base'
+        if args[0] == 'diff': return 'M\0' + path + '\0'
+        raise ValueError('missing blob')
+    required, _ = impact.required_for_event('sparsesolv', 'pull_request',
+        {'pull_request': {'base': {'sha': 'base'}}}, git, impact.manifest())
+    assert required
+    workflow = yaml.load((ROOT / '.github/workflows/sparsesolv.yml').read_text(), Loader=yaml.BaseLoader)
+    steps = workflow['jobs']['ams-regression']['steps']
+    full = next(s for s in steps if s.get('name') == 'Run required NGSolve numerical contracts')
+    assert 'github.event_name' not in full['if']
+    assert '--profile solver-numerics' in full['run']
+    assert all('--profile solver-pr' not in s.get('run', '') for s in steps)
+
+
+def test_nightly_is_independent_and_reports_failures():
+    workflow = yaml.load((ROOT / '.github/workflows/sparsesolv.yml').read_text(), Loader=yaml.BaseLoader)
+    assert 'github.event_name' in workflow['concurrency']['group']
+    job = workflow['jobs']['nightly-failure']
+    assert "github.event_name == 'schedule'" in job['if']
+    assert 'issues.create' in job['steps'][0]['with']['script']
+
+
+def test_closure_follows_cli_loaders_and_non_python_fixture(tmp_path):
+    spec = importlib.util.spec_from_file_location('fixture_inputs', ROOT / 'tools/ci_ams_inputs.py')
+    inputs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(inputs)
+    files = {
+        'tests/test_tier_manifest.json': json.dumps({'profiles': {
+            'sparsesolv': {'paths': []}, 'solver-heavy': {'paths': []},
+            'solver-numerics': {'extends': 'base', 'paths': []},
+            'base': {'paths': ['tests/test_entry.py']}}}),
+        'tests/test_entry.py': "import tests.helper\nimport subprocess\nsubprocess.run(['python', 'tools/child.py'])\n",
+        'tests/helper.py': 'VALUE = 1\n',
+        'tools/child.py': "from pathlib import Path\nPath('tests/fixtures/model.custom').read_bytes()\n",
+        'tests/fixtures/model.custom': 'fixture',
+    }
+    for path, content in files.items():
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+    closure = inputs.python_inputs(tmp_path)
+    assert {'tests/test_entry.py', 'tests/helper.py', 'tools/child.py', 'tests/fixtures/model.custom'} <= closure

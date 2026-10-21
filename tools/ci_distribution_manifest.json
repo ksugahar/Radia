@@ -209,9 +209,6 @@
         ],
         "repo-contracts": [
           "repo"
-        ],
-        "solver-pr": [
-          "radia"
         ]
       }
     }
@@ -439,11 +436,12 @@
       "pattern": "packages/radia-mcp/src/radia_mcp/common/__init__.py",
       "owners": [
         "radia-mcp",
-        "radia-simulink"
+        "radia-simulink",
+        "radia"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "imported by radia_mcp.ltspice.server, which radia-simulink LTspice tests cross-check"
+        "detail": "imported by radia_mcp.ltspice.server, which radia-simulink LTspice tests cross-check; Imported by the required CPU solver numerical test closure."
       },
       "selection": "all_owners"
     },
@@ -2076,6 +2074,30 @@
         "detail": "The per-PR solver-heavy IH operator tests import this dependency through the checked mesh/operator adapter."
       },
       "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/optimization/constraints.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "Imported by the required CPU solver numerical test closure."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/radia_ngsolve/air_gap.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "Imported by the required CPU solver numerical test closure."
+      },
+      "selection": "all_owners"
     }
   ],
   "shared_include_closures": [
@@ -2814,7 +2836,36 @@
             "src/core/radia_mex_sparse_symmetry.h",
             "!**/*.md",
             "packages/radia-simulink/README.md",
-            "docs/ltspice/README.md"
+            "docs/ltspice/README.md",
+            "validation_test/radia_simulink/**/*.ps1",
+            "validation_test/radia_simulink/**/*.c",
+            "validation_test/radia_simulink/**/*.cpp",
+            "validation_test/radia_simulink/**/*.js",
+            "validation_test/ams_cuda/**/*.ps1",
+            "validation_test/ams_cuda/**/*.c",
+            "validation_test/ams_cuda/**/*.cpp",
+            "validation_test/ams_cuda/**/*.js",
+            "validation_test/ams_cuda/**/*.json",
+            "validation_test/ic_cuda/**/*.ps1",
+            "validation_test/ic_cuda/**/*.c",
+            "validation_test/ic_cuda/**/*.cpp",
+            "validation_test/ic_cuda/**/*.js",
+            "validation_test/ic_cuda/**/*.json",
+            "validation_test/ngsolve_cuda_mex/**/*.ps1",
+            "validation_test/ngsolve_cuda_mex/**/*.c",
+            "validation_test/ngsolve_cuda_mex/**/*.cpp",
+            "validation_test/ngsolve_cuda_mex/**/*.js",
+            "validation_test/ngsolve_cuda_mex/**/*.json",
+            "validation_test/hmatrix_cuda/**/*.ps1",
+            "validation_test/hmatrix_cuda/**/*.c",
+            "validation_test/hmatrix_cuda/**/*.cpp",
+            "validation_test/hmatrix_cuda/**/*.js",
+            "validation_test/hmatrix_cuda/**/*.json",
+            "validation_test/fmm_cuda/**/*.ps1",
+            "validation_test/fmm_cuda/**/*.c",
+            "validation_test/fmm_cuda/**/*.cpp",
+            "validation_test/fmm_cuda/**/*.js",
+            "validation_test/fmm_cuda/**/*.json"
           ]
         },
         "push": {
@@ -2885,7 +2936,36 @@
             "src/core/radia_mex_sparse_symmetry.h",
             "!**/*.md",
             "packages/radia-simulink/README.md",
-            "docs/ltspice/README.md"
+            "docs/ltspice/README.md",
+            "validation_test/radia_simulink/**/*.ps1",
+            "validation_test/radia_simulink/**/*.c",
+            "validation_test/radia_simulink/**/*.cpp",
+            "validation_test/radia_simulink/**/*.js",
+            "validation_test/ams_cuda/**/*.ps1",
+            "validation_test/ams_cuda/**/*.c",
+            "validation_test/ams_cuda/**/*.cpp",
+            "validation_test/ams_cuda/**/*.js",
+            "validation_test/ams_cuda/**/*.json",
+            "validation_test/ic_cuda/**/*.ps1",
+            "validation_test/ic_cuda/**/*.c",
+            "validation_test/ic_cuda/**/*.cpp",
+            "validation_test/ic_cuda/**/*.js",
+            "validation_test/ic_cuda/**/*.json",
+            "validation_test/ngsolve_cuda_mex/**/*.ps1",
+            "validation_test/ngsolve_cuda_mex/**/*.c",
+            "validation_test/ngsolve_cuda_mex/**/*.cpp",
+            "validation_test/ngsolve_cuda_mex/**/*.js",
+            "validation_test/ngsolve_cuda_mex/**/*.json",
+            "validation_test/hmatrix_cuda/**/*.ps1",
+            "validation_test/hmatrix_cuda/**/*.c",
+            "validation_test/hmatrix_cuda/**/*.cpp",
+            "validation_test/hmatrix_cuda/**/*.js",
+            "validation_test/hmatrix_cuda/**/*.json",
+            "validation_test/fmm_cuda/**/*.ps1",
+            "validation_test/fmm_cuda/**/*.c",
+            "validation_test/fmm_cuda/**/*.cpp",
+            "validation_test/fmm_cuda/**/*.js",
+            "validation_test/fmm_cuda/**/*.json"
           ]
         },
         "workflow_dispatch": {}
@@ -3495,6 +3575,41 @@
             "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
             "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
             "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py",
+            "src/radia/**",
+            "**/pyproject.toml",
+            "**/requirements*",
+            "**/constraints*",
+            ".github/workflows/**",
+            ".github/actions/**",
+            "**/CMakeLists.txt",
+            "**/*.cmake",
+            "**/*.toolchain",
+            "**/Build.ps1",
+            "packages/radia-mcp/src/radia_mcp/common/__init__.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/air_gap.py",
+            "src/ext/sparsesolv/tests/test_ams_repeatability.py",
+            "src/ext/sparsesolv/tests/test_hermitian_iccg.py",
+            "src/ext/sparsesolv/tests/test_sparsesolv.py",
+            "tests/fixtures/**",
+            "tests/feec/test_hdiv_hex_nonconforming_touching_pair.py",
+            "tests/feec/test_hdiv_jacobi_diagonal_fail_loud.py",
+            "tests/test_arc_section_regression.py",
+            "tests/test_bem_complete_reaction.py",
+            "tests/test_bem_loop_hacapk.py",
+            "tests/test_bem_loop_panel_impedance.py",
+            "tests/test_bem_loop_work_pairings.py",
+            "tests/test_bem_strong_panel_impedance.py",
+            "tests/test_bh_law.py",
+            "tests/test_calc_fem_kelvin_fail_loud.py",
+            "tests/test_cohomology_cut_linear_residual.py",
+            "tests/test_envelope_stop_core.py",
+            "tests/test_panel_esim_complete_state.py",
+            "validation_test/bem/test_loop_extension_ring.py",
+            "validation_test/induction_heating/run_loop_work_ring.py",
+            "validation_test/induction_heating/test_esim_panel_evaluator.py",
+            "validation_test/open_boundary/test_kelvin_connected_ground.py",
+            "validation_test/panels/test_strong_coupling_cli_contract.py",
+            "tests/_ngsolve_2607.py",
             "!**/*.md"
           ]
         },
@@ -3732,6 +3847,41 @@
             "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py",
             "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py",
             "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py",
+            "src/radia/**",
+            "**/pyproject.toml",
+            "**/requirements*",
+            "**/constraints*",
+            ".github/workflows/**",
+            ".github/actions/**",
+            "**/CMakeLists.txt",
+            "**/*.cmake",
+            "**/*.toolchain",
+            "**/Build.ps1",
+            "packages/radia-mcp/src/radia_mcp/common/__init__.py",
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/air_gap.py",
+            "src/ext/sparsesolv/tests/test_ams_repeatability.py",
+            "src/ext/sparsesolv/tests/test_hermitian_iccg.py",
+            "src/ext/sparsesolv/tests/test_sparsesolv.py",
+            "tests/fixtures/**",
+            "tests/feec/test_hdiv_hex_nonconforming_touching_pair.py",
+            "tests/feec/test_hdiv_jacobi_diagonal_fail_loud.py",
+            "tests/test_arc_section_regression.py",
+            "tests/test_bem_complete_reaction.py",
+            "tests/test_bem_loop_hacapk.py",
+            "tests/test_bem_loop_panel_impedance.py",
+            "tests/test_bem_loop_work_pairings.py",
+            "tests/test_bem_strong_panel_impedance.py",
+            "tests/test_bh_law.py",
+            "tests/test_calc_fem_kelvin_fail_loud.py",
+            "tests/test_cohomology_cut_linear_residual.py",
+            "tests/test_envelope_stop_core.py",
+            "tests/test_panel_esim_complete_state.py",
+            "validation_test/bem/test_loop_extension_ring.py",
+            "validation_test/induction_heating/run_loop_work_ring.py",
+            "validation_test/induction_heating/test_esim_panel_evaluator.py",
+            "validation_test/open_boundary/test_kelvin_connected_ground.py",
+            "validation_test/panels/test_strong_coupling_cli_contract.py",
+            "tests/_ngsolve_2607.py",
             "!**/*.md"
           ]
         },

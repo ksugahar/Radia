@@ -233,6 +233,41 @@ on:
       - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py'
       - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py'
       - 'packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py'
+      - 'src/radia/**'
+      - '**/pyproject.toml'
+      - '**/requirements*'
+      - '**/constraints*'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '**/CMakeLists.txt'
+      - '**/*.cmake'
+      - '**/*.toolchain'
+      - '**/Build.ps1'
+      - 'packages/radia-mcp/src/radia_mcp/common/__init__.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/air_gap.py'
+      - 'src/ext/sparsesolv/tests/test_ams_repeatability.py'
+      - 'src/ext/sparsesolv/tests/test_hermitian_iccg.py'
+      - 'src/ext/sparsesolv/tests/test_sparsesolv.py'
+      - 'tests/fixtures/**'
+      - 'tests/feec/test_hdiv_hex_nonconforming_touching_pair.py'
+      - 'tests/feec/test_hdiv_jacobi_diagonal_fail_loud.py'
+      - 'tests/test_arc_section_regression.py'
+      - 'tests/test_bem_complete_reaction.py'
+      - 'tests/test_bem_loop_hacapk.py'
+      - 'tests/test_bem_loop_panel_impedance.py'
+      - 'tests/test_bem_loop_work_pairings.py'
+      - 'tests/test_bem_strong_panel_impedance.py'
+      - 'tests/test_bh_law.py'
+      - 'tests/test_calc_fem_kelvin_fail_loud.py'
+      - 'tests/test_cohomology_cut_linear_residual.py'
+      - 'tests/test_envelope_stop_core.py'
+      - 'tests/test_panel_esim_complete_state.py'
+      - 'validation_test/bem/test_loop_extension_ring.py'
+      - 'validation_test/induction_heating/run_loop_work_ring.py'
+      - 'validation_test/induction_heating/test_esim_panel_evaluator.py'
+      - 'validation_test/open_boundary/test_kelvin_connected_ground.py'
+      - 'validation_test/panels/test_strong_coupling_cli_contract.py'
+      - 'tests/_ngsolve_2607.py'
       - '!**/*.md'
   push:
     branches: [main]
@@ -466,6 +501,41 @@ on:
       - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py'
       - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py'
       - 'packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py'
+      - 'src/radia/**'
+      - '**/pyproject.toml'
+      - '**/requirements*'
+      - '**/constraints*'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '**/CMakeLists.txt'
+      - '**/*.cmake'
+      - '**/*.toolchain'
+      - '**/Build.ps1'
+      - 'packages/radia-mcp/src/radia_mcp/common/__init__.py'
+      - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/air_gap.py'
+      - 'src/ext/sparsesolv/tests/test_ams_repeatability.py'
+      - 'src/ext/sparsesolv/tests/test_hermitian_iccg.py'
+      - 'src/ext/sparsesolv/tests/test_sparsesolv.py'
+      - 'tests/fixtures/**'
+      - 'tests/feec/test_hdiv_hex_nonconforming_touching_pair.py'
+      - 'tests/feec/test_hdiv_jacobi_diagonal_fail_loud.py'
+      - 'tests/test_arc_section_regression.py'
+      - 'tests/test_bem_complete_reaction.py'
+      - 'tests/test_bem_loop_hacapk.py'
+      - 'tests/test_bem_loop_panel_impedance.py'
+      - 'tests/test_bem_loop_work_pairings.py'
+      - 'tests/test_bem_strong_panel_impedance.py'
+      - 'tests/test_bh_law.py'
+      - 'tests/test_calc_fem_kelvin_fail_loud.py'
+      - 'tests/test_cohomology_cut_linear_residual.py'
+      - 'tests/test_envelope_stop_core.py'
+      - 'tests/test_panel_esim_complete_state.py'
+      - 'validation_test/bem/test_loop_extension_ring.py'
+      - 'validation_test/induction_heating/run_loop_work_ring.py'
+      - 'validation_test/induction_heating/test_esim_panel_evaluator.py'
+      - 'validation_test/open_boundary/test_kelvin_connected_ground.py'
+      - 'validation_test/panels/test_strong_coupling_cli_contract.py'
+      - 'tests/_ngsolve_2607.py'
       - '!**/*.md'
   schedule:
     - cron: '17 16 * * *'
@@ -484,7 +554,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: sparsesolv-${{ github.ref }}
+  group: sparsesolv-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -605,27 +675,8 @@ jobs:
           python tools/run_test_tier.py --profile sparsesolv --junitxml "$env:RUNNER_TEMP\sparsesolv-results.xml"
           exit $LASTEXITCODE
 
-      - name: Run representative PR numerical contracts
-        if: steps.native-impact.outputs.required == 'true' && github.event_name == 'pull_request'
-        shell: pwsh
-        env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
-          RADIA_TESTS_ALLOW_PARTIAL: '0'
-          RADIA_TEST_NGSOLVE_THREADS: '1'
-          OMP_NUM_THREADS: '1'
-          OPENBLAS_NUM_THREADS: '1'
-          MKL_NUM_THREADS: '1'
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python tools/run_test_tier.py --profile solver-pr --junitxml "$env:RUNNER_TEMP\solver-pr.xml"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-pr.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
-          exit $LASTEXITCODE
-
       - name: Run required NGSolve numerical contracts
-        if: steps.native-impact.outputs.required == 'true' && github.event_name != 'pull_request'
+        if: steps.native-impact.outputs.required == 'true'
         shell: pwsh
         env:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
@@ -659,6 +710,8 @@ jobs:
           python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $forceArgs = @()
+          # PR environment/toolchain changes must not borrow old heavy evidence.
+          if ('${{ github.event_name }}' -eq 'pull_request') { $forceArgs = @('--force') }
           if ('${{ github.event_name }}' -notin @('push','pull_request') -and '${{ inputs.force_validation }}' -ne 'false') { $forceArgs = @('--force') }
           python tools/validation_source_gate.py --output "$env:RUNNER_TEMP/solver-heavy-validation" @forceArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -689,3 +742,20 @@ jobs:
             ${{ runner.temp }}/solver-heavy-validation/solver-heavy.xml
             build-msvc/build.log
           if-no-files-found: warn
+
+  nightly-failure:
+    needs: [ci-impact, ams-regression]
+    if: ${{ always() && github.event_name == 'schedule' && (needs.ci-impact.result != 'success' || needs.ams-regression.result != 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'SparseSolv nightly numerical validation failed';
+            const body = `Nightly failure: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {...context.repo, state: 'open', creator: 'github-actions[bot]'});
+            const issue = issues.find(i => i.title === title && !i.pull_request);
+            if (issue) await github.rest.issues.createComment({...context.repo, issue_number: issue.number, body});
+            else await github.rest.issues.create({...context.repo, title, body});
