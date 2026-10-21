@@ -126,3 +126,19 @@ refactorizing the Eddy operator. A temperature-dependent operator causes the
 Eddy solve to update. Nonlinear BH iteration is not present in this preview and
 `bh_mode="nonlinear"` fails during configuration instead of silently using a
 linear solve.
+
+## Host configuration regression
+
+The standalone C++ configuration regression checks typed input shapes,
+identifiers, constant-field maps and byte budgets without CUDA or MATLAB.
+Its type declarations do not supply an executable coupled-domain backend or
+certify nonlinear BH. Native numerical and model acceptance
+remain separate requirements. The CPU ESIM method remains an independent
+analysis route; no new coupled route silently falls back to it or uses its
+output as evidence of its own accuracy.
+
+The first-release host schema accepts only `linear_temperature` with the
+`independent_cpu` backend. Periodic BH, GPU artifact metadata and transaction
+domain interfaces belong to the subsequent release candidate. The standalone
+MEX also requires an explicit `bh_mode="linear"` before GPU initialization;
+that source guard has not yet been qualified in a rebuilt MEX.

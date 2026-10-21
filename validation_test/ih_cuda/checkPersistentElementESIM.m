@@ -26,6 +26,7 @@ cfg.esim_cell_parameters=[32,50,0,.001,6283.185307179586,1e-6,.5;32,50,1,.001,62
 cfg.initial_field_A_per_m=[100;200;300];cfg.max_constitutive_iterations=100;
 cfg.constitutive_tolerance=1e-8;cfg.constitutive_relaxation=.8;cfg.field_floor_A_per_m=1e-6;
 assert(radia_cuda_ih('live_count')==0);
+cfg.bh_mode='linear';
 h=radia_cuda_ih('create',cfg);cleanup=onCleanup(@()destroyIfLive(h));
 t=zeros(6,3);q=t;
 for step=0:5

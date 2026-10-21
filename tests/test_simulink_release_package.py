@@ -8,10 +8,19 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-
-
-
-
+def test_ih_resident_start_requires_explicit_magnetic_mode_without_rewriting_it():
+    """Source boundary contract; does not claim MATLAB or native execution."""
+    source = (ROOT / "packages/radia-simulink/matlab/+radia/+simulink/ihResidentSFunction.m").read_text(encoding="utf-8")
+    start = source.split("function start(block)\n", 1)[1].split("\nfunction ", 1)[0]
+    assert "cfg=block.DialogPrm(1).Data;" in start
+    guard = "if ~isfield(cfg,'bh_mode')\n    error('radia:ih:MissingMagneticMode','Explicit bh_mode is required.');\nend"
+    assert guard in start
+    assert start.index(guard) < start.index("radia_cuda_ih('create',cfg)")
+    # Any explicit mode, including nonlinear, reaches native unchanged.
+    # Its runtime acceptance/rejection remains a separate native gate.
+    assert start.count("cfg=") == 1
+    assert "cfg.bh_mode=" not in source
+    assert "cfg.('bh_mode')=" not in source
 
 
 import importlib.util as _scratch_import
@@ -406,3 +415,17 @@ def fake_x64_pe():
     payload[128:132] = b"PE\0\0"
     payload[132:134] = (0x8664).to_bytes(2, "little")
     return bytes(payload)
+
+
+def test_ih_direct_create_checks_linear_mode_before_gpu_initialization():
+    source = (ROOT / "packages/radia-simulink/native/radia_cuda_ih.cu").read_text(encoding="utf-8")
+    dispatch = source[source.index("void dispatchIh("):]
+    guard = dispatch.index('text(field(in[1],"bh_mode"))!="linear"')
+    assert dispatch.index('if(command=="create")') < guard < dispatch.index("mxInitGPU();")
+    assert guard < dispatch.index("std::make_unique<Context>")
+    bh_fields = dispatch.index('mxGetField(in[1],0,"bh_knots")||mxGetField(in[1],0,"bh_coefficients")')
+    assert guard < bh_fields < dispatch.index("mxInitGPU();")
+    assert bh_fields < dispatch.index("std::make_unique<Context>")
+    context = source[source.index("struct ElementMaterial {"):source.index("struct QuadratureThermal {")]
+    assert 'mxGetField(cfg,0,"bh_knots")' not in context
+    assert 'mxGetField(cfg,0,"bh_coefficients")' not in context
