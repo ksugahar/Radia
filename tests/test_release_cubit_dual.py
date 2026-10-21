@@ -114,10 +114,11 @@ def _fake_cubit_wheel(path):
 def _run_worker(cfg):
     import base64
     import json
+    import os
     import subprocess
     encoded = base64.b64encode(json.dumps(cfg).encode()).decode()
     p = subprocess.run([sys.executable, '-', encoded], input=_mock_process_worker(), text=True,
-                       capture_output=True, timeout=120)
+                       capture_output=True, timeout=120, env=os.environ.copy())
     lines = [line for line in p.stdout.splitlines() if line.startswith('CUBIT_DUAL_RESULT=')]
     assert lines, p.stderr
     return p.returncode, json.loads(lines[-1].partition('=')[2])
