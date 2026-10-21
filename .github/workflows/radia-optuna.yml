@@ -23,6 +23,8 @@ on:
       - 'tools/ci_tree_receipt.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
+      - 'tools/ci_gpu_artifact.py'
+      - 'tests/test_ci_gpu_artifact.py'
       - '!**/*.md'
       - 'packages/radia-optuna/README.md'
       - 'packages/radia-optuna/MATLAB_README.md'
@@ -49,6 +51,8 @@ on:
       - 'tools/ci_tree_receipt.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
+      - 'tools/ci_gpu_artifact.py'
+      - 'tests/test_ci_gpu_artifact.py'
       - '!**/*.md'
       - 'packages/radia-optuna/README.md'
       - 'packages/radia-optuna/MATLAB_README.md'
@@ -95,7 +99,7 @@ jobs:
   build-test:
     needs: [ci-impact]
     if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, Windows, X64, "100"]
+    runs-on: [self-hosted, Windows, X64, "100", gpu-rtx]
     steps:
       - uses: actions/checkout@v4
 
@@ -158,11 +162,27 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Seal exact-SHA GPU wheel
+        shell: pwsh
+        run: |
+          python -m pytest tests/test_ci_gpu_artifact.py --confcutdir=tests/ci_routing -q -o addopts=
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/ci_gpu_artifact.py seal "packages/radia-optuna/dist" --sha ${{ github.sha }}
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
+        with:
+          name: gpu-optuna-wheel
+          path: |
+            packages/radia-optuna/dist/*.whl
+            packages/radia-optuna/dist/gpu-artifact.json
+          if-no-files-found: error
+          retention-days: 30
+
   installed-wheel-matlab-e2e:
     if: ${{ needs.ci-impact.outputs.required == 'true' && (true) }}
     name: radia-optuna installed-wheel MATLAB/Simulink E2E
     needs: [ci-impact, build-test]
-    runs-on: [self-hosted, Windows, X64, "100"]
+    runs-on: [self-hosted, Windows, X64, "100", gpu-rtx]
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4

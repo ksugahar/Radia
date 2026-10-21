@@ -941,3 +941,21 @@ def test_wheel_runtime_probe_checks_installed_version_and_import_origin(
 
     assert result.returncode == expected_rc
     assert expected_message in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("status,conclusion", [("queued", None), ("completed", "failure")])
+def test_cpu_release_excludes_a100_nightly(monkeypatch, status, conclusion):
+    sha = "a" * 40
+    gpu = dict(id=2, name="validate", status=status, conclusion=conclusion,
+        details_url="https://github.com/owner/repo/actions/runs/50/job/60")
+    def github(path):
+        if "/check-runs?" in path:
+            return {"check_runs": [_green(release_quad.RELEASE_CHECK_RUN, 1), gpu]}, {}
+        return dict(head_sha=sha, path=".github/workflows/gpu-validation.yml"), {}
+    monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
+    monkeypatch.setattr(release_quad, "gh_get", github)
+    ok, message = release_quad._check_github_hosted_workflows(sha,
+        require_present=[release_quad.RELEASE_CHECK_RUN],
+        excluded_workflows=release_quad.INDEPENDENT_DISTRIBUTION_WORKFLOWS,
+        timeout_sec=0, poll_sec=0)
+    assert ok, message
