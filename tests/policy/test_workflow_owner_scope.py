@@ -215,6 +215,9 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         'packages/radia-mcp/src/radia_mcp/optimization/constraints.py',
         'packages/radia-mcp/src/radia_mcp/radia_ngsolve/air_gap.py',
     }
+    # Both GPU distributions consume exact-SHA wheel recovery, without CPU ABI sharing.
+    expected |= {'tools/ci_gpu_artifact.py', 'tests/test_ci_gpu_artifact.py',
+                 '.github/workflows/gpu-validation.yml'}
     assert shared == expected | set(RADIA_LANE_READS)
     # The shared IH contracts execute the GPU package adapter against CPU Radia solvers.
     for path in ("tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",

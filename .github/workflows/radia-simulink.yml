@@ -61,6 +61,8 @@ on:
       - 'tools/ci_tree_receipt.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
+      - 'tools/ci_gpu_artifact.py'
+      - 'tests/test_ci_gpu_artifact.py'
       - 'src/runtime/ih/**'
       - 'tests/cpp/test_radia_ih_thermal_acceptance.cpp'
       - 'tests/cpp/test_radia_mex_sparse_symmetry.cpp'
@@ -157,6 +159,8 @@ on:
       - 'tools/ci_tree_receipt.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
+      - 'tools/ci_gpu_artifact.py'
+      - 'tests/test_ci_gpu_artifact.py'
       - 'src/runtime/ih/**'
       - 'tests/cpp/test_radia_ih_thermal_acceptance.cpp'
       - 'tests/cpp/test_radia_mex_sparse_symmetry.cpp'
@@ -234,7 +238,7 @@ jobs:
   cuda-mex:
     needs: [ci-impact]
     if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    runs-on: [self-hosted, Windows, X64, "100"]
+    runs-on: [self-hosted, Windows, X64, "100", gpu-rtx]
     timeout-minutes: 60
     env:
       RADIA_GPU_CI_BUILD: "1"
@@ -368,3 +372,18 @@ jobs:
             ${{ runner.temp }}/radia-simulink-installed-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/result.json
             ${{ runner.temp }}/radia-simulink-public-${{ github.run_id }}-${{ github.run_attempt }}/*.json
           if-no-files-found: error
+
+      - name: Seal exact-SHA GPU wheel
+        shell: pwsh
+        run: |
+          python -m pytest tests/test_ci_gpu_artifact.py --confcutdir=tests/ci_routing -q -o addopts=
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/ci_gpu_artifact.py seal "${{ runner.temp }}/radia-simulink-wheel-${{ github.run_id }}-${{ github.run_attempt }}" --sha ${{ github.sha }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gpu-simulink-wheel
+          path: |
+            ${{ runner.temp }}/radia-simulink-wheel-${{ github.run_id }}-${{ github.run_attempt }}/*.whl
+            ${{ runner.temp }}/radia-simulink-wheel-${{ github.run_id }}-${{ github.run_attempt }}/gpu-artifact.json
+          if-no-files-found: error
+          retention-days: 30
