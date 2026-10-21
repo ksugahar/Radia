@@ -72,6 +72,11 @@ def verify_python_binding(path, names, archive, manifest):
     """Check the optional native adapter ABI; this is not runtime qualification."""
     python_binaries=[n for n in names if n.startswith('radia_simulink/') and n.endswith('.pyd')]
     tag=re.search(r'-(cp\d+)-(cp\d+)-win_amd64\.whl$',path.name)
+    resident_receipt = 'radia_simulink/resident-amg-build.json'
+    if resident_receipt in names and not any(
+            re.fullmatch(r'radia_simulink/_resident_amg\.cp\d+-win_amd64\.pyd', n)
+            for n in python_binaries):
+        raise ValueError('Resident AMG receipt requires its Python binding')
     seen=set()
     for binary in python_binaries:
         filename=PurePosixPath(binary).name
@@ -81,7 +86,9 @@ def verify_python_binding(path, names, archive, manifest):
                     or 'resident-amg' in seen):
                 raise ValueError('Resident AMG Python wheel ABI mismatch')
             seen.add('resident-amg')
-            binding = json.loads(archive.read('radia_simulink/resident-amg-build.json'))
+            if resident_receipt not in names:
+                raise ValueError('Resident AMG Python native receipt required')
+            binding = json.loads(archive.read(resident_receipt))
             if (binding.get('schema') != 'radia.resident-amg-python-build.v1'
                     or binding.get('source_commit') != manifest['source_commit']
                     or binding.get('binary') != filename

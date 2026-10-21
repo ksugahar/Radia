@@ -244,3 +244,22 @@ def test_csr_and_hdiv_wheel_share_abi_and_require_hdiv_qualification(tmp_path, m
         else:
             with pytest.raises(ValueError):
                 module.verify_python_binding(wheel,archive.namelist(),archive,manifest)
+
+
+@pytest.mark.parametrize('binary,receipt', [(True, False), (False, True)])
+def test_resident_wheel_rejects_unpaired_payload(tmp_path, binary, receipt):
+    import zipfile
+    spec = importlib.util.spec_from_file_location('resident_pair_contract', ROOT/'verify_wheel.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    wheel = tmp_path/'radia_simulink-0.1.5rc1-cp312-cp312-win_amd64.whl'
+    name = '_resident_amg.cp312-win_amd64.pyd'
+    with zipfile.ZipFile(wheel, 'w') as archive:
+        if binary:
+            archive.writestr('radia_simulink/'+name, b'synthetic packaging fixture')
+        if receipt:
+            archive.writestr('radia_simulink/resident-amg-build.json', '{}')
+    with zipfile.ZipFile(wheel) as archive:
+        with pytest.raises(ValueError, match='Resident AMG'):
+            module.verify_python_binding(wheel, archive.namelist(), archive,
+                                         dict(source_commit='a'*40, files={}))

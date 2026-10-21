@@ -15,6 +15,8 @@ def _qualified_native():
     identity = verify()
     root = Path(__file__).resolve().parent
     name = '_resident_amg' + sysconfig.get_config_var('EXT_SUFFIX')
+    if not (root / 'resident-amg-build.json').is_file() or not (root / name).is_file():
+        raise ImportError('Qualified installed resident AMG receipt and binary required')
     receipt = json.loads((root / 'resident-amg-build.json').read_bytes())
     if (receipt.get('schema') != 'radia.resident-amg-python-build.v1'
             or receipt.get('source_commit') != identity['source_commit']
