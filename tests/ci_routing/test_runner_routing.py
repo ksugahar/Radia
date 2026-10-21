@@ -158,6 +158,11 @@ def test_a100_is_compute_only_and_never_a_pr_gate():
     assert job['runs-on'] == ['self-hosted', 'Windows', 'X64', 'gpu-a100']
     commands = '\n'.join(step.get('run', '') for step in job['steps'])
     assert 'ci_gpu_artifact.py fetch' in commands
-    assert '--sha ${{ github.sha }}' in commands
+    assert '--sha ${{ steps.source.outputs.sha }}' in commands
+    assert "$sha = '${{ github.sha }}'" in commands
+    assert "github.event_name }}' -eq 'schedule'" in commands
+    assert 'ci_gpu_artifact.py select' in commands
+    assert workflow['concurrency']['group'].endswith('${{ github.event_name }}')
+    assert "needs.validate.result == 'failure'" in workflow['jobs']['nightly-failure']['if']
     assert not any(token in commands.lower() for token in ['build.ps1', 'mexcuda', 'cmake', 'pip install build'])
     assert 'issues: write' in (ROOT / '.github/workflows/gpu-validation.yml').read_text(encoding='utf-8')

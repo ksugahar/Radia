@@ -7,7 +7,7 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: gpu-a100-validation
+  group: gpu-a100-validation-${{ github.event_name }}
   cancel-in-progress: false
 jobs:
   validate:
@@ -18,11 +18,27 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
+      - name: Select validation source
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $sha = '${{ github.sha }}'
+          if ('${{ github.event_name }}' -eq 'schedule') {
+            python tools/ci_gpu_artifact.py select chosen-sha.txt
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $sha = (Get-Content chosen-sha.txt).Trim()
+          }
+          "sha=$sha" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "Validated source SHA: $sha" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
       - name: Fetch hash-verified exact-SHA GPU wheels built on RTX
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python tools/ci_gpu_artifact.py fetch gpu-input --sha ${{ github.sha }}
+          python tools/ci_gpu_artifact.py fetch gpu-input --sha ${{ steps.source.outputs.sha }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install verified wheels into a run-local environment
         run: |
@@ -33,7 +49,7 @@ jobs:
           if ($wheels.Count -ne 2) { throw 'Expected two verified GPU wheels' }
           & $py -I -m pip install --no-deps $wheels.FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $sim = & $py -I -c "import radia_simulink as r; x=r.verify(); assert x['passed']; assert x['source_commit']=='${{ github.sha }}'; print(r.matlab_path())"
+          $sim = & $py -I -c "import radia_simulink as r; x=r.verify(); assert x['passed']; assert x['source_commit']=='${{ steps.source.outputs.sha }}'; print(r.matlab_path())"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $opt = & $py -I -c "from radia_optuna import matlab_path; print(matlab_path())"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -46,7 +62,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: gpu-a100-validation-${{ github.sha }}
+          name: gpu-a100-validation-${{ steps.source.outputs.sha }}
           path: |
             gpu-results/**/*.json
             gpu-input/**/gpu-artifact.json
@@ -55,7 +71,7 @@ jobs:
           retention-days: 30
   nightly-failure:
     needs: [validate]
-    if: ${{ always() && needs.validate.result != 'success' }}
+    if: ${{ always() && github.event_name == 'schedule' && needs.validate.result == 'failure' }}
     runs-on: ubuntu-latest
     permissions:
       issues: write

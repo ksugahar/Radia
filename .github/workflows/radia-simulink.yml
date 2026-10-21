@@ -380,6 +380,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/ci_gpu_artifact.py seal "${{ runner.temp }}/radia-simulink-wheel-${{ github.run_id }}-${{ github.run_attempt }}" --sha ${{ github.sha }}
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
         with:
           name: gpu-simulink-wheel
           path: |

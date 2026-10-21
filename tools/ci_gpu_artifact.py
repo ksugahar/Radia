@@ -34,14 +34,58 @@ def verify(directory, sha):
             raise ValueError('GPU artifact hash mismatch')
 
 
-def fetch(output, sha):
+class SafeRedirect(urllib.request.HTTPRedirectHandler):
+    """Storage redirects must never receive the repository credential."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None:
+            redirected.remove_header('Authorization')
+        return redirected
+
+
+def request(route):
     repository = os.environ['GITHUB_REPOSITORY']
-    def request(route):
-        req = urllib.request.Request('https://api.github.com/repos/' + repository + '/' + route,
-            headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
-                     'Accept': 'application/vnd.github+json'})
-        with urllib.request.urlopen(req, timeout=60) as response:
-            return response.read()
+    req = urllib.request.Request('https://api.github.com/repos/' + repository + '/' + route,
+        headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                 'Accept': 'application/vnd.github+json'})
+    with urllib.request.build_opener(SafeRedirect()).open(req, timeout=60) as response:
+        return response.read()
+
+
+def newest_main_sha():
+    # Artifact listing is newest-first and paginated; only unexpired push/main
+    # artifacts qualify. Commit order below determines newest main ancestry.
+    available = {}
+    page = 1
+    while True:
+        artifacts = json.loads(request(f'actions/artifacts?per_page=100&page={page}'))['artifacts']
+        if not artifacts:
+            break
+        for artifact in artifacts:
+            run = artifact.get('workflow_run', {})
+            if artifact['name'] in {'gpu-simulink-wheel', 'gpu-optuna-wheel'} and not artifact['expired'] and run.get('head_branch') == 'main':
+                available.setdefault(run['head_sha'], set()).add(artifact['name'])
+        page += 1
+    candidates = {sha for sha, names in available.items() if len(names) == 2}
+    page = 1
+    while candidates:
+        commits = json.loads(request(f'commits?sha=main&per_page=100&page={page}'))
+        if not commits:
+            break
+        for commit in commits:
+            if commit['sha'] in candidates:
+                try:
+                    resolve(commit['sha'])
+                except ValueError:
+                    candidates.remove(commit['sha'])
+                else:
+                    return commit['sha']
+        page += 1
+    raise ValueError('No main SHA has both successful sealed GPU artifacts')
+
+
+def resolve(sha):
+    selected = []
     for workflow, artifact in [('radia-simulink.yml', 'gpu-simulink-wheel'),
                                ('radia-optuna.yml', 'gpu-optuna-wheel')]:
         runs = json.loads(request(f'actions/workflows/{workflow}/runs?head_sha={sha}&event=push&status=success&per_page=100'))['workflow_runs']
@@ -55,6 +99,12 @@ def fetch(output, sha):
                 break
         if found is None:
             raise ValueError(f'Missing successful exact-SHA artifact: {artifact}')
+        selected.append((run, found, artifact))
+    return selected
+
+
+def fetch(output, sha):
+    for run, found, artifact in resolve(sha):
         archive = request(f"actions/artifacts/{found['id']}/zip")
         target = output / artifact
         target.mkdir(parents=True, exist_ok=False)
@@ -70,10 +120,14 @@ def fetch(output, sha):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['seal', 'fetch'])
+    parser.add_argument('mode', choices=['seal', 'fetch', 'select'])
     parser.add_argument('directory', type=Path)
-    parser.add_argument('--sha', required=True)
+    parser.add_argument('--sha')
     args = parser.parse_args()
-    if len(args.sha) != 40 or any(c not in '0123456789abcdef' for c in args.sha):
+    if args.mode == 'select':
+        sha = newest_main_sha()
+        args.directory.write_text(sha + '\n')
+        raise SystemExit(0)
+    if not args.sha or len(args.sha) != 40 or any(c not in '0123456789abcdef' for c in args.sha):
         parser.error('Expected a full commit SHA')
     (seal if args.mode == 'seal' else fetch)(args.directory, args.sha)
