@@ -29,17 +29,20 @@ validated commit, required checks, source artifact ID and contributing run IDs.
 boundaries. Root build/configuration changes remain conservative; unknown
 content selects every owner. CPU native sources/headers and CMake toolchains
 remain inputs because the AMS job builds Radia, SparseSolv, axifem and PEEC.
-For PRs, `tools/ci_ams_inputs.py` follows Python imports from the actual AMS,
-representative numerical and solver-heavy profiles. It resolves subprocess
-CLI/file loaders and package adapters, with explicit seeds for AST loaders.
-Other numerical consumers run in the complete audit. An unknown selector or
-invalid input fails closed. Direct main pushes retain the full numerical gate.
+For PRs, `tools/ci_ams_inputs.py` follows Python imports from the full AMS,
+sparsesolv, `solver-numerics` and solver-heavy profiles (including inherited
+profiles), resolves subprocess CLI/file loaders and package adapters, and adds a
+floor of every `src/radia/*.py` module and the declared fixture directories.
+Any `src/radia/` change selects the lane. Changes to package metadata,
+requirements, CI install steps, workflows, CMake/toolchain files, `Build.ps1`
+or `tests/test_tier_manifest.json` run the full `solver-numerics` profile on the
+PR. An unknown selector or invalid input fails closed. Direct main pushes retain
+the full numerical gate.
 
 The GPU lane retains the native quote-include closure already checked by
 `tests/policy/test_workflow_owner_scope.py`, package sources and shared build
-files. CUDA validation directories select executable Python/MATLAB helpers
-and binary fixtures, rather than arbitrary saved output. GPU release
-qualification JSON remains an input. Optuna consumes its independent package,
+files. CUDA validation directories select executable helpers, binary fixtures and
+JSON inputs, including GPU release qualification JSON. Optuna consumes its independent package,
 oracle/test fixtures, CUDA validation drivers and root build configuration;
 it does not consume unrelated application packages. Redundant package-subtree
 patterns are unnecessary underneath the package wildcard.
@@ -49,9 +52,10 @@ patterns are unnecessary underneath the package wildcard.
 The SparseSolv AMS workflow is also the nightly and manually dispatched full
 audit. Nightly runs execute the unchanged 91-file `solver-numerics` profile,
 the AMS profile and forced solver-heavy validation. Failures fail the workflow;
-they are never converted into successful receipts. PRs run AMS, `solver-pr`
-(residual, HDiv energy, axisymmetric measure, IH transfer and eddy contracts),
-and the existing source-bound solver-heavy gate. No numerical test is deleted.
+they are never converted into successful receipts. PRs that select the lane
+run AMS, the full `solver-numerics` profile and forced solver-heavy validation.
+Tree receipts record the executed profile and are reused on main only when it
+matches what main would run. No numerical test is deleted.
 
 Tree reuse is queue optimization, not artifact promotion. Before release,
 dispatch the relevant distribution workflow on the exact main release SHA.

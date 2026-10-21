@@ -237,7 +237,7 @@ policy checks, repository contracts). The 52-file closure digest is now
 ## Heavy CI throughput routing (2026-10-21)
 
 Reviewed the lightweight execution closure after introducing identical-tree
-receipt verification and compact AMS PR input selection. Both helpers use only
+receipt verification and full-closure AMS PR input selection. Both helpers use only
 standard-library modules. Network verification executes in hosted routing jobs;
 source-only contracts use injected API fixtures. The AMS selector parses files
 without importing solver modules, loading native libraries or starting builds.
