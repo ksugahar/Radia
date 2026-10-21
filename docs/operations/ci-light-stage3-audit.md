@@ -192,3 +192,9 @@ audit and fast contracts (142 tests) passed without native builds. The metadata
 check uses setuptools configuration and metadata/file selectors; it does not
 execute package setup scripts or compile solvers. Updated the light closure
 digest after these checks: `9bfbe0f4f595e581cc5d3ae297ad0a21ebd0cf46316def46dad1aeed22e335cf`.
+
+After registering the new root license files (LICENSE-APACHE-2.0, NOTICE,
+THIRD_PARTY_NOTICES.md) in the distribution manifest, the isolated fast-contracts
+steps passed again (routing contract 19 tests, TaskManager audit, version check,
+fast selector 142 tests, showcase readers 6 tests). The 52-file closure digest is
+now `2d6f0f35bf7de375a25bd0e7dd86fe24c26180af43cbb4c0e84403f74938e94e`.

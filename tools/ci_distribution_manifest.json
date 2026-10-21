@@ -361,6 +361,24 @@
       ]
     },
     {
+      "pattern": "LICENSE-APACHE-2.0",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "NOTICE",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
+      "pattern": "THIRD_PARTY_NOTICES.md",
+      "owners": [
+        "repo"
+      ]
+    },
+    {
       "pattern": "MEMORY.md",
       "owners": [
         "repo"
