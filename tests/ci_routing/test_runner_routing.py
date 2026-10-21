@@ -135,4 +135,5 @@ def test_lamination_native_coverage_is_retained(changed):
     mutant=copy.deepcopy(manifest)
     for event in ('push','pull_request'):
         mutant['lanes']['sparsesolv']['events'][event]['paths'].remove(changed)
+        mutant['lanes']['sparsesolv']['events'][event]['paths'].append('!' + changed)
     assert not impact.lane_required('sparsesolv',{changed},lambda p:(None,None),mutant)[0]

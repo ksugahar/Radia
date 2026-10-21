@@ -696,6 +696,8 @@ def _download_verified_optuna_ci_wheel(ci_run_id: str) -> tuple[dict | None, str
         "conclusion": "success",
         "workflowName": "radia-optuna",
     }
+    if run_info.get("event") == "workflow_dispatch":
+        expected["event"] = "workflow_dispatch"
     mismatches = [
         f"{key}={run_info.get(key)!r} (expected {value!r})"
         for key, value in expected.items()

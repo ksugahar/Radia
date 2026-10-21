@@ -71,7 +71,7 @@ def _qualify_stable(wheel, qualification_directory):
 def qualify(run, repository, run_id, artifact, expected_hash,
             qualification_directory=None):
     if (str(run.get('id')) != str(run_id) or run.get('status') != 'completed'
-            or run.get('conclusion') != 'success' or run.get('event') != 'push'
+            or run.get('conclusion') != 'success' or run.get('event') not in ('push', 'workflow_dispatch')
             or run.get('head_branch') != 'main'
             or run.get('path') != '.github/workflows/radia-simulink.yml'
             or run.get('head_repository', {}).get('full_name') != repository):

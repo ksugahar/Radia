@@ -381,6 +381,29 @@ jobs:
             exit $rc
           }
 
+      - name: Run full release numerical contracts
+        shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          RADIA_TESTS_ALLOW_PARTIAL: '0'
+          RADIA_TEST_NGSOLVE_THREADS: '1'
+        run: |
+          python tools/run_test_tier.py --profile solver-numerics --junitxml "$env:RADIA_CI_OUTPUT_DIR/solver-numerics.xml"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import os,pathlib,xml.etree.ElementTree as E; cases=list(E.parse(pathlib.Path(os.environ['RADIA_CI_OUTPUT_DIR'])/'solver-numerics.xml').iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases)"
+          exit $LASTEXITCODE
+
+      - name: Execute full release solver-heavy contracts
+        shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          RADIA_TESTS_ALLOW_PARTIAL: '0'
+          RADIA_TEST_NGSOLVE_THREADS: '1'
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python tools/validation_source_gate.py --force --output "$env:RADIA_CI_OUTPUT_DIR/solver-heavy-validation"
+          exit $LASTEXITCODE
+
       - name: Capture memory after native smoke
         if: always()
         shell: pwsh

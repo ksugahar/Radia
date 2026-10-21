@@ -95,13 +95,18 @@ def ams_manifest_unchanged(before: str, after: str) -> bool:
             name = profile.get("extends")
             if name is not None and not isinstance(name, str):
                 raise ValueError("invalid AMS parent")
-        for profile_name in ("solver-numerics", "solver-heavy"):
+        for profile_name in ("solver-numerics", "solver-heavy", "solver-pr"):
             if profile_name in profiles:
                 selected[profile_name] = profiles[profile_name]
         data["profiles"] = selected
-        paths = [path for profile in selected.values() for path in profile.get("paths", [])]
+        # solver-pr intentionally references a subset of solver-numerics.
+        paths = [path for name, profile in selected.items() if name != 'solver-pr'
+                 for path in profile.get("paths", [])]
         if not paths or len(paths) != len(set(paths)):
             raise ValueError("empty or duplicate AMS test paths")
+        representative = selected.get('solver-pr', {}).get('paths', [])
+        if len(representative) != len(set(representative)):
+            raise ValueError('duplicate representative paths')
         return data
     return _canonical(relevant(before)) == _canonical(relevant(after))
 
@@ -439,6 +444,12 @@ def _required_for_event(lane,event_name,event,git,data):
         if event_name=='pull_request': base=git('merge-base',base,'HEAD').strip()
         if not base: raise ValueError('missing merge base')
         changed=changed_paths(git('diff','--name-status','-z','--find-renames',base,'HEAD','--'))
+        if lane == 'sparsesolv' and event_name == 'pull_request':
+            spec = importlib.util.spec_from_file_location('ci_ams_inputs', ROOT / 'tools/ci_ams_inputs.py')
+            inputs = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(inputs)
+            if changed and not inputs.required(ROOT, changed, CONTRACT, data):
+                return False, 'outside compact AMS build/test closure; full numerical suite is nightly'
         return lane_required(lane,changed,lambda p:(git('show',f'{base}:{p}'),git('show',f'HEAD:{p}')),data)
     except Exception as exc:  # any unanticipated failure must select the lane
         return True,f'impact unknown ({type(exc).__name__}); fail closed'
@@ -457,6 +468,7 @@ def native_required(event_name, event, git):
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lane",default="sparsesolv")
+    parser.add_argument("--tree-reuse", action="store_true", help="record PR tree identity or verify main reuse")
     args=parser.parse_args(argv)
     root = Path(__file__).resolve().parents[1]
 
@@ -472,6 +484,12 @@ def main(argv=None):
         CONTRACT.validate_schema(data)
         if args.lane not in data["lanes"]: raise ValueError("unknown lane")
         required, reason = required_for_event(args.lane, os.environ["GITHUB_EVENT_NAME"], event, git, data)
+        if args.tree_reuse:
+            spec = importlib.util.spec_from_file_location('ci_tree_receipt', root / 'tools/ci_tree_receipt.py')
+            receipt = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(receipt)
+            if receipt.route(args.lane, os.environ['GITHUB_EVENT_NAME'], event, git, required):
+                required, reason = False, 'tree already validated; see ci-tree-receipt.json'
     except Exception as exc:  # any unanticipated failure must select the lane
         required, reason = True, f"impact unknown ({type(exc).__name__}); fail closed"
     safe_reason = reason.replace('\r',' ').replace('\n',' ')
