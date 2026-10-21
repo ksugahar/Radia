@@ -133,17 +133,23 @@ def test_python_cuda_wheel_requires_exact_native_abi(tmp_path,wheel_tag,native_t
                 module.verify_python_binding(wheel,z.namelist(),z,manifest)
 
 
-def test_native_payload_uses_platform_library_root(monkeypatch):
-    import runpy
-    import setuptools
-    captured = {}
-    monkeypatch.setattr(setuptools, "setup", lambda **kwargs: captured.update(kwargs))
-    runpy.run_path(str(ROOT / "setup.py"))
-    distribution = captured["distclass"]({"packages": []})
-    command = distribution.get_command_obj("build")
-    command.ensure_finalized()
-    assert command.build_lib == command.build_platlib
-    assert command.build_lib != command.build_purelib
+def test_native_payload_uses_platform_library_root():
+    # Load the actual native-distribution policy without importing the build backend.
+    import ast
+    spec = importlib.util.spec_from_file_location("native_payload_policy", ROOT / "native_payload.py")
+    policy = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(policy)
+    assert policy.NativePayloadDistribution().has_ext_modules() is True
+    assert "include native_payload.py" in (ROOT / "MANIFEST.in").read_text().splitlines()
+    # setup.py must apply that exact policy to the backend Distribution.
+    tree = ast.parse((ROOT / "setup.py").read_text())
+    distribution = next(node for node in tree.body
+                        if isinstance(node, ast.ClassDef) and node.name == "BinaryDistribution")
+    assert [ast.unparse(base) for base in distribution.bases] == [
+        "payload_module_native().NativePayloadDistribution", "Distribution"]
+    assert not any(isinstance(node, ast.FunctionDef) and node.name == "has_ext_modules"
+                   for node in distribution.body)
+
 
 @pytest.mark.parametrize('mutation', ['none', 'abi', 'runtime', 'redistribution', 'source', 'diagnostic', 'device-diagnostic', 'device-mode-missing'])
 def test_csr_and_hdiv_wheel_share_abi_and_require_hdiv_qualification(tmp_path, mutation):
