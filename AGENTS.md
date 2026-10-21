@@ -20,8 +20,8 @@ CPU `radia` releases exclude mexcuda, MATLAB, LTspice and Simulink artifacts and
 
 - `src/`, `packages/`: production; integrations belong to their package owner.
 - `tests/`: fast deterministic bug/contract protection; every PR.
-- `validation_test/`: correctness gates (physics, CPU/GPU parity, platform agreement); nightly and on the exact release artifact.
-- `validation_records/`: once-passed evidence (speedups, one-offs): script, source SHA, artifact hash, result JSON; CI checks schema. Timings never gate.
+- `validation_test/`: correctness gates (physics, CPU/GPU and platform parity); nightly and on the exact release artifact.
+- `validation_records/`: once-passed evidence (speedups, one-offs) with script, SHAs, result JSON; CI checks schema. Timings never gate.
 - `docs/**/*.ipynb`: executed, saved feature introductions and presentation-ready
   narratives linking those samples; not production interfaces or benchmarks.
 - `C:\temp`: disposable prototypes and generated work.
@@ -227,7 +227,7 @@ Measurements remain valid provenance: publish neutral roles, not hosts/IPs/paths
 
 **POLICY (2026-10-13)**: Remote compute jobs, including NGSolve and retirement cleanup on jmag, finish only after verified recovery and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments and helpers.
 - Recover JSON, logs, commands, runtime/source identity, hashes and non-reconstructible inputs
-  to LAB durable storage. Numerical evidence goes in `validation_test/`, public demonstrations
+  to LAB durable storage. Gates go in `validation_test/`, records in `validation_records/`, public demonstrations
   in executed `docs/**/*.ipynb`; raw operational logs/inventories stay outside tracked source.
 - Verify destination hashes and commit intended evidence before deleting its remote copy,
   including failed-run diagnostics. Verify deletion and report locations and cleanup outcome.
