@@ -21,7 +21,7 @@ see the [maintenance procedure](docs/maintenance.md) and
 
 [![PyPI](https://img.shields.io/pypi/v/radia-mcp.svg)](https://pypi.org/project/radia-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/radia-mcp.svg)](https://pypi.org/project/radia-mcp/)
-[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 > **First-and-only public Model Context Protocol (MCP) server suite for
 > Gmsh, build123d, and the Radia CAE ecosystem, with independent Cubit integration —
@@ -542,7 +542,7 @@ History of every release is in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-BSD-3-Clause — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
@@ -554,3 +554,8 @@ BSD-3-Clause — see [LICENSE](LICENSE).
   `gitlab.onelab.info`.
 - **MCP / Anthropic** for the protocol that made AI-driven CAE
   practical.
+
+
+Owner-authored code is licensed under Apache-2.0 from the next releases.
+See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
+retain their original licenses; previously published artifacts are unchanged.

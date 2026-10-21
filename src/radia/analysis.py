@@ -19,7 +19,7 @@ References:
         TU Wien, 2003.
 
 Author: Radia Development Team
-License: BSD-style AND MIT
+License: Apache-2.0
 """
 
 import warnings

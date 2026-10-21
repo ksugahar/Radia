@@ -1,5 +1,5 @@
 # Cubit-owned implementation; intentionally maintained independently of Radia MCP.
-# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
+# SPDX-License-Identifier: Apache-2.0
 """Force stdout/stderr to UTF-8 so --selftest output doesn't crash on cp932.
 
 Default Windows consoles in Japanese locale use cp932, which cannot encode

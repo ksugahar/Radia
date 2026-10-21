@@ -26,8 +26,8 @@ def test_mcp_sdk_dependency_declares_supported_floor():
     project = metadata["project"]
     assert SDK_REQUIREMENT in project["dependencies"]
     assert metadata["build-system"]["requires"] == ["setuptools>=77.0"]
-    assert project["license"] == "BSD-3-Clause"
-    assert project["license-files"] == ["LICENSE"]
+    assert project["license"] == "Apache-2.0"
+    assert project["license-files"] == ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
     from packaging.requirements import Requirement
     names = {Requirement(item).name for item in project['dependencies']}
     assert not {'cae-mcp-core', 'cubit-mesh-export', 'radia'}.intersection(names)
