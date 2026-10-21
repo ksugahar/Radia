@@ -2277,10 +2277,6 @@
   ],
   "accepted": true,
   "elapsed_seconds": 6.221288100001402,
-  "source_hashes": {
-    "src/radia/esim_cell_problem.py": "4feb7339455228ad0cbbea4dc15ba0add7314d3aa798cd90bed60b320985ef60",
-    "src/radia/esim_depth.py": "f2cb0cdf63e3af27a6fd25bef6d31b73ca366d37e7380cbfc77f83f9aeddf969"
-  },
   "versions": {
     "python": "3.12.10",
     "numpy": "2.5.3",
@@ -2293,6 +2289,39 @@
     "Phasor ESIM does not certify time-resolved nonlinear BH cycles.",
     "Nested mesh change is empirical and not a rigorous error bound."
   ],
-  "tested_source_sha": "46b8ae9e9f814005c56ffbd0d68c6946cdf8a537",
-  "pure_python_source_modules_only": true
+  "pure_python_source_modules_only": true,
+  "historical_execution_source_hashes_raw": {
+    "src/radia/esim_cell_problem.py": "4feb7339455228ad0cbbea4dc15ba0add7314d3aa798cd90bed60b320985ef60",
+    "src/radia/esim_depth.py": "f2cb0cdf63e3af27a6fd25bef6d31b73ca366d37e7380cbfc77f83f9aeddf969"
+  },
+  "original_execution_source_sha": "46b8ae9e9f814005c56ffbd0d68c6946cdf8a537",
+  "numerical_source_reference_sha": "000c9c384040f0003d65f0eab9c76568acee4d74",
+  "source_hashes_lf": {
+    "src/radia/esim_cell_problem.py": "fc40933e5474881a3f68f09bc8ccedb92d47226ba353b03de03bc57eaaac3a57",
+    "src/radia/esim_depth.py": "f2cb0cdf63e3af27a6fd25bef6d31b73ca366d37e7380cbfc77f83f9aeddf969"
+  },
+  "source_identity": {
+    "reachable_reference_sha": "000c9c384040f0003d65f0eab9c76568acee4d74",
+    "followup_parent_sha": "6051d712a06c95e1fb567c303cced43d5f911582",
+    "comparison_to": "Numerical source files committed with this evidence update",
+    "method": "Exact git blob equality original execution versus reachable000c; candidate AST equality excluding docstrings and verified-unused n/h assignments in surface resistance helper. Comments do not enter AST.",
+    "files": {
+      "src/radia/esim_cell_problem.py": {
+        "original_and_reference_git_bytes_identical": true,
+        "reference_lf_sha256": "fc40933e5474881a3f68f09bc8ccedb92d47226ba353b03de03bc57eaaac3a57",
+        "candidate_lf_sha256": "4799dd64e9787a98c80953691a97de27ba1c85b38f45575e19a075c99eb7bbc4",
+        "normalized_numerical_ast_sha256": "9747fabbb0a305eaed451d6891b216377745c78b6c80f69bb06cfe155f2fd534",
+        "candidate_numerical_ast_matches_reference": true
+      },
+      "src/radia/esim_depth.py": {
+        "original_and_reference_git_bytes_identical": true,
+        "reference_lf_sha256": "f2cb0cdf63e3af27a6fd25bef6d31b73ca366d37e7380cbfc77f83f9aeddf969",
+        "candidate_lf_sha256": "f2cb0cdf63e3af27a6fd25bef6d31b73ca366d37e7380cbfc77f83f9aeddf969",
+        "normalized_numerical_ast_sha256": "f1fd0db2c099e4e8de0cd744d51ce6957002c9f77603fa48033cefaaa3d0b8b5",
+        "candidate_numerical_ast_matches_reference": true
+      }
+    },
+    "no_rerun": true,
+    "execution_provenance": "Original recorded execution metrics and versions unchanged. Reachable source reference is not a new execution SHA."
+  }
 }

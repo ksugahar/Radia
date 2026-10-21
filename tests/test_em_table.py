@@ -91,3 +91,20 @@ def test_user_table_impedance_is_strict_and_energy_consistent(em_table):
         model.impedance(1, 70, frequency_hz=1000)
     with pytest.raises(ValueError, match="passivity"):
         SurfaceImpedanceModel.from_table(em_table, name="invalid")
+
+
+@pytest.mark.parametrize("schema", [None, 1, "2", 2])
+def test_saved_table_schema_rejects_old_and_missing_versions(tmp_path, em_table, schema):
+    import json
+    from radia.panels.em_table import EM_TABLE_SCHEMA_VERSION, load_em_table
+    meta = {} if schema is None else {"schema_version": schema}
+    path = tmp_path / "table.npz"
+    np.savez(path, H_grid=em_table.H_grid, T_grid=em_table.T_grid,
+             Zs_re=em_table.Zs_re, Zs_im=em_table.Zs_im, q_surf=em_table.q_surf,
+             meta=np.asarray(json.dumps(meta)))
+    if schema == EM_TABLE_SCHEMA_VERSION:
+        loaded = load_em_table(path)
+        np.testing.assert_array_equal(loaded.q_surf, em_table.q_surf)
+    else:
+        with pytest.raises(ValueError, match="Unsupported EM table schema"):
+            load_em_table(path)

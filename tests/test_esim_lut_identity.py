@@ -71,3 +71,9 @@ def test_algorithm_identity_and_new_schema_roundtrip(tmp_path):
 def test_invalid_depth_controls_fail_before_cell_evaluation(change):
     with pytest.raises(ValueError):
         replace(model(), **change)
+
+
+@pytest.mark.parametrize("change", [{"n_nodes": 3}, {"n_nodes": 101, "max_nodes": 100}])
+def test_seed_node_budget_is_validated_at_model_construction(change):
+    with pytest.raises(ValueError, match="n_nodes"):
+        replace(model(), **change)
