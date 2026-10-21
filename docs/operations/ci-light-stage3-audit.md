@@ -248,3 +248,7 @@ TaskManager ownership, version consistency, fast contracts and showcase readers,
 followed by policy and repository contracts. Runner count and heavy labels are
 unchanged. See [heavy CI execution policy](ci-throughput.md) for release gates
 and the full numerical audit schedule.
+
+After merging current main (CI throughput routing) into the NGSolve 6.2.2608
+migration, the shared precheck passed on the merged tree. The 54-file closure
+digest is now `12f26b1613e69e623b4314a92af07c7d2ad10e14a91a8c8b2f2bf9148f7e8c71`.

@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-gpu = ["numpy>=1.26", "ngsolve==6.2.2608",
+gpu = ["numpy>=1.26", "ngsolve==6.2.2608", "netgen-mesher==6.2.2608",
        "nvidia-cuda-runtime-cu12==12.8.57; sys_platform == 'win32'",
        "nvidia-cublas-cu12==12.8.3.14; sys_platform == 'win32'",
        "nvidia-cusolver-cu12==11.7.2.55; sys_platform == 'win32'",

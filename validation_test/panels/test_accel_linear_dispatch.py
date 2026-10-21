@@ -31,6 +31,12 @@ def test_accel_backend_matches_direct(form, order, backend):
         reference.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
     expected = reference.vec.FV().NumPy().copy()
     inverse = _accel_inverse(a, fes, backend)
+    if form == "a" and backend == "iccg":
+        # Full HCurl with a 1e-6 mass gauge has condition number about 7e9.
+        # A 1e-12 residual does not guarantee the 1e-5 coefficient-error gate.
+        # Request tighter convergence for this coefficient comparison; keep
+        # the production default and both acceptance thresholds unchanged.
+        inverse.tol = 1e-14
     result = GridFunction(fes)
     with TaskManager():
         residual = apply_fe_inverse(a.mat, inverse, f.vec, result.vec, fes.FreeDofs())
