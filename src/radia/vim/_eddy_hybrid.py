@@ -9546,7 +9546,8 @@ def AssembleSurfaceImpedanceGram(
     )
 
 
-_LOCAL_ESIM_LUT_SCHEMA_VERSION = 1
+_LOCAL_ESIM_LUT_SCHEMA_VERSION = 2
+_LOCAL_ESIM_CELL_ALGORITHM = "conservative-cv-adaptive-depth-exp-positive-iwt-v1"
 _LOCAL_ESIM_LUT_INTERPOLATION = "bilinear-logf-logh-logabs-phase-v1"
 
 
@@ -9874,6 +9875,9 @@ class LocalESIMSurfaceModel:
     cell_tolerance: float = 1.0e-5
     cell_max_iterations: int = 80
     cell_relaxation: float = 0.5
+    mesh_tol: float = 1.0e-3
+    max_nodes: int = 32769
+    max_refinements: int = 16
     h_floor: float = 1.0e-6
     table_range_margin: float = 2.0
     lut: LocalESIMSurfaceLUT | None = None
@@ -9902,8 +9906,8 @@ class LocalESIMSurfaceModel:
         max_iterations = int(self.cell_max_iterations)
         if bins < 2:
             raise ValueError("bins must be >= 2")
-        if n_nodes < 3:
-            raise ValueError("n_nodes must be >= 3")
+        if isinstance(self.n_nodes, bool) or n_nodes != self.n_nodes or n_nodes < 4:
+            raise ValueError("n_nodes must be an integer >= 4")
         if max_iterations < 1:
             raise ValueError("cell_max_iterations must be >= 1")
         for name in (
@@ -9918,6 +9922,17 @@ class LocalESIMSurfaceModel:
             object.__setattr__(self, name, value)
         if self.table_range_margin <= 1.0:
             raise ValueError("table_range_margin must be greater than 1")
+        mesh_tol = float(self.mesh_tol)
+        if not np.isfinite(mesh_tol) or not 0.0 < mesh_tol < 1.0:
+            raise ValueError("mesh_tol must be in (0, 1)")
+        object.__setattr__(self, "mesh_tol", mesh_tol)
+        for name, minimum in (("max_nodes", 8), ("max_refinements", 1)):
+            value = getattr(self, name)
+            if isinstance(value, bool) or int(value) != value or value < minimum:
+                raise ValueError(f"{name} must be an integer >= {minimum}")
+            object.__setattr__(self, name, int(value))
+        if n_nodes > self.max_nodes:
+            raise ValueError("n_nodes must not exceed max_nodes")
         relaxation = float(self.cell_relaxation)
         if not np.isfinite(relaxation) or not 0.0 < relaxation <= 1.0:
             raise ValueError("cell_relaxation must be in (0, 1]")
@@ -9939,6 +9954,10 @@ class LocalESIMSurfaceModel:
         return {
             "schema_version": _LOCAL_ESIM_LUT_SCHEMA_VERSION,
             "cell_model": "radia.esim_cell_problem.ESIMCellProblemSolver",
+            "cell_algorithm": _LOCAL_ESIM_CELL_ALGORITHM,
+            "mesh_tol": float(self.mesh_tol),
+            "max_nodes": int(self.max_nodes),
+            "max_refinements": int(self.max_refinements),
             "bh_curve_sha256": hashlib.sha256(curve.tobytes()).hexdigest(),
             "bh_curve_points": int(curve.shape[0]),
             "sigma_S_per_m": float(self.sigma),
@@ -9969,6 +9988,9 @@ class LocalESIMSurfaceModel:
             frequency=frequency,
             num_skin_depths=self.num_skin_depths,
             n_nodes=self.n_nodes,
+            mesh_tol=self.mesh_tol,
+            max_nodes=self.max_nodes,
+            max_refinements=self.max_refinements,
         )
 
     def linear_impedance(self, frequency_hz: float) -> complex:
@@ -10098,7 +10120,7 @@ class LocalESIMSurfaceModel:
         if np.min(values.real) < -1.0e-12:
             raise RuntimeError("ESIM cell interpolation produced a non-passive impedance")
         return values, {
-            "cell_model": "semi-infinite-geometrically-graded-1d-esim",
+            "cell_model": "semi-infinite-conservative-adaptive-depth-1d-esim",
             "frequency_Hz": frequency,
             "bins": int(h_nodes.size),
             "cell_iterations_max": int(table.cell_iterations_max),

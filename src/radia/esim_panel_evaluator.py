@@ -31,7 +31,8 @@ def finite_cell_configuration(solver):
     names = (
         'half_thickness', 'sigma', 'frequency', 'omega', 'rho', 'n_nodes',
         'geometry', 'linear_mu_r', 'use_complex_mu', 'mu_initial',
-        'delta', 'xi', 'mesh_points', 'n_elements')
+        'delta', 'xi', 'mesh_points', 'n_elements',
+        'mesh_tol', 'max_nodes', 'max_refinements', 'cell_max_iter')
     missing = [name for name in (*names, 'bh_interp', 'mu_interp') if not hasattr(solver, name)]
     if missing:
         raise ValueError('Unsupported ESIM finite-cell configuration; missing attributes: ' + ', '.join(missing))
@@ -93,7 +94,7 @@ class PanelESIMEvaluator:
 
     def _identity(self):
         payload = dict(cell=self.configuration(),
-                       solve_controls={'tol': 1e-6, 'max_iter': 50, 'relaxation': .5},
+                       solve_controls={'tol': 1e-6, 'max_iter': getattr(self.solver, 'cell_max_iter', 200), 'relaxation': .5},
                        field_floor_A_per_m=1e-3)
         raw = json.dumps(payload, sort_keys=True, default=_json_value,
                          allow_nan=False, separators=(',', ':')).encode()

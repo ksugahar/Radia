@@ -37,6 +37,9 @@ from typing import Optional
 import numpy as np
 
 
+EM_TABLE_SCHEMA_VERSION = 2
+
+
 @dataclass
 class EMTable:
     """In-memory representation of a calc_em_table .npz."""
@@ -73,6 +76,11 @@ def load_em_table(path: str) -> EMTable:
             f"EM table {path} is missing keys {missing}; "
             f"available: {d.files}")
     meta = json.loads(str(d["meta"]))
+    if (not isinstance(meta, dict) or
+            type(meta.get("schema_version")) is not int or
+            meta["schema_version"] != EM_TABLE_SCHEMA_VERSION):
+        d.close()
+        raise ValueError("Unsupported EM table schema; regenerate with the current cell solver")
     H_grid = np.asarray(d["H_grid"], dtype=float)
     T_grid = np.asarray(d["T_grid"], dtype=float)
     if not np.all(np.diff(H_grid) > 0):
