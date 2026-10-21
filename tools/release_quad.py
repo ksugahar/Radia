@@ -2069,6 +2069,7 @@ RELEASE_CHECK_RUN = "radia-native-release-build"
 # These independently released owners cannot block the CPU Radia distribution.
 # Keep shared/unknown checks required and the exact native release check mandatory.
 INDEPENDENT_DISTRIBUTION_WORKFLOWS = frozenset({
+    ".github/workflows/gpu-validation.yml",
     ".github/workflows/radia-simulink.yml",
     ".github/workflows/radia-simulink-release.yml",
     ".github/workflows/ltspice-data-safety.yml",

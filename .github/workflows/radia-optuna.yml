@@ -169,6 +169,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/ci_gpu_artifact.py seal "packages/radia-optuna/dist" --sha ${{ github.sha }}
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
         with:
           name: gpu-optuna-wheel
           path: |

@@ -14,14 +14,16 @@ the generic label. Stage 3 uses `[self-hosted, Windows, X64, ci-light]`.
 Restore `100` only after all heavy jobs select explicit capabilities. Contract
 tests validate the transitional and final states separately.
 
-Three runner instances share the existing Windows build host; they are not
-three machines. Give each exactly one capability label in addition to
-`self-hosted`, `Windows`, `X64`, and the existing policy label `100`:
+Three runner instances share the Windows build host; A100 is a separate
+compute role. CPU heavy jobs currently use `100`, RTX jobs add `gpu-rtx`,
+and light jobs use `ci-light` without `100`. The final CPU capability is
+`ci-native`; A100 uses `gpu-a100` without `100`:
 
 | Capability | Purpose | Proposed job budget: CPU / private memory / wall time |
 | --- | --- | --- |
-| `ci-native` | Native compiler, CPU numerical validation | 16 threads / 64 GiB / 60 min |
-| `ci-matlab-gpu` | MATLAB, Engine, mexcuda, CUDA and Simulink | 8 host threads / 32 GiB / 60 min |
+| `ci-native` | Native compiler, CPU numerical validation and MATLAB CPU contracts | 16 threads / 64 GiB / 60 min |
+| `gpu-rtx` | RTX GPU wheel build and acceptance | 8 host threads / 32 GiB / 60 min |
+| `gpu-a100` | Artifact-only GPU compute validation | 8 host threads / 32 GiB / 90 min |
 | `ci-light` | Source/policy/compact contract checks only | 2 threads / 8 GiB / 20 min |
 
 These are initial proposed ceilings, not measured adequate settings. Admission
@@ -182,9 +184,9 @@ tests on the wheel host, MATLAB-account proof and numerical release gates.
 Existing hosted workflows remain explicit exceptions. Proposed focused text
 for BOTH AGENTS.md and CLAUDE.md (not edited in this draft):
 
-> Local CI on the build host uses exactly three capability lanes: ci-native,
-> ci-matlab-gpu and ci-light, each also carrying the 100 label. MATLAB/CUDA/
-> Simulink jobs use only ci-matlab-gpu. GPU CI and manual GPU jobs share one
+> Build-host CI uses ci-native, gpu-rtx and ci-light capabilities;
+> ci-light does not require the 100 label. Artifact-only compute validation uses
+> gpu-a100 on the compute host. GPU CI and manual GPU jobs share one
 > exclusive host lock. Each job enforces declared CPU, aggregate process-tree
 > memory and timeout budgets. Existing GitHub-hosted package/source jobs remain
 > explicitly classified. Performance acceptance runs only in reserved windows

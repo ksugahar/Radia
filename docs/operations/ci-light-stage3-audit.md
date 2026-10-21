@@ -264,3 +264,9 @@ The artifact helper is standard-library code tested separately using local
 wheel fixtures and an injected empty Actions response. Light requirements and
 execution steps remain unchanged. The reviewed closure digest is
 `2b4544a4d0a685032d07845b89e869e378c84944ad8b1bcf7d63fcd7c755fef2`.
+
+Re-audited after the GPU nightly amendment and rebase: the routing contracts
+inspect selected-SHA workflow strings, separate dispatch concurrency and
+failure-only reporting without adding executable GPU or network dependencies.
+The closure remains source-only; the current digest is
+`7c7b29639ad0c648e648be3dec79ef43a02445054a65f3fcdbe305da3311edfa`.
