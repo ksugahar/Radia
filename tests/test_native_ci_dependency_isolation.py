@@ -41,3 +41,12 @@ def test_missing_venv_python_fails_before_any_install(tmp_path):
                             capture_output=True, text=True, encoding="utf-8", timeout=20)
     assert result.returncode != 0
     assert "Isolated CI Python is missing" in result.stderr
+
+
+def test_release_numerical_contracts_have_the_step_cad_extra():
+    # The solver-numerics tier contains STEP coil contracts, so the declared
+    # build123d extra must be installed and importable before that tier runs.
+    script = dependency_step()
+    assert "['optional-dependencies']['build123d']" in script
+    assert "& $ciPython -m pip install @cadPins" in script
+    assert ", OCP;" in script
