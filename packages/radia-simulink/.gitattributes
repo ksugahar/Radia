@@ -1,0 +1,2 @@
+# Preserve third-party license text, including its upstream whitespace.
+licenses/*.txt whitespace=-blank-at-eol,-blank-at-eof

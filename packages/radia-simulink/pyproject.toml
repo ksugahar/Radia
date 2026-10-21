@@ -20,6 +20,12 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+gpu = ["numpy>=1.26", "ngsolve==6.2.2608",
+       "nvidia-cuda-runtime-cu12==12.8.57; sys_platform == 'win32'",
+       "nvidia-cublas-cu12==12.8.3.14; sys_platform == 'win32'",
+       "nvidia-cusolver-cu12==11.7.2.55; sys_platform == 'win32'",
+       "nvidia-cusparse-cu12==12.5.7.53; sys_platform == 'win32'",
+       "nvidia-nvjitlink-cu12==12.8.61; sys_platform == 'win32'"]
 exchange = ["numpy>=1.26", "h5py>=3.10"]
 coupling = ["radia>=5.3.1"]
 ltspice = ["schemdraw>=0.18"]

@@ -1,0 +1,34 @@
+{
+  "accepted": true,
+  "native_source": "10032e79adf02367b95ebaa06e04ade34a143fe2",
+  "mex_sha256": "2ef1fec70f2213062f164ee408aa9ae940f3754eba6a144e74061e5814ef1944",
+  "host_cpp_sha256": "0f65b314ea1b505652e0bc15289b81d1ba7147100829e47d063fc588224479e8",
+  "scope": "Exact schema2 partition: gap/duplicate/partial overlap rejection, cap/bit boundary host cases, unchanged numeric MEX action, invalid-input recovery/live0. Not final release or all-site faults.",
+  "schema": "radia.normalized-leaf-coverage.v1",
+  "matlab": {
+    "accepted": true,
+    "relative_error": 0,
+    "live_count": 0
+  },
+  "bitmap_max_bytes": 2654208,
+  "coverage_contract": "Schema2 covers each upper-triangle entry exactly once. Diagonal square lower halves are not double-counted. Legacy/internal additive packing unchanged.",
+  "host_cases": [
+    "valid partition",
+    "reordered partition",
+    "duplicate",
+    "missing offdiagonal",
+    "partial overlap",
+    "diagonal crossing",
+    "nonsquare diagonal",
+    "lower block",
+    "zero dimension",
+    "over-budget dimension",
+    "65-bit-word boundary",
+    "4608 dimension cap"
+  ],
+  "build_seconds": 162.766,
+  "host_test_seconds": 2.984,
+  "mex_test_seconds": 13.938,
+  "new_coverage_allocator_site": "normalized.coverage",
+  "limitations": "New allocator site not fail-N enumerated; no FE/physical/fullNewton/common100/finalwheel/release acceptance. Default MEX only; no new Pyd."
+}

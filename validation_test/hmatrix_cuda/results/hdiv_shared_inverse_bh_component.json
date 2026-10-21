@@ -1,0 +1,55 @@
+{
+  "schema": "radia.hdiv-shared-inverse-bh-component.v1",
+  "source_sha": "f68d2e50e343489df7f7c1af2435fd27bf1d6615",
+  "python_binary_sha256": "7c994026a56aba15cd94d2ba5de90d9c1f6b502b6df08523e3780b453e50d799",
+  "mex_binary_sha256": "dab9b8fdfee6a4d790af5a20da1d29d717a3c8976cf51f264b3e72755152ba95",
+  "accepted": true,
+  "scope": "Shared inverse BH scalar CUDA evaluator through Python and MEX; not complete nonlinear MMM",
+  "production_python_oracle": {
+    "samples": 1804,
+    "knots": 801,
+    "relative_limit": 2e-14,
+    "errors": {
+      "secant": 1.1739040588449844e-20,
+      "tangent": 4.586062947541021e-18,
+      "energy": 1.52648344833665e-20
+    },
+    "extraction": "Exact pinned production scalar AST functions with independent SciPy PCHIP, no shared CUDA math"
+  },
+  "mex_analytic": {
+    "accepted": true,
+    "relative_errors": [
+      3.186129271449537e-17,
+      5.399093793652317e-17,
+      0
+    ],
+    "scope": "Shared inverse BH sample GPU core, not nonlinear solver"
+  },
+  "common100": {
+    "warm": 5,
+    "measured": 100,
+    "host": {
+      "final25_slope_bytes_per_run": 0.0,
+      "final25_delta_bytes": 0,
+      "accepted": true
+    },
+    "device": {
+      "final25_slope_bytes_per_run": 0.0,
+      "final25_delta_bytes": 0,
+      "accepted": true
+    }
+  },
+  "post_device_failure": {
+    "warm": 5,
+    "measured": 10,
+    "host_delta_bytes": 0,
+    "device_delta_bytes": 0,
+    "valid_recovery": true
+  },
+  "limitations": [
+    "Existing MATLAB FE gradient/tangent and Newton are not routed through this evaluator yet",
+    "No nonlinear tet/hex true-residual acceptance on this artifact",
+    "No mixed pyramid charge Gram or release acceptance",
+    "Allocated payload is not global peak; opaque runtime retention not called zero"
+  ]
+}

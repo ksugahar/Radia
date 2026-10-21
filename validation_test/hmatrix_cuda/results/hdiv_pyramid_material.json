@@ -1,0 +1,108 @@
+{
+  "schema": "radia.hdiv-pyramid-material.v1",
+  "native_source": "5422a5811fafb2f8c437d84127b72a759638ee54",
+  "pyd_sha256": "047d7ec0011568b63287fed14328411797e4deace17f4c9cb93c8f6b4a7388ee",
+  "mex_sha256": "1bbc3a6ac4e622318cb79b3cfa95269db5ed8eacb846dfc4fb2929e9e882fe3f",
+  "ngsolve": "6.2.2608",
+  "gate": 1e-11,
+  "rows": [
+    {
+      "family": "pyramid",
+      "order": 1,
+      "material_action_accepted": true,
+      "dofs": 19.0,
+      "points": 392.0,
+      "relative_mass_error": 7.094775201340651e-15,
+      "relative_gradient_error": 1.3371807044720083e-15,
+      "relative_tangent_error": 7.263559688521642e-15,
+      "relative_energy_error": 3.7214179600096257e-16,
+      "constant_field_max_error": null,
+      "mixed_gpu_action_executed": null
+    },
+    {
+      "family": "tet-pyramid-hex",
+      "order": 1,
+      "material_action_accepted": false,
+      "dofs": 60.0,
+      "points": 1078.0,
+      "relative_mass_error": 5.521753776903774e-15,
+      "constant_field_max_error": 1.593980503145076e-11,
+      "mixed_gpu_action_executed": false
+    },
+    {
+      "family": "pyramid",
+      "order": 2,
+      "material_action_accepted": true,
+      "dofs": 49.0,
+      "points": 392.0,
+      "relative_mass_error": 1.7197739239391396e-14,
+      "relative_gradient_error": 1.1092653706755701e-14,
+      "relative_tangent_error": 1.9310026537322086e-14,
+      "relative_energy_error": 9.861757594025416e-15,
+      "constant_field_max_error": null,
+      "mixed_gpu_action_executed": null
+    },
+    {
+      "family": "tet-pyramid-hex",
+      "order": 2,
+      "material_action_accepted": false,
+      "dofs": 172.0,
+      "points": 1078.0,
+      "relative_mass_error": 9.17958891925818e-15,
+      "constant_field_max_error": 1.7779444583254644e-11,
+      "mixed_gpu_action_executed": false
+    }
+  ],
+  "matlab_hdf5": {
+    "accepted": true,
+    "native_source": "5422a5811fafb2f8c437d84127b72a759638ee54",
+    "mex_sha256": "1bbc3a6ac4e622318cb79b3cfa95269db5ed8eacb846dfc4fb2929e9e882fe3f",
+    "rows": [
+      {
+        "order": 1,
+        "errors": [
+          1.3371807044720081e-15,
+          7.263559688521642e-15,
+          3.7214179600096257e-16
+        ],
+        "output_sha256": "d207eb4898c3c1d4169ebc6ee3fbd75845893c61d0d09c5659f2475070ce88b3"
+      },
+      {
+        "order": 2,
+        "errors": [
+          1.1092653706755701e-14,
+          1.9310026537322086e-14,
+          9.861757594025416e-15
+        ],
+        "output_sha256": "6b0297ca8e36441cc20780cbe079f7f8b77362732d0c83a5bf35b8517866593b"
+      }
+    ],
+    "scope": "Standalone PYR material action and Python-to-MATLAB-to-Python HDF5. No chargeGram/fullMMM.",
+    "publication_failure": "MATLAB fopen x unsupported at final JSON publication; all two HDF5 outputs/readbacks completed first. Raw failed supervisor retained. Resume validates files only, no GPU replay."
+  },
+  "upstream_mapping_probe": {
+    "schema": "ngsolve.pyramid-mapping-probe.v1",
+    "ngsolve": "6.2.2608",
+    "analytic_volume": 0.3333333333333333,
+    "point_mapped_volume": 0.3333333333333255,
+    "integrate_volume": 0.33333333329999204,
+    "relative_point_vs_integrate": 1.0000034135094691e-10,
+    "scope": "One straight pyramid, order-12 rule; diagnostic only, no Radia or GPU code"
+  },
+  "limits": {
+    "build_cores": 4,
+    "build_memory_gib": 16,
+    "build_seconds": 900,
+    "run_cores": 2,
+    "run_memory_gib": 8,
+    "run_seconds": 240
+  },
+  "scope": "Standalone PYR material assembly/action only. Mixed constant-field tests FAIL; full PYR/mixed charge-Gram remains unsupported. No nonlinear/full-MMM/common100/release acceptance.",
+  "failure_provenance": {
+    "initial_native": "d8d5b7a394193211d8bb631f256db1c832b4c48d",
+    "initial_mass_error": 4.493215285579683e-11,
+    "fix": "Use NGSolve whole-rule mapping for PYR; tet/hex point mapping unchanged",
+    "publication": "MATLAB final JSON fopen x failed after two HDF5 outputs and assertions; resume certified immutable HDF5 only without GPU replay"
+  },
+  "geometry_accuracy_disposition": "PYR whole-rule path is used for parity with NGSolve mass assembly, not improved geometric exactness. Pinned2607/2608 whole-rule volume is about1e-10 below analytic, while point-wise mapping is closer. Mixed constant failure may be related, but causality is not established."
+}

@@ -1,0 +1,62 @@
+{
+  "completed": true,
+  "scope": "Charge preparation component controls, not frozen protocol",
+  "cohorts": [
+    {
+      "scope": "charge-no-mass",
+      "materialize_mass": false,
+      "build_hmatrix": true,
+      "forced_gc": true,
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope": [
+        -144220.16,
+        0.0
+      ],
+      "final_25_delta": [
+        -30949376.0,
+        0.0
+      ],
+      "within_frozen_memory_bounds": true
+    },
+    {
+      "scope": "charge-no-hmatrix",
+      "materialize_mass": true,
+      "build_hmatrix": false,
+      "forced_gc": true,
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope": [
+        258539.52,
+        0.0
+      ],
+      "final_25_delta": [
+        266240.0,
+        0.0
+      ],
+      "within_frozen_memory_bounds": false
+    },
+    {
+      "scope": "charge-no-mass-no-hmatrix",
+      "materialize_mass": false,
+      "build_hmatrix": false,
+      "forced_gc": true,
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope": [
+        -165286.2030769231,
+        0.0
+      ],
+      "final_25_delta": [
+        1650688.0,
+        0.0
+      ],
+      "within_frozen_memory_bounds": false
+    }
+  ],
+  "elapsed_seconds": 45.48399999999674,
+  "frozen_protocol_accepted": false,
+  "limitation": "Sequential same-process forced-GC component controls; not leak-owner proof or replacement for frozen full workflow gate.",
+  "native_source": "7995b719cf02653bd08c90b1d0d10efa87007a23",
+  "cpu_native_source": "b32faf7127fe86f9253bdeaf5f9c37fe8bdaaf8a"
+}

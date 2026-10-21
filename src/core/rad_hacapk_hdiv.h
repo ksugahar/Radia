@@ -16,6 +16,7 @@
 #include "rad_planar_charges.h"
 #include <unordered_map>
 #include <memory>
+#include <functional>
 #include <mutex>
 #include <shared_mutex>
 #include <cmath>
@@ -23,6 +24,7 @@
 enum class ChargeDerivativeFamily { Hex, Tet, Wedge };
 class RadHACApKChargeGramDerivative;
 #include <memory>
+#include <functional>
 #include <string>
 #include <utility>
 #include <atomic>
@@ -47,6 +49,19 @@ struct RadHACApKSymmetricLeafQuadraticReport {
     int upper_dense_count = 0;
     int diagonal_low_rank_count = 0;
     std::vector<RadHACApKSymmetricLeafQuadratic> dominant_leaves;
+};
+
+// Deep owned transfer data. No native pointer or borrowed factor escapes.
+struct RadHACApKResidentLeaf {
+    std::size_t row=0,column=0,rows=0,columns=0,rank=0;
+    std::vector<double> a1,a2;
+};
+struct RadHACApKResidentSnapshot {
+    std::size_t dimension=0,owned_bytes=0;
+    bool normalization_active=false;
+    std::vector<std::size_t> permutation;
+    std::vector<double> scale;
+    std::vector<RadHACApKResidentLeaf> leaves;
 };
 
 // Persistent exact HDiv mass factor for the MASS RIESZ preconditioner, cached
@@ -482,6 +497,11 @@ public:
     // the production H-matrix or solve path.
     RadHACApKSymmetricLeafQuadraticReport DiagnoseSymmetricLeafQuadratics(
         const std::vector<double>& x, int raw_check_count) const;
+    // Caller-exclusive immutable snapshot; do not rebuild the owner concurrently.
+    RadHACApKResidentSnapshot ResidentLeafSnapshot(std::size_t maximum_bytes) const;
+    // Internal owned snapshot/workspace, created once per explicitly accurate solve.
+    std::function<void(const std::vector<double>&,std::vector<double>&)>
+        MakeCompensatedDemag(std::size_t maximum_bytes) const;
     // Exact dense fallback for medium-size release-validation meshes.  The
     // normalized analytic Gram is materialized once and then reused by every
     // C++ solve/apply.  It is intentionally memory-bounded; large meshes must
@@ -527,7 +547,7 @@ public:
         const std::vector<double>* coarse_basis = nullptr,
         const std::vector<double>* coarse_applied = nullptr,
         const std::vector<double>* coarse_factor = nullptr,
-        int coarse_dim = 0);
+        int coarse_dim = 0, std::size_t compensated_bytes = 0);
     // Matrix-free postprocessing primitives used by the production planar and
     // three-dimensional HDiv paths.  ApplyDemagOperator computes B^T G B x
     // without materializing N.  ApplyMassRiesz computes M_mass^{-1} rhs with a
@@ -567,6 +587,9 @@ public:
     std::vector<int> ConfiguredActiveHMatrixStats(int component = 0) const;
     void SetConfiguredConstraints(const std::vector<int>& dofs,
                                   bool preserve_existing = false);
+    // Bounded independent CPU arithmetic oracle; never an automatic backend fallback.
+    std::vector<double> ApplyConfiguredDemagCompensated(
+        const std::vector<double>& x, std::size_t maximum_bytes) const;
     std::vector<double> ApplyConfiguredDemag(
         const std::vector<double>& x, bool symmetric = true);
     void ApplyConfiguredDemag(
@@ -658,7 +681,7 @@ public:
     std::vector<double> SolveConfiguredLinearMaterial(
         double inv_chi, const std::vector<double>& rhs, double tol, int maxit,
         int& iters_out, bool mass_riesz = true, bool symmetric = true,
-        const std::vector<double>* x0 = nullptr);
+        const std::vector<double>* x0 = nullptr, std::size_t compensated_bytes = 0);
     std::vector<double> SolveConfiguredLinearMaterialAutoPrec(
         double inv_chi, const std::vector<double>& rhs, double tol, int maxit,
         int& iters_out, double& prec_min, double& prec_max,
@@ -1146,11 +1169,13 @@ private:
     // per-host cloud memory (the old per-(host,sub,corner) cloud cache idea was rejected for its O(hosts)
     // thread_local footprint).
     struct HexSiteRad { int nq = 0; std::vector<double> S, M, w; };
-    std::vector<HexSiteRad> m_cellSiteRad;               // [6*15] per (sub, site), ref-space tables
-    std::vector<HexSiteRad> m_faceSiteRad;               // [2*7]
+    struct HexSiteTables { std::vector<HexSiteRad> cell, face; };
+    // Host-independent immutable tables share an exact quadrature-rule key.
+    // The process cache retains only one rule; live instances own their tables.
+    std::shared_ptr<const HexSiteTables> m_hexSiteTables;
     std::vector<double> m_cellSiteX;                     // [n_el*6*15*3] mapped site positions (site pick)
     std::vector<double> m_faceSiteX;                     // [n_bf*2*7*3]
-    void BuildHexSiteTables();                           // ctor helper: fills the four members above
+    void BuildHexSiteTables();                           // shared reference tables + per-host mapped sites
     void PhiInnerHexSiteVec(int kindS, int hS, int subB, const double p[3],
                             const std::vector<int>& srcG, double* inn) const;
     std::vector<double> QuadBlockHexAffineProduct(int kindT, int hT, int kindS, int hS, int img) const;

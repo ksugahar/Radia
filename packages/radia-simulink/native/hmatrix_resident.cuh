@@ -10,6 +10,7 @@
 #include <utility>
 #include <memory>
 #include "hmatrix_host_fault.hpp"
+#include "hmatrix_leaf_coverage.hpp"
 
 namespace radia_hmatrix_cuda {
 inline void check(cudaError_t status) {
@@ -124,6 +125,22 @@ inline Plan pack(std::size_t n,const HostVector<Leaf>& leaves,
                  const std::vector<std::size_t,PermAllocator>& permutation,const std::vector<double,ScaleAllocator>& scale){
     return packLeaves(n,leaves,permutation,scale);
 }
+// Higher-order HDiv charge maps can amplify low-order dot-product roundoff.
+// Keep the physical operator and stable leaf order; compensate scalar reductions.
+// Stock builds use --fmad=false, so these correction terms are not contracted.
+struct CompensatedDeviceSum {
+    double value=0, correction=0;
+    __device__ void add(double x) {
+        const double t=value+x;
+        correction += fabs(value)>=fabs(x) ? (value-t)+x : (x-t)+value;
+        value=t;
+    }
+    __device__ void addProduct(double a,double b) {
+        const double product=a*b;
+        add(product);add(fma(a,b,-product));
+    }
+    __device__ double get() const {return value+correction;}
+};
 __global__ void gatherInput(std::size_t n,const std::size_t* permutation,const double* scale,
                             const double* state,double* input) {
     auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;
@@ -134,9 +151,9 @@ __global__ void projectRanks(const Direction* directions,std::size_t count,
     const auto task=std::size_t(blockIdx.x);if(task>=count)return;
     const auto d=directions[task];
     for(auto k=std::size_t(threadIdx.x);k<d.rank;k+=blockDim.x) {
-        const auto base=d.transpose?d.b:d.a;double value=0;
-        for(std::size_t j=0;j<d.inputs;++j)value+=coefficients[base+j+d.inputs*k]*input[d.input+j];
-        tmp[d.tmp+k]=value;
+        const auto base=d.transpose?d.b:d.a;CompensatedDeviceSum value;
+        for(std::size_t j=0;j<d.inputs;++j)value.addProduct(coefficients[base+j+d.inputs*k],input[d.input+j]);
+        tmp[d.tmp+k]=value.get();
     }
 }
 __global__ void applyLeaves(const Direction* directions,std::size_t count,
@@ -144,26 +161,26 @@ __global__ void applyLeaves(const Direction* directions,std::size_t count,
     const auto task=std::size_t(blockIdx.x);if(task>=count)return;
     const auto d=directions[task];
     for(auto i=std::size_t(threadIdx.x);i<d.outputs;i+=blockDim.x) {
-        double value=0;
+        CompensatedDeviceSum value;
         if(d.rank) {
             const auto base=d.transpose?d.a:d.b;
-            for(std::size_t k=0;k<d.rank;++k)value+=coefficients[base+i+d.outputs*k]*tmp[d.tmp+k];
+            for(std::size_t k=0;k<d.rank;++k)value.addProduct(coefficients[base+i+d.outputs*k],tmp[d.tmp+k]);
         }else {
             for(std::size_t j=0;j<d.inputs;++j) {
                 const auto offset=d.transpose?j*d.outputs+i:i*d.inputs+j;
-                value+=coefficients[d.a+offset]*input[d.input+j];
+                value.addProduct(coefficients[d.a+offset],input[d.input+j]);
             }
         }
-        partial[d.partial+i]=value;
+        partial[d.partial+i]=value.get();
     }
 }
 __global__ void reduceOutput(std::size_t n,const std::size_t* offsets,const std::size_t* indices,
         const std::size_t* permutation,const double* scale,const double* partial,double* state) {
     auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=n)return;
-    double value=0;
+    CompensatedDeviceSum value;
     // Stable leaf order, no cross-block atomic updates.
-    for(auto j=offsets[i];j<offsets[i+1];++j)value+=partial[indices[j]];
-    state[permutation[i]]=scale[permutation[i]]*value;
+    for(auto j=offsets[i];j<offsets[i+1];++j)value.add(partial[indices[j]]);
+    state[permutation[i]]=scale[permutation[i]]*value.get();
 }
 template<class T> struct Buffer {
     T* data=nullptr;std::size_t size=0;int device=0;
@@ -222,7 +239,7 @@ struct SparseMap {
 __global__ void sparseMapApply(std::size_t rows,const std::size_t* offsets,const std::size_t* indices,
                               const double* values,const double* x,double* y) {
     auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=rows)return;
-    double result=0;for(auto k=offsets[i];k<offsets[i+1];++k)result+=values[k]*x[indices[k]];y[i]=result;
+    CompensatedDeviceSum result;for(auto k=offsets[i];k<offsets[i+1];++k)result.addProduct(values[k],x[indices[k]]);y[i]=result.get();
 }
 struct DeviceMap {
     Buffer<std::size_t> offsets,indices;Buffer<double> values;std::size_t rows=0;

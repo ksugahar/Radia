@@ -1,0 +1,20 @@
+{
+  "schema": "radia.hdiv-working-review-conditions.v1",
+  "scope": "Working-component review conditions, not release acceptance",
+  "reviewed_source_commit": "7995b719cf02653bd08c90b1d0d10efa87007a23",
+  "revision_source_commit": "b32faf7127fe86f9253bdeaf5f9c37fe8bdaaf8a",
+  "documentation_commit": "671a544d1",
+  "cpu_python_sha256": "f919392052ced87556a49074154fa2e830b785fff69b3823c3b85f689fc3e897",
+  "fresh_cpu_native_tests_passed": 3,
+  "native_test_seconds": 2.61,
+  "coverage_required": ["diagonal_dense", "offdiagonal_dense", "offdiagonal_lowrank"],
+  "oracle": "60-digit Decimal composition of the input factors with unchanged 2e-15 relative gate",
+  "private_bool_rejection": ["resident_leaf_snapshot", "apply_configured_demag_compensated", "solve_configured_linear_material_mass_riesz"],
+  "wheel_tests_passed": 50,
+  "wheel_device_fault_flag": "explicit false required; true or missing rejected in staging and wheel admission",
+  "arithmetic_qualification": "Compensation within N; demag and mass outputs rounded before forming A",
+  "default_qualification": "Arithmetic unchanged; fresh original-residual certificate changes Newton step acceptance and cost",
+  "cost_qualification": "Outer compensated N calls rebuild snapshot/workspace; trial energy and residual each evaluate N. Inner PCG retains one snapshot/workspace per solve",
+  "existing_mex_execution_evidence": "hdiv_matlab_shared_newton_api.json",
+  "limitations": ["Fresh CPU unit acceptance only; no new GPU binary", "Existing MEX run is small adapter algebra, not physical FE or release acceptance", "Final same-SHA release gates remain open"]
+}

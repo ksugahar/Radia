@@ -5,6 +5,7 @@
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 #include <sstream>
+#include <functional>
 namespace radia_hmatrix_cuda {
 inline void blasCheck(cublasStatus_t s){if(s!=CUBLAS_STATUS_SUCCESS)throw std::runtime_error("HDiv PCG cuBLAS failure");}
 inline void solverCheck(cusolverStatus_t status){if(status!=CUSOLVER_STATUS_SUCCESS)throw std::runtime_error("HDiv mass Cholesky cuSOLVER failure");}
@@ -47,7 +48,7 @@ struct MaterialPreconditionGraph {
 };
 struct MaterialSolution {HostVector<double> x;int iterations=0;double relativeResidual=0;std::size_t ownedBytes=0,preconditionerGraphLaunches=0;};
 template<class Allocator>
-inline MaterialSolution solveLinearMaterial(Resident& op,const SparseMap& mass,const std::vector<double,Allocator>& rhs,double invChi,double tolerance,int maxIterations,bool massCholesky=false,bool massPolynomial=false,bool polynomialGraph=false,bool massChebyshev=false,int chebyshevDegree=8,double chebyshevLowerFraction=.1){
+inline MaterialSolution solveLinearMaterial(Resident& op,const SparseMap& mass,const std::vector<double,Allocator>& rhs,double invChi,double tolerance,int maxIterations,bool massCholesky=false,bool massPolynomial=false,bool polynomialGraph=false,bool massChebyshev=false,int chebyshevDegree=8,double chebyshevLowerFraction=.1,const std::function<void(const double*,double*,cudaStream_t)>& materialAction={}){
     const auto n=op.dimension();
     if(!op.isDemag()||mass.rows!=n||mass.columns!=n||rhs.size()!=n||n>2147483647u||!std::isfinite(invChi)||invChi<=0||!std::isfinite(tolerance)||tolerance<=0||tolerance>1.e-6||maxIterations<1||maxIterations>100000)
         throw std::invalid_argument("Invalid linear material PCG configuration");
@@ -106,7 +107,7 @@ inline MaterialSolution solveLinearMaterial(Resident& op,const SparseMap& mass,c
     }
     check(cudaMemsetAsync(x.data,0,n*sizeof(double),stream));check(cudaMemcpyAsync(r.data,b.data,n*sizeof(double),cudaMemcpyDeviceToDevice,stream));
     auto dot=[&](const double* a,const double* b){double v;blasCheck(cublasDdot(blas.value,int(n),a,1,b,1,&v));if(!std::isfinite(v))throw std::runtime_error("Nonfinite PCG reduction");return v;};
-    auto apply=[&](const double* v){op.applyDevice(v,ap.data);m.apply(v,mx.data,stream);materialSum<<<unsigned((n+255)/256),256,0,stream>>>(n,invChi,mx.data,ap.data);check(cudaGetLastError());};
+    auto apply=[&](const double* v){op.applyDevice(v,ap.data);if(materialAction)materialAction(v,mx.data,stream);else m.apply(v,mx.data,stream);materialSum<<<unsigned((n+255)/256),256,0,stream>>>(n,invChi,mx.data,ap.data);check(cudaGetLastError());};
     auto polynomialSubmit=[&](){
         check(cudaMemsetAsync(z.data,0,n*sizeof(double),stream));
         for(int step=0;step<8;++step){m.apply(z.data,mx.data,stream);pcgPolynomialStep<<<unsigned((n+255)/256),256,0,stream>>>(n,polynomialOmega,invChi,d.data,r.data,mx.data,z.data);check(cudaGetLastError());}
@@ -166,7 +167,14 @@ inline MaterialSolution solveLinearMaterial(Resident& op,const SparseMap& mass,c
             precondition();double next=dot(r.data,z.data);double beta=next/rz;if(!std::isfinite(beta)||next<=0)throw std::runtime_error("Invalid PCG recurrence");
             pcgDirection<<<unsigned((n+255)/256),256,0,stream>>>(n,beta,z.data,p.data);check(cudaGetLastError());rz=next;
         }
-        if(!converged)throw std::runtime_error("Material PCG failed true residual convergence");
+        if(!converged){
+            apply(x.data);trueResidual<<<unsigned((n+255)/256),256,0,stream>>>(n,b.data,ap.data,r.data);check(cudaGetLastError());
+            const double actual=std::sqrt(dot(r.data,r.data)/b2);
+            std::ostringstream message;message.precision(17);
+            message<<"Material PCG failed true residual convergence: iterations="<<result.iterations
+                   <<" requested="<<tolerance<<" actual="<<actual;
+            throw std::runtime_error(message.str());
+        }
     }
     apply(x.data);trueResidual<<<unsigned((n+255)/256),256,0,stream>>>(n,b.data,ap.data,r.data);check(cudaGetLastError());
     result.relativeResidual=b2>0?std::sqrt(dot(r.data,r.data)/b2):std::sqrt(dot(r.data,r.data));

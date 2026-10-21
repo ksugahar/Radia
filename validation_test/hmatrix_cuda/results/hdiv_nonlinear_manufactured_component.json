@@ -1,0 +1,153 @@
+{
+  "accepted": true,
+  "scope": "Manufactured nonlinear connected tet/hex HDiv shared Newton; independent original CPU factor and analytic material oracle; not physical excitation or mixed MMM acceptance",
+  "cases": [
+    {
+      "topology": "tet",
+      "order": 1,
+      "dofs": 12,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 1.1501807433894124e-15,
+      "independent_original_residual": 7.707411596410068e-16,
+      "reported_residual": 8.340646741992424e-17,
+      "newton_iterations": 4,
+      "graph_launches": 0,
+      "mesh_sha256": "07c678502fe9a4618684408f3502393b4ecb6246c250a5c4d2922a0ea3039798"
+    },
+    {
+      "topology": "tet",
+      "order": 1,
+      "dofs": 12,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 1.3632946259168387e-15,
+      "independent_original_residual": 8.194705551712647e-16,
+      "reported_residual": 5.369700416591319e-17,
+      "newton_iterations": 4,
+      "graph_launches": 44,
+      "mesh_sha256": "07c678502fe9a4618684408f3502393b4ecb6246c250a5c4d2922a0ea3039798"
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "dofs": 30,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 1.513037348543248e-14,
+      "independent_original_residual": 4.0712686735231646e-16,
+      "reported_residual": 1.2530868139800894e-16,
+      "newton_iterations": 4,
+      "graph_launches": 0,
+      "mesh_sha256": "07c678502fe9a4618684408f3502393b4ecb6246c250a5c4d2922a0ea3039798"
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "dofs": 30,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 1.2435202862975195e-14,
+      "independent_original_residual": 3.5649408350821567e-16,
+      "reported_residual": 1.9179013050486687e-16,
+      "newton_iterations": 4,
+      "graph_launches": 64,
+      "mesh_sha256": "07c678502fe9a4618684408f3502393b4ecb6246c250a5c4d2922a0ea3039798"
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "dofs": 36,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 6.981710057937319e-15,
+      "independent_original_residual": 4.46183035464359e-16,
+      "reported_residual": 1.5468393288395163e-16,
+      "newton_iterations": 5,
+      "graph_launches": 0,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81"
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "dofs": 36,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 7.191085053834662e-15,
+      "independent_original_residual": 4.313745532048012e-16,
+      "reported_residual": 9.149463102275325e-17,
+      "newton_iterations": 5,
+      "graph_launches": 78,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81"
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "dofs": 108,
+      "preconditioner": "reference-diagonal",
+      "coefficient_error": 9.393082213578426e-14,
+      "independent_original_residual": 2.5012401474160805e-15,
+      "reported_residual": 2.2965757052035375e-15,
+      "newton_iterations": 6,
+      "graph_launches": 0,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81"
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "dofs": 108,
+      "preconditioner": "reference-chebyshev-graph",
+      "coefficient_error": 1.948787786477009e-13,
+      "independent_original_residual": 1.4762716324134627e-15,
+      "reported_residual": 1.2862698215058384e-15,
+      "newton_iterations": 6,
+      "graph_launches": 118,
+      "mesh_sha256": "805150f220538af3925767f091a946b5b5ed8c2c60e4ad9e011be7f674e70a81"
+    }
+  ],
+  "release_accepted": false,
+  "ngsolve": "6.2.2608",
+  "native_source_commit": "f4f7266debd42ed2ced0dd67c71b4a0de6ae68b4",
+  "binary_sha256": "2d0d8eadb1ff42ed5848e8191c58321df171d245aa97e7d78a476a38f2c39531",
+  "cpu_source_commit": "ba94077fd68c940386e9de2134095cf29232d384",
+  "cpu_binary_sha256": "ac9cdf61eae530c1c3f8ac0f077c2479841a509388964850a5b6fadbc61b6afa",
+  "fixture_source_sha256": "ad0d4091cf3b212196602fa201bbaf0e4783fb586eb91132737bdf7c23260720",
+  "validator_sha256": "dea1242439b3108f760f115e080138d3e585fab77b035d07bb1d5baebfe1664e",
+  "cpu_oracle_arithmetic": "Independent compensated CPU factors; analytic cubic material over NGSolve-owned mapped quadrature",
+  "memory": [
+    {
+      "topology": "hex",
+      "order": 2,
+      "preconditioner": "reference-diagonal",
+      "warm": 5,
+      "runs": 100,
+      "host": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "preconditioner": "reference-chebyshev-graph",
+      "warm": 5,
+      "runs": 100,
+      "host": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      }
+    }
+  ],
+  "limits": [
+    "Manufactured nonlinear finite-element roots, not physical excitation validation",
+    "Python FE solves accepted; MATLAB only prior manufactured 3DoF algebra",
+    "Mixed mesh, allocation-site failure coverage, release acceptance remain pending",
+    "Final25 memory slopes do not imply zero opaque runtime retention"
+  ]
+}

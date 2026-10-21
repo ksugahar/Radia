@@ -4,13 +4,16 @@ Breaking source migration, not a published or accepted new-name wheel.
 Historical 0.1.x releases and measurements below belong to the retired
 distribution and do not certify this distribution. CPU mexcuda execution and direct Python GPU
 bindings are separate implementation/acceptance work, not completed by renaming.
+The experimental CSR adapter now has explicit CPU/GPU source routes and bounded
+component tests; this does not certify a release wheel or the other solvers.
 No old-name package, import or CLI compatibility is provided.
 
 Independent GPU distribution from the Radia monorepo: MATLAB CUDA MEX
 kernels, readable Simulink blocks, and LTspice integration code.
 Python CPU electromagnetic execution remains in `radia` (pybind11/NGSolve).
-Explicit MATLAB CPU mexcuda and direct Python GPU paths are planned; this
-source rename does not implement those paths.
+Explicit CPU/GPU routes and optional direct Python GPU bindings now have
+bounded component validation. Each distributed native payload still requires
+its own qualification; renaming alone does not establish acceptance.
 `radia-mcp` is the AI operation interface. Neither package is required merely
 to locate and use the installed GPU MATLAB files.
 
@@ -51,6 +54,24 @@ does not meet the stable publication gate of 1e-8. Defaults are unchanged.
 These bounds apply to the declared case, not arbitrary inputs; the separation-2
 setting has no formal speed acceptance yet.
 
+## Python solver ABI environments
+
+The CPU `radia` distribution retains its exact NGSolve and Netgen 6.2.2607
+pins. The optional `radia-simulink[gpu]` Python HDiv route requires NGSolve
+6.2.2608 and native payloads built for that ABI. These two dependency sets
+cannot coexist in one Python environment: use separate virtual environments
+and explicit artifact boundaries for independent CPU validation. Do not force
+installation with `--no-deps`, replace a solver DLL, or load both solver ABIs
+in one process. The GPU user route does not require a CPU `radia` solve.
+The base MATLAB/MEX distribution has no Python solver dependency; selecting
+`[coupling]` adds `radia` and does not make it compatible with `[gpu]`.
+
+This HDiv candidate does not migrate the CPU `radia` release to 2608.
+Existing CPU validation artifacts built with 2608 remain evidence of their
+recorded ABI only; they do not certify a CPU release with 2607 metadata.
+A CPU ABI migration requires its own dependency, exporter compatibility,
+native rebuild and release validation review.
+
 ## Install
 
 ```powershell
@@ -61,7 +82,20 @@ radia-simulink-path
 
 Add the reported directory to MATLAB's path. MATLAB R2026a, Parallel Computing
 Toolbox, an NVIDIA GPU and a compatible NVIDIA driver are external requirements.
-Python delivers and verifies the MATLAB payload; it does not execute GPU solves.
+Those requirements apply to the MATLAB/MEX interface. Qualified optional
+Python GPU bindings use separately installed NVIDIA runtime packages and do
+not require MATLAB or MATLAB Engine at execution time:
+
+```powershell
+python -m pip install "radia-simulink[gpu,coupling]"
+```
+
+The wheel must include the qualified Python native binding for the requested
+solver; missing bindings or runtime dependencies raise without CPU fallback.
+See [Python GPU runtime dependencies](docs/python-gpu-runtime.md). HDiv workflows
+also require a checked `.vol` and its label contract; `check-vol` is supplied
+by the separately installed mesh-export checker and needs no CAD application.
+Its independent CPU accuracy validation is not a GPU-user prerequisite.
 CSR-PCG consumes caller-provided matrix arrays and requires no Python Radia or
 NGSolve runtime. The experimental native AMS candidate constructs its hierarchy
 inside mexcuda and requires compatible NGSolve/Netgen native libraries, including
@@ -78,7 +112,7 @@ versions, artifact hashes and machine-readable results. A100 validation and
 scaling are optional additional evidence, not publication requirements.
 Formal GPU timing uses the on-demand A100 host when idle; 100 timings are diagnostic.
 RTX 5000 installation acceptance does not certify A100 scaling.
-Cubit mesh export is tested separately on 100 and 102. NGSolve validation
+Cubit mesh export is tested separately on 100. NGSolve validation
 starts by checking and loading an exported `.vol` with its versioned label
 contract; it does not require Cubit on the NGSolve host.
 
@@ -319,6 +353,49 @@ Machine-readable qualification is in
 binary hashes and memory limits are in
 `validation_test/radia_simulink/results/0.1.3-performance.json`.
 
+
+## Experimental explicit CSR execution
+
+`radia.csrPCG(..., "cpu")` accepts full host int32 CSR indices and FP64 arrays;
+`radia.csrPCG(..., "gpu")` accepts the corresponding gpuArrays. Both use the
+same mexcuda-built module. The current CPU kernel is serial and reports one
+host thread. No thread pool is created and no route fallback is performed.
+The dedicated `radia.gpu.csrPCG` entry remains an explicit GPU request.
+
+For an assembled NGSolve real SPD matrix with constrained degrees of freedom
+already handled by the caller, the optional direct Python adapter is:
+
+```python
+from radia_simulink.csr import solve_spd
+solution, info = solve_spd(matrix, rhs, backend="gpu")
+```
+
+The GPU binding shares the CSR CUDA implementation with MEX, but uses a pybind11
+ABI with explicit host/device transfers. GPU calls do not import MATLAB Engine.
+A configured CUDA runtime and a separately qualified native extension are
+required. Missing GPU support raises. The independent Python CPU selection is
+`backend="cpu"`; it uses NGSolve `sparsecholesky` inside the caller's TaskManager
+region. CPU accuracy validation is a release responsibility, not a GPU-user
+initialization step.
+
+Build the candidate with `Build.ps1 -CudaMexOnly -CsrPythonBindings` under an
+explicit build admission. The binding is compiled with NGSolve/Netgen's pybind11
+headers and the approved MATLAB-bundled CUDA/MSVC toolchain. A wheel containing
+the extension carries its CPython ABI tag. No CUDA DLL is bundled. Runtime
+redistribution and complete distribution qualification remain separate gates.
+These CSR results do not establish HDiv, AMS, nonlinear or large-model parity.
+
+The Python HDiv GPU workflow requires the optional `cubit-mesh-export` package for strict `check-vol` validation, in addition to its numerical dependencies. Cubit itself is not required.
+
+Affine linear P2 GPU results obtained with the former degree-5 quadrature do not certify the degree-10 route. Independent CPU re-certification passed for one 30-DoF affine tet P2 linear isotropic case (inverse susceptibility 1, uniform applied H): coefficient error 4.11e-13 and original-equation residual 5.53e-15. The exact wrapper and native identities are in `validation_test/hmatrix_cuda/results/hdiv_linear_p2_degree10.json`. This bounded result does not certify other meshes or final release artifacts; nonlinear P2 evidence has its separately recorded scope.
+
+The experimental numeric HMatrix boundary accepts explicit `assembly="normalized_leaves"` with `schema_version=2`. It preserves normalized leaf factors, scale and permutation through the same shared packer as Python; schema 1 remains the legacy HACApK struct conversion route, which also preserves factor values. This distinction declares the payload contract and bounded admission; it does not fix a re-normalization in the current schema 1 adapter. Offsets and permutations are one-based in MATLAB. Only upper/diagonal leaves are supplied; the packer mirrors off-diagonal leaves. Dense coefficients are flat row-major, low-rank a1/a2 are flat column-major columns-by-rank/rows-by-rank. This is a host-prepared numeric boundary, not CUDA geometry assembly or mixed-mesh certification.
+
+`radia_simulink.hdiv.prepare_hdiv_host_setup(..., backend="gpu", label_contract=..., order=...)` prepares owned sparse/numeric FE data under the caller's NGSolve TaskManager, without a CPU solution or resident GPU operator. MATLAB can pass the in-memory numeric setup to `PreparedHDivNonlinear('', order, H, bhTable, Assembly='ngsolve-host-normalized', HostSetup=setup)`. This explicit route preserves Python's NGSolve FE and Radia charge preparation and uses the shared GPU Newton; it requires neither MATLAB Engine in Python nor a file exchange. `native-tet` remains the default geometry route and rejects HostSetup. Host setup is CPU preparation, not CUDA geometry assembly; unsupported mixed/pyramid charge construction still fails. Mesh/label hashes describe the bytes checked at preparation, not a cryptographic attestation of an arbitrary caller-supplied struct.
+
+Schema-2 normalized leaves must partition the upper matrix exactly once. A bounded per-row bitmap rejects duplicate, overlapping or missing blocks before resident allocation. Diagonal squares cover their upper triangle; off-diagonal blocks are mirrored. Legacy schema-1 and internal additive operator packing retain their existing contracts. Prefer the checked NGSolve/Radia snapshot publisher for HDiv workflows. Matrix symmetry/physical validity also remains a caller contract. `HostSetup` FE dimensions/types are checked before GPU initialization; native leaf/key/charge-map validation runs after GPU selection, before resident allocation.
+
+## License
 
 Owner-authored code is licensed under Apache-2.0 from the next releases.
 See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets

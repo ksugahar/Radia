@@ -1,0 +1,26 @@
+{
+  "schema": "radia.hdiv-python-mcp-workflow.v1",
+  "accepted": true,
+  "scope": "Tet order1 uniform applied H with analytic cubic material through MCP domain workflow, not production BH or release",
+  "adapter_source_commit": "176e695ee99f3e8882816d0a669f313c48f5b585",
+  "native_source_commit": "7995b719cf02653bd08c90b1d0d10efa87007a23",
+  "native_python_sha256": "4aac3c5e6db47d8f06546f8841575a57c045d5478d1ab36b32d761bbd744ed94",
+  "native_fault_injection": true,
+  "independent_cpu_source_commit": "5f5cf3ef652459e3580d764f25ac787081c4e075",
+  "independent_cpu_sha256": "008295b9305c0dbf7b91f39cc21e8313c7c1f6ca5c6a9db7fee49a38ca3426bf",
+  "worker_role": "gpu-validation-worker",
+  "cases": [
+    {"independent_original_residual": 6.087250265791945e-16, "reported_residual": 1.5399329002545922e-16},
+    {"independent_original_residual": 4.3008409154671734e-16, "reported_residual": 2.3724758220401495e-16}
+  ],
+  "same_prepared_owner_reused": true,
+  "native_host_live_bytes": 0,
+  "native_device_live_bytes": 0,
+  "native_live_resources": 0,
+  "matlab_engine_imported": false,
+  "mcp_server_tool_registered": true,
+  "cold_server_optional_numerical_imports": [],
+  "focused_contract_tests_passed": 4,
+  "bounded_job": {"cpu_count": 2, "memory_limit_bytes": 8589934592, "wall_limit_seconds": 240, "elapsed_seconds": 10.75, "exit_code": 0},
+  "limitations": ["No independent CPU coefficient solve in this workflow test", "No fresh common100 memory gate", "No MCP client reconnect or live deployment acceptance", "Diagnostic native payload, not final same-SHA release"]
+}

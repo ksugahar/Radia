@@ -14,6 +14,7 @@ extern "C" {
 #include <unordered_map>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <atomic>
 #include <functional>
@@ -4000,93 +4001,115 @@ static void QuadSiteRef(int s, int k, double u0[2])
 // the per-host MAPPED site positions used by the nearest-site pick.
 void RadHACApKChargeGram::BuildHexSiteTables()
 {
-    const int nR = (int)m_glIn.size();
-    const double* GL = m_glIn.data();
-    const double* GW = m_gwIn.data();
-    m_cellSiteRad.assign(6*15, HexSiteRad());
-    for (int s = 0; s < 6; ++s) {
-        const int* tv = HEXREF_TETS[s];
-        double V[4][3];
-        for (int i = 0; i < 4; ++i) for (int d = 0; d < 3; ++d) V[i][d] = HEXREF_V[tv[i]][d];
-        double E0[3], E1[3], E2[3];
-        for (int d = 0; d < 3; ++d) { E0[d] = V[1][d]-V[0][d]; E1[d] = V[2][d]-V[0][d]; E2[d] = V[3][d]-V[0][d]; }
-        const double hv = E0[0]*(E1[1]*E2[2]-E1[2]*E2[1]) - E0[1]*(E1[0]*E2[2]-E1[2]*E2[0])
-                        + E0[2]*(E1[0]*E2[1]-E1[1]*E2[0]);
-        const double sgnT = (hv >= 0.0) ? 1.0 : -1.0;
-        for (int k = 0; k < 15; ++k) {
-            HexSiteRad& R = m_cellSiteRad[(size_t)s*15 + k];
-            double x0[3];
-            HexSiteRef(s, k, x0);
-            for (int f = 0; f < 4; ++f) {
-                const double* b1 = V[HEXTET_FC[f][0]];
-                const double* b2 = V[HEXTET_FC[f][1]];
-                const double* b3 = V[HEXTET_FC[f][2]];
-                double d1[3], d2[3], d3[3], e21[3], e32[3];
-                for (int d = 0; d < 3; ++d) {
-                    d1[d] = b1[d]-x0[d]; d2[d] = b2[d]-x0[d]; d3[d] = b3[d]-x0[d];
-                    e21[d] = b2[d]-b1[d]; e32[d] = b3[d]-b2[d];
-                }
-                const double cr[3] = {d2[1]*d3[2]-d2[2]*d3[1], d2[2]*d3[0]-d2[0]*d3[2], d2[0]*d3[1]-d2[1]*d3[0]};
-                const double D = d1[0]*cr[0] + d1[1]*cr[1] + d1[2]*cr[2];
-                if (std::fabs(D) < 1e-12) continue;              // degenerate cone: site lies on this face
-                for (int a = 0; a < nR; ++a) { const double u = GL[a];
-                    for (int b = 0; b < nR; ++b) { const double v = GL[b];
-                        for (int c = 0; c < nR; ++c) { const double w = GL[c];
-                            double y[3];
-                            for (int d = 0; d < 3; ++d) y[d] = x0[d] + u*(d1[d] + v*(e21[d] + w*e32[d]));
-                            R.w.push_back(sgnT*GW[a]*GW[b]*GW[c]*(u*u*v*D));
-                            double vx[3], dxu[3], vy[3], dyu[3], vz[3], dzu[3];
-                            HexLag3(y[0], vx, dxu); HexLag3(y[1], vy, dyu); HexLag3(y[2], vz, dzu);
-                            for (int iz = 0; iz < 3; ++iz)
-                                for (int iy = 0; iy < 3; ++iy)
-                                    for (int ix = 0; ix < 3; ++ix) R.S.push_back(vx[ix]*vy[iy]*vz[iz]);
-                            const double px[3] = {1.0, y[0], y[0]*y[0]};
-                            const double py[3] = {1.0, y[1], y[1]*y[1]};
-                            const double pz[3] = {1.0, y[2], y[2]*y[2]};
-                            for (int ez = 0; ez < 3; ++ez)
-                                for (int ey = 0; ey < 3; ++ey)
-                                    for (int ex = 0; ex < 3; ++ex)
-                                        R.M.push_back(px[ex]*py[ey]*pz[ez]);
+    // Exact-value key includes weights, not just rule length. Only one cache
+    // entry is retained; eviction cannot invalidate older live Gram instances.
+    struct CacheEntry {
+        std::vector<double> nodes, weights;
+        std::shared_ptr<const HexSiteTables> tables;
+    };
+    static std::mutex cache_mutex;
+    static std::shared_ptr<const CacheEntry> cache;
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        if (!cache || cache->nodes != m_glIn || cache->weights != m_gwIn) {
+            auto next = std::make_shared<CacheEntry>();
+            next->nodes = m_glIn;
+            next->weights = m_gwIn;
+            auto tables = std::make_shared<HexSiteTables>();
+            auto& cell = tables->cell;
+            auto& face = tables->face;
+            const int nR = (int)m_glIn.size();
+            const double* GL = m_glIn.data();
+            const double* GW = m_gwIn.data();
+            cell.assign(6*15, HexSiteRad());
+            for (int s = 0; s < 6; ++s) {
+                const int* tv = HEXREF_TETS[s];
+                double V[4][3];
+                for (int i = 0; i < 4; ++i) for (int d = 0; d < 3; ++d) V[i][d] = HEXREF_V[tv[i]][d];
+                double E0[3], E1[3], E2[3];
+                for (int d = 0; d < 3; ++d) { E0[d] = V[1][d]-V[0][d]; E1[d] = V[2][d]-V[0][d]; E2[d] = V[3][d]-V[0][d]; }
+                const double hv = E0[0]*(E1[1]*E2[2]-E1[2]*E2[1]) - E0[1]*(E1[0]*E2[2]-E1[2]*E2[0])
+                                + E0[2]*(E1[0]*E2[1]-E1[1]*E2[0]);
+                const double sgnT = (hv >= 0.0) ? 1.0 : -1.0;
+                for (int k = 0; k < 15; ++k) {
+                    HexSiteRad& R = cell[(size_t)s*15 + k];
+                    double x0[3];
+                    HexSiteRef(s, k, x0);
+                    for (int f = 0; f < 4; ++f) {
+                        const double* b1 = V[HEXTET_FC[f][0]];
+                        const double* b2 = V[HEXTET_FC[f][1]];
+                        const double* b3 = V[HEXTET_FC[f][2]];
+                        double d1[3], d2[3], d3[3], e21[3], e32[3];
+                        for (int d = 0; d < 3; ++d) {
+                            d1[d] = b1[d]-x0[d]; d2[d] = b2[d]-x0[d]; d3[d] = b3[d]-x0[d];
+                            e21[d] = b2[d]-b1[d]; e32[d] = b3[d]-b2[d];
+                        }
+                        const double cr[3] = {d2[1]*d3[2]-d2[2]*d3[1], d2[2]*d3[0]-d2[0]*d3[2], d2[0]*d3[1]-d2[1]*d3[0]};
+                        const double D = d1[0]*cr[0] + d1[1]*cr[1] + d1[2]*cr[2];
+                        if (std::fabs(D) < 1e-12) continue;              // degenerate cone: site lies on this face
+                        for (int a = 0; a < nR; ++a) { const double u = GL[a];
+                            for (int b = 0; b < nR; ++b) { const double v = GL[b];
+                                for (int c = 0; c < nR; ++c) { const double w = GL[c];
+                                    double y[3];
+                                    for (int d = 0; d < 3; ++d) y[d] = x0[d] + u*(d1[d] + v*(e21[d] + w*e32[d]));
+                                    R.w.push_back(sgnT*GW[a]*GW[b]*GW[c]*(u*u*v*D));
+                                    double vx[3], dxu[3], vy[3], dyu[3], vz[3], dzu[3];
+                                    HexLag3(y[0], vx, dxu); HexLag3(y[1], vy, dyu); HexLag3(y[2], vz, dzu);
+                                    for (int iz = 0; iz < 3; ++iz)
+                                        for (int iy = 0; iy < 3; ++iy)
+                                            for (int ix = 0; ix < 3; ++ix) R.S.push_back(vx[ix]*vy[iy]*vz[iz]);
+                                    const double px[3] = {1.0, y[0], y[0]*y[0]};
+                                    const double py[3] = {1.0, y[1], y[1]*y[1]};
+                                    const double pz[3] = {1.0, y[2], y[2]*y[2]};
+                                    for (int ez = 0; ez < 3; ++ez)
+                                        for (int ey = 0; ey < 3; ++ey)
+                                            for (int ex = 0; ex < 3; ++ex)
+                                                R.M.push_back(px[ex]*py[ey]*pz[ez]);
+                                }
+                            }
                         }
                     }
+                    R.nq = (int)R.w.size();
                 }
             }
-            R.nq = (int)R.w.size();
-        }
-    }
-    m_faceSiteRad.assign(2*7, HexSiteRad());
-    for (int s = 0; s < 2; ++s) {
-        const int* tv = QUADREF_TRIS[s];
-        double V[3][2];
-        for (int i = 0; i < 3; ++i) for (int d = 0; d < 2; ++d) V[i][d] = QUADREF_V[tv[i]][d];
-        for (int k = 0; k < 7; ++k) {
-            HexSiteRad& R = m_faceSiteRad[(size_t)s*7 + k];
-            double u0[2];
-            QuadSiteRef(s, k, u0);
-            for (int kf = 0; kf < 3; ++kf) {
-                const double* A = V[kf]; const double* B = V[(kf+1)%3];
-                const double ea[2] = {A[0]-u0[0], A[1]-u0[1]};
-                const double eb[2] = {B[0]-u0[0], B[1]-u0[1]};
-                const double s2 = ea[0]*eb[1] - ea[1]*eb[0];
-                if (std::fabs(s2) < 1e-12) continue;             // degenerate cone: site lies on this edge
-                for (int a = 0; a < nR; ++a) { const double u = GL[a];
-                    for (int b = 0; b < nR; ++b) { const double v = GL[b];
-                        const double yu = u0[0] + u*(ea[0] + v*(eb[0]-ea[0]));
-                        const double yv = u0[1] + u*(ea[1] + v*(eb[1]-ea[1]));
-                        R.w.push_back(GW[a]*GW[b]*(u*s2));       // QUADREF_TRIS are CCW: signed s2 sums to +
-                        double vu[3], duu[3], vv[3], dvu[3];
-                        HexLag3(yu, vu, duu); HexLag3(yv, vv, dvu);
-                        for (int iv = 0; iv < 3; ++iv)
-                            for (int iu = 0; iu < 3; ++iu) R.S.push_back(vu[iu]*vv[iv]);
-                        const double pu[3] = {1.0, yu, yu*yu};
-                        const double pv[3] = {1.0, yv, yv*yv};
-                        for (int ev = 0; ev < 3; ++ev)
-                            for (int eu = 0; eu < 3; ++eu) R.M.push_back(pu[eu]*pv[ev]);
+            face.assign(2*7, HexSiteRad());
+            for (int s = 0; s < 2; ++s) {
+                const int* tv = QUADREF_TRIS[s];
+                double V[3][2];
+                for (int i = 0; i < 3; ++i) for (int d = 0; d < 2; ++d) V[i][d] = QUADREF_V[tv[i]][d];
+                for (int k = 0; k < 7; ++k) {
+                    HexSiteRad& R = face[(size_t)s*7 + k];
+                    double u0[2];
+                    QuadSiteRef(s, k, u0);
+                    for (int kf = 0; kf < 3; ++kf) {
+                        const double* A = V[kf]; const double* B = V[(kf+1)%3];
+                        const double ea[2] = {A[0]-u0[0], A[1]-u0[1]};
+                        const double eb[2] = {B[0]-u0[0], B[1]-u0[1]};
+                        const double s2 = ea[0]*eb[1] - ea[1]*eb[0];
+                        if (std::fabs(s2) < 1e-12) continue;             // degenerate cone: site lies on this edge
+                        for (int a = 0; a < nR; ++a) { const double u = GL[a];
+                            for (int b = 0; b < nR; ++b) { const double v = GL[b];
+                                const double yu = u0[0] + u*(ea[0] + v*(eb[0]-ea[0]));
+                                const double yv = u0[1] + u*(ea[1] + v*(eb[1]-ea[1]));
+                                R.w.push_back(GW[a]*GW[b]*(u*s2));       // QUADREF_TRIS are CCW: signed s2 sums to +
+                                double vu[3], duu[3], vv[3], dvu[3];
+                                HexLag3(yu, vu, duu); HexLag3(yv, vv, dvu);
+                                for (int iv = 0; iv < 3; ++iv)
+                                    for (int iu = 0; iu < 3; ++iu) R.S.push_back(vu[iu]*vv[iv]);
+                                const double pu[3] = {1.0, yu, yu*yu};
+                                const double pv[3] = {1.0, yv, yv*yv};
+                                for (int ev = 0; ev < 3; ++ev)
+                                    for (int eu = 0; eu < 3; ++eu) R.M.push_back(pu[eu]*pv[ev]);
+                            }
+                        }
                     }
+                    R.nq = (int)R.w.size();
                 }
             }
-            R.nq = (int)R.w.size();
+            next->tables = std::move(tables);
+            cache = std::move(next);  // Publish only a completely built entry.
         }
+        m_hexSiteTables = cache->tables;
     }
     // ---- mapped site positions per host (the nearest-site pick is a physical distance test) ----
     m_cellSiteX.assign((size_t)m_n_el*6*15*3, 0.0);
@@ -4172,12 +4195,12 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexStateBreakdo
     addi("host", m_host); addi("kind", m_kind); addi("expo", m_expo); addi("hexLocalOf", m_hexLocalOf);
     {
         double s = 0.0;
-        for (const HexSiteRad& R : m_cellSiteRad) { s += R.nq; for (double x : R.S) s += x; for (double x : R.M) s += x; for (double x : R.w) s += x; }
+        if (m_hexSiteTables) for (const HexSiteRad& R : m_hexSiteTables->cell) { s += R.nq; for (double x : R.S) s += x; for (double x : R.M) s += x; for (double x : R.w) s += x; }
         out.emplace_back("cellSiteRad", s);
     }
     {
         double s = 0.0;
-        for (const HexSiteRad& R : m_faceSiteRad) { s += R.nq; for (double x : R.S) s += x; for (double x : R.M) s += x; for (double x : R.w) s += x; }
+        if (m_hexSiteTables) for (const HexSiteRad& R : m_hexSiteTables->face) { s += R.nq; for (double x : R.S) s += x; for (double x : R.M) s += x; for (double x : R.w) s += x; }
         out.emplace_back("faceSiteRad", s);
     }
     add("cellSiteX", m_cellSiteX); add("faceSiteX", m_faceSiteX);
@@ -4483,6 +4506,7 @@ static std::shared_ptr<const HexQuadCloud> HexGetCloud(long long build_id, long 
 void RadHACApKChargeGram::PhiInnerHexSiteVec(int kindS, int hS, int subB, const double p[3],
                                              const std::vector<int>& srcG, double* inn) const
 {
+    if (!m_hexSiteTables) throw std::logic_error("HEX site reference tables are not initialized");
     const bool cell = (kindS == 0);
     const int nsite = cell ? 15 : 7;
     const double* sx = cell ? &m_cellSiteX[(((size_t)hS*6 + subB)*15)*3]
@@ -4493,7 +4517,7 @@ void RadHACApKChargeGram::PhiInnerHexSiteVec(int kindS, int hS, int subB, const 
         const double d = dx*dx + dy*dy + dz*dz;
         if (d < bd) { bd = d; best = k; }
     }
-    const HexSiteRad& R = cell ? m_cellSiteRad[(size_t)subB*15 + best] : m_faceSiteRad[(size_t)subB*7 + best];
+    const HexSiteRad& R = cell ? m_hexSiteTables->cell[(size_t)subB*15 + best] : m_hexSiteTables->face[(size_t)subB*7 + best];
     const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
     const int nn = cell ? 27 : 9;
     const int nm = cell ? 27 : 9;
@@ -5092,8 +5116,9 @@ void RadHACApKChargeGram::DPhiInnerHexSubVec(int kindS,int hS,int subB,
     const double* nd=cell?&m_hexNodes[(size_t)hS*81]:&m_quadNodes[(size_t)hS*27];const int n=(int)srcG.size();
     if(far){const auto cl=HexGetCloud(m_build_id,HexCloudKey(cell?0:1,false,false,hS,subB,3),[&](HexQuadCloud& c){if(cell)HexBuildCloud(nd,true,subB,m_farTetP.data(),m_farTetW.data(),(int)m_farTetW.size(),false,c);else HexBuildCloud(nd,false,subB,m_farTriP.data(),m_farTriW.data(),(int)m_farTriW.size(),false,c);});
         for(int q=0;q<(int)cl->wgeo.size();++q){const double* xi=&cl->xi[3*q];double dX[3];if(cell)HexQ2MapX(velocity,xi,dX);else{const double uv[2]={xi[0],xi[1]};QuadQ2MapX(velocity,uv,dX);}const double R[3]={p[0]-cl->pts[3*q],p[1]-cl->pts[3*q+1],p[2]-cl->pts[3*q+2]},dR[3]={dp[0]-dX[0],dp[1]-dX[1],dp[2]-dX[2]};const double r2=R[0]*R[0]+R[1]*R[1]+R[2]*R[2];if(r2<1e-300)continue;const double w=-cl->wgeo[q]*(R[0]*dR[0]+R[1]*dR[1]+R[2]*dR[2])/(r2*std::sqrt(r2));for(int j=0;j<n;++j)dinn[j]+=w*HexMonoEval(srcG[j],xi);}return;}
+    if (!m_hexSiteTables) throw std::logic_error("HEX site reference tables are not initialized");
     const int nsite=cell?15:7;const double* sx=cell?&m_cellSiteX[(((size_t)hS*6+subB)*15)*3]:&m_faceSiteX[(((size_t)hS*2+subB)*7)*3];int best=0;double bd=1e300;for(int k=0;k<nsite;++k){const double x=p[0]-sx[3*k],y=p[1]-sx[3*k+1],z=p[2]-sx[3*k+2],d=x*x+y*y+z*z;if(d<bd){bd=d;best=k;}}
-    const HexSiteRad& Q=cell?m_cellSiteRad[(size_t)subB*15+best]:m_faceSiteRad[(size_t)subB*7+best];const int nn=cell?27:9,nm=cell?27:9;std::vector<int> col(n);for(int j=0;j<n;++j){const int* e=&m_expo[(size_t)3*srcG[j]];col[j]=e[0]+3*e[1]+(cell?9*e[2]:0);}for(int q=0;q<Q.nq;++q){const double* S=&Q.S[(size_t)q*nn];double X[3]={},dX[3]={};for(int a=0;a<nn;++a)for(int k=0;k<3;++k){X[k]+=S[a]*nd[3*a+k];dX[k]+=S[a]*velocity[3*a+k];}const double R[3]={p[0]-X[0],p[1]-X[1],p[2]-X[2]},dR[3]={dp[0]-dX[0],dp[1]-dX[1],dp[2]-dX[2]};const double r2=R[0]*R[0]+R[1]*R[1]+R[2]*R[2];if(r2<1e-300)continue;const double w=-Q.w[q]*(R[0]*dR[0]+R[1]*dR[1]+R[2]*dR[2])/(r2*std::sqrt(r2));const double* M=&Q.M[(size_t)q*nm];for(int j=0;j<n;++j)dinn[j]+=w*M[col[j]];}
+    const HexSiteRad& Q=cell?m_hexSiteTables->cell[(size_t)subB*15+best]:m_hexSiteTables->face[(size_t)subB*7+best];const int nn=cell?27:9,nm=cell?27:9;std::vector<int> col(n);for(int j=0;j<n;++j){const int* e=&m_expo[(size_t)3*srcG[j]];col[j]=e[0]+3*e[1]+(cell?9*e[2]:0);}for(int q=0;q<Q.nq;++q){const double* S=&Q.S[(size_t)q*nn];double X[3]={},dX[3]={};for(int a=0;a<nn;++a)for(int k=0;k<3;++k){X[k]+=S[a]*nd[3*a+k];dX[k]+=S[a]*velocity[3*a+k];}const double R[3]={p[0]-X[0],p[1]-X[1],p[2]-X[2]},dR[3]={dp[0]-dX[0],dp[1]-dX[1],dp[2]-dX[2]};const double r2=R[0]*R[0]+R[1]*R[1]+R[2]*R[2];if(r2<1e-300)continue;const double w=-Q.w[q]*(R[0]*dR[0]+R[1]*dR[1]+R[2]*dR[2])/(r2*std::sqrt(r2));const double* M=&Q.M[(size_t)q*nm];for(int j=0;j<n;++j)dinn[j]+=w*M[col[j]];}
 }
 
 std::vector<double> RadHACApKChargeGram::QuadBlockHexDirectionalDerivative(
@@ -8343,6 +8368,87 @@ double RadHACApKChargeGram::RawSymmetricQuadraticForm(
     return (double)value;
 }
 
+RadHACApKResidentSnapshot RadHACApKChargeGram::ResidentLeafSnapshot(
+    std::size_t maximum_bytes) const
+{
+    if (!maximum_bytes || maximum_bytes > (std::size_t(512) << 20))
+        throw std::invalid_argument("Resident leaf snapshot requires a budget in (0,512 MiB]");
+    if (!m_exactDenseNormalizedGram.empty())
+        throw std::runtime_error("Resident leaf snapshot requires the factorized H-matrix backend");
+    if (GetDeflationCycleCount()>0 && GetDeflationAlpha()!=0.0)
+        throw std::runtime_error("Resident leaf snapshot does not support active deflation");
+    const auto* matrix=static_cast<const st_cHACApK_leafmtxp_t*>(GetLeafmtxp());
+    const auto* control=static_cast<const st_cHACApK_lcontrol_t*>(GetLcontrol());
+    if (m_n<=0 || !matrix || !control || matrix->nd!=m_n || matrix->nlf<=0 || !matrix->st_lf || !control->lod)
+        throw std::runtime_error("Resident leaf snapshot requires a built H-matrix");
+    std::size_t admitted=0,upper_count=0;
+    const auto charge=[&](std::size_t count,std::size_t width) {
+        if (count>(maximum_bytes-admitted)/width)
+            throw std::runtime_error("Resident leaf snapshot exceeds its host budget");
+        admitted+=count*width;
+    };
+    charge(1,sizeof(RadHACApKResidentSnapshot));
+    // Includes the temporary permutation seen-vector and conservative metadata.
+    charge(std::size_t(m_n),2*sizeof(std::size_t)+sizeof(double));
+    for (int k=1;k<=matrix->nlf;++k) {
+        const auto* leaf=matrix->st_lf[k];
+        if (!leaf || leaf->nstrtl>leaf->nstrtt)continue;
+        if (leaf->nstrtl<1 || leaf->nstrtt<1 || leaf->nstrtl>m_n || leaf->nstrtt>m_n ||
+            leaf->ndl<=0 || leaf->ndt<=0 || leaf->ndl>m_n-leaf->nstrtl+1 || leaf->ndt>m_n-leaf->nstrtt+1 ||
+            (leaf->nstrtl==leaf->nstrtt && leaf->ndl!=leaf->ndt))
+            throw std::runtime_error("Invalid resident snapshot leaf range");
+        charge(1,2*sizeof(RadHACApKResidentLeaf));++upper_count;
+        if (leaf->ltmtx==1) {
+            if (leaf->kt<=0 || !leaf->a1 || !leaf->a2)
+                throw std::runtime_error("Incomplete resident low-rank factors");
+            // Check byte width before charging the factor dimensions.
+            const auto rank=std::size_t(leaf->kt);
+            if (rank>std::numeric_limits<std::size_t>::max()/sizeof(double))
+                throw std::overflow_error("Resident factor byte width overflow");
+            charge(std::size_t(leaf->ndt),rank*sizeof(double));
+            charge(std::size_t(leaf->ndl),rank*sizeof(double));
+        } else if (leaf->ltmtx==2) {
+            if (!leaf->a1)throw std::runtime_error("Incomplete resident dense leaf");
+            if (std::size_t(leaf->ndt)>std::numeric_limits<std::size_t>::max()/sizeof(double))
+                throw std::overflow_error("Resident dense byte width overflow");
+            charge(std::size_t(leaf->ndl),std::size_t(leaf->ndt)*sizeof(double));
+        } else throw std::runtime_error("Unsupported resident snapshot leaf kind");
+    }
+    if (!upper_count)throw std::runtime_error("No resident upper leaves");
+    if (m_sigmaActive && m_chargeSigma.size()!=std::size_t(m_n))
+        throw std::runtime_error("Resident physical normalization is unavailable");
+    RadHACApKResidentSnapshot result;result.dimension=std::size_t(m_n);
+    result.owned_bytes=admitted;result.normalization_active=m_sigmaActive;
+    result.permutation.resize(std::size_t(m_n));result.scale.resize(std::size_t(m_n));
+    std::vector<bool> seen(std::size_t(m_n),false);
+    for (int i=0;i<m_n;++i) {
+        const auto original=control->lod[i+1];
+        if (original<1 || original>m_n || seen[std::size_t(original-1)])
+            throw std::runtime_error("Invalid resident snapshot permutation");
+        seen[std::size_t(original-1)]=true;result.permutation[std::size_t(i)]=std::size_t(original-1);
+        const double scale=m_sigmaActive?m_chargeSigma[std::size_t(i)]:1.;
+        if (!std::isfinite(scale) || scale<=0)throw std::runtime_error("Invalid resident physical scaling");
+        result.scale[std::size_t(i)]=scale;
+    }
+    result.leaves.reserve(upper_count);
+    for (int k=1;k<=matrix->nlf;++k) {
+        const auto* leaf=matrix->st_lf[k];
+        if (!leaf || leaf->nstrtl>leaf->nstrtt)continue;
+        RadHACApKResidentLeaf copy;
+        copy.row=std::size_t(leaf->nstrtl-1);copy.column=std::size_t(leaf->nstrtt-1);
+        copy.rows=std::size_t(leaf->ndl);copy.columns=std::size_t(leaf->ndt);
+        copy.rank=leaf->ltmtx==1?std::size_t(leaf->kt):0;
+        const auto first=copy.columns*(copy.rank?copy.rank:copy.rows);
+        const auto second=copy.rows*copy.rank;
+        copy.a1.assign(leaf->a1,leaf->a1+first);
+        if (second)copy.a2.assign(leaf->a2,leaf->a2+second);
+        for (double value:copy.a1)if (!std::isfinite(value))throw std::runtime_error("Nonfinite resident factor");
+        for (double value:copy.a2)if (!std::isfinite(value))throw std::runtime_error("Nonfinite resident factor");
+        result.leaves.push_back(std::move(copy));
+    }
+    return result;
+}
+
 RadHACApKSymmetricLeafQuadraticReport
 RadHACApKChargeGram::DiagnoseSymmetricLeafQuadratics(
     const std::vector<double>& x, int raw_check_count) const
@@ -9453,6 +9559,23 @@ double DeterministicDot(
 
 }  // namespace
 
+struct RadHDivAccurateSum {
+        double value=0, correction=0;
+        void add(double v) {
+            const double t=value+v;
+            correction += std::abs(value)>=std::abs(v) ? (value-t)+v : (v-t)+value;
+            value=t;
+        }
+        void addProduct(double a,double b) {
+            const double product=a*b;
+            add(product);add(std::fma(a,b,-product));
+        }
+        void addScaled(double a,const RadHDivAccurateSum& b) {
+            addProduct(a,b.value);addProduct(a,b.correction);
+        }
+        double get() const { return value+correction; }
+};
+
 std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
     const std::vector<double>& B_data, int n_face,
@@ -9463,7 +9586,7 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const std::vector<double>* coarse_basis,
     const std::vector<double>* coarse_applied,
     const std::vector<double>* coarse_factor,
-    int coarse_dim)
+    int coarse_dim, std::size_t compensated_bytes)
 {
     using Clock = std::chrono::steady_clock;
     auto elapsed = [](Clock::time_point a, Clock::time_point b) {
@@ -9687,7 +9810,27 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     };
     // A x = inv_chi*(M_mass x) + B^T (G (B x)), with G applied as the charge-Gram H-matvec.
     std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
+    std::function<void(const std::vector<double>&,std::vector<double>&)> accurate_apply;
+    if(compensated_bytes) {
+        if(!configured_charge_map || !symmetric || coarse_dim)
+            throw std::invalid_argument("Compensated PCG requires configured symmetric operator without coarse basis");
+        accurate_apply=MakeCompensatedDemag(compensated_bytes);
+    }
     auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
+        if(accurate_apply) {
+            const auto accurate_start=Clock::now();
+            accurate_apply(x,y);
+            for(int i=0;i<n_face;++i) {
+                RadHDivAccurateSum sum;
+                for(int k=mass_indptr[i];k<mass_indptr[i+1];++k)
+                    sum.addProduct(mass_val[k],x[mass_col[k]]);
+                RadHDivAccurateSum total;total.add(y[i]);total.addProduct(inv_chi,sum.get());y[i]=total.get();
+            }
+            project(y);++m_lastSolveTiming.apply_count;
+            const auto seconds=elapsed(accurate_start,Clock::now());
+            m_lastSolveTiming.ax_total_s+=seconds;m_lastSolveTiming.ax_other_s+=seconds;return;
+        }
+
         const auto ta0 = Clock::now();
         std::fill(q.begin(), q.end(), 0.0);
         const auto tb0 = Clock::now();
@@ -9733,7 +9876,10 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     std::vector<double> dot_partial;
     auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
         const auto t0 = Clock::now();
-        const double result = DeterministicDot(a, b, dot_partial);
+        double result;
+        if(accurate_apply) {
+            RadHDivAccurateSum sum;for(std::size_t i=0;i<a.size();++i)sum.addProduct(a[i],b[i]);result=sum.get();
+        } else result = DeterministicDot(a, b, dot_partial);
         m_lastSolveTiming.dot_s += elapsed(t0, Clock::now());
         ++m_lastSolveTiming.dot_count;
         return result;
@@ -10244,6 +10390,96 @@ bool RadHACApKChargeGram::RestoreGeometryMassMatrix()
     return true;
 }
 
+#ifdef _MSC_VER
+// The surrounding target uses /fp:fast; compensation requires ordered operations.
+#pragma float_control(precise, on, push)
+#pragma fp_contract(off)
+#endif
+// Neumaier accumulation plus explicit FMA product residuals preserve low-order
+// terms of the same FP64 input factors; the physical operator is unchanged.
+std::function<void(const std::vector<double>&,std::vector<double>&)>
+RadHACApKChargeGram::MakeCompensatedDemag(std::size_t maximum_bytes) const
+{
+    if (!m_operatorChargeConfigured || !maximum_bytes || maximum_bytes>(std::size_t(512)<<20))
+        throw std::invalid_argument("Compensated demag needs configured geometry and budget in (0,512 MiB]");
+    const auto n=static_cast<std::size_t>(m_n),faces=static_cast<std::size_t>(m_operatorNFace);
+    if(n>maximum_bytes/(16*sizeof(double)) || faces>maximum_bytes/(16*sizeof(double)))
+        throw std::runtime_error("Compensated demag workspace exceeds budget");
+    // Paired intermediates retain dot/product low parts across B, factors,
+    // normalization and B^T, instead of rounding at every composition boundary.
+    if((6*n+3*faces)*sizeof(double)>maximum_bytes/2)
+        throw std::runtime_error("Compensated paired workspace exceeds budget");
+    auto tree=ResidentLeafSnapshot(maximum_bytes/2);
+    std::vector<RadHDivAccurateSum> xp(n),physical(n);
+    std::vector<RadHDivAccurateSum> yp(n),output(faces);
+    return [this,n,faces,tree=std::move(tree),xp=std::move(xp),physical=std::move(physical),yp=std::move(yp),output=std::move(output)]
+        (const std::vector<double>& x,std::vector<double>& result) mutable {
+        if(x.size()!=faces)throw std::invalid_argument("Compensated demag input size mismatch");
+        result.resize(faces);std::fill(output.begin(),output.end(),RadHDivAccurateSum{});
+    for (int component=0;component<m_operatorChargeComponents;++component) {
+        const auto offset=static_cast<std::size_t>(component)*n;
+        for (std::size_t a=0;a<n;++a) {
+            RadHDivAccurateSum dot;
+            for (int k=m_operatorBIndptr[offset+a];k<m_operatorBIndptr[offset+a+1];++k)
+                dot.addProduct(m_operatorBData[k],x[m_operatorBIndices[k]]);
+            physical[a]=RadHDivAccurateSum{};physical[a].addScaled(tree.scale[a],dot);
+        }
+        for (std::size_t a=0;a<n;++a) { xp[a]=physical[tree.permutation[a]];yp[a]=RadHDivAccurateSum{}; }
+        for (const auto& leaf:tree.leaves) {
+            const auto r=leaf.row,c=leaf.column,nr=leaf.rows,nc=leaf.columns,k=leaf.rank;
+            if (k) {
+                for (std::size_t h=0;h<k;++h) {
+                    RadHDivAccurateSum dot;
+                    for (std::size_t j=0;j<nc;++j)dot.addScaled(leaf.a1[j+nc*h],xp[c+j]);
+                    const auto t=dot;
+                    for (std::size_t i=0;i<nr;++i)yp[r+i].addScaled(leaf.a2[i+nr*h],t);
+                    if (r!=c) {
+                        RadHDivAccurateSum transpose;
+                        for (std::size_t i=0;i<nr;++i)transpose.addScaled(leaf.a2[i+nr*h],xp[r+i]);
+                        const auto u=transpose;
+                        for (std::size_t j=0;j<nc;++j)yp[c+j].addScaled(leaf.a1[j+nc*h],u);
+                    }
+                }
+            } else {
+                for (std::size_t i=0;i<nr;++i) {
+                    RadHDivAccurateSum dot;
+                    for (std::size_t j=0;j<nc;++j)dot.addScaled(leaf.a1[i*nc+j],xp[c+j]);
+                    yp[r+i].add(dot.value);yp[r+i].add(dot.correction);
+                }
+                if (r!=c)for (std::size_t j=0;j<nc;++j) {
+                    RadHDivAccurateSum dot;
+                    for (std::size_t i=0;i<nr;++i)dot.addScaled(leaf.a1[i*nc+j],xp[r+i]);
+                    yp[c+j].add(dot.value);yp[c+j].add(dot.correction);
+                }
+            }
+        }
+        for (std::size_t a=0;a<n;++a) {
+            auto& mapped=physical[tree.permutation[a]];mapped=RadHDivAccurateSum{};
+            mapped.addScaled(tree.scale[tree.permutation[a]],yp[a]);
+        }
+        const auto bt_offset=static_cast<std::size_t>(component)*faces;
+        for (std::size_t f=0;f<faces;++f) {
+            RadHDivAccurateSum dot;
+            for (int k=m_operatorBTIndptr[bt_offset+f];k<m_operatorBTIndptr[bt_offset+f+1];++k)
+                dot.addScaled(m_operatorBTData[k],physical[m_operatorBTIndices[k]]);
+            output[f].add(dot.value);output[f].add(dot.correction);
+        }
+    }
+    for (std::size_t f=0;f<faces;++f)result[f]=output[f].get();
+    };
+}
+std::vector<double> RadHACApKChargeGram::ApplyConfiguredDemagCompensated(
+    const std::vector<double>& x,std::size_t maximum_bytes) const
+{
+    auto apply=MakeCompensatedDemag(maximum_bytes);
+    std::vector<double> result;apply(x,result);return result;
+}
+
+#ifdef _MSC_VER
+#pragma fp_contract(on)
+#pragma float_control(pop)
+#endif
+
 std::vector<double> RadHACApKChargeGram::ApplyConfiguredDemag(
     const std::vector<double>& x, bool symmetric)
 {
@@ -10355,7 +10591,8 @@ std::vector<double> RadHACApKChargeGram::ApplyConfiguredMassRiesz(
 
 std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterial(
     double inv_chi, const std::vector<double>& rhs, double tol, int maxit,
-    int& iters_out, bool mass_riesz, bool symmetric, const std::vector<double>* x0)
+    int& iters_out, bool mass_riesz, bool symmetric, const std::vector<double>* x0,
+    std::size_t compensated_bytes)
 {
     if (!m_operatorChargeConfigured || !m_operatorMassConfigured)
         throw std::runtime_error("SolveConfiguredLinearMaterial: charge map and mass matrix must be configured");
@@ -10363,7 +10600,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterial(
     return SolveLinearMaterial(m_operatorBIndptr, m_operatorBIndices, m_operatorBData,
                                m_operatorNFace, m_operatorMassI, m_operatorMassJ,
                                m_operatorMassV, inv_chi, no_prec, rhs, tol, maxit,
-                               iters_out, mass_riesz, symmetric, x0);
+                               iters_out, mass_riesz, symmetric, x0, nullptr, nullptr, nullptr, 0, compensated_bytes);
 }
 
 std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrec(

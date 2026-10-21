@@ -1,0 +1,81 @@
+{
+  "scope": "Separate forced-GC/no-op controls; not frozen protocol acceptance",
+  "cohorts": [
+    {
+      "scope": "observer-publication-only",
+      "forced_gc": true,
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope": [
+        0.0,
+        0.0
+      ],
+      "final_25_delta": [
+        0.0,
+        0.0
+      ],
+      "within_frozen_memory_bounds": true,
+      "weak_mesh_expiration_supported": false,
+      "all_weak_meshes_expired": true
+    },
+    {
+      "scope": "NG-mesh-FE-only",
+      "forced_gc": true,
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope": [
+        0.0,
+        0.0
+      ],
+      "final_25_delta": [
+        0.0,
+        0.0
+      ],
+      "within_frozen_memory_bounds": true,
+      "weak_mesh_expiration_supported": true,
+      "all_weak_meshes_expired": true
+    },
+    {
+      "scope": "NG-charge-preparation-only",
+      "forced_gc": true,
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope": [
+        86658.75692307693,
+        0.0
+      ],
+      "final_25_delta": [
+        8187904.0,
+        0.0
+      ],
+      "within_frozen_memory_bounds": false,
+      "weak_mesh_expiration_supported": true,
+      "all_weak_meshes_expired": true
+    },
+    {
+      "scope": "MCP-full-forced-GC",
+      "forced_gc": true,
+      "warm": 5,
+      "measured": 100,
+      "final_25_slope": [
+        -115907.3476923077,
+        0.0
+      ],
+      "final_25_delta": [
+        -753664.0,
+        0.0
+      ],
+      "within_frozen_memory_bounds": true,
+      "weak_mesh_expiration_supported": false,
+      "all_weak_meshes_expired": true
+    }
+  ],
+  "elapsed_seconds": 124.45299999999406,
+  "no_engine": true,
+  "completed": true,
+  "frozen_protocol_accepted": false,
+  "limitation": "Separate forced-GC controls in sequential same-process cohorts; Python Mesh wrapper weak expiration is not C++ MeshAccess owner proof. Do not replace or relax frozen common100 gate.",
+  "adapter_source": "ccf22993a",
+  "helper_source": "7037f0080",
+  "native_source": "7995b719cf02653bd08c90b1d0d10efa87007a23"
+}

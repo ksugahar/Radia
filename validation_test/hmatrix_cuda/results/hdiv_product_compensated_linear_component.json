@@ -1,0 +1,481 @@
+{
+  "schema": "radia.hdiv-compensated-linear-component.v1",
+  "accepted": true,
+  "release_accepted": false,
+  "scope": "Tiny real 3D FE HDiv linear-material component; not nonlinear MMM, connected mixed meshes or scaling acceptance",
+  "native_source_commit": "ba94077fd68c940386e9de2134095cf29232d384",
+  "cpu_binary_sha256": "ac9cdf61eae530c1c3f8ac0f077c2479841a509388964850a5b6fadbc61b6afa",
+  "python_gpu_binary_sha256": "5d45ffe0e5e640518b04facdc097a8c0670f9e69ea54d34b26dd72bc70fcd88f",
+  "mex_binary_sha256": "d5531418abc6e291d3470d03a00ed986f4823c9c5ffcff9ebd2bdbbf637c6148",
+  "ngsolve": "6.2.2608",
+  "mesh_coordinate_units": "m",
+  "cpu_reference": "Explicit independent CPU Neumaier plus FMA product residuals; standard fast CPU route is unchanged; CPU validation is not a GPU-user prerequisite",
+  "gates": {
+    "relative_matvec": 1e-11,
+    "relative_coefficient_error": 1e-10,
+    "independent_original_residual": 1e-11,
+    "requested_linear_tolerance": 5e-14
+  },
+  "linear_cases": [
+    {
+      "topology": "tet",
+      "order": 1,
+      "seed": 10,
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "matvec_error": 0.0,
+      "cpu_error": 1.460025141511008e-14,
+      "independent_original_residual": 6.157616136546819e-16,
+      "reported_residual": 5.907902368019523e-16,
+      "iterations": 11,
+      "graph_launches": 11
+    },
+    {
+      "topology": "tet",
+      "order": 1,
+      "seed": 10,
+      "preconditioner": "diagonal",
+      "graph": false,
+      "matvec_error": 0.0,
+      "cpu_error": 1.970725826365199e-15,
+      "independent_original_residual": 5.406464665396933e-16,
+      "reported_residual": 5.289764041196071e-16,
+      "iterations": 14,
+      "graph_launches": 0
+    },
+    {
+      "topology": "tet",
+      "order": 1,
+      "seed": 20,
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "matvec_error": 0.0,
+      "cpu_error": 4.461751750660036e-13,
+      "independent_original_residual": 3.174550472121224e-14,
+      "reported_residual": 3.1723582513744126e-14,
+      "iterations": 11,
+      "graph_launches": 11
+    },
+    {
+      "topology": "tet",
+      "order": 1,
+      "seed": 20,
+      "preconditioner": "diagonal",
+      "graph": false,
+      "matvec_error": 0.0,
+      "cpu_error": 3.335512262272809e-14,
+      "independent_original_residual": 1.7581458317385553e-14,
+      "reported_residual": 1.7622299497909485e-14,
+      "iterations": 14,
+      "graph_launches": 0
+    },
+    {
+      "topology": "tet",
+      "order": 1,
+      "seed": 30,
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "matvec_error": 0.0,
+      "cpu_error": 7.978684790094784e-16,
+      "independent_original_residual": 2.0432127196723865e-16,
+      "reported_residual": 2.0432127196723865e-16,
+      "iterations": 12,
+      "graph_launches": 12
+    },
+    {
+      "topology": "tet",
+      "order": 1,
+      "seed": 30,
+      "preconditioner": "diagonal",
+      "graph": false,
+      "matvec_error": 0.0,
+      "cpu_error": 1.2263459641065598e-14,
+      "independent_original_residual": 9.901805621625098e-15,
+      "reported_residual": 9.90524781466129e-15,
+      "iterations": 14,
+      "graph_launches": 0
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "seed": 10,
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "matvec_error": 0.0,
+      "cpu_error": 6.571854632830513e-14,
+      "independent_original_residual": 2.3400872766282148e-14,
+      "reported_residual": 2.3313823373436838e-14,
+      "iterations": 16,
+      "graph_launches": 16
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "seed": 10,
+      "preconditioner": "diagonal",
+      "graph": false,
+      "matvec_error": 0.0,
+      "cpu_error": 4.289128894927057e-14,
+      "independent_original_residual": 1.7540688649958434e-14,
+      "reported_residual": 1.7671542249669237e-14,
+      "iterations": 39,
+      "graph_launches": 0
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "seed": 20,
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "matvec_error": 0.0,
+      "cpu_error": 3.768586609142374e-13,
+      "independent_original_residual": 2.608866163251998e-14,
+      "reported_residual": 2.6086366533451448e-14,
+      "iterations": 15,
+      "graph_launches": 15
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "seed": 20,
+      "preconditioner": "diagonal",
+      "graph": false,
+      "matvec_error": 0.0,
+      "cpu_error": 2.8631875096562163e-14,
+      "independent_original_residual": 4.444077331178839e-15,
+      "reported_residual": 4.441321729952753e-15,
+      "iterations": 39,
+      "graph_launches": 0
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "seed": 30,
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "matvec_error": 0.0,
+      "cpu_error": 4.4301123468856384e-14,
+      "independent_original_residual": 7.266863390800363e-15,
+      "reported_residual": 7.181306531950095e-15,
+      "iterations": 16,
+      "graph_launches": 16
+    },
+    {
+      "topology": "tet",
+      "order": 2,
+      "seed": 30,
+      "preconditioner": "diagonal",
+      "graph": false,
+      "matvec_error": 0.0,
+      "cpu_error": 1.2996330007379204e-13,
+      "independent_original_residual": 4.4698766492621815e-14,
+      "reported_residual": 4.461311985978442e-14,
+      "iterations": 39,
+      "graph_launches": 0
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "seed": 10,
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "matvec_error": 0.0,
+      "cpu_error": 2.1563276769837457e-14,
+      "independent_original_residual": 1.2787055908423406e-14,
+      "reported_residual": 1.2761048375791633e-14,
+      "iterations": 14,
+      "graph_launches": 14
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "seed": 10,
+      "preconditioner": "diagonal",
+      "graph": false,
+      "matvec_error": 0.0,
+      "cpu_error": 4.739377620146103e-15,
+      "independent_original_residual": 1.0224930430548386e-14,
+      "reported_residual": 1.0188419394202241e-14,
+      "iterations": 21,
+      "graph_launches": 0
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "seed": 20,
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "matvec_error": 0.0,
+      "cpu_error": 5.264248406904766e-14,
+      "independent_original_residual": 1.6454827630951334e-14,
+      "reported_residual": 1.6456903767252294e-14,
+      "iterations": 14,
+      "graph_launches": 14
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "seed": 20,
+      "preconditioner": "diagonal",
+      "graph": false,
+      "matvec_error": 0.0,
+      "cpu_error": 1.5792802265216824e-14,
+      "independent_original_residual": 2.7859248277216694e-14,
+      "reported_residual": 2.7880202083183043e-14,
+      "iterations": 21,
+      "graph_launches": 0
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "seed": 30,
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "matvec_error": 0.0,
+      "cpu_error": 2.6364198502914963e-14,
+      "independent_original_residual": 5.638790858276067e-15,
+      "reported_residual": 5.6562183828916175e-15,
+      "iterations": 14,
+      "graph_launches": 14
+    },
+    {
+      "topology": "hex",
+      "order": 1,
+      "seed": 30,
+      "preconditioner": "diagonal",
+      "graph": false,
+      "matvec_error": 0.0,
+      "cpu_error": 3.872041096758633e-15,
+      "independent_original_residual": 3.663623945786417e-16,
+      "reported_residual": 3.2241991058991663e-16,
+      "iterations": 22,
+      "graph_launches": 0
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "seed": 10,
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "matvec_error": 0.0,
+      "cpu_error": 1.1686790166251892e-13,
+      "independent_original_residual": 1.7842355184762696e-14,
+      "reported_residual": 1.78771176319437e-14,
+      "iterations": 18,
+      "graph_launches": 18
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "seed": 10,
+      "preconditioner": "diagonal",
+      "graph": false,
+      "matvec_error": 0.0,
+      "cpu_error": 7.565360286547285e-13,
+      "independent_original_residual": 3.205384769988718e-14,
+      "reported_residual": 3.2038444511529373e-14,
+      "iterations": 77,
+      "graph_launches": 0
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "seed": 20,
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "matvec_error": 0.0,
+      "cpu_error": 1.155025518692158e-13,
+      "independent_original_residual": 1.8659307092597504e-14,
+      "reported_residual": 1.86528083404893e-14,
+      "iterations": 18,
+      "graph_launches": 18
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "seed": 20,
+      "preconditioner": "diagonal",
+      "graph": false,
+      "matvec_error": 0.0,
+      "cpu_error": 5.944179883722532e-13,
+      "independent_original_residual": 3.8423872528902086e-14,
+      "reported_residual": 3.8423705860468357e-14,
+      "iterations": 76,
+      "graph_launches": 0
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "seed": 30,
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "matvec_error": 0.0,
+      "cpu_error": 1.2979801080748207e-13,
+      "independent_original_residual": 1.513880294608691e-14,
+      "reported_residual": 1.509974062776797e-14,
+      "iterations": 18,
+      "graph_launches": 18
+    },
+    {
+      "topology": "hex",
+      "order": 2,
+      "seed": 30,
+      "preconditioner": "diagonal",
+      "graph": false,
+      "matvec_error": 0.0,
+      "cpu_error": 8.308178830539372e-13,
+      "independent_original_residual": 4.012616344790817e-14,
+      "reported_residual": 4.014161506213169e-14,
+      "iterations": 73,
+      "graph_launches": 0
+    }
+  ],
+  "maximum_coefficient_error": 8.308178830539372e-13,
+  "maximum_independent_original_residual": 4.4698766492621815e-14,
+  "forward_decimal_diagnostics": [
+    {
+      "charge_gpu_vs_cpu": 2.220595352596465e-13,
+      "numpy_map_cpu_vs_native": 2.696928647482457e-11,
+      "numpy_map_gpu_vs_native": 1.2029834399892892e-14,
+      "full_gpu_vs_numpy_map_gpu": 1.2029834399892863e-14,
+      "charge_norm": 0.5693202471763994,
+      "output_norm": 2.3389608256339454,
+      "seed": 10,
+      "legacy_fast_cpu_vs_decimal": 2.0056984085936912e-11,
+      "decimal_precision": 60,
+      "cpu_vs_decimal": 6.431721218489811e-15,
+      "gpu_vs_decimal": 6.431721218489811e-15,
+      "remapped_cpu_vs_decimal": 2.6966794305620084e-11
+    },
+    {
+      "charge_gpu_vs_cpu": 1.222957657118029e-13,
+      "numpy_map_cpu_vs_native": 9.653675503290357e-12,
+      "numpy_map_gpu_vs_native": 8.74248455897851e-15,
+      "full_gpu_vs_numpy_map_gpu": 8.742484558978504e-15,
+      "charge_norm": 0.5224640958581953,
+      "output_norm": 2.507767162233405,
+      "seed": 20,
+      "legacy_fast_cpu_vs_decimal": 1.2481609596789197e-11,
+      "decimal_precision": 60,
+      "cpu_vs_decimal": 7.417237143446635e-15,
+      "gpu_vs_decimal": 7.417237143446635e-15,
+      "remapped_cpu_vs_decimal": 9.654975461147207e-12
+    },
+    {
+      "charge_gpu_vs_cpu": 2.8011508054106e-14,
+      "numpy_map_cpu_vs_native": 4.555118099210917e-12,
+      "numpy_map_gpu_vs_native": 1.3506095741453689e-14,
+      "full_gpu_vs_numpy_map_gpu": 1.3506095741453697e-14,
+      "charge_norm": 1.1930480083893316,
+      "output_norm": 2.7641396997218894,
+      "seed": 30,
+      "legacy_fast_cpu_vs_decimal": 5.3709593142505945e-12,
+      "decimal_precision": 60,
+      "cpu_vs_decimal": 4.9591745530195154e-15,
+      "gpu_vs_decimal": 4.9591745530195154e-15,
+      "remapped_cpu_vs_decimal": 4.555238510650794e-12
+    }
+  ],
+  "mex_numeric_component": {
+    "accepted": true,
+    "scope": "MEX ABI numeric cancellation, shared material PCG/Graph, handle release; not complete MMM",
+    "rows": [
+      {
+        "preconditioner": "mass-diagonal",
+        "cpu_error": 1.148993011396281e-16,
+        "independent_original_residual": 7.471549796330767e-17
+      },
+      {
+        "preconditioner": "mass-chebyshev-graph",
+        "cpu_error": 1.114686952725502e-16,
+        "independent_original_residual": 7.471549796330767e-17
+      }
+    ],
+    "live_count": 0,
+    "cancellation_exact": true,
+    "product_cancellation_exact": true,
+    "failure_recovery": true
+  },
+  "memory_scope": "One reused HMatrix resident with 100 fresh linear solves per preconditioner after five warmups; solver/graph resources destroyed per solve. Not 100 FE rebuilds; final-window zero is not zero runtime memory.",
+  "memory": [
+    {
+      "preconditioner": "chebyshev",
+      "graph": true,
+      "cold_transfer_inclusive_seconds": 0.05026160000124946,
+      "warmed_transfer_inclusive_median_seconds": 0.01567234999674838,
+      "loop_with_observer_seconds": 1.5980664999951841,
+      "host": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "observer_control_host": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "observer_control_device": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "max_cpu_error": 1.1686790166251892e-13,
+      "max_reported_residual": 1.78771176319437e-14,
+      "last_independent_original_residual": 1.7842355184762696e-14,
+      "owned_operator_payload_bytes": 95912
+    },
+    {
+      "preconditioner": "diagonal",
+      "graph": false,
+      "cold_transfer_inclusive_seconds": 0.011199300002772361,
+      "warmed_transfer_inclusive_median_seconds": 0.011210499993467238,
+      "loop_with_observer_seconds": 1.1276816000026884,
+      "host": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "device": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "observer_control_host": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "observer_control_device": {
+        "final25_slope_bytes_per_run": 0.0,
+        "final25_delta_bytes": 0,
+        "accepted": true
+      },
+      "max_cpu_error": 7.565360286547285e-13,
+      "max_reported_residual": 3.2038444511529373e-14,
+      "last_independent_original_residual": 3.205384769988718e-14,
+      "owned_operator_payload_bytes": 95912
+    }
+  ],
+  "after_close_runtime_memory": [
+    945831936,
+    448856064
+  ],
+  "after_close_memory_fields": [
+    "host_private_bytes",
+    "device_used_bytes"
+  ],
+  "closed": true,
+  "timing_scope": "Small problem, transfer-inclusive per-solve observations, no CPU speedup baseline; Graph launch reduction is not a speedup claim",
+  "unaccepted": [
+    "Connected tet-pyramid-hex charge Gram/MMM",
+    "Nonlinear direct Python MMM",
+    "Large-scale performance and memory",
+    "Wheel/install/CPU-context/SLX/licensing/distribution/CI/release"
+  ],
+  "prior_failures_preserved": true
+}

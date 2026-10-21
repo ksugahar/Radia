@@ -1,0 +1,55 @@
+{
+  "schema": "radia.python-gpu-runtime-qualification.v1",
+  "accepted_scope": "bounded Windows runtime and physical hex2 solve",
+  "adapter_source": "e977db21e",
+  "native_source": "947db66639d977a6388d6faf910ccc6c9bf387d1",
+  "native_sha256": "3c20940a94539df77c900b8bdc434bd649e2d8e1750ff0e11f9d614148e4c02b",
+  "ngsolve": "6.2.2608",
+  "cuda_components": {
+    "cudart": "12.8.57",
+    "cublas": "12.8.3.14",
+    "cusolver": "11.7.2.55",
+    "cusparse": "12.5.7.53",
+    "nvjitlink": "12.8.61"
+  },
+  "cuda_libraries_from_runtime_packages": true,
+  "matlab_dlls_loaded": false,
+  "matlab_engine_imported": false,
+  "matlab_physically_absent": false,
+  "matlab_dll_search_excluded": true,
+  "degree": 2,
+  "element_family": "hex",
+  "dofs": 108,
+  "coefficient_gate": 1e-10,
+  "original_residual_gate": 1e-11,
+  "cases": [
+    {
+      "preconditioner": "reference-diagonal",
+      "independent_original_residual": 1.5616694469018664e-14,
+      "saved_cpu_certified_root_difference": 2.4354022450216086e-12,
+      "native_residual": 1.0973547345773458e-14
+    },
+    {
+      "preconditioner": "reference-chebyshev-graph",
+      "independent_original_residual": 1.685448249535868e-14,
+      "saved_cpu_certified_root_difference": 2.7397368939450194e-12,
+      "native_residual": 1.5753111291837114e-14
+    }
+  ],
+  "independent_certificate": "Fresh independent installed947 CPU original-equation residual; coefficient comparison to exact saved947 MATLAB root independently CPU-certified in phase236",
+  "resources": {
+    "physical_cores": 2,
+    "threads": 2,
+    "ngsolve_threads": 1,
+    "host_commit_limit_bytes": 8589934592,
+    "wall_limit_seconds": 120,
+    "elapsed_seconds": 21.953000000008615,
+    "peak_job_commit_bytes": 927440896
+  },
+  "limitations": [
+    "No physically MATLAB-free host claim",
+    "No full wheel, licensing, common100 or release acceptance",
+    "Native binary and Python adapter source identities differ",
+    "No speedup claim"
+  ]
+}

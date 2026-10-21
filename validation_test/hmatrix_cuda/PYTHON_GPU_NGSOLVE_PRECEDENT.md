@@ -69,3 +69,27 @@ cannot pass under the approved toolchain, return the precise missing capability
 and a proposed exception for an explicit decision; do not silently install a
 toolkit or claim a distributable implementation. F14 evidence is therefore
 partially resolved, with build/redistribution closure still required.
+
+
+## Bounded CSR adapter implementation checkpoint
+
+The CSR implementation now uses a shared MEX-free CUDA domain header and a
+thin pybind11 adapter. CUDA compilation uses the stock `mexcuda -c` route;
+MSVC links the resulting object with Python and the bundled CUDA runtime import
+library. NGSolve/Netgen's installed pybind11 headers supply the binding ABI.
+No NVRTC, unsupported compiler setting, or separately installed CUDA toolkit
+is used. The same CUDA solve is called by the MATLAB GPU gateway.
+
+A bounded Windows component build and 3/64-row algebra checks exercised Python
+GPU, independent NGSolve CPU, and explicit MATLAB CPU/GPU execution. The Python
+GPU validation process imports no MATLAB module; the extension's direct PE
+imports contain Python, CUDA runtime and standard Windows/MSVC libraries, not
+the MEX ABI or Engine. This verifies that selected local route only. The local
+validation resolves the CUDA DLL from the installed MATLAB tree; it does not
+establish permission to redistribute that DLL or general standalone support.
+
+Read-only API traces use a separately staged observer, a GPU positive control
+and an observer-only control. CPU traces distinguish a GPU-present process from
+a process with zero CUDA-visible devices. The latter is not a physically
+GPU-absent machine. Trace scope and observer limitations remain explicit; no
+software-visibility condition is relabelled as hardware provenance.
