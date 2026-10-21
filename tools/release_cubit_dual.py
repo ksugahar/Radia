@@ -153,7 +153,10 @@ try:
     if tier == 'editable':
         if root is None:
             raise RuntimeError('The editable tier needs its release checkout')
-        git = ['git', '-c', 'safe.directory=' + str(root), '-C', str(root)]
+        git_executable = shutil.which('git')
+        if git_executable is None:
+            raise RuntimeError('Git is required to verify the editable release checkout')
+        git = [git_executable, '-c', 'safe.directory=' + str(root), '-C', str(root)]
         if command(git + ['rev-parse', 'HEAD']).strip() != cfg['source_sha']:
             raise RuntimeError('Wrong release checkout SHA')
         if command(git + ['status', '--porcelain', '--untracked-files=no']).strip():
