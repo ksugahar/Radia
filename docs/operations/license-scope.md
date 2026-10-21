@@ -32,8 +32,6 @@ terms remain in force pending provenance verification:
 - `packages/radia-simulink/native/radia_cuda_ams.cu`
 - `packages/radia-simulink/native/radia_cuda_fmm.cu`
 - `packages/radia-simulink/native/radia_cuda_ic.cu`
-- `packages/radia-simulink/native/resident_amg_cuda.cu`
-- `packages/radia-simulink/native/resident_amg_python.cpp`
 - `src/ext/HACApK/cHACApK_calc_entry_ij.h`
 - `src/ext/HACApK/cHACApK_cpp.h`
 - `src/ext/HACApK/cHACApK_cpp_impl.c`
