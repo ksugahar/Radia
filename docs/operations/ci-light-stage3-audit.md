@@ -174,3 +174,30 @@ worst-case fast selector (137 tests, zero skips, 15.3 s). No solver, MATLAB
 Engine or GPU compilation was used. The 51-file closure digest is now
 `e0f823ec0563ecdfaf3305abca6b6994c206d8585fe1968f1ce037d6a9d38e23`.
 All 45 workflow jobs pass the routing audit.
+
+
+## HDiv BH contract and Newton budget repair (2026-10-21)
+
+The changed `tests/test_hdiv_bh_table_saturation_contract.py` and its dynamic
+source `validation_test/feec/bh_saturation_audit.py` were re-audited in a fresh
+isolated Python 3.12.10 venv containing only pytest, PyYAML, NumPy, SciPy,
+setuptools, wheel and their lightweight dependencies. The curve test executes
+selected scalar production helpers and SciPy interpolation; it does not import
+NGSolve or a native solver. No MATLAB Engine, Cubit, GPU or solver dependency
+was installed in this environment.
+
+All F2 steps passed: routing (45 jobs), routing mutations (19 tests), source
+compilation, caller-owned TaskManager audit, CPU version (1 test), the actual
+fast selector with `--since origin/main` (342 tests, zero skips, 24.31 seconds;
+25.28 seconds through the tier runner), and showcase readers (6 tests).
+The Newton inner-solve failure contract also passed 16 tests, including the
+explicit compensated-budget forwarding regression. This is source-contract
+coverage, not native numerical or release acceptance.
+
+The 51-file execution closure digest is
+`519820bd4a6447418bdbd59ce3fec8ec393ad63d76a4cbad56fa65ef520ee345`.
+The single audit used two physical cores on one NUMA node, one library thread,
+BelowNormal priority, an 8 GiB job-commit cap and a 240-second wall cap, with no
+GPU and no retry. It completed in 81.14 seconds with a peak job commit of
+132526080 bytes. Exact topology, affinity, dependency versions and raw outputs
+are retained privately; no runner or shared environment was changed.

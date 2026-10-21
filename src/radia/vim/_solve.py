@@ -1441,7 +1441,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
                          "(got %r)" % (inner_preconditioner,))
 
     def _solve_W(W_matrix, rhs, *, tol_override=None, x0=None,
-                 context="unspecified"):
+                 context="unspecified", compensated_memory_mb=0):
         solve_tol = float(cg_tol if tol_override is None else max(float(cg_tol), float(tol_override)))
         if inner_preconditioner == "jacobi":
             res = _h_solve_auto_prec(
@@ -1545,7 +1545,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
             invchi0.Set(material.initial_reluctivity)
             m, it0 = _solve_W(
                 _W_matrix(invchi0, tensor=False), rhs_stage, tol_override=max(cg_tol, 1e-6),
-                context="linear_warmstart_stage_1")
+                context="linear_warmstart_stage_1", compensated_memory_mb=compensated_memory_mb)
             stats["nonlinear_warmstart_solves"] += 1
             stats["nonlinear_linear_inner_iters"] += int(it0)
 
@@ -1585,7 +1585,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
             solve_tol = _forcing_tol(rel_step, stage_final)
             dm, itlin = _solve_W(cached_W, -R, tol_override=solve_tol,
                                  x0=dm_prev if (cg_x0 and dm_prev is not None) else None,
-                                 context="newton_stage_%d_iteration_%d" % (istage + 1, it + 1))
+                                 context="newton_stage_%d_iteration_%d" % (istage + 1, it + 1),
+                                 compensated_memory_mb=compensated_memory_mb)
             stats["nonlinear_linear_inner_iters"] += int(itlin)
             dec = float(-dm @ R)                             # dm.(-R) = dm^T J dm >= 0
             E0 = E
@@ -1601,7 +1602,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
                 stats["nonlinear_fresh_tangent_retries"] += 1
                 dm, itlin = _solve_W(cached_W, -R, tol_override=max(cg_tol, min(1e-4, solve_tol)),
                                      x0=dm_prev if (cg_x0 and dm_prev is not None) else None,
-                                     context="fresh_tangent_stage_%d_iteration_%d" % (istage + 1, it + 1))
+                                     context="fresh_tangent_stage_%d_iteration_%d" % (istage + 1, it + 1),
+                                     compensated_memory_mb=compensated_memory_mb)
                 stats["nonlinear_linear_inner_iters"] += int(itlin)
                 dec = float(-dm @ R)
                 lam, trial_energy, backtracks = _line_search(m, dm, rhs_stage, E0, dec)

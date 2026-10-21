@@ -47,6 +47,8 @@ def test_failure_records_the_requested_inner_solve(preconditioner):
     assert error.linear_preconditioner == preconditioner
     assert 'operator is SPD' not in str(error)
     assert captured == [result]
+    if preconditioner == 'mass-riesz':
+        assert calls[0][1]['compensated_memory_mb'] == 0
     assert len(calls) == 1
 
 
@@ -72,6 +74,16 @@ def test_all_inner_call_sites_supply_a_context():
              and isinstance(node.func, ast.Name) and node.func.id == '_solve_W']
     assert len(calls) == 3
     assert all(any(keyword.arg == 'context' for keyword in call.keywords) for call in calls)
+    assert all(any(keyword.arg == 'compensated_memory_mb'
+                   and isinstance(keyword.value, ast.Name)
+                   and keyword.value.id == 'compensated_memory_mb'
+                   for keyword in call.keywords) for call in calls)
+
+
+def test_explicit_inner_compensated_budget_is_forwarded():
+    solve, calls, _ = _inner_solve('mass-riesz', {'iters': 3, 'm': [1., 2.]})
+    solve(object(), np.ones(2), compensated_memory_mb=64)
+    assert calls[0][1]['compensated_memory_mb'] == 64
 
 
 @pytest.mark.parametrize('residual,mode,exhausted,expected', [
