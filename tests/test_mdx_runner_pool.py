@@ -26,7 +26,7 @@ def test_retired_compute_deployment_never_contacts_hosts(monkeypatch, target):
     monkeypatch.setattr(tool, "run", lambda *_a, **_k: pytest.fail("retired route ran a command"))
     assert tool._deploy_mdx(target) == 2
     assert tool.cmd_phase8e(None) == 2
-    assert set(tool.SIMULINK_TARGETS) == {"lab", "100"}
+    assert set(tool.SIMULINK_TARGETS) == {"100"}
 
 
 def test_compute_probe_is_solver_only_and_keeps_row_contract(monkeypatch, capsys, tmp_path):
