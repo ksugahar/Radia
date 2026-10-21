@@ -164,7 +164,7 @@ def test_optuna_manual_release_selects_one_fully_successful_ci_run():
         '"radia_optuna/matlab/optuna_mex.mexw64": Path('
         in workflow
     )
-    assert '"radia_optuna/matlab/LICENSE": Path("LICENSE")' in workflow
+    assert '"radia_optuna/matlab/LICENSE": Path("LICENSE")' not in workflow
     assert "target.write_bytes(archive.read(member))" in workflow
     assert 'EXPECTED_TAG="refs/tags/radia-optuna-v${VERSION}"' in workflow
     assert 'ACTUAL_SHA256=$(sha256sum "$WHL"' in workflow
