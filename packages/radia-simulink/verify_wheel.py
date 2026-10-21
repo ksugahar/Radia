@@ -96,9 +96,9 @@ def verify_python_binding(path, names, archive, manifest):
                     or binding.get('extension_suffix') != '.' + resident_tag[1] + '-win_amd64.pyd'
                     or any(binding.get(key) is not False for key in (
                         'source_dirty', 'fault_injection', 'device_fault_injection',
-                        'lifecycle_diagnostic', 'matlab_engine_user_dependency'))
+                        'lifecycle_diagnostic', 'matlab_engine_user_dependency', 'matlab_dlls_loaded'))
                     or any(binding.get(key) is not True for key in (
-                        'runtime_import_checked', 'redistribution_accepted'))
+                        'runtime_import_checked', 'redistribution_accepted', 'matlab_dll_search_excluded'))
                     or any(not isinstance(binding.get(key), str) or not re.fullmatch(
                         r'[0-9a-f]{64}', binding[key]) for key in (
                             'runtime_validation_sha256', 'loaded_runtime_sha256',

@@ -26,9 +26,9 @@ def _qualified_native():
             or receipt.get('binary_sha256') != hashlib.sha256((root / name).read_bytes()).hexdigest()
             or any(receipt.get(key) is not False for key in (
                 'fault_injection', 'device_fault_injection', 'lifecycle_diagnostic',
-                'matlab_engine_user_dependency'))
+                'matlab_engine_user_dependency', 'matlab_dlls_loaded'))
             or any(receipt.get(key) is not True for key in (
-                'runtime_import_checked', 'redistribution_accepted'))
+                'runtime_import_checked', 'redistribution_accepted', 'matlab_dll_search_excluded'))
             or any(not isinstance(receipt.get(key), str) or not re.fullmatch(r'[0-9a-f]{64}', receipt[key]) for key in (
                 'runtime_validation_sha256', 'loaded_runtime_sha256',
                 'redistribution_reference_sha256'))):
