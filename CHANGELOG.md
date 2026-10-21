@@ -1,7 +1,22 @@
 # Changelog
 
-## 5.3.3 - 2026-10-13
+## 5.3.3 - 2026-10-22
 
+- Update the CPU solver runtime to Netgen/NGSolve 6.2.2608. The P1 linear and
+  Newton routes classify non-tetrahedral and curved elements through the
+  element `type`/`curved` fields that replace the removed `np` field.
+- Mixed Omega: explicit batch source evaluation, separated Kelvin coupling
+  probes, and discrete scalar lifts applied through their stiffness operator.
+- Induction heating: explicit four-property thermal coupling (B(H,T), rho(T),
+  c(T), kappa(T)) with CPU energy validation.
+- ESIM: resolve depth cells with bounded adaptive refinement and explicit
+  `mesh_tol` / `max_nodes` / `max_refinements` controls. Local surface LUTs
+  and EM tables move to schema 2; older archives are rejected instead of being
+  reused with different cell controls.
+- HDiv VIM: optional compensated Newton arithmetic under an explicit memory
+  budget (`newton_compensated_memory_mb`, energy solvers with `mass-riesz`
+  only); the default arithmetic is unchanged.
+- Owner-authored code is licensed under Apache-2.0.
 - Add an explicit forward B(H) HDiv Newton route that retains falling
   magnetization segments (dB/dH < mu0) instead of capping the inverse M law,
   and honor the automatic inner tolerance. Existing routes are unchanged.
