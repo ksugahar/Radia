@@ -34,20 +34,31 @@ def _clean_env(**extra):
     return env
 
 
+LOG_DIR = None  # set by main(); full step output is written here
+
+
 def _run(name, command, env, steps):
     started = time.perf_counter()
     try:
         result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
         returncode = result.returncode
-        tail = (result.stdout + result.stderr).strip().splitlines()[-3:]
+        output = result.stdout + result.stderr
     except OSError as error:  # the step could not even start
-        returncode, tail = 1, [repr(error)]
+        returncode, output = 1, repr(error)
+    tail = output.strip().splitlines()[-3:]
+    log = None
+    if LOG_DIR is not None:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        slug = "".join(ch if ch.isalnum() else "-" for ch in name).strip("-")
+        log = LOG_DIR / f"{len(steps) + 1:02d}-{slug}.log"
+        log.write_text(output, encoding="utf-8", errors="replace")
     steps.append({
         "name": name,
         "command": [str(part) for part in command],
         "returncode": returncode,
         "seconds": round(time.perf_counter() - started, 3),
         "tail": tail,
+        "log": str(log) if log else None,
     })
     status = "PASS" if returncode == 0 else "FAIL"
     print(f"[{status}] {name}: {tail[-1] if tail else ''}", flush=True)
@@ -59,8 +70,14 @@ def _light_python(directory, steps):
     try:
         venv.EnvBuilder(with_pip=True, clear=True).create(directory)
     except Exception as error:  # recorded, then reported as a failed step
+        log = None
+        if LOG_DIR is not None:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            log = LOG_DIR / f"{len(steps) + 1:02d}-create-isolated-venv.log"
+            log.write_text(repr(error), encoding="utf-8", errors="replace")
         steps.append({"name": "create isolated venv", "command": [], "returncode": 1,
-                      "seconds": round(time.perf_counter() - started, 3), "tail": [repr(error)]})
+                      "seconds": round(time.perf_counter() - started, 3), "tail": [repr(error)],
+                      "log": str(log) if log else None})
         print(f"[FAIL] create isolated venv: {error!r}", flush=True)
         return None
     scripts = "Scripts" if os.name == "nt" else "bin"
@@ -81,6 +98,8 @@ def main(argv=None):
     parser.add_argument("--skip-repo-contracts", action="store_true",
                         help="run only the fast-contracts steps")
     args = parser.parse_args(argv)
+    global LOG_DIR
+    LOG_DIR = args.report.with_name(args.report.stem + "-logs")
 
     steps = []
     with tempfile.TemporaryDirectory(prefix="radia-ci-precheck-") as scratch:
