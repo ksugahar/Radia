@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased
+## 2.2.6 - Native input validation and debug references
 
 - Embed filename-only PDB references in both native payloads.
-- Reject unknown node references and invalid volume connectivity before geometry callbacks or curving.
+- Reject unknown or duplicate node IDs, malformed coordinate arrays and element connectivity, invalid edge pairs, and nonpositive volume domains before geometry callbacks or curving.
 
 ## 2.2.5 - Netgen/NGSolve 6.2.2608
 
