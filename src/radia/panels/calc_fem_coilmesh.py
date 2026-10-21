@@ -30,6 +30,8 @@ import os
 import sys
 import time
 
+from radia.esim_depth import add_depth_arguments, depth_controls
+
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -58,7 +60,7 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                        esim_max_iter=15,
                        esim_tol=1e-3,
                        esim_relax=0.5,
-                       esim_per_panel=False):
+                       esim_per_panel=False, esim_cell_controls=None):
     """A-V formulation for volumetric coil + SIBC workpiece + Kelvin.
 
     ``impedance_model="esim"`` runs a Karl iteration: per outer iteration
@@ -96,7 +98,7 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     if impedance_model == "esim":
         # A seed must satisfy the same nonlinear and depth-mesh gates.
         esim_solver = wp_mat.create_esim_solver(
-            frequency, half_thickness, geometry='cylinder')
+            frequency, half_thickness, geometry='cylinder', **(esim_cell_controls or {}))
         Z_s_wp = complex(esim_solver.solve(5.0)['Z'])
     else:
         esim_solver = None
@@ -752,6 +754,7 @@ def build_argparser():
     parser.add_argument("--bh-file", default="",
                         help="BH table (2-col H[A/m] B[T]); required "
                              "for --impedance-model esim.")
+    add_depth_arguments(parser)
     parser.add_argument("--esim-max-iter", type=int, default=15,
                         help="ESIM Karl iteration max.")
     parser.add_argument("--esim-tol", type=float, default=1e-3,
@@ -839,6 +842,7 @@ def main():
             esim_tol=args.esim_tol,
             esim_relax=args.esim_relax,
             esim_per_panel=args.esim_per_panel,
+            esim_cell_controls=depth_controls(args),
         )
         return result
 

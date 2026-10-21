@@ -29,6 +29,12 @@ cells cannot silently populate an impedance table. Panel cache identities
 include all these controls. Accepted adaptive fields carry their own mesh;
 the solver's declared seed is restored after success or failure.
 
+The induction-heating DesignSpec and BEM/FEM command lines expose
+`--esim-cell-max-iter`, `--esim-cell-mesh-tol`, and `--esim-cell-max-nodes`.
+These are inner-cell controls; `--esim-max-iter` still controls the separate
+outer electromagnetic coupling loop. `calc_em_table` accepts the same cell
+controls and records them in its table metadata.
+
 Run `validate_esim_adaptive_depth.py --output result.json` for synthetic
 linear slab/cylinder/half-space analytic comparisons, high-node stability,
 and independent seed convergence for a synthetic saturating BH table.

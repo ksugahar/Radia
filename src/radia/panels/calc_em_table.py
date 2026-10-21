@@ -58,6 +58,8 @@ import os
 import sys
 import time
 
+from radia.esim_depth import add_depth_arguments, depth_controls
+
 import numpy as np
 
 _panels_dir = os.path.dirname(os.path.abspath(__file__))
@@ -144,7 +146,7 @@ def curie_scaled_bh(bh_curve, f):
 
 def build_table(material, frequency, H_grid, T_grid, sigma_at,
                 n_nodes=100, num_skin_depths=10,
-                curie_temp=0.0, curie_exp=0.5):
+                curie_temp=0.0, curie_exp=0.5, esim_cell_controls=None):
     """Sweep (H, T) and return (Zs_re, Zs_im, q_surf) arrays.
 
     Each cell instantiates a fresh ESIMCellProblemSolver (cheap; the
@@ -175,7 +177,7 @@ def build_table(material, frequency, H_grid, T_grid, sigma_at,
             bh = bh0
         solver = ESIMCellProblemSolver(
             bh_curve=bh, sigma=sigma_T, frequency=frequency,
-            n_nodes=n_nodes, num_skin_depths=num_skin_depths)
+            n_nodes=n_nodes, num_skin_depths=num_skin_depths, **(esim_cell_controls or {}))
         for i, H in enumerate(H_grid):
             res = solver.solve(float(H))
             Z = complex(res["Z"])
@@ -236,7 +238,8 @@ def run(args):
     Zs_re, Zs_im, q_surf = build_table(
         material, args.frequency, H_grid, T_grid, sigma_at,
         n_nodes=args.n_nodes, num_skin_depths=args.num_skin_depths,
-        curie_temp=args.curie_temp, curie_exp=args.curie_exp)
+        curie_temp=args.curie_temp, curie_exp=args.curie_exp,
+        esim_cell_controls=depth_controls(args))
     build_time_s = time.perf_counter() - t0
 
     out_path = args.em_table_output
@@ -254,6 +257,7 @@ def run(args):
         "curie_temp": float(args.curie_temp),
         "curie_exp": float(args.curie_exp),
         "n_nodes": args.n_nodes,
+        "esim_cell_controls": depth_controls(args),
         "num_skin_depths": args.num_skin_depths,
         "build_time_s": build_time_s,
         "schema_version": 1,
@@ -314,6 +318,7 @@ def main():
     parser.add_argument("--curie-exp", type=float, default=0.5,
                         help="Exponent in the Curie factor (1-T/Tc)^exp "
                              "(default 0.5, mean-field-ish).")
+    add_depth_arguments(parser)
     parser.add_argument("--n-nodes", type=int, default=100,
                         help="ESIM cell-problem 1D mesh nodes")
     parser.add_argument("--num-skin-depths", type=float, default=10.0,
