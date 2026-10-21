@@ -174,3 +174,12 @@ worst-case fast selector (137 tests, zero skips, 15.3 s). No solver, MATLAB
 Engine or GPU compilation was used. The 51-file closure digest is now
 `e0f823ec0563ecdfaf3305abca6b6994c206d8585fe1968f1ce037d6a9d38e23`.
 All 45 workflow jobs pass the routing audit.
+
+Re-audit after the execution-role change. The closure files changed were
+tests/test_public_runtime_privacy.py, tests/test_radia_promotion_gate.py,
+tools/ci_distribution_manifest.json, tools/policy_lint.py, tools/pre_push_check.py
+and tools/release_acceptance.py. In the isolated lightweight environment, the
+fast-contracts job steps passed: routing audit, routing contract (19 tests),
+source compilation, caller-owned TaskManager audit, version check, fast
+selector (135 tests) and showcase readers (6 tests). The 51-file closure digest
+is now `c59f7d870b417d07d7de003cdd27bdc1c3bec3e53a06646203029acbcf437e9e`.
