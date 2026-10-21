@@ -394,3 +394,9 @@ The experimental numeric HMatrix boundary accepts explicit `assembly="normalized
 `radia_simulink.hdiv.prepare_hdiv_host_setup(..., backend="gpu", label_contract=..., order=...)` prepares owned sparse/numeric FE data under the caller's NGSolve TaskManager, without a CPU solution or resident GPU operator. MATLAB can pass the in-memory numeric setup to `PreparedHDivNonlinear('', order, H, bhTable, Assembly='ngsolve-host-normalized', HostSetup=setup)`. This explicit route preserves Python's NGSolve FE and Radia charge preparation and uses the shared GPU Newton; it requires neither MATLAB Engine in Python nor a file exchange. `native-tet` remains the default geometry route and rejects HostSetup. Host setup is CPU preparation, not CUDA geometry assembly; unsupported mixed/pyramid charge construction still fails. Mesh/label hashes describe the bytes checked at preparation, not a cryptographic attestation of an arbitrary caller-supplied struct.
 
 Schema-2 normalized leaves must partition the upper matrix exactly once. A bounded per-row bitmap rejects duplicate, overlapping or missing blocks before resident allocation. Diagonal squares cover their upper triangle; off-diagonal blocks are mirrored. Legacy schema-1 and internal additive operator packing retain their existing contracts. Prefer the checked NGSolve/Radia snapshot publisher for HDiv workflows. Matrix symmetry/physical validity also remains a caller contract. `HostSetup` FE dimensions/types are checked before GPU initialization; native leaf/key/charge-map validation runs after GPU selection, before resident allocation.
+
+## License
+
+Owner-authored code is licensed under Apache-2.0 from the next releases.
+See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
+retain their original licenses; previously published artifacts are unchanged.

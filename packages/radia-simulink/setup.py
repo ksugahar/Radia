@@ -166,7 +166,7 @@ class build_py(_build_py):
         public_ams.update(binary_sha256=ams_hash,
                           source_sha256=ams_receipt["source_sha256"]["packages/radia-simulink/native/radia_cuda_ams.cu"])
         (package / "ams-build.json").write_text(json.dumps(public_ams, indent=2)+"\n", encoding="utf-8")
-        shutil.copy2(ROOT / "LICENSE", package / "LICENSE")
+        shutil.copy2(PACKAGE / "LICENSE", package / "LICENSE")
         shutil.copy2(PACKAGE / "README.md", package / "README.md")
         expected.update(payload_module().stage_documentation(PACKAGE, package))
         # Public provenance deliberately omits private host/interpreter/install paths.

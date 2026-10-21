@@ -15,7 +15,7 @@
 | **First public disclosure** | 2026-04-20, this repository, BSD-3-Clause |
 | **Reference implementation** | [`radia-mcp`](https://pypi.org/project/radia-mcp/) ≥ 0.25.0 |
 | **Status** | Historical proposed pattern; interactive runtime superseded |
-| **License of this document** | BSD-3-Clause (matching the project) |
+| **License of this document** | Apache-2.0 (matching the project) |
 
 > **Defensive publication.** This document, together with the
 > reference implementation in `radia-mcp` (publicly released on PyPI
@@ -387,7 +387,7 @@ the following reasons:
 5. **Citation > royalty**: a paper or design-doc citation is the
    academic currency that matters for a university lab.
 
-The license is BSD-3-Clause; the pattern is intended to be
+The license is Apache-2.0; the pattern is intended to be
 freely adopted by FreeCAD-MCP, OpenSCAD-MCP, Blender-MCP,
 Ansys/SolidWorks/Onshape MCPs, and any future CAE-MCP author.
 
@@ -443,4 +443,4 @@ For BibTeX:
 
 See [`packages/cubit-mesh-export/src/cubit_mesh_export/mcp/server.py`](../../../cubit-mesh-export/src/cubit_mesh_export/mcp/server.py),
 function `cubit_mesh_race_with_human` (≈ 130 lines). License:
-BSD-3-Clause.
+Apache-2.0.

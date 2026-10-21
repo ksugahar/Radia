@@ -8,7 +8,8 @@ version = "0.1.5rc1"
 description = "Experimental Radia MATLAB/Simulink native backends and LTspice integration"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "LicenseRef-Radia"
+license = "Apache-2.0 AND MIT AND MPL-2.0"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "src/radia_simulink/ltspice/LICENSE", "licenses/MPL-2.0.txt"]
 authors = [{name = "Radia Development Team"}]
 dependencies = []
 classifiers = [

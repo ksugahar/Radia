@@ -326,7 +326,7 @@ IrfanViewがインストールされた試験機が必要ですが、マウス�
 
 ## ライセンス
 
-Eqnedit64本体はBSD 2-Clause Licenseです。詳細は[`LICENSE`](LICENSE)を参照して
+Eqnedit64本体はApache License 2.0です。詳細は[`LICENSE`](LICENSE)を参照して
 ください。内蔵Eqnedit Math（Latin Modern Mathから変換したTrueTypeフォント）とアプリケーションアイコンの第三者素材は
 [`assets/THIRD_PARTY_NOTICES.md`](assets/THIRD_PARTY_NOTICES.md)および
 [`assets/GUST-FONT-LICENSE.txt`](assets/GUST-FONT-LICENSE.txt)に従います。
@@ -365,3 +365,8 @@ diagonal strike. They are not passes and do not qualify for Web hand-test
 exemption. Bare functions may have empty OMML arguments; `sin 2x` collects only
 `2`. PowerPoint colour loss on the shared OMML route remains a known limitation.
 Full arbitrary-TeX or Office/browser parity is not established.
+
+
+Owner-authored code is licensed under Apache-2.0 from the next releases.
+See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
+retain their original licenses; previously published artifacts are unchanged.

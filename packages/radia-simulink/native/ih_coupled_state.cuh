@@ -23,6 +23,12 @@ struct CoupledOperators {
     ComplexSolver::Result (*solveMaterial)(void*,ComplexSolver&,double,int)=nullptr;
     void (*commitMaterial)(void*)=nullptr;
     void (*resetMaterial)(void*)=nullptr;
+    void* thermalOwner=nullptr;
+    ComplexSolver::Result (*solveThermal)(void*,ComplexSolver&,const double*,const double*,double,double,double*)=nullptr;
+    void (*commitThermal)(void*)=nullptr;
+    void (*resetThermal)(void*)=nullptr;
+    const cuDoubleComplex* voltageProjection=nullptr;
+    double coilResistance=0.,energyRelativeLimit=1e-6,energyPowerFloor=1e-12;
 };
 class CoupledState {
     CoupledOperators op_;
@@ -30,6 +36,8 @@ class CoupledState {
     double *heat_=nullptr,*candidateHeat_=nullptr,*load_=nullptr,*temperature_=nullptr,*candidate_=nullptr,*controls_=nullptr;
     cuDoubleComplex* acceptedElectromagnetic_=nullptr;
     int* invalid_=nullptr;
+    double* powerReport_=nullptr;
+    double acceptedPower_[5]{},candidatePower_[5]{};
     cudaEvent_t heatReady_=nullptr;
     std::size_t steps_=0;
     ComplexSolver::Result lastEddy_{},lastThermal_{};
@@ -40,6 +48,7 @@ class CoupledState {
         for(auto* p:{heat_,candidateHeat_,load_,temperature_,candidate_,controls_})if(p)cudaFree(p);
         if(acceptedElectromagnetic_)cudaFree(acceptedElectromagnetic_);
         if(invalid_)cudaFree(invalid_);
+        if(powerReport_)cudaFree(powerReport_);
     }
 public:
     CoupledState(const CoupledState&)=delete;
@@ -59,7 +68,7 @@ public:
         const auto reserve=std::max<std::size_t>(2ULL<<30,total/5);
         // Includes solver workspaces, state and controls, not caller-owned operators.
         const auto need=(op.eddy.rows*(op.eddyPreconditioner.precision==PreconditionerPrecision::None?10:12)+op.thermalSystem.rows*9+2)*sizeof(cuDoubleComplex)+
-            (2*op.heatSamples+3*op.thermalSystem.rows+2)*sizeof(double)+2*sizeof(BiCGState)+sizeof(int);
+            (2*op.heatSamples+3*op.thermalSystem.rows+7)*sizeof(double)+2*sizeof(BiCGState)+sizeof(int);
         if(available<=reserve||need>available-reserve)throw std::runtime_error("IH resident state exceeds GPU memory budget");
         try {
             eddy_=std::make_unique<ComplexSolver>(op.eddy,op.eddyPreconditioner);
@@ -71,6 +80,7 @@ public:
             cudaCheck(cudaMalloc(&temperature_,op.thermalSystem.rows*sizeof(double)));
             cudaCheck(cudaMalloc(&candidate_,op.thermalSystem.rows*sizeof(double)));
             cudaCheck(cudaMalloc(&controls_,2*sizeof(double)));cudaCheck(cudaMalloc(&invalid_,sizeof(int)));
+            cudaCheck(cudaMalloc(&powerReport_,5*sizeof(double)));
             cudaCheck(cudaEventCreateWithFlags(&heatReady_,cudaEventDisableTiming));reset();
         }catch(...){release();throw;}
     }
@@ -78,18 +88,19 @@ public:
         if(eddy_)eddy_->abandonAfterDeviceReset();
         if(thermal_)thermal_->abandonAfterDeviceReset();
         heat_=candidateHeat_=load_=temperature_=candidate_=controls_=nullptr;
-        acceptedElectromagnetic_=nullptr;invalid_=nullptr;heatReady_=nullptr;
+        acceptedElectromagnetic_=nullptr;invalid_=nullptr;heatReady_=nullptr;powerReport_=nullptr;
     }
     std::size_t ownedBytes()const {
         return eddy_->ownedBytes()+thermal_->ownedBytes()+op_.eddy.rows*sizeof(cuDoubleComplex)+
-            (2*op_.heatSamples+3*op_.thermalSystem.rows+2)*sizeof(double)+sizeof(int);
+            (2*op_.heatSamples+3*op_.thermalSystem.rows+7)*sizeof(double)+sizeof(int);
     }
     ~CoupledState(){release();}
     void reset() {
+        std::fill(acceptedPower_,acceptedPower_+5,0.);
         cudaCheck(cudaMemcpyAsync(temperature_,op_.initialTemperature,op_.thermalSystem.rows*sizeof(double),cudaMemcpyDeviceToDevice,thermal_->stream()));
         cudaCheck(cudaMemsetAsync(heat_,0,op_.heatSamples*sizeof(double),thermal_->stream()));
         cudaCheck(cudaMemsetAsync(acceptedElectromagnetic_,0,op_.eddy.rows*sizeof(cuDoubleComplex),thermal_->stream()));
-        cudaCheck(cudaStreamSynchronize(thermal_->stream()));if(op_.resetMaterial)op_.resetMaterial(op_.materialOwner);steps_=0;lastEddy_={};lastThermal_={};
+        cudaCheck(cudaStreamSynchronize(thermal_->stream()));if(op_.resetMaterial)op_.resetMaterial(op_.materialOwner);if(op_.resetThermal)op_.resetThermal(op_.thermalOwner);steps_=0;lastEddy_={};lastThermal_={};
     }
     // Called only at the Simulink discrete Update boundary. Outputs observes
     // accepted state; no thermal vector is returned merely to re-upload it.
@@ -105,18 +116,33 @@ public:
         cudaCheck(cudaStreamWaitEvent(thermal_->stream(),heatReady_,0));
         const auto blocks=unsigned((op_.thermalSystem.rows+127)/128);
         thermalLoad<<<blocks,128,0,thermal_->stream()>>>(op_.heatProjection,candidateHeat_,load_);
-        thermalIncrementRHS<<<blocks,128,0,thermal_->stream()>>>(op_.stiffness,op_.convection,load_,temperature_,op_.constantCoefficients,controls_+1,op_.dt,op_.conductivity,op_.convectionScale,thermal_->rhs());
-        const auto thermalResult=thermal_->solve(tolerance,maxIterations);
+        ComplexSolver::Result thermalResult{};
         cudaCheck(cudaMemsetAsync(invalid_,0,sizeof(int),thermal_->stream()));
-        thermalCandidate<<<blocks,128,0,thermal_->stream()>>>(temperature_,thermal_->solution(),candidate_,invalid_,op_.thermalSystem.rows);
+        if(op_.voltageProjection){
+            certifyIHPower<<<1,1,0,thermal_->stream()>>>(op_.voltageProjection,eddy_->solution(),load_,op_.constantCoefficients,
+                op_.eddy.rows,op_.thermalSystem.rows,current,op_.coilResistance,op_.energyRelativeLimit,op_.energyPowerFloor,powerReport_,invalid_);
+            int bad=0;cudaCheck(cudaMemcpyAsync(&bad,invalid_,sizeof(int),cudaMemcpyDeviceToHost,thermal_->stream()));
+            cudaCheck(cudaMemcpyAsync(candidatePower_,powerReport_,sizeof(candidatePower_),cudaMemcpyDeviceToHost,thermal_->stream()));
+            cudaCheck(cudaStreamSynchronize(thermal_->stream()));if(bad)throw std::runtime_error("Independent IH port/heat power balance rejected; accepted state preserved");
+        }
+        if(op_.solveThermal){
+            thermalResult=op_.solveThermal(op_.thermalOwner,*thermal_,temperature_,load_,ambient,op_.dt,candidate_);
+        }else{
+            thermalIncrementRHS<<<blocks,128,0,thermal_->stream()>>>(op_.stiffness,op_.convection,load_,temperature_,op_.constantCoefficients,controls_+1,op_.dt,op_.conductivity,op_.convectionScale,thermal_->rhs());
+            thermalResult=thermal_->solve(tolerance,maxIterations);
+            thermalCandidate<<<blocks,128,0,thermal_->stream()>>>(temperature_,thermal_->solution(),candidate_,invalid_,op_.thermalSystem.rows);
+        }
         int invalid=0;cudaCheck(cudaMemcpyAsync(&invalid,invalid_,sizeof(int),cudaMemcpyDeviceToHost,thermal_->stream()));
         cudaCheck(cudaStreamSynchronize(thermal_->stream()));
         if(invalid)throw std::runtime_error("IH candidate temperature rejected; accepted state preserved");
         cudaCheck(cudaMemcpyAsync(acceptedElectromagnetic_,eddy_->solution(),op_.eddy.rows*sizeof(cuDoubleComplex),cudaMemcpyDeviceToDevice,thermal_->stream()));
         cudaCheck(cudaStreamSynchronize(thermal_->stream()));
         if(op_.commitMaterial)op_.commitMaterial(op_.materialOwner);
+        if(op_.commitThermal)op_.commitThermal(op_.thermalOwner);
+        if(op_.voltageProjection)std::copy(candidatePower_,candidatePower_+5,acceptedPower_);
         std::swap(temperature_,candidate_);std::swap(heat_,candidateHeat_);lastEddy_=eddyResult;lastThermal_=thermalResult;++steps_;
     }
+    const double* powerBalance()const{return acceptedPower_;}
     // Explicit observation only; never an intermediate Simulink transfer.
     std::vector<cuDoubleComplex> electromagneticState() {
         std::vector<cuDoubleComplex> out(op_.eddy.rows);

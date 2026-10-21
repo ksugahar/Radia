@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,8 @@ version = "0.4.0"
 description = "MATLAB mexcuda optimization with Simulink integration, verified against Optuna 5.0.0"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "BSD-3-Clause"
+license = "Apache-2.0 AND MIT AND BSD-3-Clause"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
 authors = [{name = "Radia Development Team"}]
 keywords = ["matlab", "mexcuda", "cuda", "optuna", "optimization", "tpe", "simulink"]
 classifiers = [

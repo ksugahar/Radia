@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "cmake>=3.20"]
+requires = ["setuptools>=77", "wheel", "cmake>=3.20"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,8 @@ version = "5.3.3"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {file = "LICENSE"}
+license = "Apache-2.0 AND LicenseRef-ESRF-Radia AND MIT AND MPL-2.0"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "LICENSE-APACHE-2.0", "src/ext/sparsesolv/LICENSE"]
 authors = [
     {name = "Oleg Chubar", email = "chubar@bnl.gov"},
     {name = "Pascal Elleaume"},
@@ -108,12 +109,12 @@ test = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     # Execute MANIFEST.in with the build backend's file-selection implementation.
-    "setuptools>=45",
+    "setuptools>=77",
 ]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "setuptools>=45",
+    "setuptools>=77",
     "matplotlib>=3.5",
 ]
 

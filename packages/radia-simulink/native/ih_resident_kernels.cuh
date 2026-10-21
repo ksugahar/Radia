@@ -56,4 +56,19 @@ __global__ void scaleDrive(const cuDoubleComplex* rhsPerAmp,
     if(i<n) rhs[i]=make_cuDoubleComplex(cuCreal(rhsPerAmp[i])*currentAmp[0],
                                        cuCimag(rhsPerAmp[i])*currentAmp[0]);
 }
+// Voltage observation is supplied independently by the physical PEEC/BEM
+// assembler, never reconstructed from the heat weights being checked.
+__global__ void certifyIHPower(const cuDoubleComplex* voltageProjection,
+        const cuDoubleComplex* state,const double* load,const double* constant,
+        std::size_t emSize,std::size_t thermalSize,double current,double coilResistance,
+        double relativeLimit,double floor,double* report,int* invalid) {
+    if(blockIdx.x||threadIdx.x)return;
+    double voltage=coilResistance*current,heat=0.;
+    for(std::size_t j=0;j<emSize;++j)voltage+=cuCreal(cuCmul(voltageProjection[j],state[j]));
+    for(std::size_t i=0;i<thermalSize;++i)heat+=constant[i]*load[i];
+    const double input=.5*current*voltage,coil=.5*coilResistance*current*current;
+    const double defect=input-coil-heat,scale=fmax(fmax(fabs(input),fabs(coil)+fabs(heat)),floor);
+    report[0]=input;report[1]=coil;report[2]=heat;report[3]=defect;report[4]=fabs(defect)/scale;
+    if(!isfinite(report[4])||report[4]>relativeLimit)atomicExch(invalid,1);
+}
 } // namespace radia_ih_cuda
