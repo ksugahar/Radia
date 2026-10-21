@@ -4,11 +4,19 @@
 
 - Update the CPU solver runtime to Netgen/NGSolve 6.2.2608. The P1 linear and
   Newton routes classify non-tetrahedral and curved elements through the
-  element `type`/`curved` fields that replace the removed `np` field.
+  element `type`/`curved` fields that replace the removed `np` field, and
+  integrate current loads with `bonus_intorder=2` so cubic divergence-free
+  currents receive sufficient quadrature.
+- Hysteresis I/O is HDF5-only: `load_mat`, `mat_to_radia` and
+  `mat_to_play_radia` are replaced by `load_hdf5`, `hdf5_to_radia` and
+  `hdf5_to_play_radia` with schema validation; `h5py>=3.10` is now a required
+  dependency.
+- Remove the `radia.equation` module.
 - Mixed Omega: explicit batch source evaluation, separated Kelvin coupling
   probes, and discrete scalar lifts applied through their stiffness operator.
-- Induction heating: explicit four-property thermal coupling (B(H,T), rho(T),
-  c(T), kappa(T)) with CPU energy validation.
+- Induction heating: a bounded CPU thermal quadrature reference for
+  temperature-dependent c(T) and kappa(T) with radiation and energy-balance
+  checks. Full electromagnetic coupling validation is not part of this release.
 - ESIM: resolve depth cells with bounded adaptive refinement and explicit
   `mesh_tol` / `max_nodes` / `max_refinements` controls. Local surface LUTs
   and EM tables move to schema 2; older archives are rejected instead of being
