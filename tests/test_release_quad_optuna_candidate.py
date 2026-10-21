@@ -46,6 +46,24 @@ def test_optuna_candidate_requires_the_independent_distribution_workflow():
     assert '"workflowName": "CI"' not in source
 
 
+@pytest.mark.parametrize('event,job,accepted', [
+    ('push', 'success', True), ('workflow_dispatch', 'success', True),
+    ('pull_request', 'success', False), ('workflow_dispatch', 'skipped', False),
+])
+def test_manual_exact_main_artifacts_still_require_executed_heavy_jobs(monkeypatch, tmp_path, event, job, accepted):
+    monkeypatch.setattr(release_quad, '_optuna_release_source_ready', lambda: (True, 'a' * 40))
+    monkeypatch.setattr(release_quad.tempfile, 'mkdtemp', lambda **kwargs: str(tmp_path))
+    run = dict(headSha='a' * 40, headBranch='main', event=event, status='completed', conclusion='success',
+               workflowName='radia-optuna', jobs=[dict(name=name, status='completed', conclusion=job)
+               for name in ('build-test', 'radia-optuna installed-wheel MATLAB/Simulink E2E')])
+    def command(args, **kwargs):
+        return SimpleNamespace(returncode=0, stdout=json.dumps(run), stderr='') if args[2] == 'view' else SimpleNamespace(returncode=1, stdout='', stderr='verified identity; artifact download reached')
+    monkeypatch.setattr(release_quad.subprocess, 'run', command)
+    result, message = release_quad._download_verified_optuna_ci_wheel('42')
+    assert result is None
+    assert ('artifact download reached' in message) is accepted
+
+
 def test_genuine_optuna_build_runs_its_release_quad_candidate_contract():
     """A triggered radia-optuna build checks the candidate contract at its own SHA.
 

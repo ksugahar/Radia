@@ -233,3 +233,18 @@ into the HDiv runtime candidate with the setuptools-free distribution contract,
 the shared precheck passed (light fast-contracts steps in an isolated venv,
 policy checks, repository contracts). The 52-file closure digest is now
 `2b7175ea2d8a8b081d2419d4bd549de6a8d04766abd285f78919b1f5f989df2d`.
+
+## Heavy CI throughput routing (2026-10-21)
+
+Reviewed the lightweight execution closure after introducing identical-tree
+receipt verification and full-closure AMS PR input selection. Both helpers use only
+standard-library modules. Network verification executes in hosted routing jobs;
+source-only contracts use injected API fixtures. The AMS selector parses files
+without importing solver modules, loading native libraries or starting builds.
+The closure now contains 54 files; its digest is
+`03eaeb5881ac7cd81d7e400c811218236a1a9c924c845c77154b39c18d92aea0`.
+The isolated ci_precheck verifies routing, routing mutations, compilation,
+TaskManager ownership, version consistency, fast contracts and showcase readers,
+followed by policy and repository contracts. Runner count and heavy labels are
+unchanged. See [heavy CI execution policy](ci-throughput.md) for release gates
+and the full numerical audit schedule.

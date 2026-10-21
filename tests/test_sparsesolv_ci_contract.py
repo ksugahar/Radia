@@ -466,7 +466,7 @@ def test_all_distribution_gates_are_hosted_and_preserve_full_manual_release_runs
         routers=[s.get('run','') for s in gate['steps'] if 'tools/sparsesolv_ci_impact.py' in s.get('run','')]
         assert len(routers)==1 and _router_lane(routers[0])==lane, (lane, routers)
         for name,job in workflow['jobs'].items():
-            if name=='ci-impact':continue
+            if name in ('ci-impact', 'nightly-failure'):continue
             assert 'ci-impact' in job['needs']
             assert "needs.ci-impact.outputs.required == 'true'" in job['if']
         assert IMPACT.required_for_event(lane,'workflow_dispatch',{},None,data)[0]
