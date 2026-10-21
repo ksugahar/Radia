@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Embed filename-only PDB references in both native payloads.
+- Reject unknown node references and invalid volume connectivity before geometry callbacks or curving.
+
 ## 2.2.5 - Netgen/NGSolve 6.2.2608
 
 - Pin the external Python runtime to Netgen/NGSolve 6.2.2608 and rebuild the native curver for its C++ ABI.

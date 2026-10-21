@@ -6,9 +6,8 @@
 // high-order curving via BuildCurvedElements.
 //
 // Usage (external Python 3.12):
-//   from cubit_mesh_export import extract_curved_mesh
-//   ng_mesh = extract_curved_mesh(cubit, order=3)
-//   mesh = ngsolve.Mesh(ng_mesh)
+//   from cubit_mesh_export import cubit_mesh_curver
+//   # Supply mesh arrays and geometry callbacks to build_curved_mesh.
 // ============================================================
 
 #include <meshing.hpp>
@@ -35,9 +34,8 @@ PYBIND11_MODULE(cubit_mesh_curver, m)
         builds a curved Netgen mesh using BuildCurvedElements.
         Does NOT link to any Cubit C++ libraries.
 
-        Typical usage via cubit_mesh_export:
-            from cubit_mesh_export import extract_curved_mesh
-            mesh = extract_curved_mesh(cubit, order=3)
+        Use cubit_mesh_export.cubit_mesh_curver.build_curved_mesh with
+        node arrays, element connectivity and geometry callbacks.
     )doc";
 
     // --------------------------------------------------------
@@ -63,6 +61,9 @@ PYBIND11_MODULE(cubit_mesh_curver, m)
             py::module_::import("netgen.meshing");
 
             // --- Convert node data ---
+            if (node_ids.ndim() != 1 || node_coords.ndim() != 2 ||
+                node_coords.shape(1) != 3 || node_coords.shape(0) != node_ids.shape(0))
+                throw py::value_error("NetgenCurverPure: node_coords must have shape (len(node_ids), 3) and node_ids must be one-dimensional");
             auto nc_buf = node_coords.unchecked<2>();
             auto ni_buf = node_ids.unchecked<1>();
             int N = (int)ni_buf.shape(0);
@@ -81,8 +82,14 @@ PYBIND11_MODULE(cubit_mesh_curver, m)
             std::vector<VolumeElement> velems;
             for (auto item : vol_elements) {
                 auto tup = item.cast<py::tuple>();
+                if (py::len(tup) != 2 && py::len(tup) != 3)
+                    throw py::value_error("NetgenCurverPure: volume element must contain type, connectivity and optional domain");
                 VolumeElement ve;
-                ve.type = static_cast<PureElemType>(tup[0].cast<int>());
+                const int type_code = tup[0].cast<int>();
+                if (type_code < PURE_TET || type_code > PURE_PYRAMID)
+                    throw py::value_error("NetgenCurverPure: unsupported volume element type " +
+                                          std::to_string(type_code));
+                ve.type = static_cast<PureElemType>(type_code);
                 ve.conn = tup[1].cast<std::vector<int>>();
                 ve.domain = (py::len(tup) > 2) ? tup[2].cast<int>() : 1;
                 velems.push_back(ve);
@@ -97,12 +104,16 @@ PYBIND11_MODULE(cubit_mesh_curver, m)
 
                 // tris: flat list [n0,n1,n2, n0,n1,n2, ...]
                 auto tri_list = d["tris"].cast<std::vector<int>>();
+                if (tri_list.size() % 3 != 0)
+                    throw py::value_error("NetgenCurverPure: surface " + std::to_string(si.id) + " tris length must be divisible by 3");
                 for (size_t t = 0; t < tri_list.size(); t += 3) {
                     si.tris.push_back({tri_list[t], tri_list[t+1], tri_list[t+2]});
                 }
 
                 // quads: flat list [n0,n1,n2,n3, ...]
                 auto quad_list = d["quads"].cast<std::vector<int>>();
+                if (quad_list.size() % 4 != 0)
+                    throw py::value_error("NetgenCurverPure: surface " + std::to_string(si.id) + " quads length must be divisible by 4");
                 for (size_t q = 0; q < quad_list.size(); q += 4) {
                     si.quads.push_back({quad_list[q], quad_list[q+1],
                                         quad_list[q+2], quad_list[q+3]});
@@ -159,16 +170,20 @@ PYBIND11_MODULE(cubit_mesh_curver, m)
                 auto seg_list = d["segments"].cast<py::list>();
                 for (auto s : seg_list) {
                     auto pair = s.cast<std::vector<int>>();
-                    if (pair.size() >= 2)
-                        ei.segments.push_back({pair[0], pair[1]});
+                    if (pair.size() != 2)
+                        throw py::value_error("NetgenCurverPure: edge " + std::to_string(edges.size() + 1) +
+                                              " segment " + std::to_string(ei.segments.size() + 1) + " requires exactly 2 node IDs");
+                    ei.segments.push_back({pair[0], pair[1]});
                 }
                 // dist (normalized curve parameter) per segment endpoint
                 if (d.contains("dists")) {
                     auto dist_list = d["dists"].cast<py::list>();
                     for (auto dd : dist_list) {
                         auto dv = dd.cast<std::vector<double>>();
-                        if (dv.size() >= 2)
-                            ei.dists.push_back({dv[0], dv[1]});
+                        if (dv.size() != 2)
+                            throw py::value_error("NetgenCurverPure: edge " + std::to_string(edges.size() + 1) +
+                                                  " dists entry " + std::to_string(ei.dists.size() + 1) + " requires exactly 2 values");
+                        ei.dists.push_back({dv[0], dv[1]});
                     }
                 }
                 edges.push_back(std::move(ei));

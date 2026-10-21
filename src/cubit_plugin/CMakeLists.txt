@@ -189,6 +189,9 @@ target_compile_definitions(cubit_mesh_export_ccm PRIVATE _DISABLE_CONSTEXPR_MUTE
 # DELAYLOAD cubit_geom so the .ccm can still load even if
 # cubit_geom.dll init is deferred until first geometry call
 if(MSVC)
+  # CodeView records contain a filename; full local PDBs remain available.
+  target_link_options(cubit_mesh_export_ccm PRIVATE
+    "$<$<CONFIG:Release>:/PDBALTPATH:$<TARGET_PDB_FILE_NAME:cubit_mesh_export_ccm>>")
   target_link_options(cubit_mesh_export_ccm PRIVATE
     "/DELAYLOAD:$<TARGET_FILE_NAME:cubit_geom>")
   target_link_libraries(cubit_mesh_export_ccm delayimp)
@@ -247,6 +250,10 @@ if(pybind11_FOUND AND HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
       callbackgeom.hpp
   )
   set_target_properties(cubit_mesh_curver PROPERTIES CXX_STANDARD 17)
+  if(MSVC)
+    target_link_options(cubit_mesh_curver PRIVATE
+      "$<$<CONFIG:Release>:/PDBALTPATH:$<TARGET_PDB_FILE_NAME:cubit_mesh_curver>>")
+  endif()
 
   target_include_directories(cubit_mesh_curver PRIVATE
     "${NETGEN_DIR}/include"
