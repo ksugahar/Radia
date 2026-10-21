@@ -191,3 +191,73 @@ The separated-body adapter accepts `--threads` from 1 through 16 and records
 the requested count in each JSON result. The default remains one thread.
 Thread affinity and topology are supplied and recorded by the external run
 supervisor; selecting a thread count alone does not establish affinity.
+
+
+
+## Experimental resident algebraic AMG through Python
+
+`Build.ps1 -CudaMexOnly -ResidentAmgPython` stages an optional pybind11
+module using the admitted MATLAB-bundled CUDA compiler and supported MSVC.
+It does not install the module or change a running backend. The module has
+no MATLAB Engine or NGSolve runtime calls; the caller owns FE assembly.
+
+The standalone validation adapter is `mixed_omega_amg_resident.ResidentAMG`.
+Pass `directory=DIR` explicitly; it never changes the production backend.
+PyAMG constructs a smoothed-aggregation Galerkin hierarchy on the CPU from
+the assembled free system and an NGSolve-interpolated constant candidate.
+A bounded coarse inverse action is prepared using NGSolve sparsecholesky.
+The validation adapter owns a Python TaskManager region only for this coarse
+CPU preparation; FE assembly remains in its caller-owned region. Device
+construction and execution occur outside this adapter-owned CPU region.
+Matrices, transfers, coarse action, CG vectors and level workspaces then
+remain on the GPU. Symmetric pre/post damped-Jacobi smoothing and the coarse
+action form a fixed V-cycle. CG batches eight iterations in a CUDA Graph;
+the original-system residual is checked independently on the host as well.
+This route is smoothed aggregation, not a GPU port of h1amg or AMS.
+
+The `strength` and `damping` constructor keyword arguments specify separate experimental
+configurations. The damping is scaled by a certified normalized row-sum
+spectral bound and must lie strictly between zero and two. Unsupported or
+singular coarse hierarchies fail; there is no automatic configuration or
+backend fallback. CPU references remain independent of these optional imports.
+
+Preparation time includes hierarchy construction, coarse preparation and
+device upload. Solve time includes right-hand-side upload and solution
+download. The process-level bounded-job receipt measures startup-inclusive
+time. Setup amortization and full workflow time must accompany a warm solve
+comparison. Run `resident_amg_contract_probe.py` to check repeated changing
+right-hand sides, zero input, nonfinite rejection and released contexts.
+
+
+
+HDF5 transfer reuse is explicit: `cache_path=PATH` with `cache_mode="build"`,
+`"reuse"` (fresh Galerkin operators) or `"reuse-hierarchy"` (unchanged fine
+operator within the recorded roundoff guard; retained coarse blocks serve
+only as a preconditioner). Candidate coefficients, settings, sparse structure
+and all payload hashes are checked. Existing files are never overwritten.
+The arrays are algebraic coefficients in the caller's consistent SI system;
+no coordinate conversion occurs. `resident_amg_cache_probe.py --out result.json`
+checks this contract without CUDA or NGSolve imports.
+
+For changing SPD operators, `nonlinear_cache_path=PATH` stores interpolation
+only. `nonlinear_cache_mode="reuse"` checks the sparse layout and candidate;
+all fine and Galerkin operator values are current. This does not certify
+nonlinear FEM or material coupling. `nonlinear_amg_cache_probe.py` checks the
+updated-operator solves using explicit native and CUDA DLL directories.
+
+The native PCG always checks the original resident system. If recursive
+convergence leaves an excessive original residual, at most three resident
+corrections use the same requested tolerance and the same total iteration
+budget. The requested PCG tolerance is distinct from the native original-system
+certificate: `min(max(10*tolerance, 1e-12), 1e-6)`, returned as `certificate_gate`.
+The validation adapter separately evaluates `||Ax-b||/||b||` with SciPy on
+its retained original fine matrix, raises above `1e-6` (or on nonfinite
+results), and records `host_true_relative_residual`, `host_certificate_gate`
+and verification time. For a zero RHS the absolute residual is checked.
+There is no CPU solve fallback. The
+contract probe includes independently solved SPD systems, scaled right-hand
+sides, repeated solves and lifecycle failures. It records any corrections
+in its JSON result. No device build artifact is distributed by these probes.
+
+The standalone native module requires compute capability 7.5 or newer and
+rejects older devices before allocating the resident context.
