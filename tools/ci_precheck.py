@@ -22,6 +22,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LIGHT_REQUIREMENTS = ["pytest", "pyyaml", "numpy", "scipy", "setuptools>=45", "wheel"]
+# Caller settings that would change what runs or where packages land.
+_DROPPED_PREFIXES = ("PYTEST_", "PIP_", "PYTHON")
+_DROPPED_NAMES = {"VIRTUAL_ENV", "CONDA_PREFIX"}
+
+
+def _clean_env(**extra):
+    env = {key: value for key, value in os.environ.items()
+           if not key.upper().startswith(_DROPPED_PREFIXES) and key.upper() not in _DROPPED_NAMES}
+    env.update(PYTHONNOUSERSITE="1", **extra)
+    return env
 
 
 def _run(name, command, env, steps):
@@ -40,30 +50,39 @@ def _run(name, command, env, steps):
     return result.returncode == 0
 
 
-def _light_python(directory):
-    venv.EnvBuilder(with_pip=True, clear=True).create(directory)
+def _light_python(directory, steps):
+    started = time.perf_counter()
+    try:
+        venv.EnvBuilder(with_pip=True, clear=True).create(directory)
+    except Exception as error:  # recorded, then reported as a failed step
+        steps.append({"name": "create isolated venv", "command": [], "returncode": 1,
+                      "seconds": round(time.perf_counter() - started, 3), "tail": [repr(error)]})
+        print(f"[FAIL] create isolated venv: {error!r}", flush=True)
+        return None
     scripts = "Scripts" if os.name == "nt" else "bin"
     python = Path(directory) / scripts / ("python.exe" if os.name == "nt" else "python")
-    subprocess.run([str(python), "-m", "pip", "install", "--quiet",
-                    "--disable-pip-version-check", *LIGHT_REQUIREMENTS], check=True)
-    return python
+    # --isolated ignores pip configuration files and PIP_* variables.
+    ok = _run("install light requirements",
+              [python, "-m", "pip", "--isolated", "install", "--quiet",
+               "--disable-pip-version-check", *LIGHT_REQUIREMENTS], _clean_env(), steps)
+    return python if ok else None
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--since", default="origin/main",
                         help="base revision for impact-selected fast contracts")
-    parser.add_argument("--report", type=Path,
-                        help="JSON report path (default: print only)")
+    parser.add_argument("--report", type=Path, default=ROOT / "ci-precheck-report.json",
+                        help="JSON report path (default: ci-precheck-report.json at the repository root)")
     parser.add_argument("--skip-repo-contracts", action="store_true",
                         help="run only the fast-contracts steps")
     args = parser.parse_args(argv)
 
     steps = []
     with tempfile.TemporaryDirectory(prefix="radia-ci-precheck-") as scratch:
-        light = _light_python(Path(scratch) / "venv")
-        env = dict(os.environ, RADIA_SOURCE_ONLY_CONTRACTS="1")
-        fast = [
+        light = _light_python(Path(scratch) / "venv", steps)
+        env = _clean_env(RADIA_SOURCE_ONLY_CONTRACTS="1")
+        fast = [] if light is None else [
             ("runner routing", [light, "tools/ci_runner_routing.py"]),
             ("routing contract", [light, "-m", "pytest", "tests/ci_routing/test_runner_routing.py",
                                   "--confcutdir=tests/ci_routing", "-q", "-o", "addopts="]),
@@ -76,8 +95,9 @@ def main(argv=None):
             ("showcase readers", [light, "-m", "pytest", "tests/showcase/test_result_readers.py",
                                   "--confcutdir=tests/showcase", "-q", "-o", "addopts="]),
         ]
-        for name, command in fast:
-            _run(name, command, env, steps)
+        if light is not None:
+            for name, command in fast:
+                _run(name, command, env, steps)
 
     caller = [
         ("policy lint", [sys.executable, "tools/policy_lint.py"]),
@@ -87,7 +107,7 @@ def main(argv=None):
         caller.append(("repository contracts",
                        [sys.executable, "tools/run_test_tier.py", "--profile", "repo-contracts"]))
     for name, command in caller:
-        _run(name, command, dict(os.environ), steps)
+        _run(name, command, _clean_env(), steps)
 
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
                           capture_output=True, text=True).stdout.strip()
@@ -96,7 +116,7 @@ def main(argv=None):
         "head": head,
         "since": args.since,
         "python": platform.python_version(),
-        "passed": all(step["returncode"] == 0 for step in steps),
+        "passed": bool(steps) and all(step["returncode"] == 0 for step in steps),
         "steps": steps,
     }
     if args.report:
