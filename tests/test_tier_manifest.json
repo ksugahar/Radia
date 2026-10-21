@@ -278,7 +278,7 @@
         "tests/test_radia.py",
         "tests/test_meshless_relaxation_contract.py",
         "tests/test_version_consistency.py",
-        "tests/test_ngsolve_2607_compatibility.py",
+        "tests/test_ngsolve_2608_compatibility.py",
         "tests/test_vim_api_names.py",
         "src/ext/sparsesolv/tests/test_sparsesolv.py",
         "src/ext/sparsesolv/tests/test_hermitian_iccg.py",
