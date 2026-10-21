@@ -38,6 +38,14 @@ def payload_module():
     return module
 
 
+def payload_module_native():
+    spec = importlib.util.spec_from_file_location(
+        'radia_simulink_native_payload', PACKAGE / 'native_payload.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class build_py(_build_py):
     def run(self):
         build = ROOT / "build-cuda-mex"
@@ -198,10 +206,8 @@ class bdist_wheel(_bdist_wheel):
         return payload_module().wheel_tag(python_selected, sys.platform, sys.version_info)
 
 
-class BinaryDistribution(Distribution):
+class BinaryDistribution(payload_module_native().NativePayloadDistribution, Distribution):
     """MEX and optional Python extensions belong in the platform library root."""
-    def has_ext_modules(self):
-        return True
 
 
 setup(distclass=BinaryDistribution, cmdclass={"build_py": build_py, "bdist_wheel": bdist_wheel})
