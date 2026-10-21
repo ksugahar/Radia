@@ -17,8 +17,8 @@ spec.loader.exec_module(quad)
 def probe():
     values = {
         "VER radia": "4.95.91",
-        "ABI ngsolve": "6.2.2607",
-        "ABI netgen-mesher": "6.2.2607",
+        "ABI ngsolve": "6.2.2608",
+        "ABI netgen-mesher": "6.2.2608",
         "NATIVE radia": "abcdef012345",
     }
     for name in ("panels/calc_inductance.py",

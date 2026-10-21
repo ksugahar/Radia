@@ -641,3 +641,32 @@ def test_scalar_amg_reinitializes_every_cycle(box_mesh, sweeps):
     with ng.TaskManager():
         pre.Mult(b, pb)
     np.testing.assert_array_equal(pb.FV().NumPy(), 0.)
+
+
+@pytest.mark.parametrize("point_count,curved", [(4, False), (4, True), (10, False), (5, False), (6, False), (8, False)])
+def test_element_type_guard_uses_2608_api(point_count, curved):
+    """Reject higher-node/non-tet/curved cells even without the removed np field."""
+    from types import SimpleNamespace
+    from netgen.meshing import Element3D
+    from radia.p1_newton import _material_numbers
+
+    element = Element3D(1, list(range(1, point_count + 1)))
+    elements = np.zeros(1, dtype=[("index", "i4"), ("type", "u1"),
+                                  ("curved", "?"), ("nodes", "i4", (point_count,))])
+    elements["index"] = 1
+    elements["type"] = int(element.type)
+    elements["curved"] = curved
+    elements["nodes"] = np.arange(1, point_count + 1)
+    mesh = SimpleNamespace(GetMaterials=lambda: ("iron",), ngmesh=SimpleNamespace(
+        Elements3D=lambda: SimpleNamespace(NumPy=lambda: elements),
+        Points=lambda: [SimpleNamespace(p=(float(i), 0., 0.)) for i in range(point_count)]))
+    if point_count == 4 and not curved:
+        numbers, centers = lane().iron_elements_with_centroids(mesh)
+        np.testing.assert_array_equal(numbers, [0])
+        np.testing.assert_allclose(centers, [[1.5, 0., 0.]])
+        np.testing.assert_array_equal(_material_numbers(mesh, ("iron",)), [0])
+    else:
+        with pytest.raises(RuntimeError, match="straight tetrahedra"):
+            lane().iron_elements_with_centroids(mesh)
+        with pytest.raises(ValueError, match="straight tetrahedra"):
+            _material_numbers(mesh, ("iron",))
