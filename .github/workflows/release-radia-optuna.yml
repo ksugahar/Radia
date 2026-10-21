@@ -1,14 +1,14 @@
 name: Release radia-optuna
 
 # Publication is deliberately manual. release_quad.py downloads one successful
-# main-push CI artifact, runs that exact wheel on the declared CUDA acceptance host, and
+# main push/manual CI artifact, runs that exact wheel on the declared CUDA acceptance host, and
 # emits its SHA256. This workflow accepts only that CI run and hash; it never
 # rebuilds the distribution or substitutes a tag-run artifact.
 on:
   workflow_dispatch:
     inputs:
       ci_run_id:
-        description: "Successful main-push CI run gated by release-quad"
+        description: "Successful main push/manual CI run gated by release-quad"
         required: true
         type: string
       candidate_sha256:
@@ -43,10 +43,10 @@ jobs:
           HEAD_BRANCH=$(jq -r '.head_branch' <<<"$RUN_JSON")
           HEAD_REPOSITORY=$(jq -r '.head_repository.full_name' <<<"$RUN_JSON")
           if [ "$STATUS" != "completed" ] || [ "$CONCLUSION" != "success" ] || \
-             [ "$EVENT" != "push" ] || [ "$HEAD_BRANCH" != "main" ] || \
+             { [ "$EVENT" != "push" ] && [ "$EVENT" != "workflow_dispatch" ]; } || [ "$HEAD_BRANCH" != "main" ] || \
              [ "$WORKFLOW_PATH" != ".github/workflows/radia-optuna.yml" ] || \
              [ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
-            echo "::error::CI run $RUN_ID is not a successful main-push run of radia-optuna.yml"
+            echo "::error::CI run $RUN_ID is not a successful main push/manual run of radia-optuna.yml"
             exit 1
           fi
 
