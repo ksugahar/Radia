@@ -41,7 +41,11 @@ end
 end
 function start(block)
 terminate(block);
-h=radia_cuda_ih('create',block.DialogPrm(1).Data);
+cfg=block.DialogPrm(1).Data;
+if ~isfield(cfg,'bh_mode')
+    error('radia:ih:MissingMagneticMode','Explicit bh_mode is required.');
+end
+h=radia_cuda_ih('create',cfg);
 block.Dwork(1).Data=uint32(bitand(h,uint64(4294967295)));
 block.Dwork(2).Data=uint32(bitshift(h,-32));
 end

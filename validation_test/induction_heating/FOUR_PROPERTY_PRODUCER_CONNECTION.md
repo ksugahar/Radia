@@ -24,3 +24,10 @@ User direction: keep no legacy execution route. Migrate every IH producer, valid
 ## Acceptance not yet established
 
 NGSolve-generated physical producer maps, native BH/rho temperature updates, both S-Functions executing the same coupled state, GPU numerical agreement, independent FEM, and formal SLX/package acceptance remain NOT VERIFIED. The existing scalar preview and the independent Python CPU reference cannot satisfy these gates.
+
+## First-release boundary
+
+The first release includes the CPU thermal coupling and explicit linear-mode
+configuration checks. The complete shared domain, periodic nonlinear BH and
+GPU connection remain subsequent-release work. These limitations do not retire
+the independent ESIM analysis route.

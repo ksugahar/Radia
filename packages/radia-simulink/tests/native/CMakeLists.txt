@@ -20,3 +20,12 @@ add_executable(test_radia_ih_thermal_acceptance
 target_include_directories(test_radia_ih_thermal_acceptance PRIVATE "${RADIA_ROOT}/src/runtime/ih")
 target_compile_features(test_radia_ih_thermal_acceptance PRIVATE cxx_std_17)
 add_test(NAME radia.ih_thermal_acceptance.cpp COMMAND test_radia_ih_thermal_acceptance)
+
+add_executable(test_ih_coupled_config test_ih_coupled_config.cpp)
+target_compile_features(test_ih_coupled_config PRIVATE cxx_std_17)
+if(MSVC)
+    target_compile_options(test_ih_coupled_config PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(test_ih_coupled_config PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+add_test(NAME radia.ih_coupled_config.cpp COMMAND test_ih_coupled_config)
