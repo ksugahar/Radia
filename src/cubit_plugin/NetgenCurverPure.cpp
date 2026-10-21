@@ -64,6 +64,7 @@ bool NetgenCurverPure::build_netgen_mesh(
     return false;
 
   // Add nodes
+  std::unordered_map<int, ng::PointIndex> cubit_nid_to_ng_pi_;
   for (int i = 0; i < num_nodes; i++) {
     ng::PointIndex pi = ng_mesh_->AddPoint(
         ng::MeshPoint(ng::Point<3>(node_coords[3*i],
@@ -90,7 +91,7 @@ bool NetgenCurverPure::build_netgen_mesh(
     // Add triangles
     for (auto& tri : surf.tris) {
       ng::Element2d el(ng::TRIG);
-      el.SetIndex(fd_idx);
+      el.SetIndex(ng::FaceRegionIndex::FromNr1(fd_idx));
       for (int k = 0; k < 3; k++) {
         auto it = cubit_nid_to_ng_pi_.find(tri[k]);
         if (it == cubit_nid_to_ng_pi_.end()) return false;
@@ -114,7 +115,7 @@ bool NetgenCurverPure::build_netgen_mesh(
     // Add quads
     for (auto& quad : surf.quads) {
       ng::Element2d el(ng::QUAD);
-      el.SetIndex(fd_idx);
+      el.SetIndex(ng::FaceRegionIndex::FromNr1(fd_idx));
       for (int k = 0; k < 4; k++) {
         auto it = cubit_nid_to_ng_pi_.find(quad[k]);
         if (it == cubit_nid_to_ng_pi_.end()) return false;
@@ -151,7 +152,7 @@ bool NetgenCurverPure::build_netgen_mesh(
     ng::Element el(etype);
     for (int k = 0; k < nnodes; k++)
       el[k] = cubit_nid_to_ng_pi_[ve.conn[k]];
-    el.SetIndex(ve.domain);
+    el.SetIndex(ng::VolumeRegionIndex::FromNr1(ve.domain));
     ng_mesh_->AddVolumeElement(el);
   }
 
@@ -159,13 +160,11 @@ bool NetgenCurverPure::build_netgen_mesh(
   {
     int edgenr = 1;
     for (auto& ei : edge_elements) {
-#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
       // Netgen 6.2.2606 moved geometric edge metadata out of Segment and
       // into a 1-based EdgeDescriptor table.  Surface descriptor indices are
       // also 1-based in the new API and are passed to CallbackGeometry as-is.
-      const int edge_descriptor_index = ng_mesh_->AddEdgeDescriptor(
+      const auto edge_descriptor_index = ng_mesh_->AddEdgeDescriptor(
           ng::EdgeDescriptor(edgenr, ei.surfnr1, ei.surfnr2));
-#endif
       for (size_t s = 0; s < ei.segments.size(); s++) {
         auto& seg = ei.segments[s];
         auto it0 = cubit_nid_to_ng_pi_.find(seg[0]);
@@ -182,36 +181,13 @@ bool NetgenCurverPure::build_netgen_mesh(
         ng::Segment nseg;
         nseg[0] = it0->second;
         nseg[1] = it1->second;
-#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
         nseg.SetIndex(edge_descriptor_index);
         nseg.EPGeomInfo(0).dist = dist0;
         nseg.EPGeomInfo(1).dist = dist1;
-#else
-        // Use surfnr2 as si to give each curve a unique surface reference.
-        // surfnr1 is often shared (e.g., both curves touch the same surface),
-        // but surfnr2 differs, which helps Netgen topology distinguish edges.
-        nseg.si = ei.surfnr2;  // 1-based FD index
-        nseg.edgenr = edgenr;
-        // surfnr1/2 MUST be set to 0-based FD indices (NOT -1).
-        // BuildCurvedElements reads these and passes to PointBetweenEdge.
-        nseg.surfnr1 = ei.surfnr1 - 1;  // 0-based
-        nseg.surfnr2 = ei.surfnr2 - 1;  // 0-based
-        nseg.epgeominfo[0].edgenr = edgenr;
-        nseg.epgeominfo[0].dist = dist0;
-        nseg.epgeominfo[1].edgenr = edgenr;
-        nseg.epgeominfo[1].dist = dist1;
-#endif
         ng_mesh_->AddSegment(nseg);
       }
       edgenr++;
     }
-    // Pre-allocate cd2names array so Python SetCD2Name doesn't segfault.
-    // Segment edgenr is 1-based (1..n_edges), cd2names uses same indices.
-    // edgenr is now max_edgenr + 1, so allocate edgenr entries (0..edgenr-1).
-#ifndef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
-    if (edgenr > 1)
-      ng_mesh_->SetNCD2Names(edgenr);
-#endif
   }
 
   ng_mesh_->UpdateTopology();
