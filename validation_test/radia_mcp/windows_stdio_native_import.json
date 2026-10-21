@@ -1,0 +1,21 @@
+{
+  "accepted": true,
+  "reader": "available",
+  "stage": "complete",
+  "python": "3.12.10",
+  "library_threads": 1,
+  "elapsed_seconds": 7.64100000000326,
+  "versions": {
+    "numpy": "2.5.3",
+    "scipy": "1.18.1"
+  },
+  "cold_start": true,
+  "large_utf8_frame": true,
+  "error_recovery": true,
+  "scope": "Real stdio lazy native import, framing and error recovery; no electromagnetic solver acceptance",
+  "execution_role": "release_validation",
+  "physical_cores": 2,
+  "memory_limit_bytes": 8589934592,
+  "timeout_seconds": 20,
+  "transport_helper_sha256": "ca932a75d73a7fa291f9f806fa8776217cc1d1f7dbd865ea06195529062ebae1"
+}
