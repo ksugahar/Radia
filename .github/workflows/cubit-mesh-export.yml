@@ -198,7 +198,7 @@ jobs:
         run: |
           python -m compileall -q packages\cubit-mesh-export\src
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pip install setuptools pytest psutil numpy `
+          python -m pip install setuptools pytest psutil numpy pefile `
             "netgen-mesher==6.2.2608" "ngsolve==6.2.2608"
           $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
           python -m pytest tests\test_cubit_installers.py `
@@ -208,6 +208,8 @@ jobs:
             packages\cubit-mesh-export\tests\test_toolbar_smoke.py `
             packages\cubit-mesh-export\tests\test_smoke_command.py `
             packages\cubit-mesh-export\tests\test_runtime_contract.py `
+            packages\cubit-mesh-export\tests\test_native_curver_connectivity.py `
+            packages\cubit-mesh-export\tests\test_native_debug_paths.py `
             packages\cubit-mesh-export\tests\test_native_plugin_registry.py `
             tests\test_release_cubit_dual.py -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
