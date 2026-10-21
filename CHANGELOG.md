@@ -1,7 +1,30 @@
 # Changelog
 
-## 5.3.3 - 2026-10-13
+## 5.3.3 - 2026-10-22
 
+- Update the CPU solver runtime to Netgen/NGSolve 6.2.2608. The P1 linear and
+  Newton routes classify non-tetrahedral and curved elements through the
+  element `type`/`curved` fields that replace the removed `np` field, and
+  integrate current loads with `bonus_intorder=2` so cubic divergence-free
+  currents receive sufficient quadrature.
+- Hysteresis I/O is HDF5-only: `load_mat`, `mat_to_radia` and
+  `mat_to_play_radia` are replaced by `load_hdf5`, `hdf5_to_radia` and
+  `hdf5_to_play_radia` with schema validation; `h5py>=3.10` is now a required
+  dependency.
+- Remove the `radia.equation` module.
+- Mixed Omega: explicit batch source evaluation, separated Kelvin coupling
+  probes, and discrete scalar lifts applied through their stiffness operator.
+- Induction heating: a bounded CPU thermal quadrature reference for
+  temperature-dependent c(T) and kappa(T) with radiation and energy-balance
+  checks. Full electromagnetic coupling validation is not part of this release.
+- ESIM: resolve depth cells with bounded adaptive refinement and explicit
+  `mesh_tol` / `max_nodes` / `max_refinements` controls. Local surface LUTs
+  and EM tables move to schema 2; older archives are rejected instead of being
+  reused with different cell controls.
+- HDiv VIM: optional compensated Newton arithmetic under an explicit memory
+  budget (`newton_compensated_memory_mb`, energy solvers with `mass-riesz`
+  only); the default arithmetic is unchanged.
+- Owner-authored code is licensed under Apache-2.0.
 - Add an explicit forward B(H) HDiv Newton route that retains falling
   magnetization segments (dB/dH < mu0) instead of capping the inverse M law,
   and honor the automatic inner tolerance. Existing routes are unchanged.
