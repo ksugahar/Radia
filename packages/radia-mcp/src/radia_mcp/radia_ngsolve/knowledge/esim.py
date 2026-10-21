@@ -175,11 +175,11 @@ operator and accepts exactly one physical excitation.  It is not yet a
 simultaneous bulk nonlinear B-H solve.
 
 ```python
-# Scalar Karl iteration loop (legacy/application compatibility)
+# Scalar outer Picard iteration with a converged bounded cell seed
 esim = ESIMFiniteSlabSolver(half_thickness=R_wp, bh_curve=bh,
                             sigma=sigma, frequency=freq,
                             geometry='cylinder')
-Z_s = complex(esim.solve(5.0, max_iter=5)['Z'])   # seed
+Z_s = complex(esim.solve(5.0)['Z'])   # seed
 history = []
 for k in range(max_iter):
     res = solve_outer_BEM_or_FEM(Z_s=Z_s)         # bem.solve / a_bf re-assemble

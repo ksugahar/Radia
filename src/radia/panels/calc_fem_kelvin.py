@@ -26,6 +26,8 @@ import os
 import sys
 import time
 
+from radia.esim_depth import add_depth_arguments, depth_controls
+
 import numpy as np
 
 # Shared utilities
@@ -217,7 +219,7 @@ def solve_fem(vol_file="", fes_order=1,
               peec_nhinc=1,
               peec_n_peri=0,
               esim_per_panel=False,
-              filaments=None):
+              filaments=None, esim_cell_controls=None):
     """3D FEM-SIBC solver for .vol mesh.
 
     Args:
@@ -452,7 +454,7 @@ def solve_fem(vol_file="", fes_order=1,
         # Seed Z_s with a converged small-H cell solve.  An unconverged seed
         # is not a cheaper approximation: it changes every outer Karl matrix.
         esim = mat.create_esim_solver(frequency, half_thickness,
-                                      geometry='cylinder')
+                                      geometry='cylinder', **(esim_cell_controls or {}))
         seed_result = require_esim_converged(
             esim.solve(5.0), "FEM ESIM seed cell solve")
         Z_s = seed_result['Z']
@@ -1702,6 +1704,7 @@ def build_argparser():
                              "ESIM nonlinear path.")
     parser.add_argument("--max-iter", type=int, default=15,
                         help="Max Karl iterations")
+    add_depth_arguments(parser)
     parser.add_argument("--esim-per-panel", action="store_true",
                         help="Per-BND-DOF ESIM Karl (v4.48.0+): one ESIM "
                              "cell solve per H1 workpiece-boundary DOF "
@@ -1808,6 +1811,7 @@ def main():
             peec_nhinc=args.peec_nhinc,
             peec_n_peri=args.peec_n_peri,
             esim_per_panel=args.esim_per_panel,
+            esim_cell_controls=depth_controls(args),
         )
 
     calc_main(run, parser)

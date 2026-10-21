@@ -179,6 +179,9 @@ class IHDesignSpec:
 
     impedance_model: str = "Linear SIBC"
     bh_file: str = ""
+    esim_cell_max_iter: int = 200
+    esim_cell_mesh_tol: float = 1e-3
+    esim_cell_max_nodes: int = 32769
     esim_max_iter: int = 30
     esim_tol: str = "1e-3"
     esim_per_panel: bool = False
@@ -376,6 +379,7 @@ class IHDesignSpec:
             if self.impedance_model_cli() == "esim":
                 fields.update({
                     "bh_file", "esim_max_iter", "esim_per_panel",
+                    "esim_cell_max_iter", "esim_cell_mesh_tol", "esim_cell_max_nodes",
                 })
                 if self.method != METHOD_PEEC_FEM_KELVIN:
                     fields.update({"esim_tol", "esim_relax"})
@@ -720,6 +724,9 @@ class IHDesignSpec:
             raise ValueError(
                 "Nonlinear ESIM impedance model requires a BH file."
             )
+        cmd += ["--esim-cell-max-iter", str(self.esim_cell_max_iter),
+                "--esim-cell-mesh-tol", str(self.esim_cell_mesh_tol),
+                "--esim-cell-max-nodes", str(self.esim_cell_max_nodes)]
         if kelvin:
             cmd += ["--bh-file", self.bh_file, "--max-iter", str(self.esim_max_iter)]
         else:

@@ -124,9 +124,9 @@ the cell problem is:
 
 | Geometry | PDE | Domain | Boundary conditions |
 |---|---|---|---|
-| `slab` | `ρ ∂²H/∂z² + jω μ(|H|) H = 0` | `z ∈ [0, a]` | `H(0) = H_t`, `dH/dz(a) = 0` |
-| `cylinder` | `(ρ/r) ∂/∂r[r ∂H/∂r] + jω μ(|H|) H = 0` | `r ∈ [0, R]` | `dH/dr(0) = 0` (regularity), `H(R) = H_t` |
-| `finite_slab` | as `slab` (`ρ ∂²H/∂z² + jω μ(|H|) H = 0`) | `z ∈ [0, a]` | `H(0) = H_t` (driven face), `dH/dz(a) = 0` (insulated back) |
+| `slab` | `ρ ∂²H/∂z² - jω μ(|H|) H = 0` | `z ∈ [0, a]` | `H(0) = H_t`, `dH/dz(a) = 0` |
+| `cylinder` | `(ρ/r) ∂/∂r[r ∂H/∂r] - jω μ(|H|) H = 0` | `r ∈ [0, R]` | `dH/dr(0) = 0` (regularity), `H(R) = H_t` |
+| `finite_slab` | as `slab` (`ρ ∂²H/∂z² - jω μ(|H|) H = 0`) | `z ∈ [0, a]` | `H(0) = H_t` (driven face), `dH/dz(a) = 0` (insulated back) |
 
 The `finite_slab` mode is implemented by
 [`ESIMFiniteSlabSolver`](../../src/radia/esim_cell_problem.py#L339)
@@ -148,11 +148,12 @@ documents these BVPs verbatim, with the analytical linear solutions
 Output of `solve(H0)`:
 
 - `Z = E_t(surface) / H_t(surface)` — complex surface impedance [Ω]
-- `P' = 0.5 Re(Z) |H_t|² + losses_in_complex_mu` — surface power density [W/m²]
+- `P' = 0.5 Re(Z) |H_t|²` — surface power density [W/m²]
 - `Q' = 0.5 Im(Z) |H_t|²` — surface reactive power density [VAR/m²]
 
-The `2·(P' + jQ') / H0²` identity ties P' and Z together — both are
-independent observables in publication tables.  Implementations:
+The `2·(P' + jQ') / H0²` identity ties P' and Z together; they are
+not independent accuracy evidence. Complex-mu losses are already included
+in the cell impedance and must not be added to this port power twice.  Implementations:
 
 - Slab / cylinder solver: [`esim_cell_problem.py:545`](../../src/radia/esim_cell_problem.py#L545).
 - Finite-slab (2-sided heating, `ESIMFiniteSlabSolver`):
@@ -160,210 +161,58 @@ independent observables in publication tables.  Implementations:
 
 ---
 
-## 1.5 Derivation of the Cell-Problem Strong and Weak Forms
+## 1.5 Sign convention and weak form
 
-This section derives the cylinder cell PDE from Maxwell's equations
-and presents both the strong (PDE) and weak (variational) forms.  The
-finite-difference solver implements the strong form directly; the FE
-finite-difference solver mathematically can be viewed as the limit of
-a P0 / P1 weak-form solver on a uniform mesh.  The derivation is
-included for reviewers who prefer the variational view.
-
-### 1.5.1 Maxwell → 1-D diffusion equation inside the conductor
-
-Inside a homogeneous conductor (no free charge, no displacement
-current in the magneto-quasi-static (MQS) limit), Maxwell's equations
-reduce to:
+With `exp(+j omega t)`, Faraday's law is `curl E = -j omega B` and
+Ampere's MQS law is `curl H = sigma E`. Thus
+`curl(rho curl H) = -j omega mu H`. For the scalar slab field, or the
+axial scalar field in the cylindrical cell, this gives
 
 $$
-\nabla \times \mathbf{E} = -j\omega \mathbf{B}, \quad
-\nabla \times \mathbf{H} = \mathbf{J} = \sigma \mathbf{E}, \quad
-\mathbf{B} = \mu(|\mathbf{H}|)\,\mathbf{H}.
+\rho\,\operatorname{div}(\nabla H)-j\omega\mu H=0.
 $$
 
-Eliminating `E` and `J`:
+The cylindrical scalar operator is `(rho/r) d_r(r d_r H)`; it is not
+the vector diffusion operator for an azimuthal field. This cell model
+therefore requires the declared scalar geometry and boundary assumptions.
+For radial test functions vanishing on the driven surface, multiplying
+the negative strong form by the conjugate test function yields
 
 $$
-\nabla \times (\rho\,\nabla \times \mathbf{H}) = -j\omega\,\mu(|\mathbf{H}|)\,\mathbf{H},
-\qquad \rho = 1/\sigma.
+\int_0^R \rho\,r\,H'\,\overline{v'}\,dr
++ j\omega\int_0^R \mu H\overline v\,r\,dr=0.
 $$
 
-For an infinite axially-uniform cylindrical conductor (no `z` or `φ`
-dependence) driven by an azimuthal surface field, symmetry requires
-`H = H_φ(r) φ̂`.  The cylindrical curl with this ansatz is
-
-$$
-\nabla \times \mathbf{H} = \frac{1}{r}\,\partial_r\!\bigl[r\,H_\varphi\bigr]\,\hat{z}
-$$
-
-(no `r̂` or `ẑ` components from a purely-`φ̂` field that depends only
-on `r`).  Then `J = σ E = (σ/r) ∂_r[r H_φ] ẑ`, and applying
-`∇ × (∇ × H) = -∇²H` plus `∇ × J = jωμ H` gives, after one more
-cylindrical-curl operation:
-
-$$
--\frac{1}{r}\,\partial_r\!\left[r\,\rho\,\partial_r H_\varphi\right]
-= -j\omega\,\mu(|H_\varphi|)\,H_\varphi.
-$$
-
-For constant `ρ` (uniform conductivity), this rearranges to the cell
-PDE used in [`esim_cell_problem.py`](../../src/radia/esim_cell_problem.py):
-
-$$
-\boxed{\quad
-\frac{\rho}{r}\,\partial_r\!\left[r\,\partial_r H\right] + j\omega\,\mu(|H|)\,H = 0,
-\qquad r \in [0, R].
-\quad}
-$$
-
-### 1.5.2 Boundary conditions
-
-- **Surface** (`r = R`).  The Robin / Leontovich SIBC is *not* applied
-  on the cell — instead the cell is driven by the tangential field
-  `H(R) = H_t` set by the outer (BEM / FEM) solve.  In the cell, this
-  becomes a Dirichlet BC.
-- **Axis** (`r = 0`).  Regularity of `H` (no infinite derivatives at
-  the axis) implies `∂_r H(0) = 0` by symmetry.
-
-The pair (Dirichlet at `R`, Neumann at `0`) gives a well-posed BVP
-for any `μ(|H|) > 0`.
-
-### 1.5.3 Weak form
-
-Multiply the strong PDE by a test function `v(r)` (complex,
-sufficiently smooth), and integrate against the **radial measure**
-`r\,dr` over `[0, R]`:
-
-$$
-\int_0^R \left\{ \frac{\rho}{r}\,\partial_r[r\,\partial_r H] +
-                 j\omega\,\mu(|H|)\,H \right\}\,v\,r\,dr = 0.
-$$
-
-Integrate by parts the first term, using `∂_r H(0) = 0`:
-
-$$
--\int_0^R \rho\,r\,(\partial_r H)\,(\partial_r v^*)\,dr
-+ \left[\rho\,r\,(\partial_r H)\,v^*\right]_{r=R}
-+ j\omega \int_0^R \mu\,H\,v^*\,r\,dr = 0.
-$$
-
-For the homogeneous Dirichlet problem we test against `v ∈ H¹_0([0,R])`
-with `v(R) = 0`, so the boundary term at `r = R` vanishes
-identically.
-
-The resulting weak form:
-
-$$
-\boxed{\quad
-\int_0^R \rho\,r\,\partial_r H\,\partial_r v^*\,dr
-\;-\;j\omega \int_0^R \mu(|H|)\,H\,v^*\,r\,dr = 0,
-\quad}
-\qquad v(R) = 0,\ \partial_r v(0) = 0.
-$$
-
-This is a curl-curl-like form on a 1-D radial mesh with radial-weighted
-inner product.  Galerkin FE discretisation with P1 basis on a uniform
-mesh and one-point quadrature recovers exactly the finite-difference
-stencil used in [`esim_cell_problem.py:594-602`](../../src/radia/esim_cell_problem.py#L594-L602):
-
-$$
-\frac{\rho\,r_{i+1/2}}{h^2}\,(H_{i+1} - H_i) -
-\frac{\rho\,r_{i-1/2}}{h^2}\,(H_i - H_{i-1})
-+ j\omega\,\mu_i\,r_i\,H_i = 0,
-$$
-
-after dividing by `r_i`.  The L'Hôpital limit at `r = 0` produces
-exactly the `4ρ/h²` coefficient documented at
-[`esim_cell_problem.py:609-611`](../../src/radia/esim_cell_problem.py#L609-L611).
-
-*Caveat on the FE↔FD equivalence statement above.*  Strictly, the
-equivalence holds when the stiffness term uses midpoint quadrature
-on each element (which gives the `r_{i±1/2}` weights) AND the mass
-term uses vertex / lumped quadrature (which gives `μ_i r_i`).  Mixing
-two quadrature rules in this way is non-standard but well-defined; a
-pure-Galerkin P1 implementation with consistent (Gauss) quadrature
-gives a structurally identical tridiagonal stencil with slightly
-different coefficients (differ by `O(h)`) and converges to the same
-continuum limit.
-
-### 1.5.4 Why a finite-difference solver in production
-
-The weak form is **mathematically equivalent** to the production
-finite-difference (FD) solver on a uniform mesh.  We use FD instead of
-a full FE machinery because:
-
-1. The 1-D cell is small (`n_nodes = 100`) — FE-assembly overhead
-   would dominate the actual linear solve.
-2. The tridiagonal structure is exact under FD, allowing
-   `scipy.sparse.linalg.spsolve` with `O(n)` work per solve.  An FE
-   approach needs explicit mass-matrix assembly, which has the same
-   tridiagonal structure but more boilerplate.
-3. The L'Hôpital regularisation at `r = 0` is naturally handled by
-   the FD stencil; FE requires a ghost-cell convention or special
-   axis basis function (Henrotte basis — used by Radia's axisymmetric
-   *magnetic* solver, NOT by ESIM, see CLAUDE.md "Axisymmetric FE"
-   policy).
-
-For higher-dimensional problems (the planned 2-D nonlocal SIBC
-extension to capture finite-coil-aperture wide-band effects, see
-`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb`),
-a proper FE discretisation would be preferred.
+The axis has zero flux. Passive complex permeability is
+`mu = mu' - j mu''`, with `mu'' >= 0`; the real part of the reaction
+coefficient `j omega mu` is then nonnegative. The conservative
+control-volume implementation below uses this same sign and radial measure.
+A nonuniform control-volume stencil is not a claim of exact equivalence
+to an independently assembled Galerkin FEM discretization.
 
 ---
 
 ## 2. Discretisation of the 1-D Cell Problem
 
-### 2.1 Mesh
+### 2.1 Adaptive depth mesh
 
-```python
-self.mesh_points = np.linspace(0, half_thickness, n_nodes)
-```
-([`esim_cell_problem.py:428`](../../src/radia/esim_cell_problem.py#L428))
+The shared [depth solver](../../src/radia/esim_depth.py) starts with
+physical grading strength `log1p(length / delta)`, independent of node count.
+Nested midpoint probes compare complex impedance, Joule power and reactive
+power. Marked intervals are refined within explicit node and refinement limits;
+unresolved meshes raise. Half-space cells also check independent domain-depth
+extensions. The estimator is empirical, not a rigorous global error bound.
 
-The cell mesh is **uniform** with `n_nodes = 100` by default
-([`esim_cell_problem.py:366`](../../src/radia/esim_cell_problem.py#L366)).
+### 2.2 Conservative control-volume assembly
 
-**Implication for thin-skin regimes.**  The dimensionless skin parameter
-is `ξ = a / δ` where `δ = sqrt(2 ρ / (ω μ_0 μ_r))`.  For a typical IH
-steel workpiece (μ_r ≈ 100, σ = 2×10⁶ S/m, f = 100 kHz):
-
-- `δ ≈ 0.16 mm`
-- `a = 5 mm` → `ξ ≈ 30`
-- Uniform `h = 50 μm` → ≈ 3 nodes within one skin depth — marginal.
-
-For `ξ > 100` (high frequency × thick workpiece), a geometric stretch
-toward the surface would be a strict improvement.  This is **not
-currently implemented**.  Open issue: replace `np.linspace` with a
-graded mesh `r_i = a · (1 - (1-i/N)^p)` for `p ≈ 2-3` so that the
-spacing near `r = a` is `O(h/p)`.
-
-### 2.2 Stiffness assembly
-
-The cylindrical discretisation uses cell-centred fluxes — a standard
-conservative scheme:
-
-```python
-r_ip = z[i] + h/2  # r_{i+1/2}
-r_im = z[i] - h/2  # r_{i-1/2}
-coef_p = self.rho * r_ip / (r_i * h * h)
-coef_m = self.rho * r_im / (r_i * h * h)
-diag_main[i] = -(coef_p + coef_m) + 1j * self.omega * mu_dist[i]
-```
-([`esim_cell_problem.py:594-602`](../../src/radia/esim_cell_problem.py#L594-L602))
-
-The axis singularity at `r = 0` is resolved by L'Hôpital + symmetry
-(`H[-1] = H[1]` ghost-cell mirror), yielding:
-
-```python
-coef_0 = 4 * self.rho / (h * h)
-diag_main[0] = -coef_0 + 1j * self.omega * mu_dist[0]
-diag_upper[0] = coef_0
-```
-([`esim_cell_problem.py:609-611`](../../src/radia/esim_cell_problem.py#L609-L611))
-
-This is correct because `(1/r) ∂/∂r[r ∂H/∂r] → 2 ∂²H/∂r²` as `r → 0`
-when `dH/dr(0) = 0`.  Verified against the analytical
-`H(r) = H_0 I_0(γr) / I_0(γR)` in the constant-μ limit (see § 5.1).
+For the `exp(+i omega t)` convention the equation is
+`-rho div(grad H) + i omega mu H = 0` with passive `mu = mu' - i mu''`.
+Face conductance is `rho / dx` for slabs and `rho * r_face / dx` for
+cylinders. Reaction terms integrate over the control-volume measure
+(`dx` or the integral of `r dr`). The axis and slab midplane have zero flux;
+the driven surface is Dirichlet. There is no uniform-grid ghost stencil.
+Rows are scaled before the band solve, and the measured algebraic relative
+residual must be at most `1e-6`, otherwise the solver raises.
 
 ### 2.3 Nonlinear Picard
 
@@ -539,7 +388,7 @@ the scalar mesh-RMS to floating-point precision.
 The `ESIMFiniteSlabSolver` class has a per-call radius override:
 
 ```python
-def solve(self, H0, tol=1e-6, max_iter=50, relaxation=0.5, R_local=None):
+def solve(self, H0, tol=1e-6, max_iter=None, relaxation=0.5, R_local=None):
     if R_local is not None:
         self.set_radius(float(R_local))
     ...
@@ -551,7 +400,8 @@ def solve(self, H0, tol=1e-6, max_iter=50, relaxation=0.5, R_local=None):
 ```python
 def set_radius(self, R):
     self.half_thickness = R
-    self.mesh_points = np.linspace(0, R, self.n_nodes)
+    self.mesh_points = depth_mesh(R, self.delta, self.n_nodes,
+                                  cylinder=self.geometry == "cylinder")
 ```
 ([`esim_cell_problem.py:440-455`](../../src/radia/esim_cell_problem.py#L440-L455))
 
@@ -943,7 +793,7 @@ grain-level eddy-current loss inside the conductor.  The cell PDE is
 unchanged in form but `μ` is now complex:
 
 $$
-\frac{\rho}{r}\,\partial_r[r\,\partial_r H] + j\omega\,\mu(|H|)\,H = 0,
+\frac{\rho}{r}\,\partial_r[r\,\partial_r H] - j\omega\,\mu(|H|)\,H = 0,
 \qquad \mu = \mu'(|H|) - j\mu"(|H|).
 $$
 
@@ -1171,7 +1021,7 @@ reviewers, prefer "Hollaus-type Picard relaxation" or
 The outer Karl loop wraps the BEM/FEM solve:
 
 ```python
-Z_s = esim.solve(5.0, max_iter=5)['Z']        # seed at small H_t
+Z_s = esim.solve(5.0)['Z']        # converged cell seed at small H_t
 for k in range(max_iter):
     res = solve_outer(Z_s=Z_s)                # BEM/FEM solve
     H_t = res['H_t_rms']                       # mesh-RMS
@@ -1198,15 +1048,14 @@ ESIM Z_s near the BH knee, `L` can approach 1; `relax = 0.5` gives
 on the steel sample.  For sharper saturation (e.g. SUS430 above 30
 kHz) drop to `--esim-relax 0.3`.
 
-### 6.2 The "seed at small H_t" choice
+### 6.2 Converged low-field cell seed
 
-The seed is `esim.solve(5.0, max_iter=5)`.  H_t = 5 A/m corresponds to
-~6 µT of B-field — well below the BH knee for any ferromagnetic
-material we ship.  This guarantees the seed Z_s is in the linear regime
-(high μ, large |Z_s|), which is a **conservative** start: the outer
-solve under-estimates H_t → first ESIM update moves Z_s toward smaller
-|Z_s| (saturation).  Compared to starting from the linear Dowell Z_s,
-this avoids overshoot in the first iteration.
+Production outer iterations using `ESIMFiniteSlabSolver` start with
+`esim.solve(5.0)['Z']`. The solve uses the configured nonlinear iteration
+limit and adaptive-depth gates; it is not capped at five iterations.
+`get_linear_sibc()` belongs to the separate half-space
+`ESIMCellProblemSolver` API and is not a finite-slab method. A failed seed
+raises rather than supplying an unconverged impedance to the outer loop.
 
 ### 6.3 Convergence guarantees
 

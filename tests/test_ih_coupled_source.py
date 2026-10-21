@@ -56,7 +56,7 @@ def _table(path, T_max=1500.0, scale=1.0):
     np.savez(path, H_grid=H, T_grid=T, Zs_re=_re_z(T)[None, :].repeat(25, 0),
              Zs_im=_re_z(T)[None, :].repeat(25, 0), q_surf=q,
              meta=np.asarray(json.dumps({"frequency": 7000.0,
-                                         "material": "test"})))
+                                         "material": "test", "schema_version": 2})))
     return str(path)
 
 
