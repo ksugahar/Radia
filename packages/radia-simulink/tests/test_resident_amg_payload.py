@@ -48,7 +48,8 @@ def selected(tmp_path):
     runtime = dict(schema='radia.resident-amg-runtime.v1', source_commit='1' * 40,
                    binary_sha256=receipt['binary_sha256'], accepted=True,
                    runtime_import_checked=True, redistribution_accepted=True,
-                   matlab_engine_loaded=False, runtime_provider='nvidia-pip',
+                   matlab_engine_loaded=False, matlab_dll_search_excluded=True,
+                   matlab_dlls_loaded=False, runtime_provider='nvidia-pip',
                    loaded_runtime_sha256='2' * 64, redistribution_reference_sha256='3' * 64,
                    lifecycle={key: True for key in (
                        'repeated_solve', 'close_idempotent', 'solve_after_close_rejected',
@@ -61,10 +62,18 @@ def selected(tmp_path):
 @pytest.mark.parametrize('mutation', [
     'none', 'fault-missing', 'fault-integer', 'diagnostic', 'source', 'runtime-sha',
     'redistribution', 'provider', 'lifecycle', 'no-cases', 'cpu-oracle', 'residual',
+    'dll-search-missing', 'dll-search-false', 'dll-search-integer',
+    'dll-loaded-missing', 'dll-loaded-true', 'dll-loaded-integer',
 ])
 def test_selected_payload_fails_closed_before_copy(selected, mutation):
     repo, build, package, receipt, runtime = selected
-    if mutation == 'fault-missing':
+    if mutation.startswith('dll-'):
+        key = 'matlab_dll_search_excluded' if mutation.startswith('dll-search-') else 'matlab_dlls_loaded'
+        if mutation.endswith('missing'):
+            runtime.pop(key)
+        else:
+            runtime[key] = {'false': False, 'true': True, 'integer': 0}[mutation.rsplit('-', 1)[1]]
+    elif mutation == 'fault-missing':
         receipt.pop('fault_injection')
     elif mutation == 'fault-integer':
         receipt['fault_injection'] = 0

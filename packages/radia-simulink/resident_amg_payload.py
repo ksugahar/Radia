@@ -43,8 +43,10 @@ def stage(repo, package, commit, build):
             or runtime.get('source_commit') != commit
             or runtime.get('binary_sha256') != digest
             or any(runtime.get(key) is not True for key in (
-                'accepted', 'runtime_import_checked', 'redistribution_accepted'))
+                'accepted', 'runtime_import_checked', 'redistribution_accepted',
+                'matlab_dll_search_excluded'))
             or runtime.get('matlab_engine_loaded') is not False
+            or runtime.get('matlab_dlls_loaded') is not False
             or runtime.get('runtime_provider') != 'nvidia-pip'
             or any(not isinstance(runtime.get(key), str) or not re.fullmatch(
                 r'[0-9a-f]{64}', runtime[key]) for key in (
@@ -72,6 +74,7 @@ def stage(repo, package, commit, build):
         'device_fault_injection', 'lifecycle_diagnostic', 'matlab_engine_user_dependency')}
     public.update({key: runtime[key] for key in (
         'runtime_import_checked', 'redistribution_accepted',
+        'matlab_dll_search_excluded', 'matlab_dlls_loaded',
         'loaded_runtime_sha256', 'redistribution_reference_sha256')})
     public['runtime_validation_sha256'] = hashlib.sha256(runtime_path.read_bytes()).hexdigest()
     package.mkdir(parents=True, exist_ok=True)
