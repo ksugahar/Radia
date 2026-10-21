@@ -60,6 +60,7 @@ def test_owner_reuse_errors_and_idempotent_close(adapter, monkeypatch):
 @pytest.mark.parametrize('mutation', [
     'none', 'source', 'binary', 'dirty', 'fault-missing', 'fault-true',
     'device-fault', 'diagnostic', 'engine', 'runtime', 'redistribution', 'proof',
+    'receipt-missing', 'binary-missing',
 ])
 def test_receipt_admission_precedes_cuda_loading(adapter, monkeypatch, tmp_path, mutation):
     package = ModuleType('resident_receipt_contract')
@@ -95,6 +96,10 @@ def test_receipt_admission_precedes_cuda_loading(adapter, monkeypatch, tmp_path,
         key, value = changes[mutation]
         receipt[key] = value
     (tmp_path / 'resident-amg-build.json').write_text(json.dumps(receipt))
+    if mutation == 'receipt-missing':
+        (tmp_path / 'resident-amg-build.json').unlink()
+    elif mutation == 'binary-missing':
+        (tmp_path / name).unlink()
     calls = []
     runtime = ModuleType(package.__name__ + '._cuda_runtime')
     runtime.prepare_cuda_runtime = lambda: calls.append('runtime')

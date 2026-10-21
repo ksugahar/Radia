@@ -27,3 +27,10 @@ Packaging selects this component with `RADIA_RESIDENT_AMG_BUILD`. Staging
 requires matching clean-source build and runtime qualification records,
 independent CPU numerical comparisons, lifecycle checks and distribution
 evidence. Successful compilation alone does not qualify a resident AMG wheel.
+
+Resident AMG in 0.1.5 is available through Python only. No standalone MATLAB
+MEX gateway is provided or accepted for resident AMG.
+
+The 0.1.5 MATLAB-independent runtime gate excludes MATLAB DLL directories from
+search, starts no Engine, and audits loaded process modules on the GPU worker.
+This does not establish that MATLAB is physically absent from the host.
