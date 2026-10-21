@@ -15,12 +15,17 @@ def main():
     from check_mex_error_boundaries import require_boundaries
     require_boundaries()
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--resident-amg-python', action='store_true')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--build-admission',type=Path);parser.add_argument('--build-admission-sha256')
     args = parser.parse_args()
     package = Path(__file__).resolve().parents[1]
     root = package.parents[1]
     admission=require_build_admission(root,'csr-ic',args.build_admission,args.build_admission_sha256)
+    if args.resident_amg_python:
+        from build_resident_amg_python import build
+        build(package, args.out.resolve(), admission)
+        return
     sources = [package / 'native/radia_cuda_csr_pcg.cu', package / 'native/radia_cuda_ic.cu']
     out = args.out.resolve(); out.mkdir(parents=True, exist_ok=True)
     eng = matlab.engine.start_matlab('-nodesktop -nosplash')
