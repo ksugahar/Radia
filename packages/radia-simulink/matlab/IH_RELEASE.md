@@ -136,3 +136,9 @@ certify nonlinear periodic response. Native numerical and model acceptance
 remain separate requirements. The CPU ESIM method remains an independent
 analysis route; no new coupled route silently falls back to it or uses its
 output as evidence of its own accuracy.
+
+The first-release host schema accepts only `linear_temperature` with the
+`independent_cpu` backend. Periodic BH, GPU artifact metadata and transaction
+domain interfaces belong to the subsequent release candidate. The standalone
+MEX also requires an explicit `bh_mode="linear"` before GPU initialization;
+that source guard has not yet been qualified in a rebuilt MEX.

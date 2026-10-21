@@ -1,7 +1,8 @@
 // Complete owned CONFIG PROPOSAL; not a declaration of executable physics.
 // Both adapters convert language buffers once; this header owns canonical checks.
 #pragma once
-#include "ih_periodic_config.hpp"
+#include <cstdint>
+#include <stdexcept>
 #include <algorithm>
 #include <complex>
 #include <cmath>
@@ -10,16 +11,15 @@
 #include <vector>
 
 namespace radia_ih {
-enum class ConfigBackend { invalid, independent_cpu, gpu };
-enum class MagneticMode { invalid, linear_temperature, resolved_periodic_bh };
+enum class ConfigBackend { invalid, independent_cpu };
+enum class MagneticMode { invalid, linear_temperature };
 enum class HeatMeasure { invalid, volume_m3, surface_m2 };
 struct ConfigIdentity {
     std::string producer_source_sha1, physics_source_sha1;
     std::string mesh_sha256, label_contract_sha256, assembled_operators_sha256;
-    std::string expected_native_artifact_sha256; // required GPU, empty CPU
 };
 struct MemoryBudgets {
-    std::uint64_t input_bytes{}, domain_host_bytes{}, device_bytes{};
+    std::uint64_t input_bytes{}, domain_host_bytes{};
     // Domain host budget covers simultaneous accepted/trial host snapshots;
     // caller-owned published NumPy/MATLAB copies are separate caller memory.
 };
@@ -54,9 +54,7 @@ struct MagneticMaterialConfig {
     OwnedDense resistivity_ohm_m; // [element,T]
     // Linear route: [element,T], exp(+iwt), passive imag(mu)<=0.
     std::vector<std::complex<double>> linear_permeability_H_per_m;
-    // Periodic route ONLY: common positive H knots from0; B[element,T,H].
-    // Reversible/isotropic/odd/single-valued, no hysteresis or complex mu.
-    std::vector<double> H_axis_A_per_m, B_T;
+
 };
 struct HarmonicOperator {
     std::uint32_t harmonic_index{};
@@ -76,15 +74,9 @@ struct ElectromagneticConfig {
     // DOF order/units belong to supplied assembly. No node/field inference.
     std::vector<std::string> unknown_units, equation_units;
     std::vector<HarmonicOperator> harmonics;
-    // Complete two-face planar diffusion cells: [element,face,component].
-    // One or two tangential components. No silent scalarization of vector data.
-    std::uint32_t cells_per_element{};
-    std::vector<double> thickness_m, face_area_m2;
-    // Initial phase-zero B/H, [element,cell,component]; paired validated maps.
-    std::vector<double> initial_cell_B_T, initial_cell_H_A_per_m;
     // Linear loss only: q=.5*sum(loss_coefficient*abs(projected_field)^2).
     // Volume: projected J[A/m2], coefficient rho[ohm*m]; surface: H[A/m],
-    // coefficient Re(Zs)[ohm]. Periodic mode forbids this surrogate loss route.
+    // coefficient Re(Zs)[ohm].
     OwnedCSR<std::complex<double>> linear_loss_projection;
     std::vector<double> linear_loss_coefficient;
     double linear_true_residual_limit{}, port_energy_relative_limit{}, power_floor_W{};
@@ -107,13 +99,13 @@ struct CoupledConfig {
     MagneticMaterialConfig magnetic;
     ElectromagneticConfig em;
     HeatTransferConfig heat;
-    PeriodicDriveConfig drive{};
+    double frequency_Hz{}, thermal_macro_dt_s{};
     // No user-set "supported"/fallback/accepted flag. Build capabilities are
     // selected by the compiled domain, separately from this owned payload.
 };
 struct ConfigValidation {
-    std::uint64_t input_bytes{}, host_reserve_bytes{}, device_reserve_bytes{};
-    std::uint32_t periods_per_macro{}, boundary_components{};
+    std::uint64_t input_bytes{}, host_reserve_bytes{};
+    std::uint32_t boundary_components{};
 };
 namespace config_detail {
 [[noreturn]] inline void bad(const char* message) { throw std::invalid_argument(message); }
@@ -212,11 +204,11 @@ inline ConfigValidation validate_config(const CoupledConfig& cfg) {
     const auto& id=cfg.identity;
     hex(id.producer_source_sha1,40,bytes);hex(id.physics_source_sha1,40,bytes);
     hex(id.mesh_sha256,64,bytes);hex(id.label_contract_sha256,64,bytes);hex(id.assembled_operators_sha256,64,bytes);
-    if(cfg.backend==ConfigBackend::gpu)hex(id.expected_native_artifact_sha256,64,bytes);
-    else if(cfg.backend!=ConfigBackend::independent_cpu||!id.expected_native_artifact_sha256.empty())bad("Invalid explicit IH backend identity");
+    if(cfg.backend!=ConfigBackend::independent_cpu)bad("Explicit independent CPU backend required");
     if(!cfg.budgets.input_bytes||cfg.budgets.input_bytes>(2ULL<<30)||
-       !cfg.budgets.domain_host_bytes||!cfg.budgets.device_bytes)bad("Invalid explicit IH byte budgets");
-    result.periods_per_macro=cfg.drive.checked_periods_per_macro();
+       !cfg.budgets.domain_host_bytes)bad("Invalid explicit IH byte budgets");
+    if(!finite(cfg.frequency_Hz)||cfg.frequency_Hz<=0.||
+       !finite(cfg.thermal_macro_dt_s)||cfg.thermal_macro_dt_s<=0.)bad("Invalid IH frequency or thermal timestep");
     const auto& t=cfg.thermal;const auto n=t.coefficients,q=t.volume_samples,b=t.boundary_samples,d=t.dimension;
     if(!n||n>256||!q||q>4096||!b||b>4096||!d||d>3)bad("Bounded IH thermal dimensions exceeded");
     axis(t.temperature_axis_K);vector(t.temperature_axis_K,t.temperature_axis_K.size(),bytes);
@@ -254,35 +246,22 @@ inline ConfigValidation validate_config(const CoupledConfig& cfg) {
         }
         if(!finite(c)||std::abs(c-1.)>1e-12||!finite(temp)||temp<m.temperature_axis_K.front()||temp>m.temperature_axis_K.back())bad("Invalid magnetic temperature map/range");
     }
-    const bool periodic=cfg.magnetic_mode==MagneticMode::resolved_periodic_bh;
-    if(periodic) {
-        if(!m.linear_permeability_H_per_m.empty())bad("No complex/frozen/secant mu in resolved nonlinear BH");
-        axis(m.H_axis_A_per_m,true);vector(m.H_axis_A_per_m,m.H_axis_A_per_m.size(),bytes);
-        const auto nh=m.H_axis_A_per_m.size();vector(m.B_T,mul(mul(e,mt),nh),bytes);
-        for(std::size_t row=0;row<std::size_t(e)*mt;++row)for(std::size_t k=0;k<nh;++k) {
-            auto x=m.B_T[row*nh+k];
-            if((!k&&x!=0.)||(k&&x<=m.B_T[row*nh+k-1]))bad("BH must increase through origin without hysteresis");
-        }
-    } else if(cfg.magnetic_mode==MagneticMode::linear_temperature) {
-        if(!m.H_axis_A_per_m.empty()||!m.B_T.empty())bad("Nonlinear BH cannot enter linear route");
-        vector(m.linear_permeability_H_per_m,mul(e,mt),bytes);
-        for(auto mu:m.linear_permeability_H_per_m)if(mu.real()<=0.||mu.imag()>0.)bad("Invalid passive linear permeability");
-    } else bad("Unknown IH magnetic mode");
+    if(cfg.magnetic_mode!=MagneticMode::linear_temperature)bad("Explicit linear temperature magnetic mode required");
+    vector(m.linear_permeability_H_per_m,mul(e,mt),bytes);
+    for(auto mu:m.linear_permeability_H_per_m)if(mu.real()<=0.||mu.imag()>0.)bad("Invalid passive linear permeability");
     const auto& em=cfg.em;const auto ne=em.unknowns,components=em.field_components;
     if(!ne||ne>4096||!components||components>2||em.harmonics.empty()||em.harmonics.size()>64)bad("Invalid bounded IH electromagnetic dimensions");
     labels(em.unknown_units,ne,bytes);labels(em.equation_units,ne,bytes);
     const auto nb=std::uint32_t(mul(mul(2,e),components));result.boundary_components=nb;
     for(std::size_t k=0;k<em.harmonics.size();++k) {
         const auto& op=em.harmonics[k];
-        if(op.harmonic_index!=(periodic?2*k+1:1)||(!periodic&&em.harmonics.size()!=1)||
-           op.harmonic_index>=cfg.drive.micro_steps_per_cycle/2)bad("IH harmonic numbering/Nyquist mismatch");
+        if(op.harmonic_index!=1||em.harmonics.size()!=1)bad("Linear IH requires only the fundamental harmonic");
         csr(op.base_operator,ne,ne,bytes);csr(op.boundary_E_to_rhs,ne,nb,bytes);csr(op.state_to_boundary_H,nb,ne,bytes);
         vector(op.coil_rhs_per_A,ne,bytes);vector(op.coil_boundary_H_per_A,nb,bytes);vector(op.port_voltage_projection,ne,bytes);
         if(!finite(op.coil_resistance_ohm)||op.coil_resistance_ohm<0.)bad("Invalid coil resistance");
         if(k)for(auto value:op.coil_rhs_per_A)if(value!=std::complex<double>{})bad("Sinusoidal source has no imposed higher-harmonic current");
         if(k)for(auto value:op.coil_boundary_H_per_A)if(value!=std::complex<double>{})bad("Sinusoidal source has no imposed higher-harmonic boundary field");
     }
-    if(periodic&&em.harmonics.size()<3)bad("Resolved nonlinear proposal requires at least harmonics1/3/5");
     limit(em.linear_true_residual_limit,1e-6);limit(em.port_energy_relative_limit,1e-6);limit(em.power_floor_W,1e-12);
     if(!em.max_linear_iterations||em.max_linear_iterations>10000)bad("Invalid IH EM iteration budget");
     const auto& heat=cfg.heat;
@@ -290,52 +269,19 @@ inline ConfigValidation validate_config(const CoupledConfig& cfg) {
     if(heat.measure!=HeatMeasure::volume_m3&&heat.measure!=HeatMeasure::surface_m2)bad("Explicit IH heat measure required");
     vector(heat.measure_weights,heat.samples,bytes);positive(heat.measure_weights);
     csr(heat.to_thermal_load,n,heat.samples,bytes);
-    std::uint64_t cell_values=0;
-    if(periodic) {
-        if(em.cells_per_element<2||em.cells_per_element>128||heat.measure!=HeatMeasure::volume_m3||
-           heat.samples!=mul(e,em.cells_per_element)||heat.components!=components)bad("Invalid IH planar diffusion cell/heat layout");
-        vector(em.thickness_m,e,bytes);positive(em.thickness_m);vector(em.face_area_m2,e,bytes);positive(em.face_area_m2);
-        cell_values=mul(heat.samples,components);
-        vector(em.initial_cell_B_T,cell_values,bytes);vector(em.initial_cell_H_A_per_m,cell_values,bytes);
-        // Initial schema supports cold-start only. Warm starts are retained
-        // accepted snapshots, not independently supplied inconsistent B/H pairs.
-        for(auto x:em.initial_cell_B_T)if(x!=0.)bad("Nonzero initial cycle state is not implemented in this schema");
-        for(auto x:em.initial_cell_H_A_per_m)if(x!=0.)bad("Nonzero initial cycle state is not implemented in this schema");
-        for(std::uint32_t i=0;i<e;++i)for(std::uint32_t c=0;c<em.cells_per_element;++c) {
-            const double vol=em.thickness_m[i]*em.face_area_m2[i]/em.cells_per_element;
-            if(!finite(vol)||vol<=0.||std::abs(heat.measure_weights[i*em.cells_per_element+c]-vol)>1e-12*vol)bad("IH cell volume inconsistent with declared slab geometry");
-        }
-        if(em.linear_loss_projection.rows||em.linear_loss_projection.columns||!em.linear_loss_projection.values.empty()||!em.linear_loss_projection.row_offsets.empty()||!em.linear_loss_projection.column_indices.empty()||!em.linear_loss_coefficient.empty())bad("No quadratic amplitude-loss substitute for nonlinear periodic Joule power");
-    } else {
-        if(em.cells_per_element||!em.thickness_m.empty()||!em.face_area_m2.empty()||!em.initial_cell_B_T.empty()||!em.initial_cell_H_A_per_m.empty())bad("Unused periodic cell data cannot enter linear config");
-        csr(em.linear_loss_projection,heat.samples*heat.components,ne,bytes);
-        vector(em.linear_loss_coefficient,mul(heat.samples,heat.components),bytes);
-        for(auto x:em.linear_loss_coefficient)if(x<0.)bad("Negative IH loss coefficient");
-    }
-    // Conservative preallocation reserves: owned input plus accepted/trial state.
-    // Actual capacities, validation scratch, solver and preconditioner allocations
-    // remain charged by the compiled domain before any allocation; these reserves
-    // do not certify the complete device peak or the runtime memory gate.
-    auto one_snapshot=std::uint64_t(sizeof(CommittedSnapshot));
-    add(one_snapshot,mul(n+heat.samples,sizeof(double)));
-    add(one_snapshot,mul(mul(ne,em.harmonics.size()),sizeof(std::complex<double>)));
-    if(periodic) {
-        // Distinct endpoint B/H, full-cycle B/H and harmonic metadata payloads.
-        add(one_snapshot,mul(mul(cell_values,2),sizeof(double)));
-        add(one_snapshot,mul(mul(mul(cell_values,cfg.drive.micro_steps_per_cycle),2),sizeof(double)));
-        add(one_snapshot,mul(em.harmonics.size(),sizeof(std::uint32_t)));
-        add(one_snapshot,mul(mul(cell_values,em.harmonics.size()),sizeof(std::complex<double>)));
-    }
-    result.host_reserve_bytes=mul(one_snapshot,2);
+    csr(em.linear_loss_projection,heat.samples*heat.components,ne,bytes);
+    vector(em.linear_loss_coefficient,mul(heat.samples,heat.components),bytes);
+    for(auto x:em.linear_loss_coefficient)if(x<0.)bad("Negative IH loss coefficient");
+    // Host payload lower bound only, not runtime peak-memory certification.
+    auto host_payload=mul(n+heat.samples,sizeof(double));
+    add(host_payload,mul(ne,sizeof(std::complex<double>)));
+    result.host_reserve_bytes=mul(host_payload,2);
     add(result.host_reserve_bytes,bytes);
     add(result.host_reserve_bytes,mul(heat.samples,sizeof(double)));
-    result.device_reserve_bytes=mul(mul(n+heat.samples+cell_values*2,2),sizeof(double));
-    add(result.device_reserve_bytes,mul(mul(mul(ne,em.harmonics.size()),2),sizeof(std::complex<double>)));
-    add(result.device_reserve_bytes,bytes);
-    if(bytes>cfg.budgets.input_bytes||result.host_reserve_bytes>cfg.budgets.domain_host_bytes||
-       result.device_reserve_bytes>cfg.budgets.device_bytes)bad("IH config exceeds declared byte budgets");
+    if(bytes>cfg.budgets.input_bytes||result.host_reserve_bytes>cfg.budgets.domain_host_bytes)
+        bad("IH config exceeds declared byte budgets");
     // First and only owned validation workspace allocation; all declared input,
-    // host (including this scratch) and device reserves have passed above.
+    // host payload (including this scratch) checks have passed above.
     std::vector<double> sums(heat.samples,0.);
     for(std::uint32_t i=0;i<n;++i)for(auto k=heat.to_thermal_load.row_offsets[i];k<heat.to_thermal_load.row_offsets[i+1];++k)
         sums[heat.to_thermal_load.column_indices[k]]+=t.constant_coefficients[i]*heat.to_thermal_load.values[k];
@@ -346,13 +292,12 @@ inline ConfigValidation validate_config(const CoupledConfig& cfg) {
 // Capabilities come ONLY from compiled domain implementation, never from user
 // config or adapter-provided flags. Structural validity is not execution support.
 struct CompiledDomainCapabilities {
-    bool independent_cpu{}, gpu{}, linear_temperature{}, resolved_periodic_bh{}, vector_tangential_field{};
+    bool independent_cpu{}, linear_temperature{}, vector_tangential_field{};
 };
 inline ConfigValidation validate_config_for_execution(const CoupledConfig& cfg,
         const CompiledDomainCapabilities& compiled) {
     auto result=validate_config(cfg);
-    if((cfg.backend==ConfigBackend::gpu?!compiled.gpu:!compiled.independent_cpu)||
-       (cfg.magnetic_mode==MagneticMode::resolved_periodic_bh?!compiled.resolved_periodic_bh:!compiled.linear_temperature)||
+    if(!compiled.independent_cpu||!compiled.linear_temperature||
        (cfg.em.field_components==2&&!compiled.vector_tangential_field))
         throw std::runtime_error("IH physical execution route not implemented in this compiled domain; no fallback");
     return result;
