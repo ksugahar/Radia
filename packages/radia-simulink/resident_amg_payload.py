@@ -29,6 +29,8 @@ def stage(repo, package, commit, build):
         'packages/radia-simulink/native/resident_amg_host.hpp',
         'packages/radia-simulink/tools/build_resident_amg_python.py',
         'packages/radia-simulink/tools/build_cuda_mex.py',
+        'packages/radia-simulink/tools/build_csr_python.py',
+        'packages/radia-simulink/tools/native_source_paths.py',
         'packages/radia-simulink/tools/matlab_cuda_toolchain.py',
         'packages/radia-simulink/tools/vs2022_toolchain.py', 'Build.ps1',
     }
