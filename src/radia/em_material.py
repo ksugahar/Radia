@@ -182,7 +182,9 @@ class EMMaterial:
         return (self.rho / R) * gamma_a * np.tanh(gamma_a)
 
     def create_esim_solver(self, frequency: float, half_thickness: float,
-                           geometry: str = "cylinder"):
+                           geometry: str = "cylinder", *, n_nodes=200,
+                           mesh_tol=1e-3, max_nodes=32769,
+                           max_refinements=16, cell_max_iter=200):
         """Create an ESIMFiniteSlabSolver for this material.
 
         Lazy-imports esim_cell_problem to avoid import overhead when not
@@ -196,8 +198,10 @@ class EMMaterial:
             sigma=self.sigma,
             frequency=frequency,
             mu_r=self.mu_r if self.bh_curve is None else None,
-            n_nodes=200,
+            n_nodes=n_nodes,
             geometry=geometry,
+            mesh_tol=mesh_tol, max_nodes=max_nodes,
+            max_refinements=max_refinements, cell_max_iter=cell_max_iter,
         )
 
     # ------------------------------------------------------------------

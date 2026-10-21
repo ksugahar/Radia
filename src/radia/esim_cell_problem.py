@@ -30,6 +30,7 @@ from scipy.interpolate import interp1d
 from scipy.constants import mu_0
 
 from radia.bh_law import monotone_bh_pchip
+from radia.esim_depth import AdaptiveDepth, depth_mesh, linear_cell
 
 
 def require_esim_converged(result, context="ESIM cell solve"):
@@ -357,7 +358,7 @@ class ComplexPermeabilityInterpolator:
             self.mu_initial = mu_0 * complex(mu_p, -mu_pp)
 
 
-class ESIMFiniteSlabSolver:
+class ESIMFiniteSlabSolver(AdaptiveDepth):
     """
     Solves the 1D Cell Problem for a FINITE THICKNESS slab conductor.
 
@@ -384,7 +385,8 @@ class ESIMFiniteSlabSolver:
     """
 
     def __init__(self, half_thickness, bh_curve=None, sigma=None, frequency=None,
-                 n_nodes=100, complex_mu=None, mu_r=None, geometry='slab'):
+                 n_nodes=100, complex_mu=None, mu_r=None, geometry='slab', *,
+                 mesh_tol=1e-3, max_nodes=32769, max_refinements=16, cell_max_iter=200):
         """
         Initialize the Finite Slab/Cylinder Cell Problem solver.
 
@@ -412,6 +414,7 @@ class ESIMFiniteSlabSolver:
         self.geometry = geometry  # 'slab' or 'cylinder'
 
         self.n_nodes = n_nodes
+        self._configure_depth(mesh_tol, max_nodes, max_refinements, cell_max_iter)
 
         # Setup permeability model
         self.use_complex_mu = complex_mu is not None
@@ -446,7 +449,7 @@ class ESIMFiniteSlabSolver:
         self.xi = half_thickness / self.delta if self.delta < float('inf') else 0
 
         # Create uniform mesh from surface (z=0) to center (z=a)
-        self.mesh_points = np.linspace(0, half_thickness, n_nodes)
+        self.mesh_points = depth_mesh(half_thickness, self.delta, n_nodes, geometry == 'cylinder')
         self.n_elements = n_nodes - 1
 
     def _get_mu(self, H_abs):
@@ -473,10 +476,10 @@ class ESIMFiniteSlabSolver:
             self.xi = R / self.delta
         else:
             self.xi = 0.0
-        self.mesh_points = np.linspace(0, R, self.n_nodes)
+        self.mesh_points = depth_mesh(R, self.delta, self.n_nodes, self.geometry == 'cylinder')
 
-    def solve(self, H0, tol=1e-6, max_iter=50, relaxation=0.5,
-              R_local=None):
+    def _solve_on_mesh(self, H0, tol=1e-6, max_iter=200, relaxation=0.5,
+                       R_local=None):
         """
         Solve the finite slab Cell Problem for given surface field H0.
 
@@ -582,95 +585,7 @@ class ESIMFiniteSlabSolver:
         }
 
     def _solve_linear_system(self, H0, mu_dist):
-        """
-        Solve the linearized Cell Problem.
-
-        Slab (geometry='slab'):
-            Domain: z from 0 (surface) to a (center)
-            PDE: rho * d^2H/dz^2 + jw*mu*H = 0
-            BC: H(0) = H0, dH/dz(a) = 0
-            Solution: H(z) = H0 * cosh(gamma*(a-z)) / cosh(gamma*a)
-
-        Cylinder (geometry='cylinder'):
-            Domain: r from 0 (center) to R (surface)
-            PDE: rho/r * d/dr(r * dH/dr) + jw*mu*H = 0
-            BC: dH/dr(0) = 0 (symmetry), H(R) = H0
-            Solution: H(r) = H0 * I0(gamma*r) / I0(gamma*R)
-        """
-        n = self.n_nodes
-        z = self.mesh_points  # z for slab, r for cylinder
-        h = z[1] - z[0]
-        a = self.half_thickness  # half-thickness (slab) or radius (cylinder)
-
-        diag_main = np.zeros(n, dtype=complex)
-        diag_lower = np.zeros(n - 1, dtype=complex)
-        diag_upper = np.zeros(n - 1, dtype=complex)
-        rhs = np.zeros(n, dtype=complex)
-
-        if self.geometry == 'cylinder':
-            # Cylindrical: (1/r)*d/dr[r*dH/dr] + jw*mu*sigma*H = 0
-            # FD on uniform mesh r_i = i*h:
-            #   [r_{i+1/2}*(H_{i+1}-H_i) - r_{i-1/2}*(H_i-H_{i-1})] / (r_i*h^2)
-            #   + jw*mu*sigma*H_i = 0
-            # Multiply by rho: rho/r_i * [...] + jw*mu*H_i = 0
-
-            for i in range(1, n - 1):
-                r_i = z[i]
-                r_ip = z[i] + h / 2  # r_{i+1/2}
-                r_im = z[i] - h / 2  # r_{i-1/2}
-                coef_p = self.rho * r_ip / (r_i * h * h)
-                coef_m = self.rho * r_im / (r_i * h * h)
-                diag_lower[i - 1] = coef_m
-                diag_upper[i] = coef_p
-                diag_main[i] = -(coef_p + coef_m) + 1j * self.omega * mu_dist[i]
-                rhs[i] = 0.0
-
-            # BC at r=0: dH/dr = 0 (symmetry)
-            # L'Hopital: (1/r)*d/dr(r*dH/dr)|_{r=0} = 2*d^2H/dr^2
-            # With symmetry H[-1]=H[1]: d^2H/dr^2 = 2*(H[1]-H[0])/h^2
-            # So equation: rho*4*(H[1]-H[0])/h^2 + jw*mu*H[0] = 0
-            coef_0 = 4 * self.rho / (h * h)
-            diag_main[0] = -coef_0 + 1j * self.omega * mu_dist[0]
-            diag_upper[0] = coef_0
-            rhs[0] = 0.0
-
-            # BC at r=R: H(R) = H0 (Dirichlet at surface)
-            diag_main[n - 1] = 1.0
-            if n >= 2:
-                diag_lower[n - 2] = 0.0
-            rhs[n - 1] = H0
-
-        else:
-            # Slab: rho * d^2H/dz^2 + jw*mu*H = 0
-            coef = self.rho / (h * h)
-
-            for i in range(1, n - 1):
-                diag_lower[i - 1] = coef
-                diag_upper[i] = coef
-                diag_main[i] = -2 * coef + 1j * self.omega * mu_dist[i]
-                rhs[i] = 0.0
-
-            # BC at z=0: H(0) = H0 (Dirichlet at surface)
-            diag_main[0] = 1.0
-            rhs[0] = H0
-
-            # BC at z=a: dH/dz = 0 (Neumann - symmetry)
-            diag_main[n - 1] = -2 * coef + 1j * self.omega * mu_dist[n - 1]
-            diag_lower[n - 2] = 2 * coef
-            rhs[n - 1] = 0.0
-
-        # Solve tridiagonal system
-        from scipy.sparse import diags as sp_diags
-        from scipy.sparse.linalg import spsolve as sp_solve
-
-        A = sp_diags(
-            [diag_lower, diag_main, diag_upper],
-            offsets=[-1, 0, 1],
-            format='csr'
-        )
-
-        H = sp_solve(A, rhs)
-        return H
+        return linear_cell(self, H0, mu_dist)
 
     def _compute_resistance_ratio(self, H, mu_dist, H0):
         """
@@ -746,16 +661,13 @@ class ESIMFiniteSlabSolver:
         a = self.half_thickness
         h = z[1] - z[0]
 
-        # 3-point forward formula for dH/dz at z=0
-        if n >= 3:
-            dHdz_surface = (-3*H[0] + 4*H[1] - H[2]) / (2*h)
-        else:
-            dHdz_surface = (H[1] - H[0]) / h
-
-        if abs(H[0]) < 1e-30:
+        surface = -1 if self.geometry == 'cylinder' else 0
+        if abs(H[surface]) < 1e-30:
             return 1.0
-
-        Z_s = -self.rho * dHdz_surface / H[0]
+        gradient = np.gradient(H, z, edge_order=2)[surface]
+        Z_s = self.rho * gradient / H[surface]
+        if self.geometry != 'cylinder':
+            Z_s = -Z_s
         R_ratio = Z_s.real * a / self.rho
 
         return max(R_ratio, 1.0)
@@ -830,7 +742,7 @@ class ESIMFiniteSlabSolver:
             return xi  # High frequency limit
 
 
-class ESIMCellProblemSolver:
+class ESIMCellProblemSolver(AdaptiveDepth):
     """
     Solves the 1D Cell Problem for ESIM using finite differences.
 
@@ -850,7 +762,8 @@ class ESIMCellProblemSolver:
     """
 
     def __init__(self, bh_curve=None, sigma=None, frequency=None,
-                 num_skin_depths=10, n_nodes=100, complex_mu=None):
+                 num_skin_depths=10, n_nodes=100, complex_mu=None, *,
+                 mesh_tol=1e-3, max_nodes=32769, max_refinements=16, cell_max_iter=200):
         """
         Initialize the Cell Problem solver.
 
@@ -880,6 +793,7 @@ class ESIMCellProblemSolver:
 
         self.num_skin_depths = num_skin_depths
         self.n_nodes = n_nodes
+        self._configure_depth(mesh_tol, max_nodes, max_refinements, cell_max_iter)
 
         # Setup permeability model
         self.use_complex_mu = complex_mu is not None
@@ -909,27 +823,7 @@ class ESIMCellProblemSolver:
         self._create_mesh()
 
     def _create_mesh(self):
-        """
-        Create 1D mesh with geometric grading near the surface (s=0).
-
-        Uses a geometric progression to cluster nodes near s=0 where
-        field gradients are largest (within skin depth).
-        """
-        # Geometric grading: finer near s=0
-        # s_i = L * (r^i - 1) / (r^N - 1), where r is the grading ratio
-
-        grading = 1.1  # Grading ratio (>1 means finer near s=0)
-        N = self.n_nodes - 1
-
-        if abs(grading - 1.0) < 1e-10:
-            # Uniform mesh
-            self.mesh_points = np.linspace(0, self.L, self.n_nodes)
-        else:
-            # Geometric progression
-            i = np.arange(self.n_nodes)
-            r = grading
-            self.mesh_points = self.L * (r ** i - 1) / (r ** N - 1)
-
+        self.mesh_points = depth_mesh(self.L, self.delta_initial, self.n_nodes)
         self.n_elements = self.n_nodes - 1
 
     def _linear_skin_depth(self, mu):
@@ -958,7 +852,7 @@ class ESIMCellProblemSolver:
         else:
             return self.bh_interp.mu_initial
 
-    def solve(self, H0, tol=1e-6, max_iter=50, relaxation=0.5):
+    def _solve_on_mesh(self, H0, tol=1e-6, max_iter=200, relaxation=0.5):
         """
         Solve the Cell Problem for given surface field H0.
 
@@ -1045,73 +939,7 @@ class ESIMCellProblemSolver:
         }
 
     def _solve_linear_system(self, H0, mu_dist):
-        """
-        Solve the linearized Cell Problem using finite differences.
-
-        The equation:
-            rho * d^2H/ds^2 + j*omega*mu*H = 0
-
-        With boundary conditions:
-            H(0) = H0
-            H(L) = 0 (approximation for H(infinity) = 0)
-
-        Parameters:
-            H0: Surface field value
-            mu_dist: Permeability distribution at mesh points
-
-        Returns:
-            H: Solution array
-        """
-        n = self.n_nodes
-        s = self.mesh_points
-
-        # Build tridiagonal system: A * H = b
-        # For non-uniform mesh, use general finite difference formula
-
-        # Coefficient arrays for tridiagonal matrix
-        diag_main = np.zeros(n, dtype=complex)
-        diag_lower = np.zeros(n - 1, dtype=complex)
-        diag_upper = np.zeros(n - 1, dtype=complex)
-        rhs = np.zeros(n, dtype=complex)
-
-        # Interior points (i = 1, ..., n-2)
-        for i in range(1, n - 1):
-            h_minus = s[i] - s[i - 1]  # h_{i-1/2}
-            h_plus = s[i + 1] - s[i]   # h_{i+1/2}
-            h_avg = 0.5 * (h_minus + h_plus)
-
-            # Second derivative: d^2H/ds^2 ≈ (H_{i+1} - H_i)/h_plus - (H_i - H_{i-1})/h_minus) / h_avg
-            coef_lower = self.rho / (h_minus * h_avg)
-            coef_upper = self.rho / (h_plus * h_avg)
-            coef_main = -coef_lower - coef_upper + 1j * self.omega * mu_dist[i]
-
-            diag_lower[i - 1] = coef_lower
-            diag_main[i] = coef_main
-            diag_upper[i] = coef_upper
-            rhs[i] = 0.0
-
-        # Boundary condition at s=0: H(0) = H0
-        diag_main[0] = 1.0
-        rhs[0] = H0
-
-        # Boundary condition at s=L: H(L) = 0
-        diag_main[n - 1] = 1.0
-        rhs[n - 1] = 0.0
-
-        # Solve tridiagonal system using scipy
-        # Construct sparse matrix
-        from scipy.sparse import diags as sp_diags
-        from scipy.sparse.linalg import spsolve as sp_solve
-
-        A = sp_diags(
-            [diag_lower, diag_main, diag_upper],
-            offsets=[-1, 0, 1],
-            format='csr'
-        )
-
-        H = sp_solve(A, rhs)
-
-        return H
+        return linear_cell(self, H0, mu_dist)
 
     def _compute_power_losses(self, H, mu_dist):
         """
