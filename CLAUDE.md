@@ -19,11 +19,11 @@ Scope commits to the owner. Each PyPI distribution owns its CI lane in `tools/ci
 CPU `radia` releases exclude mexcuda, MATLAB, LTspice and Simulink artifacts and their CI gates. These belong to independent distribution releases; shared and CPU numerical gates remain mandatory.
 
 - `src/`, `packages/`: production; integrations belong to their package owner.
-- `tests/`: fast deterministic bug/contract protection; every PR.
-- `validation_test/`: correctness gates (physics, CPU/GPU and platform parity); nightly and on the exact release artifact.
-- `validation_records/`: once-passed evidence (speedups, one-offs) with script, SHAs, result JSON; CI checks schema. Timings never gate.
-- `docs/**/*.ipynb`: executed, saved feature introductions and presentation-ready
-  narratives linking those samples; not production interfaces or benchmarks.
+- `tests/`: source soundness; fast deterministic checks, every PR.
+- `validation_test/`: formulation soundness (physics, CPU/GPU and platform parity); nightly and on the exact release artifact.
+- `validation_records/`: Radia's performance record (speedups, one-offs) with script, SHAs, result JSON; CI checks schema. Timings never gate.
+- `docs/**/*.ipynb`: executed notebooks explaining Radia's implementation;
+  not production interfaces or benchmarks.
 - `C:\temp`: disposable prototypes and generated work.
 - `examples/`: retired; never add files.
 
