@@ -25,7 +25,7 @@ def main():
         projection=np.array([[1.,0.],[.5,.5],[0.,1.]])
         cases=[];baseline={}
         for precision in ('none','fp64','fp32'):
-            eng.eval("cfg=makeResidentAlgebraConfig(); cfg.preconditioner_inverse=diag(1./diag(cfg.eddy)); cfg.preconditioner_inverse(1,2)=.002+.001i; cfg.preconditioner_inverse(2,3)=-.001i; cfg.preconditioner_inverse(3,1)=.001;",nargout=0)
+            eng.eval("cfg=makeResidentAlgebraConfig(); cfg.bh_mode='linear'; cfg.preconditioner_inverse=diag(1./diag(cfg.eddy)); cfg.preconditioner_inverse(1,2)=.002+.001i; cfg.preconditioner_inverse(2,3)=-.001i; cfg.preconditioner_inverse(3,1)=.001;",nargout=0)
             eng.workspace['precision_mode']=precision;eng.eval('cfg.preconditioner_precision=precision_mode;',nargout=0)
             for current in (0.,1.,-2.5):
                 eng.workspace['drive']=current;eng.eval("h=radia_cuda_ih('create',cfg);",nargout=0)
