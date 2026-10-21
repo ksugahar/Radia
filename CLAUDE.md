@@ -19,8 +19,9 @@ Scope commits to the owner. Each PyPI distribution owns its CI lane in `tools/ci
 CPU `radia` releases exclude mexcuda, MATLAB, LTspice and Simulink artifacts and their CI gates. These belong to independent distribution releases; shared and CPU numerical gates remain mandatory.
 
 - `src/`, `packages/`: production; integrations belong to their package owner.
-- `tests/`: small executable usage samples and fast deterministic bug/contract protection.
-- `validation_test/`: executable physics/application samples and numerical, performance, native, GUI, and multi-machine evidence with result JSON.
+- `tests/`: fast deterministic bug/contract protection; every PR.
+- `validation_test/`: correctness gates (physics, CPU/GPU parity, platform agreement); nightly and on the exact release artifact.
+- `validation_records/`: once-passed evidence (speedups, one-offs): script, source SHA, artifact hash, result JSON; CI checks schema. Timings never gate.
 - `docs/**/*.ipynb`: executed, saved feature introductions and presentation-ready
   narratives linking those samples; not production interfaces or benchmarks.
 - `C:\temp`: disposable prototypes and generated work.
@@ -266,7 +267,6 @@ Adopt the Optuna 5 design in place: delete active optuna49 fixtures/pins, remove
 legacy sampler-state restore and public multi-objective TPE; unified TPESampler owns both objectives.
 Table/HDF5 storage, Simulink, parallelism and MEX are extensions, not algorithm changes.
 Native acceleration requires correct differential results; maintain API/oracle manifests and fail loudly.
-Fast deterministic tests belong in tests; long performance/scaling/parallel/dimension work in validation_test.
 Released optuna-mcp==0.2.0 owns generic Study/Trial MCP for Optuna 5.0.0; 0.3.0.dev is not a stable release.
 radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and Radia composition.
 
