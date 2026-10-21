@@ -62,3 +62,13 @@ def test_unresolved_mesh_budget_fails_and_cache_controls_are_hashed():
     solver.mesh_tol *= .5
     with pytest.raises(RuntimeError, match='configuration changed'):
         evaluator._fields(np.array([1000.]))
+
+
+def test_lossy_material_sign_and_halfspace_depth_are_checked():
+    cell = ESIMCellProblemSolver(complex_mu=(100., 20.), sigma=5e6,
+                                frequency=222e3, n_nodes=40, num_skin_depths=1)
+    result = cell.solve(1000.)
+    expected = np.sqrt(1j*cell.omega*MU0*(100-20j)*cell.rho)
+    assert abs(result['Z']/expected-1) < .003
+    assert len(result['depth_history']) > 1
+    assert result['P_magnetic'] > 0
