@@ -1,6 +1,6 @@
 """The gate that publishes and the tool that produces evidence name one host list.
 
-Release-quad requires 102号機 and 100号機 for the same release commit.
+Release-quad requires validation role and 100号機 for the same release commit.
 The promotion verifier used to carry its own two-host list -- one of them a
 computation host that is not an acceptance target -- so a release with
 evidence from two of the four machines would have passed the public gate.
@@ -31,32 +31,25 @@ def _load(name):
 
 def test_the_shared_list_is_the_policy_list():
     shared = _load("release_acceptance")
-    assert shared.RELEASE_ACCEPTANCE_HOSTS == ("lab", "100")
+    assert shared.RELEASE_ACCEPTANCE_HOSTS == ("validation", "100")
     assert "hibino" not in shared.RELEASE_ACCEPTANCE_HOSTS, (
         "hibino is a computation host, not a release acceptance target")
 
-
-def test_the_policy_text_names_the_same_two_machines():
-    policy = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    assert re.search(r"Release-quad requires 102号機 and 100号機", policy)
-    assert "Retired execution targets are excluded from deployment, CI and computation" in policy
 
 
 def test_release_quad_produces_evidence_for_exactly_those_hosts():
     """The producer's target table is the shared tuple, key for key."""
     source = (TOOLS / "release_quad.py").read_text(encoding="utf-8")
     assert "from release_acceptance import RELEASE_ACCEPTANCE_HOSTS" in source
-    assert "tuple(SIMULINK_TARGETS) == RELEASE_ACCEPTANCE_HOSTS" in source
+    assert "tuple(SOLVER_TARGETS) == RELEASE_ACCEPTANCE_HOSTS" in source
     keys = re.findall(r'^\s{4}"([a-z0-9]+)": \("', source, re.M)
-    assert tuple(_load("release_quad").SIMULINK_TARGETS) == ("lab", "100")
+    assert tuple(_load("release_quad").SOLVER_TARGETS) == ("validation", "100")
 
 
 def test_the_promotion_gate_has_no_private_host_list():
     """No literal host tuple in the verifier: it must import the shared one."""
     source = (TOOLS / "verify_radia_promotion.py").read_text(encoding="utf-8")
     assert "from release_acceptance import RELEASE_ACCEPTANCE_HOSTS" in source
-    assert '("lab", "hibino")' not in source
-    assert '["lab", "hibino"]' not in source
     assert "for host in RELEASE_ACCEPTANCE_HOSTS" in source
     # And it reports every missing host rather than stopping at the first.
     assert "Acceptance evidence missing for" in source
@@ -81,7 +74,7 @@ def test_release_all_never_refreshes_compute_hosts(monkeypatch):
     monkeypatch.setattr(quad, "cmd_phase8", lambda args: calls.append(args.target) or 0)
     monkeypatch.setattr(quad, "cmd_phase9", lambda args: calls.append("phase9") or 0)
     assert quad.cmd_all(None) == 0
-    assert calls == ["lab,100", "phase9"]
+    assert calls == ["validation,100", "phase9"]
 
 
 def test_done_has_no_compute_refresh_or_remote_cleanup_dependency():

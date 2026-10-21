@@ -155,9 +155,9 @@ def test_optuna_candidate_rejects_ambiguous_engine_sessions_before_any_target(
     monkeypatch.setattr(release_quad, "_run_optuna_candidate_target", no_target)
     for target, sessions in (
         ("100", ["lab=radia_shared"]),            # unselected target
-        ("lab", ["lab=a", "lab=b"]),             # duplicate target
-        ("lab", ["lab="]),                        # empty name
-        ("lab", ["radia_shared"]),                 # missing HOST=
+        ("validation", ["lab=a", "lab=b"]),             # duplicate target
+        ("validation", ["lab="]),                        # empty name
+        ("validation", ["radia_shared"]),                 # missing HOST=
     ):
         args = argparse.Namespace(
             ci_run_id="12345", target=target, engine_session=sessions
@@ -176,7 +176,7 @@ def test_optuna_candidate_parser_accepts_repeatable_engine_sessions(monkeypatch)
     monkeypatch.setattr(
         release_quad.sys, "argv",
         ["release_quad.py", "optuna-candidate", "--ci-run-id", "1",
-         "--target", "lab,100", "--engine-session", "lab=a",
+         "--target", "validation,100", "--engine-session", "lab=a",
          "--engine-session", "100=b"],
     )
     try:

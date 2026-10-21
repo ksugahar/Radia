@@ -289,7 +289,7 @@ def test_preflight_git_scope_is_safe_in_an_isolated_worktree(monkeypatch):
 
 def test_pre_push_runs_the_unpushed_candidate_on_lab():
     hook = (ROOT / "tools" / "git-hooks" / "pre-push").read_text(encoding="utf-8")
-    helper = (ROOT / "tools" / "ci_preflight_lab.py").read_text(encoding="utf-8")
+    helper = (ROOT / "tools" / "ci_preflight_remote.py").read_text(encoding="utf-8")
 
     dispatcher = (ROOT / "tools" / "pre_push_check.py").read_text(encoding="utf-8")
     assert "python tools/pre_push_check.py" in hook
@@ -304,7 +304,7 @@ def test_pre_push_runs_the_unpushed_candidate_on_lab():
     assert 'import mcp, numpy, pytest, scipy, setuptools, wheel, yaml' in helper
     assert "tools/run_test_tier.py --profile fast-contracts" in helper
     assert "candidate preflight helper is missing" in dispatcher
-    assert '&& [ -f tools/ci_preflight_lab.py ]' not in hook
+    assert '&& [ -f tools/ci_preflight_remote.py ]' not in hook
     assert "upload_release_asset.py" not in hook
     assert "developer push must never upload mutable" in hook
 
@@ -322,7 +322,7 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert policy == section(claude)
     normalized = " ".join(policy.split())
     assert "with the `100` runner label" in normalized
-    assert "LAB/102 tests radia and radia-mcp wheels without radia-gpu" in normalized
+    assert "NGSolve compute validation consumes radia/radia-mcp wheels, never Cubit" in normalized
     assert "Use the on-demand GPU worker only for mexcuda GPU work" in normalized
     assert "Retired execution targets are excluded from deployment, CI and computation" in normalized
     assert "`A100` validation runs without Cubit" in normalized
@@ -342,7 +342,7 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert "Do not keep two tests whose purpose and failure signal are the same" in normalized
     assert "an adjacent JSON and a runtime gate are not required" in normalized
     assert "A docs-only contract lane parses changed notebooks" in normalized
-    assert "Developer pre-push hooks run only the impact-scoped LAB preflight" in normalized
+    assert "Pre-push runs only impact-scoped build-target preflight" in normalized
 
 
 def test_policy_twins_define_the_same_compute_host_routing():
@@ -467,14 +467,7 @@ def test_workflow_discovers_directory_and_preserves_exact_selectors(monkeypatch,
 
 def test_host_roles_agree_across_deployment_skills():
     root = ROOT
-    verify = " ".join((root / ".agents/skills/verify-deploy/SKILL.md").read_text(encoding="utf-8").split())
     cubit = " ".join((root / ".agents/skills/release-cubit-mesh-export/SKILL.md").read_text(encoding="utf-8").split())
-    build = " ".join((root / ".agents/skills/build/SKILL.md").read_text(encoding="utf-8").split())
-    assert "On LAB, they must resolve to the verified wheel" in verify
-    assert "Only 100号機 uses an editable install" in verify
-    assert "LAB/100 editable sources" not in build
-    assert "LAB/100 must remain verified editable" not in build
-    assert "LAB uses verified wheels and only 100号機 uses an editable development install" in build
     # The public role table documents CLI identifiers, not physical host names.
     # Bind its tiers to the actual deployment source instead of historical prose.
     guide = root / ".agents/skills/release-cubit-mesh-export/SKILL.md"
@@ -489,10 +482,9 @@ def test_host_roles_agree_across_deployment_skills():
     assert spec and spec.loader
     dual = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(dual)
-    assert documented_tiers == dual.TIERS == {"100": "editable", "lab": "wheel"}
+    assert documented_tiers == dual.TIERS == {"100": "editable"}
     assert set(documented_tiers) == set(dual.TARGETS)
     assert "`tools/release_cubit_dual.py`" in cubit
-    assert "solver releases must not install, repoint or version-gate it" in cubit
     # Both release agents use the same portable acceptance/cleanup contract.
     import re
     links = re.findall(r"\]\((\.\./[^)]+)\)", guide.read_text(encoding="utf-8"))

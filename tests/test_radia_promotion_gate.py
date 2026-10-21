@@ -17,6 +17,13 @@ spec.loader.exec_module(gate)
 EVIDENCE = ROOT / "validation_test/esrf_three_engine/results/candidate_ed58b5deb"
 
 
+@pytest.fixture(autouse=True)
+def configured_acceptance_roles(monkeypatch):
+    names = {"validation": "validation-machine", "100": "build-machine"}
+    monkeypatch.setattr(gate, "CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES", names)
+    monkeypatch.setattr(gate, "RELEASE_ACCEPTANCE_HOSTNAMES", {k: {v} for k, v in names.items()})
+
+
 @pytest.mark.parametrize("suffix", ["", "actions/runs/123"])
 def test_github_endpoint_has_no_empty_trailing_path(monkeypatch, suffix):
     seen = []
@@ -36,7 +43,7 @@ def evidence(record="validation"):
     x = (EVIDENCE / record / "focused.xml").read_bytes()
     tree = ET.fromstring(x)
     suite = tree if tree.tag == "testsuite" else tree.find("testsuite")
-    suite.set("hostname", "lab")  # Synthetic operational-role fixture only.
+    suite.set("hostname", "validation-machine")  # Synthetic operational-role fixture only.
     x = ET.tostring(tree)
     identity = {k: a[k] for k in ("wheel_sha256", "native_sha256", "source_commit", "ci_run", "sources_verified", "version")}
     return a, f, x, identity
@@ -44,7 +51,7 @@ def evidence(record="validation"):
 
 @pytest.mark.parametrize("record", ["validation", "compute"])
 def test_committed_numeric_record_with_synthetic_host(record):
-    gate.verify_host(*evidence(record), "lab")
+    gate.verify_host(*evidence(record), "validation")
 
 
 @pytest.mark.parametrize("key", ["wheel_sha256", "native_sha256", "source_commit", "ci_run", "sources_verified", "version"])
@@ -52,7 +59,7 @@ def test_reject_substituted_identity(key):
     a, f, x, identity = evidence()
     a[key] = "wrong"
     with pytest.raises(ValueError):
-        gate.verify_host(a, f, x, identity, "lab")
+        gate.verify_host(a, f, x, identity, "validation")
 
 
 @pytest.mark.parametrize("mutation", ["missing", "duplicate", "failed", "bool_exit"])
@@ -67,7 +74,7 @@ def test_reject_step_contract(mutation):
     else:
         a["steps"][0]["exit_code"] = 1
     with pytest.raises(ValueError):
-        gate.verify_host(a, f, x, identity, "lab")
+        gate.verify_host(a, f, x, identity, "validation")
 
 
 @pytest.mark.parametrize("text", ['{"x":NaN}', '{"x":Infinity}', '{"x":1e999}', '{"x":1,"x":2}'])
@@ -90,7 +97,7 @@ def test_reject_native_failure(mutation):
     else:
         f["rows"][0]["nonlinear_stats"]["nonlinear_tangent_assemblies"] = 0
     with pytest.raises(ValueError):
-        gate.verify_host(a, f, x, identity, "lab")
+        gate.verify_host(a, f, x, identity, "validation")
 
 
 def test_host_and_focused_failure():
@@ -98,7 +105,7 @@ def test_host_and_focused_failure():
     with pytest.raises(ValueError):
         gate.verify_host(a, f, x, identity, "hibino")
     with pytest.raises(ValueError):
-        gate.verify_host(a, f, x.replace(b'failures="0"', b'failures="1"'), identity, "lab")
+        gate.verify_host(a, f, x.replace(b'failures="0"', b'failures="1"'), identity, "validation")
 
 
 def test_strengthened_focused_suite_and_reject_unknown_case():
@@ -110,24 +117,22 @@ def test_strengthened_focused_suite_and_reject_unknown_case():
     extra.set("time", "0.1")
     suite.set("tests", str(int(suite.get("tests")) + 1))
     strengthened = ET.tostring(root)
-    gate.verify_host(a, f, strengthened, identity, "lab")
+    gate.verify_host(a, f, strengthened, identity, "validation")
     extra.set("name", "test_unreviewed_extra_case")
     with pytest.raises(ValueError, match="Missing or duplicate focused case"):
-        gate.verify_host(a, f, ET.tostring(root), identity, "lab")
+        gate.verify_host(a, f, ET.tostring(root), identity, "validation")
 
 
-@pytest.mark.parametrize("host,hostname", [("lab", "lab"), ("lab", "INTEL11"),
-                                          ("100", "INTEL11"), ("100", "T7920")])
-def test_current_and_historical_os_hostnames(host, hostname):
+@pytest.mark.parametrize("host,hostname", [("validation", "validation-machine"), ("100", "build-machine")])
+def test_configured_os_hostnames(host, hostname):
     a, f, xml, identity = evidence()
     root = ET.fromstring(xml)
     root.find('.//testsuite').set('hostname', hostname)
     actual = ET.tostring(root)
     gate.verify_host(a, f, actual, identity, host)
-    wrong_targets = ['mdx1', 'mdx2'] + (['lab'] if hostname == 'T7920' else [])
-    for wrong_target in wrong_targets:
-        with pytest.raises(ValueError, match='Wrong acceptance host'):
-            gate.verify_host(a, f, actual, identity, wrong_target)
+    other = "100" if host == "validation" else "validation"
+    with pytest.raises(ValueError, match='Wrong acceptance host'):
+        gate.verify_host(a, f, actual, identity, other)
 
 
 def private_current_evidence(host):
@@ -166,15 +171,15 @@ def test_public_export_preserves_numbers_and_passes_privacy_policy():
 def test_public_export_rejects_historical_machine_for_current_role():
     a, f, xml, identity = private_current_evidence("100")
     tree = ET.fromstring(xml)
-    tree.find(".//testsuite").set("hostname", "INTEL11")
-    with pytest.raises(ValueError, match="Current acceptance host required"):
+    tree.find(".//testsuite").set("hostname", "other-machine")
+    with pytest.raises(ValueError, match="Wrong acceptance host"):
         gate.prepare_public_host(a, f, ET.tostring(tree), identity, "100", b"x" * 32)
 
 
 @pytest.mark.parametrize("changed", ["acceptance", "full6", "focused", "unverified", "missing"])
 def test_public_gate_rejects_changed_or_unverified_export(changed):
-    a, f, xml, identity = private_current_evidence("lab")
-    a, f, xml = gate.prepare_public_host(a, f, xml, identity, "lab", b"x" * 32)
+    a, f, xml, identity = private_current_evidence("validation")
+    a, f, xml = gate.prepare_public_host(a, f, xml, identity, "validation", b"x" * 32)
     if changed == "acceptance":
         a["steps"][0]["elapsed_s"] = a["steps"][0].get("elapsed_s", 0) + 1
     elif changed == "full6":
@@ -188,7 +193,7 @@ def test_public_gate_rejects_changed_or_unverified_export(changed):
     else:
         del a["private_runtime_verification"]
     with pytest.raises(ValueError):
-        gate.verify_host(a, f, xml, identity, "lab", public=True)
+        gate.verify_host(a, f, xml, identity, "validation", public=True)
 
 
 @pytest.mark.parametrize("changed", ["machine_token", "verification_batch", "missing_role"])
@@ -213,7 +218,7 @@ def test_bool_is_not_a_numerical_result(key):
     a, f, x, identity = evidence()
     f["rows"][0][key] = False if key != "order" else True
     with pytest.raises(ValueError):
-        gate.verify_host(a, f, x, identity, "lab")
+        gate.verify_host(a, f, x, identity, "validation")
 
 
 class FakeAPI:
@@ -342,7 +347,7 @@ def test_exact_wheel_end_to_end(tmp_path):
 
     api.file = read_file
     report = gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
-    assert report["hosts"] == ["lab", "100"] and report["passed"]
+    assert report["hosts"] == ["validation", "100"] and report["passed"]
     for missing_host in report["hosts"]:
         def incomplete(path, commit):
             if path.split("/")[-2] == missing_host:
@@ -358,7 +363,7 @@ def test_exact_wheel_end_to_end(tmp_path):
         data = read_file(path, commit)
         if path.endswith("focused.xml"):
             tree = ET.fromstring(data)
-            tree.find(".//testsuite").set("hostname", "INTEL11")
+            tree.find(".//testsuite").set("hostname", "other-machine")
             return ET.tostring(tree)
         return data
     def old_fleet(path, commit):
@@ -366,14 +371,14 @@ def test_exact_wheel_end_to_end(tmp_path):
         if path.endswith("focused.xml"):
             tree = ET.fromstring(data)
             host = path.split("/")[-2]
-            tree.find(".//testsuite").set("hostname", "lab" if host == "lab" else "INTEL11")
+            tree.find(".//testsuite").set("hostname", "validation-machine" if host == "validation" else "other-machine")
             return ET.tostring(tree)
         return data
     api.file = old_fleet
-    with pytest.raises(ValueError, match="Current acceptance host required"):
+    with pytest.raises(ValueError, match="Wrong acceptance host"):
         gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
     api.file = same_machine
-    with pytest.raises(ValueError, match="Current acceptance host required"):
+    with pytest.raises(ValueError, match="Wrong acceptance host"):
         gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
     api.file = read_file
     ctx["ref_type"] = "branch"
@@ -395,14 +400,14 @@ def test_new_releases_require_the_strengthened_focused_suite():
     for version in ("5.1.0", "5.1.1", "6.0.0"):
         a["version"] = f["version"] = identity["version"] = version
         with pytest.raises(ValueError, match="Missing or duplicate focused case"):
-            gate.verify_host(a, f, xml, identity, "lab")
+            gate.verify_host(a, f, xml, identity, "validation")
         root = ET.fromstring(xml)
         suite = root if root.tag == "testsuite" else root.find("testsuite")
         extra = ET.SubElement(suite, "testcase")
         extra.set("name", "test_indefinite_operator_with_positive_jacobi_diagonal_raises_in_batched_pcg")
         extra.set("time", "0.1")
         suite.set("tests", str(int(suite.get("tests")) + 1))
-        gate.verify_host(a, f, ET.tostring(root), identity, "lab")
+        gate.verify_host(a, f, ET.tostring(root), identity, "validation")
 
 
 @pytest.mark.parametrize("status,conclusion", [("in_progress", None), ("completed", "failure"),
@@ -439,12 +444,12 @@ def test_application_acceptance_requires_two_exact_mex_results():
     for mutation in ("missing_host", "failed", "wrong_mex", "wrong_source", "missing_time",
                      "wrong_label"):
         proof = application_proof()
-        if mutation == "missing_host": del proof["targets"]["lab"]
+        if mutation == "missing_host": del proof["targets"]["validation"]
         elif mutation == "wrong_label": proof["targets"]["100"]["label"] = "mdx1"
         elif mutation == "failed": proof["targets"]["100"]["status"] = "failed"
-        elif mutation == "wrong_mex": proof["targets"]["lab"]["mex_sha256"] = "d"*64
+        elif mutation == "wrong_mex": proof["targets"]["validation"]["mex_sha256"] = "d"*64
         elif mutation == "wrong_source": proof["commit"] = "e"*40
-        else: del proof["targets"]["lab"]["verified_at_utc"]
+        else: del proof["targets"]["validation"]["verified_at_utc"]
         with pytest.raises(ValueError):
             gate.verify_application_acceptance(proof, identity)
 
