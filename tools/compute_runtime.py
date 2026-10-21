@@ -48,11 +48,18 @@ def normalize(name: str) -> str:
     return name.lower().replace("_", "-").replace(".", "-")
 
 
+def validate_distributions(wheels):
+    """Compute wheel runtimes exclude the licensed CAD exporter."""
+    if any(normalize(row["name"]) == "cubit-mesh-export" for row in wheels):
+        raise ValueError("cubit-mesh-export is forbidden on compute targets")
+
+
 def read_lock(path: Path) -> dict:
     lock = json.loads(path.read_text(encoding="utf-8"))
     payload = {k: v for k, v in lock.items() if k != "lock_sha256"}
     if lock.get("schema") != SCHEMA or hashlib.sha256(canonical(payload)).hexdigest() != lock.get("lock_sha256"):
         raise ValueError("Invalid or modified compute lock")
+    validate_distributions(lock.get("wheels", []))
     return lock
 
 
@@ -81,6 +88,7 @@ def create_lock(wheelhouse: Path, output: Path, procedure_commit: str, runtime_i
                     modules[module] = dict(wheel=path.name, sha256=hashlib.sha256(z.read(name)).hexdigest())
     if set(MODULES) != set(modules):
         raise ValueError(f"Missing required wheel modules: {set(MODULES) - set(modules)}")
+    validate_distributions(wheels)
     names = [w["name"] for w in wheels]
     if len(set(names)) != len(names):
         raise ValueError("More than one wheel per distribution")

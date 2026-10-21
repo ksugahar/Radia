@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check every branch candidate from Git pre-push stdin on the wheel test host."""
+"""Check every branch candidate from Git pre-push stdin on the build target."""
 from pathlib import Path
 import re
 import subprocess
@@ -78,7 +78,7 @@ def candidates(lines):
 def main(lines=None):
     try:
         updates = candidates(sys.stdin if lines is None else lines)
-        helper = ROOT / "tools" / "ci_preflight_lab.py"
+        helper = ROOT / "tools" / "ci_preflight_remote.py"
         if updates and not helper.is_file():
             raise ValueError("candidate preflight helper is missing")
         for base, head in updates:

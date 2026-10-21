@@ -5,6 +5,13 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## [Unreleased]
+
+- Avoid an outstanding blocking read on empty Windows stdin pipes in the
+  NGSolve MCP server. Lazy native-module imports can otherwise stall while the
+  transport waits for its next request. Preserve SDK framing and dispatch,
+  restore stdin on exit, and leave other transports and platforms unchanged.
+
 ## [2.0.2] - 2026-10-08
 
 - Guide supported large real lowest-order H(curl) analyses through

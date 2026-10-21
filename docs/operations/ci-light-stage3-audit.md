@@ -201,3 +201,15 @@ BelowNormal priority, an 8 GiB job-commit cap and a 240-second wall cap, with no
 GPU and no retry. It completed in 81.14 seconds with a peak job commit of
 132526080 bytes. Exact topology, affinity, dependency versions and raw outputs
 are retained privately; no runner or shared environment was changed.
+Re-audit after the execution-role change. The closure files changed were
+tests/test_public_runtime_privacy.py, tests/test_radia_promotion_gate.py,
+tools/ci_distribution_manifest.json, tools/policy_lint.py, tools/pre_push_check.py
+and tools/release_acceptance.py. In the isolated lightweight environment, the
+fast-contracts job steps passed: routing audit, routing contract (19 tests),
+source compilation, caller-owned TaskManager audit, version check, fast
+selector (135 tests) and showcase readers (6 tests). The 51-file closure digest
+is now `c59f7d870b417d07d7de003cdd27bdc1c3bec3e53a06646203029acbcf437e9e`.
+
+After merging the Newton budget fix with current main, the combined 51-file
+closure digest is `0d933121845010f273cd88353a810aa7253f472f539f56783a19471ae4e7f26d`; the isolated fast-contracts steps were re-run on the
+merged tree.

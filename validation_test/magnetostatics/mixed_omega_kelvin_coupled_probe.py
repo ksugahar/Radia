@@ -24,6 +24,7 @@ def main():
     p.add_argument('--mode',choices=('parity','coupled','repeated'),default='parity')
     p.add_argument('--backend',choices=('cpu','gpu'),default='cpu')
     p.add_argument('--cpu-solver',choices=('direct','cg-local','cg-h1amg','cg-bddc-h1amg'),default='direct')
+    p.add_argument('--threads',type=int,choices=range(1,17),default=1)
     p.add_argument('--radius',type=float,default=.18)
     p.add_argument('--maxh',type=float,default=.18)
     p.add_argument('--order',type=int,choices=(1,2,3),default=2)
@@ -71,10 +72,10 @@ def main():
     candidate=Path(__file__).resolve().parents[2]/'src/radia/kelvin_solver.py'
     spec=importlib.util.spec_from_file_location('radia._mixed_candidate',candidate)
     omega=importlib.util.module_from_spec(spec);spec.loader.exec_module(omega)
-    ng.SetNumThreads(1)
+    ng.SetNumThreads(args.threads)
     record=dict(schema='mixed-omega.separated-coupling.v1',passed=False,backend=args.backend,
                 ngsolve=ng.__version__,mode=args.mode,radius=args.radius,history=[])
-    record.update(fem_backend=args.backend,mmm_backend='cpu')
+    record.update(fem_backend=args.backend,mmm_backend='cpu',threads=args.threads,formulation_parity_status='OPEN')
     if args.backend=='gpu':record['csr_manifest']=radia_simulink.verify()
     record.update(bonus_intorder=args.bonus_intorder,parity_trace=args.parity_trace,parity_flux=args.parity_flux)
     if args.mode!='parity' and (args.parity_trace!='projected' or args.parity_flux!='mean-corrected'):raise ValueError('Parity route changes require parity mode')

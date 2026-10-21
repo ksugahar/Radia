@@ -123,7 +123,7 @@ def download_one(repo: str, tag: str, name: str, dest_dir: str,
             print(f"    Network error downloading asset: {e}")
 
     print(f"::error::Failed to download {name} from {repo}@{tag} "
-          f"after {max_attempts} attempts (run tools/upload_release_asset.py on LAB).")
+          f"after {max_attempts} attempts (run tools/upload_release_asset.py on the build target).")
     return 1
 
 

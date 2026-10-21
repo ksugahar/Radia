@@ -51,8 +51,8 @@ def test_changed_release_tool_selects_its_regressions():
 
 def test_changed_test_selects_itself_but_not_unrelated_regressions():
     runner = runner_module()
-    selected = runner.select_impact_tests([], ['tests/test_ci_preflight_lab.py'])
-    assert selected == ['tests/test_ci_preflight_lab.py']
+    selected = runner.select_impact_tests([], ['tests/test_ci_preflight_remote.py'])
+    assert selected == ['tests/test_ci_preflight_remote.py']
     assert runner.select_impact_tests([], ['docs/intro.md']) == []
 
 
@@ -60,7 +60,7 @@ def test_unknown_base_selects_all_registered_impacts():
     runner = runner_module()
     selected = runner.select_impact_tests([], None)
     assert 'tests/test_release_quad_state.py' in selected
-    assert 'tests/test_ci_preflight_lab.py' in selected
+    assert 'tests/test_ci_preflight_remote.py' in selected
 
 
 @pytest.mark.parametrize('changed', [None, ['src/radia/vim/_nonlinear.py'],
@@ -94,12 +94,12 @@ def test_additive_manifest_selects_new_rules_and_ordinary_impacts(monkeypatch, t
     monkeypatch.setattr(runner, 'MANIFEST', manifest)
     selected = runner.select_impact_tests(
         ['tests/test_test_tier_policy.py'],
-        ['tests/test_tier_manifest.json', 'tools/ci_preflight_lab.py'],
+        ['tests/test_tier_manifest.json', 'tools/ci_preflight_remote.py'],
         previous_manifest=previous,
     )
     assert set(selected) == {
         'tests/test_test_tier_policy.py', 'tests/test_ih_energy_audit_contract.py',
-        'tests/test_ci_preflight_lab.py',
+        'tests/test_ci_preflight_remote.py',
     }
 
 
@@ -168,12 +168,12 @@ def test_profile_membership_only_selects_changed_tests(change, monkeypatch, tmp_
     paths = current['profiles']['fast-contracts']['paths']
     before = set(paths)
     if change == 'add':
-        paths.append('tests/test_ci_preflight_lab.py')
+        paths.append('tests/test_ci_preflight_remote.py')
     elif change == 'remove':
         paths.remove('tests/test_ih_energy_audit_contract.py')
     elif change == 'replace':
         paths.remove('tests/test_ih_energy_audit_contract.py')
-        paths.append('tests/test_ci_preflight_lab.py')
+        paths.append('tests/test_ci_preflight_remote.py')
     else:
         paths.reverse()
     manifest = tmp_path / 'manifest.json'
@@ -281,7 +281,7 @@ def test_cli_passes_exact_base_manifest_to_selection(monkeypatch):
     monkeypatch.setattr(runner.subprocess, 'run', fake_run)
     assert runner.main(['--since', 'exact-base', '--collect-only']) == 0
     selected = calls[-1]
-    assert 'tests/test_ci_preflight_lab.py' not in selected
+    assert 'tests/test_ci_preflight_remote.py' not in selected
     assert 'tests/test_run_test_tier.py' not in selected
     assert 'tests/test_run_test_tier.py' in runner.load_profile('repo-contracts')[0]
 

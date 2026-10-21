@@ -152,7 +152,8 @@ This distinction does not weaken wheel, dependency, or numerical acceptance.
 ## Scope
 
 radia-mcp is independently versioned and distributed. Its release-dual targets
-are validation host (verified wheel) and 100 (editable) only, like cubit-mesh-export.
+are the NGSolve compute validation role (verified wheel) and build role (editable).
+Cubit deploys only to the build role and is forbidden on the compute role.
 Do not deploy radia-mcp to compute-host, worker-a or worker-b, or run the full Radia QUAD
 installer for an MCP-only update. Isolated CI/wheel tests on compute runners
 are tests, not host deployment. Existing installations on excluded hosts are

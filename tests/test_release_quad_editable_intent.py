@@ -49,7 +49,7 @@ def test_remote_verify_ships_the_intent_tool_as_the_script():
 
 def test_verify_editable_checks_lab_wheel_and_100_editable(monkeypatch):
     calls = []
-    monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda: calls.append("lab-wheel") or 0)
+    monkeypatch.setattr(release_quad, "_verify_validation_wheel", lambda: calls.append("lab-wheel") or 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable", lambda: calls.append("100-editable") or 0)
     assert release_quad.cmd_verify_editable(None) == 0
     assert calls == ["lab-wheel", "100-editable"]
@@ -121,7 +121,7 @@ def test_remote_verify_counts_unverified_and_drift(monkeypatch):
 @pytest.mark.parametrize("source_rc", [0, 4])
 def test_done_default_source_is_controller_and_ignores_legacy_lab_intent(
         isolated_record, monkeypatch, record, source_rc):
-    # Legacy LAB editable records no longer select or gate the runtime source.
+    # Legacy validation editable records no longer select or gate the runtime source.
     if record:
         _record(isolated_record, "radia", "S:/Radia/old-lab-editable/")
     assert release_quad._done_release_source(SimpleNamespace()) == str(release_quad.REPO)
@@ -148,8 +148,8 @@ def test_lab_deploy_uses_wheel_route_and_propagates_failure(monkeypatch, rc):
     calls = []
     monkeypatch.setattr(release_quad, "_deploy_pypi",
                         lambda host, label, **kw: calls.append((host, label, kw)) or rc)
-    assert release_quad._deploy_lab() == rc
-    assert calls == [("102", "LAB", {})]
+    assert release_quad._deploy_validation() == rc
+    assert calls == [("validation", "validation", {})]
 
 
 
@@ -159,7 +159,7 @@ def test_remote_record_helper_uses_record_current_with_the_host_tool(monkeypatch
     monkeypatch.setattr(release_quad, "_remote_editable_intent",
                         lambda host, argv, **kw: seen.update(host=host, argv=list(argv)) or
                         (0, {"results": [], "record_file": "r", "exit_code": 0}, ""))
-    assert release_quad._record_release_intent_remote("100", "100号機", r"W:\x") == 0
+    assert release_quad._record_release_intent_remote("100", "build", r"W:\x") == 0
     assert seen["host"] == "100"
     assert seen["argv"][:3] == ["--json", "repoint", "--record-current"]
     assert seen["argv"].count("--package") == 1
@@ -190,7 +190,7 @@ def test_repoint_on_lab_is_refused_before_action(monkeypatch, capsys):
     monkeypatch.setattr(intent, "main", lambda argv: actions.append(argv) or 0)
     monkeypatch.setattr(release_quad, "_remote_editable_intent",
                         lambda *args, **kwargs: actions.append(args))
-    args = SimpleNamespace(host="lab", package=["radia"], source=["S:/old"],
+    args = SimpleNamespace(host="validation", package=["radia"], source=["S:/old"],
                            reason="test", via=None, record_current=False,
                            rollback=False, dry_run=False, require_pushed=False)
     assert release_quad.cmd_repoint(args) == 2
@@ -198,7 +198,7 @@ def test_repoint_on_lab_is_refused_before_action(monkeypatch, capsys):
     assert "only on 100号機" in capsys.readouterr().out
 
 def test_repoint_refuses_incomplete_requests():
-    base = {"host": "lab", "via": None, "record_current": False, "rollback": False,
+    base = {"host": "validation", "via": None, "record_current": False, "rollback": False,
             "dry_run": False, "require_pushed": False}
     assert release_quad.cmd_repoint(SimpleNamespace(package=["radia"], source=[], reason="r", **base)) == 2
     assert release_quad.cmd_repoint(SimpleNamespace(package=["radia"], source=["x"], reason="", **base)) == 2
