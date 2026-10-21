@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.5 - Netgen/NGSolve 6.2.2608
+
+- Pin the external Python runtime to Netgen/NGSolve 6.2.2608 and rebuild the native curver for its C++ ABI.
+- Preserve Netgen's typed point and region indices and iterate surface elements through the public range API.
+- Keep the standalone Cubit command plugin independent of the Python solver wheels.
+
 ## 2.2.4 - Pinned native build toolchain
 
 - Require Visual Studio Build Tools 2022 with MSVC 14.44.35207 for native builds and reject mismatched compiler caches.

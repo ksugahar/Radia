@@ -87,7 +87,6 @@ private:
   bool curve(int order);
 
   std::shared_ptr<netgen::Mesh> ng_mesh_;
-  std::unordered_map<int, int> cubit_nid_to_ng_pi_;  // cubit node ID -> netgen PointIndex
 };
 
 #endif // NETGEN_CURVER_PURE_HPP
