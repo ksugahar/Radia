@@ -11,9 +11,8 @@ Intentional differences in environment variables, provenance, state directories,
 example providers and mesh contracts must remain owner-specific. Cubit's tests
 cover these contracts independently, including operation without Radia installed.
 
-Support derived from the former shared runtime retains the copyright and full
-BSD-3-Clause terms in LICENSE-BSD-3-Clause.txt. The containing exporter uses MIT;
-this does not relicense the inherited support or discard its notices.
+Support derived from the former shared runtime is owner-authored and licensed
+under Apache-2.0; see LICENSE-APACHE-2.0.txt.
 
 Cubit controls use CUBIT_MCP_* environment variables. RADIA_MCP_* variables no
 longer configure this product. Its state directory is independent; old Radia

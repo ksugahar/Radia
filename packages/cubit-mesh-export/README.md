@@ -537,3 +537,8 @@ Source: [github.com/ksugahar/Radia](https://github.com/ksugahar/Radia)
 Coreform Cubit 2026.8 is the supported native SDK/runtime. The installer rejects
 older runtimes and SDK mismatches. Distribution acceptance runs on the licensed validation host; computation-time
 evaluation hosts do not install Cubit.
+
+
+Owner-authored code is licensed under Apache-2.0 from the next releases.
+See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
+retain their original licenses; previously published artifacts are unchanged.

@@ -1,5 +1,5 @@
 # Cubit-owned implementation; intentionally maintained independently of Radia MCP.
-# Derived support retains BSD-3-Clause terms: see LICENSE-BSD-3-Clause.txt.
+# SPDX-License-Identifier: Apache-2.0
 """Mesh-only Gmsh 4.1 handoff for the Netgen comparison route (TET, orders 1-3).
 
 NGSolve owns curved geometry evaluation; Gmsh owns its reference-node ordering.

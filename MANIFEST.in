@@ -1,5 +1,9 @@
 # Include license and copyright files
 include LICENSE
+include LICENSE-APACHE-2.0
+include NOTICE
+include THIRD_PARTY_NOTICES.md
+include src/ext/sparsesolv/LICENSE
 include COPYRIGHT.txt
 
 # Include documentation

@@ -11,8 +11,8 @@ version = "2.0.2"
 # short and stable; release-specific notes go in CHANGELOG.md.
 description = "MCP workflows and executable engineering guidance for Radia: build123d, Gmsh post-processing, NGSolve, mixed-omega, PEEC, induction heating, optimization and research publications. Cubit MCP is distributed separately in cubit-mesh-export."
 readme = "README.md"
-license = "BSD-3-Clause"
-license-files = ["LICENSE"]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.10"
 authors = [{name = "Kengo Sugahara"}]
 # Core servers import without Radia, Cubit, MKL or a native build.

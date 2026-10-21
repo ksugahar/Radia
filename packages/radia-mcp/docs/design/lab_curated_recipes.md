@@ -4,7 +4,7 @@
 |---|---|
 | **Author** | Kengo Sugahara (菅原 賢悟) — Sugawara Lab, Kindai University |
 | **Status** | Operating, distillation runs ad-hoc (target: weekly) |
-| **License of this document** | CC-BY-4.0 (recipes themselves are BSD-3-Clause via the wheel) |
+| **License of this document** | CC-BY-4.0 (recipes themselves are Apache-2.0 via the wheel) |
 | **First public disclosure** | 2026-04-20, this repository |
 | **Reference implementation** | [`radia-mcp`](https://pypi.org/project/radia-mcp/) ≥ 0.30.0 |
 
@@ -107,7 +107,7 @@ cadence: weekly during heavy lab use, monthly otherwise.
 ### Stage 3 — public release as a CC-BY dataset
 
 The recipes themselves continue to ship under the wheel's
-BSD-3-Clause license, but **this methodology document and the
+Apache-2.0 license, but **this methodology document and the
 distilled summary statistics** are published under CC-BY-4.0 so
 they can be:
 
@@ -164,7 +164,7 @@ Recipe entries record `source` (`human` / `ai_<variant_name>`),
 `signature` (geometry shape only — no project-identifying data),
 `recipe` (Cubit text commands), and `quality` (numbers).  No
 filenames, project names, user names, or identifying metadata are
-stored. Contributors using radia-mcp under BSD-3-Clause are
+stored. Contributors using radia-mcp under Apache-2.0 are
 implicitly consenting to recipe collection; lab policy is to keep
 the pool internal until distillation, then ship only the distilled
 top-N (no raw history) in the public wheel.
