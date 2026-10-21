@@ -15,6 +15,69 @@ def load_api():
     return module
 
 
+@pytest.mark.parametrize('mutation', [
+    'none', 'notice-missing', 'ngsolve-license-missing', 'netgen-license-missing',
+    'license-truncated', 'license-modified', 'source-link-missing',
+    'dependency-missing', 'dependency-unpinned', 'dependency-duplicate',
+    'dependency-not-gpu', 'solver-abi-mismatch', 'crlf-license',
+])
+def test_dependency_only_distribution_audit(tmp_path, mutation):
+    """Audit bytes in the archive, not a receipt claiming licensing acceptance."""
+    import tomllib
+    import zipfile
+    from email.message import Message
+    spec = importlib.util.spec_from_file_location('dependency_audit', ROOT/'verify_wheel.py')
+    verifier = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+    metadata = Message()
+    gpu = tomllib.loads((ROOT/'pyproject.toml').read_text(encoding='utf-8'))[
+        'project']['optional-dependencies']['gpu']
+    for requirement in gpu:
+        if requirement.startswith('nvidia-cusparse-cu12'):
+            if mutation == 'dependency-missing':
+                continue
+            if mutation == 'dependency-unpinned':
+                requirement = requirement.replace('==', '>=')
+            if mutation == 'dependency-duplicate':
+                metadata['Requires-Dist'] = requirement + '; extra == "gpu"'
+            if mutation == 'dependency-not-gpu':
+                metadata['Requires-Dist'] = requirement + '; extra == "test"'
+                continue
+        if requirement.startswith('netgen-mesher') and mutation == 'solver-abi-mismatch':
+            requirement = 'netgen-mesher==0.0.0'
+        metadata['Requires-Dist'] = requirement + (' and ' if ';' in requirement else '; ') + 'extra == "gpu"'
+    files = {name: (ROOT/name).read_bytes() for name in (
+        'THIRD_PARTY_NOTICES.md', 'licenses/NGSOLVE-LICENSE.txt', 'licenses/NETGEN-LICENSE.txt')}
+    if mutation == 'notice-missing':
+        files.pop('THIRD_PARTY_NOTICES.md')
+    if mutation == 'ngsolve-license-missing':
+        files.pop('licenses/NGSOLVE-LICENSE.txt')
+    if mutation == 'netgen-license-missing':
+        files.pop('licenses/NETGEN-LICENSE.txt')
+    if mutation == 'license-truncated':
+        files['licenses/NGSOLVE-LICENSE.txt'] = files['licenses/NGSOLVE-LICENSE.txt'][:100]
+    if mutation == 'license-modified':
+        files['licenses/NETGEN-LICENSE.txt'] += b'changed'
+    if mutation == 'source-link-missing':
+        files['THIRD_PARTY_NOTICES.md'] = files['THIRD_PARTY_NOTICES.md'].replace(
+            b'https://github.com/NGSolve/netgen', b'https://example.invalid/source')
+    if mutation == 'crlf-license':
+        for name in ('licenses/NGSOLVE-LICENSE.txt', 'licenses/NETGEN-LICENSE.txt'):
+            files[name] = files[name].replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+    wheel = tmp_path/'dependency-audit.whl'
+    with zipfile.ZipFile(wheel, 'w') as archive:
+        for name, value in files.items():
+            archive.writestr('radia_simulink/' + name, value)
+    with zipfile.ZipFile(wheel) as archive:
+        if mutation in ('none', 'crlf-license'):
+            report = verifier.audit_dependency_distribution(archive, metadata)
+            assert report['passed'] and not report['dependency_dlls_bundled']
+            assert report['full_lgpl21_texts_checked']
+        else:
+            with pytest.raises(ValueError):
+                verifier.audit_dependency_distribution(archive, metadata)
+
+
 def test_installed_manifest_rejects_tampering_and_path_escape(tmp_path,monkeypatch):
     api=load_api()
     monkeypatch.setattr(api,"files",lambda package:tmp_path)
@@ -49,7 +112,8 @@ def test_package_keeps_solver_runtime_dependencies_optional_and_lazy():
 
 
 @pytest.mark.parametrize('member',['../escape','radia_simulink/matlab/radia_mex.mexw64',
-                                  'radia_simulink/matlab/external.dll','radia/__init__.py'])
+                                  'radia_simulink/matlab/external.dll',
+                                  'radia_simulink/matlab/external.DLL','radia/__init__.py'])
 def test_wheel_rejects_escape_cpu_solver_and_external_payload(tmp_path,member):
     import zipfile
     spec=importlib.util.spec_from_file_location('gpu_wheel_contract',ROOT/'verify_wheel.py')
