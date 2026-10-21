@@ -54,6 +54,24 @@ does not meet the stable publication gate of 1e-8. Defaults are unchanged.
 These bounds apply to the declared case, not arbitrary inputs; the separation-2
 setting has no formal speed acceptance yet.
 
+## Python solver ABI environments
+
+The CPU `radia` distribution retains its exact NGSolve and Netgen 6.2.2607
+pins. The optional `radia-simulink[gpu]` Python HDiv route requires NGSolve
+6.2.2608 and native payloads built for that ABI. These two dependency sets
+cannot coexist in one Python environment: use separate virtual environments
+and explicit artifact boundaries for independent CPU validation. Do not force
+installation with `--no-deps`, replace a solver DLL, or load both solver ABIs
+in one process. The GPU user route does not require a CPU `radia` solve.
+The base MATLAB/MEX distribution has no Python solver dependency; selecting
+`[coupling]` adds `radia` and does not make it compatible with `[gpu]`.
+
+This HDiv candidate does not migrate the CPU `radia` release to 2608.
+Existing CPU validation artifacts built with 2608 remain evidence of their
+recorded ABI only; they do not certify a CPU release with 2607 metadata.
+A CPU ABI migration requires its own dependency, exporter compatibility,
+native rebuild and release validation review.
+
 ## Install
 
 ```powershell

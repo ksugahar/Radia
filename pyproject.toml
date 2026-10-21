@@ -38,7 +38,7 @@ dependencies = [
     # uses the mkl_rt.3.dll ABI, so keep runtime and build packages in 2026.x.
     "mkl>=2026,<2027",
     "intel-cmplr-lib-rt>=2026,<2027",
-    # NGSolve + Netgen-mesher pinned to 6.2.2608 for BEM near-field quadrature correction.
+    # NGSolve + Netgen-mesher pinned to 6.2.2607 for BEM near-field quadrature correction.
     # Rebuild native extensions linked to these external libraries together:
     # NGSolve and Netgen expose C++ ABI used directly by the shipped binaries.
     # Bump consequences:
@@ -60,8 +60,8 @@ dependencies = [
     #     docs/peec_integration/README.md).  Radia-specific
     #     H-matrix acceleration is kept in Radia's C++ kernels, primarily
     #     the HDiv-VIM open-boundary path.
-    "ngsolve==6.2.2608",
-    "netgen-mesher==6.2.2608",
+    "ngsolve==6.2.2607",
+    "netgen-mesher==6.2.2607",
 ]
 
 [project.optional-dependencies]
