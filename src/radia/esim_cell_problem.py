@@ -371,7 +371,7 @@ class ESIMFiniteSlabSolver(AdaptiveDepth):
     - Center at z = a with dH/dz = 0 (symmetry)
 
     Governing equation:
-        rho * d^2H/dz^2 + j*omega*mu(|H|)*H = 0    for z in [0, a]
+        rho * d^2H/dz^2 - j*omega*mu(|H|)*H = 0    for z in [0, a]
 
     Boundary conditions:
         H(0) = H0           (surface tangential field)
@@ -657,9 +657,7 @@ class ESIMFiniteSlabSolver(AdaptiveDepth):
         R_ac/R_dc = Re(Z_s) * a / rho
         """
         z = self.mesh_points
-        n = self.n_nodes
         a = self.half_thickness
-        h = z[1] - z[0]
 
         surface = -1 if self.geometry == 'cylinder' else 0
         if abs(H[surface]) < 1e-30:
