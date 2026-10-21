@@ -36,18 +36,22 @@ def _clean_env(**extra):
 
 def _run(name, command, env, steps):
     started = time.perf_counter()
-    result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
-    tail = (result.stdout + result.stderr).strip().splitlines()[-3:]
+    try:
+        result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
+        returncode = result.returncode
+        tail = (result.stdout + result.stderr).strip().splitlines()[-3:]
+    except OSError as error:  # the step could not even start
+        returncode, tail = 1, [repr(error)]
     steps.append({
         "name": name,
         "command": [str(part) for part in command],
-        "returncode": result.returncode,
+        "returncode": returncode,
         "seconds": round(time.perf_counter() - started, 3),
         "tail": tail,
     })
-    status = "PASS" if result.returncode == 0 else "FAIL"
+    status = "PASS" if returncode == 0 else "FAIL"
     print(f"[{status}] {name}: {tail[-1] if tail else ''}", flush=True)
-    return result.returncode == 0
+    return returncode == 0
 
 
 def _light_python(directory, steps):
