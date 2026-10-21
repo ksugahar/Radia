@@ -30,6 +30,7 @@ def selected(tmp_path):
              for suffix in ('cuda.cu', 'python.cpp', 'host.hpp')]
     paths += ['packages/radia-simulink/tools/' + name for name in (
         'build_resident_amg_python.py', 'build_cuda_mex.py',
+        'build_csr_python.py', 'native_source_paths.py',
         'matlab_cuda_toolchain.py', 'vs2022_toolchain.py')]
     paths += ['Build.ps1']
     for relative in paths:
