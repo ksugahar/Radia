@@ -217,7 +217,7 @@ def test_only_declared_adapters_call_other_radia_matlab_namespaces():
 
 def test_staging_refuses_a_partial_native_distribution():
     setup_source = (PACKAGE_ROOT / "setup.py").read_text(encoding="utf-8")
-    assert "Build.ps1 -OptunaMexOnly" in setup_source
+    assert "buildOptunaMex" in setup_source
     assert "optuna_mex.mexw64" in setup_source
     assert "optuna_upstream_compatibility.json" in setup_source
     assert "optuna50_api_coverage.json" in setup_source
