@@ -255,6 +255,9 @@
     "src/radia/esim_cell_problem.py": [
       "tests/test_esim_adaptive_depth.py",
       "validation_test/induction_heating/test_esim_adaptive_depth_validation.py"
+    ],
+    "tools/ci_precheck.py": [
+      "tests/test_ci_precheck.py"
     ]
   },
   "profiles": {
@@ -450,8 +453,10 @@
         "tests/test_release_quad_state.py",
         "tests/test_validation_records.py",
         "tests/test_regression_lock.py",
-        "tests/test_coverage_difference.py"
+        "tests/test_coverage_difference.py",
+        "tests/test_ci_precheck.py"
       ]
     }
   }
 }
+
