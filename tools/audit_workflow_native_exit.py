@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import yaml
 
-NATIVE = re.compile(r'^\s*(?:[\'\"]@\s*\|\s*)?(?:\$[\w:]+\s*=\s*)?(?:&\s+|(?:python(?:3(?:\.\d+)?)?|git|cmake|ctest|ninja|pip|dotnet|npm|node|gh|pwsh|powershell|signtool|robocopy|curl|tar)(?:\.exe)?\s|[\w./\\:-]+\.exe(?:\s|$))', re.I)
+NATIVE = re.compile(r'^\s*(?:[\'\"]@\s*\|\s*)?(?:\$[\w:]+\s*=\s*)?(?:&\s+|(?:python(?:3(?:\.\d+)?)?|git|cmake|ctest|ninja|pip|dotnet|npm|node|gh|pwsh|powershell|signtool|robocopy|curl|tar|matlab|octave|cmd|ssh|scp|wsl|bash|7z|nuget|msbuild|cl|link|vswhere)(?:\.exe)?\s|[\w./\\:-]+\.exe(?:\s|$))', re.I)
 GUARD = re.compile(r'^\s*if\s*\(\s*\$LASTEXITCODE\s*-ne\s*0\s*\)\s*\{\s*(?:exit\s+\$LASTEXITCODE|throw\b[^}]*)\s*\}\s*$', re.I)
 
 def native_lines(script):
