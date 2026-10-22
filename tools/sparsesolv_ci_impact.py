@@ -117,6 +117,90 @@ def ams_manifest_unchanged(before: str, after: str) -> bool:
     return _canonical(relevant(before)) == _canonical(relevant(after))
 
 
+def _strict_json(text):
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError('duplicate JSON key')
+            result[key] = value
+        return result
+    def invalid(value):
+        raise ValueError('nonfinite JSON value: ' + value)
+    return json.loads(text, object_pairs_hook=pairs, parse_constant=invalid)
+
+
+def ams_tier_projection_unchanged(before, after):
+    """Compare all three numerical profiles and every inherited ancestor."""
+    def projection(text):
+        data = _strict_json(text)
+        if (set(data) != {'schema', 'profiles', 'impact_rules'}
+                or data['schema'] != 'radia.test-tier-manifest.v1'):
+            raise ValueError('unknown tier schema/fields')
+        profiles = data['profiles']
+        if not isinstance(profiles, dict) or not isinstance(data['impact_rules'], dict):
+            raise ValueError('invalid tier maps')
+        for path, tests in data['impact_rules'].items():
+            if not isinstance(path, str) or not isinstance(tests, list) or not all(isinstance(x, str) for x in tests):
+                raise ValueError('invalid impact rule')
+        for profile in profiles.values():
+            if (not isinstance(profile, dict)
+                    or set(profile) - {'paths', 'extends', 'description', 'max_elapsed_seconds'}):
+                raise ValueError('unknown profile fields')
+            paths = profile.get('paths', [])
+            if (not isinstance(paths, list) or not all(isinstance(x, str) for x in paths)
+                    or len(paths) != len(set(paths))):
+                raise ValueError('invalid profile paths')
+            if 'description' in profile and not isinstance(profile['description'], str):
+                raise ValueError('invalid profile description')
+            if 'max_elapsed_seconds' in profile and not _valid_budget(profile['max_elapsed_seconds']):
+                raise ValueError('invalid profile budget')
+        def ancestors(name):
+            seen = set()
+            while name is not None:
+                if not isinstance(name, str) or name in seen or name not in profiles:
+                    raise ValueError('invalid/cyclic profile parent')
+                seen.add(name)
+                name = profiles[name].get('extends')
+            return seen
+        # Invalid unrelated data must still fail closed, not become an exemption.
+        for name in profiles:
+            ancestors(name)
+        selected = set()
+        for name in ('sparsesolv', 'solver-numerics', 'solver-heavy'):
+            selected.update(ancestors(name))
+        return {name: profiles[name] for name in selected}
+    return _canonical(projection(before)) == _canonical(projection(after))
+
+
+def ams_records_projection_unchanged(before, after):
+    """Exempt only records ownership data; keep every execution projection sealed.
+
+    Ordered rules in these anchored namespaces cannot replace a rule outside
+    them. All lanes, root attribution, shared closures and non-record rules
+    must remain byte-semantically identical, not merely owner names equal.
+    """
+    def projection(text):
+        data = _strict_json(text)
+        if set(data) != {'schema', 'distributions', 'infrastructure_owner',
+                         'rule_semantics', 'root_content_diff', 'rules',
+                         'shared_include_closures', 'lanes', 'migration_exceptions'}:
+            raise ValueError('unknown distribution fields')
+        CONTRACT.validate_schema(data)
+        prefixes = ('validation_records/',) + tuple(
+            'packages/' + name + '/validation_records/' for name in CONTRACT.DISTRIBUTIONS)
+        rules = []
+        for rule in data['rules']:
+            if rule['pattern'].startswith(prefixes):
+                if set(rule) != {'pattern', 'owners'} or len(rule['owners']) != 1:
+                    raise ValueError('unknown/shared records rule')
+            else:
+                rules.append(rule)
+        data['rules'] = rules
+        return data
+    return _canonical(projection(before)) == _canonical(projection(after))
+
+
 NEWLINE = chr(10)
 
 
@@ -450,6 +534,7 @@ def _required_for_event(lane,event_name,event,git,data):
         if event_name=='pull_request': base=git('merge-base',base,'HEAD').strip()
         if not base: raise ValueError('missing merge base')
         changed=changed_paths(git('diff','--name-status','-z','--find-renames',base,'HEAD','--'))
+        exemptions = set()
         if lane == 'sparsesolv' and event_name == 'pull_request':
             # Share the GPU selector's typed TOML proof before BOTH closures.
             # Main pushes keep their execution/evidence-producing route.
@@ -458,16 +543,25 @@ def _required_for_event(lane,event_name,event,git,data):
                 and project_version_only(git('show', f'{base}:{path}'),
                                          git('show', f'HEAD:{path}'))
             }
-            changed -= version_only
-            if version_only and not changed:
-                return False, 'PR version-only metadata; no numerical execution input'
+            exemptions.update(version_only)
+            for path, proof in (
+                    ('tests/test_tier_manifest.json', ams_tier_projection_unchanged),
+                    ('tools/ci_distribution_manifest.json', ams_records_projection_unchanged)):
+                if path in changed and proof(git('show', f'{base}:{path}'), git('show', f'HEAD:{path}')):
+                    exemptions.add(path)
+            changed -= exemptions
+            if exemptions and not changed:
+                return False, 'PR metadata/numerical projection unchanged: ' + ', '.join(sorted(exemptions))
             spec = importlib.util.spec_from_file_location('ci_ams_inputs', ROOT / 'tools/ci_ams_inputs.py')
             inputs = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(inputs)
             if changed and inputs.required(ROOT, changed, CONTRACT, data):
                 return True, 'full numerical/build input closure'
             # Preserve every parent workflow input in addition to the derived closure.
-        return lane_required(lane,changed,lambda p:(git('show',f'{base}:{p}'),git('show',f'HEAD:{p}')),data)
+        required, reason = lane_required(lane,changed,lambda p:(git('show',f'{base}:{p}'),git('show',f'HEAD:{p}')),data)
+        if exemptions:
+            reason += '; proved PR exemptions: ' + ', '.join(sorted(exemptions))
+        return required, reason
     except Exception as exc:  # any unanticipated failure must select the lane
         return True,f'impact unknown ({type(exc).__name__}); fail closed'
 
