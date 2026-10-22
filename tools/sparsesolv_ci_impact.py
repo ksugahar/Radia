@@ -451,6 +451,16 @@ def _required_for_event(lane,event_name,event,git,data):
         if not base: raise ValueError('missing merge base')
         changed=changed_paths(git('diff','--name-status','-z','--find-renames',base,'HEAD','--'))
         if lane == 'sparsesolv' and event_name == 'pull_request':
+            # Share the GPU selector's typed TOML proof before BOTH closures.
+            # Main pushes keep their execution/evidence-producing route.
+            version_only = {
+                path for path in changed if Path(path).name == 'pyproject.toml'
+                and project_version_only(git('show', f'{base}:{path}'),
+                                         git('show', f'HEAD:{path}'))
+            }
+            changed -= version_only
+            if version_only and not changed:
+                return False, 'PR version-only metadata; no numerical execution input'
             spec = importlib.util.spec_from_file_location('ci_ams_inputs', ROOT / 'tools/ci_ams_inputs.py')
             inputs = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(inputs)
