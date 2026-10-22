@@ -456,7 +456,9 @@
         "tests/test_validation_records.py",
         "tests/test_regression_lock.py",
         "tests/test_coverage_difference.py",
-        "tests/test_ci_precheck.py"
+        "tests/test_ci_precheck.py",
+        "tests/test_policy_lint_execution_failure.py",
+        "tests/test_policy_notebook_payloads.py"
       ]
     }
   }
