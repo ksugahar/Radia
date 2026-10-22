@@ -12,7 +12,6 @@ from email.parser import BytesParser
 from pathlib import Path, PurePosixPath
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
-REPO_ROOT = PACKAGE_ROOT.parents[1]
 PACKAGE_PREFIX = PurePosixPath("radia_optuna")
 MATLAB_PREFIX = PACKAGE_PREFIX / "matlab"
 OPTUNA_PREFIX = MATLAB_PREFIX / "+radia" / "+optuna"
@@ -86,7 +85,7 @@ def _is_windows_x64_pe(payload: bytes) -> bool:
 
 
 def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
-    matlab_root = REPO_ROOT / "packages/radia-optuna/matlab"
+    matlab_root = PACKAGE_ROOT / "matlab"
     payloads = {
         str(PACKAGE_PREFIX / path.name): path
         for path in (PACKAGE_ROOT / "src" / "radia_optuna").iterdir()
@@ -116,21 +115,13 @@ def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
     return payloads
 
 
-def _cpu_dependency_boundary_errors(root_project, source_project):
-    """CPU Radia uses upstream Python Optuna; MATLAB releases independently."""
-    errors = []
+def _upstream_dependency_errors(source_project):
+    """Keep the package's independent upstream oracle pin explicit."""
     upstream = source_project["optional-dependencies"]["upstream"]
     oracle = [requirement for requirement in upstream if requirement.startswith("optuna==")]
-    extras = root_project["optional-dependencies"]
-    if len(oracle) != 1 or extras.get("optuna") != oracle:
-        errors.append("radia[optuna] must pin the independent package's upstream Python oracle")
-    if "optuna-upstream" in extras:
-        errors.append("Retired radia[optuna-upstream] must not restore the MATLAB distribution dependency")
-    requirements = list(root_project["dependencies"])
-    requirements.extend(requirement for group in extras.values() for requirement in group)
-    if any(requirement.lower().startswith("radia-optuna") for requirement in requirements):
-        errors.append("CPU radia must not depend on the MATLAB radia-optuna distribution")
-    return errors
+    if oracle != ["optuna==5.0.0"]:
+        return ["the package upstream extra must pin optuna==5.0.0"]
+    return []
 
 
 def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]:
@@ -142,9 +133,6 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
         (PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )["project"]
     source_version = source_project["version"]
-    root_project = tomllib.loads(
-        (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    )["project"]
     source_manifest = json.loads(
         (PACKAGE_ROOT / "src" / "radia_optuna" / "manifest.json").read_text(
             encoding="utf-8"
@@ -155,7 +143,7 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
             "package source versions are not synchronized: "
             f"package={source_version}, manifest={source_manifest['version']}"
         )
-    errors.extend(_cpu_dependency_boundary_errors(root_project, source_project))
+    errors.extend(_upstream_dependency_errors(source_project))
 
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
