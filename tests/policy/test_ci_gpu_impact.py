@@ -201,3 +201,41 @@ def test_main_push_cannot_reuse_cpu_only_pr_and_receipt_records_gpu(tmp_path, mo
     assert record['gpu_required'] is True
     assert record['gpu_reason'] == 'push qualification'
     assert 'gpu_required=true' in (tmp_path / 'output').read_text()
+
+
+@pytest.mark.parametrize("event", ["pull_request", "push"])
+@pytest.mark.parametrize("extra", [None, "src/radia/ih_thermal.py", "src/core/rad_hdiv_vim.h", "CMakeLists.txt"])
+def test_ams_version_exemption_cannot_hide_numerical_or_build_changes(extra, event):
+    path = "packages/radia-simulink/pyproject.toml"
+    before = '[project]\nversion="0.1.5rc1"\ndependencies=["numpy"]\n'
+    after = before.replace('0.1.5rc1', '0.1.5')
+    def git(*args):
+        if args[0] == "merge-base": return "base"
+        if args[0] == "diff": return "M\0" + path + "\0" + ("M\0" + extra + "\0" if extra else "")
+        if args[0] == "show": return before if args[1].startswith("base:") else after
+        raise AssertionError(args)
+    selected = impact.required_for_event("sparsesolv", event,
+        {"before": "base", "pull_request": {"base": {"sha": "base"}}}, git, impact.manifest())[0]
+    assert selected is (event == "push" or bool(extra))
+
+
+@pytest.mark.parametrize("after", [
+    '[project]\nversion="2"\ndependencies=["numpy>=2"]\n',
+    '[project]\nversion="2"\ndependencies=["numpy"]\n[build-system]\nrequires=["setuptools>=90"]\n',
+    '[project]\ndependencies=["numpy"]\n', 'not valid toml',
+])
+def test_ams_dependency_build_or_invalid_metadata_still_selects_full_gate(after):
+    path = "packages/radia-simulink/pyproject.toml"
+    def git(*args):
+        if args[0] == "merge-base": return "base"
+        if args[0] == "diff": return "M\0" + path + "\0"
+        if args[0] == "show":
+            return '[project]\nversion="1"\ndependencies=["numpy"]\n' if args[1].startswith("base:") else after
+        raise AssertionError(args)
+    assert impact.required_for_event("sparsesolv", "pull_request",
+        {"pull_request": {"base": {"sha": "base"}}}, git, impact.manifest())[0]
+
+
+def test_ams_qualification_still_runs_full_gate():
+    for event in ("workflow_dispatch", "schedule", "release"):
+        assert impact.required_for_event("sparsesolv", event, {}, None, impact.manifest())[0]

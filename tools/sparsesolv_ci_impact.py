@@ -82,39 +82,105 @@ def _canonical(value) -> str:
     return json.dumps(_typed(value), ensure_ascii=False)
 
 
-def ams_manifest_unchanged(before: str, after: str) -> bool:
-    def relevant(text):
-        data = json.loads(text)
-        if data["schema"] != "radia.test-tier-manifest.v1":
-            raise ValueError("unknown manifest schema")
-        profiles = data.pop("profiles")
-        data.pop("impact_rules", None)  # AMS invokes the profile without --since.
-        selected = {}
-        name = "sparsesolv"
-        while name:
-            if name in selected:
-                raise ValueError("cyclic AMS profile inheritance")
-            profile = profiles[name]
-            paths = profile.get("paths", [])
-            if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
-                raise ValueError("invalid AMS paths")
-            budget = profile.get("max_elapsed_seconds")
-            if budget is not None and not _valid_budget(budget):
-                raise ValueError("invalid AMS time budget")
-            selected[name] = profile
-            name = profile.get("extends")
-            if name is not None and not isinstance(name, str):
-                raise ValueError("invalid AMS parent")
-        for profile_name in ("solver-numerics", "solver-heavy"):
-            if profile_name in profiles:
-                selected[profile_name] = profiles[profile_name]
-        data["profiles"] = selected
-        paths = [path for name, profile in selected.items()
-                 for path in profile.get("paths", [])]
-        if not paths or len(paths) != len(set(paths)):
-            raise ValueError("empty or duplicate AMS test paths")
+def package_version_only(before, after):
+    import ast
+    def without_version(text):
+        tree = ast.parse(text)
+        versions = [node for node in tree.body if (
+            isinstance(node, ast.Assign) and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name) and node.targets[0].id == '__version__'
+            and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
+            and node.value.value.strip())]
+        if len(versions) != 1:
+            raise ValueError('missing or ambiguous package version')
+        tree.body = [node for node in tree.body if node not in versions]
+        return ast.dump(tree, include_attributes=False)
+    return without_version(before) == without_version(after)
+
+
+def _strict_json(text):
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError('duplicate JSON key')
+            result[key] = value
+        return result
+    def invalid(value):
+        raise ValueError('nonfinite JSON value: ' + value)
+    return json.loads(text, object_pairs_hook=pairs, parse_constant=invalid)
+
+
+def ams_tier_projection_unchanged(before, after):
+    """Compare executed profiles and ancestors; impact rules are conservative inputs."""
+    def projection(text):
+        data = _strict_json(text)
+        if (set(data) != {'schema', 'profiles', 'impact_rules'}
+                or data['schema'] != 'radia.test-tier-manifest.v1'):
+            raise ValueError('unknown tier schema/fields')
+        profiles = data['profiles']
+        if not isinstance(profiles, dict) or not isinstance(data['impact_rules'], dict):
+            raise ValueError('invalid tier maps')
+        for path, tests in data['impact_rules'].items():
+            if not isinstance(path, str) or not isinstance(tests, list) or not all(isinstance(x, str) for x in tests):
+                raise ValueError('invalid impact rule')
+        for profile in profiles.values():
+            if (not isinstance(profile, dict)
+                    or set(profile) - {'paths', 'extends', 'description', 'max_elapsed_seconds'}):
+                raise ValueError('unknown profile fields')
+            paths = profile.get('paths', [])
+            if (not isinstance(paths, list) or not all(isinstance(x, str) for x in paths)
+                    or len(paths) != len(set(paths))):
+                raise ValueError('invalid profile paths')
+            if 'description' in profile and not isinstance(profile['description'], str):
+                raise ValueError('invalid profile description')
+            if 'max_elapsed_seconds' in profile and not _valid_budget(profile['max_elapsed_seconds']):
+                raise ValueError('invalid profile budget')
+        def ancestors(name):
+            seen = set()
+            while name is not None:
+                if not isinstance(name, str) or name in seen or name not in profiles:
+                    raise ValueError('invalid/cyclic profile parent')
+                seen.add(name)
+                name = profiles[name].get('extends')
+            return seen
+        # Invalid unrelated data must still fail closed, not become an exemption.
+        for name in profiles:
+            ancestors(name)
+        selected = set()
+        for name in ('sparsesolv', 'solver-numerics', 'solver-heavy', 'native-build-contracts'):
+            selected.update(ancestors(name))
+        return {'profiles': {name: profiles[name] for name in selected},
+                'impact_rules': data['impact_rules']}
+    return _canonical(projection(before)) == _canonical(projection(after))
+
+
+def ams_records_projection_unchanged(before, after):
+    """Exempt only records ownership data; keep every execution projection sealed.
+
+    Ordered rules in these anchored namespaces cannot replace a rule outside
+    them. All lanes, root attribution, shared closures and non-record rules
+    must remain byte-semantically identical, not merely owner names equal.
+    """
+    def projection(text):
+        data = _strict_json(text)
+        if set(data) != {'schema', 'distributions', 'infrastructure_owner',
+                         'rule_semantics', 'root_content_diff', 'rules',
+                         'shared_include_closures', 'lanes', 'migration_exceptions'}:
+            raise ValueError('unknown distribution fields')
+        CONTRACT.validate_schema(data)
+        prefixes = ('validation_records/',) + tuple(
+            'packages/' + name + '/validation_records/' for name in CONTRACT.DISTRIBUTIONS)
+        rules = []
+        for rule in data['rules']:
+            if rule['pattern'].startswith(prefixes):
+                if set(rule) != {'pattern', 'owners'} or len(rule['owners']) != 1:
+                    raise ValueError('unknown/shared records rule')
+            else:
+                rules.append(rule)
+        data['rules'] = rules
         return data
-    return _canonical(relevant(before)) == _canonical(relevant(after))
+    return _canonical(projection(before)) == _canonical(projection(after))
 
 
 NEWLINE = chr(10)
@@ -408,7 +474,7 @@ def lane_required(lane,changed,blobs,data):
             if lane=='sparsesolv' and old is not None and new is not None and 'fail closed' not in reason:
                 try:
                     if path=='pyproject.toml' and test_dependencies_only(old,new): owners=set()
-                    if path=='tests/test_tier_manifest.json' and ams_manifest_unchanged(old,new): owners=set()
+                    if path=='tests/test_tier_manifest.json' and ams_tier_projection_unchanged(old,new): owners=set()
                 except (ValueError,KeyError,TypeError,AttributeError): pass
             selected_owners.update(owners); reasons.append(path+': '+reason)
         else:
@@ -441,6 +507,13 @@ def required_for_event(lane,event_name,event,git,data):
         return True,f'impact unknown ({type(exc).__name__}); fail closed'
 
 
+def _ams_inputs():
+    spec = importlib.util.spec_from_file_location('ci_ams_inputs', ROOT / 'tools/ci_ams_inputs.py')
+    inputs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(inputs)
+    return inputs
+
+
 def _required_for_event(lane,event_name,event,git,data):
     if event_name not in ('push','pull_request') or event.get('ref','').startswith('refs/tags/'):
         return True,'release/manual/unknown event: preserve full lane'
@@ -450,14 +523,39 @@ def _required_for_event(lane,event_name,event,git,data):
         if event_name=='pull_request': base=git('merge-base',base,'HEAD').strip()
         if not base: raise ValueError('missing merge base')
         changed=changed_paths(git('diff','--name-status','-z','--find-renames',base,'HEAD','--'))
+        exemptions = set()
         if lane == 'sparsesolv' and event_name == 'pull_request':
-            spec = importlib.util.spec_from_file_location('ci_ams_inputs', ROOT / 'tools/ci_ams_inputs.py')
-            inputs = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(inputs)
+            inputs = _ams_inputs()
+            # Share the GPU selector's typed TOML proof before BOTH closures.
+            # Main pushes keep their execution/evidence-producing route.
+            version_only = {
+                path for path in changed if Path(path).name == 'pyproject.toml'
+                and path not in inputs.python_inputs(ROOT)
+                and project_version_only(git('show', f'{base}:{path}'),
+                                         git('show', f'HEAD:{path}'))
+            }
+            exemptions.update(version_only)
+            exemptions.update(path for path in changed
+                if path.startswith('packages/') and path.endswith('/__init__.py')
+                and package_version_only(git('show', f'{base}:{path}'),
+                                         git('show', f'HEAD:{path}')))
+            for path, proof in (
+                    ('tests/test_tier_manifest.json', ams_tier_projection_unchanged),
+                    ('tools/ci_distribution_manifest.json', ams_records_projection_unchanged)):
+                if (path in changed
+                        and proof(git('show', f'{base}:{path}'), git('show', f'HEAD:{path}'))
+                        and path not in inputs.python_inputs(ROOT)):
+                    exemptions.add(path)
+            changed -= exemptions
+            if exemptions and not changed:
+                return False, 'PR metadata/numerical projection unchanged: ' + ', '.join(sorted(exemptions))
             if changed and inputs.required(ROOT, changed, CONTRACT, data):
                 return True, 'full numerical/build input closure'
             # Preserve every parent workflow input in addition to the derived closure.
-        return lane_required(lane,changed,lambda p:(git('show',f'{base}:{p}'),git('show',f'HEAD:{p}')),data)
+        required, reason = lane_required(lane,changed,lambda p:(git('show',f'{base}:{p}'),git('show',f'HEAD:{p}')),data)
+        if exemptions:
+            reason += '; proved PR exemptions: ' + ', '.join(sorted(exemptions))
+        return required, reason
     except Exception as exc:  # any unanticipated failure must select the lane
         return True,f'impact unknown ({type(exc).__name__}); fail closed'
 
@@ -492,18 +590,7 @@ def gpu_required_for_event(event_name, event, git, data):
                 return True, 'GPU build/dependency metadata: ' + path
             if path == 'packages/radia-simulink/src/radia_simulink/__init__.py':
                 import ast
-                def without_version(text):
-                    tree = ast.parse(text)
-                    versions = [node for node in tree.body if (
-                        isinstance(node, ast.Assign) and len(node.targets) == 1
-                        and isinstance(node.targets[0], ast.Name) and node.targets[0].id == '__version__'
-                        and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
-                        and node.value.value.strip())]
-                    if len(versions) != 1:
-                        raise ValueError('missing or ambiguous package version')
-                    tree.body = [node for node in tree.body if node not in versions]
-                    return ast.dump(tree, include_attributes=False)
-                if without_version(git('show', f'{base}:{path}')) == without_version(git('show', f'HEAD:{path}')):
+                if package_version_only(git('show', f'{base}:{path}'), git('show', f'HEAD:{path}')):
                     continue
                 return True, 'GPU package initialization changed'
             # Selection is the distribution contract, not a GPU source allowlist.

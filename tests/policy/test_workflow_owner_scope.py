@@ -218,6 +218,24 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     # Both GPU distributions consume exact-SHA wheel recovery, without CPU ABI sharing.
     expected |= {'tools/ci_gpu_artifact.py', 'tests/test_ci_gpu_artifact.py',
                  '.github/workflows/gpu-validation.yml'}
+    # These package initializers execute before modules in the numerical
+    # closure; ownership stays with the package plus the proven CPU integration.
+    initializers = {
+        'packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py',
+        'packages/radia-simulink/src/radia_simulink/__init__.py',
+        'packages/radia-mcp/src/radia_mcp/__init__.py',
+        'packages/radia-mcp/src/radia_mcp/peec/__init__.py',
+        'packages/radia-mcp/src/radia_mcp/radia_ngsolve/__init__.py',
+        'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/__init__.py',
+    }
+    spec = importlib.util.spec_from_file_location('initializer_inputs', ROOT / 'tools/ci_ams_inputs.py')
+    inputs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(inputs)
+    assert initializers <= inputs.python_inputs(ROOT)
+    for path in initializers:
+        assert all(CONTRACT.selected(path, MANIFEST['lanes']['sparsesolv']['events'][event])
+                   for event in ('push', 'pull_request'))
+    expected |= initializers
     assert shared == expected | set(RADIA_LANE_READS)
     # The shared IH contracts execute the GPU package adapter against CPU Radia solvers.
     for path in ("tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
