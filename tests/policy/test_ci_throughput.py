@@ -124,7 +124,13 @@ def test_every_declared_existing_input_selects_its_lane(lane):
 
 def test_numerical_tests_are_retained_and_full_release_is_mandatory():
     tiers = json.loads((ROOT / 'tests/test_tier_manifest.json').read_text())['profiles']
-    assert len(tiers['solver-numerics']['paths']) == 91
+    # Preserve the original 91 routes and explicitly register both ESIM halves.
+    esim_routes = {
+        'tests/test_esim_adaptive_depth.py',
+        'validation_test/induction_heating/test_esim_adaptive_depth_validation.py',
+    }
+    assert esim_routes <= set(tiers['solver-numerics']['paths'])
+    assert len(tiers['solver-numerics']['paths']) == 91 + len(esim_routes)
     assert 'solver-pr' not in tiers
     workflow = yaml.load((ROOT / '.github/workflows/sparsesolv.yml').read_text(), Loader=yaml.BaseLoader)
     assert workflow['on']['schedule'] and 'workflow_dispatch' in workflow['on']
