@@ -29,3 +29,47 @@ else()
     target_compile_options(test_ih_coupled_config PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 add_test(NAME radia.ih_coupled_config.cpp COMMAND test_ih_coupled_config)
+
+# Host link checks compile production sources in this test tree. Synthetic
+# transaction physics is linked only into its separate scenario executable.
+add_library(radia_ih_coupled_domain_host OBJECT "../../native/ih_coupled_domain.cpp")
+target_compile_features(radia_ih_coupled_domain_host PRIVATE cxx_std_17)
+add_library(radia_ih_coupled_domain STATIC "../../native/ih_coupled_domain.cpp"
+    "../../native/ih_coupled_backend.cpp")
+target_compile_features(radia_ih_coupled_domain PRIVATE cxx_std_17)
+add_executable(test_ih_coupled_production_unavailable test_ih_coupled_production_unavailable.cpp)
+target_link_libraries(test_ih_coupled_production_unavailable PRIVATE radia_ih_coupled_domain)
+target_compile_features(test_ih_coupled_production_unavailable PRIVATE cxx_std_17)
+add_test(NAME radia.ih_domain.production_unavailable COMMAND test_ih_coupled_production_unavailable)
+add_executable(test_ih_coupled_domain_scenarios test_ih_coupled_domain_scenarios.cpp
+    $<TARGET_OBJECTS:radia_ih_coupled_domain_host>)
+target_compile_features(test_ih_coupled_domain_scenarios PRIVATE cxx_std_17)
+foreach(target radia_ih_coupled_domain_host radia_ih_coupled_domain
+        test_ih_coupled_production_unavailable test_ih_coupled_domain_scenarios)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endforeach()
+foreach(scenario eddy_solve heat_projection thermal_solve port_gate thermal_gate
+        host_snapshot_allocation reset_copy_or_sync
+        device_failure trial_sync malformed_snapshot oversized_snapshot
+        outputs_repeated reset_success closed_snapshot
+        owner_idempotency owner_failed_advance owner_reset_generation owner_poison)
+    add_test(NAME radia.ih_domain.${scenario} COMMAND test_ih_coupled_domain_scenarios ${scenario})
+endforeach()
+
+# Peer-agreed registry/runtime contracts use no production physics factory.
+find_package(Threads REQUIRED)
+foreach(name IN ITEMS ih_coupled_registry ih_coupled_runtime)
+    add_executable(test_${name} test_${name}.cpp)
+    target_compile_features(test_${name} PRIVATE cxx_std_17)
+    if(MSVC)
+        target_compile_options(test_${name} PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(test_${name} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    target_link_libraries(test_${name} PRIVATE Threads::Threads)
+    add_test(NAME radia.${name}.cpp COMMAND test_${name})
+endforeach()
