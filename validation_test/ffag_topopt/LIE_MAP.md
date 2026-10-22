@@ -44,7 +44,7 @@ commits a one-degree-of-freedom fifth-order Dragt--Finn composition with
 known `f3/f4/f5/f6`, so a future `dragt_finn_factorize_fifth_order` has an
 exact recovery contract before any implementation exists.  Its self-tests
 reproduce the multipole oracle's closed forms as a special case, and
-`tests/test_accelerator_lie_p6_oracle.py` locks the committed JSON
+`validation_test/ffag_topopt/test_lie_p6_oracle.py` validates the committed JSON
 independently: an exact-Hamiltonian scipy flow must close against the
 committed contractions at `O(z^6)` (measured ratio 63.8 per amplitude
 halving against the theoretical 64).
