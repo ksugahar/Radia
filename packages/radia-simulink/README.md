@@ -17,7 +17,7 @@ its own qualification; renaming alone does not establish acceptance.
 `radia-mcp` is the AI operation interface. Neither package is required merely
 to locate and use the installed GPU MATLAB files.
 
-The 0.1.5rc1 candidate adds experimental GPU IC(0)-PCG with retained factors
+The 0.1.5 release adds experimental GPU IC(0)-PCG with retained factors
 and `radia.gpu.HCurlICSystem`. CUDA performs the fixed-shift numerical
 factorization; cuSPARSE performs the forward and transpose triangular solves.
 Host code owns symbolic analysis and iteration control. The published 0.1.4
