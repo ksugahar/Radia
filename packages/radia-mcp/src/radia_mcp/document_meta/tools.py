@@ -400,7 +400,7 @@ def document_meta_lint_all(path: str,
         pdf_path = p.with_suffix(".pdf")
         if pdf_path.exists():
             try:
-                import fitz
+                import pymupdf as fitz
                 npages = fitz.open(str(pdf_path)).page_count
                 findings["pdf_pages"] = {"pages": npages, "limit": page_limit,
                                           "ok": npages <= page_limit}

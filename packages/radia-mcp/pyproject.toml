@@ -117,7 +117,8 @@ md2html = [
 # PPTX manipulation, proposal/paper lint, poster rendering, bibliography fetch.
 #   pip install radia-mcp[document]
 document = [
-    "pymupdf>=1.24",
+    # Canonical module name since 1.24.3; avoid the deprecated fitz bridge.
+    "pymupdf>=1.24.3",
     "python-pptx>=1.0",
     "lxml>=3.1.0",
     "Pillow>=10.0",

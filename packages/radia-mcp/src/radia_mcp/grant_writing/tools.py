@@ -5487,7 +5487,7 @@ def grant_writing_page_limit_check(pdf_path: str, tex_dir: str = "") -> dict:
     if not pdf.is_file():
         raise FileNotFoundError(f"compiled proposal not found: {pdf_path}")
 
-    import fitz  # PyMuPDF; imported here so text-only checks never need it.
+    import pymupdf as fitz  # PyMuPDF; imported here so text-only checks never need it.
 
     doc = fitz.open(str(pdf))
     pages: list[dict] = []

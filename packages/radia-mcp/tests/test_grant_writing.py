@@ -2417,7 +2417,7 @@ def test_budget_narrative_is_not_applicable_without_a_necessity_section():
 
 def _write_form_pdf(path, fields, overflow_notice=""):
     """Build a stand-in compiled form: one page per entry of ``fields``."""
-    import fitz
+    import pymupdf as fitz
 
     doc = fitz.open()
     for title, pages in fields:
@@ -3388,7 +3388,7 @@ def test_page_limit_does_not_consume_the_next_section_declaration(tmp_path):
 
 
 def test_page_limit_handles_two_field_headings_on_the_same_page(tmp_path):
-    import fitz
+    import pymupdf as fitz
 
     (tmp_path / "a.tex").write_text(
         "\\section{FIRST}\n% <<最大 1ページ>>\n"
