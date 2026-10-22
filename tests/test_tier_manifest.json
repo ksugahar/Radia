@@ -438,6 +438,7 @@
     "repo-contracts": {
       "description": "Cross-distribution source and release-tool contracts in the always-on repository policy lane.",
       "paths": [
+        "tests/test_cpu_optuna_dependency_boundary.py",
         "tests/test_ci_execution_policy.py",
         "tests/test_ci_monitor.py",
         "tests/test_release_quad_optuna_candidate.py",
