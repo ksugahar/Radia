@@ -55,7 +55,7 @@ def test_strong_end_to_end_self_consistent(tmp_path):
     workpiece = sibc hole) and assert the coupled solve is self-consistent.
 
     Values are tiny (the demo geometry is small/coarse); the physics
-    magnitude golden is in the bem_reference lane.  Here we lock the
+    magnitude checks are in test_inductance_golden.py.  Here we lock the
     wiring: status ok, coupling_mode strong, converged, and the output
     assembly identities L_total = L_coil + dL, R_total = R_coil + dR,
     dR = 2 P_reaction / I^2 for the ideal surface coil.
