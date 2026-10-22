@@ -1,6 +1,7 @@
 """Precheck coverage must match CI and propagate real selected failures."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shlex
 import subprocess
@@ -13,6 +14,68 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("source_precheck", ROOT / "tools/ci_precheck.py")
 precheck = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(precheck)
+
+
+@pytest.mark.parametrize("parent_utf8", [None, "1"])
+@pytest.mark.parametrize("exit_code", [0, 7])
+def test_child_capture_is_independent_of_parent_encoding(
+    tmp_path, parent_utf8, exit_code,
+):
+    child = tmp_path / "child.py"
+    child.write_text(
+        "import json, os, sys\n"
+        "assert os.environ['PYTHONUTF8'] == '1'\n"
+        "assert os.environ['PYTHONIOENCODING'] == 'utf-8'\n"
+        "assert sys.stdout.encoding.lower() == 'utf-8'\n"
+        "sys.stdout.buffer.write(bytes.fromhex('93fa967b8cea') + b'\\n')\n"
+        "sys.stderr.buffer.write(bytes.fromhex('93fa967b8cea') + b'\\n')\n"
+        "sys.stdout.flush(); sys.stderr.flush()\n"
+        f"raise SystemExit({exit_code})\n",
+        encoding="utf-8",
+    )
+    driver = tmp_path / "driver.py"
+    driver.write_text(
+        "import importlib.util, json, sys\n"
+        f"spec=importlib.util.spec_from_file_location('precheck', {str(ROOT / 'tools/ci_precheck.py')!r})\n"
+        "module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)\n"
+        f"module.LOG_DIR=__import__('pathlib').Path({str(tmp_path / 'logs')!r})\n"
+        "steps=[]\n"
+        f"ok=module._run('legacy bytes', [sys.executable, {str(child)!r}], module._clean_env(), steps)\n"
+        f"__import__('pathlib').Path({str(tmp_path / 'result.json')!r}).write_text(json.dumps(dict(ok=ok, steps=steps)), encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    env = dict(os.environ)
+    env.pop("PYTHONUTF8", None)
+    env["PYTHONIOENCODING"] = "cp932:strict"
+    if parent_utf8 is not None:
+        env["PYTHONUTF8"] = parent_utf8
+    result = subprocess.run([sys.executable, str(driver)], env=env,
+                            capture_output=True, encoding="utf-8", errors="replace")
+    assert result.returncode == 0, result.stdout + result.stderr
+    recorded = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
+    assert recorded["ok"] is (exit_code == 0)
+    assert recorded["steps"][0]["returncode"] == exit_code
+    expected = bytes.fromhex("93fa967b8cea").decode("utf-8", errors="replace")
+    log = Path(recorded["steps"][0]["log"]).read_text(encoding="utf-8")
+    assert log == expected + "\n" + expected + "\n"
+
+
+@pytest.mark.parametrize("exit_code", [0, 7])
+def test_missing_capture_streams_keep_the_child_returncode(monkeypatch, exit_code):
+    from types import SimpleNamespace
+
+    def run(*args, **kwargs):
+        assert kwargs["encoding"] == "utf-8"
+        assert kwargs["errors"] == "replace"
+        assert kwargs["env"]["PYTHONUTF8"] == "1"
+        assert kwargs["env"]["PYTHONIOENCODING"] == "utf-8"
+        return SimpleNamespace(returncode=exit_code, stdout=None, stderr=None)
+
+    monkeypatch.setattr(precheck.subprocess, "run", run)
+    steps = []
+    assert precheck._run("empty streams", ["child"], {}, steps) is (exit_code == 0)
+    assert steps[0]["returncode"] == exit_code
+    assert steps[0]["tail"] == []
 
 
 def git_diff(paths):
