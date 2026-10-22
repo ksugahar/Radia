@@ -20,7 +20,7 @@ under `validation_test/` and are reproducible from a clean
 | [`validation_test/ih_esim_benchmark/benchmark.py`](../../validation_test/ih_esim_benchmark/benchmark.py) | Drives the 3-path (PEEC-BEM / FEM-Kelvin / FEM-coilmesh) Karl benchmark at 10/50/100/500 kHz.  Emits `results.json` and `benchmark_plot.png`. | Validation tier **(iv)** consistency table |
 | [`validation_test/ih_esim_benchmark/plot_zs_per_dof_map.py`](../../validation_test/ih_esim_benchmark/plot_zs_per_dof_map.py) | 3-panel side-wall map of per-DOF $\mathrm{Re}\,Z_s$, $\mathrm{Im}\,Z_s$, $|H_t|$ from a `--esim-per-panel` JSON.  Publication-ready Fig. 2 (hotspot pattern). | Requires `esim_per_panel_H_t` array (radia $\geq$ 4.55.x) |
 | [`validation_test/ih_esim_benchmark/plot_karl_history.py`](../../validation_test/ih_esim_benchmark/plot_karl_history.py) | Karl-iteration convergence diagnostic.  3-panel plot of $dZ$ (log), $\|Z_s\|$ with per-DOF min/max band, and $\|H_t\|$ per iteration.  Accepts both scalar- and per-panel-Karl JSONs.  Use to distinguish *convergence*, *plateau-at-max-iter* and *divergence* (see [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4 decision table). | Diagnostic / triage |
-| [`validation_test/induction_heating/bem_reference/`](../../validation_test/induction_heating/bem_reference/) + `radia.bem_inductance` / `radia.ngsbem_*` | Reference BEM scripts and reusable BEM APIs retained for research cross-check. | Research / validation |
+| [`validation_test/bem/test_coil_bem_a_volume_vol.py`](../../validation_test/bem/test_coil_bem_a_volume_vol.py) + `radia.bem_inductance` / `radia.ngsbem_*` | Executable BEM validation and reusable BEM APIs. | Research / validation |
 
 ## Tests
 

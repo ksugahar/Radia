@@ -14,20 +14,13 @@ regenerates the meshes (Cubit); `run_cross_formulation.py` runs the
 comparison matrix and asserts golden bands (no Cubit import). Backs the
 validation tier (vi) of the SA-26-070 (八戸) and IGTE 2026 papers.
 
-## Scattered RHS Clean Test
+## BEM Validation
 
-`scattered_rhs_clean_test/` is a historical validation fixture for the
-scattered-field Robin RHS investigation. It keeps the script, the generated
-Netgen `.vol` mesh fixture, and the measured `results.json` together.
-
-## BEM Reference
-
-`bem_reference/` contains the executable reference scripts and sweep result
-that used to live under the induction-heating examples tree.  The
-reusable solver code was promoted to `src/radia` as `radia.bem_inductance`,
-`radia.bem_coupled_solver`, `radia.cubit_bem_extractor`, and
-`radia.ngsbem_*`; validation scripts should import those APIs instead of
-reaching back into `examples/`.
+[`test_coil_bem_a_volume_vol.py`](../bem/test_coil_bem_a_volume_vol.py)
+contains executable BEM validation. Reusable solver code is provided by
+`radia.bem_inductance`, `radia.bem_coupled_solver`, and `radia.ngsbem_*`;
+validation scripts should import those APIs directly. Retired investigation
+scripts and unreproducible sweep records remain available in Git history.
 
 The public docs catalog is `docs/induction_heating/`.
 
