@@ -77,6 +77,30 @@ def read_plan(path):
     return plan
 
 
+def verify_receipt(path, plan_path):
+    """Consumer gate: process exit zero alone is never execution evidence.
+
+    Raises ValueError/OSError on missing, interrupted or mismatched evidence.
+    This checks receipt consistency, not an adversarially forged signature.
+    """
+    plan = read_plan(plan_path)
+    data = json.loads(unlinked(path).read_text(encoding='utf-8'))
+    expected = sorted(plan['expected_nodeids'])
+    if (not isinstance(data, dict)
+            or data.get('schema') != 'radia.validation-execution.v1'
+            or data.get('state') != 'finished' or data.get('status') != 'passed'
+            or type(data.get('effective_exit_code')) is not int
+            or data['effective_exit_code'] != 0
+            or data.get('plan_sha256') != sha256(plan_path)
+            or data.get('identity') != plan
+            or data.get('final_source_sha') != plan['source_sha']
+            or data.get('final_source_tree') != plan['source_tree']
+            or any(data.get(key) != expected for key in
+                   ('collected', 'executed', 'passed_pytest_cases'))):
+        raise ValueError('receipt is not a finished, matching successful execution')
+    return data
+
+
 class Receipt:
     def __init__(self, plan_path, source_root, receipt_path, output_root):
         self.root = unlinked(source_root).resolve()
@@ -124,7 +148,15 @@ class Receipt:
             stream.write('\n')
         os.replace(temporary, self.path)
 
-    def collection(self, nodeids):
+    def collection(self, nodeids, items=None):
+        if items is not None:
+            tracked = set(git(self.root, 'ls-files', '-z').split('\0'))
+            for item in items:
+                path = unlinked(item.path).resolve()
+                if (not path.is_relative_to(self.root)
+                        or path.relative_to(self.root).as_posix() not in tracked
+                        or item.nodeid.split('::', 1)[0] != path.relative_to(self.root).as_posix()):
+                    raise pytest.UsageError('validation item is not the bound tracked source file')
         selected = [key for key in nodeids if key.split('::', 1)[0].startswith('validation_test/')]
         self.data['collected'] = sorted(set(selected))
         self.data['duplicate_collected'] = sorted({key for key in selected if selected.count(key) > 1})
@@ -199,6 +231,8 @@ def pytest_configure(config):
     if not any(options): return
     if not all(options): raise pytest.UsageError('all four validation receipt options are required')
     try:
+        if config.rootpath.resolve() != unlinked(options[1]).resolve():
+            raise ValueError('pytest rootdir must equal validation source root')
         config._validation_receipt = Receipt(*options)
         config.pluginmanager.register(config._validation_receipt, 'validation-receipt-collection')
     except (OSError, ValueError, subprocess.SubprocessError) as error:
@@ -207,7 +241,7 @@ def pytest_configure(config):
 
 def pytest_collection_finish(session):
     receipt = getattr(session.config, '_validation_receipt', None)
-    if receipt and receipt.collection([item.nodeid for item in session.items]):
+    if receipt and receipt.collection([item.nodeid for item in session.items], session.items):
         raise pytest.UsageError('unapproved/duplicate validation cases; nothing may execute')
 
 

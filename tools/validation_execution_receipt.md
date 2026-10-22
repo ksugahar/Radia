@@ -59,3 +59,16 @@ unreviewed plugin/retry autoload, and run one sequential phase per receipt.
 C5b must wire this into the approved nightly and manual routes, preserve exact
 release gates, and commission the full MCP inventory. This slice alone does not
 claim that any numerical validation is scheduled or has passed.
+
+The pytest rootdir must equal the bound checkout root. Collected items must name
+tracked files inside that root; alternate passing copies cannot certify this plan.
+Consumers must call `verify_receipt(receipt_path, plan_path)` after checking the
+child exit code. Exit zero alone (including os._exit(0)) is not success: missing,
+running/incomplete, wrong-plan or wrong-identity receipts are rejected.
+
+Source-change detection is a clean-worktree check, not an execution sandbox.
+Ignored files, Git assume-unchanged/skip-worktree flags, and modifications restored
+before the final check are not comprehensively detected. The producer must use
+an isolated trusted checkout, reviewed conftest/plugins and controlled imports.
+This slice does not attest every imported byte or defend against malicious code
+forging receipts. C5b trigger policy is pending; no fixed schedule is authorized.
