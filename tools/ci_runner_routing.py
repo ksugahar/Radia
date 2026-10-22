@@ -30,23 +30,37 @@ def light_sources(root, declaration):
     Dynamic file loaders in tests use literal .py paths; resolve those as well.
     This is conservative source inspection, not a Python sandbox.
     """
-    tier = json.loads((root / 'tests/test_tier_manifest.json').read_text(encoding='utf-8'))
-    paths = set(declaration['entrypoints'])
-    name = declaration['test_profile']
-    visited = set()
-    while name:
-        if name in visited:
-            raise ValueError('cyclic profile')
-        visited.add(name)
-        profile = tier['profiles'][name]
-        paths.update(profile['paths'])
-        name = profile.get('extends')
     import importlib.util
     spec = importlib.util.spec_from_file_location('routing_tier', root / 'tools/run_test_tier.py')
     runner = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(runner)
     runner.ROOT = root
     runner.MANIFEST = root / 'tests/test_tier_manifest.json'
+    tier = runner.validate_tier_data(root, runner.read_tier_data(runner.MANIFEST))
+    # Ownership DATA has its own existing contract; its reader remains sealed.
+    spec = importlib.util.spec_from_file_location('routing_ownership', root / 'tools/ci_distribution_contract.py')
+    ownership = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ownership)
+    owner_data = runner.read_tier_data(root / 'tools/ci_distribution_manifest.json')
+    try:
+        expected_keys = {'schema', 'distributions', 'infrastructure_owner', 'rule_semantics', 'root_content_diff', 'rules', 'shared_include_closures', 'lanes', 'migration_exceptions'}
+        if not isinstance(owner_data, dict) or set(owner_data) != expected_keys:
+            raise ValueError('expected supported ownership DATA keys only')
+        ownership.validate_schema(owner_data)
+        assigned = owner_data['root_content_diff']['attribution']['tests/test_tier_manifest.json']
+        if not set(tier['profiles']) <= set(assigned):
+            raise ValueError(f"unclassified profile owners: {sorted(set(tier['profiles']) - set(assigned))}")
+        for profile in tier['profiles'].values():
+            for path in profile['paths']:
+                ownership.owner_rule(owner_data, path)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"ownership DATA: {exc}") from exc
+    required = {'tests/test_test_tier_policy.py', 'tests/test_run_test_tier.py'}
+    if not required <= set(runner.profile_paths(tier, 'repo-contracts')):
+        raise ValueError(f"required tier/coverage contracts missing: {sorted(required - set(runner.profile_paths(tier, 'repo-contracts')))}")
+    paths = set(declaration['entrypoints'])
+    selected, _ = runner.load_profile(declaration['test_profile'])
+    paths.update(selected)
     with contextlib.redirect_stdout(io.StringIO()):
         paths.update(runner.select_impact_tests(list(paths), None, profile_name='fast-contracts'))
     paths.update(['tests/conftest.py', 'tools/ci_runner_routing.py'])
@@ -82,14 +96,22 @@ def light_sources(root, declaration):
     return paths, imports
 
 
-def audit_digest(root, job, paths):
-    # Audited closure includes selector and source-only conftest. Any executable
-    # change requires a deliberate F2 review, including dynamically loaded code.
-    values = {path: (root / path).read_text(encoding='utf-8-sig').replace('\r\n', '\n')
-              for path in sorted(paths)}
-    values['test_selector_manifest'] = (root / 'tests/test_tier_manifest.json').read_text(encoding='utf-8')
-    values['workflow_execution'] = json.dumps({'steps': job['steps'], 'env': job.get('env')}, sort_keys=True)
-    return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
+# Only these explicit, separately validated DATA documents are excluded.
+VALIDATED_DATA = {'tests/test_tier_manifest.json', 'tools/ci_distribution_manifest.json'}
+
+
+def audit_digest(root, job, paths, declaration):
+    sources = {path: (root / path).read_text(encoding='utf-8-sig').replace('\r\n', '\n')
+              for path in sorted(paths) if path not in VALIDATED_DATA}
+    tier = json.loads((root / 'tests/test_tier_manifest.json').read_text(encoding='utf-8'))
+    policy = {key: value for key, value in declaration.items() if key != 'audit_sha256'}
+    policy['audited_dynamic_sources'] = [path for path in policy.get('audited_dynamic_sources', []) if path not in VALIDATED_DATA]
+    values = {'sources': sources}
+    values['audit_format'] = 'executable-closure-v2'
+    values['light_declaration'] = policy
+    values['active_profile_budget'] = tier['profiles'][declaration['test_profile']].get('max_elapsed_seconds')
+    values['workflow_execution'] = job
+    return hashlib.sha256(json.dumps(values, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
 
 def validate(root, manifest=None, mode=None):
@@ -135,7 +157,7 @@ def validate(root, manifest=None, mode=None):
             if job.get('env', {}).get('RADIA_SOURCE_ONLY_CONTRACTS') != '1':
                 raise ValueError('source-only import guard disabled')
             if denied: raise ValueError(f'heavy light dependency: {denied}')
-            if declaration.get('audit_sha256') != audit_digest(root, job, paths):
+            if declaration.get('audit_sha256') != audit_digest(root, job, paths, declaration):
                 raise ValueError('light execution closure changed: repeat F2 audit')
     return {'jobs': len(actual), 'mode': mode}
 
