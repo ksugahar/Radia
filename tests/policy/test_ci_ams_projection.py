@@ -193,4 +193,9 @@ def test_review_parent_initializers_are_real_execution_inputs(package, version_c
         blobs = {'pyproject.toml': ('[project]\nversion="1"\n', '[project]\nversion="2"\n')}
     else:
         blobs = {}
-    assert decide(blobs, data, extra=initializer)
+    # Supply actual initializer blobs: a missing blob must not be the reason
+    # this regression selects AMS.
+    blobs[initializer] = ('__version__ = "1"\n',
+                          '__version__ = "1"\nimport numpy\nnumpy.seterr(all="raise")\n')
+    assert decide(blobs, data)
+

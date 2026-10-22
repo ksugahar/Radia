@@ -117,6 +117,22 @@ def ams_manifest_unchanged(before: str, after: str) -> bool:
     return _canonical(relevant(before)) == _canonical(relevant(after))
 
 
+def package_version_only(before, after):
+    import ast
+    def without_version(text):
+        tree = ast.parse(text)
+        versions = [node for node in tree.body if (
+            isinstance(node, ast.Assign) and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name) and node.targets[0].id == '__version__'
+            and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
+            and node.value.value.strip())]
+        if len(versions) != 1:
+            raise ValueError('missing or ambiguous package version')
+        tree.body = [node for node in tree.body if node not in versions]
+        return ast.dump(tree, include_attributes=False)
+    return without_version(before) == without_version(after)
+
+
 def _strict_json(text):
     def pairs(items):
         result = {}
@@ -553,6 +569,10 @@ def _required_for_event(lane,event_name,event,git,data):
                                          git('show', f'HEAD:{path}'))
             }
             exemptions.update(version_only)
+            exemptions.update(path for path in changed
+                if path.startswith('packages/') and path.endswith('/__init__.py')
+                and package_version_only(git('show', f'{base}:{path}'),
+                                         git('show', f'HEAD:{path}')))
             for path, proof in (
                     ('tests/test_tier_manifest.json', ams_tier_projection_unchanged),
                     ('tools/ci_distribution_manifest.json', ams_records_projection_unchanged)):
@@ -604,18 +624,7 @@ def gpu_required_for_event(event_name, event, git, data):
                 return True, 'GPU build/dependency metadata: ' + path
             if path == 'packages/radia-simulink/src/radia_simulink/__init__.py':
                 import ast
-                def without_version(text):
-                    tree = ast.parse(text)
-                    versions = [node for node in tree.body if (
-                        isinstance(node, ast.Assign) and len(node.targets) == 1
-                        and isinstance(node.targets[0], ast.Name) and node.targets[0].id == '__version__'
-                        and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
-                        and node.value.value.strip())]
-                    if len(versions) != 1:
-                        raise ValueError('missing or ambiguous package version')
-                    tree.body = [node for node in tree.body if node not in versions]
-                    return ast.dump(tree, include_attributes=False)
-                if without_version(git('show', f'{base}:{path}')) == without_version(git('show', f'HEAD:{path}')):
+                if package_version_only(git('show', f'{base}:{path}'), git('show', f'HEAD:{path}')):
                     continue
                 return True, 'GPU package initialization changed'
             # Selection is the distribution contract, not a GPU source allowlist.
