@@ -183,7 +183,9 @@ def build_source_plan(since, *, full=False, git=None):
 
 def _mcp_checks(plan, steps, output):
     """Execute the selector's Python test fields, using CI collection semantics."""
-    selection_file = output.with_name(output.stem + "-mcp-selection.json")
+    artifacts = output.with_name(output.stem + "-logs")
+    artifacts.mkdir(parents=True, exist_ok=True)
+    selection_file = artifacts / "mcp-selection.json"
     command = [sys.executable, "packages/radia-mcp/tools/select_ci_tests.py",
                "--output", str(selection_file)]
     command += ["--full"] if plan["mode"] == "full" else ["--base", plan["base"]]
@@ -218,7 +220,7 @@ def _mcp_checks(plan, steps, output):
         package_env.pop("RADIA_MCP_CI_SELECTION_JSON", None)
     # Probe the actual collection policy in a fresh child before pytest can
     # collect_ignore selected files. Missing dependencies never become PASS.
-    dependency_report = output.with_name(output.stem + "-mcp-not-collected.json")
+    dependency_report = artifacts / "mcp-not-collected.json"
     probe = (
         "import importlib.util,json,runpy; from pathlib import Path; "
         "required=['pytest','numpy','scipy','h5py']; "
@@ -250,7 +252,7 @@ def _mcp_checks(plan, steps, output):
               "--confcutdir=tests/mcp_integration", *selection["integration_tests"]], env, steps)
         _run("MCP package test boundary",
              [sys.executable, "packages/radia-mcp/tools/check_package_test_boundary.py",
-              "--scratch-root", str(output.parent / (output.stem + "-boundary-scratch"))], env, steps)
+              "--scratch-root", str(artifacts / "boundary-scratch")], env, steps)
     return selection
 
 
@@ -314,12 +316,13 @@ def main(argv=None):
     report = {
         "schema": "radia.ci-precheck.v2", "head": head, "since": args.since,
         "python": platform.python_version(), "interpreter": sys.executable,
-        "passed": None if (args.plan_only or args.skip_repo_contracts) and not errors else passed,
+        "passed": None if (args.plan_only and not errors) or (args.skip_repo_contracts and passed) else passed,
         "qualified": passed and not args.skip_repo_contracts,
         "status": "failed" if errors or (not args.plan_only and not passed) else
                   "planned" if args.plan_only else "partial" if args.skip_repo_contracts else "passed",
         "dirty_paths": dirty,
         "ci_only_lanes": plan.get("ci_only_lanes", []) if plan else [],
+        "ci_only_lane_note": "Distribution/platform qualification remains CI-only; policy-lint source commands are also executed locally.",
         "plan": plan, "steps": steps, "errors": errors, "mcp_selection": selection,
         "mcp_ci_only_server_selftests": selection["server_selftests"] if selection else [],
         "scope": "Python 3.12 source precheck; native/platform/release and server stdio qualification remain CI",

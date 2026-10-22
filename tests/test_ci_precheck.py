@@ -273,3 +273,33 @@ def test_boundary_helper_is_the_workflows_standalone_package_probe():
     helper = (ROOT / "packages/radia-mcp/tools/check_package_test_boundary.py").read_text()
     assert 'env["RADIA_REPO_ROOT"] = str(root / "no-monorepo")' in helper
     assert 'TemporaryDirectory(' in helper
+
+
+def test_default_report_sidecars_do_not_dirty_next_precheck(tmp_path, monkeypatch):
+    # Use the real repository ignore rules and Git status, not a fake clean tree.
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_bytes((ROOT / ".gitignore").read_bytes())
+    subprocess.run(["git", "add", ".gitignore"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "-c", "user.email=test@example.invalid", "-c", "user.name=Test",
+                    "commit", "-qm", "ignore policy"], cwd=tmp_path, check=True)
+    monkeypatch.setattr(precheck, "ROOT", tmp_path)
+    commands = []
+    monkeypatch.setattr(precheck, "_run", fake_run(commands, selection=selection()))
+    precheck._mcp_checks({"mode": "affected", "base": "base"}, [], tmp_path / "ci-precheck-report.json")
+    artifacts = tmp_path / "ci-precheck-report-logs"
+    # Collection diagnostics/helper scratch use the same ignored parent.
+    (artifacts / "mcp-not-collected.json").write_text("{}")
+    (artifacts / "boundary-scratch").mkdir()
+    assert (artifacts / "mcp-selection.json").is_file()
+    assert subprocess.check_output(["git", "status", "--porcelain",
+                                    "--untracked-files=all"], cwd=tmp_path, text=True) == ""
+
+
+def test_failed_partial_reports_false_not_unknown(tmp_path, monkeypatch):
+    plan = precheck.build_source_plan("base", git=git_diff(["packages/cubit-mesh-export/README.md"]))
+    monkeypatch.setattr(precheck, "build_source_plan", lambda *a, **k: plan)
+    monkeypatch.setattr(precheck, "_run", fake_run([], failing="policy tests"))
+    out = tmp_path / "report.json"
+    assert precheck.main(["--skip-repo-contracts", "--report", str(out)]) == 1
+    result = json.loads(out.read_text())
+    assert result["passed"] is False and result["status"] == "failed"
