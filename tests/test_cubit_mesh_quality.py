@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("ngsolve")
 
 PACKAGE_SRC = Path(__file__).resolve().parents[1] / "packages" / "cubit-mesh-export" / "src"
 CHECK_FILE = PACKAGE_SRC / "cubit_mesh_export" / "check.py"
