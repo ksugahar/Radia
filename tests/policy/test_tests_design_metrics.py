@@ -147,10 +147,44 @@ class MetricsContracts(unittest.TestCase):
                 if '/jobs?' in url: data['jobs'][0]['completed_at']='invalid'
                 return data
             result=m.collect(m.Snapshot(Path(tmp)/'private',get),'a/b','2026-01-02T00:00:00Z','2026-01-03T00:00:00Z')
-            self.assertFalse(result['collection_complete'])
+            self.assertTrue(result['collection_complete'])
+            self.assertEqual(result['errors'],[])
             self.assertIsNone(result['jobs'][0]['duration_s'])
+            self.assertEqual(result['jobs'][0]['duration_unavailable_reason'],'invalid_timestamp')
             schema=json.loads((ROOT/'tools/schemas/tests_design_metrics.schema.json').read_text())
             self.assertEqual(set(result),set(schema['required']))
+
+
+    def test_skipped_negative_interval_is_missing_measurement_not_failed_collection(self):
+        # Synthetic shape of an observed skipped job: completion one second before start.
+        with TemporaryDirectory() as tmp:
+            def get(url):
+                data=self.synthetic(url)
+                if '/jobs?' in url:
+                    data['jobs'][1].update(status='completed', started_at='2026-01-01T00:02:01Z',
+                                           completed_at='2026-01-01T00:02:00Z')
+                return data
+            result=m.collect(m.Snapshot(Path(tmp)/'private',get),'a/b','2026-01-02T00:00:00Z','2026-01-03T00:00:00Z')
+            self.assertTrue(result['collection_complete'])
+            self.assertEqual(result['errors'],[])
+            skipped=[j for j in result['jobs'] if j['conclusion']=='skipped']
+            self.assertEqual(len(skipped),2)
+            self.assertTrue(all(j['duration_s'] is None and j['duration_unavailable_reason']=='negative_interval' for j in skipped))
+            self.assertEqual(result['prs'][0]['unknown_duration_job_count'],2)
+            self.assertEqual(result['prs'][0]['observed_sum_job_execution_s'],120)
+            self.assertEqual(result['prs'][0]['executed_job_count'],2)
+
+    def test_job_interval_reasons_do_not_clip_or_invent_durations(self):
+        cases=[(None,'2026-01-01T00:00:00Z',None,'missing_timestamp'),
+               ('invalid','2026-01-01T00:00:00Z',None,'invalid_timestamp'),
+               ('2026-01-01T00:00:01Z','2026-01-01T00:00:00Z',None,'negative_interval'),
+               ('2026-01-01T00:00:00Z','2026-01-01T00:00:00Z',0,None),
+               ('2026-01-01T00:00:00Z','2026-01-01T00:00:01Z',1,None)]
+        for start,end,duration,reason in cases:
+            for conclusion in ('success','skipped','cancelled'):
+                with self.subTest(conclusion=conclusion,start=start):
+                    row=m.job_record(dict(id=1,conclusion=conclusion,started_at=start,completed_at=end),8,1)
+                    self.assertEqual((row['duration_s'],row['duration_unavailable_reason']),(duration,reason))
 
 
     def test_unknown_and_invalid_time_are_not_zero(self):

@@ -114,11 +114,25 @@ def observed_elapsed(snapshot, start, end):
         return None
 
 
-def job_record(job, run_id, attempt, snapshot):
+def job_duration(start, end):
+    """Timestamp quality is per-job observation metadata, not a retrieval error."""
+    if start is None or end is None:
+        return None, 'missing_timestamp'
+    try:
+        seconds = (timestamp(end) - timestamp(start)).total_seconds()
+    except (ValueError, TypeError, AttributeError, OverflowError):
+        return None, 'invalid_timestamp'
+    if seconds < 0:
+        return None, 'negative_interval'
+    return seconds, None
+
+
+def job_record(job, run_id, attempt):
+    duration, reason = job_duration(job.get('started_at'), job.get('completed_at'))
     return dict(run_id=run_id, attempt=attempt, job_id=job['id'], name=job.get('name'),
                 status=job.get('status'), conclusion=job.get('conclusion'),
                 started_at=job.get('started_at'), completed_at=job.get('completed_at'),
-                duration_s=observed_elapsed(snapshot, job.get('started_at'), job.get('completed_at')))
+                duration_s=duration, duration_unavailable_reason=reason)
 
 
 def collect(snapshot, repo, start, until):
@@ -169,7 +183,7 @@ def collect(snapshot, repo, start, until):
                 if job.get('run_id') != run['id'] or job.get('run_attempt') != attempt:
                     snapshot.errors.append(dict(job_id=job['id'], reason='job attempt identity mismatch'))
                     continue
-                jobs.append(job_record(job, run['id'], attempt, snapshot))
+                jobs.append(job_record(job, run['id'], attempt))
     summary_prs = []
     for pr in prs:
         ids = {x['run_id'] for x in links if x['pr'] == pr['number']}
