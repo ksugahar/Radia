@@ -191,3 +191,48 @@ def test_duplicate_phase_is_not_a_successful_retry(tmp_path):
 def test_duplicate_json_keys_are_refused(tmp_path):
     plan=tmp_path/'duplicate.json';plan.write_text('{"schema":1,"schema":2}')
     with pytest.raises(ValueError,match='duplicate plan key'):receipt.read_plan(plan)
+
+
+def test_modified_copy_rootdir_cannot_certify_bound_checkout(tmp_path):
+    paths = repo(tmp_path, 'def test_case():\n    assert False\n')
+    copy = tmp_path/'copy'
+    copy.mkdir()
+    (copy/'validation_test').mkdir()
+    (copy/'validation_test/test_case.py').write_text('def test_case(): pass\n')
+    result, data = execute(paths, ('--rootdir', str(copy)))
+    assert result.returncode != 0 and data is None
+    assert 'rootdir must equal' in result.stderr
+
+
+def test_untracked_or_external_item_is_rejected(tmp_path):
+    from types import SimpleNamespace
+    paths = repo(tmp_path)
+    record = receipt.Receipt(paths[1], paths[0], paths[2], paths[3])
+    for path in (paths[0]/'validation_test/untracked.py', tmp_path/'external.py'):
+        path.write_text('def test_case(): pass')
+        item = SimpleNamespace(path=path, nodeid='validation_test/untracked.py::test_case')
+        with pytest.raises(pytest.UsageError, match='tracked source'):
+            record.collection([item.nodeid], [item])
+
+
+def test_zero_exit_interruption_is_rejected_by_consumer(tmp_path):
+    paths = repo(tmp_path, 'import os\ndef test_case():\n    os._exit(0)\n')
+    result, data = execute(paths)
+    assert result.returncode == 0 and data['state'] == 'running'
+    with pytest.raises(ValueError, match='finished'):
+        receipt.verify_receipt(paths[2], paths[1])
+
+
+def test_consumer_verifies_finished_identity_and_plan(tmp_path):
+    paths = repo(tmp_path)
+    with pytest.raises(OSError):
+        receipt.verify_receipt(paths[2], paths[1])
+    result, data = execute(paths)
+    assert result.returncode == 0
+    assert receipt.verify_receipt(paths[2], paths[1]) == data
+    for key, value in [('effective_exit_code', 1), ('plan_sha256', '0'*64),
+                       ('identity', {}), ('state', 'running'), ('executed', [])]:
+        changed = dict(data, **{key: value})
+        paths[2].write_text(json.dumps(changed))
+        with pytest.raises(ValueError):
+            receipt.verify_receipt(paths[2], paths[1])
