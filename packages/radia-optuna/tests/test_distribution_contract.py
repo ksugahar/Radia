@@ -316,7 +316,7 @@ def test_wheel_verifier_rejects_solver_boundary_leaks():
     assert "optuna\\s*==\\s*5\\.0\\.0" in verifier
     assert "THIRD_PARTY_NOTICES.md" in verifier
     assert "source_fidelity_verified" in verifier
-    assert "wheel payload differs from the checked monorepo source" in verifier
+    assert "wheel payload differs from the checked package source" in verifier
 
 
 def test_release_candidate_fidelity_normalizes_text_but_not_semantics():

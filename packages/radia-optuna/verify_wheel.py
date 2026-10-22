@@ -227,7 +227,7 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
             )
         if stale_payloads:
             errors.append(
-                "wheel payload differs from the checked monorepo source: "
+                "wheel payload differs from the checked package source: "
                 + ", ".join(stale_payloads)
             )
 
