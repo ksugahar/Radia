@@ -452,6 +452,70 @@ def _required_for_event(lane,event_name,event,git,data):
         return True,f'impact unknown ({type(exc).__name__}); fail closed'
 
 
+
+def gpu_required_for_event(event_name, event, git, data):
+    """Select GPU execution, independently of distribution/CPU lane ownership."""
+    try:
+        if event_name not in ('push', 'pull_request') or event.get('ref', '').startswith('refs/tags/'):
+            return True, 'release/manual/unknown event: preserve GPU qualification'
+        base = event.get('before') if event_name == 'push' else event['pull_request']['base']['sha']
+        if not base or set(base) == {'0'}:
+            raise ValueError('missing comparison base')
+        if event_name == 'pull_request':
+            base = git('merge-base', base, 'HEAD').strip()
+        if not base:
+            raise ValueError('missing merge base')
+        paths = changed_paths(git('diff', '--name-status', '-z', '--find-renames', base, 'HEAD', '--'))
+        for path in sorted(paths):
+            if path.endswith(('.md', '.rst', '.ipynb')) or path.startswith('docs/'):
+                continue
+            if path in ('pyproject.toml', 'packages/radia-simulink/pyproject.toml'):
+                old, new = (tomllib.loads(git('show', f'{ref}:{path}')) for ref in (base, 'HEAD'))
+                for document in (old, new):
+                    document['project'].pop('version', None)
+                if _canonical(old) == _canonical(new):
+                    continue
+                return True, 'GPU build/dependency metadata: ' + path
+            if path == 'packages/radia-simulink/src/radia_simulink/__init__.py':
+                import ast
+                def without_version(text):
+                    tree = ast.parse(text)
+                    tree.body = [node for node in tree.body if not (
+                        isinstance(node, ast.Assign) and len(node.targets) == 1
+                        and isinstance(node.targets[0], ast.Name) and node.targets[0].id == '__version__'
+                        and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str))]
+                    return ast.dump(tree, include_attributes=False)
+                if without_version(git('show', f'{base}:{path}')) == without_version(git('show', f'HEAD:{path}')):
+                    continue
+                return True, 'GPU package initialization changed'
+            if path in ('Build.ps1', 'CMakeLists.txt', 'MANIFEST.in', 'tests/test_tier_manifest.json',
+                        'tools/sparsesolv_ci_impact.py', 'tools/ci_distribution_manifest.json',
+                        'tools/ci_distribution_contract.py', 'tools/ci_tree_receipt.py', 'tools/ci_gpu_artifact.py',
+                        'tests/test_ci_gpu_artifact.py', '.github/workflows/radia-simulink.yml'):
+                return True, 'GPU build/routing contract: ' + path
+            if path.startswith(('packages/radia-simulink/native/', 'packages/radia-simulink/tools/',
+                                'packages/radia-simulink/tests/native/', 'packages/radia-simulink/matlab/',
+                                'validation_test/radia_simulink/', 'validation_test/ams_cuda/', 'validation_test/ic_cuda/',
+                                'validation_test/ngsolve_cuda_mex/', 'validation_test/hmatrix_cuda/',
+                                'validation_test/fmm_cuda/', 'src/runtime/ih/', 'src/ext/HACApK/')):
+                return True, 'GPU native/runtime/validation input: ' + path
+            if path.startswith('packages/radia-simulink/') and '/' not in path[len('packages/radia-simulink/'):]:
+                return True, 'GPU payload/packaging contract: ' + path
+            if path.startswith('packages/radia-simulink/src/radia_simulink/') and Path(path).name in (
+                    'hdiv.py', 'csr.py', 'ngsolve_gpu.py', 'ams_exchange.py', 'resident_amg.py', '_cuda_runtime.py', 'vim.py'):
+                return True, 'Python GPU contract: ' + path
+            if path.startswith('packages/radia-simulink/tests/test_') and any(
+                    Path(path).stem.startswith('test_' + name) for name in
+                    ('ams', 'cuda', 'csr', 'hdiv', 'resident', 'vim', 'mex', 'native', 'ngsolve_gpu')):
+                return True, 'GPU contract test: ' + path
+            projection = data['lanes']['radia-simulink']['events']['push']
+            if path.startswith(('src/core/', 'src/ext/sparsesolv/', 'tests/cpp/')) and CONTRACT.selected(path, projection):
+                return True, 'Shared GPU native input: ' + path
+        return False, 'no GPU execution inputs'
+    except Exception as exc:
+        return True, f'GPU impact unknown ({type(exc).__name__}); fail closed'
+
+
 def native_required(event_name, event, git):
     """Compatibility API for callers supplying a path-only diff; one decision engine."""
     if event_name not in ('push','pull_request'): return True,'manual or unknown event'
@@ -475,12 +539,15 @@ def main(argv=None):
             encoding="utf-8", stderr=subprocess.PIPE,
         )
 
+    gpu_required, gpu_reason = True, "impact unknown; fail closed"
     try:
         event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
         data=manifest()
         CONTRACT.validate_schema(data)
         if args.lane not in data["lanes"]: raise ValueError("unknown lane")
         required, reason = required_for_event(args.lane, os.environ["GITHUB_EVENT_NAME"], event, git, data)
+        if args.lane == "radia-simulink":
+            gpu_required, gpu_reason = gpu_required_for_event(os.environ["GITHUB_EVENT_NAME"], event, git, data)
         if args.tree_reuse:
             spec = importlib.util.spec_from_file_location('ci_tree_receipt', root / 'tools/ci_tree_receipt.py')
             receipt = importlib.util.module_from_spec(spec)
@@ -494,6 +561,9 @@ def main(argv=None):
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
         output.write(f"required={str(required).lower()}\n")
         output.write("reason=" + safe_reason + "\n")
+        if args.lane == "radia-simulink":
+            output.write(f"gpu_required={str(required and gpu_required).lower()}\n")
+            output.write("gpu_reason=" + gpu_reason.replace("\r", " ").replace("\n", " ") + "\n")
 
 
 if __name__ == "__main__":

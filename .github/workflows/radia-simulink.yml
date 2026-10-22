@@ -215,6 +215,8 @@ jobs:
     outputs:
       required: ${{ steps.route.outputs.required }}
       reason: ${{ steps.route.outputs.reason }}
+      gpu_required: ${{ steps.route.outputs.gpu_required }}
+      gpu_reason: ${{ steps.route.outputs.gpu_reason }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -237,7 +239,7 @@ jobs:
 
   cuda-mex:
     needs: [ci-impact]
-    if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ needs.ci-impact.outputs.gpu_required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: [self-hosted, Windows, X64, "100", gpu-rtx]
     timeout-minutes: 60
     env:
