@@ -3,6 +3,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 
 import pytest
 import yaml
@@ -13,6 +14,21 @@ impact = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(impact)
 TIER = 'tests/test_tier_manifest.json'
 OWNERS = 'tools/ci_distribution_manifest.json'
+
+
+@pytest.fixture(scope='module')
+def real_inputs():
+    spec = importlib.util.spec_from_file_location('real_ams_inputs', ROOT / 'tools/ci_ams_inputs.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(autouse=True)
+def reuse_graph_cache_for_immutable_checkout(monkeypatch, real_inputs):
+    # Reuse the real helper's existing ROOT-keyed cache across cases. Neither
+    # traversal nor its results are mocked; temporary consumer trees use other keys.
+    monkeypatch.setattr(impact, '_ams_inputs', lambda: real_inputs)
 
 
 def documents():
@@ -131,3 +147,19 @@ def test_parent_and_internal_native_impact_use_one_pr_aware_decision():
         commands = [step['run'] for step in workflow['jobs'][job]['steps']
                     if 'tools/sparsesolv_ci_impact.py' in step.get('run', '')]
         assert len(commands) == 1 and '--lane sparsesolv' in commands[0]
+
+
+@pytest.mark.parametrize('consumed', [TIER, OWNERS])
+def test_a_numerical_consumer_of_metadata_prevents_its_exemption(tmp_path, monkeypatch, consumed):
+    blobs, data = documents()
+    (tmp_path / 'tools').mkdir()
+    (tmp_path / 'tests').mkdir()
+    shutil.copy2(ROOT / 'tools/ci_ams_inputs.py', tmp_path / 'tools/ci_ams_inputs.py')
+    (tmp_path / OWNERS).write_text(json.dumps(data), encoding='utf-8')
+    (tmp_path / TIER).write_text(json.dumps({'profiles': {
+        name: {'paths': ['tests/test_consumer.py']}
+        for name in ('sparsesolv', 'solver-numerics', 'solver-heavy')}}), encoding='utf-8')
+    (tmp_path / 'tests/test_consumer.py').write_text(
+        "from pathlib import Path\nPath(" + repr(consumed) + ").read_text()\n", encoding='utf-8')
+    monkeypatch.setattr(impact, 'ROOT', tmp_path)
+    assert decide(blobs, data)

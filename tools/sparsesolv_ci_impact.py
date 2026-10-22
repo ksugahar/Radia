@@ -525,6 +525,13 @@ def required_for_event(lane,event_name,event,git,data):
         return True,f'impact unknown ({type(exc).__name__}); fail closed'
 
 
+def _ams_inputs():
+    spec = importlib.util.spec_from_file_location('ci_ams_inputs', ROOT / 'tools/ci_ams_inputs.py')
+    inputs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(inputs)
+    return inputs
+
+
 def _required_for_event(lane,event_name,event,git,data):
     if event_name not in ('push','pull_request') or event.get('ref','').startswith('refs/tags/'):
         return True,'release/manual/unknown event: preserve full lane'
@@ -536,6 +543,7 @@ def _required_for_event(lane,event_name,event,git,data):
         changed=changed_paths(git('diff','--name-status','-z','--find-renames',base,'HEAD','--'))
         exemptions = set()
         if lane == 'sparsesolv' and event_name == 'pull_request':
+            inputs = _ams_inputs()
             # Share the GPU selector's typed TOML proof before BOTH closures.
             # Main pushes keep their execution/evidence-producing route.
             version_only = {
@@ -547,14 +555,13 @@ def _required_for_event(lane,event_name,event,git,data):
             for path, proof in (
                     ('tests/test_tier_manifest.json', ams_tier_projection_unchanged),
                     ('tools/ci_distribution_manifest.json', ams_records_projection_unchanged)):
-                if path in changed and proof(git('show', f'{base}:{path}'), git('show', f'HEAD:{path}')):
+                if (path in changed
+                        and proof(git('show', f'{base}:{path}'), git('show', f'HEAD:{path}'))
+                        and path not in inputs.python_inputs(ROOT)):
                     exemptions.add(path)
             changed -= exemptions
             if exemptions and not changed:
                 return False, 'PR metadata/numerical projection unchanged: ' + ', '.join(sorted(exemptions))
-            spec = importlib.util.spec_from_file_location('ci_ams_inputs', ROOT / 'tools/ci_ams_inputs.py')
-            inputs = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(inputs)
             if changed and inputs.required(ROOT, changed, CONTRACT, data):
                 return True, 'full numerical/build input closure'
             # Preserve every parent workflow input in addition to the derived closure.
