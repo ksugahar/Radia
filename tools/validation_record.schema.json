@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:radia:validation-record:v1",
+  "$id": "urn:radia:validation-record:v2",
   "title": "Historical validation record (no numerical replay)",
   "type": "object",
   "additionalProperties": false,
@@ -32,7 +32,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "radia.validation-record.v1"
+      "const": "radia.validation-record.v2"
     },
     "id": {
       "type": "string",
@@ -67,12 +67,20 @@
         "dirty",
         "native_sha256",
         "wheel_sha256",
-        "source_only"
+        "source_only",
+        "provenance"
       ],
       "properties": {
         "repo_sha": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{40}$"
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "dirty": {
           "const": false
@@ -97,6 +105,12 @@
         },
         "source_only": {
           "type": "boolean"
+        },
+        "provenance": {
+          "enum": [
+            "exact",
+            "pre-rewrite"
+          ]
         }
       }
     },
