@@ -1,4 +1,9 @@
-"""Tree reuse and impact contracts need no solver, credentials or network."""
+"""Guards: CI reuse/selection preserves numerical routes and full release gates.
+
+Assumes: source-only contracts, synthetic API receipts, and the reviewed historical
+route ledger; additions are allowed, removals require explicit retirement review.
+No solver, credentials or network are used. Numerical thresholds are unchanged.
+"""
 import importlib.util
 import io
 import json
@@ -122,26 +127,59 @@ def test_every_declared_existing_input_selects_its_lane(lane):
         assert impact.lane_required(lane, {path}, lambda _: (None, None), data)[0]
 
 
+def assert_retained_routes(ledger, current):
+    """The frozen inventory never shrinks; reviewed retirement is an exception."""
+    assert ledger['schema'] == 'radia.numerical-route-retention.v1'
+    original = ledger['baseline_paths']
+    assert original == sorted(set(original))
+    import hashlib
+    assert hashlib.sha256(('\n'.join(original) + '\n').encode()).hexdigest() == '3ba98fa313ca9a84f602937c48374f9d90c952672480e3dda4950060b7868359'
+    required = set(original)
+    retired = set()
+    for record in ledger['retirements']:
+        assert set(record) == {'path', 'reason', 'review', 'consumer_evidence', 'oracle_preservation'}
+        path = record['path']
+        assert path in required and path not in retired
+        assert path not in current, f'stale retirement: {path}'
+        for field in ('reason', 'review', 'consumer_evidence', 'oracle_preservation'):
+            assert isinstance(record[field], str) and record[field].strip(), (path, field)
+        retired.add(path)
+    assert required - retired <= current, f'unrecorded numerical route removal: {sorted(required - retired - current)}'
+
+
+@pytest.mark.parametrize('change', ['addition', 'unrecorded_removal', 'recorded_retirement',
+                                  'empty_review', 'unknown_retirement', 'duplicate_retirement',
+                                  'stale_retirement', 'baseline_shrink'])
+def test_route_retention_allows_growth_but_requires_reviewed_retirement(change):
+    ledger = json.loads((ROOT / 'tests/policy/numerical_route_retention.json').read_text())
+    current = set(ledger['baseline_paths'])
+    path = ledger['baseline_paths'][0]
+    record = dict(path=path, reason='Synthetic retirement', review='Synthetic independent review',
+                  consumer_evidence='Synthetic consumer audit', oracle_preservation='Synthetic preserved oracle')
+    if change == 'addition':
+        current.add('tests/new_route.py')
+    elif change == 'baseline_shrink':
+        ledger['baseline_paths'].pop(0)
+        current.remove(path)
+    else:
+        current.remove(path)
+        if change != 'unrecorded_removal':
+            ledger['retirements'].append(record)
+        if change == 'empty_review': record['review'] = ''
+        if change == 'unknown_retirement': record['path'] = 'tests/unknown.py'
+        if change == 'duplicate_retirement': ledger['retirements'].append(dict(record))
+        if change == 'stale_retirement': current.add(path)
+    if change in {'addition', 'recorded_retirement'}:
+        assert_retained_routes(ledger, current)
+    else:
+        with pytest.raises(AssertionError):
+            assert_retained_routes(ledger, current)
+
+
 def test_numerical_tests_are_retained_and_full_release_is_mandatory():
     tiers = json.loads((ROOT / 'tests/test_tier_manifest.json').read_text())['profiles']
-    # Preserve the original 91 routes and explicitly register the added validations.
-    esim_routes = {
-        'tests/test_esim_adaptive_depth.py',
-        'validation_test/induction_heating/test_esim_adaptive_depth_validation.py',
-    }
-    direct_routes = {
-        'tests/test_planar_eddy_direct_inverse.py',
-        'tests/test_vector_potential_direct_inverse.py',
-    }
-    topology_routes = {
-        'validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py',
-    }
-    mmm_routes = {
-        'tests/test_mmm_topology.py',
-    }
-    added_routes = esim_routes | direct_routes | topology_routes | mmm_routes
-    assert added_routes <= set(tiers['solver-numerics']['paths'])
-    assert len(tiers['solver-numerics']['paths']) == 91 + len(added_routes)
+    ledger = json.loads((ROOT / 'tests/policy/numerical_route_retention.json').read_text())
+    assert_retained_routes(ledger, set(tiers['solver-numerics']['paths']))
     assert 'solver-pr' not in tiers
     workflow = yaml.load((ROOT / '.github/workflows/sparsesolv.yml').read_text(), Loader=yaml.BaseLoader)
     assert workflow['on']['schedule'] and 'workflow_dispatch' in workflow['on']
