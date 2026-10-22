@@ -2134,6 +2134,42 @@
         "detail": "Checks exact-SHA artifact recovery for both GPU distributions."
       },
       "selection": "all_owners"
+    },
+    {
+      "pattern": "validation_records/**",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "packages/radia-simulink/validation_records/**",
+      "owners": [
+        "radia-simulink"
+      ]
+    },
+    {
+      "pattern": "packages/radia-mcp/validation_records/**",
+      "owners": [
+        "radia-mcp"
+      ]
+    },
+    {
+      "pattern": "packages/radia-optuna/validation_records/**",
+      "owners": [
+        "radia-optuna"
+      ]
+    },
+    {
+      "pattern": "packages/cubit-mesh-export/validation_records/**",
+      "owners": [
+        "cubit-mesh-export"
+      ]
+    },
+    {
+      "pattern": "packages/eqnedit64/validation_records/**",
+      "owners": [
+        "eqnedit64"
+      ]
     }
   ],
   "shared_include_closures": [
