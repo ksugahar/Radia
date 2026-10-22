@@ -179,8 +179,8 @@ def _mcp_checks(plan, steps, output):
              [sys.executable, "-m", "pytest", "-v", "-ra",
               "--confcutdir=tests/mcp_integration", *selection["integration_tests"]], env, steps)
         _run("MCP package test boundary",
-             [sys.executable, "packages/radia-mcp/tools/check_package_test_boundary.py",
-              "--scratch-root", str(output.parent / (output.stem + "-boundary-scratch"))], env, steps)
+             [sys.executable, "-m", "pytest",
+              "packages/radia-mcp/tests/test_validation_lane_separation.py", "-q"], env, steps)
     return selection
 
 

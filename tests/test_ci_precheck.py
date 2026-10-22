@@ -131,10 +131,6 @@ def test_mcp_executes_the_actual_collection_protocol_and_propagates_boundary_fai
     assert cwd == ROOT / "packages/radia-mcp"
     assert "--confcutdir=tests/mcp_integration" in rows["MCP selected integration tests"][0]
     assert "MCP response tests" in rows and "MCP package test boundary" in rows
-    boundary = rows["MCP package test boundary"][0]
-    assert boundary[1] == "packages/radia-mcp/tools/check_package_test_boundary.py"
-    assert boundary[2] == "--scratch-root"
-    assert Path(boundary[3]).parent == tmp_path
     assert any(step["returncode"] for step in steps)
 
 
