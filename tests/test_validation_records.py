@@ -42,13 +42,13 @@ def sample(tmp_path):
     (folder / "entry.py").write_bytes(script)
     (folder / "result.json").write_bytes(result)
     record = {
-        "schema": "radia.validation-record.v1", "id": "principle/20261022_contract",
+        "schema": "radia.validation-record.v2", "id": "principle/20261022_contract",
         "milestone": "Synthetic integrity milestone", "claim": "Recorded bytes match their source",
         "date": "2026-10-22", "radia_version": "5.3.3",
         "conditions": {"problem": "Synthetic contract", "mesh": "Not applicable: no solver", "hardware": "CPU contract fixture"},
         "comparison": {"reference": "Independent SHA256 of synthetic bytes", "independence": "Integrity only; no physics claim"},
         "kind": "investigation", "question": "Synthetic artifact integrity", "outcome": "observed",
-        "source": {"repo_sha": source, "dirty": False, "native_sha256": {}, "wheel_sha256": None, "source_only": True},
+        "source": {"repo_sha": source, "provenance": "exact", "dirty": False, "native_sha256": {}, "wheel_sha256": None, "source_only": True},
         "covered_paths": ["physics.py", "pyproject.toml"],
         "covered_sha256": covered_hashes(tmp_path, ["physics.py", "pyproject.toml"]),
         "entry": {"script": "entry.py", "script_sha256": hashlib.sha256(script).hexdigest(),
@@ -299,3 +299,88 @@ def test_covered_metadata_is_author_selected_not_forced_to_root(sample):
     (root / "pyproject.toml").write_text('[project]\nversion="5.3.4"\ndependencies=["ngsolve==6.2.2608"]\n')
     write(path, record)
     assert validate_record(root, path)["status"] == "current"
+
+
+def pre_rewrite(record):
+    record["source"].update(repo_sha=None, provenance="pre-rewrite")
+    record.update(status="stale", stale_reason="pre-rewrite: execution identity lost in confirmed rewrite")
+
+
+def test_pre_rewrite_keeps_null_source_and_stale_without_changing_artifacts(sample):
+    root, path, record = sample
+    before = {name: (path.parent / name).read_bytes() for name in ("entry.py", "result.json")}
+    pre_rewrite(record)
+    write(path, record)
+    result = validate_record(root, path)
+    assert result["source"] is None and result["provenance"] == "pre-rewrite"
+    assert result["status"] == "stale" and result["changed_covered_files"] == []
+    assert result["numerical_work_executed"] is False
+    assert all((path.parent / name).read_bytes() == raw for name, raw in before.items())
+
+
+@pytest.mark.parametrize("change,match", [
+    ("exact-null", "exact requires a full"),
+    ("pre-rewrite-sha", "repo_sha=null"),
+    ("current", "requires status=stale"),
+    ("wrong-reason", "stale_reason requires"),
+    ("empty-explanation", "stale_reason requires"),
+])
+def test_provenance_cross_field_contract_is_explicit(sample, change, match):
+    root, path, record = sample
+    old = record["source"]["repo_sha"]
+    pre_rewrite(record)
+    if change == "exact-null":
+        record["source"]["provenance"] = "exact"
+    elif change == "pre-rewrite-sha":
+        record["source"]["repo_sha"] = old
+    elif change == "current":
+        record.update(status="current", stale_reason=None)
+    elif change == "wrong-reason":
+        record["stale_reason"] = "covered files changed"
+    else:
+        record["stale_reason"] = "pre-rewrite:   "
+    write(path, record)
+    with pytest.raises(ValueError, match=match) as error:
+        validate_record(root, path)
+    if change == "pre-rewrite-sha":
+        assert old not in str(error.value)
+
+
+@pytest.mark.parametrize("change,match", [
+    ("artifact", "requires native"), ("result", "result sha256"),
+    ("script", "entry script sha256"), ("dirty", "schema"),
+    ("covered", "covered_sha256 must contain"), ("private", "private"),
+])
+def test_pre_rewrite_does_not_bypass_existing_integrity_guards(sample, change, match):
+    root, path, record = sample
+    pre_rewrite(record)
+    if change == "artifact":
+        record["source"]["source_only"] = False
+    elif change == "result":
+        (path.parent / "result.json").write_bytes(b"{}")
+    elif change == "script":
+        (path.parent / "entry.py").write_bytes(b"pass")
+    elif change == "dirty":
+        record["source"]["dirty"] = True
+    elif change == "covered":
+        record["covered_sha256"] = {}
+    else:
+        record["question"] = "C:/private/original"
+    write(path, record)
+    with pytest.raises(ValueError, match=match):
+        validate_record(root, path)
+
+
+@pytest.mark.parametrize("change", ["v1", "missing-provenance", "public-old-sha"])
+def test_latest_schema_has_no_legacy_or_old_identity_field(sample, change):
+    root, path, record = sample
+    if change == "v1":
+        record["schema"] = "radia.validation-record.v1"
+    elif change == "missing-provenance":
+        del record["source"]["provenance"]
+    else:
+        pre_rewrite(record)
+        record["source"]["old_sha"] = "b" * 40
+    write(path, record)
+    with pytest.raises(ValueError, match="schema"):
+        validate_record(root, path)

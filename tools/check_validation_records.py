@@ -206,6 +206,16 @@ def _validate_record(root, record_path, *, head="HEAD"):
     if private_text(record):
         raise ValueError("record contains a private path or comparison marker")
     source = record["source"]["repo_sha"]
+    provenance = record["source"]["provenance"]
+    if provenance == "exact" and source is None:
+        raise ValueError("source.provenance=exact requires a full source.repo_sha; actual=null")
+    if provenance == "pre-rewrite":
+        if source is not None:
+            raise ValueError("source.provenance=pre-rewrite requires source.repo_sha=null; actual=non-null identity (omitted)")
+        if record["status"] != "stale":
+            raise ValueError(f"pre-rewrite evidence requires status=stale; actual={record['status']!r}")
+        if not record["stale_reason"].startswith("pre-rewrite:") or not record["stale_reason"][len("pre-rewrite:"):].strip():
+            raise ValueError("pre-rewrite stale_reason requires 'pre-rewrite:' followed by a nonempty explanation")
     current = covered_hashes(root, record["covered_paths"], head=head)
     expected = record["covered_sha256"]
     if not expected:
@@ -245,7 +255,7 @@ def _validate_record(root, record_path, *, head="HEAD"):
     if private_text(data.decode("utf-8-sig")):
         raise ValueError("entry contains a private path, address or comparison marker")
     return {"path": record_path.relative_to(root).as_posix(), "status": record["status"],
-            "source": source, "covered_files": len(covered), "changed_covered_files": sorted(touched),
+            "source": source, "provenance": provenance, "covered_files": len(covered), "changed_covered_files": sorted(touched),
             "numerical_work_executed": False}
 
 
