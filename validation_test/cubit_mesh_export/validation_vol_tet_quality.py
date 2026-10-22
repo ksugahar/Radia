@@ -1,4 +1,10 @@
-r"""Validation-class Netgen .vol tetrahedron quality example.
+r"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+
+The analytic checks are exercised by
+packages/radia-mcp/tests/test_netgen_vol_analytic_examples.py.
+CLI output remains opt-in; pytest outputs belong to tmp_path.
+
+Validation-class Netgen .vol tetrahedron quality example.
 
 This is an example/validation run, not a pytest test.  It keeps the Cubit/Coreform
 mesh-quality checks public-safe and solver-independent:

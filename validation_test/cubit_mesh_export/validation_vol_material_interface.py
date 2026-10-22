@@ -1,4 +1,10 @@
-"""Validation-class Netgen .vol material/interface inventory example.
+"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+
+The analytic checks are exercised by
+packages/radia-mcp/tests/test_netgen_vol_analytic_examples.py.
+CLI output remains opt-in; pytest outputs belong to tmp_path.
+
+Validation-class Netgen .vol material/interface inventory example.
 
 This example keeps the mesh small enough to read by eye: two tetrahedra use
 different material numbers and share one triangular material interface.  It

@@ -1,4 +1,10 @@
-"""Validation-class Netgen .vol surface-closure checks for FEM/BEM intake.
+"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+
+The analytic checks are exercised by
+packages/radia-mcp/tests/test_netgen_vol_analytic_examples.py.
+CLI output remains opt-in; pytest outputs belong to tmp_path.
+
+Validation-class Netgen .vol surface-closure checks for FEM/BEM intake.
 
 This example is intentionally outside the fast unit-test path. It records the
 geometry checks that matter when a Cubit/Coreform or Netgen-style ``.vol`` file

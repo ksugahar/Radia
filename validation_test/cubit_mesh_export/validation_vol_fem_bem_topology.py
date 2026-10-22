@@ -1,4 +1,10 @@
-"""Validation-class Netgen .vol FEM/BEM topology checks.
+"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+
+The analytic checks are exercised by
+packages/radia-mcp/tests/test_netgen_vol_analytic_examples.py.
+CLI output remains opt-in; pytest outputs belong to tmp_path.
+
+Validation-class Netgen .vol FEM/BEM topology checks.
 
 This example is intentionally outside the fast unit-test path. It records the
 topology gates needed by a first-order FEM/BEM coupling view:

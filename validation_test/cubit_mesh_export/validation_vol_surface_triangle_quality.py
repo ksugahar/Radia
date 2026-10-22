@@ -1,4 +1,10 @@
-"""Validation-class Netgen .vol surface triangle quality example.
+"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+
+The analytic checks are exercised by
+packages/radia-mcp/tests/test_netgen_vol_analytic_examples.py.
+CLI output remains opt-in; pytest outputs belong to tmp_path.
+
+Validation-class Netgen .vol surface triangle quality example.
 
 Coreform Cubit 2026.6 emphasizes stronger triangle/tet meshing and richer
 quality assessment.  This public-safe example keeps the downstream side honest:

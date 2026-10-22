@@ -1,4 +1,10 @@
-"""Validation-class `.vol` boundary pressure force/moment rows.
+"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+
+The analytic checks are exercised by
+packages/radia-mcp/tests/test_netgen_vol_analytic_examples.py.
+CLI output remains opt-in; pytest outputs belong to tmp_path.
+
+Validation-class `.vol` boundary pressure force/moment rows.
 
 Named Cubit/Coreform sidesets exported as Netgen `.vol` already provide
 oriented boundary triangle area vectors.  A constant scalar pressure on a

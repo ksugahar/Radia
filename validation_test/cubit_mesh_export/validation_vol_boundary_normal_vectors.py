@@ -1,4 +1,10 @@
-"""Validation-class `.vol` boundary normal/vector-area rows.
+"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+
+The analytic checks are exercised by
+packages/radia-mcp/tests/test_netgen_vol_analytic_examples.py.
+CLI output remains opt-in; pytest outputs belong to tmp_path.
+
+Validation-class `.vol` boundary normal/vector-area rows.
 
 Electromagnetic force extraction needs surface orientation before it needs a
 large solver: Maxwell stress integrates ``T n dS``.  This example checks that

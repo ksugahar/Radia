@@ -1,4 +1,10 @@
-"""Validation-class P1 FEM/BEM trace matrix from a tri/tet .vol mesh.
+"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+
+The analytic checks are exercised by
+packages/radia-mcp/tests/test_netgen_vol_analytic_examples.py.
+CLI output remains opt-in; pytest outputs belong to tmp_path.
+
+Validation-class P1 FEM/BEM trace matrix from a tri/tet .vol mesh.
 
 Run:
 
