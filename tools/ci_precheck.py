@@ -147,7 +147,7 @@ def _ci_only_lanes(changed, data=None):
 def build_source_plan(since, *, full=False, git=None):
     """Use the checked workflow projections, never a second path allowlist."""
     def run_git(*args):
-        return subprocess.check_output(["git", *args], cwd=ROOT, text=True)
+        return subprocess.check_output(["git", *args], cwd=ROOT, text=True, stderr=subprocess.PIPE)
     git = git or run_git
     if full:
         base = git("merge-base", since, "HEAD").strip()
@@ -271,13 +271,21 @@ def main(argv=None):
     LOG_DIR = args.report.with_name(args.report.stem + "-logs")
     steps, errors = [], []
     plan, selection = None, None
-    dirty = dirty_paths()
+    dirty = []
     try:
+        dirty = dirty_paths()
         if dirty:
             raise ValueError("dirty working tree: commit all tracked/untracked inputs before precheck")
         plan = build_source_plan(args.since, full=args.full)
     except Exception as error:
-        errors.append(f"selection failed: {type(error).__name__}: {error}")
+        detail = str(error)
+        if isinstance(error, subprocess.CalledProcessError):
+            diagnostic = error.stderr or error.stdout
+            if diagnostic:
+                if isinstance(diagnostic, bytes):
+                    diagnostic = diagnostic.decode("utf-8", errors="replace")
+                detail += f": {diagnostic.strip()}"
+        errors.append(f"selection failed: {type(error).__name__}: {detail}")
     if plan is not None and not args.plan_only:
         if plan["radia"]:
             with tempfile.TemporaryDirectory(prefix="radia-ci-precheck-") as scratch:
@@ -329,6 +337,11 @@ def main(argv=None):
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    for error in errors:
+        print(f"[FAIL] {error}", flush=True)
+    for step in steps:
+        if step["returncode"]:
+            print(f"[FAIL] step={step['name']} rc={step['returncode']} log={step.get('log')}", flush=True)
     print("PRECHECK", report["status"].upper())
     return 0 if report["status"] in {"passed", "partial", "planned"} else 1
 

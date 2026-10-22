@@ -124,14 +124,17 @@ def test_policy_always_runs_and_plan_only_never_claims_tests_passed(tmp_path, mo
     assert result["status"] == "planned" and result["passed"] is None and not result["qualified"]
 
 
-def test_invalid_base_records_failure_before_any_execution(tmp_path, monkeypatch):
+def test_invalid_base_records_failure_before_any_execution(tmp_path, monkeypatch, capsys):
     def unavailable(*args, **kwargs):
-        raise subprocess.CalledProcessError(128, ["git", "merge-base"])
+        raise subprocess.CalledProcessError(128, ["git", "merge-base"], stderr="fatal: missing comparison ref")
     monkeypatch.setattr(precheck, "build_source_plan", unavailable)
     monkeypatch.setattr(precheck, "_run", lambda *a, **k: pytest.fail("must not execute"))
     report = tmp_path / "report.json"
     assert precheck.main(["--report", str(report)]) == 1
-    assert not json.loads(report.read_text())["passed"]
+    result = json.loads(report.read_text())
+    assert not result["passed"]
+    assert "missing comparison ref" in result["errors"][0]
+    assert "missing comparison ref" in capsys.readouterr().out
 
 
 def selection(**changes):
@@ -166,6 +169,11 @@ def test_mcp_executes_the_actual_collection_protocol_and_propagates_boundary_fai
 
 
 def test_full_executes_prior_source_steps_and_full_mcp_plan(tmp_path, monkeypatch):
+    # This is an orchestration test: the checked comparison is supplied by a
+    # Git double, independent of checkout depth, remote refs and runner files.
+    build_plan = precheck.build_source_plan
+    monkeypatch.setattr(precheck, "build_source_plan",
+                        lambda since, full=False: build_plan(since, full=full, git=git_diff([])))
     commands = []
     monkeypatch.setattr(precheck, "_light_python", lambda *a: sys.executable)
     monkeypatch.setattr(precheck, "_run", fake_run(commands, selection=selection(package_tests=["tests"])))
