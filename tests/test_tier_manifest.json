@@ -242,6 +242,15 @@
     ],
     "tools/validation_source_gate.py": [
       "tests/validation_gate/test_source_gate.py"
+    ],
+    "tools/check_validation_records.py": [
+      "tests/test_validation_records.py"
+    ],
+    "tools/validation_record.schema.json": [
+      "tests/test_validation_records.py"
+    ],
+    "validation_records/": [
+      "tests/test_validation_records.py"
     ]
   },
   "profiles": {
@@ -432,7 +441,8 @@
         "tests/test_release_quad_editable_source.py",
         "tests/test_release_quad_evidence_motor.py",
         "tests/test_release_quad_phase9_contract.py",
-        "tests/test_release_quad_state.py"
+        "tests/test_release_quad_state.py",
+        "tests/test_validation_records.py"
       ]
     }
   }
