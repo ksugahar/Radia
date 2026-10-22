@@ -254,7 +254,9 @@ jobs:
           python -m venv $venv
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $python = Join-Path $venv 'Scripts/python.exe'
-          & $python -m pip install pytest build setuptools wheel numpy scipy h5py schemdraw "mcp>=1.21.1,<2"
+          $pins = @(& $python -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('packages/radia-simulink/pyproject.toml').read_text(encoding='utf-8')); print(*[x for x in d['project']['optional-dependencies']['gpu'] if x.startswith(('ngsolve==','netgen-mesher=='))],sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $pins.Count -ne 2) { throw 'Expected exact FE contract pins' }
+          & $python -m pip install @pins pytest build setuptools wheel numpy scipy h5py schemdraw "mcp>=1.21.1,<2"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Append -Encoding utf8
       - name: Run Python contracts and wheel metadata checks without GPU
