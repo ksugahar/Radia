@@ -102,6 +102,7 @@ def test_ordered_matching_preserves_actions_markdown_reinclusion():
 # Foreign files the radia-mcp-matrix lane really reads, with the reader that
 # proves it (pattern -> (reader, text the reader contains)).
 MCP_LANE_READS = {
+    "validation_test/cubit_mesh_export/**": ("tests/mcp_integration/test_netgen_vol_analytic_examples.py", "cubit_mesh_export"),
     "AGENTS.md": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "AGENTS.md"),
     "CLAUDE.md": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "CLAUDE.md"),
     "README.md": ("tests/mcp_integration/test_matlab_source_contract.py", "README.md"),
