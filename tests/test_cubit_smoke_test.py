@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("ngsolve")
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_SRC = ROOT / "packages" / "cubit-mesh-export" / "src"
