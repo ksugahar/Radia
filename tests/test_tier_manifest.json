@@ -393,6 +393,7 @@
         "tests/test_isochronous_topopt.py",
         "tests/test_accelerator_lie_topopt.py",
         "tests/test_topology_optimization.py",
+        "tests/test_mmm_topology.py",
         "tests/test_vim_eddy_hybrid.py",
         "tests/test_vim_coupled_weak_vs_monolithic.py",
         "tests/test_patch_recovery.py",

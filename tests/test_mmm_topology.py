@@ -1,3 +1,12 @@
+"""Source contracts for the two-stage MMM topology facade.
+
+Guards: Lego-before-shape execution, explicit final-acceptance reporting,
+and rejection of unsupported policies and reserved option overrides.
+Assumes: Real Radia modules and result types are importable. Numerical stage
+functions are replaced with controlled stubs; these tests certify orchestration,
+not field accuracy, convergence, mesh validity, or a numerical baseline.
+"""
+
 from __future__ import annotations
 
 import numpy as np
