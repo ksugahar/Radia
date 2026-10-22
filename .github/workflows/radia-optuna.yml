@@ -123,6 +123,7 @@ jobs:
         shell: pwsh
         run: |
           & $env:RADIA_OPTUNA_CI_PYTHON -m pip install build wheel pytest optuna==5.0.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $env:RADIA_OPTUNA_CI_PYTHON -m pytest packages\radia-optuna\tests -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # A genuine radia-optuna build also runs the candidate contract at the
@@ -146,7 +147,6 @@ jobs:
           } finally {
             Pop-Location
           }
-
       - name: Verify CPU/GPU upstream TPE parity and density lifecycle
         shell: pwsh
         run: |
