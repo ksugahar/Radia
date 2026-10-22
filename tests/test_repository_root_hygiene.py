@@ -10,10 +10,12 @@ ALLOWED_MARKDOWN = {
     "BUILD.md",
     "CHANGELOG.md",
     "CLAUDE.md",
+    "CLAUDE.local.md",  # untracked private coordination; gitignored
     "CONTRIBUTING.md",
     "README.md",
     "ROADMAP.md",
     "SECURITY.md",
+    "THIRD_PARTY_NOTICES.md",
 }
 
 BANNED_SUFFIXES = {
