@@ -675,3 +675,14 @@ def test_separated_acceptance_has_an_executing_lane_and_input_triggers():
     assert router_test not in tier["repo-contracts"]["paths"]
     assert all(IMPACT.CONTRACT.selected(router_test, data["lanes"]["policy-lint"]["events"][event])
                for event in ("push", "pull_request"))
+
+
+def test_data_separation_keeps_existing_physics_route_coverage_check(monkeypatch, tmp_path):
+    """Reuse the existing route contract; do not invent a second gate table."""
+    data = json.loads((ROOT / "tests/test_tier_manifest.json").read_text(encoding="utf-8"))
+    data["profiles"]["solver-numerics"]["paths"].remove("tests/test_p1_linear.py")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_tier_manifest.json").write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setitem(globals(), "ROOT", tmp_path)
+    with pytest.raises(AssertionError):
+        test_p1_linear_routes_to_solver_numerics_and_native_ci("src/radia/p1_linear.py")
