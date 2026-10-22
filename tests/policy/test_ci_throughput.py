@@ -190,7 +190,7 @@ def test_full_profile_changes_cannot_be_exempted_as_unrelated():
     before = (ROOT / 'tests/test_tier_manifest.json').read_text()
     after = json.loads(before)
     after['profiles']['solver-numerics']['paths'].append('tests/new_numerical_contract.py')
-    assert not impact.ams_manifest_unchanged(before, json.dumps(after))
+    assert not impact.ams_tier_projection_unchanged(before, json.dumps(after))
 
 
 @pytest.mark.parametrize('path', [

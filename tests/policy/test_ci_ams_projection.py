@@ -92,6 +92,7 @@ def test_every_numerical_profile_and_ancestor_stays_an_execution_input(profile, 
         after['profiles']['new-parent']['paths'].append('tests/new_numerical_contract.py')
     blobs[TIER] = json.dumps(before), json.dumps(after)
     assert decide(blobs, data)
+    assert decide(blobs, data, event='push')
 
 
 @pytest.mark.parametrize('mutation', ['unknown', 'cycle', 'missing-parent', 'bool-budget',
@@ -180,7 +181,7 @@ def test_review_native_contract_counterexamples_remain_required(mutation):
     blobs[TIER] = json.dumps(before), json.dumps(after)
     assert decide(blobs, data)
     assert decide(blobs, data, event='push')
-    assert not impact.ams_manifest_unchanged(*blobs[TIER])
+    assert not impact.ams_tier_projection_unchanged(*blobs[TIER])
 
 
 @pytest.mark.parametrize('package', ['radia_simulink', 'radia_mcp', 'radia_mcp/radia_ngsolve'])
@@ -199,3 +200,20 @@ def test_review_parent_initializers_are_real_execution_inputs(package, version_c
                           '__version__ = "1"\nimport numpy\nnumpy.seterr(all="raise")\n')
     assert decide(blobs, data)
 
+
+
+def test_version_exemption_does_not_hide_a_numerical_pyproject_reader(tmp_path, monkeypatch):
+    _, data = documents()
+    (tmp_path / 'tools').mkdir()
+    (tmp_path / 'tests').mkdir()
+    shutil.copy2(ROOT / 'tools/ci_ams_inputs.py', tmp_path / 'tools/ci_ams_inputs.py')
+    (tmp_path / OWNERS).write_text(json.dumps(data), encoding='utf-8')
+    (tmp_path / TIER).write_text(json.dumps({'profiles': {
+        name: {'paths': ['tests/test_consumer.py']} for name in
+        ('sparsesolv', 'solver-numerics', 'solver-heavy', 'native-build-contracts')}}), encoding='utf-8')
+    (tmp_path / 'tests/test_consumer.py').write_text(
+        "from pathlib import Path\nPath('pyproject.toml').read_text()\n", encoding='utf-8')
+    before, after = '[project]\nversion="1"\n', '[project]\nversion="2"\n'
+    (tmp_path / 'pyproject.toml').write_text(after, encoding='utf-8')
+    monkeypatch.setattr(impact, 'ROOT', tmp_path)
+    assert decide({'pyproject.toml': (before, after)}, data)

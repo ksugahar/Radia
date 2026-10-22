@@ -141,6 +141,8 @@ def test_native_impact_gates_expensive_steps_and_watches_itself():
 def manifest():
     return {"schema": "radia.test-tier-manifest.v1", "impact_rules": {}, "profiles": {
         "sparsesolv": {"extends": "base", "paths": [SUITE], "max_elapsed_seconds": 30},
+        "solver-numerics": {"paths": []}, "solver-heavy": {"paths": []},
+        "native-build-contracts": {"paths": []},
         "base": {"paths": ["tests/base.py"]}, "fast": {"paths": ["tests/old.py"]}}}
 
 
@@ -151,28 +153,28 @@ def manifest():
     (lambda d: d["profiles"]["base"]["paths"].append("tests/new.py"), False),
     (lambda d: d["profiles"]["sparsesolv"].update(max_elapsed_seconds=60), False),
     (lambda d: d["profiles"]["sparsesolv"].update(extends="fast"), False),
-    (lambda d: d.update(future_global_option=True), False),
 ])
 def test_manifest_compares_ams_and_all_ancestors(change, expected):
     before, after = manifest(), manifest()
     change(after)
-    assert IMPACT.ams_manifest_unchanged(json.dumps(before), json.dumps(after)) is expected
+    assert IMPACT.ams_tier_projection_unchanged(json.dumps(before), json.dumps(after)) is expected
 
 
 @pytest.mark.parametrize("change", [
     lambda d: d.update(schema="unknown"),
+    lambda d: d.update(future_global_option=True),
     lambda d: d["profiles"].pop("sparsesolv"),
     lambda d: d["profiles"].pop("base"),
     lambda d: d["profiles"]["base"].update(extends="sparsesolv"),
     lambda d: d["profiles"]["base"].update(paths="bad"),
-    lambda d: d["profiles"]["base"].update(paths=[SUITE]),
+    lambda d: d["profiles"]["base"].update(paths=[SUITE, SUITE]),
     lambda d: d["profiles"]["sparsesolv"].update(max_elapsed_seconds=-1),
 ])
 def test_invalid_manifest_fails_closed(change):
     before, after = manifest(), manifest()
     change(after)
     with pytest.raises((KeyError, ValueError, TypeError)):
-        IMPACT.ams_manifest_unchanged(json.dumps(before), json.dumps(after))
+        IMPACT.ams_tier_projection_unchanged(json.dumps(before), json.dumps(after))
 
 
 @pytest.mark.parametrize("extra,required", [
@@ -238,7 +240,7 @@ def test_ih_thermal_and_complex_ams_contracts_run_with_ngsolve():
 def test_numerical_tier_changes_cannot_skip_native_lane():
     before, after = manifest(), manifest()
     after["profiles"]["solver-numerics"] = {"paths": ["tests/test_mixed_omega_newton.py"]}
-    assert not IMPACT.ams_manifest_unchanged(json.dumps(before), json.dumps(after))
+    assert not IMPACT.ams_tier_projection_unchanged(json.dumps(before), json.dumps(after))
 
 
 def test_heavy_derivative_validation_remains_required_after_tier_split():
@@ -261,7 +263,7 @@ def test_heavy_derivative_validation_remains_required_after_tier_split():
                                   lambda *args: path + "\0")[0]
     before, after = manifest(), manifest()
     after["profiles"]["solver-heavy"] = {"paths": [path]}
-    assert not IMPACT.ams_manifest_unchanged(json.dumps(before), json.dumps(after))
+    assert not IMPACT.ams_tier_projection_unchanged(json.dumps(before), json.dumps(after))
 
 
 def test_cpu_lane_excludes_foreign_runtime_and_integration_gates():
@@ -487,7 +489,7 @@ def test_invalid_tier_budget_fails_closed(bad):
                             IMPACT.CONTRACT.load(ROOT)["rules"][0].get("content_diff", {}))
     if name == "sparsesolv":
         with pytest.raises(ValueError):
-            IMPACT.ams_manifest_unchanged(before, after)
+            IMPACT.ams_tier_projection_unchanged(before, after)
 
 
 def test_numeric_one_and_true_are_distinct_changes():

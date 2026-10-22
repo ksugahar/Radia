@@ -241,8 +241,6 @@ def test_build_entrypoint_declares_optional_strict_provenance_mode():
     assert "Write-NativeBuildProvenance" in source
 
 
-
-
 @pytest.mark.skipif(
     os.environ.get("RADIA_RUN_NATIVE_BUILD_CONTRACT") != "1",
     reason="set RADIA_RUN_NATIVE_BUILD_CONTRACT=1 to exercise real native builds",

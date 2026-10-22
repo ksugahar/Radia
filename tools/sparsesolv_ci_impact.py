@@ -82,41 +82,6 @@ def _canonical(value) -> str:
     return json.dumps(_typed(value), ensure_ascii=False)
 
 
-def ams_manifest_unchanged(before: str, after: str) -> bool:
-    def relevant(text):
-        data = json.loads(text)
-        if data["schema"] != "radia.test-tier-manifest.v1":
-            raise ValueError("unknown manifest schema")
-        profiles = data.pop("profiles")
-        # Static native provenance contracts inspect impact_rules too.
-        selected = {}
-        name = "sparsesolv"
-        while name:
-            if name in selected:
-                raise ValueError("cyclic AMS profile inheritance")
-            profile = profiles[name]
-            paths = profile.get("paths", [])
-            if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
-                raise ValueError("invalid AMS paths")
-            budget = profile.get("max_elapsed_seconds")
-            if budget is not None and not _valid_budget(budget):
-                raise ValueError("invalid AMS time budget")
-            selected[name] = profile
-            name = profile.get("extends")
-            if name is not None and not isinstance(name, str):
-                raise ValueError("invalid AMS parent")
-        for profile_name in ("solver-numerics", "solver-heavy", "native-build-contracts"):
-            if profile_name in profiles:
-                selected[profile_name] = profiles[profile_name]
-        data["profiles"] = selected
-        paths = [path for name, profile in selected.items()
-                 for path in profile.get("paths", [])]
-        if not paths or len(paths) != len(set(paths)):
-            raise ValueError("empty or duplicate AMS test paths")
-        return data
-    return _canonical(relevant(before)) == _canonical(relevant(after))
-
-
 def package_version_only(before, after):
     import ast
     def without_version(text):
@@ -147,7 +112,7 @@ def _strict_json(text):
 
 
 def ams_tier_projection_unchanged(before, after):
-    """Compare every executed AMS profile, its ancestors and static impact contracts."""
+    """Compare executed profiles and ancestors; impact rules are conservative inputs."""
     def projection(text):
         data = _strict_json(text)
         if (set(data) != {'schema', 'profiles', 'impact_rules'}
@@ -509,7 +474,7 @@ def lane_required(lane,changed,blobs,data):
             if lane=='sparsesolv' and old is not None and new is not None and 'fail closed' not in reason:
                 try:
                     if path=='pyproject.toml' and test_dependencies_only(old,new): owners=set()
-                    if path=='tests/test_tier_manifest.json' and ams_manifest_unchanged(old,new): owners=set()
+                    if path=='tests/test_tier_manifest.json' and ams_tier_projection_unchanged(old,new): owners=set()
                 except (ValueError,KeyError,TypeError,AttributeError): pass
             selected_owners.update(owners); reasons.append(path+': '+reason)
         else:
@@ -565,6 +530,7 @@ def _required_for_event(lane,event_name,event,git,data):
             # Main pushes keep their execution/evidence-producing route.
             version_only = {
                 path for path in changed if Path(path).name == 'pyproject.toml'
+                and path not in inputs.python_inputs(ROOT)
                 and project_version_only(git('show', f'{base}:{path}'),
                                          git('show', f'HEAD:{path}'))
             }

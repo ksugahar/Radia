@@ -262,4 +262,3 @@ def test_provenance_helper_and_beam_contracts_are_in_ci_scope():
         assert "tests/test_beam_transfer_mex_pybind_validation.py" in rules[
             f"validation_test/accelerator/{name}"
         ]
-
