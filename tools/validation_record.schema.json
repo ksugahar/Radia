@@ -1,0 +1,352 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:radia:validation-record:v1",
+  "title": "Historical validation record (no numerical replay)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "kind",
+    "question",
+    "outcome",
+    "source",
+    "covered_paths",
+    "entry",
+    "environment",
+    "result",
+    "key_values",
+    "limits",
+    "timing_s",
+    "status",
+    "stale_reason",
+    "superseded_by",
+    "private",
+    "milestone",
+    "claim",
+    "date",
+    "radia_version",
+    "conditions",
+    "comparison",
+    "covered_sha256"
+  ],
+  "properties": {
+    "schema": {
+      "const": "radia.validation-record.v1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?:[A-Za-z0-9_-]+/)+[0-9]{8}_[A-Za-z0-9_-]+$"
+    },
+    "kind": {
+      "enum": [
+        "investigation",
+        "speedup",
+        "comparison",
+        "acceptance",
+        "parity"
+      ]
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outcome": {
+      "enum": [
+        "pass",
+        "fail",
+        "observed"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo_sha",
+        "dirty",
+        "native_sha256",
+        "wheel_sha256",
+        "source_only"
+      ],
+      "properties": {
+        "repo_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "dirty": {
+          "const": false
+        },
+        "native_sha256": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "wheel_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_only": {
+          "type": "boolean"
+        }
+      }
+    },
+    "covered_paths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "script",
+        "script_sha256",
+        "command"
+      ],
+      "properties": {
+        "script": {
+          "type": "string",
+          "minLength": 1
+        },
+        "script_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_role",
+        "os",
+        "python",
+        "threads"
+      ],
+      "properties": {
+        "host_role": {
+          "enum": [
+            "neutral-cpu",
+            "neutral-gpu",
+            "build",
+            "validation"
+          ]
+        },
+        "os": {
+          "type": "string",
+          "minLength": 1
+        },
+        "python": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ngsolve": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "key_values": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "value",
+          "unit"
+        ],
+        "properties": {
+          "value": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "timing_s": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "status": {
+      "enum": [
+        "current",
+        "stale"
+      ]
+    },
+    "stale_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "superseded_by": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "private": {
+      "const": false
+    },
+    "milestone": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "[^\\r\\n]+"
+    },
+    "claim": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "[^\\r\\n]+"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "[0-9]{4}-[0-9]{2}-[0-9]{2}"
+    },
+    "radia_version": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "[0-9]+\\.[0-9]+\\.[0-9]+(?:[A-Za-z0-9.+-]*)"
+    },
+    "conditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "problem",
+        "mesh",
+        "hardware"
+      ],
+      "properties": {
+        "problem": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mesh": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hardware": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "independence"
+      ],
+      "properties": {
+        "reference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "independence": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "covered_sha256": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "[0-9a-f]{64}"
+      },
+      "required": []
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "stale"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "stale_reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "current"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "stale_reason": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}
