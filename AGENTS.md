@@ -91,7 +91,7 @@ No workflow selects a retired or user-desktop runner. The EqnEdit64 release lane
 ### Tests For AI-Authored Code
 
 Radia is implemented only by AI agents; humans do not write code. Tests therefore target AI-typical failures, not human slips:
-- Acceptance criteria (validation thresholds, reference values, golden expectations, tolerances) are human-owned. Changing them requires explicit user approval; agents may only propose, with evidence.
+- Acceptance criteria (validation thresholds, reference values, tolerances) are human-owned. Changing them requires explicit user approval; agents may only propose, with evidence.
 - Lifecycle: a new capability starts as a `validation_test/` case against an analytic or independent reference (route, literature, measurement); reaching a milestone is recorded in `validation_records/`; the case is then demoted: a light version of the same model, exercising the same code paths (for example forcing size-dependent compression or solver branches), goes to `tests/` as a regression lock (numbers unchanged versus a stored baseline with SHA), while the heavy validation stays runnable (nightly/on demand) and is rerun to re-certify before any intentional baseline change. Baseline regeneration is explicit and reviewed, recording reason and diff; validation thresholds and reference values stay user-owned.
 - The agent that implements a change does not certify its expected values or baselines; reciprocal review checks oracle independence.
 - Assertions report actual and expected values. Prefer behavioral tests and generated single sources of truth over string-pinned text checks that only guard copy or typo slips.
