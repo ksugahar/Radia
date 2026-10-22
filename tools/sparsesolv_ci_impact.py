@@ -450,19 +450,6 @@ def _required_for_event(lane,event_name,event,git,data):
         if event_name=='pull_request': base=git('merge-base',base,'HEAD').strip()
         if not base: raise ValueError('missing merge base')
         changed=changed_paths(git('diff','--name-status','-z','--find-renames',base,'HEAD','--'))
-        if lane == 'sparsesolv':
-            # A version literal is not a numerical dependency/ABI change. Apply
-            # the proof before BOTH the environment closure and workflow paths.
-            # Missing/malformed blobs remain inside the outer fail-closed guard.
-            version_inputs = set()
-            for path in changed:
-                if Path(path).name == 'pyproject.toml' and project_version_only(
-                        git('show', f'{base}:{path}'), git('show', f'HEAD:{path}')):
-                    version_inputs.add(path)
-            if version_inputs:
-                changed = changed - version_inputs
-                if not changed:
-                    return False, 'version-only metadata; no numerical execution input'
         if lane == 'sparsesolv' and event_name == 'pull_request':
             spec = importlib.util.spec_from_file_location('ci_ams_inputs', ROOT / 'tools/ci_ams_inputs.py')
             inputs = importlib.util.module_from_spec(spec)
@@ -570,8 +557,10 @@ def main(argv=None):
             spec = importlib.util.spec_from_file_location('ci_tree_receipt', root / 'tools/ci_tree_receipt.py')
             receipt = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(receipt)
-            if receipt.route(args.lane, os.environ['GITHUB_EVENT_NAME'], event, git, required) and not (
-                    args.lane == 'radia-simulink' and os.environ['GITHUB_EVENT_NAME'] == 'push'):
+            route_event = os.environ['GITHUB_EVENT_NAME']
+            if args.lane == 'radia-simulink' and route_event == 'push':
+                route_event = 'workflow_dispatch'  # record execution; never reuse a CPU-only PR
+            if receipt.route(args.lane, route_event, event, git, required):
                 required, reason = False, 'tree already validated; see ci-tree-receipt.json'
     except Exception as exc:  # any unanticipated failure must select the lane
         required, reason = True, f"impact unknown ({type(exc).__name__}); fail closed"

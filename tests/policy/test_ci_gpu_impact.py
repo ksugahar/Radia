@@ -132,44 +132,6 @@ def test_cli_emits_separate_gpu_output(tmp_path, monkeypatch):
     assert values["gpu_required"] == "false"
 
 
-@pytest.mark.parametrize("event", ["pull_request", "push"])
-@pytest.mark.parametrize("extra", [None, "src/radia/ih_thermal.py", "src/core/rad_hdiv_vim.h", "CMakeLists.txt"])
-def test_ams_version_exemption_cannot_hide_numerical_or_build_changes(extra, event):
-    path = "packages/radia-simulink/pyproject.toml"
-    before = '[project]\nversion="0.1.5rc1"\ndependencies=["numpy"]\n'
-    after = before.replace('0.1.5rc1', '0.1.5')
-    def git(*args):
-        if args[0] == "merge-base": return "base"
-        if args[0] == "diff": return "M\0" + path + "\0" + ("M\0" + extra + "\0" if extra else "")
-        if args[0] == "show": return before if args[1].startswith("base:") else after
-        raise AssertionError(args)
-    selected = impact.required_for_event("sparsesolv", event,
-        {"before": "base", "pull_request": {"base": {"sha": "base"}}}, git, impact.manifest())[0]
-    assert selected is bool(extra)
-
-
-@pytest.mark.parametrize("after", [
-    '[project]\nversion="2"\ndependencies=["numpy>=2"]\n',
-    '[project]\nversion="2"\ndependencies=["numpy"]\n[build-system]\nrequires=["setuptools>=90"]\n',
-    '[project]\ndependencies=["numpy"]\n', 'not valid toml',
-])
-def test_ams_dependency_build_or_invalid_metadata_still_selects_full_gate(after):
-    path = "packages/radia-simulink/pyproject.toml"
-    def git(*args):
-        if args[0] == "merge-base": return "base"
-        if args[0] == "diff": return "M\0" + path + "\0"
-        if args[0] == "show":
-            return '[project]\nversion="1"\ndependencies=["numpy"]\n' if args[1].startswith("base:") else after
-        raise AssertionError(args)
-    assert impact.required_for_event("sparsesolv", "pull_request",
-        {"pull_request": {"base": {"sha": "base"}}}, git, impact.manifest())[0]
-
-
-def test_ams_qualification_still_runs_full_gate():
-    for event in ("workflow_dispatch", "schedule", "release"):
-        assert impact.required_for_event("sparsesolv", event, {}, None, impact.manifest())[0]
-
-
 @pytest.mark.parametrize('path', [
     'src/radia/vim/_vim.py', 'src/radia/vim/_nonlinear.py',
     'src/radia/vim/_eddy_foster.py', 'src/core/new_gpu_header.h',
@@ -204,3 +166,38 @@ def test_version_only_push_still_produces_release_gpu_artifacts():
     blobs = {'base:' + path: '[project]\nversion="1"\n', 'HEAD:' + path: '[project]\nversion="2"\n'}
     assert not decide([path], blobs)
     assert decide([path], blobs, event='push')
+
+
+def test_main_push_cannot_reuse_cpu_only_pr_and_receipt_records_gpu(tmp_path, monkeypatch):
+    import importlib.machinery
+    import types
+
+    event = tmp_path / 'event.json'
+    event.write_text(json.dumps({'ref': 'refs/heads/main'}))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('GITHUB_EVENT_PATH', str(event))
+    monkeypatch.setenv('GITHUB_EVENT_NAME', 'push')
+    monkeypatch.setenv('GITHUB_OUTPUT', str(tmp_path / 'output'))
+    monkeypatch.setattr(impact, 'required_for_event', lambda *args: (True, 'selected'))
+    monkeypatch.setattr(impact, 'gpu_required_for_event', lambda *args: (True, 'push qualification'))
+    calls = []
+
+    class Loader:
+        def create_module(self, spec):
+            return types.ModuleType(spec.name)
+
+        def exec_module(self, module):
+            def route(lane, event_name, event, git, required):
+                calls.append(event_name)
+                Path('ci-tree-receipt.json').write_text(json.dumps({'mode': 'execute'}))
+                return event_name == 'push'  # simulate a reusable CPU-only PR
+            module.route = route
+
+    monkeypatch.setattr(impact.importlib.util, 'spec_from_file_location',
+        lambda name, path: importlib.machinery.ModuleSpec(name, Loader()))
+    impact.main(['--lane', 'radia-simulink', '--tree-reuse'])
+    assert calls == ['workflow_dispatch']
+    record = json.loads((tmp_path / 'ci-tree-receipt.json').read_text())
+    assert record['gpu_required'] is True
+    assert record['gpu_reason'] == 'push qualification'
+    assert 'gpu_required=true' in (tmp_path / 'output').read_text()
