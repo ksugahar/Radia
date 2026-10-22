@@ -472,7 +472,9 @@ def gpu_required_for_event(event_name, event, git, data):
             if path in ('pyproject.toml', 'packages/radia-simulink/pyproject.toml'):
                 old, new = (tomllib.loads(git('show', f'{ref}:{path}')) for ref in (base, 'HEAD'))
                 for document in (old, new):
-                    document['project'].pop('version', None)
+                    version = document['project'].pop('version')
+                    if not isinstance(version, str) or not version.strip():
+                        raise ValueError('invalid version metadata')
                 if _canonical(old) == _canonical(new):
                     continue
                 return True, 'GPU build/dependency metadata: ' + path
@@ -480,10 +482,14 @@ def gpu_required_for_event(event_name, event, git, data):
                 import ast
                 def without_version(text):
                     tree = ast.parse(text)
-                    tree.body = [node for node in tree.body if not (
+                    versions = [node for node in tree.body if (
                         isinstance(node, ast.Assign) and len(node.targets) == 1
                         and isinstance(node.targets[0], ast.Name) and node.targets[0].id == '__version__'
-                        and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str))]
+                        and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
+                        and node.value.value.strip())]
+                    if len(versions) != 1:
+                        raise ValueError('missing or ambiguous package version')
+                    tree.body = [node for node in tree.body if node not in versions]
                     return ast.dump(tree, include_attributes=False)
                 if without_version(git('show', f'{base}:{path}')) == without_version(git('show', f'HEAD:{path}')):
                     continue

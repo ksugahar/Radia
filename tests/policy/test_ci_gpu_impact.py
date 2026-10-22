@@ -70,6 +70,8 @@ def test_version_only_metadata_skips_but_dependency_changes_select(path):
     assert not decide([path], blobs)
     blobs["HEAD:" + path] = new.replace('numpy', 'numpy>=2')
     assert decide([path], blobs)
+    blobs["HEAD:" + path] = '[project]\ndependencies=["numpy"]\n'
+    assert decide([path], blobs)  # Removing a version is not a version bump.
     assert decide([path])  # Missing/deleted/malformed input cannot exempt a build.
 
 
@@ -79,6 +81,8 @@ def test_python_version_only_exemption_does_not_hide_initialization_changes():
     blobs = {"base:" + path: old, "HEAD:" + path: old.replace('1.0', '1.1')}
     assert not decide([path], blobs)
     blobs["HEAD:" + path] += 'from . import _cuda_runtime\n'
+    assert decide([path], blobs)
+    blobs["HEAD:" + path] = 'from . import cli\n'
     assert decide([path], blobs)
 
 
