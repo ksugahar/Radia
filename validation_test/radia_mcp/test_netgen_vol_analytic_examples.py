@@ -1,4 +1,4 @@
-"""Nightly analytic acceptance, distinct from the frozen-output regression lock."""
+"""Analytic acceptance with a nightly attribute; not yet scheduled."""
 import json
 import pytest
 from validation_test.radia_mcp.netgen_vol_examples import CASES, example_module

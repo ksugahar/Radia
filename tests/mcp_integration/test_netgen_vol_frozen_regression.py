@@ -21,3 +21,17 @@ def test_frozen_summary(module_name, tmp_path, monkeypatch):
     output = tmp_path / reference["file"]
     output.write_text(json.dumps(summary, sort_keys=True), encoding="utf-8")
     assert json.loads(output.read_text(encoding="utf-8")) == json.loads(frozen)
+
+
+def test_p1_cli_does_not_bypass_validation(tmp_path, monkeypatch):
+    """The CLI must dispatch validation before writing, independent of its criteria."""
+    import sys
+    output = tmp_path / "p1.json"
+    with example_module("validation_p1_surface_triangle_element_summary") as module:
+        def refused(_summary):
+            raise RuntimeError("validation dispatch reached")
+        monkeypatch.setattr(module, "validate_summary", refused)
+        monkeypatch.setattr(sys, "argv", [module.__file__, "--out", str(output)])
+        with pytest.raises(RuntimeError, match="validation dispatch reached"):
+            module.main()
+    assert not output.exists()

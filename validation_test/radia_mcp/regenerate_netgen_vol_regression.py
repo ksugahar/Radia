@@ -25,15 +25,21 @@ def main():
         with example_module(name) as module:
             data = json.loads(json.dumps(module.build_summary()))
         filename = manifest["cases"][name]["file"]
-        encoded = (json.dumps(data, indent=2, sort_keys=True) + "\n").encode()
+        original = (approved / filename).read_bytes()
+        previous = json.loads(original)
+        changed = data != previous
+        # Preserve approved bytes for unchanged JSON values, including signed
+        # zero representation and whitespace. Never normalize the reference.
+        encoded = ((json.dumps(data, indent=2, sort_keys=True) + "\n").encode()
+                   if changed else original)
         (args.out / filename).write_bytes(encoded)
-        previous = json.loads((approved / filename).read_bytes())
         delta = list(difflib.unified_diff(
-            (json.dumps(previous, indent=2, sort_keys=True) + "\n").splitlines(),
+            original.decode().splitlines(),
             encoded.decode().splitlines(), fromfile="approved/" + filename,
             tofile="proposed/" + filename, lineterm=""))
         rows.append({"diff": delta, "case": name, "sha256": hashlib.sha256(encoded).hexdigest(),
-                     "changed": data != json.loads((approved / filename).read_bytes())})
+                     "changed": changed, "byte_changed": encoded != original,
+                     "formatting_only": encoded != original and not changed})
     report = {"reason": args.reason, "source_sha": subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)),

@@ -103,7 +103,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = _json_clean(build_summary())
+    summary = _json_clean(validate_summary(build_summary()))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
