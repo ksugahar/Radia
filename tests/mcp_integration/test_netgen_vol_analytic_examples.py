@@ -15,7 +15,7 @@ import sys
 import pytest
 
 
-EXAMPLES = Path(__file__).resolve().parents[3] / "validation_test" / "cubit_mesh_export"
+EXAMPLES = Path(__file__).resolve().parents[2] / "validation_test" / "cubit_mesh_export"
 CASES = (
     "validation_p1_surface_triangle_element_summary",
     "validation_vol_boundary_condition_assignment",
@@ -41,6 +41,7 @@ CASES = (
 @pytest.mark.parametrize("module_name", CASES, ids=CASES)
 def test_analytic_summary(module_name, tmp_path, monkeypatch):
     """Run the real independent guards; persist only this run's temporary output."""
+    monkeypatch.setattr(sys, "dont_write_bytecode", True)
     monkeypatch.syspath_prepend(str(EXAMPLES))
     before = set(sys.modules)
     try:

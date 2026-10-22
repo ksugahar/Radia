@@ -386,6 +386,7 @@ def _integration_tests(changed: list[str]) -> list[str]:
         # Foreign inputs this lane genuinely reads (see the radia-mcp-matrix
         # integration rules in tools/ci_distribution_manifest.json).
         "validation_test/radia_mcp/", "validation_test/vim_coupled/results_",
+        "validation_test/cubit_mesh_export/",
         "validation_test/maglev/team28_coilbuilder_dynamic_simulink_results.json",
         "validation_test/optimization/benchmark_",
         "packages/radia-optuna/matlab/", "packages/radia-optuna/native/optuna_mex.cpp",
@@ -402,6 +403,8 @@ def _integration_tests(changed: list[str]) -> list[str]:
         "packages/radia-mcp/tools/select_ci_tests.py",
         "packages/radia-mcp/tools/check_package_test_boundary.py",
         "packages/radia-mcp/src/radia_mcp/radia_ngsolve/force.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/netgen_vol.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/scalar_fem3d.py",
     )
     if any(path.startswith(broad) or path in {"AGENTS.md", "CLAUDE.md", "README.md"}
            for path in changed):

@@ -532,8 +532,14 @@
     {
       "pattern": "validation_test/cubit_mesh_export/**",
       "owners": [
-        "cubit-mesh-export"
-      ]
+        "cubit-mesh-export",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "Repository MCP integration tests execute the documentation examples against netgen_vol, force and scalar_fem3d analytic guards."
+      },
+      "selection": "all_owners"
     },
     {
       "pattern": "validation_test/esrf_radia_examples_cubit/**",
@@ -3084,6 +3090,7 @@
             "packages/radia-mcp/**",
             "tests/mcp_server/**",
             "tests/mcp_integration/**",
+            "validation_test/cubit_mesh_export/**",
             "packages/radia-simulink/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m",
             "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
             "packages/radia-simulink/matlab/+radia/+acoustic/**",
@@ -3127,6 +3134,7 @@
             "packages/radia-mcp/**",
             "tests/mcp_server/**",
             "tests/mcp_integration/**",
+            "validation_test/cubit_mesh_export/**",
             "packages/radia-simulink/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m",
             "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",
             "packages/radia-simulink/matlab/+radia/+acoustic/**",
