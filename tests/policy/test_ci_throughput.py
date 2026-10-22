@@ -129,8 +129,12 @@ def test_numerical_tests_are_retained_and_full_release_is_mandatory():
         'tests/test_esim_adaptive_depth.py',
         'validation_test/induction_heating/test_esim_adaptive_depth_validation.py',
     }
-    assert esim_routes <= set(tiers['solver-numerics']['paths'])
-    assert len(tiers['solver-numerics']['paths']) == 91 + len(esim_routes)
+    direct_routes = {
+        'tests/test_planar_eddy_direct_inverse.py',
+        'tests/test_vector_potential_direct_inverse.py',
+    }
+    assert esim_routes | direct_routes <= set(tiers['solver-numerics']['paths'])
+    assert len(tiers['solver-numerics']['paths']) == 91 + len(esim_routes | direct_routes)
     assert 'solver-pr' not in tiers
     workflow = yaml.load((ROOT / '.github/workflows/sparsesolv.yml').read_text(), Loader=yaml.BaseLoader)
     assert workflow['on']['schedule'] and 'workflow_dispatch' in workflow['on']

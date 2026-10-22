@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-ng = pytest.importorskip("ngsolve")
+import ngsolve as ng
 
 pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
 MU0 = 4e-7 * np.pi

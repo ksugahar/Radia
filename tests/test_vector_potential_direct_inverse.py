@@ -1,6 +1,6 @@
 """The direct HCurl backend is native SparseCholesky, with true-residual gates."""
 import pytest
-ng = pytest.importorskip("ngsolve")
+import ngsolve as ng
 from radia import vector_potential_solver as vps
 
 
