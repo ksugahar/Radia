@@ -136,7 +136,10 @@ def test_numerical_tests_are_retained_and_full_release_is_mandatory():
     topology_routes = {
         'validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py',
     }
-    added_routes = esim_routes | direct_routes | topology_routes
+    mmm_routes = {
+        'tests/test_mmm_topology.py',
+    }
+    added_routes = esim_routes | direct_routes | topology_routes | mmm_routes
     assert added_routes <= set(tiers['solver-numerics']['paths'])
     assert len(tiers['solver-numerics']['paths']) == 91 + len(added_routes)
     assert 'solver-pr' not in tiers
