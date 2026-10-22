@@ -320,6 +320,8 @@
     "solver-numerics": {
       "description": "Required NGSolve contracts for mixed Omega, HDiv/topology, eddy currents, SIBC and IH thermal coupling; no partial dependency run.",
       "paths": [
+        "tests/test_planar_eddy_direct_inverse.py",
+        "tests/test_vector_potential_direct_inverse.py",
         "tests/test_bem_complete_reaction.py",
         "tests/test_bem_strong_panel_impedance.py",
         "tests/test_panel_esim_complete_state.py",
