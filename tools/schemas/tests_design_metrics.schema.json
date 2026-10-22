@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Private tests design metrics retrieval snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "repository",
+    "merged_from",
+    "merged_until_exclusive",
+    "collected_at",
+    "api_version",
+    "collector_script_sha256",
+    "collection_complete",
+    "errors",
+    "prs",
+    "runs",
+    "jobs",
+    "associations",
+    "limitations",
+    "responses"
+  ],
+  "properties": {
+    "schema": {
+      "const": "radia.tests-design-metrics.v1"
+    },
+    "repository": {
+      "type": "string"
+    },
+    "merged_from": {
+      "type": "string"
+    },
+    "merged_until_exclusive": {
+      "type": "string"
+    },
+    "collected_at": {
+      "type": "string"
+    },
+    "api_version": {
+      "type": "string"
+    },
+    "collector_script_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "collection_complete": {
+      "type": "boolean"
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "prs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "number": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merged_at": {
+            "type": "string"
+          },
+          "final_head_sha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merge_commit_sha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "open_to_merge_s": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "associated_run_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "executed_job_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "skipped_job_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cancelled_job_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unknown_duration_job_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unstarted_job_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "observed_sum_job_execution_s": {
+            "type": "number",
+            "minimum": 0
+          },
+          "linkage_status": {
+            "enum": [
+              "observed_links_not_exhaustive_history",
+              "unresolved"
+            ]
+          }
+        },
+        "required": [
+          "number",
+          "created_at",
+          "merged_at",
+          "final_head_sha",
+          "merge_commit_sha",
+          "open_to_merge_s",
+          "associated_run_count",
+          "executed_job_count",
+          "skipped_job_count",
+          "cancelled_job_count",
+          "unknown_duration_job_count",
+          "unstarted_job_count",
+          "observed_sum_job_execution_s",
+          "linkage_status"
+        ]
+      }
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "integer"
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "event": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_sha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workflow_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conclusion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_s": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "wall_s": {
+            "type": "null"
+          },
+          "wall_reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "attempt",
+          "event",
+          "head_sha",
+          "workflow_path",
+          "status",
+          "conclusion",
+          "created_at",
+          "started_at",
+          "updated_at",
+          "queue_s",
+          "wall_s",
+          "wall_reason"
+        ]
+      }
+    },
+    "jobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "integer"
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "job_id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conclusion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_s": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          }
+        },
+        "required": [
+          "run_id",
+          "attempt",
+          "job_id",
+          "name",
+          "status",
+          "conclusion",
+          "started_at",
+          "completed_at",
+          "duration_s"
+        ]
+      }
+    },
+    "associations": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "responses": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}
