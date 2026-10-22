@@ -1,4 +1,4 @@
-"""Lock the arbitrary-jet (p=6) symbolic Lie-map reference.
+"""Validate the arbitrary-jet (p=6) symbolic Lie-map reference independently.
 
 ``validation_test/ffag_topopt/lie_map_symbolic_oracle_p6.wls`` derives, for a
 committed median-plane-symmetric transverse jet through total degree six, the
@@ -6,9 +6,12 @@ homogeneous Hamiltonians ``H2..H6`` and the flow-map contractions ``R.u``,
 ``T[u,u]``, ``U[u^3]``, ``V[u^4]``, and the fifth-order ``W[u^5]`` around the
 design orbit, plus a one-degree-of-freedom fifth-order Dragt--Finn composition
 with known generators.  Wolfram Language is a derivation/golden tool only; this
-test consumes the committed JSON without invoking it.
+validation consumes the committed JSON without invoking it. A failure means
+the independent reference/analytic-flow comparison disagrees, not that a
+stored Radia production output regressed: this module does not import Radia.
+Nightly/release selection is a lane attribute, not a timing assertion here.
 
-Two independent locks:
+Two independent comparisons:
 
 * analytic spot checks of tensor entries that close in one line
   (``H2_y_py = -cy01``, ``H6_x^6 = -720 cs60``, ``H2_dd = 1-beta^2``);
@@ -24,14 +27,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-scipy_integrate = pytest.importorskip("scipy.integrate")
+import scipy.integrate as scipy_integrate
 
-REFERENCE = (
-    Path(__file__).resolve().parents[1]
-    / "validation_test"
-    / "ffag_topopt"
-    / "lie_map_symbolic_reference_p6.json"
-)
+REFERENCE = Path(__file__).resolve().with_name("lie_map_symbolic_reference_p6.json")
 
 
 @pytest.fixture(scope="module")
