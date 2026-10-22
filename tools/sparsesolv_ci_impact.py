@@ -88,7 +88,7 @@ def ams_manifest_unchanged(before: str, after: str) -> bool:
         if data["schema"] != "radia.test-tier-manifest.v1":
             raise ValueError("unknown manifest schema")
         profiles = data.pop("profiles")
-        data.pop("impact_rules", None)  # AMS invokes the profile without --since.
+        # Static native provenance contracts inspect impact_rules too.
         selected = {}
         name = "sparsesolv"
         while name:
@@ -105,7 +105,7 @@ def ams_manifest_unchanged(before: str, after: str) -> bool:
             name = profile.get("extends")
             if name is not None and not isinstance(name, str):
                 raise ValueError("invalid AMS parent")
-        for profile_name in ("solver-numerics", "solver-heavy"):
+        for profile_name in ("solver-numerics", "solver-heavy", "native-build-contracts"):
             if profile_name in profiles:
                 selected[profile_name] = profiles[profile_name]
         data["profiles"] = selected
@@ -131,7 +131,7 @@ def _strict_json(text):
 
 
 def ams_tier_projection_unchanged(before, after):
-    """Compare all three numerical profiles and every inherited ancestor."""
+    """Compare every executed AMS profile, its ancestors and static impact contracts."""
     def projection(text):
         data = _strict_json(text)
         if (set(data) != {'schema', 'profiles', 'impact_rules'}
@@ -167,9 +167,10 @@ def ams_tier_projection_unchanged(before, after):
         for name in profiles:
             ancestors(name)
         selected = set()
-        for name in ('sparsesolv', 'solver-numerics', 'solver-heavy'):
+        for name in ('sparsesolv', 'solver-numerics', 'solver-heavy', 'native-build-contracts'):
             selected.update(ancestors(name))
-        return {name: profiles[name] for name in selected}
+        return {'profiles': {name: profiles[name] for name in selected},
+                'impact_rules': data['impact_rules']}
     return _canonical(projection(before)) == _canonical(projection(after))
 
 

@@ -145,7 +145,7 @@ def manifest():
 
 
 @pytest.mark.parametrize("change,expected", [
-    (lambda d: d["impact_rules"].update({"tools/new.py": ["tests/new.py"]}), True),
+    (lambda d: d["impact_rules"].update({"tools/new.py": ["tests/new.py"]}), False),
     (lambda d: d["profiles"]["fast"]["paths"].append("tests/new.py"), True),
     (lambda d: d["profiles"]["sparsesolv"]["paths"].append("tests/new.py"), False),
     (lambda d: d["profiles"]["base"]["paths"].append("tests/new.py"), False),
@@ -187,7 +187,8 @@ def test_invalid_manifest_fails_closed(change):
 def test_manifest_edit_with_other_files(extra, required):
     path = "tests/test_tier_manifest.json"
     before, after = manifest(), manifest()
-    after["impact_rules"]["tools/new.py"] = ["tests/new.py"]
+    # Exercise unrelated profile data; impact rules are read by native contracts.
+    after["profiles"]["fast"]["description"] = "unrelated metadata"
     def git(*args):
         if args[0] == "diff":
             return path + "\0" + extra

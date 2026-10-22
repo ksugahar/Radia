@@ -75,7 +75,7 @@ def test_data_exemptions_never_hide_mixed_numeric_build_or_gate_changes(extra):
     assert decide(blobs, data, extra=extra)
 
 
-@pytest.mark.parametrize('profile', ['sparsesolv', 'solver-numerics', 'solver-heavy'])
+@pytest.mark.parametrize('profile', ['sparsesolv', 'solver-numerics', 'solver-heavy', 'native-build-contracts'])
 @pytest.mark.parametrize('mutation', ['path', 'budget', 'ancestor'])
 def test_every_numerical_profile_and_ancestor_stays_an_execution_input(profile, mutation):
     blobs, data = documents()
@@ -158,8 +158,39 @@ def test_a_numerical_consumer_of_metadata_prevents_its_exemption(tmp_path, monke
     (tmp_path / OWNERS).write_text(json.dumps(data), encoding='utf-8')
     (tmp_path / TIER).write_text(json.dumps({'profiles': {
         name: {'paths': ['tests/test_consumer.py']}
-        for name in ('sparsesolv', 'solver-numerics', 'solver-heavy')}}), encoding='utf-8')
+        for name in ('sparsesolv', 'solver-numerics', 'solver-heavy', 'native-build-contracts')}}), encoding='utf-8')
     (tmp_path / 'tests/test_consumer.py').write_text(
         "from pathlib import Path\nPath(" + repr(consumed) + ").read_text()\n", encoding='utf-8')
     monkeypatch.setattr(impact, 'ROOT', tmp_path)
     assert decide(blobs, data)
+
+
+@pytest.mark.parametrize('mutation', ['beam-impact', 'empty-native', 'native-budget'])
+def test_review_native_contract_counterexamples_remain_required(mutation):
+    blobs, data = documents()
+    before = json.loads(blobs[TIER][0])
+    after = copy.deepcopy(before)
+    if mutation == 'beam-impact':
+        after['impact_rules']['validation_test/accelerator/benchmark_beam_transfer_mex_python.py'].remove(
+            'tests/test_beam_transfer_mex_pybind_validation.py')
+    elif mutation == 'empty-native':
+        after['profiles']['native-build-contracts']['paths'] = []
+    else:
+        after['profiles']['native-build-contracts']['max_elapsed_seconds'] = 0.001
+    blobs[TIER] = json.dumps(before), json.dumps(after)
+    assert decide(blobs, data)
+    assert decide(blobs, data, event='push')
+    assert not impact.ams_manifest_unchanged(*blobs[TIER])
+
+
+@pytest.mark.parametrize('package', ['radia_simulink', 'radia_mcp', 'radia_mcp/radia_ngsolve'])
+@pytest.mark.parametrize('version_change', [False, True])
+def test_review_parent_initializers_are_real_execution_inputs(package, version_change):
+    blobs, data = documents()
+    initializer = ('packages/radia-simulink/src/' if package == 'radia_simulink'
+                   else 'packages/radia-mcp/src/') + package + '/__init__.py'
+    if version_change:
+        blobs = {'pyproject.toml': ('[project]\nversion="1"\n', '[project]\nversion="2"\n')}
+    else:
+        blobs = {}
+    assert decide(blobs, data, extra=initializer)
