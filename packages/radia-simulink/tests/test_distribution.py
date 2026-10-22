@@ -182,7 +182,7 @@ def test_python_cuda_wheel_requires_exact_native_abi(tmp_path,wheel_tag,native_t
     spec=importlib.util.spec_from_file_location('wheel_native_contract',ROOT/'verify_wheel.py')
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     name=f'_csr_cuda.{native_tag}-win_amd64.pyd'
-    wheel=tmp_path/f'radia_simulink-0.1.5rc1-{wheel_tag}-win_amd64.whl'
+    wheel=tmp_path/f'radia_simulink-0.1.5-{wheel_tag}-win_amd64.whl'
     digest=hashlib.sha256(b'packaging-only synthetic binary').hexdigest()
     manifest=dict(source_commit='a'*40,files={name:digest})
     receipt=dict(schema='radia.csr-python-build.v1',source_commit='a'*40,binary=name,
@@ -220,7 +220,7 @@ def test_csr_and_hdiv_wheel_share_abi_and_require_hdiv_qualification(tmp_path, m
     import zipfile
     spec=importlib.util.spec_from_file_location('wheel_dual_native_contract', ROOT/'verify_wheel.py')
     module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-    wheel=tmp_path/'radia_simulink-0.1.5rc1-cp312-cp312-win_amd64.whl'
+    wheel=tmp_path/'radia_simulink-0.1.5-cp312-cp312-win_amd64.whl'
     manifest=dict(source_commit='a'*40, files={})
     with zipfile.ZipFile(wheel, 'w') as archive:
         for component in ('csr', 'hdiv'):
@@ -252,7 +252,7 @@ def test_resident_wheel_rejects_unpaired_payload(tmp_path, binary, receipt):
     spec = importlib.util.spec_from_file_location('resident_pair_contract', ROOT/'verify_wheel.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    wheel = tmp_path/'radia_simulink-0.1.5rc1-cp312-cp312-win_amd64.whl'
+    wheel = tmp_path/'radia_simulink-0.1.5-cp312-cp312-win_amd64.whl'
     name = '_resident_amg.cp312-win_amd64.pyd'
     with zipfile.ZipFile(wheel, 'w') as archive:
         if binary:
@@ -272,7 +272,7 @@ def test_resident_orphan_receipt_cannot_hide_in_other_wheel(tmp_path, companion)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     tag = 'py3-none' if companion == 'pure' else 'cp312-cp312'
-    wheel = tmp_path/f'radia_simulink-0.1.5rc1-{tag}-win_amd64.whl'
+    wheel = tmp_path/f'radia_simulink-0.1.5-{tag}-win_amd64.whl'
     name = '_csr_cuda.cp312-win_amd64.pyd'
     manifest = dict(source_commit='a'*40, files={name: 'b'*64})
     with zipfile.ZipFile(wheel, 'w') as archive:

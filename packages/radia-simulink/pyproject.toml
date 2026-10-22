@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-simulink"
-version = "0.1.5rc1"
+version = "0.1.5"
 description = "Experimental Radia MATLAB/Simulink native backends and LTspice integration"
 readme = "README.md"
 requires-python = ">=3.10"
