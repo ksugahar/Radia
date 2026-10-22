@@ -26,7 +26,8 @@ LIGHT_REQUIREMENTS = ["pytest", "pyyaml", "numpy", "scipy", "setuptools>=45", "w
 # Caller settings that would change what runs or where packages land.
 _DROPPED_PREFIXES = ("PYTEST_", "PIP_", "PYTHON")
 _DROPPED_NAMES = {"VIRTUAL_ENV", "CONDA_PREFIX", "RADIA_MCP_CI_SELECTION_JSON",
-                  "RADIA_SOURCE_ONLY_CONTRACTS", "RADIA_TESTS_ALLOW_PARTIAL"}
+                  "RADIA_SOURCE_ONLY_CONTRACTS", "RADIA_TESTS_ALLOW_PARTIAL",
+                  "RADIA_MCP_FORCE_MINIMAL", "RADIA_REPO_ROOT"}
 
 
 def _clean_env(**extra):
@@ -93,6 +94,31 @@ def _light_python(directory, steps):
 
 
 POLICY_TESTS = ("tests/policy/", "tests/test_sparsesolv_ci_contract.py")
+POLICY_COMMANDS = (
+    ("policy lint", ("tools/policy_lint.py",)),
+    ("public-name lint", ("tools/eqnedit64/tests/check_public_names.py",)),
+    ("policy tests", ("-m", "pytest", *POLICY_TESTS, "-q")),
+)
+REPOSITORY_COMMANDS = (
+    ("repository contracts", ("tools/run_test_tier.py", "--profile", "repo-contracts")),
+    ("repository TaskManager audit", ("tools/audit_taskmanager.py",)),
+    ("CI install audit", ("tools/audit_ci_no_system_install.py",)),
+    ("repository versions", ("tools/ci_preflight.py", "--only", "version")),
+)
+MCP_STATIC_COMMANDS = (
+    ("MCP publish lint selftest", ("packages/radia-mcp/tools/policy_lint.py", "--selftest")),
+    ("MCP publish lint", ("packages/radia-mcp/tools/policy_lint.py",)),
+    ("MCP architecture selftest", ("packages/radia-mcp/tools/check_ngsolve_architecture.py", "--selftest")),
+    ("MCP compile", ("-m", "compileall", "-q", "packages/radia-mcp/src")),
+)
+
+
+def dirty_paths():
+    return subprocess.check_output(
+        ["git", "status", "--porcelain", "--untracked-files=all"], cwd=ROOT, text=True
+    ).splitlines()
+
+
 _CONTROL_INPUTS = {
     "tools/ci_precheck.py", "tools/ci_distribution_contract.py",
     "tools/ci_distribution_manifest.json", "tools/run_test_tier.py",
@@ -101,14 +127,35 @@ _CONTROL_INPUTS = {
 }
 
 
+def _ci_only_lanes(changed, data=None):
+    if data is None:
+        spec = importlib.util.spec_from_file_location("precheck_lanes", ROOT / "tools/ci_distribution_contract.py")
+        contract = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(contract)
+        data = contract.load(ROOT)
+    else:
+        spec = importlib.util.spec_from_file_location("precheck_lanes", ROOT / "tools/ci_distribution_contract.py")
+        contract = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(contract)
+    return sorted(lane for lane, rule in data["lanes"].items()
+                  if lane not in {"radia", "radia-mcp-matrix"}
+                  and "pull_request" in rule["events"]
+                  and (changed is None or any(contract.selected(
+                      path, rule["events"]["pull_request"]) for path in changed)))
+
+
 def build_source_plan(since, *, full=False, git=None):
     """Use the checked workflow projections, never a second path allowlist."""
     def run_git(*args):
         return subprocess.check_output(["git", *args], cwd=ROOT, text=True)
     git = git or run_git
     if full:
-        return {"mode": "full", "base": None, "changed_paths": [],
-                "radia": True, "mcp": True, "reason": "explicit full source audit"}
+        base = git("merge-base", since, "HEAD").strip()
+        if not base:
+            raise ValueError("comparison base could not be resolved")
+        return {"mode": "full", "base": base, "changed_paths": [],
+                "radia": True, "mcp": True, "ci_only_lanes": _ci_only_lanes(None),
+                "reason": "explicit full source audit"}
     base = git("merge-base", since, "HEAD").strip()
     if not base:
         raise ValueError("comparison base could not be resolved")
@@ -128,6 +175,7 @@ def build_source_plan(since, *, full=False, git=None):
     return {"mode": "affected", "base": base, "changed_paths": changed,
             "radia": not changed or selected("radia"),
             "mcp": selected("radia-mcp-matrix"),
+            "ci_only_lanes": _ci_only_lanes(changed, data),
             "reason": "shared execution control" if control else
                       "verified empty diff: prior source baseline" if not changed else
                       "checked distribution workflow projections"}
@@ -151,12 +199,12 @@ def _mcp_checks(plan, steps, output):
         raise ValueError("invalid MCP selection: refusing an empty or malformed test plan")
     for field, prefix in (("package_tests", "tests"), ("integration_tests", "tests/mcp_integration")):
         for value in selection[field]:
-            if (not isinstance(value, str) or "\\\\" in value or ":" in value.split("::", 1)[0]
+            if (not isinstance(value, str) or "\\" in value or ":" in value.split("::", 1)[0]
                     or value.startswith("/") or ".." in value.split("/")
                     or not (value == prefix or value.startswith(prefix + "/"))):
                 raise ValueError(f"unsafe MCP test selector: {value!r}")
     package = ROOT / "packages/radia-mcp"
-    env = _clean_env(PYTHONPATH=os.pathsep.join([str(package / "src"), str(ROOT / "src")]),
+    env = _clean_env(PYTHONPATH=str(package / "src"),
                      PYTEST_DISABLE_PLUGIN_AUTOLOAD="1")
     code = ("from pathlib import Path; import radia_mcp; "
             f"expected=Path({str(package / 'src/radia_mcp')!r}).resolve(); "
@@ -168,6 +216,28 @@ def _mcp_checks(plan, steps, output):
         package_env["RADIA_MCP_CI_SELECTION_JSON"] = json.dumps(selection["package_tests"])
     else:
         package_env.pop("RADIA_MCP_CI_SELECTION_JSON", None)
+    # Probe the actual collection policy in a fresh child before pytest can
+    # collect_ignore selected files. Missing dependencies never become PASS.
+    dependency_report = output.with_name(output.stem + "-mcp-not-collected.json")
+    probe = (
+        "import importlib.util,json,runpy; from pathlib import Path; "
+        "required=['pytest','numpy','scipy','h5py']; "
+        + ("required+=['markdown','pymdownx']; " if selection["integration_tests"] else "")
+        + "missing=[name for name in required if importlib.util.find_spec(name) is None]; "
+        "state=runpy.run_path('tests/conftest.py'); "
+        "ignored=state['_DEPENDENCY_IGNORED']; "
+        f"Path({str(dependency_report)!r}).write_text(json.dumps(dict(missing=missing,not_collected=ignored),indent=2)); "
+        "print(dict(missing=missing,not_collected=ignored)); "
+        "raise SystemExit(bool(missing or ignored))"
+    )
+    if not _run("MCP collection dependencies", [sys.executable, "-c", probe],
+                package_env, steps, cwd=package):
+        return selection
+    for name, arguments in MCP_STATIC_COMMANDS:
+        _run(name, [sys.executable, *arguments], env, steps)
+    # --full still validates the checked base for this changed-definition gate.
+    _run("MCP architecture diff", [sys.executable,
+         "packages/radia-mcp/tools/check_ngsolve_architecture.py", "--base", plan["base"]], env, steps)
     _run("MCP selected package tests",
          [sys.executable, "-m", "pytest", "-v", "-r", "aR",
           "-m", "not xval and not slow", "tests"], package_env, steps, cwd=package)
@@ -179,8 +249,8 @@ def _mcp_checks(plan, steps, output):
              [sys.executable, "-m", "pytest", "-v", "-ra",
               "--confcutdir=tests/mcp_integration", *selection["integration_tests"]], env, steps)
         _run("MCP package test boundary",
-             [sys.executable, "-m", "pytest",
-              "packages/radia-mcp/tests/test_validation_lane_separation.py", "-q"], env, steps)
+             [sys.executable, "packages/radia-mcp/tools/check_package_test_boundary.py",
+              "--scratch-root", str(output.parent / (output.stem + "-boundary-scratch"))], env, steps)
     return selection
 
 
@@ -199,7 +269,10 @@ def main(argv=None):
     LOG_DIR = args.report.with_name(args.report.stem + "-logs")
     steps, errors = [], []
     plan, selection = None, None
+    dirty = dirty_paths()
     try:
+        if dirty:
+            raise ValueError("dirty working tree: commit all tracked/untracked inputs before precheck")
         plan = build_source_plan(args.since, full=args.full)
     except Exception as error:
         errors.append(f"selection failed: {type(error).__name__}: {error}")
@@ -223,14 +296,11 @@ def main(argv=None):
                 ]
                 for name, command in fast:
                     _run(name, command, env, steps)
-        caller = [
-            ("policy lint", [sys.executable, "tools/policy_lint.py"]),
-            ("public-name lint", [sys.executable, "tools/eqnedit64/tests/check_public_names.py"]),
-            ("policy tests", [sys.executable, "-m", "pytest", *POLICY_TESTS, "-q"]),
-        ]
+        caller = [(name, [sys.executable, *arguments])
+                  for name, arguments in POLICY_COMMANDS]
         if not args.skip_repo_contracts:
-            caller.append(("repository contracts",
-                           [sys.executable, "tools/run_test_tier.py", "--profile", "repo-contracts"]))
+            caller += [(name, [sys.executable, *arguments])
+                       for name, arguments in REPOSITORY_COMMANDS]
         for name, command in caller:
             _run(name, command, _clean_env(), steps)
         if plan["mcp"]:
@@ -244,10 +314,12 @@ def main(argv=None):
     report = {
         "schema": "radia.ci-precheck.v2", "head": head, "since": args.since,
         "python": platform.python_version(), "interpreter": sys.executable,
-        "passed": None if args.plan_only and not errors else passed,
+        "passed": None if (args.plan_only or args.skip_repo_contracts) and not errors else passed,
         "qualified": passed and not args.skip_repo_contracts,
         "status": "failed" if errors or (not args.plan_only and not passed) else
                   "planned" if args.plan_only else "partial" if args.skip_repo_contracts else "passed",
+        "dirty_paths": dirty,
+        "ci_only_lanes": plan.get("ci_only_lanes", []) if plan else [],
         "plan": plan, "steps": steps, "errors": errors, "mcp_selection": selection,
         "mcp_ci_only_server_selftests": selection["server_selftests"] if selection else [],
         "scope": "Python 3.12 source precheck; native/platform/release and server stdio qualification remain CI",

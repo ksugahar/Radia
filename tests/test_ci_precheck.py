@@ -24,16 +24,45 @@ def git_diff(paths):
     return git
 
 
-def test_policy_collection_is_the_workflows_actual_collection():
+@pytest.fixture(autouse=True)
+def clean_candidate(monkeypatch):
+    monkeypatch.setattr(precheck, "dirty_paths", lambda: [])
+
+
+def workflow_commands(job):
     workflow = yaml.load((ROOT / ".github/workflows/policy-lint.yml").read_text(), Loader=yaml.BaseLoader)
-    commands = [line.strip() for step in workflow["jobs"]["policy-checks"]["steps"]
-                for line in step.get("run", "").splitlines()]
-    pytest_commands = [shlex.split(line) for line in commands if line.startswith("python -m pytest ")]
-    assert len(pytest_commands) == 1
-    targets = tuple(word for word in pytest_commands[0][3:] if not word.startswith("-"))
-    assert tuple(path.rstrip("/") for path in precheck.POLICY_TESTS) == tuple(path.rstrip("/") for path in targets)
-    assert "python tools/policy_lint.py" in commands
-    assert "python tools/eqnedit64/tests/check_public_names.py" in commands
+    return {tuple(shlex.split(line.strip())[1:])
+            for step in workflow["jobs"][job]["steps"]
+            for line in step.get("run", "").splitlines()
+            if line.strip().startswith("python ")
+            and not line.strip().startswith("python -m pip install ")}
+
+
+def test_policy_and_repository_commands_match_ci_in_both_directions():
+    assert workflow_commands("policy-checks") == {args for _, args in precheck.POLICY_COMMANDS}
+    assert workflow_commands("repository-contracts") == {args for _, args in precheck.REPOSITORY_COMMANDS}
+
+
+def test_mcp_static_commands_match_workflow_in_both_directions():
+    workflow = yaml.load((ROOT / ".github/workflows/radia-mcp-matrix.yml").read_text(), Loader=yaml.BaseLoader)
+    names = ("Compile check (", "Publish-boundary lint", "Keep new gates out of")
+    steps = [step for job in workflow["jobs"].values() for step in job["steps"]
+             if step.get("name", "").startswith(names)]
+    assert len(steps) == 3
+    actual = set()
+    for step in steps:
+        for line in step["run"].splitlines():
+            line = line.strip()
+            if line.startswith(("python ", "python3 ")):
+                parts = tuple(shlex.split(line)[1:])
+                if "--base" in parts:
+                    assert parts[-1] == "$CI_BASE_SHA"
+                    actual.add((parts[0], "--base", "<base>"))
+                else:
+                    actual.add(parts)
+    expected = {args for _, args in precheck.MCP_STATIC_COMMANDS}
+    expected.add(("packages/radia-mcp/tools/check_ngsolve_architecture.py", "--base", "<base>"))
+    assert actual == expected
 
 
 def test_docs_dont_create_an_unneeded_light_environment():
@@ -66,10 +95,8 @@ def test_unknown_ownership_cannot_become_a_successful_skip():
         precheck.build_source_plan("base", git=git_diff(["unknown_new_owner/input.dat"]))
 
 
-def test_full_does_not_require_a_git_comparison_and_empty_diff_keeps_source_baseline():
-    def unavailable(*args):
-        raise AssertionError("full must not need a base")
-    assert precheck.build_source_plan("missing", full=True, git=unavailable)["mcp"]
+def test_full_keeps_a_verified_base_and_empty_diff_keeps_source_baseline():
+    assert precheck.build_source_plan("base", full=True, git=git_diff([]))["mcp"]
     assert precheck.build_source_plan("base", git=git_diff([]))["radia"]
 
 
@@ -91,7 +118,7 @@ def test_policy_always_runs_and_plan_only_never_claims_tests_passed(tmp_path, mo
     monkeypatch.setattr(precheck, "_run", fake_run(commands))
     report = tmp_path / "report.json"
     assert precheck.main(["--report", str(report)]) == 0
-    assert [row[0] for row in commands] == ["policy lint", "public-name lint", "policy tests", "repository contracts"]
+    assert [row[0] for row in commands] == [name for name, _ in (*precheck.POLICY_COMMANDS, *precheck.REPOSITORY_COMMANDS)]
     assert precheck.main(["--plan-only", "--report", str(report)]) == 0
     result = json.loads(report.read_text())
     assert result["status"] == "planned" and result["passed"] is None and not result["qualified"]
@@ -131,6 +158,10 @@ def test_mcp_executes_the_actual_collection_protocol_and_propagates_boundary_fai
     assert cwd == ROOT / "packages/radia-mcp"
     assert "--confcutdir=tests/mcp_integration" in rows["MCP selected integration tests"][0]
     assert "MCP response tests" in rows and "MCP package test boundary" in rows
+    assert rows["MCP package test boundary"][0][1] == "packages/radia-mcp/tools/check_package_test_boundary.py"
+    assert "--scratch-root" in rows["MCP package test boundary"][0]
+    assert env["PYTHONPATH"] == str(ROOT / "packages/radia-mcp/src")
+    assert "MCP collection dependencies" in rows
     assert any(step["returncode"] for step in steps)
 
 
@@ -156,7 +187,7 @@ def test_failed_selected_test_makes_main_fail(tmp_path, monkeypatch):
     assert not json.loads(report.read_text())["qualified"]
 
 
-@pytest.mark.parametrize("bad", ["../escape.py", "/tmp/escape.py", "tests/../../escape.py"])
+@pytest.mark.parametrize("bad", ["../escape.py", "/tmp/escape.py", "tests/../../escape.py", r"tests\foo.py"])
 def test_invalid_selected_paths_do_not_execute_tests(tmp_path, monkeypatch, bad):
     commands = []
     monkeypatch.setattr(precheck, "_run", fake_run(commands, selection=selection(package_tests=[bad])))
@@ -179,3 +210,66 @@ def test_caller_filters_cannot_silently_remove_required_tests(monkeypatch):
     assert "RADIA_SOURCE_ONLY_CONTRACTS" not in env
     assert "PYTEST_ADDOPTS" not in env
     assert env["RADIA_TESTS_ALLOW_PARTIAL"] == "0"
+
+
+def test_dirty_untracked_input_cannot_qualify(tmp_path, monkeypatch):
+    monkeypatch.setattr(precheck, "dirty_paths", lambda: ["?? packages/radia-mcp/src/new.py"])
+    monkeypatch.setattr(precheck, "_run", lambda *a, **k: pytest.fail("must not execute"))
+    out = tmp_path / "report.json"
+    assert precheck.main(["--report", str(out)]) == 1
+    result = json.loads(out.read_text())
+    assert result["dirty_paths"] and not result["qualified"]
+
+
+def test_unexecuted_distribution_lanes_are_explicit():
+    plan = precheck.build_source_plan("base", git=git_diff(["packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py"]))
+    assert "cubit-mesh-export" in plan["ci_only_lanes"]
+    assert not plan["mcp"]
+
+
+def test_missing_collection_dependencies_stop_before_pytest(tmp_path, monkeypatch):
+    commands = []
+    monkeypatch.setattr(precheck, "_run", fake_run(commands, selection=selection(),
+                                                 failing="MCP collection dependencies"))
+    precheck._mcp_checks({"mode": "affected", "base": "base"}, [], tmp_path / "report.json")
+    assert "MCP collection dependencies" == commands[-1][0]
+    assert not any("pytest" in cmd for _, cmd, _, _ in commands)
+
+
+def test_partial_is_not_a_passing_qualification(tmp_path, monkeypatch):
+    plan = precheck.build_source_plan("base", git=git_diff(["packages/cubit-mesh-export/README.md"]))
+    monkeypatch.setattr(precheck, "build_source_plan", lambda *a, **k: plan)
+    monkeypatch.setattr(precheck, "_run", fake_run([]))
+    out = tmp_path / "report.json"
+    assert precheck.main(["--skip-repo-contracts", "--report", str(out)]) == 0
+    result = json.loads(out.read_text())
+    assert result["passed"] is None and not result["qualified"] and result["status"] == "partial"
+
+
+def test_actual_git_rename_and_delete_keep_old_and_new_sides(tmp_path):
+    # Only the distribution diff promises both sides; MCP's selector is unchanged.
+    def git(*args):
+        return subprocess.check_output(["git", *args], cwd=tmp_path, text=True)
+    git("init", "-q")
+    git("config", "user.email", "test@example.invalid")
+    git("config", "user.name", "Regression")
+    (tmp_path / "src/radia").mkdir(parents=True)
+    (tmp_path / "src/radia/old.py").write_text("x=1\n")
+    (tmp_path / "src/radia/deleted.py").write_text("y=2\n")
+    git("add", ".")
+    git("commit", "-qm", "base")
+    base = git("rev-parse", "HEAD").strip()
+    (tmp_path / "docs").mkdir()
+    git("mv", "src/radia/old.py", "docs/new.py")
+    git("rm", "src/radia/deleted.py")
+    git("commit", "-qm", "rename and delete")
+    plan = precheck.build_source_plan(base, git=git)
+    assert plan["changed_paths"] == ["docs/new.py", "src/radia/deleted.py", "src/radia/old.py"]
+
+
+def test_boundary_helper_is_the_workflows_standalone_package_probe():
+    workflow = (ROOT / ".github/workflows/radia-mcp-matrix.yml").read_text()
+    assert 'sys.executable, "packages/radia-mcp/tools/check_package_test_boundary.py"' in workflow
+    helper = (ROOT / "packages/radia-mcp/tools/check_package_test_boundary.py").read_text()
+    assert 'env["RADIA_REPO_ROOT"] = str(root / "no-monorepo")' in helper
+    assert 'TemporaryDirectory(' in helper
