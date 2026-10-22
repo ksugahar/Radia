@@ -407,3 +407,49 @@ def test_fast_selection_hands_repository_contracts_to_the_always_on_lanes():
     assert set(cpu) <= set(selected)
     assert not set(selected) & set(repository)
     assert "tests/test_sparsesolv_ci_contract.py" not in selected
+
+
+@pytest.mark.parametrize("path,route", [
+    ("tests/test_radia_promotion_gate.py", "fast"),
+    ("tests/test_surface_rom_linear_gate_contract.py", "impact"),
+])
+def test_previous_manifest_delta_hands_current_heavy_tests_out_of_fast(monkeypatch, tmp_path, capsys, path, route):
+    runner = runner_module()
+    previous = json.loads(runner.MANIFEST.read_text(encoding="utf-8"))
+    current = copy.deepcopy(previous)
+    if route == "fast":
+        current["profiles"]["fast-contracts"]["paths"].remove(path)
+    else:
+        for tests in current["impact_rules"].values():
+            if path in tests:
+                tests.remove(path)
+    current["profiles"]["solver-heavy"]["paths"].append(path)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(current), encoding="utf-8")
+    monkeypatch.setattr(runner, "MANIFEST", manifest)
+    fast, _ = runner.load_profile("fast-contracts")
+    selected = runner.select_impact_tests(fast, ["tests/test_tier_manifest.json"],
+        previous_manifest=previous, profile_name="fast-contracts")
+    runner.check_light_selection(selected)
+    assert path not in selected and set(fast) <= set(selected)
+    assert path in capsys.readouterr().out
+
+
+def test_previous_manifest_existing_but_unregistered_path_still_fails(monkeypatch, tmp_path):
+    runner = runner_module()
+    current = json.loads(runner.MANIFEST.read_text(encoding="utf-8"))
+    previous = copy.deepcopy(current)
+    path = "tests/test_ci_execution_policy.py"
+    for profile in current["profiles"].values():
+        profile["paths"] = [p for p in profile["paths"] if p != path]
+    for tests in current["impact_rules"].values():
+        tests[:] = [p for p in tests if p != path]
+    previous["profiles"]["fast-contracts"]["paths"].append(path)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(current), encoding="utf-8")
+    monkeypatch.setattr(runner, "MANIFEST", manifest)
+    fast, _ = runner.load_profile("fast-contracts")
+    selected = runner.select_impact_tests(fast, ["tests/test_tier_manifest.json"],
+        previous_manifest=previous, profile_name="fast-contracts")
+    with pytest.raises(ValueError, match="outside audited alternatives"):
+        runner.check_light_selection(selected)
