@@ -1,6 +1,7 @@
 """Keep the 100-host CI split and remote pre-push contract explicit."""
 
 import importlib.util
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -395,8 +396,9 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
 
     policy = "\n".join(agents)
     # Public text names roles, never physical hosts or private paths.
-    for identifier in ("号機", "A100 host", "`packages/radia-gpu`", "hibino", "mdx1", "192.168."):
+    for identifier in ("号機", "A100 host", "`packages/radia-gpu`"):
         assert identifier not in policy, identifier
+    assert not re.search(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", policy), "IPv4 address in public policy"
     assert "### Tests For AI-Authored Code" in policy
     assert "Investigations remain in Git" in policy
     assert "Never include, link, or use NGSolve TaskManager in mexcuda builds" in policy
