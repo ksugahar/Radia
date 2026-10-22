@@ -308,9 +308,9 @@ jobs:
           $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
           & cmd.exe /d /c "call `"$vcvars`" && cmake -S packages/radia-simulink/tests/native -B `"$nativeBuild`" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & cmd.exe /d /c "call `"$vcvars`" && cmake --build `"$nativeBuild`" --config Release --target test_radia_mex_sparse_symmetry test_radia_ih_thermal_acceptance test_ih_coupled_config --parallel 2"
+          & cmd.exe /d /c "call `"$vcvars`" && cmake --build `"$nativeBuild`" --config Release --target test_radia_mex_sparse_symmetry test_radia_ih_thermal_acceptance test_ih_coupled_config test_ih_coupled_production_unavailable test_ih_coupled_domain_scenarios test_ih_coupled_registry test_ih_coupled_runtime --parallel 2"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ctest --test-dir $nativeBuild -C Release -R '^radia\.(mex_sparse_symmetry|ih_thermal_acceptance|ih_coupled_config)\.cpp$' --output-on-failure --no-tests=error
+          ctest --test-dir $nativeBuild -C Release -R '^radia\.((mex_sparse_symmetry|ih_thermal_acceptance|ih_coupled_config|ih_coupled_registry|ih_coupled_runtime)\.cpp|ih_domain\..+)$' --output-on-failure --no-tests=error
           exit $LASTEXITCODE
       - name: Build GPU mexcuda gateway
         shell: pwsh
