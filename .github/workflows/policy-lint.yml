@@ -48,8 +48,9 @@ jobs:
         run: python -m pip install pytest pyyaml numpy scipy wheel setuptools -e packages/radia-mcp
       - name: Run cross-distribution source contracts
         run: python tools/run_test_tier.py --profile repo-contracts
-      - name: Audit repository-wide execution and package policy
-        run: |
-          python tools/audit_taskmanager.py
-          python tools/audit_ci_no_system_install.py
-          python tools/ci_preflight.py --only version
+      - name: Audit repository-wide TaskManager policy
+        run: python tools/audit_taskmanager.py
+      - name: Audit CI system installation policy
+        run: python tools/audit_ci_no_system_install.py
+      - name: Audit repository versions
+        run: python tools/ci_preflight.py --only version
