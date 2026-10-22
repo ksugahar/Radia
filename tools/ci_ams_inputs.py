@@ -64,7 +64,8 @@ def _python_inputs(root):
                     and re.search(r'\.[A-Za-z][A-Za-z0-9_-]{0,15}$', node.value)):
                 for base in (root, file.parent, root / 'src/radia/panels', root / 'validation_test/panels'):
                     candidate = base / node.value
-                    if candidate.is_relative_to(root) and candidate.is_file():
+                    if (candidate.is_relative_to(root) and candidate.is_file()
+                            and '.git' not in candidate.relative_to(root).parts):
                         pending.append(candidate.relative_to(root).as_posix())
             names = []
             if isinstance(node, ast.Import):

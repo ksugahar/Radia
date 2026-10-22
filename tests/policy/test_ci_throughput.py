@@ -231,6 +231,7 @@ def test_closure_follows_cli_loaders_and_non_python_fixture(tmp_path):
     files = {
         'tests/test_tier_manifest.json': json.dumps({'profiles': {
             'sparsesolv': {'paths': []}, 'solver-heavy': {'paths': []},
+            'native-build-contracts': {'paths': []},
             'solver-numerics': {'extends': 'base', 'paths': []},
             'base': {'paths': ['tests/test_entry.py']}}}),
         'tests/test_entry.py': "import tests.helper\nimport subprocess\nsubprocess.run(['python', 'tools/child.py'])\n",
