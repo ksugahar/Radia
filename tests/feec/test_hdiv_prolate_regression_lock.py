@@ -19,13 +19,15 @@ from pathlib import Path
 
 import ngsolve as ng
 from threadpoolctl import threadpool_limits
-from tools.regression_lock import assert_regression, load_baseline
 
 
 def test_prolate_solved_magnetization_lock():
     root = Path(__file__).resolve().parents[2]
+    helper_spec = importlib.util.spec_from_file_location("prolate_regression_helper", root / "tools/regression_lock.py")
+    helper = importlib.util.module_from_spec(helper_spec)
+    helper_spec.loader.exec_module(helper)
     fixtures = Path(__file__).parent / "data" / "prolate_mavg_z"
-    baseline = load_baseline(fixtures / "baseline.json")
+    baseline = helper.load_baseline(fixtures / "baseline.json")
     mesh = fixtures / "prolate.vol"
     assert hashlib.sha256(mesh.read_bytes()).hexdigest() == baseline["conditions"]["mesh_sha256"], "frozen mesh identity differs"
     spec = importlib.util.spec_from_file_location("prolate_validation_case", root / "validation_test/feec/test_hdiv_vim_ellipsoid.py")
@@ -38,4 +40,4 @@ def test_prolate_solved_magnetization_lock():
             output = case.run_prolate_case(maxh=0.6, mesh_path=mesh)
     finally:
         ng.SetNumThreads(previous_threads)
-    assert_regression({"M_avg_z": float(output["M_avg"][2])}, baseline, conditions=baseline["conditions"])
+    helper.assert_regression({"M_avg_z": float(output["M_avg"][2])}, baseline, conditions=baseline["conditions"])
