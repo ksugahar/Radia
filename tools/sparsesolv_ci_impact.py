@@ -48,6 +48,16 @@ def test_dependencies_only(before: str, after: str) -> bool:
     return _canonical(old) == _canonical(new)
 
 
+def project_version_only(before: str, after: str) -> bool:
+    """Prove that dependency/build/project settings differ only in the version."""
+    old, new = tomllib.loads(before), tomllib.loads(after)
+    for document in (old, new):
+        version = document['project'].pop('version')
+        if not isinstance(version, str) or not version.strip():
+            raise ValueError('invalid version metadata')
+    return _canonical(old) == _canonical(new)
+
+
 def _valid_budget(value) -> bool:
     """A time budget is a finite positive number; JSON true/false are not numbers."""
     if not isinstance(value, (int, float)) or isinstance(value, bool):
@@ -440,6 +450,19 @@ def _required_for_event(lane,event_name,event,git,data):
         if event_name=='pull_request': base=git('merge-base',base,'HEAD').strip()
         if not base: raise ValueError('missing merge base')
         changed=changed_paths(git('diff','--name-status','-z','--find-renames',base,'HEAD','--'))
+        if lane == 'sparsesolv':
+            # A version literal is not a numerical dependency/ABI change. Apply
+            # the proof before BOTH the environment closure and workflow paths.
+            # Missing/malformed blobs remain inside the outer fail-closed guard.
+            version_inputs = set()
+            for path in changed:
+                if Path(path).name == 'pyproject.toml' and project_version_only(
+                        git('show', f'{base}:{path}'), git('show', f'HEAD:{path}')):
+                    version_inputs.add(path)
+            if version_inputs:
+                changed = changed - version_inputs
+                if not changed:
+                    return False, 'version-only metadata; no numerical execution input'
         if lane == 'sparsesolv' and event_name == 'pull_request':
             spec = importlib.util.spec_from_file_location('ci_ams_inputs', ROOT / 'tools/ci_ams_inputs.py')
             inputs = importlib.util.module_from_spec(spec)
@@ -470,12 +493,7 @@ def gpu_required_for_event(event_name, event, git, data):
             if path.endswith(('.md', '.rst', '.ipynb')) or path.startswith('docs/'):
                 continue
             if path in ('pyproject.toml', 'packages/radia-simulink/pyproject.toml'):
-                old, new = (tomllib.loads(git('show', f'{ref}:{path}')) for ref in (base, 'HEAD'))
-                for document in (old, new):
-                    version = document['project'].pop('version')
-                    if not isinstance(version, str) or not version.strip():
-                        raise ValueError('invalid version metadata')
-                if _canonical(old) == _canonical(new):
+                if project_version_only(git('show', f'{base}:{path}'), git('show', f'HEAD:{path}')):
                     continue
                 return True, 'GPU build/dependency metadata: ' + path
             if path == 'packages/radia-simulink/src/radia_simulink/__init__.py':
