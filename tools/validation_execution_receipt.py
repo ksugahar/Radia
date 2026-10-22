@@ -109,7 +109,11 @@ class Receipt:
         unlinked(self.path.parent)
         self.data['runtime_s'] = time.monotonic() - self.started
         expected = set(self.plan['expected_nodeids'])
-        executed = {key for key, phases in self.data['phases'].items() if 'call' in phases}
+        attempted = {key for key, phases in self.data['phases'].items() if 'call' in phases}
+        executed = {key for key, phases in self.data['phases'].items() if phases.get('call') in {'passed','failed'}}
+        self.data['attempted'] = sorted(attempted)
+        self.data['passed_pytest_cases'] = sorted(key for key, phases in self.data['phases'].items()
+                                                 if phases == dict(setup='passed',call='passed',teardown='passed'))
         self.data['executed'] = sorted(executed)
         self.data['missing_collection'] = sorted(expected - set(self.data['collected']))
         self.data['missing_execution'] = sorted(expected - executed)

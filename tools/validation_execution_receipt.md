@@ -29,7 +29,9 @@ for each attempt. No options means the explicitly loaded plugin stays inactive.
 The receipt schema identifier is `radia.validation-execution.v1`. `identity` is
 the plan, bound by `plan_sha256`; `collected`, `executed`, `missing_collection`,
 `missing_execution`, `unexpected`, and phase outcomes/durations describe actual
-pytest observations. Expected validation cases may run alongside ordinary source
+pytest observations. `attempted` includes call reports; `executed` excludes skipped/xfail/xpass calls.
+`passed_pytest_cases` requires successful setup, call and teardown, and is not an
+independent numerical-accuracy claim. Expected validation cases may run alongside ordinary source
 tests in an existing tier; a failure elsewhere in that run still makes the run
 fail. Unreviewed or duplicate validation cases block execution. Missing cases,
 skips, xfail/xpass, collect-only, deselection, or duplicate phases are incomplete.
@@ -50,7 +52,9 @@ producer must declare which cases provide numerical JSON versus outcome-only
 receipts. Resources, bounded child lifetime, fresh native import/source-build
 provenance, Python/package versions, timeouts, safe publication/redaction, private
 archive recovery and CI artifact transport remain producer responsibilities.
-No local absolute paths or failure stack traces are copied into the receipt.
+The plugin does not add local absolute paths or failure stack traces. The
+producer must also review identifiers themselves for safe publication, disable
+unreviewed plugin/retry autoload, and run one sequential phase per receipt.
 
 C5b must wire this into the approved nightly and manual routes, preserve exact
 release gates, and commission the full MCP inventory. This slice alone does not

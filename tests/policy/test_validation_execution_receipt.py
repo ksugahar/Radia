@@ -57,6 +57,9 @@ def execute(paths, extra=()):
  ('import pytest\ndef test_case():\n    pytest.skip("visible")\n','incomplete'),
  ('import pytest\n@pytest.mark.xfail(reason="known")\ndef test_case():\n    assert False\n','incomplete'),
  ('import pytest\npytest.skip("module skipped", allow_module_level=True)\ndef test_case(): pass\n','incomplete'),
+ ('import pytest\n@pytest.mark.xfail(reason="expected failure")\ndef test_case():\n    assert True\n','incomplete'),
+ ('import pytest\n@pytest.fixture\ndef broken():\n    raise RuntimeError("setup failed")\ndef test_case(broken): pass\n','failed'),
+ ('import pytest\n@pytest.fixture\ndef broken():\n    yield\n    raise RuntimeError("teardown failed")\ndef test_case(broken): pass\n','failed'),
 ])
 def test_real_pytest_outcomes_preserve_completeness(tmp_path,body,status):
     result,data=execute(repo(tmp_path,body))
@@ -64,6 +67,8 @@ def test_real_pytest_outcomes_preserve_completeness(tmp_path,body,status):
     assert (result.returncode==0)==(status=='passed')
     assert data['qualification_scope'].startswith('source-nightly-only')
     assert data['state']=='finished'
+    assert bool(data['passed_pytest_cases']) == (status=='passed')
+    if status=='incomplete': assert data['executed']==[]
 
 
 def test_missing_expected_case_is_incomplete(tmp_path):
