@@ -1,0 +1,43 @@
+{
+  "schema": "radia.regression-lock.v1",
+  "source_sha": "194db5105229f80524d6100cf76ac485f3375af9",
+  "conditions": {
+    "case": "prolate spheroid (1,1,2)",
+    "entry_point": "radia.vim.Solve",
+    "maxh": 0.6,
+    "scale_reduction": "none; validation and lock have 1338 elements / 9177 DOF",
+    "mesh_sha256": "76c79f3fc6d9d61585b270c486265e1a4c763eb301a7befe86de4504a05c9852",
+    "mu_r": 1000.0,
+    "H_ext_A_per_m": [
+      0,
+      0,
+      1.0
+    ],
+    "backend": "CPU HDiv-VIM",
+    "ngsolve_threads": 1,
+    "library_threads": 1,
+    "provenance": {
+      "source_sha": "194db5105229f80524d6100cf76ac485f3375af9",
+      "native_sha256": "3a4403792412d58483a1bd1b222fcf1bcf166418e18e554bec7847f57ad919ce",
+      "reproducibility_ngsolve_threads": [
+        1,
+        2
+      ],
+      "samples_per_thread": 3,
+      "heavy_runtime_s": 32.516,
+      "runtime_includes": "meshing/loading, Solve and coverage; descriptive only",
+      "heavy_mesh_sha256": "eb732dbe60e18ba5a64bbdd2e458f1fbb2a939c9510ade012fdc314f255d7839",
+      "heavy_to_frozen_coordinate_delta_m": 3.3008068107687194e-06
+    },
+    "mesh_selection": "frozen six-repeat mesh originally generated at maxh1.0; maxh0.6 is nominal only when mesh_path is supplied, not a remeshing claim"
+  },
+  "runtime_s": 32.04700000002049,
+  "quantities": {
+    "M_avg_z": {
+      "expected": 5.710946852499634,
+      "unit": "A/m",
+      "rtol": 1e-12,
+      "atol": 0
+    }
+  }
+}
