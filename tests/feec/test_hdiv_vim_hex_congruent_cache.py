@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-pytest.importorskip("ngsolve")
+
 
 import ngsolve as ng  # noqa: E402
 from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
