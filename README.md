@@ -44,6 +44,13 @@ assistant through `radia-mcp`: ask it, starting with `capability_pack_status`
 and the domain usage tools it reports. This README introduces capabilities; it
 is not the manual.
 
+Radia supports two ways of working. In **AI-driven execution** (Python through
+MCP), you set the analysis plan, physical assumptions and acceptance criteria,
+and the AI assistant runs the calculation workflow end to end. In **human–AI
+collaborative operation**, you and the assistant work on the same artifacts:
+CAD and meshes in Coreform Cubit, and system models in the Radia Simulink
+library.
+
 | Start with | Use it for |
 | --- | --- |
 | `radia` | CPU electromagnetic calculations through Python, pybind11 and NGSolve |
