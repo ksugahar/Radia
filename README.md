@@ -46,10 +46,13 @@ is not the manual.
 
 Radia supports two ways of working. In **AI-driven execution** (Python through
 MCP), you set the analysis plan, physical assumptions and acceptance criteria,
-and the AI assistant runs the calculation workflow end to end. In **human–AI
-collaborative operation**, you and the assistant work on the same artifacts:
-CAD and meshes in Coreform Cubit, and system models in the Radia Simulink
-library.
+and the AI assistant executes supported calculation workflows end to end;
+you evaluate the engineering conclusions. In **human–AI collaborative
+operation**, you and the assistant develop and inspect CAD and mesh artifacts
+using Coreform Cubit, and system models using masked blocks in the Radia
+Simulink library. The assistant operates Cubit in batch/nographics mode,
+with journals, checkpoints and exported artifacts supporting human inspection
+and handoff.
 
 | Start with | Use it for |
 | --- | --- |
