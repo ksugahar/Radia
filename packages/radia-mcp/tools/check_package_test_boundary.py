@@ -6,6 +6,7 @@ The temporary copy has no monorepo siblings and cannot use the live editable.
 
 from __future__ import annotations
 
+import argparse
 import os
 from pathlib import Path
 import shutil
@@ -29,9 +30,18 @@ TESTS = (
 )
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scratch-root", type=Path,
+                        help="parent for owned temporary package copies (default: platform scratch)")
+    args = parser.parse_args(argv)
     source = Path(__file__).resolve().parents[1]
-    scratch = Path("C:/temp") if os.name == "nt" else None
+    scratch = args.scratch_root
+    if scratch is not None:
+        scratch = scratch.resolve()
+        scratch.mkdir(parents=True, exist_ok=True)
+    elif os.name == "nt":
+        scratch = Path("C:/temp")
     with tempfile.TemporaryDirectory(prefix="mcp-test-boundary-", dir=scratch) as temp:
         root = Path(temp) / "standalone"
         for folder in ("src", "tools"):
