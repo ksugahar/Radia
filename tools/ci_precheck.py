@@ -43,9 +43,12 @@ LOG_DIR = None  # set by main(); full step output is written here
 def _run(name, command, env, steps, cwd=None):
     started = time.perf_counter()
     try:
-        result = subprocess.run(command, cwd=cwd or ROOT, env=env, capture_output=True, text=True)
+        child_env = dict(env, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+        result = subprocess.run(command, cwd=cwd or ROOT, env=child_env,
+                                capture_output=True, text=True,
+                                encoding="utf-8", errors="replace")
         returncode = result.returncode
-        output = result.stdout + result.stderr
+        output = (result.stdout or "") + (result.stderr or "")
     except OSError as error:  # the step could not even start
         returncode, output = 1, repr(error)
     tail = output.strip().splitlines()[-3:]
@@ -65,7 +68,11 @@ def _run(name, command, env, steps, cwd=None):
         "log": str(log) if log else None,
     })
     status = "PASS" if returncode == 0 else "FAIL"
-    print(f"[{status}] {name}: {tail[-1] if tail else ''}", flush=True)
+    message = f"[{status}] {name}: {tail[-1] if tail else ''}"
+    # Preserve the UTF-8 log even when the parent's console cannot display it.
+    console_encoding = sys.stdout.encoding or "utf-8"
+    message = message.encode(console_encoding, errors="backslashreplace").decode(console_encoding)
+    print(message, flush=True)
     return returncode == 0
 
 
