@@ -1,6 +1,7 @@
 """Keep the 100-host CI split and remote pre-push contract explicit."""
 
 import importlib.util
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -68,19 +69,18 @@ def test_fast_ci_declares_bh_and_wheel_contract_dependencies():
     assert 'ngsolve' not in setup.lower()
 
 
-def test_no_workflow_selects_a_lab_runner():
-    """No lane may ask for a LAB runner, the signing release included.
+def test_no_workflow_selects_a_retired_runner():
+    """No lane may ask for a retired or user-desktop runner, signing included.
 
-    The signing job used to be the documented exception, and it could never
-    run: a runner service executes as NETWORK SERVICE, which sees no per-user
+    A runner service executes as NETWORK SERVICE, which sees no per-user
     mapped drive, and these machines form a workgroup rather than a domain, so
-    the laboratory share refuses the machine account.  The label it asked for
-    was never registered either, so a tag push queued forever instead of
-    failing.  The signed executable now arrives as a staging release asset and
-    the whole lane is GitHub-hosted.
+    a laboratory share refuses the machine account.  The signed EqnEdit64
+    executable therefore arrives as a staging release asset and the whole lane
+    is GitHub-hosted.  Only active self-hosted labels may appear.
     """
     workflows = ROOT / ".github" / "workflows"
     signing_release = "release-eqnedit64-pypi.yml"
+    retired_labels = ("windows-radia", "lab")
 
     for path in sorted(workflows.glob("*.yml")):
         runner_lines = [
@@ -90,20 +90,17 @@ def test_no_workflow_selects_a_lab_runner():
         ]
         for line in runner_lines:
             normalized = line.lower()
-            assert "windows-radia" not in normalized, f"{path.name}: {line}"
-            assert "lab" not in normalized, f"{path.name}: {line}"
+            for label in retired_labels:
+                assert label not in normalized, f"{path.name}: {line}"
 
     signing = (workflows / signing_release).read_text(encoding="utf-8")
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    deploy = (
-        ROOT / ".agents" / "skills" / "deploy" / "SKILL.md"
-    ).read_text(encoding="utf-8")
     assert "runs-on: windows-2022" in signing
     assert "--tag eqnedit64-staging" in signing
-    assert "No workflow selects a LAB runner." in agents
-    assert "No workflow selects a LAB runner." in claude
-    assert "No workflow selects a LAB runner." in " ".join(deploy.split())
+    for policy in (agents, claude):
+        assert "No workflow selects a retired or user-desktop runner." in policy
+        assert "eqnedit64-staging release" in policy
 
 
 def test_policy_lint_enforces_the_retired_examples_boundary():
@@ -322,10 +319,13 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert policy == section(claude)
     normalized = " ".join(policy.split())
     assert "with the `100` runner label" in normalized
-    assert "NGSolve compute validation consumes radia/radia-mcp wheels, never Cubit" in normalized
+    # Hosts appear by role only; the role-to-host map is private configuration.
+    assert "radia and radia-mcp deploy to the build host (editable) and the validation host (verified wheel)" in normalized
+    assert "cubit-mesh-export deploys only to the build host" in normalized
+    assert "the validation host consumes radia/radia-mcp wheels, never Cubit" in normalized
     assert "Use the on-demand GPU worker only for mexcuda GPU work" in normalized
     assert "Retired execution targets are excluded from deployment, CI and computation" in normalized
-    assert "`A100` validation runs without Cubit" in normalized
+    assert "the validation host runs without Cubit" in normalized
     assert "NGSolve hosts start from checked exported .vol files, without Cubit" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
     assert "each server's live `tools/list` response are the tool-discovery source of truth" in normalized
@@ -351,7 +351,7 @@ def test_policy_twins_define_the_same_compute_host_routing():
     # Anchor on the heading, not on a dated POLICY line: the routing rule is
     # revised whenever the host fleet changes and the marker should survive it.
     start_marker = "### Compute Host Routing"
-    end_marker = "**POLICY**: 全てのベンチマークスクリプト"
+    end_marker = "**POLICY**: Every benchmark script saves a machine-readable JSON result."
 
     def routing_policy(text: str) -> str:
         start = text.index(start_marker)
@@ -360,19 +360,23 @@ def test_policy_twins_define_the_same_compute_host_routing():
     policy = routing_policy(agents)
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
-    assert "A100 owns GPU development (mexcuda only)" in normalized
-    assert "Retired targets are excluded from deployment, CI and computation" in normalized
-    assert "BatchMode=yes A100 hostname" in normalized
+    # Roles, not hosts: probe commands, aliases and core ranges stay private.
+    assert "the build host owns CI, release artifacts, isolated numerical validation and CPU development" in normalized
+    assert "the validation host runs GPU development, verified-wheel validation and timing, never Cubit" in normalized
+    assert "the JMAG evaluation host runs no Radia work" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
-    assert "Prioritize HDiv-MMM, then AMS" in normalized
-    assert "A100 is optional for development/publication" not in normalized
-    assert "100/LAB timings are diagnostic" in normalized
+    assert "Timings are diagnostic" in normalized
     assert "one heavy job at a time" in normalized.lower()
-    assert "jobs and memory" in normalized
-    assert "never stop others' jobs" in normalized
-    assert "ConnectTimeout" in normalized
+    assert "running jobs and available memory" in normalized
+    assert "never stop another session's jobs" in normalized
+    assert "isolated job venv, never the shared release runtime" in normalized
+    assert "only owner-pool cores, never CI runner cores" in normalized
+    assert "manager resource admission before start" in normalized
+    assert "`owner.json` in the job root" in normalized
+    assert "never PR gates" in normalized
     assert "Measure speed" in normalized
     assert "remain valid provenance" in normalized
+    assert "Keep hosts, IPs and paths private" in normalized
 
 
 def test_agent_policies_stay_compact_and_share_one_policy_body():
@@ -384,13 +388,18 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
     assert agents[0] == "# Codex - Radia Project Policy"
     assert claude[0] == "# Claude Code - Radia Project Policy"
     assert agents[1:] == claude[1:]
-    assert len(agents) < 300
-    # Independent GPU ownership and exchange policy add required guidance;
-    # retain the line bound and a bounded document size for both agents.
+    assert len(agents) < 260
+    # The public policy must stay small enough for an agent's context; private
+    # session coordination lives in CLAUDE.local.md and user-level Codex rules.
     assert len("\n".join(agents).encode("utf-8")) < 24_000
     assert len("\n".join(claude).encode("utf-8")) < 24_000
 
     policy = "\n".join(agents)
+    # Public text names roles, never physical hosts or private paths.
+    for identifier in ("号機", "A100 host", "`packages/radia-gpu`"):
+        assert identifier not in policy, identifier
+    assert not re.search(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", policy), "IPv4 address in public policy"
+    assert "### Tests For AI-Authored Code" in policy
     assert "Investigations remain in Git" in policy
     assert "Never include, link, or use NGSolve TaskManager in mexcuda builds" in policy
     assert "Keep management, sequential RNG" in policy

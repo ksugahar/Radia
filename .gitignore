@@ -3,8 +3,10 @@
 # ============================================================================
 # Local Development Files (DO NOT COMMIT)
 # ============================================================================
-CLAUDE.md
-AGENTS.md
+# CLAUDE.md / AGENTS.md are the tracked public policy. Private session
+# coordination (roles, host map, transport) lives in the untracked local file.
+CLAUDE.local.md
+# Tracked skills/commands stay tracked; these ignores cover local-only content.
 .agents/
 .claude/
 .mcp.json

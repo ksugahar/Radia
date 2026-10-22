@@ -141,8 +141,6 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     '.github/workflows/matlab-engine-diagnostic.yml': 'Existing CI runner routing and runner-local scratch commands; phase 2.',
     '.github/workflows/radia.yml': 'Existing CI runner routing and runner-local scratch commands; phase 2.',
     '.github/workflows/release.yml': 'Existing CI runner routing and runner-local scratch commands; phase 2.',
-    'AGENTS.md': 'Routing policy retained verbatim until phase 2; result publication is not exempt.',
-    'CLAUDE.md': 'Routing policy retained verbatim until phase 2; result publication is not exempt.',
     'CMakeLists.txt': 'Existing operational build/runtime scratch routing; phase 2.',
     'docs/induction_heating/axisymmetric_thermal_example.py': 'Executable demonstration scratch defaults; phase 2, prose already neutralized.',
     'packages/radia-simulink/matlab/+radia/+kicad/buildLTspiceBlock.m': 'Existing executable runtime scratch defaults; phase 2, unchanged in phase 1.',
