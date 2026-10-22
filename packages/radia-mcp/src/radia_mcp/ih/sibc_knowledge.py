@@ -220,7 +220,7 @@ applies.
 
 BEM solver modules are importable as `radia.bem_inductance`,
 `radia.bem_coupled_solver`, and `radia.ngsbem_*`.  Runnable reference
-scripts are in `validation_test/induction_heating/bem_reference/`.
+validation is in `validation_test/bem/test_coil_bem_a_volume_vol.py`.
 """
 
 
