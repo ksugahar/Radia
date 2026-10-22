@@ -65,7 +65,8 @@ def _python_inputs(root):
                 for base in (root, file.parent, root / 'src/radia/panels', root / 'validation_test/panels'):
                     candidate = base / node.value
                     if (candidate.is_relative_to(root) and candidate.is_file()
-                            and '.git' not in candidate.relative_to(root).parts):
+                            and '.git' not in candidate.relative_to(root).parts
+                            and candidate != root / '.gitignore'):
                         pending.append(candidate.relative_to(root).as_posix())
             names = []
             if isinstance(node, ast.Import):

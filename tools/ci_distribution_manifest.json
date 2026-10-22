@@ -2170,6 +2170,78 @@
       "owners": [
         "eqnedit64"
       ]
+    },
+    {
+      "pattern": "packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py",
+      "owners": [
+        "radia",
+        "cubit-mesh-export"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "Ancestor package initializer executed by the required CPU numerical import closure; changing it can alter solver validation state."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/__init__.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "Ancestor package initializer executed by the required CPU numerical import closure; changing it can alter solver validation state."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/peec/__init__.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "Ancestor package initializer executed by the required CPU numerical import closure; changing it can alter solver validation state."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/radia_ngsolve/__init__.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "Ancestor package initializer executed by the required CPU numerical import closure; changing it can alter solver validation state."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/__init__.py",
+      "owners": [
+        "radia",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "Ancestor package initializer executed by the required CPU numerical import closure; changing it can alter solver validation state."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-simulink/src/radia_simulink/__init__.py",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "Ancestor package initializer executed by the required CPU numerical import closure; changing it can alter solver validation state."
+      },
+      "selection": "all_owners"
     }
   ],
   "shared_include_closures": [
@@ -3690,7 +3762,6 @@
             "validation_test/open_boundary/test_kelvin_connected_ground.py",
             "validation_test/panels/test_strong_coupling_cli_contract.py",
             "tests/_ngsolve_2607.py",
-            ".gitignore",
             "packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py",
             "packages/radia-mcp/src/radia_mcp/__init__.py",
             "packages/radia-mcp/src/radia_mcp/peec/__init__.py",
@@ -3972,7 +4043,6 @@
             "validation_test/open_boundary/test_kelvin_connected_ground.py",
             "validation_test/panels/test_strong_coupling_cli_contract.py",
             "tests/_ngsolve_2607.py",
-            ".gitignore",
             "packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py",
             "packages/radia-mcp/src/radia_mcp/__init__.py",
             "packages/radia-mcp/src/radia_mcp/peec/__init__.py",
