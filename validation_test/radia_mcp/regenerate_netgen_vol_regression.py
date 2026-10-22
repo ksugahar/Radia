@@ -1,5 +1,6 @@
 """Produce a separate regression-reference proposal; never rewrite approved records."""
 import argparse
+import difflib
 import hashlib
 import json
 from pathlib import Path
@@ -26,7 +27,12 @@ def main():
         filename = manifest["cases"][name]["file"]
         encoded = (json.dumps(data, indent=2, sort_keys=True) + "\n").encode()
         (args.out / filename).write_bytes(encoded)
-        rows.append({"case": name, "sha256": hashlib.sha256(encoded).hexdigest(),
+        previous = json.loads((approved / filename).read_bytes())
+        delta = list(difflib.unified_diff(
+            (json.dumps(previous, indent=2, sort_keys=True) + "\n").splitlines(),
+            encoded.decode().splitlines(), fromfile="approved/" + filename,
+            tofile="proposed/" + filename, lineterm=""))
+        rows.append({"diff": delta, "case": name, "sha256": hashlib.sha256(encoded).hexdigest(),
                      "changed": data != json.loads((approved / filename).read_bytes())})
     report = {"reason": args.reason, "source_sha": subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),

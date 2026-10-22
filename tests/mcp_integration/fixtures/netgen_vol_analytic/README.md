@@ -12,7 +12,7 @@ source on PYTHONPATH; this change does not claim an existing scheduled job runs 
 Historical documentation records stay at their original paths.
 
 To propose a reference update, run
-`python validation_test/radia_mcp/regenerate_netgen_vol_regression.py --out <new-directory> --reason <reason>`.
+`python -m validation_test.radia_mcp.regenerate_netgen_vol_regression --out <new-directory> --reason <reason>`.
 It creates a separate proposal, producing source SHA, conditions and differences;
 it never overwrites these records. Obtain user approval of changed references
 and independent review before replacing approved fixture bytes or the manifest.
