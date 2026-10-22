@@ -237,6 +237,36 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  python-contracts:
+    needs: [ci-impact]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && needs.ci-impact.outputs.gpu_required != 'true' }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare isolated Python contract environment
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "simulink-python-$env:GITHUB_RUN_ID"
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $python = Join-Path $venv 'Scripts/python.exe'
+          & $python -m pip install pytest build setuptools wheel numpy scipy h5py schemdraw "mcp>=1.21.1,<2"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Run Python contracts and wheel metadata checks without GPU
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "$PWD/packages/radia-simulink/src;$PWD/packages/radia-mcp/src"
+          python -m pytest packages/radia-simulink/tests -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $metadata = Join-Path $env:RUNNER_TEMP "simulink-metadata-$env:GITHUB_RUN_ID"
+          python packages/radia-simulink/tools/check_wheel_metadata.py --out $metadata
+          exit $LASTEXITCODE
+
   cuda-mex:
     needs: [ci-impact]
     if: ${{ needs.ci-impact.outputs.gpu_required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}

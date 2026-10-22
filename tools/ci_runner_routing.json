@@ -241,6 +241,11 @@
       "target": "github-hosted",
       "owner": "radia-simulink",
       "legacy_100": false
+    },
+    "radia-simulink.yml:python-contracts": {
+      "owner": "radia-simulink",
+      "target": "github-hosted",
+      "legacy_100": false
     }
   },
   "light": {

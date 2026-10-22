@@ -27,10 +27,10 @@ def decide(paths, blobs=None, event="pull_request", raw=None):
 
 @pytest.mark.parametrize("path", [
     "packages/radia-simulink/README.md", "docs/gpu/tutorial.md",
-    "packages/radia-simulink/src/radia_simulink/cli.py",
-    "packages/radia-simulink/src/radia_simulink/ltspice/parser/cir_to_schemdraw.py",
-    "packages/radia-simulink/tests/ltspice/test_cli.py",
-    "packages/radia-mcp/src/radia_mcp/ltspice/server.py",
+
+
+
+
 ])
 def test_non_gpu_changes_do_not_acquire_gpu_runner(path):
     assert not decide([path])
@@ -104,12 +104,17 @@ def test_bad_event_and_comparison_fail_closed():
     assert decide([], raw="R100\0truncated\0")
 
 
-def test_workflow_consumes_gpu_decision_and_cpu_ams_is_unchanged():
+def test_workflow_keeps_python_contracts_for_every_selected_pr():
     workflow = yaml.load((ROOT / ".github/workflows/radia-simulink.yml").read_text(), Loader=yaml.BaseLoader)
     assert workflow["jobs"]["ci-impact"]["outputs"]["gpu_required"] == "${{ steps.route.outputs.gpu_required }}"
     assert "outputs.gpu_required == 'true'" in workflow["jobs"]["cuda-mex"]["if"]
-    cpu = yaml.load((ROOT / ".github/workflows/sparsesolv.yml").read_text(), Loader=yaml.BaseLoader)
-    assert "gpu-rtx" not in cpu["jobs"]["ams-regression"]["runs-on"]
+    cpu = workflow['jobs']['python-contracts']
+    assert "outputs.required == 'true'" in cpu['if']
+    assert "outputs.gpu_required != 'true'" in cpu['if']
+    for job in (cpu, workflow['jobs']['cuda-mex']):
+        assert any('pytest packages/radia-simulink/tests -q' in step.get('run', '') for step in job['steps'])
+    assert any('check_wheel_metadata.py' in step.get('run', '') for step in cpu['steps'])
+
 
 
 def test_cli_emits_separate_gpu_output(tmp_path, monkeypatch):
@@ -163,3 +168,39 @@ def test_ams_dependency_build_or_invalid_metadata_still_selects_full_gate(after)
 def test_ams_qualification_still_runs_full_gate():
     for event in ("workflow_dispatch", "schedule", "release"):
         assert impact.required_for_event("sparsesolv", event, {}, None, impact.manifest())[0]
+
+
+@pytest.mark.parametrize('path', [
+    'src/radia/vim/_vim.py', 'src/radia/vim/_nonlinear.py',
+    'src/radia/vim/_eddy_foster.py', 'src/core/new_gpu_header.h',
+    'packages/radia-simulink/src/radia_simulink/new_adapter.py',
+    'packages/radia-simulink/src/radia_simulink/simulink/application.py',
+    'packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py',
+    'packages/radia-simulink/src/radia_simulink/simulink/contracts/new.json',
+    'packages/radia-simulink/tests/test_ic_payload.py',
+    'packages/radia-simulink/tests/test_projection_build_dependencies.py',
+    'packages/radia-simulink/tests/test_vs2022_toolchain.py',
+    'packages/radia-simulink/tests/test_public_evidence.py',
+    'packages/radia-simulink/tests/test_release_gate.py', 'tests/conftest.py',
+    '.github/workflows/radia-simulink-release.yml', '.github/workflows/gpu-validation.yml',
+    'tools/ci_precheck.py', 'tools/ci_ams_inputs.py', 'unknown_future_input.bin',
+])
+def test_unproven_transitive_and_future_inputs_fail_closed(path):
+    assert decide([path])
+
+
+def test_every_non_documentation_workflow_path_selects_gpu():
+    workflow = yaml.load((ROOT / '.github/workflows/radia-simulink.yml').read_text(), Loader=yaml.BaseLoader)
+    for event in ('pull_request', 'push'):
+        for pattern in workflow['on'][event]['paths']:
+            if pattern.startswith('!') or pattern.endswith('.md'):
+                continue
+            path = pattern.replace('**/', 'future/').replace('**', 'future').replace('*', 'future')
+            assert decide([path], event=event), (event, pattern)
+
+
+def test_version_only_push_still_produces_release_gpu_artifacts():
+    path = 'packages/radia-simulink/pyproject.toml'
+    blobs = {'base:' + path: '[project]\nversion="1"\n', 'HEAD:' + path: '[project]\nversion="2"\n'}
+    assert not decide([path], blobs)
+    assert decide([path], blobs, event='push')

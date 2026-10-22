@@ -489,8 +489,15 @@ def gpu_required_for_event(event_name, event, git, data):
         if not base:
             raise ValueError('missing merge base')
         paths = changed_paths(git('diff', '--name-status', '-z', '--find-renames', base, 'HEAD', '--'))
+        if not paths:
+            raise ValueError('empty change set')
+        # Qualification pushes must produce exact-SHA GPU artifacts, even for
+        # a version bump. Only pull requests may use the CPU-only exemption.
+        if event_name == 'push':
+            return True, 'main push: preserve exact-SHA GPU qualification'
+        projections = data['lanes']['radia-simulink']['events']
         for path in sorted(paths):
-            if path.endswith(('.md', '.rst', '.ipynb')) or path.startswith('docs/'):
+            if path.endswith('.md'):
                 continue
             if path in ('pyproject.toml', 'packages/radia-simulink/pyproject.toml'):
                 if project_version_only(git('show', f'{base}:{path}'), git('show', f'HEAD:{path}')):
@@ -512,30 +519,17 @@ def gpu_required_for_event(event_name, event, git, data):
                 if without_version(git('show', f'{base}:{path}')) == without_version(git('show', f'HEAD:{path}')):
                     continue
                 return True, 'GPU package initialization changed'
-            if path in ('Build.ps1', 'CMakeLists.txt', 'MANIFEST.in', 'tests/test_tier_manifest.json',
-                        'tools/sparsesolv_ci_impact.py', 'tools/ci_distribution_manifest.json',
-                        'tools/ci_distribution_contract.py', 'tools/ci_tree_receipt.py', 'tools/ci_gpu_artifact.py',
-                        'tests/test_ci_gpu_artifact.py', '.github/workflows/radia-simulink.yml'):
-                return True, 'GPU build/routing contract: ' + path
-            if path.startswith(('packages/radia-simulink/native/', 'packages/radia-simulink/tools/',
-                                'packages/radia-simulink/tests/native/', 'packages/radia-simulink/matlab/',
-                                'validation_test/radia_simulink/', 'validation_test/ams_cuda/', 'validation_test/ic_cuda/',
-                                'validation_test/ngsolve_cuda_mex/', 'validation_test/hmatrix_cuda/',
-                                'validation_test/fmm_cuda/', 'src/runtime/ih/', 'src/ext/HACApK/')):
-                return True, 'GPU native/runtime/validation input: ' + path
-            if path.startswith('packages/radia-simulink/') and '/' not in path[len('packages/radia-simulink/'):]:
-                return True, 'GPU payload/packaging contract: ' + path
-            if path.startswith('packages/radia-simulink/src/radia_simulink/') and Path(path).name in (
-                    'hdiv.py', 'csr.py', 'ngsolve_gpu.py', 'ams_exchange.py', 'resident_amg.py', '_cuda_runtime.py', 'vim.py'):
-                return True, 'Python GPU contract: ' + path
-            if path.startswith('packages/radia-simulink/tests/test_') and any(
-                    Path(path).stem.startswith('test_' + name) for name in
-                    ('ams', 'cuda', 'csr', 'hdiv', 'resident', 'vim', 'mex', 'native', 'ngsolve_gpu')):
-                return True, 'GPU contract test: ' + path
-            projection = data['lanes']['radia-simulink']['events']['push']
-            if path.startswith(('src/core/', 'src/ext/sparsesolv/', 'tests/cpp/')) and CONTRACT.selected(path, projection):
-                return True, 'Shared GPU native input: ' + path
-        return False, 'no GPU execution inputs'
+            # Selection is the distribution contract, not a GPU source allowlist.
+            # Unknown inputs fail closed. Application-only exemptions require an
+            # import-closure proof; none are assumed here.
+            CONTRACT.owner_rule(data, path)
+            if any(CONTRACT.selected(path, projection) for name, projection in projections.items()
+                   if name in ('push', 'pull_request')):
+                return True, 'distribution execution input: ' + path
+            # Transitive Python/native callers and newly introduced inputs may be
+            # absent from today's workflow projection: never infer GPU irrelevance.
+            return True, 'GPU independence unproven: ' + path
+        return False, 'PR documentation or proven version-only metadata'
     except Exception as exc:
         return True, f'GPU impact unknown ({type(exc).__name__}); fail closed'
 
@@ -576,10 +570,17 @@ def main(argv=None):
             spec = importlib.util.spec_from_file_location('ci_tree_receipt', root / 'tools/ci_tree_receipt.py')
             receipt = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(receipt)
-            if receipt.route(args.lane, os.environ['GITHUB_EVENT_NAME'], event, git, required):
+            if receipt.route(args.lane, os.environ['GITHUB_EVENT_NAME'], event, git, required) and not (
+                    args.lane == 'radia-simulink' and os.environ['GITHUB_EVENT_NAME'] == 'push'):
                 required, reason = False, 'tree already validated; see ci-tree-receipt.json'
     except Exception as exc:  # any unanticipated failure must select the lane
         required, reason = True, f"impact unknown ({type(exc).__name__}); fail closed"
+    if args.lane == 'radia-simulink' and args.tree_reuse:
+        record_path = Path('ci-tree-receipt.json')
+        if record_path.is_file():
+            record = json.loads(record_path.read_text(encoding='utf-8'))
+            record.update(gpu_required=bool(required and gpu_required), gpu_reason=gpu_reason)
+            record_path.write_text(json.dumps(record, indent=2) + '\n', encoding='utf-8')
     safe_reason = reason.replace('\r',' ').replace('\n',' ')
     print(f"{args.lane} required={required}: {safe_reason}")
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
