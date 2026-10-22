@@ -1,0 +1,203 @@
+"""GPU selection preserves native coverage without scheduling documentation builds."""
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+spec = importlib.util.spec_from_file_location("gpu_impact", ROOT / "tools/sparsesolv_ci_impact.py")
+impact = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(impact)
+
+
+def decide(paths, blobs=None, event="pull_request", raw=None):
+    def git(*args):
+        if args[0] == "merge-base":
+            return "base"
+        if args[0] == "diff":
+            return raw if raw is not None else "".join("M\0" + p + "\0" for p in paths)
+        if args[0] == "show":
+            return (blobs or {})[args[1]]
+        raise AssertionError(args)
+    payload = {"pull_request": {"base": {"sha": "base"}}, "before": "base"}
+    return impact.gpu_required_for_event(event, payload, git, impact.manifest())[0]
+
+
+@pytest.mark.parametrize("path", [
+    "packages/radia-simulink/README.md", "docs/gpu/tutorial.md",
+
+
+
+
+])
+def test_non_gpu_changes_do_not_acquire_gpu_runner(path):
+    assert not decide([path])
+
+
+@pytest.mark.parametrize("path", [
+    "packages/radia-simulink/native/radia_ams_cuda.cu",
+    "packages/radia-simulink/native/shared.cuh",
+    "packages/radia-simulink/tests/native/CMakeLists.txt",
+    "packages/radia-simulink/matlab/+radia/cudaGateway.m",
+    "packages/radia-simulink/tools/build_ams_cuda.py",
+    "packages/radia-simulink/src/radia_simulink/_cuda_runtime.py",
+    "packages/radia-simulink/src/radia_simulink/resident_amg.py",
+    "packages/radia-simulink/src/radia_simulink/hdiv.py",
+    "packages/radia-simulink/tests/test_ams_acceptance.py",
+    "packages/radia-simulink/native_payload.py",
+    "validation_test/ams_cuda/run.py", "validation_test/ic_cuda/input.vol",
+    "validation_test/ngsolve_cuda_mex/run_poisson.py",
+    "validation_test/hmatrix_cuda/run.py", "validation_test/fmm_cuda/run.py",
+    "validation_test/radia_simulink/run.py",
+    "src/core/rad_hdiv_vim.h", "src/ext/HACApK/kernel.c",
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp",
+    "tests/cpp/test_radia_ih_thermal_acceptance.cpp",
+    "Build.ps1", "CMakeLists.txt", "tools/ci_gpu_artifact.py",
+    "tools/ci_tree_receipt.py", "tools/sparsesolv_ci_impact.py",
+    ".github/workflows/radia-simulink.yml",
+])
+def test_required_gpu_contracts_still_acquire_gpu_runner(path):
+    assert decide([path])
+
+
+@pytest.mark.parametrize("path", ["pyproject.toml", "packages/radia-simulink/pyproject.toml"])
+def test_version_only_metadata_skips_but_dependency_changes_select(path):
+    old = '[project]\nversion="1.0"\ndependencies=["numpy"]\n'
+    new = old.replace('1.0', '1.1')
+    blobs = {"base:" + path: old, "HEAD:" + path: new}
+    assert not decide([path], blobs)
+    blobs["HEAD:" + path] = new.replace('numpy', 'numpy>=2')
+    assert decide([path], blobs)
+    blobs["HEAD:" + path] = '[project]\ndependencies=["numpy"]\n'
+    assert decide([path], blobs)  # Removing a version is not a version bump.
+    assert decide([path])  # Missing/deleted/malformed input cannot exempt a build.
+
+
+def test_python_version_only_exemption_does_not_hide_initialization_changes():
+    path = "packages/radia-simulink/src/radia_simulink/__init__.py"
+    old = '__version__ = "1.0"\nfrom . import cli\n'
+    blobs = {"base:" + path: old, "HEAD:" + path: old.replace('1.0', '1.1')}
+    assert not decide([path], blobs)
+    blobs["HEAD:" + path] += 'from . import _cuda_runtime\n'
+    assert decide([path], blobs)
+    blobs["HEAD:" + path] = 'from . import cli\n'
+    assert decide([path], blobs)
+
+
+def test_mixed_changes_and_both_rename_sides_keep_native_gate():
+    native = "packages/radia-simulink/native/kernel.cu"
+    assert decide(["packages/radia-simulink/README.md", native])
+    assert decide([], raw="R100\0" + native + "\0archive/kernel.txt\0")
+    assert decide([], raw="R100\0archive/kernel.txt\0" + native + "\0")
+    assert decide([], raw="D\0" + native + "\0")
+
+
+@pytest.mark.parametrize("event", ["workflow_dispatch", "schedule", "release", "unknown"])
+def test_qualification_and_unknown_events_never_skip_gpu(event):
+    assert decide([], event=event)
+
+
+def test_bad_event_and_comparison_fail_closed():
+    assert impact.gpu_required_for_event("pull_request", {}, None, {})[0]
+    assert decide([], raw="R100\0truncated\0")
+
+
+def test_workflow_keeps_python_contracts_for_every_selected_pr():
+    workflow = yaml.load((ROOT / ".github/workflows/radia-simulink.yml").read_text(), Loader=yaml.BaseLoader)
+    assert workflow["jobs"]["ci-impact"]["outputs"]["gpu_required"] == "${{ steps.route.outputs.gpu_required }}"
+    assert "outputs.gpu_required == 'true'" in workflow["jobs"]["cuda-mex"]["if"]
+    cpu = workflow['jobs']['python-contracts']
+    assert "outputs.required == 'true'" in cpu['if']
+    assert "outputs.gpu_required != 'true'" in cpu['if']
+    for job in (cpu, workflow['jobs']['cuda-mex']):
+        assert any('pytest packages/radia-simulink/tests -q' in step.get('run', '') for step in job['steps'])
+    assert any('check_wheel_metadata.py' in step.get('run', '') for step in cpu['steps'])
+
+
+
+def test_cli_emits_separate_gpu_output(tmp_path, monkeypatch):
+    event = tmp_path / "event.json"
+    event.write_text(json.dumps({}))
+    output = tmp_path / "output"
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setattr(impact, "required_for_event", lambda *args: (True, "distribution selected"))
+    monkeypatch.setattr(impact, "gpu_required_for_event", lambda *args: (False, "no GPU inputs"))
+    impact.main(["--lane", "radia-simulink"])
+    values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+    assert values["required"] == "true"
+    assert values["gpu_required"] == "false"
+
+
+@pytest.mark.parametrize('path', [
+    'src/radia/vim/_vim.py', 'src/radia/vim/_nonlinear.py',
+    'src/radia/vim/_eddy_foster.py', 'src/core/new_gpu_header.h',
+    'packages/radia-simulink/src/radia_simulink/new_adapter.py',
+    'packages/radia-simulink/src/radia_simulink/simulink/application.py',
+    'packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py',
+    'packages/radia-simulink/src/radia_simulink/simulink/contracts/new.json',
+    'packages/radia-simulink/tests/test_ic_payload.py',
+    'packages/radia-simulink/tests/test_projection_build_dependencies.py',
+    'packages/radia-simulink/tests/test_vs2022_toolchain.py',
+    'packages/radia-simulink/tests/test_public_evidence.py',
+    'packages/radia-simulink/tests/test_release_gate.py', 'tests/conftest.py',
+    '.github/workflows/radia-simulink-release.yml', '.github/workflows/gpu-validation.yml',
+    'tools/ci_precheck.py', 'tools/ci_ams_inputs.py', 'unknown_future_input.bin',
+])
+def test_unproven_transitive_and_future_inputs_fail_closed(path):
+    assert decide([path])
+
+
+def test_every_non_documentation_workflow_path_selects_gpu():
+    workflow = yaml.load((ROOT / '.github/workflows/radia-simulink.yml').read_text(), Loader=yaml.BaseLoader)
+    for event in ('pull_request', 'push'):
+        for pattern in workflow['on'][event]['paths']:
+            if pattern.startswith('!') or pattern.endswith('.md'):
+                continue
+            path = pattern.replace('**/', 'future/').replace('**', 'future').replace('*', 'future')
+            assert decide([path], event=event), (event, pattern)
+
+
+def test_version_only_push_still_produces_release_gpu_artifacts():
+    path = 'packages/radia-simulink/pyproject.toml'
+    blobs = {'base:' + path: '[project]\nversion="1"\n', 'HEAD:' + path: '[project]\nversion="2"\n'}
+    assert not decide([path], blobs)
+    assert decide([path], blobs, event='push')
+
+
+def test_main_push_cannot_reuse_cpu_only_pr_and_receipt_records_gpu(tmp_path, monkeypatch):
+    import importlib.machinery
+    import types
+
+    event = tmp_path / 'event.json'
+    event.write_text(json.dumps({'ref': 'refs/heads/main'}))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('GITHUB_EVENT_PATH', str(event))
+    monkeypatch.setenv('GITHUB_EVENT_NAME', 'push')
+    monkeypatch.setenv('GITHUB_OUTPUT', str(tmp_path / 'output'))
+    monkeypatch.setattr(impact, 'required_for_event', lambda *args: (True, 'selected'))
+    monkeypatch.setattr(impact, 'gpu_required_for_event', lambda *args: (True, 'push qualification'))
+    calls = []
+
+    class Loader:
+        def create_module(self, spec):
+            return types.ModuleType(spec.name)
+
+        def exec_module(self, module):
+            def route(lane, event_name, event, git, required):
+                calls.append(event_name)
+                Path('ci-tree-receipt.json').write_text(json.dumps({'mode': 'execute'}))
+                return event_name == 'push'  # simulate a reusable CPU-only PR
+            module.route = route
+
+    monkeypatch.setattr(impact.importlib.util, 'spec_from_file_location',
+        lambda name, path: importlib.machinery.ModuleSpec(name, Loader()))
+    impact.main(['--lane', 'radia-simulink', '--tree-reuse'])
+    assert calls == ['workflow_dispatch']
+    record = json.loads((tmp_path / 'ci-tree-receipt.json').read_text())
+    assert record['gpu_required'] is True
+    assert record['gpu_reason'] == 'push qualification'
+    assert 'gpu_required=true' in (tmp_path / 'output').read_text()

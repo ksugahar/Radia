@@ -48,6 +48,16 @@ def test_dependencies_only(before: str, after: str) -> bool:
     return _canonical(old) == _canonical(new)
 
 
+def project_version_only(before: str, after: str) -> bool:
+    """Prove that dependency/build/project settings differ only in the version."""
+    old, new = tomllib.loads(before), tomllib.loads(after)
+    for document in (old, new):
+        version = document['project'].pop('version')
+        if not isinstance(version, str) or not version.strip():
+            raise ValueError('invalid version metadata')
+    return _canonical(old) == _canonical(new)
+
+
 def _valid_budget(value) -> bool:
     """A time budget is a finite positive number; JSON true/false are not numbers."""
     if not isinstance(value, (int, float)) or isinstance(value, bool):
@@ -452,6 +462,65 @@ def _required_for_event(lane,event_name,event,git,data):
         return True,f'impact unknown ({type(exc).__name__}); fail closed'
 
 
+
+def gpu_required_for_event(event_name, event, git, data):
+    """Select GPU execution, independently of distribution/CPU lane ownership."""
+    try:
+        if event_name not in ('push', 'pull_request') or event.get('ref', '').startswith('refs/tags/'):
+            return True, 'release/manual/unknown event: preserve GPU qualification'
+        base = event.get('before') if event_name == 'push' else event['pull_request']['base']['sha']
+        if not base or set(base) == {'0'}:
+            raise ValueError('missing comparison base')
+        if event_name == 'pull_request':
+            base = git('merge-base', base, 'HEAD').strip()
+        if not base:
+            raise ValueError('missing merge base')
+        paths = changed_paths(git('diff', '--name-status', '-z', '--find-renames', base, 'HEAD', '--'))
+        if not paths:
+            raise ValueError('empty change set')
+        # Qualification pushes must produce exact-SHA GPU artifacts, even for
+        # a version bump. Only pull requests may use the CPU-only exemption.
+        if event_name == 'push':
+            return True, 'main push: preserve exact-SHA GPU qualification'
+        projections = data['lanes']['radia-simulink']['events']
+        for path in sorted(paths):
+            if path.endswith('.md'):
+                continue
+            if path in ('pyproject.toml', 'packages/radia-simulink/pyproject.toml'):
+                if project_version_only(git('show', f'{base}:{path}'), git('show', f'HEAD:{path}')):
+                    continue
+                return True, 'GPU build/dependency metadata: ' + path
+            if path == 'packages/radia-simulink/src/radia_simulink/__init__.py':
+                import ast
+                def without_version(text):
+                    tree = ast.parse(text)
+                    versions = [node for node in tree.body if (
+                        isinstance(node, ast.Assign) and len(node.targets) == 1
+                        and isinstance(node.targets[0], ast.Name) and node.targets[0].id == '__version__'
+                        and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
+                        and node.value.value.strip())]
+                    if len(versions) != 1:
+                        raise ValueError('missing or ambiguous package version')
+                    tree.body = [node for node in tree.body if node not in versions]
+                    return ast.dump(tree, include_attributes=False)
+                if without_version(git('show', f'{base}:{path}')) == without_version(git('show', f'HEAD:{path}')):
+                    continue
+                return True, 'GPU package initialization changed'
+            # Selection is the distribution contract, not a GPU source allowlist.
+            # Unknown inputs fail closed. Application-only exemptions require an
+            # import-closure proof; none are assumed here.
+            CONTRACT.owner_rule(data, path)
+            if any(CONTRACT.selected(path, projection) for name, projection in projections.items()
+                   if name in ('push', 'pull_request')):
+                return True, 'distribution execution input: ' + path
+            # Transitive Python/native callers and newly introduced inputs may be
+            # absent from today's workflow projection: never infer GPU irrelevance.
+            return True, 'GPU independence unproven: ' + path
+        return False, 'PR documentation or proven version-only metadata'
+    except Exception as exc:
+        return True, f'GPU impact unknown ({type(exc).__name__}); fail closed'
+
+
 def native_required(event_name, event, git):
     """Compatibility API for callers supplying a path-only diff; one decision engine."""
     if event_name not in ('push','pull_request'): return True,'manual or unknown event'
@@ -475,25 +544,40 @@ def main(argv=None):
             encoding="utf-8", stderr=subprocess.PIPE,
         )
 
+    gpu_required, gpu_reason = True, "impact unknown; fail closed"
     try:
         event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
         data=manifest()
         CONTRACT.validate_schema(data)
         if args.lane not in data["lanes"]: raise ValueError("unknown lane")
         required, reason = required_for_event(args.lane, os.environ["GITHUB_EVENT_NAME"], event, git, data)
+        if args.lane == "radia-simulink":
+            gpu_required, gpu_reason = gpu_required_for_event(os.environ["GITHUB_EVENT_NAME"], event, git, data)
         if args.tree_reuse:
             spec = importlib.util.spec_from_file_location('ci_tree_receipt', root / 'tools/ci_tree_receipt.py')
             receipt = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(receipt)
-            if receipt.route(args.lane, os.environ['GITHUB_EVENT_NAME'], event, git, required):
+            route_event = os.environ['GITHUB_EVENT_NAME']
+            if args.lane == 'radia-simulink' and route_event == 'push':
+                route_event = 'workflow_dispatch'  # record execution; never reuse a CPU-only PR
+            if receipt.route(args.lane, route_event, event, git, required):
                 required, reason = False, 'tree already validated; see ci-tree-receipt.json'
     except Exception as exc:  # any unanticipated failure must select the lane
         required, reason = True, f"impact unknown ({type(exc).__name__}); fail closed"
+    if args.lane == 'radia-simulink' and args.tree_reuse:
+        record_path = Path('ci-tree-receipt.json')
+        if record_path.is_file():
+            record = json.loads(record_path.read_text(encoding='utf-8'))
+            record.update(gpu_required=bool(required and gpu_required), gpu_reason=gpu_reason)
+            record_path.write_text(json.dumps(record, indent=2) + '\n', encoding='utf-8')
     safe_reason = reason.replace('\r',' ').replace('\n',' ')
     print(f"{args.lane} required={required}: {safe_reason}")
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
         output.write(f"required={str(required).lower()}\n")
         output.write("reason=" + safe_reason + "\n")
+        if args.lane == "radia-simulink":
+            output.write(f"gpu_required={str(required and gpu_required).lower()}\n")
+            output.write("gpu_reason=" + gpu_reason.replace("\r", " ").replace("\n", " ") + "\n")
 
 
 if __name__ == "__main__":
