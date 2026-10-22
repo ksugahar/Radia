@@ -5,6 +5,7 @@ models or release certification. Native identity/resource admission are producer
 contracts outside this receipt plugin; elapsed times are observations only.
 """
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -120,7 +121,8 @@ def test_checkpoint_and_numerical_file_hashes_are_observations(tmp_path):
     paths[3].mkdir();numeric=paths[3]/'observed.json';numeric.write_text('{"value": 2}')
     assert record.finish(0)==0
     data=json.loads(paths[2].read_text())
-    assert data['numerical_outputs'][0]['sha256']==receipt.sha256(numeric)
+    assert data['numerical_outputs'][0]['sha256']==hashlib.sha256(b'{"value": 2}').hexdigest()
+    assert data['numerical_outputs'][0]['bytes']==len(b'{"value": 2}')
     assert data['numerical_output_status']=='observed'
     assert data['phase_durations_s']['validation_test/test_case.py::test_case']['call']==0.001
     with pytest.raises(ValueError,match='already exists'):receipt.Receipt(paths[1],paths[0],paths[2],paths[3])
