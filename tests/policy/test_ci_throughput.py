@@ -124,7 +124,7 @@ def test_every_declared_existing_input_selects_its_lane(lane):
 
 def test_numerical_tests_are_retained_and_full_release_is_mandatory():
     tiers = json.loads((ROOT / 'tests/test_tier_manifest.json').read_text())['profiles']
-    # Preserve the original 91 routes and explicitly register both ESIM halves.
+    # Preserve the original 91 routes and explicitly register the added validations.
     esim_routes = {
         'tests/test_esim_adaptive_depth.py',
         'validation_test/induction_heating/test_esim_adaptive_depth_validation.py',
@@ -133,8 +133,12 @@ def test_numerical_tests_are_retained_and_full_release_is_mandatory():
         'tests/test_planar_eddy_direct_inverse.py',
         'tests/test_vector_potential_direct_inverse.py',
     }
-    assert esim_routes | direct_routes <= set(tiers['solver-numerics']['paths'])
-    assert len(tiers['solver-numerics']['paths']) == 91 + len(esim_routes | direct_routes)
+    topology_routes = {
+        'validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py',
+    }
+    added_routes = esim_routes | direct_routes | topology_routes
+    assert added_routes <= set(tiers['solver-numerics']['paths'])
+    assert len(tiers['solver-numerics']['paths']) == 91 + len(added_routes)
     assert 'solver-pr' not in tiers
     workflow = yaml.load((ROOT / '.github/workflows/sparsesolv.yml').read_text(), Loader=yaml.BaseLoader)
     assert workflow['on']['schedule'] and 'workflow_dispatch' in workflow['on']

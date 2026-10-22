@@ -258,6 +258,12 @@
     ],
     "tools/ci_precheck.py": [
       "tests/test_ci_precheck.py"
+    ],
+    "src/radia/ngsbem_interface.py": [
+      "validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py"
+    ],
+    "src/radia/ngsbem_peec.py": [
+      "validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py"
     ]
   },
   "profiles": {
@@ -414,7 +420,8 @@
         "tests/test_ih_thermal_transfer.py",
         "validation_test/panels/test_heat_boundary_roles.py",
         "validation_test/induction_heating/test_fem_ams_parity.py",
-        "tests/test_lamination_api.py"
+        "tests/test_lamination_api.py",
+        "validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py"
       ]
     },
     "sparsesolv": {
