@@ -190,7 +190,7 @@ def test_full_profile_changes_cannot_be_exempted_as_unrelated():
     before = (ROOT / 'tests/test_tier_manifest.json').read_text()
     after = json.loads(before)
     after['profiles']['solver-numerics']['paths'].append('tests/new_numerical_contract.py')
-    assert not impact.ams_manifest_unchanged(before, json.dumps(after))
+    assert not impact.ams_tier_projection_unchanged(before, json.dumps(after))
 
 
 @pytest.mark.parametrize('path', [
@@ -231,6 +231,7 @@ def test_closure_follows_cli_loaders_and_non_python_fixture(tmp_path):
     files = {
         'tests/test_tier_manifest.json': json.dumps({'profiles': {
             'sparsesolv': {'paths': []}, 'solver-heavy': {'paths': []},
+            'native-build-contracts': {'paths': []},
             'solver-numerics': {'extends': 'base', 'paths': []},
             'base': {'paths': ['tests/test_entry.py']}}}),
         'tests/test_entry.py': "import tests.helper\nimport subprocess\nsubprocess.run(['python', 'tools/child.py'])\n",

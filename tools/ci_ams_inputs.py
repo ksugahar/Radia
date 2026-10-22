@@ -20,7 +20,7 @@ def _python_inputs(root):
     pending = ['tests/conftest.py', 'src/radia/__init__.py', 'src/radia/bh_law.py',
                'src/radia/vim/_nonlinear.py',
                'validation_test/induction_heating/aphi_round_wire_validation.py']
-    for profile in ('sparsesolv', 'solver-numerics', 'solver-heavy'):
+    for profile in ('sparsesolv', 'solver-numerics', 'solver-heavy', 'native-build-contracts'):
         visited = set()
         while profile:
             if profile in visited:
@@ -45,6 +45,17 @@ def _python_inputs(root):
         file = root / value
         if file.suffix != '.py' or not file.is_file():
             continue
+        # Importing a module executes every ancestor package initializer too.
+        # Traverse those files as inputs, including their own imports.
+        for source_root in source_roots:
+            if file.is_relative_to(source_root):
+                parent = file.parent
+                while parent != source_root:
+                    initializer = parent / '__init__.py'
+                    if initializer.is_file():
+                        pending.append(initializer.relative_to(root).as_posix())
+                    parent = parent.parent
+                break
         tree = ast.parse(file.read_text(encoding='utf-8-sig'))
         for node in ast.walk(tree):
             # CLI subprocesses and file-based test loaders do not use imports.
@@ -53,7 +64,9 @@ def _python_inputs(root):
                     and re.search(r'\.[A-Za-z][A-Za-z0-9_-]{0,15}$', node.value)):
                 for base in (root, file.parent, root / 'src/radia/panels', root / 'validation_test/panels'):
                     candidate = base / node.value
-                    if candidate.is_relative_to(root) and candidate.is_file():
+                    if (candidate.is_relative_to(root) and candidate.is_file()
+                            and '.git' not in candidate.relative_to(root).parts
+                            and candidate != root / '.gitignore'):
                         pending.append(candidate.relative_to(root).as_posix())
             names = []
             if isinstance(node, ast.Import):
