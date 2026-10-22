@@ -442,7 +442,8 @@
         "tests/test_release_quad_evidence_motor.py",
         "tests/test_release_quad_phase9_contract.py",
         "tests/test_release_quad_state.py",
-        "tests/test_validation_records.py"
+        "tests/test_validation_records.py",
+        "tests/test_regression_lock.py"
       ]
     }
   }
