@@ -1,10 +1,13 @@
-"""Regression checks for the PEEC surface-current Helmholtz split."""
+"""Known-topology validation of the PEEC surface-current Helmholtz split.
+
+Guards: lost global cohomology modes, wrong rank, or a nonorthogonal loop/star split.
+Assumes: the declared small plate and annulus geometries, NGSolve/Netgen, and
+unchanged known-topology assertions with the existing 1e-12 tolerance. This is
+independent topology validation, not a historical-output regression lock.
+"""
 
 import numpy as np
-import pytest
-
-
-ngsolve = pytest.importorskip("ngsolve")
+import ngsolve
 
 
 def test_loop_star_keeps_global_cohomology_modes():
