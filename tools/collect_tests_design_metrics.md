@@ -35,3 +35,14 @@ reading are separate slices; this tool activates no schedule or calculation.
 Contract tests use synthetic data, no token or API. Manager performs real private
 collections. GitHub API contracts: https://docs.github.com/en/rest/actions/workflow-runs
 and https://docs.github.com/en/rest/actions/workflow-jobs.
+
+
+Job duration quality is independent of API retrieval completeness. Negative,
+malformed or missing job intervals produce `duration_s: null` and per-job
+`duration_unavailable_reason` (`negative_interval`, `invalid_timestamp` or
+`missing_timestamp`). They increment unknown-duration counts and contribute no
+value to the explicitly observed sum; they are never clipped to zero or repaired.
+Equal valid timestamps are an observed zero interval, with no invented rounding
+correction. These quality gaps alone do not set `collection_complete=false`;
+API/page/identity failures and invalid PR/run intervals still do. No CI/physics
+verdict is changed by the duration-quality metadata.

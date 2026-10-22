@@ -286,6 +286,14 @@
               "null"
             ],
             "minimum": 0
+          },
+          "duration_unavailable_reason": {
+            "enum": [
+              null,
+              "missing_timestamp",
+              "invalid_timestamp",
+              "negative_interval"
+            ]
           }
         },
         "required": [
@@ -297,7 +305,8 @@
           "conclusion",
           "started_at",
           "completed_at",
-          "duration_s"
+          "duration_s",
+          "duration_unavailable_reason"
         ]
       }
     },
