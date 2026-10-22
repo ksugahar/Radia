@@ -203,3 +203,32 @@ def test_conditions_keep_numeric_json_types_distinct(baseline):
     _, record = baseline
     with pytest.raises(AssertionError, match="conditions"):
         assert_regression({"field": [2.0, 0.0]}, record, conditions={**record["conditions"], "threads": 1.0})
+
+
+def test_nested_record_flattening_preserves_structure_literals_and_escaped_names():
+    values, structure = lock.flatten_json_record({"a.b": 1, "a": {"b": 2}, "rows": [0.0, {"ok": True}], "empty": []})
+    assert values == {"root.a~1b": 1, "root.a.b": 2, "root.rows.0": 0.0}
+    assert structure["root.rows"] == {"array_length": 2}
+    assert structure["root.rows.1.ok"] == {"literal": True}
+    assert structure["root.empty"] == {"array_length": 0}
+    with pytest.raises(ValueError, match="clean tuples/arrays"):
+        lock.flatten_json_record({"unclean": (0, 1)})
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_nested_proposal_uses_common_writer_and_preserves_signed_zero_bytes(baseline, tmp_path, changed):
+    _, record = baseline
+    path = tmp_path / "nested.json"
+    original = b'{ "nested": {"x": -0.0}, "label": "fixture" }\r\n'
+    path.write_bytes(original)
+    actual = {"nested": {"x": 2.0 if changed else 0.0}, "label": "fixture"}
+    report = lock.propose_json_regeneration(path, actual=actual, source_sha=record["source_sha"],
+        conditions=record["conditions"], runtime_s=0.25, reason="Synthetic nested proposal", out=tmp_path / "proposal")
+    assert path.read_bytes() == original
+    assert report["changed"] is changed and report["byte_changed"] is changed
+    assert report["generation"]["head"] == record["source_sha"]
+    if changed:
+        assert report["quantity_changes"] == ["root.nested.x"] and report["diff"]
+    else:
+        assert (tmp_path / "proposal/baseline.json").read_bytes() == original
+        assert report["quantity_changes"] == [] and report["diff"] == []
