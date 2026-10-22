@@ -402,6 +402,8 @@ def _integration_tests(changed: list[str]) -> list[str]:
         "packages/radia-mcp/tools/select_ci_tests.py",
         "packages/radia-mcp/tools/check_package_test_boundary.py",
         "packages/radia-mcp/src/radia_mcp/radia_ngsolve/force.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/netgen_vol.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/scalar_fem3d.py",
     )
     if any(path.startswith(broad) or path in {"AGENTS.md", "CLAUDE.md", "README.md"}
            for path in changed):

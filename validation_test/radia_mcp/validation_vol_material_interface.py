@@ -1,4 +1,11 @@
-"""Validation-class Netgen .vol material/interface inventory example.
+"""Numerical validation example with separate calculation and analytic acceptance.
+
+The analytic checks are exercised by
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
+
+Validation-class Netgen .vol material/interface inventory example.
 
 This example keeps the mesh small enough to read by eye: two tetrahedra use
 different material numbers and share one triangular material interface.  It
@@ -12,7 +19,7 @@ readable FEM/BEM setup data:
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_material_interface.py
+    python validation_test/radia_mcp/validation_vol_material_interface.py
 """
 
 from __future__ import annotations
@@ -24,10 +31,6 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import (  # noqa: E402
     parse_netgen_tri_tet_vol,
@@ -116,26 +119,6 @@ def _built_in_summary() -> dict:
         "core_neighbor_materials": by_material["core"]["neighboring_material_numbers"],
     }
 
-    assert checks["materials"] == ["air", "core"]
-    assert checks["boundary_kinds"] == {
-        "air_outer": "exterior",
-        "core_outer": "exterior",
-        "air_core_interface": "interface",
-    }
-    assert abs(checks["total_volume"] - 1.0 / 3.0) < 1.0e-15
-    assert abs(checks["air_volume"] - checks["expected_one_tet_volume"]) < 1.0e-15
-    assert abs(checks["core_volume"] - checks["expected_one_tet_volume"]) < 1.0e-15
-    assert abs(checks["air_volume_fraction"] - 0.5) < 1.0e-15
-    assert abs(checks["core_volume_fraction"] - 0.5) < 1.0e-15
-    assert abs(checks["air_exterior_area"] - outer_area) < 1.0e-15
-    assert abs(checks["core_exterior_area"] - outer_area) < 1.0e-15
-    assert abs(checks["air_interface_area"] - 0.5) < 1.0e-15
-    assert abs(checks["core_interface_area"] - 0.5) < 1.0e-15
-    assert abs(checks["interface_area"] - 0.5) < 1.0e-15
-    assert abs(checks["incidence_area_sum"] - checks["total_surface_area"]) < 1.0e-15
-    assert checks["interface_domin_domout"] == [1, 2]
-    assert checks["air_neighbor_materials"] == [2]
-    assert checks["core_neighbor_materials"] == [1]
 
     return {
         "kind": "netgen_vol_material_interface_inventory_validation",
@@ -168,11 +151,6 @@ def _external_summary(path: Path) -> dict:
         "interface_rows": sum(1 for row in incidence_rows if row["kind"] == "interface"),
         "exterior_rows": sum(1 for row in incidence_rows if row["kind"] == "exterior"),
     }
-    assert checks["summary"]["tetrahedra"] > 0
-    assert checks["material_count"] > 0
-    assert checks["incidence_row_count"] > 0
-    assert checks["max_material_volume_error"] < 1.0e-9 * max(1.0, mesh.total_volume())
-    assert checks["max_incidence_area_error"] < 1.0e-9 * max(1.0, mesh.total_surface_area())
     return {
         "checks": checks,
         "material_rows": material_rows,
@@ -187,13 +165,45 @@ def build_summary(external_vol: Path | None = None) -> dict:
     return summary
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['built_in']['checks']
+    outer_area = 1.0 + 0.5 * math.sqrt(3.0)
+    assert checks['materials'] == ['air', 'core']
+    assert checks['boundary_kinds'] == {'air_outer': 'exterior', 'core_outer': 'exterior', 'air_core_interface': 'interface'}
+    assert abs(checks['total_volume'] - 1.0 / 3.0) < 1e-15
+    assert abs(checks['air_volume'] - checks['expected_one_tet_volume']) < 1e-15
+    assert abs(checks['core_volume'] - checks['expected_one_tet_volume']) < 1e-15
+    assert abs(checks['air_volume_fraction'] - 0.5) < 1e-15
+    assert abs(checks['core_volume_fraction'] - 0.5) < 1e-15
+    assert abs(checks['air_exterior_area'] - outer_area) < 1e-15
+    assert abs(checks['core_exterior_area'] - outer_area) < 1e-15
+    assert abs(checks['air_interface_area'] - 0.5) < 1e-15
+    assert abs(checks['core_interface_area'] - 0.5) < 1e-15
+    assert abs(checks['interface_area'] - 0.5) < 1e-15
+    assert abs(checks['incidence_area_sum'] - checks['total_surface_area']) < 1e-15
+    assert checks['interface_domin_domout'] == [1, 2]
+    assert checks['air_neighbor_materials'] == [2]
+    assert checks['core_neighbor_materials'] == [1]
+    if 'external' in result:
+        checks = result['external']['checks']
+        mesh = read_netgen_tri_tet_vol(checks['path'])
+        assert checks['summary']['tetrahedra'] > 0
+        assert checks['material_count'] > 0
+        assert checks['incidence_row_count'] > 0
+        assert checks['max_material_volume_error'] < 1e-09 * max(1.0, mesh.total_volume())
+        assert checks['max_incidence_area_error'] < 1e-09 * max(1.0, mesh.total_surface_area())
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--external-vol", type=Path)
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = build_summary(args.external_vol)
+    summary = validate_summary(build_summary(args.external_vol))
     args.out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     checks = summary["built_in"]["checks"]

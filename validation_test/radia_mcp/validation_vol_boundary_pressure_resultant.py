@@ -1,4 +1,11 @@
-"""Validation-class `.vol` boundary pressure resultant summary.
+"""Numerical validation example with separate calculation and analytic acceptance.
+
+The analytic checks are exercised by
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
+
+Validation-class `.vol` boundary pressure resultant summary.
 
 Coreform/Cubit sidesets exported through Netgen `.vol` give oriented surface
 triangles.  This example reduces constant scalar pressure rows to the net
@@ -7,8 +14,8 @@ can consume directly.
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_boundary_pressure_resultant.py
-    python validation_test/cubit_mesh_export/validation_vol_boundary_pressure_resultant.py --vol private-runtime-path
+    python validation_test/radia_mcp/validation_vol_boundary_pressure_resultant.py
+    python validation_test/radia_mcp/validation_vol_boundary_pressure_resultant.py --vol private-runtime-path
 """
 
 from __future__ import annotations
@@ -20,10 +27,6 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol, read_netgen_tri_tet_vol  # noqa: E402
 from validation_vol_boundary_normal_vectors import BOX_SIX_BOUNDARY_VOL  # noqa: E402
@@ -78,24 +81,6 @@ def build_summary(external_vol=None):
         "builtin_zmax_moment_Nm": zmax["total_moment_about_pivot_Nm"],
         "builtin_zmax_shifted_moment_Nm": shifted["total_moment_about_pivot_Nm"],
     }
-    if checks["builtin_uniform_total_force_norm_N"] > 1.0e-14:
-        raise AssertionError("uniform closed-box pressure should have zero net force")
-    if checks["builtin_uniform_total_moment_norm_Nm"] > 1.0e-14:
-        raise AssertionError("uniform closed-box pressure should have zero net moment")
-    if checks["builtin_uniform_absolute_force_sum_N"] != 124.0:
-        raise AssertionError("box absolute force sum drifted")
-    if checks["builtin_surface_vector_area_norm"] > 1.0e-14:
-        raise AssertionError("box surface vector area should close")
-    if _norm([zmax["total_force_N"][0], zmax["total_force_N"][1], zmax["total_force_N"][2] - 12.0]) > 1.0e-14:
-        raise AssertionError("zmax resultant force drifted")
-    if _norm([
-        zmax["total_moment_about_pivot_Nm"][0] - 18.0,
-        zmax["total_moment_about_pivot_Nm"][1] + 12.0,
-        zmax["total_moment_about_pivot_Nm"][2],
-    ]) > 1.0e-14:
-        raise AssertionError("zmax resultant moment drifted")
-    if _norm(shifted["total_moment_about_pivot_Nm"]) > 1.0e-14:
-        raise AssertionError("shifted pivot should remove the zmax resultant moment")
 
     if external_vol is not None:
         external = records[-1]["uniform_resultant"]
@@ -105,10 +90,6 @@ def build_summary(external_vol=None):
             "external_uniform_force_balance_ratio": external["force_balance_ratio"],
             "external_surface_vector_area_norm": external["surface_vector_area_norm"],
         })
-        if checks["external_uniform_total_force_norm_N"] > 1.0e-8:
-            raise AssertionError("external uniform pressure force did not cancel")
-        if checks["external_uniform_total_moment_norm_Nm"] > 1.0e-8:
-            raise AssertionError("external uniform pressure moment did not cancel")
 
     return {
         "kind": "netgen_vol_boundary_pressure_resultant_validation",
@@ -119,13 +100,44 @@ def build_summary(external_vol=None):
     }
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    builtin = records[0]
+    zmax = builtin['zmax_resultant']
+    shifted = builtin['zmax_shifted_pivot_resultant']
+    if checks['builtin_uniform_total_force_norm_N'] > 1e-14:
+        raise AssertionError('uniform closed-box pressure should have zero net force')
+    if checks['builtin_uniform_total_moment_norm_Nm'] > 1e-14:
+        raise AssertionError('uniform closed-box pressure should have zero net moment')
+    if checks['builtin_uniform_absolute_force_sum_N'] != 124.0:
+        raise AssertionError('box absolute force sum drifted')
+    if checks['builtin_surface_vector_area_norm'] > 1e-14:
+        raise AssertionError('box surface vector area should close')
+    if _norm([zmax['total_force_N'][0], zmax['total_force_N'][1], zmax['total_force_N'][2] - 12.0]) > 1e-14:
+        raise AssertionError('zmax resultant force drifted')
+    if _norm([zmax['total_moment_about_pivot_Nm'][0] - 18.0, zmax['total_moment_about_pivot_Nm'][1] + 12.0, zmax['total_moment_about_pivot_Nm'][2]]) > 1e-14:
+        raise AssertionError('zmax resultant moment drifted')
+    if _norm(shifted['total_moment_about_pivot_Nm']) > 1e-14:
+        raise AssertionError('shifted pivot should remove the zmax resultant moment')
+    if len(records) > 1:
+        external = records[-1]
+        if checks['external_uniform_total_force_norm_N'] > 1e-08:
+            raise AssertionError('external uniform pressure force did not cancel')
+        if checks['external_uniform_total_moment_norm_Nm'] > 1e-08:
+            raise AssertionError('external uniform pressure moment did not cancel')
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--vol", type=Path, default=None, help="Optional external tri/tet Netgen .vol file")
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = build_summary(args.vol)
+    summary = validate_summary(build_summary(args.vol))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 

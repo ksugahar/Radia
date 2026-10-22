@@ -1,0 +1,183 @@
+{
+  "kind": "netgen_vol_boundary_normal_vectors_validation",
+  "validation_class": true,
+  "force_learning": "boundary vector areas provide the n dS data for Maxwell-stress force integration",
+  "checks": {
+    "builtin_boundary_names": [
+      "xmax",
+      "xmin",
+      "ymax",
+      "ymin",
+      "zmax",
+      "zmin"
+    ],
+    "builtin_vector_area_errors": {
+      "xmin": 0.0,
+      "xmax": 0.0,
+      "ymin": 0.0,
+      "ymax": 0.0,
+      "zmin": 0.0,
+      "zmax": 0.0
+    },
+    "builtin_max_vector_area_error": 0.0,
+    "builtin_max_planar_ratio_error": 0.0,
+    "builtin_surface_vector_area_norm": 0.0,
+    "builtin_surface_volume_rel_error": 0.0,
+    "builtin_total_area_from_normal_rows": 62.0,
+    "builtin_expected_total_area": 62.0
+  },
+  "records": [
+    {
+      "label": "builtin_named_box",
+      "mesh_summary": {
+        "points": 9,
+        "surface_triangles": 12,
+        "tetrahedra": 12,
+        "materials": 1,
+        "boundary_names": 6
+      },
+      "bounding_box": {
+        "x": [
+          0.0,
+          2.0
+        ],
+        "y": [
+          0.0,
+          3.0
+        ],
+        "z": [
+          0.0,
+          5.0
+        ]
+      },
+      "normal_rows": [
+        {
+          "boundary_number": 1,
+          "name": "xmin",
+          "surface_triangles": 2,
+          "surface_area": 15.0,
+          "vector_area": [
+            -15.0,
+            0.0,
+            0.0
+          ],
+          "vector_area_norm": 15.0,
+          "vector_area_norm_over_area": 1.0,
+          "unit_normal": [
+            -1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "boundary_number": 2,
+          "name": "xmax",
+          "surface_triangles": 2,
+          "surface_area": 15.0,
+          "vector_area": [
+            15.0,
+            0.0,
+            0.0
+          ],
+          "vector_area_norm": 15.0,
+          "vector_area_norm_over_area": 1.0,
+          "unit_normal": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "boundary_number": 3,
+          "name": "ymin",
+          "surface_triangles": 2,
+          "surface_area": 10.0,
+          "vector_area": [
+            0.0,
+            -10.0,
+            0.0
+          ],
+          "vector_area_norm": 10.0,
+          "vector_area_norm_over_area": 1.0,
+          "unit_normal": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        },
+        {
+          "boundary_number": 4,
+          "name": "ymax",
+          "surface_triangles": 2,
+          "surface_area": 10.0,
+          "vector_area": [
+            0.0,
+            10.0,
+            0.0
+          ],
+          "vector_area_norm": 10.0,
+          "vector_area_norm_over_area": 1.0,
+          "unit_normal": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        {
+          "boundary_number": 5,
+          "name": "zmin",
+          "surface_triangles": 2,
+          "surface_area": 6.0,
+          "vector_area": [
+            0.0,
+            0.0,
+            -6.0
+          ],
+          "vector_area_norm": 6.0,
+          "vector_area_norm_over_area": 1.0,
+          "unit_normal": [
+            0.0,
+            0.0,
+            -1.0
+          ]
+        },
+        {
+          "boundary_number": 6,
+          "name": "zmax",
+          "surface_triangles": 2,
+          "surface_area": 6.0,
+          "vector_area": [
+            0.0,
+            0.0,
+            6.0
+          ],
+          "vector_area_norm": 6.0,
+          "vector_area_norm_over_area": 1.0,
+          "unit_normal": [
+            0.0,
+            0.0,
+            1.0
+          ]
+        }
+      ],
+      "closure": {
+        "surface_triangles": 12,
+        "tetrahedra": 12,
+        "total_surface_area": 62.0,
+        "surface_vector_area": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "surface_vector_area_norm": 0.0,
+        "surface_vector_area_norm_over_area": 0.0,
+        "surface_signed_volume": 30.0,
+        "surface_abs_volume": 30.0,
+        "tetrahedron_total_volume": 30.0,
+        "surface_abs_volume_error": 0.0,
+        "surface_abs_volume_rel_error": 0.0,
+        "boundary_orientation": "outward"
+      }
+    }
+  ]
+}

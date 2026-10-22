@@ -1,0 +1,210 @@
+{
+  "checks": {
+    "builtin_all_faces_have_four_trace_nodes": true,
+    "builtin_all_faces_have_two_triangles": true,
+    "builtin_boundary_count": 6,
+    "builtin_boundary_names": [
+      "xmax",
+      "xmin",
+      "ymax",
+      "ymin",
+      "zmax",
+      "zmin"
+    ],
+    "builtin_closed_manifold": true,
+    "builtin_expected_total_surface_area": 62.0,
+    "builtin_expected_volume": 30.0,
+    "builtin_named_area_errors": {
+      "xmax": 0.0,
+      "xmin": 0.0,
+      "ymax": 0.0,
+      "ymin": 0.0,
+      "zmax": 0.0,
+      "zmin": 0.0
+    },
+    "builtin_surface_volume_rel_error": 0.0,
+    "builtin_total_surface_area": 62.0,
+    "builtin_total_volume": 30.0
+  },
+  "problem": "Netgen .vol named-boundary inventory validation",
+  "records": [
+    {
+      "boundary_rows": [
+        {
+          "boundary_number": 1,
+          "name": "xmin",
+          "surface_area": 15.0,
+          "surface_triangles": 2,
+          "trace_node_count": 4,
+          "trace_node_ids": [
+            1,
+            4,
+            5,
+            8
+          ]
+        },
+        {
+          "boundary_number": 2,
+          "name": "xmax",
+          "surface_area": 15.0,
+          "surface_triangles": 2,
+          "trace_node_count": 4,
+          "trace_node_ids": [
+            2,
+            3,
+            6,
+            7
+          ]
+        },
+        {
+          "boundary_number": 3,
+          "name": "ymin",
+          "surface_area": 10.0,
+          "surface_triangles": 2,
+          "trace_node_count": 4,
+          "trace_node_ids": [
+            1,
+            2,
+            5,
+            6
+          ]
+        },
+        {
+          "boundary_number": 4,
+          "name": "ymax",
+          "surface_area": 10.0,
+          "surface_triangles": 2,
+          "trace_node_count": 4,
+          "trace_node_ids": [
+            3,
+            4,
+            7,
+            8
+          ]
+        },
+        {
+          "boundary_number": 5,
+          "name": "zmin",
+          "surface_area": 6.0,
+          "surface_triangles": 2,
+          "trace_node_count": 4,
+          "trace_node_ids": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "boundary_number": 6,
+          "name": "zmax",
+          "surface_area": 6.0,
+          "surface_triangles": 2,
+          "trace_node_count": 4,
+          "trace_node_ids": [
+            5,
+            6,
+            7,
+            8
+          ]
+        }
+      ],
+      "bounding_box": {
+        "x": [
+          0.0,
+          2.0
+        ],
+        "y": [
+          0.0,
+          3.0
+        ],
+        "z": [
+          0.0,
+          5.0
+        ]
+      },
+      "closure": {
+        "boundary_orientation": "outward",
+        "surface_abs_volume": 30.0,
+        "surface_abs_volume_error": 0.0,
+        "surface_abs_volume_rel_error": 0.0,
+        "surface_signed_volume": 30.0,
+        "surface_triangles": 12,
+        "surface_vector_area": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "surface_vector_area_norm": 0.0,
+        "surface_vector_area_norm_over_area": 0.0,
+        "tetrahedra": 12,
+        "tetrahedron_total_volume": 30.0,
+        "total_surface_area": 62.0
+      },
+      "manifold": {
+        "closed_edges": 18,
+        "euler_characteristic": 2,
+        "is_closed_manifold": true,
+        "open_edges": 0,
+        "surface_edges": 18,
+        "surface_triangles": 12,
+        "trace_nodes": 8
+      },
+      "mesh_summary": {
+        "boundary_names": 6,
+        "materials": 1,
+        "points": 9,
+        "surface_triangles": 12,
+        "tetrahedra": 12
+      },
+      "name": "builtin_named_box",
+      "surface_area_by_boundary_number": {
+        "1": 15.0,
+        "2": 15.0,
+        "3": 10.0,
+        "4": 10.0,
+        "5": 6.0,
+        "6": 6.0
+      },
+      "trace_node_ids_by_boundary_number": {
+        "1": [
+          1,
+          4,
+          5,
+          8
+        ],
+        "2": [
+          2,
+          3,
+          6,
+          7
+        ],
+        "3": [
+          1,
+          2,
+          5,
+          6
+        ],
+        "4": [
+          3,
+          4,
+          7,
+          8
+        ],
+        "5": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "6": [
+          5,
+          6,
+          7,
+          8
+        ]
+      }
+    }
+  ],
+  "validation_class": true
+}

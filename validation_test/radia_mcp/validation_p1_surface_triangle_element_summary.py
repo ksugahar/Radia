@@ -1,8 +1,15 @@
-"""Validation-class P1 surface-triangle element teaching block.
+"""Numerical validation example with separate calculation and analytic acceptance.
+
+The analytic checks are exercised by
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
+
+Validation-class P1 surface-triangle element teaching block.
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_p1_surface_triangle_element_summary.py
+    python validation_test/radia_mcp/validation_p1_surface_triangle_element_summary.py
 
 This example records the local geometry, surface gradients, P1 stiffness,
 consistent mass, constant-load vector, and one-based sparse triplets for one
@@ -20,9 +27,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SRC = REPO / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.scalar_fem3d import (  # noqa: E402
     p1_surface_triangle_element_summary,
@@ -52,15 +56,6 @@ def build_summary() -> dict[str, object]:
         "stiffness_triplet_count": len(summary["stiffness_triplets_1based"]),
     }
 
-    assert abs(float(checks["area"]) - 1.0) < 1.0e-12
-    assert checks["unit_normal"] == (0.0, 0.0, 1.0)
-    assert max(abs(value - 1.0) for value in checks["mass_row_sums"]) < 1.0e-12
-    assert abs(float(checks["mass_integral_of_one"]) - 3.0) < 1.0e-12
-    assert abs(float(checks["constant_load_integral"]) - 5.0) < 1.0e-12
-    assert checks["stiffness_nullspace_residual"] < 1.0e-15
-    assert checks["gradient_partition_residual"] < 1.0e-15
-    assert checks["mass_triplet_count"] == 9
-    assert checks["stiffness_triplet_count"] == 9
 
     return {
         "kind": "p1_surface_triangle_element_summary_validation",
@@ -86,12 +81,29 @@ def _json_clean(value):
     return value
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    assert abs(float(checks['area']) - 1.0) < 1e-12
+    assert checks['unit_normal'] == (0.0, 0.0, 1.0)
+    assert max((abs(value - 1.0) for value in checks['mass_row_sums'])) < 1e-12
+    assert abs(float(checks['mass_integral_of_one']) - 3.0) < 1e-12
+    assert abs(float(checks['constant_load_integral']) - 5.0) < 1e-12
+    assert checks['stiffness_nullspace_residual'] < 1e-15
+    assert checks['gradient_partition_residual'] < 1e-15
+    assert checks['mass_triplet_count'] == 9
+    assert checks['stiffness_triplet_count'] == 9
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = _json_clean(build_summary())
+    summary = _json_clean(validate_summary(build_summary()))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

@@ -1,8 +1,15 @@
-"""Validation-class Netgen .vol boundary-local edge inventory.
+"""Numerical validation example with separate calculation and analytic acceptance.
+
+The analytic checks are exercised by
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
+
+Validation-class Netgen .vol boundary-local edge inventory.
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_boundary_edge_inventory.py
+    python validation_test/radia_mcp/validation_vol_boundary_edge_inventory.py
 
 For a CAD sideset exported as triangles, boundary-local perimeter edges and
 within-boundary split/diagonal edges should be easy to distinguish.  This
@@ -20,9 +27,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SRC = REPO / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol  # noqa: E402
 
@@ -119,17 +123,6 @@ def build_summary() -> dict[str, object]:
         "zmax_diagonal_nodes": zmax["shared_diagonal_edge_nodes"],
     }
 
-    assert checks["boundary_count"] == 6
-    assert checks["surface_triangles"] == 12
-    assert checks["unique_boundary_edges_total"] == 30
-    assert checks["perimeter_edges_total"] == 24
-    assert checks["shared_diagonal_edges_total"] == 6
-    assert checks["overused_edges_total"] == 0
-    assert checks["zmax_perimeter_edges"] == 4
-    assert checks["zmax_shared_diagonal_edges"] == 1
-    assert abs(checks["zmax_perimeter_length"] - 10.0) < 1.0e-12
-    assert abs(checks["zmax_diagonal_length"] - 13.0**0.5) < 1.0e-12
-    assert checks["zmax_diagonal_nodes"] == [[5, 7]]
 
     return {
         "kind": "vol_boundary_edge_inventory_validation",
@@ -143,12 +136,31 @@ def build_summary() -> dict[str, object]:
     }
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    assert checks['boundary_count'] == 6
+    assert checks['surface_triangles'] == 12
+    assert checks['unique_boundary_edges_total'] == 30
+    assert checks['perimeter_edges_total'] == 24
+    assert checks['shared_diagonal_edges_total'] == 6
+    assert checks['overused_edges_total'] == 0
+    assert checks['zmax_perimeter_edges'] == 4
+    assert checks['zmax_shared_diagonal_edges'] == 1
+    assert abs(checks['zmax_perimeter_length'] - 10.0) < 1e-12
+    assert abs(checks['zmax_diagonal_length'] - 13.0 ** 0.5) < 1e-12
+    assert checks['zmax_diagonal_nodes'] == [[5, 7]]
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = build_summary()
+    summary = validate_summary(build_summary())
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

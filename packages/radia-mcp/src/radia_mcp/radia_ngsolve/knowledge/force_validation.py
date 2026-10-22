@@ -471,9 +471,9 @@ careful remeshing.
   scripts and their adjacent summary JSON payloads. This validation corpus is
   the executable public surface; no separate docs-layer source archive is
   required.
-- ``validation_test/cubit_mesh_export/validation_vol_boundary_pressure_moment.py``:
+- ``validation_test/radia_mcp/validation_vol_boundary_pressure_moment.py``:
   named `.vol` sidesets to pressure force/moment rows and generic resultant reduction.
-- ``validation_test/cubit_mesh_export/validation_vol_boundary_traction_moment.py``:
+- ``validation_test/radia_mcp/validation_vol_boundary_traction_moment.py``:
   named `.vol` sidesets to constant vector-traction force/moment rows and
   generic resultant reduction.
 - ``validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_moment.py``:
