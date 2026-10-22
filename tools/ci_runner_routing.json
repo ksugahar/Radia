@@ -289,7 +289,7 @@
         "tools/ci_ams_inputs.py",
         "tools/ci_tree_receipt.py"
       ],
-      "audit_sha256": "36f693e835479a2d7515f428e1e19a83fb8a778baf9ad1e2fa6595ffcbaef0cd",
+      "audit_sha256": "f3169293a7b43c96bd483b2297d28c2bc8b5f05856c7b54e09f5d2338cd14e02",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
