@@ -1,8 +1,9 @@
-r"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+r"""Numerical validation example with separate calculation and analytic acceptance.
 
 The analytic checks are exercised by
-tests/mcp_integration/test_netgen_vol_analytic_examples.py.
-CLI output remains opt-in; pytest outputs belong to tmp_path.
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
 
 Validation-class Netgen .vol tetrahedron quality example.
 
@@ -17,8 +18,8 @@ mesh-quality checks public-safe and solver-independent:
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_tet_quality.py
-    python validation_test/cubit_mesh_export/validation_vol_tet_quality.py --vol private-runtime-path --out private-runtime-path
+    python validation_test/radia_mcp/validation_vol_tet_quality.py
+    python validation_test/radia_mcp/validation_vol_tet_quality.py --vol private-runtime-path --out private-runtime-path
 """
 
 from __future__ import annotations
@@ -32,9 +33,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SRC = REPO / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol, read_netgen_tri_tet_vol  # noqa: E402
 
@@ -140,20 +138,6 @@ def build_summary(external_vol: Path | None = None) -> dict:
         "sliver_edge_ratio": sliver["edge_ratio"],
     }
 
-    assert abs(checks["right_volume"] - 1.0 / 6.0) < 1.0e-15
-    assert abs(checks["right_surface_area"] - expected_surface_area) < 1.0e-15
-    assert abs(checks["right_inradius"] - expected_inradius) < 1.0e-15
-    assert abs(checks["right_circumradius"] - expected_circumradius) < 1.0e-15
-    assert abs(checks["right_radius_ratio_quality"] - expected_quality) < 1.0e-15
-    assert abs(checks["right_min_normalized_corner_jacobian"] - 0.5) < 1.0e-15
-    assert abs(checks["right_max_normalized_corner_jacobian"] - 1.0) < 1.0e-15
-    assert abs(checks["right_edge_ratio"] - math.sqrt(2.0)) < 1.0e-15
-    assert abs(checks["equilateral_radius_ratio_quality"] - 1.0) < 1.0e-14
-    assert abs(checks["equilateral_min_normalized_corner_jacobian"] - math.sqrt(0.5)) < 1.0e-14
-    assert abs(checks["equilateral_edge_ratio"] - 1.0) < 1.0e-14
-    assert checks["sliver_radius_ratio_quality"] < 0.01
-    assert checks["sliver_min_normalized_corner_jacobian"] < 0.01
-    assert checks["sliver_edge_ratio"] > 800.0
 
     summary = {
         "kind": "netgen_vol_tetrahedron_quality_validation",
@@ -170,13 +154,39 @@ def build_summary(external_vol: Path | None = None) -> dict:
     return summary
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    expected_surface_area = 1.5 + 0.5 * math.sqrt(3.0)
+    expected_inradius = 0.5 / expected_surface_area
+    expected_circumradius = math.sqrt(3.0) / 2.0
+    expected_quality = 3.0 * expected_inradius / expected_circumradius
+    assert abs(checks['right_volume'] - 1.0 / 6.0) < 1e-15
+    assert abs(checks['right_surface_area'] - expected_surface_area) < 1e-15
+    assert abs(checks['right_inradius'] - expected_inradius) < 1e-15
+    assert abs(checks['right_circumradius'] - expected_circumradius) < 1e-15
+    assert abs(checks['right_radius_ratio_quality'] - expected_quality) < 1e-15
+    assert abs(checks['right_min_normalized_corner_jacobian'] - 0.5) < 1e-15
+    assert abs(checks['right_max_normalized_corner_jacobian'] - 1.0) < 1e-15
+    assert abs(checks['right_edge_ratio'] - math.sqrt(2.0)) < 1e-15
+    assert abs(checks['equilateral_radius_ratio_quality'] - 1.0) < 1e-14
+    assert abs(checks['equilateral_min_normalized_corner_jacobian'] - math.sqrt(0.5)) < 1e-14
+    assert abs(checks['equilateral_edge_ratio'] - 1.0) < 1e-14
+    assert checks['sliver_radius_ratio_quality'] < 0.01
+    assert checks['sliver_min_normalized_corner_jacobian'] < 0.01
+    assert checks['sliver_edge_ratio'] > 800.0
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--vol", type=Path, default=None, help="Optional real Netgen .vol export to evaluate")
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = build_summary(args.vol)
+    summary = validate_summary(build_summary(args.vol))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 

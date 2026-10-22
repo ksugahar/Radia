@@ -1,0 +1,510 @@
+{
+  "checks": {
+    "clean_boundary_count": 6,
+    "clean_condition_counts": {
+      "dirichlet": 1,
+      "impedance": 1,
+      "open": 3,
+      "symmetry": 1
+    },
+    "clean_ok": true,
+    "missing_boundary_count": 5,
+    "typo_ok": false,
+    "typo_unknown_condition_keys": [
+      "not_a_boundary"
+    ],
+    "xmin_condition_source": "boundary_number",
+    "zmax_condition": "impedance",
+    "zmax_trace_node_count": 4
+  },
+  "clean_assignment": {
+    "assigned_boundary_count": 6,
+    "boundary_count": 6,
+    "condition_counts": {
+      "dirichlet": 1,
+      "impedance": 1,
+      "open": 3,
+      "symmetry": 1
+    },
+    "missing_boundary_count": 0,
+    "ok": true,
+    "policy": "netgen_vol_boundary_conditions_are_assigned_by_number_or_name",
+    "rows": [
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 1,
+        "condition": "symmetry",
+        "condition_source": "boundary_number",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "xmin",
+        "surface_area": 15.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          1,
+          4,
+          5,
+          8
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 2,
+        "condition": "open",
+        "condition_source": "default",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "xmax",
+        "surface_area": 15.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          2,
+          3,
+          6,
+          7
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 3,
+        "condition": "open",
+        "condition_source": "default",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "ymin",
+        "surface_area": 10.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          1,
+          2,
+          5,
+          6
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 4,
+        "condition": "open",
+        "condition_source": "default",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "ymax",
+        "surface_area": 10.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          3,
+          4,
+          7,
+          8
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 5,
+        "condition": "dirichlet",
+        "condition_source": "boundary_name",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "zmin",
+        "surface_area": 6.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 6,
+        "condition": "impedance",
+        "condition_source": "boundary_name",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "zmax",
+        "surface_area": 6.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          5,
+          6,
+          7,
+          8
+        ]
+      }
+    ],
+    "unknown_condition_key_count": 0,
+    "unknown_condition_keys": []
+  },
+  "kind": "vol_boundary_condition_assignment_validation",
+  "learning_theme": "named .vol boundaries should be audited against condition labels before solver operators are built",
+  "mesh_summary": {
+    "boundary_names": 6,
+    "materials": 1,
+    "points": 9,
+    "surface_triangles": 12,
+    "tetrahedra": 12
+  },
+  "missing_assignment": {
+    "assigned_boundary_count": 1,
+    "boundary_count": 6,
+    "condition_counts": {
+      "impedance": 1
+    },
+    "missing_boundary_count": 5,
+    "ok": false,
+    "policy": "netgen_vol_boundary_conditions_are_assigned_by_number_or_name",
+    "rows": [
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 1,
+        "condition": null,
+        "condition_source": "missing",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "xmin",
+        "surface_area": 15.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          1,
+          4,
+          5,
+          8
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 2,
+        "condition": null,
+        "condition_source": "missing",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "xmax",
+        "surface_area": 15.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          2,
+          3,
+          6,
+          7
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 3,
+        "condition": null,
+        "condition_source": "missing",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "ymin",
+        "surface_area": 10.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          1,
+          2,
+          5,
+          6
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 4,
+        "condition": null,
+        "condition_source": "missing",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "ymax",
+        "surface_area": 10.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          3,
+          4,
+          7,
+          8
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 5,
+        "condition": null,
+        "condition_source": "missing",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "zmin",
+        "surface_area": 6.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 6,
+        "condition": "impedance",
+        "condition_source": "boundary_name",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "zmax",
+        "surface_area": 6.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          5,
+          6,
+          7,
+          8
+        ]
+      }
+    ],
+    "unknown_condition_key_count": 0,
+    "unknown_condition_keys": []
+  },
+  "typo_assignment": {
+    "assigned_boundary_count": 6,
+    "boundary_count": 6,
+    "condition_counts": {
+      "impedance": 1,
+      "open": 5
+    },
+    "missing_boundary_count": 0,
+    "ok": false,
+    "policy": "netgen_vol_boundary_conditions_are_assigned_by_number_or_name",
+    "rows": [
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 1,
+        "condition": "open",
+        "condition_source": "default",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "xmin",
+        "surface_area": 15.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          1,
+          4,
+          5,
+          8
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 2,
+        "condition": "open",
+        "condition_source": "default",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "xmax",
+        "surface_area": 15.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          2,
+          3,
+          6,
+          7
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 3,
+        "condition": "open",
+        "condition_source": "default",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "ymin",
+        "surface_area": 10.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          1,
+          2,
+          5,
+          6
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 4,
+        "condition": "open",
+        "condition_source": "default",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "ymax",
+        "surface_area": 10.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          3,
+          4,
+          7,
+          8
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 5,
+        "condition": "open",
+        "condition_source": "default",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "zmin",
+        "surface_area": 6.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "boundary_number": 6,
+        "condition": "impedance",
+        "condition_source": "boundary_name",
+        "incidence_kinds": [
+          "exterior"
+        ],
+        "name": "zmax",
+        "surface_area": 6.0,
+        "surface_triangles": 2,
+        "trace_node_count": 4,
+        "trace_node_ids": [
+          5,
+          6,
+          7,
+          8
+        ]
+      }
+    ],
+    "unknown_condition_key_count": 1,
+    "unknown_condition_keys": [
+      "not_a_boundary"
+    ]
+  },
+  "validation_class": true
+}

@@ -386,7 +386,6 @@ def _integration_tests(changed: list[str]) -> list[str]:
         # Foreign inputs this lane genuinely reads (see the radia-mcp-matrix
         # integration rules in tools/ci_distribution_manifest.json).
         "validation_test/radia_mcp/", "validation_test/vim_coupled/results_",
-        "validation_test/cubit_mesh_export/",
         "validation_test/maglev/team28_coilbuilder_dynamic_simulink_results.json",
         "validation_test/optimization/benchmark_",
         "packages/radia-optuna/matlab/", "packages/radia-optuna/native/optuna_mex.cpp",

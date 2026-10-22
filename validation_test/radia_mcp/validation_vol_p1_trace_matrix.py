@@ -1,14 +1,15 @@
-"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+"""Numerical validation example with separate calculation and analytic acceptance.
 
 The analytic checks are exercised by
-tests/mcp_integration/test_netgen_vol_analytic_examples.py.
-CLI output remains opt-in; pytest outputs belong to tmp_path.
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
 
 Validation-class P1 FEM/BEM trace matrix from a tri/tet .vol mesh.
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_p1_trace_matrix.py
+    python validation_test/radia_mcp/validation_vol_p1_trace_matrix.py
 
 For first-order H1 FEM and first-order scalar BEM on the same tri/tet mesh, the
 boundary trace is a boolean gather matrix.  In one-based sparse COO notation:
@@ -29,9 +30,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SRC = REPO / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol  # noqa: E402
 
@@ -99,16 +97,6 @@ def build_summary() -> dict[str, object]:
         "topology_trace_rows": topology["trace"]["h1_to_scalar_bem_rows"],
     }
 
-    assert checks["n_volume_nodes"] == 5
-    assert checks["n_trace_nodes"] == 4
-    assert checks["matrix_shape"] == [4, 5]
-    assert checks["nnz"] == 4
-    assert checks["rows"] == [1, 2, 3, 4]
-    assert checks["cols"] == [1, 2, 3, 4]
-    assert checks["interior_node_ids"] == [5]
-    assert checks["topology_trace_rows"] == checks["rows"]
-    assert checks["topology_trace_cols"] == checks["cols"]
-    assert all(5 not in tri for tri in checks["surface_triangles_local"])
 
     return {
         "kind": "vol_p1_fem_bem_trace_matrix_validation",
@@ -123,12 +111,30 @@ def build_summary() -> dict[str, object]:
     }
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    assert checks['n_volume_nodes'] == 5
+    assert checks['n_trace_nodes'] == 4
+    assert checks['matrix_shape'] == [4, 5]
+    assert checks['nnz'] == 4
+    assert checks['rows'] == [1, 2, 3, 4]
+    assert checks['cols'] == [1, 2, 3, 4]
+    assert checks['interior_node_ids'] == [5]
+    assert checks['topology_trace_rows'] == checks['rows']
+    assert checks['topology_trace_cols'] == checks['cols']
+    assert all((5 not in tri for tri in checks['surface_triangles_local']))
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = build_summary()
+    summary = validate_summary(build_summary())
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

@@ -1,8 +1,9 @@
-"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+"""Numerical validation example with separate calculation and analytic acceptance.
 
 The analytic checks are exercised by
-tests/mcp_integration/test_netgen_vol_analytic_examples.py.
-CLI output remains opt-in; pytest outputs belong to tmp_path.
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
 
 Validation-class Netgen .vol FEM/BEM topology checks.
 
@@ -25,10 +26,6 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol, read_netgen_tri_tet_vol
 
@@ -166,16 +163,6 @@ def build_summary(vol_path: str | None = None) -> dict:
         "builtin_open_patch_is_closed": open_patch["manifold"]["is_closed_manifold"],
     }
 
-    if not closed["manifold"]["is_closed_manifold"]:
-        raise AssertionError("builtin closed surface is not a 2-manifold")
-    if closed["manifold"]["euler_characteristic"] != 2:
-        raise AssertionError("builtin closed surface Euler characteristic drifted")
-    if closed["topology_counts"]["rwg_dof_edges"] != closed["manifold"]["surface_edges"]:
-        raise AssertionError("closed surface RWG dof count does not match surface edge count")
-    if closed["topology_counts"]["rwg_to_hcurl_edge_ids"] != closed["topology_counts"]["rwg_dof_edges"]:
-        raise AssertionError("RWG-to-HCurl trace map is incomplete")
-    if open_patch["manifold"]["is_closed_manifold"] or open_patch["manifold"]["open_edges"] != 3:
-        raise AssertionError("open patch was not detected")
 
     if vol_path is not None:
         external = records[-1]
@@ -189,14 +176,6 @@ def build_summary(vol_path: str | None = None) -> dict:
                 external["closure"]["surface_abs_volume_rel_error"]
             ),
         })
-        if not external["manifold"]["is_closed_manifold"]:
-            raise AssertionError("external .vol boundary is not a closed 2-manifold")
-        if external["manifold"]["euler_characteristic"] != 2:
-            raise AssertionError("external .vol boundary is not sphere-like")
-        if external["topology_counts"]["rwg_dof_edges"] != external["manifold"]["surface_edges"]:
-            raise AssertionError("external .vol RWG dof count does not match surface edges")
-        if external["closure"]["surface_abs_volume_rel_error"] > 1.0e-12:
-            raise AssertionError("external .vol boundary volume does not match tet volume")
 
     return {
         "problem": "Netgen .vol first-order FEM/BEM topology validation",
@@ -206,13 +185,43 @@ def build_summary(vol_path: str | None = None) -> dict:
     }
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    closed = records[0]
+    open_patch = records[1]
+    if not closed['manifold']['is_closed_manifold']:
+        raise AssertionError('builtin closed surface is not a 2-manifold')
+    if closed['manifold']['euler_characteristic'] != 2:
+        raise AssertionError('builtin closed surface Euler characteristic drifted')
+    if closed['topology_counts']['rwg_dof_edges'] != closed['manifold']['surface_edges']:
+        raise AssertionError('closed surface RWG dof count does not match surface edge count')
+    if closed['topology_counts']['rwg_to_hcurl_edge_ids'] != closed['topology_counts']['rwg_dof_edges']:
+        raise AssertionError('RWG-to-HCurl trace map is incomplete')
+    if open_patch['manifold']['is_closed_manifold'] or open_patch['manifold']['open_edges'] != 3:
+        raise AssertionError('open patch was not detected')
+    if len(records) > 2:
+        external = records[-1]
+        if not external['manifold']['is_closed_manifold']:
+            raise AssertionError('external .vol boundary is not a closed 2-manifold')
+        if external['manifold']['euler_characteristic'] != 2:
+            raise AssertionError('external .vol boundary is not sphere-like')
+        if external['topology_counts']['rwg_dof_edges'] != external['manifold']['surface_edges']:
+            raise AssertionError('external .vol RWG dof count does not match surface edges')
+        if external['closure']['surface_abs_volume_rel_error'] > 1e-12:
+            raise AssertionError('external .vol boundary volume does not match tet volume')
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--vol", help="Optional external tri/tet Netgen .vol file")
     parser.add_argument("--output", default=str(OUT_JSON))
     args = parser.parse_args()
 
-    summary = build_summary(args.vol)
+    summary = validate_summary(build_summary(args.vol))
     out = Path(args.output)
     out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(summary["checks"], indent=2, sort_keys=True))

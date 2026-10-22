@@ -1,0 +1,459 @@
+{
+  "checks": {
+    "first_triangle_oriented_edges": [
+      [
+        1,
+        2
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        3,
+        1
+      ]
+    ],
+    "first_triangle_signs": [
+      1,
+      1,
+      -1
+    ],
+    "hcurl_edge_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "is_closed_manifold": true,
+    "open_edges": 0,
+    "orientation_sign_counts": {
+      "-1": 6,
+      "1": 6
+    },
+    "oriented_edge_rows": 12,
+    "rwg_dof_edges": 6,
+    "surface_edges": 6,
+    "surface_triangles": 4
+  },
+  "edge_summary": {
+    "closed_edges": 6,
+    "hcurl_trace_edges": 6,
+    "is_closed_manifold": true,
+    "max_edge_length_m": 1.4142135623730951,
+    "min_edge_length_m": 1.0,
+    "open_edges": 0,
+    "orientation_sign_counts": {
+      "-1": 6,
+      "1": 6
+    },
+    "oriented_edge_rows": 12,
+    "policy": "boundary_triangle_oriented_edges_for_first_order_rwg_trace",
+    "rows": [
+      {
+        "adjacent_surface_triangle_count": 2,
+        "adjacent_surface_triangles": [
+          1,
+          2
+        ],
+        "boundary_number": 1,
+        "edge_length_m": 1.0,
+        "edge_nodes_global": [
+          1,
+          2
+        ],
+        "hcurl_edge_id": 1,
+        "is_rwg_dof": true,
+        "local_edge": 1,
+        "name": "outer",
+        "opposite_vertices_global": [
+          3,
+          4
+        ],
+        "orientation_sign": 1,
+        "oriented_edge_nodes_global": [
+          1,
+          2
+        ],
+        "rwg_edge_id": 1,
+        "surface_triangle": 1,
+        "triangle_nodes_global": [
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "adjacent_surface_triangle_count": 2,
+        "adjacent_surface_triangles": [
+          1,
+          3
+        ],
+        "boundary_number": 1,
+        "edge_length_m": 1.4142135623730951,
+        "edge_nodes_global": [
+          2,
+          3
+        ],
+        "hcurl_edge_id": 4,
+        "is_rwg_dof": true,
+        "local_edge": 2,
+        "name": "outer",
+        "opposite_vertices_global": [
+          1,
+          4
+        ],
+        "orientation_sign": 1,
+        "oriented_edge_nodes_global": [
+          2,
+          3
+        ],
+        "rwg_edge_id": 4,
+        "surface_triangle": 1,
+        "triangle_nodes_global": [
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "adjacent_surface_triangle_count": 2,
+        "adjacent_surface_triangles": [
+          1,
+          4
+        ],
+        "boundary_number": 1,
+        "edge_length_m": 1.0,
+        "edge_nodes_global": [
+          1,
+          3
+        ],
+        "hcurl_edge_id": 2,
+        "is_rwg_dof": true,
+        "local_edge": 3,
+        "name": "outer",
+        "opposite_vertices_global": [
+          2,
+          4
+        ],
+        "orientation_sign": -1,
+        "oriented_edge_nodes_global": [
+          3,
+          1
+        ],
+        "rwg_edge_id": 2,
+        "surface_triangle": 1,
+        "triangle_nodes_global": [
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "adjacent_surface_triangle_count": 2,
+        "adjacent_surface_triangles": [
+          2,
+          4
+        ],
+        "boundary_number": 1,
+        "edge_length_m": 1.0,
+        "edge_nodes_global": [
+          1,
+          4
+        ],
+        "hcurl_edge_id": 3,
+        "is_rwg_dof": true,
+        "local_edge": 1,
+        "name": "outer",
+        "opposite_vertices_global": [
+          2,
+          3
+        ],
+        "orientation_sign": 1,
+        "oriented_edge_nodes_global": [
+          1,
+          4
+        ],
+        "rwg_edge_id": 3,
+        "surface_triangle": 2,
+        "triangle_nodes_global": [
+          1,
+          4,
+          2
+        ]
+      },
+      {
+        "adjacent_surface_triangle_count": 2,
+        "adjacent_surface_triangles": [
+          2,
+          3
+        ],
+        "boundary_number": 1,
+        "edge_length_m": 1.4142135623730951,
+        "edge_nodes_global": [
+          2,
+          4
+        ],
+        "hcurl_edge_id": 5,
+        "is_rwg_dof": true,
+        "local_edge": 2,
+        "name": "outer",
+        "opposite_vertices_global": [
+          1,
+          3
+        ],
+        "orientation_sign": -1,
+        "oriented_edge_nodes_global": [
+          4,
+          2
+        ],
+        "rwg_edge_id": 5,
+        "surface_triangle": 2,
+        "triangle_nodes_global": [
+          1,
+          4,
+          2
+        ]
+      },
+      {
+        "adjacent_surface_triangle_count": 2,
+        "adjacent_surface_triangles": [
+          1,
+          2
+        ],
+        "boundary_number": 1,
+        "edge_length_m": 1.0,
+        "edge_nodes_global": [
+          1,
+          2
+        ],
+        "hcurl_edge_id": 1,
+        "is_rwg_dof": true,
+        "local_edge": 3,
+        "name": "outer",
+        "opposite_vertices_global": [
+          3,
+          4
+        ],
+        "orientation_sign": -1,
+        "oriented_edge_nodes_global": [
+          2,
+          1
+        ],
+        "rwg_edge_id": 1,
+        "surface_triangle": 2,
+        "triangle_nodes_global": [
+          1,
+          4,
+          2
+        ]
+      },
+      {
+        "adjacent_surface_triangle_count": 2,
+        "adjacent_surface_triangles": [
+          2,
+          3
+        ],
+        "boundary_number": 1,
+        "edge_length_m": 1.4142135623730951,
+        "edge_nodes_global": [
+          2,
+          4
+        ],
+        "hcurl_edge_id": 5,
+        "is_rwg_dof": true,
+        "local_edge": 1,
+        "name": "outer",
+        "opposite_vertices_global": [
+          1,
+          3
+        ],
+        "orientation_sign": 1,
+        "oriented_edge_nodes_global": [
+          2,
+          4
+        ],
+        "rwg_edge_id": 5,
+        "surface_triangle": 3,
+        "triangle_nodes_global": [
+          2,
+          4,
+          3
+        ]
+      },
+      {
+        "adjacent_surface_triangle_count": 2,
+        "adjacent_surface_triangles": [
+          3,
+          4
+        ],
+        "boundary_number": 1,
+        "edge_length_m": 1.4142135623730951,
+        "edge_nodes_global": [
+          3,
+          4
+        ],
+        "hcurl_edge_id": 6,
+        "is_rwg_dof": true,
+        "local_edge": 2,
+        "name": "outer",
+        "opposite_vertices_global": [
+          2,
+          1
+        ],
+        "orientation_sign": -1,
+        "oriented_edge_nodes_global": [
+          4,
+          3
+        ],
+        "rwg_edge_id": 6,
+        "surface_triangle": 3,
+        "triangle_nodes_global": [
+          2,
+          4,
+          3
+        ]
+      },
+      {
+        "adjacent_surface_triangle_count": 2,
+        "adjacent_surface_triangles": [
+          1,
+          3
+        ],
+        "boundary_number": 1,
+        "edge_length_m": 1.4142135623730951,
+        "edge_nodes_global": [
+          2,
+          3
+        ],
+        "hcurl_edge_id": 4,
+        "is_rwg_dof": true,
+        "local_edge": 3,
+        "name": "outer",
+        "opposite_vertices_global": [
+          1,
+          4
+        ],
+        "orientation_sign": -1,
+        "oriented_edge_nodes_global": [
+          3,
+          2
+        ],
+        "rwg_edge_id": 4,
+        "surface_triangle": 3,
+        "triangle_nodes_global": [
+          2,
+          4,
+          3
+        ]
+      },
+      {
+        "adjacent_surface_triangle_count": 2,
+        "adjacent_surface_triangles": [
+          3,
+          4
+        ],
+        "boundary_number": 1,
+        "edge_length_m": 1.4142135623730951,
+        "edge_nodes_global": [
+          3,
+          4
+        ],
+        "hcurl_edge_id": 6,
+        "is_rwg_dof": true,
+        "local_edge": 1,
+        "name": "outer",
+        "opposite_vertices_global": [
+          2,
+          1
+        ],
+        "orientation_sign": 1,
+        "oriented_edge_nodes_global": [
+          3,
+          4
+        ],
+        "rwg_edge_id": 6,
+        "surface_triangle": 4,
+        "triangle_nodes_global": [
+          3,
+          4,
+          1
+        ]
+      },
+      {
+        "adjacent_surface_triangle_count": 2,
+        "adjacent_surface_triangles": [
+          2,
+          4
+        ],
+        "boundary_number": 1,
+        "edge_length_m": 1.0,
+        "edge_nodes_global": [
+          1,
+          4
+        ],
+        "hcurl_edge_id": 3,
+        "is_rwg_dof": true,
+        "local_edge": 2,
+        "name": "outer",
+        "opposite_vertices_global": [
+          2,
+          3
+        ],
+        "orientation_sign": -1,
+        "oriented_edge_nodes_global": [
+          4,
+          1
+        ],
+        "rwg_edge_id": 3,
+        "surface_triangle": 4,
+        "triangle_nodes_global": [
+          3,
+          4,
+          1
+        ]
+      },
+      {
+        "adjacent_surface_triangle_count": 2,
+        "adjacent_surface_triangles": [
+          1,
+          4
+        ],
+        "boundary_number": 1,
+        "edge_length_m": 1.0,
+        "edge_nodes_global": [
+          1,
+          3
+        ],
+        "hcurl_edge_id": 2,
+        "is_rwg_dof": true,
+        "local_edge": 3,
+        "name": "outer",
+        "opposite_vertices_global": [
+          2,
+          4
+        ],
+        "orientation_sign": 1,
+        "oriented_edge_nodes_global": [
+          1,
+          3
+        ],
+        "rwg_edge_id": 2,
+        "surface_triangle": 4,
+        "triangle_nodes_global": [
+          3,
+          4,
+          1
+        ]
+      }
+    ],
+    "rwg_dof_edges": 6,
+    "surface_edges": 6,
+    "surface_triangles": 4
+  },
+  "kind": "vol_boundary_oriented_edges_validation",
+  "learning_theme": "boundary triangle orientation should be expanded into readable RWG-style oriented edge rows before BEM assembly",
+  "validation_class": true
+}

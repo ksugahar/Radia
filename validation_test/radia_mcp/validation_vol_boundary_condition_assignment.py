@@ -1,14 +1,15 @@
-"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+"""Numerical validation example with separate calculation and analytic acceptance.
 
 The analytic checks are exercised by
-tests/mcp_integration/test_netgen_vol_analytic_examples.py.
-CLI output remains opt-in; pytest outputs belong to tmp_path.
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
 
 Validation-class boundary-condition assignment audit for tri/tet .vol meshes.
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_boundary_condition_assignment.py
+    python validation_test/radia_mcp/validation_vol_boundary_condition_assignment.py
 
 The audit maps plain boundary-condition labels onto Netgen boundary numbers or
 names and reports missing/unknown assignments before a solver script turns those
@@ -25,9 +26,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SRC = REPO / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol  # noqa: E402
 
@@ -139,20 +137,6 @@ def build_summary() -> dict[str, object]:
         "missing_boundary_count": missing["missing_boundary_count"],
     }
 
-    assert checks["clean_ok"] is True
-    assert checks["clean_boundary_count"] == 6
-    assert checks["clean_condition_counts"] == {
-        "dirichlet": 1,
-        "impedance": 1,
-        "open": 3,
-        "symmetry": 1,
-    }
-    assert checks["zmax_condition"] == "impedance"
-    assert checks["zmax_trace_node_count"] == 4
-    assert checks["xmin_condition_source"] == "boundary_number"
-    assert checks["typo_unknown_condition_keys"] == ["not_a_boundary"]
-    assert checks["typo_ok"] is False
-    assert checks["missing_boundary_count"] == 5
 
     return {
         "kind": "vol_boundary_condition_assignment_validation",
@@ -169,12 +153,29 @@ def build_summary() -> dict[str, object]:
     }
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    assert checks['clean_ok'] is True
+    assert checks['clean_boundary_count'] == 6
+    assert checks['clean_condition_counts'] == {'dirichlet': 1, 'impedance': 1, 'open': 3, 'symmetry': 1}
+    assert checks['zmax_condition'] == 'impedance'
+    assert checks['zmax_trace_node_count'] == 4
+    assert checks['xmin_condition_source'] == 'boundary_number'
+    assert checks['typo_unknown_condition_keys'] == ['not_a_boundary']
+    assert checks['typo_ok'] is False
+    assert checks['missing_boundary_count'] == 5
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = build_summary()
+    summary = validate_summary(build_summary())
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

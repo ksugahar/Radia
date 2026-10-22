@@ -1,8 +1,9 @@
-"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+"""Numerical validation example with separate calculation and analytic acceptance.
 
 The analytic checks are exercised by
-tests/mcp_integration/test_netgen_vol_analytic_examples.py.
-CLI output remains opt-in; pytest outputs belong to tmp_path.
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
 
 Validation-class Netgen .vol surface triangle quality example.
 
@@ -13,8 +14,8 @@ the boundary triangles that become scalar-BEM/RWG trace elements.
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_surface_triangle_quality.py
-    python validation_test/cubit_mesh_export/validation_vol_surface_triangle_quality.py --vol private-runtime-path
+    python validation_test/radia_mcp/validation_vol_surface_triangle_quality.py
+    python validation_test/radia_mcp/validation_vol_surface_triangle_quality.py --vol private-runtime-path
 """
 
 from __future__ import annotations
@@ -28,9 +29,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SRC = REPO / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol, read_netgen_tri_tet_vol  # noqa: E402
 
@@ -149,14 +147,6 @@ def build_summary(external_vol: Path | None = None) -> dict[str, object]:
         "sliver_min_angle_deg": sliver_quality["min_angle_deg"],
     }
 
-    assert abs(checks["unit_min_radius_ratio_quality"] - right_quality) < 1.0e-15
-    assert abs(checks["unit_max_radius_ratio_quality"] - 1.0) < 1.0e-15
-    assert abs(checks["unit_max_edge_ratio"] - math.sqrt(2.0)) < 1.0e-15
-    assert abs(checks["unit_min_angle_deg"] - 45.0) < 1.0e-12
-    assert abs(checks["unit_max_angle_deg"] - 90.0) < 1.0e-12
-    assert checks["sliver_min_radius_ratio_quality"] < 1.0e-5
-    assert checks["sliver_max_edge_ratio"] > 900.0
-    assert checks["sliver_min_angle_deg"] < 1.0e-3
 
     summary: dict[str, object] = {
         "kind": "netgen_vol_surface_triangle_quality_validation",
@@ -178,13 +168,30 @@ def build_summary(external_vol: Path | None = None) -> dict[str, object]:
     return summary
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    right_quality = 2.0 * (1.0 / (2.0 + math.sqrt(2.0))) / (math.sqrt(2.0) / 2.0)
+    assert abs(checks['unit_min_radius_ratio_quality'] - right_quality) < 1e-15
+    assert abs(checks['unit_max_radius_ratio_quality'] - 1.0) < 1e-15
+    assert abs(checks['unit_max_edge_ratio'] - math.sqrt(2.0)) < 1e-15
+    assert abs(checks['unit_min_angle_deg'] - 45.0) < 1e-12
+    assert abs(checks['unit_max_angle_deg'] - 90.0) < 1e-12
+    assert checks['sliver_min_radius_ratio_quality'] < 1e-05
+    assert checks['sliver_max_edge_ratio'] > 900.0
+    assert checks['sliver_min_angle_deg'] < 0.001
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--vol", type=Path, default=None, help="Optional real Netgen .vol export to evaluate")
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = build_summary(args.vol)
+    summary = validate_summary(build_summary(args.vol))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 

@@ -21,7 +21,7 @@ SPEC.loader.exec_module(SELECTOR)
     "packages/radia-optuna/matlab/optuna50_api_coverage.json",
     "tests/matlab/test_optuna_sampler.m",
     "tests/mcp_server/fixtures/bad_radia_script.py",
-    "validation_test/cubit_mesh_export/validation_vol_tet_quality.py",
+    "validation_test/radia_mcp/validation_vol_tet_quality.py",
     "packages/radia-mcp/src/radia_mcp/radia_ngsolve/netgen_vol.py",
     "packages/radia-mcp/src/radia_mcp/radia_ngsolve/force.py",
     "packages/radia-mcp/src/radia_mcp/radia_ngsolve/scalar_fem3d.py",

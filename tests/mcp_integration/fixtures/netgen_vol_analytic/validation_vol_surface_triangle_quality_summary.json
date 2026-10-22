@@ -1,0 +1,198 @@
+{
+  "kind": "netgen_vol_surface_triangle_quality_validation",
+  "validation_class": true,
+  "quality_definition": "radius_ratio_quality = 2 * inradius / circumradius; 1.0 is equilateral, near 0 marks sliver or degenerate boundary triangles",
+  "release_learning": "Coreform Cubit 2026.6 highlights triangle/tet meshing robustness and quality assessment; radia independently checks .vol boundary triangles before FEM/BEM trace use.",
+  "builtin_cases": [
+    {
+      "label": "unit_tetrahedron_boundary",
+      "mesh_summary": {
+        "points": 4,
+        "surface_triangles": 4,
+        "tetrahedra": 1,
+        "materials": 1,
+        "boundary_names": 1
+      },
+      "quality_rows": [
+        {
+          "surface_triangle": 1,
+          "boundary_number": 1,
+          "surfnr": 1,
+          "area": 0.5,
+          "inradius": 0.2928932188134525,
+          "circumradius": 0.7071067811865476,
+          "radius_ratio_quality": 0.8284271247461901,
+          "min_edge": 1.0,
+          "max_edge": 1.4142135623730951,
+          "edge_ratio": 1.4142135623730951,
+          "min_angle_deg": 44.999999999999986,
+          "max_angle_deg": 90.00000000000001
+        },
+        {
+          "surface_triangle": 2,
+          "boundary_number": 1,
+          "surfnr": 1,
+          "area": 0.5,
+          "inradius": 0.2928932188134525,
+          "circumradius": 0.7071067811865476,
+          "radius_ratio_quality": 0.8284271247461901,
+          "min_edge": 1.0,
+          "max_edge": 1.4142135623730951,
+          "edge_ratio": 1.4142135623730951,
+          "min_angle_deg": 44.999999999999986,
+          "max_angle_deg": 90.00000000000001
+        },
+        {
+          "surface_triangle": 3,
+          "boundary_number": 1,
+          "surfnr": 1,
+          "area": 0.5,
+          "inradius": 0.2928932188134525,
+          "circumradius": 0.7071067811865476,
+          "radius_ratio_quality": 0.8284271247461901,
+          "min_edge": 1.0,
+          "max_edge": 1.4142135623730951,
+          "edge_ratio": 1.4142135623730951,
+          "min_angle_deg": 44.999999999999986,
+          "max_angle_deg": 90.00000000000001
+        },
+        {
+          "surface_triangle": 4,
+          "boundary_number": 1,
+          "surfnr": 1,
+          "area": 0.8660254037844386,
+          "inradius": 0.40824829046386296,
+          "circumradius": 0.8164965809277263,
+          "radius_ratio_quality": 0.9999999999999996,
+          "min_edge": 1.4142135623730951,
+          "max_edge": 1.4142135623730951,
+          "edge_ratio": 1.0,
+          "min_angle_deg": 60.00000000000001,
+          "max_angle_deg": 60.00000000000001
+        }
+      ],
+      "quality_summary": {
+        "surface_triangles": 4,
+        "min_radius_ratio_quality": 0.8284271247461901,
+        "max_radius_ratio_quality": 0.9999999999999996,
+        "mean_radius_ratio_quality": 0.8713203435596424,
+        "min_area": 0.5,
+        "max_edge_ratio": 1.4142135623730951,
+        "min_angle_deg": 44.999999999999986,
+        "max_angle_deg": 90.00000000000001
+      },
+      "boundary_rows": [
+        {
+          "boundary_number": 1,
+          "name": "outer",
+          "surface_triangles": 4,
+          "surface_area": 2.3660254037844384,
+          "trace_node_count": 4,
+          "trace_node_ids": [
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "closure": {
+        "surface_triangles": 4,
+        "tetrahedra": 1,
+        "total_surface_area": 2.3660254037844384,
+        "surface_vector_area": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "surface_vector_area_norm": 0.0,
+        "surface_vector_area_norm_over_area": 0.0,
+        "surface_signed_volume": -0.16666666666666666,
+        "surface_abs_volume": 0.16666666666666666,
+        "tetrahedron_total_volume": 0.16666666666666666,
+        "surface_abs_volume_error": 0.0,
+        "surface_abs_volume_rel_error": 0.0,
+        "boundary_orientation": "inward"
+      }
+    },
+    {
+      "label": "single_sliver_patch",
+      "mesh_summary": {
+        "points": 3,
+        "surface_triangles": 1,
+        "tetrahedra": 0,
+        "materials": 0,
+        "boundary_names": 1
+      },
+      "quality_rows": [
+        {
+          "surface_triangle": 1,
+          "boundary_number": 1,
+          "surfnr": 1,
+          "area": 5e-07,
+          "inradius": 4.999999998748749e-07,
+          "circumradius": 499.5002497501883,
+          "radius_ratio_quality": 2.0020010004997455e-09,
+          "min_edge": 0.001000000499999876,
+          "max_edge": 1.0,
+          "edge_ratio": 999.999500000374,
+          "min_angle_deg": 5.73555451404618e-05,
+          "max_angle_deg": 179.9426468860732
+        }
+      ],
+      "quality_summary": {
+        "surface_triangles": 1,
+        "min_radius_ratio_quality": 2.0020010004997455e-09,
+        "max_radius_ratio_quality": 2.0020010004997455e-09,
+        "mean_radius_ratio_quality": 2.0020010004997455e-09,
+        "min_area": 5e-07,
+        "max_edge_ratio": 999.999500000374,
+        "min_angle_deg": 5.73555451404618e-05,
+        "max_angle_deg": 179.9426468860732
+      },
+      "boundary_rows": [
+        {
+          "boundary_number": 1,
+          "name": "sliver_patch",
+          "surface_triangles": 1,
+          "surface_area": 5e-07,
+          "trace_node_count": 3,
+          "trace_node_ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "closure": {
+        "surface_triangles": 1,
+        "tetrahedra": 0,
+        "total_surface_area": 5e-07,
+        "surface_vector_area": [
+          0.0,
+          0.0,
+          5e-07
+        ],
+        "surface_vector_area_norm": 5e-07,
+        "surface_vector_area_norm_over_area": 1.0,
+        "surface_signed_volume": 0.0,
+        "surface_abs_volume": 0.0,
+        "tetrahedron_total_volume": 0,
+        "surface_abs_volume_error": 0.0,
+        "surface_abs_volume_rel_error": null,
+        "boundary_orientation": "zero_or_open"
+      }
+    }
+  ],
+  "checks": {
+    "unit_min_radius_ratio_quality": 0.8284271247461901,
+    "unit_expected_right_face_quality": 0.8284271247461901,
+    "unit_max_radius_ratio_quality": 0.9999999999999996,
+    "unit_max_edge_ratio": 1.4142135623730951,
+    "unit_min_angle_deg": 44.999999999999986,
+    "unit_max_angle_deg": 90.00000000000001,
+    "sliver_min_radius_ratio_quality": 2.0020010004997455e-09,
+    "sliver_max_edge_ratio": 999.999500000374,
+    "sliver_min_angle_deg": 5.73555451404618e-05
+  }
+}

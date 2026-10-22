@@ -1,14 +1,15 @@
-"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+"""Numerical validation example with separate calculation and analytic acceptance.
 
 The analytic checks are exercised by
-tests/mcp_integration/test_netgen_vol_analytic_examples.py.
-CLI output remains opt-in; pytest outputs belong to tmp_path.
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
 
 Validation-class `.vol` boundary-to-tetrahedron face incidence.
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_boundary_tet_face_incidence.py
+    python validation_test/radia_mcp/validation_vol_boundary_tet_face_incidence.py
 
 The check verifies that boundary triangles exported in a tri/tet Netgen `.vol`
 mesh actually correspond to volume tetrahedron faces.  Exterior triangles
@@ -26,9 +27,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SRC = REPO / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol  # noqa: E402
 
@@ -116,17 +114,6 @@ def build_summary() -> dict:
         ),
     }
 
-    assert checks["surface_triangles"] == 7
-    assert checks["tetrahedra"] == 2
-    assert checks["exterior_surface_triangles"] == 6
-    assert checks["interface_surface_triangles"] == 1
-    assert checks["orphan_surface_triangles"] == 0
-    assert checks["overconnected_surface_triangles"] == 0
-    assert checks["domain_material_mismatch_count"] == 0
-    assert checks["max_adjacent_tetrahedra"] == 2
-    assert checks["is_volume_boundary_consistent"]
-    assert checks["interface_adjacent_material_numbers"] == [1, 2]
-    assert checks["interface_declared_domain_numbers"] == [1, 2]
 
     return {
         "kind": "vol_boundary_tet_face_incidence_validation",
@@ -137,8 +124,27 @@ def build_summary() -> dict:
     }
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    assert checks['surface_triangles'] == 7
+    assert checks['tetrahedra'] == 2
+    assert checks['exterior_surface_triangles'] == 6
+    assert checks['interface_surface_triangles'] == 1
+    assert checks['orphan_surface_triangles'] == 0
+    assert checks['overconnected_surface_triangles'] == 0
+    assert checks['domain_material_mismatch_count'] == 0
+    assert checks['max_adjacent_tetrahedra'] == 2
+    assert checks['is_volume_boundary_consistent']
+    assert checks['interface_adjacent_material_numbers'] == [1, 2]
+    assert checks['interface_declared_domain_numbers'] == [1, 2]
+    return result
+
+
 def main() -> int:
-    summary = build_summary()
+    summary = validate_summary(build_summary())
     OUT_JSON.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     checks = summary["checks"]

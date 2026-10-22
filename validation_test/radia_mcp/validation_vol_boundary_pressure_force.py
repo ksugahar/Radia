@@ -1,8 +1,9 @@
-"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+"""Numerical validation example with separate calculation and analytic acceptance.
 
 The analytic checks are exercised by
-tests/mcp_integration/test_netgen_vol_analytic_examples.py.
-CLI output remains opt-in; pytest outputs belong to tmp_path.
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
 
 Validation-class `.vol` boundary pressure-to-force rows.
 
@@ -16,8 +17,8 @@ force rows for pressure loads, Maxwell pressure, or acoustic pressure examples.
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_boundary_pressure_force.py
-    python validation_test/cubit_mesh_export/validation_vol_boundary_pressure_force.py --vol private-runtime-path
+    python validation_test/radia_mcp/validation_vol_boundary_pressure_force.py
+    python validation_test/radia_mcp/validation_vol_boundary_pressure_force.py --vol private-runtime-path
 """
 
 from __future__ import annotations
@@ -29,10 +30,6 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol, read_netgen_tri_tet_vol  # noqa: E402
 from validation_vol_boundary_normal_vectors import BOX_SIX_BOUNDARY_VOL  # noqa: E402
@@ -86,10 +83,6 @@ def build_summary(external_vol=None):
             builtin["zmax_force_N"][2] - 12.0,
         ]),
     }
-    if checks["builtin_uniform_total_force_norm_N"] > 1.0e-14:
-        raise AssertionError("uniform pressure on closed box should sum to zero")
-    if checks["builtin_zmax_force_abs_error_N"] > 1.0e-14:
-        raise AssertionError("zmax pressure force drifted")
 
     if external_vol is not None:
         external = records[-1]
@@ -102,10 +95,6 @@ def build_summary(external_vol=None):
                 external["zmax_force_N"][2] - 12.0,
             ]) if external["zmax_force_N"] is not None else math.inf,
         })
-        if checks["external_uniform_total_force_norm_N"] > 1.0e-8:
-            raise AssertionError("external uniform pressure force did not cancel")
-        if checks["external_zmax_force_abs_error_N"] > 1.0e-8:
-            raise AssertionError("external zmax pressure force drifted")
 
     return {
         "kind": "netgen_vol_boundary_pressure_force_validation",
@@ -116,13 +105,31 @@ def build_summary(external_vol=None):
     }
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    if checks['builtin_uniform_total_force_norm_N'] > 1e-14:
+        raise AssertionError('uniform pressure on closed box should sum to zero')
+    if checks['builtin_zmax_force_abs_error_N'] > 1e-14:
+        raise AssertionError('zmax pressure force drifted')
+    if len(records) > 1:
+        external = records[-1]
+        if checks['external_uniform_total_force_norm_N'] > 1e-08:
+            raise AssertionError('external uniform pressure force did not cancel')
+        if checks['external_zmax_force_abs_error_N'] > 1e-08:
+            raise AssertionError('external zmax pressure force drifted')
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--vol", type=Path, default=None, help="Optional external tri/tet Netgen .vol file")
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = build_summary(args.vol)
+    summary = validate_summary(build_summary(args.vol))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 

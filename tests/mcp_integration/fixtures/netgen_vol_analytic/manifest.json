@@ -1,0 +1,123 @@
+{
+  "reference_source_sha": "b97f47e5a309ec16d0b77bc0e21ddd2b7b43376d",
+  "conditions": "Built-in synthetic inputs, no external VOL, CPU Python. Original historical execution SHA unknown; immutable Git records retained. Baseline reproduction recorded separately.",
+  "cases": {
+    "validation_p1_surface_triangle_element_summary": {
+      "file": "validation_p1_surface_triangle_element_summary.json",
+      "sha256": "ec980c2ee83c2d325c747f211dd5af4ad47674c97505ade5f693f327a2d2a873",
+      "original_path": "validation_test/cubit_mesh_export/validation_p1_surface_triangle_element_summary.json",
+      "git_blob": "bd39d584143a7d212cdc2410a4d29be7c7c01a66"
+    },
+    "validation_vol_boundary_condition_assignment": {
+      "file": "validation_vol_boundary_condition_assignment_summary.json",
+      "sha256": "ef9912eea227d989bfacaf90fb83ab767fc622dc68e510523a87fc3738ca44e4",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_boundary_condition_assignment_summary.json",
+      "git_blob": "33c902c43b958502594cc75771ab3a36eb3b8eae"
+    },
+    "validation_vol_boundary_edge_inventory": {
+      "file": "validation_vol_boundary_edge_inventory_summary.json",
+      "sha256": "8e593a06c18d9ffcb38dcc3652edd0bb171a93b06c8f208477796c0857e3ee45",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_boundary_edge_inventory_summary.json",
+      "git_blob": "f9b82d491fa1acec3f14e4ccfc6ad21dad2488ac"
+    },
+    "validation_vol_boundary_inventory": {
+      "file": "validation_vol_boundary_inventory_summary.json",
+      "sha256": "30634f66ef1b562f01ef24d8775d09bd616bb24f84df8a551e56355923d97fc2",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_boundary_inventory_summary.json",
+      "git_blob": "f08c874194ee48f43a26e053da385ea1e8c5f8a6"
+    },
+    "validation_vol_boundary_normal_vectors": {
+      "file": "validation_vol_boundary_normal_vectors_summary.json",
+      "sha256": "5c253bbfff53eb072389d2bbafed929cde0f939bb122ee2ad739e90a0915d714",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors_summary.json",
+      "git_blob": "b1afbd5aecbdcd96a5d6197ba554a5af3574b145"
+    },
+    "validation_vol_boundary_oriented_edges": {
+      "file": "validation_vol_boundary_oriented_edges_summary.json",
+      "sha256": "0c8880d65df9eed7348b356f4e687b90e9c55fb9daa34c508e6dbaa5440688f8",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_boundary_oriented_edges_summary.json",
+      "git_blob": "e1f5353653b54a8376dc32e125432c40e0b26e6a"
+    },
+    "validation_vol_boundary_pressure_force": {
+      "file": "validation_vol_boundary_pressure_force_summary.json",
+      "sha256": "660353314fae5fcdb0e9704bf6ff709586959ea7883c5df9400207c51d25cf68",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_boundary_pressure_force_summary.json",
+      "git_blob": "ae0bf76e2c110be0c4d013b97fda4f20098a7362"
+    },
+    "validation_vol_boundary_pressure_moment": {
+      "file": "validation_vol_boundary_pressure_moment_summary.json",
+      "sha256": "b232335482abec80efa08927b00edb3b74ff591977ff08d527cdc6d62f5aae82",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_boundary_pressure_moment_summary.json",
+      "git_blob": "b3c7cbb4c7959e386374ac43acd29be23c194f79"
+    },
+    "validation_vol_boundary_pressure_resultant": {
+      "file": "validation_vol_boundary_pressure_resultant_summary.json",
+      "sha256": "8de6de40ad3a3a259f68fe273ff0033b5c5deb24cb7cf0ee5938a0bf829e4a96",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_boundary_pressure_resultant_summary.json",
+      "git_blob": "086e6a124198be7e3b4af5a2fdc7f067bb28fa07"
+    },
+    "validation_vol_boundary_tet_face_incidence": {
+      "file": "validation_vol_boundary_tet_face_incidence_summary.json",
+      "sha256": "e73bbf02f13d93c7580fb619eaa213523fc70110788c0ad9dda12f1c710c40d1",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_boundary_tet_face_incidence_summary.json",
+      "git_blob": "9ba092bb35509200e23348931a78ac0164b6af9e"
+    },
+    "validation_vol_boundary_traction_moment": {
+      "file": "validation_vol_boundary_traction_moment_summary.json",
+      "sha256": "3bdda5e5b39cf2681ccb79358eb1f470a68dbfd7bd56a456094b61877cef7e87",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_boundary_traction_moment_summary.json",
+      "git_blob": "ad992c81ac655d2d398a2dfc4bb4f0631c2d1fca"
+    },
+    "validation_vol_fem_bem_topology": {
+      "file": "validation_vol_fem_bem_topology_summary.json",
+      "sha256": "4eb08e434f8942392a77393d3e6fc21f5f8246c4dcfceb122fc5f72c7fdb8ef9",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_fem_bem_topology_summary.json",
+      "git_blob": "98e074064628cc069e9a54c372166e781bdcdea6"
+    },
+    "validation_vol_material_interface": {
+      "file": "validation_vol_material_interface_summary.json",
+      "sha256": "5b59701cc9d177c1ddbbda9c95cbbd643022f929862c13ce0308f92ee6521b93",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_material_interface_summary.json",
+      "git_blob": "f1e0eaf8105d44f9b496a857031cac3b8c2f4d17"
+    },
+    "validation_vol_mesh_health": {
+      "file": "validation_vol_mesh_health_summary.json",
+      "sha256": "01dd727543909195f784896396618c627fe36238a1b269adf4a33f638ae1447c",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_mesh_health_summary.json",
+      "git_blob": "feab00af6963f6480fdcab3d138575c998ea84e4"
+    },
+    "validation_vol_p1_trace_matrix": {
+      "file": "validation_vol_p1_trace_matrix_summary.json",
+      "sha256": "361f8a6330e2747f917b77c54b801a09aac67b877e1d17fa011d772d2f640839",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_p1_trace_matrix_summary.json",
+      "git_blob": "a69c92cec832c1df0602d1f5adf6a88181e51202"
+    },
+    "validation_vol_surface_closure": {
+      "file": "validation_vol_surface_closure_summary.json",
+      "sha256": "5fb6e53083acae6fb92494ef6a90c778f1b685bb8053d647f8cb5b17768b133a",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_surface_closure_summary.json",
+      "git_blob": "e92d3f75beb556c5f9ed4f82cbe5ab53ee88d886"
+    },
+    "validation_vol_surface_triangle_quality": {
+      "file": "validation_vol_surface_triangle_quality_summary.json",
+      "sha256": "0569b02fcba370b92b5cd4375ddef431d38292c2b36b2fe2258666ab65b0be55",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_surface_triangle_quality_summary.json",
+      "git_blob": "842f5275c6dfb161a384f45c0c8288cb1fbd6ec5"
+    },
+    "validation_vol_tet_quality": {
+      "file": "validation_vol_tet_quality_summary.json",
+      "sha256": "c957848c3e0c12a7f7e4a4ff90a5665aba9ca1a81d2836823b8f00d9bf9457c0",
+      "original_path": "validation_test/cubit_mesh_export/validation_vol_tet_quality_summary.json",
+      "git_blob": "227b4169c1d48d9a6fe8c0152c44425e04e75021"
+    }
+  },
+  "baseline_reproduction": {
+    "source_sha": "b97f47e5a309ec16d0b77bc0e21ddd2b7b43376d",
+    "result": "All 18 default build_summary outputs reproduced and JSON-normalized equal to these immutable Git records.",
+    "python": "3.12.10",
+    "numpy": "2.5.4",
+    "scipy": "1.18.1",
+    "threads": 2,
+    "external_vol": null
+  }
+}

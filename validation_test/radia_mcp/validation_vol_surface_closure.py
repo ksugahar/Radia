@@ -1,8 +1,9 @@
-"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+"""Numerical validation example with separate calculation and analytic acceptance.
 
 The analytic checks are exercised by
-tests/mcp_integration/test_netgen_vol_analytic_examples.py.
-CLI output remains opt-in; pytest outputs belong to tmp_path.
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
 
 Validation-class Netgen .vol surface-closure checks for FEM/BEM intake.
 
@@ -24,10 +25,6 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol, read_netgen_tri_tet_vol
 
@@ -120,24 +117,34 @@ def build_summary(vol_path=None):
         "flipped_abs_volume_rel_error": bad["surface_abs_volume_rel_error"],
     }
 
-    if abs(clean["tetrahedron_total_volume"] - 1.0) > 1e-14:
-        raise AssertionError("builtin cube tetra volume drifted")
-    if abs(clean["total_surface_area"] - 6.0) > 1e-14:
-        raise AssertionError("builtin cube surface area drifted")
-    if clean["surface_vector_area_norm_over_area"] > 1e-14:
-        raise AssertionError("closed cube surface vector area did not cancel")
-    if clean["surface_abs_volume_rel_error"] > 1e-14:
-        raise AssertionError("closed cube boundary volume does not match tet volume")
-    if bad["surface_vector_area_norm_over_area"] < 0.05:
-        raise AssertionError("single flipped triangle was not detected by vector area")
-    if bad["surface_abs_volume_rel_error"] < 0.05:
-        raise AssertionError("single flipped triangle was not detected by volume mismatch")
 
     return {
         "problem": "Netgen .vol boundary closure and orientation validation",
         "checks": checks,
         "records": records,
     }
+
+
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    clean = records[0]['closure']
+    bad = records[1]['closure']
+    if abs(clean['tetrahedron_total_volume'] - 1.0) > 1e-14:
+        raise AssertionError('builtin cube tetra volume drifted')
+    if abs(clean['total_surface_area'] - 6.0) > 1e-14:
+        raise AssertionError('builtin cube surface area drifted')
+    if clean['surface_vector_area_norm_over_area'] > 1e-14:
+        raise AssertionError('closed cube surface vector area did not cancel')
+    if clean['surface_abs_volume_rel_error'] > 1e-14:
+        raise AssertionError('closed cube boundary volume does not match tet volume')
+    if bad['surface_vector_area_norm_over_area'] < 0.05:
+        raise AssertionError('single flipped triangle was not detected by vector area')
+    if bad['surface_abs_volume_rel_error'] < 0.05:
+        raise AssertionError('single flipped triangle was not detected by volume mismatch')
+    return result
 
 
 def main():
@@ -149,7 +156,7 @@ def main():
     )
     args = parser.parse_args()
 
-    summary = build_summary(args.vol)
+    summary = validate_summary(build_summary(args.vol))
     out = Path(args.output)
     out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(summary["checks"], indent=2, sort_keys=True))

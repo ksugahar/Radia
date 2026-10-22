@@ -1,8 +1,9 @@
-"""Documentation sample and explicit summary generator, not a standalone pytest gate.
+"""Numerical validation example with separate calculation and analytic acceptance.
 
 The analytic checks are exercised by
-tests/mcp_integration/test_netgen_vol_analytic_examples.py.
-CLI output remains opt-in; pytest outputs belong to tmp_path.
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
 
 Validation-class Netgen .vol named-boundary inventory checks.
 
@@ -17,7 +18,7 @@ is used as a shared FEM/BEM mesh:
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_boundary_inventory.py
+    python validation_test/radia_mcp/validation_vol_boundary_inventory.py
 """
 
 from __future__ import annotations
@@ -28,10 +29,6 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol, read_netgen_tri_tet_vol  # noqa: E402
 
@@ -162,22 +159,6 @@ def build_summary(vol_path=None):
         "builtin_surface_volume_rel_error": builtin["closure"]["surface_abs_volume_rel_error"],
     }
 
-    if checks["builtin_boundary_names"] != sorted(EXPECTED_AREAS):
-        raise AssertionError("named boundary inventory drifted")
-    if abs(checks["builtin_total_surface_area"] - checks["builtin_expected_total_surface_area"]) > 1.0e-14:
-        raise AssertionError("boundary area total does not match analytic box area")
-    if abs(checks["builtin_total_volume"] - checks["builtin_expected_volume"]) > 1.0e-14:
-        raise AssertionError("box tet volume does not match analytic volume")
-    if max(checks["builtin_named_area_errors"].values()) > 1.0e-14:
-        raise AssertionError("per-boundary area drifted")
-    if not checks["builtin_all_faces_have_two_triangles"]:
-        raise AssertionError("each box face should have two boundary triangles")
-    if not checks["builtin_all_faces_have_four_trace_nodes"]:
-        raise AssertionError("each box face should expose four trace nodes")
-    if not checks["builtin_closed_manifold"]:
-        raise AssertionError("box boundary is not closed")
-    if checks["builtin_surface_volume_rel_error"] > 1.0e-14:
-        raise AssertionError("surface/tet volume mismatch")
 
     if vol_path is not None:
         external = records[-1]
@@ -190,10 +171,6 @@ def build_summary(vol_path=None):
             else external_area_from_rows,
             "external_named_boundaries": [row["name"] for row in external["boundary_rows"]],
         })
-        if len(external["boundary_rows"]) == 0:
-            raise AssertionError("external .vol had no boundary rows")
-        if abs(checks["external_area_from_rows"] - checks["external_total_surface_area"]) > 1.0e-10:
-            raise AssertionError("external boundary area rows do not sum to total area")
 
     return {
         "problem": "Netgen .vol named-boundary inventory validation",
@@ -203,13 +180,43 @@ def build_summary(vol_path=None):
     }
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    if checks['builtin_boundary_names'] != sorted(EXPECTED_AREAS):
+        raise AssertionError('named boundary inventory drifted')
+    if abs(checks['builtin_total_surface_area'] - checks['builtin_expected_total_surface_area']) > 1e-14:
+        raise AssertionError('boundary area total does not match analytic box area')
+    if abs(checks['builtin_total_volume'] - checks['builtin_expected_volume']) > 1e-14:
+        raise AssertionError('box tet volume does not match analytic volume')
+    if max(checks['builtin_named_area_errors'].values()) > 1e-14:
+        raise AssertionError('per-boundary area drifted')
+    if not checks['builtin_all_faces_have_two_triangles']:
+        raise AssertionError('each box face should have two boundary triangles')
+    if not checks['builtin_all_faces_have_four_trace_nodes']:
+        raise AssertionError('each box face should expose four trace nodes')
+    if not checks['builtin_closed_manifold']:
+        raise AssertionError('box boundary is not closed')
+    if checks['builtin_surface_volume_rel_error'] > 1e-14:
+        raise AssertionError('surface/tet volume mismatch')
+    if len(records) > 1:
+        external = records[-1]
+        if len(external['boundary_rows']) == 0:
+            raise AssertionError('external .vol had no boundary rows')
+        if abs(checks['external_area_from_rows'] - checks['external_total_surface_area']) > 1e-10:
+            raise AssertionError('external boundary area rows do not sum to total area')
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--vol", help="Optional external tri/tet Netgen .vol file")
     parser.add_argument("--output", default=str(OUT_JSON))
     args = parser.parse_args()
 
-    summary = build_summary(args.vol)
+    summary = validate_summary(build_summary(args.vol))
     out = Path(args.output)
     out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(summary["checks"], indent=2, sort_keys=True))
