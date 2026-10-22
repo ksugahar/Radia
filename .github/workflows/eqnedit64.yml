@@ -298,16 +298,16 @@ jobs:
         working-directory: .
         run: |
           python -m pip install build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:EQNEDIT64_RELEASE_EXE = (Resolve-Path 'tools\eqnedit64\build_cmake\Release\Eqnedit64.exe').Path
           python -m build --wheel packages\eqnedit64
-
       - name: Verify installed Eqnedit64 wheel
         working-directory: .
         run: |
           $wheel = Get-ChildItem 'packages\eqnedit64\dist\eqnedit64-*.whl' | Select-Object -First 1
           python -m pip install --force-reinstall $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python packages\eqnedit64\tests\verify_installed.py
-
       - uses: actions/upload-artifact@v4
         with:
           name: eqnedit64-wheel-candidate
