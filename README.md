@@ -38,6 +38,12 @@ interaction sequences while keeping the model and results inspectable.
 Start with `radia` for CPU calculations in Python and `radia-mcp` for AI-assisted
 tool operation. The CPU solver builds on NGSolve and does not require MATLAB.
 
+**Radia's operating manual is distributed as `radia-mcp`.** Detailed usage,
+recipes, validation catalogs and tool contracts are served to your AI
+assistant through `radia-mcp`: ask it, starting with `capability_pack_status`
+and the domain usage tools it reports. This README introduces capabilities; it
+is not the manual.
+
 | Start with | Use it for |
 | --- | --- |
 | `radia` | CPU electromagnetic calculations through Python, pybind11 and NGSolve |
