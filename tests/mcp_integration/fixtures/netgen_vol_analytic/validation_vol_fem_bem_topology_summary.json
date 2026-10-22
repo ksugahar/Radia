@@ -1,0 +1,109 @@
+{
+  "checks": {
+    "builtin_closed_euler_characteristic": 2,
+    "builtin_closed_hcurl_edges": 26,
+    "builtin_closed_rwg_dof_edges": 18,
+    "builtin_closed_surface_edges": 18,
+    "builtin_open_patch_is_closed": false,
+    "builtin_open_patch_open_edges": 3
+  },
+  "problem": "Netgen .vol first-order FEM/BEM topology validation",
+  "records": [
+    {
+      "bounding_box": {
+        "x": [
+          0.0,
+          1.0
+        ],
+        "y": [
+          0.0,
+          1.0
+        ],
+        "z": [
+          0.0,
+          1.0
+        ]
+      },
+      "closure": {
+        "boundary_orientation": "outward",
+        "surface_abs_volume": 0.9999999999999999,
+        "surface_abs_volume_error": 1.1102230246251565e-16,
+        "surface_abs_volume_rel_error": 1.1102230246251565e-16,
+        "surface_signed_volume": 0.9999999999999999,
+        "surface_triangles": 12,
+        "surface_vector_area": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "surface_vector_area_norm": 0.0,
+        "surface_vector_area_norm_over_area": 0.0,
+        "tetrahedra": 12,
+        "tetrahedron_total_volume": 1.0,
+        "total_surface_area": 6.0
+      },
+      "manifold": {
+        "closed_edges": 18,
+        "euler_characteristic": 2,
+        "is_closed_manifold": true,
+        "open_edges": 0,
+        "surface_edges": 18,
+        "surface_triangles": 12,
+        "trace_nodes": 8
+      },
+      "mesh_summary": {
+        "boundary_names": 1,
+        "materials": 1,
+        "points": 9,
+        "surface_triangles": 12,
+        "tetrahedra": 12
+      },
+      "name": "builtin_star_cube_closed",
+      "topology_counts": {
+        "h1_nodes": 9,
+        "h1_trace_nodes": 8,
+        "hcurl_edges": 26,
+        "rwg_dof_edges": 18,
+        "rwg_edges": 18,
+        "rwg_to_hcurl_edge_ids": 18,
+        "scalar_bem_nodes": 8,
+        "scalar_bem_triangles": 12
+      },
+      "trace_policy": "first_order_h1_p1_hcurl_nedelec0_bem_p1_rwg_only"
+    },
+    {
+      "bounding_box": {
+        "x": [
+          0.0,
+          1.0
+        ],
+        "y": [
+          0.0,
+          1.0
+        ],
+        "z": [
+          0.0,
+          0.0
+        ]
+      },
+      "manifold": {
+        "closed_edges": 0,
+        "euler_characteristic": 1,
+        "is_closed_manifold": false,
+        "open_edges": 3,
+        "surface_edges": 3,
+        "surface_triangles": 1,
+        "trace_nodes": 3
+      },
+      "mesh_summary": {
+        "boundary_names": 1,
+        "materials": 0,
+        "points": 3,
+        "surface_triangles": 1,
+        "tetrahedra": 0
+      },
+      "name": "builtin_open_triangle_patch"
+    }
+  ],
+  "validation_class": true
+}

@@ -1,4 +1,11 @@
-r"""Validation-class Netgen .vol mesh health example.
+r"""Numerical validation example with separate calculation and analytic acceptance.
+
+The analytic checks are exercised by
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
+
+Validation-class Netgen .vol mesh health example.
 
 This is an example/validation run, not a pytest test.  It combines the small
 tri/tet-only checks that matter before a Netgen ``.vol`` export is used as a
@@ -12,8 +19,8 @@ first-order FEM/BEM trace:
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_mesh_health.py
-    python validation_test/cubit_mesh_export/validation_vol_mesh_health.py --vol private-runtime-path --out private-runtime-path
+    python validation_test/radia_mcp/validation_vol_mesh_health.py
+    python validation_test/radia_mcp/validation_vol_mesh_health.py --vol private-runtime-path --out private-runtime-path
 """
 
 from __future__ import annotations
@@ -26,9 +33,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SRC = REPO / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol, read_netgen_tri_tet_vol  # noqa: E402
 
@@ -148,10 +152,6 @@ def build_summary(external_vol: Path | None = None) -> dict[str, object]:
         "open_boundary_face_match_ok": open_patch["checks"]["boundary_faces_match_tetrahedra"],
     }
 
-    assert checks["clean_ok"] is True
-    assert checks["sliver_tet_quality_ok"] is False
-    assert checks["open_closed_manifold_ok"] is False
-    assert checks["open_boundary_face_match_ok"] is False
 
     summary: dict[str, object] = {
         "kind": "netgen_vol_mesh_health_validation",
@@ -169,13 +169,25 @@ def build_summary(external_vol: Path | None = None) -> dict[str, object]:
     return summary
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    assert checks['clean_ok'] is True
+    assert checks['sliver_tet_quality_ok'] is False
+    assert checks['open_closed_manifold_ok'] is False
+    assert checks['open_boundary_face_match_ok'] is False
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--vol", type=Path, default=None, help="Optional real Netgen .vol export to evaluate")
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = build_summary(args.vol)
+    summary = validate_summary(build_summary(args.vol))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 

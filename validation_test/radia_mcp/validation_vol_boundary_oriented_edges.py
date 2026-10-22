@@ -1,8 +1,15 @@
-"""Validation-class Netgen .vol boundary oriented-edge table.
+"""Numerical validation example with separate calculation and analytic acceptance.
+
+The analytic checks are exercised by
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
+
+Validation-class Netgen .vol boundary oriented-edge table.
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_boundary_oriented_edges.py
+    python validation_test/radia_mcp/validation_vol_boundary_oriented_edges.py
 
 This example keeps the first-order boundary trace small and readable: one
 tetrahedron, four boundary triangles, six closed surface edges, and twelve
@@ -20,9 +27,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SRC = REPO / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol  # noqa: E402
 
@@ -85,16 +89,6 @@ def build_summary() -> dict[str, object]:
         "hcurl_edge_ids": sorted({row["hcurl_edge_id"] for row in rows}),
     }
 
-    assert checks["surface_triangles"] == 4
-    assert checks["surface_edges"] == 6
-    assert checks["rwg_dof_edges"] == 6
-    assert checks["oriented_edge_rows"] == 12
-    assert checks["open_edges"] == 0
-    assert checks["is_closed_manifold"] is True
-    assert checks["orientation_sign_counts"] == {"-1": 6, "1": 6}
-    assert checks["first_triangle_oriented_edges"] == [[1, 2], [2, 3], [3, 1]]
-    assert checks["first_triangle_signs"] == [1, 1, -1]
-    assert checks["hcurl_edge_ids"] == [1, 2, 3, 4, 5, 6]
 
     return {
         "kind": "vol_boundary_oriented_edges_validation",
@@ -108,12 +102,30 @@ def build_summary() -> dict[str, object]:
     }
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    assert checks['surface_triangles'] == 4
+    assert checks['surface_edges'] == 6
+    assert checks['rwg_dof_edges'] == 6
+    assert checks['oriented_edge_rows'] == 12
+    assert checks['open_edges'] == 0
+    assert checks['is_closed_manifold'] is True
+    assert checks['orientation_sign_counts'] == {'-1': 6, '1': 6}
+    assert checks['first_triangle_oriented_edges'] == [[1, 2], [2, 3], [3, 1]]
+    assert checks['first_triangle_signs'] == [1, 1, -1]
+    assert checks['hcurl_edge_ids'] == [1, 2, 3, 4, 5, 6]
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = build_summary()
+    summary = validate_summary(build_summary())
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

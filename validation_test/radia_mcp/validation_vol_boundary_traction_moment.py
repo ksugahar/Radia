@@ -1,4 +1,11 @@
-"""Validation-class `.vol` boundary vector-traction force/moment rows.
+"""Numerical validation example with separate calculation and analytic acceptance.
+
+The analytic checks are exercised by
+validation_test/radia_mcp/test_netgen_vol_analytic_examples.py.
+CLI writes its default adjacent summary unless an output path is supplied.
+Nightly acceptance uses tmp_path; regression checks never run analytic guards.
+
+Validation-class `.vol` boundary vector-traction force/moment rows.
 
 Named Cubit/Coreform sidesets exported as Netgen `.vol` provide boundary
 triangles and names.  A constant vector traction on a boundary has
@@ -10,8 +17,8 @@ This example checks the per-boundary rows and the generic force/moment reducer.
 
 Run:
 
-    python validation_test/cubit_mesh_export/validation_vol_boundary_traction_moment.py
-    python validation_test/cubit_mesh_export/validation_vol_boundary_traction_moment.py --vol private-runtime-path
+    python validation_test/radia_mcp/validation_vol_boundary_traction_moment.py
+    python validation_test/radia_mcp/validation_vol_boundary_traction_moment.py --vol private-runtime-path
 """
 
 from __future__ import annotations
@@ -23,10 +30,6 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "packages" / "radia-mcp" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.force import force_moment_resultant_summary  # noqa: E402
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol, read_netgen_tri_tet_vol  # noqa: E402
@@ -114,18 +117,6 @@ def build_summary(external_vol=None):
         "builtin_zmax_resultant_force_error_N": errors["force_error_N"],
         "builtin_zmax_resultant_moment_error_Nm": errors["moment_error_Nm"],
     }
-    if _norm([zmax["force_N"][0] - 6.0, zmax["force_N"][1] + 12.0, zmax["force_N"][2] - 18.0]) > 1.0e-14:
-        raise AssertionError("zmax vector traction force drifted")
-    if _norm([
-        zmax["moment_about_pivot_Nm"][0] - 87.0,
-        zmax["moment_about_pivot_Nm"][1] - 12.0,
-        zmax["moment_about_pivot_Nm"][2] + 21.0,
-    ]) > 1.0e-14:
-        raise AssertionError("zmax vector traction moment drifted")
-    if _norm(shifted["moment_about_pivot_Nm"]) > 1.0e-14:
-        raise AssertionError("zmax shifted-pivot moment should vanish")
-    if errors["force_error_N"] > 1.0e-14 or errors["moment_error_Nm"] > 1.0e-14:
-        raise AssertionError("generic resultant drifted")
 
     if external_vol is not None:
         external = records[-1]
@@ -140,10 +131,6 @@ def build_summary(external_vol=None):
             "external_zmax_resultant_force_error_N": external_errors["force_error_N"],
             "external_zmax_resultant_moment_error_Nm": external_errors["moment_error_Nm"],
         })
-        if external_errors["force_error_N"] > 1.0e-8:
-            raise AssertionError("external resultant force drifted")
-        if external_errors["moment_error_Nm"] > 1.0e-8:
-            raise AssertionError("external resultant moment drifted")
 
     return {
         "kind": "netgen_vol_boundary_traction_moment_validation",
@@ -154,13 +141,40 @@ def build_summary(external_vol=None):
     }
 
 
+
+def validate_summary(result: dict) -> dict:
+    """Apply the unchanged analytic acceptance; never called by regression locks."""
+    checks = result['checks']
+    records = result.get('records', [])
+    builtin = records[0]
+    zmax = builtin['zmax_row']
+    shifted = builtin['zmax_shifted_pivot_row']
+    errors = _row_resultant_errors(builtin)
+    if _norm([zmax['force_N'][0] - 6.0, zmax['force_N'][1] + 12.0, zmax['force_N'][2] - 18.0]) > 1e-14:
+        raise AssertionError('zmax vector traction force drifted')
+    if _norm([zmax['moment_about_pivot_Nm'][0] - 87.0, zmax['moment_about_pivot_Nm'][1] - 12.0, zmax['moment_about_pivot_Nm'][2] + 21.0]) > 1e-14:
+        raise AssertionError('zmax vector traction moment drifted')
+    if _norm(shifted['moment_about_pivot_Nm']) > 1e-14:
+        raise AssertionError('zmax shifted-pivot moment should vanish')
+    if errors['force_error_N'] > 1e-14 or errors['moment_error_Nm'] > 1e-14:
+        raise AssertionError('generic resultant drifted')
+    if len(records) > 1:
+        external = records[-1]
+        external_errors = _row_resultant_errors(external)
+        if external_errors['force_error_N'] > 1e-08:
+            raise AssertionError('external resultant force drifted')
+        if external_errors['moment_error_Nm'] > 1e-08:
+            raise AssertionError('external resultant moment drifted')
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--vol", type=Path, default=None, help="Optional external tri/tet Netgen .vol file")
     parser.add_argument("--out", type=Path, default=OUT_JSON)
     args = parser.parse_args()
 
-    summary = build_summary(args.vol)
+    summary = validate_summary(build_summary(args.vol))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
