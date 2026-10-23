@@ -1,15 +1,21 @@
-"""Detached-package wheel verification contract.
+"""Detached-package wheel and coverage verification contract.
 
-Guards: Reintroducing monorepo-root reads into wheel verification, or accepting
+Guards: Reintroducing monorepo-root reads into wheel verification or API
+coverage generation, changing frozen oracle inputs during verification, or accepting
 a package whose upstream oracle pin drifts despite correct wheel metadata.
 Assumes: A copy of the package source alone, with a synthetic PE header standing
-in for the MEX. This checks packaging behavior, not native execution or ABI.
+in for the MEX, and stored upstream inputs. This checks packaging and coverage
+metadata behavior, not native execution or ABI.
 """
 
+import hashlib
 import importlib.util
+import os
 import json
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import zipfile
 
 import pytest
@@ -45,6 +51,24 @@ def test_detached_package_verifies_without_cpu_project(tmp_path):
     result = verifier.verify(wheel)
     assert result["ok"] is True, result
     assert result["source_fidelity_verified"] is True, result
+
+    # Run the real package-local entry point without a monorepo or source-path
+    # rescue. Only this detached copy's coverage ledger may be reproduced;
+    # upstream producers and stored numerical expectations are read-only inputs.
+    coverage = detached / "matlab/optuna50_api_coverage.json"
+    expected_coverage = coverage.read_bytes().replace(b"\r\n", b"\n")
+    inputs = {p: hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in (detached / "oracles").iterdir() if p.is_file()}
+    environment = dict(os.environ)
+    environment.pop("PYTHONPATH", None)
+    environment.pop("RADIA_REPO_ROOT", None)
+    completed = subprocess.run(
+        [sys.executable, str(detached / "tools/generate_optuna50_api_coverage.py")],
+        cwd=detached, env=environment, capture_output=True, text=True, timeout=60,
+    )
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert coverage.read_bytes().replace(b"\r\n", b"\n") == expected_coverage
+    assert {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs} == inputs
 
     metadata = detached / "pyproject.toml"
     text = metadata.read_text(encoding="utf-8")

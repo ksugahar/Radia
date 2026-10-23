@@ -1064,7 +1064,7 @@ zero partial, and zero unmapped, so
 `full_compatibility_complete` is true for the checked public inventory. Any
 future missing or non-oracled entry makes it false again. Regenerate both files with
 `generate_optuna50_api_inventory.py` and
-`generate_optuna50_api_coverage.py`; do not hand-edit their counts.
+`packages/radia-optuna/tools/generate_optuna50_api_coverage.py`; do not hand-edit their counts.
 
 `get_param_importances` defaults to PED-ANOVA and delegates fANOVA,
 mean-decrease-impurity, and PED-ANOVA evaluation to the pinned Optuna 5.0.0

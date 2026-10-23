@@ -36,7 +36,7 @@ VERIFY_SPEC.loader.exec_module(verify_wheel)
 
 
 def test_api_coverage_is_reproducible_and_names_real_matlab_packages(monkeypatch, tmp_path):
-    path = REPO_ROOT / "tests/matlab/fixtures/generate_optuna50_api_coverage.py"
+    path = PACKAGE_ROOT / "tools/generate_optuna50_api_coverage.py"
     spec = importlib.util.spec_from_file_location("optuna_coverage_audit", path)
     assert spec is not None and spec.loader is not None
     generator = importlib.util.module_from_spec(spec)
@@ -63,7 +63,7 @@ def test_api_coverage_is_reproducible_and_names_real_matlab_packages(monkeypatch
         parts = name.split(".")
         if entry["kind"].startswith("class-"):
             parts = parts[:-1]
-        source = REPO_ROOT / "packages/radia-optuna/matlab"
+        source = PACKAGE_ROOT / "matlab"
         for package in parts[:-1]:
             source /= "+" + package
         assert (source / (parts[-1] + ".m")).is_file(), name
@@ -186,7 +186,7 @@ def test_only_declared_adapters_call_other_radia_matlab_namespaces():
             encoding="utf-8"
         )
     )
-    source = REPO_ROOT / "packages/radia-optuna/matlab"
+    source = PACKAGE_ROOT / "matlab"
     observed: set[str] = set()
     pattern = re.compile(r"\bradia\.(?!optuna\b)")
     for path in (source / "+radia" / "+optuna").rglob("*.m"):
