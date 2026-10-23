@@ -8,6 +8,7 @@ import numpy as np
 
 class ResidentAMG:
     def __init__(self,row,col,values,*,directory,candidate,strength=0.,damping=.8,cache_path=None,cache_mode='build',updated_transfers=None,nonlinear_cache_path=None,nonlinear_cache_mode='build'):
+        from radia.ngsolve_sparse import real_sparse_matrix_type
         if nonlinear_cache_mode=='reuse' and nonlinear_cache_path is None:raise ValueError('Nonlinear transfer cache path required')
         if nonlinear_cache_mode not in ('build','reuse'):raise ValueError('Explicit nonlinear AMG cache mode required')
         if nonlinear_cache_path is not None and (cache_path is not None or updated_transfers is not None):raise ValueError('Distinct nonlinear transfer cache required')
@@ -91,7 +92,7 @@ class ResidentAMG:
         # This validation adapter calls NGSolve only for coarse preparation;
         # it owns that CPU region, separately from the caller's FE assembly.
         with ng.TaskManager():
-            matrix=ng.la.SparseMatrixdouble.CreateFromCOO(coarse.row.tolist(),coarse.col.tolist(),coarse.data.tolist(),n,n)
+            matrix=real_sparse_matrix_type().CreateFromCOO(coarse.row.tolist(),coarse.col.tolist(),coarse.data.tolist(),n,n)
             inverse=matrix.Inverse(inverse='sparsecholesky');rhs=matrix.CreateColVector();answer=matrix.CreateColVector();dense=np.empty((n,n))
             for i in range(n):
                 rhs[:]=0.;rhs[i]=1.;answer.data=inverse*rhs;dense[:,i]=answer.FV().NumPy()
