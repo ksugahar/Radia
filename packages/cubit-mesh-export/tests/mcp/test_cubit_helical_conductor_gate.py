@@ -47,7 +47,7 @@ def summary() -> dict:
             "bytes": 1024,
             "sha256": "b" * 64,
             "header": {
-                "version": "4.1",
+                "version": "4.2",
                 "file_type": 0,
                 "has_entities_section": True,
                 "has_nodes_section": True,
@@ -109,7 +109,7 @@ def test_region_gate_rejects_quality_count_drift_and_old_gmsh():
     result = json.loads(cubit_region_owned_mixed_mesh_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"]["quality_count_matches_topology"] is False
-    assert result["checks"]["gmsh_ascii_v41_handoff_complete"] is False
+    assert result["checks"]["gmsh_ascii_v42_handoff_complete"] is False
     assert result["checks"]["parsed_gmsh_topology_matches_cubit"] is False
 
 

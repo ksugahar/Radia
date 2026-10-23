@@ -64,8 +64,8 @@ def cubit_pyramid_mixed_export_gate(summary: Mapping[str, object]) -> dict[str, 
         is False
         and int(pyramid_scaled.get("count", -1)) == 0
         and gmsh_volumes.get("pyramid", 0.0) > 0.0,
-        "gmsh_is_complete_ascii_v41": gmsh.get("status") == "ok"
-        and gmsh.get("mesh_format") == "4.1"
+        "gmsh_is_complete_ascii_v42": gmsh.get("status") == "ok"
+        and gmsh.get("mesh_format") == "4.2"
         and gmsh.get("binary") is False,
         "gmsh_counts_match_cubit": all(
             gmsh_counts.get(kind, -1) == counts.get(kind, 0)

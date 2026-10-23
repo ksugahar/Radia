@@ -651,7 +651,7 @@ def check_plain_gmsh_export(filepath: str, lines: List[str]) -> List[Dict]:
 	"""HIGH: `export mesh "…"` emits MSH v2.2 (Cubit default) which is
 	deprecated lab-wide as of 2026-04-19.
 
-	Valid replacements (both emit v4.1):
+	Valid replacements (both emit v4.2):
 	  - `export gmsh "file.msh" order N overwrite`
 	  - `export mesh "file.msh" mesh_version 4.1 overwrite` (only if the
 	    Cubit build supports the option — newer Coreform versions do)
@@ -678,7 +678,7 @@ def check_plain_gmsh_export(filepath: str, lines: List[str]) -> List[Dict]:
 			'message': (
 				f'`export mesh "{m.group(1)}"` emits MSH v2.2 '
 				f'(deprecated lab-wide). Use `export gmsh '
-				f'"{m.group(1)}" order N` (v4.1) or append '
+				f'"{m.group(1)}" order N` (v4.2) or append '
 				f'`mesh_version 4.1 overwrite` on newer Cubit builds.'
 			),
 		})

@@ -118,7 +118,7 @@ class TestCubitScriptingKnowledge:
 class TestExportKnowledge:
     FORMATS = {
         "overview":       ["export", "format"],
-        "gmsh_v4":        ["msh", "4.1", "gmsh"],
+        "gmsh_v4":        ["msh", "4.2", "gmsh"],
         "curved":         ["curved", "order", "netgen"],
         "netgen":         ["vol", "netgen"],
         "nastran":        ["nastran", "bdf"],
@@ -144,7 +144,7 @@ class TestExportKnowledge:
     def test_gmsh_v4_documents_geo_as_radia_post_launch_artifact(self):
         body = get_export_documentation("gmsh_v4")
 
-        assert ".msh v4.1 + .geo" in body
+        assert ".msh v4.2 + .geo" in body
         assert "standard file to open for Radia post-processing is `.geo`" in body
         assert "`.msh` association is optional raw mesh/data inspection" in body
         assert ".geo` companion" in body

@@ -186,7 +186,7 @@ retains its temporary work directory together with `vol-check.json` (or
 
 ```
 export netgen "model.vol" order 3 overwrite                 # NGSolve FEM (.vol)
-export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.1 raw data + .geo launch
+export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.2 raw data + .geo launch
 export nastran_bdf "model.bdf" order 2 overwrite             # Nastran BDF
 export vtk    "model.vtk" order 2 overwrite                 # VTK Legacy
 ```
@@ -200,7 +200,7 @@ physical material data in the receiving solver.
 For Radia post-processing, `.geo` is the standard launch artifact. The Gmsh
 export writes:
 
-- `model.msh`: raw GMSH v4.1 mesh/data container
+- `model.msh`: raw GMSH v4.2 mesh/data container
 - `model.geo`: normal review entry point; it merges `model.msh`
 - `model.geo.opt`: exact Gmsh sidecar auto-loaded when `model.geo` opens
 - `model.msh.opt`: raw mesh/data inspection sidecar when `model.msh` opens
@@ -542,3 +542,21 @@ evaluation hosts do not install Cubit.
 Owner-authored code is licensed under Apache-2.0 from the next releases.
 See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
 retain their original licenses; previously published artifacts are unchanged.
+
+### Gmsh 5 development runtime
+
+Install Gmsh **alone** from its official development index in an isolated Python
+3.12 environment, then install the exporter and its other dependencies from PyPI:
+
+```powershell
+python -m pip install --pre -i https://gmsh.info/python-packages-dev gmsh --report gmsh-install.json
+python -m pip install "cubit-mesh-export[mesh-quality]"
+$env:CUBIT_GMSH_INSTALL_REPORT = (Resolve-Path gmsh-install.json).Path
+```
+
+The extra declares `gmsh>=5.0.0.dev0`; there is no dated or upper metadata pin.
+The quality runtime requires native major 5 and proves MSH 4.2 write/read support
+in its isolated child before invoking Gmsh. Non-4.2 mesh input is rejected.
+The install report retains the original wheel hash; loaded wrapper/native hashes
+are recorded separately and are not a reconstructed wheel identity. Qualification
+uses a hash-verified archived official wheel, not an unrecorded index resolution.

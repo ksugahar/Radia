@@ -24,7 +24,7 @@ def live_summary() -> dict:
         "positive_scaled_jacobian": True,
         "brick_union_volume_conserved": True,
         "swept_pipe_volume_matches_path_area": True,
-        "gmsh_v41_export_created": True,
+        "gmsh_v42_export_created": True,
     }
     quad_interface = {
         "surface_id": 10,
@@ -78,7 +78,7 @@ def live_summary() -> dict:
             "bytes": 43209355,
             "sha256": "b" * 64,
             "header": {
-                "version": "4.1",
+                "version": "4.2",
                 "file_type": 0,
                 "has_entities_section": True,
                 "has_nodes_section": True,
@@ -111,7 +111,7 @@ def test_public_gate_accepts_verified_hex_tet_pyramid_transition():
     result = json.loads(cubit_embedded_region_mixed_transition_gate(live_summary()))
     assert result["status"] == "ok"
     assert result["quality_minima"]["tet"] == 0.1545
-    assert result["checks"]["gmsh_ascii_v41_handoff_complete"] is True
+    assert result["checks"]["gmsh_ascii_v42_handoff_complete"] is True
     assert result["checks"]["hex_tet_transition_is_conformal_quad_mesh"] is True
 
 
@@ -133,7 +133,7 @@ def test_public_gate_rejects_unmeshed_volume_and_binary_or_old_gmsh():
     result = json.loads(cubit_embedded_region_mixed_transition_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"]["all_cad_volumes_meshed"] is False
-    assert result["checks"]["gmsh_ascii_v41_handoff_complete"] is False
+    assert result["checks"]["gmsh_ascii_v42_handoff_complete"] is False
 
 
 def test_source_gate_accepts_semantically_explained_nonzero_exit():

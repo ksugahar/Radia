@@ -76,7 +76,7 @@ def test_netgen_reference_preserves_curved_volume_without_radia(tmp_path, order)
     from ngsolve import Mesh, Integrate, TaskManager
     from cubit_mesh_export.mcp._support.netgen_compare import _write_tet_msh
     from cubit_mesh_export.mcp._support.mesh_quality import mesh_total_volume, mesh_quality
-    from cubit_mesh_export.mcp.gmsh_v41 import summarize_gmsh_v41_ascii
+    from cubit_mesh_export.mcp.gmsh_v42 import summarize_gmsh_v42_ascii
     target = tmp_path / 'sphere.msh'
     # Netgen's sphere tessellation is not deterministic across hosts. A coarse
     # third-order curved mesh can genuinely invert, which the exporter must
@@ -92,7 +92,7 @@ def test_netgen_reference_preserves_curved_volume_without_radia(tmp_path, order)
                 raise
     assert report['min_jacobian_det'] > 0
     assert '$Entities' in target.read_text()
-    inventory = summarize_gmsh_v41_ascii(target.read_text())
+    inventory = summarize_gmsh_v42_ascii(target.read_text())
     assert inventory['status'] == 'ok'
     volume = mesh_total_volume(target, quadrature='Gauss10')
     assert volume['ok'], volume
