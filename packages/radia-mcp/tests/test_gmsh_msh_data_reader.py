@@ -9,7 +9,7 @@ from radia_mcp.gmsh.post_process import _PLOT_SCRIPT, export_view_csv
 from radia_mcp.gmsh.render import render_montage
 
 _VALID = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $Nodes
 1 4 1 4
@@ -37,10 +37,16 @@ $NodeData
 0
 1
 4
-1 1.0
-2 2.0
-3 3.0
-4 4.0
+1 4 1 4
+4
+1
+2
+3
+4
+1.0
+2.0
+3.0
+4.0
 $EndNodeData
 """
 
@@ -74,13 +80,13 @@ def test_reader_and_csv_accept_consistent_counts_without_gmsh(tmp_path):
          "$Nodes declares 5 nodes"),
         (_VALID.replace("1 1 1 1\n3 1 4 1", "1 2 1 1\n3 1 4 1"),
          "$Elements declares 2 elements"),
-        (_VALID.replace("0\n1\n4\n1 1.0", "0\n1\n5\n1 1.0"),
+        (_VALID.replace("0\n1\n4\n1 4 1 4", "0\n1\n5\n1 4 1 4"),
          "$NodeData"),
-        (_VALID.replace("4 4.0", "4"),
-         "has 0 values; expected 1"),
+        (_VALID.replace("4.0\n$EndNodeData", "$EndNodeData"),
+         "truncated data block"),
         (_VALID.replace("1\n2\n3\n4\n0 0 0", "1\n2\n3\n3\n0 0 0"),
          "duplicate node tag 3"),
-        (_VALID.replace("3 3.0\n4 4.0", "3 3.0\n3 4.0"),
+        (_VALID.replace("4\n1\n2\n3\n4\n1.0", "4\n1\n2\n3\n3\n1.0"),
          "duplicate data tag 3"),
     ],
 )
@@ -100,12 +106,15 @@ def test_reader_rejects_bad_element_node_data_width(tmp_path):
 0
 1
 1
-1 4 10 20 30
+1 1 1 1
+4 4 1
+1
+10 20 30
 $EndElementNodeData
 """
     msh = _write(tmp_path, _VALID + element_node_data)
 
-    with pytest.raises(ValueError, match="has 3 values; expected 4"):
+    with pytest.raises(ValueError, match="truncated data block"):
         read_msh_data(msh)
 
 
@@ -119,7 +128,10 @@ def test_reader_matches_element_node_data_count_to_connectivity(tmp_path):
 0
 1
 1
-1 3 10 20 30
+1 1 1 1
+2 3 1
+1
+10 20 30
 $EndElementNodeData
 """
     msh = _write(tmp_path, _VALID + element_node_data)
@@ -129,14 +141,14 @@ $EndElementNodeData
 
 
 def test_reader_rejects_a_truncated_mesh_format_header(tmp_path):
-    msh = _write(tmp_path, _VALID.replace("4.1 0 8", "4.1"))
+    msh = _write(tmp_path, _VALID.replace("4.2 0 8", "4.2"))
 
     with pytest.raises(ValueError, match="malformed \\$MeshFormat header"):
         read_msh_data(msh)
 
 
 def test_csv_returns_a_structured_error_for_a_malformed_reader_input(tmp_path):
-    msh = _write(tmp_path, _VALID.replace("4 4.0", "4"))
+    msh = _write(tmp_path, _VALID.replace("4.0\n$EndNodeData", "$EndNodeData"))
 
     result = export_view_csv(msh, tmp_path / "must_not_exist.csv")
 

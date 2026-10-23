@@ -54,6 +54,8 @@ import traceback
 _RS = "\x1e"
 _T0 = time.time()
 
+from radia_mcp.gmsh.runtime import qualify_runtime
+_RUNTIME = qualify_runtime()
 import gmsh
 gmsh.initialize(["-noconfig"])
 gmsh.option.setNumber("General.Terminal", 0)
@@ -74,6 +76,7 @@ def _status():
         pass
     return {
         "ok": True,
+        "runtime": _RUNTIME,
         "pid": os.getpid(),
         "gmsh_version": gmsh.option.getString("General.Version"),
         "python_version": sys.version.split()[0],
@@ -138,6 +141,7 @@ for _line in sys.stdin:
             raise
         except BaseException:
             _resp = {"ok": False, "error": traceback.format_exc()[-4000:]}
+    _resp['runtime'] = _RUNTIME
     sys.stdout.write(_RS + json.dumps(_resp) + "\n")
     sys.stdout.flush()
     if _resp.get("bye"):
@@ -166,7 +170,7 @@ class GmshSession:
     def __init__(self):
         if not gmsh_available():
             raise GmshSessionError(
-                "gmsh Python package not installed (pip install gmsh)")
+                "Gmsh 5 development package missing; install the latest official development wheel and record its provenance")
         self._log_dir = Path(tempfile.mkdtemp(prefix="radia_mcp_gmsh_session_"))
         self.log_path = self._log_dir / "worker.log"
         self._log_handle = open(self.log_path, "w", encoding="utf-8")

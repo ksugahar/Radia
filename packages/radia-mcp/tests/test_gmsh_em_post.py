@@ -17,6 +17,8 @@ every reduction below has a closed form:
   a_1 = r, b_1 = 2 r and every other bin is zero.
 """
 
+from msh42_fixtures import field_section
+
 import importlib.util
 import math
 
@@ -31,7 +33,7 @@ _GMSH_AVAILABLE = importlib.util.find_spec("gmsh") is not None
 # Kuhn decomposition of the cube [-0.5, 0.5]^3 (see the particle-trace
 # tests): 6 positively oriented tets sharing the diagonal node1->node8.
 _CUBE = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $Nodes
 1 8 1 8
@@ -73,12 +75,7 @@ B_UNIFORM = 2.0            # Tesla, along +z
 
 
 def _nodedata(name, ncomp, rows, time=0.0, step=0):
-    lines = ["$NodeData", "1", f'"{name}"', "1", str(time), "3",
-             str(step), str(ncomp), str(len(rows))]
-    for tag, vals in rows:
-        lines.append(str(tag) + " " + " ".join(f"{v:.16g}" for v in vals))
-    lines.append("$EndNodeData")
-    return "\n".join(lines) + "\n"
+    return field_section('NodeData', name, ncomp, rows, time=time, step=step)
 
 
 def _write(tmp_path, text, name):

@@ -25,16 +25,54 @@ from radia_mcp.gmsh.render import _build_clip
 
 
 def _tiny_msh(path):
-    """Smallest valid v4.1 file with one node view (never probed --
+    """Smallest valid v4.2 file with one node view (never probed --
     the argument checks under test fire first)."""
     path.write_text(
-        "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n"
-        "$Entities\n0 0 0 1\n1 0 0 0 1 1 1 0 0\n$EndEntities\n"
-        "$Nodes\n1 4 1 4\n3 1 0 4\n1\n2\n3\n4\n"
-        "0 0 0\n1 0 0\n0 1 0\n0 0 1\n$EndNodes\n"
-        "$Elements\n1 1 1 1\n3 1 4 1\n1 1 2 3 4\n$EndElements\n"
-        "$NodeData\n1\n\"f\"\n1\n0\n3\n0\n1\n4\n"
-        "1 1.0\n2 1.0\n3 1.0\n4 1.0\n$EndNodeData\n",
+        """$MeshFormat
+4.2 0 8
+$EndMeshFormat
+$Entities
+0 0 0 1
+1 0 0 0 1 1 1 0 0 0
+$EndEntities
+$Nodes
+1 4 1 4
+3 1 0 4
+1
+2
+3
+4
+0 0 0
+1 0 0
+0 1 0
+0 0 1
+$EndNodes
+$Elements
+1 1 1 1
+3 1 4 1
+1 1 2 3 4
+$EndElements
+$NodeData
+1
+"f"
+1
+0
+3
+0
+1
+4
+1 4 1 4
+4
+1
+2
+3
+4
+1.0
+1.0
+1.0
+1.0
+$EndNodeData
+""",
         encoding="utf-8")
     return path
 
