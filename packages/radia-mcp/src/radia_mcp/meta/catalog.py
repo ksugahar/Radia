@@ -715,7 +715,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "radia_mcp_by_tag", "radia_mcp_related",
                             "radia_mcp_health",
                               "radia_mcp_validate_solver_artifact",
-                              "radia_mcp_operations"],
+                              "radia_mcp_operations", "tests_design_guide"],
         "related": ["literature-index", "document-meta"],
         "tags": ["meta"],
     },

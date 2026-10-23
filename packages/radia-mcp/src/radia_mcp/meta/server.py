@@ -23,6 +23,7 @@ from mcp.types import ToolAnnotations
 from radia_mcp.common import register_status_tool
 from radia_mcp.common.mcp_contract import validate_solver_artifact_identity
 from . import bug_patterns, catalog, operations
+from .knowledge.tests_design import get_tests_design_guide
 
 mcp = FastMCP("mcp-server-radia-meta")
 
@@ -222,6 +223,9 @@ def radia_mcp_golden_gate(check_path: bool = False) -> dict:
     links, external-MCP boundaries, and optional entry-point visibility without
     launching every server selftest. For the full gate, run the commands
     returned under ``full_gate_commands``.
+
+    For numerical lock authoring, use ``tests_design_guide``; this fleet gate
+    does not certify physical accuracy or approve numerical baselines.
     """
     servers = catalog.list_all()
     catalog_names = set(catalog.CATALOG)
@@ -359,6 +363,18 @@ def radia_mcp_golden_gate(check_path: bool = False) -> dict:
 # ============================================================
 
 @mcp.tool()
+def tests_design_guide(section: str = "overview") -> dict:
+    """Read the AI-authored electromagnetic tests design manual, one section.
+
+    Start with overview; the response lists section IDs. Covers sensitive locks,
+    production mutation evidence, coverage limits and execution preflight.
+    Read-only: does not execute cases, modify baselines or approve criteria.
+    Unknown section IDs raise with the allowed choices.
+    """
+    return get_tests_design_guide(section)
+
+
+@mcp.tool()
 def bug_patterns_lookup(topic: str = "",
                         severity: str = "",
                         recent_days: int = 0) -> dict:
@@ -368,6 +384,9 @@ def bug_patterns_lookup(topic: str = "",
     plugin / license-handling code -- the catalog records every
     bug class the lab has hit in real incidents, with the prevention
     rule for each.  Saves repeating the same mistakes.
+
+    For the lock-creation procedure, use ``tests_design_guide``. This lookup
+    remains the incident catalog rather than a second design manual.
 
     Args:
         topic: substring filter against tags + id + title.
@@ -457,6 +476,9 @@ def main():
         gate = radia_mcp_golden_gate()
         print(f"  golden gate: {gate['level']} ({len(gate['checks'])} checks)")
         assert gate["all_passed"], gate
+        guide = tests_design_guide()
+        assert guide["section"] == "overview" and guide["read_only"] is True
+        print(f"  tests design guide: {len(guide['sections'])} sections")
         print("  PASSED")
         return
 
