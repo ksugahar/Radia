@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased - Gmsh post-processing support
+
+- Gmsh MSH 4.2 export for post-processing and visualization only; solver meshes remain checked `.vol` files with their versioned contracts. No Gmsh-to-`.vol` route.
+- Require the official Gmsh 5 development runtime and reject other MSH formats.
+- Use stored post-processing fixtures instead of invoking Gmsh meshing in tests.
+
 ## 2.2.6 - Native input validation and debug references
 
 - Embed filename-only PDB references in both native payloads.

@@ -116,7 +116,7 @@ The BEM solver uses BND elements only. Volume elements are ignored.
 """
 
 EXPORT_GMSH_V42 = """
-# Gmsh v4.2 Export (order 1-3)
+# Gmsh MSH 4.2 post-processing support (order 1-3)
 
 ```
 export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
@@ -403,7 +403,7 @@ EXPORT_COMPARISON = """
 | 2D mode | No | Yes | Yes | Yes | Yes (twod/axi) | No |
 | Companion | .vol.json | .geo + .geo.opt launch recipe | - | - | - | d3 |
 
-## export netgen vs Gmsh for NGSolve
+## Checked .vol solver input vs Gmsh post-processing support
 
 | Aspect | export netgen | export gmsh |
 |--------|---------------------|-------------------|
@@ -429,7 +429,7 @@ EXPORT_DECISION_GUIDE = """
   ```
   Works for ANY geometry shape. No STEP files, no OCC, no SetGeomInfo.
 
-- **Alternative (order 1-3)** -> Use `export gmsh` for GMSH visualization:
+- **Post-processing support (order 1-3)** -> Use `export gmsh` for GMSH visualization:
   ```python
   cubit.cmd('export gmsh "mesh.msh" order 3 overwrite')
   # Supports order 1-3 (wedge limited to order 2). Order 4-5: error.
@@ -686,6 +686,9 @@ not inferred from `.vol` label names.
 """
 
 
+GMSH_POSTPROCESSING_SUPPORT = 'Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.'
+
+
 def get_export_documentation(format: str = "all") -> str:
 	"""Return export documentation by format name."""
 	topics = {
@@ -703,9 +706,9 @@ def get_export_documentation(format: str = "all") -> str:
 
 	format = format.lower().strip()
 	if format == "all":
-		return EXPORT_OVERVIEW + "\n\n" + EXPORT_COMPARISON
+		return GMSH_POSTPROCESSING_SUPPORT + "\n\n" + EXPORT_OVERVIEW + "\n\n" + EXPORT_COMPARISON
 	elif format in topics:
-		return topics[format]
+		return GMSH_POSTPROCESSING_SUPPORT + "\n\n" + topics[format]
 	else:
 		return (
 			f"Unknown format: '{format}'. "

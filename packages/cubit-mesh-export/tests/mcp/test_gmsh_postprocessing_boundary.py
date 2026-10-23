@@ -33,3 +33,14 @@ def test_exporter_has_no_gmsh_meshing_or_solver_conversion_calls():
                 if name == "gmsh.model.mesh.generate" or name.endswith("ReadGmshMesh"):
                     violations.append((str(path.relative_to(root)), node.lineno, name))
     assert not violations, violations
+
+
+def test_public_gmsh_descriptions_state_postprocessing_boundary():
+    from cubit_mesh_export.mcp.knowledge.export import get_export_documentation
+    descriptions = [server.cubit_gmsh_v42_inventory.__doc__,
+                    server.cubit_gmsh_v42_mixed_order_gate.__doc__,
+                    get_export_documentation("gmsh_v42")]
+    for text in descriptions:
+        assert "post-processing" in text.lower(), text
+        assert ".vol" in text, text
+        assert "solver" in text.lower(), text

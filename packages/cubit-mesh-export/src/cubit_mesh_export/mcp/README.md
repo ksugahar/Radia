@@ -1,5 +1,7 @@
 # `cubit_mesh_export.mcp` — Cubit mesh scripting MCP server
 
+Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+
 The production `core` profile exposes the operating workflows directly and
 groups fine-grained scenario/identity checks behind `cubit_validation_catalog`
 and `cubit_validation_run`. The underlying Python checks remain independently
