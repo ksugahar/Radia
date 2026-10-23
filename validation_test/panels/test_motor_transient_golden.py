@@ -58,7 +58,7 @@ def _run(extra_args, mesh_path, output_dir):
         result = json.load(f)
     assert result["gmsh_file"] == os.path.abspath(output_msh)
     with open(output_msh, "r", encoding="utf-8") as f:
-        assert f.read(40).startswith("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
+        assert f.read(40).startswith("$MeshFormat\n4.2 0 8\n$EndMeshFormat\n")
     return result
 
 
