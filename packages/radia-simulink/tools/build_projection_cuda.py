@@ -4,6 +4,19 @@ import argparse,ctypes,hashlib,json,os,socket,subprocess,sys,tempfile
 import importlib.util
 import importlib.metadata
 
+def create_build_directory():
+    """CI scratch belongs to the runner; local callers own their temp settings."""
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        value = os.environ.get('RUNNER_TEMP')
+        if not value:
+            raise RuntimeError('CI projection build requires RUNNER_TEMP')
+        base = Path(value)
+        if not base.is_absolute() or not base.is_dir():
+            raise RuntimeError('RUNNER_TEMP must be an existing absolute directory')
+    else:
+        base = Path(tempfile.gettempdir())
+    return Path(tempfile.mkdtemp(prefix='projection-cuda-', dir=base))
+
 def projection_dependencies():
     spec=importlib.util.find_spec('netgen')
     if spec is None or not spec.origin:
@@ -33,7 +46,7 @@ def main():
     admission=require_build_admission(root,'projection',args.build_admission,args.build_admission_sha256)
     ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
     source=root/'packages/radia-simulink/native/radia_cuda_projection.cu'
-    out=Path(tempfile.mkdtemp(prefix='projection-cuda-',dir='C:/temp'))
+    out=create_build_directory()
     receipt=dict(accepted=False,a100_used=False,scope='Experimental native mapped-target replay, not full RadFld migration',source_commit=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip(),source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),taskmanager_started=False)
     receipt.pop('a100_used')
     receipt['build_admission']=admission
