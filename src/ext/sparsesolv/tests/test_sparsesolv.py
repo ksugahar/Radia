@@ -372,6 +372,7 @@ def test_ams_rejects_zero_free_auxiliary_vertices():
     free interior edges; no linear solve or accuracy criterion is involved.
     """
     from ngsolve.meshes import MakeStructured3DMesh
+    from netgen.libngpy._meshing import NgException
     import radia.sparsesolv_ngsolve as ssn
 
     mesh = MakeStructured3DMesh(hexes=False, nx=2, ny=1, nz=1)
@@ -399,7 +400,8 @@ def test_ams_rejects_zero_free_auxiliary_vertices():
     form += (InnerProduct(curl(u), curl(v)) + 1j*InnerProduct(u, v)) * dx
     pre = Preconditioner(form, "bddc", coarsetype="sparsesolv_ams",
                          coarseflags={"cycles": 4})
-    with pytest.raises(RuntimeError, match=message):
+    # NGSolve wraps the native RuntimeError while assembling BDDC.
+    with pytest.raises(NgException, match=message):
         with TaskManager():
             form.Assemble()
 
