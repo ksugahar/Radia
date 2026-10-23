@@ -70,7 +70,8 @@ end
 
 function testGpuModelConstructionMatchesUpstream(testCase)
 root=fileparts(mfilename('fullpath'));
-oracle=jsondecode(fileread(fullfile(root,'fixtures','optuna50_cuda_oracle.json')));
+oracle=jsondecode(fileread(fullfile(root,'..','..','packages','radia-optuna', ...
+    'oracles','optuna50_cuda_oracle.json')));
 verifyEqual(testCase,string(oracle.optuna_version),"5.0.0");
 previous=radia.optuna.executionMode();
 restoreMode=onCleanup(@()radia.optuna.executionMode(previous));
