@@ -286,6 +286,21 @@
     ],
     "tests/fixtures/esim_slab_A25_cf77cd6e0.json": [
       "tests/test_esim_finite_slab_regression.py"
+    ],
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": [
+      "tests/test_ih_ams_f1_surrogate.py"
+    ],
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/complex_compact_ams.hpp": [
+      "tests/test_ih_ams_f1_surrogate.py"
+    ],
+    "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_wirebasket.hpp": [
+      "tests/test_ih_ams_f1_surrogate.py"
+    ],
+    "tests/fixtures/ih_f1_m2_p1_5_3_3.json": [
+      "tests/test_ih_ams_f1_surrogate.py"
+    ],
+    "tests/fixtures/ih_f1_m2_p2_5_3_3.json": [
+      "tests/test_ih_ams_f1_surrogate.py"
     ]
   },
   "profiles": {
@@ -446,7 +461,8 @@
         "tests/test_lamination_api.py",
         "validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py",
         "tests/feec/test_hdiv_prolate_regression_lock.py",
-        "tests/test_esim_finite_slab_regression.py"
+        "tests/test_esim_finite_slab_regression.py",
+        "tests/test_ih_ams_f1_surrogate.py"
       ]
     },
     "sparsesolv": {

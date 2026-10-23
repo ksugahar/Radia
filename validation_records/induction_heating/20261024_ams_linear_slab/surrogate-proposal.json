@@ -1,8 +1,6 @@
 {
-  "status": "PROPOSAL_USER_DECISION_REQUIRED",
-  "tolerance_approved": false,
-  "proposed_rtol": 1e-09,
-  "proposed_atol": 0,
+  "status": "USER_APPROVED_TOLERANCE",
+  "tolerance_approved": true,
   "quantity": "computed Joule power W, one frozen value per native route",
   "historical_baseline_source": "accepted F1 run04, not a fresh manufactured oracle",
   "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
@@ -30,8 +28,11 @@
         10.335590300004696,
         10.548357599996962
       ],
-      "tolerance": null,
-      "user_decision_required": true
+      "tolerance": {
+        "rtol": 1e-08,
+        "atol": 0
+      },
+      "user_decision_required": false
     },
     "2": {
       "power_W_values": [
@@ -53,8 +54,11 @@
         16.848385900011635,
         17.91569900000468
       ],
-      "tolerance": null,
-      "user_decision_required": true
+      "tolerance": {
+        "rtol": 1e-08,
+        "atol": 0
+      },
+      "user_decision_required": false
     }
   },
   "routes": [
@@ -105,5 +109,10 @@
     "Zero-output mutations killed existing convergence contracts; no approved scalar tolerance yet",
     "A4 rejects historical/new artifact identity mismatch; native internal branch coverage not measured"
   ],
-  "rationale": "Observed relative noise <=2.32e-15. For P=||J||^2/(2sigma), relative change <=2 epsilon+epsilon^2 for a relative J difference epsilon. Historical same-matrix J parity yields bounds <=1.59e-10 on these two coarse routes; proposed1e-9 provides >=6.3x margin over this measured algebraic scale and >4e5x observed repeat noise. This is an empirical proposal, not a mathematical portability guarantee; exceeding it requires review, never automatic widening."
+  "rationale": "Repeat noise <=2.32e-15 and the historical coarse-route algebraic scale informed an owner proposal1e-9. The user explicitly chose1e-8, atol0. This is not a mathematical portability guarantee; exceeding it requires review, never automatic widening.",
+  "approved_rtol": 1e-08,
+  "approved_atol": 0,
+  "approval_ref": "APPROVAL-20261024-IH-AMS-F1-SURROGATE-TOL-01",
+  "approval_sha256": "2daabd08d5614a9b856ec1f7bd3215e5c0ac8fd63833bf3906c893f67aed8157",
+  "current_main_guard_decision": "Guard dropped; never triggered for m2p1/m2p2, so measured numerical paths apply unchanged. Final lock checked on current-main native build; no repeatability remeasurement."
 }

@@ -20,7 +20,7 @@
   "quantities": {
     "power_W": {
       "expected": 1.3152840607420637e-05,
-      "rtol": 1e-09,
+      "rtol": 1e-08,
       "atol": 0,
       "unit": "W"
     }

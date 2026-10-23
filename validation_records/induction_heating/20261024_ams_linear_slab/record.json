@@ -97,7 +97,7 @@
   },
   "result": {
     "path": "adoption-result.json",
-    "sha256": "25becdaca3a453b1a3fbb3ae33a949eb9644224e19fdf8df9843fc38b1d9d99a"
+    "sha256": "d596767646081973d1770e2a9bbee83da57b3454e1ce08a3eb4f1c72c9d358b9"
   },
   "key_values": {
     "a_over_delta": {
@@ -1170,12 +1170,12 @@
       "approved_on": "2026-10-24",
       "approval_ref": "APPROVAL-20261024-IH-AMS-F1-FROZEN-03",
       "criterion_sha256": "f9b4e5426eccb9939f2e8008026ad2bbcc9c53d8d8706fc962a5a47f8e6d554e",
-      "rationale_sha256": "1bd88ccb220baea2c2e39639950c8aefb5e5e8d038aca160020ef8773860af57",
+      "rationale_sha256": "97b1f0f4331c33c3a6379955662c7edff3952a8a1c2eb93f0ba8ae3a9f2c049e",
       "scope_sha256": "9150d29b505d78fd1c2ca15554872df3de5661d3570ef529bcf82fcb52b672db"
     },
     "result": {
       "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
-      "artifact_sha256": "25becdaca3a453b1a3fbb3ae33a949eb9644224e19fdf8df9843fc38b1d9d99a",
+      "artifact_sha256": "d596767646081973d1770e2a9bbee83da57b3454e1ce08a3eb4f1c72c9d358b9",
       "verdict": "PASS",
       "levels": [
         {
@@ -1688,7 +1688,7 @@
       "tests/test_ih_ams_f1_surrogate.py"
     ],
     "rationale": {
-      "inference": "Historical5.3.3 artifact passed the preregistered linear slab campaign. This is not a current-main or release qualification claim. Proposed surrogate tolerances still require user decision before integration.",
+      "inference": "Historical5.3.3 artifact passed the frozen linear slab campaign. This is not current-main or release qualification. The separate surrogate tolerance is explicitly user-approved at1e-8, atol0.",
       "scope": "Linear homogeneous driven slab a/delta2 only; no nonlinear BH, GPU, thermal, PEEC-BEM/fullcoil or other skin-depth ratios",
       "assumptions": [
         {
@@ -1733,7 +1733,7 @@
         {
           "id": "protection.proposal",
           "kind": "coverage",
-          "statement": "Surrogate proposal uses coarse m2p1 and m2p2, same native entry families, measured repeatability and zero-output mutation failures; user has not yet approved proposed lock tolerance. A4 exact identity mismatch is reported, not hidden.",
+          "statement": "Coarse m2p1 and m2p2 exercise the same native entry families. Repeatability and zero-output mutation failures are measured; user approval APPROVAL-20261024-IH-AMS-F1-SURROGATE-TOL-01 sets rtol1e-8/atol0. A4 historical/current identity mismatch remains explicit.",
           "evidence_refs": [
             "artifact:result"
           ],
