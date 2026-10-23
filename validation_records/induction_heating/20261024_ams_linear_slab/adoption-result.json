@@ -529,9 +529,13 @@
     ],
     "independent_review_sha256": "65b811111551fce85e5f9659c0843461920f2d2e420a11c623ba2fa861f54364"
   },
-  "surrogate_status": "PROPOSAL rtol1e-9/atol0; user decision pending, not numerical CI qualification",
+  "surrogate_status": "User approved rtol=1e-8/atol=0; final fixed AMS qualification recorded separately",
   "complete_original_scientific_result": {
     "path": "result.json",
     "sha256": "b214e6c5ef8263e50b78825d4e457aabcc4b9ca3076e592dc7f858f72050ec64"
+  },
+  "surrogate_tolerance_approval": {
+    "id": "APPROVAL-20261024-IH-AMS-F1-SURROGATE-TOL-01",
+    "sha256": "2daabd08d5614a9b856ec1f7bd3215e5c0ac8fd63833bf3906c893f67aed8157"
   }
 }

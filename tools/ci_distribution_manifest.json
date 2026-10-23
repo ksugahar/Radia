@@ -1415,7 +1415,9 @@
     },
     {
       "pattern": "tools/build_linux.py",
-      "owners": ["radia"]
+      "owners": [
+        "radia"
+      ]
     },
     {
       "pattern": "tools/native_build_provenance.ps1",
@@ -3821,7 +3823,8 @@
             "tests/analytical_formulas/__init__.py",
             "validation_test/panels/__init__.py",
             "tools/regression_lock.py",
-            "!**/*.md"
+            "!**/*.md",
+            "tests/test_ih_ams_f1_surrogate.py"
           ]
         },
         "push": {
@@ -4112,7 +4115,8 @@
             "tests/analytical_formulas/__init__.py",
             "validation_test/panels/__init__.py",
             "tools/regression_lock.py",
-            "!**/*.md"
+            "!**/*.md",
+            "tests/test_ih_ams_f1_surrogate.py"
           ]
         },
         "schedule": [

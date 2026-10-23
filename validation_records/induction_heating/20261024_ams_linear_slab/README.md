@@ -21,16 +21,15 @@ strict p-monotonicity still gate. The 1% finest-error criterion applies to p=2/3
 The actual largest iterative true residual is 1.0465108862687692e-12, below the
 approved 1e-6 gate; internal GMRES target flags are retained without relabeling.
 
-## Historical adoption proposal
+## Historical adoption
 
 This record binds the actual radia5.3.3 source8a988152/native4b09e365/run04.
 It is explicitly stale with respect to current-main qualification. It does not
-backfill source hashes after the constructor guard fix. The original6-case
+backfill source hashes to current main. The original6-case
 campaign is not replayed here. Re-certification belongs to the release wheel.
 
-The proposed surrogate covers m2p1 complex AMS and m2p2 full-HCurl BDDC+AMS.
-Its proposed rtol1e-9/atol0 is NOT USER-APPROVED yet; do not merge or run
-numerical CI qualification until that decision. Both production zero-output
+The surrogate covers m2p1 complex AMS and m2p2 full-HCurl BDDC+AMS.
+Its rtol=1e-8/atol=0 is user-approved by APPROVAL-20261024-IH-AMS-F1-SURROGATE-TOL-01. Both production zero-output
 mutations failed the unchanged residual contract and clean sources/native
 were restored. Python tracing does not establish native internal coverage;
 strict A4 rejects historical/current source and artifact identity differences.
@@ -43,3 +42,8 @@ Case runtimes were not recorded by run04 and are explicitly null. Baseline
 runtime metadata comes from the separately identified surrogate measurement.
 
 Scope excludes nonlinear BH, GPU, thermal/PEEC-BEM/fullcoil and other a/delta.
+
+The current-main native build has no empty-vertex guard. The previously measured
+m2 cases never triggered that guard; its removal changes neither case's numerical
+path. Recorded repeatability and production-native mutations remain measurement
+evidence, not a replay or re-certification of the historical campaign.

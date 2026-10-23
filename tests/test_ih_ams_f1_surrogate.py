@@ -1,4 +1,4 @@
-"""Proposed surrogate tests for the historical linear volumetric F1 slab.
+"""Surrogate tests for the historical linear volumetric F1 slab.
 
 Guards: Breakage of the complex AMS and full-HCurl BDDC+sparsesolv_ams solve
 routes that changes computed Joule power or loses finite convergent output.
@@ -9,8 +9,8 @@ Assumes: surrogate test of adoption record induction_heating/20261024_ams_linear
 m2p1 is the lowest-order route; m2p2 is the coarsest h level of the BDDC route.
 Constant real mu/sigma, exact tangent trace, peak phasors exp(+i omega t).
 Historical values are from radia5.3.3/source8a988152/native4b09e365/run04.
-PROPOSAL ONLY: rtol1e-9/atol0 awaits USER approval; this candidate is not cleared
-for merge or numerical qualification. No analytic accuracy gate belongs here.
+User approval APPROVAL-20261024-IH-AMS-F1-SURROGATE-TOL-01: rtol=1e-8, atol=0.
+No analytic accuracy gate belongs here.
 Runtime is metadata, not an assertion. No nonlinear BH, GPU, full-coil or thermal claim.
 """
 import importlib.util
