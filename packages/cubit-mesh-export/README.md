@@ -552,11 +552,30 @@ Install Gmsh **alone** from its official development index in an isolated Python
 python -m pip install --pre -i https://gmsh.info/python-packages-dev gmsh --report gmsh-install.json
 python -m pip install "cubit-mesh-export[mesh-quality]"
 $env:CUBIT_GMSH_INSTALL_REPORT = (Resolve-Path gmsh-install.json).Path
+$gmsh = (Get-Content -Raw gmsh-install.json | ConvertFrom-Json).install | Where-Object { $_.metadata.name -eq 'gmsh' }
+python -m pip download --no-index --no-deps --dest gmsh-wheel $gmsh.download_info.url
+$env:CUBIT_GMSH_WHEEL = (Get-ChildItem gmsh-wheel/*.whl).FullName
 ```
 
 The extra declares `gmsh>=5.0.0.dev0`; there is no dated or upper metadata pin.
 The quality runtime requires native major 5 and proves MSH 4.2 write/read support
 in its isolated child before invoking Gmsh. Non-4.2 mesh input is rejected.
-The install report retains the original wheel hash; loaded wrapper/native hashes
-are recorded separately and are not a reconstructed wheel identity. Qualification
+Retain the original wheel selected by the installer report; the runtime verifies
+its full hash and compares the actual wrapper/native payloads against its ZIP
+bytes. Neither installed RECORD nor a reconstructed wheel is the integrity oracle. Qualification
 uses a hash-verified archived official wheel, not an unrecorded index resolution.
+
+The exporter supports geometric orders 1-3 for hex/tet/triangle/quad, and 1-2
+for wedge/pyramid. Unsupported requests fail before creating a partial `.msh`;
+they never substitute a lower-order mesh. Pyramid 3 export remains unqualified:
+the current official reference runtime advertises type 125 but cannot construct
+it. This restriction is a pending adoption disposition, not a physics criterion
+change. Licensed regression execution (with admitted compute resources) is:
+
+```powershell
+python validation_test/cubit/run_gmsh42_hex_order3.py --cubit-exe <console-executable> --plugin <candidate.ccm> --install-report gmsh-install.json --wheel <retained-official.whl> --out <new-job-output>
+```
+
+The executable checks the loaded candidate DLL and uses Gmsh's positive-Jacobian
+contract to expose reversed cubic edge ordering. It does not replace release
+handler acceptance or numerical validation.

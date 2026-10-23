@@ -1,7 +1,7 @@
 """Guards: Gmsh 4/native mismatches and old mesh formats cannot pass quality gates.
 
 Assumes: official Gmsh 5 is installed in the caller's isolated environment;
-its pip install report supplies the original wheel hash when retained. The real
+its pip install report and retained original wheel bind the loaded bytes. The real
 Gmsh API roundtrip is interoperability evidence, not numerical accuracy proof.
 """
 import gmsh
@@ -34,6 +34,22 @@ def test_major4_is_rejected_before_initializing_native_state(monkeypatch):
 def test_missing_wheel_identity_is_not_silently_reconstructed(monkeypatch):
     monkeypatch.delenv("CUBIT_GMSH_INSTALL_REPORT", raising=False)
     with pytest.raises(RuntimeError, match="wheel identity missing"):
+        runtime.probe_gmsh5()
+    assert not gmsh.isInitialized()
+
+
+def test_original_wheel_is_required_instead_of_trusting_record(monkeypatch):
+    monkeypatch.delenv("CUBIT_GMSH_WHEEL", raising=False)
+    with pytest.raises(RuntimeError, match="original wheel missing"):
+        runtime.probe_gmsh5()
+    assert not gmsh.isInitialized()
+
+
+def test_changed_original_wheel_is_rejected_before_native_initialization(monkeypatch, tmp_path):
+    wheel = tmp_path / "changed.whl"
+    wheel.write_bytes(b"changed archive")
+    monkeypatch.setenv("CUBIT_GMSH_WHEEL", str(wheel))
+    with pytest.raises(RuntimeError, match="SHA256 differs"):
         runtime.probe_gmsh5()
     assert not gmsh.isInitialized()
 

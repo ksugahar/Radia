@@ -123,6 +123,9 @@ export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
 ```
 
 v4.2 is the only supported GMSH format. No block assignment required.
+Current geometric order limits: hex/tet/triangle/quad 1-3; wedge/pyramid 1-2.
+Pyramid order 3 is unqualified with the current Gmsh 5 native consumer.
+Unsupported orders fail explicitly; no lower-order substitution.
 For Radia post-processing, treat this `.msh` as raw mesh/data and open the
 generated `.geo` launch recipe. The command should attach `case.geo`,
 `case.geo.opt`, and `case.msh.opt`; a plain `case.opt` is not an Explorer

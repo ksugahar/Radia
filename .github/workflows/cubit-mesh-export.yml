@@ -223,13 +223,41 @@ jobs:
           # Resolve Gmsh alone from its official dev index; other dependencies
           # stay on PyPI. Retain pip's original wheel hash for runtime evidence.
           $env:CUBIT_GMSH_INSTALL_REPORT = Join-Path $env:RUNNER_TEMP 'cubit-gmsh-install.json'
-          python -m pip install --pre -i https://gmsh.info/python-packages-dev `
+          python -m pip install --force-reinstall --no-deps --pre -i https://gmsh.info/python-packages-dev `
             gmsh --report $env:CUBIT_GMSH_INSTALL_REPORT
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "CUBIT_GMSH_INSTALL_REPORT=$env:CUBIT_GMSH_INSTALL_REPORT" >> $env:GITHUB_ENV
+          $gmsh = @((Get-Content -Raw $env:CUBIT_GMSH_INSTALL_REPORT | ConvertFrom-Json).install |
+            Where-Object { $_.metadata.name -eq 'gmsh' })
+          if ($gmsh.Count -ne 1) { throw 'Expected one Gmsh install identity' }
+          $url = [uri]$gmsh[0].download_info.url
+          if ($url.Scheme -ne 'https' -or $url.Host -ne 'gmsh.info') {
+            throw 'Gmsh must come from its official development index'
+          }
+          $archives = Join-Path $env:RUNNER_TEMP 'cubit-gmsh-wheel'
+          python -m pip download --no-index --no-deps --dest $archives $url.AbsoluteUri
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $wheels = @(Get-ChildItem -LiteralPath $archives -Filter '*.whl' -File)
+          if ($wheels.Count -ne 1) { throw 'Expected one original Gmsh wheel' }
+          $env:CUBIT_GMSH_WHEEL = $wheels[0].FullName
+          $actual = (Get-FileHash -LiteralPath $env:CUBIT_GMSH_WHEEL -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $gmsh[0].download_info.archive_info.hashes.sha256) {
+            throw 'Original Gmsh wheel hash does not match installer report'
+          }
+          "CUBIT_GMSH_WHEEL=$env:CUBIT_GMSH_WHEEL" >> $env:GITHUB_ENV
           # Resolve declared public dependencies normally; absence probes reject
           # Radia/private foundations. Feature tests use the wheel's extras.
           python -m pip install "$($wheel.FullName)[mesh-quality,sculpt,youtube]"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          @'
+          import json, os
+          from pathlib import Path
+          from cubit_mesh_export._gmsh_runtime import probe_gmsh5
+          identity = probe_gmsh5()
+          identity['source_sha'] = os.environ['GITHUB_SHA']
+          (Path(os.environ['RUNNER_TEMP']) / 'cubit-gmsh-runtime.json').write_text(
+              json.dumps(identity, indent=2), encoding='utf-8')
+          '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -I tools\check_cubit_standalone.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -239,6 +267,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pytest packages\cubit-mesh-export\tests\mcp --confcutdir=packages\cubit-mesh-export\tests\mcp -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Retain Gmsh runtime identity
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cubit-mesh-export-gmsh-runtime
+          path: ${{ runner.temp }}/cubit-gmsh-runtime.json
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload cubit-mesh-export wheel
         uses: actions/upload-artifact@v4
