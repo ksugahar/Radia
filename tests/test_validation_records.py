@@ -1036,3 +1036,44 @@ def test_accuracy_champion_cannot_be_worse_than_origin(champion_sample):
     for level, error in zip(record["champion"]["levels"], (.9, .5)): level["error"] = error
     reseal_champion_levels(path, record)
     with pytest.raises(ValueError, match="champion origin error bound"): validate_record(root, path)
+
+
+def test_recorded_finest_still_checks_rate_and_preserves_large_error(adoption_sample):
+    root, path, record = adoption_sample
+    a = record["adoption"]
+    a["criterion"]["series"][0]["finest_threshold"] = {
+        "operator": "recorded-only", "reason": "Synthetic user approval excludes finest accuracy only"}
+    for row in a["result"]["levels"]:
+        row["error"] *= 1000
+    seal_adoption(path, record)
+    assert validate_record(root, path)["adoption_claim"] is True
+    a["criterion"]["series"][0]["minimum_rate"] = 2.5
+    seal_adoption(path, record)
+    with pytest.raises(ValueError, match="series verdict"):
+        validate_record(root, path)
+
+
+@pytest.mark.parametrize("change", ["no-reason", "hidden-threshold", "numeric-no-value"])
+def test_ambiguous_finest_gate_is_rejected(adoption_sample, change):
+    root, path, record = adoption_sample
+    gate = {"operator": "recorded-only", "reason": "Synthetic approval"}
+    if change == "no-reason": del gate["reason"]
+    elif change == "hidden-threshold": gate["value"] = 1e20
+    else: gate = {"operator": "le"}
+    record["adoption"]["criterion"]["series"][0]["finest_threshold"] = gate
+    seal_adoption(path, record)
+    with pytest.raises(ValueError):
+        validate_record(root, path)
+
+
+def test_missing_level_timing_is_explicit_not_zero(adoption_sample):
+    root, path, record = adoption_sample
+    row = record["adoption"]["result"]["levels"][0]
+    row["runtime_s"] = None
+    row["runtime_note"] = "Historical campaign recorded only its aggregate elapsed time"
+    seal_adoption(path, record)
+    assert validate_record(root, path)["adoption_claim"] is True
+    del row["runtime_note"]
+    seal_adoption(path, record)
+    with pytest.raises(ValueError, match="runtime_note"):
+        validate_record(root, path)
