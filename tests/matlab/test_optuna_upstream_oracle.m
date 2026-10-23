@@ -183,7 +183,7 @@ end
 function testPublicAPIInventoryReportsEvidenceClosureHonestly(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
 coverage=jsondecode(fileread(fullfile( ...
-    root,"matlab","optuna50_api_coverage.json")));
+    root,"packages","radia-optuna","matlab","optuna50_api_coverage.json")));
 verifyEqualWithPrecision(testCase,string(coverage.schema), ...
     "radia.optuna50-api-coverage.v1");
 verifyEqualWithPrecision(testCase,string(coverage.upstream_version),"5.0.0");
