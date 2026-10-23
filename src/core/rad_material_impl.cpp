@@ -1756,7 +1756,7 @@ void radTApplication::OutFieldCompRes(char* FieldChar, radTField* FieldArray, lo
 		FieldPtr++;
 		BufChar = ActualInitCharPtr;
 	}
-	int Dims[] = { InnerCount, Np};
+	int Dims[] = { InnerCount, static_cast<int>(Np)};
 	Send.MultiDimArrayOfDouble(TotOutArray, Dims, 2);
 	// RAII: automatic cleanup
 }

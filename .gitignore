@@ -49,6 +49,7 @@ radia-*/
 *.pyd
 *.mexw64
 *.pyd.build.json
+*.so.build.json
 *.mexw64.build.json
 *.ccm
 *.so
