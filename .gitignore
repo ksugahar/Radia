@@ -12,7 +12,6 @@ CLAUDE.local.md
 .mcp.json
 publish_to_pypi.cmd
 ngsolve_developers/
-to_developers/
 Build_PyPI_Package.ps1
 build_log.txt
 logs/
