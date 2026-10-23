@@ -89,11 +89,12 @@
     "criterion": {
       "reference": {
         "kind": "analytic",
-        "citation": "Canonical bibliography key haus1989electromagnetic: Haus and Melcher, Electromagnetic Fields and Energy (1989), ISBN 9780132490207, section 10.7, https://web.mit.edu/6.013_book/www/chapter10/10.7.html ; symmetric-boundary specialization verified in the attached derivation. DOI not verified.",
+        "citation": "Canonical bibliography key haus1989electromagnetic: Haus and Melcher, Electromagnetic Fields and Energy (1989), ISBN 9780132490207, section 10.7, https://web.mit.edu/6.013_book/www/chapter10/10.7.html ; symmetric-boundary specialization verified in the attached derivation.",
         "symbolic_verification": {
           "path": "symbolic-verification.json",
           "sha256": "61af5d85836566bb7f2e7e98eb4876a59b7af0ad964ba609ab062e74fdfc147e"
-        }
+        },
+        "bib_key": "haus1989electromagnetic"
       },
       "quantity": {
         "name": "relative complex L2 magnetic-field error",
@@ -257,7 +258,7 @@
       "approved_by": "user",
       "approved_on": "2026-10-23",
       "approval_ref": "APPROVAL-20261023-ESIM-SLAB-PHASE-01",
-      "criterion_sha256": "7edbceeeabc1362246e84a2dd822df19384916cacc99727cc3f37502bf9496d5",
+      "criterion_sha256": "fd75a829740344c708800268fed220ada574628e55460bb5096f18474690f267",
       "rationale_sha256": "ffa94243f1e50f62d568afd1354ac5b0916ac3eca787bd3edab4b3d5140adf19",
       "scope_sha256": "44caea84bc230e47764bba96dcef2a5d2bb2ac2033ff8608eda54890ee46f2ce"
     },
