@@ -8,9 +8,45 @@ from __future__ import annotations
 import ast
 from datetime import date
 import hashlib
+import importlib.util
 import json
 import math
+from pathlib import Path
 import re
+import sys
+from functools import lru_cache
+
+
+@lru_cache(maxsize=1)
+def _bib_parser():
+    """Reuse the canonical bibliography's stdlib parser without MCP imports."""
+    source = (Path(__file__).resolve().parents[1] /
+              "packages/radia-mcp/src/radia_mcp/bibliography/_bibparse.py")
+    spec = importlib.util.spec_from_file_location("validation_record_bibparse", source)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module.parse_bib
+
+
+def _analytic_reference(root, reference):
+    """Resolve the single canonical key; URLs alone never establish identity."""
+    _require("bib_key" in reference and "symbolic_verification" in reference,
+             "analytic reference", sorted(reference), "canonical bib_key and hashed symbolic-verification record")
+    canonical = root / "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib"
+    entries = [entry for entry in _bib_parser()(canonical.read_text(encoding="utf-8")) if entry.key]
+    keys = [entry.key for entry in entries]
+    _require(len(keys) == len(set(keys)), "canonical bibliography keys", keys, "unique citation keys")
+    matches = [entry for entry in entries if entry.key == reference["bib_key"]]
+    _require(len(matches) == 1, "analytic bibliography key", reference["bib_key"], "one existing canonical entry")
+    fields = matches[0].fields
+    doi = fields.get("doi", "").strip()
+    isbn = re.sub(r"[-\s]", "", fields.get("isbn", ""))
+    valid_isbn = (re.fullmatch(r"97[89][0-9]{10}", isbn) is not None and
+                  sum(int(digit) * (1 if i % 2 == 0 else 3) for i, digit in enumerate(isbn)) % 10 == 0)
+    _require(re.fullmatch(r"10\.[0-9]{4,9}/[^\s]+", doi) is not None or valid_isbn,
+             "analytic bibliography identifier", {"bib_key": reference["bib_key"], "doi": doi, "isbn": isbn},
+             "DOI or checksum-valid ISBN-13 (978/979); URL alone is insufficient")
 
 
 def criterion_hash(criterion):
@@ -123,8 +159,7 @@ def validate_adoption(root, folder, record, payload, *, local_path, sha256):
              expected_payload)
     reference = criterion["reference"]
     if reference["kind"] == "analytic":
-        _require("doi" in reference and "symbolic_verification" in reference,
-                 "analytic reference", sorted(reference), "DOI and hashed symbolic-verification record")
+        _analytic_reference(root, reference)
         _artifact(folder, reference["symbolic_verification"], local_path, sha256)
     elif reference["kind"] == "independent-route":
         _require("independence" in reference and "shared_components" in reference,
