@@ -753,7 +753,7 @@ def _native_config(
             "fin_sweep": electromagnetic.solver_payload.get("fin_sweep"),
         },
         "artifacts": {
-            "gmsh_format": "msh-v4.1",
+            "gmsh_format": "msh-v4.2",
             "gmsh": [str(path) for path in gmsh_files],
         },
         "generated_at_utc": _utc_now(),
@@ -810,7 +810,7 @@ def _result_payload(
             "primary": {"key": "P_wp_W", "value": primary_power_W},
             "artifacts": {
                 "gmsh_policy": "required",
-                "gmsh_format": "msh-v4.1",
+                "gmsh_format": "msh-v4.2",
                 "gmsh": [str(path) for path in artifacts if path.suffix == ".msh"],
                 "all": [str(path) for path in artifacts],
             },

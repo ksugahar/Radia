@@ -34,7 +34,7 @@ def test_application_manifest_has_no_notebook_workbenches():
     applications = {item["id"]: item for item in manifest["applications"]}
     spatial = manifest["library"]["spatial_artifact"]
     mesh_preflight = manifest["library"]["mesh_preflight"]
-    assert spatial["format"] == "GMSH .msh v4.1"
+    assert spatial["format"] == "GMSH .msh v4.2"
     assert spatial["location"] == "application run directory"
     assert spatial["scalar_only"] == "not-applicable"
     assert mesh_preflight["checker"] == "check-vol"
