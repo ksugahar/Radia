@@ -14,13 +14,19 @@ relaxation. This checks historical outputs, not analytic accuracy. It does not
 certify finite-thickness effects, adaptive refinement, nonlinear BH, full coils,
 GPU or FEM. Runtime is metadata, never an assertion.
 """
+import importlib.util
 from pathlib import Path
 
 from radia.esim_cell_problem import ESIMFiniteSlabSolver
-from tools.regression_lock import assert_regression, load_baseline
 
 
 def test_fixed_slab_impedance_and_phase_match_adopted_history():
+    root = Path(__file__).resolve().parents[1]
+    helper_spec = importlib.util.spec_from_file_location(
+        "esim_regression_helper", root / "tools/regression_lock.py"
+    )
+    helper = importlib.util.module_from_spec(helper_spec)
+    helper_spec.loader.exec_module(helper)
     conditions = {
         "geometry": "slab", "half_depth_m": 0.005,
         "sigma_S_per_m": 5e6, "frequency_Hz": 222e3,
@@ -41,12 +47,12 @@ def test_fixed_slab_impedance_and_phase_match_adopted_history():
         f"ESIM diffusion phase: actual Im(H1)/H0={phase}; expected <0 for "
         "exp(+j omega t). This surrogate depends on depth_mesh mesher grading."
     )
-    baseline = load_baseline(
+    baseline = helper.load_baseline(
         Path(__file__).parent / "fixtures" / "esim_slab_A25_cf77cd6e0.json"
     )
     try:
-        assert_regression({"Re_Z_ohm": float(result["Z"].real),
-                           "Im_H1_over_H0": phase}, baseline, conditions=conditions)
+        helper.assert_regression({"Re_Z_ohm": float(result["Z"].real),
+                                  "Im_H1_over_H0": phase}, baseline, conditions=conditions)
     except AssertionError as exc:
         raise AssertionError(
             "ESIM A25 surrogate depends on depth_mesh mesher grading and the "

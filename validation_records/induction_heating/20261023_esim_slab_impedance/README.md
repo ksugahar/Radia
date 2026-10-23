@@ -1,5 +1,7 @@
 # Recorded ESIM slab adoption
 
+This record excludes nonlinear BH, full-coil models, GPU execution and independent FEM validation.
+
 This is source-only numerical evidence using the Python ESIM source, not an
 exact-wheel or native-artifact qualification. The runtime package version was
 5.3.3 with the identified source overlaid. The exact original measurement entry
