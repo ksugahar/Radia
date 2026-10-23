@@ -29,13 +29,33 @@ def _prolate_Nz_analytic(c, a=1.0):
     return (1.0 - e * e) / e ** 2 * ((1.0 / (2.0 * e)) * log((1.0 + e) / (1.0 - e)) - 1.0)
 
 
-def test_prolate_spheroid_demag_factor():
-    c = 2.0                                              # 2:1 prolate, long axis = z
+def run_prolate_case(maxh=0.6, *, mesh_path=None):
+    """Run one production case at a mesh scale; return the production output.
+
+    Optional mesh_path retains identical mesh bytes across reproducibility runs.
+    The analytic oracle belongs only to the heavy validation entry below.
+    """
+    from pathlib import Path
+
+    c = 2.0
     geo = CSGeometry()
     geo.Add(Ellipsoid(Pnt(0, 0, 0), Vec(1, 0, 0), Vec(0, 1, 0), Vec(0, 0, c)))
     with ng.TaskManager():
-        mesh = ng.Mesh(geo.GenerateMesh(maxh=0.6))
-        Dw = Solve(mesh, mu_r=1000.0, H_ext=ng.CoefficientFunction((0, 0, 1.0)))["demag"]
-    Na = _prolate_Nz_analytic(c)
+        if mesh_path is not None and Path(mesh_path).is_file():
+            mesh = ng.Mesh(str(mesh_path))
+        else:
+            mesh = ng.Mesh(geo.GenerateMesh(maxh=maxh))
+            if mesh_path is not None:
+                mesh.ngmesh.Save(str(mesh_path))
+        return Solve(mesh, mu_r=1000.0, H_ext=ng.CoefficientFunction((0, 0, 1.0)))
+
+
+def assert_prolate_validation(Dw):
+    """Existing independent heavy criterion; never used by a regression lock."""
+    Na = _prolate_Nz_analytic(2.0)
     assert 0.15 < Na < 0.20, f"analytic prolate N_z sanity: {Na:.4f}"
     assert abs(Dw - Na) < 1.5e-2 * Na, f"prolate N_z {Dw:.4f} not within 1.5% of analytic {Na:.4f}"
+
+
+def test_prolate_spheroid_demag_factor():
+    assert_prolate_validation(run_prolate_case(maxh=0.6)["demag"])
