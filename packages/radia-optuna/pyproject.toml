@@ -56,4 +56,4 @@ radia-optuna-bridge = "radia_optuna.bridge:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-radia_optuna = ["manifest.json"]
+radia_optuna = ["manifest.json", "evidence_manifest.json"]

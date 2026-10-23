@@ -2,7 +2,8 @@
 
 Guards: Reintroducing monorepo-root reads into wheel verification or API
 coverage generation, changing frozen oracle inputs during verification, or accepting
-a package whose upstream oracle pin drifts despite correct wheel metadata.
+a package whose upstream oracle pin drifts despite correct wheel metadata, or
+missing/tampered installed evidence and accidentally bundled producers.
 Assumes: A copy of the package source alone, with a synthetic PE header standing
 in for the MEX, and stored upstream inputs. This checks packaging and coverage
 metadata behavior, not native execution or ABI.
@@ -51,6 +52,31 @@ def test_detached_package_verifies_without_cpu_project(tmp_path):
     result = verifier.verify(wheel)
     assert result["ok"] is True, result
     assert result["source_fidelity_verified"] is True, result
+
+    assert result["compatibility_evidence_verified"] is True, result
+    evidence = json.loads((detached / "src/radia_optuna/evidence_manifest.json").read_text(encoding="utf-8"))
+    with zipfile.ZipFile(wheel) as archive:
+        original = {name: archive.read(name) for name in archive.namelist()}
+    target = "radia_optuna/" + evidence["files"]["python_oracle"]["path"]
+    # Exercise the public verifier with damaged distributions, not mocked hashes.
+    for damage in ("missing", "tampered", "producer"):
+        members = dict(original)
+        if damage == "missing":
+            del members[target]
+        elif damage == "tampered":
+            members[target] += b" "
+        else:
+            members["radia_optuna/oracles/generate_optuna50_oracle.py"] = b"raise RuntimeError('must not ship')\n"
+        with zipfile.ZipFile(wheel, "w") as archive:
+            for name, payload in members.items():
+                archive.writestr(name, payload)
+        with pytest.raises(SystemExit) as failure:
+            verifier.verify(wheel)
+        assert failure.value.code == 1, damage
+    with zipfile.ZipFile(wheel, "w") as archive:
+        for name, payload in original.items():
+            archive.writestr(name, payload)
+    assert verifier.verify(wheel)["ok"] is True
 
     # Run the real package-local entry point without a monorepo or source-path
     # rescue. Only this detached copy's coverage ledger may be reproduced;
