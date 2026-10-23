@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 from functools import lru_cache
 import json
 from pathlib import Path, PurePosixPath
@@ -17,6 +18,7 @@ import tomllib
 
 SCHEMA = 'radia.numerical-ci-plan.v1'
 TIER = 'tests/test_tier_manifest.json'
+DECLARATIONS = 'tools/ci_numerical_inputs.json'
 PROFILES = ('sparsesolv', 'solver-numerics', 'solver-heavy', 'native-build-contracts')
 GMSH_TESTS = (
     'validation_test/gmsh_post/test_msh42_reference.py',
@@ -28,7 +30,7 @@ GMSH_TESTS = (
 )
 NATIVE_PREFIXES = ('src/core/', 'src/lib/', 'src/ext/', 'cmake/')
 GLOBAL_INPUTS = {'CMakeLists.txt', 'Build.ps1', 'MANIFEST.in', TIER,
-                 'tools/ci_numerical_plan.py', 'tools/run_test_tier.py',
+                 'tools/ci_numerical_plan.py', DECLARATIONS, 'tools/run_test_tier.py',
                  'tools/ci_ams_inputs.py', 'tools/sparsesolv_ci_impact.py',
                  'tools/ci_distribution_manifest.json', 'tools/ci_distribution_contract.py',
                  'tools/native_build_provenance.ps1', 'tools/validation_source_gate.py'}
@@ -36,6 +38,8 @@ EXTERNAL = set(sys.stdlib_module_names) | {
     'numpy', 'scipy', 'ngsolve', 'netgen', 'pytest', 'gmsh', 'h5py', 'psutil',
     'matplotlib', 'sympy', 'yaml', 'pefile', 'packaging', 'setuptools', 'pybind11',
     'threadpoolctl', 'pandas', 'pydantic', 'mcp', 'fastmcp', 'sklearn', 'numba',
+    'torch', 'kan', 'build123d', 'OCP', 'cubit', 'netCDF4', 'PySide6',
+    'skimage', 'trimesh',  # Upstream optional CAD/inspection packages; not local code.
 }
 NATIVE_MODULES = {'_radia_pybind', 'sparsesolv_ngsolve', 'peec_matrices', 'axifem',
                   'cubit_mesh_curver'}
@@ -56,8 +60,9 @@ def unique_pairs(items):
 
 
 class Tree:
-    def __init__(self, root, rev):
+    def __init__(self, root, rev, declarations=None):
         self.root = root
+        self.declarations = declarations or {}
         self.sha = git(root, 'rev-parse', '--verify', '--end-of-options', rev + '^{commit}').decode('utf-8').strip()
         self.files = {}
         for row in git(root, 'ls-tree', '-r', '-z', self.sha).split(b'\0'):
@@ -67,7 +72,7 @@ class Tree:
                 self.files[name.decode('utf-8')] = (mode, kind, oid)
         self.blobs = {}
         self.parsed_nodes = 0
-        self.roots = ['src', *sorted({p.split('/src/', 1)[0] + '/src'
+        self.roots = ['src', 'src/radia', *sorted({p.split('/src/', 1)[0] + '/src'
                                      for p in self.files if p.startswith('packages/') and '/src/' in p}), '']
 
     def load_blobs(self):
@@ -188,24 +193,9 @@ class Tree:
                 if name.split('.')[0] in {'ngsolve', 'netgen'}: components.add('solver')
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 value = node.value
-                # Explicit CLI/file loaders, including Python scripts embedded in -c.
-                if '\n' in value and ('import ' in value or 'from ' in value):
-                    try:
-                        embedded = ast.parse(value)
-                        for imp in ast.walk(embedded):
-                            embedded_names = []
-                            if isinstance(imp, ast.Import): embedded_names = [a.name for a in imp.names]
-                            if isinstance(imp, ast.ImportFrom): embedded_names = [imp.module or '']
-                            for name in embedded_names:
-                                candidate = self.module(name, path)
-                                if candidate: pending.append(candidate)
-                                elif name.rsplit('.', 1)[-1] in NATIVE_MODULES: native.add(name.rsplit('.', 1)[-1])
-                                elif name.split('.')[0] not in EXTERNAL: unknown.add('embedded import unresolved: ' + path)
-                                if name.split('.')[0] == 'gmsh': components.add('gmsh')
-                            if isinstance(imp, ast.Call) and ast.unparse(imp.func).endswith(('exec_module', 'run_path', 'spec_from_file_location')):
-                                unknown.add('embedded dynamic loader needs declaration: ' + path)
-                    except SyntaxError: unknown.add('unparsed embedded Python: ' + path)
-                if len(value) < 240 and '\n' not in value:
+                # Only executable call sites are treated as code loaders below.
+                # Docstrings, knowledge and generated template fragments are data.
+                if len(value) < 240 and '\n' not in value and not value.endswith('.py'):
                     for base in ['', str(parent), 'src/radia/panels', 'validation_test/panels']:
                         candidate = ((base + '/') if base != '.' and base else '') + value
                         if candidate in self.files: pending.append(candidate)
@@ -213,7 +203,11 @@ class Tree:
                 name = ast.unparse(node.func)
                 if name.endswith(('import_module', 'importorskip', 'run_module', 'find_spec')) or name == '__import__':
                     if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                        candidate = self.module(node.args[0].value, path)
+                        import_name = node.args[0].value
+                        candidate = self.module(import_name, path)
+                        if import_name.startswith('.'):
+                            relative_path = str(parent / (import_name.lstrip('.').replace('.', '/') + '.py'))
+                            candidate = relative_path if relative_path in self.files else None
                         if candidate: pending.append(candidate)
                         elif node.args[0].value.rsplit('.', 1)[-1] in NATIVE_MODULES:
                             native.add(node.args[0].value.rsplit('.', 1)[-1])
@@ -235,11 +229,31 @@ class Tree:
                     # Dynamic -c programs and arbitrary executables require review.
                     script = None
                     if isinstance(expression, (ast.List, ast.Tuple)) and len(expression.elts) >= 2:
-                        for literal in ast.walk(expression.elts[1]):
-                            if isinstance(literal, ast.Constant) and isinstance(literal.value, str) and literal.value.endswith('.py'):
-                                script = self.literal_path(literal.value, path)
+                        expressions = [expression.elts[1]]; visited_names = set()
+                        while expressions:
+                            for literal in ast.walk(expressions.pop()):
+                                if isinstance(literal, ast.Name) and literal.id not in visited_names:
+                                    visited_names.add(literal.id)
+                                    expressions.extend(assignments.get(literal.id, []))
+                                if isinstance(literal, ast.Constant) and isinstance(literal.value, str) and literal.value.endswith('.py'):
+                                    candidate_script = self.literal_path(literal.value, path)
+                                    if candidate_script:
+                                        script = candidate_script; pending.append(script)
                     if script and not any(kw.arg == 'shell' for kw in node.keywords): pending.append(script)
                     else: unknown.add('subprocess entry needs declaration: ' + path)
+        binding = self.declarations.get('bindings', {}).get(path)
+        if binding:
+            if hashlib.sha256(self.read(path)).hexdigest() not in binding['sha256']:
+                unknown.add('stale dynamic declaration: ' + path)
+            else:
+                if not binding.get('entries'):
+                    unknown.difference_update(binding['resolves'])
+                for dep in binding['dependencies']:
+                    if dep not in self.files: unknown.add('declared dependency missing: ' + dep)
+                    pending.append(dep)
+                for prefix in binding.get('fixture_prefixes', []):
+                    pending.extend(p for p in self.files if p.startswith(prefix))
+        pending.extend(self.declarations.get('consumer_inputs', {}).get(path, []))
         return pending, unknown, native, components
 
     @lru_cache(maxsize=None)
@@ -253,6 +267,12 @@ class Tree:
             edges, issues, modules, uses = self.edges(path)
             pending.extend(edges); unknown.update(issues)
             native.update(modules); components.update(uses)
+        for path in seen:
+            binding = self.declarations.get('bindings', {}).get(path, {})
+            if binding.get('entries', {}).get(entry) and entry in self.files:
+                if (hashlib.sha256(self.read(path)).hexdigest() in binding['sha256']
+                        and hashlib.sha256(self.read(entry)).hexdigest() in binding['entries'][entry]):
+                    unknown.difference_update(binding['resolves'])
         return seen, unknown, native, components
 
 
@@ -288,7 +308,24 @@ def dependency_change(old, new):
 
 
 def plan(root, base, head, event):
-    before, after = Tree(root, base), Tree(root, head)
+    policy_sha = git(root, 'rev-parse', 'HEAD').decode('ascii').strip()
+    policy_tree = Tree(root, policy_sha)
+    declarations = {}
+    declaration_blob = None
+    if DECLARATIONS in policy_tree.files:
+        declaration_blob = policy_tree.files[DECLARATIONS][2]
+        declarations = json.loads(git(root, 'cat-file', 'blob', declaration_blob), object_pairs_hook=unique_pairs)
+        if set(declarations) != {'schema', 'bindings', 'consumer_inputs'} or declarations['schema'] != 'radia.numerical-inputs.v1':
+            raise ValueError('invalid numerical declaration schema')
+        for path, binding in declarations['bindings'].items():
+            if set(binding) - {'sha256', 'resolves', 'dependencies', 'fixture_prefixes', 'reason', 'entries'} or not binding.get('reason'):
+                raise ValueError('invalid dynamic declaration: ' + path)
+            if not binding.get('sha256') or any(not re.fullmatch('[0-9a-f]{64}', h) for h in binding['sha256']):
+                raise ValueError('unsealed dynamic declaration: ' + path)
+            for dep in [path, *binding['dependencies'], *binding.get('fixture_prefixes', [])]:
+                if not dep or dep.startswith('/') or ':' in dep or '\\' in dep or '..' in PurePosixPath(dep).parts:
+                    raise ValueError('unsafe declared dependency')
+    before, after = Tree(root, base, declarations), Tree(root, head, declarations)
     changed = changes(root, before.sha, after.sha)
     old_profiles, new_profiles = before.profiles(), after.profiles()
     reasons = []; global_change = event != 'pull_request' or not changed; gmsh_change = False
@@ -336,7 +373,8 @@ def plan(root, base, head, event):
             row['selected'] = True; row['reasons'].append('unclassified input; full fallback')
             native_required.update(row['native_modules'])
     return {'schema': SCHEMA, 'status': 'planned', 'qualification': False, 'execution_wired': False,
-            'base': before.sha, 'head': after.sha, 'event': event, 'changed_paths': sorted(changed),
+            'base': before.sha, 'head': after.sha, 'event': event,
+            'declaration_identity': {'commit': policy_sha, 'blob': declaration_blob}, 'changed_paths': sorted(changed),
             'unclassified_inputs': unclassified, 'cases': rows,
             'native_build_targets': sorted(native_required),
             'ams_paths': sorted({r['path'] for r in rows if r['selected'] and r['profile'] == 'sparsesolv'}),
