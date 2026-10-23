@@ -1,6 +1,12 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "tools/build_linux.py": [
+      "tests/test_linux_build.py"
+    ],
+    "tests/test_linux_build.py": [
+      "tests/test_linux_build.py"
+    ],
     "packages/radia-simulink/src/radia_simulink/simulink/ih_operator_assembly.py": [
       "tests/test_ih_panel_esim_assembly.py",
       "tests/test_ih_operator_assembly.py"

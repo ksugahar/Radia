@@ -65,7 +65,9 @@ if(NOT NGSolve_DIR)
 	)
 	if(_NGSOLVE_PY_RESULT EQUAL 0)
 		# pip-installed: site-packages/ngsolve/cmake/
-		if(EXISTS "${_NGSOLVE_PY_PATH}/cmake/NGSolveConfig.cmake")
+		if(NOT WIN32 AND EXISTS "${PYTHON_SITE_PACKAGES}/lib/cmake/ngsolve/NGSolveConfig.cmake")
+			set(NGSolve_DIR "${PYTHON_SITE_PACKAGES}/lib/cmake/ngsolve")
+		elseif(EXISTS "${_NGSOLVE_PY_PATH}/cmake/NGSolveConfig.cmake")
 			set(NGSolve_DIR "${_NGSOLVE_PY_PATH}/cmake")
 		else()
 			# Source-installed: go up from .../Lib/site-packages/ngsolve to install root
@@ -84,7 +86,9 @@ if(NOT NGSolve_DIR)
 endif()
 if(NOT Netgen_DIR)
 	# Netgen config is typically in the same directory as NGSolve config
-	if(EXISTS "${NGSolve_DIR}/NetgenConfig.cmake")
+	if(NOT WIN32 AND EXISTS "${PYTHON_SITE_PACKAGES}/lib/cmake/netgen/NetgenConfig.cmake")
+		set(Netgen_DIR "${PYTHON_SITE_PACKAGES}/lib/cmake/netgen")
+	elseif(EXISTS "${NGSolve_DIR}/NetgenConfig.cmake")
 		set(Netgen_DIR "${NGSolve_DIR}")
 	else()
 		execute_process(
@@ -135,6 +139,13 @@ execute_process(
 )
 set(NGSOLVE_BUNDLED_INC "${_NETGEN_PKG_DIR}/include")
 set(NGSOLVE_COMPAT_INC "${NGSOLVE_BUNDLED_INC}/include")
+# Linux wheel layout: the bundled headers (and pybind11) live in
+# <site-packages>/include/netgen instead of <site-packages>/netgen/include.
+if(NOT WIN32 AND NOT EXISTS "${NGSOLVE_BUNDLED_INC}/pybind11/pybind11.h"
+		AND EXISTS "${PYTHON_SITE_PACKAGES}/include/netgen/pybind11/pybind11.h")
+    set(NGSOLVE_BUNDLED_INC "${PYTHON_SITE_PACKAGES}/include/netgen")
+    set(NGSOLVE_COMPAT_INC "${NGSOLVE_BUNDLED_INC}/include")
+endif()
 if(EXISTS "${NGSOLVE_BUNDLED_INC}/pybind11/pybind11.h")
     message(STATUS "ngsolve bundled pybind11: ${NGSOLVE_BUNDLED_INC}/pybind11")
 else()
@@ -147,6 +158,13 @@ set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/lib")
 set(EXT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/ext")
 set(PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/radia")
 # FFTW directory removed - using MKL DFTI via fftw.h compatibility layer
+
+# File name suffix of the extension modules copied into src/radia after the build
+if(WIN32)
+	set(RADIA_PYMOD_SUFFIX ".pyd")
+else()
+	set(RADIA_PYMOD_SUFFIX ".so")
+endif()
 
 
 # BLAS/LAPACK: Intel MKL 2026 from the selected Python environment. An
@@ -227,6 +245,23 @@ if(WIN32)
 	else()
 		message(FATAL_ERROR "Intel MKL not found. Install pip package mkl-devel>=2026,<2027.")
 	endif()
+else()
+	# Linux: oneMKL from MKLROOT (e.g. an oneAPI environment module), single
+	# dynamic runtime libmkl_rt.  The threading layer is selected at run time
+	# (MKL_THREADING_LAYER).
+	if(NOT DEFINED ENV{MKLROOT})
+		message(FATAL_ERROR "Linux build: MKLROOT is not set (load the oneAPI MKL environment first)")
+	endif()
+	file(TO_CMAKE_PATH "$ENV{MKLROOT}" MKL_DIR)
+	set(MKL_INCLUDE_DIR "${MKL_DIR}/include")
+	set(MKL_LIB "${MKL_DIR}/lib/libmkl_rt.so")
+	if(NOT EXISTS "${MKL_LIB}" OR NOT EXISTS "${MKL_INCLUDE_DIR}/mkl.h")
+		message(FATAL_ERROR "Intel MKL not found under ${MKL_DIR} (need lib/libmkl_rt.so and include/mkl.h)")
+	endif()
+	message(STATUS "Intel MKL (Linux): ${MKL_LIB}")
+	set(BLAS_LIB ${MKL_LIB})
+	set(BLAS_INCLUDE_DIR ${MKL_INCLUDE_DIR})
+	set(USE_MKL_FOUND TRUE)
 endif()
 
 # Radia core sources (organized by API functionality)
@@ -524,7 +559,7 @@ target_compile_definitions(peec_matrices PRIVATE
 )
 
 # Intel MKL for BLAS operations (if available)
-if(WIN32 AND USE_MKL_FOUND)
+if(USE_MKL_FOUND)
 	target_link_libraries(peec_matrices PRIVATE ${BLAS_LIB})
 	target_include_directories(peec_matrices PRIVATE ${BLAS_INCLUDE_DIR})
 	target_compile_definitions(peec_matrices PRIVATE HAVE_LAPACK)
@@ -554,7 +589,12 @@ if(MSVC)
 	)
 	message(STATUS "Using MSVC compiler for peec_matrices")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-	target_compile_options(peec_matrices PRIVATE /O3 /fp:fast /W0)
+	if(WIN32)
+		target_compile_options(peec_matrices PRIVATE /O3 /fp:fast /W0)
+	else()
+		# Linux icx/icpx spelling of /O3 /fp:fast /W0
+		target_compile_options(peec_matrices PRIVATE -O3 -fp-model=fast -w)
+	endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	target_compile_options(peec_matrices PRIVATE
 		-Wno-conversion
@@ -574,8 +614,8 @@ endif()
 add_custom_command(TARGET peec_matrices POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different
 		"$<TARGET_FILE:peec_matrices>"
-		"${CMAKE_SOURCE_DIR}/src/radia/peec_matrices.pyd"
-	COMMENT "Copying peec_matrices.pyd to src/radia"
+		"${CMAKE_SOURCE_DIR}/src/radia/peec_matrices${RADIA_PYMOD_SUFFIX}"
+	COMMENT "Copying peec_matrices${RADIA_PYMOD_SUFFIX} to src/radia"
 )
 
 # Post-build: Copy required DLLs
@@ -633,7 +673,7 @@ target_compile_definitions(_radia_pybind PRIVATE
 )
 
 # Intel MKL for _radia_pybind
-if(WIN32 AND USE_MKL_FOUND)
+if(USE_MKL_FOUND)
 	target_link_libraries(_radia_pybind PRIVATE ${BLAS_LIB})
 	target_include_directories(_radia_pybind PRIVATE ${BLAS_INCLUDE_DIR})
 	target_compile_definitions(_radia_pybind PRIVATE HAVE_LAPACK)
@@ -684,7 +724,12 @@ if(MSVC)
 		"$<$<COMPILE_LANGUAGE:CXX>:/FI${NGSOLVE_BUNDLED_INC}/core/localheap.hpp>"
 	)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-	target_compile_options(_radia_pybind PRIVATE /O3 /fp:fast /W0)
+	if(WIN32)
+		target_compile_options(_radia_pybind PRIVATE /O3 /fp:fast /W0)
+	else()
+		# Linux icx/icpx spelling of /O3 /fp:fast /W0
+		target_compile_options(_radia_pybind PRIVATE -O3 -fp-model=fast -w)
+	endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	target_compile_options(_radia_pybind PRIVATE
 		-Wno-conversion
@@ -701,8 +746,8 @@ endif()
 add_custom_command(TARGET _radia_pybind POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different
 		"$<TARGET_FILE:_radia_pybind>"
-		"${CMAKE_SOURCE_DIR}/src/radia/_radia_pybind.pyd"
-	COMMENT "Copying _radia_pybind.pyd to src/radia"
+		"${CMAKE_SOURCE_DIR}/src/radia/_radia_pybind${RADIA_PYMOD_SUFFIX}"
+	COMMENT "Copying _radia_pybind${RADIA_PYMOD_SUFFIX} to src/radia"
 )
 
 message(STATUS "_radia_pybind module configured (pybind11 bindings)")
@@ -755,7 +800,7 @@ else()
 endif()
 
 # Intel MKL for BLAS/LAPACK (sparsesolv uses dense ops in AMG coarse solve)
-if(WIN32 AND USE_MKL_FOUND)
+if(USE_MKL_FOUND)
 	target_link_libraries(sparsesolv_ngsolve PRIVATE ${BLAS_LIB})
 	target_include_directories(sparsesolv_ngsolve PRIVATE ${BLAS_INCLUDE_DIR})
 endif()
@@ -764,8 +809,8 @@ endif()
 add_custom_command(TARGET sparsesolv_ngsolve POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different
 		"$<TARGET_FILE:sparsesolv_ngsolve>"
-		"${CMAKE_SOURCE_DIR}/src/radia/sparsesolv_ngsolve.pyd"
-	COMMENT "Copying sparsesolv_ngsolve.pyd to src/radia"
+		"${CMAKE_SOURCE_DIR}/src/radia/sparsesolv_ngsolve${RADIA_PYMOD_SUFFIX}"
+	COMMENT "Copying sparsesolv_ngsolve${RADIA_PYMOD_SUFFIX} to src/radia"
 )
 
 message(STATUS "sparsesolv_ngsolve module configured (NGSolve preconditioners)")
@@ -832,8 +877,8 @@ endif()
 add_custom_command(TARGET axifem POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different
 		"$<TARGET_FILE:axifem>"
-		"${CMAKE_SOURCE_DIR}/src/radia/axifem.pyd"
-	COMMENT "Copying axifem.pyd to src/radia"
+		"${CMAKE_SOURCE_DIR}/src/radia/axifem${RADIA_PYMOD_SUFFIX}"
+	COMMENT "Copying axifem${RADIA_PYMOD_SUFFIX} to src/radia"
 )
 
 message(STATUS "axifem module configured (Henrotte axisymmetric FE)")
