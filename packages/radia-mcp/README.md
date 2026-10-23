@@ -294,6 +294,7 @@ radia_mcp_by_tag("optimization")      # filter optimization/theory servers
 radia_mcp_related("bayesian-opt")     # cross-link map for optimization servers
 radia_mcp_health()                    # importability probe of the current catalog
 radia_mcp_golden_gate()               # catalog/discovery/public-boundary gate
+  tests_design_guide(section="overview") # authoring guide; lists available sections
 ```
 
 Then drill into a specific server with its `<short>_status()` (auto-
