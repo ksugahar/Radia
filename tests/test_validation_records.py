@@ -1075,5 +1075,5 @@ def test_missing_level_timing_is_explicit_not_zero(adoption_sample):
     assert validate_record(root, path)["adoption_claim"] is True
     del row["runtime_note"]
     seal_adoption(path, record)
-    with pytest.raises(ValueError, match="unmeasured runtime"):
+    with pytest.raises(ValueError, match="runtime_note"):
         validate_record(root, path)
