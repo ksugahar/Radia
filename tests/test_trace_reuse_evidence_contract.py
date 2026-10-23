@@ -2,6 +2,7 @@
 import hashlib
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -15,7 +16,17 @@ def test_trace_reuse_runner_and_exercised_cache_are_recorded():
         contract = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(contract)
         relative = "validation_test/mixed_omega_trace_reuse/run.py"
-        assert contract.verifies_redaction(relative, record["runner_sha256"], runner.read_text(encoding="utf-8"), record.get("source_privacy_redactions", {}).get(relative, {}))
+        text = runner.read_text(encoding="utf-8")
+        binding = record.get("source_privacy_redactions", {}).get(relative, {})
+        if not contract.verifies_redaction(relative, record["runner_sha256"], text, binding):
+            status = json.loads((folder / "source-status.json").read_text(encoding="utf-8"))
+            assert status["status"] == "stale" and status["stale_reason"]
+            assert status["runner"] == relative
+            historical = subprocess.check_output(
+                ["git", "show", status["historical_source_revision"] + ":" + relative], cwd=root)
+            assert hashlib.sha256(historical).hexdigest() == binding["published_text_sha256"]
+            text = historical.decode("utf-8")
+        assert contract.verifies_redaction(relative, record["runner_sha256"], text, binding)
     assert record["ngsolve"] == "6.2.2607"
     assert len(record["cases"]) == 3
     for case in record["cases"]:
