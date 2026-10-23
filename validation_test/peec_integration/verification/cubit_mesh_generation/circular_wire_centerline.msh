@@ -1,5 +1,5 @@
 $MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $PhysicalNames
 2
@@ -9,7 +9,7 @@ $EndPhysicalNames
 $Entities
 1 1 0 0
 1 0 0 0 1 1
-1 0 0 0 1 0 0 1 1 0
+1 0 0 0 1 0 0 1 1 0 0
 $EndEntities
 $Nodes
 1 11 1 11
