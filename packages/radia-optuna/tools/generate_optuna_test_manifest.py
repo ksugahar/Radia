@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
-TEST_DIRECTORY = ROOT / "tests" / "matlab"
 
 CLASSIFICATION_BY_FILE = {
     "test_optuna_cuda.m": "matlab-integration",
@@ -68,8 +67,8 @@ def test_functions(path: Path) -> list[str]:
     return [name for name in names if name != path.stem]
 
 
-def build_manifest() -> dict[str, object]:
-    files = sorted(path.name for path in TEST_DIRECTORY.glob("test_optuna*.m"))
+def build_manifest(test_directory: Path) -> dict[str, object]:
+    files = sorted(path.name for path in test_directory.glob("test_optuna*.m"))
     missing = sorted(set(files) - CLASSIFICATION_BY_FILE.keys())
     stale = sorted(CLASSIFICATION_BY_FILE.keys() - set(files))
     if missing or stale:
@@ -78,7 +77,7 @@ def build_manifest() -> dict[str, object]:
     entries: list[dict[str, object]] = []
     for filename in files:
         classification = CLASSIFICATION_BY_FILE[filename]
-        for test_name in test_functions(TEST_DIRECTORY / filename):
+        for test_name in test_functions(test_directory / filename):
             effective_classification = classification
             if test_name == "testOraclePolicyManifestIsComplete":
                 effective_classification = "matlab-integration"
@@ -119,13 +118,16 @@ def build_manifest() -> dict[str, object]:
 
 
 def main() -> None:
-    destination = Path(__file__).with_name("optuna_test_manifest.json")
-    destination.write_text(
-        json.dumps(build_manifest(), indent=2, sort_keys=True) + "\n",
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--test-directory", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    args.output.write_text(
+        json.dumps(build_manifest(args.test_directory), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
         newline="\n",
     )
-    print(destination)
+    print(args.output)
 
 
 if __name__ == "__main__":

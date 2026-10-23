@@ -1,0 +1,40 @@
+{
+  "schema": "radia-optuna.compatibility-evidence.v1",
+  "version": "0.4.0",
+  "oracle_version": "5.0.0",
+  "hash_basis": "utf8-lf-bytes",
+  "files": {
+    "compatibility": {
+      "path": "matlab/optuna_upstream_compatibility.json",
+      "sha256": "332471beabc755762972f143dbcf9a8dd245f9c4284fab741b58b5b52f8d9cca"
+    },
+    "api_coverage": {
+      "path": "matlab/optuna50_api_coverage.json",
+      "sha256": "ab3251d38be914f11adaacaedbe507f4040cf564d7137c1701d4605fb7ae0ff5"
+    },
+    "python_oracle": {
+      "path": "oracles/optuna50_oracle.json",
+      "sha256": "89bb7a0f907ef7158213deca5d2e2feb7810b95191c5d96bcb6bfed456183264"
+    },
+    "public_api_inventory": {
+      "path": "oracles/optuna50_public_api.json",
+      "sha256": "81cbd4c33acac95063994cc8de8b5bbef788c40ed23f8eceae690c9f0d14b602"
+    },
+    "mcp_oracle": {
+      "path": "oracles/optuna50_mcp_oracle.json",
+      "sha256": "890bd0c25e6842427db8c55a6c1cda4135afdacb03ea2d53b5c4785aa15aa8aa"
+    },
+    "test_manifest": {
+      "path": "oracles/optuna_test_manifest.json",
+      "sha256": "ff8c3794f3a2f85f7d9e55087df59c16b94d713960a955f77db484bafc2cde43"
+    },
+    "cuda_oracle": {
+      "path": "oracles/optuna50_cuda_oracle.json",
+      "sha256": "e72ccf5cdb84cbd50c61d8b445d1310e02ea1bf9a2eab51baddc2d7eec29e9bf"
+    },
+    "cuda_density_oracle": {
+      "path": "oracles/optuna_cuda_density_oracle.json",
+      "sha256": "04d11672c5dfd73f7dc399fc237d2f8e1c8b01c2bff06cb1a7ed5085f807dbfc"
+    }
+  }
+}

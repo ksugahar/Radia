@@ -25,7 +25,6 @@ validation_test/radia_mcp/artifacts/annular_motor_dual_lane_v1/*.json text eol=l
 
 # MATLAB Optuna oracle fixtures carry checked SHA-256 links.  Pin their bytes
 # to LF so Windows and Linux checkouts preserve one byte-stable oracle.
-tests/matlab/fixtures/optuna*.json text eol=lf
 packages/radia-optuna/oracles/optuna50_cuda_oracle.json text eol=lf
 packages/radia-optuna/oracles/optuna_cuda_density_oracle.json text eol=lf
 matlab/optuna*.json text eol=lf
@@ -69,3 +68,7 @@ CLAUDE.md text eol=lf
 # Preserve this release's evidence bytes across Windows and Linux checkouts.
 validation_test/induction_heating/bored_workpiece/results/candidate_0bdd66c9c/*.json -text whitespace=cr-at-eol
 validation_test/induction_heating/bored_workpiece/results/candidate_0bdd66c9c/*.xml -text whitespace=cr-at-eol
+packages/radia-optuna/oracles/optuna50_mcp_oracle.json text eol=lf
+packages/radia-optuna/oracles/optuna50_public_api.json text eol=lf
+packages/radia-optuna/oracles/optuna50_oracle.json text eol=lf
+packages/radia-optuna/oracles/optuna_test_manifest.json text eol=lf

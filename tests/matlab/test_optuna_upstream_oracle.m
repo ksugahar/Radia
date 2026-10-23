@@ -100,7 +100,7 @@ entries=string(strsplit(path,pathsep));
 testCase.TestData.RemovePath=~any(strcmpi(entries,string(matlabDirectory)));
 if testCase.TestData.RemovePath, addpath(matlabDirectory); end
 testCase.TestData.MatlabDirectory=matlabDirectory;
-fixture=fullfile(root,"tests","matlab","fixtures","optuna50_oracle.json");
+fixture=fullfile(root,"packages","radia-optuna","oracles","optuna50_oracle.json");
 testCase.TestData.Oracle=jsondecode(fileread(fixture));
 optunaPrecision('begin',testCase.TestData.Oracle);
 end
@@ -127,7 +127,7 @@ end
 
 function testOraclePolicyManifestIsComplete(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
-fixtureDirectory=fullfile(root,"tests","matlab","fixtures");
+fixtureDirectory=fullfile(root,"packages","radia-optuna","oracles");
 manifest=jsondecode(fileread(fullfile( ...
     fixtureDirectory,"optuna_test_manifest.json")));
 verifyEqualWithPrecision(testCase,string(manifest.schema), ...
@@ -183,7 +183,7 @@ end
 function testPublicAPIInventoryReportsEvidenceClosureHonestly(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
 coverage=jsondecode(fileread(fullfile( ...
-    root,"matlab","optuna50_api_coverage.json")));
+    root,"packages","radia-optuna","matlab","optuna50_api_coverage.json")));
 verifyEqualWithPrecision(testCase,string(coverage.schema), ...
     "radia.optuna50-api-coverage.v1");
 verifyEqualWithPrecision(testCase,string(coverage.upstream_version),"5.0.0");

@@ -9,11 +9,11 @@ import re
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[3]
-INVENTORY_PATH = Path(__file__).with_name("optuna50_public_api.json")
-ORACLE_PATH = Path(__file__).with_name("optuna50_oracle.json")
-MATLAB_DIRECTORY = ROOT / "packages/radia-optuna/matlab" / "+radia" / "+optuna"
-DESTINATION = ROOT / "packages/radia-optuna/matlab" / "optuna50_api_coverage.json"
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+INVENTORY_PATH = PACKAGE_ROOT / "oracles/optuna50_public_api.json"
+ORACLE_PATH = PACKAGE_ROOT / "oracles/optuna50_oracle.json"
+MATLAB_DIRECTORY = PACKAGE_ROOT / "matlab" / "+radia" / "+optuna"
+DESTINATION = PACKAGE_ROOT / "matlab" / "optuna50_api_coverage.json"
 FUNCTION_PATTERN = re.compile(
     r"(?m)^\s*function\s+(?:\[[^]]*\]|\w+)\s*=\s*(\w+)\s*\(|"
     r"^\s*function\s+(\w+)\s*\("
@@ -1204,9 +1204,8 @@ def _oracle_generator_sections() -> dict[str, set[str]]:
     generators, so an entry without a generating section cannot be counted as
     verified.
     """
-    fixtures = Path(__file__).resolve().parent
-    oracle_source = fixtures / "generate_optuna50_oracle.py"
-    mcp_source = fixtures / "generate_optuna50_mcp_oracle.py"
+    oracle_source = PACKAGE_ROOT / "oracles/generate_optuna50_oracle.py"
+    mcp_source = PACKAGE_ROOT / "oracles/generate_optuna50_mcp_oracle.py"
     tree = ast.parse(oracle_source.read_text(encoding="utf-8"))
     functions = {
         node.name: node
@@ -1241,7 +1240,7 @@ def _oracle_generator_sections() -> dict[str, set[str]]:
 
     fixture_sections = set(
         json.loads(
-            (fixtures / "optuna50_oracle.json").read_text(encoding="utf-8")
+            ORACLE_PATH.read_text(encoding="utf-8")
         )
     )
     unknown = sorted(set(section_producers) - fixture_sections)
@@ -1453,9 +1452,9 @@ def build_coverage() -> dict[str, Any]:
     return {
         "schema": "radia.optuna50-api-coverage.v1",
         "upstream_version": "5.0.0",
-        "upstream_inventory": "tests/matlab/fixtures/optuna50_public_api.json",
+        "upstream_inventory": "packages/radia-optuna/oracles/optuna50_public_api.json",
         "upstream_inventory_sha256": _sha256(INVENTORY_PATH),
-        "upstream_oracle": "tests/matlab/fixtures/optuna50_oracle.json",
+        "upstream_oracle": "packages/radia-optuna/oracles/optuna50_oracle.json",
         "upstream_oracle_sha256": _sha256(ORACLE_PATH),
         "class_oracle_sections": CLASS_ORACLE_SECTIONS,
         "closure_rule": (

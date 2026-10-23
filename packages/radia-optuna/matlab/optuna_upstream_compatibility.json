@@ -15,7 +15,7 @@
     "extensions": "Parallel scheduling, table/MAT persistence, Simulink telemetry, and explicitly named MATLAB-only capabilities remain extensions rather than parity evidence."
   },
   "complete_api_closure": {
-    "inventory": "tests/matlab/fixtures/optuna50_public_api.json",
+    "inventory": "packages/radia-optuna/oracles/optuna50_public_api.json",
     "coverage": "packages/radia-optuna/matlab/optuna50_api_coverage.json",
     "result": "812 present, 749 oracle-verified, 63 explicit assertions, 0 partial, 0 unmapped, 0 missing; all 401 required entries are oracle-mapped",
     "complete": true

@@ -1,7 +1,8 @@
 """Optuna release and isolated acceptance contracts.
 
 Guards: Release artifact identity, isolated acceptance lifecycle, and the CI
-package-entry route to the supported mexcuda build without pybind dependencies.
+package-entry route to the supported mexcuda build without pybind dependencies,
+and the root build adapter and MATLAB test classification inputs.
 Assumes: Repository workflow and release tooling describe the public release
 contract; mocked transport tests do not certify native numerical correctness.
 """
@@ -673,3 +674,34 @@ def test_owned_scratch_refuses_a_junction(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "refused-junction" in result.stdout
     assert (tmp_path / "outside" / "keep.txt").read_text(encoding="utf-8").strip() == "keep"
+
+
+def test_test_manifest_matches_its_generator(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    generator = root / "packages/radia-optuna/tools/generate_optuna_test_manifest.py"
+    output = tmp_path / "classification.json"
+    completed = subprocess.run(
+        [sys.executable, str(generator), "--test-directory", str(root / "tests/matlab"),
+         "--output", str(output)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60,
+    )
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    committed = root / "packages/radia-optuna/oracles/optuna_test_manifest.json"
+    assert output.read_bytes() == committed.read_bytes().replace(b"\r\n", b"\n")
+    # An omitted input directory must not discover a repository implicitly.
+    missing = tmp_path / "missing-input.json"
+    rejected = subprocess.run(
+        [sys.executable, str(generator), "--output", str(missing)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60,
+    )
+    assert rejected.returncode == 2, (rejected.stdout, rejected.stderr)
+    assert not missing.exists()
+
+
+def test_root_optuna_build_adapter_stays_outside_solver_cmake():
+    REPO_ROOT = Path(__file__).resolve().parents[1]
+    build = (REPO_ROOT / "Build.ps1").read_text(encoding="utf-8")
+    optuna_route = build[build.index("if ($OptunaMexOnly) {"):build.index("# Paths")]
+    assert "buildOptunaMex" in optuna_route
+    assert "return" in optuna_route
+    assert "radia_add_optuna_mex" not in (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
