@@ -396,9 +396,9 @@
                   "type": "string",
                   "minLength": 1
                 },
-                "doi": {
+                "bib_key": {
                   "type": "string",
-                  "pattern": "10\\.[0-9]{4,9}/[^\\s]+"
+                  "minLength": 1
                 },
                 "symbolic_verification": {
                   "type": "object",
