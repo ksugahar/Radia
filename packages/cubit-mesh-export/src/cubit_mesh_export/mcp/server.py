@@ -2370,7 +2370,9 @@ def _cubit_path_dispatch(path: Path) -> str:
         return f'import step "{abs_path}"'
     if suffix in (".brep", ".brp"):
         return f'import acis "{abs_path}"'
-    if suffix in (".msh", ".vol", ".g", ".e", ".exo"):
+    if suffix == ".msh" or path.name.lower().endswith(".msh.gz"):
+        raise ValueError("Gmsh MSH is post-processing only; solver meshes must be checked .vol files, never converted from .msh")
+    if suffix in (".vol", ".g", ".e", ".exo"):
         return f'import mesh "{abs_path}"'
     raise ValueError(f"Unsupported extension for Cubit viewer: {suffix}")
 
@@ -2384,7 +2386,8 @@ def cubit_stage(path: str = "", extra_commands: list = None,
 
 	Supported inputs: .jou (playback), .py (play — Cubit-side Python),
 	.step/.stp (import step), .brep (import acis),
-	.msh/.vol/.g/.e/.exo (import mesh).
+	.vol/.g/.e/.exo (import mesh). Gmsh .msh is post-processing-only output,
+	never staged as an input that could be converted to solver .vol.
 
 	Args:
 	    path: file to load. Leave empty to run only `extra_commands`.
@@ -2398,10 +2401,6 @@ def cubit_stage(path: str = "", extra_commands: list = None,
 		deadline = _command_timeout(timeout_s)
 	except ValueError as exc:
 		return json.dumps(_error_payload("input", str(exc), kind="input"))
-	sess, err = _cubit_session_or_error()
-	if err is not None:
-		return err
-
 	cmds = []
 	if path:
 		p = _P(path)
@@ -2420,6 +2419,12 @@ def cubit_stage(path: str = "", extra_commands: list = None,
 	if not cmds:
 		return json.dumps({"status": "error", "stage": "input", "kind": "input",
 		                   "error": "Either `path` or `extra_commands` is required."})
+
+	if any(re.search(r"(?i)\bimport\s+(?:mesh|gmsh)\b.*\.msh\b", command) for command in cmds):
+		return json.dumps(_error_payload("input", "Gmsh .msh is post-processing only; solver meshes are checked .vol", kind="input"))
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
 
 	try:
 		r = sess.call("cmd", cmds, timeout_s=deadline)
@@ -3260,7 +3265,7 @@ def cubit_suggest_next(goal: str = "mesh") -> str:
 	elif g == "export":
 		if not any_mesh:
 			add("mesh volume all", "No mesh yet — create one before export.")
-		add('export mesh "<path>.msh" overwrite', "Gmsh .msh (preferred lab format).")
+		add('export gmsh "<path>.msh" order 2 overwrite', "Gmsh MSH 4.2 post-processing and visualization support; solver meshes are checked .vol.")
 		add('export abaqus "<path>.inp" overwrite', "Abaqus .inp for FEM.")
 		add('export genesis "<path>.g" overwrite', "Exodus .g for Sierra / Netgen pipelines.")
 		add('export step "<path>.step" overwrite', "Geometry-only STEP (for round-trip CAD).")
