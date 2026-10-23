@@ -4,6 +4,8 @@ Load the Python-only writer directly so this format validation requires no
 Radia native solver build. Gmsh is a validation dependency, not a core runtime.
 """
 import importlib.util
+import ast
+import math
 from pathlib import Path
 import sys
 
@@ -83,6 +85,48 @@ def test_separate_line_writer_preserves_fields(tmp_path):
         [0, 0], ['coil'], [{'name': 'I', 'ncomp': 1, 'values': [2., -3.]}])
     actual, target = _views(path)
     assert actual['I', 0][1] == dict(zip(stats['element_tags'], [[2.], [-3.]]))
+    assert _views(target)[0] == actual
+
+
+def test_streamfunction_wire_writer_opens_in_gmsh(tmp_path):
+    # Execute the production function without importing unrelated solver kernels.
+    tree = ast.parse((ROOT / 'src/radia/streamfunction_volume.py').read_text(encoding='utf-8'))
+    function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'write_wires_msh')
+    namespace = {'math': math}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), str(ROOT / 'src/radia/streamfunction_volume.py'), 'exec'), namespace)
+    path = tmp_path / 'wires.msh'
+    assert namespace['write_wires_msh']([[(0, 0, 0), (1, 0, 0), (1, 1, 0)]], path) == (3, 2)
+    gmsh.initialize(['-noconfig'])
+    try:
+        gmsh.open(str(path))
+        assert list(map(int, gmsh.model.mesh.getNodes()[0])) == [1, 2, 3]
+        assert list(map(int, gmsh.model.mesh.getElementsByType(1)[1])) == [1, 2, 2, 3]
+    finally:
+        gmsh.finalize()
+
+
+def test_combined_surface_volume_writer_roundtrips_fields(tmp_path):
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    mesh = MakeStructured3DMesh(hexes=False, nx=1, ny=1, nz=1)
+    vol = tmp_path / 'combined_source.vol'
+    mesh.ngmesh.Save(str(vol))
+    checker = _source_module('msh42_combined_vol_checker', 'packages/cubit-mesh-export/src/cubit_mesh_export/check.py')
+    contract = {'schema': checker.LABEL_CONTRACT_SCHEMA,
+                'materials': {'required': list(mesh.GetMaterials())},
+                'boundaries': {'required': list(mesh.GetBoundaries())}}
+    assert checker.check_label_contract(vol, contract=contract)['passed']
+    mesh = ng.Mesh(str(vol))
+    coordinates = [list(v.point) for v in mesh.vertices]
+    elements = [[v.nr for v in e.vertices] for e in mesh.Elements(ng.VOL)]
+    path = tmp_path / 'combined.msh'
+    with ng.TaskManager():
+        writer.write_combined_msh_v42(str(path), mesh, [[1, 2, 3]]*mesh.nv,
+                                     coordinates, elements, [[4, 5, 6]]*mesh.nv)
+    actual, target = _views(path)
+    assert set(actual['B', 0][1]) == set(range(1, mesh.nv+1))
+    assert all(v == [4., 5., 6.] for v in actual['B', 0][1].values())
+    assert all(v == [1., 2., 3.] for v in actual['J', 0][1].values())
     assert _views(target)[0] == actual
 
 
