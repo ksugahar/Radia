@@ -121,8 +121,6 @@ MCP_LANE_READS = {
     "packages/radia-optuna/oracles/optuna*.json": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "packages/radia-optuna/oracles"),
     "packages/radia-optuna/oracles/generate_optuna*": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "packages/radia-optuna/oracles/generate_optuna"),
     "packages/radia-optuna/tools/generate_optuna*": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "packages/radia-optuna/tools/generate_optuna"),
-    "tests/matlab/fixtures/optuna*": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "optuna50_oracle.json"),
-    "tests/matlab/fixtures/generate_optuna*": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "generate_optuna50_oracle.py"),
     "tests/matlab/test_optuna*.m": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "test_optuna*.m"),
     "validation_test/optimization/benchmark_*": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_quality.py", "benchmark_"),
     "validation_test/vim_coupled/results_*.json": ("tests/mcp_integration/test_hdiv_vim_disk_validation_evidence.py", "vim_coupled"),

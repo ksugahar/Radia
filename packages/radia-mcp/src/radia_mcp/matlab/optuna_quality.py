@@ -128,9 +128,9 @@ def _repository_layout(root: Path) -> dict[str, Path | str] | None:
         / "oracles"
         / "optuna50_public_api.json",
         "test_manifest": root
-        / "tests"
-        / "matlab"
-        / "fixtures"
+        / "packages"
+        / "radia-optuna"
+        / "oracles"
         / "optuna_test_manifest.json",
     }
 
@@ -523,7 +523,7 @@ def matlab_optuna_oracle_plan(
                 "python packages/radia-optuna/oracles/generate_optuna50_api_inventory.py",
                 "python packages/radia-optuna/oracles/generate_optuna50_oracle.py",
                 "python packages/radia-optuna/tools/generate_optuna50_api_coverage.py",
-                "python tests/matlab/fixtures/generate_optuna_test_manifest.py",
+                "python packages/radia-optuna/tools/generate_optuna_test_manifest.py --test-directory tests/matlab --output packages/radia-optuna/oracles/optuna_test_manifest.json",
             ]
         )
     if key in {"all", "upstream_mcp"}:

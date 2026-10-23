@@ -43,9 +43,9 @@ def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):
     test_manifest = json.loads(
         (
             REPO_ROOT
-            / "tests"
-            / "matlab"
-            / "fixtures"
+            / "packages"
+            / "radia-optuna"
+            / "oracles"
             / "optuna_test_manifest.json"
         ).read_text(encoding="utf-8")
     )

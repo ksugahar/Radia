@@ -127,7 +127,7 @@ end
 
 function testOraclePolicyManifestIsComplete(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
-fixtureDirectory=fullfile(root,"tests","matlab","fixtures");
+fixtureDirectory=fullfile(root,"packages","radia-optuna","oracles");
 manifest=jsondecode(fileread(fullfile( ...
     fixtureDirectory,"optuna_test_manifest.json")));
 verifyEqualWithPrecision(testCase,string(manifest.schema), ...

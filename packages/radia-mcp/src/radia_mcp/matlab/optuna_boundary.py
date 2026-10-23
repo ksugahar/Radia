@@ -124,7 +124,7 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
             "packages/radia-optuna/oracles/optuna50_mcp_oracle.json",
             "packages/radia-optuna/oracles/optuna50_public_api.json",
             "packages/radia-optuna/matlab/optuna50_api_coverage.json",
-            "tests/matlab/fixtures/optuna_test_manifest.json",
+            "packages/radia-optuna/oracles/optuna_test_manifest.json",
         ],
         "disagreement_policy": (
             "Regenerate the pinned upstream fixture first, then fix MATLAB; "
