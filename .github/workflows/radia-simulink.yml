@@ -277,6 +277,13 @@ jobs:
     env:
       RADIA_GPU_CI_BUILD: "1"
     steps:
+      - name: Initialize runner-owned CI scratch
+        shell: pwsh
+        run: |
+          if (-not $env:RUNNER_TEMP -or -not (Test-Path -LiteralPath $env:RUNNER_TEMP -PathType Container)) { throw 'RUNNER_TEMP is required for CI scratch.' }
+          foreach ($key in @('TMP','TEMP','TMPDIR')) {
+            "$key=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          }
       - uses: actions/checkout@v4
       - name: Prepare isolated mexcuda environment
         shell: pwsh
@@ -340,7 +347,7 @@ jobs:
             return $accepted[0].FullName
           }
           $hmatrix = Select-ExactBuild (Get-ChildItem build-hmatrix-cuda -Directory -Filter 'job-*')
-          $projection = Select-ExactBuild (Get-ChildItem C:/temp -Directory -Filter 'projection-cuda-*' | Where-Object LastWriteTimeUtc -ge $projectionStart)
+          $projection = Select-ExactBuild (Get-ChildItem -LiteralPath $env:RUNNER_TEMP -Directory -Filter 'projection-cuda-*' | Where-Object LastWriteTimeUtc -ge $projectionStart)
           $fmm = Select-ExactBuild (Get-ChildItem build-fmm-cuda -Directory -Filter 'job-*')
           "RADIA_HDIV_HMATRIX_BUILD=$hmatrix" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "RADIA_HDIV_PROJECTION_BUILD=$projection" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
@@ -406,6 +413,42 @@ jobs:
             ${{ runner.temp }}/radia-simulink-installed-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/result.json
             ${{ runner.temp }}/radia-simulink-public-${{ github.run_id }}-${{ github.run_attempt }}/*.json
           if-no-files-found: error
+
+      - name: Select portable projection build evidence
+        if: always()
+        shell: pwsh
+        run: |
+          @'
+          import hashlib, json, os, re
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          out = root / ('projection-ci-evidence-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'])
+          out.mkdir()
+          for path in root.glob('projection-cuda-*/build.json'):
+              raw = path.read_bytes()
+              record = json.loads(raw)
+              public = {key: record[key] for key in ('accepted','source_commit','source_dirty','binary_sha256','source_sha256','matlab','taskmanager_started','lifecycle_diagnostic','fault_injection') if key in record}
+              public['raw_receipt_sha256'] = hashlib.sha256(raw).hexdigest()
+              toolchain = path.with_name('toolchain.json')
+              if toolchain.is_file():
+                  public['toolchain_receipt_sha256'] = hashlib.sha256(toolchain.read_bytes()).hexdigest()
+                  details = json.loads(toolchain.read_bytes())
+                  public['toolchain'] = {key: details[key] for key in ('cuda_selection','selector_sha256','profile_declared_cuda_version','profile_validation') if key in details}
+                  versions = re.findall(r'14[.]44[.][0-9]+', details.get('msvc', ''))
+                  public['toolchain']['msvc_toolsets'] = sorted(set(versions))
+                  public['toolchain']['nvcc_releases'] = re.findall(r'release ([0-9]+[.][0-9]+)', details.get('nvcc_version', ''))
+                  public['toolchain']['inputs'] = [{'name': Path(name).name, 'sha256': digest, 'origin_path_sha256': hashlib.sha256(name.encode()).hexdigest()} for name,digest in sorted(details.get('sha256', {}).items())]
+              (out / (path.parent.name + '.json')).write_text(json.dumps(public, indent=2), encoding='utf-8')
+          '@ | python
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Retain portable projection build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-simulink-projection-build
+          path: ${{ runner.temp }}/projection-ci-evidence-${{ github.run_id }}-${{ github.run_attempt }}/*.json
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Seal exact-SHA GPU wheel
         shell: pwsh

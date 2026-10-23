@@ -50,7 +50,6 @@ jobs:
       # does not spend hours revalidating numerical evidence by default.
       RUN_SLOW_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.full_slow == true }}
       RUN_VALIDATION_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_validation_test == true || inputs.full_slow == true) }}
-      RADIA_CI_OUTPUT_DIR: 'C:\temp\radia-ci-output-${{ github.run_id }}-${{ github.run_attempt }}'
       # This CI lane (including opt-in tests) is not a scaling benchmark.
       # Bound nested pools; use dedicated validation runs for performance claims.
       OMP_NUM_THREADS: '8'
@@ -59,6 +58,16 @@ jobs:
       MKL_NUM_THREADS: '1'
 
     steps:
+      - name: Initialize runner-owned CI scratch
+        shell: pwsh
+        run: |
+          if (-not $env:RUNNER_TEMP -or -not (Test-Path -LiteralPath $env:RUNNER_TEMP -PathType Container)) { throw 'RUNNER_TEMP is required for CI scratch.' }
+          foreach ($key in @('TMP','TEMP','TMPDIR')) {
+            "$key=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          $output = Join-Path $env:RUNNER_TEMP "radia-ci-output-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Force -Path $output | Out-Null
+          "RADIA_CI_OUTPUT_DIR=$output" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - uses: actions/checkout@v4
 
       # Release workflows consume this artifact from the exact triggering CI
@@ -525,35 +534,6 @@ jobs:
           }
 
       # ----------------------------------------------------------------
-      # L2 (2026-05-30): Archive junit + stdout to a per-SHA folder on
-      # the self-hosted runner.  This makes historical CI data live on
-      # development/build host disk (not just GitHub artifact storage), so we can later
-      # `grep` C:\actions-runner\test-history\<sha>\ without hitting
-      # the 60-req/hour unauthenticated GitHub API rate limit.
-      # ----------------------------------------------------------------
-      - name: Archive junit on self-hosted runner
-        if: always() && runner.environment == 'self-hosted'
-        shell: pwsh
-        working-directory: ${{ github.workspace }}
-        continue-on-error: true
-        run: |
-          $dst = "C:\actions-runner\test-history\${{ github.sha }}_${{ github.run_id }}_${{ github.run_attempt }}"
-          New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          foreach ($f in @(
-            "$env:RADIA_CI_OUTPUT_DIR\test-results.xml",
-            "$env:RADIA_CI_OUTPUT_DIR\golden-test-results.xml",
-            "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-stdout.log",
-            "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log",
-            "$env:RADIA_CI_OUTPUT_DIR\ci-context.json"
-          )) {
-            if (Test-Path $f) {
-              Copy-Item $f -Destination $dst -Force
-              Write-Host "  archived $f"
-            }
-          }
-          Write-Host "Archived under: $dst"
-
-      # ----------------------------------------------------------------
       # Upload test results for GitHub Actions summary
       # ----------------------------------------------------------------
       - name: Upload test results
@@ -561,12 +541,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: |
-            ${{ env.RADIA_CI_OUTPUT_DIR }}\test-results.xml
-            ${{ env.RADIA_CI_OUTPUT_DIR }}\golden-test-results.xml
-            ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-basic-stdout.log
-            ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-golden-stdout.log
-            ${{ env.RADIA_CI_OUTPUT_DIR }}\ci-context.json
+          path: ${{ env.RADIA_CI_OUTPUT_DIR }}
           retention-days: 30
 
       # ----------------------------------------------------------------
