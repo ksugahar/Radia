@@ -133,7 +133,7 @@ def test_missing_file_is_reported(tmp_path: Path) -> None:
 
 
 def test_pdf_rasterised_at_the_paste_width_audits_clean(tmp_path: Path) -> None:
-    fitz = pytest.importorskip("fitz")
+    fitz = pytest.importorskip("pymupdf")
     from radia_mcp.figure import slide_png_from_pdf
 
     src = tmp_path / "vector.pdf"

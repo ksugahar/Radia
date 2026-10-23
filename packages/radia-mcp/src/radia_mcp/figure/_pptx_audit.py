@@ -385,7 +385,7 @@ def slide_png_from_pdf(pdf_path: str,
     label lands at ``20 * text_scale`` on the slide.
     """
     try:
-        import fitz                                   # PyMuPDF
+        import pymupdf as fitz                                   # PyMuPDF
     except ImportError as exc:                        # pragma: no cover - env dependent
         raise RuntimeError(
             "PyMuPDF (fitz) is required to rasterise a vector figure at the "

@@ -86,7 +86,7 @@ radia = [
 rag = [
     "chromadb>=0.4.0",
     "sentence-transformers>=2.2.0",
-    "pymupdf>=1.24.0",
+    "pymupdf>=1.24.3",
 ]
 # Optional OCR engines for scanned PDFs and slide images (literature index
 # fallback, presentation text audits). Google Cloud Vision sends images to an

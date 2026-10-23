@@ -442,7 +442,7 @@ def _ocr_page_easyocr(page, languages, dpi: int) -> str:
     """OCR a rendered PDF page with easyocr (in-process; GPU if torch.cuda).
     Reader cached module-wide (construction loads models)."""
     global _EASYOCR_READER, _EASYOCR_LANGS
-    import fitz  # pymupdf
+    import pymupdf as fitz  # pymupdf
     import numpy as np
     langs = tuple(languages)
     if _EASYOCR_READER is None or _EASYOCR_LANGS != langs:
@@ -461,7 +461,7 @@ def _ocr_page_ndlocr(page, dpi: int) -> str:
     e.g. recovers the Zienkiewicz FEM volumes' garbled text layer to clean
     English).  Runs the ``ndlocr-lite`` CLI on a temp PNG.  Point NDLOCR_LITE_DIR
     at its ``src`` dir (default ``C:private-runtime-path``)."""
-    import fitz  # pymupdf
+    import pymupdf as fitz  # pymupdf
     import os
     import sys
     import shutil
@@ -536,7 +536,7 @@ def extract_pdf_chunks(
     (src/knowledge/pdf_processor.py::PDFProcessor.process_pdf).
     """
     try:
-        import fitz  # pymupdf
+        import pymupdf as fitz  # pymupdf
     except ImportError:
         raise ImportError(
             "PDF extraction requires pymupdf: pip install pymupdf")

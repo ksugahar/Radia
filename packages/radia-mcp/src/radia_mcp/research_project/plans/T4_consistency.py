@@ -40,7 +40,7 @@ def _extract_text(path: pathlib.Path) -> str:
             return ""
     if ext == ".pdf":
         try:
-            import fitz  # type: ignore
+            import pymupdf as fitz  # type: ignore
             doc = fitz.open(path)
             chunks = []
             for page in doc:

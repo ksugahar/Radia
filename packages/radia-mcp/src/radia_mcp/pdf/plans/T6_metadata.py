@@ -10,7 +10,7 @@ import pathlib
 
 def _load_pymupdf():
     try:
-        import fitz  # type: ignore
+        import pymupdf as fitz  # type: ignore
         return fitz
     except ImportError:
         return None

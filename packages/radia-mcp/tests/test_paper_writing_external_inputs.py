@@ -495,7 +495,7 @@ def test_verified_pdf_save_preserves_destination_until_valid(monkeypatch, tmp_pa
 
 
 def test_pdf_magic_alone_does_not_validate_corruption(tmp_path):
-    pytest.importorskip("fitz")
+    pytest.importorskip("pymupdf")
     path = tmp_path / "corrupt.pdf"
     path.write_bytes(b"%PDF-1.7\nnot a document\n")
     assert download._verify_pdf(str(path))["ok"] is False

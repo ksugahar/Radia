@@ -231,7 +231,7 @@ def test_float_distance_without_aux_is_not_reported_as_pass(tmp_path, monkeypatc
 
 
 def test_float_distance_uses_aux_page_and_pdf_prose_reference(tmp_path):
-    fitz = pytest.importorskip("fitz")
+    fitz = pytest.importorskip("pymupdf")
     tex = tmp_path / "paper.tex"
     aux = tmp_path / "paper.aux"
     pdf = tmp_path / "paper.pdf"
@@ -261,7 +261,7 @@ def test_float_distance_uses_aux_page_and_pdf_prose_reference(tmp_path):
 
 
 def test_cropbox_with_nonzero_pdf_origin_does_not_create_false_overflow(tmp_path):
-    fitz = pytest.importorskip("fitz")
+    fitz = pytest.importorskip("pymupdf")
     pdf = tmp_path / "cropped.pdf"
     with fitz.open() as document:
         page = document.new_page(width=600, height=800)

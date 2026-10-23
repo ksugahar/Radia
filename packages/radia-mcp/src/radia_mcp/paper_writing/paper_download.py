@@ -93,7 +93,7 @@ def _verify_pdf(path: str) -> dict:
             "first_bytes": head.hex(), "size_bytes": size,
         }
     try:
-        import fitz
+        import pymupdf as fitz
         with fitz.open(path) as doc:
             if doc.needs_pass or doc.page_count <= 0 or doc.is_repaired:
                 return {"ok": False, "error": "PDF is encrypted, empty or required structural repair"}
