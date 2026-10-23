@@ -1,3 +1,11 @@
+"""Public Optuna evidence, planning and release contracts.
+
+Guards: Missing/altered installed evidence being accepted or silently replaced
+by a repository, wrong release/planning boundaries and incomplete API closure.
+Assumes: Stored reviewed JSON and declared package layout. The installed-copy
+check uses a presence-only MEX placeholder and makes no native execution claim.
+"""
+
 import json
 from copy import deepcopy
 from radia_mcp.matlab import optuna_quality
@@ -293,3 +301,63 @@ def test_release_gate_accepts_complete_evidence_and_rejects_regression(monkeypat
     assert result["ok"] is False
     assert any("scalar MATLAB/Python" in error for error in result["errors"])
     assert any("SamplerStateTable" in error for error in result["errors"])
+
+
+def test_installed_evidence_is_authoritative_without_repository(tmp_path, monkeypatch):
+    import importlib.util
+    import shutil
+    from types import SimpleNamespace
+    import pytest
+    from radia_mcp.matlab.optuna_oracle import matlab_optuna_compatibility_contract
+
+    source = REPO_ROOT / "packages/radia-optuna"
+    target = tmp_path / "radia_optuna"
+    shutil.copytree(source / "src/radia_optuna", target,
+                    ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(source / "matlab", target / "matlab",
+                    ignore=shutil.ignore_patterns("*.mexw64"))
+    (target / "oracles").mkdir()
+    for path in (source / "oracles").glob("*.json"):
+        shutil.copy2(path, target / "oracles" / path.name)
+    (target / "matlab/optuna_mex.mexw64").write_bytes(b"presence-only placeholder")
+    shutil.copy2(source / "THIRD_PARTY_NOTICES.md", target / "matlab/THIRD_PARTY_NOTICES.md")
+    monkeypatch.delenv("RADIA_REPO_ROOT", raising=False)
+    original = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a, **k:
+                        SimpleNamespace(origin=str(target / "__init__.py"))
+                        if name == "radia_optuna" else original(name, *a, **k))
+    def no_repository():
+        raise AssertionError("installed evidence must not search a repository")
+    monkeypatch.setattr(optuna_quality, "_repository_candidates", no_repository)
+    health = matlab_optuna_health()
+    assert health["ok"] is True, health
+    assert health["source_kind"] == "installed-distribution", health
+    assert health["oracle"]["actual_fixture_sha256"] == health["oracle"]["recorded_fixture_sha256"]
+    contract = matlab_optuna_compatibility_contract()
+    assert contract["ok"] is True, contract
+    assert contract["root"] == str(target.resolve()), contract
+    assert contract["source_kind"] == "installed-distribution", contract
+
+    fixture = target / "oracles/optuna50_oracle.json"
+    content = fixture.read_bytes()
+    for damage in ("tamper", "missing"):
+        if damage == "tamper":
+            fixture.write_bytes(content + b" ")
+        else:
+            fixture.unlink()
+        rejected = matlab_optuna_health()
+        assert rejected["ok"] is False, rejected
+        with pytest.raises((OSError, ValueError)):
+            matlab_optuna_compatibility_contract()
+        fixture.write_bytes(content)
+    ledger = target / "evidence_manifest.json"
+    original_ledger = ledger.read_bytes()
+    unsafe = json.loads(original_ledger)
+    unsafe["files"]["python_oracle"]["path"] = "../outside.json"
+    ledger.write_text(json.dumps(unsafe), encoding="utf-8")
+    assert matlab_optuna_health()["ok"] is False
+    with pytest.raises(ValueError, match="Unsafe"):
+        matlab_optuna_compatibility_contract()
+    ledger.write_bytes(original_ledger)
+    assert matlab_optuna_health()["ok"] is True
+    assert matlab_optuna_compatibility_contract()["ok"] is True

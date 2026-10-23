@@ -9,7 +9,6 @@ Optuna MCP tools.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import re
 from collections import Counter
@@ -18,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from ..common.scratch import scratch_root
+from .optuna_evidence import checked_evidence, installed_package_root
 
 _NOTICE_TOKENS = (
     "Copyright (c) 2018 Preferred Networks, Inc.",
@@ -140,16 +140,18 @@ def _installed_layout(package_root: Path) -> dict[str, Path | str] | None:
     manifest = package_root / "manifest.json"
     if not manifest.is_file() or not (matlab_root / "optuna50_api_coverage.json").is_file():
         return None
+    evidence = checked_evidence(package_root)
     return {
         "source_kind": "installed-distribution",
         "root": package_root,
         "matlab_root": matlab_root,
         "manifest": manifest,
         "notice": matlab_root / "THIRD_PARTY_NOTICES.md",
-        "oracle": Path(),
-        "mcp_oracle": Path(),
-        "inventory": Path(),
-        "test_manifest": Path(),
+        "oracle": evidence["python_oracle"],
+        "mcp_oracle": evidence["mcp_oracle"],
+        "inventory": evidence["public_api_inventory"],
+        "test_manifest": evidence["test_manifest"],
+        "evidence_manifest": evidence["evidence_manifest"],
     }
 
 
@@ -178,20 +180,18 @@ def _resolve_layout(location: str = "") -> dict[str, Path | str]:
             f"{supplied} is neither a Radia repository nor an installed radia-optuna package"
         )
 
+    installed = installed_package_root()
+    if installed is not None:
+        layout = _installed_layout(installed)
+        if layout is None:
+            raise FileNotFoundError(f"Incomplete installed radia-optuna package: {installed}")
+        return layout
+
     for candidate in _repository_candidates():
         layout = _repository_layout(candidate)
         if layout is not None:
             return layout
 
-    spec = importlib.util.find_spec("radia_optuna")
-    if spec is not None:
-        locations = list(spec.submodule_search_locations or [])
-        if spec.origin:
-            locations.append(str(Path(spec.origin).parent))
-        for value in locations:
-            layout = _installed_layout(Path(value).resolve())
-            if layout is not None:
-                return layout
     raise FileNotFoundError(
         "radia-optuna was not found in a repository or installed Python environment"
     )
@@ -233,7 +233,7 @@ def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
     errors: list[str] = []
     try:
         layout = _resolve_layout(distribution_path)
-    except (OSError, FileNotFoundError) as error:
+    except (OSError, ValueError, KeyError, TypeError) as error:
         return {
             "schema": "radia-mcp.matlab-optuna-health/v1",
             "ok": False,
