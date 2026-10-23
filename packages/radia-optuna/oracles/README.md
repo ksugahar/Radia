@@ -83,3 +83,15 @@ No producer execution or expectation regeneration is part of this move.
 | --- | --- |
 | `generate_optuna50_oracle.py` | `4524b64b6f9bfac45bd0abd24fd6633ee50de7780920cb942341dcd6613dfdac` |
 | `optuna50_oracle.json` | `89bb7a0f907ef7158213deca5d2e2feb7810b95191c5d96bcb6bfed456183264` |
+
+## MATLAB test classification
+
+`optuna_test_manifest.json` is classification metadata, not a numerical oracle.
+It was moved byte-for-byte from commit `73ff5ad1b9bee1c5b37fe4e54c20e622580ae59d`
+(SHA256 `ff8c3794f3a2f85f7d9e55087df59c16b94d713960a955f77db484bafc2cde43`). The class tables and ordering
+are unchanged. Its package-owned generator requires an explicit test directory
+and output; it never discovers a monorepo or rewrites this file implicitly:
+
+```console
+python packages/radia-optuna/tools/generate_optuna_test_manifest.py --test-directory tests/matlab --output <chosen-file.json>
+```

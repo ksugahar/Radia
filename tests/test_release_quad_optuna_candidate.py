@@ -676,16 +676,26 @@ def test_owned_scratch_refuses_a_junction(tmp_path):
     assert (tmp_path / "outside" / "keep.txt").read_text(encoding="utf-8").strip() == "keep"
 
 
-def test_test_manifest_matches_its_generator():
-    REPO_ROOT = Path(__file__).resolve().parents[1]
-    path = REPO_ROOT / "tests/matlab/fixtures/generate_optuna_test_manifest.py"
-    spec = importlib.util.spec_from_file_location("optuna_test_manifest_audit", path)
-    assert spec is not None and spec.loader is not None
-    generator = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(generator)
-    expected = json.dumps(generator.build_manifest(), indent=2, sort_keys=True) + "\n"
-    actual = path.with_name("optuna_test_manifest.json").read_bytes().replace(b"\r\n", b"\n")
-    assert actual == expected.encode()
+def test_test_manifest_matches_its_generator(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    generator = root / "packages/radia-optuna/tools/generate_optuna_test_manifest.py"
+    output = tmp_path / "classification.json"
+    completed = subprocess.run(
+        [sys.executable, str(generator), "--test-directory", str(root / "tests/matlab"),
+         "--output", str(output)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60,
+    )
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    committed = root / "packages/radia-optuna/oracles/optuna_test_manifest.json"
+    assert output.read_bytes() == committed.read_bytes().replace(b"\r\n", b"\n")
+    # An omitted input directory must not discover a repository implicitly.
+    missing = tmp_path / "missing-input.json"
+    rejected = subprocess.run(
+        [sys.executable, str(generator), "--output", str(missing)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60,
+    )
+    assert rejected.returncode == 2, (rejected.stdout, rejected.stderr)
+    assert not missing.exists()
 
 
 def test_root_optuna_build_adapter_stays_outside_solver_cmake():

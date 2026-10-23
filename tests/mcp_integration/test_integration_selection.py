@@ -44,6 +44,8 @@ def test_repository_changes_keep_integration_lane(changed):
     "packages/radia-optuna/src/radia_optuna/__init__.py",
     "packages/radia-optuna/tools/build_mexcuda.m",
     "packages/radia-optuna/oracles/README.md",
+    "tests/matlab/fixtures/optuna_test_manifest.json",
+    "tests/matlab/fixtures/generate_optuna_test_manifest.py",
     "docs/README.md",
 ])
 def test_unread_foreign_changes_do_not_run_the_integration_lane(changed):

@@ -394,7 +394,6 @@ def _integration_tests(changed: list[str]) -> list[str]:
         "packages/radia-optuna/oracles/optuna",
         "packages/radia-optuna/oracles/generate_optuna",
         "packages/radia-optuna/tools/generate_optuna",
-        "tests/matlab/fixtures/optuna", "tests/matlab/fixtures/generate_optuna",
         "tests/matlab/test_optuna",
         "packages/radia-simulink/matlab/+radia/+simulink/makeCircuitFieldStateSpace.m",
         "packages/radia-simulink/matlab/+radia/+simulink/buildCircuitFieldStateSpaceModel.m",

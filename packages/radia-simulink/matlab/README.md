@@ -1035,11 +1035,12 @@ with `packages/radia-optuna/oracles/generate_optuna50_oracle.py` and
 `packages/radia-optuna/oracles/generate_optuna50_mcp_oracle.py`. optuna-mcp 0.2.0 does
 not accept a sampler seed, so exact seed streams intentionally remain in the
 direct Optuna 5.0.0 oracle. Every MATLAB Optuna test function is classified in
-`tests/matlab/fixtures/optuna_test_manifest.json` as `upstream-python`,
+`packages/radia-optuna/oracles/optuna_test_manifest.json` as `upstream-python`,
 `upstream-mcp`, or `matlab-integration`. The last class covers only MATLAB
 storage, parallel, native, and Simulink integration and is not evidence of
 behavioral parity. Regenerate that checked inventory with
-`tests/matlab/fixtures/generate_optuna_test_manifest.py`.
+`packages/radia-optuna/tools/generate_optuna_test_manifest.py` with
+`--test-directory tests/matlab --output packages/radia-optuna/oracles/optuna_test_manifest.json`.
 The machine-readable `packages/radia-optuna/matlab/optuna_upstream_compatibility.json` inventory
 separates the shared behavior verified against 5.0.0, MATLAB-only integration
 contracts, and the Python-runtime-identity boundary. Unseeded sampler constructors

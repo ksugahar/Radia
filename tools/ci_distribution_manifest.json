@@ -1847,30 +1847,6 @@
       "selection": "all_owners"
     },
     {
-      "pattern": "tests/matlab/fixtures/optuna*",
-      "owners": [
-        "radia-optuna",
-        "radia-mcp"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "radia-mcp owns the MATLAB Optuna composition, differential-oracle and performance-gate audits that read these files."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "tests/matlab/fixtures/generate_optuna*",
-      "owners": [
-        "radia-optuna",
-        "radia-mcp"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "radia-mcp owns the MATLAB Optuna composition, differential-oracle and performance-gate audits that read these files."
-      },
-      "selection": "all_owners"
-    },
-    {
       "pattern": "validation_test/optimization/benchmark_*",
       "owners": [
         "radia-optuna",
@@ -3265,8 +3241,6 @@
             "packages/radia-optuna/oracles/optuna*.json",
             "packages/radia-optuna/oracles/generate_optuna*",
             "packages/radia-optuna/tools/generate_optuna*",
-            "tests/matlab/fixtures/optuna*",
-            "tests/matlab/fixtures/generate_optuna*",
             "tests/matlab/test_optuna*.m",
             "validation_test/radia_mcp/**",
             "validation_test/vim_coupled/results_*.json",
@@ -3311,8 +3285,6 @@
             "packages/radia-optuna/oracles/optuna*.json",
             "packages/radia-optuna/oracles/generate_optuna*",
             "packages/radia-optuna/tools/generate_optuna*",
-            "tests/matlab/fixtures/optuna*",
-            "tests/matlab/fixtures/generate_optuna*",
             "tests/matlab/test_optuna*.m",
             "validation_test/radia_mcp/**",
             "validation_test/vim_coupled/results_*.json",
