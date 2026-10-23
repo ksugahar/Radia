@@ -1,0 +1,97 @@
+name: GPU runner readiness (manual only)
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        type: choice
+        options: [gpu-a100, gpu-rtx]
+        default: gpu-a100
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: gpu-readiness-${{ inputs.target }}
+  cancel-in-progress: false
+jobs:
+  a100:
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'gpu-a100'
+    runs-on: [self-hosted, Windows, X64, gpu-a100]
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PROBE_CONFIG: ${{ secrets.GPU_READINESS_A100 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare fresh evidence
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "readiness-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if (Test-Path -LiteralPath $root) { throw 'Fresh evidence root required.' }
+          New-Item -ItemType Directory -Path $root | Out-Null
+          "PROBE_EVIDENCE=$root" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          @{ schema='radia.runner-readiness.v1'; state='started'; passed=$false } | ConvertTo-Json | Set-Content (Join-Path $root 'dispatch.json')
+      - name: Probe existing MATLAB and Engine in runner context
+        timeout-minutes: 5
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PROBE_CONFIG)) { throw 'Manager-supplied readiness configuration secret required.' }
+          $config = $env:PROBE_CONFIG | ConvertFrom-Json
+          & ./packages/radia-simulink/tools/gpu_readiness/Invoke-RunnerReadiness.ps1 -RunnerRoot $config.runner_root -ExpectedSid $config.expected_sid -ExpectedRunnerName $config.expected_runner_name -MatlabRoot $config.matlab_root -ProbePython $config.python -ExpectedGPU $config.expected_gpu -ProbeDir "$env:GITHUB_WORKSPACE/packages/radia-simulink/tools/gpu_readiness" -EvidenceDir $env:PROBE_EVIDENCE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify finished readiness receipt
+        run: |
+          $record = Get-Content -LiteralPath (Join-Path $env:PROBE_EVIDENCE 'summary.json') -Raw | ConvertFrom-Json
+          if ($record.state -ne 'finished' -or $record.passed -ne $true -or $record.batch.passed -ne $true -or $record.engine.passed -ne $true -or $record.engine.shutdown -ne 'complete') { throw 'Readiness missing, incomplete or failed.' }
+      - name: Retain sanitized readiness evidence, including incomplete attempts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-readiness-${{ inputs.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.PROBE_EVIDENCE }}/dispatch.json
+            ${{ env.PROBE_EVIDENCE }}/summary.json
+          if-no-files-found: error
+          retention-days: 7
+  rtx:
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'gpu-rtx'
+    runs-on: [self-hosted, Windows, X64, "100", gpu-rtx]
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PROBE_CONFIG: ${{ secrets.GPU_READINESS_RTX }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare fresh evidence
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "readiness-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if (Test-Path -LiteralPath $root) { throw 'Fresh evidence root required.' }
+          New-Item -ItemType Directory -Path $root | Out-Null
+          "PROBE_EVIDENCE=$root" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          @{ schema='radia.runner-readiness.v1'; state='started'; passed=$false } | ConvertTo-Json | Set-Content (Join-Path $root 'dispatch.json')
+      - name: Probe existing MATLAB and Engine in runner context
+        timeout-minutes: 5
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PROBE_CONFIG)) { throw 'Manager-supplied readiness configuration secret required.' }
+          $config = $env:PROBE_CONFIG | ConvertFrom-Json
+          & ./packages/radia-simulink/tools/gpu_readiness/Invoke-RunnerReadiness.ps1 -RunnerRoot $config.runner_root -ExpectedSid $config.expected_sid -ExpectedRunnerName $config.expected_runner_name -MatlabRoot $config.matlab_root -ProbePython $config.python -ExpectedGPU $config.expected_gpu -ProbeDir "$env:GITHUB_WORKSPACE/packages/radia-simulink/tools/gpu_readiness" -EvidenceDir $env:PROBE_EVIDENCE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify finished readiness receipt
+        run: |
+          $record = Get-Content -LiteralPath (Join-Path $env:PROBE_EVIDENCE 'summary.json') -Raw | ConvertFrom-Json
+          if ($record.state -ne 'finished' -or $record.passed -ne $true -or $record.batch.passed -ne $true -or $record.engine.passed -ne $true -or $record.engine.shutdown -ne 'complete') { throw 'Readiness missing, incomplete or failed.' }
+      - name: Retain sanitized readiness evidence, including incomplete attempts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-readiness-${{ inputs.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.PROBE_EVIDENCE }}/dispatch.json
+            ${{ env.PROBE_EVIDENCE }}/summary.json
+          if-no-files-found: error
+          retention-days: 7
