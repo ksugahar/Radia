@@ -172,15 +172,20 @@ def test_time_series_rejects_element_node_data(tmp_path):
              for k in range(2)]
     for path in paths:
         elements = read_msh_data(path, include_elements=True)["elements"]
-        rows = []
+        groups = {}
         for tag, element in elements.items():
-            values = " ".join("1" for _ in element["nodes"])
-            rows.append(f"{tag} {len(element['nodes'])} {values}")
-        from msh42_fixtures import field_section
+            groups.setdefault(element["type"], []).append(tag)
+        tags = list(elements)
+        body = [f"{len(groups)} {len(tags)} {min(tags)} {max(tags)}"]
+        for etype, block_tags in groups.items():
+            width = len(elements[block_tags[0]]["nodes"])
+            body += [f"{etype} {width} {len(block_tags)}"]
+            body += [str(tag) for tag in block_tags]
+            body += [" ".join("1" for _ in range(width)) for tag in block_tags]
         path.write_text(
             path.read_text(encoding="utf-8")
-            + field_section("ElementNodeData", "local", 1,
-                            [tuple(row.split()) for row in rows]),
+            + '$ElementNodeData\n1\n"local"\n1\n0\n3\n0\n1\n'
+            + f"{len(tags)}\n" + "\n".join(body) + "\n$EndElementNodeData\n",
             encoding="utf-8")
     res = time_series(paths, view="local")
     assert not res["ok"]
