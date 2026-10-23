@@ -58,12 +58,12 @@ def unique_pairs(items):
 class Tree:
     def __init__(self, root, rev):
         self.root = root
-        self.sha = git(root, 'rev-parse', '--verify', '--end-of-options', rev + '^{commit}').decode().strip()
+        self.sha = git(root, 'rev-parse', '--verify', '--end-of-options', rev + '^{commit}').decode('utf-8').strip()
         self.files = {}
         for row in git(root, 'ls-tree', '-r', '-z', self.sha).split(b'\0'):
             if row:
                 metadata, name = row.split(b'\t', 1)
-                mode, kind, oid = metadata.decode().split()
+                mode, kind, oid = metadata.decode('utf-8').split()
                 self.files[name.decode('utf-8')] = (mode, kind, oid)
         self.blobs = {}
         self.parsed_nodes = 0
@@ -257,7 +257,7 @@ class Tree:
 
 
 def changes(root, base, head):
-    fields = git(root, 'diff', '--name-status', '-z', '--find-renames', base, head).decode().rstrip('\0').split('\0')
+    fields = git(root, 'diff', '--name-status', '-z', '--find-renames', base, head).decode('utf-8').rstrip('\0').split('\0')
     paths = set(); i = 0
     if fields == ['']: return paths
     while i < len(fields):
@@ -271,7 +271,7 @@ def changes(root, base, head):
 
 def dependency_change(old, new):
     """Prove a Gmsh-only metadata change; everything else stays conservative."""
-    left, right = tomllib.loads(old.decode()), tomllib.loads(new.decode())
+    left, right = tomllib.loads(old.decode('utf-8')), tomllib.loads(new.decode('utf-8'))
     def extract(data):
         project = data.get('project', {})
         project.pop('version', None)
