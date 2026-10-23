@@ -15,7 +15,7 @@ CLI = Path(__file__).resolve().parents[1] / 'tools/ci_numerical_plan.py'
 
 
 def git(root, *args):
-    return subprocess.check_output(['git', *args], cwd=root, stderr=subprocess.PIPE).decode().strip()
+    return subprocess.check_output(['git', *args], cwd=root, stderr=subprocess.PIPE).decode('utf-8').strip()
 
 
 @pytest.fixture
@@ -39,29 +39,29 @@ def repository(tmp_path):
         'pyproject.toml': '[project]\nname="contract"\nversion="1"\ndependencies=["gmsh>=5.0.0.dev0", "ngsolve==6.2.2608"]\n',
     }
     for name, content in files.items():
-        path = root / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text(content)
+        path = root / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text(content, encoding='utf-8')
     manifest = {'schema': 'radia.test-tier-manifest.v1', 'profiles': {
         'sparsesolv': {'paths': ['tests/ams.py']},
         'solver-numerics': {'paths': ['tests/viewer.py', 'tests/output.py']},
         'solver-heavy': {'paths': ['validation_test/motor.py', 'validation_test/ih.py']},
         'native-build-contracts': {'paths': ['tests/native_contract.py']},
     }, 'impact_rules': {}}
-    (root / 'tests/test_tier_manifest.json').write_text(json.dumps(manifest))
+    (root / 'tests/test_tier_manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
     git(root, 'add', '.'); git(root, 'commit', '-qm', 'Independent consumer graph')
     return root, git(root, 'rev-parse', 'HEAD')
 
 
 def change(root, path, text):
-    file = root / path; file.parent.mkdir(parents=True, exist_ok=True); file.write_text(text)
+    file = root / path; file.parent.mkdir(parents=True, exist_ok=True); file.write_text(text, encoding='utf-8')
     git(root, 'add', '.'); git(root, 'commit', '-qm', 'Contract input change')
 
 
 def invoke(root, base, tmp_path, event='pull_request', expected=0):
     report = tmp_path / 'plan.json'
     process = subprocess.run([sys.executable, str(CLI), '--repo', str(root), '--base', base,
-                              '--event', event, '--out', str(report)], capture_output=True, text=True)
-    assert process.returncode == expected, (process.stdout, process.stderr, report.read_text() if report.exists() else '')
-    data = json.loads(report.read_text())
+                              '--event', event, '--out', str(report)], capture_output=True, text=True, encoding='utf-8')
+    assert process.returncode == expected, (process.stdout, process.stderr, report.read_text(encoding='utf-8') if report.exists() else '')
+    data = json.loads(report.read_text(encoding='utf-8'))
     assert data['qualification'] is False and data['execution_wired'] is False
     return data
 
@@ -79,7 +79,7 @@ def test_plan_uses_committed_blobs_despite_worktree_replacement(repository, tmp_
     root, base = repository
     change(root, 'src/radia/panels/open_gmsh.py', '# UTF-8: 球\ndef show(): return "\\n"\n')
     committed = invoke(root, base, tmp_path)
-    (root / 'src/radia/panels/open_gmsh.py').write_text('invalid Python (')
+    (root / 'src/radia/panels/open_gmsh.py').write_text('invalid Python (', encoding='utf-8')
     observed = invoke(root, base, tmp_path)
     assert observed == committed
     assert observed['ams_paths'] == [] and observed['heavy_case_paths'] == []
@@ -163,7 +163,7 @@ def test_parent_initializer_change_is_not_missed(repository, tmp_path):
 @pytest.mark.parametrize('dependency,ams', [('gmsh', False), ('ngsolve', True)])
 def test_dependency_components_do_not_treat_gmsh_as_solver(repository, tmp_path, dependency, ams):
     root, base = repository
-    text = (root / 'pyproject.toml').read_text()
+    text = (root / 'pyproject.toml').read_text(encoding='utf-8')
     text = text.replace('5.0.0.dev0', '5.0.0.dev20261024') if dependency == 'gmsh' else text.replace('6.2.2608', '6.2.9999')
     change(root, 'pyproject.toml', text)
     plan = invoke(root, base, tmp_path)
@@ -194,7 +194,7 @@ def test_invalid_base_is_blocked_not_empty_success(repository, tmp_path):
 
 def test_empty_profile_is_blocked(repository, tmp_path):
     root, base = repository
-    path = root / 'tests/test_tier_manifest.json'; data = json.loads(path.read_text())
+    path = root / 'tests/test_tier_manifest.json'; data = json.loads(path.read_text(encoding='utf-8'))
     data['profiles']['sparsesolv']['paths'] = []
     change(root, 'tests/test_tier_manifest.json', json.dumps(data))
     assert invoke(root, base, tmp_path, expected=2)['status'] == 'blocked'
