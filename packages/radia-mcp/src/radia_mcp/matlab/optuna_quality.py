@@ -522,7 +522,7 @@ def matlab_optuna_oracle_plan(
             [
                 "python packages/radia-optuna/oracles/generate_optuna50_api_inventory.py",
                 "python packages/radia-optuna/oracles/generate_optuna50_oracle.py",
-                "python tests/matlab/fixtures/generate_optuna50_api_coverage.py",
+                "python packages/radia-optuna/tools/generate_optuna50_api_coverage.py",
                 "python tests/matlab/fixtures/generate_optuna_test_manifest.py",
             ]
         )

@@ -109,7 +109,7 @@ def _evidence_paths(root: Path) -> dict[str, Path]:
         "test_manifest": fixture / "optuna_test_manifest.json",
         "python_generator": root / "packages/radia-optuna/oracles/generate_optuna50_oracle.py",
         "api_inventory_generator": root / "packages/radia-optuna/oracles/generate_optuna50_api_inventory.py",
-        "api_coverage_generator": fixture / "generate_optuna50_api_coverage.py",
+        "api_coverage_generator": root / "packages/radia-optuna/tools/generate_optuna50_api_coverage.py",
         "mcp_generator": root / "packages/radia-optuna/oracles/generate_optuna50_mcp_oracle.py",
         "manifest_generator": fixture / "generate_optuna_test_manifest.py",
     }
@@ -304,7 +304,7 @@ def matlab_optuna_oracle_audit(
         "regeneration_commands": [
             "python packages/radia-optuna/oracles/generate_optuna50_oracle.py",
             "python packages/radia-optuna/oracles/generate_optuna50_api_inventory.py",
-            "python tests/matlab/fixtures/generate_optuna50_api_coverage.py",
+            "python packages/radia-optuna/tools/generate_optuna50_api_coverage.py",
             "python packages/radia-optuna/oracles/generate_optuna50_mcp_oracle.py",
             "python tests/matlab/fixtures/generate_optuna_test_manifest.py",
         ],
