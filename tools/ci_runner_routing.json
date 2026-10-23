@@ -2,6 +2,8 @@
   "schema": 1,
   "mode": "stage3",
   "jobs": {
+    "gpu-runner-readiness.yml:a100": {"owner": "radia-simulink", "target": "gpu-a100", "legacy_100": false},
+    "gpu-runner-readiness.yml:rtx": {"owner": "radia-simulink", "target": "gpu-rtx", "legacy_100": false},
     "build-test.yml:build-test": {
       "owner": "radia",
       "target": "ci-native",
