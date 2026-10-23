@@ -1,0 +1,541 @@
+{
+  "adoption_result": {
+    "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+    "verdict": "PASS",
+    "levels": [
+      {
+        "id": "H-m2-p1",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 1,
+          "metric_code": 0
+        },
+        "error": 0.12019673209290184,
+        "relative_residual": 1.0465108862687692e-12,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "H-m2-p2",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 2,
+          "metric_code": 0
+        },
+        "error": 0.0009128210669642261,
+        "relative_residual": 7.286461556742831e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "H-m2-p3",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 3,
+          "metric_code": 0
+        },
+        "error": 1.3169747031420185e-05,
+        "relative_residual": 9.68103161188331e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "H-m4-p1",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 1,
+          "metric_code": 0
+        },
+        "error": 0.06066614087413869,
+        "relative_residual": 8.579638231210491e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "H-m4-p2",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 2,
+          "metric_code": 0
+        },
+        "error": 0.0002251836735273075,
+        "relative_residual": 9.166119177135723e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "H-m4-p3",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 3,
+          "metric_code": 0
+        },
+        "error": 1.6298047190591256e-06,
+        "relative_residual": 8.884228647584609e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "B-m2-p1",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 1,
+          "metric_code": 1
+        },
+        "error": 0.12019673209290159,
+        "relative_residual": 1.0465108862687692e-12,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "B-m2-p2",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 2,
+          "metric_code": 1
+        },
+        "error": 0.0009128210669642249,
+        "relative_residual": 7.286461556742831e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "B-m2-p3",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 3,
+          "metric_code": 1
+        },
+        "error": 1.316974703142158e-05,
+        "relative_residual": 9.68103161188331e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "B-m4-p1",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 1,
+          "metric_code": 1
+        },
+        "error": 0.06066614087413994,
+        "relative_residual": 8.579638231210491e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "B-m4-p2",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 2,
+          "metric_code": 1
+        },
+        "error": 0.00022518367352731002,
+        "relative_residual": 9.166119177135723e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "B-m4-p3",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 3,
+          "metric_code": 1
+        },
+        "error": 1.6298047190587906e-06,
+        "relative_residual": 8.884228647584609e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "J-m2-p1",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 1,
+          "metric_code": 2
+        },
+        "error": 0.048271043699482624,
+        "relative_residual": 1.0465108862687692e-12,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "J-m2-p2",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 2,
+          "metric_code": 2
+        },
+        "error": 2.3707932063690624e-05,
+        "relative_residual": 7.286461556742831e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "J-m2-p3",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 3,
+          "metric_code": 2
+        },
+        "error": 2.283010385033384e-07,
+        "relative_residual": 9.68103161188331e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "J-m4-p1",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 1,
+          "metric_code": 2
+        },
+        "error": 0.024653702854584857,
+        "relative_residual": 8.579638231210491e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "J-m4-p2",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 2,
+          "metric_code": 2
+        },
+        "error": 2.853536317912898e-06,
+        "relative_residual": 9.166119177135723e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "J-m4-p3",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 3,
+          "metric_code": 2
+        },
+        "error": 1.4299014813027892e-08,
+        "relative_residual": 8.884228647584609e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "Z_back-m2-p1",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 1,
+          "metric_code": 3
+        },
+        "error": 0.0711975675938518,
+        "relative_residual": 1.0465108862687692e-12,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "Z_back-m2-p2",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 2,
+          "metric_code": 3
+        },
+        "error": 0.0016200892229698807,
+        "relative_residual": 7.286461556742831e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "Z_back-m2-p3",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 3,
+          "metric_code": 3
+        },
+        "error": 2.729599434031916e-05,
+        "relative_residual": 9.68103161188331e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "Z_back-m4-p1",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 1,
+          "metric_code": 3
+        },
+        "error": 0.043655044552081725,
+        "relative_residual": 8.579638231210491e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "Z_back-m4-p2",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 2,
+          "metric_code": 3
+        },
+        "error": 0.00039139786210864313,
+        "relative_residual": 9.166119177135723e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "Z_back-m4-p3",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 3,
+          "metric_code": 3
+        },
+        "error": 3.2784633391902526e-06,
+        "relative_residual": 8.884228647584609e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "Z_front-m2-p1",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 1,
+          "metric_code": 4
+        },
+        "error": 0.07119756759385289,
+        "relative_residual": 1.0465108862687692e-12,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "Z_front-m2-p2",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 2,
+          "metric_code": 4
+        },
+        "error": 0.0016200892229661654,
+        "relative_residual": 7.286461556742831e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "Z_front-m2-p3",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 3,
+          "metric_code": 4
+        },
+        "error": 2.7295994063451873e-05,
+        "relative_residual": 9.68103161188331e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "Z_front-m4-p1",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 1,
+          "metric_code": 4
+        },
+        "error": 0.04365504455227834,
+        "relative_residual": 8.579638231210491e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "Z_front-m4-p2",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 2,
+          "metric_code": 4
+        },
+        "error": 0.00039139786218804506,
+        "relative_residual": 9.166119177135723e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "Z_front-m4-p3",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 3,
+          "metric_code": 4
+        },
+        "error": 3.2784632198186105e-06,
+        "relative_residual": 8.884228647584609e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "power-m2-p1",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 1,
+          "metric_code": 5
+        },
+        "error": 0.0018964141115191135,
+        "relative_residual": 1.0465108862687692e-12,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "power-m2-p2",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 2,
+          "metric_code": 5
+        },
+        "error": 1.234375418875825e-06,
+        "relative_residual": 7.286461556742831e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "power-m2-p3",
+        "parameters": {
+          "h_max_over_a": 0.10825317547305487,
+          "p": 3,
+          "metric_code": 5
+        },
+        "error": 1.0211839522467115e-07,
+        "relative_residual": 9.68103161188331e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "power-m4-p1",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 1,
+          "metric_code": 5
+        },
+        "error": 0.0005597124966443827,
+        "relative_residual": 8.579638231210491e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "power-m4-p2",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 2,
+          "metric_code": 5
+        },
+        "error": 1.0082683024937012e-07,
+        "relative_residual": 9.166119177135723e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      },
+      {
+        "id": "power-m4-p3",
+        "parameters": {
+          "h_max_over_a": 0.05412658773652743,
+          "p": 3,
+          "metric_code": 5
+        },
+        "error": 6.335924863572237e-09,
+        "relative_residual": 8.884228647584609e-13,
+        "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+        "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+        "runtime_s": null,
+        "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+      }
+    ]
+  },
+  "historical_run04": {
+    "runner_sha256": "e0fe40c98580ac87b3c89c65235b649ad6e6aa67a10c3478501b79da82e3d7c9",
+    "manifest_sha256": "2d95da304331d0fe29ae8424a9a75874e86b2fb3c3ab3a1591317c1db62acf22",
+    "original_result_sha256": "f960d8b232750ca6896d88c41bcce28ca2a6b8be8559171c0201fc2709950a05",
+    "approvals": [
+      {
+        "id": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01",
+        "sha256": "6e61e84a6ea208304372b22a87f35777bdb3c73d872a1bbff4eb04f08941f6c6"
+      },
+      {
+        "id": "APPROVAL-20261023-IH-AMS-F1-FROZEN-02",
+        "sha256": "76686e122d37a494d4ac5d03a878d9caec49bc42f9625036e1a583148c4eeac5"
+      },
+      {
+        "id": "APPROVAL-20261024-IH-AMS-F1-FROZEN-03",
+        "sha256": "82257a5c08456c319d1644a69a667aeaeb7113f0a38e28c1c64448e4a93a9f1d"
+      }
+    ],
+    "independent_review_sha256": "65b811111551fce85e5f9659c0843461920f2d2e420a11c623ba2fa861f54364"
+  },
+  "surrogate_status": "User approved rtol=1e-8/atol=0; final fixed AMS qualification recorded separately",
+  "complete_original_scientific_result": {
+    "path": "result.json",
+    "sha256": "b214e6c5ef8263e50b78825d4e457aabcc4b9ca3076e592dc7f858f72050ec64"
+  },
+  "surrogate_tolerance_approval": {
+    "id": "APPROVAL-20261024-IH-AMS-F1-SURROGATE-TOL-01",
+    "sha256": "2daabd08d5614a9b856ec1f7bd3215e5c0ac8fd63833bf3906c893f67aed8157"
+  }
+}
