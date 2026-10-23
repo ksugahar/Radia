@@ -26,7 +26,7 @@ if executionMode=="gpu"
 else
     gpuName="not initialized"; capability=""; driver="";
 end
-fixturePath = fullfile(repoRoot,'tests','matlab','fixtures','optuna50_cuda_oracle.json');
+fixturePath = fullfile(repoRoot,'packages','radia-optuna','oracles','optuna50_cuda_oracle.json');
 oracle = jsondecode(fileread(fixturePath));
 assert(string(oracle.optuna_version) == "5.0.0");
 result = struct(schema="radia.optuna.cuda-acceptance.v1", ok=false, ...
