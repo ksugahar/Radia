@@ -1,4 +1,8 @@
-"""A new workflow must explicitly declare whether it belongs to solver CI."""
+"""Guards: declared workflow ownership cannot omit real shared solver inputs.
+
+Assumes: source-only ownership/trigger contracts, no solver or numerical oracle;
+explicit integration readers justify shared ownership instead of migration debt.
+"""
 from fnmatch import fnmatchcase
 import copy
 import importlib.util
@@ -236,6 +240,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         assert all(CONTRACT.selected(path, MANIFEST['lanes']['sparsesolv']['events'][event])
                    for event in ('push', 'pull_request'))
     expected |= initializers
+    expected.add("tools/regression_lock.py")
     assert shared == expected | set(RADIA_LANE_READS)
     # The shared IH contracts execute the GPU package adapter against CPU Radia solvers.
     for path in ("tests/test_ih_operator_assembly.py", "tests/test_ih_operator_axisym.py",
