@@ -26,3 +26,19 @@ command provenance, raw byte/hash diff, case ordering and numerical differences.
 Review the proposed fixture and contract hash updates independently before
 accepting them. No generation run or new generation provenance is claimed by
 this relocation.
+
+## Density evidence
+
+The additional density pair was relocated byte-for-byte from source
+`53b4f2cfc01931398acf6b978b9180eef1752f5d`, without importing or executing its
+producer (which writes the fixture at module import).
+
+| Input | SHA-256 of Git blob bytes |
+| --- | --- |
+| `generate_optuna_cuda_density_oracle.py` | `434e0ed2aacb6dec0db5d9e99a99f9a05cf0d75fb02d04e2e9310fc94bfe654f` |
+| `optuna_cuda_density_oracle.json` | `04d11672c5dfd73f7dc399fc237d2f8e1c8b01c2bff06cb1a7ed5085f807dbfc` |
+
+This stored schema records Optuna 5.0.0 and cases, but no NumPy version or
+embedded producer hash. The companion producer is identified by its Git bytes;
+no missing generation metadata is inferred from the other oracle or invented.
+The same explicit review and regeneration policy above applies.

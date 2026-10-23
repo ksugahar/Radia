@@ -4,7 +4,8 @@ end
 
 function testDensityMatchesUpstream(testCase)
 root=fileparts(mfilename('fullpath'));
-oracle=jsondecode(fileread(fullfile(root,'fixtures','optuna_cuda_density_oracle.json')));
+oracle=jsondecode(fileread(fullfile(root,'..','..','packages','radia-optuna', ...
+    'oracles','optuna_cuda_density_oracle.json')));
 verifyEqual(testCase,string(oracle.optuna_version),"5.0.0");
 previous=radia.optuna.executionMode();
 cleanup=onCleanup(@()radia.optuna.executionMode(previous));
