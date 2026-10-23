@@ -27,6 +27,7 @@ validation_test/radia_mcp/artifacts/annular_motor_dual_lane_v1/*.json text eol=l
 # to LF so Windows and Linux checkouts preserve one byte-stable oracle.
 tests/matlab/fixtures/optuna*.json text eol=lf
 packages/radia-optuna/oracles/optuna50_cuda_oracle.json text eol=lf
+packages/radia-optuna/oracles/optuna_cuda_density_oracle.json text eol=lf
 matlab/optuna*.json text eol=lf
 
 # The independent MagLev 3-D validation records SHA-256 fingerprints for the
