@@ -115,7 +115,7 @@ cubit.cmd('export netgen "coil.vol" order 2 overwrite')
 The BEM solver uses BND elements only. Volume elements are ignored.
 """
 
-EXPORT_GMSH_V2 = """
+EXPORT_GMSH_V42 = """
 # Gmsh v4.2 Export (order 1-3)
 
 ```
@@ -690,7 +690,7 @@ def get_export_documentation(format: str = "all") -> str:
 	"""Return export documentation by format name."""
 	topics = {
 		"overview": EXPORT_OVERVIEW,
-		"gmsh_v2": EXPORT_GMSH_V2,
+		"gmsh_v42": EXPORT_GMSH_V42,
 		"gmsh_v4": EXPORT_GMSH_V4,
 		"curved": EXPORT_CURVED,
 		"netgen": EXPORT_CURVED,  # Alias: old name redirects to export netgen

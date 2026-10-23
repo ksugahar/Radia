@@ -617,7 +617,7 @@ def cubit_docs(topic: str = "all") -> str:
 	        "all"                    - Overview of all categories
 	        --- Export formats ---
 	        "export_overview"        - All export commands overview
-	        "gmsh_v2"               - Gmsh v4.2 format (export gmsh)
+	        "gmsh_v42"               - Gmsh v4.2 format (export gmsh)
 	        "gmsh_v4"               - Gmsh v4.2 format policy
 	        "netgen"                - Netgen .vol export (export netgen)
 	        "nastran"               - Nastran BDF (export nastran_bdf + consumer gate)
@@ -682,7 +682,7 @@ def cubit_docs(topic: str = "all") -> str:
 		return (
 			"# Cubit Documentation\n\n"
 			"Use topic prefixes to navigate:\n"
-			"- `export_*` - Export format documentation (gmsh_v2, netgen, nastran, etc.)\n"
+			"- `export_*` - Export format documentation (gmsh_v42, netgen, nastran, etc.)\n"
 			"- `scripting_*` - Python scripting guide (blocks, mesh_schemes, etc.)\n"
 			"- `api_*` - API reference (core, geometry_queries, mesh_access, etc.)\n"
 			"- `panel_*` - optional Radia solver handoff conventions\n\n"
@@ -2085,7 +2085,6 @@ def generate_cubit_script(workflow: str = "tet_netgen") -> str:
 	    workflow: Script template to generate. Options:
 	        "tet_netgen"       - Tet mesh -> export netgen with ACIS curving
 	        "tet_netgen_named" - Complex geometry with export netgen
-	        "tet_gmsh"         - Tet mesh -> Netgen .vol 2nd order (simplest)
 	        "hex_netgen"       - Hex mesh -> export netgen with curving
 	"""
 	workflow = workflow.lower().strip()

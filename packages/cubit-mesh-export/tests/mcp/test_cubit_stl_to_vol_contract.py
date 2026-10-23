@@ -1,4 +1,5 @@
-"""cubit_stl_to_vol input contract + the gmsh volume referee.
+"""Guards: Cubit STL input refusal and Gmsh post-processing volume integration.
+Assumes: fixed MSH 4.2 unit hex; only Cubit produces solver-bound .vol.
 
 No Cubit needed: every test here exercises the fail-fast input paths and
 the gmsh-side total-volume integrator the closure gate relies on.  The
@@ -182,20 +183,9 @@ def test_stl_route_uses_plugin_aware_headless_process(tmp_path, monkeypatch):
 
 
 def _write_unit_cube_msh(path: Path) -> None:
-    import gmsh
-
-    gmsh.initialize(["-noconfig"])
-    try:
-        gmsh.option.setNumber("General.Terminal", 0)
-        gmsh.model.add("cube")
-        gmsh.model.occ.addBox(0, 0, 0, 1, 1, 1)
-        gmsh.model.occ.synchronize()
-        gmsh.option.setNumber("Mesh.MeshSizeMin", 0.5)
-        gmsh.option.setNumber("Mesh.MeshSizeMax", 0.5)
-        gmsh.model.mesh.generate(3)
-        gmsh.write(str(path))
-    finally:
-        gmsh.finalize()
+    # Stored explicit hex connectivity: Gmsh only reads/integrates it.
+    import shutil
+    shutil.copyfile(Path(__file__).parent / "fixtures/msh42/unit_cube.msh", path)
 
 
 def test_mesh_total_volume_unit_cube(tmp_path):
