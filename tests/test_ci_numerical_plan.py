@@ -75,6 +75,16 @@ def test_viewer_cli_plan_does_not_select_ams_or_heavy(repository, tmp_path):
     assert plan['unclassified_inputs'] == []
 
 
+def test_plan_uses_committed_blobs_despite_worktree_replacement(repository, tmp_path):
+    root, base = repository
+    change(root, 'src/radia/panels/open_gmsh.py', '# UTF-8: 球\ndef show(): return "\\n"\n')
+    committed = invoke(root, base, tmp_path)
+    (root / 'src/radia/panels/open_gmsh.py').write_text('invalid Python (')
+    observed = invoke(root, base, tmp_path)
+    assert observed == committed
+    assert observed['ams_paths'] == [] and observed['heavy_case_paths'] == []
+
+
 def test_writer_cli_plan_keeps_motor_subprocess_consumer(repository, tmp_path):
     root, base = repository
     change(root, 'src/radia/gmsh_post_export.py', 'import gmsh\ndef write(): return 2\n')

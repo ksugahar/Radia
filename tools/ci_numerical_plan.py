@@ -8,7 +8,6 @@ from __future__ import annotations
 import argparse
 import ast
 from functools import lru_cache
-import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
@@ -66,15 +65,37 @@ class Tree:
                 metadata, name = row.split(b'\t', 1)
                 mode, kind, oid = metadata.decode().split()
                 self.files[name.decode('utf-8')] = (mode, kind, oid)
+        self.blobs = {}
+        self.parsed_nodes = 0
         self.roots = ['src', *sorted({p.split('/src/', 1)[0] + '/src'
                                      for p in self.files if p.startswith('packages/') and '/src/' in p}), '']
 
-    @lru_cache(maxsize=None)
+    def load_blobs(self):
+        """One immutable batch per side; exclude binary payloads and unrelated data."""
+        oids = sorted({oid for path, (mode, kind, oid) in self.files.items()
+                       if kind == 'blob' and mode in {'100644', '100755'}
+                       and (path.endswith('.py') or path.endswith('pyproject.toml') or path == TIER)})
+        request = ''.join(oid + '\n' for oid in oids).encode('ascii')
+        raw = subprocess.run(['git', '-c', f'safe.directory={self.root}', 'cat-file', '--batch'],
+                             input=request, cwd=self.root, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, check=True).stdout
+        offset = 0
+        for expected in oids:
+            end = raw.index(b'\n', offset)
+            oid, kind, size = raw[offset:end].decode('ascii').split()
+            if oid != expected or kind != 'blob': raise ValueError('unexpected batch object')
+            start = end + 1; finish = start + int(size)
+            if raw[finish:finish + 1] != b'\n': raise ValueError('truncated batch object')
+            self.blobs[oid] = raw[start:finish]; offset = finish + 1
+        if offset != len(raw): raise ValueError('unexpected trailing batch bytes')
+
     def read(self, path):
         mode, kind, oid = self.files[path]
-        if mode != '100644' and mode != '100755' or kind != 'blob':
+        if mode not in {'100644', '100755'} or kind != 'blob':
             raise ValueError('non-regular source: ' + path)
-        return git(self.root, 'cat-file', 'blob', oid)
+        if not self.blobs: self.load_blobs()
+        if oid not in self.blobs: raise ValueError('source outside batch contract: ' + path)
+        return self.blobs[oid]
 
     def profiles(self):
         data = json.loads(self.read(TIER), object_pairs_hook=unique_pairs)
@@ -108,119 +129,130 @@ class Tree:
         return None
 
     @lru_cache(maxsize=None)
+    def edges(self, path):
+        """Parse each reached module once into the shared graph for this side."""
+        pending = []; unknown = set(); native = set(); components = set()
+        if path not in self.files:
+            if path != 'tests/conftest.py': unknown.add('missing dependency: ' + path)
+            return pending, unknown, native, components
+        if not path.endswith('.py'): return pending, unknown, native, components
+        self.parsed_nodes += 1
+        try: tree = ast.parse(self.read(path).decode('utf-8-sig'))
+        except (ValueError, SyntaxError, UnicodeError) as exc:
+            unknown.add(path + ': ' + type(exc).__name__); return pending, unknown, native, components
+        assignments = {}
+        for assignment in ast.walk(tree):
+            if isinstance(assignment, ast.Assign):
+                for target in assignment.targets:
+                    if isinstance(target, ast.Name): assignments.setdefault(target.id, []).append(assignment.value)
+        parent = PurePosixPath(path).parent
+        for ancestor in [parent, *parent.parents]:
+            initializer = str(ancestor / '__init__.py')
+            conftest = str(ancestor / 'conftest.py')
+            if initializer in self.files: pending.append(initializer)
+            if conftest in self.files: pending.append(conftest)
+        for node in ast.walk(tree):
+            names = []
+            if isinstance(node, ast.Import): names = [alias.name for alias in node.names]
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ''
+                if node.level:
+                    base = parent
+                    for _ in range(node.level - 1): base = base.parent
+                    names = [str(base / module.replace('.', '/')).replace('/', '.')]
+                    # Resolve relative imports without assuming a particular package root.
+                    stem = str(base / module.replace('.', '/'))
+                    found = False
+                    for candidate in [stem + '.py', stem + '/__init__.py']:
+                        if candidate in self.files: pending.append(candidate); found = True
+                    if module.rsplit('.', 1)[-1] in NATIVE_MODULES:
+                        native.add(module.rsplit('.', 1)[-1]); found = True
+                    for alias in node.names:
+                        candidate = stem.rstrip('/') + '/' + alias.name + '.py'
+                        if candidate in self.files: pending.append(candidate); found = True
+                        if alias.name in NATIVE_MODULES: native.add(alias.name); found = True
+                    if not found: unknown.add('unresolved relative import: ' + path + ':' + module)
+                    continue
+                names = [module] + [module + '.' + a.name for a in node.names if a.name != '*']
+            for name in names:
+                candidate = self.module(name, path)
+                if candidate: pending.append(candidate)
+                elif name.rsplit('.', 1)[-1] in NATIVE_MODULES:
+                    native.add(name.rsplit('.', 1)[-1])
+                elif name.split('.')[0] not in EXTERNAL:
+                    # A from-import can name an attribute of a resolved local module.
+                    if not any(self.module('.'.join(name.split('.')[:i]), path)
+                               for i in range(1, len(name.split('.')))):
+                        unknown.add('unresolved import: ' + name + ' in ' + path)
+                if name.split('.')[0] == 'gmsh': components.add('gmsh')
+                if name.split('.')[0] in {'ngsolve', 'netgen'}: components.add('solver')
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                value = node.value
+                # Explicit CLI/file loaders, including Python scripts embedded in -c.
+                if '\n' in value and ('import ' in value or 'from ' in value):
+                    try:
+                        embedded = ast.parse(value)
+                        for imp in ast.walk(embedded):
+                            embedded_names = []
+                            if isinstance(imp, ast.Import): embedded_names = [a.name for a in imp.names]
+                            if isinstance(imp, ast.ImportFrom): embedded_names = [imp.module or '']
+                            for name in embedded_names:
+                                candidate = self.module(name, path)
+                                if candidate: pending.append(candidate)
+                                elif name.rsplit('.', 1)[-1] in NATIVE_MODULES: native.add(name.rsplit('.', 1)[-1])
+                                elif name.split('.')[0] not in EXTERNAL: unknown.add('embedded import unresolved: ' + path)
+                                if name.split('.')[0] == 'gmsh': components.add('gmsh')
+                            if isinstance(imp, ast.Call) and ast.unparse(imp.func).endswith(('exec_module', 'run_path', 'spec_from_file_location')):
+                                unknown.add('embedded dynamic loader needs declaration: ' + path)
+                    except SyntaxError: unknown.add('unparsed embedded Python: ' + path)
+                if len(value) < 240 and '\n' not in value:
+                    for base in ['', str(parent), 'src/radia/panels', 'validation_test/panels']:
+                        candidate = ((base + '/') if base != '.' and base else '') + value
+                        if candidate in self.files: pending.append(candidate)
+            if isinstance(node, ast.Call):
+                name = ast.unparse(node.func)
+                if name.endswith(('import_module', 'importorskip', 'run_module', 'find_spec')) or name == '__import__':
+                    if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                        candidate = self.module(node.args[0].value, path)
+                        if candidate: pending.append(candidate)
+                        elif node.args[0].value.rsplit('.', 1)[-1] in NATIVE_MODULES:
+                            native.add(node.args[0].value.rsplit('.', 1)[-1])
+                        elif node.args[0].value.split('.')[0] not in EXTERNAL:
+                            unknown.add('unresolved dynamic import: ' + path)
+                        if node.args[0].value.split('.')[0] == 'gmsh': components.add('gmsh')
+                        if node.args[0].value.split('.')[0] in {'ngsolve', 'netgen'}: components.add('solver')
+                    else: unknown.add('dynamic import needs declaration: ' + path)
+                if name.endswith(('spec_from_file_location', 'run_path', 'SourceFileLoader')) or name in {'eval', 'exec'}:
+                    # File execution is not proved complete by ordinary imports.
+                    unknown.add('opaque file/code loader: ' + path + ':' + name)
+                if name.startswith('subprocess.') and name.rsplit('.', 1)[-1] in {'run', 'Popen', 'call', 'check_call', 'check_output'}:
+                    expression = node.args[0] if node.args else None
+                    if isinstance(expression, ast.Name):
+                        values = assignments.get(expression.id, [])
+                        expression = values[0] if len(values) == 1 else None
+                    if isinstance(expression, ast.BinOp) and isinstance(expression.op, ast.Add): expression = expression.left
+                    # Only a fixed Python script entry is statically bounded.
+                    # Dynamic -c programs and arbitrary executables require review.
+                    script = None
+                    if isinstance(expression, (ast.List, ast.Tuple)) and len(expression.elts) >= 2:
+                        for literal in ast.walk(expression.elts[1]):
+                            if isinstance(literal, ast.Constant) and isinstance(literal.value, str) and literal.value.endswith('.py'):
+                                script = self.literal_path(literal.value, path)
+                    if script and not any(kw.arg == 'shell' for kw in node.keywords): pending.append(script)
+                    else: unknown.add('subprocess entry needs declaration: ' + path)
+        return pending, unknown, native, components
+
+    @lru_cache(maxsize=None)
     def closure(self, entry):
-        pending = [entry, 'tests/conftest.py']; seen = set(); unknown = set(); native = set(); components = set()
+        pending = [entry, 'tests/conftest.py']; seen = set()
+        unknown = set(); native = set(); components = set()
         while pending:
             path = pending.pop()
             if path in seen: continue
             seen.add(path)
-            if path not in self.files:
-                if path == 'tests/conftest.py': continue
-                unknown.add('missing dependency: ' + path); continue
-            if not path.endswith('.py'): continue
-            try: tree = ast.parse(self.read(path).decode('utf-8-sig'))
-            except (ValueError, SyntaxError, UnicodeError) as exc:
-                unknown.add(path + ': ' + type(exc).__name__); continue
-            assignments = {}
-            for assignment in ast.walk(tree):
-                if isinstance(assignment, ast.Assign):
-                    for target in assignment.targets:
-                        if isinstance(target, ast.Name): assignments.setdefault(target.id, []).append(assignment.value)
-            parent = PurePosixPath(path).parent
-            for ancestor in [parent, *parent.parents]:
-                initializer = str(ancestor / '__init__.py')
-                conftest = str(ancestor / 'conftest.py')
-                if initializer in self.files: pending.append(initializer)
-                if conftest in self.files: pending.append(conftest)
-            for node in ast.walk(tree):
-                names = []
-                if isinstance(node, ast.Import): names = [alias.name for alias in node.names]
-                if isinstance(node, ast.ImportFrom):
-                    module = node.module or ''
-                    if node.level:
-                        base = parent
-                        for _ in range(node.level - 1): base = base.parent
-                        names = [str(base / module.replace('.', '/')).replace('/', '.')]
-                        # Resolve relative imports without assuming a particular package root.
-                        stem = str(base / module.replace('.', '/'))
-                        found = False
-                        for candidate in [stem + '.py', stem + '/__init__.py']:
-                            if candidate in self.files: pending.append(candidate); found = True
-                        if module.rsplit('.', 1)[-1] in NATIVE_MODULES:
-                            native.add(module.rsplit('.', 1)[-1]); found = True
-                        for alias in node.names:
-                            candidate = stem.rstrip('/') + '/' + alias.name + '.py'
-                            if candidate in self.files: pending.append(candidate); found = True
-                            if alias.name in NATIVE_MODULES: native.add(alias.name); found = True
-                        if not found: unknown.add('unresolved relative import: ' + path + ':' + module)
-                        continue
-                    names = [module] + [module + '.' + a.name for a in node.names if a.name != '*']
-                for name in names:
-                    candidate = self.module(name, path)
-                    if candidate: pending.append(candidate)
-                    elif name.rsplit('.', 1)[-1] in NATIVE_MODULES:
-                        native.add(name.rsplit('.', 1)[-1])
-                    elif name.split('.')[0] not in EXTERNAL:
-                        # A from-import can name an attribute of a resolved local module.
-                        if not any(self.module('.'.join(name.split('.')[:i]), path)
-                                   for i in range(1, len(name.split('.')))):
-                            unknown.add('unresolved import: ' + name + ' in ' + path)
-                    if name.split('.')[0] == 'gmsh': components.add('gmsh')
-                    if name.split('.')[0] in {'ngsolve', 'netgen'}: components.add('solver')
-                if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                    value = node.value
-                    # Explicit CLI/file loaders, including Python scripts embedded in -c.
-                    if '\n' in value and ('import ' in value or 'from ' in value):
-                        try:
-                            embedded = ast.parse(value)
-                            for imp in ast.walk(embedded):
-                                embedded_names = []
-                                if isinstance(imp, ast.Import): embedded_names = [a.name for a in imp.names]
-                                if isinstance(imp, ast.ImportFrom): embedded_names = [imp.module or '']
-                                for name in embedded_names:
-                                    candidate = self.module(name, path)
-                                    if candidate: pending.append(candidate)
-                                    elif name.rsplit('.', 1)[-1] in NATIVE_MODULES: native.add(name.rsplit('.', 1)[-1])
-                                    elif name.split('.')[0] not in EXTERNAL: unknown.add('embedded import unresolved: ' + path)
-                                    if name.split('.')[0] == 'gmsh': components.add('gmsh')
-                                if isinstance(imp, ast.Call) and ast.unparse(imp.func).endswith(('exec_module', 'run_path', 'spec_from_file_location')):
-                                    unknown.add('embedded dynamic loader needs declaration: ' + path)
-                        except SyntaxError: unknown.add('unparsed embedded Python: ' + path)
-                    if len(value) < 240 and '\n' not in value:
-                        for base in ['', str(parent), 'src/radia/panels', 'validation_test/panels']:
-                            candidate = ((base + '/') if base != '.' and base else '') + value
-                            if candidate in self.files: pending.append(candidate)
-                if isinstance(node, ast.Call):
-                    name = ast.unparse(node.func)
-                    if name.endswith(('import_module', 'importorskip', 'run_module', 'find_spec')) or name == '__import__':
-                        if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                            candidate = self.module(node.args[0].value, path)
-                            if candidate: pending.append(candidate)
-                            elif node.args[0].value.rsplit('.', 1)[-1] in NATIVE_MODULES:
-                                native.add(node.args[0].value.rsplit('.', 1)[-1])
-                            elif node.args[0].value.split('.')[0] not in EXTERNAL:
-                                unknown.add('unresolved dynamic import: ' + path)
-                            if node.args[0].value.split('.')[0] == 'gmsh': components.add('gmsh')
-                            if node.args[0].value.split('.')[0] in {'ngsolve', 'netgen'}: components.add('solver')
-                        else: unknown.add('dynamic import needs declaration: ' + path)
-                    if name.endswith(('spec_from_file_location', 'run_path', 'SourceFileLoader')) or name in {'eval', 'exec'}:
-                        # File execution is not proved complete by ordinary imports.
-                        unknown.add('opaque file/code loader: ' + path + ':' + name)
-                    if name.startswith('subprocess.') and name.rsplit('.', 1)[-1] in {'run', 'Popen', 'call', 'check_call', 'check_output'}:
-                        expression = node.args[0] if node.args else None
-                        if isinstance(expression, ast.Name):
-                            values = assignments.get(expression.id, [])
-                            expression = values[0] if len(values) == 1 else None
-                        if isinstance(expression, ast.BinOp) and isinstance(expression.op, ast.Add): expression = expression.left
-                        # Only a fixed Python script entry is statically bounded.
-                        # Dynamic -c programs and arbitrary executables require review.
-                        script = None
-                        if isinstance(expression, (ast.List, ast.Tuple)) and len(expression.elts) >= 2:
-                            for literal in ast.walk(expression.elts[1]):
-                                if isinstance(literal, ast.Constant) and isinstance(literal.value, str) and literal.value.endswith('.py'):
-                                    script = self.literal_path(literal.value, path)
-                        if script and not any(kw.arg == 'shell' for kw in node.keywords): pending.append(script)
-                        else: unknown.add('subprocess entry needs declaration: ' + path)
+            edges, issues, modules, uses = self.edges(path)
+            pending.extend(edges); unknown.update(issues)
+            native.update(modules); components.update(uses)
         return seen, unknown, native, components
 
 
@@ -311,6 +343,8 @@ def plan(root, base, head, event):
             'python_test_paths': sorted({r['path'] for r in rows if r['selected'] and r['profile'] in ('solver-numerics', 'native-build-contracts')}),
             'heavy_case_paths': sorted({r['path'] for r in rows if r['selected'] and r['profile'] == 'solver-heavy'}),
             'gmsh_reference_paths': sorted({r['path'] for r in rows if r['selected'] and r['path'] in GMSH_TESTS}),
+            'graph_statistics': {label: {'parsed_modules': tree.parsed_nodes, 'blob_count': len(tree.blobs)}
+                                 for label, tree in [('base', before), ('head', after)]},
             'note': 'S1 plan only, not test success or authority to skip existing workflow gates'}
 
 
