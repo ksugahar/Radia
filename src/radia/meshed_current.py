@@ -26,13 +26,14 @@ def _solve_rt0_saddle(matrix, rhs, free, velocity_dofs):
     preconditioner. The exact Schur operator uses the full mass inverse;
     neither a pressure penalty nor a lumped physical mass is introduced.
     """
+    from radia.ngsolve_sparse import real_sparse_matrix_type
     from scipy.sparse import coo_matrix, diags
     from scipy.sparse.linalg import LinearOperator, cg
 
     rows, cols, values = matrix.COO()
     full = coo_matrix((np.asarray(values), (rows, cols)),
                       shape=(matrix.height, matrix.width)).tocsr()
-    if "SparseMatrixSymmetric" in type(matrix).__name__:
+    if isinstance(matrix, real_sparse_matrix_type(symmetric=True)):
         full = full + full.T - diags(full.diagonal())
     active = np.flatnonzero(np.array(list(free), dtype=bool))
     velocity = active[active < velocity_dofs]
@@ -44,7 +45,7 @@ def _solve_rt0_saddle(matrix, rhs, free, velocity_dofs):
 
     def factor_apply(sparse):
         data = sparse.tocoo()
-        native = ng.la.SparseMatrixdouble.CreateFromCOO(
+        native = real_sparse_matrix_type().CreateFromCOO(
             data.row.tolist(), data.col.tolist(), data.data.tolist(), *data.shape)
         inverse = native.Inverse(inverse="sparsecholesky")
 

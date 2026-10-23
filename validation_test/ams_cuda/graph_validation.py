@@ -55,8 +55,9 @@ def cpu_oracle(path,oracle_dir=ROOT/'build-ams-cuda'):
     ng.SetNumThreads(1)
     data=read_exchange(path);model=data['model']
     def matrix(csr):
+        from radia.ngsolve_sparse import real_sparse_matrix_type
         rows=np.repeat(np.arange(int(csr['rows']),dtype=np.int32),np.diff(csr['rowptr']))
-        return ng.la.SparseMatrixdouble.CreateFromCOO(Array_I_S(rows),Array_I_S(csr['columns']),
+        return real_sparse_matrix_type().CreateFromCOO(Array_I_S(rows),Array_I_S(csr['columns']),
             Array_D_S(csr['values']),int(csr['rows']),int(csr['cols']))
     a=matrix(model['A']);g=matrix(model['G']);free=np.asarray(model['free'],dtype=bool)
     reference=bridge.snapshot(a,g,ng.BitArray(free.tolist()),*model['coordinates'].T,

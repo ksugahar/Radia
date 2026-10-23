@@ -18,6 +18,7 @@ import types
 
 
 def main():
+    from radia.ngsolve_sparse import real_sparse_matrix_type
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--maxh', type=float, default=.65)
@@ -81,7 +82,7 @@ def main():
             lift=np.array(reference['solution'].vec.FV().NumPy(),copy=True); lift[mask]=0
             rhs=(np.array(f.FV().NumPy())-matrix@lift)[mask]
             compact=matrix[mask][:,mask].tocoo()
-            native=ng.la.SparseMatrixdouble.CreateFromCOO(compact.row.tolist(),compact.col.tolist(),compact.data.tolist(),int(mask.sum()),int(mask.sum()))
+            native=real_sparse_matrix_type().CreateFromCOO(compact.row.tolist(),compact.col.tolist(),compact.data.tolist(),int(mask.sum()),int(mask.sum()))
             b=native.CreateColVector(); b.FV().NumPy()[:]=rhs
             t=time.perf_counter(); inverse=native.Inverse(inverse='sparsecholesky')
             direct=b.CreateVector();direct.data=inverse*b
