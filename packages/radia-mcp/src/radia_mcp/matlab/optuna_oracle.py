@@ -15,6 +15,8 @@ from pathlib import Path
 import re
 from typing import Any
 
+from .optuna_evidence import checked_evidence, installed_package_root
+
 
 _POLICY_HEADING = "## Optuna"
 
@@ -114,12 +116,35 @@ def _evidence_paths(root: Path) -> dict[str, Path]:
     }
 
 
+def _contract_location(location=None):
+    """Use an explicit source/package root or installed evidence bundle."""
+    configured = str(location or "").strip() or os.environ.get("RADIA_REPO_ROOT", "").strip()
+    if configured:
+        root = Path(configured).expanduser().resolve()
+        if _has_evidence(root):
+            return root, root / "packages/radia-optuna", "repository"
+        if (root / "manifest.json").is_file():
+            return root, root, "installed-distribution"
+        if (root / "src/radia_optuna/manifest.json").is_file():
+            return root, root, "package-source"
+        raise FileNotFoundError(f"No Optuna evidence at the requested location: {root}")
+    installed = installed_package_root()
+    if installed is not None:
+        return installed, installed, "installed-distribution"
+    root = _repo_root()
+    return root, root / "packages/radia-optuna", "repository"
+
+
 def matlab_optuna_compatibility_contract(
     repo_root: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
-    """Return the checked supported/integration/unsupported Optuna boundary."""
-    root = _repo_root(repo_root)
-    paths = _evidence_paths(root)
+    """Read stored evidence from source or an installed package.
+
+    An explicit location is authoritative; damaged installed evidence never
+    falls back to a different checkout. This does not execute numerical tests.
+    """
+    root, package_root, source_kind = _contract_location(repo_root)
+    paths = checked_evidence(package_root)
     compatibility = _json(paths["compatibility"])
     api_coverage = _json(paths["api_coverage"])
     python_oracle = _json(paths["python_oracle"])
@@ -180,7 +205,10 @@ def matlab_optuna_compatibility_contract(
         "runtime_owner": "MathWorks MATLAB MCP Server",
         "oracle_owner": "optuna==5.0.0 and official optuna/optuna-mcp",
         "claim": claim,
-        "repo_root": str(root),
+        "repo_root": str(root) if source_kind == "repository" else None,
+        "root": str(root),
+        "source_kind": source_kind,
+        "evidence_manifest_sha256": _sha256(paths["evidence_manifest"]),
         "oracle_versions": {
             "optuna": python_oracle.get("optuna_version"),
             "python": python_oracle.get("python_version"),
