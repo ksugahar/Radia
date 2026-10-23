@@ -2254,6 +2254,12 @@
         "detail": "solver-numerics surrogate tests import the regression-lock helper"
       },
       "selection": "all_owners"
+    },
+    {
+      "pattern": ".github/workflows/gpu-runner-readiness.yml",
+      "owners": [
+        "radia-simulink"
+      ]
     }
   ],
   "shared_include_closures": [
@@ -4157,6 +4163,33 @@
           }
         ],
         "workflow_dispatch": {}
+      },
+      "selector_refs": [],
+      "markdown_inputs": [],
+      "content_diff_active": [],
+      "required_paths": []
+    },
+    "gpu-runner-readiness": {
+      "workflow": ".github/workflows/gpu-runner-readiness.yml",
+      "owners": [
+        "radia-simulink"
+      ],
+      "scope": "distribution",
+      "native": false,
+      "events": {
+        "workflow_dispatch": {
+          "inputs": {
+            "target": {
+              "type": "choice",
+              "options": [
+                "gpu-a100",
+                "gpu-rtx"
+              ],
+              "default": "gpu-a100",
+              "required": "true"
+            }
+          }
+        }
       },
       "selector_refs": [],
       "markdown_inputs": [],
