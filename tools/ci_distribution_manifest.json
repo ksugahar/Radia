@@ -1811,6 +1811,42 @@
       "selection": "all_owners"
     },
     {
+      "pattern": "packages/radia-optuna/oracles/optuna*.json",
+      "owners": [
+        "radia-optuna",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "radia-mcp reads the package-owned Optuna compatibility evidence and its explicit regeneration entry points."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-optuna/oracles/generate_optuna*",
+      "owners": [
+        "radia-optuna",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "radia-mcp reads the package-owned Optuna compatibility evidence and its explicit regeneration entry points."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "packages/radia-optuna/tools/generate_optuna*",
+      "owners": [
+        "radia-optuna",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "radia-mcp reads the package-owned Optuna compatibility evidence and its explicit regeneration entry points."
+      },
+      "selection": "all_owners"
+    },
+    {
       "pattern": "tests/matlab/fixtures/optuna*",
       "owners": [
         "radia-optuna",
@@ -3226,6 +3262,9 @@
             "packages/radia-optuna/native/optuna_mex.cpp",
             "packages/radia-optuna/src/radia_optuna/manifest.json",
             "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
+            "packages/radia-optuna/oracles/optuna*.json",
+            "packages/radia-optuna/oracles/generate_optuna*",
+            "packages/radia-optuna/tools/generate_optuna*",
             "tests/matlab/fixtures/optuna*",
             "tests/matlab/fixtures/generate_optuna*",
             "tests/matlab/test_optuna*.m",
@@ -3269,6 +3308,9 @@
             "packages/radia-optuna/native/optuna_mex.cpp",
             "packages/radia-optuna/src/radia_optuna/manifest.json",
             "packages/radia-optuna/THIRD_PARTY_NOTICES.md",
+            "packages/radia-optuna/oracles/optuna*.json",
+            "packages/radia-optuna/oracles/generate_optuna*",
+            "packages/radia-optuna/tools/generate_optuna*",
             "tests/matlab/fixtures/optuna*",
             "tests/matlab/fixtures/generate_optuna*",
             "tests/matlab/test_optuna*.m",
