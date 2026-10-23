@@ -1,0 +1,71 @@
+{
+  "artifacts": {
+    "reference-verification.md": "c2d89b723e7598b27f9332569dd1aef5bf7d21f9396b988ff660c34ed4844772",
+    "verify_reference.py": "e958e7be87b1bd14e6a5d60deff4ebafd01f013fd72cd0516448a8d827779e34"
+  },
+  "assumptions": [
+    "x real; a,sigma,mu,omega,H0 positive and real",
+    "exp(+j omega t)",
+    "k principal sqrt(j omega mu sigma), with positive real part; cosh(k*a) nonzero"
+  ],
+  "bibliography_key": "haus1989electromagnetic",
+  "boundary_specialization": "Symmetric slab centre Neumann and imposed surface H; derived from the cited equation, not a claim about the book's worked-example boundary conditions",
+  "convergence_campaign_executed": false,
+  "identities": {
+    "centre_zero_flux": {
+      "expected": "0",
+      "passed": true,
+      "residual": "0"
+    },
+    "complex_power_flux_identity": {
+      "expected": "0",
+      "passed": true,
+      "residual": "0"
+    },
+    "conjugate_has_opposite_ODE_sign": {
+      "expected": "0",
+      "passed": true,
+      "residual": "0"
+    },
+    "diffusion_ODE": {
+      "expected": "0",
+      "passed": true,
+      "residual": "0"
+    },
+    "dispersion_relation": {
+      "expected": "0",
+      "passed": true,
+      "residual": "0"
+    },
+    "surface_impedance": {
+      "expected": "0",
+      "passed": true,
+      "residual": "0"
+    },
+    "surface_imposed_H": {
+      "expected": "0",
+      "passed": true,
+      "residual": "0"
+    },
+    "wrong_phase_surface_residual_formula": {
+      "expected": "0",
+      "passed": true,
+      "residual": "0"
+    }
+  },
+  "method": "Exact symbolic differentiation/substitution and algebra; no numerical solver import",
+  "negative_control": {
+    "correct_ODE_surface_residual": "-2*I*H0*mu*omega*sigma",
+    "expected_nonzero": "-2*I*H0*mu*omega*sigma",
+    "killed": true,
+    "reference": "conjugate analytic profile"
+  },
+  "passed": true,
+  "radia_solver_imported": false,
+  "review_required": "Symbolic identities do not authenticate reference applicability, user approval or measured convergence",
+  "schema": "radia.symbolic-reference-verification.v1",
+  "software": {
+    "python": "3.12.14",
+    "sympy": "1.14.0"
+  }
+}

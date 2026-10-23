@@ -1,10 +1,13 @@
 # Analytic verification of the adopted slab reference
 
-This is an independently written algebraic derivation, not a solver run or a
-computer-algebra receipt. Independent review of the derivation remains required.
+This is an algebraic derivation independent of the discrete production solver.
+Its companion verify_reference.py checks the identities with exact symbolic
+algebra; symbolic-verification.json binds the executed script and this text by
+SHA256. Scientific review of assumptions and applicability remains required.
 The source of the diffusion equation is Haus and Melcher, *Electromagnetic
 Fields and Energy* (1989), ISBN 9780132490207, section 10.7:
 https://web.mit.edu/6.013_book/www/chapter10/10.7.html .
+The canonical bibliography key is haus1989electromagnetic.
 That section supplies the differential equation and exponential solutions;
 the symmetric boundary conditions below specify this adopted case, rather than
 claiming its worked example has the same boundary conditions. A DOI for this
