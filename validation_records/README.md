@@ -216,7 +216,9 @@ A current champion requires a current origin; a stale origin requires the
 champion to be marked stale too. Its original data remains retained. A champion
 requires outcome=pass, the same quantity name/unit as its origin criterion, and
 exactly the origin's variable keys at every level. Accuracy-champion errors must
-be nonincreasing in declared table order. This is a consistency guard, not a
+be nonincreasing in declared table order and no worse than the finest origin
+error (the best terminal error across the origin's declared convergence series).
+This is a consistency guard, not a
 new convergence-rate threshold, proof of globally best accuracy, or a timing
 gate; scientific comparability and best-result selection still need review.
 
@@ -225,8 +227,8 @@ module with the exact record citation in Assumes. An adoption cannot use its
 own record ID as record: evidence. The checker enforces these links without
 importing tests or proving that they are collected, traverse the right code,
 or kill a mutation. Those remain independent evidence/review obligations.
-The two development checks that asserted a fixture file's existence or a
-constant numerical_work_executed=False have been removed; failure-capable
-public record contracts remain. Future record dates relative to wall-clock
+Contract checks must be able to fail on changed public behaviour; merely
+asserting fixture existence or a constant flag is not evidence.
+Future record dates relative to wall-clock
 time are not checked (optional L5); approval-versus-record chronology and
 calendar validity remain checked. Audit the actual dated provenance in review.

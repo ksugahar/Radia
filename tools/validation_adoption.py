@@ -274,6 +274,10 @@ def validate_champion(root, base, folder, record, payload, *, local_path, sha256
                  sorted(level["parameters"]), sorted(criterion["variables"]))
     if record["category"] == "accuracy-champion":
         errors = [level["error"] for level in champion["levels"]]
+        origin_levels = {level["id"]: level for level in original["adoption"]["result"]["levels"]}
+        origin_finest = min(origin_levels[series["level_ids"][-1]]["error"] for series in criterion["series"])
+        _require(all(error <= origin_finest for error in errors), "champion origin error bound", errors,
+                 f"each error <= finest origin error {origin_finest}")
         _require(all(b <= a for a, b in zip(errors, errors[1:])), "champion error trend", errors,
                  "nonincreasing errors in declared table order")
     _require(champion["feature"] == original["adoption"]["feature"], "champion feature",
