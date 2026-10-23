@@ -30,7 +30,7 @@ _PAPER_MM = {
 
 def _load_pymupdf():
     try:
-        import fitz  # noqa: F401
+        import pymupdf as fitz  # noqa: F401
         return fitz
     except ImportError:
         return None
