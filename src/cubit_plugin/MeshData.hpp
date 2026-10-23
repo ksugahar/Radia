@@ -86,16 +86,18 @@ namespace EdgeTables {
   // Flip needed for: edge 2 (0,2 vs 2,0), edge 3 (0,3 vs 3,0),
   //                  edge 4 (1,3 vs 3,1), edge 5 (2,3 vs 3,2)
   inline constexpr bool tet_gmsh_flip[6] = {false,false,true,true,true,true};
-  // HEX (MHexahedron.h): all edges match internal direction
-  inline constexpr bool hex_gmsh_flip[12] = {false,false,false,false,
-                                              false,false,false,false,
+  // Gmsh 5 Hexahedron 32 reference nodes orient edges (0,3) and (4,7)
+  // opposite to internal edges (3,0) and (7,4). A quadratic midpoint
+  // conceals this error; cubic edge nodes must be reversed.
+  inline constexpr bool hex_gmsh_flip[12] = {false,false,false,true,
+                                              false,false,false,true,
                                               false,false,false,false};
   // WEDGE (MPrism.h): edges match
   inline constexpr bool wedge_gmsh_flip[9] = {false,false,false,
                                                false,false,false,
                                                false,false,false};
-  // PYRAMID (MPyramid.h): edges to apex (4) go from base vertex to apex
-  inline constexpr bool pyramid_gmsh_flip[8] = {false,false,false,false,
+  // Pyramid reference nodes orient the base edge (0,3), not (3,0).
+  inline constexpr bool pyramid_gmsh_flip[8] = {false,false,false,true,
                                                  false,false,false,false};
   inline constexpr bool tri_gmsh_flip[3] = {false,false,false};
   inline constexpr bool quad_gmsh_flip[4] = {false,false,false,false};

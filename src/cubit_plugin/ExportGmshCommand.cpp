@@ -124,7 +124,7 @@ std::vector<std::string> ExportGmshCommand::get_help()
     "Options:\n"
     "  order 1      1st-order elements (default)\n"
     "  order 2      2nd-order (edge mid-nodes)\n"
-    "  order 3      Higher order (requires Netgen, wedge limited to order 2)\n"
+    "  order 3      Higher order (requires Netgen; wedge/pyramid limited to order 2)\n"
     "  dimension 3  3D mode (default)\n"
     "  dimension 2  2D mode\n"
     "  overwrite    Overwrite existing file\n"
@@ -222,7 +222,14 @@ int ExportGmshCommand::gmsh_type(const MeshElement &elem, int order)
   else if (order == 3) {
     if (is_tet)  return 29;   // TET20
     if (is_hex)  return 99;   // HEX32 (serendipity)
-    if (is_pyr)  return 125;  // PYRAMID21 (serendipity)
+    if (is_pyr) {
+      // The reference runtime advertises type 125 but cannot construct it.
+      // Do not emit an artifact which that consumer cannot read, or silently
+      // substitute a different order/element family.
+      PRINT_ERROR("GMSH: pyramid order 3 is not qualified with the current "
+                  "Gmsh 5 consumer; export aborted.\n");
+      return 0;
+    }
     if (is_tri)  return 21;   // TRI10
     if (is_quad) return 39;   // QUAD12 (serendipity)
     if (is_line) return 26;   // LINE4

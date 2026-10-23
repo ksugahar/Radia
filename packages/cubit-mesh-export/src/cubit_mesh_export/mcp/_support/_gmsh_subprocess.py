@@ -56,8 +56,13 @@ try:
     runtime = probe_gmsh5()
     for argument in sys.argv[1:-1]:
         candidate = Path(argument)
-        if candidate.suffix.lower() == '.msh' and candidate.is_file():
-            require_msh42(candidate)
+        if candidate.is_file():
+            if candidate.name.lower().endswith('.msh.gz'):
+                raise ValueError('Compressed MSH input is unsupported; use MSH 4.2 directly')
+            with candidate.open('rb') as source:
+                marker = source.read(11).strip()
+            if candidate.suffix.lower() == '.msh' or marker == b'$MeshFormat':
+                require_msh42(candidate)
     exec(compile({script!r}, '<gmsh-operation>', 'exec'))
     output = Path(sys.argv[-1])
     result = json.loads(output.read_text(encoding='utf-8'))

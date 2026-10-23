@@ -115,22 +115,3 @@ def test_invalid_reference_jacobians_fail_loudly(tmp_path, monkeypatch, minimum)
                         lambda *_a, **_k: {'ok': True, 'min_jacobian_det': minimum})
     with pytest.raises(ValueError, match='Jacobian'):
         netgen_compare._write_tet_msh(mesh, tmp_path / 'bad.msh')
-
-
-def test_reference_nodes_are_cached_by_supported_order(monkeypatch):
-    from cubit_mesh_export.mcp._support import netgen_compare
-    calls = []
-    def reference(_script, args, **kwargs):
-        calls.append(args)
-        return {'ok': True, 'points': []}
-    netgen_compare._reference_nodes.cache_clear()
-    monkeypatch.setattr(netgen_compare, 'run_gmsh_json_subprocess', reference)
-    try:
-        netgen_compare._reference_nodes(1)
-        netgen_compare._reference_nodes(1)
-        netgen_compare._reference_nodes(2)
-        assert len(calls) == 2
-        with pytest.raises(ValueError):
-            netgen_compare._reference_nodes(4)
-    finally:
-        netgen_compare._reference_nodes.cache_clear()

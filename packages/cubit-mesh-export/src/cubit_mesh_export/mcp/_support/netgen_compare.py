@@ -6,7 +6,6 @@ NGSolve owns curved geometry evaluation; Gmsh owns its reference-node ordering.
 This private adapter deliberately excludes Radia's field/postprocessing APIs.
 The artifact is only for the Gmsh quality referee, not a general interchange mesh.
 """
-from functools import lru_cache
 import math
 from pathlib import Path
 from ._gmsh_subprocess import run_gmsh_json_subprocess
@@ -26,8 +25,9 @@ finally:
 '''
 
 
-@lru_cache(maxsize=3)
 def _reference_nodes(order: int) -> dict:
+    # Each operation resolves the current archive-bound Gmsh reference; a
+    # process-lifetime order-only cache can outlive a development-wheel update.
     if order not in (1, 2, 3):
         raise ValueError('Comparison supports tetrahedral orders 1-3')
     reference = run_gmsh_json_subprocess(_REFERENCE_SCRIPT, [str(order)], timeout_s=60,
