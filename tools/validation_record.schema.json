@@ -543,17 +543,21 @@
                       "operator": {
                         "enum": [
                           "lt",
-                          "le"
+                          "le",
+                          "recorded-only"
                         ]
                       },
                       "value": {
                         "type": "number",
                         "minimum": 0
+                      },
+                      "reason": {
+                        "type": "string",
+                        "minLength": 1
                       }
                     },
                     "required": [
-                      "operator",
-                      "value"
+                      "operator"
                     ]
                   },
                   "expected_theory": {
@@ -778,8 +782,15 @@
                     "pattern": "[0-9a-f]{64}"
                   },
                   "runtime_s": {
-                    "type": "number",
+                    "type": [
+                      "number",
+                      "null"
+                    ],
                     "minimum": 0
+                  },
+                  "runtime_note": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [

@@ -209,6 +209,9 @@ def validate_adoption(root, folder, record, payload, *, local_path, sha256):
         _require(set(level["parameters"]) == set(variables), "level variables", level["parameters"], sorted(variables))
         _require(row["parameters"] == level["parameters"], "recorded parameters", row["parameters"], level["parameters"])
         _require(row["source_sha"] == result["source_sha"], "level source", row["source_sha"], result["source_sha"])
+        if row["runtime_s"] is None:
+            _require(bool(row.get("runtime_note", "").strip()), "unmeasured runtime",
+                     row.get("runtime_note"), "explicit reason; never substitute zero")
     series_ids = set()
     used = set()
     failed = any(row["relative_residual"] > criterion["residual_threshold"] for row in observed.values())
@@ -247,7 +250,13 @@ def validate_adoption(root, folder, record, payload, *, local_path, sha256):
             failed |= rate < series["minimum_rate"]
         final = observed[ids[-1]]["error"]
         gate = series["finest_threshold"]
-        failed |= not (final < gate["value"] if gate["operator"] == "lt" else final <= gate["value"])
+        if gate["operator"] == "recorded-only":
+            _require(set(gate) == {"operator", "reason"} and bool(gate["reason"].strip()),
+                     "recorded-only finest threshold", gate, "reason without a numeric threshold")
+        else:
+            _require(set(gate) == {"operator", "value"}, "numeric finest threshold", gate,
+                     "operator and numeric value")
+            failed |= not (final < gate["value"] if gate["operator"] == "lt" else final <= gate["value"])
     _require(used == levels.keys(), "unexamined levels", sorted(levels.keys() - used), "all levels in a declared series")
     verdict = "FAIL" if failed else "UNRESOLVED" if unresolved else "PASS"
     _require(result["verdict"] == verdict, "series verdict", result["verdict"], verdict)
