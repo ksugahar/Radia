@@ -41,6 +41,12 @@ import pytest
             "81cbd4c33acac95063994cc8de8b5bbef788c40ed23f8eceae690c9f0d14b602",
             False, id="api50",
         ),
+        pytest.param(
+            "generate_optuna50_oracle.py", "optuna50_oracle.json",
+            "4524b64b6f9bfac45bd0abd24fd6633ee50de7780920cb942341dcd6613dfdac",
+            "89bb7a0f907ef7158213deca5d2e2feb7810b95191c5d96bcb6bfed456183264",
+            False, id="upstream50",
+        ),
     ],
 )
 def test_cuda_oracle_preserves_approved_source_identity(

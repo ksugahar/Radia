@@ -103,7 +103,7 @@ def test_constructor_defaults_are_audited_against_the_pinned_oracle():
     constant_liar from False to True, and only the second had a named test.
     """
     oracle = json.loads(
-        (REPO_ROOT / "tests/matlab/fixtures/optuna50_oracle.json").read_text(
+        (PACKAGE_ROOT / "oracles/optuna50_oracle.json").read_text(
             encoding="utf-8"
         )
     )

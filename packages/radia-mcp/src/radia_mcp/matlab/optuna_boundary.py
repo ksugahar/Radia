@@ -120,7 +120,7 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
             "MATLAB/Radia CAE artifact contracts",
         ],
         "fixtures": [
-            "tests/matlab/fixtures/optuna50_oracle.json",
+            "packages/radia-optuna/oracles/optuna50_oracle.json",
             "packages/radia-optuna/oracles/optuna50_mcp_oracle.json",
             "packages/radia-optuna/oracles/optuna50_public_api.json",
             "packages/radia-optuna/matlab/optuna50_api_coverage.json",
