@@ -52,7 +52,9 @@ def main():
                 _, actual_tags, values, _, _ = gmsh.view.getModelData(view, 0)
                 report['field_values'] = dict(zip(map(int, actual_tags), map(list, values)))
         report['node_tags'] = list(map(int, gmsh.model.mesh.getNodes()[0]))
-        report['passed'] = report['node_tags'] == tags
+        report['passed'] = report['node_tags'] == tags and (
+            args.phase != 'field' or report['field_values'] == {
+                tags[0]: [1., -2., 3.], tags[1]: [4., 5., -6.]})
     except Exception as exc:
         report['error'] = repr(exc)
         report['traceback'] = traceback.format_exc()
