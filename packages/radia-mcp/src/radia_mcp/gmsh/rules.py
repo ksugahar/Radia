@@ -150,7 +150,7 @@ def check_pip_gmsh_import(filepath: str, lines: List[str]) -> List[Dict]:
                     "mesh-generation scripts. The canonical viewer launcher is "
                     "`gmsh` on PATH (Python wrapper is OK for launch/inspection). "
                     "For mesh input to NGSolve, use .vol files (export netgen); "
-                    "for post-processing, emit .msh v4.1 plus a .geo launch file."
+                    "for post-processing, emit .msh v4.2 plus a .geo launch file."
                 ),
             })
     return findings
@@ -176,7 +176,7 @@ def check_meshio_import(filepath: str, lines: List[str]) -> List[Dict]:
 
 
 def check_invalid_gmsh_option_names(filepath: str, lines: List[str]) -> List[Dict]:
-    """HIGH: option names that do not exist in GMSH 4.x (crash on merge/set)."""
+    """HIGH: option names that do not exist in GMSH 5 (crash on merge/set)."""
     findings = []
     patterns = {
         opt: re.compile(rf"{re.escape(opt)}\b") for opt in INVALID_GEO_OPTIONS
@@ -190,7 +190,7 @@ def check_invalid_gmsh_option_names(filepath: str, lines: List[str]) -> List[Dic
                     "severity": "HIGH",
                     "rule": "invalid-gmsh-option",
                     "message": (
-                        f"{opt} does not exist in GMSH 4.x "
+                        f"{opt} does not exist in GMSH 5 "
                         f"({INVALID_GEO_OPTIONS[opt]}). It fails on "
                         f"gmsh.option.setNumber and crashes .geo merge."
                     ),

@@ -51,9 +51,9 @@ def _sphere_field(path, value_at, n=5, x_shift=0.0):
     rows = {t: [value_at(p)] for t, p in nodes.items()}
     lo = [min(p[i] for p in nodes.values()) for i in range(3)]
     hi = [max(p[i] for p in nodes.values()) for i in range(3)]
-    out = ["$MeshFormat", "4.1 0 8", "$EndMeshFormat",
+    out = ["$MeshFormat", "4.2 0 8", "$EndMeshFormat",
            "$Entities", "0 0 0 1",
-           "1 %g %g %g %g %g %g 0 0" % (*lo, *hi), "$EndEntities",
+           "1 %g %g %g %g %g %g 0 0 0" % (*lo, *hi), "$EndEntities",
            "$Nodes", f"1 {len(nodes)} 1 {len(nodes)}",
            f"3 1 0 {len(nodes)}"]
     out += [str(t) for t in nodes]
@@ -65,7 +65,9 @@ def _sphere_field(path, value_at, n=5, x_shift=0.0):
             for t, ns in elements.items()]
     out += ["$EndElements", "$NodeData", "1", '"f"', "1", "0",
             "3", "0", "1", str(len(rows))]
-    out += [f"{t} %.9e" % v[0] for t, v in rows.items()]
+    out += [f"1 {len(rows)} {min(rows)} {max(rows)}", str(len(rows))]
+    out += [str(t) for t in rows]
+    out += ["%.9e" % v[0] for v in rows.values()]
     out += ["$EndNodeData"]
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
     return path

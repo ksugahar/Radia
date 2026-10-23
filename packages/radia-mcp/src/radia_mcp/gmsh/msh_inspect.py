@@ -1,4 +1,4 @@
-"""Pure-Python GMSH MSH v4.1 inspection and validation.
+"""Pure-Python GMSH MSH v4.2 inspection and validation.
 
 The structural layer (``inspect_msh`` / ``validate_msh`` / ``validate_geo``)
 has no gmsh dependency, so it works on any machine including minimal-dep CI.
@@ -7,7 +7,7 @@ subprocess -- never in-process -- so a crashing gmsh cannot take the MCP
 server down and the stdio transport cannot dead-lock on inherited pipes
 (temp-file redirect + ``stdin=DEVNULL``, per the lab subprocess pattern).
 
-Scope: MSH **v4.1 ASCII** only, matching the repository-wide format policy.
+Scope: MSH **v4.2 ASCII** only, matching the repository-wide format policy.
 Binary MSH and v2.2 are rejected loudly, never half-parsed.
 """
 
@@ -95,7 +95,7 @@ def _is_beam_animation_view(name: str) -> bool:
     """True for the multi-step hide-the-future 'beam (<quantity>)' view."""
     return name.startswith(_BEAM_VIEW_PREFIX)
 
-# Known-bad options for .geo validation.  These do not exist in GMSH 4.x and
+# Known-bad options for .geo validation.  These do not exist in GMSH 5 and
 # crash or error on merge; each maps to the correct replacement.
 INVALID_GEO_OPTIONS: dict[str, str] = {
     "Mesh.Volumes": "use Mesh.VolumeEdges + Mesh.VolumeFaces",
@@ -219,6 +219,15 @@ def _parse_entities(body: list[str]) -> tuple[dict[str, Any], list[str]]:
                 n_bnd = int(next(toks))
                 for _ in range(n_bnd):
                     next(toks)
+                n_embedded = int(next(toks))
+                if n_embedded < 0:
+                    raise ValueError('negative embedded entity count')
+                for _ in range(n_embedded):
+                    embedded_dim, embedded_tag = int(next(toks)), int(next(toks))
+                    if not 0 <= embedded_dim < dim or embedded_tag <= 0:
+                        raise ValueError('invalid embedded entity')
+        if next(toks, None) is not None:
+            raise ValueError('trailing entity tokens')
     except (StopIteration, ValueError) as exc:
         errors.append(f"$Entities: truncated or malformed ({exc})")
     return result, errors
@@ -305,6 +314,53 @@ def _parse_elements(body: list[str]) -> tuple[dict[str, Any], list[str]]:
     return out, errors
 
 
+def _decode_data_blocks(kind: str, lines: list[str], ncomp: int,
+                        declared: int) -> list[str]:
+    """Decode MSH 4.2 tag/value blocks into internal per-tag records."""
+    toks = _token_stream(lines)
+    records = []
+    tags_seen = set()
+    try:
+        blocks, count, minimum, maximum = [int(next(toks)) for _ in range(4)]
+        if min(blocks, count, declared) < 0 or ncomp not in (1, 3, 9):
+            raise ValueError('negative count or unsupported component count')
+        if count != declared:
+            raise ValueError(f'declares {declared} entries but block header declares {count}')
+        for _ in range(blocks):
+            width = ncomp
+            nodes = None
+            if kind == 'ElementNodeData':
+                etype, width = int(next(toks)), int(next(toks))
+                if etype not in ELEMENT_TYPES or width != ELEMENT_TYPES[etype][1] * ncomp:
+                    raise ValueError('ElementNodeData block width/type mismatch')
+                nodes = width // ncomp
+            n = int(next(toks))
+            if n < 0 or n > count:
+                raise ValueError('invalid data block count')
+            tags = [int(next(toks)) for _ in range(n)]
+            for tag in tags:
+                if tag <= 0 or tag in tags_seen:
+                    raise ValueError(f'non-positive or duplicate data tag {tag}')
+                tags_seen.add(tag)
+            for tag in tags:
+                values = [next(toks) for _ in range(width)]
+                # Validate lexical values even when statistics were not requested.
+                for value in values:
+                    float(value)
+                records.append(' '.join([str(tag)] + ([str(nodes)] if nodes is not None else []) + values))
+        if len(records) != count:
+            raise ValueError(f'data blocks contain {len(records)} entries; expected {count}')
+        if tags_seen and (min(tags_seen), max(tags_seen)) != (minimum, maximum):
+            raise ValueError('data tag range mismatch')
+        if not tags_seen and (minimum, maximum) != (0, 0):
+            raise ValueError('empty data tag range must be 0 0')
+        if next(toks, None) is not None:
+            raise ValueError('trailing data tokens')
+    except StopIteration as exc:
+        raise ValueError('truncated data block') from exc
+    return records
+
+
 def _parse_data_section(kind: str, body: list[str], start_line: int,
                         parse_values: bool = False,
                         collect_values_for: Callable[[str], bool] | None = None
@@ -368,7 +424,15 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
                  "min": None, "max": None, "s1": 0.0, "s2": 0.0,
                  "n_finite_samples": 0}
 
-    for row in rows[idx:]:
+    try:
+        data_rows = _decode_data_blocks(kind, rows[idx:], ncomp, view['declared'])
+    except (TypeError, ValueError) as exc:
+        errors.append(f'${kind} @L{start_line}: {exc}')
+        if stats is not None:
+            stats['bad_width_rows'] = 1
+        view['value_stats'] = stats
+        return view, errors
+    for row in data_rows:
         view["data_rows"] += 1
         toks = row.split()
         try:
@@ -438,7 +502,7 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
 def _parse_msh(path: Path, parse_values: bool = False,
                collect_values_for: Callable[[str], bool] | None = None
                ) -> dict[str, Any]:
-    """Parse an MSH file into an internal structure (ASCII v4.x only)."""
+    """Parse an MSH file into an internal structure (ASCII v4.2 only)."""
     text = path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
     sections, section_errors = _split_sections(lines)
@@ -452,30 +516,39 @@ def _parse_msh(path: Path, parse_values: bool = False,
         "errors": [], "warnings": [],
     }
 
-    fmt = next(((b, ln) for name, b, ln in sections if name == "MeshFormat"), None)
+    formats = [(b, ln) for name, b, ln in sections if name == 'MeshFormat']
+    if len(formats) > 1:
+        parsed['errors'].append('multiple $MeshFormat sections are not supported')
+        return parsed
+    fmt = formats[0] if formats else None
     if fmt is None:
         parsed["errors"].append("$MeshFormat section missing")
         return parsed
     fmt_tokens = " ".join(fmt[0]).split()
-    if len(fmt_tokens) < 2:
+    if len(fmt_tokens) != 3:
         parsed["errors"].append("$MeshFormat: malformed header")
         return parsed
     parsed["version"] = fmt_tokens[0]
     parsed["ascii"] = fmt_tokens[1] == "0"
-    if not parsed["version"].startswith("4"):
+    if parsed["version"] != "4.2":
         parsed["errors"].append(
             f"MSH v{parsed['version']} is not supported; the lab standard is "
-            f"v4.1 (re-export, do not downgrade the checker)")
+            f"v4.2 (re-export, do not downgrade the checker)")
         return parsed
     if not parsed["ascii"]:
         parsed["errors"].append(
             "binary MSH is not supported by this validator; re-export ASCII")
         return parsed
+    if fmt_tokens[2] != '8':
+        parsed['errors'].append('$MeshFormat: expected data size 8')
+        return parsed
 
     n_nodes_sections = 0
     n_elems_sections = 0
     for name, body, start_line in sections:
-        if name == "PhysicalNames":
+        if name in {'PartitionedEntities', 'GhostElements', 'Polytopes', 'Edges', 'Faces'}:
+            parsed['errors'].append(f'${name} is not supported by this structural reader')
+        elif name == "PhysicalNames":
             parsed["physical_names"], errs = _parse_physical_names(body)
             parsed["errors"].extend(errs)
         elif name == "Entities":
@@ -484,14 +557,14 @@ def _parse_msh(path: Path, parse_values: bool = False,
         elif name == "Nodes":
             n_nodes_sections += 1
             if n_nodes_sections > 1:
-                parsed["warnings"].append("multiple $Nodes sections; using the first")
+                parsed["errors"].append("multiple $Nodes sections are not supported")
                 continue
             parsed["nodes"], errs = _parse_nodes(body)
             parsed["errors"].extend(errs)
         elif name == "Elements":
             n_elems_sections += 1
             if n_elems_sections > 1:
-                parsed["warnings"].append("multiple $Elements sections; using the first")
+                parsed["errors"].append("multiple $Elements sections are not supported")
                 continue
             parsed["elements"], errs = _parse_elements(body)
             parsed["errors"].extend(errs)
@@ -537,7 +610,7 @@ def _group_views(views_raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def read_msh_data(msh_path: str | Path,
                   include_elements: bool = False) -> dict[str, Any]:
-    """Read node coordinates and raw data values from an ASCII MSH v4.x.
+    """Read node coordinates and raw data values from an ASCII MSH v4.2.
 
     Pure Python (no gmsh).  Returns::
 
@@ -547,7 +620,7 @@ def read_msh_data(msh_path: str | Path,
          "elements": {tag: {"type": int, "nodes": [tags]}}}  # opt-in
 
     ``ElementNodeData`` rows drop the per-element node-count token and
-    keep the flat value list.  Raises ``ValueError`` on non-4.x or
+    keep the flat value list.  Raises ``ValueError`` on non-4.2 or
     binary files and on malformed counts (fail fast -- a wrong count
     header crashes gmsh itself with heap corruption, so files must be
     validated before any API feeds on them).
@@ -565,14 +638,16 @@ def read_msh_data(msh_path: str | Path,
         raise ValueError(f"{path.name}: multiple $MeshFormat sections")
     fmt = format_sections[0]
     fmt_tokens = " ".join(fmt).split()
-    if len(fmt_tokens) < 2:
+    if len(fmt_tokens) != 3:
         raise ValueError(f"{path.name}: malformed $MeshFormat header")
-    if not fmt_tokens[0].startswith("4"):
+    if fmt_tokens[0] != "4.2":
         raise ValueError(
             f"{path.name}: MSH v{fmt_tokens[0]} is "
-            f"not supported (ASCII v4.x only)")
+            f"not supported (ASCII v4.2 only)")
     if fmt_tokens[1] != "0":
         raise ValueError(f"{path.name}: binary MSH is not supported")
+    if fmt_tokens[2] != '8':
+        raise ValueError(f'{path.name}: expected MSH data size 8')
 
     out: dict[str, Any] = {"nodes": {}, "views": [], "elements": {}}
     node_sections = 0
@@ -590,7 +665,13 @@ def read_msh_data(msh_path: str | Path,
             f"{path.name}: ${section} has trailing token {extra!r}")
 
     for name, body, start_line in sections:
-        if name == "Nodes":
+        if name in {'PartitionedEntities', 'GhostElements', 'Polytopes', 'Edges', 'Faces'}:
+            raise ValueError(f'{path.name}: ${name} is not supported by this field reader')
+        if name == 'Entities':
+            _, errors = _parse_entities(body)
+            if errors:
+                raise ValueError(f'{path.name}: {"; ".join(errors)}')
+        elif name == "Nodes":
             node_sections += 1
             if node_sections > 1:
                 raise ValueError(
@@ -746,7 +827,10 @@ def read_msh_data(msh_path: str | Path,
                 raise ValueError(
                     f"{path.name}: ${name} @L{start_line} has negative "
                     f"entry count {declared}")
-            data_rows = list(row_iter)
+            try:
+                data_rows = _decode_data_blocks(name, list(row_iter), ncomp, declared)
+            except ValueError as exc:
+                raise ValueError(f'{path.name}: ${name} @L{start_line}: {exc}') from exc
             if len(data_rows) != declared:
                 raise ValueError(
                     f"{path.name}: ${name} @L{start_line} declares "
@@ -845,7 +929,7 @@ def read_msh_data(msh_path: str | Path,
 # ======================================================================
 
 def inspect_msh(msh_path: str | Path) -> dict[str, Any]:
-    """Summarize the structure of an MSH v4.1 file (no gmsh dependency)."""
+    """Summarize the structure of an MSH v4.2 file (no gmsh dependency)."""
     path = Path(msh_path)
     if not path.is_file():
         return {"ok": False, "path": str(path), "error": f"file not found: {path}"}
@@ -861,7 +945,7 @@ def inspect_msh(msh_path: str | Path) -> dict[str, Any]:
         "parse_errors": _cap(parsed["section_errors"] + parsed["errors"]),
         "warnings": parsed["warnings"],
     }
-    if parsed["version"] is None or not str(parsed["version"]).startswith("4") \
+    if parsed["version"] != '4.2' \
             or parsed["ascii"] is False:
         result["ok"] = False
         return result
@@ -931,7 +1015,7 @@ def validate_msh(msh_path: str | Path,
                  check_jacobians: bool = False,
                  quadrature: str = "Gauss2",
                  timeout_s: float = 300.0) -> dict[str, Any]:
-    """Validate MSH v4.1 structural consistency; optional Jacobian check.
+    """Validate MSH v4.2 structural consistency; optional Jacobian check.
 
     The Jacobian check implements the repository policy that high-order
     meshes are verified through the GMSH API (``getJacobians``): negative
@@ -947,13 +1031,13 @@ def validate_msh(msh_path: str | Path,
     errors: list[str] = list(parsed["section_errors"]) + list(parsed["errors"])
     warnings: list[str] = list(parsed["warnings"])
     checks: dict[str, bool] = {
-        "format_is_v41": str(parsed["version"]) == "4.1",
+        "format_is_v42": str(parsed["version"]) == "4.2",
         "is_ascii": bool(parsed["ascii"]),
         "sections_balanced": not parsed["section_errors"],
         "sections_parseable": not parsed["errors"],
     }
 
-    if not checks["format_is_v41"] or not checks["is_ascii"]:
+    if not checks["format_is_v42"] or not checks["is_ascii"]:
         status = "needs_attention"
         return {"ok": False, "path": str(path), "status": status,
                 "checks": checks, "errors": _cap(errors), "warnings": warnings}
@@ -991,7 +1075,7 @@ def validate_msh(msh_path: str | Path,
         checks["element_tags_unique"] = not dupes
         if dupes:
             errors.append(
-                f"duplicate element tags (v4.1 requires globally unique "
+                f"duplicate element tags (v4.2 requires globally unique "
                 f"element tags): {_cap([str(d) for d in dupes])}")
         if nodes is not None:
             missing = elements["node_refs"] - node_tag_set
@@ -1093,7 +1177,7 @@ def validate_msh(msh_path: str | Path,
             errors.append(f"jacobian check did not run: {jac.get('error', 'unknown')}")
             result["errors"] = _cap(errors)
 
-    result["status"] = "ok" if all(checks.values()) else "needs_attention"
+    result["status"] = "ok" if all(checks.values()) and not errors else "needs_attention"
     result["ok"] = result["status"] == "ok"
     return result
 
@@ -1235,7 +1319,7 @@ def field_stats(msh_path: str | Path,
     if parsed["version"] is None or not str(parsed["version"]).startswith("4") \
             or parsed["ascii"] is False:
         return {"ok": False, "path": str(path),
-                "error": "not an ASCII MSH v4.x file",
+                "error": "not an ASCII MSH v4.2 file",
                 "parse_errors": _cap(parsed["errors"])}
 
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
@@ -1407,48 +1491,26 @@ result = {"ok": False, "ran": False}
 
 
 def _face_groups(mesh, element_type):
-    # Faces of one element type as (corner count, sorted corner keys, all
-    # face nodes).  Gmsh 5 returns faces of every size with their sizes;
-    # Gmsh 4 takes one call per corner count and raises for a count the
-    # element type does not have.  primary=True gives the corners that
-    # identify a face; primary=False adds the high-order face nodes.
+    # Gmsh 5 returns all face families and their sizes in one call.
     groups = []
-    if hasattr(mesh, "getElementFaceNodesByType"):  # Gmsh >= 5
-        corners, csizes = mesh.getElementFaceNodes(element_type, primary=True)
-        nodes, nsizes = mesh.getElementFaceNodes(element_type, primary=False)
-        corners = np.asarray(corners, dtype=np.int64)
-        nodes = np.asarray(nodes, dtype=np.int64)
-        csizes = np.asarray(csizes, dtype=np.int64)
-        nsizes = np.asarray(nsizes, dtype=np.int64)
-        coff = np.concatenate(([0], np.cumsum(csizes)[:-1]))
-        noff = np.concatenate(([0], np.cumsum(nsizes)[:-1]))
-        for n in np.unique(csizes):
-            idx = np.nonzero(csizes == n)[0]
-            widths = np.unique(nsizes[idx])
-            if len(widths) != 1:
-                raise RuntimeError(
-                    "faces with %d corners have mixed node counts %s"
-                    % (n, widths.tolist()))
-            key = corners[coff[idx][:, None] + np.arange(n)]
-            full = nodes[noff[idx][:, None] + np.arange(widths[0])]
-            groups.append((int(n), np.sort(key, axis=1), full))
-        return groups
-    # Gmsh 4: ask only for the face sizes this element family has
-    # (tet: tri, hex: quad, prism/pyramid: both), so an API failure raises.
-    primary = mesh.getElementProperties(element_type)[5]
-    corner_counts = {4: (3,), 8: (4,), 6: (3, 4), 5: (3, 4)}.get(int(primary))
-    if corner_counts is None:
-        raise RuntimeError("unsupported 3D element type %d (%d primary nodes)"
-                           % (element_type, primary))
-    for n in corner_counts:
-        corners = mesh.getElementFaceNodes(element_type, n, primary=True)
-        if not len(corners):
-            continue
-        key = np.asarray(corners, dtype=np.int64).reshape(-1, n)
-        full = np.asarray(
-            mesh.getElementFaceNodes(element_type, n, primary=False),
-            dtype=np.int64).reshape(len(key), -1)
-        groups.append((n, np.sort(key, axis=1), full))
+    corners, csizes = mesh.getElementFaceNodes(element_type, primary=True)
+    nodes, nsizes = mesh.getElementFaceNodes(element_type, primary=False)
+    corners = np.asarray(corners, dtype=np.int64)
+    nodes = np.asarray(nodes, dtype=np.int64)
+    csizes = np.asarray(csizes, dtype=np.int64)
+    nsizes = np.asarray(nsizes, dtype=np.int64)
+    coff = np.concatenate(([0], np.cumsum(csizes)[:-1]))
+    noff = np.concatenate(([0], np.cumsum(nsizes)[:-1]))
+    for n in np.unique(csizes):
+        idx = np.nonzero(csizes == n)[0]
+        widths = np.unique(nsizes[idx])
+        if len(widths) != 1:
+            raise RuntimeError(
+                "faces with %d corners have mixed node counts %s"
+                % (n, widths.tolist()))
+        key = corners[coff[idx][:, None] + np.arange(n)]
+        full = nodes[noff[idx][:, None] + np.arange(widths[0])]
+        groups.append((int(n), np.sort(key, axis=1), full))
     return groups
 
 
@@ -1938,7 +2000,7 @@ def _rel_delta(a: float | None, b: float | None) -> float | None:
 
 def diff_msh(msh_a: str | Path, msh_b: str | Path,
              rel_tol: float = 1e-9) -> dict[str, Any]:
-    """Compare two MSH v4.1 files: structure and field statistics.
+    """Compare two MSH v4.2 files: structure and field statistics.
 
     Built for before/after checks (re-export, node-order fix, solver
     change): reports node/element/physical/view structure differences
@@ -2147,7 +2209,7 @@ def validate_geo(geo_path: str | Path, deep: bool = True,
     """Validate a .geo launch/companion file before opening it in GMSH.
 
     Checks that every ``Merge "..."`` target exists on disk and that no
-    known-invalid GMSH 4.x option names are used.  With ``deep=True``
+    known-invalid GMSH 5 option names are used.  With ``deep=True``
     (default) the merged .msh files are scanned for their view count so
     out-of-range ``View[N]`` references -- the classic "opens black"
     bug -- are caught, and the exact-autoload sidecars are reported.
@@ -2198,7 +2260,7 @@ def validate_geo(geo_path: str | Path, deep: bool = True,
             if re.match(rf"{re.escape(opt)}\s*=", stripped):
                 invalid_options.append({"line": lineno, "option": opt, "fix": fix})
                 errors.append(
-                    f"L{lineno}: invalid GMSH 4.x option {opt} -- {fix}")
+                    f"L{lineno}: invalid GMSH 5 option {opt} -- {fix}")
 
         for idx_str in re.findall(r"View\[(\d+)\]", stripped):
             max_view_index = max(max_view_index, int(idx_str))
@@ -2304,7 +2366,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(
         prog="python -m radia_mcp.gmsh.msh_inspect",
-        description="Inspect / validate / diff GMSH MSH v4.1 artifacts "
+        description="Inspect / validate / diff GMSH MSH v4.2 artifacts "
                     "(pure Python; --jacobians shells out to gmsh).")
     parser.add_argument("target", help=".msh or .geo file, or a directory")
     parser.add_argument("--validate", action="store_true",

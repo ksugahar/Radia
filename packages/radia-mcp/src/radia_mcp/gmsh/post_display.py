@@ -1,7 +1,7 @@
 """Gmsh post-processing launch artifact helpers.
 
 These helpers keep Radia and MATLAB/Gypsilab acoustic artifacts on the same
-display contract: the raw data live in a single Gmsh MSH v4.1 file, while the
+display contract: the raw data live in a single Gmsh MSH v4.2 file, while the
 human launch target is a sibling ``case.geo`` plus exact sidecars
 ``case.geo.opt`` and ``case.msh.opt``.  The contract is intentionally about
 post-processing only; it does not create geometry or generate meshes.
@@ -103,7 +103,7 @@ def build_gmsh_post_display_contract(
         "display_json": str(display_json),
         "launch_target": str(geo),
         "mesh_inspection_target": str(msh),
-        "gmsh_msh_version": "4.1",
+        "gmsh_msh_version": "4.2",
         "camera": {
             "preset": camera_preset,
             "rotation": list(rot),
@@ -191,7 +191,7 @@ def gmsh_post_display_manifest_gate(
     views = manifest.get("views") or []
     checks = {
         "schema_recorded": manifest.get("schema") == "cae-ai-lab.gmsh-post-launch.v1",
-        "msh_version_is_41": str(manifest.get("gmsh_msh_version", "")) == "4.1",
+        "msh_version_is_41": str(manifest.get("gmsh_msh_version", "")) == "4.2",
         "launch_target_is_geo": str(manifest.get("launch_target", "")).endswith(".geo"),
         "geo_opt_exact_autoload": str(manifest.get("gmsh_geo_opt", "")).endswith(".geo.opt"),
         "msh_opt_exact_autoload": str(manifest.get("gmsh_msh_opt", "")).endswith(".msh.opt"),
