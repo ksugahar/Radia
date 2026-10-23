@@ -11,7 +11,7 @@ The monorepo independently releases `radia`, `radia-simulink`, `cubit-mesh-expor
 
 - `src/`, `packages/`: production; integrations belong to their package owner.
 - `tests/`: protect against breakage by future changes, every push, impact-selected: surrogate tests (an adopted case's coarsest convergence level vs its stored baseline; ~1 % off analytic is fine: it guards code, not accuracy) and lint-like contracts. Docstrings state `Guards:`/`Assumes:`; never independent validation.
-- `validation_test/`: formulation soundness: p-convergence against cited, CAS-checked analytic solutions, independent solvers or measurements, plus CPU/GPU and platform parity; runs on triggers (covered code or dependency change, surrogate-test failure, baseline regeneration, adoption) and gates releases on the exact artifact, reported in release notes.
+- `validation_test/`: formulation soundness: p-convergence against cited, CAS-checked analytic solutions, independent solvers or measurements, plus CPU/GPU and platform parity; runs on triggers (covered code or dependency change, surrogate-test failure, baseline regeneration, adoption) and every adopted case gates release on the exact wheel (failed or incomplete blocks it; release notes mark validated vs experimental features).
 - `validation_records/`: adoption decisions (user-approved criterion, rationale, evidence hashes) and champion data (finest/highest-order runs, speed and scale records) with version, source SHA and conditions; marked stale, never deleted, when covered code changes; CI checks schema only. Timings never gate.
 - `docs/**/*.ipynb`: executed notebooks explaining Radia's implementation; not production interfaces or benchmarks.
 - Job-owned scratch (`C:\temp`): disposable prototypes and generated work. `examples/`: retired; never add files.
@@ -33,7 +33,7 @@ Prefer established public abstractions over proprietary plumbing.
 - Python FE work follows caller-owned `ngsolve.TaskManager()`. Exception: `p1_newton.solve_p1_newton` and `p1_linear.solve_p1_linear` own regions and reject active TaskManager for AMS setup; helpers stay caller-owned.
 - Fail loudly on unsupported geometry, labels, ABI, convergence or backend state. Never silently substitute a numerically different route.
 ## Interfaces
-Python/MCP is the first-class AI interface. Operational workflows use MCP or human-AI collaboration through Cubit for CAD/mesh and masked blocks in the single Radia Simulink library; the relative effectiveness of MCP+LLM and Simulink+MCP is an open research question. Standalone PySide/PyQt panels and notebook workbenches are retired; Cubit's private PySide6 serves only the `cubit-mesh-export` toolbar, and normal Radia Python must not depend on Qt.
+Python/MCP is the first-class AI interface. Operational workflows use MCP or human-AI collaboration through Cubit for CAD/mesh and masked blocks in the single Radia Simulink library; the effectiveness of MCP+LLM vs Simulink+MCP is an open research question. Standalone PySide/PyQt panels and notebook workbenches are retired; Cubit's private PySide6 serves only the `cubit-mesh-export` toolbar, and normal Radia Python must not depend on Qt.
 
 ### Shared MCP Runtime Ownership
 - radia-mcp releases independently of Radia: it deploys to the build host (editable) and the validation host (verified wheel), never to the JMAG evaluation host or retired execution targets; isolated CI tests are not deployment.
@@ -41,7 +41,7 @@ Python/MCP is the first-class AI interface. Operational workflows use MCP or hum
 - MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version or keep rollback copies; remove obsolete copies after consumer and unique-work checks.
 - MCP is experimental development tooling, not a numerical solver release. Developers may edit live MCP source and change its editable source with `pip install -e`; no dedicated branch, frozen snapshot or separate deployment approval is required for routine MCP experiments.
 - Coordinate overlapping edits and environment changes; preserve others' WIP and active CAD/MATLAB jobs. Never mass-kill processes to refresh MCP.
-- Verify the interpreter and actual import path after repointing. Report each client's live loaded source separately; reload/reconnect affected clients as needed. Unknown or mixed evidence must stay unverified.
+- Verify the interpreter and actual import path after repointing. Report each client's live loaded source separately; reconnect as needed. Unknown or mixed evidence must stay unverified.
 - Keep solver release tests isolated from development. See [Shared MCP runtime policy](packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
 
 ### Canonical Bibliography
@@ -49,7 +49,7 @@ The single parent is `packages/radia-mcp/src/radia_mcp/bibliography/data/referen
 
 ### CPU / GPU Execution Policy (2026-10-11)
 - CPU: Python (pybind11)/NGSolve built with Visual Studio Build Tools; NGSolve TaskManager owns CPU parallel execution under the caller-owned region policy. A mexcuda-built CPU route is permitted only when selected explicitly and proven to create no CUDA context; no separate CPU-only MEX build.
-- radia first: functions are developed and validated in `radia` (CPU, Python/pybind11); `radia-simulink` makes them usable from MATLAB/Simulink through thin MEX gateways and blocks, and `radia` is the oracle. `radia-simulink` kernels are C++/CUDA built with MATLAB mexcuda (NGSolve-inherited DLLs allowed), developed and tested first through a pybind11 binding; Equivalence: (1) pybind11 vs MEX on the same kernel (tests, bitwise); (2) radia CPU reference vs GPU kernel (validation_test, tolerance). Exceptions (Simulink-only behavior such as sample time, ports, S-Function lifecycle, LTspice; GPU-only kernels) are declared in the parity manifest with a reason and validated separately. Python CPU accuracy validation is never a GPU-user prerequisite.
+- radia first: functions are developed and validated in `radia` (CPU, Python/pybind11); `radia-simulink` makes them usable from MATLAB/Simulink through thin MEX gateways and blocks, and `radia` is the oracle. `radia-simulink` kernels are C++/CUDA built with MATLAB mexcuda (NGSolve-inherited DLLs allowed), developed and tested first through a pybind11 binding; Equivalence: (1) pybind11 vs MEX on the same kernel (tests, bitwise); (2) radia CPU reference vs GPU kernel (validation_test, tolerance). Exceptions (Simulink-only behavior such as sample time, ports, S-Function lifecycle, LTspice; GPU-only kernels without a CPU counterpart) are declared in the parity manifest with a reason and validated separately. Python CPU accuracy validation is never a GPU-user prerequisite.
 - mexcuda modules may retain CPU host control. Never include, link, or use NGSolve TaskManager in mexcuda builds. MATLAB owns host scheduling, CUDA owns device execution; judge bounded OpenMP host work by numerical parity and transfer-inclusive timing.
 - All builds use Visual Studio Build Tools 2022/MSVC 14.44, selected by mexcuda compatibility. CUDA is MATLAB-bundled 12.8 only; no external CUDA Toolkit or unsupported compiler overrides. Python GPU runtime (2026-10-21): exact-version pip NVIDIA CUDA 12.8 runtime packages, loaded lazily on GPU paths only; wheels do not redistribute the CUDA runtime.
 - No implicit CPU/GPU/Python fallback: select explicitly (`Backend="gpu"|"cpu"`), record the backend and raise on failure. Internal CPU/GPU agreement does not replace Python CPU validation. Record parity, artifact hashes and validation JSON; Poisson does not certify ICCG/AMS/HDiv-MMM.
@@ -74,7 +74,7 @@ STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver bo
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
 **POLICY**: CI and builds run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` serves fast contracts, `100` heavy CPU jobs, plus one GPU label. Use the on-demand GPU worker only for mexcuda GPU work.
-Deployment (2026-10-21): radia and radia-mcp deploy to the build host (editable) and the validation host (verified wheel); cubit-mesh-export deploys only to the build host, is tested independently there, and solver releases never install, uninstall, repoint or version-gate it. Retired execution targets are excluded from deployment, CI and computation; the JMAG evaluation host receives no Radia deployment, CI, solver runs or timing.
+Deployment (2026-10-21): radia and radia-mcp deploy to the build host (editable) and the validation host (verified wheel); cubit-mesh-export deploys only to the build host, is tested independently there, and solver releases never install, uninstall, repoint or version-gate it. Retired execution targets are excluded from deployment, CI and computation.
 The build host owns preflight. Editable installs exist only there, in a dedicated development venv separate from the release runtime; the validation host consumes radia/radia-mcp wheels, never Cubit. NGSolve runs from verified wheels at the version pinned in package metadata (6.2.2608).
 NGSolve hosts start from checked exported .vol files, without Cubit; the validation host runs without Cubit and never installs or runs it.
 MATLAB-capable runners use a MATLAB-authenticated interactive account and pass an Engine startup/calculation/shutdown check in the actual runner context; never a MATLAB runner service.
@@ -92,13 +92,13 @@ No workflow selects a retired or user-desktop runner. The EqnEdit64 release lane
 
 Radia is implemented only by AI agents; humans do not write code. Tests therefore target AI-typical failures, not human slips:
 - Acceptance criteria (validation thresholds, reference values, tolerances) are human-owned. Changing them requires explicit user approval; agents may only propose, with evidence.
-- Lifecycle: computation time is scale. A feature is adopted when its user-approved criterion passes in `validation_test/`; the coarsest level becomes a `tests/` surrogate test calling the same production entries (<= 30 s; runtime recorded), and perturbing each guarded feature must fail it. Lint-like contracts: policy, packaging, API, fail-loud, fixtures. Development unit tests are triaged at PR time: contract, validation or deletion. Tests are fluid, not a constitution: a new test may retire those it supersedes, a suite that only grows is a defect, overlap across paths is welcome, exact duplicates are not. Baselines regenerate only with review (reason, diff) and re-certification. Explanatory milestones go to `docs/**/*.ipynb`, validated workflows to radia-mcp.
+- Lifecycle: computation time is scale. A feature is adopted when its user-approved criterion passes in `validation_test/`; the coarsest level becomes a `tests/` surrogate test calling the same production entries (<= 30 s target; runtime recorded); at creation and regeneration a temporary production mutation per guarded feature must fail it and pass once restored. Lint-like contracts: policy, packaging, API, fail-loud. Development unit tests are triaged at PR time: contract, validation or deletion. Tests are fluid, not a constitution: a new test may retire those it supersedes, a suite that only grows is a defect, overlap across paths is welcome; only full duplicates (same purpose, quantity, model and failure signal) are retired. Baselines regenerate only after validation re-certification, with review (reason, diff). Explanatory milestones go to `docs/**/*.ipynb`, validated workflows to radia-mcp.
 - The agent that implements a change does not certify its expected values or baselines; reciprocal review checks oracle independence.
 - Assertions report actual and expected values. Prefer behavioral tests and generated single sources of truth over string-pinned text checks.
 - Never claim results that were not executed; evidence carries the source SHA and artifact hashes. Keep files small enough for an agent's context.
 
 Every AI output passes at least one independent check: an agent that is about 90 % right becomes about 99 % right after one. A check counts only if independent (a different model or agent, or independent evidence), actually executed (not a summary read) and able to fail. Scale checks by impact: routine changes take one check (reciprocal review plus CI); releases, deletions and acceptance-criteria changes take at least two, and acceptance-criteria changes also need user approval.
-Reliability comes from cheap independent checks on every change, not exhaustive test enumeration. Aim for the necessary, sufficient and minimal set: two independent detectors for each important, often-changed component, one where code is mature; no just-in-case variants.
+Reliability comes from cheap independent checks on every change, not exhaustive test enumeration. Aim for the necessary, sufficient and minimal set: two independent detectors where code changes often, one where it is mature; no just-in-case variants.
 
 ### Compute Host Routing
 
@@ -122,7 +122,7 @@ Historical measurements remain valid provenance: public evidence uses neutral ro
 - Use `tools/release_quad.py` and the `release-quad` skill. Publish only when CI, exact package hashes, native/MEX/SLX checks and required machine gates pass for the same commit on the build host; on-demand validation-host timing is separate. Verify fresh imports and live sources after deployment. Before tagging, dispatch `Radia Native Release` on the exact release SHA; `ci-verify` requires its successful native check.
 
 ## Optuna
-`radia-optuna` uses GPU numerical kernels compiled with MATLAB mexcuda. Keep management, sequential RNG and work without a speed requirement on CPU. Choose GPU work using measured transfer-inclusive cost; compilation alone is not GPU execution or speedup. No CPU-only MEX build or implicit fallback for declared GPU operations.
+`radia-optuna` uses GPU numerical kernels compiled with MATLAB mexcuda. Keep management, sequential RNG and work without a speed requirement on CPU. Choose GPU work by measured transfer-inclusive cost; no implicit fallback for declared GPU operations.
 Pinned Optuna 5.0.0 is the sole oracle for shared MATLAB behavior: seed, options,
 parameter/search-space order, history, named constraints, values, states, warnings,
 defaults, extension points, and random consumption match upstream-generated fixtures.
@@ -131,7 +131,7 @@ Adopt the Optuna 5 design in place: delete active optuna49 fixtures/pins, remove
 legacy sampler-state restore and public multi-objective TPE; unified TPESampler owns both objectives.
 Table/HDF5 storage, Simulink, parallelism and MEX are extensions, not algorithm changes.
 Native acceleration requires correct differential results; maintain API/oracle manifests and fail loudly.
-Released optuna-mcp==0.2.0 owns generic Study/Trial MCP for Optuna 5.0.0; 0.3.0.dev is not a stable release.
+Released optuna-mcp==0.2.0 owns generic Study/Trial MCP for Optuna 5.0.0.
 radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and Radia composition.
 
 ## Git And Agents
