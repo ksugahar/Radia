@@ -3,10 +3,8 @@
 Guards: changes to depth-mesh grading and conservative conductance assembly
 that alter real surface impedance or the diffusion phase; both conductance
 x1.001 and sign-reversal mutations were detected by the phase sensor.
-Assumes: surrogate test of adoption record
-induction_heating/20261023_esim_slab_impedance (convergence level 1), and
-surrogate test of adoption record
-induction_heating/20261023_esim_slab_phase (convergence level 1).
+Assumes: surrogate test of adoption record induction_heating/20261023_esim_slab_impedance (convergence level 1);
+surrogate test of adoption record induction_heating/20261023_esim_slab_phase (convergence level 1).
 APPROVAL-20261023-ESIM-SURROGATE-TOL-01 sets rtol=1e-9 and atol=0 for
 both locked quantities; the explicit Im(H1)<0 sign check remains required.
 N25 on the fixed smooth grading, constant real mu and sigma, exp(+j omega t),
