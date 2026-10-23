@@ -12,7 +12,6 @@ import numpy as np
 import pytest
 
 ng = pytest.importorskip("ngsolve")
-pytest.importorskip("radia.sparsesolv_ngsolve")
 
 OFFSET = (3.0, 0.0, 0.0)
 
@@ -80,6 +79,7 @@ def test_periodic_gradient_is_exact_and_edge_vertex_paired(kelvin_mesh):
 
 
 def test_periodic_kelvin_ams_matches_direct(kelvin_mesh):
+    pytest.importorskip("radia.sparsesolv_ngsolve")
     from ngsolve import InnerProduct, curl, dx
     from ngsolve.krylovspace import CGSolver
     from radia.kelvin_source import kelvin_nu_factor_3d_cf
