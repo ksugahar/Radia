@@ -13,6 +13,7 @@ import subprocess
 import sys
 
 from ci_distribution_contract import matches
+from validation_adoption import validate_adoption, validate_champion
 
 SCHEMA = Path(__file__).with_name("validation_record.schema.json")
 PRIVATE = re.compile(r"(?:\b[A-Za-z]:[\\/](?!/)|\\\\[A-Za-z0-9_.-]+\\|/(?:Users|home|temp|tmp)/|\bcommercial[ _-]+(?:comparison|reference)\b)", re.I)
@@ -203,6 +204,23 @@ def _validate_record(root, record_path, *, head="HEAD"):
     base = next((p for p in candidates if record_path.is_relative_to(p)), None)
     if base is None or record["id"] != record_path.parent.relative_to(base).as_posix():
         raise ValueError("record id must match its records-root-relative directory")
+    # Relations are documentary, not automatic performance ranking or promotion.
+    def predecessors(item, stack):
+        ids = [row["id"] for row in item["supersedes"]]
+        if len(set(ids)) != len(ids):
+            raise ValueError(f"duplicate supersedes ids: actual={ids!r}; expected=unique")
+        for identity in ids:
+            if identity in stack:
+                raise ValueError(f"supersedes cycle: actual={stack + [identity]!r}; expected=acyclic")
+            target = local_path(base, identity) / "record.json"
+            other = read_json(target.read_text(encoding="utf-8"))
+            check_shape(other, schema)
+            if other["id"] != identity:
+                raise ValueError(f"supersedes target id: actual={other['id']!r}; expected={identity!r}")
+            if other["superseded_by"] != item["id"]:
+                raise ValueError(f"supersedes backlink: actual={other['superseded_by']!r}; expected={item['id']!r}")
+            predecessors(other, stack + [identity])
+    predecessors(record, [record["id"]])
     if private_text(record):
         raise ValueError("record contains a private path or comparison marker")
     source = record["source"]["repo_sha"]
@@ -239,6 +257,11 @@ def _validate_record(root, record_path, *, head="HEAD"):
         target = local_path(base, record["superseded_by"]) / "record.json"
         if target == record_path or not target.is_file():
             raise ValueError(f"superseded_by target must exist and differ: {target}")
+        successor = read_json(target.read_text(encoding="utf-8"))
+        check_shape(successor, schema)
+        if successor["id"] != record["superseded_by"] or not any(row["id"] == record["id"] for row in successor["supersedes"]):
+            raise ValueError(f"superseded_by forward link: actual={successor['supersedes']!r}; expected={record['id']!r}")
+
     entry = record["entry"]
     script_path = entry["script"]
     data = local_path(record_path.parent, script_path).read_bytes()
@@ -254,15 +277,20 @@ def _validate_record(root, record_path, *, head="HEAD"):
         raise ValueError("result contains a private path, address or comparison marker")
     if private_text(data.decode("utf-8-sig")):
         raise ValueError("entry contains a private path, address or comparison marker")
+    adoption = validate_adoption(root, record_path.parent, record, parsed_result,
+                                 local_path=local_path, sha256=sha256)
+    champion = validate_champion(root, base, record_path.parent, record, parsed_result,
+                                 local_path=local_path, sha256=sha256, read_json=read_json,
+                                 load_record=lambda repo, path: _validate_record(repo, path, head=head))
     return {"path": record_path.relative_to(root).as_posix(), "status": record["status"],
             "source": source, "provenance": provenance, "covered_files": len(covered), "changed_covered_files": sorted(touched),
-            "numerical_work_executed": False}
+            "numerical_work_executed": False, **adoption, **champion}
 
 
 def validate_record(root, record_path, *, head="HEAD"):
     try:
         return _validate_record(root, record_path, head=head)
-    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+    except (ValueError, OSError, OverflowError, subprocess.CalledProcessError) as exc:
         raise ValueError(f"record {record_path}: {exc}") from exc
 
 
