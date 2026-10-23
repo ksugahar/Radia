@@ -1,6 +1,6 @@
-"""Package-owned CUDA oracle identity contract.
+"""Package-owned upstream oracle identity contract.
 
-Guards: Changes to the approved producer or stored CUDA expectations, drift of
+Guards: Changes to the approved producer or stored oracle expectations, drift of
 its upstream pin, and reintroducing monorepo-relative verification inputs.
 Assumes: Stored upstream Optuna 5.0.0 evidence; producer identity uses its
 existing LF normalization. This checks source identity, not solver accuracy.
@@ -29,6 +29,12 @@ import pytest
             "04d11672c5dfd73f7dc399fc237d2f8e1c8b01c2bff06cb1a7ed5085f807dbfc",
             False, id="density",
         ),
+        pytest.param(
+            "generate_optuna50_mcp_oracle.py", "optuna50_mcp_oracle.json",
+            "7d6a08a91e8fe21a438660e6f359bcfa468578efd9c7579c6e592dbec56dd6cb",
+            "890bd0c25e6842427db8c55a6c1cda4135afdacb03ea2d53b5c4785aa15aa8aa",
+            False, id="mcp50",
+        ),
     ],
 )
 def test_cuda_oracle_preserves_approved_source_identity(
@@ -46,7 +52,7 @@ def test_cuda_oracle_preserves_approved_source_identity(
     if embedded_hash:
         assert oracle["generator_sha256"] == producer_hash, oracle["generator_sha256"]
     else:
-        # The unchanged density schema has no embedded producer fingerprint.
+        # The unchanged legacy schema has no embedded producer fingerprint.
         assert "generator_sha256" not in oracle, oracle.keys()
     assert oracle["optuna_version"] == "5.0.0", oracle["optuna_version"]
     project = tomllib.loads((package / "pyproject.toml").read_text(encoding="utf-8"))

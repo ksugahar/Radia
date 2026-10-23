@@ -118,9 +118,9 @@ def _repository_layout(root: Path) -> dict[str, Path | str] | None:
         "notice": root / "packages" / "radia-optuna" / "THIRD_PARTY_NOTICES.md",
         "oracle": root / "tests" / "matlab" / "fixtures" / "optuna50_oracle.json",
         "mcp_oracle": root
-        / "tests"
-        / "matlab"
-        / "fixtures"
+        / "packages"
+        / "radia-optuna"
+        / "oracles"
         / "optuna50_mcp_oracle.json",
         "inventory": root
         / "tests"
@@ -528,7 +528,7 @@ def matlab_optuna_oracle_plan(
         )
     if key in {"all", "upstream_mcp"}:
         fixture_commands.append(
-            "python tests/matlab/fixtures/generate_optuna50_mcp_oracle.py"
+            "python packages/radia-optuna/oracles/generate_optuna50_mcp_oracle.py"
         )
 
     return {

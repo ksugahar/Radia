@@ -59,7 +59,7 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
             "optuna": "5.0.0",
             "optuna_mcp": "0.2.0",
             "transport": "stdio",
-            "fixture": "tests/matlab/fixtures/optuna50_mcp_oracle.json",
+            "fixture": "packages/radia-optuna/oracles/optuna50_mcp_oracle.json",
             "sampler_seed_exposed": False,
         },
         "upstream_source_observation": {
@@ -121,7 +121,7 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
         ],
         "fixtures": [
             "tests/matlab/fixtures/optuna50_oracle.json",
-            "tests/matlab/fixtures/optuna50_mcp_oracle.json",
+            "packages/radia-optuna/oracles/optuna50_mcp_oracle.json",
             "tests/matlab/fixtures/optuna50_public_api.json",
             "packages/radia-optuna/matlab/optuna50_api_coverage.json",
             "tests/matlab/fixtures/optuna_test_manifest.json",

@@ -105,12 +105,12 @@ def _evidence_paths(root: Path) -> dict[str, Path]:
         "api_coverage": root / "packages/radia-optuna/matlab" / "optuna50_api_coverage.json",
         "python_oracle": fixture / "optuna50_oracle.json",
         "public_api_inventory": fixture / "optuna50_public_api.json",
-        "mcp_oracle": fixture / "optuna50_mcp_oracle.json",
+        "mcp_oracle": root / "packages/radia-optuna/oracles/optuna50_mcp_oracle.json",
         "test_manifest": fixture / "optuna_test_manifest.json",
         "python_generator": fixture / "generate_optuna50_oracle.py",
         "api_inventory_generator": fixture / "generate_optuna50_api_inventory.py",
         "api_coverage_generator": fixture / "generate_optuna50_api_coverage.py",
-        "mcp_generator": fixture / "generate_optuna50_mcp_oracle.py",
+        "mcp_generator": root / "packages/radia-optuna/oracles/generate_optuna50_mcp_oracle.py",
         "manifest_generator": fixture / "generate_optuna_test_manifest.py",
     }
 
@@ -305,7 +305,7 @@ def matlab_optuna_oracle_audit(
             "python tests/matlab/fixtures/generate_optuna50_oracle.py",
             "python tests/matlab/fixtures/generate_optuna50_api_inventory.py",
             "python tests/matlab/fixtures/generate_optuna50_api_coverage.py",
-            "python tests/matlab/fixtures/generate_optuna50_mcp_oracle.py",
+            "python packages/radia-optuna/oracles/generate_optuna50_mcp_oracle.py",
             "python tests/matlab/fixtures/generate_optuna_test_manifest.py",
         ],
         "matlab_verification": {

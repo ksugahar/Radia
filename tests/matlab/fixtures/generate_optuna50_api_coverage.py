@@ -1206,7 +1206,7 @@ def _oracle_generator_sections() -> dict[str, set[str]]:
     """
     fixtures = Path(__file__).resolve().parent
     oracle_source = fixtures / "generate_optuna50_oracle.py"
-    mcp_source = fixtures / "generate_optuna50_mcp_oracle.py"
+    mcp_source = ROOT / "packages/radia-optuna/oracles/generate_optuna50_mcp_oracle.py"
     tree = ast.parse(oracle_source.read_text(encoding="utf-8"))
     functions = {
         node.name: node

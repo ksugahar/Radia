@@ -9,7 +9,7 @@ entries=string(strsplit(path,pathsep));
 testCase.TestData.RemovePath=~any(strcmpi(entries,string(matlabDirectory)));
 if testCase.TestData.RemovePath, addpath(matlabDirectory); end
 testCase.TestData.MatlabDirectory=matlabDirectory;
-fixture=fullfile(root,"tests","matlab","fixtures", ...
+fixture=fullfile(root,"packages","radia-optuna","oracles", ...
     "optuna50_mcp_oracle.json");
 testCase.TestData.Oracle=jsondecode(fileread(fixture));
 end

@@ -1032,7 +1032,7 @@ The public Study/Trial lifecycle is independently checked through the official
 fixed-distribution `ask`, `tell`, user attributes, `add_trial(s)`, metric
 names, `best_trial`, and `best_trials`. The two fixtures can be regenerated
 with `tests/matlab/fixtures/generate_optuna50_oracle.py` and
-`tests/matlab/fixtures/generate_optuna50_mcp_oracle.py`. optuna-mcp 0.2.0 does
+`packages/radia-optuna/oracles/generate_optuna50_mcp_oracle.py`. optuna-mcp 0.2.0 does
 not accept a sampler seed, so exact seed streams intentionally remain in the
 direct Optuna 5.0.0 oracle. Every MATLAB Optuna test function is classified in
 `tests/matlab/fixtures/optuna_test_manifest.json` as `upstream-python`,
