@@ -8,19 +8,18 @@ def real_sparse_matrix_type(*, symmetric=False):
     """Return the scalar real-double CSR type for the requested storage.
 
     NGSolve's exported Python class names depend on the compiler. Build a
-    one-element mass matrix once per storage kind and use its actual type.
+    small mass matrix once per storage kind and use its actual type.
     This does not choose an inverse or create a TaskManager region; callers
     retain ownership of numerical execution and their existing solver route.
     """
     import ngsolve as ng
-    from netgen.meshing import Element2D, Mesh, MeshPoint, Pnt
+    from netgen.geom2d import unit_square
 
     try:
-        mesh = Mesh(dim=2)
-        vertices = [mesh.Add(MeshPoint(Pnt(*point))) for point in
-                    ((0, 0, 0), (1, 0, 0), (0, 1, 0))]
-        mesh.Add(Element2D(1, vertices))
-        space = ng.L2(ng.Mesh(mesh), order=0, complex=False)
+        # Use Netgen's complete public mesh builder. Inserting a raw Element2D
+        # without all required region descriptors can crash in native code.
+        mesh = ng.Mesh(unit_square.GenerateMesh(maxh=1))
+        space = ng.L2(mesh, order=0, complex=False)
         form = ng.BilinearForm(space, symmetric=symmetric,
                               symmetric_storage=symmetric, fp32=False)
         trial, test = space.TnT()
