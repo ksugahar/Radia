@@ -270,3 +270,21 @@ inspect selected-SHA workflow strings, separate dispatch concurrency and
 failure-only reporting without adding executable GPU or network dependencies.
 The closure remains source-only; the current digest is
 `7c7b29639ad0c648e648be3dec79ef43a02445054a65f3fcdbe305da3311edfa`.
+
+## Linux source-build route contracts
+
+The Linux CPU build entry point is included explicitly in
+`audited_dynamic_sources` because `test_linux_build.py` loads it dynamically.
+The new impact contract loads definitions and package metadata; pipeline tests
+mock compiler lookup and subprocess execution. The cross-platform provenance
+check uses only temporary Git repositories and the existing PowerShell source
+identity helper. No native build, NGSolve import, solver, scheduler submission
+or remote access executes in this lightweight test.
+
+On the Windows Python 3.12 source-check environment, the eight new tests passed
+in 3.43 seconds; the affected fast-contract selection passed 192 tests in
+19.18 seconds. These are observed runtimes, not acceptance thresholds. The
+executable closure digest was recalculated with `audit_digest` and the declared
+dynamic source included. Runner labels, denied imports, dependencies, job steps
+and the active profile budget remain unchanged. Reciprocal CI review still
+applies; source contracts do not qualify Linux or Windows native artifacts.
