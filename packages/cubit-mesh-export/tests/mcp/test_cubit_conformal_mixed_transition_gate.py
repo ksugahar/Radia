@@ -63,12 +63,12 @@ def summary() -> dict:
         "geometry": {
             "cad_total_volume_m3": 2.0e-9,
             "analytic_total_volume_m3": 2.0e-9,
-            "element_volume_source": "independent_gmsh_v41_coordinate_reconstruction",
+            "element_volume_source": "independent_gmsh_v42_coordinate_reconstruction",
         },
         "gmsh_export": {"bytes": 1233, "sha256": "b" * 64},
         "gmsh_inventory": {
             "status": "ok",
-            "mesh_format": "4.1",
+            "mesh_format": "4.2",
             "binary": False,
             "connectivity_mismatches": [],
             "volume_family_counts": {"hex": 1, "pyramid": 1, "tet": 10},

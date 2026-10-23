@@ -1,10 +1,15 @@
+"""Guards: exporter inventory rejects obsolete formats and preserves mixed-order labels.
+
+Assumes: ASCII MSH 4.2 topology fixtures; Gmsh API independently checks writer
+artifacts in licensed acceptance. These inventory fixtures do not certify geometry.
+"""
 import json
 
-from cubit_mesh_export.mcp.gmsh_v41 import (
-    gmsh_v41_mixed_order_series_gate,
-    summarize_gmsh_v41_ascii,
+from cubit_mesh_export.mcp.gmsh_v42 import (
+    gmsh_v42_mixed_order_series_gate,
+    summarize_gmsh_v42_ascii,
 )
-from cubit_mesh_export.mcp.server import cubit_gmsh_v41_inventory
+from cubit_mesh_export.mcp.server import cubit_gmsh_v42_inventory
 
 
 def _mesh(element_type, connectivity, node_count, *, transition_dim=0):
@@ -25,7 +30,7 @@ def _mesh(element_type, connectivity, node_count, *, transition_dim=0):
             blocks.append(" ".join([str(element_tag)] + [str((i % node_count) + 1) for i in range(count)]))
             element_tag += 1
     return f"""$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $PhysicalNames
 5
@@ -55,8 +60,8 @@ ORDER2_NODES = {"hex": 20, "tet": 10, "pyramid": 13, "triangle": 6, "quad": 8}
 
 
 def _rows(transition_dim=0):
-    first = summarize_gmsh_v41_ascii(_mesh(ORDER1_TYPES, ORDER1_NODES, 20, transition_dim=transition_dim))
-    second = summarize_gmsh_v41_ascii(_mesh(ORDER2_TYPES, ORDER2_NODES, 60, transition_dim=transition_dim))
+    first = summarize_gmsh_v42_ascii(_mesh(ORDER1_TYPES, ORDER1_NODES, 20, transition_dim=transition_dim))
+    second = summarize_gmsh_v42_ascii(_mesh(ORDER2_TYPES, ORDER2_NODES, 60, transition_dim=transition_dim))
     return [{"order": 1, "inventory": first}, {"order": 2, "inventory": second}]
 
 
@@ -67,7 +72,7 @@ VOL = {
 }
 
 
-def test_gmsh_v41_parser_reads_block_headers_and_high_order_connectivity():
+def test_gmsh_v42_parser_reads_block_headers_and_high_order_connectivity():
     inventory = _rows()[1]["inventory"]
     assert inventory["status"] == "ok"
     assert inventory["element_type_counts"] == {"9": 1, "11": 1, "16": 1, "17": 1, "19": 1}
@@ -75,7 +80,7 @@ def test_gmsh_v41_parser_reads_block_headers_and_high_order_connectivity():
 
 
 def test_mixed_order_gate_uses_vol_when_transition_physical_dimension_is_incomplete():
-    result = gmsh_v41_mixed_order_series_gate(_rows(), authoritative_vol_inventory=VOL)
+    result = gmsh_v42_mixed_order_series_gate(_rows(), authoritative_vol_inventory=VOL)
     assert result["status"] == "ok_with_vol_metadata_authority"
     assert result["checks"]["gmsh_transition_physical_dimension_is_volume"] is False
     assert result["checks"]["vol_transition_metadata_authoritative"] is True
@@ -84,11 +89,11 @@ def test_mixed_order_gate_uses_vol_when_transition_physical_dimension_is_incompl
 def test_mixed_order_gate_rejects_topology_drift():
     rows = _rows(transition_dim=3)
     rows[1]["inventory"]["element_family_counts"]["tet"] = 2
-    result = gmsh_v41_mixed_order_series_gate(rows, authoritative_vol_inventory=VOL)
+    result = gmsh_v42_mixed_order_series_gate(rows, authoritative_vol_inventory=VOL)
     assert result["status"] == "needs_attention"
     assert result["checks"]["topology_counts_invariant"] is False
 
 
-def test_gmsh_v41_inventory_mcp_tool_rejects_v2_text():
-    result = json.loads(cubit_gmsh_v41_inventory("$MeshFormat\n2.2 0 8\n$EndMeshFormat"))
+def test_gmsh_v42_inventory_mcp_tool_rejects_v2_text():
+    result = json.loads(cubit_gmsh_v42_inventory("$MeshFormat\n2.2 0 8\n$EndMeshFormat"))
     assert result["status"] == "invalid_input"

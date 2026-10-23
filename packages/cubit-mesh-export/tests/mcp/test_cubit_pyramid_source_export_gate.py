@@ -27,7 +27,7 @@ def _public() -> dict:
             "tet": {"scaled_jacobian": {"available": True, "count": 115, "min": 0.36}},
             "pyramid": {"scaled_jacobian": {"available": False, "count": 0}},
         },
-        "gmsh_header": {"status": "ok", "mesh_format": "4.1", "binary": False},
+        "gmsh_header": {"status": "ok", "mesh_format": "4.2", "binary": False},
         "gmsh_independent": {
             "element_counts": {"hex": 8, "pyramid": 4, "tet": 115, "other_3d": 0},
             "volume_by_type": {"hex": 1000.0, "pyramid": 117.8, "tet": 882.2},

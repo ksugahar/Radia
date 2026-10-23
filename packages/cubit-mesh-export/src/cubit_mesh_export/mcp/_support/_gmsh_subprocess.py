@@ -40,13 +40,34 @@ def run_gmsh_json_subprocess(script: str, args: list[str], *,
     """
     if not gmsh_available():
         return {"ok": False, "ran": False,
-                "error": "gmsh Python package not installed (pip install cubit-mesh-export[mesh-quality])"}
+                "error": "Gmsh 5 missing; install Gmsh alone with --pre -i https://gmsh.info/python-packages-dev gmsh"}
 
     with tempfile.TemporaryDirectory(prefix=prefix) as work:
         out_json = Path(work) / "result.json"
         log_path = Path(work) / "run.log"
         script_path = Path(work) / "script.py"
-        script_path.write_text(script, encoding="utf-8")
+        # Every reference operation must pass the same native/format boundary.
+        # Keep native state in this child, including the readiness roundtrip.
+        wrapped = f'''import json, sys
+from pathlib import Path
+sys.path.insert(0, {str(Path(__file__).resolve().parents[3])!r})
+from cubit_mesh_export._gmsh_runtime import probe_gmsh5, require_msh42
+try:
+    runtime = probe_gmsh5()
+    for argument in sys.argv[1:-1]:
+        candidate = Path(argument)
+        if candidate.suffix.lower() == '.msh' and candidate.is_file():
+            require_msh42(candidate)
+    exec(compile({script!r}, '<gmsh-operation>', 'exec'))
+    output = Path(sys.argv[-1])
+    result = json.loads(output.read_text(encoding='utf-8'))
+    result['gmsh_runtime'] = runtime
+except Exception as exc:
+    result = {{'ok': False, 'ran': False,
+              'error': f'{{type(exc).__name__}}: {{exc}}'}}
+Path(sys.argv[-1]).write_text(json.dumps(result), encoding='utf-8')
+'''
+        script_path.write_text(wrapped, encoding="utf-8")
         cmd = [sys.executable, str(script_path), *args, str(out_json)]
         try:
             with open(log_path, "w", encoding="utf-8") as log:
@@ -61,4 +82,8 @@ def run_gmsh_json_subprocess(script: str, args: list[str], *,
             return {"ok": False, "ran": False,
                     "error": f"gmsh subprocess exited {proc.returncode} "
                              f"without result: {tail}"}
-        return json.loads(out_json.read_text(encoding="utf-8"))
+        result = json.loads(out_json.read_text(encoding="utf-8"))
+        if proc.returncode != 0:
+            return {"ok": False, "ran": False,
+                    "error": f"Gmsh operation exited {proc.returncode}"}
+        return result

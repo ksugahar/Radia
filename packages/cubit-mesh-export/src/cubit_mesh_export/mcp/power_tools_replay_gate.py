@@ -113,8 +113,8 @@ def cubit_partial_volume_hex_diagnosis_gate(
         "block_membership_does_not_hide_missing_mesh": set(block_ids)
         == set(prepared_ids)
         and bool(set(block_ids).intersection(actual_unmeshed)),
-        "gmsh_ascii_v41_matches_produced_mesh": str(gmsh.get("mesh_format", ""))
-        == "4.1"
+        "gmsh_ascii_v42_matches_produced_mesh": str(gmsh.get("mesh_format", ""))
+        == "4.2"
         and gmsh.get("binary") is False
         and int(gmsh.get("hex_count", -1)) == totals.get("hex", 0)
         and int(gmsh.get("other_volume_count", -1)) == 0,

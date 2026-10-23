@@ -48,7 +48,7 @@ def cubit_symmetric_swept_mixed_mesh_gate(summary: Mapping[str, object]) -> dict
         and hex_quality > 0.0
         and math.isfinite(tet_quality)
         and tet_quality > 0.0,
-        "gmsh_ascii_v41_complete": gmsh.get("mesh_format") == "4.1"
+        "gmsh_ascii_v42_complete": gmsh.get("mesh_format") == "4.2"
         and gmsh.get("binary") is False,
         "gmsh_topology_matches_cubit": int(gmsh_counts.get("hex", -1)) == hex_count
         and int(gmsh_counts.get("pyramid", -1)) == pyramid_count

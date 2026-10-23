@@ -1,4 +1,4 @@
-"""Small, strict inventory helpers for ASCII Gmsh 4.1 mesh exports."""
+"""Small, strict inventory helpers for ASCII Gmsh 4.2 mesh exports."""
 from __future__ import annotations
 
 from collections import Counter
@@ -40,8 +40,8 @@ def _section(lines: list[str], name: str) -> list[str]:
     return lines[start:end]
 
 
-def summarize_gmsh_v41_ascii(text: str, *, source: str = "inline") -> dict:
-    """Return topology, order and connectivity inventory from ASCII Gmsh 4.1."""
+def summarize_gmsh_v42_ascii(text: str, *, source: str = "inline") -> dict:
+    """Return topology, order and connectivity inventory from ASCII Gmsh 4.2."""
 
     lines = [line.strip() for line in str(text).splitlines() if line.strip()]
     mesh_format = _section(lines, "MeshFormat")
@@ -51,10 +51,12 @@ def summarize_gmsh_v41_ascii(text: str, *, source: str = "inline") -> dict:
     if len(format_parts) != 3:
         raise ValueError("invalid Gmsh MeshFormat row")
     version, binary_flag, data_size = format_parts
-    if version != "4.1":
-        raise ValueError(f"expected Gmsh 4.1, got {version}")
+    if version != "4.2":
+        raise ValueError(f"expected Gmsh 4.2, got {version}")
+    if data_size != "8":
+        raise ValueError(f"expected 8-byte Gmsh data size, got {data_size}")
     if binary_flag != "0":
-        raise ValueError("only ASCII Gmsh 4.1 is supported")
+        raise ValueError("only ASCII Gmsh 4.2 is supported")
 
     physical_names = []
     if "$PhysicalNames" in lines:
@@ -133,7 +135,7 @@ def summarize_gmsh_v41_ascii(text: str, *, source: str = "inline") -> dict:
         raise ValueError("unexpected trailing rows in Elements section")
 
     checks = {
-        "mesh_format_is_ascii_v41": version == "4.1" and binary_flag == "0",
+        "mesh_format_is_ascii_v42": version == "4.2" and binary_flag == "0",
         "element_block_count_matches": len(blocks) == declared_blocks,
         "element_count_matches": parsed_elements == declared_elements,
         "known_connectivity_matches": not connectivity_mismatches,
@@ -141,7 +143,7 @@ def summarize_gmsh_v41_ascii(text: str, *, source: str = "inline") -> dict:
     }
     return {
         "source": source,
-        "policy": "gmsh_v41_ascii_inventory_v1",
+        "policy": "gmsh_v42_ascii_inventory_v1",
         "status": "ok" if all(checks.values()) else "needs_attention",
         "mesh_format": version,
         "binary": False,
@@ -166,13 +168,13 @@ def summarize_gmsh_v41_ascii(text: str, *, source: str = "inline") -> dict:
     }
 
 
-def gmsh_v41_mixed_order_series_gate(
+def gmsh_v42_mixed_order_series_gate(
     rows,
     *,
     authoritative_vol_inventory: Mapping | None = None,
     transition_names=("pyram", "pyramid_transition", "transition"),
 ) -> dict:
-    """Check order elevation and metadata fidelity for a mixed Gmsh 4.1 series."""
+    """Check order elevation and metadata fidelity for a mixed Gmsh 4.2 series."""
 
     series = []
     for raw in rows:
@@ -221,8 +223,8 @@ def gmsh_v41_mixed_order_series_gate(
     )
     checks = {
         "orders_are_one_then_two": orders == [1, 2],
-        "all_inventories_are_ascii_v41": bool(series) and all(
-            inv.get("mesh_format") == "4.1" and inv.get("binary") is False for _, inv in series
+        "all_inventories_are_ascii_v42": bool(series) and all(
+            inv.get("mesh_format") == "4.2" and inv.get("binary") is False for _, inv in series
         ),
         "all_connectivity_matches_declared_type": bool(series) and all(
             not inv.get("connectivity_mismatches") for _, inv in series
@@ -243,7 +245,7 @@ def gmsh_v41_mixed_order_series_gate(
     }
     hard_names = [
         "orders_are_one_then_two",
-        "all_inventories_are_ascii_v41",
+        "all_inventories_are_ascii_v42",
         "all_connectivity_matches_declared_type",
         "requested_order_matches_element_types",
         "topology_counts_invariant",
@@ -264,7 +266,7 @@ def gmsh_v41_mixed_order_series_gate(
     else:
         status = "needs_attention"
     return {
-        "policy": "gmsh_v41_mixed_order_series_gate_v1",
+        "policy": "gmsh_v42_mixed_order_series_gate_v1",
         "status": status,
         "success": hard_ok and (checks["gmsh_transition_physical_dimension_is_volume"] or vol_transition_authority),
         "orders": orders,
@@ -278,7 +280,7 @@ def gmsh_v41_mixed_order_series_gate(
             "The transition physical name is not a 3D Gmsh group; keep the labeled .vol inventory authoritative and use .msh for mesh inspection."
         ],
         "lesson": (
-            "Parse Gmsh 4.1 by entity blocks, not as v2 element rows. Order elevation must preserve mixed topology and declared connectivity. "
+            "Parse Gmsh 4.2 by entity blocks, not as v2 element rows. Order elevation must preserve mixed topology and declared connectivity. "
             "When transition-block dimensions are incomplete, retain the labeled .vol as solver metadata authority."
         ),
     }

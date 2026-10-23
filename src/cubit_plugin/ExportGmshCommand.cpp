@@ -116,7 +116,7 @@ std::vector<std::string> ExportGmshCommand::get_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "Export mesh to Gmsh MSH v4.1 format (lab-wide standard).\n"
+    "Export mesh to Gmsh MSH v4.2 format (lab-wide standard).\n"
     "Block assignment is NOT required.\n"
     "Sidesets exported as surface elements. Nodesets as comments.\n\n"
     "Writes filename.geo, filename.geo.opt, and filename.msh.opt.\n"
@@ -169,7 +169,7 @@ bool ExportGmshCommand::write_gmsh(const std::string &filename,
   if (!mesh.extract(order))
     return false;
 
-  bool ok = write_gmsh_v41(filename, mesh);
+  bool ok = write_gmsh_v42(filename, mesh);
 
   if (ok)
     write_gmsh_launch_companions(filename);
@@ -346,12 +346,12 @@ int ExportGmshCommand::elem_dim(const MeshElement &elem)
 }
 
 // ========================================================================
-// Gmsh v4.1 writer
+// Gmsh v4.2 writer
 //
 // Format reference: https://gmsh.info/doc/texinfo/gmsh.html#MSH-file-format
 // Sections: $MeshFormat, $PhysicalNames, $Entities, $Nodes, $Elements
 // ========================================================================
-bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
+bool ExportGmshCommand::write_gmsh_v42(const std::string &filename,
                                         const MeshData &mesh)
 {
   std::ofstream fid(u8_string_to_path(filename));
@@ -425,7 +425,7 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
   }
 
   // ---- $MeshFormat ----
-  fid << "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n";
+  fid << "$MeshFormat\n4.2 0 8\n$EndMeshFormat\n";
 
   // ---- $PhysicalNames ----
   int nphys = (int)block_info.size() + (int)sideset_info.size()
@@ -497,18 +497,18 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
             << "1 " << e.phys_tag << "\n";
       } else {
         // curve/surface/volume entity:
-        // tag xMin yMin zMin xMax yMax zMax numPhysicalTags [phys...] numBounding [bound...]
+        // tag xMin yMin zMin xMax yMax zMax numPhysicalTags [phys...] numBounding [bound...] numEmbedded [embedded...]
         fid << e.tag << " "
             << e.xmin << " " << e.ymin << " " << e.zmin << " "
             << e.xmax << " " << e.ymax << " " << e.zmax << " "
-            << "1 " << e.phys_tag << " 0\n";
+            << "1 " << e.phys_tag << " 0 0\n";
       }
     }
   }
   fid << "$EndEntities\n";
 
   // ---- $Nodes ----
-  // v4.1: numEntityBlocks numNodes minNodeTag maxNodeTag
+  // v4.2: numEntityBlocks numNodes minNodeTag maxNodeTag
   // We put all nodes in one entity block per block/entity.
   // Simpler: one big entity block with all nodes.
   int n_total_nodes = mesh.total_node_count();
@@ -622,7 +622,7 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
   if (skipped > 0)
     PRINT_WARNING("Skipped %d elements with unknown type.\n", skipped);
 
-  PRINT_INFO("Exported Gmsh v4.1 (order %d%s): %s (%d nodes, %d elements, %d blocks)\n",
+  PRINT_INFO("Exported Gmsh v4.2 (order %d%s): %s (%d nodes, %d elements, %d blocks)\n",
              mesh.order, mesh.has_netgen ? ", NetgenCurver" : "",
              filename.c_str(), n_total_nodes, total_elems, (int)elem_blocks.size());
 

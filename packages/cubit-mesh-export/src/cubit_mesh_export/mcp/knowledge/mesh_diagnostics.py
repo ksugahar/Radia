@@ -286,7 +286,7 @@ If you need boundary conditions in the downstream solver:
 
 - For **NGSolve**: name the *OCC faces* before meshing, not sidesets.
   See `cubit_docs topic=netgen` for the `set_name_for_occ_face` workflow.
-- For **Abaqus / Nastran / Gmsh v4.1**: use plain `export abaqus` etc.,
+- For **Abaqus / Nastran / Gmsh v4.2**: use plain `export abaqus` etc.,
   which do translate sidesets and nodesets.
 
 See `cubit_docs topic=scripting_blocks_only_policy` for details.

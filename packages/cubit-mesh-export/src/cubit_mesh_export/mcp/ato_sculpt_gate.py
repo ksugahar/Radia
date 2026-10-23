@@ -117,9 +117,9 @@ def cubit_levelset_sculpt_hex_validation_gate(
         and coarse["source_minimum_quality"] < quality_floor
         and fine["source_minimum_quality"] >= quality_floor
         and fine["source_minimum_quality"] > coarse["source_minimum_quality"],
-        "gmsh_ascii_v41_counts_match": len(rows) == 2
+        "gmsh_ascii_v42_counts_match": len(rows) == 2
         and all(
-            row["gmsh_mesh_format"] == "4.1"
+            row["gmsh_mesh_format"] == "4.2"
             and row["gmsh_binary"] is False
             and row["gmsh_hex_count"] == row["hex_count"]
             for row in rows

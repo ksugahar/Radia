@@ -1,6 +1,6 @@
 # Cubit-owned implementation; intentionally maintained independently of Radia MCP.
 # SPDX-License-Identifier: Apache-2.0
-"""Mesh-only Gmsh 4.1 handoff for the Netgen comparison route (TET, orders 1-3).
+"""Mesh-only Gmsh 4.2 handoff for the Netgen comparison route (TET, orders 1-3).
 
 NGSolve owns curved geometry evaluation; Gmsh owns its reference-node ordering.
 This private adapter deliberately excludes Radia's field/postprocessing APIs.
@@ -70,8 +70,8 @@ def _write_tet_msh(mesh, out_msh: Path, order: int = 1) -> dict:
         raise ValueError('Netgen comparison produced an empty volume mesh')
     # One discrete volume suffices for this mesh-quality-only referee.
     bounds = [min(p[i] for p in nodes) for i in range(3)] + [max(p[i] for p in nodes) for i in range(3)]
-    lines = ['$MeshFormat', '4.1 0 8', '$EndMeshFormat', '$Entities', '0 0 0 1',
-             '1 ' + ' '.join(format(v, '.17g') for v in bounds) + ' 0 0',
+    lines = ['$MeshFormat', '4.2 0 8', '$EndMeshFormat', '$Entities', '0 0 0 1',
+             '1 ' + ' '.join(format(v, '.17g') for v in bounds) + ' 0 0 0',
              '$EndEntities', '$Nodes',
              f'1 {len(nodes)} 1 {len(nodes)}', f'3 1 0 {len(nodes)}']
     lines.extend(str(i) for i in range(1, len(nodes)+1))

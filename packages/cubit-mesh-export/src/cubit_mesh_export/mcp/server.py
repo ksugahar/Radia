@@ -46,7 +46,7 @@ from cubit_mesh_export.mcp.knowledge.license import get_license_documentation
 from cubit_mesh_export.mcp.knowledge.format_routing import get_format_routing_documentation
 from cubit_mesh_export.mcp.knowledge.coreform_webinars import get_coreform_webinar_documentation
 from cubit_mesh_export.mcp.vol_inventory import cubit_hex_geometry_refinement_gate, cubit_live_mixed_mesh_python_gate as _cubit_live_mixed_mesh_python_gate, cubit_mapped_boundary_layer_shell_gate as _cubit_mapped_boundary_layer_shell_gate, cubit_sweep_along_curve_gate as _cubit_sweep_along_curve_gate, cubit_partitioned_sweep_compatibility_gate as _cubit_partitioned_sweep_compatibility_gate, cubit_pyramid_degenerate_hex_export_gate as _cubit_pyramid_degenerate_hex_export_gate, cubit_webcut_conformal_hex_gate as _cubit_webcut_conformal_hex_gate, cubit_webcut_journal_execution_gate as _cubit_webcut_journal_execution_gate, cubit_helical_partition_mesh_gate as _cubit_helical_partition_mesh_gate, cubit_source_journal_replay_gate as _cubit_source_journal_replay_gate, cubit_boundary_layer_candidate_gate as _cubit_boundary_layer_candidate_gate, cubit_boundary_layer_journal_recovery_gate as _cubit_boundary_layer_journal_recovery_gate, cubit_embedded_region_mixed_transition_gate as _cubit_embedded_region_mixed_transition_gate, cubit_embedded_pipe_source_recovery_gate as _cubit_embedded_pipe_source_recovery_gate, cubit_mixed_order_series_inventory_gate, summarize_netgen_vol_inventory
-from cubit_mesh_export.mcp.gmsh_v41 import gmsh_v41_mixed_order_series_gate, summarize_gmsh_v41_ascii
+from cubit_mesh_export.mcp.gmsh_v42 import gmsh_v42_mixed_order_series_gate, summarize_gmsh_v42_ascii
 from cubit_mesh_export.mcp.nastran_consumer import evaluate_nastran_consumer_contract
 from cubit_mesh_export.mcp._support.lazy_call import lazy_callable
 _cubit_loft_high_order_vol_series_gate = lazy_callable(".high_order_export_gate", "cubit_loft_high_order_vol_series_gate", __package__)
@@ -617,8 +617,8 @@ def cubit_docs(topic: str = "all") -> str:
 	        "all"                    - Overview of all categories
 	        --- Export formats ---
 	        "export_overview"        - All export commands overview
-	        "gmsh_v2"               - Gmsh v4.1 format (export gmsh)
-	        "gmsh_v4"               - Gmsh v4.1 format policy
+	        "gmsh_v2"               - Gmsh v4.2 format (export gmsh)
+	        "gmsh_v4"               - Gmsh v4.2 format policy
 	        "netgen"                - Netgen .vol export (export netgen)
 	        "nastran"               - Nastran BDF (export nastran_bdf + consumer gate)
 	        "exodus"                - Exodus II (Cubit built-in)
@@ -796,14 +796,14 @@ def cubit_nastran_consumer_gate(
 
 
 @mcp.tool()
-def cubit_gmsh_v41_inventory(text: str) -> str:
-	"""Parse inline ASCII Gmsh 4.1 by entity blocks and validate connectivity."""
+def cubit_gmsh_v42_inventory(text: str) -> str:
+	"""Parse inline ASCII Gmsh 4.2 by entity blocks and validate connectivity."""
 
 	try:
-		result = summarize_gmsh_v41_ascii(text)
+		result = summarize_gmsh_v42_ascii(text)
 	except (TypeError, ValueError) as exc:
 		result = {
-			"policy": "gmsh_v41_ascii_inventory_v1",
+			"policy": "gmsh_v42_ascii_inventory_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}
@@ -811,20 +811,20 @@ def cubit_gmsh_v41_inventory(text: str) -> str:
 
 
 @_validation.tool()
-def cubit_gmsh_v41_mixed_order_gate(
+def cubit_gmsh_v42_mixed_order_gate(
 	rows: list[dict],
 	authoritative_vol_inventory: dict | None = None,
 ) -> str:
-	"""Gate Gmsh 4.1 mixed topology/order while retaining .vol label authority."""
+	"""Gate Gmsh 4.2 mixed topology/order while retaining .vol label authority."""
 
 	try:
-		result = gmsh_v41_mixed_order_series_gate(
+		result = gmsh_v42_mixed_order_series_gate(
 			rows,
 			authoritative_vol_inventory=authoritative_vol_inventory,
 		)
 	except (TypeError, ValueError) as exc:
 		result = {
-			"policy": "gmsh_v41_mixed_order_series_gate_v1",
+			"policy": "gmsh_v42_mixed_order_series_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}
@@ -1284,7 +1284,7 @@ def cubit_embedded_region_mixed_transition_gate(
 	max_volume_relative_error: float = 1.0e-5,
 	max_swept_volume_relative_error: float = 5.0e-4,
 ) -> str:
-	"""Gate hex-led tet/pyramid recovery, quality, interfaces, and Gmsh 4.1."""
+	"""Gate hex-led tet/pyramid recovery, quality, interfaces, and Gmsh 4.2."""
 	try:
 		result = _cubit_embedded_region_mixed_transition_gate(
 			summary,
@@ -3714,7 +3714,7 @@ def _run_batch(step_path: str | None, commands: list[str],
 
 def _netgen_mesh_to_msh(step_path: Path, maxh: float, out_msh: Path,
                         order: int = 1) -> dict:
-	"""STEP -> Netgen curved tetrahedra -> Gmsh 4.1, without Radia."""
+	"""STEP -> Netgen curved tetrahedra -> Gmsh 4.2, without Radia."""
 	from ._support.netgen_compare import step_to_msh
 	return step_to_msh(step_path, maxh, out_msh, order)
 
@@ -3777,14 +3777,14 @@ def cubit_netgen_quality_compare(step_path: str,
 	NEUTRAL referee.
 
 	Routes (headless throughout, per the driving policy):
-	  * netgen     — STEP -> Netgen tet mesh (maxh) -> .msh v4.1
+	  * netgen     — STEP -> Netgen tet mesh (maxh) -> .msh v4.2
 	  * cubit_tet  — batch Cubit, `volume all scheme tetmesh`, size
 	  * cubit_hex  — batch Cubit, default scheme ladder (sweep/map where
 	                 possible), size
 
 	Referee: GMSH minSICN via the radia-gmsh quality engine
 	(`cubit_mesh_export.mcp._support.mesh_quality.mesh_quality`) evaluated on each
-	exported `.msh v4.1` -- ONE metric implementation for every mesher,
+	exported `.msh v4.2` -- ONE metric implementation for every mesher,
 	so numbers are directly comparable. minSICN is defined for tets AND
 	hexes, but comparing across element FAMILIES is still
 	apples-to-oranges for meshing-difficulty reasons; the honest

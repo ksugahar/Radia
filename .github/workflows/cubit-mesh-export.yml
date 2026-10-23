@@ -220,6 +220,13 @@ jobs:
         run: |
           $wheel = Get-ChildItem packages\cubit-mesh-export\dist\*.whl |
             Select-Object -First 1
+          # Resolve Gmsh alone from its official dev index; other dependencies
+          # stay on PyPI. Retain pip's original wheel hash for runtime evidence.
+          $env:CUBIT_GMSH_INSTALL_REPORT = Join-Path $env:RUNNER_TEMP 'cubit-gmsh-install.json'
+          python -m pip install --pre -i https://gmsh.info/python-packages-dev `
+            gmsh --report $env:CUBIT_GMSH_INSTALL_REPORT
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "CUBIT_GMSH_INSTALL_REPORT=$env:CUBIT_GMSH_INSTALL_REPORT" >> $env:GITHUB_ENV
           # Resolve declared public dependencies normally; absence probes reject
           # Radia/private foundations. Feature tests use the wheel's extras.
           python -m pip install "$($wheel.FullName)[mesh-quality,sculpt,youtube]"
