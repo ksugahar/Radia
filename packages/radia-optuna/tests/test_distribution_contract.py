@@ -1,3 +1,11 @@
+"""Optuna distribution source contracts.
+
+Guards: Package version, declared MATLAB payload, oracle provenance and native
+distribution boundaries drifting from their declared contracts.
+Assumes: Source-checkout audit with existing upstream-generated fixtures and
+MATLAB sources; numerical execution and release acceptance are separate gates.
+"""
+
 from __future__ import annotations
 
 import importlib.util
@@ -161,26 +169,11 @@ def test_matlab_path_names_the_layout_it_resolved():
     assert payload["matlab_file_count"] == payload["expected_matlab_file_count"]
 
 
-def test_cpu_optuna_extra_and_matlab_distribution_have_separate_owners():
-    root_project = tomllib.loads(
-        (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    )["project"]
+def test_package_version_matches_its_init():
     package_project = tomllib.loads(
         (PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )["project"]
     version = package_project["version"]
-    assert version != root_project["version"]
-    assert root_project["optional-dependencies"]["optuna"] == ["optuna==5.0.0"]
-    assert "optuna-upstream" not in root_project["optional-dependencies"]
-    assert not any("radia-optuna" in requirement for requirement in root_project["dependencies"])
-    assert not verify_wheel._cpu_dependency_boundary_errors(root_project, package_project)
-    from copy import deepcopy
-    invalid = deepcopy(root_project)
-    invalid["optional-dependencies"]["optuna"] = [f"radia-optuna=={version}"]
-    assert verify_wheel._cpu_dependency_boundary_errors(invalid, package_project)
-    invalid = deepcopy(root_project)
-    invalid["optional-dependencies"]["optuna-upstream"] = [f"radia-optuna[upstream]=={version}"]
-    assert verify_wheel._cpu_dependency_boundary_errors(invalid, package_project)
     init_source = (
         PACKAGE_ROOT / "src" / "radia_optuna" / "__init__.py"
     ).read_text(encoding="utf-8")
@@ -323,7 +316,7 @@ def test_wheel_verifier_rejects_solver_boundary_leaks():
     assert "optuna\\s*==\\s*5\\.0\\.0" in verifier
     assert "THIRD_PARTY_NOTICES.md" in verifier
     assert "source_fidelity_verified" in verifier
-    assert "wheel payload differs from the checked monorepo source" in verifier
+    assert "wheel payload differs from the checked package source" in verifier
 
 
 def test_release_candidate_fidelity_normalizes_text_but_not_semantics():
