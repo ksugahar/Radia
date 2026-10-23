@@ -558,6 +558,41 @@
                     },
                     "required": [
                       "operator"
+                    ],
+                    "oneOf": [
+                      {
+                        "properties": {
+                          "operator": {
+                            "enum": [
+                              "lt",
+                              "le"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "value"
+                        ],
+                        "not": {
+                          "required": [
+                            "reason"
+                          ]
+                        }
+                      },
+                      {
+                        "properties": {
+                          "operator": {
+                            "const": "recorded-only"
+                          }
+                        },
+                        "required": [
+                          "reason"
+                        ],
+                        "not": {
+                          "required": [
+                            "value"
+                          ]
+                        }
+                      }
                     ]
                   },
                   "expected_theory": {
@@ -801,7 +836,22 @@
                   "source_sha",
                   "mesh_sha256",
                   "runtime_s"
-                ]
+                ],
+                "if": {
+                  "properties": {
+                    "runtime_s": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "runtime_s"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "runtime_note"
+                  ]
+                }
               },
               "minItems": 2
             }
