@@ -543,6 +543,14 @@ Owner-authored code is licensed under Apache-2.0 from the next releases.
 See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
 retain their original licenses; previously published artifacts are unchanged.
 
+### Gmsh output boundary
+
+The exported MSH 4.2 file is **post-processing and visualization only**.
+It must never be loaded as a solver mesh or converted to `.vol`.
+Solver input remains a checked `.vol` produced by Cubit or Netgen; that `.vol`
+and its versioned contract remain the authority for labels and topology.
+Gmsh inspection results do not certify a solver input or replace `check-vol`.
+
 ### Gmsh 5 development runtime
 
 Install Gmsh **alone** from its official development index in an isolated Python

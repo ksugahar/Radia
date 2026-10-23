@@ -1,4 +1,6 @@
-"""Small, strict inventory helpers for ASCII Gmsh 4.2 mesh exports."""
+"""Post-processing inventories for ASCII MSH 4.2; never solver mesh inputs.
+Checked .vol and its contract are always the solver label/topology authority.
+"""
 from __future__ import annotations
 
 from collections import Counter
@@ -150,6 +152,9 @@ def summarize_gmsh_v42_ascii(text: str, *, source: str = "inline") -> dict:
     return {
         "source": source,
         "policy": "gmsh_v42_ascii_inventory_v1",
+        "artifact_role": "post-processing-only",
+        "solver_mesh": False,
+        "solver_metadata_authority": "checked .vol and its versioned contract",
         "status": "ok" if all(checks.values()) else "needs_attention",
         "mesh_format": version,
         "binary": False,
@@ -275,6 +280,9 @@ def gmsh_v42_mixed_order_series_gate(
         status = "needs_attention"
     return {
         "policy": "gmsh_v42_mixed_order_series_gate_v1",
+        "artifact_role": "post-processing-only",
+        "solver_mesh": False,
+        "solver_metadata_authority": "checked .vol and its versioned contract",
         "status": status,
         "success": hard_ok and (checks["gmsh_transition_physical_dimension_is_volume"] or vol_transition_authority),
         "orders": orders,
@@ -289,6 +297,6 @@ def gmsh_v42_mixed_order_series_gate(
         ],
         "lesson": (
             "Parse Gmsh 4.2 by entity blocks, not as v2 element rows. Order elevation must preserve mixed topology and declared connectivity. "
-            "When transition-block dimensions are incomplete, retain the labeled .vol as solver metadata authority."
+            "The checked .vol and its versioned contract always remain solver label/topology authority; .msh is never converted into a solver input."
         ),
     }
