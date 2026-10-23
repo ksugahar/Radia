@@ -7,6 +7,10 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Add the read-only `tests_design_guide` in radia-meta: author sensitive
+  historical locks with production mutation evidence, scoped coverage claims
+  and execution preflight. Existing fleet and incident gates keep their roles.
+
 - Avoid an outstanding blocking read on empty Windows stdin pipes in the
   NGSolve MCP server. Lazy native-module imports can otherwise stall while the
   transport waits for its next request. Preserve SDK framing and dispatch,
