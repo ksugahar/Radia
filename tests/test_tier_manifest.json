@@ -254,7 +254,8 @@
     ],
     "src/radia/esim_cell_problem.py": [
       "tests/test_esim_adaptive_depth.py",
-      "validation_test/induction_heating/test_esim_adaptive_depth_validation.py"
+      "validation_test/induction_heating/test_esim_adaptive_depth_validation.py",
+      "tests/test_esim_finite_slab_regression.py"
     ],
     "tools/ci_precheck.py": [
       "tests/test_ci_precheck.py"
@@ -273,6 +274,12 @@
     ],
     "src/radia/vim/": [
       "tests/feec/test_hdiv_prolate_regression_lock.py"
+    ],
+    "src/radia/esim_depth.py": [
+      "tests/test_esim_finite_slab_regression.py"
+    ],
+    "tests/fixtures/esim_slab_A25_cf77cd6e0.json": [
+      "tests/test_esim_finite_slab_regression.py"
     ]
   },
   "profiles": {
@@ -432,7 +439,8 @@
         "validation_test/induction_heating/test_fem_ams_parity.py",
         "tests/test_lamination_api.py",
         "validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py",
-        "tests/feec/test_hdiv_prolate_regression_lock.py"
+        "tests/feec/test_hdiv_prolate_regression_lock.py",
+        "tests/test_esim_finite_slab_regression.py"
       ]
     },
     "sparsesolv": {
