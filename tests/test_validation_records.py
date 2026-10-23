@@ -264,20 +264,50 @@ def test_varying_geometry_inside_p_series_is_rejected(adoption_sample):
     with pytest.raises(ValueError, match="held-fixed"): validate_record(root, path)
 
 
-def test_valid_analytic_receipt_is_hashed_not_executed(adoption_sample):
+@pytest.fixture
+def analytic_sample(adoption_sample):
     root, path, record = adoption_sample
-    # Synthetic DOI-shaped token, not a claim to a real publication/calculation.
+    # Synthetic canonical entry, never a scientific approval or execution claim.
+    bibliography = root / "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib"
+    bibliography.parent.mkdir(parents=True)
+    bibliography.write_text('@article{SyntheticReference, doi={10.0000/synthetic-schema-fixture}}\n', encoding="utf-8")
     receipt = b'{"synthetic": true, "execution_claim": false}\n'
     (path.parent / "symbolic.json").write_bytes(receipt)
     record["adoption"]["criterion"]["reference"] = {
-        "kind": "analytic", "citation": "Synthetic DOI/receipt schema fixture only",
-        "doi": "10.0000/synthetic-schema-fixture", "symbolic_verification": {
+        "kind": "analytic", "citation": "Synthetic canonical reference/receipt fixture only",
+        "bib_key": "SyntheticReference", "symbolic_verification": {
             "path": "symbolic.json", "sha256": hashlib.sha256(receipt).hexdigest()},
     }
     seal_adoption(path, record)
+    return root, path, record, bibliography
+
+
+@pytest.mark.parametrize("identifier", ["doi={10.0000/synthetic-schema-fixture}", "isbn={978-0-13-249020-7}"])
+def test_valid_analytic_receipt_is_hashed_not_executed(analytic_sample, identifier):
+    root, path, record, bibliography = analytic_sample
+    bibliography.write_text('@book{SyntheticReference, '+identifier+'}\n', encoding="utf-8")
     assert validate_record(root, path)["theory_applicability"] == "independent-review-required"
     (path.parent / "symbolic.json").write_bytes(b"changed")
     with pytest.raises(ValueError, match="artifact hash"): validate_record(root, path)
+
+
+def test_analytic_reference_rejects_missing_canonical_key(analytic_sample):
+    root, path, record, bibliography = analytic_sample
+    record["adoption"]["criterion"]["reference"]["bib_key"] = "MissingReference"
+    seal_adoption(path, record)
+    with pytest.raises(ValueError, match="analytic bibliography key"): validate_record(root, path)
+
+
+def test_analytic_reference_rejects_url_only_entry(analytic_sample):
+    root, path, record, bibliography = analytic_sample
+    bibliography.write_text('@book{SyntheticReference, url={https://example.org/reference}}\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="analytic bibliography identifier"): validate_record(root, path)
+
+
+def test_analytic_reference_rejects_invalid_isbn_checksum(analytic_sample):
+    root, path, record, bibliography = analytic_sample
+    bibliography.write_text('@book{SyntheticReference, isbn={9780132490208}}\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="checksum-valid ISBN-13"): validate_record(root, path)
 
 
 @pytest.mark.parametrize("extra", ["LIMIT = 2 * 0.01\n", "if True:\n    LIMIT = 0.02\n"])
