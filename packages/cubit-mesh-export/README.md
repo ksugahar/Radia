@@ -2,6 +2,10 @@
 
 Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 
+Order-3 pyramid export to Gmsh is refused with an explicit element/order error:
+the native Gmsh 5 consumer cannot construct that type. No lower-order or fake
+element is substituted; pyramid orders 1 and 2 are unchanged.
+
 `cubit-plugin-install` automatically registers the official Coreform
 WorkflowToolbar for each selected profile. No manual toolbar package import is
 required. Existing user toolbars and unrelated preferences are preserved;

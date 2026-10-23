@@ -1,4 +1,4 @@
-"""Guards: cubic hex export edge orientation and the actual MSH 4.2 handoff.
+"""Guards: cubic hex orientation and fail-loud order-3 pyramid export refusal.
 
 Assumes: manager-admitted licensed batch execution on the build role, the
 candidate command plugin, and an isolated Gmsh 5 environment with install report.
@@ -18,6 +18,7 @@ import subprocess
 from cubit_mesh_export._layout import runtime_environment
 from cubit_mesh_export._gmsh_runtime import probe_gmsh5
 from cubit_mesh_export.mcp._support.mesh_quality import mesh_total_volume
+from cubit_mesh_export.mcp.gmsh_v42 import summarize_gmsh_v42_ascii
 
 
 def main() -> int:
@@ -30,7 +31,7 @@ def main() -> int:
     args = parser.parse_args()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    result = {"passed": False, "state": "running", "scope": "cubic hex geometry export"}
+    result = {"passed": False, "state": "running", "scope": "post-processing export and unsupported-element refusal"}
     try:
         exe, plugin, report = (value.resolve(strict=True) for value in
                                (args.cubit_exe, args.plugin, args.install_report))
@@ -43,6 +44,9 @@ def main() -> int:
         shutil.copy2(plugin, candidate)
         digest = hashlib.sha256(candidate.read_bytes()).hexdigest()
         result["candidate_sha256"] = digest
+        pyramid_fixture = Path(__file__).with_name("fixtures") / "gmsh42_pyramid5.e"
+        shutil.copyfile(pyramid_fixture, out / "pyramid.e")
+        result["pyramid_fixture_sha256"] = hashlib.sha256(pyramid_fixture.read_bytes()).hexdigest()
         script = f'''import cubit,ctypes,json,hashlib,traceback
 from pathlib import Path
 out=Path({str(out)!r})
@@ -63,6 +67,7 @@ try:
  if actual!=(out/'plugins/cubit_mesh_export.dll').resolve():raise RuntimeError('wrong loaded DLL')
  loaded=hashlib.sha256(actual.read_bytes()).hexdigest()
  if loaded!={digest!r}:raise RuntimeError('loaded DLL bytes differ')
+ if cubit.get_error_count()!=0:raise RuntimeError('unexpected startup errors')
  for text in ['reset','create brick x 1 y 1 z 1','volume 1 scheme map',
               'curve all interval 2','mesh volume 1','block 1 add hex all',
               'block 1 name "cubic_hex"']:
@@ -70,7 +75,18 @@ try:
  count=len(cubit.get_block_hexes(1))
  if not count:raise RuntimeError('empty input')
  command('export gmsh "'+(out/'hex-p3.msh').as_posix()+'" order 3 overwrite')
- result.update(passed=True,loaded_sha256=loaded,primary_elements=count)
+ command('reset')
+ command('import mesh "'+(out/'pyramid.e').as_posix()+'" no_geom')
+ for order in [1,2]:
+  command('export gmsh "'+(out/('pyramid-p'+str(order)+'.msh')).as_posix()+'" order '+str(order)+' overwrite')
+ refused=out/'pyramid-p3.msh'
+ before=cubit.get_error_count()
+ cubit.cmd('export gmsh "'+refused.as_posix()+'" order 3 overwrite')
+ after=cubit.get_error_count()
+ if after<=before or refused.exists():raise RuntimeError('order-3 pyramid was not refused without an artifact')
+ result.update(passed=True,loaded_sha256=loaded,primary_elements=count,
+               refusal={{'element':'pyramid','order':3,'error_delta':after-before,'artifact_exists':refused.exists()}},
+               expected_process_exit_code=after)
 except Exception:result['error']=traceback.format_exc()
 (out/'cubit-result.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
 '''
@@ -89,8 +105,23 @@ except Exception:result['error']=traceback.format_exc()
                                      stderr=subprocess.STDOUT, timeout=300, check=False)
         receipt = json.loads((out / "cubit-result.json").read_text(encoding="utf-8"))
         result.update(cubit=receipt, process_exit_code=process.returncode)
-        if process.returncode or receipt.get("passed") is not True:
+        # The deliberate failed Cubit command contributes to Cubit's batch exit
+        # code. Accept only the recorded final error count, after every positive
+        # command passed, and independently require the refusal diagnostic below.
+        if (receipt.get("passed") is not True
+                or not isinstance(receipt.get("expected_process_exit_code"), int)
+                or receipt["expected_process_exit_code"] <= 0
+                or process.returncode != receipt["expected_process_exit_code"]):
             raise RuntimeError("licensed exporter execution failed")
+        log_text = (out / "cubit.log").read_text(encoding="utf-8", errors="replace").lower()
+        if "pyramid order 3" not in log_text or "export aborted" not in log_text:
+            raise RuntimeError("unsupported pyramid diagnostic must name the element and order")
+        for order, element_type in [(1, 7), (2, 19)]:
+            path = out / f"pyramid-p{order}.msh"
+            inventory = summarize_gmsh_v42_ascii(path.read_text(encoding="utf-8"))
+            if inventory["element_type_counts"].get(str(element_type), 0) != 1:
+                raise RuntimeError(f"pyramid order {order} was substituted or lost")
+        result["pyramid_lower_orders"] = [1, 2]
         os.environ["CUBIT_GMSH_INSTALL_REPORT"] = str(report)
         quality = mesh_total_volume(out / "hex-p3.msh", quadrature="Gauss4")
         result["gmsh"] = quality
