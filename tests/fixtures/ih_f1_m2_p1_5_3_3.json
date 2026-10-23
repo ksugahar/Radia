@@ -1,0 +1,28 @@
+{
+  "schema": "radia.regression-lock.v1",
+  "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+  "conditions": {
+    "a_over_delta": 2,
+    "m": 2,
+    "p": 1,
+    "phasor": "exp(+i omega t), peak",
+    "sigma_S_per_m": 5000000.0,
+    "mu_H_per_m": 1.2566370614359173e-06,
+    "delta_m": 0.001,
+    "H0_A_per_m": 1000,
+    "route": "Complex AMS",
+    "gmres_tol": 1e-12,
+    "restart": 50,
+    "maxiter": 500,
+    "runtime_metadata": "measured coarse case on source6d9e8fd30; historical run04 has no per-level timings"
+  },
+  "runtime_s": 10.548357599996962,
+  "quantities": {
+    "power_W": {
+      "expected": 1.3177800106307637e-05,
+      "rtol": 1e-08,
+      "atol": 0,
+      "unit": "W"
+    }
+  }
+}
