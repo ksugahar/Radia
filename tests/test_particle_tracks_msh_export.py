@@ -135,7 +135,7 @@ def _beam_steps(msh_path):
                 tags = [int(lines[j + k]) for k in range(size)]
                 assert all(minimum <= tag <= maximum for tag in tags)
                 j += size
-                vals.extend(float(lines[j + k]) for k in range(size))
+                vals.extend(float(lines[j + k].split()[0]) for k in range(size))
                 j += size
             assert len(vals) == n and lines[j] == '$EndElementData'
             if name.startswith("beam"):
