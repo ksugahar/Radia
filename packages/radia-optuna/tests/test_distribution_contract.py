@@ -2,7 +2,7 @@
 
 Guards: Package version, declared MATLAB payload, oracle provenance and native
 distribution boundaries drifting from their declared contracts.
-Assumes: Source-checkout audit with existing upstream-generated fixtures and
+Assumes: Package source alone with existing upstream-generated fixtures and
 MATLAB sources; numerical execution and release acceptance are separate gates.
 """
 
@@ -23,7 +23,6 @@ import sys
 import pytest
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = PACKAGE_ROOT.parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT / "src"))
 
 
@@ -36,7 +35,7 @@ VERIFY_SPEC.loader.exec_module(verify_wheel)
 
 
 def test_api_coverage_is_reproducible_and_names_real_matlab_packages(monkeypatch, tmp_path):
-    path = REPO_ROOT / "tests/matlab/fixtures/generate_optuna50_api_coverage.py"
+    path = PACKAGE_ROOT / "tools/generate_optuna50_api_coverage.py"
     spec = importlib.util.spec_from_file_location("optuna_coverage_audit", path)
     assert spec is not None and spec.loader is not None
     generator = importlib.util.module_from_spec(spec)
@@ -63,7 +62,7 @@ def test_api_coverage_is_reproducible_and_names_real_matlab_packages(monkeypatch
         parts = name.split(".")
         if entry["kind"].startswith("class-"):
             parts = parts[:-1]
-        source = REPO_ROOT / "packages/radia-optuna/matlab"
+        source = PACKAGE_ROOT / "matlab"
         for package in parts[:-1]:
             source /= "+" + package
         assert (source / (parts[-1] + ".m")).is_file(), name
@@ -82,17 +81,6 @@ def test_api_coverage_is_reproducible_and_names_real_matlab_packages(monkeypatch
     assert "step" in members["Legacy"]
 
 
-def test_test_manifest_matches_its_generator():
-    path = REPO_ROOT / "tests/matlab/fixtures/generate_optuna_test_manifest.py"
-    spec = importlib.util.spec_from_file_location("optuna_test_manifest_audit", path)
-    assert spec is not None and spec.loader is not None
-    generator = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(generator)
-    expected = json.dumps(generator.build_manifest(), indent=2, sort_keys=True) + "\n"
-    actual = path.with_name("optuna_test_manifest.json").read_bytes().replace(b"\r\n", b"\n")
-    assert actual == expected.encode()
-
-
 def test_constructor_defaults_are_audited_against_the_pinned_oracle():
     """Every upstream constructor default is compared, or declared, or open.
 
@@ -103,7 +91,7 @@ def test_constructor_defaults_are_audited_against_the_pinned_oracle():
     constant_liar from False to True, and only the second had a named test.
     """
     oracle = json.loads(
-        (REPO_ROOT / "tests/matlab/fixtures/optuna50_oracle.json").read_text(
+        (PACKAGE_ROOT / "oracles/optuna50_oracle.json").read_text(
             encoding="utf-8"
         )
     )
@@ -117,7 +105,7 @@ def test_constructor_defaults_are_audited_against_the_pinned_oracle():
     assert record["parameter_count"] > 0
 
     coverage = json.loads(
-        (REPO_ROOT / "packages/radia-optuna/matlab/optuna50_api_coverage.json").read_text(encoding="utf-8")
+        (PACKAGE_ROOT / "matlab/optuna50_api_coverage.json").read_text(encoding="utf-8")
     )
     audit = coverage["constructor_default_audit"]
 
@@ -186,7 +174,7 @@ def test_only_declared_adapters_call_other_radia_matlab_namespaces():
             encoding="utf-8"
         )
     )
-    source = REPO_ROOT / "packages/radia-optuna/matlab"
+    source = PACKAGE_ROOT / "matlab"
     observed: set[str] = set()
     pattern = re.compile(r"\bradia\.(?!optuna\b)")
     for path in (source / "+radia" / "+optuna").rglob("*.m"):
@@ -220,10 +208,6 @@ def test_staging_refuses_a_partial_native_distribution():
 
 
 def test_focused_optuna_build_uses_mexcuda_without_solver_runtime():
-    build = (REPO_ROOT / "Build.ps1").read_text(encoding="utf-8")
-    optuna_route = build[build.index("if ($OptunaMexOnly) {"):build.index("# Paths")]
-    assert "buildOptunaMex" in optuna_route
-    assert "return" in optuna_route
     compiler = (PACKAGE_ROOT / "buildOptunaMex.m").read_text(encoding="utf-8")
     assert "mexcuda(" in compiler
     assert "optuna_cuda.cu" in compiler
@@ -258,7 +242,6 @@ def test_focused_optuna_build_uses_mexcuda_without_solver_runtime():
     assert "TaskManager" not in native
     assert "ngsolve" not in native.lower()
     assert "RADIA_OPTUNA_MEX_ONLY" not in native
-    assert "radia_add_optuna_mex" not in (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows CMD path-resolution contract")

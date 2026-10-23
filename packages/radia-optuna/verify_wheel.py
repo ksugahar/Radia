@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -112,6 +113,13 @@ def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
     payloads[str(MATLAB_PREFIX / "OPTUNA_SIMULINK_LAB.md")] = (
         PACKAGE_ROOT / "OPTUNA_SIMULINK_LAB.md"
     )
+    evidence = json.loads(
+        (PACKAGE_ROOT / "src/radia_optuna/evidence_manifest.json").read_text(encoding="utf-8")
+    )
+    for record in evidence["files"].values():
+        relative = PurePosixPath(record["path"])
+        if relative.parts[0] == "oracles":
+            payloads[str(PACKAGE_PREFIX / relative)] = PACKAGE_ROOT / relative
     return payloads
 
 
@@ -122,6 +130,39 @@ def _upstream_dependency_errors(source_project):
     if oracle != ["optuna==5.0.0"]:
         return ["the package upstream extra must pin optuna==5.0.0"]
     return []
+
+
+def _evidence_errors(archive, names, source_manifest):
+    """Verify installed evidence without importing any oracle producer."""
+    member = str(PACKAGE_PREFIX / source_manifest["compatibility_evidence"])
+    if member not in names:
+        return ["missing compatibility evidence manifest"]
+    evidence = json.loads(archive.read(member))
+    errors = []
+    if (evidence.get("schema") != "radia-optuna.compatibility-evidence.v1"
+            or evidence.get("version") != source_manifest["version"]
+            or evidence.get("oracle_version") != source_manifest["oracle_version"]
+            or evidence.get("hash_basis") != "utf8-lf-bytes"):
+        errors.append("invalid compatibility evidence identity/hash basis")
+    expected_oracles = set()
+    for key, record in evidence.get("files", {}).items():
+        path = PurePosixPath(record["path"])
+        if (len(path.parts) != 2 or path.parts[0] not in {"oracles", "matlab"}
+                or path.suffix != ".json" or ".." in path.parts
+                or "\\" in str(path) or ":" in str(path)):
+            errors.append(f"unsafe evidence path for {key}: {path}")
+            continue
+        entry = str(PACKAGE_PREFIX / path)
+        if path.parts[0] == "oracles":
+            expected_oracles.add(entry)
+        if entry not in names:
+            errors.append(f"missing evidence payload: {entry}")
+        elif hashlib.sha256(archive.read(entry).replace(b"\r\n", b"\n")).hexdigest() != record["sha256"]:
+            errors.append(f"evidence hash mismatch: {entry}")
+    actual_oracles = {name for name in names if name.startswith(f"{PACKAGE_PREFIX}/oracles/")}
+    if actual_oracles != expected_oracles:
+        errors.append("unexpected oracle payload inventory (producers are source-only)")
+    return errors
 
 
 def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]:
@@ -148,6 +189,7 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
         source_payloads = _source_payloads(source_manifest)
+        errors.extend(_evidence_errors(archive, names, source_manifest))
         metadata = _metadata(archive, names)
         wheel_version = metadata.get("Version")
         if wheel_version != source_version:
@@ -347,6 +389,7 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
         "simulink_standalone": source_manifest["simulink_standalone"],
         "simulink_entry_count": len(simulink_entries),
         "radia_integration_adapter_count": len(adapters),
+        "compatibility_evidence_verified": True,
         "source_fidelity_verified": True,
         "source_fidelity_mode": (
             "release-candidate" if release_candidate else "same-workspace-strict"

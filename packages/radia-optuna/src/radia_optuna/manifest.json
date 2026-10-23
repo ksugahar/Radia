@@ -31,5 +31,6 @@
     "+radia/+optuna/LTspiceRunner.m",
     "+radia/+optuna/SheetMetalRunner.m",
     "+radia/+optuna/+internal/runLTspiceTrial.m"
-  ]
+  ],
+  "compatibility_evidence": "evidence_manifest.json"
 }

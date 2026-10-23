@@ -229,7 +229,7 @@ def test_radia_matlab_tools_do_not_shadow_verified_upstream_optuna_mcp_tools():
 
     root = Path(__file__).resolve().parents[2]
     fixture = json.loads(
-        (root / "tests" / "matlab" / "fixtures" /
+        (root / "packages" / "radia-optuna" / "oracles" /
          "optuna50_mcp_oracle.json").read_text(encoding="utf-8")
     )
     upstream_tools = set(fixture["tools"])

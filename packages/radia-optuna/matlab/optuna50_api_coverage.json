@@ -8184,9 +8184,9 @@
   "surface_entry_count": 812,
   "surface_missing_count": 0,
   "surface_present_count": 812,
-  "upstream_inventory": "tests/matlab/fixtures/optuna50_public_api.json",
+  "upstream_inventory": "packages/radia-optuna/oracles/optuna50_public_api.json",
   "upstream_inventory_sha256": "81CBD4C33ACAC95063994CC8DE8B5BBEF788C40ED23F8ECEAE690C9F0D14B602",
-  "upstream_oracle": "tests/matlab/fixtures/optuna50_oracle.json",
+  "upstream_oracle": "packages/radia-optuna/oracles/optuna50_oracle.json",
   "upstream_oracle_sha256": "89BB7A0F907EF7158213DECA5D2E2FEB7810B95191C5D96BCB6BFED456183264",
   "upstream_version": "5.0.0"
 }
