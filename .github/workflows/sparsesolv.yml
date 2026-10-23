@@ -284,6 +284,7 @@ on:
       - 'tests/analytical_formulas/__init__.py'
       - 'validation_test/panels/__init__.py'
       - '!**/*.md'
+      - 'tools/regression_lock.py'
   push:
     branches: [main]
     paths:
@@ -567,6 +568,7 @@ on:
       - 'tests/analytical_formulas/__init__.py'
       - 'validation_test/panels/__init__.py'
       - '!**/*.md'
+      - 'tools/regression_lock.py'
   schedule:
     - cron: '17 16 * * *'
   workflow_dispatch:

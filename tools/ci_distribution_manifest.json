@@ -2242,6 +2242,18 @@
         "detail": "Ancestor package initializer executed by the required CPU numerical import closure; changing it can alter solver validation state."
       },
       "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/regression_lock.py",
+      "owners": [
+        "repo",
+        "radia"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "solver-numerics surrogate tests import the regression-lock helper"
+      },
+      "selection": "all_owners"
     }
   ],
   "shared_include_closures": [
@@ -3777,7 +3789,8 @@
             "tests/__init__.py",
             "tests/analytical_formulas/__init__.py",
             "validation_test/panels/__init__.py",
-            "!**/*.md"
+            "!**/*.md",
+            "tools/regression_lock.py"
           ]
         },
         "push": {
@@ -4064,7 +4077,8 @@
             "tests/__init__.py",
             "tests/analytical_formulas/__init__.py",
             "validation_test/panels/__init__.py",
-            "!**/*.md"
+            "!**/*.md",
+            "tools/regression_lock.py"
           ]
         },
         "schedule": [
