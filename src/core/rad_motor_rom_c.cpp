@@ -17,12 +17,12 @@ namespace {
 constexpr double kTwoPi = 6.283185307179586476925286766559;
 thread_local std::string g_last_error;
 
-bool finite(double value) { return std::isfinite(value) != 0; }
+bool finite_value(double value) { return std::isfinite(value) != 0; }
 
 bool all_finite(const double* values, size_t count) {
     if (values == nullptr) return false;
     for (size_t i = 0; i < count; ++i)
-        if (!finite(values[i])) return false;
+        if (!finite_value(values[i])) return false;
     return true;
 }
 
@@ -128,7 +128,7 @@ bool solve_dense(std::vector<double> matrix, std::vector<double> rhs,
                 pivot_abs = candidate;
             }
         }
-        if (!(pivot_abs > epsilon) || !finite(pivot_abs)) return false;
+        if (!(pivot_abs > epsilon) || !finite_value(pivot_abs)) return false;
         if (pivot != k) {
             for (size_t j = k; j < n; ++j)
                 std::swap(matrix[k * n + j], matrix[pivot * n + j]);
@@ -198,7 +198,7 @@ struct RadMotorROMHandle {
         for (size_t i = 0; i < n; ++i) {
             const double fi = 1.0 + temperature_coefficient[i] *
                 (temperature - reference_temperature);
-            if (!finite(fi) || fi <= 0.0)
+            if (!finite_value(fi) || fi <= 0.0)
                 throw std::runtime_error(
                     "temperature-dependent resistance scale must remain positive");
             scale[i] = std::sqrt(fi);
@@ -243,13 +243,13 @@ RadMotorROMHandle* rad_motor_rom_create(const RadMotorROMModelData* model) {
     if (na < 3 || na % 2 == 0 ||
         model->n_phase == 0 || model->n_generalized < model->n_phase ||
         n > std::numeric_limits<size_t>::max() / n ||
-        !finite(model->period_rad) || model->period_rad <= 0.0 ||
-        !finite(model->angle_origin_rad) || !finite(model->skew_span_rad) ||
-        !finite(model->inertia_kg_m2) || model->inertia_kg_m2 <= 0.0 ||
-        !finite(model->viscous_friction_Nm_s) || model->viscous_friction_Nm_s < 0.0 ||
-        !finite(model->reference_temperature_K) ||
-        !finite(model->thermal_capacity_J_per_K) || model->thermal_capacity_J_per_K < 0.0 ||
-        !finite(model->thermal_conductance_W_per_K) ||
+        !finite_value(model->period_rad) || model->period_rad <= 0.0 ||
+        !finite_value(model->angle_origin_rad) || !finite_value(model->skew_span_rad) ||
+        !finite_value(model->inertia_kg_m2) || model->inertia_kg_m2 <= 0.0 ||
+        !finite_value(model->viscous_friction_Nm_s) || model->viscous_friction_Nm_s < 0.0 ||
+        !finite_value(model->reference_temperature_K) ||
+        !finite_value(model->thermal_capacity_J_per_K) || model->thermal_capacity_J_per_K < 0.0 ||
+        !finite_value(model->thermal_conductance_W_per_K) ||
         model->thermal_conductance_W_per_K < 0.0 ||
         model->inductance_H == nullptr || model->resistance_ohm == nullptr ||
         model->pm_flux_linkage_Wb == nullptr) {
@@ -344,8 +344,8 @@ int rad_motor_rom_step(RadMotorROMHandle* h, RadMotorROMState* state,
         input->abi_version != RAD_MOTOR_ROM_ABI_VERSION ||
         output->abi_version != RAD_MOTOR_ROM_ABI_VERSION ||
         state->generalized_currents_A == nullptr || input->phase_voltages_V == nullptr ||
-        !finite(dt) || dt <= 0.0 || max_iterations == 0 ||
-        !finite(tolerance) || tolerance <= 0.0) {
+        !finite_value(dt) || dt <= 0.0 || max_iterations == 0 ||
+        !finite_value(tolerance) || tolerance <= 0.0) {
         if (h != nullptr) h->set_error("invalid step argument or ABI version");
         else g_last_error = "null motor ROM handle";
         return RAD_MOTOR_ROM_INVALID_ARGUMENT;
@@ -358,9 +358,9 @@ int rad_motor_rom_step(RadMotorROMHandle* h, RadMotorROMState* state,
         const double temperature0 = state->temperature_K;
         const double ambient = input->has_ambient_temperature
             ? input->ambient_temperature_K : temperature0;
-        if (!finite(state->time_s) || !finite(theta0) || !finite(omega0) ||
-            !finite(temperature0) || !finite(state->hysteresis_stored_energy_J) ||
-            !finite(input->load_torque_Nm) || !finite(ambient) ||
+        if (!finite_value(state->time_s) || !finite_value(theta0) || !finite_value(omega0) ||
+            !finite_value(temperature0) || !finite_value(state->hysteresis_stored_energy_J) ||
+            !finite_value(input->load_torque_Nm) || !finite_value(ambient) ||
             !all_finite(state->generalized_currents_A, n) ||
             !all_finite(input->phase_voltages_V, h->np) ||
             (state->hysteresis_flux_linkage_Wb != nullptr &&
@@ -408,8 +408,8 @@ int rad_motor_rom_step(RadMotorROMHandle* h, RadMotorROMState* state,
                     hflux1.data(), &hysteresis_torque, &hysteresis_energy1,
                     &hysteresis_dissipation);
                 if (status != 0 || !all_finite(hflux1.data(), n) ||
-                    !finite(hysteresis_torque) || !finite(hysteresis_energy1) ||
-                    !finite(hysteresis_dissipation) || hysteresis_dissipation < 0.0) {
+                    !finite_value(hysteresis_torque) || !finite_value(hysteresis_energy1) ||
+                    !finite_value(hysteresis_dissipation) || hysteresis_dissipation < 0.0) {
                     h->set_error("hysteresis trial callback failed or returned invalid data");
                     return RAD_MOTOR_ROM_HYSTERESIS_ERROR;
                 }
@@ -475,8 +475,8 @@ int rad_motor_rom_step(RadMotorROMHandle* h, RadMotorROMState* state,
                 hflux1.data(), &hysteresis_torque, &hysteresis_energy1,
                 &hysteresis_dissipation);
             if (status != 0 || !all_finite(hflux1.data(), n) ||
-                !finite(hysteresis_torque) || !finite(hysteresis_energy1) ||
-                !finite(hysteresis_dissipation) || hysteresis_dissipation < 0.0) {
+                !finite_value(hysteresis_torque) || !finite_value(hysteresis_energy1) ||
+                !finite_value(hysteresis_dissipation) || hysteresis_dissipation < 0.0) {
                 h->set_error("final hysteresis trial callback failed or returned invalid data");
                 return RAD_MOTOR_ROM_HYSTERESIS_ERROR;
             }

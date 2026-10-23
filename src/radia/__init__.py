@@ -77,6 +77,12 @@ if sys.platform == 'win32':
             os.environ['PATH'] = _d + os.pathsep + os.environ.get('PATH', '')
 
     del _dirs_to_add, _mkl_bin, _mklroot_bin
+else:
+    # Other platforms: _radia_pybind links NGSolve's shared libraries, which
+    # need the NGSolve runtime (and its OpenBLAS) loaded by `import ngsolve`.
+    # The Windows branch above also imports ngsolve before _radia_pybind.
+    import ngsolve as _ngsolve_mod  # noqa: F401
+    del _ngsolve_mod
 
 # High-order mesh curving is handled by the Cubit C++ plugin (ACIS kernel).
 # Netgen fork (SetGeomInfo) is no longer required.

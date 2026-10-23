@@ -1,6 +1,8 @@
 # Radia Build Guide
 
-Radia's production native build targets Windows x64 and Python 3.12. The build
+Radia's production native build targets Windows x64 and Python 3.12.
+The Linux HPC source-build path uses Intel LLVM; see
+[Linux HPC builds](docs/compilation/linux-hpc.md) for setup and verification status. The Windows build
 uses MSVC, the exact NGSolve/Netgen versions pinned in `pyproject.toml`, and the
 Intel MKL files installed into the selected Python environment by `mkl-devel`.
 
@@ -11,9 +13,9 @@ build inputs into that environment:
 
 ```powershell
 python -m pip install --upgrade pip
-python -m pip install ngsolve==6.2.2607 netgen-mesher==6.2.2607 `
-  mkl-devel pybind11==3.0.2 ninja cmake build wheel
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build.ps1 -Rebuild -Test
+python -m pip install ngsolve==6.2.2608 netgen-mesher==6.2.2608 `
+  "mkl-devel>=2026,<2027" pybind11==3.0.2 ninja cmake build wheel
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build.ps1 -Rebuild -Test -BuildJobs 1
 ```
 
 `Build.ps1` uses the `python` selected on `PATH`. Do not point CMake at one
@@ -27,11 +29,11 @@ Python installation while importing the result from another.
 | `.\Build.ps1 -Rebuild` | Clean configure and build |
 | `.\Build.ps1 -RadiaOnly` | Main `_radia_pybind` extension only |
 | `.\Build.ps1 -AxiFemOnly` | Fast axifem C++ iteration |
-| `.\Build.ps1 -MatlabMexOnly` | Standalone Radia MEX gateway and native S-Function targets |
+| `.\Build.ps1 -CudaMexOnly` | Explicit CUDA MEX bridge (independent radia-simulink toolchain) |
 | `.\Build.ps1 -OptunaMexOnly` | Lightweight standalone `optuna_mex` target |
 | `.\Build.ps1 -Test` | Build, source import check, and focused pytest |
 
-The four `*Only` switches are mutually exclusive. `-InstallToSitePackages` is
+The listed `*Only` switches select separate build paths. `-InstallToSitePackages` is
 for an intentional local installation test; editable development normally
 loads the extensions from this checkout.
 
@@ -41,7 +43,7 @@ discovers it through `tools/find_cubit.ps1`. The independent
 
 ## Toolchain Contract
 
-- Visual Studio Build Tools with the x64 MSVC toolchain are required.
+- Visual Studio Build Tools 2022 / MSVC 14.44 with the x64 toolchain are required.
 - Python 3.12 is the supported wheel ABI.
 - NGSolve and Netgen must match the exact pins in `pyproject.toml`.
 - `pybind11==3.0.2` is the checked adapter toolchain version.
@@ -52,7 +54,8 @@ The selected Python environment's `Library` directory is the first MKL search
 location. An explicitly set `MKLROOT` is a fallback for a controlled external
 installation. There is no hard-coded oneAPI installation path.
 
-NGSolve 6.2.2607 declares `ngsolve-openblas==0.3.33` on Windows/Linux.
+NGSolve owns its OpenBLAS dependency on Windows/Linux; resolve its version
+from the pinned NGSolve package metadata.
 Radia's HACApK and dense native kernels use MKL; direct FE solves explicitly
 use NGSolve SparseCholesky, with no PARDISO fallback. These are separate native
 dependencies; Radia does not replace or bundle the user's NumPy implementation.
