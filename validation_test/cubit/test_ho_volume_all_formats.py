@@ -1,8 +1,9 @@
 """
-Verify high-order mesh export quality using GMSH API volume computation.
+Verify high-order post-processing export quality using GMSH API volume computation.
+Solver meshes remain checked .vol; exported .msh is never solver input.
 
 Tests all element types (TET, HEX, WEDGE, PYRAMID) across all export formats
-(GMSH v2.2, GMSH v4.1, Nastran BDF, VTK) at order 1 and 2.
+(Gmsh MSH4.2 post-processing, Nastran BDF, VTK) at order 1 and 2.
 
 Geometries:
   - Sphere (TET):     r=0.05 m, tetmesh
@@ -43,7 +44,7 @@ if _plugin_dir and os.path.isdir(_plugin_dir):
     os.environ['CUBIT_PLUGIN_DIR'] = _plugin_dir
 
 import cubit
-cubit.init(['cubit', '-nojournal', '-batch',
+cubit.init(['cubit', '-nojournal', '-batch', '-nographics',
             '-commandplugindir', _plugin_dir or ''])
 
 # --- Output directory ---
@@ -144,7 +145,7 @@ def gmsh_api_volume(filename):
 # Export formats
 # ================================================================
 FORMATS = [
-    ("GMSH_v4.1", ".msh", 'export gmsh "{f}" order {o} dimension 3 overwrite'),
+    ("GMSH_MSH4.2", ".msh", 'export gmsh "{f}" order {o} dimension 3 overwrite'),
     ("Nastran",   ".bdf", 'export nastran_bdf "{f}" order {o} dimension 3 overwrite'),
     ("VTK",       ".vtk", 'export vtk "{f}" order {o} dimension 3 overwrite'),
 ]
