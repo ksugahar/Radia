@@ -52,7 +52,7 @@ Output
 ------
 JSON summary on stdout (last line) with peak temperature, probe
 history and timings. The final spatial temperature and heat-flux fields are
-written to the requested GMSH ``.msh v4.1`` artifact.
+written to the requested GMSH ``.msh v4.2`` artifact.
 """
 
 from __future__ import annotations

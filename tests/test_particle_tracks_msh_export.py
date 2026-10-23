@@ -126,10 +126,21 @@ def _beam_steps(msh_path):
             name = lines[i + 2].strip('"')
             step = int(lines[i + 6])
             n = int(lines[i + 8])
-            vals = [float(lines[i + 9 + k].split()[1]) for k in range(n)]
+            nblocks, count, minimum, maximum = map(int, lines[i + 9].split())
+            assert count == n
+            j = i + 10
+            vals = []
+            for _ in range(nblocks):
+                size = int(lines[j]); j += 1
+                tags = [int(lines[j + k]) for k in range(size)]
+                assert all(minimum <= tag <= maximum for tag in tags)
+                j += size
+                vals.extend(float(lines[j + k]) for k in range(size))
+                j += size
+            assert len(vals) == n and lines[j] == '$EndElementData'
             if name.startswith("beam"):
                 blocks.append((step, vals))
-            i += 9 + n
+            i = j + 1
         else:
             i += 1
     blocks.sort()

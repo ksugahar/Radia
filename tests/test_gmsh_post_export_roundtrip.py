@@ -2,7 +2,7 @@
 GMSH .msh output round-trip validation (gmsh as an OUTPUT tool).
 
 GmshPostExport (src/radia/gmsh_post_export.py) writes NGSolve mesh + field data
-to GMSH .msh v4.1 with per-material physical groups and high-order elements.
+to GMSH .msh v4.2 with per-material physical groups and high-order elements.
 These tests forge it as an *output* tool by re-opening every file we write with
 the GMSH API itself and asserting the result is valid: node/element counts,
 physical groups (by name), element TYPE codes (incl. high-order), and that the
