@@ -115,7 +115,8 @@ public:
             (int)coord_z.size() != ndof_h1_)
             throw std::runtime_error("HypreBasedAMS: coordinate size mismatch with H1 DOFs");
         RequireLowestOrderGradient();
-        RequireFreeAuxiliaryVertices();
+        // beta_zero omits the G correction and never builds its nodal hierarchy.
+        if (!beta_zero_) RequireFreeAuxiliaryVertices();
 
         Setup(coord_x, coord_y, coord_z);
     }
@@ -152,8 +153,8 @@ public:
     /// Tangential Dirichlet edges constrain both endpoint vertices of the
     /// auxiliary H1_0 space. Free edge endpoints alone are not free vertices:
     /// a thin mesh can have interior diagonals but no interior vertex at all.
-    /// Reject that unsupported auxiliary space before either AMG hierarchy is
-    /// built. This also covers ComplexHypreBasedAMS and BDDC's wirebasket AMS,
+    /// Reject that unsupported gradient space before its hierarchy is built.
+    /// The beta_zero path omits that correction and does not require it. This also covers ComplexHypreBasedAMS and BDDC's wirebasket AMS,
     /// which both construct this real auxiliary operator.
     void RequireFreeAuxiliaryVertices() const {
         std::vector<unsigned char> touching_free(ndof_h1_, 0);
