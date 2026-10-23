@@ -32,9 +32,9 @@ import numpy as np
 
 
 class GMSHCenterlineReader:
-    """Read 1D line elements from a GMSH MSH v4.1 ASCII centerline mesh.
+    """Read 1D line elements from a GMSH MSH v4.2 ASCII centerline mesh.
 
-    MSH v4.1 is the repository-wide standard; any other version (v2.2
+    MSH v4.2 is the repository-wide standard; any other version (v2.2
     included) raises with a re-export message instead of misparsing.
     """
 
@@ -59,7 +59,7 @@ class GMSHCenterlineReader:
         if not format_rows:
             raise ValueError(
                 f"{self.filename}: $MeshFormat section missing; "
-                "re-export the mesh as ASCII MSH v4.1")
+                "re-export the mesh as ASCII MSH v4.2")
         self._check_format(lines, format_rows[0])
 
         i = 0
@@ -78,16 +78,18 @@ class GMSHCenterlineReader:
         return self.nodes, self.edge_elements
 
     def _check_format(self, lines, idx):
+        if idx >= len(lines):
+            raise ValueError(f'{self.filename}: truncated $MeshFormat')
         tokens = lines[idx].split()
         version = tokens[0] if tokens else "?"
-        if version != "4.1":
+        if version != "4.2":
             raise ValueError(
                 f"{self.filename}: MSH v{version} is not supported; the "
-                f"repository standard is v4.1 -- re-export the mesh")
-        if len(tokens) > 1 and tokens[1] != "0":
+                f"repository standard is v4.2 -- re-export the mesh")
+        if len(tokens) != 3 or tokens[1:] != ['0', '8']:
             raise ValueError(
-                f"{self.filename}: binary MSH is not supported; "
-                f"re-export as ASCII")
+                f"{self.filename}: expected ASCII MSH 4.2 with data size 8; "
+                f"got {' '.join(tokens)!r}")
 
     def _read_physical_names(self, lines, start_idx):
         num_names = int(lines[start_idx].strip())
@@ -104,7 +106,7 @@ class GMSHCenterlineReader:
         return idx
 
     def _read_nodes(self, lines, start_idx):
-        # v4.1: numBlocks numNodes minTag maxTag, then per block
+        # v4.2: numBlocks numNodes minTag maxTag, then per block
         # (dim tag parametric numInBlock) + tag lines + coordinate lines.
         num_blocks = int(lines[start_idx].split()[0])
         idx = start_idx + 1
@@ -127,7 +129,7 @@ class GMSHCenterlineReader:
         return idx
 
     def _read_elements(self, lines, start_idx):
-        # v4.1: numBlocks numElements minTag maxTag, then per block
+        # v4.2: numBlocks numElements minTag maxTag, then per block
         # (dim tag elementType numInBlock) + "tag n1 n2 ..." lines.
         num_blocks = int(lines[start_idx].split()[0])
         idx = start_idx + 1
@@ -182,7 +184,7 @@ class GMSHCenterlineReader:
 
 
 def read_gmsh_centerline(filename, unit_scale=1.0):
-    """Read a GMSH MSH v4.1 ASCII centerline mesh, return ``(nodes, edges)``."""
+    """Read a GMSH MSH v4.2 ASCII centerline mesh, return ``(nodes, edges)``."""
     reader = GMSHCenterlineReader(filename, unit_scale=unit_scale)
     return reader.read()
 
@@ -288,6 +290,12 @@ def _load_gmsh(filename, unit_scale=1.0):
         nodes: (N, 3) array of vertex positions
         faces: list of tuples (0-indexed vertex indices per face)
     """
+    # Derived conductor surfaces use the same strict format as centerlines.
+    # Volume solver meshes remain checked .vol inputs.
+    with open(filename, encoding='utf-8') as source:
+        if source.readline().strip() != '$MeshFormat':
+            raise ValueError(f'{filename}: $MeshFormat header missing')
+        GMSHCenterlineReader(filename)._check_format([source.readline()], 0)
     import gmsh
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)

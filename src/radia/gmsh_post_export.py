@@ -1,7 +1,7 @@
 """
 gmsh_post_export.py
 
-GMSH .msh v4.1 post-processing export with per-material physical groups.
+GMSH .msh v4.2 post-processing export with per-material physical groups.
 
 GMSH natively supports high-order elements (Tri6, Quad9, Tet10, Hex20)
 with correct interpolation, unlike VTK which approximates.
@@ -55,11 +55,11 @@ def _point3(point):
 
 
 # ============================================================
-# Unified GMSH v4.1 payload model (Phase E.1, 2026-04-15)
+# Unified GMSH v4.2 payload model (Phase E.1, 2026-04-15)
 # ============================================================
 # Both the single-mesh writer (GmshPostExport.write) and the multi-mesh
-# writer (write_combined_msh_v41) build PayloadV41 instances and emit
-# through _emit_v41_msh. Every on-disk field of the .msh format lives
+# writer (write_combined_msh_v42) build PayloadV42 instances and emit
+# through _emit_v42_msh. Every on-disk field of the .msh format lives
 # here once, so format changes only need touching one place.
 
 
@@ -109,7 +109,7 @@ class DataField:
 
 
 @dataclass
-class PayloadV41:
+class PayloadV42:
     groups: List[PhysicalGroup] = field(default_factory=list)
     entities: List[Entity] = field(default_factory=list)
     node_blocks: List[NodeBlock] = field(default_factory=list)
@@ -117,9 +117,9 @@ class PayloadV41:
     data_fields: List[DataField] = field(default_factory=list)
 
 
-def _emit_v41_msh(f, payload: PayloadV41) -> None:
-    """Single v4.1 emitter. Writes a full .msh from a PayloadV41."""
-    f.write('$MeshFormat\n4.1 0 8\n$EndMeshFormat\n')
+def _emit_v42_msh(f, payload: PayloadV42) -> None:
+    """Single v4.2 emitter. Writes a full .msh from a PayloadV42."""
+    f.write('$MeshFormat\n4.2 0 8\n$EndMeshFormat\n')
 
     # $PhysicalNames
     if payload.groups:
@@ -144,8 +144,10 @@ def _emit_v41_msh(f, payload: PayloadV41) -> None:
                       f'{xmax:.15e}', f'{ymax:.15e}', f'{zmax:.15e}']
         parts.append(str(len(e.physical_tags)))
         parts += [str(t) for t in e.physical_tags]
-        parts.append(str(len(e.bounding_tags)))
-        parts += [str(t) for t in e.bounding_tags]
+        if e.dim:
+            parts.append(str(len(e.bounding_tags)))
+            parts += [str(t) for t in e.bounding_tags]
+            parts.append('0')  # MSH 4.2: no embedded entities
         f.write(' '.join(parts) + '\n')
     f.write('$EndEntities\n')
 
@@ -155,7 +157,8 @@ def _emit_v41_msh(f, payload: PayloadV41) -> None:
         f.write('$Nodes\n0 0 0 0\n$EndNodes\n')
     else:
         f.write(f'$Nodes\n{len(payload.node_blocks)} {total_nodes} '
-                f'1 {total_nodes}\n')
+                f'{min(b.start_id for b in payload.node_blocks if b.coords)} '
+                f'{max(b.start_id + len(b.coords) - 1 for b in payload.node_blocks if b.coords)}\n')
         for b in payload.node_blocks:
             f.write(f'{b.entity_dim} {b.entity_tag} 0 {len(b.coords)}\n')
             for i in range(len(b.coords)):
@@ -193,13 +196,26 @@ def _emit_data_section(f, df: DataField) -> None:
     f.write(f'1\n{df.time:.15e}\n')
     f.write(f'3\n{df.timestep}\n{df.ncomp}\n')
     f.write(f'{len(df.items)}\n')
+    tags = [int(tag) for tag, _ in df.items]
+    if any(tag <= 0 for tag in tags) or len(set(tags)) != len(tags):
+        raise ValueError('field tags must be positive and unique')
+    if df.ncomp not in (1, 3, 9):
+        raise ValueError(f'unsupported Gmsh component count: {df.ncomp}')
+    if not tags:
+        f.write('0 0 0 0\n')
+    else:
+        f.write(f'1 {len(tags)} {min(tags)} {max(tags)}\n{len(tags)}\n')
+        for tag in tags:
+            f.write(f'{tag}\n')
     if df.ncomp == 1:
         for tag, val in df.items:
-            f.write(f'{tag} {float(val):.15e}\n')
+            f.write(f'{float(val):.15e}\n')
     else:
         for tag, vec in df.items:
+            if len(vec) != df.ncomp:
+                raise ValueError(f'field {df.name!r}: expected {df.ncomp} components')
             vals = ' '.join(f'{float(c):.15e}' for c in vec)
-            f.write(f'{tag} {vals}\n')
+            f.write(f'{vals}\n')
     f.write(f'{end_kind}\n')
 
 
@@ -406,7 +422,7 @@ _VOL_TYPES = {4, 5, 6, 7, 11, 12, 17, 18, 19,
 # ============================================================
 
 class GmshPostExport:
-    """Export NGSolve mesh and field data to GMSH .msh v4.1 format.
+    """Export NGSolve mesh and field data to GMSH .msh v4.2 format.
 
     Supports per-material physical groups for field switching in GMSH GUI.
 
@@ -464,13 +480,13 @@ class GmshPostExport:
         self._fields.append((name, 3, arr, cell_data, material))
 
     def write(self, filename, time=0.0, timestep=0):
-        """Write mesh + field data to GMSH .msh v4.1 format.
+        """Write mesh + field data to GMSH .msh v4.2 format.
 
-        v4.1 is the only supported format (lab-wide standard, 2026-04).
+        v4.2 is the only supported format (repository standard).
         netgen I/O is always via .vol; .msh v2.2 is no longer emitted.
 
         Phase E.1 (2026-04-15): now goes through the unified
-        _emit_v41_msh emitter via a PayloadV41 built here.
+        _emit_v42_msh emitter via a PayloadV42 built here.
         """
         if not filename.endswith('.msh'):
             filename += '.msh'
@@ -496,7 +512,7 @@ class GmshPostExport:
             dim, mat_bboxes, time, timestep)
 
         with open(filename, 'w', encoding='utf-8') as f:
-            _emit_v41_msh(f, payload)
+            _emit_v42_msh(f, payload)
 
         # Companion launch artifacts:
         #   case.geo      -- user-facing Gmsh launch recipe
@@ -516,8 +532,8 @@ class GmshPostExport:
 
     def _build_single_mesh_payload(self, nodes, mat_names, elem_data,
                                      mat_elem_map, n_elems, dim, mat_bboxes,
-                                     time, timestep) -> PayloadV41:
-        """Translate single-mesh state into a PayloadV41.
+                                     time, timestep) -> PayloadV42:
+        """Translate single-mesh state into a PayloadV42.
 
         One PhysicalGroup + one Entity per material. Nodes share a
         single block (entity tag = 1, covering the whole mesh). Elements
@@ -626,7 +642,7 @@ class GmshPostExport:
                     kind='$NodeData', name=name, ncomp=ncomp,
                     items=items, time=time, timestep=timestep))
 
-        return PayloadV41(
+        return PayloadV42(
             groups=groups, entities=entities,
             node_blocks=node_blocks, element_blocks=element_blocks,
             data_fields=data_fields)
@@ -674,7 +690,7 @@ class GmshPostExport:
 def export_element_activation_animation(
         mesh, active_steps, filename, *, field_name="Iron shape",
         times=None, require_monotone=True):
-    """Write a Gmsh v4.1 time-series view of element activation.
+    """Write a Gmsh v4.2 time-series view of element activation.
 
     The design-superset mesh is written once and every accepted topology is a
     separate ``ElementData`` time step.  Only active volume elements receive
@@ -756,7 +772,7 @@ def export_element_activation_animation(
     parent = os.path.dirname(os.path.abspath(filename))
     os.makedirs(parent, exist_ok=True)
     with open(filename, "w", encoding="utf-8") as stream:
-        _emit_v41_msh(stream, payload)
+        _emit_v42_msh(stream, payload)
     opt_path = write_companion_opt(filename, view_ncomps=[1])
     geo_path = _geo_filename_for_msh(filename)
     return {
@@ -837,7 +853,7 @@ def export_nodal_deformation_animation(
     parent = os.path.dirname(os.path.abspath(filename))
     os.makedirs(parent, exist_ok=True)
     with open(filename, "w", encoding="utf-8") as stream:
-        _emit_v41_msh(stream, payload)
+        _emit_v42_msh(stream, payload)
     opt_path = write_companion_opt(filename, view_ncomps=[3])
     geo_path = _geo_filename_for_msh(filename)
     displacement_options = (
@@ -1478,7 +1494,7 @@ def save_vol_sol_pair(vol_path, sol_path, mesh_ngmesh, gf):
 # ============================================================
 # Multi-mesh combined .msh writer (Phase C, 2026-04-14)
 # ============================================================
-# Used by calc_inductance to emit one .msh v4.1 file that holds
+# Used by calc_inductance to emit one .msh v4.2 file that holds
 # three logically-separate meshes (air volume, coil surface, workpiece
 # surface) as distinct physical groups with curved Tri6 coil rendering.
 # Lives here so any panel that later needs the same pattern can reuse
@@ -1553,11 +1569,11 @@ def extract_tri6_surface(mesh_surf):
     return nodes, elems, sorted(wire_edges)
 
 
-def write_combined_msh_v41(filename, mesh_surf, J_nodes,
+def write_combined_msh_v42(filename, mesh_surf, J_nodes,
                            vol_nodes, vol_elems, B_nodes,
                            wp_nodes=None, wp_elems=None, q_nodes=None,
                            wp_J_nodes=None):
-    """Write a single .msh v4.1 with volume B + surface J + wireframe.
+    """Write a single .msh v4.2 with volume B + surface J + wireframe.
 
     Physical groups (contiguous node ID space across three meshes):
 
@@ -1570,8 +1586,8 @@ def write_combined_msh_v41(filename, mesh_surf, J_nodes,
     Coil surface uses Tri6 (GMSH type 9) for curved rendering.
     Writes companion .geo/.geo.opt/.msh.opt display artifacts.
 
-    Phase E.1 (2026-04-15): builds a PayloadV41 and emits via
-    _emit_v41_msh (shared with GmshPostExport.write).
+    Phase E.1 (2026-04-15): builds a PayloadV42 and emits via
+    _emit_v42_msh (shared with GmshPostExport.write).
     """
     surf_nodes, surf_elems, wire_edges = extract_tri6_surface(mesh_surf)
     nv_surf = len(surf_nodes)
@@ -1655,13 +1671,13 @@ def write_combined_msh_v41(filename, mesh_surf, J_nodes,
             kind='$NodeData', name='q', ncomp=1,
             items=[(wp_offset + i + 1, q_nodes[i]) for i in range(nv_wp)]))
 
-    payload = PayloadV41(
+    payload = PayloadV42(
         groups=groups, entities=entities,
         node_blocks=node_blocks, element_blocks=element_blocks,
         data_fields=data_fields)
 
     with open(filename, 'w', encoding='utf-8') as f:
-        _emit_v41_msh(f, payload)
+        _emit_v42_msh(f, payload)
 
     n_vec = 2 + (1 if (has_wp and wp_J_nodes is not None) else 0)
     n_sca = 1 if has_wp else 0
@@ -1927,9 +1943,9 @@ def _compute_material_bboxes(nodes, mat_names, elem_data):
 # Phase E.1 (2026-04-15): the per-section writers (_write_physical_names,
 # _write_entities, _write_nodes, _write_elements_grouped,
 # _write_node_data, _write_node_data_filtered,
-# _write_element_data_filtered) were collapsed into _emit_v41_msh /
+# _write_element_data_filtered) were collapsed into _emit_v42_msh /
 # _emit_data_section at the top of this file. Both GmshPostExport.write
-# and write_combined_msh_v41 now build a PayloadV41 and call the unified
+# and write_combined_msh_v42 now build a PayloadV42 and call the unified
 # emitter, so changing the .msh on-disk layout is a one-touch edit.
 
 
@@ -2057,7 +2073,7 @@ def _expand_vertex_data_to_nodes(data, ncomp, n_nodes, elem_data,
 
 
 # ============================================================
-# .vol + .sol -> .msh v4.1 converter
+# .vol + .sol -> .msh v4.2 converter
 # ============================================================
 
 def _extract_curved_surface(mesh, curve_order):
@@ -2189,7 +2205,7 @@ _LINE_ENT_TAG_OFFSET = 10_000_000
 
 def _write_line_element_msh(output_msh, segments, groups, group_names,
                             element_views=()):
-    """Write 2-node line elements as a GMSH .msh v4.1 post file.
+    """Write 2-node line elements as a GMSH .msh v4.2 post file.
 
     Shared low-level writer behind ``export_filaments_msh`` (per-filament
     polylines) and ``export_peec_topology_msh`` (per-segment PEEC
@@ -2243,7 +2259,7 @@ def _write_line_element_msh(output_msh, segments, groups, group_names,
         elems_by_group[g].append((tag, n1, n2))
 
     with open(output_msh, "w") as f:
-        f.write("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
+        f.write("$MeshFormat\n4.2 0 8\n$EndMeshFormat\n")
 
         f.write("$PhysicalNames\n")
         f.write(f"{n_groups}\n")
@@ -2265,7 +2281,7 @@ def _write_line_element_msh(output_msh, segments, groups, group_names,
                 lo = hi = [0.0, 0.0, 0.0]
             f.write(f"{k + 1 + _LINE_ENT_TAG_OFFSET} "
                     f"{lo[0]:.9e} {lo[1]:.9e} {lo[2]:.9e} "
-                    f"{hi[0]:.9e} {hi[1]:.9e} {hi[2]:.9e} 1 {k+1} 0\n")
+                    f"{hi[0]:.9e} {hi[1]:.9e} {hi[2]:.9e} 1 {k+1} 0 0\n")
         f.write("$EndEntities\n")
 
         # Nodes (one block, all nodes, on the first curve entity)
@@ -2300,13 +2316,11 @@ def _write_line_element_msh(output_msh, segments, groups, group_names,
                     f"view {view['name']!r}: values shape {vals.shape} "
                     f"!= expected ({n_elems}, {ncomp})")
             step = int(view.get("step", 0))
-            f.write("$ElementData\n")
-            f.write(f'1\n"{view["name"]}"\n')
-            f.write(f"1\n{float(view.get('time', step)):g}\n")
-            f.write(f"3\n{step}\n{ncomp}\n{n_elems}\n")
-            for (tag, _g, _n1, _n2), row in zip(elements, vals):
-                f.write(f"{tag} " + " ".join(f"{v:.6e}" for v in row) + "\n")
-            f.write("$EndElementData\n")
+            _emit_data_section(f, DataField(
+                kind='$ElementData', name=view['name'], ncomp=ncomp,
+                items=[(element[0], row[0] if ncomp == 1 else row)
+                       for element, row in zip(elements, vals)],
+                time=float(view.get('time', step)), timestep=step))
 
     return {"n_nodes": n_nodes, "n_elements": n_elems,
             "element_tags": [e[0] for e in elements]}
@@ -2319,7 +2333,7 @@ def export_filaments_msh(filament_paths, output_msh, *,
                          viz_subdivide_long=True,
                          viz_subdivide_threshold=5.0,
                          viz_subdivide_n=8):
-    """Export PEEC filament paths as GMSH .msh v4.1 line elements.
+    """Export PEEC filament paths as GMSH .msh v4.2 line elements.
 
     Each filament is a polyline of ((x1,y1,z1),(x2,y2,z2)) segments.
     Writes 2-node line elements (GMSH type 1) grouped per filament
@@ -2541,7 +2555,7 @@ def export_peec_topology_msh(topology, output_msh, *,
                              groups=None, group_names=None,
                              label="peec",
                              direction_view=False, complex_steps=False):
-    """Export a solved PEEC topology as a GMSH .msh v4.1 post file.
+    """Export a solved PEEC topology as a GMSH .msh v4.2 post file.
 
     This is the PEEC-solution counterpart of ``export_filaments_msh``:
     it takes the ``PEECBuilder.build_topology()`` dict directly (so the
@@ -2843,7 +2857,7 @@ def export_particle_tracks_msh(tracks, output_msh, *, label="track",
             return value of ``track_lorentz_ivp`` (schema
             ``radia-time-domain-lorentz-track/v1``); for the
             five-momentum optics helpers pass ``result["tracks"]``.
-        output_msh: output .msh v4.1 path.
+        output_msh: output .msh v4.2 path.
         label: physical-group base name; track ``k`` becomes
             ``{label}_{k}``.
         stride: keep every ``stride``-th time sample (the final sample
