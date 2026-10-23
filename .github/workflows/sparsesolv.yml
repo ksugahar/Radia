@@ -283,6 +283,7 @@ on:
       - 'tests/__init__.py'
       - 'tests/analytical_formulas/__init__.py'
       - 'validation_test/panels/__init__.py'
+      - 'tools/regression_lock.py'
       - '!**/*.md'
   push:
     branches: [main]
@@ -566,6 +567,7 @@ on:
       - 'tests/__init__.py'
       - 'tests/analytical_formulas/__init__.py'
       - 'validation_test/panels/__init__.py'
+      - 'tools/regression_lock.py'
       - '!**/*.md'
   schedule:
     - cron: '17 16 * * *'
