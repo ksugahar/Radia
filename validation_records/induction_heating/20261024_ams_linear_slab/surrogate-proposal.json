@@ -1,0 +1,109 @@
+{
+  "status": "PROPOSAL_USER_DECISION_REQUIRED",
+  "tolerance_approved": false,
+  "proposed_rtol": 1e-09,
+  "proposed_atol": 0,
+  "quantity": "computed Joule power W, one frozen value per native route",
+  "historical_baseline_source": "accepted F1 run04, not a fresh manufactured oracle",
+  "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+  "historical_native_sha256": "4b09e365c6826eaa98fba72a190a2bae780140edf68b601626dd632777b05753",
+  "measurement_source_sha": "6d9e8fd30d4a140876f7d361c47944722eba50a4",
+  "measurement_native_sha256": "0758e49dd7129c7d0962914ce77771530042c1ee842f9e672f1b74b991e874ac",
+  "measurements": {
+    "1": {
+      "power_W_values": [
+        1.3177800106307649e-05,
+        1.3177800106307649e-05,
+        1.3177800106307649e-05,
+        1.3177800106307635e-05,
+        1.3177800106307649e-05,
+        1.3177800106307645e-05
+      ],
+      "reference_first": 1.3177800106307649e-05,
+      "max_relative_to_first": 1.0284362372124457e-15,
+      "span_relative_to_first": 1.0284362372124457e-15,
+      "runtime_s": [
+        10.339561899992987,
+        10.329121300004772,
+        10.410533300004317,
+        10.304620700000669,
+        10.335590300004696,
+        10.548357599996962
+      ],
+      "tolerance": null,
+      "user_decision_required": true
+    },
+    "2": {
+      "power_W_values": [
+        1.315284060742064e-05,
+        1.315284060742064e-05,
+        1.315284060742064e-05,
+        1.315284060742066e-05,
+        1.3152840607420662e-05,
+        1.315284060742067e-05
+      ],
+      "reference_first": 1.315284060742064e-05,
+      "max_relative_to_first": 2.3183726627045873e-15,
+      "span_relative_to_first": 2.3183726627045873e-15,
+      "runtime_s": [
+        11.243865599986748,
+        11.088581700008945,
+        11.601277599998866,
+        15.043575299991062,
+        16.848385900011635,
+        17.91569900000468
+      ],
+      "tolerance": null,
+      "user_decision_required": true
+    }
+  },
+  "routes": [
+    {
+      "m": 2,
+      "p": 1,
+      "proposed_baseline_power_W": 1.3177800106307637e-05,
+      "historical_J_same_matrix_parity": 7.928681180576357e-11,
+      "historical_quadratic_power_difference_bound": 1.5857362361781353e-10,
+      "proposed_rtol_over_observed_power_bound": 6.306219011619181,
+      "max_repeat_relative_to_historical_baseline": 8.998817075608908e-16,
+      "max_runtime_s": 10.548357599996962
+    },
+    {
+      "m": 2,
+      "p": 2,
+      "proposed_baseline_power_W": 1.3152840607420637e-05,
+      "historical_J_same_matrix_parity": 5.026088373466843e-11,
+      "historical_quadratic_power_difference_bound": 1.0052176747186302e-10,
+      "proposed_rtol_over_observed_power_bound": 9.948094081014935,
+      "max_repeat_relative_to_historical_baseline": 2.57596962522732e-15,
+      "max_runtime_s": 17.91569900000468
+    }
+  ],
+  "mutation_table": [
+    {
+      "p": 1,
+      "native_route": "complex AMS",
+      "corruption": "zero production preconditioner output",
+      "status": "killed-by-contract",
+      "patch_sha256": "97eef4555a8fb9b82441d191fb64dc2fffaffc9525429d4514847044f615a2cc",
+      "restored_clean_solve": "EXECUTED",
+      "restore_relative_to_historical_baseline": 8.998817075608908e-16
+    },
+    {
+      "p": 2,
+      "native_route": "BDDC+AMS",
+      "corruption": "zero production preconditioner output",
+      "status": "killed-by-contract",
+      "patch_sha256": "3237675bbe3cdde2ddfd9f3aefdbba5445813d9678f341f28458ee9f36694e06",
+      "restored_clean_solve": "EXECUTED",
+      "restore_relative_to_historical_baseline": 2.447171143965954e-15
+    }
+  ],
+  "limits": [
+    "Only m2p1 complex AMS and m2p2 full-HCurl BDDC+AMS; not nonlinear BH, GPU, thermal/fullcoil",
+    "No cross-platform reproducibility claimed",
+    "Zero-output mutations killed existing convergence contracts; no approved scalar tolerance yet",
+    "A4 rejects historical/new artifact identity mismatch; native internal branch coverage not measured"
+  ],
+  "rationale": "Observed relative noise <=2.32e-15. For P=||J||^2/(2sigma), relative change <=2 epsilon+epsilon^2 for a relative J difference epsilon. Historical same-matrix J parity yields bounds <=1.59e-10 on these two coarse routes; proposed1e-9 provides >=6.3x margin over this measured algebraic scale and >4e5x observed repeat noise. This is an empirical proposal, not a mathematical portability guarantee; exceeding it requires review, never automatic widening."
+}
