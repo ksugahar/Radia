@@ -9,6 +9,7 @@ import pytest
 
 from cubit_mesh_export import _gmsh_runtime as runtime
 from cubit_mesh_export.mcp._support._gmsh_subprocess import run_gmsh_json_subprocess
+from cubit_mesh_export.mcp.gmsh_v42 import ELEMENT_TYPES
 
 
 def test_loaded_gmsh5_roundtrips_msh42_without_leaving_a_model():
@@ -59,3 +60,15 @@ def test_child_result_keeps_runtime_identity():
     assert result["ok"] is True
     assert result["gmsh_runtime"]["native_version"].startswith("5.")
     assert result["gmsh_runtime"]["msh42_roundtrip"] is True
+
+
+def test_inventory_connectivity_contract_matches_gmsh5_element_api():
+    runtime.probe_gmsh5()
+    gmsh.initialize(["-noconfig"])
+    try:
+        for kind, (family, order, nodes) in ELEMENT_TYPES.items():
+            name, dimension, actual_order, actual_nodes, coordinates, primary = (
+                gmsh.model.mesh.getElementProperties(kind))
+            assert (actual_order, actual_nodes) == (order, nodes), (kind, name, family)
+    finally:
+        gmsh.finalize()

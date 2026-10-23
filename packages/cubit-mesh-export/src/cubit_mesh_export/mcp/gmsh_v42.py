@@ -21,11 +21,17 @@ ELEMENT_TYPES = {
     12: ("hex", 2, 27),
     13: ("wedge", 2, 18),
     14: ("pyramid", 2, 14),
-    15: ("point", 1, 1),
+    15: ("point", 0, 1),
     16: ("quad", 2, 8),
     17: ("hex", 2, 20),
     18: ("wedge", 2, 15),
     19: ("pyramid", 2, 13),
+    21: ("triangle", 3, 10),
+    26: ("line", 3, 4),
+    29: ("tet", 3, 20),
+    39: ("quad", 3, 12),
+    99: ("hex", 3, 32),
+    125: ("pyramid", 3, 21),
 }
 
 
@@ -198,7 +204,9 @@ def gmsh_v42_mixed_order_series_gate(
     order_matches = []
     for requested_order, inventory in series:
         blocks = inventory.get("element_blocks", [])
-        order_matches.append(bool(blocks) and all(int(block.get("order") or 0) == requested_order for block in blocks))
+        order_matches.append(bool(blocks) and all(
+            int(block.get("entity_dimension", -1)) == 0
+            or int(block.get("order") or 0) == requested_order for block in blocks))
 
     first_inventory = series[0][1] if series else {}
     volume = dict(first_inventory.get("volume_family_counts", {}))

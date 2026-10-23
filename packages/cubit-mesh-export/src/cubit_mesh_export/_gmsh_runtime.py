@@ -1,6 +1,7 @@
 """Gmsh 5 / MSH 4.2 boundary for exporter-owned isolated processes."""
 from __future__ import annotations
 
+import base64
 import hashlib
 from importlib import metadata
 import json
@@ -37,6 +38,31 @@ def _wheel_identity() -> dict:
     return {"wheel_sha256": digest, "wheel_provenance": "pip install report"}
 
 
+def _payload_identity(gmsh) -> dict:
+    distribution = metadata.distribution("gmsh")
+    recorded = {Path(distribution.locate_file(entry)).resolve(): entry.hash
+                for entry in distribution.files or []}
+    result = {}
+    for name, path in (("wrapper", Path(gmsh.__file__).resolve()),
+                       ("native", Path(gmsh.lib._name).resolve())):
+        expected = recorded.get(path)
+        if expected is None or expected.mode != "sha256":
+            raise RuntimeError(f"Gmsh {name} is not a hash-recorded installed payload")
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        # The official development wheel's generator writes hex SHA256 values;
+        # standard wheel generators write URL-safe Base64. Compare the digest,
+        # never a textual encoding or a freshly reconstructed wheel hash.
+        if re.fullmatch(r"[0-9a-f]{64}", expected.value):
+            record_digest = expected.value
+        else:
+            record_digest = base64.urlsafe_b64decode(
+                expected.value + "=" * (-len(expected.value) % 4)).hex()
+        if actual != record_digest:
+            raise RuntimeError(f"Gmsh {name} differs from its installed distribution RECORD")
+        result[name + "_sha256"] = actual
+    return result
+
+
 def probe_gmsh5() -> dict:
     """Check actual native version and a real 4.2 roundtrip in an owned child.
 
@@ -51,7 +77,8 @@ def probe_gmsh5() -> dict:
         raise RuntimeError(f"Gmsh major 5 required, installed {version}")
     if gmsh.isInitialized():
         raise RuntimeError("Gmsh readiness probe requires an uninitialized owned process")
-    identity = {"distribution_version": version, **_wheel_identity()}
+    identity = {"distribution_version": version, **_wheel_identity(),
+                **_payload_identity(gmsh)}
     gmsh.initialize(["-noconfig"])
     try:
         gmsh.option.setNumber("General.Terminal", 0)
@@ -75,12 +102,8 @@ def probe_gmsh5() -> dict:
             if (list(tags) != [1, 2, 3] or list(coordinates) != [0, 0, 0, 1, 0, 0, 0, 1, 0]
                     or list(etags) != [1] or list(connectivity) != [1, 2, 3]):
                 raise RuntimeError("Gmsh MSH 4.2 read/write probe changed mesh data")
-        wrapper = Path(gmsh.__file__).resolve()
-        native = Path(gmsh.lib._name).resolve()
         identity.update(native_version=native_version, msh_format="4.2",
-                        msh42_roundtrip=True,
-                        wrapper_sha256=hashlib.sha256(wrapper.read_bytes()).hexdigest(),
-                        native_sha256=hashlib.sha256(native.read_bytes()).hexdigest())
+                        msh42_roundtrip=True)
         return identity
     finally:
         gmsh.finalize()
