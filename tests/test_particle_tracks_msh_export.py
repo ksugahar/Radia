@@ -62,7 +62,7 @@ def test_exports_circle_track_with_all_views(tmp_path):
     assert text.count("$ElementData") == 4
     assert '"track_0"' in text
     # kinetic energy view is in eV: 100 V acceleration -> 100 eV
-    assert "$MeshFormat\n4.1 0 8" in text
+    assert "$MeshFormat\n4.2 0 8" in text
 
 
 def test_two_tracks_become_two_groups_and_stride_decimates(tmp_path):
