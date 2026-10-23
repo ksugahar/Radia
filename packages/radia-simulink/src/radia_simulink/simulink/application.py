@@ -168,14 +168,14 @@ def _replace_optional_output_path(
     return result, True
 
 
-def _is_gmsh_v41(path: Path) -> bool:
-    """Return whether *path* begins with the repository's ASCII MSH v4.1 header."""
+def _is_gmsh_v42(path: Path) -> bool:
+    """Return whether *path* begins with the repository's ASCII MSH v4.2 header."""
 
     try:
         header = path.read_bytes()[:256].replace(b"\r\n", b"\n")
     except OSError:
         return False
-    return header.startswith(b"$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
+    return header.startswith(b"$MeshFormat\n4.2 0 8\n$EndMeshFormat\n")
 
 
 def _find_key(value: Any, key: str) -> Any:
@@ -344,11 +344,11 @@ def run_application(
                         f"the required GMSH artifact: {gmsh_output_path}"
                     )
                     log.write("\n" + error + "\n")
-                elif not _is_gmsh_v41(gmsh_output_path):
+                elif not _is_gmsh_v42(gmsh_output_path):
                     status = "failed"
                     error = (
                         "The spatial application wrote a GMSH artifact that is not "
-                        f"ASCII .msh v4.1: {gmsh_output_path}"
+                        f"ASCII .msh v4.2: {gmsh_output_path}"
                     )
                     log.write("\n" + error + "\n")
         except Exception as exc:
@@ -389,7 +389,7 @@ def run_application(
             "primary": {"key": primary_key, "value": primary_value},
             "artifacts": {
                 "gmsh_policy": "required" if gmsh_requested else "not-applicable",
-                "gmsh_format": "msh-v4.1" if gmsh_requested else None,
+                "gmsh_format": "msh-v4.2" if gmsh_requested else None,
                 "gmsh_primary": (
                     str(gmsh_output_path) if gmsh_output_path.is_file() else None
                 ),
