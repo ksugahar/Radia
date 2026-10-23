@@ -44,3 +44,17 @@ def test_public_gmsh_descriptions_state_postprocessing_boundary():
         assert "post-processing" in text.lower(), text
         assert ".vol" in text, text
         assert "solver" in text.lower(), text
+
+
+def test_stage_rejects_msh_before_starting_cubit(tmp_path, monkeypatch):
+    import json
+    def unexpected_session():
+        raise AssertionError("invalid solver input must not start Cubit")
+    monkeypatch.setattr(server, "_cubit_session_or_error", unexpected_session)
+    mesh = tmp_path / "post.msh"
+    mesh.write_text("$MeshFormat\n4.2 0 8\n$EndMeshFormat\n", encoding="ascii")
+    for kwargs in [{"path": str(mesh)}, {"extra_commands": [f'import mesh "{mesh}"', 'export netgen "bad.vol"']}]:
+        result = json.loads(server.cubit_stage(**kwargs))
+        assert result["status"] == "error", result
+        assert result["stage"] == "input", result
+        assert "post-processing" in result["error"], result
