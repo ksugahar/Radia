@@ -9,7 +9,7 @@ Models:
   - 2D: square tri mesh (surface only)
 
 Combinations:
-  GMSH:    order(1-5) x dim(2D,3D) = 10 per model x 2 = 20 (v4.2 only)
+  GMSH:    order(1-3) x dim(2D,3D), MSH4.2 post-processing only
   Nastran: order(1,2) x dim(2D,3D) x nopyramid(0,1) = 8 per model x 2 = 16
   VTK:     order(1,2) x dim(2D,3D) = 4 per model x 2 = 8
 
@@ -360,7 +360,7 @@ def generate_test_cases():
     for model in ['3d', '2d']:
         for order in [1, 2, 3]:
             for dim in [3, 2]:
-                vstr = '4.1'
+                vstr = '4.2'
                 name = f"gmsh_{model}_order{order}_v{vstr}_dim{dim}"
                 fname = os.path.join(OUT_DIR, f"{name}.msh")
 
