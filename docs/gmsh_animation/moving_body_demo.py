@@ -4,7 +4,7 @@ Demo: Stator (STEP, fixed) + Rotor (.vol, translating) -> GMSH animation.
 Creates:
   1. A stator geometry (STEP file, static)
   2. A rotor mesh (Netgen .vol with curving)
-  3. A GMSH .msh v4.1 with multiple time steps (rotor displaced at each step)
+  3. A GMSH .msh v4.2 with multiple time steps (rotor displaced at each step)
   4. A .geo companion file for GMSH settings
 
 The resulting .msh can be opened in GMSH and animated using
@@ -77,7 +77,7 @@ def create_rotor_vol(filename, order=2):
 
 def create_animation_msh(rotor_vol, output_msh, n_steps=20,
                           displacement=0.15, direction=(1, 0, 0)):
-    """Create GMSH .msh v4.1 with time-stepped displaced rotor mesh.
+    """Create GMSH .msh v4.2 with time-stepped displaced rotor mesh.
 
     Each time step shifts the rotor by (step/n_steps * displacement * direction).
     Displacement field is stored as $NodeData for visualization.
@@ -96,7 +96,7 @@ def create_animation_msh(rotor_vol, output_msh, n_steps=20,
     d = np.array(direction, dtype=float)
     d = d / np.linalg.norm(d)
 
-    from radia.gmsh_post_export import GmshPostExport
+    from radia.gmsh_post_export import GmshPostExport, DataField, _emit_data_section
 
     print(f"Rotor: {ne} elements")
     print(f"Displacement: {displacement} m in direction {d}")
@@ -129,21 +129,10 @@ def create_animation_msh(rotor_vol, output_msh, n_steps=20,
             t = step / n_steps
             dx = displacement * t * d
 
-            # Displacement field (3-component vector per node)
-            f.write("$NodeData\n")
-            f.write("1\n")  # num string tags
-            f.write(f'"Displacement [m]"\n')
-            f.write("1\n")  # num real tags
-            f.write(f"{t:.6f}\n")  # time value
-            f.write("3\n")  # num int tags
-            f.write(f"{step}\n")  # timestep
-            f.write("3\n")  # num components (vector)
-            f.write(f"{n_msh_nodes}\n")  # num nodes
-
-            for vid in range(n_msh_nodes):
-                f.write(f"{vid + 1} {dx[0]:.10e} {dx[1]:.10e} {dx[2]:.10e}\n")
-
-            f.write("$EndNodeData\n")
+            _emit_data_section(f, DataField(
+                kind='$NodeData', name='Displacement [m]', ncomp=3,
+                items=[(vid + 1, tuple(dx)) for vid in range(n_msh_nodes)],
+                time=t, timestep=step))
 
     print(f"Written: {output_msh} ({n_steps + 1} time steps)")
     return output_msh
@@ -202,7 +191,7 @@ def main():
         print("   (demo works without stator, rotor animation still visible)")
 
     # Create animation .msh
-    print("\n3. Creating animation .msh (GMSH v4.1)...")
+    print("\n3. Creating animation .msh (GMSH v4.2)...")
     create_animation_msh(rotor_vol, rotor_msh,
                           n_steps=20, displacement=0.15,
                           direction=(1, 0, 0))

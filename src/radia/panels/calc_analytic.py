@@ -1,11 +1,11 @@
 """
-Analytic function evaluation on mesh: .vol + expression -> .msh v4.1
+Analytic function evaluation on mesh: .vol + expression -> .msh v4.2
 
 Called as subprocess from Cubit Solve -> Analytic Function:
     python calc_analytic.py --vol model.vol --expr "sin(x)*cos(y)" --name "f"
 
 Evaluates a mathematical expression as an NGSolve CoefficientFunction
-on the mesh, exports to GMSH .msh v4.1 for visualization.
+on the mesh, exports to GMSH .msh v4.2 for visualization.
 
 IMPORTANT: NGSolve must be imported BEFORE cubit.
 Outputs JSON to stdout (last line).
@@ -29,7 +29,7 @@ def _log(msg):
 
 def evaluate_analytic(vol_path, expression, field_name="f",
                       fes_order=1, vector=False):
-    """Evaluate expression on mesh and export to .msh v4.1."""
+    """Evaluate expression on mesh and export to .msh v4.2."""
     setup_paths()
 
     from ngsolve import Mesh, x, y, z, CF, sqrt, sin, cos, tan, exp, log, TaskManager

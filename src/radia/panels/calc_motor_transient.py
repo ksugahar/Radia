@@ -648,7 +648,7 @@ def build_argparser():
     parser.add_argument("--n-steps-per-FE", type=int, default=10)
     parser.add_argument(
         "--msh-output", default="",
-        help="GMSH .msh v4.1 output for the final FE-refresh field",
+        help="GMSH .msh v4.2 output for the final FE-refresh field",
     )
     return parser
 
