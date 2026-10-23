@@ -58,3 +58,11 @@ def test_large_actual_tag_cannot_hide_behind_small_header(tmp_path):
     _field_file(path, 'NodeData', 2147483665, declared_max=17)
     with pytest.raises(ValueError, match='2147483665 exceeds 2147483647'):
         reader.validate_native_msh_fields(path)
+
+
+def test_geo_native_handoff_checks_merged_fields(tmp_path):
+    _field_file(tmp_path / 'field.msh', 'NodeData', 2147483665)
+    geo = tmp_path / 'display.geo'
+    geo.write_text('Merge "field.msh";\n', encoding='utf-8')
+    with pytest.raises(ValueError, match='2147483665 exceeds 2147483647'):
+        reader.validate_native_msh_fields(geo)
