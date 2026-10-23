@@ -7,6 +7,8 @@ Assumes: surrogate test of adoption record
 induction_heating/20261023_esim_slab_impedance (convergence level 1), and
 surrogate test of adoption record
 induction_heating/20261023_esim_slab_phase (convergence level 1).
+APPROVAL-20261023-ESIM-SURROGATE-TOL-01 sets rtol=1e-9 and atol=0 for
+both locked quantities; the explicit Im(H1)<0 sign check remains required.
 N25 on the fixed smooth grading, constant real mu and sigma, exp(+j omega t),
 a/delta about 105. The baseline depends on depth_mesh grading and the numerical
 library route; changed grading requires reviewed regeneration, not tolerance
