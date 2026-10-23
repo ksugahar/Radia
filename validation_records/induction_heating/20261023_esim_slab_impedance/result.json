@@ -1,0 +1,225 @@
+{
+  "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+  "conditions": {
+    "geometry": "slab",
+    "half_depth_m": 0.005,
+    "sigma_S_per_m": 5000000.0,
+    "frequency_Hz": 222000.0,
+    "mu_r": 100,
+    "H_peak_A_per_m": 1000,
+    "coordinate": "z from surface; analytic x=a-z from centre",
+    "time_convention": "exp(+j omega t)",
+    "material": "constant real permeability and conductivity; linear"
+  },
+  "mu_SI": 0.000125663706127,
+  "skin_depth_m": 4.7770374092050955e-05,
+  "a_over_delta": 104.66738213867171,
+  "levels": [
+    {
+      "initial_nodes": 25,
+      "final_nodes": 25,
+      "h_max_normalized": 0.17817572023010128,
+      "h_min_over_delta": 0.21431363860601343,
+      "Z_real": 0.004156401003913473,
+      "Z_imag": 0.004081290037716426,
+      "relative_complex_Z_error": 0.018522966226967537,
+      "linear_residual": 1.4381195712768756e-16
+    },
+    {
+      "initial_nodes": 49,
+      "final_nodes": 49,
+      "h_max_normalized": 0.09340921422569068,
+      "h_min_over_delta": 0.10195900041971317,
+      "Z_real": 0.004179252519111425,
+      "Z_imag": 0.004159759715426741,
+      "relative_complex_Z_error": 0.004719726588819487,
+      "linear_residual": 1.741807516445129e-16
+    },
+    {
+      "initial_nodes": 97,
+      "final_nodes": 97,
+      "h_max_normalized": 0.047838016339960855,
+      "h_min_over_delta": 0.04974234954093054,
+      "Z_real": 0.004184842665821733,
+      "Z_imag": 0.004179924507507283,
+      "relative_complex_Z_error": 0.0011855769961309,
+      "linear_residual": 2.5652075393682725e-16
+    },
+    {
+      "initial_nodes": 193,
+      "final_nodes": 193,
+      "h_max_normalized": 0.024209279502973753,
+      "h_min_over_delta": 0.024569348331742034,
+      "Z_real": 0.004186232633514943,
+      "Z_imag": 0.004185000279827202,
+      "relative_complex_Z_error": 0.00029674839941361427,
+      "linear_residual": 4.1905103015826693e-16
+    },
+    {
+      "initial_nodes": 385,
+      "final_nodes": 385,
+      "h_max_normalized": 0.012178090942814926,
+      "h_min_over_delta": 0.012210130522186597,
+      "Z_real": 0.004186579653945333,
+      "Z_imag": 0.004186271389574493,
+      "relative_complex_Z_error": 7.420925481439297e-05,
+      "linear_residual": 4.908519487078945e-16
+    }
+  ],
+  "pairs": [
+    {
+      "nodes": [
+        25,
+        49
+      ],
+      "errors": [
+        0.018522966226967537,
+        0.004719726588819487
+      ],
+      "h": [
+        0.17817572023010128,
+        0.09340921422569068
+      ],
+      "q": 2.117222511579658,
+      "status": "PASS"
+    },
+    {
+      "nodes": [
+        49,
+        97
+      ],
+      "errors": [
+        0.004719726588819487,
+        0.0011855769961309
+      ],
+      "h": [
+        0.09340921422569068,
+        0.047838016339960855
+      ],
+      "q": 2.0645316471043005,
+      "status": "PASS"
+    },
+    {
+      "nodes": [
+        97,
+        193
+      ],
+      "errors": [
+        0.0011855769961309,
+        0.00029674839941361427
+      ],
+      "h": [
+        0.047838016339960855,
+        0.024209279502973753
+      ],
+      "q": 2.033668273358083,
+      "status": "PASS"
+    },
+    {
+      "nodes": [
+        193,
+        385
+      ],
+      "errors": [
+        0.00029674839941361427,
+        7.420925481439297e-05
+      ],
+      "h": [
+        0.024209279502973753,
+        0.012178090942814926
+      ],
+      "q": 2.0171748186506857,
+      "status": "PASS"
+    }
+  ],
+  "adoption": {
+    "criterion": {
+      "reference": "rho*k*tanh(k*a)",
+      "reference_source": "MIT Electromagnetic Fields and Energy, section10.7 diffusion equation; boundary solution derived for H(surface)=H0 and zero midplane flux",
+      "quantity": "relative complex surface impedance error",
+      "convergence_variable": "actual h_max/half-depth on fixed smooth grading",
+      "levels": [
+        25,
+        49,
+        97,
+        193,
+        385
+      ],
+      "expected": "asymptotic second order on this smooth constant-coefficient profile and fixed smooth grid",
+      "q_min": 1.5,
+      "q_pairs": "all consecutive pairs",
+      "finest_error_max": 0.003,
+      "strict_monotonicity": true,
+      "plateau": "UNRESOLVED when h unchanged or roundoff prevents a rate",
+      "scale": "one-dimensional fixed-grid solves; runtime metadata only"
+    },
+    "numerical_verdict": "pass",
+    "review": "independently reproduced from saved fields by a separate reviewer, not the implementation scripts",
+    "inference_limit": "a/delta about105: validates deep-skin linear diffusion, not finite-thickness or midplane behaviour",
+    "mesh_rate_interpretation": "h_max lies in negligible-field interior; uniform refinement halves h_min/delta too"
+  },
+  "mutation_matrix": [
+    {
+      "feature": "finite linear slab conductance-to-impedance",
+      "mutation": "conductance1001",
+      "factor": "1.001",
+      "patch_sha256": "4afa2b258ce7f0b09d78256fc040aba529cc881141a06f37319c1ea56d57b953",
+      "source_sha256": "7a129f256423053f034add2000613c3365f8bfb8ab8d06ba10054d0a05897601",
+      "surrogate": "killed",
+      "validation": "killed"
+    },
+    {
+      "feature": "finite linear slab conductance-to-impedance",
+      "mutation": "conductanceSign",
+      "factor": "-1.0",
+      "patch_sha256": "8c7fe68e4216fcd461e1f2203bf92c738358d29fe5d297e4a11eb5684643b8f1",
+      "source_sha256": "6f541267ecb9c5af5bb0b0de9bc9c515b007ff3b0bcd046edf9520aff3a0a924",
+      "surrogate": "survived",
+      "validation": "survived"
+    }
+  ],
+  "original_result_sha256": "67bca7d60c4bfdf61856c69d40174db7bdadf6f5692c0e4d83f3117f66fc5443",
+  "original_checker_sha256": "aacef97c3827d7ed752d90b9454a12a1212b510928571d3547cec52d28574b52",
+  "measurement_entry_sha256": "73393d355a23afab8f79dc56f255b541d2790f4817daf75ef92235d745bfcf64",
+  "surrogate": {
+    "record_id": "induction_heating/20261023_esim_slab_impedance",
+    "convergence_level": 1,
+    "N": 25,
+    "baseline": "tests/fixtures/esim_slab_A25_cf77cd6e0.json",
+    "scope": "historical Z/phase guard, not analytic accuracy",
+    "phase_tolerance_status": "candidate uses existing repository convention; final user tolerance decision pending"
+  },
+  "adaptive_reference": [
+    {
+      "tol": 0.001,
+      "nodes": 127,
+      "error": 0.00023744046342913836,
+      "h_max": 0.0925825703793369
+    },
+    {
+      "tol": 0.0003,
+      "nodes": 221,
+      "error": 7.553928662119125e-05,
+      "h_max": 0.0925825703793369
+    },
+    {
+      "tol": 0.0001,
+      "nodes": 395,
+      "error": 1.3672222565839735e-05,
+      "h_max": 0.0925825703793369
+    },
+    {
+      "tol": 3e-05,
+      "nodes": 693,
+      "error": 3.8010386463050304e-06,
+      "h_max": 0.0925825703793369
+    },
+    {
+      "tol": 1e-05,
+      "nodes": 1023,
+      "error": 2.187218526290447e-06,
+      "h_max": 0.0925825703793369
+    }
+  ],
+  "adaptive_rate_status": "UNRESOLVED: h_max unchanged; reference only; B24 is not adopted A level1"
+}

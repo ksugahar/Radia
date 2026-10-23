@@ -1,0 +1,85 @@
+{
+  "schema": "radia.validation-record.v2",
+  "id": "induction_heating/20261023_esim_slab_impedance",
+  "kind": "acceptance",
+  "question": "Does deep-skin linear slab impedance converge to the independent analytic solution?",
+  "outcome": "pass",
+  "source": {
+    "repo_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+    "dirty": false,
+    "native_sha256": {},
+    "wheel_sha256": null,
+    "source_only": true,
+    "provenance": "exact"
+  },
+  "covered_paths": [
+    "src/radia/esim_cell_problem.py",
+    "src/radia/esim_depth.py",
+    "src/radia/bh_law.py",
+    "pyproject.toml"
+  ],
+  "entry": {
+    "script": "entry.py",
+    "script_sha256": "73393d355a23afab8f79dc56f255b541d2790f4817daf75ef92235d745bfcf64",
+    "command": [
+      "python",
+      "entry.py",
+      "clean"
+    ]
+  },
+  "environment": {
+    "host_role": "neutral-cpu",
+    "os": "Windows",
+    "python": "3.12.14",
+    "ngsolve": "6.2.2608",
+    "threads": 1
+  },
+  "result": {
+    "path": "result.json",
+    "sha256": "988fe5789b9fd483cf0e4d7ff065692821210c6b1918baeb7dd3d46199744f38"
+  },
+  "key_values": {
+    "finest_relative_error": {
+      "value": 7.420925481439297e-05,
+      "unit": "1"
+    },
+    "minimum_observed_q": {
+      "value": 2.0171748186506857,
+      "unit": "1"
+    },
+    "a_over_delta": {
+      "value": 104.66738213867171,
+      "unit": "1"
+    }
+  },
+  "limits": {
+    "finest_relative_error": 0.003,
+    "minimum_observed_q": 1.5
+  },
+  "timing_s": {
+    "coarsest_solve": 0.00114560000019992
+  },
+  "status": "current",
+  "stale_reason": null,
+  "superseded_by": null,
+  "private": false,
+  "milestone": "Deep-skin ESIM slab impedance convergence",
+  "claim": "The fixed-grid deep-skin slab impedance error decreases monotonically with every q>=1.5 and finest relative error<=0.003.",
+  "date": "2026-10-23",
+  "radia_version": "5.3.3",
+  "conditions": {
+    "problem": "Linear constant-mu slab; a=0.005m,222kHz,sigma=5e6S/m,mu_r=100,H0=1000A/m; exp(+j omega t)",
+    "mesh": "Fixed smooth depth grading N25/49/97/193/385; h_max and h_min/delta recorded",
+    "hardware": "CPU double precision, one library thread"
+  },
+  "comparison": {
+    "reference": "Analytic slab diffusion solution with centre symmetry; https://web.mit.edu/6.013_book/www/chapter10/10.7.html",
+    "independence": "Closed-form diffusion reference and independent reviewer recomputation from recorded fields; no use of production solver as reference. Deep-skin regime does not validate finite-thickness effects."
+  },
+  "covered_sha256": {
+    "src/radia/esim_cell_problem.py": "4799dd64e9787a98c80953691a97de27ba1c85b38f45575e19a075c99eb7bbc4",
+    "src/radia/esim_depth.py": "f2cb0cdf63e3af27a6fd25bef6d31b73ca366d37e7380cbfc77f83f9aeddf969",
+    "src/radia/bh_law.py": "80a7e2ea51c4e8254b429d21600aae8982c19130662d2c80f05a4d2673d67690",
+    "pyproject.toml": "9736e404347c7c6bb955b1e9874029d6cfeac4b588dd859e9d92ecdf0f39df46"
+  }
+}

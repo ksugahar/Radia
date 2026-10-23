@@ -1,0 +1,30 @@
+{
+  "schema": "radia.regression-lock.v1",
+  "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+  "conditions": {
+    "geometry": "slab",
+    "half_depth_m": 0.005,
+    "sigma_S_per_m": 5000000.0,
+    "frequency_Hz": 222000.0,
+    "mu_r": 100,
+    "H_peak_A_per_m": 1000,
+    "initial_nodes": 25,
+    "mesh": "fixed physical grading; no adaptive outer refinement",
+    "production_entry_point": "radia.esim_cell_problem.ESIMFiniteSlabSolver._solve_on_mesh"
+  },
+  "runtime_s": 0.0013097000010020565,
+  "quantities": {
+    "Re_Z_ohm": {
+      "expected": 0.004156401003913473,
+      "rtol": 1e-12,
+      "atol": 0,
+      "unit": "ohm"
+    },
+    "Im_H1_over_H0": {
+      "expected": -0.17294595578148775,
+      "rtol": 1e-12,
+      "atol": 0,
+      "unit": "1"
+    }
+  }
+}
