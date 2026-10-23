@@ -20,3 +20,12 @@ finite-thickness or midplane behaviour. h_max is in negligible field: the rate
 is interpreted with uniform refinement of the entire fixed grading, and
 h_min/delta is recorded alongside it. The tests surrogate uses the same N25
 production path; its coarse analytic error is deliberately not an assertion.
+
+The v3 wrapper points to adoption-result.json, a separately identified metadata
+export of the approved A ladder. Historical result.json and entry.py bytes
+are unchanged. reference-verification.md supplies the algebraic specialization
+of the published diffusion equation; independent scientific review remains
+required. The A25 surrogate tolerance was approved in
+APPROVAL-20261023-ESIM-SURROGATE-TOL-01 (rtol1e-9,atol0,negative phase check).
+Schema hashes bind the serialized criterion, rationale and feature/record scope;
+they do not authenticate consent or replace review of its original scope.
