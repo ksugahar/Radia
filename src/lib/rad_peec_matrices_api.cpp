@@ -522,7 +522,7 @@ public:
 
         int n_ports = solver_->NumPorts();
         if (n_ports == 0) {
-            return py::array_t<std::complex<double>>({0, 0});
+            return py::array_t<std::complex<double>>(py::array::ShapeContainer{0, 0});
         }
 
         // Extract Zs from numpy or None
@@ -889,7 +889,7 @@ public:
     py::array_t<std::complex<double>> solve_z_matrix(double freq,
                                                       py::object Zs_obj = py::none()) {
         if (n_ports_ == 0) {
-            return py::array_t<std::complex<double>>({0, 0});
+            return py::array_t<std::complex<double>>(py::array::ShapeContainer{0, 0});
         }
 
         const std::complex<double>* Zs_ptr = nullptr;

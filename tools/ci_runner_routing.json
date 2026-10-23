@@ -289,9 +289,10 @@
         "tools/local_push_checks.py",
         "tools/validation_source_gate.py",
         "tools/ci_ams_inputs.py",
-        "tools/ci_tree_receipt.py"
+        "tools/ci_tree_receipt.py",
+        "tools/build_linux.py"
       ],
-      "audit_sha256": "f8920d024bbae447db898ce08d48df151370ea859e3ffa646d90ad269db17ff3",
+      "audit_sha256": "e43b79aac0d44a3073c98cef7d10be644373949408a04465be84e7ae7496a7ea",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
