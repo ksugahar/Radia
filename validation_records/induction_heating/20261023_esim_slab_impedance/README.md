@@ -29,3 +29,8 @@ required. The A25 surrogate tolerance was approved in
 APPROVAL-20261023-ESIM-SURROGATE-TOL-01 (rtol1e-9,atol0,negative phase check).
 Schema hashes bind the serialized criterion, rationale and feature/record scope;
 they do not authenticate consent or replace review of its original scope.
+
+The canonical reference key is haus1989electromagnetic. The hash-bound
+symbolic-verification.json receipt records eight exact SymPy identities and
+a conjugate-profile negative control, with local derivation/script hashes.
+This algebra check does not replay the saved convergence experiment.

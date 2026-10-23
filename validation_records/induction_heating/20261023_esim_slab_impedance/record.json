@@ -89,10 +89,10 @@
     "criterion": {
       "reference": {
         "kind": "analytic",
-        "citation": "Haus and Melcher, Electromagnetic Fields and Energy (1989), ISBN 9780132490207, section 10.7, https://web.mit.edu/6.013_book/www/chapter10/10.7.html ; symmetric-boundary specialization verified in the attached derivation. DOI not verified.",
+        "citation": "Canonical bibliography key haus1989electromagnetic: Haus and Melcher, Electromagnetic Fields and Energy (1989), ISBN 9780132490207, section 10.7, https://web.mit.edu/6.013_book/www/chapter10/10.7.html ; symmetric-boundary specialization verified in the attached derivation. DOI not verified.",
         "symbolic_verification": {
-          "path": "reference-verification.md",
-          "sha256": "8275ae387cfb87386410910bf586322d973f9488d43a9ab2cb75118baa8461ef"
+          "path": "symbolic-verification.json",
+          "sha256": "61af5d85836566bb7f2e7e98eb4876a59b7af0ad964ba609ab062e74fdfc147e"
         }
       },
       "quantity": {
@@ -257,7 +257,7 @@
       "approved_by": "user",
       "approved_on": "2026-10-23",
       "approval_ref": "APPROVAL-20261023-ESIM-SLAB-01",
-      "criterion_sha256": "55b817a5400eb6285136f7ea23665c174cd797bbd12b1200fa9dcf368fde3d8f",
+      "criterion_sha256": "34efa34ecbe1665c8a12bf66da036771d82370d99251edc68775ac7c84655ed8",
       "rationale_sha256": "a453cd5bc89f0a37e89f8eed20b085daeba217397531f3fbcc940fb58c969a98",
       "scope_sha256": "763e3943454b80092b000c9ff20417c5258ea6907eff2ef5eacc255cea38bc8f"
     },
