@@ -8,10 +8,12 @@ discretization and use strict MSH 4.2.
 
 The `gmsh` and `shape-regeneration` extras allow `gmsh>=5.0.0.dev0`.
 PyPI may only have the stable Gmsh 4 release, so obtain the development wheel
-from its public official development index. The public install command is:
+from its public official development index. Install Gmsh alone from that index,
+then install the package and its other dependencies from PyPI:
 
 ```text
-python -m pip install --pre --extra-index-url https://gmsh.info/python-packages-dev "radia-mcp[gmsh]"
+python -m pip install --pre -i https://gmsh.info/python-packages-dev gmsh
+python -m pip install "radia-mcp[gmsh]"
 ```
 
 For reproducible private operations, download the selected wheel separately:
