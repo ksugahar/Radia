@@ -630,3 +630,14 @@ Optuna 5 unified TPESampler owns both objective modes. Use shared weighted Parze
 Owner-authored code is licensed under Apache-2.0 from the next releases.
 See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
 retain their original licenses; previously published artifacts are unchanged.
+
+
+### Installed compatibility evidence
+
+The wheel includes `evidence_manifest.json` beside the distribution manifest.
+Use `importlib.resources.files("radia_optuna")` to read these manifests;
+`radia_optuna.matlab_path().parent` contains the relative payload paths listed
+in the evidence manifest, for both a checkout and an installed wheel. The
+ledger records SHA-256 of LF-normalized stored JSON bytes. It does not claim
+a new validation run. Upstream numerical producer scripts remain source-only;
+installing, building and verifying the wheel never regenerates expectations.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -12,6 +13,13 @@ from setuptools.command.build_py import build_py as _build_py
 PACKAGE_ROOT = Path(__file__).resolve().parent
 MATLAB_ROOT = PACKAGE_ROOT / "matlab"
 OPTUNA_SOURCE = MATLAB_ROOT / "+radia" / "+optuna"
+EVIDENCE = json.loads(
+    (PACKAGE_ROOT / "src/radia_optuna/evidence_manifest.json").read_text(encoding="utf-8")
+)
+ORACLE_SOURCES = tuple(
+    PACKAGE_ROOT / record["path"] for record in EVIDENCE["files"].values()
+    if record["path"].startswith("oracles/")
+)
 MEX_SOURCE = MATLAB_ROOT / "optuna_mex.mexw64"
 CONTRACT_SOURCES = (
     MATLAB_ROOT / "optuna_upstream_compatibility.json",
@@ -43,6 +51,7 @@ class build_py(_build_py):
                 OPTUNA_SOURCE,
                 MEX_SOURCE,
                 *CONTRACT_SOURCES,
+                *ORACLE_SOURCES,
                 *SIMULINK_SOURCES,
                 *DOC_SOURCES,
             )
@@ -57,6 +66,10 @@ class build_py(_build_py):
 
         super().run()
         package_dir = Path(self.build_lib) / "radia_optuna"
+        oracle_dir = package_dir / "oracles"
+        oracle_dir.mkdir(parents=True, exist_ok=True)
+        for source in ORACLE_SOURCES:
+            shutil.copy2(source, oracle_dir / source.name)
         matlab_dir = package_dir / "matlab"
         staged_optuna = matlab_dir / "+radia" / "+optuna"
         shutil.copytree(OPTUNA_SOURCE, staged_optuna, dirs_exist_ok=True)
