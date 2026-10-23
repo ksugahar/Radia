@@ -3780,7 +3780,9 @@ def time_series(paths: list[str | Path], *,
     head = text[:min(starts)] if starts else text
     blocks = []
     for s in stats:
-        rows = "".join(f"{tag} {per_tag[s][tag]:.9e}\n" for tag in tags)
+        rows = (f"1 {len(tags)} {min(tags)} {max(tags)}\n{len(tags)}\n"
+                + "".join(f"{tag}\n" for tag in tags)
+                + "".join(f"{per_tag[s][tag]:.9e}\n" for tag in tags))
         blocks.append(f"${section}\n"
                       f'1\n"{view_name}_{s}"\n1\n0\n'
                       f"3\n0\n1\n{len(tags)}\n{rows}$End{section}\n")

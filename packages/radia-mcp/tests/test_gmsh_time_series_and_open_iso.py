@@ -176,11 +176,11 @@ def test_time_series_rejects_element_node_data(tmp_path):
         for tag, element in elements.items():
             values = " ".join("1" for _ in element["nodes"])
             rows.append(f"{tag} {len(element['nodes'])} {values}")
+        from msh42_fixtures import field_section
         path.write_text(
             path.read_text(encoding="utf-8")
-            + "$ElementNodeData\n1\n\"local\"\n1\n0\n3\n0\n1\n"
-              f"{len(rows)}\n" + "\n".join(rows)
-            + "\n$EndElementNodeData\n",
+            + field_section("ElementNodeData", "local", 1,
+                            [tuple(row.split()) for row in rows]),
             encoding="utf-8")
     res = time_series(paths, view="local")
     assert not res["ok"]

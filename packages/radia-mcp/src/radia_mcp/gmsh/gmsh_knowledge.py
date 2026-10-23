@@ -649,7 +649,7 @@ def write_msh_opt(msh_path: str, hidden_volumes: list[int],
 GMSH_MSH_FORMAT = """
 # GMSH .msh File Format
 
-## Version 4.2 (Lab-wide standard, 2026-04)
+## Version 4.2 (current repository standard)
 
 v4.2 is the only supported format across the Radia repository
 (Cubit plugin output, NGSolve post-processing, all panels).
@@ -1629,7 +1629,6 @@ GMSH has limited transparency support:
 ```
 View[0].ColormapAlpha = 0.3;       // global alpha (0=transparent, 1=opaque)
 View[0].ColormapAlphaPower = 0.0;  // nonlinear alpha mapping
-View[0].FakeTransparency = 0;      // 0=real (sorted), 1=additive (faster)
 ```
 
 - **Real transparency**: back-to-front triangle sorting per frame. Correct

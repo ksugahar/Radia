@@ -59,3 +59,46 @@ def test_other_versions_fail_both_readers_and_native_preflight(tmp_path, version
         read_msh_data(path)
     with pytest.raises(ValueError):
         require_msh42(path)
+
+
+def test_time_series_writer_is_readable_by_native_reference(tmp_path):
+    from radia_mcp.gmsh.post_process import time_series
+
+    qualify_runtime()
+    inputs = []
+    for step, values in enumerate(([1., 6.], [5., 2.])):
+        path = tmp_path / f'step{step}.msh'
+        gmsh.initialize(['-noconfig'])
+        try:
+            gmsh.model.add('series')
+            gmsh.model.addDiscreteEntity(1, 1)
+            gmsh.model.mesh.addNodes(1, 1, [17, 19], [0, 0, 0, 1, 0, 0])
+            gmsh.model.mesh.addElementsByType(1, 1, [37], [17, 19])
+            gmsh.write(str(path))
+            view = gmsh.view.add('f')
+            gmsh.view.addModelData(view, 0, 'series', 'NodeData',
+                                   [17, 19], [[v] for v in values],
+                                   numComponents=1)
+            gmsh.option.setNumber('PostProcessing.SaveMesh', 0)
+            gmsh.view.write(view, str(path), append=True)
+        finally:
+            gmsh.finalize()
+        inputs.append(path)
+    output = tmp_path / 'stats.msh'
+    result = time_series(inputs, view='f', times=[0., 1.],
+                         stats=('min', 'max', 'argmax_time'), out_file=output)
+    assert result['ok'], result
+    expected = {'f_min': {17: [1.], 19: [2.]},
+                'f_max': {17: [5.], 19: [6.]},
+                'f_argmax_time': {17: [1.], 19: [0.]}}
+    gmsh.initialize(['-noconfig'])
+    try:
+        gmsh.open(str(output))
+        for view in gmsh.view.getTags():
+            name = gmsh.view.option.getString(view, 'Name')
+            kind, tags, values, time, ncomp = gmsh.view.getModelData(view, 0)
+            assert kind == 'NodeData' and ncomp == 1 and time == 0.
+            assert dict(zip(map(int, tags), map(list, values))) == expected.pop(name)
+        assert not expected
+    finally:
+        gmsh.finalize()
