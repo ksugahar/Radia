@@ -1,0 +1,204 @@
+{
+  "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+  "conditions": {
+    "geometry": "slab",
+    "half_depth_m": 0.005,
+    "sigma_S_per_m": 5000000.0,
+    "frequency_Hz": 222000.0,
+    "mu_r": 100,
+    "H_peak_A_per_m": 1000,
+    "coordinate": "z from surface; analytic x=a-z from centre",
+    "time_convention": "exp(+j omega t)",
+    "material": "constant real permeability and conductivity; linear"
+  },
+  "mu_SI": 0.000125663706127,
+  "skin_depth_m": 4.7770374092050955e-05,
+  "a_over_delta": 104.66738213867171,
+  "levels": [
+    {
+      "initial_nodes": 25,
+      "final_nodes": 25,
+      "h_max_normalized": 0.17817572023010128,
+      "h_min_over_delta": 0.21431363860601343,
+      "Z_real": 0.004156401003913473,
+      "Z_imag": 0.004081290037716426,
+      "relative_complex_L2": 0.02051663374150583,
+      "quadrature_order": 32,
+      "quadrature16_error": 0.020516633741506442,
+      "linear_residual": 1.4381195712768756e-16,
+      "phase_sensor": -0.17294595578148775
+    },
+    {
+      "initial_nodes": 49,
+      "final_nodes": 49,
+      "h_max_normalized": 0.09340921422569068,
+      "h_min_over_delta": 0.10195900041971317,
+      "Z_real": 0.004179252519111425,
+      "Z_imag": 0.004159759715426741,
+      "relative_complex_L2": 0.005157693403278469,
+      "quadrature_order": 32,
+      "quadrature16_error": 0.005157693403278333,
+      "linear_residual": 1.741807516445129e-16,
+      "phase_sensor": -0.09210449612905257
+    },
+    {
+      "initial_nodes": 97,
+      "final_nodes": 97,
+      "h_max_normalized": 0.047838016339960855,
+      "h_min_over_delta": 0.04974234954093054,
+      "Z_real": 0.004184842665821733,
+      "Z_imag": 0.004179924507507283,
+      "relative_complex_L2": 0.0012912616247878757,
+      "quadrature_order": 32,
+      "quadrature16_error": 0.0012912616247884054,
+      "linear_residual": 2.5652075393682725e-16,
+      "phase_sensor": -0.047334001488251634
+    },
+    {
+      "initial_nodes": 193,
+      "final_nodes": 193,
+      "h_max_normalized": 0.024209279502973753,
+      "h_min_over_delta": 0.024569348331742034,
+      "Z_real": 0.004186232633514943,
+      "Z_imag": 0.004185000279827202,
+      "relative_complex_L2": 0.0003229311307866228,
+      "quadrature_order": 32,
+      "quadrature16_error": 0.0003229311307864384,
+      "linear_residual": 4.1905103015826693e-16,
+      "phase_sensor": -0.02397383811841329
+    },
+    {
+      "initial_nodes": 385,
+      "final_nodes": 385,
+      "h_max_normalized": 0.012178090942814926,
+      "h_min_over_delta": 0.012210130522186597,
+      "Z_real": 0.004186579653945333,
+      "Z_imag": 0.004186271389574493,
+      "relative_complex_L2": 8.074002837496887e-05,
+      "quadrature_order": 32,
+      "quadrature16_error": 8.074002837511795e-05,
+      "linear_residual": 4.908519487078945e-16,
+      "phase_sensor": -0.012062054846595865
+    }
+  ],
+  "pairs": [
+    {
+      "nodes": [
+        25,
+        49
+      ],
+      "errors": [
+        0.02051663374150583,
+        0.005157693403278469
+      ],
+      "h": [
+        0.17817572023010128,
+        0.09340921422569068
+      ],
+      "q": 2.138105755088086,
+      "status": "PASS"
+    },
+    {
+      "nodes": [
+        49,
+        97
+      ],
+      "errors": [
+        0.005157693403278469,
+        0.0012912616247878757
+      ],
+      "h": [
+        0.09340921422569068,
+        0.047838016339960855
+      ],
+      "q": 2.069535494578086,
+      "status": "PASS"
+    },
+    {
+      "nodes": [
+        97,
+        193
+      ],
+      "errors": [
+        0.0012912616247878757,
+        0.0003229311307866228
+      ],
+      "h": [
+        0.047838016339960855,
+        0.024209279502973753
+      ],
+      "q": 2.0348953281277082,
+      "status": "PASS"
+    },
+    {
+      "nodes": [
+        193,
+        385
+      ],
+      "errors": [
+        0.0003229311307866228,
+        8.074002837496887e-05
+      ],
+      "h": [
+        0.024209279502973753,
+        0.012178090942814926
+      ],
+      "q": 2.0174787738337816,
+      "status": "PASS"
+    }
+  ],
+  "adoption": {
+    "criterion": {
+      "reference": "H0*cosh(k*x)/cosh(k*a), x=a-z; piecewise-linear interpolation with elementwise Gauss-Legendre32",
+      "reference_source": "MIT Electromagnetic Fields and Energy, section10.7 diffusion equation; boundary solution derived for H(surface)=H0 and zero midplane flux",
+      "quantity": "relative complex L2 field error integrated over the half-depth",
+      "convergence_variable": "actual h_max/half-depth on fixed smooth grading",
+      "levels": [
+        25,
+        49,
+        97,
+        193,
+        385
+      ],
+      "expected": "asymptotic second order on this smooth constant-coefficient profile and fixed smooth grid",
+      "q_min": 1.5,
+      "q_pairs": "all consecutive pairs",
+      "finest_error_max": 0.003,
+      "strict_monotonicity": true,
+      "plateau": "UNRESOLVED when h unchanged or roundoff prevents a rate",
+      "scale": "one-dimensional fixed-grid solves; runtime metadata only"
+    },
+    "numerical_verdict": "pass",
+    "review": "independently reproduced from saved fields by a separate reviewer, not the implementation scripts",
+    "inference_limit": "a/delta about105: validates deep-skin linear diffusion, not finite-thickness or midplane behaviour",
+    "mesh_rate_interpretation": "h_max lies in negligible-field interior; uniform refinement halves h_min/delta too"
+  },
+  "mutation_matrix": [
+    {
+      "feature": "finite slab diffusion phase and sign",
+      "mutation": "conductanceSign",
+      "patch_sha256": "8c7fe68e4216fcd461e1f2203bf92c738358d29fe5d297e4a11eb5684643b8f1",
+      "validation": "killed",
+      "surrogate_candidate": "killed"
+    },
+    {
+      "feature": "finite slab diffusion phase and sign",
+      "mutation": "conductance1001",
+      "patch_sha256": "4afa2b258ce7f0b09d78256fc040aba529cc881141a06f37319c1ea56d57b953",
+      "validation": "killed",
+      "surrogate_candidate": "killed"
+    }
+  ],
+  "original_result_sha256": "a450b9c6e7d9344a52baa3ece57b4400edf7aac0dc6f5c73ae8930e60c3c35ee",
+  "original_checker_sha256": "351c434d98097c049d4eb96c22b5c25e649906191eec41e481fa65f3f6126430",
+  "measurement_entry_sha256": "17a37c94dd3b1f8f24c3d55a1145100909e85ee243a8cb53ba39e57329cf2a0c",
+  "surrogate": {
+    "record_id": "induction_heating/20261023_esim_slab_phase",
+    "convergence_level": 1,
+    "N": 25,
+    "baseline": "tests/fixtures/esim_slab_A25_cf77cd6e0.json",
+    "scope": "historical Z/phase guard, not analytic accuracy",
+    "phase_tolerance_status": "candidate uses existing repository convention; final user tolerance decision pending"
+  },
+  "quadrature_note": "Gauss16/32 crosscheck and independent saved-field recomputation; no nodal-only error"
+}

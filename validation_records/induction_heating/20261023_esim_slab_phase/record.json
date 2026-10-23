@@ -1,0 +1,331 @@
+{
+  "schema": "radia.validation-record.v3",
+  "id": "induction_heating/20261023_esim_slab_phase",
+  "kind": "acceptance",
+  "question": "Does deep-skin linear slab phase converge to the independent analytic solution?",
+  "outcome": "pass",
+  "source": {
+    "repo_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+    "dirty": false,
+    "native_sha256": {},
+    "wheel_sha256": null,
+    "source_only": true,
+    "provenance": "exact"
+  },
+  "covered_paths": [
+    "src/radia/esim_cell_problem.py",
+    "src/radia/esim_depth.py",
+    "src/radia/bh_law.py",
+    "pyproject.toml"
+  ],
+  "entry": {
+    "script": "entry.py",
+    "script_sha256": "17a37c94dd3b1f8f24c3d55a1145100909e85ee243a8cb53ba39e57329cf2a0c",
+    "command": [
+      "python",
+      "entry.py",
+      "clean"
+    ]
+  },
+  "environment": {
+    "host_role": "neutral-cpu",
+    "os": "Windows",
+    "python": "3.12.14",
+    "ngsolve": "6.2.2608",
+    "threads": 1
+  },
+  "result": {
+    "path": "adoption-result.json",
+    "sha256": "526ed271f3aeede0f5d14d68f65ae607bb4821aeaecb01f5f1966f9c4961c658"
+  },
+  "key_values": {
+    "finest_relative_error": {
+      "value": 8.074002837496887e-05,
+      "unit": "1"
+    },
+    "minimum_observed_q": {
+      "value": 2.0174787738337816,
+      "unit": "1"
+    },
+    "a_over_delta": {
+      "value": 104.66738213867171,
+      "unit": "1"
+    }
+  },
+  "limits": {
+    "finest_relative_error": 0.003,
+    "minimum_observed_q": 1.5
+  },
+  "timing_s": {
+    "coarsest_solve": 0.0013097000010020565
+  },
+  "status": "current",
+  "stale_reason": null,
+  "superseded_by": null,
+  "private": false,
+  "milestone": "Deep-skin ESIM slab phase convergence",
+  "claim": "The fixed-grid deep-skin slab phase error decreases monotonically with every q>=1.5 and finest relative error<=0.003.",
+  "date": "2026-10-23",
+  "radia_version": "5.3.3",
+  "conditions": {
+    "problem": "Linear constant-mu slab; a=0.005m,222kHz,sigma=5e6S/m,mu_r=100,H0=1000A/m; exp(+j omega t)",
+    "mesh": "Fixed smooth depth grading N25/49/97/193/385; h_max and h_min/delta recorded",
+    "hardware": "CPU double precision, one library thread"
+  },
+  "comparison": {
+    "reference": "Analytic slab diffusion solution with centre symmetry; https://web.mit.edu/6.013_book/www/chapter10/10.7.html",
+    "independence": "Closed-form diffusion reference and independent reviewer recomputation from recorded fields; no use of production solver as reference. Deep-skin regime does not validate finite-thickness effects."
+  },
+  "covered_sha256": {
+    "src/radia/esim_cell_problem.py": "4799dd64e9787a98c80953691a97de27ba1c85b38f45575e19a075c99eb7bbc4",
+    "src/radia/esim_depth.py": "f2cb0cdf63e3af27a6fd25bef6d31b73ca366d37e7380cbfc77f83f9aeddf969",
+    "src/radia/bh_law.py": "80a7e2ea51c4e8254b429d21600aae8982c19130662d2c80f05a4d2673d67690",
+    "pyproject.toml": "9736e404347c7c6bb955b1e9874029d6cfeac4b588dd859e9d92ecdf0f39df46"
+  },
+  "category": "adoption",
+  "supersedes": [],
+  "adoption": {
+    "feature": "radia.esim_cell_problem.ESIMFiniteSlabSolver._solve_on_mesh:deep-skin-linear-phase",
+    "criterion": {
+      "reference": {
+        "kind": "analytic",
+        "citation": "Canonical bibliography key haus1989electromagnetic: Haus and Melcher, Electromagnetic Fields and Energy (1989), ISBN 9780132490207, section 10.7, https://web.mit.edu/6.013_book/www/chapter10/10.7.html ; symmetric-boundary specialization verified in the attached derivation.",
+        "symbolic_verification": {
+          "path": "symbolic-verification.json",
+          "sha256": "61af5d85836566bb7f2e7e98eb4876a59b7af0ad964ba609ab062e74fdfc147e"
+        },
+        "bib_key": "haus1989electromagnetic"
+      },
+      "quantity": {
+        "name": "relative complex L2 magnetic-field error",
+        "definition": "sqrt(integral |H_FE-H_exact|^2 dx / integral |H_exact|^2 dx), elementwise 32-point Gauss-Legendre quadrature of the P1 interpolant",
+        "unit": "1"
+      },
+      "variables": {
+        "h_max_over_half_depth": "Actual maximum element width divided by fixed slab half-depth a; only this refinement axis varies"
+      },
+      "levels": [
+        {
+          "id": "A25",
+          "parameters": {
+            "h_max_over_half_depth": 0.17817572023010128
+          }
+        },
+        {
+          "id": "A49",
+          "parameters": {
+            "h_max_over_half_depth": 0.09340921422569068
+          }
+        },
+        {
+          "id": "A97",
+          "parameters": {
+            "h_max_over_half_depth": 0.047838016339960855
+          }
+        },
+        {
+          "id": "A193",
+          "parameters": {
+            "h_max_over_half_depth": 0.024209279502973753
+          }
+        },
+        {
+          "id": "A385",
+          "parameters": {
+            "h_max_over_half_depth": 0.012178090942814926
+          }
+        }
+      ],
+      "series": [
+        {
+          "id": "A-fixed-grid",
+          "level_ids": [
+            "A25",
+            "A49",
+            "A97",
+            "A193",
+            "A385"
+          ],
+          "axis": "h_max_over_half_depth",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 1.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.003
+          },
+          "expected_theory": {
+            "model": "Asymptotic second-order expectation for smooth constant-coefficient diffusion on uniformly refined smooth depth grading; q>=1.5 is the approved empirical lower bound",
+            "norm": "relative complex L2 of the P1 field interpolant",
+            "source": "Analytic ODE and boundary verification in reference-verification.md; approved fixed-grid experiment",
+            "assumptions": "Fixed smooth grading refined over the entire half-depth; fixed positive real mu/sigma, a/frequency/H0; no roundoff plateau",
+            "limitations": "Deep-skin a/delta about105 only; h_max in negligible-field interior, h_min/delta halves too. No general adaptive-mesh, finite-thickness, nonlinear, GPU or full-coil order claim."
+          }
+        }
+      ],
+      "failure_definition": "FAIL if errors are not strictly decreasing, any adjacent actual-h_max rate is below1.5, the finest error exceeds0.003, or any true residual exceeds1e-6. An unchanged mesh coordinate or zero/roundoff plateau is UNRESOLVED, never a fabricated rate or waiver.",
+      "saturation_policy": "blocks-pass",
+      "residual_threshold": 1e-06,
+      "threshold_verification": {
+        "mode": "reviewer",
+        "review_ref": "APPROVAL-20261023-ESIM-SLAB-PHASE-01-INDEPENDENT-RECOMPUTATION"
+      }
+    },
+    "rationale": {
+      "inference": "The independently checked fixed-grid A ladder satisfies the declared deep-skin linear slab criterion. This is a scoped adoption, not whole-IH or release qualification.",
+      "scope": "Constant real mu/sigma; half-depth0.005m,222kHz,mu_r100,sigma5e6S/m,H0=1000A/m; a/delta about105. Finite-thickness/midplane, nonlinear BH, fullcoil, GPU and FEM remain outside this evidence.",
+      "assumptions": [
+        {
+          "id": "reference-sign-boundary",
+          "kind": "reference-verification",
+          "statement": "The analytic reference solves the declared exp(+j omega t) equation and symmetric boundary conditions; its conjugate is not valid under that convention.",
+          "evidence_refs": [
+            "artifact:entry",
+            "artifact:result",
+            "review:APPROVAL-20261023-ESIM-SLAB-PHASE-01-INDEPENDENT-RECOMPUTATION"
+          ],
+          "invalidated_by": [
+            "reference-invalid"
+          ],
+          "recheck": "Independently review the algebraic derivation and original reference evaluation; reconsider both Z and phase adoption if the equation, boundary or convention changes."
+        },
+        {
+          "id": "fixed-grid-rate-scope",
+          "kind": "assumes",
+          "statement": "The A25..385 series refines the entire fixed smooth grading at fixed a/material/drive. h_max/a is the approved rate coordinate; h_min/delta is recorded to expose the skin-layer resolution.",
+          "evidence_refs": [
+            "artifact:result",
+            "approval:APPROVAL-20261023-ESIM-SLAB-PHASE-01"
+          ],
+          "invalidated_by": [
+            "scope-or-grid-change"
+          ],
+          "recheck": "Reconsider all dependent adoption claims on changed physical regime, grid grading, refinement policy or unexplained plateau; do not transfer these orders to adaptive B."
+        },
+        {
+          "id": "source-and-oracle-independence",
+          "kind": "independence",
+          "statement": "Saved exact-source clean computations were compared with an analytic reference and independently recomputed by the reviewer; the production solver is not its own analytic oracle.",
+          "evidence_refs": [
+            "artifact:result",
+            "review:APPROVAL-20261023-ESIM-SLAB-PHASE-01-INDEPENDENT-RECOMPUTATION"
+          ],
+          "invalidated_by": [
+            "provenance-or-oracle-change"
+          ],
+          "recheck": "Check original source/mesh/result identities and independent recomputation before re-certification; an archive hash alone is not numerical verification."
+        },
+        {
+          "id": "A25-protection",
+          "kind": "coverage",
+          "statement": "The A25 surrogate uses the adopted fixed-grid production entry point and historical ReZ/phase values. Both conductance mutations change the phase sensor; the explicit negative phase assertion remains. The impedance-only sign survivor remains disclosed.",
+          "evidence_refs": [
+            "artifact:result"
+          ],
+          "invalidated_by": [
+            "guard-or-mutation-change"
+          ],
+          "recheck": "Review production-path coverage and mutation sensitivity after any guard/baseline/grading change. Tolerance is user-approved1e-9 with zero atol; never infer accuracy from this coarse lock."
+        }
+      ],
+      "depends_on": [
+        "reference-sign-boundary",
+        "fixed-grid-rate-scope",
+        "source-and-oracle-independence",
+        "A25-protection"
+      ],
+      "break_conditions": [
+        {
+          "id": "reference-invalid",
+          "condition": "ODE, boundary, phase convention or analytic reference derivation is found incorrect"
+        },
+        {
+          "id": "scope-or-grid-change",
+          "condition": "Material, excitation, regime, grid/refinement contract or rate applicability changes"
+        },
+        {
+          "id": "provenance-or-oracle-change",
+          "condition": "Original identity or independent-oracle/reviewer evidence is contradicted or covered source changes"
+        },
+        {
+          "id": "guard-or-mutation-change",
+          "condition": "Production path, coarse model, phase sign guard or mutation sensitivity changes or required mutation survives"
+        }
+      ]
+    },
+    "approval": {
+      "approved_by": "user",
+      "approved_on": "2026-10-23",
+      "approval_ref": "APPROVAL-20261023-ESIM-SLAB-PHASE-01",
+      "criterion_sha256": "fd75a829740344c708800268fed220ada574628e55460bb5096f18474690f267",
+      "rationale_sha256": "ffa94243f1e50f62d568afd1354ac5b0916ac3eca787bd3edab4b3d5140adf19",
+      "scope_sha256": "44caea84bc230e47764bba96dcef2a5d2bb2ac2033ff8608eda54890ee46f2ce"
+    },
+    "result": {
+      "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+      "verdict": "PASS",
+      "levels": [
+        {
+          "id": "A25",
+          "parameters": {
+            "h_max_over_half_depth": 0.17817572023010128
+          },
+          "error": 0.02051663374150583,
+          "relative_residual": 1.4381195712768756e-16,
+          "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+          "mesh_sha256": "37d42d0a4d96199292c3cca15fa9c83c3fe73e564b3774bd55e27faae0e0eb24",
+          "runtime_s": 0.0013097000010020565
+        },
+        {
+          "id": "A49",
+          "parameters": {
+            "h_max_over_half_depth": 0.09340921422569068
+          },
+          "error": 0.005157693403278469,
+          "relative_residual": 1.741807516445129e-16,
+          "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+          "mesh_sha256": "8c341b89210784d2fd723ecfdd6cd7e3a47e8b6e17263f56d61a1e9af8420c1c",
+          "runtime_s": 0.000855500000398024
+        },
+        {
+          "id": "A97",
+          "parameters": {
+            "h_max_over_half_depth": 0.047838016339960855
+          },
+          "error": 0.0012912616247878757,
+          "relative_residual": 2.5652075393682725e-16,
+          "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+          "mesh_sha256": "5396ff4fd084c6d751e4d6b4eea5811066cb683948ed72a5a6056b9bf6e7ba77",
+          "runtime_s": 0.001254799999514944
+        },
+        {
+          "id": "A193",
+          "parameters": {
+            "h_max_over_half_depth": 0.024209279502973753
+          },
+          "error": 0.0003229311307866228,
+          "relative_residual": 4.1905103015826693e-16,
+          "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+          "mesh_sha256": "99e3273ba530eb21bac615c3e7ebee33d5e5573ea012f8a07f6fb22b942e3728",
+          "runtime_s": 0.002094299999953364
+        },
+        {
+          "id": "A385",
+          "parameters": {
+            "h_max_over_half_depth": 0.012178090942814926
+          },
+          "error": 8.074002837496887e-05,
+          "relative_residual": 4.908519487078945e-16,
+          "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+          "mesh_sha256": "63d8de374fc57807133727d09e047c6505ec1ff0a110de3c3d3a2ba15a9c00b1",
+          "runtime_s": 0.0037515000003622845
+        }
+      ],
+      "artifact_sha256": "526ed271f3aeede0f5d14d68f65ae607bb4821aeaecb01f5f1966f9c4961c658"
+    },
+    "protected_by": [
+      "tests/test_esim_finite_slab_regression.py"
+    ]
+  }
+}

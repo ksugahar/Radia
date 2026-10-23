@@ -1,0 +1,109 @@
+{
+  "adoption_result": {
+    "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+    "verdict": "PASS",
+    "levels": [
+      {
+        "id": "A25",
+        "parameters": {
+          "h_max_over_half_depth": 0.17817572023010128
+        },
+        "error": 0.02051663374150583,
+        "relative_residual": 1.4381195712768756e-16,
+        "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+        "mesh_sha256": "37d42d0a4d96199292c3cca15fa9c83c3fe73e564b3774bd55e27faae0e0eb24",
+        "runtime_s": 0.0013097000010020565
+      },
+      {
+        "id": "A49",
+        "parameters": {
+          "h_max_over_half_depth": 0.09340921422569068
+        },
+        "error": 0.005157693403278469,
+        "relative_residual": 1.741807516445129e-16,
+        "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+        "mesh_sha256": "8c341b89210784d2fd723ecfdd6cd7e3a47e8b6e17263f56d61a1e9af8420c1c",
+        "runtime_s": 0.000855500000398024
+      },
+      {
+        "id": "A97",
+        "parameters": {
+          "h_max_over_half_depth": 0.047838016339960855
+        },
+        "error": 0.0012912616247878757,
+        "relative_residual": 2.5652075393682725e-16,
+        "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+        "mesh_sha256": "5396ff4fd084c6d751e4d6b4eea5811066cb683948ed72a5a6056b9bf6e7ba77",
+        "runtime_s": 0.001254799999514944
+      },
+      {
+        "id": "A193",
+        "parameters": {
+          "h_max_over_half_depth": 0.024209279502973753
+        },
+        "error": 0.0003229311307866228,
+        "relative_residual": 4.1905103015826693e-16,
+        "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+        "mesh_sha256": "99e3273ba530eb21bac615c3e7ebee33d5e5573ea012f8a07f6fb22b942e3728",
+        "runtime_s": 0.002094299999953364
+      },
+      {
+        "id": "A385",
+        "parameters": {
+          "h_max_over_half_depth": 0.012178090942814926
+        },
+        "error": 8.074002837496887e-05,
+        "relative_residual": 4.908519487078945e-16,
+        "source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+        "mesh_sha256": "63d8de374fc57807133727d09e047c6505ec1ff0a110de3c3d3a2ba15a9c00b1",
+        "runtime_s": 0.0037515000003622845
+      }
+    ]
+  },
+  "scientific_evidence": {
+    "path": "result.json",
+    "sha256": "8ae22d98187a0373305906196cfd32dd2e1f3e60d30d2b1492d92502197fed39",
+    "original_result_sha256": "a450b9c6e7d9344a52baa3ece57b4400edf7aac0dc6f5c73ae8930e60c3c35ee",
+    "original_checker_sha256": "351c434d98097c049d4eb96c22b5c25e649906191eec41e481fa65f3f6126430"
+  },
+  "mesh_hash_definition": "SHA256 of canonical UTF-8 JSON with sorted keys, compact separators and keys coordinate='depth_from_surface_m',points=<original mesh_points_m array>; no mesh recomputation",
+  "mesh_resolution": [
+    {
+      "level": "A25",
+      "h_max_over_half_depth": 0.17817572023010128,
+      "h_min_over_delta": 0.21431363860601343
+    },
+    {
+      "level": "A49",
+      "h_max_over_half_depth": 0.09340921422569068,
+      "h_min_over_delta": 0.10195900041971317
+    },
+    {
+      "level": "A97",
+      "h_max_over_half_depth": 0.047838016339960855,
+      "h_min_over_delta": 0.04974234954093054
+    },
+    {
+      "level": "A193",
+      "h_max_over_half_depth": 0.024209279502973753,
+      "h_min_over_delta": 0.024569348331742034
+    },
+    {
+      "level": "A385",
+      "h_max_over_half_depth": 0.012178090942814926,
+      "h_min_over_delta": 0.012210130522186597
+    }
+  ],
+  "original_source_sha": "cf77cd6e02ebc1d002af8adb37a0b2cedd58d7d9",
+  "surrogate_tolerance": {
+    "approval_ref": "APPROVAL-20261023-ESIM-SURROGATE-TOL-01",
+    "rtol": 1e-09,
+    "atol": 0,
+    "explicit_sign_check": "Im(H1)/H0<0"
+  },
+  "evidence_limitations": [
+    "Deep-skin only, not finite-thickness/midplane qualification",
+    "h_max lies in negligible field; entire fixed grading uniformly refined",
+    "Original result.json is preserved; interim tolerance wording there is historical and superseded by the approval declared here"
+  ]
+}
