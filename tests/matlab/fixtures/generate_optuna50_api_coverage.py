@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
-INVENTORY_PATH = Path(__file__).with_name("optuna50_public_api.json")
+INVENTORY_PATH = ROOT / "packages/radia-optuna/oracles/optuna50_public_api.json"
 ORACLE_PATH = Path(__file__).with_name("optuna50_oracle.json")
 MATLAB_DIRECTORY = ROOT / "packages/radia-optuna/matlab" / "+radia" / "+optuna"
 DESTINATION = ROOT / "packages/radia-optuna/matlab" / "optuna50_api_coverage.json"
@@ -1453,7 +1453,7 @@ def build_coverage() -> dict[str, Any]:
     return {
         "schema": "radia.optuna50-api-coverage.v1",
         "upstream_version": "5.0.0",
-        "upstream_inventory": "tests/matlab/fixtures/optuna50_public_api.json",
+        "upstream_inventory": "packages/radia-optuna/oracles/optuna50_public_api.json",
         "upstream_inventory_sha256": _sha256(INVENTORY_PATH),
         "upstream_oracle": "tests/matlab/fixtures/optuna50_oracle.json",
         "upstream_oracle_sha256": _sha256(ORACLE_PATH),

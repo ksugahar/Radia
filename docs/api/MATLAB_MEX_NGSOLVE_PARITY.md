@@ -341,7 +341,7 @@ presence does not establish upstream algorithmic parity.
 Compatibility evidence is generated from the pinned version and checked in:
 
 - `tests/matlab/fixtures/optuna50_oracle.json`: differential behavior fixtures;
-- `tests/matlab/fixtures/optuna50_public_api.json`: upstream API inventory;
+- `packages/radia-optuna/oracles/optuna50_public_api.json`: upstream API inventory;
 - `packages/radia-optuna/matlab/optuna50_api_coverage.json`: mapped, verified, asserted and unresolved coverage;
 - `tests/matlab/fixtures/optuna_test_manifest.json`: test classification and oracle ownership.
 

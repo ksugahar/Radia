@@ -70,3 +70,4 @@ CLAUDE.md text eol=lf
 validation_test/induction_heating/bored_workpiece/results/candidate_0bdd66c9c/*.json -text whitespace=cr-at-eol
 validation_test/induction_heating/bored_workpiece/results/candidate_0bdd66c9c/*.xml -text whitespace=cr-at-eol
 packages/radia-optuna/oracles/optuna50_mcp_oracle.json text eol=lf
+packages/radia-optuna/oracles/optuna50_public_api.json text eol=lf

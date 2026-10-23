@@ -123,9 +123,9 @@ def _repository_layout(root: Path) -> dict[str, Path | str] | None:
         / "oracles"
         / "optuna50_mcp_oracle.json",
         "inventory": root
-        / "tests"
-        / "matlab"
-        / "fixtures"
+        / "packages"
+        / "radia-optuna"
+        / "oracles"
         / "optuna50_public_api.json",
         "test_manifest": root
         / "tests"
@@ -520,7 +520,7 @@ def matlab_optuna_oracle_plan(
     if key in {"all", "shared", "samplers", "storage"}:
         fixture_commands.extend(
             [
-                "python tests/matlab/fixtures/generate_optuna50_api_inventory.py",
+                "python packages/radia-optuna/oracles/generate_optuna50_api_inventory.py",
                 "python tests/matlab/fixtures/generate_optuna50_oracle.py",
                 "python tests/matlab/fixtures/generate_optuna50_api_coverage.py",
                 "python tests/matlab/fixtures/generate_optuna_test_manifest.py",

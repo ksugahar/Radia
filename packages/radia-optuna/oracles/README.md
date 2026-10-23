@@ -57,3 +57,15 @@ producer must not be executed during relocation or ordinary source checks.
 | --- | --- |
 | `generate_optuna50_mcp_oracle.py` | `7d6a08a91e8fe21a438660e6f359bcfa468578efd9c7579c6e592dbec56dd6cb` |
 | `optuna50_mcp_oracle.json` | `890bd0c25e6842427db8c55a6c1cda4135afdacb03ea2d53b5c4785aa15aa8aa` |
+
+## Public API inventory
+
+The Optuna 5.0.0 public inventory and its producer were moved unchanged
+from commit `dfe22b6ceb6dc0a55b902c4a80180176dfcfa814`. The stored inventory has no embedded
+producer hash. The source contract fixes the reviewed identities below;
+relocation never runs the producer or changes exported names/defaults/order.
+
+| Input | Git blob SHA256 |
+| --- | --- |
+| `generate_optuna50_api_inventory.py` | `351d63e534dcca09fc9b47493e4942cd728b59e32cea99c6694ca64d946f7e00` |
+| `optuna50_public_api.json` | `81cbd4c33acac95063994cc8de8b5bbef788c40ed23f8eceae690c9f0d14b602` |

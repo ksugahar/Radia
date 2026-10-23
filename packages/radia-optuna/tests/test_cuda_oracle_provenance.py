@@ -35,6 +35,12 @@ import pytest
             "890bd0c25e6842427db8c55a6c1cda4135afdacb03ea2d53b5c4785aa15aa8aa",
             False, id="mcp50",
         ),
+        pytest.param(
+            "generate_optuna50_api_inventory.py", "optuna50_public_api.json",
+            "351d63e534dcca09fc9b47493e4942cd728b59e32cea99c6694ca64d946f7e00",
+            "81cbd4c33acac95063994cc8de8b5bbef788c40ed23f8eceae690c9f0d14b602",
+            False, id="api50",
+        ),
     ],
 )
 def test_cuda_oracle_preserves_approved_source_identity(
