@@ -542,7 +542,7 @@ used `CP_ACP` narrow-API pattern.
 Applied to all 6 exporters:
 
 * `ExportNetgenCommand.cpp` — `.vol` via `ng_mesh->Save()` + `.vol.json`
-* `ExportGmshCommand.cpp` — `.msh` v4.1
+* `ExportGmshCommand.cpp` — historical `.msh` export (format superseded)
 * `ExportNastranCommand.cpp` — `.bdf`
 * `ExportVtkCommand.cpp` — `.vtk`
 * `ExportMegCommand.cpp` — `.meg` (FEMEEM / MAGIC)
