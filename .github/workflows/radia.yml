@@ -242,9 +242,18 @@ jobs:
     timeout-minutes: 20
     env:
       RADIA_SOURCE_ONLY_CONTRACTS: "1"
-      RADIA_CI_OUTPUT_DIR: 'C:\temp\radia-${{ github.run_id }}-${{ github.run_attempt }}'
 
     steps:
+      - name: Initialize runner-owned CI scratch
+        shell: pwsh
+        run: |
+          if (-not $env:RUNNER_TEMP -or -not (Test-Path -LiteralPath $env:RUNNER_TEMP -PathType Container)) { throw 'RUNNER_TEMP is required for CI scratch.' }
+          foreach ($key in @('TMP','TEMP','TMPDIR')) {
+            "$key=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          $output = Join-Path $env:RUNNER_TEMP "radia-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Force -Path $output | Out-Null
+          "RADIA_CI_OUTPUT_DIR=$output" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - uses: actions/checkout@v4
         with:
           # A push may contain several commits; github.event.before must exist
