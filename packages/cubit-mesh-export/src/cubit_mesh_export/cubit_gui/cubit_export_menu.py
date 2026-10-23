@@ -190,7 +190,7 @@ FMT_MEG = "meg"
 
 _FORMAT_TITLES = {
     FMT_NETGEN: "Export Netgen Vol",
-    FMT_GMSH: "Export GMSH",
+    FMT_GMSH: "Gmsh post-processing support",
     FMT_NASTRAN: "Export Nastran BDF",
     FMT_VTK: "Export VTK",
     FMT_FEMEEM: "Export FEMEEM",
@@ -1028,8 +1028,8 @@ _shutdown_connected = False
 _MENU_SPECS = (
     ("Netgen Vol (.vol)...", FMT_NETGEN,
      "Export curved mesh with labels (.vol, order 1-5)"),
-    ("GMSH (.msh)...", FMT_GMSH,
-     "Export mesh to GMSH format (.msh)"),
+    ("Gmsh MSH 4.2 (post-processing)...", FMT_GMSH,
+     "Gmsh MSH 4.2 export for post-processing and visualization; solver meshes are checked .vol"),
     ("Nastran BDF (.bdf)...", FMT_NASTRAN,
      "Export mesh to Nastran BDF format (.bdf)"),
     ("VTK (.vtk)...", FMT_VTK,

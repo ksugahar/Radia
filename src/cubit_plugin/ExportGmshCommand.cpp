@@ -116,7 +116,8 @@ std::vector<std::string> ExportGmshCommand::get_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "Export mesh to Gmsh MSH v4.2 format (lab-wide standard).\n"
+    "Gmsh MSH 4.2 export for post-processing and visualization only.\n"
+    "Solver meshes are checked .vol files; their contracts own labels and topology.\n"
     "Block assignment is NOT required.\n"
     "Sidesets exported as surface elements. Nodesets as comments.\n\n"
     "Writes filename.geo, filename.geo.opt, and filename.msh.opt.\n"

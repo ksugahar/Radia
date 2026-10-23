@@ -1,5 +1,7 @@
 # cubit-mesh-export
 
+Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+
 `cubit-plugin-install` automatically registers the official Coreform
 WorkflowToolbar for each selected profile. No manual toolbar package import is
 required. Existing user toolbars and unrelated preferences are preserved;
