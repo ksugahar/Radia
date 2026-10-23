@@ -97,7 +97,7 @@
   },
   "result": {
     "path": "adoption-result.json",
-    "sha256": "d596767646081973d1770e2a9bbee83da57b3454e1ce08a3eb4f1c72c9d358b9"
+    "sha256": "521f8e38ce1b92540c44e978df182547d12900c2c4e0d9fa404dad0ce8b4c70e"
   },
   "key_values": {
     "a_over_delta": {
@@ -1175,7 +1175,7 @@
     },
     "result": {
       "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
-      "artifact_sha256": "d596767646081973d1770e2a9bbee83da57b3454e1ce08a3eb4f1c72c9d358b9",
+      "artifact_sha256": "521f8e38ce1b92540c44e978df182547d12900c2c4e0d9fa404dad0ce8b4c70e",
       "verdict": "PASS",
       "levels": [
         {
