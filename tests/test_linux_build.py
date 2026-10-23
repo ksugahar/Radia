@@ -1,4 +1,11 @@
-"""Exercise HPC build admission checks and failure propagation without compiling."""
+"""Source-only contracts for the Linux build route.
+
+Guards: Dependency admission, build-stage failure propagation, artifact hashes,
+and clean-source provenance, including parity with the Windows identity helper.
+Assumes: Toolchain commands and installed-package metadata are mocked; actual
+subprocesses are limited to temporary Git repositories and the PowerShell
+provenance helper. No native compilation or numerical acceptance is performed.
+"""
 
 import importlib.util
 import json
