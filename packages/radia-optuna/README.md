@@ -243,12 +243,13 @@ checks idle-session receipts and exact trajectories before reporting speedups.
 Use the same TPE from MATLAB or the included masked Simulink
 study block and `SimulinkRunner`. Simulink is optional for MATLAB-only use.
 
-Build on the designated 100 host with `Build.ps1 -OptunaMexOnly -Test`.
+From the package source directory, call `buildOptunaMex` in MATLAB.
+In the monorepo, `Build.ps1 -OptunaMexOnly -Test` also runs repository acceptance.
 MATLAB selects its supported CUDA toolkit and Visual Studio compiler.
 The focused acceptance saves `validation_test/optimization/results_optuna_cuda_100.json`,
 including upstream 5.0.0 density/selection checks, exact random consumption,
 CUDA launch counters, runtime versions, transfers and temporary device memory.
-This is correctness evidence; formal speed comparisons use the idle A100 host.
+This is correctness evidence; formal speed comparisons use an idle validation host.
 
 `radia-optuna` is an independent, separately distributed MATLAB optimization
 component from the Radia monorepo. It installs the `radia.optuna` MATLAB
@@ -598,8 +599,8 @@ PyPI, and attaches it to the matching GitHub Release.
 
 ## CUDA execution boundary (2026-10-11)
 
-Build `optuna_mex` with `Build.ps1 -OptunaMexOnly`, which calls MATLAB
-`mexcuda` with its supported compiler configuration. A CUDA-capable NVIDIA
+Build `optuna_mex` by calling `buildOptunaMex` from the package source directory
+in MATLAB. The recipe calls `mexcuda` with its supported compiler configuration. A CUDA-capable NVIDIA
 host and Parallel Computing Toolbox are required for GPU-mode density evaluations.
 No NGSolve, TaskManager, Radia CPU solver, or CPU-only MEX build is linked.
 
