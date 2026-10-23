@@ -8,6 +8,7 @@ import ast
 import math
 from pathlib import Path
 import sys
+import types
 
 import gmsh
 import numpy as np
@@ -25,11 +26,15 @@ def _source_module(name, relative):
     return module
 
 
-writer = _source_module('msh42_core_writer', 'src/radia/gmsh_post_export.py')
-reader = _source_module('msh42_core_reader', 'src/radia/peec_mesh_import.py')
+package = types.ModuleType('_msh42_core')
+package.__path__ = [str(ROOT / 'src/radia')]
+sys.modules[package.__name__] = package
+writer = _source_module('_msh42_core.gmsh_post_export', 'src/radia/gmsh_post_export.py')
+reader = _source_module('_msh42_core.peec_mesh_import', 'src/radia/peec_mesh_import.py')
 
 
 def _views(path):
+    reader.validate_native_msh_fields(path)
     gmsh.initialize(['-noconfig'])
     try:
         gmsh.option.setNumber('General.Terminal', 0)
@@ -53,8 +58,8 @@ def _views(path):
         gmsh.finalize()
 
 
-@pytest.mark.parametrize('start', [17, 2**31 + 17], ids=['sparse', 'large'])
-def test_payload_fields_roundtrip(tmp_path, start):
+def test_payload_fields_roundtrip(tmp_path):
+    start = 17
     expected = {start: [1., -2., 3.], start + 1: [4., 5., -6.]}
     payload = writer.PayloadV42(
         groups=[writer.PhysicalGroup(1, 1, 'conductor')],
@@ -76,6 +81,33 @@ def test_payload_fields_roundtrip(tmp_path, start):
     nodes, edges = reader.read_gmsh_centerline(path)
     assert nodes == {start: [0., 0., 0.], start+1: [1., 0., 0.]}
     assert edges == [[start, start+1]]
+
+
+def test_large_tags_remain_supported_for_mesh_only_and_pure_python(tmp_path):
+    start = 2147483665
+    payload = writer.PayloadV42(
+        entities=[writer.Entity(1, 1, (0, 0, 0, 1, 0, 0))],
+        node_blocks=[writer.NodeBlock(1, 1, start, [(0, 0, 0), (1, 0, 0)])],
+        element_blocks=[writer.ElementBlock(1, 1, 1, [[start, start + 1]])])
+    path = tmp_path / 'large_mesh.msh'
+    with path.open('w', encoding='utf-8') as stream:
+        writer._emit_v42_msh(stream, payload)
+    reader.validate_native_msh_fields(path)
+    gmsh.initialize(['-noconfig'])
+    try:
+        gmsh.open(str(path))
+        assert list(map(int, gmsh.model.mesh.getNodes()[0])) == [start, start + 1]
+        assert list(map(int, gmsh.model.mesh.getElementsByType(1)[1])) == [start, start + 1]
+    finally:
+        gmsh.finalize()
+    # Pure serialization/parsing retains size_t indices even with field data.
+    # Do not pass this field-bearing file to the native reference.
+    with path.open('a', encoding='utf-8') as stream:
+        writer._emit_data_section(stream, writer.DataField(
+            '$NodeData', 'B', 3, [(start, [1., -2., 3.]), (start + 1, [4., 5., -6.])]))
+    nodes, edges = reader.read_gmsh_centerline(path)
+    assert nodes == {start: [0., 0., 0.], start + 1: [1., 0., 0.]}
+    assert edges == [[start, start + 1]]
 
 
 def test_separate_line_writer_preserves_fields(tmp_path):

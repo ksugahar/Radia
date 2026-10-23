@@ -30,6 +30,8 @@ Part of Radia project
 
 import numpy as np
 
+from ._gmsh_native_fields import validate_native_msh_fields
+
 
 class GMSHCenterlineReader:
     """Read 1D line elements from a GMSH MSH v4.2 ASCII centerline mesh.
@@ -296,6 +298,7 @@ def _load_gmsh(filename, unit_scale=1.0):
         if source.readline().strip() != '$MeshFormat':
             raise ValueError(f'{filename}: $MeshFormat header missing')
         GMSHCenterlineReader(filename)._check_format([source.readline()], 0)
+    validate_native_msh_fields(filename)
     import gmsh
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
