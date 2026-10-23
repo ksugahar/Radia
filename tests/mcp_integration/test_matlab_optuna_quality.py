@@ -321,6 +321,7 @@ def test_installed_evidence_is_authoritative_without_repository(tmp_path, monkey
         shutil.copy2(path, target / "oracles" / path.name)
     (target / "matlab/optuna_mex.mexw64").write_bytes(b"presence-only placeholder")
     shutil.copy2(source / "THIRD_PARTY_NOTICES.md", target / "matlab/THIRD_PARTY_NOTICES.md")
+    source_health = matlab_optuna_health(str(REPO_ROOT))
     monkeypatch.delenv("RADIA_REPO_ROOT", raising=False)
     original = importlib.util.find_spec
     monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a, **k:
@@ -330,7 +331,8 @@ def test_installed_evidence_is_authoritative_without_repository(tmp_path, monkey
         raise AssertionError("installed evidence must not search a repository")
     monkeypatch.setattr(optuna_quality, "_repository_candidates", no_repository)
     health = matlab_optuna_health()
-    assert health["ok"] is True, health
+    assert health["ok"] is source_health["ok"], health
+    assert health["errors"] == source_health["errors"], health
     assert health["source_kind"] == "installed-distribution", health
     assert health["oracle"]["actual_fixture_sha256"] == health["oracle"]["recorded_fixture_sha256"]
     contract = matlab_optuna_compatibility_contract()
@@ -347,6 +349,8 @@ def test_installed_evidence_is_authoritative_without_repository(tmp_path, monkey
             fixture.unlink()
         rejected = matlab_optuna_health()
         assert rejected["ok"] is False, rejected
+        expected_error = "hash mismatch" if damage == "tamper" else "optuna50_oracle.json"
+        assert any(expected_error in error for error in rejected["errors"]), rejected
         with pytest.raises((OSError, ValueError)):
             matlab_optuna_compatibility_contract()
         fixture.write_bytes(content)
@@ -355,9 +359,11 @@ def test_installed_evidence_is_authoritative_without_repository(tmp_path, monkey
     unsafe = json.loads(original_ledger)
     unsafe["files"]["python_oracle"]["path"] = "../outside.json"
     ledger.write_text(json.dumps(unsafe), encoding="utf-8")
-    assert matlab_optuna_health()["ok"] is False
+    assert any("Unsafe" in error for error in matlab_optuna_health()["errors"])
     with pytest.raises(ValueError, match="Unsafe"):
         matlab_optuna_compatibility_contract()
     ledger.write_bytes(original_ledger)
-    assert matlab_optuna_health()["ok"] is True
+    restored = matlab_optuna_health()
+    assert restored["ok"] is source_health["ok"], restored
+    assert restored["errors"] == source_health["errors"], restored
     assert matlab_optuna_compatibility_contract()["ok"] is True
