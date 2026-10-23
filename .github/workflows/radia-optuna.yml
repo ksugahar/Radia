@@ -116,7 +116,8 @@ jobs:
       - name: Build Optuna CUDA kernels with mexcuda
         shell: pwsh
         run: |
-          & .\Build.ps1 -OptunaMexOnly
+          $root = (Get-Location).Path.Replace("'", "''")
+          & matlab -batch "addpath('$root/packages/radia-optuna/tools'); build_mexcuda;"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test, build, and verify radia-optuna wheel
