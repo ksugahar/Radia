@@ -1,3 +1,11 @@
+"""Optuna release and isolated acceptance contracts.
+
+Guards: Release artifact identity, isolated acceptance lifecycle, and the CI
+package-entry route to the supported mexcuda build without pybind dependencies.
+Assumes: Repository workflow and release tooling describe the public release
+contract; mocked transport tests do not certify native numerical correctness.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -92,7 +100,12 @@ def test_optuna_workflow_uses_supported_mexcuda_without_pybind():
         encoding="utf-8"
     )
     assert "pip install pybind11" not in workflow
-    assert "& .\\Build.ps1 -OptunaMexOnly" in workflow
+    assert "addpath('$root/packages/radia-optuna/tools'); build_mexcuda;" in workflow
+    entry = (root / "packages/radia-optuna/tools/build_mexcuda.m").read_text(
+        encoding="utf-8"
+    )
+    assert "fileparts(fileparts(mfilename('fullpath')))" in entry
+    assert "binary = buildOptunaMex;" in entry
     assert "runs-on: windows-latest" not in workflow
     builder = (root / "packages/radia-optuna/buildOptunaMex.m").read_text(encoding="utf-8")
     assert "mexcuda(" in builder

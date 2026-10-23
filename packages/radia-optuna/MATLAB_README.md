@@ -14,7 +14,7 @@ Radia solver, NGSolve, oneMKL, Cubit, or Python binary dependency. Missing or
 incompatible native gateways fail loudly and never redirect through
 `radia_mex`.
 
-Build the gateway with `Build.ps1 -OptunaMexOnly` using MATLAB's supported
+From the package source directory, call `buildOptunaMex` in MATLAB using its supported
 `mexcuda` toolchain. TPE density, candidate scoring and maximum selection
 require Parallel Computing Toolbox and a supported NVIDIA GPU in GPU mode. Random
 consumption, candidate generation and study management execute on the host.

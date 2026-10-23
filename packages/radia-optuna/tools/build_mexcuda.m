@@ -1,5 +1,6 @@
-function build_mexcuda(repoRoot)
-% Compatibility entry point sharing the canonical package build recipe.
-addpath(fullfile(repoRoot,"packages","radia-optuna"));
-buildOptunaMex;
+function binary = build_mexcuda
+%BUILD_MEXCUDA Invoke the canonical recipe from this package's location.
+packageRoot = fileparts(fileparts(mfilename('fullpath')));
+addpath(packageRoot);
+binary = buildOptunaMex;
 end

@@ -10,7 +10,6 @@ from setuptools.command.bdist_wheel import bdist_wheel as _bdist_wheel
 from setuptools.command.build_py import build_py as _build_py
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
-REPO_ROOT = PACKAGE_ROOT.parents[1]
 MATLAB_ROOT = PACKAGE_ROOT / "matlab"
 OPTUNA_SOURCE = MATLAB_ROOT / "+radia" / "+optuna"
 MEX_SOURCE = MATLAB_ROOT / "optuna_mex.mexw64"
@@ -53,7 +52,7 @@ class build_py(_build_py):
             rendered = "\n".join(f"  - {path}" for path in missing)
             raise RuntimeError(
                 "radia-optuna cannot build a partial distribution. Missing:\n"
-                f"{rendered}\nRun Build.ps1 -OptunaMexOnly first."
+                f"{rendered}\nRun buildOptunaMex in MATLAB from the package source directory first."
             )
 
         super().run()
