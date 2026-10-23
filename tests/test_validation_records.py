@@ -280,8 +280,6 @@ def test_valid_analytic_receipt_is_hashed_not_executed(adoption_sample):
     with pytest.raises(ValueError, match="artifact hash"): validate_record(root, path)
 
 
-
-
 @pytest.mark.parametrize("extra", ["LIMIT = 2 * 0.01\n", "if True:\n    LIMIT = 0.02\n"])
 def test_reassigned_literal_is_not_safe_machine_verification(adoption_sample, extra):
     root, path, record = adoption_sample
@@ -294,8 +292,6 @@ def test_reassigned_literal_is_not_safe_machine_verification(adoption_sample, ex
     }
     seal_adoption(path, record)
     with pytest.raises(ValueError, match="assignment count"): validate_record(root, path)
-
-
 
 
 def test_p_then_h_chain_uses_separate_rates_not_a_mixed_axis(adoption_sample):
@@ -440,7 +436,6 @@ def test_current_source_change_fails_but_stale_retains_original_evidence(sample)
     assert (path.parent / "result.json").read_bytes() == before
 
 
-
 @pytest.mark.parametrize("question", ["C:/private/input", "192.0.2.1", "commercial reference data"])
 def test_private_metadata_is_rejected(sample, question):
     root, path, record = sample
@@ -448,7 +443,6 @@ def test_private_metadata_is_rejected(sample, question):
     write(path, record)
     with pytest.raises(ValueError, match="private"):
         validate_record(root, path)
-
 
 
 def test_orphan_result_cannot_bypass_schema(sample):
@@ -1005,3 +999,10 @@ def test_surrogate_lock_must_be_a_python_module(adoption_sample):
     record["adoption"]["protected_by"] = ["tests/lock.txt"]
     write(path, record)
     with pytest.raises(ValueError, match="lock extension"): validate_record(root, path)
+
+
+def test_accuracy_champion_cannot_be_worse_than_origin(champion_sample):
+    root, path, record = champion_sample
+    for level, error in zip(record["champion"]["levels"], (.9, .5)): level["error"] = error
+    reseal_champion_levels(path, record)
+    with pytest.raises(ValueError, match="champion origin error bound"): validate_record(root, path)
