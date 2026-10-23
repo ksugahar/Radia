@@ -115,6 +115,7 @@ public:
             (int)coord_z.size() != ndof_h1_)
             throw std::runtime_error("HypreBasedAMS: coordinate size mismatch with H1 DOFs");
         RequireLowestOrderGradient();
+        RequireFreeAuxiliaryVertices();
 
         Setup(coord_x, coord_y, coord_z);
     }
@@ -146,6 +147,33 @@ public:
                 + std::to_string(bad) + " of " + std::to_string(grad_->Height())
                 + " discrete-gradient rows are not edge-vertex pairs. "
                   "For order >= 2 use NGSolve's bddc preconditioner.");
+    }
+
+    /// Tangential Dirichlet edges constrain both endpoint vertices of the
+    /// auxiliary H1_0 space. Free edge endpoints alone are not free vertices:
+    /// a thin mesh can have interior diagonals but no interior vertex at all.
+    /// Reject that unsupported auxiliary space before either AMG hierarchy is
+    /// built. This also covers ComplexHypreBasedAMS and BDDC's wirebasket AMS,
+    /// which both construct this real auxiliary operator.
+    void RequireFreeAuxiliaryVertices() const {
+        std::vector<unsigned char> touching_free(ndof_h1_, 0);
+        std::vector<unsigned char> constrained(ndof_h1_, 0);
+        for (int e = 0; e < ndof_hc_; e++) {
+            const bool free = !freedofs_ || freedofs_->Test(e);
+            auto columns = grad_->GetRowIndices(e);
+            auto values = grad_->GetRowValues(e);
+            for (int j = 0; j < columns.Size(); j++) {
+                if (values[j] == 0.0) continue;  // non-edge smoothing-only row
+                if (free) touching_free[columns[j]] = 1;
+                else constrained[columns[j]] = 1;
+            }
+        }
+        for (int v = 0; v < ndof_h1_; v++)
+            if (touching_free[v] && !constrained[v]) return;
+        throw std::runtime_error(
+            "HypreBasedAMS: auxiliary nodal space has zero free vertices "
+            "touching free edges; AMS requires a nonempty auxiliary space, "
+            "not a smoother-only substitute.");
     }
 
     /// Update preconditioner with current matrix values.

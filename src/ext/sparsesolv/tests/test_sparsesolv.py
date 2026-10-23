@@ -10,6 +10,11 @@ preconditioners (IC) for use with NGSolve's Krylov solvers.
 
 Factory functions (ICPreconditioner, etc.) auto-dispatch real/complex
 based on mat.IsComplex() and auto-call Update() on construction.
+
+Guards: public solver contracts, including fail-loud rejection of an empty
+auxiliary nodal space by standalone and BDDC wirebasket AMS.
+Assumes: NGSolve's checked lowest-order edge/vertex gradient mapping; numerical
+tests below are existing contracts, not independent formulation validation.
 """
 
 import pytest
@@ -356,6 +361,47 @@ def test_lowest_order_gradient_equals_create_gradient():
         np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
     with pytest.raises(Exception, match="one HCurl dof per edge"):
         LowestOrderGradient(HCurl(mesh, order=1))
+
+
+def test_ams_rejects_zero_free_auxiliary_vertices():
+    """Reject an unsupported public setup before an apply can return NaN.
+
+    Guards: standalone complex AMS and BDDC wirebasket AMS fail loudly when
+    interior edges have only Dirichlet endpoints; no smoother-only fallback.
+    Assumes: this 12-tetrahedron mesh has all vertices on the boundary but has
+    free interior edges; no linear solve or accuracy criterion is involved.
+    """
+    from ngsolve.meshes import MakeStructured3DMesh
+    import radia.sparsesolv_ngsolve as ssn
+
+    mesh = MakeStructured3DMesh(hexes=False, nx=2, ny=1, nz=1)
+    nodal = H1(mesh, order=1, dirichlet=".*")
+    assert not any(nodal.FreeDofs()), "fixture must have zero free nodal vertices"
+    low = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    assert any(low.FreeDofs()), "fixture must retain free interior edges"
+    u, v = low.TnT()
+    auxiliary = BilinearForm(low, symmetric=True)
+    auxiliary += (InnerProduct(curl(u), curl(v)) + InnerProduct(u, v)) * dx
+    with TaskManager():
+        auxiliary.Assemble()
+    grad, _ = low.CreateGradient()
+    coords = [tuple(vertex.point) for vertex in mesh.vertices]
+    message = "auxiliary nodal space has zero free vertices"
+    with pytest.raises(RuntimeError, match=message):
+        ssn.ComplexHypreBasedAMSPreconditioner(
+            auxiliary.mat, grad, freedofs=low.FreeDofs(),
+            coord_x=[p[0] for p in coords], coord_y=[p[1] for p in coords],
+            coord_z=[p[2] for p in coords], ndof_complex=low.ndof)
+
+    full = HCurl(mesh, order=2, complex=True, dirichlet=".*")
+    u, v = full.TnT()
+    form = BilinearForm(full, symmetric=True)
+    form += (InnerProduct(curl(u), curl(v)) + 1j*InnerProduct(u, v)) * dx
+    pre = Preconditioner(form, "bddc", coarsetype="sparsesolv_ams",
+                         coarseflags={"cycles": 4})
+    with pytest.raises(RuntimeError, match=message):
+        with TaskManager():
+            form.Assemble()
 
 
 def _bddc_order2_solve(coarse, complex_system, face_wirebasket=False, order=2, **coarseflags):
