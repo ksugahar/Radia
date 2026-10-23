@@ -34,11 +34,11 @@ def require_msh42(path, _seen=None) -> None:
             return
         seen.add(resolved)
         text = re.sub(r'//[^\n]*|/\*.*?\*/', '', path.read_text(encoding='utf-8'), flags=re.S)
-        merges = re.findall(r'\bMerge\s+([^;]+);', text)
+        merges = re.findall(r'\b(?:Merge|Include)\s+([^;]+);', text)
         for expression in merges:
             literal = re.fullmatch(r'"([^"\n]+)"', expression.strip())
             if not literal:
-                raise ValueError(f'{path.name}: dynamic Merge target cannot be checked for MSH 4.2')
+                raise ValueError(f'{path.name}: dynamic Merge/Include target cannot be checked for MSH 4.2')
             require_msh42(path.parent / literal.group(1), seen)
         return
     if path.suffix.lower() != '.msh':
@@ -47,6 +47,23 @@ def require_msh42(path, _seen=None) -> None:
         opening, header, closing = [stream.readline().strip() for _ in range(3)]
     if opening != b'$MeshFormat' or header.split() != [b'4.2', b'0', b'8'] or closing != b'$EndMeshFormat':
         raise ValueError(f'{path.name}: expected ASCII MSH 4.2 (4.2 0 8), got {header!r}')
+
+    # Field tags are dense native indices in the adopted development build.
+    # Reuse the pure-Python field decoder: mesh-only size_t tags remain valid.
+    from .msh_inspect import _split_sections, _parse_data_section
+    sections, errors = _split_sections(path.read_text(encoding='utf-8').splitlines())
+    if errors:
+        raise ValueError(f'{path.name}: {"; ".join(errors)}')
+    for kind, body, line in sections:
+        if kind not in ('NodeData', 'ElementData', 'ElementNodeData'):
+            continue
+        view, errors = _parse_data_section(kind, body, line)
+        if errors:
+            raise ValueError(f'{path.name}: {"; ".join(errors)}')
+        for tag in view['tags']:
+            if tag > 2**31 - 1:
+                raise ValueError(f'{path.name}: Gmsh native {kind} field tag {tag} '
+                                 'exceeds 2147483647; no remapping or fallback is used')
 
 
 def record_wheel(wheel: Path, destination: Path) -> dict:
