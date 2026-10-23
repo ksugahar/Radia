@@ -49,7 +49,7 @@ def _run(extra_args, output_json):
         assert 0 <= result["linear_relative_residual"] < 1e-8
         assert result["gmsh_file"] == os.path.abspath(output_msh)
         with open(output_msh, "r", encoding="utf-8") as f:
-            assert f.read(40).startswith("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
+            assert f.read(40).startswith("$MeshFormat\n4.2 0 8\n$EndMeshFormat\n")
     return result
 
 

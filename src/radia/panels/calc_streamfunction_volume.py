@@ -59,7 +59,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--n-threads", type=int, default=4,
                    help="NGSolve TaskManager thread count.")
     p.add_argument("--msh-output", default=None,
-                   help="GMSH .msh (v4.1) wire overlay to write. The runner sets it.")
+                   help="GMSH .msh (v4.2) wire overlay to write. The runner sets it.")
     p.add_argument("--output", default=None,
                    help="Result JSON.  calc_main writes the return dict here.")
     return p

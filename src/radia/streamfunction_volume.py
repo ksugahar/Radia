@@ -239,10 +239,10 @@ def bz_radia(wires, currents, obs):
 
 
 # ----------------------------------------------------------------------
-# wire -> GMSH .msh v4.1 (1D line elements; lab-wide v4.1-only policy)
+# wire -> GMSH .msh v4.2 (1D line elements; lab-wide v4.2-only policy)
 # ----------------------------------------------------------------------
 def write_wires_msh(wires, path):
-    """Write the extracted wires as 1D line elements to a GMSH .msh v4.1 file.
+    """Write the extracted wires as 1D line elements to a GMSH .msh v4.2 file.
 
     One curve entity holding all wire polylines (a viewer overlay of the coil).
     """
@@ -261,10 +261,10 @@ def write_wires_msh(wires, path):
     if nN == 0:
         bb = [0, 0, 0, 0, 0, 0]
     out = []
-    out.append("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
+    out.append("$MeshFormat\n4.2 0 8\n$EndMeshFormat\n")
     out.append("$Entities\n0 1 0 0\n")
     out.append(f"1 {bb[0]:.9g} {bb[1]:.9g} {bb[2]:.9g} "
-               f"{bb[3]:.9g} {bb[4]:.9g} {bb[5]:.9g} 0 0\n")
+               f"{bb[3]:.9g} {bb[4]:.9g} {bb[5]:.9g} 0 0 0\n")
     out.append("$EndEntities\n")
     out.append("$Nodes\n")
     out.append(f"1 {nN} 1 {nN}\n")

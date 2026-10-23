@@ -339,7 +339,7 @@ def _solve_sphere(args) -> dict:
 # ============================================================
 
 def _emit_msh(mesh, gpsi, Phi_scalar, H_fem, path) -> str:
-    """Write a GMSH .msh v4.1 with the flux psi, scalar Phi, and |B| fields
+    """Write a GMSH .msh v4.2 with the flux psi, scalar Phi, and |B| fields
     so GMSH renders flux-lines (psi iso-contours) and pole equipotentials
     (Phi iso-contours).  Returns the absolute path written."""
     from ngsolve import Norm
