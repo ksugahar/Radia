@@ -18,10 +18,11 @@ import time
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from radia_mcp.common import register_status_tool
 from radia_mcp.common.mcp_contract import validate_solver_artifact_identity
-from . import bug_patterns, catalog
+from . import bug_patterns, catalog, operations
 
 mcp = FastMCP("mcp-server-radia-meta")
 
@@ -33,6 +34,19 @@ _HEALTH_CACHE_TTL_S = 30.0
 # ============================================================
 # Catalog tools
 # ============================================================
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False,
+                                    idempotentHint=True, openWorldHint=False))
+def radia_mcp_operations(topic: str = "") -> dict[str, Any]:
+    """List/read locally registered HPC, scheduler and runtime operations notes.
+
+    Empty topic lists available ids. Exact topic ids return curated instructions
+    with source provenance. Site data stays outside public packages. This tool
+    only reads knowledge: it never connects to hosts or executes/submits jobs.
+    Site queue limits are dated observations, not policy or submission permission.
+    """
+    return operations.lookup(topic)
+
 
 @mcp.tool()
 def radia_mcp_overview(full: bool = False) -> dict:
