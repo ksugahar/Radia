@@ -483,7 +483,7 @@ def build_argparser():
                         help="FE direct solver: NGSolve SparseCholesky.")
     parser.add_argument(
         "--msh-output", default="",
-        help="GMSH .msh v4.1 output for global/full FE modes",
+        help="GMSH .msh v4.2 output for global/full FE modes",
     )
     return parser
 

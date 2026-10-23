@@ -414,13 +414,13 @@ def _build_ngmesh_from_elements(elements):
 
 
 def _write_hdiv_vol_sol_msh(msh_path, elements, model, rad):
-    """.vol + .sol first, then vol2msh to GMSH v4.1 with ElementData.
+    """.vol + .sol first, then vol2msh to GMSH v4.2 with ElementData.
 
     Outputs:
       <base>.vol      netgen mesh (hex/tet/wedge)
       <base>_B.sol    L2 order=0 dim=3 element-centered B [T]
       <base>_Bmag.sol L2 order=0 scalar element-centered |B| [T]
-      <base>.msh      GMSH v4.1 with $ElementData views (via vol2msh)
+      <base>.msh      GMSH v4.2 with $ElementData views (via vol2msh)
     """
     from ngsolve import Mesh as NMesh, L2, GridFunction
     from ngsolve import TaskManager

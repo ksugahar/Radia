@@ -116,7 +116,7 @@ def build_argparser():
                         help="HDiv order: BDM1 or BDM2")
     parser.add_argument(
         "--msh-output", default="",
-        help="GMSH .msh v4.1 output for the final rotor-angle magnetization",
+        help="GMSH .msh v4.2 output for the final rotor-angle magnetization",
     )
     return parser
 
