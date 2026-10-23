@@ -116,7 +116,7 @@ def _repository_layout(root: Path) -> dict[str, Path | str] | None:
         "matlab_root": matlab_root,
         "manifest": manifest,
         "notice": root / "packages" / "radia-optuna" / "THIRD_PARTY_NOTICES.md",
-        "oracle": root / "tests" / "matlab" / "fixtures" / "optuna50_oracle.json",
+        "oracle": root / "packages" / "radia-optuna" / "oracles" / "optuna50_oracle.json",
         "mcp_oracle": root
         / "packages"
         / "radia-optuna"
@@ -521,7 +521,7 @@ def matlab_optuna_oracle_plan(
         fixture_commands.extend(
             [
                 "python packages/radia-optuna/oracles/generate_optuna50_api_inventory.py",
-                "python tests/matlab/fixtures/generate_optuna50_oracle.py",
+                "python packages/radia-optuna/oracles/generate_optuna50_oracle.py",
                 "python tests/matlab/fixtures/generate_optuna50_api_coverage.py",
                 "python tests/matlab/fixtures/generate_optuna_test_manifest.py",
             ]
