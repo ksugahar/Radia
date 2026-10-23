@@ -1,4 +1,6 @@
-"""Behavioral contracts for real scalar sparse storage, not ABI class names."""
+"""Guards: real sparse storage and operators survive compiler-specific exports.
+Assumes: pinned NGSolve/Netgen real-double CPU runtime; caller-owned TaskManager.
+"""
 import numpy as np
 import pytest
 

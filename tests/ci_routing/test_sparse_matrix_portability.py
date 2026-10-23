@@ -1,4 +1,6 @@
-"""Fast source contract: sparse scalar ABI names never select execution."""
+"""Guards: no Python source selects sparse storage by compiler-specific names.
+Assumes: a Git checkout with UTF-8 tracked Python sources; no native imports.
+"""
 from pathlib import Path
 import re
 import subprocess
