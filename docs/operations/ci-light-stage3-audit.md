@@ -288,3 +288,20 @@ executable closure digest was recalculated with `audit_digest` and the declared
 dynamic source included. Runner labels, denied imports, dependencies, job steps
 and the active profile budget remain unchanged. Reciprocal CI review still
 applies; source contracts do not qualify Linux or Windows native artifacts.
+
+## Runner-owned scratch (2026-10-23)
+
+The fast-contracts job now initializes its output and standard temporary
+variables from RUNNER_TEMP in a shell step, before checkout and child processes.
+No fixed host output/history path remains in the workflows. Artifacts preserve
+the result files before runner cleanup; this changes storage, not gate criteria.
+Runner context is resolved at step execution, not in unsupported job-level env.
+
+After retaining the Linux source-build route above, the F2 executable source
+closure contains 56 files. Relative to the integrated main, only the light job
+execution declaration changes; requirements, denied imports, runner capability,
+profile budget and source-only import guard remain unchanged. Recomputing with
+the prior job declaration reproduces the prior seal. The new audit_digest is
+`5ff1ee6e101a637220e585e2de887bf925839516c66710348d08e86d0e61f6d2`.
+Projection allocation checks belong to hosted policy contracts and do not add
+MATLAB, a GPU, a compiler or a native build to the light execution closure.

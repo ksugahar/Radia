@@ -1,4 +1,8 @@
-"""Regression tests for the source-tree native ABI probe."""
+"""Guards: native import identity and explicit clean-build provenance gates.
+
+Assumes: source workflow inspection and Python's standard _ctypes extension;
+these contracts never compile Radia or certify numerical/native solver results.
+"""
 
 from __future__ import annotations
 
@@ -89,7 +93,7 @@ def test_native_release_keeps_generated_context_outside_source_tree():
         "${{ env.RADIA_CI_OUTPUT_DIR }}/ci-release-context.json"
     )
     build = steps["Build with MSVC + MKL"]["run"]
-    assert "@rebuildFlag -RequireNativeProvenance" in build
+    assert "-Rebuild -RequireNativeProvenance" in build
     assert "memory-before-build.json" in build
     assert "memory-after-build.json" in build
     memory = steps["Upload build memory diagnostics"]
