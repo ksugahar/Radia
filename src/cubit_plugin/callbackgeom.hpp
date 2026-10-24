@@ -23,9 +23,9 @@ namespace netgen
     // Callback types:
     //   project_point:     (surfnr, x, y, z, u_hint, v_hint) -> (x_proj, y_proj, z_proj, u, v)
     //   get_normal:        (surfnr, x, y, z) -> (nx, ny, nz)
-    //   get_tangent:       (surfnr1, surfnr2, x, y, z) -> (tx, ty, tz)  [optional]
-    //   project_edge:      (surfnr1, surfnr2, x, y, z) -> (x_proj, y_proj, z_proj) [optional]
-    //   between_edge:      (surfnr1, surfnr2, dist1, dist2, secpoint) -> (x, y, z)
+    //   get_tangent:       (edgenr, surfnr1, surfnr2, x, y, z) -> (tx, ty, tz) [optional]
+    //   project_edge:      (edgenr, surfnr1, surfnr2, x, y, z) -> (x_proj, y_proj, z_proj) [optional]
+    //   between_edge:      (edgenr, surfnr1, surfnr2, p1.xyz, p2.xyz, secpoint) -> (x, y, z)
     //                      [optional; arc-length parametric midpoint on curve,
     //                       preferred over project_edge when distances are known]
     // NOTE: `has_hint` distinguishes "caller supplied an interpolated UV"
@@ -41,9 +41,9 @@ namespace netgen
     using NormalFunc = std::function<std::tuple<double,double,double>
                                     (int surfnr, double x, double y, double z)>;
     using TangentFunc = std::function<std::tuple<double,double,double>
-                                     (int surfnr1, int surfnr2, double x, double y, double z)>;
+                                     (int edgenr, int surfnr1, int surfnr2, double x, double y, double z)>;
     using EdgeProjectFunc = std::function<std::tuple<double,double,double>
-                                          (int surfnr1, int surfnr2,
+                                          (int edgenr, int surfnr1, int surfnr2,
                                            double x, double y, double z)>;
     // Arc-length parametric midpoint on the shared curve.
     // Inputs are the 3D segment endpoints (p1 = edge start, p2 = edge end) so
@@ -52,7 +52,7 @@ namespace netgen
     // PointBetweenEdge (p1/p2 are segment endpoints, and EdgePointGeomInfo.dist
     // refers to the full curve, not the segment).
     using BetweenEdgeFunc = std::function<std::tuple<double,double,double>
-                                          (int surfnr1, int surfnr2,
+                                          (int edgenr, int surfnr1, int surfnr2,
                                            double x1, double y1, double z1,
                                            double x2, double y2, double z2,
                                            double secpoint)>;
