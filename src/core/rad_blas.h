@@ -15,7 +15,13 @@
 #if !(defined(__x86_64__) || defined(_M_X64))
 #error "MKL is only admitted on x86_64"
 #endif
-#include <mkl.h>
+/* Do not expose MKL's Fortran LAPACK declarations: NGSolve owns those
+ * declarations via clapack.h. The umbrella mkl.h includes mkl_lapack.h and
+ * conflicts with NGSolve's complex signatures when this boundary is included
+ * first (for example through rad_parallel.h). */
+#include <mkl_cblas.h>
+#include <mkl_lapacke.h>
+#include <mkl_service.h>
 typedef MKL_Complex16 radia_blas_complex_double;
 #define RADIA_BLAS_NAME "mkl"
 #define RADIA_BLAS_THREAD_POLICY "mkl-caller-controlled"
