@@ -1,4 +1,7 @@
-"""Exercise the actual generated batch guards without compiling native code."""
+"""Guards: native build and CTest failures cannot become successful batch exits.
+
+Assumes: guards extracted from Build.ps1, Windows cmd.exe, no native compilation.
+"""
 
 from pathlib import Path
 import re
@@ -11,7 +14,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = (
     "sparsesolv_ngsolve", "axifem",
-    "cubit_mesh_curver", "cubit_mesh_export_ccm",
+    "cubit_mesh_curver", "cubit_mesh_export_ccm", "cubit_callback_contract",
 )
 
 
@@ -27,6 +30,24 @@ def test_native_build_guard_propagates_failure(tmp_path, target, exit_code):
     guard = match.group("guard")
     assert f"ERROR: {target} build failed" in guard
     assert "exit /b 1" in guard
+    _exercise_guard(tmp_path, guard, exit_code)
+
+
+@pytest.mark.parametrize("exit_code", [0, 7])
+def test_native_ctest_guard_propagates_failure(tmp_path, exit_code):
+    source = (ROOT / "Build.ps1").read_text(encoding="utf-8-sig")
+    match = re.search(
+        r'"\$CTEST_EXE" --test-dir "%CUBIT_PLUGIN_BUILD%" --output-on-failure\n'
+        r'(?P<guard>\s*if errorlevel 1 \([^)]*\))', source,
+    )
+    assert match, "missing immediate CTest failure guard"
+    guard = match.group("guard")
+    assert "ERROR: native Cubit callback contract failed" in guard
+    assert "exit /b 1" in guard
+    _exercise_guard(tmp_path, guard, exit_code)
+
+
+def _exercise_guard(tmp_path, guard, exit_code):
     if sys.platform != "win32":
         pytest.skip("cmd.exe execution requires Windows")
     batch = tmp_path / "guard.bat"
