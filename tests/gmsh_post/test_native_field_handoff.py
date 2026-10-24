@@ -1,5 +1,7 @@
 """Fast native-boundary checks; no Gmsh import or large native allocation."""
 import importlib.util
+import hashlib
+import json
 from pathlib import Path
 import sys
 import types
@@ -66,3 +68,17 @@ def test_geo_native_handoff_checks_merged_fields(tmp_path):
     geo.write_text('Merge "field.msh";\n', encoding='utf-8')
     with pytest.raises(ValueError, match='2147483665 exceeds 2147483647'):
         reader.validate_native_msh_fields(geo)
+
+
+@pytest.mark.parametrize('name', ['point_vector.msh', 'line_vector.msh'])
+def test_native_vector_element_node_fixture_passes_core_preflight(name):
+    """Guards: component-aware field consumption; assumes native oracle fixtures."""
+    fixtures = Path(__file__).parent / 'fixtures/native_element_node_data/inputs'
+    oracle = json.loads((fixtures / 'native-oracle.json').read_text(encoding='utf-8'))
+    expected = next(f for f in oracle['fixtures'] if f['file'] == name)
+    path = fixtures / name
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == expected['sha256']
+    assert expected['components'] == 3
+    assert all(len(row) == 3 * expected['samples_per_element']
+               for row in expected['values'])
+    reader.validate_native_msh_fields(path)
