@@ -139,8 +139,8 @@ def _active_record_text(record: dict) -> str:
 
 def _candidate_paths(root: Path) -> set[str]:
     """Native Git prefilter; still repository-wide, including UTF-16 text."""
-    # Optional bytes between letters also find UTF-16 code units. Git --text
-    # scans binary-marked text; suffix filtering avoids image payload files.
+    # Prefilter ordinary text by format-related tokens. The binary-marked
+    # suffix fallback below preserves UTF-16; image payload files are excluded.
     pattern = r"4.?[.].?1|2.?[.].?2|m.?s.?h.?(2|4|f)|s.?a.?v.?e.?d.?_.?n.?o.?t.?e.?b.?o.?o.?k"
     found = subprocess.run(
         ["git", "-c", f"safe.directory={root.as_posix()}", "grep", "--text", "-i", "-l", "-z", "-E", pattern,
