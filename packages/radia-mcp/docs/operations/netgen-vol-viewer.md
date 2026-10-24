@@ -1,7 +1,7 @@
 # Human Netgen .vol viewer
 
 Run `python -B -m radia_mcp.mesh_viewer "FILE.vol"` in an unlocked interactive
-Windows session. `--check` prints the actual Python, Netgen 6.2.2608 and native
+Windows session. `--check` prints the actual Python, Netgen and native
 module identities without opening the GUI. Missing files, other extensions and
 mismatched runtimes fail explicitly. This first delivery accepts `.vol` only.
 
@@ -37,6 +37,7 @@ requirement and official development index:
 pip install --pre --extra-index-url https://gmsh.info/python-packages-dev "radia-mcp[gmsh]"
 ```
 
-Netgen comes from the Radia/NGSolve dependency and must be 6.2.2608. The `.vol`
+Netgen comes from the Radia/NGSolve dependency and must match the sole exact
+`netgen-mesher` pin in the installed Radia package metadata. The `.vol`
 route does not import Gmsh. MSH/Gmsh support and any all-user installation still
 require their separate reviewed follow-up and explicit installation decision.

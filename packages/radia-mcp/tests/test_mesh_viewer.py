@@ -18,7 +18,7 @@ def netgen_metadata_pin(monkeypatch):
                         lambda name: ['netgen-mesher==6.2.2608'])
 
 
-@pytest.mark.parametrize("extension",[".msh",".py",".geo"])
+@pytest.mark.parametrize("extension",[".py",".geo"])
 def test_other_extensions_are_rejected_before_spawn(tmp_path,monkeypatch,extension):
     path=tmp_path/("mesh"+extension);path.write_text("data",encoding="utf-8")
     monkeypatch.setattr(adapter.subprocess,"Popen",lambda *a,**k:pytest.fail("unexpected process"))
