@@ -629,8 +629,15 @@ register_status_tool(
 def main() -> int:
     """Entry point for the ``mcp-server-radia-ltspice`` console script."""
     if "--selftest" in sys.argv:
-        names = set(mcp._tool_manager._tools)
-        assert len(names) == 33 and "netlist_to_asc" in names
+        import asyncio
+        from radia_mcp.meta.catalog import get
+
+        names = {tool.name for tool in asyncio.run(mcp.list_tools())}
+        required = set(get("mcp-server-radia-ltspice")["primary_tools"])
+        assert required and required <= names, {
+            "missing_catalog_tools": sorted(required - names),
+            "live_tools": sorted(names),
+        }
         print("LTspice MCP discovery self-test passed; execution backend is optional.")
         return 0
     try:
