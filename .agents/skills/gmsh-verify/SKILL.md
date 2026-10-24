@@ -45,7 +45,7 @@ independent field-data parser in validation scripts.
 
 ## Known invalid options (Gmsh 5)
 
-These option names do NOT exist and will crash `gmsh.merge()`:
+Reject these invalid option names before opening a launch artifact:
 
 | Invalid | Use instead |
 |---|---|
