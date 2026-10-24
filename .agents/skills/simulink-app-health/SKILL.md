@@ -29,7 +29,7 @@ Run from the repository root:
 ```powershell
 python -m pytest tests/test_simulink_application.py -q
 python -m pytest tests/test_application_interface_manifest.py -q
-python tools/audit_new_panel_contract.py
+python tools/audit_application_block_contract.py
 ```
 
 Use the official MATLAB MCP Server for MATLAB checks:
@@ -63,7 +63,7 @@ solver_result.json  # when the solver reached output generation
 `result.json` must identify the application, backend, status, timing,
 versions/platform, configuration hash, primary scalar or error, and GMSH
 artifact list. A spatial-field mode must expose `--msh-output`; the runner
-redirects it into the run directory and rejects anything except `.msh v4.1`.
+redirects it into the run directory and rejects anything except `.msh v4.2`.
 Scalar/circuit-only modes record GMSH as not applicable.
 
 Verify every generated GMSH file before opening it:

@@ -1,7 +1,7 @@
 {
   "schema": "radia.application_interface_manifest.v2",
   "generated_at_utc": "2026-07-22T00:00:00Z",
-  "policy": "The final human production interface is a masked block in the single Radia Simulink library. Notebook workbenches are retired for every application, including IH. Python and MCP remain the AI interface, executed docs notebooks with parameterized saved WebGUI scenes are the repository example and documentation layer, field-producing Simulink runs emit GMSH .msh v4.1 post-processing artifacts, and the Cubit Export Mesh toolbar remains a Cubit-embedded surface.",
+  "policy": "The final human production interface is a masked block in the single Radia Simulink library. Notebook workbenches are retired for every application, including IH. Python and MCP remain the AI interface, executed docs notebooks with parameterized saved WebGUI scenes are the repository example and documentation layer, field-producing Simulink runs emit GMSH .msh v4.2 post-processing artifacts, and the Cubit Export Mesh toolbar remains a Cubit-embedded surface.",
   "library": {
     "artifact": "packages/radia-simulink/matlab/radia_simulink_library.slx",
     "builder": "radia.simulink.buildLibrary",
@@ -9,7 +9,7 @@
     "backend": "python-headless-cli",
     "backend_policy": "MEX or ROM may replace a block backend only after numerical parity, error propagation, lifecycle, and long-run stability tests.",
     "spatial_artifact": {
-      "format": "GMSH .msh v4.1",
+      "format": "GMSH .msh v4.2",
       "location": "application run directory",
       "required_when": "the selected mode computes a spatial field",
       "scalar_only": "not-applicable",

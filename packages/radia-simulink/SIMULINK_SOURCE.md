@@ -22,7 +22,7 @@ operators can be assembled at the explicit model-update boundary from a checked
 workpiece `.vol` plus a coil `.step` (PEEC) or `.vol` (BEM-A).
 
 For a field-producing mode, the runner overrides `--msh-output` with a path in
-the run directory, requires a valid GMSH `.msh v4.1` file, and lists every
+the run directory, requires a valid GMSH `.msh v4.2` file, and lists every
 generated GMSH artifact in `result.json`. Scalar/circuit-only modes explicitly
 remain non-spatial. GMSH is used for post-processing only; solver interchange
 continues to use Netgen `.vol`.
@@ -142,7 +142,7 @@ radia-ih-assemble workpiece.vol coil.vol -o native_ih.json
 ```
 
 The CLI runs strict versioned label contracts and writes their `check-vol`
-reports, unit-current electromagnetic evidence, H1 thermal matrices, GMSH v4.1
+reports, unit-current electromagnetic evidence, H1 thermal matrices, GMSH v4.2
 fields, `run.log`, and `result.json` into a persistent artifact directory. A
 STEP coil selects PEEC; a meshed coil selects BEM-A. For the scalar current port
 and a fixed linear material law, the unit-current response is an exact basis and
