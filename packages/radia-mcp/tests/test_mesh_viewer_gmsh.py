@@ -5,6 +5,7 @@ import hashlib
 import asyncio
 import json
 import os
+import stat
 import tempfile
 from pathlib import Path
 import sys
@@ -19,6 +20,22 @@ EXPORTER_PROBE = post_view._require_exporter_capability
 def assigned_stage(output):
     scratch = Path(os.environ.get('RADIA_MESH_VIEWER_SCRATCH', str(output.parent))).resolve()
     return Path(tempfile.mkdtemp(prefix='.radia-post-receipt-', dir=scratch)) / 'staging'
+
+
+@pytest.fixture
+def junctions(tmp_path):
+    """Own junction entries only; never recursively remove their targets."""
+    links=[]
+    def create(link,target):
+        import _winapi
+        assert link.is_relative_to(tmp_path) and target.is_relative_to(tmp_path)
+        _winapi.CreateJunction(str(target),str(link))
+        links.append(link)
+    yield create
+    for link in reversed(links):
+        info=link.lstat()
+        assert info.st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT
+        os.rmdir(link)  # Removes this junction entry, not its target directory.
 
 
 def mesh_text(version='4.2', name='iron'):
@@ -187,6 +204,41 @@ def test_converter_rejects_unassigned_or_reused_staging(post_case,fault):
     with pytest.raises(ValueError,match='Staging must be a new child'):
         post_view.convert_post_view(source,str(output),str(receipt),digest,'materials',staging_dir=stage)
     assert source.read_bytes()==before and not output.exists() and writes==[]
+
+
+@pytest.mark.skipif(sys.platform!='win32',reason='Windows junction staging contract')
+@pytest.mark.parametrize('location',['operation','staging'])
+def test_real_junction_cannot_receive_staged_files(post_case,junctions,monkeypatch,location):
+    source,output,receipt,digest,writes=post_case
+    monkeypatch.setenv('RADIA_MESH_VIEWER_SCRATCH',str(output.parent))
+    stage=assigned_stage(output)
+    target=output.parent/'.radia-post-receipt-junction-target';target.mkdir()
+    link=stage.parent if location=='operation' else stage
+    if location=='operation':link.rmdir()  # Replace only this empty, owned fixture directory.
+    junctions(link,target)
+    with pytest.raises(ValueError,match='Staging must be a new child'):
+        post_view.convert_post_view(source,str(output),str(receipt),digest,'materials',staging_dir=stage)
+    assert list(target.iterdir())==[] and not output.exists() and writes==[]
+    assert post_view._is_link(link) is True
+
+
+@pytest.mark.skipif(sys.platform!='win32',reason='Windows import-time junction swap contract')
+def test_exporter_import_cannot_swap_operation_to_junction(post_case,junctions,monkeypatch):
+    source,output,receipt,digest,writes=post_case
+    monkeypatch.setenv('RADIA_MESH_VIEWER_SCRATCH',str(output.parent))
+    stage=assigned_stage(output)
+    target=output.parent/'.radia-post-receipt-swap-target';target.mkdir()
+    original=post_view._load_exporter
+    def swap_during_import():
+        exporter=original()
+        stage.parent.rmdir()
+        junctions(stage.parent,target)
+        return exporter
+    monkeypatch.setattr(post_view,'_load_exporter',swap_during_import)
+    with pytest.raises(ValueError,match='Staging must be a new child'):
+        post_view.convert_post_view(source,str(output),str(receipt),digest,'materials',staging_dir=stage)
+    assert not (target/'staging').exists() and list(target.iterdir())==[]
+    assert not output.exists() and writes==[]
 
 
 def test_worker_requires_receipt_in_assigned_operation_root(post_case,monkeypatch,capsys):
