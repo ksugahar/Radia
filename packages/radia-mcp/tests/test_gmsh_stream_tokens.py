@@ -66,3 +66,24 @@ def test_one_value_may_span_multiple_chunks(monkeypatch):
     value = '0' * 1000 + '1.25'
     tokens = msh._DataTokens(io.StringIO(value + '\t2'))
     assert list(tokens) == [value, '2']
+
+
+@pytest.mark.parametrize('chunk', [7, 65536])
+@pytest.mark.parametrize('suffix', [' x', 'X'])
+def test_closure_marker_must_end_after_its_name(tmp_path, monkeypatch, chunk, suffix):
+    monkeypatch.setattr(msh._DataTokens, '_CHUNK', chunk)
+    path = tmp_path / 'field.msh'
+    path.write_text('$NodeData\n1\n"v"\n1\n0\n3\n0\n1\n1\n'
+                    '1 1 1 1\n1\n1\n7\n$EndNodeData' + suffix + '\n', encoding='utf-8')
+    with pytest.raises(ValueError):
+        msh._validate_native_fields(path)
+
+
+@pytest.mark.parametrize('chunk', [1, 7])
+def test_closure_marker_cannot_end_a_data_line(tmp_path, monkeypatch, chunk):
+    monkeypatch.setattr(msh._DataTokens, '_CHUNK', chunk)
+    path = tmp_path / 'field.msh'
+    path.write_text('$NodeData\n1\n"v"\n1\n0\n3\n0\n1\n1\n'
+                    '1 1 1 1\n1\n1\n7 $EndNodeData\n', encoding='utf-8')
+    with pytest.raises(ValueError):
+        msh._validate_native_fields(path)
