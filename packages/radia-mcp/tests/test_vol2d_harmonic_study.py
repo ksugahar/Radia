@@ -80,7 +80,7 @@ def test_field_study_cli_materializes_owned_gmsh_bundle(
     )
 
     assert result["status"] == "solved"
-    assert target.read_text(encoding="utf-8").startswith("$MeshFormat\n4.1")
+    assert target.read_text(encoding="utf-8").startswith("$MeshFormat\n4.2 0 8\n")
     assert target.with_suffix(".geo").is_file()
     assert Path(str(target.with_suffix(".geo")) + ".opt").is_file()
     assert Path(str(target) + ".opt").is_file()

@@ -125,6 +125,20 @@ can run without native Gmsh; rendering and native plugins require it. See
 GMSH_COMMAND_LINE = """
 # Opening existing post-processing results
 
+## Windows PowerShell `-string` quoting
+
+Use single quotes inside a Gmsh snippet passed through PowerShell:
+
+```powershell
+gmsh display.geo -string "Print 'frame.png'; Exit;"
+```
+
+Backslash-escaped double quotes passed through a batch wrapper can leave
+an unquoted drive token and produce `Unknown variable 'W'`. Image export
+also requires an initialized FLTK/OpenGL context. Prefer `gmsh_render`
+or `gmsh_export_animation` for unattended image output.
+
+
 ```sh
 gmsh case.geo
 gmsh result.msh -numsubedges 4
