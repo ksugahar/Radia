@@ -13,19 +13,24 @@ would affect a shared release runtime is excluded from this plan; use the
 protected-prefix option instead.
 
 A protected non-venv prefix offers separation without a new interpreter or
-virtual environment. An illustrative installation command is:
-
-```text
-"C:\Program Files\Python312\python.exe" -m pip install --pre --extra-index-url https://gmsh.info/python-packages-dev --ignore-installed --prefix "C:\Program Files\RadiaMeshViewer" "radia-mcp[gmsh] @ file:///C:/approved/radia_mcp-REVIEWED-py3-none-any.whl"
-```
+virtual environment. Its resolver and bootstrap procedure must be reviewed
+before application; do not assume that adding `--prefix` makes an installed
+dependency visible to a later pip command.
 
 Resolve and review the complete declared dependency closure before applying;
 do not independently install Gmsh or use `--no-deps`. Record the exact wheels,
-versions, hashes and provenance. The canonical requirement remains:
+versions, hashes and provenance. The canonical runtime recipe is the
+[two-step Gmsh installation](gmsh-development-runtime.md):
 
 ```text
-pip install --pre --extra-index-url https://gmsh.info/python-packages-dev "radia-mcp[gmsh]"
+pip install --pre --upgrade -i https://gmsh.info/python-packages-dev gmsh
+pip install "radia-mcp[gmsh]"
 ```
+
+These commands describe an approved environment, not authorization to change
+system Python. A prefix-specific deployment plan must bind the qualified Gmsh
+wheel and the reviewed `radia-mcp[gmsh]` dependency closure without changing the
+shared release runtime. This document does not yet prescribe that installation.
 
 The existing system Radia/Netgen dependency can be used read-only if its installed
 metadata pin, native identity and accessibility for other users are verified.

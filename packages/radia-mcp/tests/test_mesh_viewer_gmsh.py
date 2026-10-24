@@ -2,6 +2,7 @@
 Assumes: native GUI and production-exporter proof is collected separately.
 """
 import hashlib
+import asyncio
 import json
 from pathlib import Path
 import sys
@@ -9,6 +10,8 @@ from types import SimpleNamespace as NS
 
 import pytest
 from radia_mcp.mesh_viewer import launcher, post_view
+
+EXPORTER_PROBE = post_view._require_exporter_capability
 
 
 def mesh_text(version='4.2', name='iron'):
@@ -55,12 +58,15 @@ def test_missing_gmsh_names_declared_extra(monkeypatch):
     from radia_mcp.gmsh import runtime
     def absent(_): raise runtime.importlib.metadata.PackageNotFoundError('gmsh')
     monkeypatch.setattr(runtime.importlib.metadata, 'version', absent)
-    with pytest.raises(RuntimeError, match=r'radia-mcp\[gmsh\]'):
+    with pytest.raises(RuntimeError, match=r'radia-mcp\[gmsh\]') as error:
         runtime.verify_runtime_identity()
+    assert 'pip install --pre --upgrade -i https://gmsh.info/python-packages-dev gmsh' in str(error.value)
+    assert 'then pip install "radia-mcp[gmsh]"' in str(error.value)
 
 
 @pytest.fixture
 def post_case(tmp_path, monkeypatch):
+    monkeypatch.setattr(post_view, '_require_exporter_capability', lambda: None)
     srcdir = tmp_path / 'inputs'; srcdir.mkdir()
     outdir = tmp_path / 'outputs'; outdir.mkdir()
     source = srcdir / '日本語 space.vol'; source.write_bytes(b'checked fixture')
@@ -88,6 +94,41 @@ def post_case(tmp_path, monkeypatch):
             Path(filename + '.opt').write_text('never execute')
     monkeypatch.setitem(sys.modules, 'radia', NS(gmsh_post_export=NS(PayloadV42=object, GmshPostExport=Exporter)))
     return source, outdir / 'view.msh', receipt, digest, writes
+
+
+def test_post_preflight_rejects_missing_exporter_before_writes(post_case, monkeypatch):
+    source, output, receipt, digest, writes = post_case
+    monkeypatch.setattr(post_view, '_require_exporter_capability', EXPORTER_PROBE)
+    def probe(argv, **kwargs):
+        assert argv[-1] == '--check-exporter'
+        assert kwargs['timeout'] == 20 and 'shell' not in kwargs
+        return NS(returncode=1, stderr='Installed radia lacks the production MSH 4.2 exporter; update radia')
+    monkeypatch.setattr(post_view.subprocess, 'run', probe)
+    with pytest.raises(RuntimeError, match='Installed radia lacks'):
+        post_view.validate_post_request(source, str(output), str(receipt), digest, 'materials')
+    assert not output.exists() and writes == []
+
+
+def test_exporter_check_requires_the_production_api(monkeypatch):
+    monkeypatch.setitem(sys.modules, 'radia', NS(gmsh_post_export=NS()))
+    with pytest.raises(RuntimeError, match='MSH 4.2 exporter'):
+        post_view._load_exporter()
+
+
+def test_mcp_returns_preflight_error_instead_of_launch_acceptance(post_case, monkeypatch):
+    from radia_mcp.mesh_viewer import mcp as adapter
+    source, output, receipt, digest, _ = post_case
+    monkeypatch.setattr(adapter, 'require_interactive_desktop', lambda: {})
+    monkeypatch.setattr(adapter.subprocess, 'CREATE_NO_WINDOW', 0, raising=False)
+    async def communicate():
+        return b'', b'Installed radia lacks the production MSH 4.2 exporter; update radia'
+    async def spawn_probe(*args, **kwargs):
+        assert '--check' in args and str(output) in args
+        return NS(returncode=1, communicate=communicate)
+    monkeypatch.setattr(adapter.asyncio, 'create_subprocess_exec', spawn_probe)
+    monkeypatch.setattr(adapter.subprocess, 'Popen', lambda *a, **k: pytest.fail('must not launch GUI'))
+    with pytest.raises(RuntimeError, match='Viewer preflight failed: Installed radia lacks'):
+        asyncio.run(adapter.open_mesh_viewer(str(source), str(output), str(receipt), digest, 'materials'))
 
 
 def test_post_copy_is_identical_and_keeps_companions_in_staging(post_case):
@@ -162,3 +203,17 @@ def test_conversion_process_is_separate_and_uses_a_file_receipt(post_case, monke
     assert calls[0][0][1:4] == ['-B', '-m', 'radia_mcp.mesh_viewer.post_view']
     assert 'shell' not in calls[0][1] and calls[0][1]['stdin'] == post_view.subprocess.DEVNULL
     assert result['output'] == str(output) and Path(result['worker_receipt']).is_file()
+
+
+def test_failed_worker_does_not_leave_an_empty_json_receipt(post_case, monkeypatch):
+    source, output, receipt, digest, _ = post_case
+    receipts = []
+    def fail(argv, **kwargs):
+        receipts.append(Path(argv[-1]))
+        assert not receipts[-1].exists()
+        return NS(returncode=1, stderr='export failed', stdout='')
+    monkeypatch.setattr(post_view.subprocess, 'run', fail)
+    with pytest.raises(RuntimeError, match='export failed'):
+        post_view.prepare_post_view(source, str(output), str(receipt), digest, 'materials')
+    assert len(receipts) == 1 and not receipts[0].exists()
+    assert receipts[0].parent.is_dir() and not output.exists()

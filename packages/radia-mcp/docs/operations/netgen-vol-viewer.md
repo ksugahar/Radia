@@ -34,7 +34,8 @@ extra or ad-hoc Gmsh installation is introduced. Install through the declared
 requirement and official development index:
 
 ```text
-pip install --pre --extra-index-url https://gmsh.info/python-packages-dev "radia-mcp[gmsh]"
+pip install --pre --upgrade -i https://gmsh.info/python-packages-dev gmsh
+pip install "radia-mcp[gmsh]"
 ```
 
 Netgen comes from the Radia/NGSolve dependency and must match the sole exact

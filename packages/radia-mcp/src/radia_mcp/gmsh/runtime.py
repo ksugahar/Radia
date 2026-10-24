@@ -15,6 +15,13 @@ import re
 import tempfile
 import zipfile
 
+_INSTALL_GUIDANCE = (
+    'Install Gmsh first: pip install --pre --upgrade -i '
+    'https://gmsh.info/python-packages-dev gmsh; '
+    'then pip install "radia-mcp[gmsh]". '
+    'See docs/operations/gmsh-development-runtime.md.'
+)
+
 
 def _sha(path: Path) -> str:
     digest = hashlib.sha256()
@@ -102,7 +109,7 @@ def verify_runtime_identity() -> dict:
     try:
         version = _gmsh5_distribution_version()
     except importlib.metadata.PackageNotFoundError as error:
-        raise RuntimeError('Install radia-mcp[gmsh] using the official Gmsh development index') from error
+        raise RuntimeError(_INSTALL_GUIDANCE) from error
     record = os.environ.get('RADIA_GMSH_PROVENANCE')
     if not record:
         raise RuntimeError('RADIA_GMSH_PROVENANCE is required; record the official wheel with python -m radia_mcp.gmsh.runtime --wheel WHEEL --record FILE')
@@ -114,7 +121,7 @@ def verify_runtime_identity() -> dict:
     except ModuleNotFoundError as error:
         if error.name != 'gmsh':
             raise
-        raise RuntimeError('Install radia-mcp[gmsh] using the official Gmsh development index') from error
+        raise RuntimeError(_INSTALL_GUIDANCE) from error
     for path in (Path(gmsh.__file__).resolve(), Path(gmsh.libpath).resolve()):
         if identity.get('runtime_payload_sha256', {}).get(str(path)) != _sha(path):
             raise RuntimeError(f'Gmsh runtime payload/provenance mismatch: {path.name}')

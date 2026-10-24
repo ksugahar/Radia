@@ -18,6 +18,25 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _load_exporter():
+    from radia import gmsh_post_export as exporter
+    if (not hasattr(exporter, 'PayloadV42')
+            or not callable(getattr(getattr(exporter, 'GmshPostExport', None), 'write_mesh', None))):
+        raise RuntimeError('Installed radia lacks the production MSH 4.2 exporter; update radia')
+    return exporter
+
+
+def _require_exporter_capability() -> None:
+    # Inspect the selected interpreter's installed Radia in a separate process:
+    # NGSolve must not be imported into the Gmsh GUI process, even for preflight.
+    result = subprocess.run(
+        [sys.executable, '-B', '-m', 'radia_mcp.mesh_viewer.post_view', '--check-exporter'],
+        stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8',
+        close_fds=True, timeout=20)
+    if result.returncode:
+        raise RuntimeError('VOL post-view exporter preflight failed: ' + result.stderr.strip())
+
+
 def validate_post_request(source: Path, output: str, checked_report: str,
                           source_sha256: str, group_scope: str) -> tuple[Path, dict]:
     """Require a prior check-vol receipt plus the caller's checked-input digest."""
@@ -47,6 +66,7 @@ def validate_post_request(source: Path, output: str, checked_report: str,
     scratch = Path(os.environ.get('RADIA_MESH_VIEWER_SCRATCH', str(target.parent))).resolve()
     if not scratch.is_dir() or not str(scratch).isascii() or scratch == source.resolve().parent:
         raise ValueError('Set RADIA_MESH_VIEWER_SCRATCH to an existing ASCII job directory outside the source directory')
+    _require_exporter_capability()
     return target, report
 
 
@@ -55,9 +75,7 @@ def convert_post_view(source: Path, output: str, checked_report: str,
     """Keep exporter companions in staging; copy only identical checked MSH bytes."""
     target, report = validate_post_request(source, output, checked_report,
                                            source_sha256, group_scope)
-    from radia import gmsh_post_export as exporter
-    if not hasattr(exporter, 'PayloadV42'):
-        raise RuntimeError('Installed radia lacks the production MSH 4.2 exporter; update radia')
+    exporter = _load_exporter()
     scratch = Path(os.environ.get('RADIA_MESH_VIEWER_SCRATCH', str(target.parent))).resolve()
     staging = Path(tempfile.mkdtemp(prefix='.radia-post-', dir=scratch))
     staged_source = staging / 'source.vol'
@@ -118,9 +136,10 @@ def prepare_post_view(source: Path, output: str, checked_report: str,
     """Keep NGSolve/exporter imports in a worker separate from the GUI process."""
     target, _ = validate_post_request(source, output, checked_report, source_sha256, group_scope)
     scratch = Path(os.environ.get('RADIA_MESH_VIEWER_SCRATCH', str(target.parent))).resolve()
-    with tempfile.NamedTemporaryFile(prefix='.radia-post-receipt-', suffix='.json',
-                                     dir=scratch, delete=False) as stream:
-        receipt = Path(stream.name)
+    # Reserve a private directory, not an empty JSON that could resemble success.
+    # Both receipt directories and exporter staging are retained for the caller.
+    receipt_root = Path(tempfile.mkdtemp(prefix='.radia-post-receipt-', dir=scratch))
+    receipt = receipt_root / 'receipt.json'
     argv = [sys.executable, '-B', '-m', 'radia_mcp.mesh_viewer.post_view',
             str(source), output, checked_report, source_sha256, group_scope,
             '--receipt', str(receipt)]
@@ -134,6 +153,13 @@ def prepare_post_view(source: Path, output: str, checked_report: str,
 def main() -> int:
     import argparse
     from contextlib import redirect_stdout
+    if sys.argv[1:] == ['--check-exporter']:
+        try:
+            _load_exporter()
+            return 0
+        except Exception as error:
+            print(str(error), file=sys.stderr)
+            return 1
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('source', type=Path)
     parser.add_argument('output')
@@ -146,7 +172,9 @@ def main() -> int:
         with redirect_stdout(sys.stderr):
             result = convert_post_view(args.source, args.output, args.checked_report,
                                        args.source_sha256, args.group_scope)
-        args.receipt.write_text(json.dumps(result, indent=2), encoding='utf-8')
+        payload = json.dumps(result, indent=2)
+        with args.receipt.open('x', encoding='utf-8') as stream:
+            stream.write(payload)
         return 0
     except Exception as error:
         print(str(error), file=sys.stderr)
