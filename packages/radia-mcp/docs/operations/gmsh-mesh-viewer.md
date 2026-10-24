@@ -68,7 +68,8 @@ NGSolve and the Gmsh GUI never share a process. The `post_view` response contain
 the verified output hash, source hash, group scope, physical groups, receipt and
 staging paths. The GUI receives the checked MSH alone, not another conversion
 request. Post-conversion preflight, identity, deadline and GUI spawn failures
-report retained output, receipt, staging and expected hash. A failed independent
+report retained output, receipt, staging and expected hash, qualified as verified
+at digest time rather than proof of the file's current state. A failed independent
 digest check reports retained evidence as unverified and never starts the GUI. Launch
 acceptance remains distinct from rendering success. The output is a
 post-processing view, never an input to a solver.
