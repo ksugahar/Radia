@@ -5,8 +5,8 @@ contract for labelled segmented permanent-magnet rings:
 
 * CAD volume matches the analytic annular-sector fill, including air gaps;
 * each segment label carries the Mallinson easy-axis angle;
-* the multi-region STEP -> Netgen -> Gmsh path preserves one volume group per
-  segment so solver-side magnetization can be assigned by label.
+* checked Netgen .vol materials preserve one label per segment for solver
+  magnetization; derived MSH 4.2 groups independently check post-output coupling.
 
 Run:
 
@@ -116,7 +116,7 @@ def run_case(case: dict, out_dir: Path, volume_rtol: float) -> dict:
     children = list(hb.children)
     regions = [(child, child.label) for child in children]
 
-    record = run_pipeline_multi(regions, out_dir=out_dir, label=label, maxh=case["maxh"])
+    record = run_pipeline_multi(regions, out_dir=out_dir, label=label, maxh=case["maxh"], units="mm")
     cad = _stage(record, "cad")
     mesh = _stage(record, "mesh")
     post = _stage(record, "post")

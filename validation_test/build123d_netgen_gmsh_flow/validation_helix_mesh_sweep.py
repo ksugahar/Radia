@@ -1,4 +1,4 @@
-"""Validation-class helical conductor sweep for the build123d -> Netgen -> Gmsh flow.
+"""Validation-class helical conductor sweep for the build123d -> checked Netgen .vol / MSH 4.2 post flow.
 
 This is intentionally an example/validation script, not a pytest test:
 the cases are heavier than CI smoke tests and are meant to produce reusable
@@ -94,7 +94,7 @@ def run_case(case: dict, out_dir: Path, volume_rtol: float) -> dict:
         height=case["height"],
     )
 
-    record = run_pipeline(part, out_dir=out_dir, label=label, maxh=case["maxh"])
+    record = run_pipeline(part, out_dir=out_dir, label=label, maxh=case["maxh"], units="mm")
     cad = _stage(record, "cad")
     mesh = _stage(record, "mesh")
     post = _stage(record, "post")

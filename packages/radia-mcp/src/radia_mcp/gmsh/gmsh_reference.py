@@ -260,17 +260,24 @@ Useful plugins for post-processing:
 | `Warp` | Warp mesh by vector field | Factor, TimeStep, View |
 | `StreamLines` | Stream line integration | X0..DZ, NumPointsU, MaxIter, View |
 
-Plugins always operate on existing views (by view tag); `run` creates a
-new view and returns its tag (or -1 on error).
+Plugins operate on existing views; a numeric `View` option takes the current
+view index. `run` creates a new view and returns its tag (or -1 on error).
 
 ## Canonical post-processing workflow (lab-style)
+
+The solver consumes checked Cubit/Netgen `.vol`. Produce the derived MSH 4.2
+mesh with the existing `GmshPostExport.write_mesh` or `.write` API from
+`radia.gmsh_post_export`; generic Netgen mesh-format export is not this
+post-processing contract. Post physical groups describe the exported result,
+not the solver label contract.
 
 ```python
 import gmsh
 gmsh.initialize()
 
-# 1) Load a .msh produced by Netgen or Cubit
-gmsh.open("build123d_netgen_output.msh")
+# 1) Load derived MSH 4.2 post output from GmshPostExport.
+#    The authoritative solver input remains checked Cubit/Netgen .vol.
+gmsh.open("result_post.msh")
 
 # 2) Attach computed field data (e.g. from NGSolve, Radia, or solver output)
 view_tag = gmsh.view.add("B_field")
@@ -285,12 +292,12 @@ gmsh.view.addModelData(
 )
 
 # 3) View options (display control)
-gmsh.view.option.setNumber(view_tag, "VectorType", 5)    # 3D arrow
+gmsh.view.option.setNumber(view_tag, "VectorType", 4)    # 3D arrow
 gmsh.view.option.setNumber(view_tag, "ShowScale", 1)
 gmsh.view.option.setString(view_tag, "Name", "B [T]")
 
 # 4) Derived views via plugins — no manual post-math needed
-gmsh.plugin.setString("CutPlane", "View", str(view_tag))
+gmsh.plugin.setNumber("CutPlane", "View", gmsh.view.getIndex(view_tag))
 gmsh.plugin.setNumber("CutPlane", "A", 1); gmsh.plugin.setNumber("CutPlane", "B", 0)
 gmsh.plugin.setNumber("CutPlane", "C", 0); gmsh.plugin.setNumber("CutPlane", "D", 0)
 cut_tag = gmsh.plugin.run("CutPlane")
@@ -298,9 +305,14 @@ cut_tag = gmsh.plugin.run("CutPlane")
 # 5) Point probe
 values, dist = gmsh.view.probe(view_tag, 0.01, 0.0, 0.05)
 
-# 6) Export — .msh bundles mesh + view data (lab visualization format)
-gmsh.view.write(view_tag, "B_field.pos")
+# 6) Export mesh first, then append the model-based field view.
+gmsh.option.setNumber("Mesh.MshFileVersion", 4.2)
+gmsh.option.setNumber("Mesh.Binary", 0)
 gmsh.write("full_postproc.msh")
+gmsh.option.setNumber("PostProcessing.SaveMesh", 0)
+gmsh.view.write(view_tag, "full_postproc.msh", append=True)
+# The plugin's list-based slice stays a separate post-processing view.
+gmsh.view.write(cut_tag, "B_cut.pos")
 
 gmsh.finalize()
 ```
@@ -321,13 +333,15 @@ gmsh.finalize()
 - **modelName must match**: `gmsh.view.addModelData(..., modelName=...)` needs the
   currently loaded model's name (use `gmsh.model.getCurrent()`).
 - **Tag ordering**: `tags` in addModelData must match the loaded mesh's node/element
-  IDs exactly; `.msh` writer preserves IDs, Netgen→Gmsh conversion should too.
+  IDs exactly. Use the emitted MSH 4.2 tags; do not infer them from Netgen
+  node numbers or assume a solver-to-post conversion preserves numbering.
 - **dataType choice**: "NodeData" for nodal fields, "ElementData" for cell-centered
   (one value per element), "ElementNodeData" for DG/high-order nodal per element.
 - **numComponents**: pass explicitly (1 scalar / 3 vector / 9 tensor) to avoid
   inference errors on non-standard sizes.
 - **Plugin View indexing**: `CutPlane` / `Isosurface` etc. take `View` as a
-  **string index** (tag encoded as decimal string), not an int.
+  numeric **view index**, obtained with `gmsh.view.getIndex(view_tag)`.
+  A view tag and its current index are different identifiers.
 - **Color options**: use `setColor(r, g, b, a)` — NOT a 4-tuple argument.
 - **.pos vs .msh**: `.pos` = gmsh parsed view format (ASCII, self-contained);
   `.msh` = model-based MSH 4.2 mesh + views; use ASCII for repository readers.

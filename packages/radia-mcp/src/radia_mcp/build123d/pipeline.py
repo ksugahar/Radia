@@ -6,8 +6,10 @@ or mesh-to-solver import is implemented here: the existing Radia exporter
 owns result serialization. The standalone check-vol API needs no Cubit
 installation or licence. Optional dependencies are imported only on use.
 
-Coordinates and maxh must be in meters for analysis. No unit conversion or
-physical boundary condition is inferred; the neutral mesh_boundary group
+Callers must explicitly declare whether CAD coordinates and maxh are in
+meters or millimeters. Geometry and maxh are converted together before meshing
+so the authoritative .vol and embedded CAD are SI. No physical boundary
+condition is inferred; the neutral mesh_boundary group
 does not identify electrical ports or a physical excitation.
 """
 from __future__ import annotations
@@ -18,6 +20,22 @@ import traceback
 from pathlib import Path
 
 __all__ = ["run_pipeline", "run_pipeline_multi", "save_record"]
+
+
+_DEPENDENCY_HELP = (
+    "Install the radia-mcp build123d extra: analysis needs "
+    "cubit-mesh-export.check and NGSolve; post output also needs a Radia "
+    "release newer than 5.3.3 exposing GmshPostExport and PayloadV42. "
+    "The published 5.3.3 writer is unsupported; a current source serializer "
+    "can be validated separately until the post-migration Radia release is published."
+)
+
+
+def _length_scale_to_m(units: str) -> float:
+    """Interpret an explicit unit declaration; never infer it from dimensions."""
+    if not isinstance(units, str) or units not in ("m", "mm"):
+        raise ValueError("units must be explicitly declared as 'm' or 'mm'")
+    return 1.0 if units == "m" else 1.0e-3
 
 def _write_gmsh_launch_companion(msh_path: Path) -> dict:
     """Write case.geo, case.geo.opt, and case.msh.opt for Gmsh display.
@@ -93,9 +111,10 @@ def _stage_cad(part, out_dir: Path, label: str) -> dict:
     }
     return stats
 
-def _stage_cad_multi(regions, out_dir: Path, label: str) -> dict:
-    """Stage 1 (multi): write one STEP carrying all regions as a Compound."""
-    from build123d import Compound, export_step
+def _stage_cad_multi(regions, out_dir: Path, label: str, *, units: str) -> dict:
+    """Stage 1 (multi): write one STEP carrying explicitly unit-labelled solids."""
+    _length_scale_to_m(units)
+    from build123d import Compound, Unit, export_step
 
     parts = [p for (p, _n) in regions]
     names = [n for (_p, n) in regions]
@@ -105,7 +124,9 @@ def _stage_cad_multi(regions, out_dir: Path, label: str) -> dict:
     compound.label = label
 
     step = out_dir / f"{label}.step"
-    export_step(compound, str(step))
+    # build123d declares the shape units in its STEP document. OCCT STEP
+    # import then normalizes coordinates to millimeters, independent of input units.
+    export_step(compound, str(step), unit=Unit.M if units == "m" else Unit.MM)
 
     stats = {
         "stage": "cad",
@@ -130,8 +151,11 @@ def _load_checked_vol(vol_path: Path):
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
     if contract.get("units") != "m":
         raise ValueError("Netgen solver label contract must declare SI units 'm'")
-    from cubit_mesh_export.check import check_consistency
-    from ngsolve import Mesh
+    try:
+        from cubit_mesh_export.check import check_consistency
+        from ngsolve import Mesh
+    except ImportError as exc:
+        raise RuntimeError(_DEPENDENCY_HELP) from exc
 
     report = check_consistency(vol_path, contract=contract)
     check_path = vol_path.with_suffix(".vol-check.json")
@@ -141,9 +165,14 @@ def _load_checked_vol(vol_path: Path):
     return Mesh(str(vol_path)), check_path
 
 
-def _save_solver_mesh(ng_mesh, out_dir: Path, label: str, region_names=None) -> dict:
-    """Save Netgen's authoritative mesh and run the canonical standalone gate."""
-    from ngsolve import Mesh
+def _save_solver_mesh(ng_mesh, out_dir: Path, label: str, region_names=None, *, units: str) -> dict:
+    """Save an explicitly SI Netgen mesh and run the canonical standalone gate."""
+    if _length_scale_to_m(units) != 1.0:
+        raise ValueError("Solver mesh must already use SI units 'm'; convert its CAD before meshing")
+    try:
+        from ngsolve import Mesh
+    except ImportError as exc:
+        raise RuntimeError(_DEPENDENCY_HELP) from exc
 
     mesh = Mesh(ng_mesh)
     if mesh.dim != 3:
@@ -161,10 +190,12 @@ def _save_solver_mesh(ng_mesh, out_dir: Path, label: str, region_names=None) -> 
             ng_mesh.SetBCName(index, "mesh_boundary")
     vol_path = Path(out_dir) / f"{label}.vol"
     ng_mesh.Save(str(vol_path))
+    # Netgen boundary names retain CR on Linux; keep this native artifact portable.
+    vol_path.write_bytes(vol_path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b""))
     contract_path = vol_path.with_suffix(".labels.json")
     contract = {
         "schema": "radia.vol-label-contract.v1", "application": "build123d_netgen",
-        "strict_labels": True, "units": "m",
+        "strict_labels": True, "units": units,
         "required": {"materials": sorted(set(mesh.GetMaterials())),
                      "boundaries": sorted(set(mesh.GetBoundaries()))},
     }
@@ -191,47 +222,71 @@ def _post_exporter(mesh):
     try:
         from radia.gmsh_post_export import GmshPostExport, PayloadV42
     except ImportError as exc:
-        raise RuntimeError("build123d post output requires the current Radia MSH 4.2 exporter") from exc
+        raise RuntimeError("build123d post output requires the current Radia MSH 4.2 exporter (PayloadV42). " + _DEPENDENCY_HELP) from exc
     # The typed payload is the writer's format capability, independent of
     # the native solver ABI or an unchanged development package version.
     if not isinstance(PayloadV42, type):
-        raise RuntimeError("Radia MSH 4.2 payload capability is unavailable")
+        raise RuntimeError("Radia PayloadV42 capability is unavailable. " + _DEPENDENCY_HELP)
     return GmshPostExport(mesh)
 
 
-def _stage_mesh(brep_path: Path, out_dir: Path, label: str, maxh: float = 5.0) -> dict:
-    """Generate with Netgen and save checked native .vol, never an MSH intermediate."""
-    from netgen.occ import OCCGeometry
-    from ngsolve import TaskManager
+def _stage_mesh(brep_path: Path, out_dir: Path, label: str, maxh: float = 5.0,
+                *, units: str) -> dict:
+    """Interpret unitless BREP coordinates explicitly and mesh SI geometry."""
+    scale = _length_scale_to_m(units)
+    try:
+        from netgen.occ import OCCGeometry, Pnt
+        from ngsolve import TaskManager
+    except ImportError as exc:
+        raise RuntimeError(_DEPENDENCY_HELP) from exc
 
     start = time.perf_counter()
     geometry = OCCGeometry(str(brep_path))
+    if scale != 1.0:
+        geometry = OCCGeometry(geometry.shape.Scale(Pnt(0, 0, 0), scale))
+    # Scale CAD before generation, rather than scaling mesh points afterwards:
+    # the latter would leave the .vol's embedded CAD in the old units.
+    maxh_m = maxh * scale
     with TaskManager():
-        ng_mesh = geometry.GenerateMesh(maxh=maxh)
+        ng_mesh = geometry.GenerateMesh(maxh=maxh_m)
     seconds = time.perf_counter() - start
     return {"stage": "mesh", "ok": True, "gen_seconds": round(seconds, 3),
-            "maxh": maxh, **_save_solver_mesh(ng_mesh, out_dir, label)}
+            "maxh": maxh, "input_units": units, "length_scale_to_m": scale,
+            "maxh_m": maxh_m,
+            **_save_solver_mesh(ng_mesh, out_dir, label, units="m")}
 
 
 def _stage_mesh_multi(step_path: Path, region_names, out_dir: Path,
-                      label: str, maxh: float = 5.0) -> dict:
-    """Keep named Netgen solids and use .vol for the analysis hand-off."""
-    from netgen.occ import OCCGeometry, Glue
-    from ngsolve import TaskManager
+                      label: str, maxh: float = 5.0, *, units: str) -> dict:
+    """Read STEP's declared units, then preserve named SI Netgen solids."""
+    input_scale = _length_scale_to_m(units)
+    try:
+        from netgen.occ import OCCGeometry, Glue, Pnt
+        from ngsolve import TaskManager
+    except ImportError as exc:
+        raise RuntimeError(_DEPENDENCY_HELP) from exc
 
     start = time.perf_counter()
+    # OCCT STEP import normalizes document units to millimeters. The CAD stage
+    # declares its source shape units via export_step(unit=...), so this reader
+    # conversion is fixed while maxh still follows the caller's declared units.
     geometry = OCCGeometry(str(step_path))
+    geometry = OCCGeometry(geometry.shape.Scale(Pnt(0, 0, 0), 1.0e-3))
     solids = list(geometry.shape.solids)
     if len(solids) != len(region_names):
         raise ValueError(f"STEP has {len(solids)} solids but {len(region_names)} region names")
     for solid, name in zip(solids, region_names):
         solid.mat(name)
     geometry = OCCGeometry(Glue(solids))
+    maxh_m = maxh * input_scale
     with TaskManager():
-        ng_mesh = geometry.GenerateMesh(maxh=maxh)
+        ng_mesh = geometry.GenerateMesh(maxh=maxh_m)
     seconds = time.perf_counter() - start
     return {"stage": "mesh", "ok": True, "gen_seconds": round(seconds, 3),
-            "maxh": maxh, **_save_solver_mesh(ng_mesh, out_dir, label, region_names)}
+            "maxh": maxh, "input_units": units, "length_scale_to_m": input_scale,
+            "cad_reader_units": "mm", "cad_reader_scale_to_m": 1.0e-3,
+            "maxh_m": maxh_m,
+            **_save_solver_mesh(ng_mesh, out_dir, label, region_names, units="m")}
 
 
 def _stage_post(vol_path: Path, out_dir: Path, label: str) -> dict:
@@ -286,19 +341,24 @@ def _stage_post_multi(vol_path: Path, region_names, out_dir: Path, label: str) -
             "regions": regions, "solver_vol": str(vol_path), "vol_check": str(check_path)}
 
 
-def run_pipeline(part, out_dir, label: str, maxh: float = 5.0) -> dict:
+def run_pipeline(part, out_dir, label: str, maxh: float = 5.0, *, units: str) -> dict:
     """Build CAD, checked Netgen .vol, and a derived MSH 4.2 scalar display.
 
-    part coordinates and maxh are caller-owned SI lengths. No Cubit runtime
-    is used. check-vol, NGSolve and Radia's exporter are required on this path.
+    ``units`` is required: CAD coordinates and maxh must share 'm' or 'mm'.
+    CAD statistics keep those input units; solver/post artifacts are SI.
+    check-vol, NGSolve and the current Radia exporter are required. No Cubit
+    runtime or unit inference is used.
     """
+    scale = _length_scale_to_m(units)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    record = {"label": label, "status": "ok", "stages": []}
+    record = {"label": label, "status": "ok", "input_units": units,
+              "length_scale_to_m": scale, "stages": []}
     try:
         cad = _stage_cad(part, out_dir, label)
+        cad.update(input_units=units, volume_units=f"{units}^3", area_units=f"{units}^2")
         record["stages"].append(cad)
-        mesh = _stage_mesh(Path(cad["brep"]), out_dir, label, maxh=maxh)
+        mesh = _stage_mesh(Path(cad["brep"]), out_dir, label, maxh=maxh, units=units)
         record["stages"].append(mesh)
         record["stages"].append(_stage_post(Path(mesh["vol"]), out_dir, label))
     except Exception:
@@ -307,23 +367,28 @@ def run_pipeline(part, out_dir, label: str, maxh: float = 5.0) -> dict:
     return record
 
 
-def run_pipeline_multi(regions, out_dir, label: str, maxh: float = 5.0) -> dict:
+def run_pipeline_multi(regions, out_dir, label: str, maxh: float = 5.0, *, units: str) -> dict:
     """Build named Netgen .vol regions and derived region-id post output.
 
     Outputs: CAD .step, authoritative .vol, .labels.json, .vol-check.json,
     and derived _post.msh with exact display launch companions. The i-th
     declared region owns region_id i regardless of the mesh's material order.
-    Coordinates/maxh must be meters; no physical condition is inferred.
+    Required ``units`` declares CAD coordinates/maxh as 'm' or 'mm'.
+    CAD statistics retain input units; checked .vol and post output are SI.
+    No physical condition or unit is inferred.
     """
+    scale = _length_scale_to_m(units)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     names = [name for _part,name in regions]
     record = {"label": label, "status": "ok", "mode": "multi_region",
-              "region_names": names, "stages": []}
+              "region_names": names, "input_units": units,
+              "length_scale_to_m": scale, "stages": []}
     try:
-        cad = _stage_cad_multi(regions, out_dir, label)
+        cad = _stage_cad_multi(regions, out_dir, label, units=units)
+        cad.update(input_units=units, volume_units=f"{units}^3", area_units=f"{units}^2")
         record["stages"].append(cad)
-        mesh = _stage_mesh_multi(Path(cad["step"]), names, out_dir, label, maxh=maxh)
+        mesh = _stage_mesh_multi(Path(cad["step"]), names, out_dir, label, maxh=maxh, units=units)
         record["stages"].append(mesh)
         record["stages"].append(_stage_post_multi(Path(mesh["vol"]), names, out_dir, label))
     except Exception:

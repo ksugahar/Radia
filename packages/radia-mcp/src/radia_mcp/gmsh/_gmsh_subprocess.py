@@ -38,7 +38,7 @@ def run_gmsh_json_subprocess(script: str, args: list[str], *,
     """
     if not gmsh_available():
         return {"ok": False, "ran": False,
-                "error": "Gmsh 5 package missing; follow the canonical Gmsh runtime install guide and record wheel provenance"}
+                "error": "Gmsh 5 package missing; install the declared radia-mcp[gmsh] extra via the canonical runtime guide and record wheel provenance"}
 
     with tempfile.TemporaryDirectory(prefix=prefix) as work:
         out_json = Path(work) / "result.json"

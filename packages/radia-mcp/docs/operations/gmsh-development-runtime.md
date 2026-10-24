@@ -7,17 +7,20 @@ file. Conductor display surfaces/centerlines and streamfunction wires retain
 their discretization; their display artifacts use strict MSH 4.2.
 
 The Gmsh dependency requirements live only in the package pyproject extras.
-Until the qualified release is available on PyPI, use the official development
-index for Gmsh alone, then install other package dependencies from PyPI. This
-is the canonical install recipe; README and MCP knowledge link here:
+Install the declared `radia-mcp[gmsh]` extra. Until the qualified release is
+available on PyPI, include the official development index with this canonical
+command; README, MCP knowledge and viewer deployment plans link here:
 
 ```text
-python -m pip install --pre -i https://gmsh.info/python-packages-dev --report gmsh-install.json gmsh
-python -m pip install "radia-mcp[gmsh]"
+pip install --pre --extra-index-url https://gmsh.info/python-packages-dev "radia-mcp[gmsh]"
 ```
 
-For reproducible operations, use the exact wheel URL and SHA256 from the
-installation report to retain the selected artifact. Download that artifact
+Gmsh is imported lazily on native post-processing paths. Missing-runtime
+errors name the declared extra; do not add a standalone Gmsh side install.
+
+For reproducible operations, capture pip's JSON installation report using
+`--report` on the same declared-extra installation. Use the exact wheel URL
+and SHA256 from that report to retain the selected Gmsh artifact. Download that artifact
 without resolving another version, verify its SHA256 against the report,
 and bind it to the actually installed runtime:
 
