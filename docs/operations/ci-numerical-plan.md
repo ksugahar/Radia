@@ -46,6 +46,16 @@ requires trusted successful main ancestry, exact hashes, non-skipped JUnit and t
 existing age limit. It never certifies a newly built artifact. PRs no longer force
 heavy validation unconditionally; explicit manual forcing remains available.
 
+Conservative selections cannot use a scoped source fingerprint. Unclassified
+inputs, global/control selection or unknown selected heavy closures fingerprint
+all tracked files and the entire environment, including the workflow or runtime
+contract that caused fallback. Proven closures retain their static third-party
+imports; CMake and Ninja are bound to the configured executable hashes and version
+outputs. Unresolved aliased subprocess/shell calls remain conservative. Joined
+literal documentation paths read by a case are inputs, not docs-only exemptions;
+an unresolvable documentation read marks the case unresolved. This is not a
+general proof of arbitrary filesystem access.
+
 
 SparseSolv does not reuse a PR's whole-tree job success on main: after per-case
 selection that success no longer proves the complete lane ran. Its parent receipt

@@ -241,7 +241,9 @@ def build_environment(tmp_path, monkeypatch, flags=''):
     compiler.write_text('set(CMAKE_CXX_COMPILER_ID "MSVC")\nset(CMAKE_CXX_COMPILER_VERSION "19.44")\n')
     cache=tmp_path/'build-msvc/CMakeCache.txt'
     cache.write_text('SDK:STRING=10.0.26100.0\nCMAKE_BUILD_TYPE:STRING=Release\n'
-                     'CMAKE_CXX_FLAGS:STRING='+flags+'\nCMAKE_CXX_FLAGS_RELEASE:STRING=/O2\n')
+                     'CMAKE_CXX_FLAGS:STRING='+flags+'\nCMAKE_CXX_FLAGS_RELEASE:STRING=/O2\n'
+                     'CMAKE_COMMAND:INTERNAL='+gate.sys.executable+'\n'
+                     'CMAKE_MAKE_PROGRAM:FILEPATH='+gate.sys.executable+'\n', encoding='utf-8')
     return gate.environment_contract(tmp_path)
 
 
@@ -442,8 +444,41 @@ def test_planned_fingerprint_keeps_solver_fixture_native_and_environment_inputs(
         (tmp_path / name).write_text(files[name], encoding='utf-8')
     other['packages'][0] = ('ngsolve', '6.2.next')
     assert gate.source_fingerprint(tmp_path, other, value)[0] != initial
+    tools = dict(env, build_tools={'cmake': {'version': '1'}, 'ninja': {'version': '1'}})
+    changed_tools = copy.deepcopy(tools); changed_tools['build_tools']['ninja']['version'] = '2'
+    assert gate.source_fingerprint(tmp_path, tools, value)[0] != gate.source_fingerprint(tmp_path, changed_tools, value)[0]
+    third_party = copy.deepcopy(value); third_party['cases'][0]['components'].append('package:matplotlib')
+    assert gate.source_fingerprint(tmp_path, dict(env, packages=[('matplotlib', '1')]), third_party)[0] != gate.source_fingerprint(
+        tmp_path, dict(env, packages=[('matplotlib', '2')]), third_party)[0]
     gmsh_case = copy.deepcopy(value); gmsh_case['cases'][0]['components'].append('gmsh')
     assert gate.source_fingerprint(tmp_path, env, gmsh_case)[0] != gate.source_fingerprint(
         tmp_path, dict(env, packages=[('ngsolve', '6.2.2608'), ('gmsh', '5.dev2'), ('mcp', '1')]), gmsh_case)[0]
     with pytest.raises(ValueError, match='empty planned heavy'):
         gate.source_fingerprint(tmp_path, env, {'cases': []})
+
+
+@pytest.mark.parametrize('fallback', ['unclassified', 'global', 'unknown'])
+def test_fallback_fingerprints_all_tracked_inputs_and_full_environment(tmp_path, monkeypatch, fallback):
+    files = {'src/solver.py': 'solver', '.github/workflows/sparsesolv.yml': 'workflow',
+             'validation_test/case.py': 'case', 'docs/runtime-contract.md': 'contract',
+             'packages/demo/runtime.json': 'dynamic contract'}
+    for name, content in files.items():
+        path = tmp_path / name; path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding='utf-8')
+    tier = tmp_path / 'tests/test_tier_manifest.json'; tier.parent.mkdir()
+    tier.write_text(json.dumps({'profiles': {'solver-heavy': {'paths': ['validation_test/case.py']}}}), encoding='utf-8')
+    files[tier.relative_to(tmp_path).as_posix()] = tier.read_text(encoding='utf-8')
+    monkeypatch.setattr(gate, 'git', lambda root, *args: '\0'.join(files)
+                        if args[0] == 'ls-files' and '--others' not in args else '')
+    value = {'global_selection': fallback == 'global',
+             'unclassified_inputs': ['packages/demo/runtime.json'] if fallback == 'unclassified' else [],
+             'cases': [dict(profile='solver-heavy', selected=True, path='validation_test/case.py',
+                            dependencies=['validation_test/case.py'], components=[],
+                            unknowns=['runtime loader'] if fallback == 'unknown' else [])]}
+    env = {'packages': [('unexpected-dependency', '1')]}
+    initial = gate.source_fingerprint(tmp_path, env, value)[0]
+    for name in ['.github/workflows/sparsesolv.yml', 'packages/demo/runtime.json', 'docs/runtime-contract.md']:
+        (tmp_path / name).write_text(files[name] + ' changed', encoding='utf-8')
+        assert gate.source_fingerprint(tmp_path, env, value)[0] != initial
+        (tmp_path / name).write_text(files[name], encoding='utf-8')
+    assert gate.source_fingerprint(tmp_path, {'packages': [('unexpected-dependency', '2')]}, value)[0] != initial

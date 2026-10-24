@@ -173,9 +173,20 @@ def environment_contract(root):
     if os.environ.get('RADIA_TESTS_ALLOW_PARTIAL')!='0': raise ValueError('partial validation context')
     threads={key:os.environ.get(key) for key in ('RADIA_TEST_NGSOLVE_THREADS','OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS')}
     if set(threads.values())!={'1'}: raise ValueError('unbounded or changed thread contract')
+    build_tools={}
+    for name,key in [('cmake','CMAKE_COMMAND'),('ninja','CMAKE_MAKE_PROGRAM')]:
+        matches=re.findall(r'^'+key+r':[^=]+=(.+)$',cache,re.MULTILINE)
+        if len(matches)!=1: raise ValueError('build tool identity unknown: '+name)
+        executable=Path(matches[0].strip())
+        if not executable.is_absolute() or not executable.is_file() or executable.is_symlink():
+            raise ValueError('missing/linked build tool: '+name)
+        version=subprocess.run([str(executable),'--version'],check=True,capture_output=True,
+                               text=True,encoding='utf-8',errors='strict',timeout=10).stdout.strip()
+        if not version: raise ValueError('empty build tool version: '+name)
+        build_tools[name]={'sha256':digest(executable.read_bytes()),'version':version}
     return {'python':sys.version,'platform':platform.platform(),'machine':platform.machine(),
             'processor':platform.processor(),'compiler':compiler,'windows_sdk_versions':sdk_versions,'threads':threads,
-            'compiler_options':build_options,'numerical_environment':numerical_environment(),
+            'compiler_options':build_options,'build_tools':build_tools,'numerical_environment':numerical_environment(),
             'mkl_runtime':mkl_runtime,
             'packages':sorted((d.metadata['Name'].lower(),d.version) for d in importlib.metadata.distributions())}
 
@@ -237,22 +248,31 @@ def source_fingerprint(root, environment, numerical_plan=None):
         scoped.update(path for path in ROOT_INPUTS if path in tracked_set)
         scoped.update(path for path in ('tools/ci_numerical_plan.py', 'tools/ci_numerical_inputs.json',
                                       'tools/ci_numerical_runtime.py') if path in tracked_set)
-        selected = sorted(scoped)
-        profiles = {'selected_paths': sorted(row['path'] for row in heavy), 'profile_contracts': profiles}
+        conservative = (bool(numerical_plan.get('unclassified_inputs'))
+                        or bool(numerical_plan.get('global_selection'))
+                        or bool(numerical_plan.get('global_reasons'))
+                        or any(row.get('unknowns') for row in heavy))
+        # Fallback selection is not a proved closure. Its causing input (including
+        # workflow, runtime JSON or docs) must invalidate a prior main receipt.
+        # Hash ALL tracked files and the complete environment in that case.
+        selected = sorted(tracked_set - {''}) if conservative else sorted(scoped)
+        profiles = {'selection_scope': 'full-tree' if conservative else 'proved-case-closure',
+                    'selected_paths': sorted(row['path'] for row in heavy), 'profile_contracts': profiles}
         environment = dict(environment)
         # Do not hash the entire venv. Retain numerical/toolchain identities and
         # every declared solver dependency; Gmsh participates only for its consumers.
         relevant = {'numpy','scipy','ngsolve','netgen-mesher','mkl','mkl-devel','mkl-include',
-                    'tbb','tbb-devel','intel-openmp','build123d','cadquery-ocp','h5py','pybind11','pytest','pluggy'}
+                    'tbb','tbb-devel','intel-openmp','build123d','cadquery-ocp','h5py','pybind11','pytest','pluggy',
+                    'cmake','ninja'}
         if any('gmsh' in row.get('components', []) for row in heavy): relevant.add('gmsh')
         aliases = {'OCP':'cadquery-ocp','skimage':'scikit-image','sklearn':'scikit-learn',
-                   'kan':'pykan','yaml':'pyyaml'}
+                   'kan':'pykan','yaml':'pyyaml','netgen':'netgen-mesher'}
         for row in heavy:
             for component in row.get('components', []):
                 if component.startswith('package:'):
                     module = component.split(':', 1)[1]
                     relevant.add(aliases.get(module, module).lower().replace('_','-'))
-        if not any(row.get('unknowns') for row in heavy):
+        if not conservative:
             environment['packages'] = [item for item in environment.get('packages', []) if item[0].replace('_','-') in relevant]
     rows={}
     for path in sorted(selected):

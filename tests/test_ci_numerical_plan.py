@@ -298,3 +298,64 @@ def test_cli_execution_targets_current_registry_not_retired_files(repository, tm
                              capture_output=True, text=True, encoding='utf-8')
     assert process.returncode == 0, (process.stdout, process.stderr)
     assert json.loads((tmp_path / 'verified.json').read_text(encoding='utf-8'))['paths'] == ['validation_test/motor.py']
+
+
+def test_cli_case_reads_joined_documentation_input(repository, tmp_path):
+    root, _ = repository
+    document = 'docs/induction_heating/FIN_PEEC_PRODUCTION_BOUNDARY.md'
+    change(root, document, 'approved boundary\n')
+    change(root, 'validation_test/ih.py', 'from pathlib import Path\n'
+           'ROOT = Path(__file__).resolve().parents[1]\n'
+           'doc = ROOT / "docs" / "induction_heating" / "FIN_PEEC_PRODUCTION_BOUNDARY.md"\n'
+           'text = doc.read_text(encoding="utf-8")\n')
+    base = git(root, 'rev-parse', 'HEAD')
+    change(root, document, 'changed boundary\n')
+    value = invoke(root, base, tmp_path)
+    row = next(row for row in value['cases'] if row['path'] == 'validation_test/ih.py')
+    assert row['selected'] and document in row['dependencies']
+
+
+@pytest.mark.parametrize('program', [
+    'from subprocess import run\nrun(["python", "-c", dynamic_code])\n',
+    'from subprocess import Popen as launch\nlaunch(["python", "-c", dynamic_code])\n',
+    'import subprocess as sp\nsp.check_output(dynamic_command)\n',
+    'import os\nos.system(dynamic_command)\n',
+    'import os as operating\noperating.popen(dynamic_command)\n',
+])
+def test_cli_aliased_process_or_shell_entry_is_not_a_proved_closure(repository, tmp_path, program):
+    root, _ = repository
+    change(root, 'validation_test/ih.py', program)
+    base = git(root, 'rev-parse', 'HEAD')
+    change(root, 'src/radia/panels/open_gmsh.py', 'def show(): return 2\n')
+    value = invoke(root, base, tmp_path)
+    row = next(row for row in value['cases'] if row['path'] == 'validation_test/ih.py')
+    assert row['selected'] and row['unknowns']
+
+
+def test_cli_records_static_third_party_dependency_for_heavy_environment(repository, tmp_path):
+    root, base = repository
+    change(root, 'validation_test/ih.py', 'from matplotlib import pyplot\n')
+    value = invoke(root, base, tmp_path)
+    row = next(row for row in value['cases'] if row['path'] == 'validation_test/ih.py')
+    assert 'package:matplotlib' in row['components']
+
+
+@pytest.mark.parametrize('path', [
+    'packages/radia-simulink/src/radia_simulink/simulink/contracts/ih_workpiece_v1.json',
+    '.github/workflows/sparsesolv.yml',
+])
+def test_cli_fallback_input_invalidates_trusted_heavy_receipt(repository, tmp_path, path):
+    import importlib.util
+    root, _ = repository
+    change(root, path, 'original\n')
+    base = git(root, 'rev-parse', 'HEAD')
+    value = invoke(root, base, tmp_path)
+    spec = importlib.util.spec_from_file_location('actual_source_receipt_gate', CLI.with_name('validation_source_gate.py'))
+    gate = importlib.util.module_from_spec(spec); spec.loader.exec_module(gate)
+    original = gate.source_fingerprint(root, {'packages': [('numpy', 'test')]}, value)[0]
+    change(root, path, 'changed\n')
+    value = invoke(root, base, tmp_path)
+    assert len(value['heavy_case_paths']) == 2
+    assert value['unclassified_inputs'] or value['global_selection']
+    changed = gate.source_fingerprint(root, {'packages': [('numpy', 'test')]}, value)[0]
+    assert changed != original, 'fallback-causing source must invalidate prior main evidence'
