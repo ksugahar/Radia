@@ -28,7 +28,7 @@ TEXT_SUFFIXES = {
 # Exact format tokens, not software versions or arbitrary physical values.
 OLD_VERSION = r"(?:4[.]1|2[.]2)(?!\d|[.]\d)"
 PUNCTUATION = r"[\s`*_()\[\]|:\"'=-]*"
-FORMAT_TOKENS = re.compile(r"4[.]1|2[.]2|msh(?:2|22|41)\b|MshFileVersion|_v(?:41|22)_", re.IGNORECASE)
+FORMAT_TOKENS = re.compile(r"4[.]1|2[.]2|msh(?:2|22|41)\b|MshFileVersion|_v(?:41|22)(?=[_.-])", re.IGNORECASE)
 FORMAT_CLAIM = re.compile(
     rf"(?:\bMSH\b|[.]msh\b){PUNCTUATION}"
     rf"(?:(?:ASCII|binary|file|format|version|is|only)\b{PUNCTUATION}){{0,3}}"
@@ -141,7 +141,7 @@ def _candidate_paths(root: Path) -> set[str]:
     """Native Git prefilter; still repository-wide, including UTF-16 text."""
     # Prefilter ordinary text by format-related tokens. The binary-marked
     # suffix fallback below preserves UTF-16; image payload files are excluded.
-    pattern = r"4.?[.].?1|2.?[.].?2|m.?s.?h.?(2|4|f)|s.?a.?v.?e.?d.?_.?n.?o.?t.?e.?b.?o.?o.?k"
+    pattern = r"4.?[.].?1|2.?[.].?2|m.?s.?h.?(2|4|f)|v.?(4.?1|2.?2)[_.-]|s.?a.?v.?e.?d.?_.?n.?o.?t.?e.?b.?o.?o.?k"
     found = subprocess.run(
         ["git", "-c", f"safe.directory={root.as_posix()}", "grep", "--text", "-i", "-l", "-z", "-E", pattern,
          "--", *[f":(icase)*{suffix}" for suffix in sorted(TEXT_SUFFIXES)]],
@@ -256,12 +256,13 @@ def test_git_prefilter_preserves_utf16_and_cli_claims(tmp_path):
     old = ".".join(map(str, (4, 1)))
     inputs = {"legacy.py": (f'Mesh.MshFileVersion = {old}', "utf-16"),
               "command.sh": ("gmsh file.geo -format msh" + "41", "utf-8"),
+              "reference.py": ('path="case_v' + "41" + '.geo"', "utf-8"),
               "current.py": ('Mesh.MshFileVersion = 4.2', "utf-8")}
     for name, (text, encoding) in inputs.items():
         (root / name).write_text(text, encoding=encoding)
     subprocess.run(["git", "-C", str(root), "add", "."], capture_output=True, check=True)
     selected = _candidate_paths(root)
-    assert {"legacy.py", "command.sh"}.issubset(selected), selected
+    assert {"legacy.py", "command.sh", "reference.py"}.issubset(selected), selected
     assert _claims((root / "legacy.py").read_text(encoding="utf-16"))
 
 
