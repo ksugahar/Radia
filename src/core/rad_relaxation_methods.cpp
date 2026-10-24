@@ -45,8 +45,16 @@ extern radTApplication rad;
 #include "rad_parallel.h"
 
 #ifdef HAVE_LAPACK
-// Intel MKL headers (includes dgesv_ declaration)
+// Provider-selected LP64 BLAS/LAPACK declarations.
 #include "rad_blas.h"
+// Fortran declarations stay private to TUs without NGSolve la.hpp/clapack.h.
+#if defined(RADIA_BLAS_MKL)
+#include <mkl_lapack.h>
+#define RADIA_LAPACK_GETRS dgetrs_
+#elif defined(RADIA_BLAS_NVPL)
+#include <nvpl_lapack.h>
+#define RADIA_LAPACK_GETRS NVPL_LAPACK_dgetrs
+#endif
 #endif
 
 extern radTYield radYield;
@@ -1513,7 +1521,7 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 			int info = 0;
 			cblas_dcopy(dof, rhs.data(), 1, H_vec.data(), 1);
 			char trans = 'N';
-			dgetrs_(&trans, &n, &nrhs, LHS.data(), &n, ipiv.data(),
+			RADIA_LAPACK_GETRS(&trans, &n, &nrhs, LHS.data(), &n, ipiv.data(),
 			        H_vec.data(), &n, &info);
 			if(info != 0) break;
 		}

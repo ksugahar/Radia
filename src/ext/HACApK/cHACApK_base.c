@@ -34,6 +34,15 @@
 !C  translated to C language by Akihiro Ida and Kazuya Goto
 !C**************************************************************************
 */
+#include "../../core/rad_blas.h"
+/* Provider declarations remain local to this C TU (no NGSolve headers). */
+#if defined(RADIA_BLAS_MKL)
+#include <mkl_lapack.h>
+#define RADIA_LAPACK_GESVD dgesvd_
+#elif defined(RADIA_BLAS_NVPL)
+#include <nvpl_lapack.h>
+#define RADIA_LAPACK_GESVD NVPL_LAPACK_dgesvd
+#endif
 #include "cHACApK_base.h"
 #include "cHACApK_calc_entry_ij.h"
 #include "cHACApK_dense_leaf_sink.h"
@@ -483,8 +492,6 @@ static int max(
   return i1>i2 ? i1 : i2;
 }
 
-extern void dgeqp3_(int*,int*,double*,int*,int*,double*,double*,int*,int*);
-extern void dorgqr_(int*,int*,int*,double*,int*,double*,double*,int*,int*);
 
 //***cHACApK_RRQR
 int cHACApK_RRQR(
@@ -574,7 +581,6 @@ error:
   exit(EXIT_FAILURE);
 }
 
-extern void dgesvd_(char*,char*,int*,int*,double*,int*,double*,double*,int*,double*,int*,double*,int*,int*);
 
 //***cHACApK_SVD
 int cHACApK_SVD(
@@ -634,7 +640,7 @@ int cHACApK_SVD(
   //call dgesvd ( 'A', 'A', ndl, ndt, waa, lda, w, u, ldu, vt, ldvt, work, lwork, info)
   //call dgesvd ( 'S', 'S', ndl, ndt, waa, lda, w, u, ldu, vt, ldvt, work, lwork, info)
   jobu = 'S'; jobvt = 'S';
-  dgesvd_(&jobu, &jobvt, &ndl, &ndt, waa, &lda, w, u, &ldu, vt, &nn, work, &lwork, &info);
+  RADIA_LAPACK_GESVD(&jobu, &jobvt, &ndl, &ndt, waa, &lda, w, u, &ldu, vt, &nn, work, &lwork, &info);
   // call HACApK_gesvd (waa,w,u,vt)
 
   //    print*, 'info_dgesvd=',info

@@ -2,7 +2,8 @@
 
 Guards: Architecture/provider mismatch rejection, explicit LP64 library closure,
 missing-development-file rejection before configure, and keeping MKL Fortran
-LAPACK declarations out of the NGSolve-facing provider boundary.
+LAPACK declarations out of the NGSolve-facing provider boundary, while direct
+Fortran callers explicitly include their provider's declaring header.
 Assumes: Provider files are temporary fixtures; no native library is loaded.
 """
 import importlib.util
@@ -70,3 +71,69 @@ def test_mkl_boundary_does_not_export_fortran_lapack_declarations():
                               mkl_branch, re.MULTILINE))
     expected = {"mkl_cblas.h", "mkl_lapacke.h", "mkl_service.h"}
     assert includes == expected, (includes, expected)
+
+
+def _fortran_lapack_units(root):
+    """Scan source TUs and their quote includes without loading a provider."""
+    import re
+
+    units = {}
+    paths = [p for p in (root / "src").rglob("*")
+             if p.suffix in (".c", ".cc", ".cpp", ".cxx")]
+    paths += list((root / "validation_test/numerics").glob("*.cpp"))
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        code = re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.S)
+        names = set(re.findall(
+            r"\b([sdcz](?:gesv|getrf|getrs|geqp3|orgqr|gesvd)_|RADIA_LAPACK_GETRS|RADIA_LAPACK_GESVD)\s*\(", code))
+        if not names:
+            continue
+        relative = path.relative_to(root).as_posix()
+        pattern = (r"#if defined\(RADIA_BLAS_MKL\)\s*"
+                   r'#include <mkl_lapack\.h>.*?'
+                   r"#elif defined\(RADIA_BLAS_NVPL\)\s*"
+                   r'#include <nvpl_lapack\.h>.*?#endif')
+        assert re.search(pattern, code, re.S), (
+            relative, sorted(names), "missing provider Fortran declaring headers")
+        assert not ({"dgetrs_", "zgetrs_", "dgesvd_"} & names), (
+            relative, sorted(names), "string arguments require provider macro")
+        if "RADIA_LAPACK_GETRS" in names:
+            routine = "zgetrs" if "peec" in path.name else "dgetrs"
+            assert "#define RADIA_LAPACK_GETRS " + routine + "_" in code, relative
+            assert "#define RADIA_LAPACK_GETRS NVPL_LAPACK_" + routine in code, relative
+        if "RADIA_LAPACK_GESVD" in names:
+            assert "#define RADIA_LAPACK_GESVD dgesvd_" in code, relative
+            assert "#define RADIA_LAPACK_GESVD NVPL_LAPACK_dgesvd" in code, relative
+        seen = set()
+        pending = [path]
+        while pending:
+            item = pending.pop()
+            if item in seen:
+                continue
+            seen.add(item)
+            content = item.read_text(encoding="utf-8")
+            content = re.sub(r"/\*.*?\*/|//[^\n]*", "", content, flags=re.S)
+            includes = re.findall(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]',
+                                  content, re.M)
+            assert not ({"la.hpp", "bla.hpp", "clapack.h"} & set(includes)), (
+                relative, str(item), "Fortran declarations may reach NGSolve LAPACK")
+            for include in re.findall(r'^\s*#\s*include\s*"([^"]+)"', content, re.M):
+                for base in (item.parent, root / "src/core", root / "src/lib",
+                             root / "src/ext/genmath"):
+                    candidate = (base / include).resolve()
+                    if candidate.is_relative_to(root.resolve()) and candidate.is_file():
+                        pending.append(candidate)
+                        break
+        units[relative] = sorted(names)
+    return units
+
+
+def test_every_fortran_lapack_caller_has_private_provider_declarations():
+    units = _fortran_lapack_units(ROOT)
+    expected = {
+        "src/core/rad_peec_matrices.cpp",
+        "src/core/rad_relaxation_methods.cpp",
+        "validation_test/numerics/test_provider_blas.cpp",
+        "src/ext/HACApK/cHACApK_base.c",
+    }
+    assert set(units) == expected, (set(units), expected)
