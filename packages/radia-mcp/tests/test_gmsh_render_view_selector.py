@@ -14,6 +14,8 @@ MEASURED on gmsh 4.15.2, two renders of identical settings give
 identical pixels but different PNG bytes.
 """
 
+from msh42_fixtures import field_section
+
 import hashlib
 import importlib.util
 
@@ -26,7 +28,7 @@ _PIL_AVAILABLE = importlib.util.find_spec("PIL") is not None
 # Kuhn decomposition of the cube [-0.5, 0.5]^3: 6 positively oriented
 # tets sharing the diagonal node1->node8.
 _CUBE = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $Nodes
 1 8 1 8
@@ -71,12 +73,7 @@ _W, _H = 700, 400
 
 
 def _nodedata(name, ncomp, rows, time=0.0, step=0):
-    lines = ["$NodeData", "1", f'"{name}"', "1", str(time), "3",
-             str(step), str(ncomp), str(len(rows))]
-    for tag, vals in rows:
-        lines.append(str(tag) + " " + " ".join(f"{v:.16g}" for v in vals))
-    lines.append("$EndNodeData")
-    return "\n".join(lines) + "\n"
+    return field_section('NodeData', name, ncomp, rows, time=time, step=step)
 
 
 @pytest.fixture

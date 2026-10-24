@@ -16,6 +16,8 @@ whose raw max is 11x the static kinetic energy is a rendering artefact
 that field_stats must NAME rather than serve as physics.
 """
 
+from msh42_fixtures import field_section
+
 import importlib.util
 import math
 
@@ -49,7 +51,7 @@ def _kuhn_cube(n):
                 corner = [nid(i + (loc & 1), j + ((loc >> 1) & 1),
                               k + ((loc >> 2) & 1)) for loc in range(8)]
                 tets.extend(tuple(corner[c] for c in t) for t in _LOCAL_TETS)
-    lines = ["$MeshFormat", "4.1 0 8", "$EndMeshFormat", "$Nodes",
+    lines = ["$MeshFormat", "4.2 0 8", "$EndMeshFormat", "$Nodes",
              f"1 {len(coords)} 1 {len(coords)}", f"3 1 0 {len(coords)}"]
     lines += [str(i + 1) for i in range(len(coords))]
     lines += [f"{x:.17g} {y:.17g} {z:.17g}" for x, y, z in coords]
@@ -62,12 +64,7 @@ def _kuhn_cube(n):
 
 
 def _nodedata(name, rows, ncomp=1, step=0, time=0.0):
-    lines = ["$NodeData", "1", f'"{name}"', "1", str(time), "3", str(step),
-             str(ncomp), str(len(rows))]
-    for tag, vals in rows:
-        lines.append(str(tag) + " " + " ".join(f"{v:.17g}" for v in vals))
-    lines.append("$EndNodeData")
-    return "\n".join(lines) + "\n"
+    return field_section('NodeData', name, ncomp, rows, time=time, step=step)
 
 
 def _write_cube(tmp_path, n, views=("S", "Q", "V")):
@@ -277,7 +274,7 @@ def _beam_msh(tmp_path, values, n_steps=4, name="beam (kinetic energy [eV])",
     sentinel = hi + 10.0 * scale
 
     nodes = [(i, 0.0, 0.0) for i in range(n + 1)]
-    lines = ["$MeshFormat", "4.1 0 8", "$EndMeshFormat", "$Nodes",
+    lines = ["$MeshFormat", "4.2 0 8", "$EndMeshFormat", "$Nodes",
              f"1 {n + 1} 1 {n + 1}", f"1 1 0 {n + 1}"]
     lines += [str(i + 1) for i in range(n + 1)]
     lines += [f"{x:.17g} {y:.17g} {z:.17g}" for x, y, z in nodes]
@@ -287,11 +284,7 @@ def _beam_msh(tmp_path, values, n_steps=4, name="beam (kinetic energy [eV])",
     text = "\n".join(lines)
 
     def _elemdata(view, step, vals):
-        rows = ["$ElementData", "1", f'"{view}"', "1", str(float(step)), "3",
-                str(step), "1", str(len(vals))]
-        rows += [f"{i + 1} {v:.17g}" for i, v in enumerate(vals)]
-        rows.append("$EndElementData")
-        return "\n".join(rows) + "\n"
+        return field_section('ElementData', view, 1, list(enumerate(vals, 1)), time=float(step), step=step)
 
     if static is not None:
         text += _elemdata(static, 0, values)

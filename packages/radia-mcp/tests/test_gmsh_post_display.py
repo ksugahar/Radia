@@ -9,7 +9,10 @@ from radia_mcp.gmsh.post_display import (
 
 def test_gmsh_post_display_contract_records_geo_opt_cutplane_and_camera(tmp_path):
     msh = tmp_path / "case.msh"
-    msh.write_text("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n", encoding="utf-8")
+    msh.write_text("""$MeshFormat
+4.2 0 8
+$EndMeshFormat
+""", encoding="utf-8")
 
     manifest = build_gmsh_post_display_contract(
         msh,
@@ -51,7 +54,10 @@ def test_gmsh_post_display_contract_records_geo_opt_cutplane_and_camera(tmp_path
 
 def test_write_gmsh_post_launch_artifact_emits_autoload_sidecars(tmp_path):
     msh = tmp_path / "case.msh"
-    msh.write_text("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n", encoding="utf-8")
+    msh.write_text("""$MeshFormat
+4.2 0 8
+$EndMeshFormat
+""", encoding="utf-8")
 
     manifest = write_gmsh_post_launch_artifact(
         msh,
