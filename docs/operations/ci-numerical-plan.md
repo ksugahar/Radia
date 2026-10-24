@@ -45,3 +45,17 @@ Unknown closures retain the full environment fallback. Source receipt reuse stil
 requires trusted successful main ancestry, exact hashes, non-skipped JUnit and the
 existing age limit. It never certifies a newly built artifact. PRs no longer force
 heavy validation unconditionally; explicit manual forcing remains available.
+
+
+SparseSolv does not reuse a PR's whole-tree job success on main: after per-case
+selection that success no longer proves the complete lane ran. Its parent receipt
+explicitly records `case-plan-not-full-lane`. The full main plan must execute;
+only the separately verified, scoped heavy source receipt may avoid duplicate
+heavy work. Other distributions' existing tree-reuse rules are unchanged.
+
+
+Execution targets come from the current tier registry plus the explicit current
+Gmsh-consumer supplement; retired paths are recorded
+separately rather than passed to pytest after deletion. Both Git snapshots still
+contribute dependencies of retained cases. This does not authorize retirement:
+the existing route-retention and review gates still govern registry removals.

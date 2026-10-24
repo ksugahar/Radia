@@ -70,7 +70,8 @@ def profile_matches(lane, prior, current):
     if lane != 'sparsesolv':
         return True
     # A skipped or compact PR cannot certify the full post-merge lane.
-    return (prior.get('impact_required') is True
+    return (prior.get('qualification_scope') == 'full-lane'
+            and prior.get('impact_required') is True
             and prior.get('test_set') == current.get('test_set')
             and bool(current.get('test_set')))
 
@@ -163,7 +164,11 @@ def reuse(lane, event, current, get=api, listing=pages):
 def route(lane, event_name, event, git, impact_required=True):
     current = identity(lane, git)
     receipt = dict(current, mode='execute', impact_required=impact_required)
-    if event_name == 'push' and event.get('ref') == 'refs/heads/main':
+    if lane == 'sparsesolv':
+        # A successful partially selected PR job cannot certify the full main lane.
+        receipt['qualification_scope'] = 'case-plan-not-full-lane'
+        receipt['reuse_policy'] = 'disabled: use scoped heavy source receipts instead'
+    if lane != 'sparsesolv' and event_name == 'push' and event.get('ref') == 'refs/heads/main':
         try:
             receipt = reuse(lane, event, current) or receipt
         except Exception as error:

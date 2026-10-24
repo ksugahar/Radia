@@ -277,3 +277,24 @@ def test_workflow_uses_distinct_plan_outputs_and_verified_execution():
     heavy = next(step for step in steps if step.get('id') == 'heavy-validation')
     assert "-eq 'pull_request'" not in heavy['run']
     assert 'force_validation' in heavy['run']
+
+
+
+def test_cli_execution_targets_current_registry_not_retired_files(repository, tmp_path):
+    root, base = repository
+    path = root / 'tests/test_tier_manifest.json'
+    data = json.loads(path.read_text(encoding='utf-8'))
+    data['profiles']['solver-heavy']['paths'].remove('validation_test/ih.py')
+    (root / 'validation_test/ih.py').unlink()
+    change(root, 'tests/test_tier_manifest.json', json.dumps(data))
+    value = invoke(root, base, tmp_path)
+    assert value['retired_case_paths']['solver-heavy'] == ['validation_test/ih.py']
+    assert value['heavy_case_paths'] == ['validation_test/motor.py']
+    assert all(row['path'] != 'validation_test/ih.py' for row in value['cases'])
+    runtime = CLI.with_name('ci_numerical_runtime.py')
+    process = subprocess.run([sys.executable, str(runtime), '--repo', str(root),
+                              '--plan', str(tmp_path / 'plan.json'), '--profile', 'solver-heavy',
+                              '--out', str(tmp_path / 'verified.json')],
+                             capture_output=True, text=True, encoding='utf-8')
+    assert process.returncode == 0, (process.stdout, process.stderr)
+    assert json.loads((tmp_path / 'verified.json').read_text(encoding='utf-8'))['paths'] == ['validation_test/motor.py']
