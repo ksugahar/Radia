@@ -151,6 +151,13 @@ class Tree:
             if isinstance(assignment, ast.Assign):
                 for target in assignment.targets:
                     if isinstance(target, ast.Name): assignments.setdefault(target.id, []).append(assignment.value)
+        aliases = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                aliases.update((item.asname or item.name.split('.')[0],
+                                item.name if item.asname else item.name.split('.')[0]) for item in node.names)
+            elif isinstance(node, ast.ImportFrom) and not node.level and node.module:
+                aliases.update((item.asname or item.name, node.module + '.' + item.name) for item in node.names)
         parent = PurePosixPath(path).parent
         for ancestor in [parent, *parent.parents]:
             initializer = str(ancestor / '__init__.py')
@@ -192,6 +199,8 @@ class Tree:
                         unknown.add('unresolved import: ' + name + ' in ' + path)
                 if name.split('.')[0] == 'gmsh': components.add('gmsh')
                 if name.split('.')[0] in {'ngsolve', 'netgen'}: components.add('solver')
+                if name.split('.')[0] in EXTERNAL - set(sys.stdlib_module_names):
+                    components.add('package:' + name.split('.')[0])
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 value = node.value
                 # Only executable call sites are treated as code loaders below.
@@ -202,6 +211,26 @@ class Tree:
                         if candidate in self.files: pending.append(candidate)
             if isinstance(node, ast.Call):
                 name = ast.unparse(node.func)
+                first, *tail = name.split('.')
+                name = '.'.join([aliases.get(first, first), *tail])
+                if name in {'os.system', 'os.popen'}:
+                    unknown.add('shell entry needs declaration: ' + path)
+                if name.endswith(('.read_text', '.read_bytes')):
+                    # Joined/dynamic file paths cannot be bounded by a bare string
+                    # lookup. Preserve correctness until an exact declaration or
+                    # literal tracked path supplies that dependency.
+                    receiver = node.func.value if isinstance(node.func, ast.Attribute) else None
+                    values = assignments.get(receiver.id, []) if isinstance(receiver, ast.Name) else []
+                    value = values[0] if len(values) == 1 else receiver
+                    literals = [n for n in ast.walk(value) if isinstance(n, ast.Constant)
+                                and isinstance(n.value, str)] if value is not None else []
+                    strings = [n.value for n in sorted(literals, key=lambda n: (n.lineno, n.col_offset))]
+                    candidates = [self.literal_path(text, path) for text in strings]
+                    if strings: candidates.append(self.literal_path('/'.join(strings), path))
+                    if strings and any(candidates):
+                        pending.extend(p for p in candidates if p)
+                    elif any(text.endswith(('.md', '.rst')) for text in strings):
+                        unknown.add('file read needs declaration: ' + path)
                 if name.endswith(('import_module', 'importorskip', 'run_module', 'find_spec')) or name == '__import__':
                     if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
                         import_name = node.args[0].value
@@ -400,7 +429,8 @@ def plan(root, base, head, event):
     return {'schema': SCHEMA, 'status': 'planned', 'qualification': False, 'execution_wired': False,
             'base': before.sha, 'head': after.sha, 'event': event,
             'declaration_identity': {'commit': policy_sha, 'blob': declaration_blob}, 'changed_paths': sorted(changed),
-            'unclassified_inputs': unclassified, 'retired_case_paths': retired, 'cases': rows,
+            'unclassified_inputs': unclassified, 'global_selection': bool(global_change),
+            'global_reasons': reasons, 'retired_case_paths': retired, 'cases': rows,
             'native_build_targets': sorted(native_required),
             'ams_paths': sorted({r['path'] for r in rows if r['selected'] and r['profile'] == 'sparsesolv'}),
             'python_test_paths': sorted({r['path'] for r in rows if r['selected'] and r['profile'] in ('solver-numerics', 'native-build-contracts')}),
