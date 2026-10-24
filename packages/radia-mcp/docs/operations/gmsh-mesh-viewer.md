@@ -7,10 +7,12 @@ the MSH route; installed payload hashes must match `RADIA_GMSH_PROVENANCE`.
 Configuration loading and automatic option/session saving are disabled.
 The tool returns launch acceptance, not proof of successful rendering.
 
-Use the existing declared extra and official development index:
+Use the declared extra and the canonical
+[two-step runtime installation](gmsh-development-runtime.md):
 
 ```text
-pip install --pre --extra-index-url https://gmsh.info/python-packages-dev "radia-mcp[gmsh]"
+pip install --pre --upgrade -i https://gmsh.info/python-packages-dev gmsh
+pip install "radia-mcp[gmsh]"
 ```
 
 ## Explicit VOL post-processing view
@@ -39,7 +41,11 @@ A hash-identical VOL copy is loaded from staging. The exporter's `.geo`/`.opt`
 companions remain there and are never executed, opened or merged. After format
 and physical-group/selected-element-count checks, only byte-identical MSH content is copied to a new
 destination. Existing outputs, source-directory outputs and adjacent option
-scripts are rejected. Staging is retained for caller-owned evidence/cleanup.
+scripts are rejected. Staging is retained on both success and failure for
+caller-owned evidence and cleanup. Receipt directories are also retained; a
+failed conversion creates no success receipt JSON. The operator removes these
+explicitly after consumers finish and any required evidence is recovered.
+The launcher performs no automatic deletion.
 No other MSH writer, reverse conversion or solver initialization is used.
 
 `materials` exports all volume material groups (or 2D material groups).
@@ -50,7 +56,9 @@ or an installed Radia without the MSH 4.2 exporter fail explicitly.
 MCP supplies the same explicit `post_output`, `checked_report`, `source_sha256`
 and `group_scope` arguments. The detached viewer delegates conversion to a
 separate worker so NGSolve and the Gmsh GUI do not share a process;
-preflight performs no writes, and the MCP server does not wait for conversion
+preflight performs no writes and probes the selected interpreter's installed
+exporter in a separate process. A missing production MSH 4.2 exporter returns
+an MCP preflight error before the detached GUI is launched. The server does not wait for conversion
 or the GUI. The output is a post-processing view, never an input to a solver.
 
 All-user installation and Windows associations require their separate reviewed
