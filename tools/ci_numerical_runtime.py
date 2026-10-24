@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 from ci_numerical_plan import Tree, git, plan
 
@@ -75,5 +76,6 @@ if __name__ == '__main__':
         code = 0
     except Exception as error:
         result = {'status': 'blocked', 'error': str(error)}; code = 2
+        print('Numerical execution blocked: ' + str(error), file=sys.stderr)
     args.out.write_text(json.dumps(result, indent=2), encoding='utf-8')
     raise SystemExit(code)
