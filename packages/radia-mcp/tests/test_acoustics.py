@@ -194,7 +194,7 @@ def test_acoustic_fembem_gmsh_artifact_gate_accepts_gypsilab_radia_contract():
         "uses_pml": False,
         "gmsh_post_display": {
             "schema": "cae-ai-lab.gmsh-post-launch.v1",
-            "gmsh_msh_version": "4.1",
+            "gmsh_msh_version": "4.2",
             "launch_target": "case.geo",
             "gmsh_geo_opt": "case.geo.opt",
             "gmsh_msh_opt": "case.msh.opt",

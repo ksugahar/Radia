@@ -51,9 +51,9 @@ def _sphere_field(path, value_at, n=5, x_shift=0.0):
     rows = {t: [value_at(p)] for t, p in nodes.items()}
     lo = [min(p[i] for p in nodes.values()) for i in range(3)]
     hi = [max(p[i] for p in nodes.values()) for i in range(3)]
-    out = ["$MeshFormat", "4.1 0 8", "$EndMeshFormat",
+    out = ["$MeshFormat", "4.2 0 8", "$EndMeshFormat",
            "$Entities", "0 0 0 1",
-           "1 %g %g %g %g %g %g 0 0" % (*lo, *hi), "$EndEntities",
+           "1 %g %g %g %g %g %g 0 0 0" % (*lo, *hi), "$EndEntities",
            "$Nodes", f"1 {len(nodes)} 1 {len(nodes)}",
            f"3 1 0 {len(nodes)}"]
     out += [str(t) for t in nodes]
@@ -65,7 +65,9 @@ def _sphere_field(path, value_at, n=5, x_shift=0.0):
             for t, ns in elements.items()]
     out += ["$EndElements", "$NodeData", "1", '"f"', "1", "0",
             "3", "0", "1", str(len(rows))]
-    out += [f"{t} %.9e" % v[0] for t, v in rows.items()]
+    out += [f"1 {len(rows)} {min(rows)} {max(rows)}", str(len(rows))]
+    out += [str(t) for t in rows]
+    out += ["%.9e" % v[0] for v in rows.values()]
     out += ["$EndNodeData"]
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
     return path
@@ -170,15 +172,20 @@ def test_time_series_rejects_element_node_data(tmp_path):
              for k in range(2)]
     for path in paths:
         elements = read_msh_data(path, include_elements=True)["elements"]
-        rows = []
+        groups = {}
         for tag, element in elements.items():
-            values = " ".join("1" for _ in element["nodes"])
-            rows.append(f"{tag} {len(element['nodes'])} {values}")
+            groups.setdefault(element["type"], []).append(tag)
+        tags = list(elements)
+        body = [f"{len(groups)} {len(tags)} {min(tags)} {max(tags)}"]
+        for etype, block_tags in groups.items():
+            width = len(elements[block_tags[0]]["nodes"])
+            body += [f"{etype} {width} {len(block_tags)}"]
+            body += [str(tag) for tag in block_tags]
+            body += [" ".join("1" for _ in range(width)) for tag in block_tags]
         path.write_text(
             path.read_text(encoding="utf-8")
-            + "$ElementNodeData\n1\n\"local\"\n1\n0\n3\n0\n1\n"
-              f"{len(rows)}\n" + "\n".join(rows)
-            + "\n$EndElementNodeData\n",
+            + '$ElementNodeData\n1\n"local"\n1\n0\n3\n0\n1\n'
+            + f"{len(tags)}\n" + "\n".join(body) + "\n$EndElementNodeData\n",
             encoding="utf-8")
     res = time_series(paths, view="local")
     assert not res["ok"]

@@ -42,7 +42,17 @@ def _sections(path, kind="ElementData"):
         idx += 1 + n_real
         n_int = int(body[idx])
         ints = [int(v) for v in body[idx + 1:idx + 1 + n_int]]
-        rows = [ln.split() for ln in body[idx + 1 + n_int:]]
+        tokens = iter(' '.join(body[idx + 1 + n_int:]).split())
+        blocks, count, minimum, maximum = [int(next(tokens)) for _ in range(4)]
+        rows = []
+        for _ in range(blocks):
+            size = int(next(tokens))
+            tags = [next(tokens) for _ in range(size)]
+            assert all(minimum <= int(tag) <= maximum for tag in tags)
+            rows.extend([tag, *[next(tokens) for _ in range(ints[1])]]
+                        for tag in tags)
+        assert len(rows) == count == ints[2]
+        assert next(tokens, None) is None
         out.append({"name": name, "step": ints[0], "ncomp": ints[1],
                     "rows": rows})
     return out

@@ -7,6 +7,8 @@ radius preservation, evenly spaced ring placement, and termination
 reasons all have exact expected answers.
 """
 
+from msh42_fixtures import field_section
+
 import importlib.util
 import math
 from itertools import pairwise
@@ -27,7 +29,7 @@ pytestmark = pytest.mark.skipif(not _GMSH_AVAILABLE,
 # Kuhn decomposition of the cube [-0.5, 0.5]^3: 6 positively oriented
 # tets sharing the diagonal node1 -> node8.
 _CUBE = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $Nodes
 1 8 1 8
@@ -67,12 +69,7 @@ _P = {1: (-0.5, -0.5, -0.5), 2: (0.5, -0.5, -0.5), 3: (-0.5, 0.5, -0.5),
 
 
 def _nodedata(name, ncomp, rows, time=0.0, step=0):
-    lines = ["$NodeData", "1", f'"{name}"', "1", str(time), "3",
-             str(step), str(ncomp), str(len(rows))]
-    for tag, vals in rows:
-        lines.append(str(tag) + " " + " ".join(f"{v:.16g}" for v in vals))
-    lines.append("$EndNodeData")
-    return "\n".join(lines) + "\n"
+    return field_section('NodeData', name, ncomp, rows, time=time, step=step)
 
 
 _ROT = _CUBE + _nodedata(  # (-y, x, 0): field lines are circles
@@ -86,11 +83,11 @@ _UNI = _CUBE + _nodedata(  # uniform (1, 0, 0)
 
 # unit square in z=0 (2 tris) with A = x: isolines are vertical lines
 _SQUARE_AX = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $Entities
 0 0 1 0
-1 0 0 0 1 1 0 0 0
+1 0 0 0 1 1 0 0 0 0
 $EndEntities
 $Nodes
 1 4 1 4
@@ -280,7 +277,7 @@ def _tet10_r2_msh():
     for nid, (a, b) in edges.items():
         pa, pb = corners[a], corners[b]
         coords[nid] = tuple((pa[k] + pb[k]) / 2 for k in range(3))
-    lines = ["$MeshFormat", "4.1 0 8", "$EndMeshFormat", "$Nodes",
+    lines = ["$MeshFormat", "4.2 0 8", "$EndMeshFormat", "$Nodes",
              "1 10 1 10", "3 1 0 10"]
     lines += [str(i) for i in range(1, 11)]
     lines += [f"{coords[i][0]} {coords[i][1]} {coords[i][2]}"

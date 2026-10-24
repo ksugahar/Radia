@@ -14,6 +14,8 @@ closed-form answer:
   speed_change_rel is a roundoff-level integrator health metric.
 """
 
+from msh42_fixtures import field_section
+
 import importlib.util
 import math
 
@@ -30,7 +32,7 @@ ME = 9.1093837015e-31
 # Kuhn decomposition of the cube [-0.5, 0.5]^3 (see the streamlines
 # tests): 6 positively oriented tets sharing the diagonal node1->node8.
 _CUBE = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $Nodes
 1 8 1 8
@@ -70,12 +72,7 @@ _P = {1: (-0.5, -0.5, -0.5), 2: (0.5, -0.5, -0.5), 3: (-0.5, 0.5, -0.5),
 
 
 def _nodedata(name, ncomp, rows, time=0.0, step=0):
-    lines = ["$NodeData", "1", f'"{name}"', "1", str(time), "3",
-             str(step), str(ncomp), str(len(rows))]
-    for tag, vals in rows:
-        lines.append(str(tag) + " " + " ".join(f"{v:.16g}" for v in vals))
-    lines.append("$EndNodeData")
-    return "\n".join(lines) + "\n"
+    return field_section('NodeData', name, ncomp, rows, time=time, step=step)
 
 
 def _electron(ke_ev, r_target):
@@ -538,7 +535,7 @@ def test_list_data_out_file_must_be_pos(input_file, forbid_gmsh_launch):
 
     MEASURED: the file began "$MeshFormat / 2.2 0 8" and this lane's own
     field_histogram then rejected it with "MSH v2.2 is not supported
-    (ASCII v4.x only)" -- a silent breach of the v4.1-only policy.  The
+    (ASCII v4.x only)" -- a silent breach of the v4.2-only policy.  The
     rejection happens before gmsh is ever launched.
     """
     result = particle_trace(input_file, [[0.0, 0.0, 0.0]],

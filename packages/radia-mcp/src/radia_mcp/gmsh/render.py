@@ -1362,7 +1362,7 @@ def volume_render(path: str | Path,
     and it costs one CutPlane pass per slice.
 
     Args:
-        path: ASCII MSH v4.x file holding a scalar field.
+        path: ASCII MSH v4.2 file holding a scalar field.
         png_out: output PNG (default: alongside the input).
         view: source view name or index.
         n_slices: number of cut planes (24 is a good default; >64 is slow).
@@ -1378,7 +1378,7 @@ def volume_render(path: str | Path,
         return {"ok": False, "error": f"file not found: {src}"}
     if src.suffix.lower() != ".msh":
         return {"ok": False,
-                "error": "volume_render requires an ASCII MSH v4.x file"}
+                "error": "volume_render requires an ASCII MSH v4.2 file"}
     if axis not in ("x", "y", "z"):
         raise ValueError(f"axis must be x|y|z, got {axis!r}")
     if isinstance(n_slices, bool) or int(n_slices) != n_slices:

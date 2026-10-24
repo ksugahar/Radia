@@ -719,6 +719,16 @@ try:
                 vels = [[c / gamma0 for c in u_vec]]
                 reason = "max_steps"
                 for _ in range(max_steps):
+                    step_dt = dt
+                    if max_time is not None:
+                        remaining = float(max_time) - t_now
+                        # A sum of fixed steps can finish a few representable
+                        # floats below the same time computed by multiplication.
+                        if remaining <= 4 * _math.ulp(float(max_time)):
+                            t_now = float(max_time)
+                            reason = 'max_time'
+                            break
+                        step_dt = min(dt, remaining)
                     if e_tag is not None:
                         E = _probe_vec(e_tag, p)
                         if E is None:
@@ -730,10 +740,10 @@ try:
                     if B is None:
                         reason = "left_data"
                         break
-                    qmdt2 = q * dt / (2.0 * m)
+                    qmdt2 = q * step_dt / (2.0 * m)
                     um = [u_vec[k] + qmdt2 * E[k] for k in range(3)]
                     g_minus = _gamma_of(um)
-                    f = q * dt / (2.0 * m * g_minus)
+                    f = q * step_dt / (2.0 * m * g_minus)
                     tv = [f * B[k] for k in range(3)]
                     t2 = sum(c * c for c in tv)
                     upr = [um[k] + _cross(um, tv)[k] for k in range(3)]
@@ -742,10 +752,10 @@ try:
                     u_vec = [upl[k] + qmdt2 * E[k] for k in range(3)]
                     g_new = _gamma_of(u_vec)
                     v = [c / g_new for c in u_vec]
-                    p = [p[k] + v[k] * dt for k in range(3)]
-                    t_now += dt
+                    p = [p[k] + v[k] * step_dt for k in range(3)]
+                    t_now += step_dt
                     v_abs = _math.sqrt(sum(c * c for c in v))
-                    path_len += v_abs * dt
+                    path_len += v_abs * step_dt
                     pts.append(list(p))
                     cols.append(_color(t_now, u_vec))
                     vels.append(v)
@@ -1047,6 +1057,7 @@ try:
         elif op == "warp":
             tag = _view_tag_by_selector(tags, cfg.get("view"))
             gmsh.plugin.setNumber("Warp", "View", gmsh.view.getIndex(tag))
+            gmsh.plugin.setNumber("Warp", "OtherView", gmsh.view.getIndex(tag))
             gmsh.plugin.setNumber("Warp", "Factor", float(cfg["factor"]))
             gmsh.plugin.setNumber("Warp", "TimeStep",
                                   int(cfg.get("time_step", 0)))
@@ -1532,11 +1543,11 @@ with open(out_path, "w", encoding="utf-8") as f:
 # returns, or that the worker builds with view.add + addListData.
 # MEASURED (gmsh 4.15.2, one probe per verb into a ".msh" target): every
 # op below wrote "$MeshFormat / 2.2 0 8", i.e. gmsh silently downgrades a
-# list-data export to LEGACY MSH v2.2, which this lane's own v4.1-only
+# list-data export to LEGACY MSH v2.2, which this lane's own v4.2-only
 # readers then reject ("MSH v2.2 is not supported (ASCII v4.x only)") --
-# a silent violation of the repo-wide v4.1-only policy.  The three verbs
+# a silent violation of the repo-wide v4.2-only policy.  The three verbs
 # NOT listed (warp, smooth, modulus_phase) rewrite the original
-# MODEL-based view in place and correctly produced v4.1, so a ".msh"
+# MODEL-based view in place and correctly produced v4.2, so a ".msh"
 # target is legitimate for them.
 _LIST_DATA_OPS = frozenset({
     "math_eval", "isosurface", "cut_plane", "harmonic_to_time",
@@ -1557,7 +1568,7 @@ def _check_list_data_out(cfg: dict[str, Any]) -> dict[str, Any] | None:
         f"out_file for {cfg['op']} must end in '.pos', got "
         f"{Path(out_file).name!r}: this verb writes a LIST-DATA view, "
         "which gmsh exports to a '.msh' target as legacy MSH v2.2 -- a "
-        "format the v4.1-only readers in this lane (field_stats, "
+        "format the v4.2-only readers in this lane (field_stats, "
         "field_histogram, inspect_msh) reject.  Write '.pos' and merge "
         "it alongside the mesh in gmsh.")}
 
@@ -2658,7 +2669,7 @@ def resample_grid(path: str | Path, origin: list[float],
 
 
 # ======================================================================
-# Pure-Python post verbs (no gmsh needed: our own MSH v4.1 parser)
+# Pure-Python post verbs (no gmsh needed: our own MSH v4.2 parser)
 # ======================================================================
 
 def _write_samples_csv(csv_out: str | Path, params: list[Any],
@@ -2768,7 +2779,7 @@ def export_view_csv(path: str | Path, csv_out: str | Path, *,
                     kind: str = "auto") -> dict[str, Any]:
     """Dump view data to CSV (the ParaView spreadsheet / SaveData analog).
 
-    Pure Python on our own MSH v4.1 parser -- no gmsh needed.
+    Pure Python on our own MSH v4.2 parser -- no gmsh needed.
     ``kind="nodes"`` writes tag,x,y,z + one column per view step and
     component from $NodeData; ``kind="elements"`` writes element tag +
     CENTROID coordinates + $ElementData columns.  ``auto`` picks nodes
@@ -3496,7 +3507,7 @@ def flow_texture(path: str | Path, *,
         return {"ok": False, "error": f"file not found: {src}"}
     if src.suffix.lower() != ".msh":
         return {"ok": False,
-                "error": "flow_texture requires an ASCII MSH v4.x file"}
+                "error": "flow_texture requires an ASCII MSH v4.2 file"}
     density = float(density)
     if not math.isfinite(density) or density <= 0:
         raise ValueError(f"density must be > 0, got {density}")
@@ -3769,7 +3780,9 @@ def time_series(paths: list[str | Path], *,
     head = text[:min(starts)] if starts else text
     blocks = []
     for s in stats:
-        rows = "".join(f"{tag} {per_tag[s][tag]:.9e}\n" for tag in tags)
+        rows = (f"1 {len(tags)} {min(tags)} {max(tags)}\n{len(tags)}\n"
+                + "".join(f"{tag}\n" for tag in tags)
+                + "".join(f"{per_tag[s][tag]:.9e}\n" for tag in tags))
         blocks.append(f"${section}\n"
                       f'1\n"{view_name}_{s}"\n1\n0\n'
                       f"3\n0\n1\n{len(tags)}\n{rows}$End{section}\n")

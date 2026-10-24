@@ -1,0 +1,340 @@
+{
+  "schema": "radia.ih-ams-slab-saved-evidence.v1",
+  "export_kind": "derived whitelist of scientific values; original result bytes unchanged in durable evidence",
+  "scope": "linear homogeneous boundary-driven conductor-volume slab, a/delta=2, peak phasor exp(+i omega t)",
+  "radia_version": "5.3.3",
+  "ngsolve_version": "6.2.2608",
+  "threads": 2,
+  "conditions": {
+    "a_m": 0.002,
+    "width_m": 0.00025,
+    "mu": 1.2566370614359173e-06,
+    "sigma": 5000000.0,
+    "omega": 318309.8861837907,
+    "H0_peak": 1000.0,
+    "k": [
+      1000.0,
+      1000.0
+    ],
+    "Zref": [
+      0.00021044570948774099,
+      0.0001990885283404481
+    ],
+    "Pref_W": 1.3152856842983812e-05,
+    "basis_per_p": {
+      "1": "HCurl(order=1,nograds=True,complex=True,dirichlet=.*): lowest-order Nedelec/AMS",
+      "2": "HCurl(order=2,complex=True,dirichlet=.*): FULL HCurl/BDDC+AMS",
+      "3": "HCurl(order=3,complex=True,dirichlet=.*): FULL HCurl/BDDC+AMS"
+    },
+    "coarse_cycles": 4,
+    "assembly_bonus_intorder": {
+      "1": 4,
+      "2": 6,
+      "3": 8
+    },
+    "error_quadrature_order": {
+      "1": 14,
+      "2": 16,
+      "3": 18
+    }
+  },
+  "cases": [
+    {
+      "m": 2,
+      "p": 1,
+      "ndof": 1328,
+      "tetrahedra": 768,
+      "hmax_over_a": 0.10825317547305487,
+      "hmin_over_delta": 0.12499999999999968,
+      "errors": {
+        "H": 0.12019673209290184,
+        "B": 0.12019673209290159,
+        "J": 0.048271043699482624,
+        "Z_back": 0.0711975675938518,
+        "Z_front": 0.07119756759385289,
+        "power": 0.0018964141115191135
+      },
+      "parity": {
+        "A": 7.928681175107218e-11,
+        "H": 2.745485668177797e-12,
+        "J": 7.928681180576357e-11
+      },
+      "true_residual": 1.0465108862687692e-12,
+      "direct_true_residual": 8.095641004298869e-16,
+      "Z_faces": {
+        "back": [
+          0.0002177511297764548,
+          0.00021837706424004974
+        ],
+        "front": [
+          0.00021775112977645482,
+          0.00021837706424005006
+        ]
+      },
+      "power_W": 1.3177800106307637e-05,
+      "iterations": 24,
+      "quadrature_order": 14,
+      "assembly_bonus_intorder": 4,
+      "basis": "HCurl(order=1,nograds=True,complex=True,dirichlet=.*): lowest-order Nedelec/AMS",
+      "converged": true,
+      "internal_target_met": false,
+      "maxiter_reached": false,
+      "dirichlet_lift_retained": true,
+      "dirichlet_max_abs_difference": 0.0
+    },
+    {
+      "m": 2,
+      "p": 2,
+      "ndof": 9384,
+      "tetrahedra": 768,
+      "hmax_over_a": 0.10825317547305487,
+      "hmin_over_delta": 0.12499999999999968,
+      "errors": {
+        "H": 0.0009128210669642261,
+        "B": 0.0009128210669642249,
+        "J": 2.3707932063690624e-05,
+        "Z_back": 0.0016200892229698807,
+        "Z_front": 0.0016200892229661654,
+        "power": 1.234375418875825e-06
+      },
+      "parity": {
+        "A": 5.026088383443981e-11,
+        "H": 1.0362272688374457e-11,
+        "J": 5.026088373466843e-11
+      },
+      "true_residual": 7.286461556742831e-13,
+      "direct_true_residual": 1.2521132899672908e-15,
+      "Z_faces": {
+        "back": [
+          0.00021013640085651447,
+          0.0001994415179008088
+        ],
+        "front": [
+          0.00021013640085651276,
+          0.00019944151790080586
+        ]
+      },
+      "power_W": 1.3152840607420637e-05,
+      "iterations": 50,
+      "quadrature_order": 16,
+      "assembly_bonus_intorder": 6,
+      "basis": "HCurl(order=2,complex=True,dirichlet=.*): FULL HCurl/BDDC+AMS",
+      "converged": true,
+      "internal_target_met": true,
+      "maxiter_reached": false,
+      "dirichlet_lift_retained": true,
+      "dirichlet_max_abs_difference": 0.0
+    },
+    {
+      "m": 2,
+      "p": 3,
+      "ndof": 22784,
+      "tetrahedra": 768,
+      "hmax_over_a": 0.10825317547305487,
+      "hmin_over_delta": 0.12499999999999968,
+      "errors": {
+        "H": 1.3169747031420185e-05,
+        "B": 1.316974703142158e-05,
+        "J": 2.283010385033384e-07,
+        "Z_back": 2.729599434031916e-05,
+        "Z_front": 2.7295994063451873e-05,
+        "power": 1.0211839522467115e-07
+      },
+      "parity": {
+        "A": 3.708686908586852e-11,
+        "H": 1.9470290123585948e-11,
+        "J": 3.708686943531333e-11
+      },
+      "true_residual": 9.68103161188331e-13,
+      "direct_true_residual": 1.899548033096777e-15,
+      "Z_faces": {
+        "back": [
+          0.00021043784297397047,
+          0.0001990893327385576
+        ],
+        "front": [
+          0.00021043784297408125,
+          0.00019908933273885248
+        ]
+      },
+      "power_W": 1.3152855499835178e-05,
+      "iterations": 68,
+      "quadrature_order": 18,
+      "assembly_bonus_intorder": 8,
+      "basis": "HCurl(order=3,complex=True,dirichlet=.*): FULL HCurl/BDDC+AMS",
+      "converged": true,
+      "internal_target_met": true,
+      "maxiter_reached": false,
+      "dirichlet_lift_retained": true,
+      "dirichlet_max_abs_difference": 0.0
+    },
+    {
+      "m": 4,
+      "p": 1,
+      "ndof": 8824,
+      "tetrahedra": 6144,
+      "hmax_over_a": 0.05412658773652743,
+      "hmin_over_delta": 0.06249999999999962,
+      "errors": {
+        "H": 0.06066614087413869,
+        "B": 0.06066614087413994,
+        "J": 0.024653702854584857,
+        "Z_back": 0.043655044552081725,
+        "Z_front": 0.04365504455227834,
+        "power": 0.0005597124966443827
+      },
+      "parity": {
+        "A": 1.2271499394630865e-10,
+        "H": 8.252987895172333e-12,
+        "J": 1.227149939189793e-10
+      },
+      "true_residual": 8.579638231210491e-13,
+      "direct_true_residual": 1.9335052115890994e-15,
+      "Z_faces": {
+        "back": [
+          0.0002152709876962941,
+          0.00021077849192614495
+        ],
+        "front": [
+          0.00021527098769653,
+          0.0002107784919261092
+        ]
+      },
+      "power_W": 1.3160218661325404e-05,
+      "iterations": 67,
+      "quadrature_order": 14,
+      "assembly_bonus_intorder": 4,
+      "basis": "HCurl(order=1,nograds=True,complex=True,dirichlet=.*): lowest-order Nedelec/AMS",
+      "converged": true,
+      "internal_target_met": true,
+      "maxiter_reached": false,
+      "dirichlet_lift_retained": true,
+      "dirichlet_max_abs_difference": 0.0
+    },
+    {
+      "m": 4,
+      "p": 2,
+      "ndof": 66504,
+      "tetrahedra": 6144,
+      "hmax_over_a": 0.05412658773652743,
+      "hmin_over_delta": 0.06249999999999962,
+      "errors": {
+        "H": 0.0002251836735273075,
+        "B": 0.00022518367352731002,
+        "J": 2.853536317912898e-06,
+        "Z_back": 0.00039139786210864313,
+        "Z_front": 0.00039139786218804506,
+        "power": 1.0082683024937012e-07
+      },
+      "parity": {
+        "A": 1.590127372477417e-10,
+        "H": 1.9826320184761278e-11,
+        "J": 1.590127372266902e-10
+      },
+      "true_residual": 9.166119177135723e-13,
+      "direct_true_residual": 3.0154065640933654e-15,
+      "Z_faces": {
+        "back": [
+          0.0002103694057050855,
+          0.00019917239839983882
+        ],
+        "front": [
+          0.00021036940570505255,
+          0.00019917239839983993
+        ]
+      },
+      "power_W": 1.3152855516822947e-05,
+      "iterations": 82,
+      "quadrature_order": 16,
+      "assembly_bonus_intorder": 6,
+      "basis": "HCurl(order=2,complex=True,dirichlet=.*): FULL HCurl/BDDC+AMS",
+      "converged": true,
+      "internal_target_met": true,
+      "maxiter_reached": false,
+      "dirichlet_lift_retained": true,
+      "dirichlet_max_abs_difference": 0.0
+    },
+    {
+      "m": 4,
+      "p": 3,
+      "ndof": 166624,
+      "tetrahedra": 6144,
+      "hmax_over_a": 0.05412658773652743,
+      "hmin_over_delta": 0.06249999999999962,
+      "errors": {
+        "H": 1.6298047190591256e-06,
+        "B": 1.6298047190587906e-06,
+        "J": 1.4299014813027892e-08,
+        "Z_back": 3.2784633391902526e-06,
+        "Z_front": 3.2784632198186105e-06,
+        "power": 6.335924863572237e-09
+      },
+      "parity": {
+        "A": 1.4520456729084338e-10,
+        "H": 2.4667708480640264e-11,
+        "J": 1.4520456741366706e-10
+      },
+      "true_residual": 8.884228647584609e-13,
+      "direct_true_residual": 4.003672239867519e-15,
+      "Z_faces": {
+        "back": [
+          0.00021044476268403039,
+          0.0001990886031803784
+        ],
+        "front": [
+          0.0002104447626840362,
+          0.00019908860318001328
+        ]
+      },
+      "power_W": 1.3152856759648299e-05,
+      "iterations": 113,
+      "quadrature_order": 18,
+      "assembly_bonus_intorder": 8,
+      "basis": "HCurl(order=3,complex=True,dirichlet=.*): FULL HCurl/BDDC+AMS",
+      "converged": true,
+      "internal_target_met": true,
+      "maxiter_reached": false,
+      "dirichlet_lift_retained": true,
+      "dirichlet_max_abs_difference": 0.0
+    }
+  ],
+  "provenance": {
+    "runner_sha256": "e0fe40c98580ac87b3c89c65235b649ad6e6aa67a10c3478501b79da82e3d7c9",
+    "source_manifest_sha256": "2d95da304331d0fe29ae8424a9a75874e86b2fb3c3ab3a1591317c1db62acf22",
+    "original_result_sha256": "f960d8b232750ca6896d88c41bcce28ca2a6b8be8559171c0201fc2709950a05",
+    "original_gates_sha256": "1951f8495c29678d11da2bf05d15dd959332b86ec2af35ae95174db171471aa4",
+    "original_terminal_sha256": "6f7f7568a8db4488d163b74dd3ae7c707e95e70ba1a375ab24a0688bf2ce18a3",
+    "native_sha256": "4b09e365c6826eaa98fba72a190a2bae780140edf68b601626dd632777b05753",
+    "wheel_sha256": "0e2a43900f6b7331dd3bc4a2aa8ba917545e9dc56be50514de840b5e66d34f23",
+    "user_approvals": [
+      {
+        "id": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01",
+        "sha256": "6e61e84a6ea208304372b22a87f35777bdb3c73d872a1bbff4eb04f08941f6c6"
+      },
+      {
+        "id": "APPROVAL-20261023-IH-AMS-F1-FROZEN-02",
+        "sha256": "76686e122d37a494d4ac5d03a878d9caec49bc42f9625036e1a583148c4eeac5"
+      },
+      {
+        "id": "APPROVAL-20261024-IH-AMS-F1-FROZEN-03",
+        "sha256": "82257a5c08456c319d1644a69a667aeaeb7113f0a38e28c1c64448e4a93a9f1d"
+      }
+    ]
+  },
+  "recorded_outcome": {
+    "PASS": 90,
+    "RECORDED_ONLY": 12,
+    "verdict": "PASS",
+    "runtime_s": 491.01600000000326
+  },
+  "exclusions": [
+    "other a/delta ratios",
+    "nonlinear BH",
+    "thermal coupling",
+    "PEEC-BEM coupling",
+    "full coil",
+    "GPU",
+    "cross-formulation FEM",
+    "release acceptance"
+  ]
+}

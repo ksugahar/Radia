@@ -1075,12 +1075,13 @@ def test_iccg_contract_reports_auto_shift(poisson_2d):
 
 def _dense_system(entries, rhs, x0=None):
     """NGSolve matrix and vectors for a small dense system (rows of entries)."""
+    from radia.ngsolve_sparse import real_sparse_matrix_type
     n = len(entries)
     rows, cols, vals = [], [], []
     for i, row in enumerate(entries):
         for j, value in enumerate(row):
             rows.append(i); cols.append(j); vals.append(float(value))
-    m = la.SparseMatrixdouble.CreateFromCOO(rows, cols, vals, n, n)
+    m = real_sparse_matrix_type().CreateFromCOO(rows, cols, vals, n, n)
     b = m.CreateRowVector()
     b.FV().NumPy()[:] = rhs
     x = m.CreateColVector()

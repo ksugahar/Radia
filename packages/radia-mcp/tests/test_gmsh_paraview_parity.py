@@ -8,6 +8,8 @@ expected values.  Plugin semantics were measured on gmsh 4.15.2
 selects on the ELEMENT MEAN).
 """
 
+from msh42_fixtures import field_section
+
 import csv
 import importlib.util
 import math
@@ -41,7 +43,7 @@ pytestmark = pytest.mark.skipif(not _GMSH_AVAILABLE,
 
 # 2 tets: (1,2,3,4) and (2,3,5,4); p5 = (1,1,1).
 _MESH = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $Nodes
 1 5 1 5
@@ -69,21 +71,11 @@ _P = {1: (0, 0, 0), 2: (1, 0, 0), 3: (0, 1, 0), 4: (0, 0, 1), 5: (1, 1, 1)}
 
 
 def _nodedata(name, ncomp, rows, time, step):
-    lines = ["$NodeData", "1", f'"{name}"', "1", str(time), "3",
-             str(step), str(ncomp), str(len(rows))]
-    for tag, vals in rows:
-        lines.append(str(tag) + " " + " ".join(f"{v:.16g}" for v in vals))
-    lines.append("$EndNodeData")
-    return "\n".join(lines) + "\n"
+    return field_section('NodeData', name, ncomp, rows, time=time, step=step)
 
 
 def _elementdata(name, ncomp, rows, time=0.0, step=0):
-    lines = ["$ElementData", "1", f'"{name}"', "1", str(time), "3",
-             str(step), str(ncomp), str(len(rows))]
-    for tag, vals in rows:
-        lines.append(str(tag) + " " + " ".join(f"{v:.16g}" for v in vals))
-    lines.append("$EndElementData")
-    return "\n".join(lines) + "\n"
+    return field_section('ElementData', name, ncomp, rows, time=time, step=step)
 
 
 def _t(x, y, z):

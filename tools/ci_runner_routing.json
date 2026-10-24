@@ -292,7 +292,7 @@
         "tools/ci_tree_receipt.py",
         "tools/build_linux.py"
       ],
-      "audit_sha256": "5ff1ee6e101a637220e585e2de887bf925839516c66710348d08e86d0e61f6d2",
+      "audit_sha256": "df15b00bfccb0056284d27f6a5259e8401102aa3ec5542299cca272f4c4bf4a4",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

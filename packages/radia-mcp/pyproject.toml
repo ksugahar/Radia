@@ -38,10 +38,10 @@ cubit = [
 cadquery = [
     "cadquery>=2.5",
 ]
-# gmsh_post: MSH v4.1 inspect / validate / convert / write_node_data, plus
+# gmsh_post: MSH v4.2 inspect / validate / convert / write_node_data, plus
 # the NumPy/SciPy field post-processing and Matplotlib raster tools.
 gmsh = [
-    "gmsh>=4.10",
+    "gmsh>=5.0.0.dev0",
     "numpy>=1.24",
     "scipy>=1.10",
     "matplotlib>=3.8",
@@ -61,7 +61,7 @@ shape-regeneration = [
     "cubit-mesh-export>=1.0.2; python_version == '3.12' and sys_platform == 'win32'",
     "radia[topopt-cad]>=4.95.51",
     "scipy>=1.10",
-    "gmsh>=4.10",
+    "gmsh>=5.0.0.dev0",
 ]
 # YouTube transcript scraping for Cubit/build123d/gmsh tutorial
 # absorption (cubit_youtube / build123d_youtube / gmsh_youtube

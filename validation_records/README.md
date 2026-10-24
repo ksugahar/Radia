@@ -240,3 +240,13 @@ asserting fixture existence or a constant flag is not evidence.
 Future record dates relative to wall-clock
 time are not checked (optional L5); approval-versus-record chronology and
 calendar validity remain checked. Audit the actual dated provenance in review.
+
+
+A user-approved finest-error exemption is represented by
+`finest_threshold: {"operator": "recorded-only", "reason": "<approval and scope>"}`.
+It does not exempt monotonicity, rate or residual gates, and must not include a
+numeric threshold. Numeric `lt`/`le` gates still require their value. The complete
+criterion, including the exemption, remains bound by the approval hash.
+Historical evidence with only an aggregate duration uses `runtime_s: null` and
+an explicit `runtime_note` for each unmeasured level; zero is not an estimate.
+This absence does not establish per-level performance.

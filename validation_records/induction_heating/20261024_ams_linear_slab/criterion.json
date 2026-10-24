@@ -1,0 +1,77 @@
+{
+  "schema": "radia.ih-ams-f1-frozen03-criterion.v1",
+  "feature": "linear volumetric HCurl slab a/delta=2 with AMS/BDDC",
+  "approval_chain": [
+    {
+      "id": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01",
+      "sha256": "6e61e84a6ea208304372b22a87f35777bdb3c73d872a1bbff4eb04f08941f6c6"
+    },
+    {
+      "id": "APPROVAL-20261023-IH-AMS-F1-FROZEN-02",
+      "sha256": "76686e122d37a494d4ac5d03a878d9caec49bc42f9625036e1a583148c4eeac5"
+    },
+    {
+      "id": "APPROVAL-20261024-IH-AMS-F1-FROZEN-03",
+      "sha256": "82257a5c08456c319d1644a69a667aeaeb7113f0a38e28c1c64448e4a93a9f1d"
+    }
+  ],
+  "quantities": [
+    "H complex volume L2",
+    "B complex volume L2",
+    "J complex volume L2",
+    "back face complex E/H impedance",
+    "front face complex E/H impedance",
+    "Joule power"
+  ],
+  "convergence": {
+    "m": [
+      2,
+      4
+    ],
+    "p": [
+      1,
+      2,
+      3
+    ],
+    "h_coordinate": "actual maximum tetrahedron diameter / half depth a",
+    "h_gate": "strict error decrease and q=log(e_m2/e_m4)/log(h_m2/h_m4)>=p-0.5, every quantity",
+    "p_gate": "strict error decrease p1->p2->p3 at each m, every quantity",
+    "finest_relative_error": {
+      "gate_p": [
+        2,
+        3
+      ],
+      "record_only_p": [
+        1
+      ],
+      "upper_bound": 0.01
+    },
+    "finest_adjacent_p_ratio": {
+      "gate_quantities": [
+        "H",
+        "B",
+        "J"
+      ],
+      "upper_bound": 0.1767766952966369,
+      "record_only_quantities": [
+        "Z_back",
+        "Z_front",
+        "power"
+      ]
+    }
+  },
+  "solver_gates": {
+    "iterative_and_direct_true_residual_upper": 1e-06,
+    "same_matrix_physical_L2_parity_A_H_J_upper": 1e-06
+  },
+  "solver_settings_not_acceptance_criteria": {
+    "GMRES_tol": 1e-12,
+    "restart": 50,
+    "maxiter": 500,
+    "p1": "HCurl(order=1,nograds=True), complex AMS",
+    "p2_p3": "full HCurl(order=p), BDDC+sparsesolv_ams cycles4",
+    "direct": "sparsecholesky"
+  },
+  "unresolved": "nonfinite or zero reference, unchanged h, roundoff plateau; no fabricated rate or threshold waiver",
+  "decision_wiring": "entry.py saved-value audit of all102 checks; not a solver replay"
+}

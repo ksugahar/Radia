@@ -6,7 +6,7 @@ run, so a v2.2 regression or corrupt export is caught at commit time.
 
 The allowlist below names the KNOWN legacy v2.2 assets.  It may only
 SHRINK: a companion test fails the moment an allowlisted file becomes
-v4.1 (or disappears), forcing the entry to be removed.
+v4.2 (or disappears), forcing the entry to be removed.
 """
 
 import subprocess
@@ -20,7 +20,7 @@ _REPO = Path(__file__).resolve().parents[2]
 _LANES = ("docs", "validation_test", "src/radia/panels/samples")
 
 # Known legacy v2.2 assets. Never ADD to this list -- new .msh must be
-# v4.1 (repo format policy 2026-04-15).
+# v4.2 (repo format policy 2026-10-23).
 _KNOWN_LEGACY = set()
 
 
@@ -65,7 +65,7 @@ def test_durable_lane_msh_assets_are_structurally_sound():
         unexpected.append((rel, failed, result["errors"][:1]))
     assert unexpected == [], (
         "unsound .msh assets outside the known-legacy allowlist "
-        f"(new .msh must be valid v4.1): {unexpected}")
+        f"(new .msh must be valid v4.2): {unexpected}")
 
 
 def test_known_legacy_allowlist_only_shrinks():
@@ -81,8 +81,8 @@ def test_known_legacy_allowlist_only_shrinks():
             stale_entries.append((rel, "file no longer exists"))
             continue
         result = validate_msh(path)
-        if result["checks"].get("format_is_v41", False):
-            stale_entries.append((rel, "migrated to v4.1"))
+        if result["checks"].get("format_is_v42", False):
+            stale_entries.append((rel, "migrated to v4.2"))
     assert stale_entries == [], (
         "allowlist entries are stale -- remove them from _KNOWN_LEGACY: "
         f"{stale_entries}")

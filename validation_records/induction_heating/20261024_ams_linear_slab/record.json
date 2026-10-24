@@ -1,0 +1,1772 @@
+{
+  "schema": "radia.validation-record.v3",
+  "id": "induction_heating/20261024_ams_linear_slab",
+  "kind": "acceptance",
+  "question": "Did the historical radia5.3.3 linear volumetric slab a/delta2 meet the frozen h/p, residual and parity gates?",
+  "outcome": "pass",
+  "source": {
+    "repo_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+    "dirty": false,
+    "native_sha256": {
+      "sparsesolv_ngsolve.pyd": "4b09e365c6826eaa98fba72a190a2bae780140edf68b601626dd632777b05753"
+    },
+    "wheel_sha256": "0e2a43900f6b7331dd3bc4a2aa8ba917545e9dc56be50514de840b5e66d34f23",
+    "source_only": false,
+    "provenance": "exact"
+  },
+  "covered_paths": [
+    "src/ext/sparsesolv/include/sparsesolv/core/abmc_ordering.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/constants.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/dense_matrix.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/hermitian.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/level_schedule.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/norms.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/parallel.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/preconditioner.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/rcm_ordering.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/solver_config.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/sparse_matrix_coo.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/sparse_matrix_csr.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/sparse_matrix_csr_builder.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/sparse_matrix_view.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/core/types.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_wirebasket.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/ngsolve/sparsesolv_precond.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/ngsolve/sparsesolv_python_export.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/ngsolve/sparsesolv_solvers.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/complex_compact_ams.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/ic_preconditioner.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/solvers/cg_solver.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/solvers/cocr_solver.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/solvers/iterative_solver.hpp",
+    "src/ext/sparsesolv/include/sparsesolv/sparsesolv.hpp",
+    "src/ext/sparsesolv/ngsolve/python_module.cpp"
+  ],
+  "covered_sha256": {
+    "src/ext/sparsesolv/include/sparsesolv/core/abmc_ordering.hpp": "a19b37773e113369f7abd99f115610e3d359dba85138aed274f3ad6adf5df35d",
+    "src/ext/sparsesolv/include/sparsesolv/core/constants.hpp": "84c924b9d4b8d8159832d4dd9b2bd60e5a84d8a15d983311c28baff82365a81b",
+    "src/ext/sparsesolv/include/sparsesolv/core/dense_matrix.hpp": "c836207dd19a26dbb560461941bb29d2ae69c9dcb9823d400ad4bb8e8bedc58e",
+    "src/ext/sparsesolv/include/sparsesolv/core/hermitian.hpp": "28d9b3937b2165d2f40b09585f8b49d81fa7d8079ed7df1e23bf0655835aeeba",
+    "src/ext/sparsesolv/include/sparsesolv/core/level_schedule.hpp": "1a0dfef526e2248b377034d5df98e7b8099034fd142d219c5321fc5f4b5ddb94",
+    "src/ext/sparsesolv/include/sparsesolv/core/norms.hpp": "4d15894918d4e022adc4323fe60931e0d57285a73dc9c8e20b799c18193079f3",
+    "src/ext/sparsesolv/include/sparsesolv/core/parallel.hpp": "dea68eff48b4fcfffe5599ff5f2f6df395e3981b8408f7d055a16403548f1fc1",
+    "src/ext/sparsesolv/include/sparsesolv/core/preconditioner.hpp": "c1d71c528e26a6f319a82b1d4bfb64f0673e452338cc15e2b4fb57434cf455eb",
+    "src/ext/sparsesolv/include/sparsesolv/core/rcm_ordering.hpp": "a643a9498f06fc6574e3d2a2e0ecb7d48e460d797083f6ec6bdc32600fa7e679",
+    "src/ext/sparsesolv/include/sparsesolv/core/solver_config.hpp": "ac0f830d5d824e034df4a57ceeb5e0b267a6e52489fe2bd19b8480686b5ead27",
+    "src/ext/sparsesolv/include/sparsesolv/core/sparse_matrix_coo.hpp": "3233b6b1b640a36add910959f9b611a25c51b03f62585c961070093e31aed392",
+    "src/ext/sparsesolv/include/sparsesolv/core/sparse_matrix_csr.hpp": "171111b26d34cbd49973ecaf2495d4b30687fc9b301d04137bd58361d4d806c9",
+    "src/ext/sparsesolv/include/sparsesolv/core/sparse_matrix_csr_builder.hpp": "f5e9d4b53bccc7fa88526715f8e842e7472bdafeb6cab56a6be18a743d240e33",
+    "src/ext/sparsesolv/include/sparsesolv/core/sparse_matrix_view.hpp": "5756cab44b230fad3a92c5c5123b9071724ea4f9b9be982c67489e3bb276bb66",
+    "src/ext/sparsesolv/include/sparsesolv/core/types.hpp": "da321837029ec3648239475f512257903c7b3aa45a8b3b738d206649135550a4",
+    "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "455717ae8e07fac3512bb7fe87ebd4365f1949bb34a79e668387c81c9c2bece4",
+    "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_wirebasket.hpp": "838b371ef3bc936947b3b9b8bc399fea2aac174e4f82c450b8b613c80b8b8b7e",
+    "src/ext/sparsesolv/include/sparsesolv/ngsolve/sparsesolv_precond.hpp": "cc47127382db41271473fa1a9d18b11716cd359e5c8e65b34afdcc6c18a9beec",
+    "src/ext/sparsesolv/include/sparsesolv/ngsolve/sparsesolv_python_export.hpp": "652c9299b94dbde7f294820fc6a93caea8febb81b7f9f16f660c7d04f8afe094",
+    "src/ext/sparsesolv/include/sparsesolv/ngsolve/sparsesolv_solvers.hpp": "ae87f07229455949a23cff250f5f80a1f47efc38bfc6111310bbea49995ad2d8",
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "d827178445d61419d51395bc5290b7c736a02b0e8fb7a4551ebc47e4c8752e58",
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "825530b6d717e08cbaea8c1bc69337b7514468e7c7be779eb2e50b4a77b2acf4",
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp": "35f3cd197930e3ce99e4a73a0fc9d568e453a267a3a6520bad0d4edc41173a6c",
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/complex_compact_ams.hpp": "fe89b62e5ce8cb3f95295c6c6ce437a7d08ca123f9681a8f1dda30ed5eedf84d",
+    "src/ext/sparsesolv/include/sparsesolv/preconditioners/ic_preconditioner.hpp": "d3de095d94004a014088c7158e694f910a28800eb674446aca36a58016ae4975",
+    "src/ext/sparsesolv/include/sparsesolv/solvers/cg_solver.hpp": "aa1d924aa6d16f65e63c02aa7af20c0cd09dd366c2e8ffba3fdf2a6861980084",
+    "src/ext/sparsesolv/include/sparsesolv/solvers/cocr_solver.hpp": "a81dde86d2ad9613957784b9fc86d077d8b63dad2556fa0cbb7243d29bc80fde",
+    "src/ext/sparsesolv/include/sparsesolv/solvers/iterative_solver.hpp": "d3827e984e6e70dbfa8f2d17ce75d97d5892e33c7fd81265cd9b9af7d7ccd311",
+    "src/ext/sparsesolv/include/sparsesolv/sparsesolv.hpp": "9c589762578d02054396aa4e30c205f985832309a0214a32393808b2ca766847",
+    "src/ext/sparsesolv/ngsolve/python_module.cpp": "ad0fbf514693c072d24d2e52c4e455281707ba1cc1a21e96056eeaaab3242ad9"
+  },
+  "entry": {
+    "script": "entry.py",
+    "script_sha256": "eab5c942f0f75975af89725eb066828b3e68cc6cc8f0d07dfa9efaf9af937a41",
+    "command": [
+      "python",
+      "entry.py",
+      "--report",
+      "<owned-output>/gates.json"
+    ]
+  },
+  "environment": {
+    "host_role": "neutral-cpu",
+    "os": "Windows",
+    "python": "3.12.14",
+    "ngsolve": "6.2.2608",
+    "threads": 2
+  },
+  "result": {
+    "path": "adoption-result.json",
+    "sha256": "521f8e38ce1b92540c44e978df182547d12900c2c4e0d9fa404dad0ce8b4c70e"
+  },
+  "key_values": {
+    "a_over_delta": {
+      "value": 2,
+      "unit": "1"
+    },
+    "maximum_true_residual": {
+      "value": 1.0465108862687692e-12,
+      "unit": "1"
+    },
+    "maximum_same_matrix_parity": {
+      "value": 1.590127372477417e-10,
+      "unit": "1"
+    }
+  },
+  "limits": {
+    "residual": 1e-06,
+    "same_matrix_parity": 1e-06,
+    "p2_p3_finest_error": 0.01,
+    "finest_field_adjacent_p_ratio": 0.1767766952966369
+  },
+  "timing_s": {
+    "campaign": 491.01600000000326
+  },
+  "status": "stale",
+  "stale_reason": "Explicit historical5.3.3 artifact adoption; current-main currentness is not asserted. Reviewed constructor-guard change PR538 changes compact_ams.hpp; no original covered hashes are backfilled. Exact release-wheel recertification is deferred to IH release qualification.",
+  "superseded_by": null,
+  "private": false,
+  "milestone": "Historical linear volumetric HCurl slab with AMS and BDDC+AMS",
+  "claim": "Historical radia5.3.3 linear slab a/delta2 met the approved FROZEN01/02/03 campaign; not current-main qualification.",
+  "date": "2026-10-24",
+  "radia_version": "5.3.3",
+  "conditions": {
+    "problem": "Linear constant mu=4pi e-7H/m,sigma5e6S/m,delta1e-3m,a2delta,widthdelta/4,H0peak1000A/m; exp(+i omega t); exact tangent trace on all six faces",
+    "mesh": "Kuhn tetrahedra m2/4, nx16m,ny=nz=m; p1 HCurl(order1,nograds), p2/3 full HCurl; actual maximal edge/a",
+    "hardware": "CPU double precision, two admitted library threads; host-neutral publication"
+  },
+  "comparison": {
+    "reference": "Canonical haus1989electromagnetic, ISBN9780132490207, section10.7; specialized analytic diffusion fields and flux/power identities",
+    "independence": "Analytic formulation is independent of assembled FE; same-matrix sparsecholesky checks algebraic solver parity only; H and B are proportional and not independent detectors"
+  },
+  "category": "adoption",
+  "supersedes": [],
+  "adoption": {
+    "feature": "radia.sparsesolv_ngsolve:historical-linear-HCurl-slab-AMS-and-BDDC-AMS",
+    "criterion": {
+      "reference": {
+        "kind": "analytic",
+        "citation": "Haus and Melcher, Electromagnetic Fields and Energy (1989), ISBN9780132490207, section10.7; constant-coefficient diffusion specialized to the driven3D extrusion; manual symbolic derivation attached",
+        "bib_key": "haus1989electromagnetic",
+        "symbolic_verification": {
+          "path": "reference-verification.md",
+          "sha256": "58ebab55212e62e702d81b547974a591d1b9e5740bc40df44b614a97c84d3fe0"
+        }
+      },
+      "quantity": {
+        "name": "per-component relative errors of H/B/J, face impedance and Joule power",
+        "definition": "Every component is retained separately as metric_code; complete residual/parity and plateau gates are independently audited by entry.py and criterion.json",
+        "unit": "1"
+      },
+      "variables": {
+        "h_max_over_a": "Actual maximal tetrahedron edge over slab half-depth",
+        "p": "Declared HCurl order mapping; p1 lowest-order, p2/3 full HCurl",
+        "metric_code": "H=0,B=1,J=2,Z_back=3,Z_front=4,power=5; held fixed within each series"
+      },
+      "levels": [
+        {
+          "id": "H-m2-p1",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 1,
+            "metric_code": 0
+          }
+        },
+        {
+          "id": "H-m2-p2",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 2,
+            "metric_code": 0
+          }
+        },
+        {
+          "id": "H-m2-p3",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 3,
+            "metric_code": 0
+          }
+        },
+        {
+          "id": "H-m4-p1",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 1,
+            "metric_code": 0
+          }
+        },
+        {
+          "id": "H-m4-p2",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 2,
+            "metric_code": 0
+          }
+        },
+        {
+          "id": "H-m4-p3",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 3,
+            "metric_code": 0
+          }
+        },
+        {
+          "id": "B-m2-p1",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 1,
+            "metric_code": 1
+          }
+        },
+        {
+          "id": "B-m2-p2",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 2,
+            "metric_code": 1
+          }
+        },
+        {
+          "id": "B-m2-p3",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 3,
+            "metric_code": 1
+          }
+        },
+        {
+          "id": "B-m4-p1",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 1,
+            "metric_code": 1
+          }
+        },
+        {
+          "id": "B-m4-p2",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 2,
+            "metric_code": 1
+          }
+        },
+        {
+          "id": "B-m4-p3",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 3,
+            "metric_code": 1
+          }
+        },
+        {
+          "id": "J-m2-p1",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 1,
+            "metric_code": 2
+          }
+        },
+        {
+          "id": "J-m2-p2",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 2,
+            "metric_code": 2
+          }
+        },
+        {
+          "id": "J-m2-p3",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 3,
+            "metric_code": 2
+          }
+        },
+        {
+          "id": "J-m4-p1",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 1,
+            "metric_code": 2
+          }
+        },
+        {
+          "id": "J-m4-p2",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 2,
+            "metric_code": 2
+          }
+        },
+        {
+          "id": "J-m4-p3",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 3,
+            "metric_code": 2
+          }
+        },
+        {
+          "id": "Z_back-m2-p1",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 1,
+            "metric_code": 3
+          }
+        },
+        {
+          "id": "Z_back-m2-p2",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 2,
+            "metric_code": 3
+          }
+        },
+        {
+          "id": "Z_back-m2-p3",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 3,
+            "metric_code": 3
+          }
+        },
+        {
+          "id": "Z_back-m4-p1",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 1,
+            "metric_code": 3
+          }
+        },
+        {
+          "id": "Z_back-m4-p2",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 2,
+            "metric_code": 3
+          }
+        },
+        {
+          "id": "Z_back-m4-p3",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 3,
+            "metric_code": 3
+          }
+        },
+        {
+          "id": "Z_front-m2-p1",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 1,
+            "metric_code": 4
+          }
+        },
+        {
+          "id": "Z_front-m2-p2",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 2,
+            "metric_code": 4
+          }
+        },
+        {
+          "id": "Z_front-m2-p3",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 3,
+            "metric_code": 4
+          }
+        },
+        {
+          "id": "Z_front-m4-p1",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 1,
+            "metric_code": 4
+          }
+        },
+        {
+          "id": "Z_front-m4-p2",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 2,
+            "metric_code": 4
+          }
+        },
+        {
+          "id": "Z_front-m4-p3",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 3,
+            "metric_code": 4
+          }
+        },
+        {
+          "id": "power-m2-p1",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 1,
+            "metric_code": 5
+          }
+        },
+        {
+          "id": "power-m2-p2",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 2,
+            "metric_code": 5
+          }
+        },
+        {
+          "id": "power-m2-p3",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 3,
+            "metric_code": 5
+          }
+        },
+        {
+          "id": "power-m4-p1",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 1,
+            "metric_code": 5
+          }
+        },
+        {
+          "id": "power-m4-p2",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 2,
+            "metric_code": 5
+          }
+        },
+        {
+          "id": "power-m4-p3",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 3,
+            "metric_code": 5
+          }
+        }
+      ],
+      "series": [
+        {
+          "id": "h-H-p1",
+          "level_ids": [
+            "H-m2-p1",
+            "H-m4-p1"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 0.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "recorded-only",
+            "reason": "APPROVAL-20261024-IH-AMS-F1-FROZEN-03: p1 finest accuracy is recorded only"
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-H-p2",
+          "level_ids": [
+            "H-m2-p2",
+            "H-m4-p2"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 1.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-H-p3",
+          "level_ids": [
+            "H-m2-p3",
+            "H-m4-p3"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 2.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "p-H-m2",
+          "level_ids": [
+            "H-m2-p1",
+            "H-m2-p2",
+            "H-m2-p3"
+          ],
+          "axis": "p",
+          "direction": "increasing",
+          "rate_model": "log-per-unit",
+          "minimum_rate": 0,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "recorded-only",
+            "reason": "Finest h accuracy gate belongs to m4 only; m2 p-monotonicity still gates"
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "p-H-m4",
+          "level_ids": [
+            "H-m4-p1",
+            "H-m4-p2",
+            "H-m4-p3"
+          ],
+          "axis": "p",
+          "direction": "increasing",
+          "rate_model": "log-per-unit",
+          "minimum_rate": 1.7328679513998633,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-B-p1",
+          "level_ids": [
+            "B-m2-p1",
+            "B-m4-p1"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 0.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "recorded-only",
+            "reason": "APPROVAL-20261024-IH-AMS-F1-FROZEN-03: p1 finest accuracy is recorded only"
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-B-p2",
+          "level_ids": [
+            "B-m2-p2",
+            "B-m4-p2"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 1.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-B-p3",
+          "level_ids": [
+            "B-m2-p3",
+            "B-m4-p3"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 2.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "p-B-m2",
+          "level_ids": [
+            "B-m2-p1",
+            "B-m2-p2",
+            "B-m2-p3"
+          ],
+          "axis": "p",
+          "direction": "increasing",
+          "rate_model": "log-per-unit",
+          "minimum_rate": 0,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "recorded-only",
+            "reason": "Finest h accuracy gate belongs to m4 only; m2 p-monotonicity still gates"
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "p-B-m4",
+          "level_ids": [
+            "B-m4-p1",
+            "B-m4-p2",
+            "B-m4-p3"
+          ],
+          "axis": "p",
+          "direction": "increasing",
+          "rate_model": "log-per-unit",
+          "minimum_rate": 1.7328679513998633,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-J-p1",
+          "level_ids": [
+            "J-m2-p1",
+            "J-m4-p1"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 0.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "recorded-only",
+            "reason": "APPROVAL-20261024-IH-AMS-F1-FROZEN-03: p1 finest accuracy is recorded only"
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-J-p2",
+          "level_ids": [
+            "J-m2-p2",
+            "J-m4-p2"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 1.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-J-p3",
+          "level_ids": [
+            "J-m2-p3",
+            "J-m4-p3"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 2.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "p-J-m2",
+          "level_ids": [
+            "J-m2-p1",
+            "J-m2-p2",
+            "J-m2-p3"
+          ],
+          "axis": "p",
+          "direction": "increasing",
+          "rate_model": "log-per-unit",
+          "minimum_rate": 0,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "recorded-only",
+            "reason": "Finest h accuracy gate belongs to m4 only; m2 p-monotonicity still gates"
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "p-J-m4",
+          "level_ids": [
+            "J-m4-p1",
+            "J-m4-p2",
+            "J-m4-p3"
+          ],
+          "axis": "p",
+          "direction": "increasing",
+          "rate_model": "log-per-unit",
+          "minimum_rate": 1.7328679513998633,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-Z_back-p1",
+          "level_ids": [
+            "Z_back-m2-p1",
+            "Z_back-m4-p1"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 0.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "recorded-only",
+            "reason": "APPROVAL-20261024-IH-AMS-F1-FROZEN-03: p1 finest accuracy is recorded only"
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-Z_back-p2",
+          "level_ids": [
+            "Z_back-m2-p2",
+            "Z_back-m4-p2"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 1.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-Z_back-p3",
+          "level_ids": [
+            "Z_back-m2-p3",
+            "Z_back-m4-p3"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 2.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "p-Z_back-m2",
+          "level_ids": [
+            "Z_back-m2-p1",
+            "Z_back-m2-p2",
+            "Z_back-m2-p3"
+          ],
+          "axis": "p",
+          "direction": "increasing",
+          "rate_model": "log-per-unit",
+          "minimum_rate": 0,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "recorded-only",
+            "reason": "Finest h accuracy gate belongs to m4 only; m2 p-monotonicity still gates"
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "p-Z_back-m4",
+          "level_ids": [
+            "Z_back-m4-p1",
+            "Z_back-m4-p2",
+            "Z_back-m4-p3"
+          ],
+          "axis": "p",
+          "direction": "increasing",
+          "rate_model": "log-per-unit",
+          "minimum_rate": 0,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-Z_front-p1",
+          "level_ids": [
+            "Z_front-m2-p1",
+            "Z_front-m4-p1"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 0.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "recorded-only",
+            "reason": "APPROVAL-20261024-IH-AMS-F1-FROZEN-03: p1 finest accuracy is recorded only"
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-Z_front-p2",
+          "level_ids": [
+            "Z_front-m2-p2",
+            "Z_front-m4-p2"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 1.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-Z_front-p3",
+          "level_ids": [
+            "Z_front-m2-p3",
+            "Z_front-m4-p3"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 2.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "p-Z_front-m2",
+          "level_ids": [
+            "Z_front-m2-p1",
+            "Z_front-m2-p2",
+            "Z_front-m2-p3"
+          ],
+          "axis": "p",
+          "direction": "increasing",
+          "rate_model": "log-per-unit",
+          "minimum_rate": 0,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "recorded-only",
+            "reason": "Finest h accuracy gate belongs to m4 only; m2 p-monotonicity still gates"
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "p-Z_front-m4",
+          "level_ids": [
+            "Z_front-m4-p1",
+            "Z_front-m4-p2",
+            "Z_front-m4-p3"
+          ],
+          "axis": "p",
+          "direction": "increasing",
+          "rate_model": "log-per-unit",
+          "minimum_rate": 0,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-power-p1",
+          "level_ids": [
+            "power-m2-p1",
+            "power-m4-p1"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 0.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "recorded-only",
+            "reason": "APPROVAL-20261024-IH-AMS-F1-FROZEN-03: p1 finest accuracy is recorded only"
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-power-p2",
+          "level_ids": [
+            "power-m2-p2",
+            "power-m4-p2"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 1.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "h-power-p3",
+          "level_ids": [
+            "power-m2-p3",
+            "power-m4-p3"
+          ],
+          "axis": "h_max_over_a",
+          "direction": "decreasing",
+          "rate_model": "log-ratio",
+          "minimum_rate": 2.5,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "p-power-m2",
+          "level_ids": [
+            "power-m2-p1",
+            "power-m2-p2",
+            "power-m2-p3"
+          ],
+          "axis": "p",
+          "direction": "increasing",
+          "rate_model": "log-per-unit",
+          "minimum_rate": 0,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "recorded-only",
+            "reason": "Finest h accuracy gate belongs to m4 only; m2 p-monotonicity still gates"
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        },
+        {
+          "id": "p-power-m4",
+          "level_ids": [
+            "power-m4-p1",
+            "power-m4-p2",
+            "power-m4-p3"
+          ],
+          "axis": "p",
+          "direction": "increasing",
+          "rate_model": "log-per-unit",
+          "minimum_rate": 0,
+          "monotonicity": "strict-decrease",
+          "finest_threshold": {
+            "operator": "le",
+            "value": 0.01
+          },
+          "expected_theory": {
+            "model": "Smooth constant-coefficient diffusion; h-field approximation O((h/delta)^p); functional cancellation can alter p ratios",
+            "norm": "Relative complex volume L2 for H/B/J; relative complex face E/H and mean Joule functional errors",
+            "source": "APPROVAL-20261023-IH-AMS-F1-FROZEN-01/02/03; prior a-priori estimate with |k|=sqrt(2)/delta",
+            "assumptions": "Homogeneous linear a/delta2 driven slab; fixed exact trace and geometry; h rates only between m2 and4",
+            "limitations": "Empirical approved lower rates p-0.5. p-ratio<=2sqrt(2)/16 only H/B/J at m4; functional ratios recorded, not rate gates."
+          }
+        }
+      ],
+      "failure_definition": "Any failed FROZEN01/02/03 gate: true iterative/direct residual or A/H/J same-matrix parity>1e-6; non-monotone error; h rate<p-0.5; p2/3 m4 error>0.01; m4 H/B/J adjacent-p ratio>2sqrt(2)/16. Unchanged h or unexplained/roundoff plateau is UNRESOLVED. Functional p ratios and p1 finest errors are recorded only. entry.py retains all102 original gate observations.",
+      "saturation_policy": "blocks-pass",
+      "residual_threshold": 1e-06,
+      "threshold_verification": {
+        "mode": "reviewer",
+        "review_ref": "sha256-65b811111551fce85e5f9659c0843461920f2d2e420a11c623ba2fa861f54364"
+      }
+    },
+    "approval": {
+      "approved_by": "user",
+      "approved_on": "2026-10-24",
+      "approval_ref": "APPROVAL-20261024-IH-AMS-F1-FROZEN-03",
+      "criterion_sha256": "f9b4e5426eccb9939f2e8008026ad2bbcc9c53d8d8706fc962a5a47f8e6d554e",
+      "rationale_sha256": "97b1f0f4331c33c3a6379955662c7edff3952a8a1c2eb93f0ba8ae3a9f2c049e",
+      "scope_sha256": "9150d29b505d78fd1c2ca15554872df3de5661d3570ef529bcf82fcb52b672db"
+    },
+    "result": {
+      "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+      "artifact_sha256": "521f8e38ce1b92540c44e978df182547d12900c2c4e0d9fa404dad0ce8b4c70e",
+      "verdict": "PASS",
+      "levels": [
+        {
+          "id": "H-m2-p1",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 1,
+            "metric_code": 0
+          },
+          "error": 0.12019673209290184,
+          "relative_residual": 1.0465108862687692e-12,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "H-m2-p2",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 2,
+            "metric_code": 0
+          },
+          "error": 0.0009128210669642261,
+          "relative_residual": 7.286461556742831e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "H-m2-p3",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 3,
+            "metric_code": 0
+          },
+          "error": 1.3169747031420185e-05,
+          "relative_residual": 9.68103161188331e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "H-m4-p1",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 1,
+            "metric_code": 0
+          },
+          "error": 0.06066614087413869,
+          "relative_residual": 8.579638231210491e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "H-m4-p2",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 2,
+            "metric_code": 0
+          },
+          "error": 0.0002251836735273075,
+          "relative_residual": 9.166119177135723e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "H-m4-p3",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 3,
+            "metric_code": 0
+          },
+          "error": 1.6298047190591256e-06,
+          "relative_residual": 8.884228647584609e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "B-m2-p1",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 1,
+            "metric_code": 1
+          },
+          "error": 0.12019673209290159,
+          "relative_residual": 1.0465108862687692e-12,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "B-m2-p2",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 2,
+            "metric_code": 1
+          },
+          "error": 0.0009128210669642249,
+          "relative_residual": 7.286461556742831e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "B-m2-p3",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 3,
+            "metric_code": 1
+          },
+          "error": 1.316974703142158e-05,
+          "relative_residual": 9.68103161188331e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "B-m4-p1",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 1,
+            "metric_code": 1
+          },
+          "error": 0.06066614087413994,
+          "relative_residual": 8.579638231210491e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "B-m4-p2",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 2,
+            "metric_code": 1
+          },
+          "error": 0.00022518367352731002,
+          "relative_residual": 9.166119177135723e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "B-m4-p3",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 3,
+            "metric_code": 1
+          },
+          "error": 1.6298047190587906e-06,
+          "relative_residual": 8.884228647584609e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "J-m2-p1",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 1,
+            "metric_code": 2
+          },
+          "error": 0.048271043699482624,
+          "relative_residual": 1.0465108862687692e-12,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "J-m2-p2",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 2,
+            "metric_code": 2
+          },
+          "error": 2.3707932063690624e-05,
+          "relative_residual": 7.286461556742831e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "J-m2-p3",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 3,
+            "metric_code": 2
+          },
+          "error": 2.283010385033384e-07,
+          "relative_residual": 9.68103161188331e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "J-m4-p1",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 1,
+            "metric_code": 2
+          },
+          "error": 0.024653702854584857,
+          "relative_residual": 8.579638231210491e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "J-m4-p2",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 2,
+            "metric_code": 2
+          },
+          "error": 2.853536317912898e-06,
+          "relative_residual": 9.166119177135723e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "J-m4-p3",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 3,
+            "metric_code": 2
+          },
+          "error": 1.4299014813027892e-08,
+          "relative_residual": 8.884228647584609e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "Z_back-m2-p1",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 1,
+            "metric_code": 3
+          },
+          "error": 0.0711975675938518,
+          "relative_residual": 1.0465108862687692e-12,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "Z_back-m2-p2",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 2,
+            "metric_code": 3
+          },
+          "error": 0.0016200892229698807,
+          "relative_residual": 7.286461556742831e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "Z_back-m2-p3",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 3,
+            "metric_code": 3
+          },
+          "error": 2.729599434031916e-05,
+          "relative_residual": 9.68103161188331e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "Z_back-m4-p1",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 1,
+            "metric_code": 3
+          },
+          "error": 0.043655044552081725,
+          "relative_residual": 8.579638231210491e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "Z_back-m4-p2",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 2,
+            "metric_code": 3
+          },
+          "error": 0.00039139786210864313,
+          "relative_residual": 9.166119177135723e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "Z_back-m4-p3",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 3,
+            "metric_code": 3
+          },
+          "error": 3.2784633391902526e-06,
+          "relative_residual": 8.884228647584609e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "Z_front-m2-p1",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 1,
+            "metric_code": 4
+          },
+          "error": 0.07119756759385289,
+          "relative_residual": 1.0465108862687692e-12,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "Z_front-m2-p2",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 2,
+            "metric_code": 4
+          },
+          "error": 0.0016200892229661654,
+          "relative_residual": 7.286461556742831e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "Z_front-m2-p3",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 3,
+            "metric_code": 4
+          },
+          "error": 2.7295994063451873e-05,
+          "relative_residual": 9.68103161188331e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "Z_front-m4-p1",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 1,
+            "metric_code": 4
+          },
+          "error": 0.04365504455227834,
+          "relative_residual": 8.579638231210491e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "Z_front-m4-p2",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 2,
+            "metric_code": 4
+          },
+          "error": 0.00039139786218804506,
+          "relative_residual": 9.166119177135723e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "Z_front-m4-p3",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 3,
+            "metric_code": 4
+          },
+          "error": 3.2784632198186105e-06,
+          "relative_residual": 8.884228647584609e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "power-m2-p1",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 1,
+            "metric_code": 5
+          },
+          "error": 0.0018964141115191135,
+          "relative_residual": 1.0465108862687692e-12,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "power-m2-p2",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 2,
+            "metric_code": 5
+          },
+          "error": 1.234375418875825e-06,
+          "relative_residual": 7.286461556742831e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "power-m2-p3",
+          "parameters": {
+            "h_max_over_a": 0.10825317547305487,
+            "p": 3,
+            "metric_code": 5
+          },
+          "error": 1.0211839522467115e-07,
+          "relative_residual": 9.68103161188331e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "b9c4ee4422d1aca902af7293d1e5a4b319538c71c05729a5d4e32baff04f05b8",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "power-m4-p1",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 1,
+            "metric_code": 5
+          },
+          "error": 0.0005597124966443827,
+          "relative_residual": 8.579638231210491e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "power-m4-p2",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 2,
+            "metric_code": 5
+          },
+          "error": 1.0082683024937012e-07,
+          "relative_residual": 9.166119177135723e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        },
+        {
+          "id": "power-m4-p3",
+          "parameters": {
+            "h_max_over_a": 0.05412658773652743,
+            "p": 3,
+            "metric_code": 5
+          },
+          "error": 6.335924863572237e-09,
+          "relative_residual": 8.884228647584609e-13,
+          "source_sha": "8a98815230e8751c7ce7c21650f4fa68675718e2",
+          "mesh_sha256": "4470dc2639415ff5bf270c8d37eecd250e1ecbf263c22614b9a3b04a09cf6f1b",
+          "runtime_s": null,
+          "runtime_note": "Only whole-campaign491.016s was measured in run04; no per-case time is inferred."
+        }
+      ]
+    },
+    "protected_by": [
+      "tests/test_ih_ams_f1_surrogate.py"
+    ],
+    "rationale": {
+      "inference": "Historical5.3.3 artifact passed the frozen linear slab campaign. This is not current-main or release qualification. The separate surrogate tolerance is explicitly user-approved at1e-8, atol0.",
+      "scope": "Linear homogeneous driven slab a/delta2 only; no nonlinear BH, GPU, thermal, PEEC-BEM/fullcoil or other skin-depth ratios",
+      "assumptions": [
+        {
+          "id": "reference.linear",
+          "kind": "reference-verification",
+          "statement": "Manual symbolic identities use constant positive mu/sigma, peak exp(+i omega t), exact tangent A on all six faces; not an executed CAS receipt",
+          "evidence_refs": [
+            "artifact:result",
+            "artifact:entry",
+            "review:sha256-65b811111551fce85e5f9659c0843461920f2d2e420a11c623ba2fa861f54364"
+          ],
+          "invalidated_by": [
+            "reference.linear.invalid"
+          ],
+          "recheck": "Independent review of source/artifact/gates and exact release-artifact validation before current qualification"
+        },
+        {
+          "id": "approval.frozen",
+          "kind": "other",
+          "statement": "FROZEN03 amends FROZEN01/02 only by p1 finest scope; m2/4 and all other gate limits unchanged",
+          "evidence_refs": [
+            "approval:APPROVAL-20261024-IH-AMS-F1-FROZEN-03",
+            "artifact:result"
+          ],
+          "invalidated_by": [
+            "approval.frozen.invalid"
+          ],
+          "recheck": "Independent review of source/artifact/gates and exact release-artifact validation before current qualification"
+        },
+        {
+          "id": "artifact.historical",
+          "kind": "assumes",
+          "statement": "Values remain bound to source8a988152/native4b09e365/official5.3.3; covered hashes are original, not current-main backfills",
+          "evidence_refs": [
+            "artifact:result"
+          ],
+          "invalidated_by": [
+            "artifact.historical.invalid"
+          ],
+          "recheck": "Independent review of source/artifact/gates and exact release-artifact validation before current qualification"
+        },
+        {
+          "id": "protection.proposal",
+          "kind": "coverage",
+          "statement": "Coarse m2p1 and m2p2 exercise the same native entry families. Repeatability and zero-output mutation failures are measured; user approval APPROVAL-20261024-IH-AMS-F1-SURROGATE-TOL-01 sets rtol1e-8/atol0. A4 historical/current identity mismatch remains explicit.",
+          "evidence_refs": [
+            "artifact:result"
+          ],
+          "invalidated_by": [
+            "protection.proposal.invalid"
+          ],
+          "recheck": "Independent review of source/artifact/gates and exact release-artifact validation before current qualification"
+        }
+      ],
+      "depends_on": [
+        "reference.linear",
+        "approval.frozen",
+        "artifact.historical",
+        "protection.proposal"
+      ],
+      "break_conditions": [
+        {
+          "id": "reference.linear.invalid",
+          "condition": "Declared assumption or provenance fails independent review"
+        },
+        {
+          "id": "approval.frozen.invalid",
+          "condition": "Declared assumption or provenance fails independent review"
+        },
+        {
+          "id": "artifact.historical.invalid",
+          "condition": "Declared assumption or provenance fails independent review"
+        },
+        {
+          "id": "protection.proposal.invalid",
+          "condition": "Declared assumption or provenance fails independent review"
+        }
+      ]
+    }
+  }
+}
