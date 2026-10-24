@@ -2,6 +2,12 @@
 
 Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 
+Mesh-only Gmsh quality APIs accept direct ASCII MSH 4.2 files only, not GEO
+programs or indirect Merge/Include inputs. Before any native initialization,
+NodeData/ElementData/ElementNodeData field tags above 2147483647 are rejected
+explicitly without remapping. Mesh-only size_t tags and pure-Python inventory
+reading have no such upper bound; field tag 2^28 remains supported.
+
 Order-3 pyramid export to Gmsh is refused with an explicit element/order error:
 the native Gmsh 5 consumer cannot construct that type. No lower-order or fake
 element is substituted; pyramid orders 1 and 2 are unchanged.

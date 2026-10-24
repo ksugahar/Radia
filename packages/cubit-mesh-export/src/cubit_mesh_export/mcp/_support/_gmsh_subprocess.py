@@ -51,18 +51,15 @@ def run_gmsh_json_subprocess(script: str, args: list[str], *,
         wrapped = f'''import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(Path(__file__).resolve().parents[3])!r})
-from cubit_mesh_export._gmsh_runtime import probe_gmsh5, require_msh42
+from cubit_mesh_export._gmsh_runtime import probe_gmsh5, validate_native_msh_fields
 try:
-    runtime = probe_gmsh5()
     for argument in sys.argv[1:-1]:
         candidate = Path(argument)
         if candidate.is_file():
-            if candidate.name.lower().endswith('.msh.gz'):
-                raise ValueError('Compressed MSH input is unsupported; use MSH 4.2 directly')
-            with candidate.open('rb') as source:
-                marker = source.read(11).strip()
-            if candidate.suffix.lower() == '.msh' or marker == b'$MeshFormat':
-                require_msh42(candidate)
+            if candidate.suffix.lower() != '.msh':
+                raise ValueError('Mesh-only Gmsh quality APIs require direct ASCII MSH 4.2; GEO/Merge/Include and other input formats are unsupported')
+            validate_native_msh_fields(candidate)
+    runtime = probe_gmsh5()
     exec(compile({script!r}, '<gmsh-operation>', 'exec'))
     output = Path(sys.argv[-1])
     result = json.loads(output.read_text(encoding='utf-8'))
