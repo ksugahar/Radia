@@ -192,7 +192,9 @@ def test_checked_vol_mesh_field_export_and_animation(tmp_path):
         assert all(v == [0., 0., 0.] for v in next(iter(_views(moving)[0].values()))[1].values())
 
 
-@pytest.mark.parametrize('header', ['4.9 0 8', '4.2 1 8', '4.2'])
+@pytest.mark.parametrize('header', [
+    '.'.join(map(str, version)) + ' 0 8' for version in [(4, 1), (4, 0), (2, 2)]
+] + ['4.9 0 8', '4.2 1 8', '4.2'])
 def test_native_handoff_rejects_other_formats(tmp_path, header):
     path = tmp_path / 'unsupported.msh'
     path.write_text(f'$MeshFormat\n{header}\n$EndMeshFormat\n', encoding='utf-8')
