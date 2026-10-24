@@ -10,8 +10,8 @@ The view-selector goldens are EQUIVALENCE goldens: ``view="A"`` must
 produce the same picture, pixel for pixel, as the hand-written
 ``options={"View[0].Visible": 1, "View[1].Visible": 0}`` route it
 replaces.  Renders are compared on DECODED PIXELS, never on file bytes:
-MEASURED on gmsh 4.15.2, two renders of identical settings give
-identical pixels but different PNG bytes.
+PNG timestamp metadata can change file bytes without changing the RGB
+picture, so it is excluded from the comparison.
 """
 
 from msh42_fixtures import field_section
@@ -66,9 +66,7 @@ _P = {1: (-0.5, -0.5, -0.5), 2: (0.5, -0.5, -0.5), 3: (-0.5, 0.5, -0.5),
       4: (0.5, 0.5, -0.5), 5: (-0.5, -0.5, 0.5), 6: (0.5, -0.5, 0.5),
       7: (-0.5, 0.5, 0.5), 8: (0.5, 0.5, 0.5)}
 
-# Wide enough that the FLTK sidebar still leaves a usable canvas: the
-# exported width is NOT the requested width on Windows builds
-# (MEASURED gmsh 4.15.2: width=300 exported 100 px).
+# Leave enough room for a usable render canvas alongside the FLTK sidebar.
 _W, _H = 700, 400
 
 
@@ -94,8 +92,7 @@ def _skip_if_no_graphics(result):
 
 
 def _pixels(path):
-    """Decoded-pixel digest.  PNG bytes are not reproducible across two
-    identical gmsh renders (MEASURED); the pixels are."""
+    """RGB picture digest, excluding PNG timestamp metadata."""
     from PIL import Image
 
     with Image.open(path) as im:

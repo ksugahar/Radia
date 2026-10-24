@@ -482,8 +482,9 @@ class GmshPostExport:
     def write(self, filename, time=0.0, timestep=0):
         """Write mesh + field data to GMSH .msh v4.2 format.
 
-        v4.2 is the only supported format (repository standard).
-        netgen I/O is always via .vol; .msh v2.2 is no longer emitted.
+        ASCII MSH v4.2 is the only supported post-processing format.
+        Solver inputs remain checked Cubit/Netgen .vol meshes; this output
+        is derived visualization and field data, never a solver mesh.
 
         Phase E.1 (2026-04-15): now goes through the unified
         _emit_v42_msh emitter via a PayloadV42 built here.
@@ -2187,18 +2188,9 @@ def _extract_wireframe(mesh):
 # Filament visualization (PEEC sub-filament paths as GMSH line elements)
 # =====================================================================
 
-# Line-element .msh tag offsets.  Element tags start high so filament
-# lines do not collide with the volume-mesh element tags when GMSH
-# merges this file as a sibling overlay (open_gmsh.py auto-merge);
-# without the offset GMSH warns "Skipping duplicate element N" for every
-# line and silently DROPS the filament geometry.
-#
-# ENTITY tags need the same offset: merging a STEP file creates OCC
-# curves with tags 1..N in the same (dim, tag) space, and a discrete
-# curve sharing a tag gets BOUND to the OCC curve as its "mesh" -- gmsh
-# then hard-crashes (0xC000041D) as soon as shaded geometry faces are
-# enabled (Geometry.Surfaces=1 + Geometry.SurfaceType>0).  Measured
-# gmsh 4.15.2; the tag offset resolves it.
+# Line-element overlays use separate element/curve tag ranges. Sibling
+# mesh and CAD inputs must keep their tag namespaces disjoint. The qualified
+# Gmsh 5 STEP/shaded-capture check preserves these exported line tags.
 _LINE_ELEM_TAG_OFFSET = 10_000_000
 _LINE_ENT_TAG_OFFSET = 10_000_000
 
@@ -2765,35 +2757,25 @@ def _beam_animation_views(values, t_mid, *, n_frames, mode, comet_window,
                           view_name):
     """Multi-step "beam" view whose visible extent grows with time.
 
-    The trick (MEASURED on gmsh 4.15.2, locked by tests): rendered with
-    a FIXED colour range and ``SaturateValues = 0``, gmsh does NOT DRAW
-    an element whose value falls outside that range.  So step ``k``
+    The qualified Gmsh 5 native line-render check uses a
+    FIXED colour range and ``SaturateValues = 0``: a line element whose
+    value falls outside that range is not drawn.  So step ``k``
     carries the real quantity on the segments the beam has already
     reached and a far out-of-range SENTINEL everywhere else -- the
     trail grows while the colour scale stays put, unlike sweeping the
     range itself (which rescales the colours every frame).
 
-    NaN is NOT usable as the sentinel: gmsh writes the literal ``nan``
-    into the .pos/.msh and its own parser then rejects the file
-    ("Unknown variable 'nan'").  The sentinel is finite by necessity.
+    The check compares the out-of-range scene with an independently hidden
+    scene using the same camera. Keep the display sentinel finite.
     """
     import numpy as np
 
     lo = float(values.min())
     hi = float(values.max())
     # The sentinel must be far outside on the scale of the VALUES, not
-    # of their spread: a monoenergetic beam coloured by energy has a
-    # spread of ~1e-13 eV, and a sentinel one spread above the maximum
-    # would be the same colour as the beam -- i.e. not hidden at all.
-    # The floor is RELATIVE (1e-3 of the magnitude), never an absolute
-    # 1.0: an absolute floor poisons every downstream stats verb on a
-    # small-valued quantity.  MEASURED on the time-coloured beam
-    # (lo=1.68e-10, hi=6.72e-6): absolute floor -> sentinel 10.0, i.e.
-    # 1.5e6x the data (field_stats then reported max 10.0 for a view
-    # whose physics tops out at 6.72e-6); relative floor -> sentinel
-    # 7.39e-5, 11x the data.  Hiding is unaffected -- monoenergetic
-    # 1e4 eV still gives hi=1e4+0.01 and sentinel=1.01e4, far outside
-    # the colour range.
+    # of their spread: a nearly constant quantity still needs a finite
+    # separation from the visible range. An absolute floor would dominate
+    # small SI-valued quantities such as time and corrupt reported extrema.
     span = hi - lo
     scale = max(span, 1e-3 * max(abs(lo), abs(hi)))
     if scale <= 0.0:

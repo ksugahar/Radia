@@ -3,23 +3,26 @@
 from radia_mcp.gmsh.gmsh_knowledge import get_gmsh_documentation
 
 
-def test_gmsh_policy_documents_v41_msh_and_geo_launch_contract():
+def test_gmsh_policy_documents_v42_post_only_and_geo_launch_contract():
     body = get_gmsh_documentation("policy")
 
-    assert "GmshPostExport.write()` and `vol2msh()` emit .msh v4.1" in body
+    assert "GmshPostExport.write()` and `vol2msh()` emit .msh v4.2" in body
     assert "Post-processing launch artifact: `case.geo`" in body
-    assert "defaults to v2.2" not in body
+    assert "visualization and post-processing only, NOT mesh generation" in body
+    assert "**STEP -> Netgen**" in body
+    assert "**STEP -> Cubit**" in body
 
 
-def test_gmsh_overview_documents_python_wrapper_and_geo_association():
+def test_gmsh_overview_documents_qualified_runtime_and_solver_boundary():
     body = get_gmsh_documentation("overview")
 
-    assert "canonical launcher is `gmsh` on PATH" in body
-    assert "Python wrapper" in body
-    assert "Do not hard-code" in body
-    assert r"`C:\gmsh.exe`" in body
-    assert "`.geo` is the primary file association" in body
-    assert "`.msh` association is optional raw mesh/data inspection" in body
+    assert "qualified official Gmsh 5 with ASCII MSH 4.2" in body
+    assert "checked Cubit/Netgen `.vol`; Gmsh is post-processing only" in body
+    assert "gmsh-development-runtime.md" in body
+    assert "Dependency requirements are declared only in the package's pyproject extras" in body
+    assert "Native tools require `RADIA_GMSH_PROVENANCE`" in body
+    assert "exact distribution/native version and wheel SHA256" in body
+    assert "Pure-Python readers stay exact-4.2" in body
 
 
 def test_gmsh_opt_file_documents_exact_filename_autoload_contract():
@@ -49,18 +52,18 @@ def test_gmsh_geo_documents_double_click_safe_display_contract():
     assert "View[0].Clip = 1" in body
 
 
-def test_gmsh_workflow_documents_vol_to_existing_radia_msh_exporters():
+def test_gmsh_workflow_documents_inspected_results_and_checked_solver_inputs():
     body = get_gmsh_documentation("workflow")
 
-    assert "Do not plan a Radia workflow around GMSH directly opening Netgen `.vol`" in body
-    assert "do not add a GMSH-side `.vol` reader/plugin" in body
-    assert "Radia already owns the `.msh` output path" in body
-    assert "GmshPostExport.write()" in body
-    assert "vol2msh()" in body
-    assert "cubit_mesh_export.export_Gmsh_ver4" in body
-    assert "existing Radia .msh exporter -> case.geo" in body
-    assert "GMSH v4.1 `.msh`" in body
-    assert "Historical v2.2 snippets are legacy" in body
+    assert "Gmsh 5 / MSH 4.2 post-processing workflow" in body
+    assert "existing result file exported by Radia or cubit-mesh-export" in body
+    assert "Keep the original checked solver `.vol`, its label contract" in body
+    assert "Gmsh does not create or import the solver mesh" in body
+    assert body.index("gmsh_inspect_msh(") < body.index("gmsh_write_post_launch_artifact(")
+    assert body.index("gmsh_validate_msh(") < body.index("gmsh_render(")
+    assert "`field.geo`, `field.geo.opt`, `field.msh.opt`" in body
+    assert "The existing MSH data are not modified" in body
+    assert "They are not solver input" in body
 
 
 def test_gmsh_pitfalls_include_geo_opt_missing_settings_failure_mode():
