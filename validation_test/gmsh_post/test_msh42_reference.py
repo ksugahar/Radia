@@ -30,7 +30,7 @@ package = types.ModuleType('_msh42_core')
 package.__path__ = [str(ROOT / 'src/radia')]
 sys.modules[package.__name__] = package
 writer = _source_module('_msh42_core.gmsh_post_export', 'src/radia/gmsh_post_export.py')
-reader = _source_module('_msh42_core.peec_mesh_import', 'src/radia/peec_mesh_import.py')
+reader = _source_module('_msh42_core._gmsh_native_fields', 'src/radia/_gmsh_native_fields.py')
 
 
 def _views(path):
@@ -78,12 +78,9 @@ def test_payload_fields_roundtrip(tmp_path):
     assert actual['I', 0] == ('ElementData', {1: [-7.]}, 0., 1)
     reopened, _ = _views(target)
     assert reopened == actual
-    nodes, edges = reader.read_gmsh_centerline(path)
-    assert nodes == {start: [0., 0., 0.], start+1: [1., 0., 0.]}
-    assert edges == [[start, start+1]]
 
 
-def test_large_tags_remain_supported_for_mesh_only_and_pure_python(tmp_path):
+def test_large_tags_remain_supported_for_mesh_only_and_serialization(tmp_path):
     start = 2147483665
     payload = writer.PayloadV42(
         entities=[writer.Entity(1, 1, (0, 0, 0, 1, 0, 0))],
@@ -105,9 +102,9 @@ def test_large_tags_remain_supported_for_mesh_only_and_pure_python(tmp_path):
     with path.open('a', encoding='utf-8') as stream:
         writer._emit_data_section(stream, writer.DataField(
             '$NodeData', 'B', 3, [(start, [1., -2., 3.]), (start + 1, [4., 5., -6.])]))
-    nodes, edges = reader.read_gmsh_centerline(path)
-    assert nodes == {start: [0., 0., 0.], start + 1: [1., 0., 0.]}
-    assert edges == [[start, start + 1]]
+    field = path.read_text(encoding='utf-8').split('$NodeData\n')[1].split('$EndNodeData')[0].splitlines()
+    assert list(map(int, field[-4:-2])) == [start, start + 1]
+    assert [list(map(float, row.split())) for row in field[-2:]] == [[1., -2., 3.], [4., 5., -6.]]
 
 
 def test_separate_line_writer_preserves_fields(tmp_path):
@@ -195,11 +192,11 @@ def test_checked_vol_mesh_field_export_and_animation(tmp_path):
         assert all(v == [0., 0., 0.] for v in next(iter(_views(moving)[0].values()))[1].values())
 
 
-@pytest.mark.parametrize('header', ['4.1 0 8', '4.0 0 8', '2.2 0 8', '4.9 0 8', '4.2 1 8', '4.2'])
-def test_core_readers_reject_other_formats(tmp_path, header):
+@pytest.mark.parametrize('header', [
+    '.'.join(map(str, version)) + ' 0 8' for version in [(4, 1), (4, 0), (2, 2)]
+] + ['4.9 0 8', '4.2 1 8', '4.2'])
+def test_native_handoff_rejects_other_formats(tmp_path, header):
     path = tmp_path / 'unsupported.msh'
     path.write_text(f'$MeshFormat\n{header}\n$EndMeshFormat\n', encoding='utf-8')
     with pytest.raises(ValueError):
-        reader.read_gmsh_centerline(path)
-    with pytest.raises(ValueError):
-        reader._load_gmsh(path)
+        reader.validate_native_msh_fields(path)

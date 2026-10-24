@@ -76,7 +76,7 @@
 This guide consolidates the design and workflow for conductor modeling in the Radia PEEC framework. It covers:
 
 - **Conductor shape interface**: The current API (`PEECBuilder`) and proposed extensions for additional geometric primitives and path-based shapes.
-- **Mesh import workflow**: How to bring arbitrary CAD geometry into the PEEC solver via Coreform Cubit and GMSH 1D edge meshes.
+- **Mesh import workflow**: How to bring arbitrary CAD geometry into the PEEC solver via checked Coreform Cubit or Netgen `.vol` meshes.
 - **Design philosophy**: Why mesh import is the preferred approach and how cross-section metadata and port definitions are handled.
 - **API reference**: Full specifications for existing and proposed builder methods, helper functions, and configuration options.
 
@@ -92,7 +92,7 @@ PEECBuilder topology -> PEECCircuitSolver
 Impedance, Inductance, AC loss
 ```
 
-The original proposal (2026-02-13) planned a Cubit 1D edge mesh -> GMSH import path.
+Mesh-based solver input uses checked Cubit/Netgen `.vol` and a versioned label contract.
 This was replaced by the **filament model** (`coil_from_cad.py`), which extracts
 PEEC topology directly from a STEP solid without meshing.
 
@@ -227,75 +227,14 @@ builder.connect_parallel([coil1, coil2])
 > **Note**: The original 1D edge mesh import workflow (2026-02-13 proposal) has been
 > **superseded** by the filament model in `coil_from_cad.py`. See Section 3.4-3.6 below.
 
-### 3.1 Legacy: Cubit 1D Edge Mesh (Superseded)
+### 3.1 Solver input boundary
 
-The following workflow was the original proposal. It is no longer recommended:
+Use checked Cubit/Netgen `.vol` meshes and their versioned label contracts
+for mesh-based analysis. Gmsh MSH 4.2 is derived post-processing output and
+is never read back into PEEC. The existing `filaments_from_step()` route
+extracts explicit conductor topology from CAD; it is not a mesh import.
 
-```python
-import cubit
-
-cubit.init(['cubit', '-nojournal', '-batch'])
-cubit.cmd("import step 'coil.step'")
-
-# 1D edge mesh
-curve_id = cubit.get_last_id("curve")
-cubit.cmd(f"curve {curve_id} interval 36")
-cubit.cmd(f"mesh curve {curve_id}")
-cubit.cmd(f"block 1 add curve {curve_id}")
-cubit.cmd("block 1 name 'conductor'")
-cubit.cmd('export gmsh "coil_mesh.msh" overwrite')
-```
-
-**Use `filaments_from_step()` instead** — it extracts topology directly from the STEP solid.
-
-### 3.2 Step 2 -- Import to Radia PEEC
-
-```python
-import gmsh
-from peec_matrices import PEECBuilder
-
-# Load mesh
-gmsh.initialize()
-gmsh.open("coil_mesh.msh")
-
-# Get nodes and edges
-node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
-coords = node_coords.reshape(-1, 3) * 1e-3  # mm to m
-
-elem_types, elem_tags, elem_node_tags = gmsh.model.mesh.getElements()
-
-# Extract edge elements
-edges = []
-for i, elem_type in enumerate(elem_types):
-    if elem_type == 1:  # 2-node line
-        node_tags_flat = elem_node_tags[i]
-        n_elems = len(node_tags_flat) // 2
-        for j in range(n_elems):
-            n0 = node_tags_flat[j*2]
-            n1 = node_tags_flat[j*2 + 1]
-            edges.append((n0, n1))
-
-# Create PEEC segments
-builder = PEECBuilder()
-
-# Cross-section parameters (NOT in mesh)
-width = 4e-3   # 4mm
-height = 4e-3  # 4mm
-sigma = 5.8e7  # S/m (copper)
-
-for n0, n1 in edges:
-    idx0 = np.where(node_tags == n0)[0][0]
-    idx1 = np.where(node_tags == n1)[0][0]
-    p0 = coords[idx0]
-    p1 = coords[idx1]
-
-    builder.create_wire(p0, p1, width, height, 1, sigma)
-
-# Build matrices
-L, R, P, M_LS = builder.build()
-```
-
-### 3.3 Known Problems and Solutions
+### 3.2 Known Problems and Solutions
 
 #### Problem 1: Manual Cross-Section Specification
 
@@ -319,24 +258,7 @@ height = block_attrs['height'] * 1e-3
 sigma = block_attrs['sigma']
 ```
 
-**Option B: GMSH Physical Group Names**
-
-Encode cross-section in the physical group name:
-
-```python
-# In Cubit:
-cubit.cmd("block 1 name 'conductor_w4.0_h4.0_s5.8e7'")
-
-# In Python (parse name):
-import re
-name = "conductor_w4.0_h4.0_s5.8e7"
-match = re.match(r'conductor_w([\d.]+)_h([\d.]+)_s([\d.e+]+)', name)
-width = float(match.group(1)) * 1e-3
-height = float(match.group(2)) * 1e-3
-sigma = float(match.group(3))
-```
-
-**Option C: Separate Configuration File**
+**Option B: Separate Configuration File**
 
 ```yaml
 # peec_config.yaml
@@ -380,9 +302,9 @@ port_positive_nodes = get_nodeset(mesh, "port_positive")
 port_negative_nodes = get_nodeset(mesh, "port_negative")
 ```
 
-**Note**: The radia Cubit plugin does NOT currently support nodeset export to GMSH format. Until that support is added, the coordinate-based search remains the workaround.
+**Note**: Ports must be declared explicitly and checked against the solver `.vol` label contract. Gmsh display groups do not define solver inputs.
 
-### 3.4 Filament Model (Implemented)
+### 3.3 Filament Model (Implemented)
 
 The 1D edge mesh approach was superseded by the **filament model** in
 `coil_from_cad.py`. This module extracts PEEC topology directly from a
@@ -405,7 +327,7 @@ STEP solid -> extract_centerline_from_step() -> path + per-segment (w, h)
 | `extract_centerline_from_step(step_path, n_segments)` | Auto-extract centerline (marching engine + CAD-feature fast paths) |
 | `filaments_from_step(step_path, ...)` | End-to-end: STEP solid -> PEEC topology |
 
-### 3.5 Example End-to-End Workflow
+### 3.4 Example End-to-End Workflow
 
 #### Automatic (no explicit path needed)
 
@@ -444,7 +366,7 @@ heights = np.full(n_seg, 4e-3)   # 4mm height
 topo = build_peec_from_path(path, widths, heights, sigma=5.8e7)
 ```
 
-### 3.6 Implementation Status
+### 3.5 Implementation Status
 
 | Feature | Status |
 |---------|--------|
@@ -453,7 +375,6 @@ topo = build_peec_from_path(path, widths, heights, sigma=5.8e7)
 | Per-segment cross-section from STEP solid | Done |
 | Sub-filament subdivision (nwinc, nhinc) | Done |
 | PEECCircuitSolver + HACApK | Done |
-| ~~1D edge mesh import from GMSH~~ | Superseded by filament model |
 | ~~`create_peec_from_mesh()` helper~~ | Not needed (filaments_from_step replaces) |
 
 ---

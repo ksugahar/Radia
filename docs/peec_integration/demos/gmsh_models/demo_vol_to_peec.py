@@ -1,8 +1,8 @@
 """
-PEEC Analysis from GMSH Mesh
+PEEC Analysis from Netgen .vol Mesh
 
 Workflow:
-    1. Load GMSH mesh (circular_coil.msh)
+    1. Load Netgen .vol mesh (circular_coil.vol)
     2. Extract triangular edges
     3. Convert edges to PEEC segments (FastMaxwell approach)
     4. Build PEEC matrices and compute inductance
@@ -23,12 +23,12 @@ from pathlib import Path
 
 import numpy as np
 
-GMSH_MODELS = Path(__file__).resolve().parent
-sys.path.insert(0, str(GMSH_MODELS))
-from gmsh_ascii_reader import read_gmsh_ascii  # noqa: E402
+SOLVER_INPUT_TOOLS = Path(__file__).resolve().parent
+sys.path.insert(0, str(SOLVER_INPUT_TOOLS))
+from solver_vol import load_solver_mesh, vertex_data, element_groups  # noqa: E402
 
 print("=" * 70)
-print("PEEC Analysis from GMSH Mesh")
+print("PEEC Analysis from Netgen .vol Mesh")
 print("Using Radia PEEC Solver (FastMaxwell-based)")
 print("=" * 70)
 
@@ -42,31 +42,19 @@ except ImportError:
     sys.exit(1)
 
 # Check mesh file
-mesh_file = GMSH_MODELS / "circular_coil.msh"
+mesh_file, mesh = load_solver_mesh()
 
-if not mesh_file.exists():
-    print(f"\nERROR: Mesh file not found: {mesh_file}")
-    print("\nGenerate with:")
-    print("  cd gmsh_models")
-    print("  python generate_coil_cubit.py   # drives Coreform Cubit headless")
-    sys.exit(1)
-
-print(f"\n[1] Reading GMSH mesh fixture: {mesh_file.name}")
-
-mesh = read_gmsh_ascii(mesh_file)
-
-node_tags = mesh.node_tags
+node_tags, coords = vertex_data(mesh)
 n_nodes = len(node_tags)
-coords = mesh.coords * 1e-3  # mm to m
 
 print(f"    Nodes: {n_nodes}")
 
 # Get triangles
-elem_types, elem_tags, elem_node_tags = mesh.grouped_elements()
+elem_types, elem_tags, elem_node_tags = element_groups(mesh)
 
 triangles = []
 for i, elem_type in enumerate(elem_types):
-    if elem_type == 2:  # Triangle
+    if elem_type == "triangle":  # Triangle
         node_tags_flat = elem_node_tags[i]
         n_elems = len(node_tags_flat) // 3
         for j in range(n_elems):
@@ -222,7 +210,7 @@ for f in test_frequencies:
     print(f"    {f/1e3:8.1f} kHz: |Z| = {mag:.4e} Ohm, angle = {angle:.1f} deg")
 
 print(f"\n" + "=" * 70)
-print("PEEC Analysis from GMSH Completed!")
+print("PEEC Analysis from Netgen .vol Completed!")
 print("=" * 70)
 
 print(f"\nSummary:")
