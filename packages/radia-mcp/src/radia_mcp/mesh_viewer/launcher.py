@@ -63,7 +63,7 @@ def open_mesh(path: Path) -> None:
     """Display data in the existing viewer APIs without modifying installations."""
     if path.suffix.lower() == ".msh":
         import gmsh
-        gmsh.initialize(["radia-mesh-viewer", "-noconfig"], readConfigFiles=False)
+        gmsh.initialize(["radia-mesh-viewer"], readConfigFiles=False)
         try:
             gmsh.option.setNumber("General.SaveOptions", 0)
             gmsh.option.setNumber("General.SaveSession", 0)

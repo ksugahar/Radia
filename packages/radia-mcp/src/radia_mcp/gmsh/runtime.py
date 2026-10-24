@@ -132,7 +132,7 @@ def qualify_runtime() -> dict:
     """Verify native identity, MSH default and provenance; initialize no session."""
     identity = verify_runtime_identity()
     import gmsh
-    gmsh.initialize(['-noconfig'])
+    gmsh.initialize(['radia-gmsh-qualification'], readConfigFiles=False)
     try:
         if gmsh.option.getNumber('Mesh.MshFileVersion') != 4.2 or gmsh.__version__.split('.')[0] != '5':
             raise RuntimeError('Gmsh major 5 and default MSH 4.2 required')

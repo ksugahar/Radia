@@ -26,15 +26,44 @@ def _load_exporter():
     return exporter
 
 
+def _worker_options() -> dict:
+    return {'stdin': subprocess.DEVNULL, 'capture_output': True, 'close_fds': True,
+            'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+            'env': {**os.environ, 'PYTHONIOENCODING': 'utf-8', 'PYTHONUTF8': '1'}}
+
+
+def _worker_stderr(result) -> str:
+    # Native libraries can emit non-UTF-8 bytes despite Python's child encoding.
+    return (result.stderr or b'').decode('utf-8', errors='replace').strip()
+
+
 def _require_exporter_capability() -> None:
     # Inspect the selected interpreter's installed Radia in a separate process:
     # NGSolve must not be imported into the Gmsh GUI process, even for preflight.
     result = subprocess.run(
         [sys.executable, '-B', '-m', 'radia_mcp.mesh_viewer.post_view', '--check-exporter'],
-        stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8',
-        close_fds=True, timeout=20)
+        **_worker_options(), timeout=20)
     if result.returncode:
-        raise RuntimeError('VOL post-view exporter preflight failed: ' + result.stderr.strip())
+        raise RuntimeError('VOL post-view exporter preflight failed: ' + _worker_stderr(result))
+
+
+def _publish_mesh(staged: Path, target: Path) -> str:
+    """Publish only a completed verified copy; linking never overwrites a target."""
+    fd, name = tempfile.mkstemp(prefix='.' + target.name + '-', suffix='.partial', dir=target.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(fd, 'wb') as destination, staged.open('rb') as original:
+            for block in iter(lambda: original.read(1024 * 1024), b''):
+                destination.write(block)
+        digest = sha256(temporary)
+        if digest != sha256(staged):
+            raise RuntimeError('Post-view byte-copy hash mismatch')
+        # Requires hard-link support; an unsupported output filesystem fails
+        # explicitly. There is no overwrite or partial-copy fallback.
+        os.link(temporary, target)
+        return digest
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def validate_post_request(source: Path, output: str, checked_report: str,
@@ -120,13 +149,9 @@ def convert_post_view(source: Path, output: str, checked_report: str,
         raise ValueError(f'Exporter selected element count mismatch: {actual_count} != {selected_count}')
     if sha256(source) != source_sha256.lower():
         raise ValueError('Source VOL changed during conversion')
-    # Exclusive creation, no overwrite; filesystem copy is not a second MSH writer.
-    with target.open('xb') as destination, staged.open('rb') as original:
-        for block in iter(lambda: original.read(1024 * 1024), b''):
-            destination.write(block)
-    if sha256(target) != sha256(staged):
-        raise RuntimeError('Post-view byte-copy hash mismatch')
-    return {'output': str(target), 'sha256': sha256(target), 'staging': str(staging),
+    # Filesystem copy is not a second MSH writer.
+    digest = _publish_mesh(staged, target)
+    return {'output': str(target), 'sha256': digest, 'staging': str(staging),
             'source_sha256': source_sha256.lower(), 'group_scope': group_scope,
             'physical_groups': sorted(observed_groups), 'solver_input': False}
 
@@ -143,10 +168,9 @@ def prepare_post_view(source: Path, output: str, checked_report: str,
     argv = [sys.executable, '-B', '-m', 'radia_mcp.mesh_viewer.post_view',
             str(source), output, checked_report, source_sha256, group_scope,
             '--receipt', str(receipt)]
-    result = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True,
-                            text=True, encoding='utf-8', close_fds=True)
+    result = subprocess.run(argv, **_worker_options())
     if result.returncode:
-        raise RuntimeError('VOL post-view worker failed: ' + result.stderr.strip())
+        raise RuntimeError('VOL post-view worker failed: ' + _worker_stderr(result))
     return {**json.loads(receipt.read_text(encoding='utf-8')), 'worker_receipt': str(receipt)}
 
 
