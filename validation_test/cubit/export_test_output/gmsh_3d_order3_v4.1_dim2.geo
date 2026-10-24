@@ -1,3 +1,0 @@
-// Auto-generated companion for gmsh_3d_order3_v4.1_dim2.msh
-Merge "gmsh_3d_order3_v4.1_dim2.msh";
-Mesh.NumSubEdges = 4;

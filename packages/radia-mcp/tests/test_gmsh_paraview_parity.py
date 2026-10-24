@@ -3,9 +3,9 @@
 Fixture: 2-tet mesh (unit tet + its face-neighbor reaching (1,1,1)).
 T = 1 + x + 2y + 3z carries two time steps (T, T + 0.5), so gradients,
 thresholds, mirror copies, histograms, and CSV dumps all have exact
-expected values.  Plugin semantics were measured on gmsh 4.15.2
-(Transform / Warp / Smooth / ModulusPhase run IN PLACE; ExtractElements
-selects on the ELEMENT MEAN).
+expected values. Transform / Warp / Smooth / ModulusPhase update their
+source views in place; ExtractElements selects on the element mean.
+The tests below check the resulting geometry and analytic field values.
 """
 
 from msh42_fixtures import field_section

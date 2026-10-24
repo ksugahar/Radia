@@ -69,7 +69,7 @@ Scalar/circuit-only modes record GMSH as not applicable.
 Verify every generated GMSH file before opening it:
 
 ```powershell
-python tests/panels/verify_gmsh_output.py <run-dir>\<application>_fields.msh
+python validation_test/panels/verify_gmsh_output.py <run-dir>\<application>_fields.msh
 ```
 
 After the gates pass, regenerate the tracked library:

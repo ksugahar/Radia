@@ -4,11 +4,18 @@ Wraps gmsh's ACTUAL post-processing machinery (gmsh.view.probe and the
 gmsh.plugin.* family) as one-shot subprocess tools -- the missing
 "post-processing verbs" next to the inspection/rendering lanes.
 
-Empirically verified semantics (gmsh 4.15.2, locked by tests):
+Historical API investigations used Gmsh 4.15.2; those observations are
+not a qualification record for a later runtime.
+
+Adapter behavior guarded in
+``packages/radia-mcp/tests/test_gmsh_post_process.py`` (probe outside/all steps,
+volume integral and nodal MathEval). Plugin mutation handling below is a
+defensive adapter design, not a new measurement record:
 
 - ``gmsh.view.probe`` returns ``(values, distance)``; with ``step=-1``
-  the values of ALL time steps are concatenated.  Outside the mesh the
-  values are empty and ``distance`` is the gap to the nearest element.
+  the values of ALL time steps are concatenated.  Outside the mesh a
+  scalar view returns empty values, while vector views can return values
+  with a positive distance; always check distance as well as values.
 - Plugin(Integrate) sums over elements of EVERY dimension by default
   (volume integral + surface integral + ...); pass ``dimension`` to
   select one.  Its result is a list-based SP view read via
@@ -73,17 +80,9 @@ def _view_name(tag):
 
 
 def _require_step(tag, step, label="time_step"):
-    # gmsh.view.probe(step=N) with N >= NbTimeStep reads past the end of
-    # the step vector and KILLS the child process -- MEASURED gmsh
-    # 4.15.2 on a single-step view: "OSError: exception: access violation
-    # reading 0xFFFFFFFFFFFFFFFF" (probe step=7), and a garbage address
-    # such as 0x00007265766C6F53 elsewhere, i.e. it is a genuine native
-    # out-of-bounds read, not a checked error.  There is no Python
-    # traceback and no way to catch it, so EVERY probing branch must
-    # validate the requested step against NbTimeStep BEFORE the first
-    # probe.  (The plugin-driven branches -- threshold / warp /
-    # math_eval -- are NOT affected: they raise "Unknown plugin or
-    # plugin action" instead of faulting.)
+    # Validate every requested step against NbTimeStep before native
+    # access.  The wrapper reports the view and its supported step range;
+    # unsupported indices are never passed to the native probe.
     n = _n_steps(tag)
     if step < -1:
         raise RuntimeError(
@@ -96,10 +95,9 @@ def _require_step(tag, step, label="time_step"):
 
 def _require_complex_pair(tag, cfg, what):
     # Plugin(ModulusPhase) and Plugin(HarmonicToTime) both need a
-    # TWO-step re/im view.  Handed a single-step view gmsh 4.15.2
-    # rejects the RUN with the useless "Unknown plugin or plugin action"
-    # (MEASURED) -- it names neither the view nor the step count -- so
-    # gate on NbTimeStep here instead.  Returns a warning string or None.
+    # TWO-step re/im view.  Gate on NbTimeStep before native access so the
+    # error names the view and the required pair.  Returns a warning
+    # string or None.
     n = _n_steps(tag)
     name = _view_name(tag)
     if n < 2:
@@ -148,7 +146,7 @@ def _view_ncomp(tag):
 def _materialize(tag, exprs=None, name=None):
     # Identity (or sign-flipped) MathEval -> NEW list-based copy, leaving
     # the input view untouched.  Needed because Transform / Warp / Smooth
-    # / ModulusPhase modify their input IN PLACE (measured gmsh 4.15.2).
+    # / ModulusPhase can mutate their input; isolate it defensively.
     import gmsh
     if exprs is None:
         exprs = [f"v{i}" for i in range(_view_ncomp(tag))]
@@ -165,11 +163,8 @@ def _materialize(tag, exprs=None, name=None):
 
 
 def _set_adaptive_extraction(tag, cfg):
-    # Plugin(Isosurface) honors RecurLevel ONLY when the source view
-    # carries adaptive visualization data (measured gmsh 4.15.2: on a
-    # TET10 quadratic field the radial error drops 0.21 -> 0.008 once
-    # View.AdaptVisualizationGrid is enabled before the plugin runs;
-    # without it RecurLevel is silently ignored).
+    # Configure the source view's adaptive visualization before running
+    # Plugin(Isosurface), using the caller's recursion and error controls.
     import gmsh
     recur = int(cfg.get("recur_level", 0))
     if recur <= 0:
@@ -1014,8 +1009,8 @@ try:
                 gmsh.plugin.run("Transform")
                 made.append(copy)
             gmsh.view.combine("elements", "name", True, True)
-            # combine renames the merged view to "<name>_Combine"
-            # (measured gmsh 4.15.2)
+            # Accept the requested name and the native combine suffix;
+            # require exactly one resulting view instead of guessing its tag.
             merged = [t for t in gmsh.view.getTags()
                       if _view_name(t) in (name, name + "_Combine")]
             if len(merged) != 1:
@@ -1693,10 +1688,8 @@ def integrate_view(path: str | Path, *, view: str | int | None = None,
 
     dimension=-1 SUMS integrals over every element dimension present
     (volume + surface + line); pass 3 or 2 to select one -- almost
-    always what a physical quantity needs.  Accuracy (measured): the
-    plugin integrates at piecewise-linear accuracy even on high-order
-    elements (nonlinear integrands carry O(h^2) error); exact FE
-    integrals belong to NGSolve Integrate on the solver side.
+    always what a physical quantity needs.  This is post-processing of
+    the view; solver FE integrals belong to NGSolve Integrate.
     """
     err = _check_input(path)
     if err:
@@ -1740,9 +1733,8 @@ def isosurface(path: str | Path, value: float, *,
     ``0 < recur_level <= 6`` enables ADAPTIVE extraction on high-order data
     (order-2 NodeData from GmshPostExport): each element is recursively
     subdivided using the actual high-order interpolant, so the surface
-    follows the curved field instead of the P1 chord (measured on a
-    TET10 quadratic: radial error 0.21 -> 0.008 at level 4).  Requires
-    setting the view adaptive BEFORE the plugin runs -- handled here.
+    follows the curved field instead of the P1 chord.  The wrapper sets
+    the view adaptive BEFORE the plugin runs.
     """
     err = _check_input(path)
     if err:
@@ -2340,7 +2332,7 @@ def streamlines_2d(path: str | Path, origin: list[float],
 
 
 # ======================================================================
-# ParaView-parity verbs (plugin semantics measured on gmsh 4.15.2)
+# ParaView-parity verbs (supported post-processing contracts)
 # ======================================================================
 
 _DERIVED_PLUGINS = {"gradient": "Gradient", "curl": "Curl",

@@ -26,12 +26,12 @@ under `docs/` explain and reproduce methods; they are not production GUIs.
   label contract, and the `cubit-mesh-export.vol-check.v1` report stays in the
   run artifact directory. Mesh labels identify regions; material constants are
   validated by the DesignSpec/configuration and are never guessed from names.
-- A run that computes a spatial field writes a runner-owned GMSH `.msh v4.1`
+- A run that computes a spatial field writes a runner-owned GMSH `.msh v4.2`
   post-processing artifact in its run directory and records it in
   `result.json`. A scalar/circuit-only mode records GMSH as not applicable; it
   does not create a dummy field.
 - `cubit-mesh-export` is the only supported VTK producer. Radia application,
-  validation, docs, and MCP field outputs use GMSH `.msh v4.1`; they do not call
+  validation, docs, and MCP field outputs use GMSH `.msh v4.2`; they do not call
   `ngsolve.VTKOutput` or write `.vtk`, `.vtu`, or `.vts` files. NGSolve's own
   `VTKOutput` remains a valid upstream feature; this is a Radia artifact-policy
   choice, not a restriction on NGSolve.
@@ -48,7 +48,7 @@ under `docs/` explain and reproduce methods; they are not production GUIs.
   `Coupling/Field Study Configuration` compiles electrostatic, DC/AC current-flow,
   steady-heat, and time-harmonic eddy-current settings to `RadiaStudyBus`.
   The corresponding `Applications/Field Study` worker runs once on an
-  explicit trigger and writes versioned JSON, timing, Gmsh v4.1, and launch
+  explicit trigger and writes versioned JSON, timing, Gmsh v4.2, and launch
   companions. A solver callback is never invoked once per Simulink step.
 - Harmonic eddy current uses `(K+j*omega*M_sigma)a=S*i` and is accepted only
   when frequency, linear material law, winding identity, residual, and branch
@@ -139,7 +139,7 @@ action or application block. Cubit batch export produces the files and
   explicit call such as `Draw(field, mesh, name="B_magnitude", ...)`, including
   the relevant display arguments. A static image or source excerpt does not
   replace the interactive scene.
-- Simulink field-producing workflows use durable, checked GMSH `.msh v4.1`
+- Simulink field-producing workflows use durable, checked GMSH `.msh v4.2`
   and JSON artifacts. GMSH is the post-processing target, not the mesh
   generator or the NGSolve interchange format.
 - Application operation must not depend on a transient desktop viewer state.

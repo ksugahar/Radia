@@ -12,7 +12,7 @@ All commands are available in journal files (.jou) and the Cubit command line.
 | Command | Format | Orders | HO Method | Doc |
 |---------|--------|--------|-----------|-----|
 | `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | NetgenCurver + ACIS | [export_NetgenMesh](export_NetgenMesh.md) |
-| `export gmsh "f.msh" order N` | Gmsh v4.1 | 1-3 | NetgenCurver + ACIS | [export_Gmsh](export_Gmsh.md) |
+| `export gmsh "f.msh" order N` | Gmsh v4.2 | 1-3 | NetgenCurver + ACIS | [export_Gmsh](export_Gmsh.md) |
 | `export nastran_bdf "f.bdf" order N` | Nastran BDF | 1-2 | NetgenCurver + ACIS | [export_Nastran](export_Nastran.md) |
 | `export vtk "f.vtk" order N` | VTK Legacy | 1-2 | NetgenCurver + ACIS | [export_vtk](export_vtk.md) |
 | `export meg "f.meg"` | ELF/MAGIC MEG | 1 | — | [export_meg](export_meg.md) |

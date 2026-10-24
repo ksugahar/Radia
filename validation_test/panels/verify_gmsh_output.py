@@ -11,7 +11,7 @@ Usage:
     python verify_gmsh_output.py path/to/directory/
 
 Can also be imported and called from pytest:
-    from tests.panels.verify_gmsh_output import verify_geo, verify_msh
+    from validation_test.panels.verify_gmsh_output import verify_geo, verify_msh
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from pathlib import Path
 
 
 # ============================================================
-# Known-bad GMSH options (GMSH 4.x)
+# Known-bad GMSH options (Gmsh 5)
 # ============================================================
 
 _INVALID_OPTIONS = {
@@ -106,99 +106,16 @@ def verify_geo(geo_path: str | Path, verbose: bool = True) -> bool:
 # ============================================================
 
 def verify_msh(msh_path: str | Path, verbose: bool = True) -> bool:
-    """Verify a GMSH v4.1 .msh file.
+    """Use the canonical strict MSH 4.2 structural validator."""
+    from radia_mcp.gmsh.msh_inspect import validate_msh
 
-    v4.1 uses an entity-block structure where element IDs restart per
-    block by design, so the v2.2-style duplicate-ID / node-count
-    checks do not apply. Only NodeData consistency is verified here.
-
-    Returns True if all checks pass. Fails loudly if the file is not
-    GMSH v4.1.
-    """
-    msh_path = Path(msh_path)
-    text = msh_path.read_text(encoding="utf-8")
-
-    # Detect version from $MeshFormat — v4.1 is the only supported format.
-    m_ver = re.search(r'\$MeshFormat\s+(\d+\.\d+)', text)
-    if not m_ver:
-        _report(verbose, "FAIL", msh_path.name, 0,
-                '$MeshFormat header not found; cannot verify')
-        return False
-    version = m_ver.group(1)
-    if not version.startswith("4"):
-        _report(verbose, "FAIL", msh_path.name, 0,
-                f'GMSH v{version} is not supported; '
-                f'v4.1 is the only accepted format')
-        return False
-
-    _report(verbose, "INFO", msh_path.name, 0,
-            f'GMSH v{version} (entity-block format, '
-            f'structural checks skipped)')
-    ok = _check_nodedata(text, msh_path.name, verbose)
-    if ok and verbose:
-        print(f"  PASS: {msh_path.name} (v{version})")
-    return ok
-
-
-def _check_nodedata(text, filename, verbose):
-    """Check NodeData sections (same layout in v4.1 as in legacy v2.2)."""
-    ok = True
-    in_nodedata = False
-    nd_name = ""
-    nd_declared = 0
-    nd_actual = 0
-    nd_header_lines = 0
-    n_views = 0
-
-    for line in text.splitlines():
-        stripped = line.strip()
-
-        if stripped == "$NodeData":
-            in_nodedata = True
-            nd_header_lines = 0
-            nd_name = ""
-            nd_declared = 0
-            nd_actual = 0
-            continue
-        if stripped == "$EndNodeData":
-            in_nodedata = False
-            n_views += 1
-            if nd_declared != nd_actual:
-                _report(verbose, "FAIL", filename, 0,
-                        f'NodeData "{nd_name}" declared {nd_declared} '
-                        f'nodes but found {nd_actual} data lines')
-                ok = False
-            else:
-                _report(verbose, "OK", filename, 0,
-                        f'NodeData "{nd_name}": {nd_actual} nodes')
-            continue
-        if in_nodedata:
-            nd_header_lines += 1
-            # v2.2 NodeData header layout:
-            #   line 1: "1" (num string tags)
-            #   line 2: "name"
-            #   line 3: "1" (num real tags)
-            #   line 4: time value
-            #   line 5: "3" (num int tags)
-            #   line 6: timestep
-            #   line 7: ncomp
-            #   line 8: n_nodes   <-- declared count
-            #   line 9+: node_id val1 [val2 val3]
-            if nd_header_lines == 2:
-                nd_name = stripped.strip('"')
-            elif nd_header_lines == 8:
-                try:
-                    nd_declared = int(stripped)
-                except ValueError:
-                    pass
-            elif nd_header_lines > 8:
-                nd_actual += 1
-            continue
-
-    if verbose:
-        _report(verbose, "INFO", filename, 0,
-                f'{n_views} NodeData view(s)')
-    return ok
+    result = validate_msh(msh_path, check_jacobians=False)
+    for error in result.get("errors", []):
+        _report(verbose, "FAIL", Path(msh_path).name, 0, str(error))
+    if result["ok"]:
+        _report(verbose, "OK", Path(msh_path).name, 0,
+                "MSH 4.2 structural checks passed")
+    return bool(result["ok"])
 
 
 def _report(verbose, level, filename, lineno, msg):

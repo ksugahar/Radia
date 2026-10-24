@@ -237,6 +237,6 @@ If `export netgen` fails on hex boundary layers, export as Gmsh order 1 (`export
 
 ## See Also
 
-- [export_Gmsh.md](export_Gmsh.md) — Gmsh v4.1 export (order 1-3)
+- [export_Gmsh.md](export_Gmsh.md) — Gmsh v4.2 export (order 1-3)
 - [export_Nastran.md](export_Nastran.md) — Nastran BDF export (order 1-2)
 - [Function_Reference.md](Function_Reference.md) — All plugin commands

@@ -43,7 +43,7 @@ documentation demo, not a Cubit menu action or engineering design panel.
 
 | Folder | Format | Description |
 |--------|--------|-------------|
-| [gmsh/](gmsh/) | Gmsh (.msh) | v4.1, order 1-3 |
+| [gmsh/](gmsh/) | Gmsh (.msh) | v4.2, order 1-3 |
 | [nastran/](nastran/) | Nastran BDF (.bdf) | CTETRA/CHEXA/CTRIA, order 1-2 |
 | [other_formats/](other_formats/) | Custom formats | FreeFEM, ANSYS CDB, Lukas 2D |
 

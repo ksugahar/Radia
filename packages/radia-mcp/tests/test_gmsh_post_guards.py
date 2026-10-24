@@ -2,17 +2,15 @@
 
 Every test here pins a defect that used to be SILENT or FATAL:
 
-* ``gmsh.view.probe(step=N)`` with N >= NbTimeStep is a native
-  out-of-bounds read that KILLS the child process ("access violation
-  reading 0xFFFFFFFFFFFFFFFF", MEASURED gmsh 4.15.2) -- every probing
-  verb must validate the step first.
+* Every probing verb validates ``step=N`` against NbTimeStep before
+  native access and reports an unavailable step as a clean adapter error.
 * ``Plugin(ModulusPhase)`` / ``Plugin(HarmonicToTime)`` on a
   single-step view fail with gmsh's useless "Unknown plugin or plugin
   action", naming neither the view nor the step count.
 * ``field_histogram`` used to rewrite a reversed user ``value_range``
   into ``[lo, lo + 1]`` and return all-zero counts.
-* List-data views exported into a ``.msh`` target come back as legacy
-  a representation that the MSH 4.2 readers cannot consume.
+* List-data exports require ``.pos``; only model-based views may use the
+  ASCII MSH 4.2 output contract.
 
 Fixtures follow the house pattern: a hand-written Kuhn 6-tet cube
 [-0.5, 0.5]^3 with P1-exact NodeData, so every expected number is a
@@ -365,9 +363,9 @@ def test_in_place_verbs_still_accept_a_msh_out_file(one_step_vector,
                                                     tmp_path):
     """warp / smooth / modulus_phase rewrite the MODEL-based view.
 
-    MEASURED: those three produced "$MeshFormat / 4.2 0 8" in a .msh
-    target while every list-data verb produced 2.2 -- so the guard must
-    NOT fire for them.
+    Model-based exports must produce ASCII MSH 4.2 in a .msh target.
+    List-data exports require .pos; that guard must not reject these
+    model-based outputs.
     """
     cases = [
         ("warp", tmp_path / "w.msh",

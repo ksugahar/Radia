@@ -81,8 +81,7 @@ python tests/cubit/export_mixed_test/run_test.py
 
 | Command | Format | Orders | Notes |
 |---------|--------|--------|-------|
-| `export gmsh "f.msh" order N version 2` | GMSH v2.2 | 1-4 | |
-| `export gmsh "f.msh" order N version 4` | GMSH v4.1 | 1-4 | |
+| `export gmsh "f.msh" order N overwrite` | MSH 4.2 post-processing | 1-4 | Solver input is checked `.vol`. |
 | `export radia_nastran "f.bdf" order N` | Nastran BDF | 1-2 | NOT `export nastran` (built-in conflict) |
 | `export vtk "f.vtk" order N` | VTK Legacy | 1-2 | |
 | `export meg "f.meg"` | MEG/ELF | 1 only | |
