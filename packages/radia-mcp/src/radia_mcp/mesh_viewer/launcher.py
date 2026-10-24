@@ -43,9 +43,12 @@ def open_mesh(path: Path) -> None:
     """Display data in the existing viewer APIs without modifying installations."""
     from netgen.gui import win
     closed = False
-    def close_owned_window():
+    def mark_root_destroyed(event):
         nonlocal closed
-        closed = True
+        if event.widget is win:
+            closed = True
+    win.bind("<Destroy>", mark_root_destroyed, add="+")
+    def close_owned_window():
         win.destroy()
     win.protocol("WM_DELETE_WINDOW", close_owned_window)
     try:
