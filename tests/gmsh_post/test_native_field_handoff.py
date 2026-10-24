@@ -108,3 +108,16 @@ def test_named_interpolation_allows_positive_sample_count(tmp_path):
                     '1 1 17 17\n1 1 1\n17\n1.25 -2.5 3.75\n$EndElementNodeData\n',
                     encoding='utf-8')
     reader.validate_native_msh_fields(path)
+
+
+@pytest.mark.parametrize('etype', [34, 999])
+@pytest.mark.parametrize('scheme', ['', 'named'])
+def test_unknown_element_type_rejected_before_native(tmp_path, etype, scheme):
+    """Guards: explicit unknown-type rejection; assumes no native type lookup."""
+    path = tmp_path / 'unknown.msh'
+    path.write_text('$MeshFormat\n4.2 0 8\n$EndMeshFormat\n$ElementNodeData\n'
+                    + f'2\n"field"\n"{scheme}"\n1\n0\n3\n0\n1\n1\n'
+                    + f'1 1 17 17\n{etype} 2 1\n17\n1.25 -2.5\n'
+                    + '$EndElementNodeData\n', encoding='utf-8')
+    with pytest.raises(ValueError, match='sample count/type mismatch'):
+        reader.validate_native_msh_fields(path)
