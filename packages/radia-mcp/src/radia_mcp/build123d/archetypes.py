@@ -7,11 +7,12 @@ into the recurring building blocks of magnetostatic devices: permanent-magnet pr
 clean, labelled, Netgen-meshable build123d solid / Compound wired for the Radia / NGSolve pipeline.
 
 MAGNETIZATION LABEL CONVENTION.  A permanent-magnet region carries its easy-axis (magnetization)
-direction in its ``.label`` as an in-plane angle in degrees: ``"{name}_{index:02d}_M{angle:.1f}"`` (the
-``_M<deg>`` suffix).  The solver side recovers it with :func:`parse_magnetization` and sets
-``M = Br * (cos angle, sin angle, 0)``.  This is the labels-drive-magnetization idiom the lab's
-``run_pipeline_multi`` carries through to Gmsh physical groups -- so a Halbach array's per-segment easy
-axes survive the geometry -> mesh -> solver hand-off with no side-channel.
+direction in its ``.label`` as six integer millidegree digits: ``"{name}_{index:02d}_m045000"``
+encodes 45 degrees.  The canonical lowercase/underscore label passes unchanged into the checked
+Netgen ``.vol`` material names and its versioned label contract.  The solver side recovers the angle
+with :func:`parse_magnetization` and sets ``M = Br * (cos angle, sin angle, 0)``.  A Halbach array's
+per-segment easy axes therefore survive the geometry -> Netgen mesh -> solver hand-off.  Gmsh
+physical groups belong only to derived MSH 4.2 post-processing output.
 
 These archetypes replace the abridged snippets in the ``examples_lab_patterns`` documentation with
 tested generators (the Halbach segment that was ``pass`` in the docs is now a real wedge with the
@@ -44,15 +45,26 @@ __all__ = ["magnetization_tag", "parse_magnetization", "magnetization_map", "cyl
 
 
 def magnetization_tag(name, index, angle_deg):
-    r"""Build a PM region label encoding the in-plane magnetization angle (to 1e-3 deg):
-    ``{name}_{index:02d}_M{deg:.3f}``."""
-    return f"{name}_{index:02d}_M{angle_deg % 360.0:.3f}"
+    r"""Encode the easy-axis angle as ``{name}_{index:02d}_m{millidegrees:06d}``.
+
+    Angles retain the existing modulo-360 and three-decimal-degree rounding.
+    Names must be canonical Netgen material identifiers; no silent renaming is performed.
+    """
+    if not math.isfinite(angle_deg):
+        raise ValueError("magnetization angle must be finite")
+    degrees, fraction = f"{angle_deg % 360.0:.3f}".split(".")
+    millidegrees = 1000 * int(degrees) + int(fraction)
+    label = f"{name}_{index:02d}_m{millidegrees:06d}"
+    if re.fullmatch(r"[a-z][a-z0-9_]*", label) is None:
+        raise ValueError("magnetization label must be a canonical material name: "
+                         "[a-z][a-z0-9_]*")
+    return label
 
 
 def parse_magnetization(label):
-    r"""Recover the in-plane magnetization angle [deg] from a label's ``_M<deg>`` suffix (or ``None``)."""
-    m = re.search(r"_M(-?\d+\.?\d*)", label or "")
-    return float(m.group(1)) if m else None
+    r"""Recover degrees from a canonical ``_mNNNNNN`` suffix, or return ``None``."""
+    m = re.fullmatch(r"[a-z][a-z0-9_]*_m([0-9]{6})", label or "")
+    return int(m.group(1)) / 1000.0 if m else None
 
 
 def cylindrical_magnet(radius, h, m_angle_deg=0.0, name="magnet", index=0):
@@ -81,7 +93,7 @@ def halbach_ring(r_in, r_out, h, n_segments, pole_pairs=1, name="halbach", gap_d
     at the segment centre ``theta_k`` -- so ``pole_pairs=1`` is the classic dipole array (uniform
     transverse field inside the bore, ``alpha`` advancing at twice the mechanical angle),
     ``pole_pairs=2`` a quadrupole, etc.  ``gap_deg`` leaves an inter-segment air gap.  Returns a
-    labelled :class:`~build123d.Compound`; feed the per-segment ``_M<deg>`` labels to the solver via
+    labelled :class:`~build123d.Compound`; feed the per-segment millidegree labels to the solver via
     :func:`parse_magnetization`.
     """
     if n_segments < 3:
@@ -124,14 +136,14 @@ def solenoid(r_in, r_out, h, name="coil"):
 
 
 def magnetization_map(parts, Br=1.0):
-    r"""Close the geometry -> field loop: for every PM region (a label carrying an ``_M<deg>`` suffix)
+    r"""Close the geometry -> field loop: for every PM region (a canonical millidegree label)
     return ``{label: (Mx, My)}`` with ``M = Br (cos angle, sin angle)`` -- the magnetization vector the
     solver assigns to that region.  ``parts`` may be a :class:`~build123d.Compound` (its ``.children``
-    are scanned) or any iterable of labelled solids.  Non-magnet regions (no ``_M`` tag) are skipped.
+    are scanned) or any iterable of labelled solids.  Regions without a magnetization tag are skipped.
 
     Example (Halbach -> per-segment easy axis -> solver):
         hb = halbach_ring(40, 55, 20, 12)
-        Mmap = magnetization_map(hb, Br=1.2)        # {"hb_00_M30.000": (Mx, My), ...}
+        Mmap = magnetization_map(hb, Br=1.2)        # {"hb_00_m030000": (Mx, My), ...}
     """
     children = parts.children if isinstance(parts, Compound) else list(parts)
     out = {}
@@ -277,7 +289,7 @@ def spm_rotor(r_shaft, r_rotor, n_poles, magnet_thickness, magnet_span_deg, h, n
     surface magnets (annular segments, radial thickness ``magnet_thickness``, angular width
     ``magnet_span_deg``) whose easy axes are RADIAL and ALTERNATE N/S pole-to-pole (encoded in each
     magnet label via the magnetization convention).  Returns a labelled multi-region Compound
-    (``rotor_iron`` + ``{name}_kk_M<deg>``); ``magnetization_map`` turns the labels into M vectors.
+    (``rotor_iron`` + canonical PM millidegree labels); ``magnetization_map`` turns labels into M vectors.
     The rotor half of a PMSM you can drop into the AGE solver."""
     if not (0 <= r_shaft < r_rotor):
         raise ValueError("require 0 <= r_shaft < r_rotor")
@@ -744,7 +756,7 @@ def ipm_rotor(r_shaft, r_rotor, n_poles, magnet_width, magnet_thickness, v_open_
     ``n_poles`` V-shaped pairs of BURIED rectangular magnets (the ``v_open_deg`` opening of the V), the
     magnet pockets cut from the iron so iron and magnets are non-overlapping regions.  Each magnet's easy
     axis is encoded RADIAL and ALTERNATING N/S pole-to-pole via the magnetization-label convention.
-    Returns a labelled multi-region Compound (``rotor_iron`` + ``{name}_kk_M<deg>``, ``1 + 2*n_poles``
+    Returns a labelled multi-region Compound (``rotor_iron`` + canonical PM labels, ``1 + 2*n_poles``
     regions) -- the IPM rotor half of a PMSM for the AGE solver."""
     if not (0 <= r_shaft < r_rotor):
         raise ValueError("require 0 <= r_shaft < r_rotor")

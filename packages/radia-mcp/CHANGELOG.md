@@ -10,6 +10,9 @@ crystallized as its own package.
 - Make Gmsh documentation, examples and solver-boundary lint post-processing
   only: use Gmsh 5 / MSH 4.2 results, native view tools and checked Netgen/Cubit
   solver meshes. Remove obsolete remediation tools and mesh-import recipes.
+- Make build123d pipeline units explicit and preserve canonical Netgen material
+  labels with magnetization encoded in millidegrees; derive MSH 4.2 post output
+  through the production Radia exporter and declare its runtime dependencies.
 
 - Add the read-only `tests_design_guide` in radia-meta: author sensitive
   historical locks with production mutation evidence, scoped coverage claims
@@ -979,9 +982,13 @@ crystallized as its own package.
 - Expanded Cubit session setup, doctor, journal, call-log, and lifecycle
   diagnostics, including collision-free file-drop requests for multiple MCP
   clients attached to one daemon.
+- Hardened PEEC MSH v4.1 handling and synchronized the generated public tool
+  inventory with the current Gmsh and HDiv-VIM surfaces.
 
 ## [1.4.29] - 2026-08-05
 
+- Added headless GMSH v4.1 inspection, validation, PNG/GIF rendering, and
+  invalid-option lint tools, plus Cubit `check-vol` and entity/label probes.
 - Ported the official MathWorks MATLAB MCP execution patterns and documented
   the MagLev and electromagnet-topology Simulink production interfaces.
 - Kept solver-backed `check-vol` numerical checks in the validation lane and
@@ -3330,6 +3337,21 @@ which panel mode is asking.
 
 - `build123d_discussions(query)` — `gumyr/build123d` GitHub Issues
   + comments (anonymous REST, 60 issues default).
+
+## 0.14.x — gmsh-post lab v4.1 standardization
+
+- **0.14.1**: lint rule `gmsh-v22-deprecated` (HIGH) — flags
+  `export mesh "...msh"` without `mesh_version 4.1`. Lab policy
+  is v4.1 only; `.vol` (NETGEN native) is the sole exception for
+  HO curved meshes.
+- **0.14.0**: new server `mcp-server-gmsh-post` —
+  `gmsh_post_inspect`, `gmsh_post_validate`, `gmsh_post_convert`
+  (lifts any older .msh to v4.1), `gmsh_post_write_node_data` /
+  `_element_data` (append `$NodeData` / `$ElementData` blocks
+  while keeping the file v4.1-compliant), `gmsh_post_spec`.
+  `cubit_exec_safely` — auto-checkpoint to `.cub5`, batch dry-run
+  on the snapshot, replay on live GUI on success; silent-error
+  detection via `cubit.get_error_count()` delta.
 
 ## 0.13.0 — CadQuery interop
 

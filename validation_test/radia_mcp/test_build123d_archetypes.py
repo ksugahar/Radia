@@ -8,6 +8,7 @@ through the build123d -> STEP -> Netgen pipeline.
 """
 import math
 import os
+import re
 import sys
 
 import pytest
@@ -34,10 +35,15 @@ import math as _math
 
 
 def test_magnetization_label_roundtrip():
-    for ang in (0.0, 37.5, 359.9, 720.0 + 12.0):
+    for ang in (0.0, 37.5, 359.9, 720.0 + 12.0, -45.0):
         lab = magnetization_tag("seg", 3, ang)
+        assert re.fullmatch(r"[a-z][a-z0-9_]*", lab), lab
         assert abs(parse_magnetization(lab) - (ang % 360.0)) < 1e-6, lab
     assert parse_magnetization("plain_iron") is None
+    assert parse_magnetization("seg_03_M45.000") is None
+    assert parse_magnetization(magnetization_tag("seg", 3, 359.9999)) == 360.0
+    with pytest.raises(ValueError, match="canonical material name"):
+        magnetization_tag("Bad.Name", 3, 45.0)
 
 
 def test_pm_primitives_carry_magnetization():

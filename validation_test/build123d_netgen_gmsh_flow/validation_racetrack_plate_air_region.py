@@ -5,8 +5,8 @@ geometry contract for induction-heating and magnetostatic teaching models:
 
 * build123d authors a racetrack coil, conductive plate, and surrounding air;
 * analytic region volumes match the CAD volumes;
-* the multi-region STEP -> Netgen -> Gmsh path preserves one volume group per
-  region so solver-side materials can be assigned by name.
+* checked Netgen .vol materials preserve one name per solver region; derived
+  MSH 4.2 groups independently check post-output coupling.
 
 Run:
 
@@ -157,7 +157,7 @@ def _cad_volume_map(cad_stage: dict | None) -> dict[str, float]:
 
 
 def run_case(case: dict, out_dir: Path, volume_rtol: float) -> dict:
-    record = run_pipeline_multi(build_regions(case), out_dir=out_dir, label=case["label"], maxh=case["maxh"])
+    record = run_pipeline_multi(build_regions(case), out_dir=out_dir, label=case["label"], maxh=case["maxh"], units="mm")
     cad = _stage(record, "cad")
     mesh = _stage(record, "mesh")
     post = _stage(record, "post")

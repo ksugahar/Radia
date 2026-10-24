@@ -22,14 +22,15 @@ Open Cascade (OCCT) kernel. It provides two programming styles:
 
 - Python-native: loops, functions, parametric studies
 - OCCT kernel: industry-proven BREP geometry
-- STEP/BREP export: direct pipeline to Netgen, Cubit, GMSH meshers
+- STEP/BREP export: direct CAD handoff to Netgen or Cubit solver meshers
 - Label/color attributes: map to material regions and boundary conditions
 - OSS (Apache-2.0): no license restrictions
 
 ## CAE Pipeline
 
 ```
-build123d (geometry) -> .step/.brep -> Mesher (Netgen/Cubit/GMSH) -> Solver (NGSolve/Radia)
+build123d (geometry) -> .step/.brep -> Netgen/Cubit -> checked .vol -> NGSolve/Radia
+                                                               -> MSH 4.2 post output -> Gmsh
 ```
 
 ## CAE-Safe Subset (IMPORTANT)
@@ -1561,7 +1562,7 @@ between them.
 
 | Tool | Role | When to use |
 |---|---|---|
-| **build123d** (Python / OCCT) + **Netgen/OCC** | **tet-only path, Python-driven** | Default CAD and tet-only meshing. VSCode-native authoring. build123d → Netgen (tet) → Radia / Gmsh pipeline. AI-writable. |
+| **build123d** (Python / OCCT) + **Netgen/OCC** | **tet-only path, Python-driven** | Default CAD and tet-only meshing. VSCode-native authoring. build123d → Netgen (tet) → checked `.vol` → Radia; derived MSH 4.2 goes to Gmsh for post-processing. AI-writable. |
 | **Cubit** (`.jou`, `cubit.cmd(...)`) | **hex path + mixed-mesh CAD fallback** | (1) Radia/ELF requires hex — **only Cubit can supply**. (2) Hex-led meshes with tet regions and pyramid transition elements. (3) Shared-topology CAD cleanup via imprint/merge. (4) Shapes build123d cannot express cleanly. (5) Legacy `.jou` assets. |
 | (not used) | | FreeCAD (reproducibility), raw OCCT Python (verbose) |
 
@@ -1587,7 +1588,28 @@ the lab toolchain permanently. Cubit is **not** being deprecated.
 - **Block/sideset labels**: in the build123d pipeline, use
   `part.label = "name"` + `Compound(children=[...])` + the
   `radia_mcp.build123d.pipeline.run_pipeline_multi` API
-  which bridges labels to Gmsh physical groups.
+  which maps canonical region labels to Netgen `.vol` materials and the
+  versioned label contract. Boundary labels must be declared and checked
+  separately; a CAD part name does not infer a physical boundary condition.
+
+## Pipeline units and runtime dependencies
+
+`run_pipeline` and `run_pipeline_multi` require an explicit `units="m"` or
+`units="mm"` keyword. CAD dimensions and `maxh` use that same input unit;
+for example, an existing millimeter model uses
+`run_pipeline_multi(regions, out_dir="results", label="device", maxh=5.0, units="mm")`.
+There is no unit inference or default. Geometry and `maxh` are converted to SI
+before Netgen meshing; solver `.vol` and derived MSH 4.2 coordinates are meters.
+CAD statistics retain their declared input unit so analytic CAD checks compare
+like quantities.
+
+The `build123d` extra declares the CAD, Netgen/NGSolve, canonical `check-vol`
+and current Radia post-exporter dependencies. This requires the standalone
+`cubit_mesh_export.check` API, not a licensed Cubit process. Radia must provide
+`PayloadV42`; the published 5.3.3 exporter does not. The extra's updated Radia
+requirement needs a post-capable release before public installation can resolve.
+A missing capability stops the pipeline explicitly; there is no older-format
+writer fallback.
 
 ## Build123d slot gate: analytic mass properties first
 
@@ -2281,7 +2303,7 @@ Edge selection in build123d uses selectors, e.g.
 
 - `Compound(children=[v1, v2, v3])` — **tree-structured assembly**. Each
   child keeps its own `.label` and geometry; good for multi-region
-  meshing via the `run_pipeline_multi` bridge (labels → physical groups).
+  meshing via `run_pipeline_multi` (canonical labels → Netgen `.vol` materials).
 - `v1 + v2 + v3` — **fused single solid** (boolean union). Labels on the
   children are lost; the result has a single volume. Use when the
   downstream consumer treats the geometry as one part (e.g., single
@@ -2301,9 +2323,13 @@ Edge selection in build123d uses selectors, e.g.
   `OCCGeometry(...).GenerateMesh(maxh=maxh)`.
 - `block 1 volume all`, `sideset 1 surface X`, `nodeset 1 curve Y` —
   use build123d labels + Compound children + the
-  `run_pipeline_multi` bridge that maps labels to Gmsh physical groups.
+  `run_pipeline_multi` bridge that maps region labels to checked Netgen
+  `.vol` materials. Specify and check boundary labels separately.
 - `export mesh "file.e"` (Exodus) — not part of the build123d pipeline.
-  Export via NGSolve Mesh: `mesh.Export("file.msh", "Gmsh Format")`.
+  Save the authoritative solver mesh as native `.vol` and validate its label
+  contract. For derived MSH 4.2 post output, use the existing
+  `radia.gmsh_post_export.GmshPostExport.write_mesh` or `.write` exporter;
+  the generic Netgen multi-format exporter is not the post-format contract.
 - Cubit APREPRO variables (`{var = 10}`) — use plain Python variables.
 
 ## Decision help
@@ -2324,7 +2350,8 @@ EXAMPLES_LAB_PATTERNS = """\
 Parametric archetypes for the research lab's three application
 domains: induction heating (IH), accelerator magnets, and magnetic
 levitation, plus PEEC filament CAD. Each pattern is tet-pipeline
-friendly (build123d → Netgen → Gmsh). Hex-required designs (e.g.,
+friendly (build123d → Netgen → checked `.vol` → solver, with derived MSH 4.2
+for Gmsh post-processing). Hex-required designs (e.g.,
 large-scale Radia/ELF hex workpieces) stay in Cubit — see
 `lab_policy`.
 
@@ -2457,16 +2484,17 @@ from radia_mcp.build123d.archetypes import halbach_ring, parse_magnetization
 hb = halbach_ring(r_in=40, r_out=55, h=20, n_segments=12, pole_pairs=1, name="hb")
 # each child is a real annular wedge whose label encodes its easy-axis angle:
 for seg in hb.children:
-    m_deg = parse_magnetization(seg.label)     # e.g. "hb_00_M30.000" -> 30.0
+    m_deg = parse_magnetization(seg.label)     # e.g. "hb_00_m030000" -> 30.0
     # solver side: M = Br * (cos(m_deg), sin(m_deg), 0)
 ```
 
 Key idea: each segment's **label encodes the magnetization (easy-axis) angle** via the
-``_M<deg>`` suffix, set by the Mallinson law ``alpha_k = (pole_pairs+1)*theta_k`` (so the dipole
+canonical ``_m<integer millidegrees>`` suffix, set by the Mallinson law ``alpha_k = (pole_pairs+1)*theta_k`` (so the dipole
 array's easy axis advances at TWICE the mechanical angle, a quadrupole at 3x).  The solver (Radia)
 recovers it with ``archetypes.parse_magnetization`` and sets the magnetization direction;
-``radia_mcp.build123d.pipeline.run_pipeline_multi`` carries the labels to Gmsh physical
-groups, preserving the mapping.  The underlying wedge is
+``radia_mcp.build123d.pipeline.run_pipeline_multi`` preserves that mapping in
+checked Netgen `.vol` materials. Physical groups in derived MSH 4.2 are
+post-processing metadata only. The underlying wedge is
 ``radia_mcp.build123d.modeling.annular_segment`` (full annulus intersected with a pie slice -- robust
 for any span); ``polar_array`` tiles it.  See the `parametric_library` topic for the full op +
 archetype set.
@@ -2619,7 +2647,9 @@ export_step(asm, "asm.step")
 
 STEP round-trip preserves `shape.label`.  After `import step "asm.step"`
 in Cubit, `block N add volume all; block N name "<label>"` will show
-"magnet", "pole", "air" — so physical-group naming is free.
+"magnet", "pole", "air". Solver material and boundary names must satisfy the
+canonical label contract (`^[a-z][a-z0-9_]*$`); preserving a STEP label does
+not by itself certify that contract.
 
 ## Reverse: read assembly from STEP
 
@@ -3021,8 +3051,13 @@ closed-path sweep is fragile in the OCCT kernel; use `cos_theta_dipole` for tran
 
 build123d keeps region labels on a Compound's **`.children`** (NOT on the flattened `.solids()`, which
 drops them).  PM regions encode their easy-axis angle in the label via `archetypes.magnetization_tag`
-(`"{name}_{i:02d}_M{deg:.3f}"`); the solver recovers it with `archetypes.parse_magnetization` and sets
-`M = Br*(cos, sin, 0)`.  `run_pipeline_multi` carries these labels to Gmsh physical groups.
+(`"{name}_{i:02d}_m{millidegrees:06d}"`, e.g. `"pm_00_m045000"`). The suffix
+encodes the angle modulo 360 degrees rounded to three decimal places, as
+an integer number of millidegrees. `archetypes.parse_magnetization` returns
+degrees; convert to radians before forming `M = Br*(cos(alpha), sin(alpha), 0)`.
+`run_pipeline_multi` carries these canonical names to checked Netgen `.vol`
+materials and its versioned label contract. Derived MSH 4.2 physical groups
+serve post-processing, never the solver hand-off.
 
 ```python
 from radia_mcp.build123d.modeling import annular_segment, polar_array, assembly, tube
@@ -3035,8 +3070,9 @@ mags = {seg.label: parse_magnetization(seg.label) for seg in hb.children}
 ```
 
 Validated: validation_test/radia_mcp/test_build123d_modeling.py, validation_test/radia_mcp/test_build123d_archetypes.py (analytic volumes,
-OCCT-valid, region labels, Netgen-meshable, Mallinson easy axes).  The reusable Netgen/GMSH bridge
-lives in `radia_mcp.build123d.pipeline`; the executable validation corpus lives in
+OCCT-valid, region labels, Netgen-meshable, Mallinson easy axes). The reusable
+checked Netgen `.vol` pipeline and derived MSH 4.2 post exporter
+live in `radia_mcp.build123d.pipeline`; the executable validation corpus lives in
 `validation_test/build123d_netgen_gmsh_flow/`, with result-saved notebooks and JSON archives under
 `docs/build123d_netgen_gmsh_flow/`.
 """
