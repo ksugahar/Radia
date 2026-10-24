@@ -11,6 +11,7 @@ import sys
 from .launcher import require_interactive_desktop, validate_mesh_path
 
 MODULE = "radia_mcp.mesh_viewer"
+SOURCE_ROOT = Path(__file__).resolve().parents[2]
 
 
 async def open_mesh_viewer(filepath: str) -> dict:
@@ -28,7 +29,7 @@ async def open_mesh_viewer(filepath: str) -> dict:
     # Use the SAME reviewed package as the server with the selected dependency
     # interpreter. This changes only the child's environment, never installs.
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1",
-           "PYTHONPATH": str(Path(__file__).resolve().parents[2])}
+           "PYTHONPATH": str(SOURCE_ROOT)}
     argv = [str(python), "-B", "-m", MODULE, str(path)]
     probe = await asyncio.create_subprocess_exec(
         *argv, "--check", env=env, stdout=asyncio.subprocess.PIPE,

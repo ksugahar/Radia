@@ -7,6 +7,7 @@ import importlib.metadata
 import json
 import os
 from pathlib import Path
+import re
 import sys
 
 
@@ -25,9 +26,14 @@ def _file_identity(filename) -> dict:
 
 def runtime_identity(path: Path) -> dict:
     """Read identities only; never run a write/read qualification probe."""
+    requirements = importlib.metadata.requires('radia') or []
+    pins = [match.group(1) for item in requirements
+            if (match := re.fullmatch(r'netgen[-_]mesher\s*==\s*([^;\s]+)(?:\s*;.*)?', item, re.I))]
+    if len(pins) != 1:
+        raise RuntimeError('Installed radia metadata must declare one exact netgen-mesher pin')
     version = importlib.metadata.version("netgen-mesher")
-    if version != "6.2.2608":
-        raise RuntimeError(f"Netgen 6.2.2608 required; installed {version}")
+    if version != pins[0]:
+        raise RuntimeError(f"Netgen {pins[0]} required by radia metadata; installed {version}")
     import netgen
     if netgen.__version__ != version:
         raise RuntimeError("Netgen module/distribution version mismatch")

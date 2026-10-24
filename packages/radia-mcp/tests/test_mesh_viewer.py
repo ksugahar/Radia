@@ -8,7 +8,14 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace as NS
 import pytest
+import radia_mcp
 from radia_mcp.mesh_viewer import launcher, mcp as adapter
+
+
+@pytest.fixture(autouse=True)
+def netgen_metadata_pin(monkeypatch):
+    monkeypatch.setattr(launcher.importlib.metadata, 'requires',
+                        lambda name: ['netgen-mesher==6.2.2608'])
 
 
 @pytest.mark.parametrize("extension",[".msh",".py",".geo"])
@@ -108,7 +115,8 @@ def test_async_preflight_and_detached_launch(tmp_path,monkeypatch,returncode):
         assert result["pid"]==123 and result["status"]=="launched"
         assert result["argv"][-1]==str(path.resolve())
         assert calls[1][2]["creationflags"]==0x208 and "shell" not in calls[1][2]
-        assert calls[1][2]["env"]["PYTHONPATH"]==str(Path(adapter.__file__).resolve().parents[2])
+        assert adapter.SOURCE_ROOT == Path(radia_mcp.__file__).resolve().parent.parent
+        assert calls[1][2]["env"]["PYTHONPATH"] == str(adapter.SOURCE_ROOT)
     assert heartbeat==[True]
 
 
@@ -118,3 +126,19 @@ def test_registered_mcp_adapter_is_async():
     tools=asyncio.run(server.list_tools())
     assert [tool.name for tool in tools]==["open_mesh_viewer"]
     assert tools[0].annotations.readOnlyHint is False
+
+
+def test_netgen_pin_follows_installed_radia_metadata(tmp_path, monkeypatch):
+    monkeypatch.setattr(launcher.importlib.metadata, 'requires',
+                        lambda name: ['netgen-mesher==6.2.2700'])
+    monkeypatch.setattr(launcher.importlib.metadata, 'version', lambda name: '6.2.2608')
+    with pytest.raises(RuntimeError, match='6.2.2700 required by radia metadata'):
+        launcher.runtime_identity(tmp_path / 'mesh.vol')
+
+
+@pytest.mark.parametrize('requirements', [[], ['netgen-mesher>=6.2'],
+                                        ['netgen-mesher==6.2.1', 'netgen-mesher==6.2.2']])
+def test_ambiguous_or_unpinned_netgen_metadata_fails(tmp_path, monkeypatch, requirements):
+    monkeypatch.setattr(launcher.importlib.metadata, 'requires', lambda name: requirements)
+    with pytest.raises(RuntimeError, match='one exact netgen-mesher pin'):
+        launcher.runtime_identity(tmp_path / 'mesh.vol')
