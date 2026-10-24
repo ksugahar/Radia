@@ -477,7 +477,9 @@ a (theta, phi) lat-long discretisation.  Other helpers:
     NearFieldSource.box_surface_mesh(x0, x1, y0, y1, z0, z1,
                                        n_per_face=(20, 20, 20))
     NearFieldSource.from_ngsolve_boundary(mesh, "nfs_surface")
-    NearFieldSource.from_mesh_file("surface.msh")
+
+Use a checked solver `.vol` mesh with `from_ngsolve_boundary`; Gmsh MSH 4.2
+is a post-processing output, not a NearFieldSource mesh input.
 
 ## Re-radiating an NFS as a Radia source
 

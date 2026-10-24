@@ -21,7 +21,7 @@ from radia_mcp.gmsh.msh_inspect import mesh_quality
 
 
 def _write_unit_cube_tet_msh(path: Path) -> None:
-    """One cube split into tets, written as .msh v4.1 by gmsh itself."""
+    """One cube split into tets, written as .msh v4.2 by gmsh itself."""
     import gmsh
 
     gmsh.initialize(["-noconfig"])

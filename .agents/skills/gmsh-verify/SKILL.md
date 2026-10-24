@@ -16,14 +16,14 @@ otherwise show up as "Open GMSH doesn't work" or "GMSH is black".
 - After a BEM / FEM solve completes and you want to verify the
   output before clicking Open GMSH
 - After a field-producing Simulink application run; its run-directory
-  `<application>_fields.msh` is a required `.msh v4.1` artifact
+  `<application>_fields.msh` is a required `.msh v4.2` artifact
 - As a pre-commit check when you touched `.geo` companion writers
 
 ## What it checks
 
 | Check | What it catches |
 |---|---|
-| **Invalid .geo options** | `Mesh.Volumes` (does not exist in GMSH 4.x) and other unknown options |
+| **Invalid .geo options** | `Mesh.Volumes` (does not exist in Gmsh 5) and other unknown options |
 | **Merge targets exist** | `Merge "foo.msh"` in .geo but foo.msh is missing |
 | **Duplicate element IDs** | Two-file merge where both start element numbering from 1 |
 | **NodeData node count** | NodeData declares N nodes but the $Nodes section has M != N |
@@ -73,7 +73,7 @@ def test_bem_output_valid(tmp_path):
     assert verify_msh(tmp_path / "inductance.msh")
 ```
 
-## Known invalid options (GMSH 4.x)
+## Known invalid options (Gmsh 5)
 
 These option names do NOT exist and will crash `gmsh.merge()`:
 
@@ -82,14 +82,14 @@ These option names do NOT exist and will crash `gmsh.merge()`:
 | `Mesh.Volumes` | `Mesh.VolumeEdges` + `Mesh.VolumeFaces` |
 | `Mesh.Surfaces` | `Mesh.SurfaceEdges` + `Mesh.SurfaceFaces` |
 
-The valid mesh-visibility options in GMSH 4.15.2 are:
+The mesh-visibility defaults measured with the qualified Gmsh 5.0.0.dev20261018 runtime are:
 ```
 Mesh.VolumeEdges    (default 1)
 Mesh.VolumeFaces    (default 0)
 Mesh.SurfaceEdges   (default 1)
 Mesh.SurfaceFaces   (default 0)
 Mesh.Points         (default 0)
-Mesh.NumSubEdges    (default 1, set to 4 for curved elements)
+Mesh.NumSubEdges    (default 2, set to 4 for curved elements)
 ```
 
 ## Reference

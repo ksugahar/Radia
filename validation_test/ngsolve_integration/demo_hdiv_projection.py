@@ -17,7 +17,7 @@ CLAUDE.md Best Practices:
 4. Use CoefficientFunction directly for maximum accuracy near boundaries
 
 Output:
-- Checked GMSH `.msh v4.1` field file
+- Checked GMSH `.msh v4.2` field file
 - Comparison between HDiv, HCurl, and VectorH1 spaces
 
 Usage:

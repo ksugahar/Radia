@@ -454,7 +454,7 @@ which is inflated by the Robin penalty. The previous implementation
 **Robin sign**: `+jw/Z_s` (positive). With negative sign or without Robin,
 the solution diverges or gives PEC.
 
-**GMSH |B| export**: Per-vertex `|B|` field written to `.msh v4.1` via `GmshPostExport`.
+**GMSH |B| export**: Per-vertex `|B|` field written to `.msh v4.2` via `GmshPostExport`.
 
 ```python
 # CRITICAL: unpack tuple for GridFunction evaluation

@@ -49,6 +49,13 @@ def echo_application(monkeypatch: pytest.MonkeyPatch):
     )
 
 
+@pytest.mark.parametrize("version, accepted", [("4.2", True), ("4.1", False)])
+def test_application_mesh_header_is_latest_only(tmp_path: Path, version, accepted):
+    mesh = tmp_path / "fields.msh"
+    mesh.write_bytes(f"$MeshFormat\n{version} 0 8\n$EndMeshFormat\n".encode("ascii"))
+    assert app._is_gmsh_v42(mesh) is accepted, (version, accepted)
+
+
 def test_application_runner_writes_stable_artifacts(tmp_path: Path, echo_application):
     config = tmp_path / "config.json"
     config.write_text(
