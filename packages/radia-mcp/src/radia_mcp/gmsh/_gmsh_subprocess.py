@@ -38,7 +38,7 @@ def run_gmsh_json_subprocess(script: str, args: list[str], *,
     """
     if not gmsh_available():
         return {"ok": False, "ran": False,
-                "error": "Gmsh 5 development package missing; fetch the latest official development wheel and record its provenance"}
+                "error": "Gmsh 5 package missing; follow the canonical Gmsh runtime install guide and record wheel provenance"}
 
     with tempfile.TemporaryDirectory(prefix=prefix) as work:
         out_json = Path(work) / "result.json"
