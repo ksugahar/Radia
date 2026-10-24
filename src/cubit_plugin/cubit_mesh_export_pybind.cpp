@@ -152,10 +152,10 @@ PYBIND11_MODULE(cubit_mesh_curver, m)
             EdgeProjectFunc edge_proj = nullptr;
             if (!edge_project_func.is_none()) {
                 py::function epf = edge_project_func.cast<py::function>();
-                edge_proj = [epf](int s1, int s2, double x, double y, double z)
+                edge_proj = [epf](int edge, int s1, int s2, double x, double y, double z)
                     -> std::tuple<double,double,double>
                 {
-                    py::object result = epf(s1, s2, x, y, z);
+                    py::object result = epf(edge, s1, s2, x, y, z);
                     return result.cast<std::tuple<double,double,double>>();
                 };
             }
@@ -272,6 +272,9 @@ PYBIND11_MODULE(cubit_mesh_curver, m)
                     hint, do a global projection. Distinguishes legitimate
                     UV=(0,0) from "no hint".
                 normal_func: Callable (surfnr, x,y,z) -> (nx,ny,nz).
+                edge_project_func: Callable (edgenr, surfnr1, surfnr2, x,y,z)
+                    -> (xp,yp,zp). edgenr is the geometric EdgeDescriptor.EdgeNr(),
+                    not a surface-pair key or the descriptor table index.
                 order: Polynomial order for curving (>= 2).
                 surface_only: Remove volume elements (BEM workflow).
                 split_quads: Split quad faces into triangles.
