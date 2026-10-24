@@ -1,0 +1,142 @@
+{
+  "schema": "radia.native-gmsh-fixtures.v1",
+  "purpose": "Post-only ElementNodeData parser contract; no solver mesh or numerical baseline",
+  "generator": "generate.py",
+  "generator_sha256": "df472f36eb8e1e2a699bf4bf7c9917d6a7f631288cb24608921644d7aa268a84",
+  "gmsh_distribution": "5.0.0.dev20261018",
+  "native_version": "5.0.0-git-c020e8f43",
+  "wheel_sha256": "f0d2ca61322ff778afe464e293ae3b51b1401d268b1db7ab2a75d64d6bdb1e0c",
+  "text_storage": "Native output normalized CRLF to LF only; fixtures use local eol=lf attributes",
+  "fixtures": [
+    {
+      "file": "point_scalar.msh",
+      "element_type": 15,
+      "samples_per_element": 1,
+      "components": 1,
+      "time": 0.5,
+      "data_type": "ElementNodeData",
+      "tags": [
+        11,
+        23
+      ],
+      "values": [
+        [
+          20.0
+        ],
+        [
+          10.0
+        ]
+      ],
+      "sha256": "041da83e33ad4f0e78eb5da31a416c9cb6ab03969ffcddc4fe145ace951bbc05",
+      "native_bytes_sha256": "89eee1d9f90959c007b900d425d08987db1102411b4a4dcf2b638d73f55889ff"
+    },
+    {
+      "file": "point_vector.msh",
+      "element_type": 15,
+      "samples_per_element": 1,
+      "components": 3,
+      "time": 0.5,
+      "data_type": "ElementNodeData",
+      "tags": [
+        11,
+        23
+      ],
+      "values": [
+        [
+          20.0,
+          20.25,
+          20.5
+        ],
+        [
+          10.0,
+          10.25,
+          10.5
+        ]
+      ],
+      "sha256": "c9090daf5770ffef1139e4c37866fb69c608646a45ea95c1a4b41e9f45b99a0f",
+      "native_bytes_sha256": "c3da4809bf52691b2e8ed11c87e2a9d4ac99f08372fee2eaed213e2b70ce927d"
+    },
+    {
+      "file": "line_scalar.msh",
+      "element_type": 1,
+      "samples_per_element": 2,
+      "components": 1,
+      "time": 0.5,
+      "data_type": "ElementNodeData",
+      "tags": [
+        11,
+        23
+      ],
+      "values": [
+        [
+          20.0,
+          21.0
+        ],
+        [
+          10.0,
+          11.0
+        ]
+      ],
+      "sha256": "1c5407615e2fca0ed9e4c29796c4ab982397f38c218e56f1c870afe250665ed1",
+      "native_bytes_sha256": "567460f02106e5561d316d53022248b862c2726ac2826ffd3a618a619f1bdfd1"
+    },
+    {
+      "file": "line_vector.msh",
+      "element_type": 1,
+      "samples_per_element": 2,
+      "components": 3,
+      "time": 0.5,
+      "data_type": "ElementNodeData",
+      "tags": [
+        11,
+        23
+      ],
+      "values": [
+        [
+          20.0,
+          20.25,
+          20.5,
+          21.0,
+          21.25,
+          21.5
+        ],
+        [
+          10.0,
+          10.25,
+          10.5,
+          11.0,
+          11.25,
+          11.5
+        ]
+      ],
+      "sha256": "b85ec7dfc4c71323e636c8650596369f25a362b9e5ee5a8c002122ee99cc45ba",
+      "native_bytes_sha256": "2e023284baa1441f5711c577c48cedc746066c29cfbacf2aa84b1be73dce965e"
+    },
+    {
+      "file": "line_sample_vector.msh",
+      "element_type": 1,
+      "samples_per_element": 1,
+      "components": 3,
+      "time": 0.5,
+      "data_type": "ElementNodeData",
+      "tags": [
+        11,
+        23
+      ],
+      "values": [
+        [
+          20.0,
+          20.25,
+          20.5
+        ],
+        [
+          10.0,
+          10.25,
+          10.5
+        ]
+      ],
+      "sha256": "9b78b352280dcbeb0868a2918559c2b79605275d91b396ae35fa9fee13147fe4",
+      "native_bytes_sha256": "3da38bebd682a2bca41f087eaf6fa0105878852c3bcd9ef5dcf3eec969d4e13f"
+    }
+  ]
+}
