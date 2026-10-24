@@ -22,6 +22,7 @@ _LANES = ("docs", "validation_test", "src/radia/panels/samples")
 # Known legacy v2.2 assets. Never ADD to this list -- new .msh must be
 # v4.2 (repo format policy 2026-10-23).
 _KNOWN_LEGACY = set()
+_KNOWN_GOOD_MSH42_SAMPLE = 'validation_test/gmsh_post/fixtures/unit_cube_post.msh'
 
 
 def _existing_lanes():
@@ -55,6 +56,7 @@ def test_durable_lane_msh_assets_are_structurally_sound():
     _existing_lanes()
     tracked = _tracked_lane_assets()
     assert tracked, "expected committed MSH assets in the repository durable lanes"
+    assert _KNOWN_GOOD_MSH42_SAMPLE in tracked, 'required known-good post-only MSH 4.2 sample'
     unexpected = []
     for rel in sorted(tracked):
         result = validate_msh(_REPO / rel)
