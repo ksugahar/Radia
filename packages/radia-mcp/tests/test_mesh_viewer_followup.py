@@ -239,8 +239,10 @@ def test_digest_wait_cleans_tree_without_launching(digest_case,tmp_path,monkeypa
     source,target,receipt,locations,conversion=digest_case
     pidfile=tmp_path/'digest-pids.json'
     script=("import subprocess,sys,json,time,os; "
+        "from pathlib import Path; "
         "p=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']); "
-        "open(sys.argv[1],'w').write(json.dumps([os.getpid(),p.pid]));time.sleep(60)")
+        "ready=Path(sys.argv[1]);temporary=ready.with_suffix('.tmp'); "
+        "temporary.write_text(json.dumps([os.getpid(),p.pid]));temporary.replace(ready);time.sleep(60)")
     async def worker(argv,**kwargs):
         if '--hash-output' not in argv:return await conversion(argv,**kwargs)
         return await run_worker([sys.executable,'-B','-c',script,str(pidfile)],**kwargs)
@@ -275,8 +277,10 @@ def test_digest_wait_cleans_tree_without_launching(digest_case,tmp_path,monkeypa
 def test_owned_grandchild_dies_and_unrelated_sentinel_survives(tmp_path,mode):
     pidfile=tmp_path/'pids.json'
     script=("import subprocess,sys,json,time,os; "
+            "from pathlib import Path; "
             "p=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']); "
-            "open(sys.argv[1],'w').write(json.dumps([os.getpid(),p.pid]));time.sleep(60)")
+            "ready=Path(sys.argv[1]);temporary=ready.with_suffix('.tmp'); "
+            "temporary.write_text(json.dumps([os.getpid(),p.pid]));temporary.replace(ready);time.sleep(60)")
     sentinel=subprocess.Popen([str(Path(sys.base_prefix)/'python.exe'),'-c','import time;time.sleep(60)'],
                               creationflags=subprocess.CREATE_NO_WINDOW)
     async def scenario():
