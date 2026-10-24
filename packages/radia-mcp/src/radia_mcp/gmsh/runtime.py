@@ -97,19 +97,34 @@ def record_wheel(wheel: Path, destination: Path) -> dict:
     return result
 
 
-def qualify_runtime() -> dict:
-    """Verify native identity, MSH default and provenance; initialize no session."""
-    version = _gmsh5_distribution_version()
+def verify_runtime_identity() -> dict:
+    """Verify installed payload provenance without initializing or writing files."""
+    try:
+        version = _gmsh5_distribution_version()
+    except importlib.metadata.PackageNotFoundError as error:
+        raise RuntimeError('Install radia-mcp[gmsh] using the official Gmsh development index') from error
     record = os.environ.get('RADIA_GMSH_PROVENANCE')
     if not record:
         raise RuntimeError('RADIA_GMSH_PROVENANCE is required; record the official wheel with python -m radia_mcp.gmsh.runtime --wheel WHEEL --record FILE')
     identity = json.loads(Path(record).read_text(encoding='utf-8'))
     if identity.get('distribution_version') != version or not re.fullmatch(r'[0-9a-f]{64}', identity.get('wheel_sha256', '')):
         raise RuntimeError('Gmsh wheel provenance/version mismatch')
-    import gmsh
+    try:
+        import gmsh
+    except ModuleNotFoundError as error:
+        if error.name != 'gmsh':
+            raise
+        raise RuntimeError('Install radia-mcp[gmsh] using the official Gmsh development index') from error
     for path in (Path(gmsh.__file__).resolve(), Path(gmsh.libpath).resolve()):
         if identity.get('runtime_payload_sha256', {}).get(str(path)) != _sha(path):
             raise RuntimeError(f'Gmsh runtime payload/provenance mismatch: {path.name}')
+    return identity
+
+
+def qualify_runtime() -> dict:
+    """Verify native identity, MSH default and provenance; initialize no session."""
+    identity = verify_runtime_identity()
+    import gmsh
     gmsh.initialize(['-noconfig'])
     try:
         if gmsh.option.getNumber('Mesh.MshFileVersion') != 4.2 or gmsh.__version__.split('.')[0] != '5':
