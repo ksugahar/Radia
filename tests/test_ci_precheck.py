@@ -329,6 +329,7 @@ def test_caller_filters_cannot_silently_remove_required_tests(monkeypatch):
     assert "RADIA_SOURCE_ONLY_CONTRACTS" not in env
     assert "PYTEST_ADDOPTS" not in env
     assert env["RADIA_TESTS_ALLOW_PARTIAL"] == "0"
+    assert env["PYTHONDONTWRITEBYTECODE"] == "1"
 
 
 def test_dirty_untracked_input_cannot_qualify(tmp_path, monkeypatch):
