@@ -15,16 +15,16 @@
     },
     "src/ext/sparsesolv/tests/test_sparsesolv.py": {
       "sha256": [
-        "d0cc085bd9db546e237830ce6ac589cc9f4b426f024b22d6d6ce3a3ddb376db6"
+        "0414ecb085d71c18819df3a7f886a3f190c7f656eb94e62f76d75ce6e973b08a"
       ],
       "resolves": [
         "subprocess entry needs declaration: src/ext/sparsesolv/tests/test_sparsesolv.py"
       ],
       "dependencies": [],
-      "reason": "Sealed test executes literal inline Python and already imported radia.sparsesolv_ngsolve extension path; native sources remain mandatory build inputs.",
+      "reason": "Sealed test executes literal inline Python and already imported radia.sparsesolv_ngsolve extension path; native sources remain mandatory build inputs. Integrated main changes only _dense_system to the public real_sparse_matrix_type helper; the bounded inline child command is unchanged.",
       "entries": {
         "src/ext/sparsesolv/tests/test_sparsesolv.py": [
-          "d0cc085bd9db546e237830ce6ac589cc9f4b426f024b22d6d6ce3a3ddb376db6"
+          "0414ecb085d71c18819df3a7f886a3f190c7f656eb94e62f76d75ce6e973b08a"
         ]
       },
       "fixture_prefixes": []
