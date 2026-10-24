@@ -25,7 +25,7 @@ def test_loaded_gmsh5_roundtrips_msh42_without_leaving_a_model():
 
 
 def test_major4_is_rejected_before_initializing_native_state(monkeypatch):
-    monkeypatch.setattr(runtime.metadata, "version", lambda name: "4.15.2")
+    monkeypatch.setattr(runtime.metadata, "version", lambda name: "4.99.0")
     with pytest.raises(RuntimeError, match="major 5 required"):
         runtime.probe_gmsh5()
     assert not gmsh.isInitialized()
@@ -54,11 +54,11 @@ def test_changed_original_wheel_is_rejected_before_native_initialization(monkeyp
     assert not gmsh.isInitialized()
 
 
-@pytest.mark.parametrize("version", ["2.2", "4.1", "4.3"])
-def test_obsolete_or_unknown_mesh_never_reaches_the_operation(tmp_path, version):
+@pytest.mark.parametrize("header", ["4.3 0 8", "4.2 1 8", "4.2 0 4", "invalid"])
+def test_unknown_binary_or_malformed_mesh_never_reaches_the_operation(tmp_path, header):
     path = tmp_path / "input.msh"
     marker = tmp_path / "operation-executed"
-    path.write_text(f"$MeshFormat\n{version} 0 8\n$EndMeshFormat\n", encoding="ascii")
+    path.write_text(f"$MeshFormat\n{header}\n$EndMeshFormat\n", encoding="ascii")
     script = f"""import json,sys
 from pathlib import Path
 Path({str(marker)!r}).write_text('executed')
