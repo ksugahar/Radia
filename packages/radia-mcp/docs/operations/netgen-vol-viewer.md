@@ -1,0 +1,28 @@
+# Human Netgen .vol viewer
+
+Run `python -B -m radia_mcp.mesh_viewer "FILE.vol"` in an unlocked interactive
+Windows session. `--check` prints the actual Python, Netgen 6.2.2608 and native
+module identities without opening the GUI. Missing files, other extensions and
+mismatched runtimes fail explicitly. This first delivery accepts `.vol` only.
+
+The launcher uses the installed Netgen GUI and passes the entire filename as
+one `tk.call("Ng_LoadMesh", path)` argument. Japanese text, spaces, braces,
+brackets, dollar signs and semicolons remain literal path data. It does not
+patch Netgen, use Tcl eval for filenames, mesh, solve, write files, or modify
+Windows associations. Only its owned window is destroyed on close.
+
+The `open_mesh_viewer(filepath)` MCP tool uses this same module in a detached
+process and returns `pid`, literal `argv`, desktop and runtime identity.
+Preflight is asynchronous, and the server never waits for the GUI event loop.
+`status="launched"` does not by itself certify a rendered image.
+
+An operator can select an existing compatible dependency interpreter with
+`RADIA_MESH_VIEWER_PYTHON`. The child's Python path selects the same reviewed
+package as the server; it does not install, copy or repoint a shared runtime.
+The default server interpreter must itself meet the Netgen version requirement;
+there is no implicit alternate interpreter or solver fallback.
+
+A real GUI proof uses a checked `.vol`, records the original file hash and label
+contract, confirms visible mesh counts and a Japanese/space/symbol filename,
+then verifies the input hash is unchanged. Keep machine/user evidence private.
+Gmsh/MSH support and all-user associations are separate follow-up work.
