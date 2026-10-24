@@ -92,16 +92,16 @@ def test_non_windows_session_fails_before_gui(monkeypatch):
 def test_async_preflight_and_detached_launch(tmp_path,monkeypatch,returncode):
     path=tmp_path/"日本語 空白 [$];.vol";path.write_text("mesh3d",encoding="utf-8")
     calls=[];heartbeat=[]
-    async def communicate():
+    async def probe(argv, **kwargs):
+        calls.append(('probe', argv, kwargs))
         await asyncio.sleep(.01)
-        return json.dumps({"backend":"netgen"}).encode(),b"bad runtime"
-    async def probe(*args,**kwargs):
-        calls.append(("probe",args,kwargs));return NS(returncode=returncode,communicate=communicate)
+        if returncode: raise RuntimeError('Viewer preflight: bad runtime')
+        return NS(stdout=json.dumps({'backend':'netgen'}).encode())
     def spawn(*args,**kwargs):calls.append(("GUI",args,kwargs));return NS(pid=123)
     for name,value in [("CREATE_NO_WINDOW",0x08000000),("DETACHED_PROCESS",8),("CREATE_NEW_PROCESS_GROUP",0x200)]:
         monkeypatch.setattr(adapter.subprocess,name,value,raising=False)
     monkeypatch.setattr(adapter,"require_interactive_desktop",lambda:{"session_id":1})
-    monkeypatch.setattr(adapter.asyncio,"create_subprocess_exec",probe)
+    monkeypatch.setattr(adapter,"run_worker",probe)
     monkeypatch.setattr(adapter.subprocess,"Popen",spawn)
     async def scenario():
         task=asyncio.create_task(adapter.open_mesh_viewer(str(path)))
