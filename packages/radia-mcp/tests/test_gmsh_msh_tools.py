@@ -234,9 +234,9 @@ def test_validate_detects_invalid_component_count(tmp_path):
     assert result["checks"]["view_components_consistent"] is False
 
 
-def test_validate_rejects_v22(tmp_path):
-    v22 = "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n"
-    result = validate_msh(_write(tmp_path, v22))
+def test_validate_rejects_unknown_format(tmp_path):
+    unknown = "$MeshFormat\n4.9 0 8\n$EndMeshFormat\n"
+    result = validate_msh(_write(tmp_path, unknown))
 
     assert result["ok"] is False
     assert result["checks"]["format_is_v42"] is False
@@ -594,7 +594,7 @@ def test_elementnodedata_width_mismatch_fails(tmp_path):
 
 def test_audit_msh_directory_reports_issues(tmp_path):
     _write(tmp_path, _BASE_MSH, "good.msh")
-    _write(tmp_path, "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n", "legacy.msh")
+    _write(tmp_path, "$MeshFormat\n4.9 0 8\n$EndMeshFormat\n", "legacy.msh")
     sub = tmp_path / "sub"
     sub.mkdir()
     _write(sub, _TRI6_MSH, "curved.msh")
@@ -830,7 +830,7 @@ def test_lint_fixture_bad_script_trips_every_rule_class():
     rules = {f["rule"] for f in findings}
     assert {"pip-gmsh-import", "gmsh-mesh-generation", "meshio-removed",
             "gmsh-builder-removed", "invalid-gmsh-option",
-            "readgmsh-deprecated"} <= rules
+            "gmsh-solver-input-forbidden"} <= rules
 
 
 def test_lint_fixture_clean_script_has_no_gmsh_findings():

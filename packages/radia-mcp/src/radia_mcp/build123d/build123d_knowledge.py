@@ -2637,7 +2637,7 @@ CAE_WORKFLOW_TIPS = """# CAE workflow tips — getting from build123d to clean h
 ## Pipeline (lab standard, 2026-04-19)
 
 ```
-build123d (Python) → STEP → Cubit (hex mesh) → .msh v4.1 or .vol
+build123d (Python) → STEP/BREP → Netgen → checked .vol (analysis); MSH 4.2 is derived post-processing output
                                               → ngsolve / radia_ngsolve
                                               → Abaqus / Nastran / other FEA
 ```

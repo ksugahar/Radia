@@ -1024,24 +1024,24 @@ For small-to-medium problems (N < 10,000) where the dense matrix IS needed
 | LU solve | 5s | scipy LAPACK (MKL) |
 | **Total** | **~26s** | |
 
-## Standard Output Format: GMSH .msh v4.1
+## Standard Output Format: GMSH .msh v4.2
 
-**GMSH .msh v4.1 is the standard field output format** for this project.
+**GMSH .msh v4.2 is the standard field output format** for this project.
 All BEM/FEM field visualization uses `GmshPostExport`, not VTK/VTS.
 
 **Why GMSH, not VTK**: GMSH natively supports arbitrary-order curved elements
 (Tri6, Tri10, Tri15, ...). VTK approximates high-order elements as linear facets.
 
-### Format Version Policy (2026-04: v4.1 only)
+### Format Version Policy (2026-10: v4.2 only)
 
 | Direction | Format | Purpose | Tool |
 |-----------|--------|---------|------|
 | **Input** (-> NGSolve) | **.vol** | Mesh import | `Mesh("model.vol")` |
-| **Output** (NGSolve ->) | **.msh v4.1** | Field visualization | `GmshPostExport.write()` / `vol2msh()` -> GMSH GUI |
+| **Output** (NGSolve ->) | **.msh v4.2** | Field visualization | `GmshPostExport.write()` / `vol2msh()` -> GMSH GUI |
 
-Lab-wide standard (2026-04): GMSH .msh v4.1 is the ONLY supported format.
+Repository standard (2026-10): GMSH .msh v4.2 is the ONLY supported format.
 `GmshPostExport.write_v22()` has been removed.  netgen I/O is always via
-.vol (never via .msh).  v4.1 supports the same arbitrary-order elements
+.vol (never via .msh).  v4.2 supports the same arbitrary-order elements
 (Tri6, Tri10, Tri15, ...) for GMSH visualization.
 
 ### Supported Orders (Lagrange Triangles)
@@ -1054,7 +1054,7 @@ Lab-wide standard (2026-04): GMSH .msh v4.1 is the ONLY supported format.
 | 4 | 23 (Tri15) | 15 | Research |
 | 5 | 25 (Tri21) | 21 | Research |
 
-Export curved BEM surface mesh with field data to GMSH .msh v4.1 for visualization.
+Export curved BEM surface mesh with field data to GMSH .msh v4.2 for visualization.
 Use `GmshPostExport(mesh, boundary=True)` to export BND elements from a volume mesh.
 
 ### GMSH Display Setting for High-Order Elements

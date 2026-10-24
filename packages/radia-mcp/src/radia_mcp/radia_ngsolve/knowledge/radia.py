@@ -537,7 +537,7 @@ flux = rad.FldInt(obj, component, start, end, axis)
 
 ## Visualization (NGSolve-Through)
 
-Field visualization uses NGSolve + GmshPostExport (.msh v4.1).
+Field visualization uses NGSolve + GmshPostExport (.msh v4.2).
 Geometry uses STEP files (CoilBuilder.write_step(), OCC shapes).
 rad.FldVTS() is removed. Use rad.Fld() for point evaluation only.
 
@@ -682,7 +682,7 @@ Cubit or Netgen; Radia consumes the resulting `.vol` via `netgen_mesh_to_radia`.
 
 | Removed                 | Replacement                                            |
 |-------------------------|--------------------------------------------------------|
-| `rad.FldVTS(...)` | Use `rad.Fld(obj, field_type, points)` for point evaluation, then export to `.msh v4.1` via `GmshPostExport` for visualization. |
+| `rad.FldVTS(...)` | Use `rad.Fld(obj, field_type, points)` for point evaluation, then export to `.msh v4.2` via `GmshPostExport` for visualization. |
 
 ## Unsafe legacy extrusions (removed 2026-07-20)
 

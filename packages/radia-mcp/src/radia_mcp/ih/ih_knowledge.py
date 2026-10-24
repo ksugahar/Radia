@@ -781,7 +781,7 @@ JSON output keys (calc_heat / calc_heat_axisym):
 | ``T_mean_C`` | physical volume mean; the axisymmetric route uses ``int(T*2*pi*r)/int(2*pi*r)`` |
 | ``T_sol_file`` | absolute path to the final-T NGSolve `.sol` |
 | ``heat_vol_file`` | absolute path to the companion `.vol`.  Empty when no separate companion was written (then re-use the `--wp-vol` input as the companion). |
-| ``msh_file`` | GMSH `.msh v4.1` (T_C + q_surf fields) when `--msh-output` was set |
+| ``msh_file`` | GMSH `.msh v4.2` (T_C + q_surf fields) when `--msh-output` was set |
 | ``csv_file`` | probe history CSV when both `--probe-point` + `--csv-output` were set |
 | ``boundary_audit`` | Concrete matched heat-flux, convection, and radiation boundaries; per-boundary area; and per-boundary heat input |
 | ``qsurf_projection`` | transfer mode, provenance, EM boundaries, distances, power balance (or ``mode=uniform``) |
@@ -1256,7 +1256,7 @@ and the thermal solve (calc_heat.py):
 
 * `validation_test/panels/test_heat_chain_golden.py` -- end-to-end chain test
   (EM solve -> qsurf.sol -> thermal solve).  Slow-marked. Export accepted
-  spatial fields as indexed GMSH `.msh v4.1` artifacts.
+  spatial fields as indexed GMSH `.msh v4.2` artifacts.
 
 5. **Full rotation**: At 12 rpm, one rotation = 5 seconds. Choose t_end
    to capture the desired number of rotations.
@@ -1265,7 +1265,7 @@ and the thermal solve (calc_heat.py):
 INDUCTION_HEATING_POSTPROCESS = """
 # Post-Processing for Induction Heating
 
-## GMSH `.msh v4.1` Output
+## GMSH `.msh v4.2` Output
 
 ```python
 from ngsolve import *
@@ -1583,7 +1583,7 @@ Bz = B[2](mesh(0, 0, 0.03))  # B_z component
 ```python
 # WRONG for a Radia-owned workflow: direct VTK-family output
 
-# CORRECT: checked GMSH .msh v4.1 output
+# CORRECT: checked GMSH .msh v4.2 output
 from radia.gmsh_post_export import GmshPostExport
 
 post = GmshPostExport(mesh)

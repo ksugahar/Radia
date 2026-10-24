@@ -2,7 +2,7 @@
 
 Layout:
   radia_mcp.build123d     — standalone build123d MCP server (STEP → Cubit workflow)
-  radia_mcp.gmsh          — standalone gmsh MSH v4.1 inspect/validate +
+  radia_mcp.gmsh          — standalone gmsh MSH v4.2 inspect/validate +
                             post-display launch artifacts + policy lint
   radia_mcp.radia_ngsolve — Radia + NGSolve general FEM/BEM/Kelvin/PEEC/MSH knowledge
   radia_mcp.force         — Shared electromagnetic-force method selection,

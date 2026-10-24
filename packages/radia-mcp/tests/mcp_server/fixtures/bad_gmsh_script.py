@@ -12,4 +12,4 @@ gmsh.model.mesh.generate(3)  # gmsh-mesh-generation
 gmsh.option.setNumber("Mesh.Volumes", 1)  # invalid-gmsh-option
 gmsh.option.setNumber("General.GraphicsSizeX", 800)  # invalid-gmsh-option
 
-mesh = ReadGmsh("legacy.msh")  # readgmsh-deprecated
+mesh = ReadGmsh("legacy.msh")  # gmsh-solver-input-forbidden

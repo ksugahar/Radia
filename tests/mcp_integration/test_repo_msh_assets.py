@@ -1,12 +1,7 @@
-"""Standing audit: every tracked .msh in the durable lanes is sound.
+"""Standing audit: every tracked post-processing MSH is valid ASCII 4.2.
 
-Runs the structural audit (no Jacobians -- pure Python, CI-fast) over
-docs/, validation_test/, and src/radia/panels/samples on every test
-run, so a v2.2 regression or corrupt export is caught at commit time.
-
-The allowlist below names the KNOWN legacy v2.2 assets.  It may only
-SHRINK: a companion test fails the moment an allowlisted file becomes
-v4.2 (or disappears), forcing the entry to be removed.
+Inspect durable docs/validation/sample artifacts; ignored local files never
+satisfy this contract. Unsupported versions receive no exceptions.
 """
 
 import subprocess
@@ -19,9 +14,6 @@ from radia_mcp.gmsh.msh_inspect import validate_msh
 _REPO = Path(__file__).resolve().parents[2]
 _LANES = ("docs", "validation_test", "src/radia/panels/samples")
 
-# Known legacy v2.2 assets. Never ADD to this list -- new .msh must be
-# v4.2 (repo format policy 2026-10-23).
-_KNOWN_LEGACY = set()
 _KNOWN_GOOD_MSH42_SAMPLE = 'validation_test/gmsh_post/fixtures/unit_cube_post.msh'
 
 
@@ -60,31 +52,11 @@ def test_durable_lane_msh_assets_are_structurally_sound():
     unexpected = []
     for rel in sorted(tracked):
         result = validate_msh(_REPO / rel)
-        if result["ok"] or rel in _KNOWN_LEGACY:
+        if result["ok"]:
             continue
         failed = [name for name, passed in result["checks"].items()
                   if not passed]
         unexpected.append((rel, failed, result["errors"][:1]))
     assert unexpected == [], (
-        "unsound .msh assets outside the known-legacy allowlist "
+        "unsound post-processing .msh assets "
         f"(new .msh must be valid v4.2): {unexpected}")
-
-
-def test_known_legacy_allowlist_only_shrinks():
-    _existing_lanes()
-    tracked = _tracked_lane_assets()
-    stale_entries = []
-    for rel in sorted(_KNOWN_LEGACY):
-        if rel not in tracked:
-            stale_entries.append((rel, "file is not tracked"))
-            continue
-        path = _REPO / rel
-        if not path.is_file():
-            stale_entries.append((rel, "file no longer exists"))
-            continue
-        result = validate_msh(path)
-        if result["checks"].get("format_is_v42", False):
-            stale_entries.append((rel, "migrated to v4.2"))
-    assert stale_entries == [], (
-        "allowlist entries are stale -- remove them from _KNOWN_LEGACY: "
-        f"{stale_entries}")
