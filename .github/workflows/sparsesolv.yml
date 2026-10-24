@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'src/core/**'
+      - 'src/core/rad_blas.h'
       - 'src/lib/**'
       - 'src/ext/**'
       - 'cmake/**'
@@ -296,6 +297,7 @@ on:
     branches: [main]
     paths:
       - 'src/core/**'
+      - 'src/core/rad_blas.h'
       - 'src/lib/**'
       - 'src/ext/**'
       - 'cmake/**'

@@ -169,11 +169,16 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     hmatrix_build = (ROOT / "packages/radia-simulink/tools/build_hmatrix_cuda.py").read_text(encoding="utf-8")
     # Every GPU build script that names or compiles a src/core file seeds the closure.
     for script in sorted((ROOT / "packages/radia-simulink/tools").glob("build_*_cuda.py")):
+        text = script.read_text(encoding="utf-8")
         seeds.update("src/core/" + name for name in
-                     re.findall(r"src/core/([A-Za-z0-9_.]+)", script.read_text(encoding="utf-8")))
-    core = set(CONTRACT.include_closure(ROOT, sorted(seeds), "src/core"))
+                     re.findall(r"src/core/([A-Za-z0-9_.]+)", text))
+        # Serial C objects are real inputs too: their relative quote includes
+        # can enter src/core even when the CUDA TU does not name that header.
+        seeds.update(re.findall(r"src/ext/HACApK/[A-Za-z0-9_.]+\.c", text))
+    core = {path for path in CONTRACT.include_closure(ROOT, sorted(seeds), "src/core")
+            if path.startswith("src/core/")}
     assert {p for p in shared if p.startswith("src/core/")} == core | {"src/core/radia_mex_sparse_symmetry.h"}
-    assert len(core) == 14
+    assert len(core) == 15
     # The radia-simulink lane must start on every file its native build reads.
     lane = MANIFEST["lanes"]["radia-simulink"]["events"]
     for event in ("push", "pull_request"):

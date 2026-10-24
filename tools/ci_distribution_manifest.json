@@ -3359,6 +3359,7 @@
           ],
           "paths": [
             "src/core/**",
+            "src/core/rad_blas.h",
             "src/lib/**",
             "src/ext/**",
             "cmake/**",
@@ -3478,7 +3479,6 @@
             "tests/test_ams_internal_setup_parallel.py",
             "src/core/rad_hacapk*",
             "src/ext/HACApK/**",
-            "src/core/rad_blas.h",
             "tests/test_hdiv_chargegram_build_safety.py",
             "tests/test_hdiv_vim_native_matrix.py",
             "tests/test_hdiv_same_process_determinism.py",
@@ -3655,6 +3655,7 @@
           ],
           "paths": [
             "src/core/**",
+            "src/core/rad_blas.h",
             "src/lib/**",
             "src/ext/**",
             "cmake/**",
@@ -3774,7 +3775,6 @@
             "tests/test_ams_internal_setup_parallel.py",
             "src/core/rad_hacapk*",
             "src/ext/HACApK/**",
-            "src/core/rad_blas.h",
             "tests/test_hdiv_chargegram_build_safety.py",
             "tests/test_hdiv_vim_native_matrix.py",
             "tests/test_hdiv_same_process_determinism.py",
