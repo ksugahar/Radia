@@ -4,6 +4,9 @@ Assumes: native GUI and production-exporter proof is collected separately.
 import hashlib
 import asyncio
 import json
+import os
+import stat
+import tempfile
 from pathlib import Path
 import sys
 from types import SimpleNamespace as NS
@@ -12,6 +15,27 @@ import pytest
 from radia_mcp.mesh_viewer import launcher, post_view
 
 EXPORTER_PROBE = post_view._require_exporter_capability
+
+
+def assigned_stage(output):
+    scratch = Path(os.environ.get('RADIA_MESH_VIEWER_SCRATCH', str(output.parent))).resolve()
+    return Path(tempfile.mkdtemp(prefix='.radia-post-receipt-', dir=scratch)) / 'staging'
+
+
+@pytest.fixture
+def junctions(tmp_path):
+    """Own junction entries only; never recursively remove their targets."""
+    links=[]
+    def create(link,target):
+        import _winapi
+        assert link.is_relative_to(tmp_path) and target.is_relative_to(tmp_path)
+        _winapi.CreateJunction(str(target),str(link))
+        links.append(link)
+    yield create
+    for link in reversed(links):
+        info=link.lstat()
+        assert info.st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT
+        os.rmdir(link)  # Removes this junction entry, not its target directory.
 
 
 def mesh_text(version='4.2', name='iron'):
@@ -159,13 +183,72 @@ def test_mcp_returns_conversion_error_instead_of_launch_acceptance(post_case, mo
 
 def test_post_copy_is_identical_and_keeps_companions_in_staging(post_case):
     source, output, receipt, digest, writes = post_case
-    result = post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials')
+    result = post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials', staging_dir=assigned_stage(output))
     assert len(writes) == 1
     assert output.read_bytes() == Path(writes[0]).read_bytes()
     assert output.parent != source.parent and not Path(str(output) + '.opt').exists()
     assert post_view.sha256(source) == digest and result['solver_input'] is False
     with pytest.raises(ValueError, match='exist'):
-        post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials')
+        post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials', staging_dir=assigned_stage(output))
+
+
+@pytest.mark.parametrize('fault',['outside','reused','source adjacent','wrong leaf'])
+def test_converter_rejects_unassigned_or_reused_staging(post_case,fault):
+    source,output,receipt,digest,writes=post_case
+    stage=assigned_stage(output)
+    if fault=='outside':stage=output.parent/'outside'/'staging'
+    elif fault=='reused':stage.mkdir()
+    elif fault=='source adjacent':stage=source.parent/'staging'
+    else:stage=stage.with_name('other')
+    before=source.read_bytes()
+    with pytest.raises(ValueError,match='Staging must be a new child'):
+        post_view.convert_post_view(source,str(output),str(receipt),digest,'materials',staging_dir=stage)
+    assert source.read_bytes()==before and not output.exists() and writes==[]
+
+
+@pytest.mark.skipif(sys.platform!='win32',reason='Windows junction staging contract')
+@pytest.mark.parametrize('location',['operation','staging'])
+def test_real_junction_cannot_receive_staged_files(post_case,junctions,monkeypatch,location):
+    source,output,receipt,digest,writes=post_case
+    monkeypatch.setenv('RADIA_MESH_VIEWER_SCRATCH',str(output.parent))
+    stage=assigned_stage(output)
+    target=output.parent/'.radia-post-receipt-junction-target';target.mkdir()
+    link=stage.parent if location=='operation' else stage
+    if location=='operation':link.rmdir()  # Replace only this empty, owned fixture directory.
+    junctions(link,target)
+    with pytest.raises(ValueError,match='Staging must be a new child'):
+        post_view.convert_post_view(source,str(output),str(receipt),digest,'materials',staging_dir=stage)
+    assert list(target.iterdir())==[] and not output.exists() and writes==[]
+    assert post_view._is_link(link) is True
+
+
+@pytest.mark.skipif(sys.platform!='win32',reason='Windows import-time junction swap contract')
+def test_exporter_import_cannot_swap_operation_to_junction(post_case,junctions,monkeypatch):
+    source,output,receipt,digest,writes=post_case
+    monkeypatch.setenv('RADIA_MESH_VIEWER_SCRATCH',str(output.parent))
+    stage=assigned_stage(output)
+    target=output.parent/'.radia-post-receipt-swap-target';target.mkdir()
+    original=post_view._load_exporter
+    def swap_during_import():
+        exporter=original()
+        stage.parent.rmdir()
+        junctions(stage.parent,target)
+        return exporter
+    monkeypatch.setattr(post_view,'_load_exporter',swap_during_import)
+    with pytest.raises(ValueError,match='Staging must be a new child'):
+        post_view.convert_post_view(source,str(output),str(receipt),digest,'materials',staging_dir=stage)
+    assert not (target/'staging').exists() and list(target.iterdir())==[]
+    assert not output.exists() and writes==[]
+
+
+def test_worker_requires_receipt_in_assigned_operation_root(post_case,monkeypatch,capsys):
+    source,output,report,digest,writes=post_case
+    stage=assigned_stage(output)
+    monkeypatch.setattr(sys,'argv',['post_view',str(source),str(output),str(report),digest,'materials',
+        '--staging-dir',str(stage),'--receipt',str(output.parent/'foreign-receipt.json')])
+    assert post_view.main()==1
+    assert 'share the assigned operation root' in capsys.readouterr().err
+    assert not stage.exists() and not output.exists() and writes==[]
 
 
 def test_failed_copy_leaves_no_final_mesh_or_temporary(post_case, monkeypatch):
@@ -180,7 +263,7 @@ def test_failed_copy_leaves_no_final_mesh_or_temporary(post_case, monkeypatch):
             raise OSError('simulated interrupted copy')
     monkeypatch.setattr(post_view.os, 'fdopen', PartialWrite)
     with pytest.raises(OSError, match='interrupted copy'):
-        post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials')
+        post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials', staging_dir=assigned_stage(output))
     assert not output.exists()
     assert list(output.parent.glob('.*.partial')) == []
     assert post_view.sha256(source) == digest
@@ -198,7 +281,7 @@ def test_publication_never_overwrites_a_racing_output(tmp_path):
 def test_post_fails_on_unpreserved_groups_and_never_creates_final_output(post_case):
     source, output, receipt, digest, _ = post_case
     with pytest.raises(ValueError, match='physical groups'):
-        post_view.convert_post_view(source, str(output), str(receipt), digest, 'boundaries')
+        post_view.convert_post_view(source, str(output), str(receipt), digest, 'boundaries', staging_dir=assigned_stage(output))
     assert not output.exists()
 
 
@@ -216,7 +299,7 @@ def test_post_rejects_a_handoff_for_different_checked_bytes(post_case):
     handoff['source_sha256'] = '0' * 64
     receipt.write_text(json.dumps(handoff))
     with pytest.raises(ValueError, match='bind'):
-        post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials')
+        post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials', staging_dir=assigned_stage(output))
     assert not output.exists()
 
 
@@ -227,7 +310,7 @@ def test_post_rejects_partial_element_export(post_case, monkeypatch):
         'physical_names': [{'dim': 3, 'name': 'iron'}],
         'elements': {'count': 5, 'parse_complete': True}, 'parse_errors': []})
     with pytest.raises(ValueError, match='element count'):
-        post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials')
+        post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials', staging_dir=assigned_stage(output))
     assert not output.exists()
 
 
@@ -238,8 +321,8 @@ def test_unicode_output_uses_an_explicit_ascii_job_scratch(post_case, monkeypatc
     with pytest.raises(ValueError, match='ASCII job'):
         post_view.validate_post_request(source, str(output), str(receipt), digest, 'materials')
     monkeypatch.setenv('RADIA_MESH_VIEWER_SCRATCH', str(output.parent.parent))
-    result = post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials')
-    assert Path(result['staging']).parent == output.parent.parent
+    result = post_view.convert_post_view(source, str(output), str(receipt), digest, 'materials', staging_dir=assigned_stage(output))
+    assert Path(result['staging']).parent.parent == output.parent.parent
     assert Path(writes[0]).read_bytes() == output.read_bytes()
 
 
@@ -255,7 +338,7 @@ def test_conversion_process_is_separate_and_uses_a_bound_receipt(post_case, monk
         Path(argv[-1]).write_text(json.dumps({'schema':'radia.mesh-post-view.v1',
             'output':str(output),'sha256':post_view.sha256(output),
             'source_sha256':digest,'group_scope':'materials','solver_input':False,
-            'staging':'test staging','physical_groups':[[3,'iron']]}))
+            'staging':argv[argv.index('--staging-dir')+1],'physical_groups':[[3,'iron']]}))
     monkeypatch.setattr(post_view, 'run_worker', run)
     monkeypatch.setitem(sys.modules, 'ngsolve', None)
     result = post_view.prepare_post_view(source, str(output), str(receipt), digest, 'materials')

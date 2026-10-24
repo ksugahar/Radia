@@ -5,6 +5,7 @@ import asyncio
 import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 import sys
 import tempfile
@@ -26,6 +27,22 @@ def retained_context(data: dict, *, verified: bool = True) -> str:
     label = 'artifact' if verified else 'unverified evidence'
     qualifier = '; verified at digest time' if verified else ''
     return f'{qualifier}; {label} retained: ' + json.dumps(fields, ensure_ascii=False)
+
+
+def _assigned_locations(locations: dict) -> str:
+    fields = {key: str(locations[key])[:4096]
+              for key in ('output', 'operation_root', 'worker_receipt', 'staging')}
+    return ('; UNVERIFIED ASSIGNED LOCATIONS (paths may be absent or incomplete): '
+            + json.dumps(fields, ensure_ascii=False))
+
+
+def _is_link(path: Path) -> bool:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return False
+    return (stat.S_ISLNK(info.st_mode) or (os.name == 'nt' and
+            bool(info.st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)))
 
 
 def _load_exporter():
@@ -96,13 +113,23 @@ def validate_post_request(source: Path, output: str, checked_report: str,
 
 
 def convert_post_view(source: Path, output: str, checked_report: str,
-                      source_sha256: str, group_scope: str) -> dict:
+                      source_sha256: str, group_scope: str, *, staging_dir: Path) -> dict:
     """Keep exporter companions in staging; copy only identical checked MSH bytes."""
     target, report = validate_post_request(source, output, checked_report,
                                            source_sha256, group_scope, probe_exporter=False)
-    exporter = _load_exporter()
     scratch = Path(os.environ.get('RADIA_MESH_VIEWER_SCRATCH', str(target.parent))).resolve()
-    staging = Path(tempfile.mkdtemp(prefix='.radia-post-', dir=scratch))
+    assigned = Path(staging_dir)
+    operation = assigned.parent
+    staging = assigned
+    exporter = _load_exporter()
+    # Check the live paths after potentially slow imports, immediately before creation.
+    if (not assigned.is_absolute() or assigned.name != 'staging'
+            or not operation.name.startswith('.radia-post-receipt-')
+            or _is_link(operation) or _is_link(assigned)
+            or not operation.is_dir() or operation.resolve().parent != scratch
+            or assigned.exists()):
+        raise ValueError('Staging must be a new child of the assigned operation root in caller scratch')
+    staging.mkdir()  # Exclusive: no reuse, random-staging fallback or overwrite.
     staged_source = staging / 'source.vol'
     with staged_source.open('xb') as copy, source.open('rb') as original:
         for block in iter(lambda: original.read(1024 * 1024), b''):
@@ -166,23 +193,46 @@ async def prepare_post_view_async(source: Path, output: str, checked_report: str
         raise ValueError('Set RADIA_MESH_VIEWER_SCRATCH to an existing ASCII job directory outside the source directory')
     receipt_root = Path(tempfile.mkdtemp(prefix='.radia-post-receipt-', dir=scratch))
     receipt = receipt_root / 'receipt.json'
+    staging = receipt_root / 'staging'
+    locations = {'output': target, 'operation_root': receipt_root,
+                 'worker_receipt': receipt, 'staging': staging}
     deadline = deadline if deadline is not None else transaction_deadline()
     worker_env = env if env is not None else os.environ
     argv = [str(python or sys.executable), '-B', '-m', 'radia_mcp.mesh_viewer.post_view',
             str(source), str(target), checked_report, source_sha256, group_scope,
+            '--staging-dir', str(staging),
             '--receipt', str(receipt)]
-    await run_worker(argv, env=worker_env, deadline=deadline,
-                     phase=f'VOL conversion {source}')
-    if receipt.stat().st_size > 1024 * 1024:
-        raise RuntimeError('Conversion receipt exceeds 1 MiB; unverified evidence retained at ' + str(target))
-    data = json.loads(receipt.read_text(encoding='utf-8'))
     import re
-    if (not target.is_file() or data.get('schema') != 'radia.mesh-post-view.v1' or data.get('output') != str(target)
-            or data.get('source_sha256') != source_sha256.lower()
-            or data.get('group_scope') != group_scope or data.get('solver_input') is not False
-            or not isinstance(data.get('staging'), str) or not data.get('physical_groups')
-            or not re.fullmatch('[0-9a-f]{64}', data.get('sha256', ''))):
-        raise RuntimeError('Unbound conversion receipt; no GUI launched: ' + str(receipt))
+    phase = 'VOL conversion'
+    try:
+        await run_worker(argv, env=worker_env, deadline=deadline,
+                         phase=f'VOL conversion {source}')
+        phase = 'Receipt file/read'
+        if _is_link(receipt) or not receipt.is_file():
+            raise ValueError('Receipt must be a regular non-link file')
+        if receipt.stat().st_size > 1024 * 1024:
+            raise ValueError('Conversion receipt exceeds 1 MiB')
+        with receipt.open('rb') as stream:
+            payload = stream.read(1024 * 1024 + 1)
+        if len(payload) > 1024 * 1024:
+            raise ValueError('Conversion receipt exceeds 1 MiB')
+        phase = 'Receipt decoding'
+        data = json.loads(payload.decode('utf-8'))
+        if not isinstance(data, dict):
+            raise ValueError('Receipt must be a JSON object')
+        phase = 'Receipt binding'
+        if (not target.is_file() or data.get('schema') != 'radia.mesh-post-view.v1'
+                or data.get('output') != str(target)
+                or data.get('source_sha256') != source_sha256.lower()
+                or data.get('group_scope') != group_scope or data.get('solver_input') is not False
+                or data.get('staging') != str(staging) or not data.get('physical_groups')
+                or not isinstance(data.get('sha256'), str)
+                or not re.fullmatch('[0-9a-f]{64}', data['sha256'])):
+            raise ValueError('Unbound conversion receipt; no GUI launched')
+    except Exception as error:
+        detail = str(error)
+        if len(detail) > 8192: detail = detail[:8192] + '...'
+        raise RuntimeError(f'{phase} failed: {detail}' + _assigned_locations(locations)) from error
     bound = {**data, 'worker_receipt': str(receipt)}
     try:
         digest = await run_worker(
@@ -229,11 +279,14 @@ def main() -> int:
     parser.add_argument('source_sha256')
     parser.add_argument('group_scope', choices=['materials', 'boundaries'])
     parser.add_argument('--receipt', type=Path, required=True)
+    parser.add_argument('--staging-dir', type=Path, required=True)
     args = parser.parse_args()
     try:
         with redirect_stdout(sys.stderr):
+            if args.receipt.resolve() != args.staging_dir.resolve().parent / 'receipt.json':
+                raise ValueError('Receipt and staging must share the assigned operation root')
             result = convert_post_view(args.source, args.output, args.checked_report,
-                                       args.source_sha256, args.group_scope)
+                                       args.source_sha256, args.group_scope, staging_dir=args.staging_dir)
         payload = json.dumps(result, indent=2)
         with args.receipt.open('x', encoding='utf-8') as stream:
             stream.write(payload)

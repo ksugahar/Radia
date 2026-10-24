@@ -32,8 +32,11 @@ and full material/boundary name inventories must match the receipt. The source
 hash is checked before and after conversion. Only linear 2D/3D maps are supported;
 curved maps need a retained-geometry protocol and fail explicitly here.
 
+The parent assigns a staging child under its new receipt/operation directory
+before starting the conversion worker. The worker creates it exclusively when
+conversion reaches that phase; the receipt must name that exact assigned path.
 The existing production `radia.gmsh_post_export.GmshPostExport.write_mesh` writes
-into a new staging directory. `RADIA_MESH_VIEWER_SCRATCH` selects an existing
+there. `RADIA_MESH_VIEWER_SCRATCH` selects an existing
 ASCII job directory outside the source directory; an ASCII output directory is
 the default. Japanese output directories require that explicit scratch setting
 because the native VOL reader does not reliably handle Unicode filenames.
@@ -44,11 +47,17 @@ copied to a temporary name beside the destination, hash-verified, and published
 by an exclusive hard link. The output filesystem must support hard links;
 otherwise publication fails explicitly. The temporary copy is removed on success
 or failure. Existing outputs, source-directory outputs and adjacent option
-scripts are rejected. Staging is retained on both success and failure for
+scripts are rejected. Any created staging is retained on success and failure for
 caller-owned evidence and cleanup. Receipt directories are also retained; a
 failed conversion creates no success receipt JSON. The operator removes these
 explicitly after consumers finish and any required evidence is recovered.
 The launcher performs no automatic deletion.
+Worker or receipt file/read/size/UTF-8/JSON/binding failures report only the
+parent-known output, operation root, receipt and staging paths, labelled
+`UNVERIFIED ASSIGNED LOCATIONS`. Paths may be absent or incomplete; this is
+neither a success receipt nor verification of their contents. Invalid receipt
+metadata never supplies diagnostic locations. Requests rejected before operation
+allocation do not create directories just to provide locations.
 No other MSH writer, reverse conversion or solver initialization is used.
 
 `materials` exports all volume material groups (or 2D material groups).

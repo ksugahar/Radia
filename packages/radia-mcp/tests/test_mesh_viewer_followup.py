@@ -19,6 +19,12 @@ from radia_mcp.mesh_viewer._worker_process import run_worker, transaction_deadli
 from radia_mcp.gmsh.runtime import require_msh42
 
 
+def assigned_context(error):
+    message=str(error)
+    assert 'UNVERIFIED ASSIGNED LOCATIONS' in message
+    return json.loads(message.split('UNVERIFIED ASSIGNED LOCATIONS',1)[1].split(': ',1)[1])
+
+
 @pytest.mark.parametrize('value', ['nan', 'inf', '29', '901', 'invalid'])
 def test_invalid_deadline_does_not_launch(value, monkeypatch):
     monkeypatch.setenv('RADIA_MESH_VIEWER_TIMEOUT_SECONDS', value)
@@ -39,7 +45,7 @@ def test_post_receipt_precedes_only_one_msh_gui(tmp_path, monkeypatch):
         output.write_bytes(b'mesh')
         receipt.update(schema='radia.mesh-post-view.v1',output=str(output),
             sha256=post_view.sha256(output),source_sha256=digest,group_scope='materials',
-            solver_input=False,staging='staging',physical_groups=[[3,'iron']])
+            solver_input=False,staging=argv[argv.index('--staging-dir')+1],physical_groups=[[3,'iron']])
         Path(argv[-1]).write_text(json.dumps(receipt),encoding='utf-8')
         events.append('verified')
     async def preflight(argv, **kwargs):
@@ -68,20 +74,24 @@ def test_post_receipt_precedes_only_one_msh_gui(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('broken', [
-    'schema','output','source_sha256','group_scope','solver_input','sha256','missing target'])
+    'schema','output','source_sha256','group_scope','solver_input','sha256','staging','missing target'])
 def test_real_receipt_binding_rejects_wrong_worker_result(tmp_path,monkeypatch,broken):
     source=tmp_path/'input.vol';source.write_bytes(b'source')
     destination=tmp_path/'post';destination.mkdir()
     output=destination/'view.msh'
     digest=post_view.sha256(source)
+    assigned={}
     async def worker(argv,**kwargs):
+        if '--hash-output' in argv:pytest.fail('Digest before receipt binding')
+        assigned.update(output=str(output),worker_receipt=argv[-1],
+            operation_root=str(Path(argv[-1]).parent),staging=argv[argv.index('--staging-dir')+1])
         if broken!='missing target':output.write_bytes(b'mesh')
         receipt={'schema':'radia.mesh-post-view.v1','output':str(output),
             'source_sha256':digest,'group_scope':'materials','solver_input':False,
-            'sha256':'a'*64,'staging':'staging','physical_groups':[[3,'iron']]}
+            'sha256':'a'*64,'staging':assigned['staging'],'physical_groups':[[3,'iron']]}
         changes={'schema':'other.schema','output':str(destination/'other.msh'),
             'source_sha256':'0'*64,'group_scope':'boundaries','solver_input':True,
-            'sha256':'not-a-sha256'}
+            'sha256':'not-a-sha256','staging':str(tmp_path/'foreign-untrusted-staging')}
         if broken in changes:receipt[broken]=changes[broken]
         Path(argv[-1]).write_text(json.dumps(receipt),encoding='utf-8')
     async def forbidden_preflight(*args,**kwargs):pytest.fail('Preflight before receipt binding')
@@ -90,8 +100,10 @@ def test_real_receipt_binding_rejects_wrong_worker_result(tmp_path,monkeypatch,b
     monkeypatch.setattr(adapter,'require_interactive_desktop',lambda:{})
     monkeypatch.setattr(adapter.subprocess,'Popen',lambda *a,**k:pytest.fail('GUI before receipt binding'))
     # The real prepare_post_view_async must reject the worker's otherwise-successful receipt.
-    with pytest.raises(RuntimeError,match='Unbound conversion receipt'):
+    with pytest.raises(RuntimeError,match='Unbound conversion receipt') as caught:
         asyncio.run(adapter.open_mesh_viewer(str(source),str(output),'check',digest,'materials'))
+    assert assigned_context(caught.value)==assigned
+    assert 'verified at digest time' not in str(caught.value)
 
 
 def test_launcher_check_rejects_mismatching_expected_sha(tmp_path,monkeypatch,capsys):
@@ -118,6 +130,7 @@ def digest_case(tmp_path,monkeypatch):
     async def worker(argv,**kwargs):
         if '--hash-output' in argv:
             return NS(stdout=hashlib.sha256(target.read_bytes()).hexdigest().encode('ascii'))
+        receipt['staging']=argv[argv.index('--staging-dir')+1]
         target.write_bytes(b'mesh');locations.append(Path(argv[-1]))
         locations[-1].write_text(json.dumps(receipt),encoding='utf-8')
     monkeypatch.setattr(post_view,'run_worker',worker)
@@ -185,6 +198,64 @@ def test_plain_view_failure_has_no_invented_retained_receipt(tmp_path,monkeypatc
         asyncio.run(adapter.open_mesh_viewer(str(source)))
     assert 'artifact retained:' not in str(caught.value)
     assert 'evidence retained:' not in str(caught.value)
+    assert 'UNVERIFIED ASSIGNED LOCATIONS' not in str(caught.value)
+
+
+@pytest.mark.parametrize('fault', [
+    'worker failure','partial worker failure','missing','unreadable','oversized',
+    'invalid utf8','truncated','array','scalar','null','forged paths'])
+def test_prebinding_failure_reports_only_assigned_locations(tmp_path,monkeypatch,fault):
+    source=tmp_path/'source.vol';source.write_bytes(b'input')
+    outdir=tmp_path/'outputs';outdir.mkdir();target=outdir/'view.msh'
+    assigned={}
+    poison='foreign-untrusted-staging'
+    actual_open=Path.open
+    actual_resolve=Path.resolve
+    def no_foreign_resolution(path,*args,**kwargs):
+        if poison in str(path):pytest.fail('Resolved an invalid receipt path')
+        return actual_resolve(path,*args,**kwargs)
+    monkeypatch.setattr(Path,'resolve',no_foreign_resolution)
+    async def worker(argv,**kwargs):
+        assert '--hash-output' not in argv,'Digest accepted invalid receipt'
+        receipt=Path(argv[-1]);stage=Path(argv[argv.index('--staging-dir')+1])
+        assigned.update(output=str(target),operation_root=str(receipt.parent),
+                        worker_receipt=str(receipt),staging=str(stage))
+        if fault=='worker failure':raise RuntimeError('変換できません')
+        if fault=='missing':return
+        stage.mkdir()
+        payload={'partial worker failure':b'{','oversized':b'x'*(1024*1024+1),
+            'invalid utf8':b'\xff','truncated':b'{"staging":"'+poison.encode(),
+            'array':b'[]','scalar':json.dumps(poison).encode(),'null':b'null',
+            'forged paths':json.dumps({'schema':'wrong','staging':poison*1000,
+                                      'output':poison}).encode()}.get(fault,b'{}')
+        receipt.write_bytes(payload)
+        if fault=='partial worker failure':raise RuntimeError('partial conversion failed')
+        if fault=='unreadable':
+            def denied(path,*args,**kwargs):
+                if path==receipt and args and args[0]=='rb':raise PermissionError('receipt denied')
+                return actual_open(path,*args,**kwargs)
+            monkeypatch.setattr(Path,'open',denied)
+    async def forbidden(*args,**kwargs):pytest.fail('Preflight before receipt accepted')
+    monkeypatch.setattr(post_view,'run_worker',worker)
+    monkeypatch.setattr(adapter,'run_worker',forbidden)
+    monkeypatch.setattr(adapter,'require_interactive_desktop',lambda:{})
+    monkeypatch.setattr(adapter.subprocess,'Popen',lambda *a,**k:pytest.fail('GUI on failed receipt'))
+    with pytest.raises(RuntimeError) as caught:
+        asyncio.run(adapter.open_mesh_viewer(str(source),str(target),'report','a'*64,'materials'))
+    assert assigned_context(caught.value)==assigned
+    assert 'verified at digest time' not in str(caught.value)
+    assert poison not in str(caught.value)
+    assert caught.value.__cause__ is not None and not target.exists()
+    assert source.read_bytes()==b'input' and Path(assigned['operation_root']).is_dir()
+    if fault in ('worker failure','missing'):assert not Path(assigned['staging']).exists()
+    if fault=='worker failure':assert '変換できません' in str(caught.value)
+
+
+def test_invalid_request_does_not_allocate_diagnostic_workspace(tmp_path,monkeypatch):
+    source=tmp_path/'wrong.txt';source.write_bytes(b'input')
+    monkeypatch.setattr(post_view.tempfile,'mkdtemp',lambda **kwargs:pytest.fail('Workspace before valid request'))
+    with pytest.raises(ValueError,match='VOL post-view'):
+        asyncio.run(post_view.prepare_post_view_async(source,str(tmp_path/'view.msh'),'report','a'*64,'materials'))
 
 
 @pytest.mark.skipif(sys.platform!='win32',reason='Windows digest worker contract')
