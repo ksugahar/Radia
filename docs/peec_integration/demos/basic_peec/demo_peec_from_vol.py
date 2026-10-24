@@ -1,10 +1,10 @@
 """
-PEEC Analysis from GMSH Mesh
+PEEC Analysis from Netgen .vol Mesh
 
-Integrates Radia's proven PEEC solver with GMSH mesh input.
+Integrates Radia's proven PEEC solver with Netgen .vol mesh input.
 
 Workflow:
-    1. Load GMSH mesh (circular_coil.msh or circular_coil_with_ports.msh)
+    1. Load Netgen .vol mesh (circular_coil.vol or circular_coil_with_ports.vol)
     2. Extract nodes and edges
     3. Feed to PEECBuilder (existing, verified implementation)
     4. Compute L, R matrices and impedance
@@ -17,12 +17,12 @@ from pathlib import Path
 
 import numpy as np
 
-GMSH_MODELS = Path(__file__).resolve().parents[1] / "gmsh_models"
-sys.path.insert(0, str(GMSH_MODELS))
-from gmsh_ascii_reader import read_gmsh_ascii  # noqa: E402
+SOLVER_INPUT_TOOLS = Path(__file__).resolve().parents[1] / "gmsh_models"
+sys.path.insert(0, str(SOLVER_INPUT_TOOLS))
+from solver_vol import load_solver_mesh, vertex_data, element_groups  # noqa: E402
 
 print("=" * 70)
-print("PEEC Analysis from GMSH Mesh")
+print("PEEC Analysis from Netgen .vol Mesh")
 print("Using Radia's Built-in PEEC Solver")
 print("=" * 70)
 
@@ -36,31 +36,19 @@ except ImportError:
     sys.exit(1)
 
 # Check mesh file
-mesh_file = GMSH_MODELS / "circular_coil.msh"
+mesh_file, mesh = load_solver_mesh()
 
-if not mesh_file.exists():
-    print(f"\nERROR: Mesh file not found: {mesh_file}")
-    print("\nGenerate with:")
-    print("  cd gmsh_models")
-    print("  python generate_coil_cubit.py   # drives Coreform Cubit headless")
-    sys.exit(1)
-
-print(f"\n[1] Reading GMSH mesh fixture: {mesh_file.name}")
-
-mesh = read_gmsh_ascii(mesh_file)
-
-node_tags = mesh.node_tags
+node_tags, coords = vertex_data(mesh)
 n_nodes = len(node_tags)
-coords = mesh.coords * 1e-3  # mm to m
 
 print(f"    Nodes: {n_nodes}")
 
 # Get triangles
-elem_types, elem_tags, elem_node_tags = mesh.grouped_elements()
+elem_types, elem_tags, elem_node_tags = element_groups(mesh)
 
 triangles = []
 for i, elem_type in enumerate(elem_types):
-    if elem_type == 2:  # Triangle
+    if elem_type == "triangle":  # Triangle
         node_tags_flat = elem_node_tags[i]
         n_elems = len(node_tags_flat) // 3
         for j in range(n_elems):
@@ -139,7 +127,7 @@ for tri in triangles:
         ))
         node_areas[idx] += tri_area / 3.0  # Distribute to 3 vertices
 
-node_map = {}  # GMSH tag -> PEEC index
+node_map = {}  # Netgen .vol tag -> PEEC index
 for i, tag in enumerate(node_tags):
     idx = np.where(node_tags == tag)[0][0]
     pos = coords[idx]  # NumPy array, not list
@@ -230,7 +218,7 @@ for f in test_frequencies:
     print(f"    {f/1e3:8.1f} kHz: |Z| = {mag:.4e} Ohm, angle = {angle:.1f} deg")
 
 print(f"\n" + "=" * 70)
-print("PEEC Analysis from GMSH Completed!")
+print("PEEC Analysis from Netgen .vol Completed!")
 print("=" * 70)
 
 print(f"\nSummary:")

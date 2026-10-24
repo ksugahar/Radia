@@ -1,7 +1,6 @@
-"""Normalize a Hiruma GMSH/Netgen mesh into a checked Netgen ``.vol``.
+"""Complete material interfaces on a Hiruma Netgen ``.vol`` mesh.
 
-The historical GMSH input contains the correct tetrahedral volume topology but
-does not emit surface descriptors for the enclosed material interfaces.  This
+A source .vol may omit surface descriptors for enclosed material interfaces.  This
 converter preserves every point and volume element and adds those missing
 interface triangles so ``check-vol`` can audit domain ownership.
 """
@@ -11,22 +10,20 @@ from itertools import combinations
 from pathlib import Path
 
 import numpy as np
-from netgen.meshing import Element2D, FaceDescriptor, Mesh
-from netgen.read_gmsh import ReadGmsh
 
 
 def _load(path):
-    if path.suffix.lower() == ".msh":
-        return ReadGmsh(str(path))
     if path.suffix.lower() == ".vol":
+        from netgen.meshing import Mesh
         mesh = Mesh(dim=3)
         mesh.Load(str(path))
         return mesh
-    raise ValueError(f"expected .msh or .vol input, got {path}")
+    raise ValueError(f"expected .vol input, got {path}")
 
 
 def add_missing_material_interfaces(mesh):
     """Add one named surface element for each cross-material tetra face."""
+    from netgen.meshing import Element2D, FaceDescriptor
     existing_faces = {
         tuple(sorted(point.nr for point in element.vertices))
         for element in mesh.Elements2D()
