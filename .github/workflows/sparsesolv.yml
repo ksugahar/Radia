@@ -57,6 +57,9 @@ on:
       - 'validation_test/induction_heating/aphi_beak_section_sweep.py'
       - 'validation_test/induction_heating/make_beak_fin_step.py'
       - 'validation_test/panels/fixtures/**'
+      - 'tools/ci_numerical_plan.py'
+      - 'tools/ci_numerical_runtime.py'
+      - 'tools/ci_numerical_inputs.json'
       - 'tools/ci_ams_inputs.py'
       - 'tests/conftest.py'
       - 'tests/test_direct_residual_gate.py'
@@ -345,6 +348,9 @@ on:
       - 'validation_test/induction_heating/aphi_beak_section_sweep.py'
       - 'validation_test/induction_heating/make_beak_fin_step.py'
       - 'validation_test/panels/fixtures/**'
+      - 'tools/ci_numerical_plan.py'
+      - 'tools/ci_numerical_runtime.py'
+      - 'tools/ci_numerical_inputs.json'
       - 'tools/ci_ams_inputs.py'
       - 'tests/conftest.py'
       - 'tests/test_direct_residual_gate.py'
@@ -647,7 +653,7 @@ jobs:
         id: native-impact
         shell: pwsh
         run: |
-          python tools/sparsesolv_ci_impact.py --lane sparsesolv
+          python tools/ci_numerical_plan.py --github-event --out "$env:RUNNER_TEMP/numerical-plan.json" --github-output "$env:GITHUB_OUTPUT"
           exit $LASTEXITCODE
 
       - name: Create isolated native environment
@@ -667,15 +673,48 @@ jobs:
           "RADIA_CI_VENV=$venv" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
 
+      - name: Install Gmsh post-processing reference separately
+        if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.gmsh_required == 'true'
+        shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\packages\radia-mcp\src'
+        run: |
+          # Resolve Gmsh alone; never mix its dedicated index with PyPI.
+          python -m pip install --force-reinstall --no-deps --pre -i https://gmsh.info/python-packages-dev --report "$env:RUNNER_TEMP/gmsh-install.json" gmsh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $gmsh = @((Get-Content -Raw "$env:RUNNER_TEMP/gmsh-install.json" | ConvertFrom-Json).install |
+            Where-Object { $_.metadata.name -eq 'gmsh' })
+          if ($gmsh.Count -ne 1) { throw 'Expected one Gmsh install identity' }
+          $url = [uri]$gmsh[0].download_info.url
+          if ($url.Scheme -ne 'https' -or $url.Host -ne 'gmsh.info') {
+            throw 'Gmsh must come from its official index'
+          }
+          $expected = $gmsh[0].download_info.archive_info.hashes.sha256
+          if ($expected -cnotmatch '^[0-9a-f]{64}$') { throw 'Missing Gmsh wheel SHA256' }
+          $archives = Join-Path $env:RUNNER_TEMP 'gmsh-wheel'
+          python -m pip download --no-index --no-deps --dest $archives $url.AbsoluteUri
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $wheels = @(Get-ChildItem -LiteralPath $archives -Filter '*.whl' -File)
+          if ($wheels.Count -ne 1) { throw 'Expected one original Gmsh wheel' }
+          $actual = (Get-FileHash -LiteralPath $wheels[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw 'Gmsh wheel hash differs from installer report' }
+          $env:RADIA_GMSH_PROVENANCE = Join-Path $env:RUNNER_TEMP 'gmsh-provenance.json'
+          # The source-owned recorder verifies both installed Python and DLL bytes.
+          python -m radia_mcp.gmsh.runtime --wheel $wheels[0].FullName --record $env:RADIA_GMSH_PROVENANCE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import json,os,pathlib; from radia_mcp.gmsh.runtime import qualify_runtime; identity=qualify_runtime(); (pathlib.Path(os.environ['RUNNER_TEMP'])/'gmsh-runtime.json').write_text(json.dumps(identity,indent=2),encoding='utf-8')"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_GMSH_PROVENANCE=$env:RADIA_GMSH_PROVENANCE" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Verify native build provenance contracts
-        if: steps.native-impact.outputs.required == 'true'
+        if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.native_required == 'true'
         shell: pwsh
         run: |
-          python tools/run_test_tier.py --profile native-build-contracts
+          python tools/run_test_tier.py --profile native-build-contracts --numerical-plan "$env:RUNNER_TEMP/numerical-plan.json"
           exit $LASTEXITCODE
 
       - name: Build current package and SparseSolv
-        if: steps.native-impact.outputs.required == 'true'
+        if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.native_required == 'true'
         shell: pwsh
         run: |
           . ./tools/native_build_provenance.ps1
@@ -703,7 +742,7 @@ jobs:
           }
 
       - name: Verify source provenance and run required AMS tests
-        if: steps.native-impact.outputs.required == 'true'
+        if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.ams_required == 'true'
         shell: pwsh
         env:
           PYTHONPATH: '${{ github.workspace }}\src'
@@ -712,11 +751,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -c "import pathlib,importlib.machinery,radia.peec_matrices as p; assert isinstance(p.__loader__,importlib.machinery.ExtensionFileLoader), p.__file__; assert pathlib.Path(p.__file__).resolve().parent == (pathlib.Path.cwd()/'src'/'radia').resolve(); assert hasattr(p,'PEECBuilder'); print('tested PEEC module:',p.__file__)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python tools/run_test_tier.py --profile sparsesolv --junitxml "$env:RUNNER_TEMP\sparsesolv-results.xml"
+          python tools/run_test_tier.py --profile sparsesolv --numerical-plan "$env:RUNNER_TEMP/numerical-plan.json" --junitxml "$env:RUNNER_TEMP\sparsesolv-results.xml"
           exit $LASTEXITCODE
 
       - name: Run required NGSolve numerical contracts
-        if: steps.native-impact.outputs.required == 'true'
+        if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.python_required == 'true'
         shell: pwsh
         env:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
@@ -729,14 +768,14 @@ jobs:
         run: |
           python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python tools/run_test_tier.py --profile solver-numerics --junitxml "$env:RUNNER_TEMP\solver-numerics.xml"
+          python tools/run_test_tier.py --profile solver-numerics --numerical-plan "$env:RUNNER_TEMP/numerical-plan.json" --junitxml "$env:RUNNER_TEMP\solver-numerics.xml"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-numerics.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
           exit $LASTEXITCODE
 
       - name: Validate solver-heavy source or verify trusted prior evidence
         id: heavy-validation
-        if: steps.native-impact.outputs.required == 'true'
+        if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.heavy_required == 'true'
         shell: pwsh
         env:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-simulink\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
@@ -750,10 +789,9 @@ jobs:
           python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $forceArgs = @()
-          # PR environment/toolchain changes must not borrow old heavy evidence.
-          if ('${{ github.event_name }}' -eq 'pull_request') { $forceArgs = @('--force') }
+          # Exact per-case source/environment fingerprints govern trusted reuse; PRs are not forced.
           if ('${{ github.event_name }}' -notin @('push','pull_request') -and '${{ inputs.force_validation }}' -ne 'false') { $forceArgs = @('--force') }
-          python tools/validation_source_gate.py --output "$env:RUNNER_TEMP/solver-heavy-validation" @forceArgs
+          python tools/validation_source_gate.py --numerical-plan "$env:RUNNER_TEMP/numerical-plan.json" --output "$env:RUNNER_TEMP/solver-heavy-validation" @forceArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $verification = Get-Content -Raw "$env:RUNNER_TEMP/solver-heavy-validation/verification.json" | ConvertFrom-Json
           if ($verification.accepted -ne $true) { throw 'solver-heavy validation failed' }
@@ -776,6 +814,10 @@ jobs:
         with:
           name: sparsesolv-results
           path: |
+            ${{ runner.temp }}/numerical-plan.json
+            ${{ runner.temp }}/gmsh-install.json
+            ${{ runner.temp }}/gmsh-provenance.json
+            ${{ runner.temp }}/gmsh-runtime.json
             ${{ runner.temp }}/sparsesolv-results.xml
             ${{ runner.temp }}/solver-numerics.xml
             ${{ runner.temp }}/solver-heavy-validation/verification.json

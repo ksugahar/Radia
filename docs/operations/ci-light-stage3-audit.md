@@ -315,3 +315,14 @@ the historical numerical gates, and adds no solver or GPU imports. Recomputing
 with the prior executable source and unchanged declaration reproduces the old
 seal; the reviewed closure digest is `df15b00bfccb0056284d27f6a5259e8401102aa3ec5542299cca272f4c4bf4a4`.
 The shared precheck repeats F2 in its isolated lightweight environment.
+## Numerical plan consumers (2026-10-24)
+
+The tier runner can consume an exact-source numerical plan. Its shared verifier
+and planner are standard-library-only; they inspect immutable Git blobs and do
+not import production numerical modules. The sealed declaration JSON is included
+explicitly because dynamic loaders are reviewed inputs, not inferred exemptions.
+The source contracts exercise real CLI processes and temporary Git repositories,
+without solver execution, native compilation, MATLAB or GPU use. Source-only
+import rejection, runner labels, requirements and the active light budget remain
+unchanged. Recompute the executable-closure-v2 seal with `audit_digest` after
+integrating these sources; source contracts do not qualify native artifacts.

@@ -1,8 +1,18 @@
-"""Keep native solver coverage connected without importing native dependencies."""
+"""Guards: numerical workflows retain native provenance and required execution paths.
+
+Assumes: source-only workflow and selector contracts; no native import or numerical
+accuracy is certified by these checks.
+"""
 
 import json
 import importlib.util
 from pathlib import Path
+import hashlib
+import os
+import shutil
+import subprocess
+import sys
+import zipfile
 
 import pytest
 import yaml
@@ -21,6 +31,92 @@ test = ["pytest"]
 dev = ["ruff"]
 beam = ["scipy"]
 '''
+
+
+@pytest.mark.parametrize('failure', ['', 'wheel_hash', 'dll_bytes', 'native_probe', 'foreign_url', 'missing_hash'])
+def test_gmsh_ci_setup_qualifies_exact_wheel_before_exporting_provenance(tmp_path, failure):
+    """Guards: CI cannot run native Gmsh gates without a qualified wheel identity.
+
+    Assumes: the actual workflow block and source recorder, offline pip transport
+    and native-probe doubles; this is a launcher contract, not native validation.
+    """
+    workflow = yaml.safe_load((ROOT / '.github/workflows/sparsesolv.yml').read_text(encoding='utf-8'))
+    steps = workflow['jobs']['ams-regression']['steps']
+    step = next(s for s in steps if s.get('name') == 'Install Gmsh post-processing reference separately')
+    assert "gmsh_required == 'true'" in step['if']
+    assert step['env']['PYTHONPATH'].endswith('packages\\radia-mcp\\src')
+    assert steps.index(step) < next(i for i, s in enumerate(steps) if s.get('name') == 'Run required NGSolve numerical contracts')
+    installed = tmp_path / 'installed'; installed.mkdir()
+    module = "from pathlib import Path\nlibpath = str(Path(__file__).with_name('gmsh.dll'))\n"
+    (installed / 'gmsh.py').write_text(module, encoding='utf-8')
+    (installed / 'gmsh.dll').write_bytes(b'fixture DLL, not a native library')
+    metadata = 'Name: gmsh\nVersion: 5.0.0.dev1\n'
+    info = installed / 'gmsh-5.0.0.dev1.dist-info'; info.mkdir()
+    (info / 'METADATA').write_text(metadata, encoding='utf-8')
+    wheel = tmp_path / 'original.whl'
+    with zipfile.ZipFile(wheel, 'w') as archive:
+        archive.writestr('gmsh.py', (installed / 'gmsh.py').read_bytes())
+        archive.writestr('gmsh.dll', (installed / 'gmsh.dll').read_bytes())
+        archive.writestr('gmsh-5.0.0.dev1.dist-info/METADATA', metadata)
+    digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    driver = tmp_path / 'python-driver.py'
+    driver.write_text('''from pathlib import Path
+import json,os,runpy,shutil,sys
+r=Path(__file__).parent;a=sys.argv[1:];failure=os.environ['SETUP_FAILURE']
+def trace(stage):
+ with (r/'trace.txt').open('a',encoding='utf-8') as f:f.write(stage+'\\n')
+if a[:3]==['-m','pip','install']:
+ trace('install');assert '--extra-index-url' not in a and a[a.index('-i')+1]=='https://gmsh.info/python-packages-dev'
+ digest=os.environ['WHEEL_SHA'] if failure!='wheel_hash' else '0'*64
+ url='https://gmsh.info/python-packages-dev/gmsh-fixture.whl' if failure!='foreign_url' else 'https://other.invalid/gmsh.whl'
+ hashes={'sha256':digest} if failure!='missing_hash' else {}
+ Path(a[a.index('--report')+1]).write_text(json.dumps({'install':[{'metadata':{'name':'gmsh'},'download_info':{'url':url,'archive_info':{'hashes':hashes}}}]}),encoding='utf-8')
+elif a[:3]==['-m','pip','download']:
+ trace('download');assert '--no-index' in a and a[-1]=='https://gmsh.info/python-packages-dev/gmsh-fixture.whl'
+ d=Path(a[a.index('--dest')+1]);d.mkdir();shutil.copyfile(r/'original.whl',d/'gmsh-fixture.whl')
+elif a[:2]==['-m','radia_mcp.gmsh.runtime']:
+ trace('record');sys.path.insert(0,str(r/'installed'))
+ if failure=='dll_bytes':(r/'installed/gmsh.dll').write_bytes(b'wrong installed DLL')
+ sys.argv=['runtime',*a[2:]];runpy.run_module('radia_mcp.gmsh.runtime',run_name='__main__')
+elif a[0]=='-c':
+ trace('probe');from radia_mcp.gmsh import runtime
+ def probe():
+  assert Path(os.environ['RADIA_GMSH_PROVENANCE']).is_file()
+  if failure=='native_probe':raise RuntimeError('native probe rejected fixture')
+  return {'fixture_only':True}
+ runtime.qualify_runtime=probe;exec(a[1])
+else:raise AssertionError(a)
+''', encoding='utf-8')
+    def quote(path):
+        return "'" + str(path).replace("'", "''") + "'"
+    script = tmp_path / 'step.ps1'
+    script.write_text("$ErrorActionPreference = 'Stop'\nfunction python { & " + quote(sys.executable)
+                      + ' ' + quote(driver) + ' @args; $global:LASTEXITCODE = $LASTEXITCODE }\n'
+                      + step['run'], encoding='utf-8')
+    env = {**os.environ, 'RUNNER_TEMP': str(tmp_path), 'GITHUB_ENV': str(tmp_path / 'github.env'),
+           'PYTHONPATH': str(ROOT / 'packages/radia-mcp/src'), 'PYTHONUTF8': '1',
+           'PYTHONIOENCODING': 'utf-8', 'SETUP_FAILURE': failure, 'WHEEL_SHA': digest}
+    env.pop('RADIA_GMSH_PROVENANCE', None)
+    pwsh = shutil.which('pwsh')
+    assert pwsh, 'PowerShell is required for the actual Windows CI setup contract'
+    result = subprocess.run([pwsh, '-NoProfile', '-File', str(script)], env=env,
+                            capture_output=True, encoding='utf-8', errors='replace', timeout=60)
+    trace = (tmp_path / 'trace.txt').read_text(encoding='utf-8').splitlines()
+    if failure:
+        assert result.returncode != 0, (failure, result.stdout, result.stderr)
+        assert not (tmp_path / 'github.env').exists(), 'Failed qualification must not export an identity'
+        if failure in {'wheel_hash', 'foreign_url', 'missing_hash'}:
+            assert 'record' not in trace, trace
+        if failure == 'dll_bytes':
+            assert 'installed runtime differs from wheel' in result.stderr, result.stderr
+            assert 'probe' not in trace, trace
+    else:
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        assert trace == ['install', 'download', 'record', 'probe'], trace
+        identity = json.loads((tmp_path / 'gmsh-provenance.json').read_text(encoding='utf-8'))
+        assert identity['wheel_sha256'] == digest
+        assert len(identity['runtime_payload_sha256']) == 2
+        assert 'RADIA_GMSH_PROVENANCE=' in (tmp_path / 'github.env').read_text(encoding='utf-8-sig')
 
 
 def test_sparsesolv_is_in_native_release_and_focused_tiers_only():
@@ -132,7 +228,7 @@ def test_native_impact_gates_expensive_steps_and_watches_itself():
         assert triggers[event]["paths"][-1] == "!**/*.md"
     steps = workflow["jobs"]["ams-regression"]["steps"]
     selector = next(s for s in steps if s.get("id") == "native-impact")
-    assert "python tools/sparsesolv_ci_impact.py" in selector["run"]
+    assert "python tools/ci_numerical_plan.py --github-event" in selector["run"]
     for step in steps:
         if step.get("name", "").startswith(("Create isolated", "Build ", "Verify source", "Upload solver")):
             assert "steps.native-impact.outputs.required == 'true'" in step["if"]
