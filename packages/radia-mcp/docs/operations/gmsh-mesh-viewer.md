@@ -39,8 +39,11 @@ the default. Japanese output directories require that explicit scratch setting
 because the native VOL reader does not reliably handle Unicode filenames.
 A hash-identical VOL copy is loaded from staging. The exporter's `.geo`/`.opt`
 companions remain there and are never executed, opened or merged. After format
-and physical-group/selected-element-count checks, only byte-identical MSH content is copied to a new
-destination. Existing outputs, source-directory outputs and adjacent option
+and physical-group/selected-element-count checks, byte-identical MSH content is
+copied to a temporary name beside the destination, hash-verified, and published
+by an exclusive hard link. The output filesystem must support hard links;
+otherwise publication fails explicitly. The temporary copy is removed on success
+or failure. Existing outputs, source-directory outputs and adjacent option
 scripts are rejected. Staging is retained on both success and failure for
 caller-owned evidence and cleanup. Receipt directories are also retained; a
 failed conversion creates no success receipt JSON. The operator removes these

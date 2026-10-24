@@ -1,1 +1,1 @@
-"""Read-only human Netgen .vol viewing, shared by CLI and MCP."""
+"""Human Netgen VOL/Gmsh MSH views and explicit one-way VOL post views."""
