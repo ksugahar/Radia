@@ -40,10 +40,15 @@ def test_public_description_and_optional_cubit_ownership():
     assert len(project["description"]) <= 512
     assert "distributed separately in cubit-mesh-export" in project["description"]
     assert "mcp-server-cubit" not in project["scripts"]
-    requirement, = map(Requirement, project["optional-dependencies"]["cubit"])
-    assert requirement.name == "cubit-mesh-export"
-    assert requirement.marker.evaluate({"python_version": "3.12", "sys_platform": "win32"})
-    assert not requirement.marker.evaluate({"python_version": "3.12", "sys_platform": "linux"})
+    for extra in ("cubit", "build123d"):
+        requirements = map(Requirement, project["optional-dependencies"][extra])
+        checker, = (item for item in requirements if item.name == "cubit-mesh-export")
+        for python, platform, expected in (("3.12", "win32", True),
+                                            ("3.13", "win32", False),
+                                            ("3.12", "linux", False)):
+            environment = {"python_version": python, "sys_platform": platform}
+            actual = checker.marker.evaluate(environment)
+            assert actual is expected, (extra, environment, str(checker), actual, expected)
     readme = (PACKAGE_ROOT / "README.md").read_text(encoding="utf-8")
     assert "core (Cubit" not in readme
     assert "| **Cubit** | `mcp-server-cubit`" not in readme
