@@ -227,73 +227,12 @@ builder.connect_parallel([coil1, coil2])
 > **Note**: The original 1D edge mesh import workflow (2026-02-13 proposal) has been
 > **superseded** by the filament model in `coil_from_cad.py`. See Section 3.4-3.6 below.
 
-### 3.1 Legacy: Cubit 1D Edge Mesh (Superseded)
+### 3.1 Solver input boundary
 
-The following workflow was the original proposal. It is no longer recommended:
-
-```python
-import cubit
-
-cubit.init(['cubit', '-nojournal', '-batch'])
-cubit.cmd("import step 'coil.step'")
-
-# 1D edge mesh
-curve_id = cubit.get_last_id("curve")
-cubit.cmd(f"curve {curve_id} interval 36")
-cubit.cmd(f"mesh curve {curve_id}")
-cubit.cmd(f"block 1 add curve {curve_id}")
-cubit.cmd("block 1 name 'conductor'")
-cubit.cmd('export gmsh "coil_mesh.msh" overwrite')
-```
-
-**Use `filaments_from_step()` instead** — it extracts topology directly from the STEP solid.
-
-### 3.2 Step 2 -- Import to Radia PEEC
-
-```python
-import gmsh
-from peec_matrices import PEECBuilder
-
-# Load mesh
-gmsh.initialize()
-gmsh.open("coil_mesh.msh")
-
-# Get nodes and edges
-node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
-coords = node_coords.reshape(-1, 3) * 1e-3  # mm to m
-
-elem_types, elem_tags, elem_node_tags = gmsh.model.mesh.getElements()
-
-# Extract edge elements
-edges = []
-for i, elem_type in enumerate(elem_types):
-    if elem_type == 1:  # 2-node line
-        node_tags_flat = elem_node_tags[i]
-        n_elems = len(node_tags_flat) // 2
-        for j in range(n_elems):
-            n0 = node_tags_flat[j*2]
-            n1 = node_tags_flat[j*2 + 1]
-            edges.append((n0, n1))
-
-# Create PEEC segments
-builder = PEECBuilder()
-
-# Cross-section parameters (NOT in mesh)
-width = 4e-3   # 4mm
-height = 4e-3  # 4mm
-sigma = 5.8e7  # S/m (copper)
-
-for n0, n1 in edges:
-    idx0 = np.where(node_tags == n0)[0][0]
-    idx1 = np.where(node_tags == n1)[0][0]
-    p0 = coords[idx0]
-    p1 = coords[idx1]
-
-    builder.create_wire(p0, p1, width, height, 1, sigma)
-
-# Build matrices
-L, R, P, M_LS = builder.build()
-```
+Use checked Cubit/Netgen `.vol` meshes and their versioned label contracts
+for mesh-based analysis. Gmsh MSH 4.2 is derived post-processing output and
+is never read back into PEEC. The existing `filaments_from_step()` route
+extracts explicit conductor topology from CAD; it is not a mesh import.
 
 ### 3.3 Known Problems and Solutions
 

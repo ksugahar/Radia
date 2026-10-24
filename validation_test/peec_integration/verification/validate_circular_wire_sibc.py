@@ -24,7 +24,7 @@ import numpy as np
 from scipy.special import iv  # Modified Bessel functions
 import matplotlib.pyplot as plt
 
-from radia.peec_mesh_import import GMSHCenterlineReader
+from centerline_vol import read_centerline
 
 print("=" * 70)
 print("PEEC SIBC Validation: Circular Wire vs Bessel Analytical")
@@ -44,25 +44,25 @@ SIGMA_COPPER = 5.8e7  # S/m
 MU_0 = 4 * np.pi * 1e-7  # H/m
 
 # ============================================================================
-# Read Wire Parameters and Mesh from Cubit
+# Read Wire Parameters and Mesh from Netgen
 # ============================================================================
 
-print("\n[Step 1] Reading Cubit-generated mesh...")
+print("\n[Step 1] Reading checked Netgen .vol mesh...")
 
 # Read wire parameters
 param_file = os.path.join(os.path.dirname(__file__),
-                          "cubit_mesh_generation/circular_wire_params.txt")
+                          "netgen_mesh_generation/circular_wire_params.txt")
 mesh_file = os.path.join(os.path.dirname(__file__),
-                         "cubit_mesh_generation/circular_wire_centerline.msh")
+                         "netgen_mesh_generation/circular_wire_centerline.vol")
 
 if not os.path.exists(param_file):
     print(f"\nERROR: Parameter file not found: {param_file}")
-    print("Run generate_circular_wire.py in Cubit first!")
+    print("Run netgen_mesh_generation/generate_centerlines.py first!")
     sys.exit(1)
 
 if not os.path.exists(mesh_file):
     print(f"\nERROR: Mesh file not found: {mesh_file}")
-    print("Run generate_circular_wire.py in Cubit first!")
+    print("Run netgen_mesh_generation/generate_centerlines.py first!")
     sys.exit(1)
 
 # Parse parameters
@@ -84,12 +84,10 @@ sigma = wire_params.get('sigma', SIGMA_COPPER)
 n_segments = int(wire_params.get('n_segments', 10))
 cross_section_area = np.pi * wire_radius**2
 
-# Read GMSH centerline mesh
-reader = GMSHCenterlineReader(mesh_file)
-nodes, edges = reader.read()
-segments = reader.get_segments()
+# Read the checked native Netgen 1D mesh; no Gmsh solver-input route.
+nodes, edges, segments, centerline_length = read_centerline(mesh_file)
 
-print(f"\nWire parameters (from Cubit):")
+print(f"\nWire parameters (SI contract):")
 print(f"  Length: {wire_length * 1e3:.0f} mm")
 print(f"  Radius: {wire_radius * 1e3:.2f} mm")
 print(f"  Area: {cross_section_area * 1e6:.4f} mm^2")
@@ -97,7 +95,7 @@ print(f"  Conductivity: {sigma:.2e} S/m (copper)")
 print(f"  Segments: {len(segments)}")
 
 # Verify total length
-total_length = reader.get_total_length()
+total_length = centerline_length
 length_error = abs(total_length - wire_length) / wire_length * 100
 print(f"\nMesh validation:")
 print(f"  Expected length: {wire_length:.6f} m")

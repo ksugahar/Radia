@@ -1,8 +1,8 @@
 """
-PEEC Analysis with Port-Defined GMSH Mesh
+PEEC Analysis with Port-Defined Netgen .vol Mesh
 
 Workflow:
-    1. Load GMSH mesh with port definitions (circular_coil_with_ports.msh)
+    1. Load Netgen .vol mesh with port definitions (circular_coil_with_ports.vol)
     2. Extract port regions (port_positive, port_negative)
     3. Build PEEC model from mesh edges
     4. Create port excitation vector
@@ -27,12 +27,12 @@ from pathlib import Path
 
 import numpy as np
 
-GMSH_MODELS = Path(__file__).resolve().parent
-sys.path.insert(0, str(GMSH_MODELS))
-from gmsh_ascii_reader import read_gmsh_ascii  # noqa: E402
+SOLVER_INPUT_TOOLS = Path(__file__).resolve().parent
+sys.path.insert(0, str(SOLVER_INPUT_TOOLS))
+from solver_vol import load_solver_mesh, vertex_data, element_groups  # noqa: E402
 
 print("=" * 70)
-print("PEEC Analysis with Port-Defined GMSH Mesh")
+print("PEEC Analysis with Port-Defined Netgen .vol Mesh")
 print("Using Radia PEEC Solver (FastMaxwell-based)")
 print("=" * 70)
 
@@ -46,31 +46,19 @@ except ImportError:
     sys.exit(1)
 
 # Check mesh file
-mesh_file = GMSH_MODELS / "circular_coil_with_ports.msh"
+mesh_file, mesh = load_solver_mesh()
 
-if not mesh_file.exists():
-    print(f"\nERROR: Mesh file not found: {mesh_file}")
-    print("\nGenerate with:")
-    print("  cd gmsh_models")
-    print("  python generate_coil_with_ports.py   # drives Coreform Cubit headless")
-    sys.exit(1)
-
-print(f"\n[1] Reading GMSH mesh fixture with ports: {mesh_file.name}")
-
-mesh = read_gmsh_ascii(mesh_file)
-
-node_tags = mesh.node_tags
+node_tags, coords = vertex_data(mesh)
 n_nodes = len(node_tags)
-coords = mesh.coords * 1e-3  # mm to m
 
 print(f"    Nodes: {n_nodes}")
 
 # Get triangles
-elem_types, elem_tags, elem_node_tags = mesh.grouped_elements()
+elem_types, elem_tags, elem_node_tags = element_groups(mesh)
 
 triangles = []
 for i, elem_type in enumerate(elem_types):
-    if elem_type == 2:  # Triangle
+    if elem_type == "triangle":  # Triangle
         node_tags_flat = elem_node_tags[i]
         n_elems = len(node_tags_flat) // 3
         for j in range(n_elems):
@@ -80,13 +68,13 @@ for i, elem_type in enumerate(elem_types):
 print(f"    Triangles: {len(triangles)}")
 
 # Define port regions using coordinate-based selection
-# (Sideset not exported by export gmsh, use coordinates instead)
+# (Use the declared geometric port selection on the checked solver mesh)
 print("\n[2] Defining port regions (coordinate-based)...")
 
 # Triangle ID -> nodes mapping
 tri_id_to_nodes = {}
 for i, elem_type in enumerate(elem_types):
-    if elem_type == 2:  # Triangle
+    if elem_type == "triangle":  # Triangle
         node_tags_flat = elem_node_tags[i]
         tri_tags_flat = elem_tags[i]
         n_elems = len(node_tags_flat) // 3

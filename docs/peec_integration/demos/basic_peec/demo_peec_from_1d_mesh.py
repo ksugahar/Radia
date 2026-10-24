@@ -1,8 +1,8 @@
 """
-PEEC Analysis from 1D Line Mesh (GMSH)
+PEEC Analysis from 1D Line Mesh (Netgen .vol)
 
 Workflow:
-    1. Load 1D line mesh (circular_coil_1d.msh)
+    1. Load 1D line mesh (circular_coil_1d.vol)
     2. Extract edge elements (start_node, end_node pairs)
     3. Convert edges to PEEC segments (center, direction, length)
     4. Build PEEC matrices with specified cross-section
@@ -22,9 +22,9 @@ from pathlib import Path
 
 import numpy as np
 
-GMSH_MODELS = Path(__file__).resolve().parents[1] / "gmsh_models"
-sys.path.insert(0, str(GMSH_MODELS))
-from gmsh_ascii_reader import read_gmsh_ascii  # noqa: E402
+SOLVER_INPUT_TOOLS = Path(__file__).resolve().parents[1] / "gmsh_models"
+sys.path.insert(0, str(SOLVER_INPUT_TOOLS))
+from solver_vol import load_solver_mesh, vertex_data, element_groups  # noqa: E402
 
 print("=" * 70)
 print("PEEC Analysis from 1D Line Mesh")
@@ -41,31 +41,19 @@ except ImportError:
     sys.exit(1)
 
 # Check mesh file
-mesh_file = GMSH_MODELS / "circular_coil_1d.msh"
+mesh_file, mesh = load_solver_mesh()
 
-if not mesh_file.exists():
-    print(f"\nERROR: Mesh file not found: {mesh_file}")
-    print("\nGenerate with:")
-    print("  cd gmsh_models")
-    print("  python generate_1d_coil_mesh.py   # drives Coreform Cubit headless")
-    sys.exit(1)
-
-print(f"\n[1] Reading 1D line mesh fixture: {mesh_file.name}")
-
-mesh = read_gmsh_ascii(mesh_file)
-
-node_tags = mesh.node_tags
+node_tags, coords = vertex_data(mesh)
 n_nodes = len(node_tags)
-coords = mesh.coords * 1e-3  # mm to m
 
 print(f"    Nodes: {n_nodes}")
 
 # Get edge elements (type 1 = 2-node line)
-elem_types, elem_tags, elem_node_tags = mesh.grouped_elements()
+elem_types, elem_tags, elem_node_tags = element_groups(mesh)
 
 edges = []
 for i, elem_type in enumerate(elem_types):
-    if elem_type == 1:  # Line element (2 nodes)
+    if elem_type == "line":  # Line element (2 nodes)
         node_tags_flat = elem_node_tags[i]
         n_elems = len(node_tags_flat) // 2
         for j in range(n_elems):

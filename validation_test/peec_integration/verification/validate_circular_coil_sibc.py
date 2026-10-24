@@ -22,7 +22,7 @@ import numpy as np
 from scipy.special import iv, ellipk, ellipe  # Modified Bessel and elliptic integrals
 import matplotlib.pyplot as plt
 
-from radia.peec_mesh_import import GMSHCenterlineReader
+from centerline_vol import read_centerline
 
 print("=" * 70)
 print("PEEC SIBC Validation: Circular Coil vs Analytical")
@@ -42,25 +42,25 @@ SIGMA_COPPER = 5.8e7  # S/m
 MU_0 = 4 * np.pi * 1e-7  # H/m
 
 # ============================================================================
-# Read Coil Parameters and Mesh from Cubit
+# Read Coil Parameters and Mesh from Netgen
 # ============================================================================
 
-print("\n[Step 1] Reading Cubit-generated mesh...")
+print("\n[Step 1] Reading checked Netgen .vol mesh...")
 
 # Read coil parameters
 param_file = os.path.join(os.path.dirname(__file__),
-                          "cubit_mesh_generation/circular_coil_params.txt")
+                          "netgen_mesh_generation/circular_coil_params.txt")
 mesh_file = os.path.join(os.path.dirname(__file__),
-                         "cubit_mesh_generation/circular_coil_centerline.msh")
+                         "netgen_mesh_generation/circular_coil_centerline.vol")
 
 if not os.path.exists(param_file):
     print(f"\nERROR: Parameter file not found: {param_file}")
-    print("Run generate_circular_coil.py in Cubit first!")
+    print("Run netgen_mesh_generation/generate_centerlines.py first!")
     sys.exit(1)
 
 if not os.path.exists(mesh_file):
     print(f"\nERROR: Mesh file not found: {mesh_file}")
-    print("Run generate_circular_coil.py in Cubit first!")
+    print("Run netgen_mesh_generation/generate_centerlines.py first!")
     sys.exit(1)
 
 # Parse parameters
@@ -81,12 +81,10 @@ wire_radius = coil_params['wire_radius']
 sigma = coil_params.get('sigma', SIGMA_COPPER)
 n_segments = int(coil_params.get('n_segments', 36))
 
-# Read GMSH centerline mesh
-reader = GMSHCenterlineReader(mesh_file)
-nodes, edges = reader.read()
-segments = reader.get_segments()
+# Read the checked native Netgen 1D mesh; no Gmsh solver-input route.
+nodes, edges, segments, centerline_length = read_centerline(mesh_file)
 
-print(f"\nCoil parameters (from Cubit):")
+print(f"\nCoil parameters (SI contract):")
 print(f"  Coil radius: {coil_radius * 1e3:.1f} mm")
 print(f"  Wire radius: {wire_radius * 1e3:.2f} mm")
 print(f"  Conductivity: {sigma:.2e} S/m (copper)")
@@ -94,7 +92,7 @@ print(f"  Segments: {len(segments)}")
 
 # Verify circumference
 circumference_expected = 2.0 * np.pi * coil_radius
-circumference_actual = reader.get_total_length()
+circumference_actual = centerline_length
 circ_error = abs(circumference_actual - circumference_expected) / circumference_expected * 100
 
 print(f"\nMesh validation:")
