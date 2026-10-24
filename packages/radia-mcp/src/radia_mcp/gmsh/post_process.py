@@ -4,7 +4,13 @@ Wraps gmsh's ACTUAL post-processing machinery (gmsh.view.probe and the
 gmsh.plugin.* family) as one-shot subprocess tools -- the missing
 "post-processing verbs" next to the inspection/rendering lanes.
 
-Gmsh 5 semantics checked with independent tiny fields:
+Historical API investigations used Gmsh 4.15.2; those observations are
+not a qualification record for a later runtime.
+
+Adapter behavior guarded in
+``packages/radia-mcp/tests/test_gmsh_post_process.py`` (probe outside/all steps,
+volume integral and nodal MathEval). Plugin mutation handling below is a
+defensive adapter design, not a new measurement record:
 
 - ``gmsh.view.probe`` returns ``(values, distance)``; with ``step=-1``
   the values of ALL time steps are concatenated.  Outside the mesh a
@@ -140,7 +146,7 @@ def _view_ncomp(tag):
 def _materialize(tag, exprs=None, name=None):
     # Identity (or sign-flipped) MathEval -> NEW list-based copy, leaving
     # the input view untouched.  Needed because Transform / Warp / Smooth
-    # / ModulusPhase modify their input IN PLACE (checked with Gmsh 5).
+    # / ModulusPhase can mutate their input; isolate it defensively.
     import gmsh
     if exprs is None:
         exprs = [f"v{i}" for i in range(_view_ncomp(tag))]
@@ -1003,8 +1009,8 @@ try:
                 gmsh.plugin.run("Transform")
                 made.append(copy)
             gmsh.view.combine("elements", "name", True, True)
-            # combine renames the merged view to "<name>_Combine"
-            # (checked with Gmsh 5)
+            # Accept the requested name and the native combine suffix;
+            # require exactly one resulting view instead of guessing its tag.
             merged = [t for t in gmsh.view.getTags()
                       if _view_name(t) in (name, name + "_Combine")]
             if len(merged) != 1:

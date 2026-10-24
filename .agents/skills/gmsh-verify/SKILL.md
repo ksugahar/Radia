@@ -52,14 +52,15 @@ These option names do NOT exist and will crash `gmsh.merge()`:
 | `Mesh.Volumes` | `Mesh.VolumeEdges` + `Mesh.VolumeFaces` |
 | `Mesh.Surfaces` | `Mesh.SurfaceEdges` + `Mesh.SurfaceFaces` |
 
-The mesh-visibility defaults measured with the qualified Gmsh 5.0.0.dev20261018 runtime are:
+Historical option/default reference from Gmsh 4.15.2 (not a Gmsh 5
+measurement). Current scripts must set intended display options explicitly:
 ```
 Mesh.VolumeEdges    (default 1)
 Mesh.VolumeFaces    (default 0)
 Mesh.SurfaceEdges   (default 1)
 Mesh.SurfaceFaces   (default 0)
 Mesh.Points         (default 0)
-Mesh.NumSubEdges    (default 2, set to 4 for curved elements)
+Mesh.NumSubEdges    (historical default 1; set explicitly for curved elements)
 ```
 
 ## Reference

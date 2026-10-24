@@ -906,8 +906,8 @@ all four docs/gmsh_animation TET10 meshes were fully inverted while
 animating perfectly in the GUI.
 
 ## 1c. Set Mesh Display Options Explicitly
-The checked Gmsh 5 NodeData fixture leaves `Mesh.SurfaceFaces` at 0
-after opening; opening a field file does not guarantee filled faces.
+Do not rely on mesh-visibility defaults: opening a field file is not
+a substitute for explicit display options.
 Set display options AFTER `gmsh.open()`, and override
 explicitly (`Mesh.SurfaceFaces = 0` etc.) when you need full control.
 The MCP `gmsh_render` applies its options after open; its `blank_check`
@@ -1413,8 +1413,8 @@ GMSH_PARAVIEW_PARITY = """
 
 Everything the lab used ParaView for maps onto the radia-mcp gmsh
 tools below.  The supported contracts have analytic tests
-(test_gmsh_paraview_parity.py, test_gmsh_post_process.py); tiny Gmsh 5
-probes additionally check native probe, plugin mutation and naming behavior.
+(`packages/radia-mcp/tests/test_gmsh_paraview_parity.py` and
+`packages/radia-mcp/tests/test_gmsh_post_process.py`).
 
 ## Filter correspondence matrix
 
@@ -1590,7 +1590,7 @@ first two for you:
    (default 30 deg) keeps genuine creases sharp.
 3. **Nesting with transparency works** --
    ``color={"alpha": 0.3..0.5}`` on a stack of levels
-   (the checked Gmsh 5 default for ``View.LightTwoSide`` is 1).
+   and set ``View.LightTwoSide`` explicitly for the intended lighting.
    Inspect the actual shell before attributing visible gaps to refinement.
 4. **What DOES look like cracks: an OPEN shell.**  Where the level set
    crosses the outer domain boundary the surface is cut open, and a
@@ -1798,7 +1798,10 @@ without waiting for a wrapper.
 - Sum two views with gmsh_math_eval(other_view=..., "v0+w0").
 - gmsh_streamlines implements its own RK4 tracer.
 
-## Measured pitfalls behind the tools
+## Defensive post-processing adapter conventions
+
+Historical API investigations used Gmsh 4.15.2; keep their provenance
+separate from qualification of the current runtime.
 
 - Transform / Warp / Smooth / ModulusPhase run IN PLACE on the input
   view (Warp even moves the model nodes).  The tools materialize
@@ -1807,10 +1810,9 @@ without waiting for a wrapper.
   (warp).
 - gmsh.view.combine("elements", "name") RENAMES the merged view to
   "<name>_Combine".
-- Checked model-based and list-based VECTOR probes return values even
-  outside their data (scalar probes return empty outside).  Always gate
-  "found" on the returned distance -- gmsh_probe and the streamline
-  tracer do this internally.
+- Always gate "found" on returned distance and value count, independent
+  of the view type or whether an outside probe returns an empty array.
+  gmsh_probe and the streamline tracer do this internally.
 - Run gmsh_validate_msh before native access: inconsistent section counts
   and references must fail at the strict format boundary.
 """

@@ -1,4 +1,4 @@
-"""Guards: the panel helper delegates strict format and field checks.
+"""Guards: the panel helper delegates strict format acceptance and rejection.
 
 Assumes: the committed analytic post-only fixture is independently verified.
 """

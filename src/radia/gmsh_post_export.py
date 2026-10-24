@@ -2189,8 +2189,8 @@ def _extract_wireframe(mesh):
 # =====================================================================
 
 # Line-element overlays use separate element/curve tag ranges. Sibling
-# mesh and CAD inputs must keep their tag namespaces disjoint. The qualified
-# Gmsh 5 STEP/shaded-capture check preserves these exported line tags.
+# mesh and CAD inputs must keep their tag namespaces disjoint to avoid
+# unintended element/entity identity collisions when display inputs merge.
 _LINE_ELEM_TAG_OFFSET = 10_000_000
 _LINE_ENT_TAG_OFFSET = 10_000_000
 
@@ -2757,7 +2757,7 @@ def _beam_animation_views(values, t_mid, *, n_frames, mode, comet_window,
                           view_name):
     """Multi-step "beam" view whose visible extent grows with time.
 
-    The qualified Gmsh 5 native line-render check uses a
+    The display design uses a
     FIXED colour range and ``SaturateValues = 0``: a line element whose
     value falls outside that range is not drawn.  So step ``k``
     carries the real quantity on the segments the beam has already
@@ -2765,8 +2765,8 @@ def _beam_animation_views(values, t_mid, *, n_frames, mode, comet_window,
     trail grows while the colour scale stays put, unlike sweeping the
     range itself (which rescales the colours every frame).
 
-    The check compares the out-of-range scene with an independently hidden
-    scene using the same camera. Keep the display sentinel finite.
+    Keep the display sentinel finite so exported field data remain finite.
+    This is a display convention, not a solver-field value.
     """
     import numpy as np
 
@@ -2830,7 +2830,7 @@ def export_particle_tracks_msh(tracks, output_msh, *, label="track",
     particles FLY along their trajectories, one time step per frame,
     ready for ``gmsh_export_animation``.  It only renders correctly
     with the fixed colour range returned in ``animation`` (see
-    ``_beam_animation_views`` for the measured mechanism) -- the
+    ``_beam_animation_views`` for the display convention) -- the
     returned ``render_hint`` is exactly the ``color=`` argument to
     pass.
 
