@@ -1,27 +1,27 @@
 # Gmsh development runtime
 
-Use the newest official Gmsh **5 development** wheel. MSH output and input are
+Use the newest qualified official Gmsh **5** wheel. MSH output and input are
 ASCII **4.2** only. A checked `.vol` and its versioned label contract remain the
 solver mesh authority; `.msh` is exclusively a derived visualization or field
 file. Conductor display surfaces/centerlines and streamfunction wires retain
 their discretization; their display artifacts use strict MSH 4.2.
 
-The `gmsh` and `shape-regeneration` extras allow `gmsh>=5.0.0.dev0`.
-PyPI may only have the stable Gmsh 4 release, so obtain the development wheel
-from its public official development index. Install Gmsh alone from that index,
-then install the package and its other dependencies from PyPI:
+The Gmsh dependency requirements live only in the package pyproject extras.
+Until the qualified release is available on PyPI, use the official development
+index for Gmsh alone, then install other package dependencies from PyPI. This
+is the canonical install recipe; README and MCP knowledge link here:
 
 ```text
-python -m pip install --pre -i https://gmsh.info/python-packages-dev gmsh
+python -m pip install --pre -i https://gmsh.info/python-packages-dev --report gmsh-install.json gmsh
 python -m pip install "radia-mcp[gmsh]"
 ```
 
-For reproducible private operations, download the selected wheel separately:
+For reproducible operations, use the exact wheel URL and SHA256 from the
+installation report to retain the selected artifact. Download that artifact
+without resolving another version, verify its SHA256 against the report,
+and bind it to the actually installed runtime:
 
 ```text
-python -m pip download --pre --no-deps --only-binary=:all: -i https://gmsh.info/python-packages-dev gmsh -d wheelhouse
-python -m pip hash wheelhouse/SELECTED_GMSH_WHEEL.whl
-python -m pip install --no-index --no-deps wheelhouse/SELECTED_GMSH_WHEEL.whl
 python -m radia_mcp.gmsh.runtime --wheel wheelhouse/SELECTED_GMSH_WHEEL.whl --record gmsh-provenance.json
 ```
 
@@ -33,17 +33,15 @@ library match the wheel; it does not install or qualify numerical semantics.
 Native tools fail explicitly if runtime identity, Gmsh major 5, or MSH 4.2 is
 missing. Pure Python structural checks require no native Gmsh installation.
 
-For a hash-locked private CI install, create a requirements file with the exact
-resolved development version and its actual archive digest:
+Private CI installs the retained artifact with hash verification. Generate
+its resolved version and hash from that artifact rather than adding another
+policy pin to a script or document. No private wheelhouse path belongs in
+public metadata.
 
-```text
-gmsh==RESOLVED_VERSION --hash=sha256:VERIFIED_DIGEST
-```
-
-Then install with `--require-hashes --no-deps --no-index --find-links wheelhouse
--r gmsh-requirements.txt`. If resolving dependencies in the same command, all
-requirements and their transitive dependencies must also be pinned and hashed.
-No private wheelhouse location belongs in public package metadata.
+When adopting the released Gmsh on PyPI, update the extra requirement and
+this canonical install recipe together. Runtime guards check major 5,
+provenance and real MSH 4.2 I/O; they do not impose a second development-only
+version policy. Released and development builds need the same qualification.
 
 Each native result/session response includes the exact distribution/native
 version, wheel SHA256 and verified runtime payload hashes. The version range
@@ -52,7 +50,7 @@ rerun per-writer Gmsh load/field roundtrips, opposite-direction API-generated
 fixtures, strict format negatives and the measured probe/plugin/rendering
 semantics. Preserve the previous evidence as dated provenance without calling
 it a measurement of the new build. Record failures; never relax goldens to
-adopt a nightly. A Windows artifact does not establish Linux qualification.
+adopt a build. A Windows artifact does not establish Linux qualification.
 
 `gmsh.write` writes the mesh, while `gmsh.view.write` writes views and can also
 write a mesh. When appending multiple model-based views to one file, set

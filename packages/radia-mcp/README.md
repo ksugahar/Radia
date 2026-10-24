@@ -196,13 +196,13 @@ user's window.
 
 ## Install
 
+For native Gmsh post-processing, follow the single [Gmsh runtime install guide](docs/operations/gmsh-development-runtime.md). Gmsh version requirements live in the package extras.
+
 ```bash
 pip install radia-mcp                # MCP guidance; no Radia solver or Cubit runtime required
 pip install radia-mcp[build123d]      # adds build123d itself
 pip install radia-mcp[build123d,cubit] # optional STEP-to-Cubit execution (Windows, Python 3.12)
 pip install radia-mcp[cadquery]       # adds CadQuery (interop with cadquery-mcp)
-python -m pip install --pre -i https://gmsh.info/python-packages-dev gmsh
-python -m pip install "radia-mcp[gmsh]"  # Gmsh 5 / MSH 4.2 post-processing
 pip install radia-mcp[youtube]        # adds youtube-transcript-api (tutorial scrape)
 pip install radia-mcp[radia]          # adds Radia core (radia-coupled servers)
 pip install radia-mcp[full]           # everything above

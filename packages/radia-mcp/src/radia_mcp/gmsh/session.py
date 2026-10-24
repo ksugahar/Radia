@@ -170,7 +170,7 @@ class GmshSession:
     def __init__(self):
         if not gmsh_available():
             raise GmshSessionError(
-                "Gmsh 5 development package missing; install the latest official development wheel and record its provenance")
+                "Gmsh 5 package missing; follow the canonical Gmsh runtime install guide and record wheel provenance")
         self._log_dir = Path(tempfile.mkdtemp(prefix="radia_mcp_gmsh_session_"))
         self.log_path = self._log_dir / "worker.log"
         self._log_handle = open(self.log_path, "w", encoding="utf-8")

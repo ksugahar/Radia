@@ -87,34 +87,21 @@ and the geometry itself.
 GMSH_OVERVIEW = """
 # Gmsh 5 post-processing runtime
 
-Radia uses the newest qualified official Gmsh 5 development build and MSH 4.2.
-Obtain Gmsh separately from its dedicated public index, then install Radia MCP:
+Radia uses qualified official Gmsh 5 with ASCII MSH 4.2. Solver meshes are
+checked Cubit/Netgen `.vol`; Gmsh is post-processing only.
 
-```sh
-python -m pip install --pre -i https://gmsh.info/python-packages-dev gmsh
-python -m pip install "radia-mcp[gmsh]"
-```
+Installation and wheel/provenance commands have one maintained source:
+[the Gmsh runtime guide](https://github.com/ksugahar/Radia/blob/main/packages/radia-mcp/docs/operations/gmsh-development-runtime.md).
+Dependency requirements are declared only in the package's pyproject extras.
+Do not copy dated pins or a second install recipe into scripts or knowledge.
 
-Keep the downloaded official wheel. Record it and set the resulting absolute
-JSON path in the environment used to start the MCP server:
-
-```sh
-python -m radia_mcp.gmsh.runtime --wheel SELECTED_GMSH_WHEEL.whl --record gmsh-provenance.json
-```
-
-Set `RADIA_GMSH_PROVENANCE` to the absolute path of `gmsh-provenance.json`
-(PowerShell: `$env:RADIA_GMSH_PROVENANCE = (Resolve-Path gmsh-provenance.json).Path`).
-The record checks installed payload hashes against that wheel. Native tools
-fail before processing if it is missing; recording does not qualify semantics.
-
-Package metadata declares `gmsh>=5.0.0.dev0`. A dated version is not a permanent
-pin. Private automation archives each adopted official wheel and installs it
-with its SHA256 using `--require-hashes`; dependencies use their normal index.
-Record the exact distribution version, native version and wheel SHA256 for
-each run. A newer development build must pass the round-trip and relevant
-post-processing semantics checks before adoption. MCP tools never run pip or
-substitute a different runtime. The runtime guard requires major 5 and probes
-actual MSH 4.2 support; unsupported runtimes fail before processing.
+Native tools require `RADIA_GMSH_PROVENANCE`, bind Python/native payload
+hashes to the adopted official wheel, and probe actual MSH 4.2 field I/O.
+Every run records the exact distribution/native version and wheel SHA256.
+A new development or released build must pass writer/field roundtrips and
+relevant post-processing semantics checks before adoption. Tools never run
+pip or substitute a different runtime. Pure-Python readers stay exact-4.2
+without requiring native Gmsh.
 
 Gmsh is GPL software by Christophe Geuzaine and Jean-Francois Remacle.
 `gmsh_detect()` reports available capabilities. Inspection and CSV/statistics

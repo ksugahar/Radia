@@ -1,4 +1,4 @@
-"""Qualified Gmsh 5 development runtime and strict MSH 4.2 boundary.
+"""Qualified Gmsh 5 runtime and strict MSH 4.2 boundary.
 
 Record a downloaded official wheel before use with
 ``python -m radia_mcp.gmsh.runtime --wheel WHEEL --record FILE`` and set
@@ -66,12 +66,18 @@ def require_msh42(path, _seen=None) -> None:
                                  'exceeds 2147483647; no remapping or fallback is used')
 
 
+def _gmsh5_distribution_version() -> str:
+    """Keep distribution-major validation independent of release channel."""
+    version = importlib.metadata.version('gmsh')
+    if version.split('.', 1)[0] != '5':
+        raise RuntimeError(f'Gmsh 5 required; installed {version}. See the canonical Gmsh runtime install guide.')
+    return version
+
+
 def record_wheel(wheel: Path, destination: Path) -> dict:
     """Bind the downloaded wheel hash to the actually installed Python/DLL."""
     import gmsh
-    version = importlib.metadata.version('gmsh')
-    if not re.fullmatch(r'5\.\d+\.\d+\.dev\d+', version):
-        raise RuntimeError(f'official Gmsh 5 development runtime required, got {version}')
+    version = _gmsh5_distribution_version()
     payload = {}
     with zipfile.ZipFile(wheel) as archive:
         metadata = [n for n in archive.namelist() if n.endswith('.dist-info/METADATA')]
@@ -93,9 +99,7 @@ def record_wheel(wheel: Path, destination: Path) -> dict:
 
 def qualify_runtime() -> dict:
     """Verify native identity, MSH default and provenance; initialize no session."""
-    version = importlib.metadata.version('gmsh')
-    if not re.fullmatch(r'5\.\d+\.\d+\.dev\d+', version):
-        raise RuntimeError(f'Gmsh 5 development build required; installed {version}. Fetch the latest official development wheel.')
+    version = _gmsh5_distribution_version()
     record = os.environ.get('RADIA_GMSH_PROVENANCE')
     if not record:
         raise RuntimeError('RADIA_GMSH_PROVENANCE is required; record the official wheel with python -m radia_mcp.gmsh.runtime --wheel WHEEL --record FILE')
