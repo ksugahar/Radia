@@ -1,4 +1,4 @@
-"""Fix inverted TET node ordering in GMSH .msh v4.1 files (docs-local).
+"""Fix inverted TET node ordering in GMSH .msh v4.2 files (docs-local).
 
 Background
 ----------
@@ -66,7 +66,7 @@ def _corner_det(p0, p1, p2, p3):
 
 
 def _parse_nodes(lines):
-    """Return {node_tag: (x, y, z)} from the $Nodes section (v4.1)."""
+    """Return {node_tag: (x, y, z)} from the $Nodes section (v4.2)."""
     coords = {}
     i = lines.index("$Nodes")
     header = lines[i + 1].split()
@@ -86,7 +86,7 @@ def _parse_nodes(lines):
 
 
 def fix_msh_tet_orientation(path: str | Path) -> dict:
-    """Fix inverted TET4/TET10 elements of a .msh v4.1 file in place.
+    """Fix inverted TET4/TET10 elements of a .msh v4.2 file in place.
 
     Returns a dict with counts: {"elements": N, "fixed": M, "kept": N-M}.
     Raises ValueError if the file has no $Elements section.

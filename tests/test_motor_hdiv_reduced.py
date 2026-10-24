@@ -182,6 +182,6 @@ def test_hdiv_reduced_cli_round_trip(tmp_path):
         str(msh.resolve())
     )
     assert msh.read_text(encoding="utf-8").startswith(
-        "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n"
+        "$MeshFormat\n4.2 0 8\n$EndMeshFormat\n"
     )
     assert "Gram built once" in completed.stderr

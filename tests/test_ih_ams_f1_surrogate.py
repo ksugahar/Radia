@@ -41,7 +41,6 @@ def _compute(p):
     form = ng.BilinearForm(space,symmetric=True)
     form += ((1/mu)*ng.InnerProduct(ng.curl(u),ng.curl(v))
              +1j*omega*sigma*ng.InnerProduct(u,v))*ng.dx(bonus_intorder=2*p+2)
-    before_stats = dict(ssn.AMSCoarseStats()) if p==2 else {}
     if p == 2:
         pre = ng.Preconditioner(form,"bddc",coarsetype="sparsesolv_ams",coarseflags={"cycles":4})
     with ng.TaskManager():
@@ -79,8 +78,16 @@ def _compute(p):
     if not math.isfinite(power):
         raise RuntimeError(f"Nonfinite computed Joule power: {power}")
     stats = dict(ssn.AMSCoarseStats()) if p==2 else {}
-    if p==2 and not (stats["builds"] > before_stats["builds"] and stats["applies"] > before_stats["applies"]):
-        raise RuntimeError("BDDC coarse native route not observed")
+    if p == 2 and not (
+        stats["n_edges"] == mesh.nedge
+        and stats["complex"] is True
+        and stats["applies"] >= solver.iterations > 0
+        and stats["builds"] >= 1
+    ):
+        raise RuntimeError(
+            f"BDDC coarse native route not observed for this solve: "
+            f"stats={stats}, mesh_edges={mesh.nedge}, iterations={solver.iterations}"
+        )
     return {"p":p,"m":2,"native_coarse_stats":stats,"ndof":space.ndof,"power_W":power,"runtime_s":time.perf_counter()-start,
             "relative_residual":relative_residual,"iterations":solver.iterations}
 
