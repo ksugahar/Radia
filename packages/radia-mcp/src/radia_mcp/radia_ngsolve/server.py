@@ -225,6 +225,9 @@ from .gmsh_post_spec import get_gmsh_post_spec
 # NOTE: induction_heating_knowledge is in mcp-server-ih (not here)
 
 mcp = FastMCP("mcp-server-radia-ngsolve")
+
+from radia_mcp.mesh_viewer.mcp import register_mesh_viewer_tool
+register_mesh_viewer_tool(mcp)
 _validation = CoarseToolRegistry(mcp, namespace="radia_ngsolve")
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[3]
