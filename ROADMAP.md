@@ -64,16 +64,19 @@ Updated 2026-10-24.
 
 ### GPU And Supercomputer Execution
 
-- GPU kernels built with MATLAB mexcuda, validated against the Python CPU
-  reference. Status: **In progress** (first radia-simulink release pending).
-- Supercomputer execution, CPU and GPU, on the Flow2 system. Target: October
-  2026. Status: **In progress.**
+- GPU kernels are validated against the Python CPU reference and reach users
+  through two builds:
+  - Python (pybind11) GPU runs on the Flow2 supercomputer, together with CPU
+    execution there. Target: October 2026. Status: **In progress.**
+  - radia-simulink GPU kernels, built with MATLAB mexcuda, run on the mdx
+    platform. Target: October 2026. Status: **In progress** (first
+    radia-simulink release pending).
 
 ### Control, Optimization And Simulink
 
 - radia-simulink: masked blocks in one Simulink library for control and
-  optimization studies. Deployment target includes the mdx platform, working in
-  October 2026. Status: **In progress.**
+  optimization studies, deployed on the mdx platform. Target: October 2026.
+  Status: **In progress.**
 - radia-optuna: a MATLAB implementation of Optuna, matched against
   upstream-generated fixtures. Status: **In progress.**
 
