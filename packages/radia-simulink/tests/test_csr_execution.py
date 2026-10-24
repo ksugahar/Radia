@@ -11,11 +11,12 @@ csr=importlib.util.module_from_spec(spec);spec.loader.exec_module(csr)
 
 
 def test_ngsolve_cpu_solve_is_independent_of_cuda_binding(monkeypatch):
+    from radia.ngsolve_sparse import real_sparse_matrix_type
     ng=pytest.importorskip('ngsolve')
     # An accidental GPU import is an error even if CUDA happens to be installed.
     monkeypatch.setitem(sys.modules,'radia_simulink._csr_cuda',None)
     monkeypatch.setitem(sys.modules,'radia_simulink._cuda_runtime',None)
-    a=ng.la.SparseMatrixdouble.CreateFromCOO([0,0,1,1,1,2,2],[0,1,0,1,2,1,2],
+    a=real_sparse_matrix_type().CreateFromCOO([0,0,1,1,1,2,2],[0,1,0,1,2,1,2],
                                           [4.,-1.,-1.,4.,-1.,-1.,3.],3,3)
     b=a.CreateColVector();b.FV().NumPy()[:]=[1.,2.,3.]
     with ng.TaskManager():
@@ -55,9 +56,10 @@ def test_gpu_missing_binding_propagates_without_cpu_fallback(monkeypatch):
 
 
 def test_gpu_result_cannot_hide_a_bad_original_equation_residual(monkeypatch):
+    from radia.ngsolve_sparse import real_sparse_matrix_type
     import types
     ng=pytest.importorskip('ngsolve')
-    a=ng.la.SparseMatrixdouble.CreateFromCOO([0],[0],[2.],1,1)
+    a=real_sparse_matrix_type().CreateFromCOO([0],[0],[2.],1,1)
     b=a.CreateColVector();b.FV().NumPy()[:]=[1.]
     fake=types.SimpleNamespace(solve=lambda *args:(np.zeros(1),dict(backend='gpu',true_relative_residual=0.)))
     package=types.ModuleType('radia_simulink');package.__path__=[];package._csr_cuda=fake

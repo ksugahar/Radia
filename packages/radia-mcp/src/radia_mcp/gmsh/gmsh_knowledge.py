@@ -46,8 +46,8 @@ GMSH GUI:
 ```
 
 ## Output Format
-- Default: .msh v4.1 (GMSH visualization)
-- `GmshPostExport.write()` and `vol2msh()` emit .msh v4.1
+- Default: .msh v4.2 (GMSH visualization)
+- `GmshPostExport.write()` and `vol2msh()` emit .msh v4.2
 - Post-processing launch artifact: `case.geo` that merges the .msh/.step data
 - Exact option sidecars: `case.geo.opt` for normal launch and `case.msh.opt`
   for raw mesh/data inspection. A plain `case.opt` is not auto-loaded.
@@ -55,7 +55,7 @@ GMSH GUI:
   `case.geo.opt`, and `case.msh.opt`; open `case.geo` for normal review.
 - For acoustic/FEM-BEM post artifacts, use the shared
   `gmsh_post_display_contract` / `write_gmsh_post_launch_artifact` pattern:
-  one MSH v4.1 data file, a `.geo` launch file, exact `.geo.opt` and
+  one MSH v4.2 data file, a `.geo` launch file, exact `.geo.opt` and
   `.msh.opt` sidecars, named views, Z-up camera metadata, and optional
   cut-plane metadata (`General.Clip0A/B/C/D`).  This is the cross-language
   contract shared with the MATLAB/Gypsilab readable acoustic lane.
@@ -88,7 +88,8 @@ GMSH_OVERVIEW = """
 # GMSH Overview
 
 GMSH is an open-source 3D finite element mesh generator with a built-in
-CAD engine and post-processor. Version 4.15.2 (March 2026).
+CAD engine and post-processor. Radia uses the latest qualified official Gmsh 5
+development build and MSH 4.2. Each run records its exact version and wheel hash.
 
 - **License**: GNU GPL v2+
 - **Authors**: Christophe Geuzaine, Jean-Francois Remacle
@@ -96,11 +97,16 @@ CAD engine and post-processor. Version 4.15.2 (March 2026).
 - **Citation**: Geuzaine & Remacle, IJNME 79(11), pp. 1309-1331, 2009
 
 ## Installation (Radia project)
-The canonical launcher is `gmsh` on PATH. On current validation runtime installs this is the
-Python wrapper `C:\\Program Files\\Python312private-runtime-path`, backed by the
-`gmsh` Python package (`gmsh.py`) at version 4.15.2. Do not hard-code
-`C:\\gmsh.exe`; use `gmsh` / `shutil.which("gmsh")` / the registered file
-association.
+Download the newest official development wheel from
+`https://gmsh.info/python-packages-dev` with `pip download --pre --no-deps
+-i https://gmsh.info/python-packages-dev gmsh`. Archive the wheel, index listing,
+source URL, UTC fetch time and SHA256 before installing into an isolated runtime.
+Use `gmsh>=5.0.0.dev0`; stable PyPI Gmsh 4 is unsupported. Public users can
+install with `pip install --pre --extra-index-url https://gmsh.info/python-packages-dev "radia-mcp[gmsh]"`. Record installed payload
+identity with `python -m radia_mcp.gmsh.runtime --wheel WHEEL --record FILE` and
+set `RADIA_GMSH_PROVENANCE=FILE`. Native tools fail if provenance or Gmsh 5/MSH
+4.2 is unavailable. Qualify each newer build with roundtrip and semantic tests
+before adoption. Use the environment's `gmsh` launcher or registered association.
 - `.geo` is the primary file association for Radia post-processing launch
 - `.msh` association is optional raw mesh/data inspection; do not make it the
   user-facing post-processing contract
@@ -336,7 +342,7 @@ Options can be set in:
 |--------|---------|-------------|
 | `Mesh.NumSubEdges` | 2 | **Subdivisions for high-order display (set 4 for curved)** |
 | `Mesh.ElementOrder` | 1 | Element polynomial order |
-| `Mesh.MshFileVersion` | 4.1 | MSH format version |
+| `Mesh.MshFileVersion` | 4.2 | MSH format version |
 | `Mesh.Binary` | 0 | Binary output |
 | `Mesh.SaveAll` | 0 | Save all elements |
 | `Mesh.Algorithm` | 6 | 2D algorithm (6=Frontal-Delaunay) |
@@ -536,7 +542,7 @@ Radia acoustic and MATLAB/Gypsilab post artifacts should use the same durable
 launch structure:
 
 ```
-case.msh          # single Gmsh MSH v4.1 result/data container
+case.msh          # single Gmsh MSH v4.2 result/data container
 case.geo          # launch target, Merge "case.msh"
 case.geo.opt      # exact autoload sidecar for post display
 case.msh.opt      # exact autoload sidecar for raw mesh/data inspection
@@ -643,15 +649,15 @@ def write_msh_opt(msh_path: str, hidden_volumes: list[int],
 GMSH_MSH_FORMAT = """
 # GMSH .msh File Format
 
-## Version 4.1 (Lab-wide standard, 2026-04)
+## Version 4.2 (current repository standard)
 
-v4.1 is the only supported format across the Radia repository
+v4.2 is the only supported format across the Radia repository
 (Cubit plugin output, NGSolve post-processing, all panels).
 netgen I/O is always via `.vol` (never `.msh`).
 
 ```
 $MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 
 $PhysicalNames
@@ -663,9 +669,9 @@ $EndPhysicalNames
 $Entities
 numPoints numCurves numSurfaces numVolumes
 pointTag X Y Z numPhysicalTags physicalTag...
-curveTag minX minY minZ maxX maxY maxZ numPhysicalTags physicalTag... numBoundingPoints pointTag...
-surfaceTag minX minY minZ maxX maxY maxZ numPhysicalTags physicalTag... numBoundingCurves curveTag...
-volumeTag minX minY minZ maxX maxY maxZ numPhysicalTags physicalTag... numBoundingSurfaces surfaceTag...
+curveTag minX minY minZ maxX maxY maxZ numPhysicalTags physicalTag... numBoundingPoints pointTag... numEmbedded entityDim entityTag...
+surfaceTag minX minY minZ maxX maxY maxZ numPhysicalTags physicalTag... numBoundingCurves curveTag... numEmbedded entityDim entityTag...
+volumeTag minX minY minZ maxX maxY maxZ numPhysicalTags physicalTag... numBoundingSurfaces surfaceTag... numEmbedded entityDim entityTag...
 $EndEntities
 
 $Nodes
@@ -687,7 +693,15 @@ entityDim entityTag elementType numElementsInBlock
 $EndElements
 ```
 
-NodeData/ElementData sections are identical in v2.2 and v4.1.
+MSH 4.2 NodeData/ElementData records are blocked: after the string/real/integer
+tags, write `numBlocks numEntries minTag maxTag`; each block has its entry count,
+all tags first, then all component values. ElementNodeData blocks instead start
+with `elementType numValuesPerElement numElementsInBlock`. Entities and
+PartitionedEntities include embedded entity lists; GhostElements is blocked.
+Node/element tags already used size_t in 4.1. Changing only the header is invalid.
+Checked .vol plus its versioned labels is the volume solver mesh authority;
+.msh 4.2 is derived visualization/postprocessing. PEEC and streamfunction line
+or surface objects keep their discretization and use strict .msh 4.2 readers.
 
 ## Element Type Codes
 
@@ -968,7 +982,7 @@ from radia.gmsh_post_export import GmshPostExport
 post = GmshPostExport(mesh, boundary=True)  # BND from volume mesh
 post.add_field("|J|", node_J, ncomp=1)      # per-vertex scalar
 post.add_vector_field("J", gf_J)            # vector field
-post.write("results.msh")                   # v4.1 lab standard
+post.write("results.msh")                   # v4.2 lab standard
 ```
 
 ## Supported Triangle Orders
@@ -1017,9 +1031,9 @@ artifacts headlessly via mcp-server-gmsh:
 
 | Tool | What it does |
 |------|--------------|
-| `gmsh_inspect_msh` | MSH v4.1 structure summary (element types/orders, views, time steps, bbox, display hints). Pure Python. |
+| `gmsh_inspect_msh` | MSH v4.2 structure summary (element types/orders, views, time steps, bbox, display hints). Pure Python. |
 | `gmsh_validate_msh` | Structural consistency; `check_jacobians=True` adds the getJacobians inverted-element gate (repo policy for high-order exports) + per-type integrated volume. |
-| `gmsh_validate_geo` | Merge targets exist + no invalid GMSH 4.x options. |
+| `gmsh_validate_geo` | Merge targets exist + no invalid GMSH 5 options. |
 | `gmsh_field_stats` | Per-view, per-step field statistics without a GUI: scalar min/max/mean/rms, vector magnitude stats + pooled component min/max, NaN/Inf counts (validate_msh also gates on finiteness). |
 | `gmsh_diff_msh` | Structure + field-statistics diff of two .msh files (before/after verification: node/element/physical/view differences, bbox drift, overall and per-step min/max/mean/rms drift). |
 | `gmsh_audit_msh_directory` | Validate every .msh under a directory (recursive), optional per-file Jacobian gate: one call answers "are the repo's mesh artifacts sound?". |
@@ -1109,7 +1123,7 @@ Netgen/Cubit -> tri/tet or hex mesh -> NGSolve/Radia validation
              -> GMSH .msh/.pos data + .geo launch recipe -> standalone GMSH
 ```
 
-For display examples, write a GMSH v4.1 `.msh` from the existing Radia/Cubit
+For display examples, write a GMSH v4.2 `.msh` from the existing Radia/Cubit
 exporters. That is a **mesh export**, not GMSH mesh generation. Keep the script
 free of `import gmsh` and `gmsh.model.*`; write `.vol` for the solver path and
 `.msh`/`.pos`/`.geo` only for display. Historical v2.2 snippets are legacy
@@ -1124,7 +1138,7 @@ Do not plan a Radia workflow around GMSH directly opening Netgen `.vol` files,
 and do not add a GMSH-side `.vol` reader/plugin for normal Radia operation.
 Radia already owns the `.msh` output path: use `GmshPostExport.write()` for an
 NGSolve mesh with fields, `vol2msh()` for `.vol` plus field payloads, and
-combined v4.1 writers for multi-mesh post-processing. Cubit-side mesh display
+combined v4.2 writers for multi-mesh post-processing. Cubit-side mesh display
 uses `export gmsh "case.msh" order N` / `cubit_mesh_export.export_Gmsh_ver4`.
 On the lab GMSH 4.15.2 package, opening existing `.vol` files fails as a syntax
 parse of a GMSH script, so `.vol` is not a portable GMSH input contract. The
@@ -1284,10 +1298,10 @@ for a whole .geo). Known renames: `View.ArrowScale` ->
 **Problem**: Unicode characters cause errors in Japanese Windows.
 **Fix**: Use ASCII only in GMSH scripts and output.
 
-## 5. .msh v2.2 vs v4.1 Confusion
-**Problem**: .msh v2.2 vs v4.1 confusion when viewing in GMSH.
+## 5. .msh v2.2 vs v4.2 Confusion
+**Problem**: .msh v2.2 vs v4.2 confusion when viewing in GMSH.
 **Fix**: Radia, `GmshPostExport`, `vol2msh`, and `cubit-mesh-export` standardize
-on `.msh v4.1`. Treat v2.2 snippets as legacy reference material only; do not
+on `.msh v4.2`. Treat v2.2 snippets as legacy reference material only; do not
 downgrade new Radia post-processing output to v2.2.
 
 ## 6. NodeData Field Not Displayed
@@ -1432,8 +1446,10 @@ Runnable artifact-inspection notebook:
 Checked companion data are in
 `validation_test/gmsh_animation/gmsh_animation_results.json`; the docs tree
 does not own a result sidecar. The
-docs-local artifact inspected there is `docs/gmsh_animation/`: MSH v4.1,
+historical docs-local artifact inspected there is `docs/gmsh_animation/`: MSH v4.1,
 2430 nodes, 1003 elements, 21 vector NodeData frames, final displacement 0.15 m.
+It requires regeneration and new evidence before use with strict 4.2 tools;
+the historical record must not be relabelled as a new-format measurement.
 
 Runnable export notebook:
 `docs/gmsh_animation/gmsh_animation_export.ipynb`.  It opens the docs-local
@@ -1443,11 +1459,11 @@ companions (`.geo`, `.geo.opt`, `.msh.opt`) were used.  This is the small
 teaching example for students and the MCP regression reference for animation
 export behavior.
 
-## .msh File Structure (v4.1 with time-stepped displacement)
+## .msh File Structure (v4.2 with time-stepped displacement)
 
 ```
 $MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $PhysicalNames
 1
@@ -1471,8 +1487,13 @@ $NodeData
 0                <- step index
 3                <- 3 components (vector)
 2430             <- number of nodes
-1 -1.0e-01 0.0 0.0   <- node 1: displacement (x, y, z)
-2 -1.0e-01 0.0 0.0
+1 2430 1 2430    <- blocks, count, min/max node tag
+2430             <- nodes in this block
+1
+2
+...              <- all 2430 node tags first
+-1.0e-01 0.0 0.0 <- node 1 displacement
+-1.0e-01 0.0 0.0 <- node 2 displacement
 ...
 $EndNodeData
 $NodeData
@@ -1484,7 +1505,11 @@ $NodeData
 1
 3
 2430
-1 -9.5e-02 0.0 0.0
+1 2430 1 2430
+2430
+1
+...              <- all node tags first
+-9.5e-02 0.0 0.0
 ...
 $EndNodeData
 ...  (repeat for each time step)
@@ -1604,7 +1629,6 @@ GMSH has limited transparency support:
 ```
 View[0].ColormapAlpha = 0.3;       // global alpha (0=transparent, 1=opaque)
 View[0].ColormapAlphaPower = 0.0;  // nonlinear alpha mapping
-View[0].FakeTransparency = 0;      // 0=real (sorted), 1=additive (faster)
 ```
 
 - **Real transparency**: back-to-front triangle sorting per frame. Correct

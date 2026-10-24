@@ -38,13 +38,28 @@ def run_gmsh_json_subprocess(script: str, args: list[str], *,
     """
     if not gmsh_available():
         return {"ok": False, "ran": False,
-                "error": "gmsh Python package not installed (pip install gmsh)"}
+                "error": "Gmsh 5 development package missing; fetch the latest official development wheel and record its provenance"}
 
     with tempfile.TemporaryDirectory(prefix=prefix) as work:
         out_json = Path(work) / "result.json"
         log_path = Path(work) / "run.log"
         script_path = Path(work) / "script.py"
-        script_path.write_text(script, encoding="utf-8")
+        guarded = (
+            'import json, sys\n'
+            'from pathlib import Path\n'
+            'from radia_mcp.gmsh.runtime import qualify_runtime\n'
+            'try:\n'
+            '    _identity = qualify_runtime()\n'
+            'except Exception as _exc:\n'
+            '    Path(sys.argv[-1]).write_text(json.dumps({"ok":False,"ran":False,"error":str(_exc)}), encoding="utf-8")\n'
+            '    raise SystemExit(0)\n'
+            f'exec(compile({script!r}, __file__, "exec"))\n'
+            '_output = Path(sys.argv[-1])\n'
+            'if _output.is_file():\n'
+            '    _result = json.loads(_output.read_text(encoding="utf-8"))\n'
+            '    _result["runtime"] = _identity\n'
+            '    _output.write_text(json.dumps(_result), encoding="utf-8")\n')
+        script_path.write_text(guarded, encoding="utf-8")
         cmd = [sys.executable, str(script_path), *args, str(out_json)]
         try:
             with open(log_path, "w", encoding="utf-8") as log:

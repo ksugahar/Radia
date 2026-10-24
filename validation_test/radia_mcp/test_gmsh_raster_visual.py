@@ -51,9 +51,9 @@ def _box_msh(path, value_at, *, ncomp=1, n=6, lo=-1.0, hi=1.0):
                     elements[et] = [c[a], c[b], c[cc], c[d]]
                     et += 1
     rows = {t: value_at(p) for t, p in nodes.items()}
-    out = ["$MeshFormat", "4.1 0 8", "$EndMeshFormat",
+    out = ["$MeshFormat", "4.2 0 8", "$EndMeshFormat",
            "$Entities", "0 0 0 1",
-           f"1 {lo:g} {lo:g} {lo:g} {hi:g} {hi:g} {hi:g} 0 0",
+           f"1 {lo:g} {lo:g} {lo:g} {hi:g} {hi:g} {hi:g} 0 0 0",
            "$EndEntities",
            "$Nodes", f"1 {len(nodes)} 1 {len(nodes)}",
            f"3 1 0 {len(nodes)}"]
@@ -67,8 +67,9 @@ def _box_msh(path, value_at, *, ncomp=1, n=6, lo=-1.0, hi=1.0):
             for t, ns in elements.items()]
     out += ["$EndElements", "$NodeData", "1", '"f"', "1", "0",
             "3", "0", str(ncomp), str(len(rows))]
-    out += [f"{t} " + " ".join(f"{v:.9e}" for v in vals)
-            for t, vals in rows.items()]
+    out += [f"1 {len(rows)} {min(rows)} {max(rows)}", str(len(rows))]
+    out += [str(t) for t in rows]
+    out += [" ".join(f"{v:.9e}" for v in vals) for vals in rows.values()]
     out += ["$EndNodeData"]
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
     return path

@@ -49,6 +49,85 @@ verbose narrative belongs in owning engineering docs/.
 from __future__ import annotations
 
 PATTERNS: list[dict] = [
+    {
+        "id": "bddc-ams-boundary-vertices-nonfinite",
+        "title": "BDDC + AMS can return NaN on all-boundary-vertex high-order meshes.",
+        "topics": [
+            "ngsolve",
+            "ams",
+            "bddc",
+            "validation"
+        ],
+        "severity": "high",
+        "first_seen": "2026-10-23",
+        "last_seen": "2026-10-23",
+        "what": "At p >= 2, an all-boundary-vertex mesh can produce nonfinite solver output after successful setup.",
+        "root_cause": "Observed mesh/space/preconditioner interaction; vertex geometry alone is not a proven sufficient cause. A geometric rejection guard was tried and rejected.",
+        "detection": "Check solution and preconditioner finiteness and the original-system true residual; preserve mesh and runtime identity.",
+        "prevention": "Do not ban meshes using a geometric heuristic, lower order, or silently substitute a solver. Keep gradient-exactness checks independent of optional AMS solves.",
+        "related": [
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/sparsesolv.py"
+        ]
+    },
+    {
+        "id": "ngsolve-sparse-generated-name-portability",
+        "title": "Generated sparse matrix class names differ across compiler builds.",
+        "topics": [
+            "ngsolve",
+            "portability",
+            "linux"
+        ],
+        "severity": "high",
+        "first_seen": "2026-10-23",
+        "last_seen": "2026-10-23",
+        "what": "A Windows-qualified sparse construction raises AttributeError on Linux before the solve.",
+        "root_cause": "A compiler-generated Python binding name was treated as a stable API.",
+        "detection": "ngsolve-sparse-type-portability lint and the whole-source sparse portability contract.",
+        "prevention": "Discover the real-double class from an assembled matrix through real_sparse_matrix_type; verify dtype/capability and raise if unresolved.",
+        "related": [
+            "src/radia/ngsolve_sparse.py",
+            "tests/ci_routing/test_sparse_matrix_portability.py"
+        ]
+    },
+    {
+        "id": "cross-platform-text-blob-hash",
+        "title": "CRLF worktree bytes can disagree with canonical Git source hashes.",
+        "topics": [
+            "provenance",
+            "windows",
+            "linux",
+            "mesh"
+        ],
+        "severity": "high",
+        "first_seen": "2026-10-23",
+        "last_seen": "2026-10-23",
+        "what": "A .vol fixture or record hash differs across operating systems or Windows-hosted CI.",
+        "root_cause": "Git text conversion changes bytes; artifact identity and parsed-text equivalence were conflated.",
+        "detection": "Compare raw artifact hashes with historical Git blob bytes; verify any declared LF derivation separately.",
+        "prevention": "Preserve original records and hashes. Derive text-only canonical inputs explicitly, verify geometry/labels, and mark changed-source historical evidence stale.",
+        "related": [
+            "tests/test_trace_reuse_evidence_contract.py"
+        ]
+    },
+    {
+        "id": "gmres-tolerance-masks-high-p-convergence",
+        "title": "Iterative error can contaminate high-order convergence rates.",
+        "topics": [
+            "gmres",
+            "validation",
+            "convergence"
+        ],
+        "severity": "high",
+        "first_seen": "2026-10-23",
+        "last_seen": "2026-10-23",
+        "what": "High-p field errors plateau or yield misleading slopes despite an accepted linear residual.",
+        "root_cause": "GMRES tolerance is too loose relative to the discretization error being measured.",
+        "detection": "At fixed mesh/order, measure field sensitivity to tighter iterative tolerances and report original-system residuals.",
+        "prevention": "Separate algebraic and discretization error; retain approved rates, references and stencils. Tightening a solver tolerance requires its own recorded numerical run.",
+        "related": [
+            "packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/loop_learning.py"
+        ]
+    },
     # =====================================================
     # PANEL / SUBPROCESS BUGS
     # =====================================================

@@ -10,6 +10,7 @@ import time
 
 
 def fixtures():
+    from radia.ngsolve_sparse import real_sparse_matrix_type
     import ngsolve as ng
     import numpy as np
     cases=[]
@@ -19,7 +20,7 @@ def fixtures():
             rows.append(i);cols.append(i);values.append(4.)
             if i+1<n:
                 rows.extend((i,i+1));cols.extend((i+1,i));values.extend((-1.,-1.))
-        a=ng.la.SparseMatrixdouble.CreateFromCOO(rows,cols,values,n,n)
+        a=real_sparse_matrix_type().CreateFromCOO(rows,cols,values,n,n)
         b=a.CreateColVector();b.FV().NumPy()[:]=np.linspace(1.,2.,n)
         with ng.TaskManager():
             inv=a.Inverse(inverse='sparsecholesky');x=b.CreateVector();x.data=inv*b

@@ -29,15 +29,15 @@ pytest.importorskip("gmsh", reason="gmsh not installed")
 
 
 # --------------------------------------------------------------------
-# fixtures: a small analytic field on a box, written as a v4.1 .msh
+# fixtures: a small analytic field on a box, written as a v4.2 .msh
 # --------------------------------------------------------------------
 
 def _write_msh(path, nodes, elements, views):
-    lines = ["$MeshFormat", "4.1 0 8", "$EndMeshFormat"]
+    lines = ["$MeshFormat", "4.2 0 8", "$EndMeshFormat"]
     lo = [min(p[i] for p in nodes.values()) for i in range(3)]
     hi = [max(p[i] for p in nodes.values()) for i in range(3)]
     lines += ["$Entities", "0 0 0 1",
-              "1 %.9g %.9g %.9g %.9g %.9g %.9g 0 0"
+              "1 %.9g %.9g %.9g %.9g %.9g %.9g 0 0 0"
               % (lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]),
               "$EndEntities"]
     lines += ["$Nodes", f"1 {len(nodes)} 1 {len(nodes)}",
@@ -53,7 +53,9 @@ def _write_msh(path, nodes, elements, views):
     for name, ncomp, rows in views:
         lines += ["$NodeData", "1", f'"{name}"', "1", "0",
                   f"3", "0", str(ncomp), str(len(rows))]
-        lines += [f"{t} " + " ".join("%.9e" % v for v in vals)
+        lines += [f'1 {len(rows)} {min(rows)} {max(rows)}', str(len(rows))]
+        lines += [str(t) for t in rows]
+        lines += [" ".join("%.9e" % v for v in vals)
                   for t, vals in rows.items()]
         lines += ["$EndNodeData"]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -126,7 +128,7 @@ def test_field_range_handles_element_node_samples_individually(tmp_path):
     path.write_text(
         path.read_text(encoding="utf-8")
         + "$ElementNodeData\n1\n\"local\"\n1\n0\n3\n0\n1\n1\n"
-          "1 4 -2 -1 3 4\n$EndElementNodeData\n",
+          "1 1 1 1\n4 4 1\n1\n-2 -1 3 4\n$EndElementNodeData\n",
         encoding="utf-8")
     result = field_range([path], view="local")
     assert result["ok"], result

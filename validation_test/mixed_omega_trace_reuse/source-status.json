@@ -1,0 +1,8 @@
+{
+  "status": "stale",
+  "stale_reason": "Portable sparse type discovery changes the current runner and covered Kelvin solver. Historical measurements remain provenance, not certification of the current runner. No timing, residual, reference, or original hash is regenerated.",
+  "runner": "validation_test/mixed_omega_trace_reuse/run.py",
+  "historical_source_revision": "d68372f15bdf3018b3ae83fa9c2dbc0d98a31789",
+  "historical_result": "result_2607_20260930.json",
+  "current_execution": "not recertified by this historical record"
+}

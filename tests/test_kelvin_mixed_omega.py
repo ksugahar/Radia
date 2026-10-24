@@ -725,6 +725,7 @@ def test_trace_without_tolerance_is_not_accepted():
 
 @pytest.mark.parametrize("order", [1, 2, 3])
 def test_sparse_direct_saddle_solve_satisfies_original_system(order):
+    from radia.ngsolve_sparse import real_sparse_matrix_type
     import ngsolve as ng
     from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
     mesh, source, potential, _ = _picard_case(maxh=0.7)
@@ -760,7 +761,7 @@ def test_sparse_direct_saddle_solve_satisfies_original_system(order):
     rows, cols, values = matrix.COO()
     assembled = coo_matrix((np.asarray(values), (np.asarray(rows), np.asarray(cols))),
                            shape=(fes.ndof, fes.ndof)).tocsr()
-    if isinstance(matrix, ng.la.SparseMatrixSymmetricdouble):
+    if isinstance(matrix, real_sparse_matrix_type(symmetric=True)):
         assembled = assembled + assembled.T - diags(assembled.diagonal())
     entries = assembled.tocoo()
     primal_end = fes.Range(2).start
@@ -768,7 +769,7 @@ def test_sparse_direct_saddle_solve_satisfies_original_system(order):
     cache = {}
     for primal_scale, trace_scale in ((1., 1.), (2., 1.), (.5, 3.)):
         scaled = entries.data * np.where(is_primal, primal_scale, trace_scale)
-        changed = ng.la.SparseMatrixdouble.CreateFromCOO(
+        changed = real_sparse_matrix_type().CreateFromCOO(
             entries.row, entries.col, scaled, *assembled.shape)
         rhs.data = changed * exact
         with ng.TaskManager():

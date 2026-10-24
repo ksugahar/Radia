@@ -21,7 +21,7 @@ pytestmark = pytest.mark.skipif(not _GMSH_AVAILABLE,
                                 reason="gmsh package not installed")
 
 _TINY_MSH = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $Nodes
 1 4 1 4

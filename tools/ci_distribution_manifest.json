@@ -1415,7 +1415,9 @@
     },
     {
       "pattern": "tools/build_linux.py",
-      "owners": ["radia"]
+      "owners": [
+        "radia"
+      ]
     },
     {
       "pattern": "tools/native_build_provenance.ps1",
@@ -3804,6 +3806,7 @@
             "validation_test/induction_heating/test_esim_panel_evaluator.py",
             "tests/test_esim_adaptive_depth.py",
             "tests/test_esim_finite_slab_regression.py",
+            "tests/test_ih_ams_f1_surrogate.py",
             "validation_test/induction_heating/test_esim_adaptive_depth_validation.py",
             "validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py",
             "tests/feec/test_hdiv_prolate_regression_lock.py",
@@ -4095,6 +4098,7 @@
             "validation_test/induction_heating/test_esim_panel_evaluator.py",
             "tests/test_esim_adaptive_depth.py",
             "tests/test_esim_finite_slab_regression.py",
+            "tests/test_ih_ams_f1_surrogate.py",
             "validation_test/induction_heating/test_esim_adaptive_depth_validation.py",
             "validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py",
             "tests/feec/test_hdiv_prolate_regression_lock.py",

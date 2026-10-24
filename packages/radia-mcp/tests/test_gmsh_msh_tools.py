@@ -1,4 +1,4 @@
-"""Tests for radia_mcp.gmsh.msh_inspect (MSH v4.1 inspect/validate tools).
+"""Tests for radia_mcp.gmsh.msh_inspect (MSH v4.2 inspect/validate tools).
 
 Structural tests are pure Python (run in the minimal-dep matrix).  The
 Jacobian tests need the gmsh Python package and skip when it is absent;
@@ -26,7 +26,7 @@ _GMSH_AVAILABLE = importlib.util.find_spec("gmsh") is not None
 
 # Unit tet (volume 1/6) + one boundary tri + a 2-step scalar NodeData view.
 _BASE_MSH = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $PhysicalNames
 2
@@ -35,8 +35,8 @@ $PhysicalNames
 $EndPhysicalNames
 $Entities
 0 0 1 1
-1 0 0 0 1 1 0 1 2 0
-1 0 0 0 1 1 1 1 1 1 1
+1 0 0 0 1 1 0 1 2 0 0
+1 0 0 0 1 1 1 1 1 1 1 0
 $EndEntities
 $Nodes
 2 4 1 4
@@ -67,10 +67,16 @@ $NodeData
 0
 1
 4
-1 1.0
-2 2.0
-3 3.0
-4 4.0
+1 4 1 4
+4
+1
+2
+3
+4
+1.0
+2.0
+3.0
+4.0
 $EndNodeData
 $NodeData
 1
@@ -81,15 +87,21 @@ $NodeData
 1
 1
 4
-1 1.5
-2 2.5
-3 3.5
-4 4.5
+1 4 1 4
+4
+1
+2
+3
+4
+1.5
+2.5
+3.5
+4.5
 $EndNodeData
 """
 
 _TRI6_MSH = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $Nodes
 1 6 1 6
@@ -129,7 +141,7 @@ def test_inspect_reports_structure(tmp_path):
     info = inspect_msh(_write(tmp_path, _BASE_MSH))
 
     assert info["ok"] is True
-    assert info["version"] == "4.1"
+    assert info["version"] == "4.2"
     assert info["ascii"] is True
     assert info["parse_errors"] == []
     assert {p["name"] for p in info["physical_names"]} == {"surface", "block"}
@@ -179,7 +191,7 @@ def test_validate_clean_mesh_passes(tmp_path):
     assert result["status"] == "ok"
     assert result["errors"] == []
     assert all(result["checks"].values())
-    for name in ("format_is_v41", "is_ascii", "sections_balanced",
+    for name in ("format_is_v42", "is_ascii", "sections_balanced",
                  "node_tags_unique", "element_tags_unique",
                  "element_node_refs_exist", "data_declared_counts_match",
                  "data_tags_exist", "data_components_valid",
@@ -188,7 +200,7 @@ def test_validate_clean_mesh_passes(tmp_path):
 
 
 def test_validate_detects_nodedata_count_mismatch(tmp_path):
-    broken = _BASE_MSH.replace("1\n4\n1 1.0", "1\n5\n1 1.0", 1)
+    broken = _BASE_MSH.replace("1\n4\n1 4 1 4", "1\n5\n1 4 1 4", 1)
     result = validate_msh(_write(tmp_path, broken))
 
     assert result["ok"] is False
@@ -214,7 +226,7 @@ def test_validate_detects_duplicate_element_tags(tmp_path):
 
 
 def test_validate_detects_invalid_component_count(tmp_path):
-    broken = _BASE_MSH.replace("0\n1\n4\n1 1.0", "0\n2\n4\n1 1.0", 1)
+    broken = _BASE_MSH.replace("0\n1\n4\n1 4 1 4", "0\n2\n4\n1 4 1 4", 1)
     result = validate_msh(_write(tmp_path, broken))
 
     assert result["ok"] is False
@@ -227,7 +239,7 @@ def test_validate_rejects_v22(tmp_path):
     result = validate_msh(_write(tmp_path, v22))
 
     assert result["ok"] is False
-    assert result["checks"]["format_is_v41"] is False
+    assert result["checks"]["format_is_v42"] is False
 
 
 def test_validate_detects_unbalanced_sections(tmp_path):
@@ -349,7 +361,7 @@ def test_diff_msh_detects_structure_change(tmp_path):
 
 def test_diff_msh_detects_field_drift(tmp_path):
     a = _write(tmp_path, _BASE_MSH, "a.msh")
-    drifted = _BASE_MSH.replace("4 4.5\n", "4 4.6\n")
+    drifted = _BASE_MSH.replace("4.5\n$EndNodeData", "4.6\n$EndNodeData")
     b = _write(tmp_path, drifted, "b.msh")
     result = diff_msh(a, b)
 
@@ -362,7 +374,7 @@ def test_diff_msh_detects_field_drift(tmp_path):
 
 def test_diff_msh_detects_interior_field_drift_with_same_extrema(tmp_path):
     a = _write(tmp_path, _BASE_MSH, "a.msh")
-    drifted = _BASE_MSH.replace("2 2.0\n", "2 2.5\n", 1)
+    drifted = _BASE_MSH.replace("2.0\n3.0", "2.5\n3.0", 1)
     b = _write(tmp_path, drifted, "b.msh")
     result = diff_msh(a, b)
 
@@ -433,9 +445,27 @@ def test_field_stats_scalar_two_steps(tmp_path):
 
 def test_field_stats_vector_magnitude(tmp_path):
     vec = _BASE_MSH.split("$NodeData")[0] + (
-        "$NodeData\n1\n\"D\"\n1\n0.0\n3\n0\n3\n4\n"
-        "1 3.0 4.0 0.0\n2 0.0 0.0 1.0\n3 1.0 0.0 0.0\n4 0.0 2.0 0.0\n"
-        "$EndNodeData\n")
+        """$NodeData
+1
+"D"
+1
+0.0
+3
+0
+3
+4
+1 4 1 4
+4
+1
+2
+3
+4
+3.0 4.0 0.0
+0.0 0.0 1.0
+1.0 0.0 0.0
+0.0 2.0 0.0
+$EndNodeData
+""")
     result = field_stats(_write(tmp_path, vec))
 
     view = result["views"][0]
@@ -459,7 +489,7 @@ def test_field_stats_view_name_filter_lists_available(tmp_path):
 
 
 def test_validate_detects_nan_values(tmp_path):
-    broken = _BASE_MSH.replace("3 3.0\n", "3 nan\n", 1)
+    broken = _BASE_MSH.replace("3.0\n4.0", "nan\n4.0", 1)
     result = validate_msh(_write(tmp_path, broken))
 
     assert result["ok"] is False
@@ -471,7 +501,7 @@ def test_validate_detects_nan_values(tmp_path):
 
 
 def test_validate_detects_wrong_row_width(tmp_path):
-    broken = _BASE_MSH.replace("3 3.0\n", "3 3.0 9.9\n", 1)
+    broken = _BASE_MSH.replace("3.0\n4.0", "3.0 9.9\n4.0", 1)
     result = validate_msh(_write(tmp_path, broken))
 
     assert result["ok"] is False
@@ -483,10 +513,37 @@ def test_validate_detects_wrong_row_width(tmp_path):
 # ======================================================================
 
 _ELEMENT_DATA = (
-    "$ElementData\n1\n\"quality\"\n1\n0.0\n3\n0\n1\n2\n"
-    "1 0.9\n2 0.8\n$EndElementData\n"
-    "$ElementNodeData\n1\n\"nodal_flux\"\n1\n0.0\n3\n0\n1\n1\n"
-    "2 4 1.0 2.0 3.0 4.0\n$EndElementNodeData\n")
+    """$ElementData
+1
+"quality"
+1
+0.0
+3
+0
+1
+2
+1 2 1 2
+2
+1
+2
+0.9
+0.8
+$EndElementData
+$ElementNodeData
+1
+"nodal_flux"
+1
+0.0
+3
+0
+1
+1
+1 1 2 2
+4 4 1
+2
+1.0 2.0 3.0 4.0
+$EndElementNodeData
+""")
 
 
 def test_element_data_sections_parse_validate_and_stats(tmp_path):
@@ -514,7 +571,7 @@ def test_element_data_sections_parse_validate_and_stats(tmp_path):
 
 
 def test_element_data_undefined_element_tag_fails(tmp_path):
-    broken = _BASE_MSH + _ELEMENT_DATA.replace("1 0.9\n", "99 0.9\n")
+    broken = _BASE_MSH + _ELEMENT_DATA.replace("1 2 1 2\n2\n1\n2\n0.9", "1 2 2 99\n2\n99\n2\n0.9")
     result = validate_msh(_write(tmp_path, broken))
 
     assert result["ok"] is False
@@ -524,7 +581,7 @@ def test_element_data_undefined_element_tag_fails(tmp_path):
 
 def test_elementnodedata_width_mismatch_fails(tmp_path):
     broken = _BASE_MSH + _ELEMENT_DATA.replace(
-        "2 4 1.0 2.0 3.0 4.0\n", "2 4 1.0 2.0 3.0\n")
+        "1.0 2.0 3.0 4.0\n", "1.0 2.0 3.0\n")
     result = validate_msh(_write(tmp_path, broken))
 
     assert result["ok"] is False
@@ -549,21 +606,21 @@ def test_audit_msh_directory_reports_issues(tmp_path):
     assert audit["by_status"] == {"ok": 2, "needs_attention": 1}
     issue = audit["issues"][0]
     assert issue["path"] == "legacy.msh"
-    assert "format_is_v41" in issue["failed_checks"]
+    assert "format_is_v42" in issue["failed_checks"]
     highorder = [f for f in audit["files"] if f["path"].endswith("curved.msh")]
     assert highorder[0]["high_order"] is True
 
 
 def test_cli_exit_codes_and_modes(tmp_path, capsys):
     good = _write(tmp_path, _BASE_MSH, "good.msh")
-    bad = _write(tmp_path, _BASE_MSH.replace("1\n4\n1 1.0", "1\n5\n1 1.0", 1),
+    bad = _write(tmp_path, _BASE_MSH.replace("1\n4\n1 4 1 4", "1\n5\n1 4 1 4", 1),
                  "bad.msh")
 
     assert msh_inspect_main([str(good), "--validate"]) == 0
     assert msh_inspect_main([str(bad), "--validate"]) == 1
     assert msh_inspect_main([str(tmp_path)]) == 1        # audit: bad inside
     assert msh_inspect_main([str(good), "--diff", str(good)]) == 0
-    assert msh_inspect_main([str(good), "--diff", str(bad)]) == 0  # same data
+    assert msh_inspect_main([str(good), "--diff", str(bad)]) == 1  # malformed field block cannot be compared
     out = capsys.readouterr().out
     assert "[ok]" in out and "[needs_attention]" in out
 
@@ -579,7 +636,7 @@ def test_cli_exit_codes_and_modes(tmp_path, capsys):
 # ======================================================================
 
 _TET10_TEMPLATE = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $Nodes
 1 10 1 10

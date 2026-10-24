@@ -1117,6 +1117,7 @@ def _matching_trace_direct_inverse(matrix, fes, *, order, cache=None):
     Its earlier inverses must not be used after another call updates the cache.
     The assembled constraints are still checked on every call.
     """
+    from radia.ngsolve_sparse import real_sparse_matrix_type
     import ngsolve as ng
     from scipy.sparse import coo_matrix, diags
     from scipy.sparse.linalg import norm as sparse_norm
@@ -1132,7 +1133,7 @@ def _matching_trace_direct_inverse(matrix, fes, *, order, cache=None):
     rows, cols, values = matrix.COO()
     assembled = coo_matrix((np.asarray(values), (np.asarray(rows), np.asarray(cols))),
                            shape=(fes.ndof, fes.ndof)).tocsr()
-    if isinstance(matrix, ng.la.SparseMatrixSymmetricdouble):
+    if isinstance(matrix, real_sparse_matrix_type(symmetric=True)):
         assembled = assembled + assembled.T - diags(assembled.diagonal())
     app = assembled[primal][:, primal].tocsr()
     constraint = assembled[multiplier_offset + lambdas][:, primal].tocsr()
@@ -1223,7 +1224,7 @@ def _matching_trace_direct_inverse(matrix, fes, *, order, cache=None):
                 old_values[:] = sparse.data
             return native, inverse
         data = sparse.tocoo()
-        native = ng.la.SparseMatrixdouble.CreateFromCOO(
+        native = real_sparse_matrix_type().CreateFromCOO(
             data.row, data.col, data.data, *data.shape)
         inverse = native.Inverse(inverse="sparsecholesky")
         # Reuse storage only when NGSolve preserves the CSR ordering exactly.

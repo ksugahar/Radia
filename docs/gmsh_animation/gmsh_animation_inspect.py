@@ -107,14 +107,34 @@ def inspect_msh(path: str | Path) -> dict:
             max_norm = 0.0
             min_norm = None
             sum_norm = 0.0
-            for _ in range(num_entries or 0):
-                vals = lines[j].split()
-                comps = [float(v) for v in vals[1:1 + (num_components or 0)]]
-                norm = math.sqrt(sum(c * c for c in comps))
-                max_norm = max(max_norm, norm)
-                min_norm = norm if min_norm is None else min(min_norm, norm)
-                sum_norm += norm
-                j += 1
+            if mesh_format != '4.2 0 8':
+                raise ValueError(f'Expected ASCII MSH 4.2, got {mesh_format!r}')
+            blocks, count, minimum, maximum = map(int, lines[j].split())
+            j += 1
+            if count != num_entries:
+                raise ValueError('NodeData count disagrees with its blocked header')
+            consumed = 0
+            for _ in range(blocks):
+                n = int(lines[j]); j += 1
+                tags = []
+                while len(tags) < n:
+                    tags.extend(map(int, lines[j].split())); j += 1
+                if len(tags) != n or any(tag < minimum or tag > maximum for tag in tags):
+                    raise ValueError('Invalid NodeData tag block')
+                values = []
+                while len(values) < n * num_components:
+                    values.extend(map(float, lines[j].split())); j += 1
+                if len(values) != n * num_components:
+                    raise ValueError('Invalid NodeData component block')
+                for k in range(n):
+                    comps = values[k*num_components:(k+1)*num_components]
+                    norm = math.sqrt(sum(c*c for c in comps))
+                    max_norm = max(max_norm, norm)
+                    min_norm = norm if min_norm is None else min(min_norm, norm)
+                    sum_norm += norm
+                consumed += n
+            if consumed != count or lines[j].strip() != '$EndNodeData':
+                raise ValueError('Invalid NodeData block termination')
             node_data.append({
                 "name": string_tags[0] if string_tags else "",
                 "time_value": time_value,
@@ -129,6 +149,8 @@ def inspect_msh(path: str | Path) -> dict:
             continue
         i += 1
 
+    if mesh_format != '4.2 0 8':
+        raise ValueError(f'Expected ASCII MSH 4.2, got {mesh_format!r}')
     return {
         "path": p.as_posix(),
         "bytes": p.stat().st_size,
@@ -179,7 +201,7 @@ def inspect_example(example_dir: str | Path = ".") -> dict:
         "geo_merges": _read_geo_merges(geo),
         "msh": msh_info,
         "checks": {
-            "is_msh_v41": msh_info["mesh_format"] == "4.1 0 8",
+            "is_msh_v42": msh_info["mesh_format"] == "4.2 0 8",
             "has_vector_node_data": all(
                 row["num_components"] == 3 for row in msh_info["node_data"]
             ),
@@ -215,7 +237,7 @@ def format_summary(result: dict) -> str:
         f"NodeData frames: {msh['node_data_count']}",
         f"geo merges: {', '.join(result['geo_merges'])}",
         f"final displacement: {checks['final_displacement_m']:.6g} m",
-        f"checks: v4.1={checks['is_msh_v41']}, "
+        f"checks: v4.2={checks['is_msh_v42']}, "
         f"vector={checks['has_vector_node_data']}, "
         f"time_monotone={checks['time_values_monotone']}, "
         f"disp_monotone={checks['max_displacement_monotone']}",

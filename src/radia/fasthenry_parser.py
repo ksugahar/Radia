@@ -705,6 +705,8 @@ class FastHenryParser:
                 builder.add_panel(block['vertices'])
 
             elif block['type'] == 'mesh':
+                from ._gmsh_native_fields import validate_native_msh_fields
+                validate_native_msh_fields(block['file'])
                 try:
                     import gmsh
                     gmsh.initialize()

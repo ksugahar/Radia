@@ -150,7 +150,7 @@ def _cylinder_mesh(a, L, n_phi=60, n_z=20):
 
 
 def build_contours_msh(out_msh, show_cylinder=True):
-    """Write a .msh v4.1 with the SF design's closed CONTOUR FILAMENTS only.
+    """Write a .msh v4.2 with the SF design's closed CONTOUR FILAMENTS only.
 
     Each contour is its own 1D entity + Physical Group ("contour_NN") so
     GMSH can colour them per-loop and the user can toggle them
@@ -177,7 +177,7 @@ def build_contours_msh(out_msh, show_cylinder=True):
 
     lines = []
     lines.append("$MeshFormat")
-    lines.append("4.1 0 8")
+    lines.append("4.2 0 8")
     lines.append("$EndMeshFormat")
     n_phys = len(contours_3d) + (1 if show_cylinder else 0)
     lines.append("$PhysicalNames")
@@ -199,14 +199,14 @@ def build_contours_msh(out_msh, show_cylinder=True):
         lines.append(
             f"{k+1} {p[:,0].min()} {p[:,1].min()} {p[:,2].min()} "
             f"{p[:,0].max()} {p[:,1].max()} {p[:,2].max()} "
-            f"1 {k+1} 0"
+            f"1 {k+1} 0 0"
         )
     if show_cylinder:
         c = np.array(cyl_nodes)
         lines.append(
             f"1 {c[:,0].min()} {c[:,1].min()} {c[:,2].min()} "
             f"{c[:,0].max()} {c[:,1].max()} {c[:,2].max()} "
-            f"1 {cyl_pg} 0"
+            f"1 {cyl_pg} 0 0"
         )
     lines.append("$EndEntities")
 
@@ -275,7 +275,7 @@ def build_contours_msh(out_msh, show_cylinder=True):
 
 
 def build_chain_msh(out_msh, show_cylinder=True):
-    """Regenerate the SF chain and write it as a .msh v4.1 file.
+    """Regenerate the SF chain and write it as a .msh v4.2 file.
 
     The chain centerline becomes a chain of 1D line2 (GMSH type 1) elements
     in Physical Group "coil_centerline".  Optionally meshes the host
@@ -318,11 +318,11 @@ def build_chain_msh(out_msh, show_cylinder=True):
     print(f"chain regenerated (kuijpers method): {len(path)} points, "
           f"{len(path) - 1} segments")
 
-    # Build a .msh v4.1 file from scratch.  Format reference:
+    # Build a .msh v4.2 file from scratch.  Format reference:
     # https://gmsh.info/doc/texinfo/gmsh.html#MSH-file-format
     lines = []
     lines.append("$MeshFormat")
-    lines.append("4.1 0 8")
+    lines.append("4.2 0 8")
     lines.append("$EndMeshFormat")
     # Physical groups: 1D coil_centerline, 2D cylinder_host
     pg_coil = 1
@@ -355,14 +355,14 @@ def build_chain_msh(out_msh, show_cylinder=True):
     lines.append(
         f"1 {p[:,0].min()} {p[:,1].min()} {p[:,2].min()} "
         f"{p[:,0].max()} {p[:,1].max()} {p[:,2].max()} "
-        f"1 {pg_coil} 0"
+        f"1 {pg_coil} 0 0"
     )
     if show_cylinder:
         c = np.array(cyl_nodes)
         lines.append(
             f"1 {c[:,0].min()} {c[:,1].min()} {c[:,2].min()} "
             f"{c[:,0].max()} {c[:,1].max()} {c[:,2].max()} "
-            f"1 {pg_cyl} 0"
+            f"1 {pg_cyl} 0 0"
         )
     lines.append("$EndEntities")
 

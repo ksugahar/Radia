@@ -71,6 +71,11 @@ def evaluate_mesh(vol_base, max_order=5):
          f"L={cad_length_total:.6e}")
 
     # === Phase 2: Format QA via GMSH API (vs CAD) ===
+    from radia._gmsh_native_fields import validate_native_msh_fields
+    for order in range(1, min(max_order, 3) + 1):
+        msh_path = f"{vol_base}_qa_gmsh_o{order}.msh"
+        if os.path.isfile(msh_path):
+            validate_native_msh_fields(msh_path)
     format_results = []
     try:
         import gmsh
