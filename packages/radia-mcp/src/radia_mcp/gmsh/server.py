@@ -2,11 +2,11 @@
 GMSH MCP Server for Radia Project
 
 Provides tools for:
-- Inspecting and validating MSH v4.1 files (structure, NodeData, Jacobians)
+- Inspecting and validating MSH v4.2 files (structure, NodeData, Jacobians)
 - Validating .geo launch files (Merge targets, invalid options)
 - Writing the shared .geo/.geo.opt/.msh.opt post-display launch artifact
 - GMSH visualization and post-processing documentation
-- .msh file format reference (v4.1)
+- .msh file format reference (v4.2)
 - Linting Python scripts for GMSH policy violations
 - High-order element display guidance
 
@@ -108,10 +108,10 @@ _RULE_REMEDIATIONS = {
     "pip-gmsh-import": (
         "Keep the gmsh Python API out of computation/mesh-generation scripts. "
         "Use the `gmsh` launcher on PATH for viewer/inspection workflows, and "
-        "prefer .msh v4.1 data plus a .geo launch file for Radia post."
+        "prefer .msh v4.2 data plus a .geo launch file for Radia post."
     ),
     "invalid-gmsh-option": (
-        "Replace option names that do not exist in GMSH 4.x: Mesh.Volumes -> "
+        "Replace option names that do not exist in GMSH 5: Mesh.Volumes -> "
         "Mesh.VolumeEdges/VolumeFaces, Mesh.Surfaces -> Mesh.SurfaceEdges/"
         "SurfaceFaces, General.GraphicsSizeX/Y -> General.GraphicsWidth/Height."
     ),
@@ -561,7 +561,7 @@ def gmsh_post_display_contract(msh_path: str,
     Return the shared .geo/.geo.opt/.msh.opt contract for Gmsh post artifacts.
 
     Use this before writing radia-acoustic or Gypsilab-derived display files:
-    the raw data stay in one MSH v4.1 file, users open the sibling .geo,
+    the raw data stay in one MSH v4.2 file, users open the sibling .geo,
     and the exact sidecars preserve camera, cut-plane, and view state.
     """
     return build_gmsh_post_display_contract(
@@ -577,7 +577,7 @@ def gmsh_post_display_gate(manifest: dict) -> dict:
     """
     Validate a Radia/Gypsilab Gmsh post-display manifest.
 
-    The gate checks MSH v4.1, .geo launch target, exact .geo.opt/.msh.opt
+    The gate checks MSH v4.2, .geo launch target, exact .geo.opt/.msh.opt
     autoload naming, Z-up camera metadata, cut-plane metadata, and named views.
     """
     return gmsh_post_display_manifest_gate(manifest)
@@ -586,7 +586,7 @@ def gmsh_post_display_gate(manifest: dict) -> dict:
 @mcp.tool()
 def gmsh_inspect_msh(msh_path: str) -> dict:
     """
-    Inspect an MSH v4.1 file and summarize its structure.
+    Inspect an MSH v4.2 file and summarize its structure.
 
     Pure-Python parser (no gmsh dependency): reports version, physical
     names, entity counts, node/element counts, element types with order,
@@ -606,9 +606,9 @@ def gmsh_inspect_msh(msh_path: str) -> dict:
 def gmsh_validate_msh(msh_path: str, check_jacobians: bool = False,
                       quadrature: str = "Gauss2") -> dict:
     """
-    Validate MSH v4.1 structural consistency; optional Jacobian check.
+    Validate MSH v4.2 structural consistency; optional Jacobian check.
 
-    Structural checks (pure Python, always available): v4.1 ASCII format,
+    Structural checks (pure Python, always available): v4.2 ASCII format,
     balanced sections, header counts vs actual, unique node/element tags,
     element node references exist, known element types, NodeData declared
     counts vs data rows, data tags exist, numComponents in {1,3,9},
@@ -636,7 +636,7 @@ def gmsh_validate_msh(msh_path: str, check_jacobians: bool = False,
 @mcp.tool()
 def gmsh_field_stats(msh_path: str, view_name: str | None = None) -> dict:
     """
-    Per-view, per-time-step field statistics for an MSH v4.1 file.
+    Per-view, per-time-step field statistics for an MSH v4.2 file.
 
     Answers "what is |B| max?" / "did the solve produce NaN?" without
     opening a GUI: scalars report signed min/max/mean/rms per step,
@@ -660,7 +660,7 @@ def gmsh_validate_geo(geo_path: str, deep: bool = True) -> dict:
     Validate a .geo launch/companion file BEFORE opening it in GMSH.
 
     Catches the classic "Open GMSH doesn't work / window is black" bugs:
-    missing Merge targets, invalid GMSH 4.x option names (Mesh.Volumes,
+    missing Merge targets, invalid GMSH 5 option names (Mesh.Volumes,
     Mesh.Surfaces, General.GraphicsSizeX/Y). With deep=True (default)
     the merged .msh files are scanned for their view count, so
     out-of-range View[N] references (silently ignored by GMSH, field
@@ -706,7 +706,7 @@ def gmsh_audit_msh_directory(directory: str,
 @mcp.tool()
 def gmsh_diff_msh(msh_a: str, msh_b: str, rel_tol: float = 1e-9) -> dict:
     """
-    Compare two MSH v4.1 files: structure + field statistics.
+    Compare two MSH v4.2 files: structure + field statistics.
 
     Built for before/after verification (re-export, node-order fix,
     solver change): reports node/element-type/physical-name/view
@@ -748,7 +748,7 @@ def gmsh_write_post_launch_artifact(msh_path: str,
     returns the gated manifest. The .msh itself is NOT modified.
 
     Args:
-        msh_path: Existing MSH v4.1 data file the artifact points at.
+        msh_path: Existing MSH v4.2 data file the artifact points at.
         output_base: Base path for .geo/.opt outputs (default: msh stem).
         title: Human-readable artifact title written into the .geo.
         camera_preset: One of z_up_xz_from_positive_y, positive_y_oblique,
@@ -2111,7 +2111,7 @@ def gmsh_export_csv(msh_path: str, csv_out: str,
     """
     Dump view data to CSV (the ParaView spreadsheet / SaveData analog).
 
-    Pure Python on the radia-mcp MSH v4.1 parser -- no gmsh needed.
+    Pure Python on the radia-mcp MSH v4.2 parser -- no gmsh needed.
     kind="nodes" writes tag,x,y,z + one column per view step/component
     from $NodeData; kind="elements" writes element CENTROIDS +
     $ElementData columns; "auto" prefers nodes. List-based .pos files
@@ -2321,17 +2321,58 @@ def _selftest(audit_repo: bool = False):
         print("  fixture validation: PASSED")
         print()
 
-    # --- MSH v4.1 inspect/validate smoke (inline, no fixture needed) ---
+    # --- MSH v4.2 inspect/validate smoke (inline, no fixture needed) ---
     import tempfile
     tiny_msh = (
-        "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n"
-        "$PhysicalNames\n1\n3 1 \"block\"\n$EndPhysicalNames\n"
-        "$Entities\n0 0 0 1\n1 0 0 0 1 1 1 1 1 0\n$EndEntities\n"
-        "$Nodes\n1 4 1 4\n3 1 0 4\n1\n2\n3\n4\n"
-        "0 0 0\n1 0 0\n0 1 0\n0 0 1\n$EndNodes\n"
-        "$Elements\n1 1 1 1\n3 1 4 1\n1 1 2 3 4\n$EndElements\n"
-        "$NodeData\n1\n\"T\"\n1\n0.0\n3\n0\n1\n4\n"
-        "1 1.0\n2 2.0\n3 3.0\n4 4.0\n$EndNodeData\n"
+        """$MeshFormat
+4.2 0 8
+$EndMeshFormat
+$PhysicalNames
+1
+3 1 "block"
+$EndPhysicalNames
+$Entities
+0 0 0 1
+1 0 0 0 1 1 1 1 1 0 0
+$EndEntities
+$Nodes
+1 4 1 4
+3 1 0 4
+1
+2
+3
+4
+0 0 0
+1 0 0
+0 1 0
+0 0 1
+$EndNodes
+$Elements
+1 1 1 1
+3 1 4 1
+1 1 2 3 4
+$EndElements
+$NodeData
+1
+"T"
+1
+0.0
+3
+0
+1
+4
+1 4 1 4
+4
+1
+2
+3
+4
+1.0
+2.0
+3.0
+4.0
+$EndNodeData
+"""
     )
     with tempfile.TemporaryDirectory() as td:
         msh = Path(td) / "selftest.msh"
@@ -2586,7 +2627,7 @@ def gmsh_volume_render(path: str, png_out: str | None = None,
     slice.
 
     Args:
-        path: ASCII MSH v4.x file holding a scalar field.
+        path: ASCII MSH v4.2 file holding a scalar field.
         png_out: output PNG (default: alongside the input).
         view: source view name or index.
         n_slices: number of cut planes (24 default; >64 is slow).
@@ -2625,7 +2666,7 @@ def gmsh_flow_texture(path: str, view: str | int | None = None,
     purely visual convolution that fills every pixel.
 
     Args:
-        path: ASCII MSH v4.x file holding a 3-component vector view.
+        path: ASCII MSH v4.2 file holding a 3-component vector view.
         view: view name or index.
         plane: "xy" | "yz" | "xz" section plane.
         offset: signed offset of the plane from the bbox centre.
@@ -2820,7 +2861,7 @@ def gmsh_lic(path: str, png_out: str | None = None,
 register_status_tool(
     mcp,
     server_name='mcp-server-gmsh',
-    description='GMSH MSH v4.1 inspect/validate + ParaView-parity post '
+    description='GMSH MSH v4.2 inspect/validate + ParaView-parity post '
                 'verbs (derive/threshold/mirror/resample/CSV) + '
                 'post-display launch artifacts + visualization policy lint',
     subpackage='radia_mcp.gmsh',

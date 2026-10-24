@@ -12,12 +12,14 @@ Every test here pins a defect that used to be SILENT or FATAL:
 * ``field_histogram`` used to rewrite a reversed user ``value_range``
   into ``[lo, lo + 1]`` and return all-zero counts.
 * List-data views exported into a ``.msh`` target come back as legacy
-  MSH v2.2, which this lane's own v4.1-only readers reject.
+  MSH v2.2, which this lane's own v4.2-only readers reject.
 
 Fixtures follow the house pattern: a hand-written Kuhn 6-tet cube
 [-0.5, 0.5]^3 with P1-exact NodeData, so every expected number is a
 closed form.
 """
+
+from msh42_fixtures import field_section
 
 import importlib.util
 
@@ -39,7 +41,7 @@ pytestmark_gmsh = pytest.mark.skipif(not _GMSH_AVAILABLE,
                                      reason="gmsh package not installed")
 
 _CUBE = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $Nodes
 1 8 1 8
@@ -79,12 +81,7 @@ _P = {1: (-0.5, -0.5, -0.5), 2: (0.5, -0.5, -0.5), 3: (-0.5, 0.5, -0.5),
 
 
 def _nodedata(name, ncomp, rows, time=0.0, step=0):
-    lines = ["$NodeData", "1", f'"{name}"', "1", str(time), "3",
-             str(step), str(ncomp), str(len(rows))]
-    for tag, vals in rows:
-        lines.append(str(tag) + " " + " ".join(f"{v:.16g}" for v in vals))
-    lines.append("$EndNodeData")
-    return "\n".join(lines) + "\n"
+    return field_section('NodeData', name, ncomp, rows, time=time, step=step)
 
 
 def _write(tmp_path, text, name):
@@ -368,7 +365,7 @@ def test_in_place_verbs_still_accept_a_msh_out_file(one_step_vector,
                                                     tmp_path):
     """warp / smooth / modulus_phase rewrite the MODEL-based view.
 
-    MEASURED: those three produced "$MeshFormat / 4.1 0 8" in a .msh
+    MEASURED: those three produced "$MeshFormat / 4.2 0 8" in a .msh
     target while every list-data verb produced 2.2 -- so the guard must
     NOT fire for them.
     """
@@ -385,4 +382,4 @@ def test_in_place_verbs_still_accept_a_msh_out_file(one_step_vector,
         assert result["ok"] is True, (name, result.get("error"))
         lines = target.read_text(encoding="utf-8").splitlines()
         assert lines[0] == "$MeshFormat", name
-        assert lines[1].startswith("4.1"), (name, lines[1])
+        assert lines[1].startswith("4.2"), (name, lines[1])

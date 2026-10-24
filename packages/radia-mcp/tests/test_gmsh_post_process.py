@@ -27,7 +27,7 @@ pytestmark = pytest.mark.skipif(not _GMSH_AVAILABLE,
                                 reason="gmsh package not installed")
 
 _TET_HEADER = """$MeshFormat
-4.1 0 8
+4.2 0 8
 $EndMeshFormat
 $Nodes
 1 4 1 4
@@ -57,10 +57,16 @@ _SCALAR_2STEP = _TET_HEADER + """$NodeData
 0
 1
 4
-1 1.0
-2 2.0
-3 3.0
-4 4.0
+1 4 1 4
+4
+1
+2
+3
+4
+1.0
+2.0
+3.0
+4.0
 $EndNodeData
 $NodeData
 1
@@ -71,10 +77,16 @@ $NodeData
 1
 1
 4
-1 1.5
-2 2.5
-3 3.5
-4 4.5
+1 4 1 4
+4
+1
+2
+3
+4
+1.5
+2.5
+3.5
+4.5
 $EndNodeData
 """
 
@@ -87,10 +99,16 @@ _VECTOR_UNIFORM_Z = _TET_HEADER + """$NodeData
 0
 3
 4
-1 0.0 0.0 1.0
-2 0.0 0.0 1.0
-3 0.0 0.0 1.0
-4 0.0 0.0 1.0
+1 4 1 4
+4
+1
+2
+3
+4
+0.0 0.0 1.0
+0.0 0.0 1.0
+0.0 0.0 1.0
+0.0 0.0 1.0
 $EndNodeData
 """
 
@@ -103,10 +121,16 @@ _VECTOR_MIXED = _TET_HEADER + """$NodeData
 0
 3
 4
-1 3.0 4.0 0.0
-2 0.0 0.0 1.0
-3 1.0 0.0 0.0
-4 0.0 2.0 0.0
+1 4 1 4
+4
+1
+2
+3
+4
+3.0 4.0 0.0
+0.0 0.0 1.0
+1.0 0.0 0.0
+0.0 2.0 0.0
 $EndNodeData
 """
 
@@ -164,11 +188,13 @@ def test_line_profile_writes_plot(tmp_path):
 # surface entity the boundary tri lives on.
 _SCALAR_MIXED_DIM = _SCALAR_2STEP.replace(
     "$EndMeshFormat\n",
-    "$EndMeshFormat\n"
-    "$Entities\n0 0 1 1\n"
-    "1 0 0 0 1 1 0 0 0\n"
-    "1 0 0 0 1 1 1 0 1 1\n"
-    "$EndEntities\n").replace(
+    """$EndMeshFormat
+$Entities
+0 0 1 1
+1 0 0 0 1 1 0 0 0 0
+1 0 0 0 1 1 1 0 1 1 0
+$EndEntities
+""").replace(
     "$Elements\n1 1 1 1\n3 1 4 1\n1 1 2 3 4\n$EndElements",
     "$Elements\n2 2 1 2\n2 1 2 1\n1 1 2 3\n3 1 4 1\n2 1 2 3 4\n$EndElements")
 

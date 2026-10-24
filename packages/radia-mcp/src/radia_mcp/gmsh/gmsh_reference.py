@@ -340,7 +340,7 @@ GMSH_ALL_MESH_OPTIONS = """
 | Option | Default | Description |
 |--------|---------|-------------|
 | Mesh.Format | 10 | Output format (10=auto) |
-| Mesh.MshFileVersion | 4.1 | MSH version |
+| Mesh.MshFileVersion | 4.2 | MSH version |
 | Mesh.Binary | 0 | Binary output |
 | Mesh.SaveAll | 0 | Save all elements |
 | Mesh.SaveParametric | 0 | Save parametric coords |
