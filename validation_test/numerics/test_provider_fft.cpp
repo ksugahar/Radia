@@ -13,10 +13,17 @@ static double check(int nx,int ny,int sign,bool inplace,int batches=1) {
     std::vector<fftw_complex> data(n*batches),out(n*batches);
     for(int b=0;b<batches;++b) for(int i=0;i<n;++i) data[b*n+i]={float((i+2*b)%5-2),float((2*i+b)%7-3)};
     const auto original=data;
-    auto plan=nx==1 ? fftw_create_plan(ny,static_cast<fftw_direction>(sign),inplace?FFTW_IN_PLACE:FFTW_OUT_OF_PLACE) : fftw2d_create_plan(nx,ny,static_cast<fftw_direction>(sign),inplace?FFTW_IN_PLACE:FFTW_OUT_OF_PLACE);
-    if(!plan) throw std::runtime_error("FFT plan allocation");
-    fftwnd(plan,batches,data.data(),1,n,inplace?data.data():out.data(),1,n);
-    fftwnd_destroy_plan(plan);
+    if(nx==1) {
+        auto plan=fftw_create_plan(ny,static_cast<fftw_direction>(sign),inplace?FFTW_IN_PLACE:FFTW_OUT_OF_PLACE);
+        if(!plan) throw std::runtime_error("FFT plan allocation");
+        fftw(plan,batches,data.data(),1,n,inplace?data.data():out.data(),1,n);
+        fftw_destroy_plan(plan);
+    } else {
+        auto plan=fftw2d_create_plan(nx,ny,static_cast<fftw_direction>(sign),inplace?FFTW_IN_PLACE:FFTW_OUT_OF_PLACE);
+        if(!plan) throw std::runtime_error("FFT plan allocation");
+        fftwnd(plan,batches,data.data(),1,n,inplace?data.data():out.data(),1,n);
+        fftwnd_destroy_plan(plan);
+    }
     const auto& result=inplace?data:out;
     double worst=0,scale=0;
     for(int b=0;b<batches;++b) for(int kx=0;kx<nx;++kx) for(int ky=0;ky<ny;++ky) {
