@@ -1,9 +1,10 @@
 # Human Netgen .vol viewer
 
 Run `python -B -m radia_mcp.mesh_viewer "FILE.vol"` in an unlocked interactive
-Windows session. `--check` prints the actual Python, Netgen 6.2.2608 and native
+Windows session. `--check` prints the actual Python, Netgen and native
 module identities without opening the GUI. Missing files, other extensions and
-mismatched runtimes fail explicitly. This first delivery accepts `.vol` only.
+mismatched runtimes fail explicitly. Strict MSH 4.2 files use the Gmsh 5 path;
+see [Gmsh post views](gmsh-mesh-viewer.md) for its checks and explicit VOL conversion.
 
 The launcher uses the installed Netgen GUI and passes the entire filename as
 one `tk.call("Ng_LoadMesh", path)` argument. Japanese text, spaces, braces,
@@ -11,7 +12,8 @@ brackets, dollar signs and semicolons remain literal path data. It does not
 patch Netgen, use Tcl eval for filenames, mesh, solve, write files, or modify
 Windows associations. Only its owned window is destroyed on close.
 
-The `open_mesh_viewer(filepath)` MCP tool uses this same module in a detached
+The `open_mesh_viewer(filepath, post_output=None, checked_report=None,
+source_sha256=None, group_scope=None)` MCP tool uses this same module in a detached
 process and returns `pid`, literal `argv`, desktop and runtime identity.
 Preflight is asynchronous, and the server never waits for the GUI event loop.
 `status="launched"` does not by itself certify a rendered image.
@@ -34,9 +36,11 @@ extra or ad-hoc Gmsh installation is introduced. Install through the declared
 requirement and official development index:
 
 ```text
-pip install --pre --extra-index-url https://gmsh.info/python-packages-dev "radia-mcp[gmsh]"
+pip install --pre --upgrade -i https://gmsh.info/python-packages-dev gmsh
+pip install "radia-mcp[gmsh]"
 ```
 
-Netgen comes from the Radia/NGSolve dependency and must be 6.2.2608. The `.vol`
+Netgen comes from the Radia/NGSolve dependency and must match the sole exact
+`netgen-mesher` pin in the installed Radia package metadata. The `.vol`
 route does not import Gmsh. MSH/Gmsh support and any all-user installation still
 require their separate reviewed follow-up and explicit installation decision.

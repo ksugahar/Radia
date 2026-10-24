@@ -15,6 +15,13 @@ import re
 import tempfile
 import zipfile
 
+_INSTALL_GUIDANCE = (
+    'Install Gmsh first: pip install --pre --upgrade -i '
+    'https://gmsh.info/python-packages-dev gmsh; '
+    'then pip install "radia-mcp[gmsh]". '
+    'See docs/operations/gmsh-development-runtime.md.'
+)
+
 
 def _sha(path: Path) -> str:
     digest = hashlib.sha256()
@@ -97,20 +104,35 @@ def record_wheel(wheel: Path, destination: Path) -> dict:
     return result
 
 
-def qualify_runtime() -> dict:
-    """Verify native identity, MSH default and provenance; initialize no session."""
-    version = _gmsh5_distribution_version()
+def verify_runtime_identity() -> dict:
+    """Verify installed payload provenance without initializing or writing files."""
+    try:
+        version = _gmsh5_distribution_version()
+    except importlib.metadata.PackageNotFoundError as error:
+        raise RuntimeError(_INSTALL_GUIDANCE) from error
     record = os.environ.get('RADIA_GMSH_PROVENANCE')
     if not record:
         raise RuntimeError('RADIA_GMSH_PROVENANCE is required; record the official wheel with python -m radia_mcp.gmsh.runtime --wheel WHEEL --record FILE')
     identity = json.loads(Path(record).read_text(encoding='utf-8'))
     if identity.get('distribution_version') != version or not re.fullmatch(r'[0-9a-f]{64}', identity.get('wheel_sha256', '')):
         raise RuntimeError('Gmsh wheel provenance/version mismatch')
-    import gmsh
+    try:
+        import gmsh
+    except ModuleNotFoundError as error:
+        if error.name != 'gmsh':
+            raise
+        raise RuntimeError(_INSTALL_GUIDANCE) from error
     for path in (Path(gmsh.__file__).resolve(), Path(gmsh.libpath).resolve()):
         if identity.get('runtime_payload_sha256', {}).get(str(path)) != _sha(path):
             raise RuntimeError(f'Gmsh runtime payload/provenance mismatch: {path.name}')
-    gmsh.initialize(['-noconfig'])
+    return identity
+
+
+def qualify_runtime() -> dict:
+    """Verify native identity, MSH default and provenance; initialize no session."""
+    identity = verify_runtime_identity()
+    import gmsh
+    gmsh.initialize(['radia-gmsh-qualification'], readConfigFiles=False)
     try:
         if gmsh.option.getNumber('Mesh.MshFileVersion') != 4.2 or gmsh.__version__.split('.')[0] != '5':
             raise RuntimeError('Gmsh major 5 and default MSH 4.2 required')
