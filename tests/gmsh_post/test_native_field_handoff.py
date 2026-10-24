@@ -82,3 +82,29 @@ def test_native_vector_element_node_fixture_passes_core_preflight(name):
     assert all(len(row) == 3 * expected['samples_per_element']
                for row in expected['values'])
     reader.validate_native_msh_fields(path)
+
+
+@pytest.mark.parametrize('scheme,samples', [('', 0), ('', 1), ('', 3), ('', 5), ('named', 0)])
+def test_invalid_element_node_samples_rejected_before_native(tmp_path, monkeypatch, scheme, samples):
+    """Guards: sample shape before native access; assumes a two-node line."""
+    path = tmp_path / 'field.msh'
+    path.write_text('$MeshFormat\n4.2 0 8\n$EndMeshFormat\n$ElementNodeData\n'
+                    + f'2\n"field"\n"{scheme}"\n1\n0\n3\n0\n1\n1\n'
+                    + f'1 1 17 17\n1 {samples} 1\n17\n' + '1.25 ' * samples
+                    + '\n$EndElementNodeData\n', encoding='utf-8')
+    native_calls = []
+    monkeypatch.setitem(sys.modules, 'gmsh', types.SimpleNamespace(
+        initialize=lambda: native_calls.append('initialize')))
+    with pytest.raises(ValueError, match='sample count/type mismatch'):
+        reader.validate_native_msh_fields(path)
+    assert native_calls == []
+
+
+def test_named_interpolation_allows_positive_sample_count(tmp_path):
+    """Guards: named interpolation differs from geometry; no evaluation implied."""
+    path = tmp_path / 'field.msh'
+    path.write_text('$MeshFormat\n4.2 0 8\n$EndMeshFormat\n$ElementNodeData\n'
+                    '2\n"field"\n"named"\n1\n0\n3\n0\n3\n1\n'
+                    '1 1 17 17\n1 1 1\n17\n1.25 -2.5 3.75\n$EndElementNodeData\n',
+                    encoding='utf-8')
+    reader.validate_native_msh_fields(path)
