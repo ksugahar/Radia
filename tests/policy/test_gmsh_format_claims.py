@@ -50,7 +50,7 @@ MESH_HEADER = re.compile(
 )
 OLD_CLI_FORMAT = re.compile(r"(?<!\w)-format\s+[\"']?msh(?:2|22|41)\b", re.IGNORECASE)
 INTEGER_SETTING = re.compile(r'\b(?:Mesh[.])?MshFileVersion[\s"\'`]*(?:=|:|,)[\s"\'`]*2(?![.\d])', re.I)
-OLD_FILENAME = re.compile(r"_v(?:4[.]?1|2[.]?2)(?=[_.-])", re.I)
+OLD_FILENAME = re.compile(r"[\w./\\-]*_v(?:4[.]?1|2[.]?2)(?=[_.-])[\w.-]*[.](?:msh|geo)\b", re.I)
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 RELEASE = re.compile(r"^\[?v?\d+[.](?:\d+|x)(?:[.][\w.-]+)?(?:\]|\s|$)", re.I)
 UNRELEASED = re.compile(r"^\[?unreleased\]?(?:\s|$)", re.IGNORECASE)
@@ -148,7 +148,20 @@ def _candidate_paths(root: Path) -> set[str]:
         cwd=root, capture_output=True,
     )
     assert found.returncode in (0, 1), found.stderr
-    return {name.decode("utf-8", errors="surrogateescape") for name in found.stdout.split(b"\0") if name}
+    paths = {name.decode("utf-8", errors="surrogateescape") for name in found.stdout.split(b"\0") if name}
+    # POSIX Git regex stops at NUL despite --text. Native Git classifies
+    # binary working-tree bytes; retain binary-marked text suffixes so the
+    # normal decoder below still inspects UTF-16 (without PCRE dependency).
+    endings = subprocess.run(["git", "-c", f"safe.directory={root.as_posix()}",
+                              "ls-files", "--eol", "-z"], cwd=root,
+                             capture_output=True, check=True)
+    for row in endings.stdout.split(b"\0"):
+        metadata, separator, raw_name = row.partition(b"\t")
+        if separator and b"w/-text" in metadata:
+            name = raw_name.decode("utf-8", errors="surrogateescape")
+            if Path(name).suffix.lower() in TEXT_SUFFIXES:
+                paths.add(name)
+    return paths
 
 
 def _document_units(path: Path, text: str):
@@ -194,6 +207,8 @@ def test_claim_detector_distinguishes_format_contracts_from_values(major, minor)
         "physical coefficients: 2.2 and 4.1",
         "field.msh has amplitude 2.2",
         "rejected_versions = [(4, 1), (2, 2)]",
+        "test_generalization_v41.py",
+        "test_gate_v22_revision",
     )
     assert all(not _claims(value) for value in good), good
     history = f"# Changelog\n## [Unreleased]\nMSH 4.2\n## [1.4.29]\nMSH v{old}\n"
@@ -250,7 +265,7 @@ def test_git_prefilter_preserves_utf16_and_cli_claims(tmp_path):
     assert _claims((root / "legacy.py").read_text(encoding="utf-16"))
 
 
-def test_tracked_files_make_no_retired_msh_format_claims():
+def test_tracked_files_make_no_retired_msh_format_claims(record_property):
     inventory = subprocess.run(
         ["git", "-c", f"safe.directory={ROOT.as_posix()}", "ls-files", "-z"],
         cwd=ROOT, capture_output=True, check=True,
@@ -259,6 +274,8 @@ def test_tracked_files_make_no_retired_msh_format_claims():
     assert tracked, "required tracked-file inventory is empty"
     candidates = _candidate_paths(ROOT)
     assert candidates.issubset(set(tracked)), "grep returned nontracked input"
+    record_property("tracked_paths", len(tracked))
+    record_property("content_candidates", len(candidates))
     historical = []
     records = {}
     for relative in candidates:
