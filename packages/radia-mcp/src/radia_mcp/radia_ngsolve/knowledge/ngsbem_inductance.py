@@ -310,7 +310,7 @@ with TaskManager():
 
 ## Dense Matrix Extraction: COO (NOT ToDense)
 
-ngsolve.bem stores BEM matrices as `SparseMatrixdouble` with 100% fill
+ngsolve.bem stores BEM matrices as `real-double sparse matrix` with 100% fill
 (every entry is nonzero).  `ToDense()` is ~2500x slower than necessary
 because it internally performs N column-by-column MatVecs instead of a
 direct memory copy.  Use `COO()` + scipy instead:
@@ -946,7 +946,7 @@ mesh = Mesh(vol_path)
 
 | | `use_fmm=False` | `use_fmm=True` |
 |--|-----------------|----------------|
-| Matrix type | `SparseMatrixdouble` (100% fill) | `SumMatrix` (FMM + near-field sparse) |
+| Matrix type | `real-double sparse matrix` (100% fill) | `SumMatrix` (FMM + near-field sparse) |
 | Structure | Dense matrix in CSR format | `FMM_Operator` (far) + `SparseMatrix` (near, 0.6% fill) |
 | MatVec accuracy | Exact | ~2.6% relative error (multipole truncation) |
 | Dense extraction | COO -> scipy (fast) | **Not possible** (SumMatrix has no COO) |
@@ -961,7 +961,7 @@ mesh = Mesh(vol_path)
 # GetOperatorInfo():
 #   SumMatrix
 #     ProductMatrix (far-field: FMM_Operator LaplaceSL)
-#     SparseMatrixdouble (near-field: nze=146799, 0.57% fill)
+#     real-double sparse matrix (near-field: nze=146799, 0.57% fill)
 ```
 
 **FMM internals** (from `mptools.hpp`):
