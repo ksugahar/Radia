@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased - Gmsh post-processing support
+## 2.2.7 - Geometric curve identity and Gmsh post-processing support
 
 - Split-seam CAD refit uses explicit geometric curve identities and real CAD tangents, with fail-loud export diagnostics. This correction remains experimental until a licensed re-export passes the existing geometry quality gates.
 - Gmsh MSH 4.2 export for post-processing and visualization only; solver meshes remain checked `.vol` files with their versioned contracts. No Gmsh-to-`.vol` route.
