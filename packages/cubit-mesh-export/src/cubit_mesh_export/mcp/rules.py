@@ -668,7 +668,7 @@ def check_plain_gmsh_export(filepath: str, lines: List[str]) -> List[Dict]:
 		findings.append({
 			'line': i,
 			'severity': 'HIGH',
-			'rule': 'gmsh-v22-deprecated',
+			'rule': 'gmsh-post-export-required',
 			'message': (
 				f'`export mesh "{m.group(1)}"` bypasses the required post-export contract. '
 				f'Use `export gmsh '

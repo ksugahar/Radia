@@ -28,19 +28,15 @@ TEXT_SUFFIXES = {
 # Exact format tokens, not software versions or arbitrary physical values.
 OLD_VERSION = r"(?:4[.]1|2[.]2)(?!\d|[.]\d)"
 PUNCTUATION = r"[\s`*_()\[\]|:\"'=-]*"
-FORMAT_TOKENS = re.compile(r"4[.]1|2[.]2|msh2\b", re.IGNORECASE)
+FORMAT_TOKENS = re.compile(r"4[.]1|2[.]2|msh(?:2|22|41)\b|MshFileVersion|_v(?:41|22)_", re.IGNORECASE)
 FORMAT_CLAIM = re.compile(
     rf"(?:\bMSH\b|[.]msh\b){PUNCTUATION}"
-    rf"(?:(?:ASCII|binary|format|version|is|only)\b{PUNCTUATION}){{0,3}}"
+    rf"(?:(?:ASCII|binary|file|format|version|is|only)\b{PUNCTUATION}){{0,3}}"
     rf"v?{OLD_VERSION}",
     re.IGNORECASE,
 )
 GMSH_VERSION = re.compile(
     rf"\bGMSH\b{PUNCTUATION}v?{OLD_VERSION}", re.IGNORECASE,
-)
-FORMAT_CONTEXT = re.compile(
-    r"[.]msh\b|\b(?:export\w*|format\w*|mesh\w*|emit\w*|write\w*|output)\b",
-    re.IGNORECASE,
 )
 FORMAT_SETTING = re.compile(
     rf"\b(?:Mesh[.]MshFileVersion|MshFileVersion|mesh_version|mesh_format|msh_version)"
@@ -49,10 +45,12 @@ FORMAT_SETTING = re.compile(
 )
 MESH_HEADER = re.compile(
     rf"\$MeshFormat(?:(?!\$EndMeshFormat).){{0,120}}?"
-    rf"{OLD_VERSION}\s+[01]\s+[48](?!\d)",
+    rf"{OLD_VERSION}\s+[01](?!\d)",
     re.IGNORECASE | re.DOTALL,
 )
-OLD_CLI_FORMAT = re.compile(r"(?<!\w)-format\s+[\"']?msh2\b", re.IGNORECASE)
+OLD_CLI_FORMAT = re.compile(r"(?<!\w)-format\s+[\"']?msh(?:2|22|41)\b", re.IGNORECASE)
+INTEGER_SETTING = re.compile(r'\b(?:Mesh[.])?MshFileVersion[\s"\'`]*(?:=|:|,)[\s"\'`]*2(?![.\d])', re.I)
+OLD_FILENAME = re.compile(r"_v(?:4[.]?1|2[.]?2)(?=[_.-])", re.I)
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 RELEASE = re.compile(r"^\[?v?\d+[.](?:\d+|x)(?:[.][\w.-]+)?(?:\]|\s|$)", re.I)
 UNRELEASED = re.compile(r"^\[?unreleased\]?(?:\s|$)", re.IGNORECASE)
@@ -88,11 +86,9 @@ def _claims(text: str) -> list[tuple[int, str]]:
     matches += list(FORMAT_SETTING.finditer(text))
     matches += list(MESH_HEADER.finditer(text))
     matches += list(OLD_CLI_FORMAT.finditer(text))
-    for match in GMSH_VERSION.finditer(text):
-        start = text.rfind("\n", 0, match.start()) + 1
-        end = text.find("\n", match.end())
-        if FORMAT_CONTEXT.search(text[start:end if end >= 0 else len(text)]):
-            matches.append(match)
+    matches += list(INTEGER_SETTING.finditer(text))
+    matches += list(OLD_FILENAME.finditer(text))
+    matches += list(GMSH_VERSION.finditer(text))
     return sorted({
         (text.count("\n", 0, match.start()) + 1, match.group().replace("\n", r"\n"))
         for match in matches
@@ -111,6 +107,9 @@ def _historical_calculation(text: str) -> dict | None:
         datetime.fromisoformat(record["generated_at_utc"].replace("Z", "+00:00"))
         assert re.fullmatch(r"\d+(?:[.]\d+){1,3}", record["versions"]["radia_version"])
         assert re.fullmatch(r"\d+[.]\d+ [01] [48]", record["msh"]["mesh_format"])
+        notebook = record["saved_notebook"]
+        assert isinstance(notebook["path"], str) and notebook["path"].endswith(".ipynb")
+        assert re.fullmatch(r"[0-9a-f]{64}", notebook["sha256"])
         return record
     except (ValueError, KeyError, TypeError, AttributeError, AssertionError):
         return None
@@ -120,9 +119,7 @@ def _archived_notebooks(root: Path, records: list[dict]) -> set[str]:
     """Only unchanged saved notebook bytes linked by calculation provenance."""
     paths = set()
     for record in records:
-        notebook = record.get("saved_notebook")
-        if notebook is None:
-            continue
+        notebook = record["saved_notebook"]
         path = root / notebook["path"]
         assert path.suffix == ".ipynb" and path.resolve().is_relative_to(root.resolve())
         payload = path.read_bytes()
@@ -131,6 +128,27 @@ def _archived_notebooks(root: Path, records: list[dict]) -> set[str]:
         assert hashlib.sha256(payload).hexdigest() == notebook["sha256"], path
         paths.add(path.relative_to(root).as_posix())
     return paths
+
+
+def _active_record_text(record: dict) -> str:
+    """Exclude only the archived format value, never arbitrary new prose."""
+    active = dict(record, msh=dict(record["msh"]))
+    active["msh"]["mesh_format"] = "historical format (original preserved in record)"
+    return json.dumps(active)
+
+
+def _candidate_paths(root: Path) -> set[str]:
+    """Native Git prefilter; still repository-wide, including UTF-16 text."""
+    # Optional bytes between letters also find UTF-16 code units. Git --text
+    # scans binary-marked text; suffix filtering avoids image payload files.
+    pattern = r"4.?[.].?1|2.?[.].?2|m.?s.?h.?(2|4|f)|s.?a.?v.?e.?d.?_.?n.?o.?t.?e.?b.?o.?o.?k"
+    found = subprocess.run(
+        ["git", "-c", f"safe.directory={root.as_posix()}", "grep", "--text", "-i", "-l", "-z", "-E", pattern,
+         "--", *[f":(icase)*{suffix}" for suffix in sorted(TEXT_SUFFIXES)]],
+        cwd=root, capture_output=True,
+    )
+    assert found.returncode in (0, 1), found.stderr
+    return {name.decode("utf-8", errors="surrogateescape") for name in found.stdout.split(b"\0") if name}
 
 
 def _document_units(path: Path, text: str):
@@ -161,6 +179,12 @@ def test_claim_detector_distinguishes_format_contracts_from_values(major, minor)
         f'{{"mesh_format": "{old} 0 8"}}',
         f'$MeshFormat\\n{old} 0 8\\n$EndMeshFormat',
         f'assert "GMSH v{old} .msh output" in response',
+        f"## GMSH v{old}",
+        f"MSH file format {old}",
+        f"case_v{old}_dim2.msh",
+        f"case_v{major}{minor}_dim2.geo",
+        f'"$MeshFormat\\n" << "{old} 0 "',
+        f"gmsh case.geo -format msh{major}{minor}",
     )
     assert all(_claims(value) for value in bad), bad
     good = (
@@ -177,6 +201,7 @@ def test_claim_detector_distinguishes_format_contracts_from_values(major, minor)
     assert _claims(_active_changelog(history.replace("MSH 4.2", f"MSH v{old}", 1)))
     if major == 2:
         assert _claims(f"gmsh result.geo -format msh{minor}")
+        assert _claims('setNumber("Mesh.MshFileVersion", ' + str(minor) + ')')
     image_only = json.dumps({"cells": [{"source": [], "outputs": [{"data": {"image/png": f"MSH v{old}"}}]}]})
     assert not any(_claims(unit) for _, unit in _document_units(Path("result.ipynb"), image_only))
     for cell in ({"source": [f"MSH v{old}"]}, {"outputs": [{"text": [f"MSH v{old}"]}]}):
@@ -192,16 +217,37 @@ def test_historical_calculation_requires_provenance_and_unchanged_notebook(tmp_p
         "msh": {"mesh_format": ".".join(map(str, (4, 1))) + " 0 8"},
         "stale": True, "stale_reason": "historical calculation",
     }
-    assert _historical_calculation(json.dumps(record)) == record
-    for key in ("schema", "generated_at_utc", "versions", "msh", "stale", "stale_reason"):
-        assert _historical_calculation(json.dumps({k: v for k, v in record.items() if k != key})) is None, key
+    assert _historical_calculation(json.dumps(record)) is None, "unlinked stale record must not be exempt"
     notebook = tmp_path / "saved.ipynb"
     notebook.write_bytes(b'{"cells": []}')
     record["saved_notebook"] = {"path": notebook.name, "sha256": hashlib.sha256(notebook.read_bytes()).hexdigest()}
+    assert _historical_calculation(json.dumps(record)) == record
+    for key in ("schema", "generated_at_utc", "versions", "msh", "stale", "stale_reason", "saved_notebook"):
+        assert _historical_calculation(json.dumps({k: v for k, v in record.items() if k != key})) is None, key
     assert _archived_notebooks(tmp_path, [record]) == {notebook.name}
+    assert not _claims(_active_record_text(record))
+    record["new_prose"] = "current exporter writes MSH v" + ".".join(map(str, (4, 1)))
+    assert _claims(_active_record_text(record)), "valid archival metadata must not hide active claims"
     notebook.write_bytes(b'{"cells": [{"source": ["changed claim"]}]}')
     with pytest.raises(AssertionError, match="saved.ipynb"):
         _archived_notebooks(tmp_path, [record])
+
+
+def test_git_prefilter_preserves_utf16_and_cli_claims(tmp_path):
+    root = tmp_path / "tracked"
+    root.mkdir()
+    for command in (["git", "init", "-q", str(root)],):
+        subprocess.run(command, capture_output=True, check=True)
+    old = ".".join(map(str, (4, 1)))
+    inputs = {"legacy.py": (f'Mesh.MshFileVersion = {old}', "utf-16"),
+              "command.sh": ("gmsh file.geo -format msh" + "41", "utf-8"),
+              "current.py": ('Mesh.MshFileVersion = 4.2', "utf-8")}
+    for name, (text, encoding) in inputs.items():
+        (root / name).write_text(text, encoding=encoding)
+    subprocess.run(["git", "-C", str(root), "add", "."], capture_output=True, check=True)
+    selected = _candidate_paths(root)
+    assert {"legacy.py", "command.sh"}.issubset(selected), selected
+    assert _claims((root / "legacy.py").read_text(encoding="utf-16"))
 
 
 def test_tracked_files_make_no_retired_msh_format_claims():
@@ -211,25 +257,23 @@ def test_tracked_files_make_no_retired_msh_format_claims():
     )
     tracked = [name.decode("utf-8", errors="surrogateescape") for name in inventory.stdout.split(b"\0") if name]
     assert tracked, "required tracked-file inventory is empty"
+    candidates = _candidate_paths(ROOT)
+    assert candidates.issubset(set(tracked)), "grep returned nontracked input"
     historical = []
-    archived_records = set()
-    for relative in tracked:
+    records = {}
+    for relative in candidates:
         if Path(relative).suffix.lower() == ".json":
-            record = _historical_calculation((ROOT / relative).read_text(encoding="utf-8-sig"))
+            text = (ROOT / relative).read_text(encoding="utf-8-sig")
+            record = _historical_calculation(text) if "saved_notebook" in text else None
             if record is not None:
                 historical.append(record)
-                archived_records.add(relative)
+                records[relative] = record
     archived_notebooks = _archived_notebooks(ROOT, historical)
-    failures = []
-    resolved_root = ROOT.resolve()
-    for relative in tracked:
-        if relative in archived_records or relative in archived_notebooks:
-            continue
+    failures = [f"{relative}: retired format filename" for relative in tracked if OLD_FILENAME.search(relative)]
+    for relative in sorted(candidates - archived_notebooks):
         path = ROOT / relative
-        if path.suffix.lower() not in TEXT_SUFFIXES:
-            continue
         try:
-            assert path.resolve(strict=True).is_relative_to(resolved_root), "tracked text resolves outside repository"
+            assert path.resolve(strict=True).is_relative_to(ROOT.resolve()), "tracked text resolves outside repository"
             raw = path.read_bytes()
             if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
                 text = raw.decode("utf-16")
@@ -237,6 +281,8 @@ def test_tracked_files_make_no_retired_msh_format_claims():
                 continue  # Binary payload, not a source/prose claim.
             else:
                 text = raw.decode("utf-8-sig", errors="surrogateescape")
+            if relative in records:
+                text = _active_record_text(records[relative])
             for location, unit in _document_units(path, text):
                 for line, claim in _claims(unit):
                     failures.append(f"{relative}:{location}:{line}: {claim!r}")

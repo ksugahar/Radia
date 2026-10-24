@@ -167,7 +167,7 @@ has already passed the bibliography audit.
 ## Visualization
 
 - [MESH_GUIDE.md](visualization/MESH_GUIDE.md) - Mesh generation workflows (Cubit + Netgen)
-- [gmsh_animation/gmsh_animation.ipynb](gmsh_animation/gmsh_animation.ipynb) - Result-bearing GMSH v4.2 `$NodeData` displacement-animation artifact inspection.
+- [gmsh_animation/gmsh_animation.ipynb](gmsh_animation/gmsh_animation.ipynb) - Historical (stale) Gmsh animation calculation record; not current-format evidence.
 - [figures/lab_diagrams/README.md](figures/lab_diagrams/README.md) - Docs-owned TikZ source templates for lab flowcharts and concept diagrams.
 
 ## Electric Machines
@@ -192,7 +192,7 @@ has already passed the bibliography audit.
 
 The following features were removed; their docs were deleted to prevent confusion:
 
-- **Nastran BDF input** (Radia-side `.bdf` mesh import): removed. Use checked Netgen `.vol` as the solver mesh input; Gmsh 5 / MSH 4.2 is the post-processing output. Note: **Cubit-side Nastran BDF export** (`export nastran_bdf`, [export_Nastran.md](cubit/export_Nastran.md)) is unaffected and still ships. The former `export jmag_nastran` alias was retired; the wheel gate fails if that token reappears in the compiled `.ccm`.
+- **Nastran BDF input** (Radia-side `.bdf` mesh import): removed. Use checked Netgen `.vol` as the solver mesh input; Gmsh 5 / MSH 4.2 is the post-processing output. Note: **Cubit-side Nastran BDF export** (`export nastran_bdf`, [export_Nastran.md](cubit/export_Nastran.md)) is unaffected and still ships. Retired exporter aliases are rejected by the compiled-plugin wheel gate.
 - **Scattered-field Robin RHS** (`docs/FEM_SCATTERED_FIELD.md`): removed 2026-04-24; the formulation could not be made stable enough for production coupling.  The total-field formulation in `calc_fem_kelvin.py` is the shipped path.
 
 See [CHANGELOG.md](../CHANGELOG.md) for the full removal history per release.
