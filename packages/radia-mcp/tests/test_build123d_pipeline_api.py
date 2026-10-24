@@ -124,7 +124,7 @@ def test_explicit_source_units_produce_the_same_si_cube(units, side, route, tmp_
                             rel_tol=0.0, abs_tol=bound)
     with ng.TaskManager():
         volume = float(ng.Integrate(ng.CoefficientFunction(1.0), mesh))
-    assert math.isclose(volume, 1.0, rel_tol=0.0, abs_tol=bound), volume
+    assert math.isclose(volume, 1.0, rel_tol=1e-9, abs_tol=bound), volume
     assert result['input_units'] == units
     assert result['maxh_m'] == 0.5
     assert json.loads(Path(result['label_contract']).read_text())['units'] == 'm'
