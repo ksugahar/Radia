@@ -120,14 +120,15 @@ def convert_post_view(source: Path, output: str, checked_report: str,
     scratch = Path(os.environ.get('RADIA_MESH_VIEWER_SCRATCH', str(target.parent))).resolve()
     assigned = Path(staging_dir)
     operation = assigned.parent
+    staging = assigned
+    exporter = _load_exporter()
+    # Check the live paths after potentially slow imports, immediately before creation.
     if (not assigned.is_absolute() or assigned.name != 'staging'
             or not operation.name.startswith('.radia-post-receipt-')
             or _is_link(operation) or _is_link(assigned)
             or not operation.is_dir() or operation.resolve().parent != scratch
             or assigned.exists()):
         raise ValueError('Staging must be a new child of the assigned operation root in caller scratch')
-    staging = assigned.resolve()
-    exporter = _load_exporter()
     staging.mkdir()  # Exclusive: no reuse, random-staging fallback or overwrite.
     staged_source = staging / 'source.vol'
     with staged_source.open('xb') as copy, source.open('rb') as original:
