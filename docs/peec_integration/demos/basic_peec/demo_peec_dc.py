@@ -8,7 +8,7 @@ Improvements over demo_peec_dc_simple.py:
     4. Proper cross-section handling
 
 Input:
-    gmsh_models/circular_coil_with_ports.msh
+    --mesh <checked.vol> --contract <labels.json>
 
 Output:
     L_total: Total loop inductance (H)
@@ -23,9 +23,9 @@ from pathlib import Path
 from scipy import sparse
 from scipy.sparse.linalg import splu
 
-GMSH_MODELS = Path(__file__).resolve().parents[1] / "gmsh_models"
-sys.path.insert(0, str(GMSH_MODELS))
-from gmsh_ascii_reader import read_gmsh_ascii  # noqa: E402
+SOLVER_INPUT_TOOLS = Path(__file__).resolve().parents[1] / "gmsh_models"
+sys.path.insert(0, str(SOLVER_INPUT_TOOLS))
+from solver_vol import load_solver_mesh, vertex_data, element_groups  # noqa: E402
 
 print("=" * 70)
 print("Corrected DC PEEC Analysis (Neumann Integral)")
@@ -44,30 +44,18 @@ print(f"    Conductivity: {SIGMA:.2e} S/m")
 print(f"    Resistivity: {RHO:.2e} Ohm*m")
 
 # Check mesh file
-mesh_file = GMSH_MODELS / "circular_coil_with_ports.msh"
-
-if not mesh_file.exists():
-    print(f"\nERROR: Mesh file not found: {mesh_file}")
-    print("\nGenerate mesh first:")
-    print("  cd gmsh_models")
-    print('  "<Coreform Cubit 2025.8+>/bin/python3/python.exe" generate_coil_with_ports.py')
-    sys.exit(1)
-
-print(f"\n[2] Reading mesh fixture: {mesh_file.name}")
-
-mesh = read_gmsh_ascii(mesh_file)
+mesh_file, mesh = load_solver_mesh()
 print("    OK Mesh read")
 
-node_tags = mesh.node_tags
+node_tags, coords = vertex_data(mesh)
 n_nodes = len(node_tags)
-coords = mesh.coords * 1e-3  # mm to m
 
 # Get triangles
-elem_types, elem_tags, elem_node_tags = mesh.grouped_elements()
+elem_types, elem_tags, elem_node_tags = element_groups(mesh)
 
 triangles = []
 for i, elem_type in enumerate(elem_types):
-    if elem_type == 2:  # Triangle
+    if elem_type == "triangle":  # Triangle
         node_tags_flat = elem_node_tags[i]
         n_elems = len(node_tags_flat) // 3
         for j in range(n_elems):

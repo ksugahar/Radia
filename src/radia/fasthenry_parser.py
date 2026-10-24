@@ -16,7 +16,7 @@ Supported directives:
   .default - Default segment parameters
   .equiv   - Node merge (equivalence)
   .magnetic / .endmagnetic - Parsed for diagnostics, rejected by solve()
-  .panel / .endpanel - Panel block for capacitive effects (plate/mesh)
+  .panel / .endpanel - Panel block for capacitive effects (plate/triangle/quad)
 
 Usage:
     from fasthenry_parser import FastHenryParser
@@ -478,21 +478,6 @@ class FastHenryParser:
             vertices = [vals[i*3:(i+1)*3] for i in range(8)]
             block['vertices'] = vertices
 
-        elif block_type == 'mesh':
-            # GMSH .msh file import
-            mesh_file = params.get('file', '')
-            if not mesh_file:
-                raise ValueError(
-                    ".magnetic type=mesh requires 'file' parameter "
-                    "(path to GMSH .msh file)")
-            # Resolve relative path against input file directory
-            if hasattr(self, '_current_file_dir') and self._current_file_dir:
-                mesh_file = os.path.join(self._current_file_dir, mesh_file)
-            block['file'] = mesh_file
-            # Optional physical group filter
-            pg = params.get('physical_group', None)
-            block['physical_group'] = int(pg) if pg is not None else None
-
         else:
             raise ValueError(f"Unknown .magnetic type: {block_type}")
 
@@ -581,14 +566,6 @@ class FastHenryParser:
               vertices=x1,y1,z1, x2,y2,z2, x3,y3,z3, x4,y4,z4
             .endpanel
 
-        Mesh file form (GMSH .msh surface mesh):
-            .panel
-              type=mesh
-              file=panel_surface.msh
-              sigma=5.8e7
-              thickness=1e-3
-            .endpanel
-
         Args:
             lines: List of lines between .panel and .endpanel
         """
@@ -642,15 +619,6 @@ class FastHenryParser:
                     f"(4 vertices x 3 coords), got {len(vals)}")
             block['vertices'] = [vals[i*3:(i+1)*3] for i in range(4)]
 
-        elif block_type == 'mesh':
-            mesh_file = params.get('file', '')
-            if not mesh_file:
-                raise ValueError(
-                    ".panel type=mesh requires 'file' parameter")
-            if hasattr(self, '_current_file_dir') and self._current_file_dir:
-                mesh_file = os.path.join(self._current_file_dir, mesh_file)
-            block['file'] = mesh_file
-
         else:
             raise ValueError(f"Unknown .panel type: {block_type}")
 
@@ -703,42 +671,6 @@ class FastHenryParser:
 
             elif block['type'] in ('triangle', 'quad'):
                 builder.add_panel(block['vertices'])
-
-            elif block['type'] == 'mesh':
-                from ._gmsh_native_fields import validate_native_msh_fields
-                validate_native_msh_fields(block['file'])
-                try:
-                    import gmsh
-                    gmsh.initialize()
-                    gmsh.option.setNumber("General.Terminal", 0)
-                    gmsh.open(block['file'])
-
-                    node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
-                    coords = node_coords.reshape(-1, 3)
-                    tag_to_idx = {int(t): i for i, t in enumerate(node_tags)}
-
-                    elem_types, _, elem_node_tags = gmsh.model.mesh.getElements()
-                    for i, et in enumerate(elem_types):
-                        if et == 2:  # Triangle
-                            ntags = elem_node_tags[i]
-                            for j in range(len(ntags) // 3):
-                                tri = ntags[j*3:(j+1)*3]
-                                verts = [coords[tag_to_idx[int(t)]].tolist()
-                                         for t in tri]
-                                builder.add_panel(verts)
-                        elif et == 3:  # Quad
-                            ntags = elem_node_tags[i]
-                            for j in range(len(ntags) // 4):
-                                quad = ntags[j*4:(j+1)*4]
-                                verts = [coords[tag_to_idx[int(t)]].tolist()
-                                         for t in quad]
-                                builder.add_panel(verts)
-
-                    gmsh.finalize()
-                except ImportError:
-                    raise ImportError(
-                        ".panel type=mesh requires GMSH Python API. "
-                        "Install with: pip install gmsh")
 
     def build_shield_solvers(self):
         """Create ShieldBEMSIBC solver instances from parsed .shield blocks.

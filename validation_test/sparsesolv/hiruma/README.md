@@ -21,8 +21,9 @@ gated because they depend on the machine and concurrent load.  Heavy scaling
 runs belong on development/build host; the tracked 2.5T case is suitable as a validation host smoke run.
 
 The fixture was converted from the existing laboratory `mesh1_2.5T.msh`
-dataset.  `prepare_hiruma_vol.py` preserves its points and volume elements and
-adds explicit air/material interface triangles.  The resulting `.vol` passes:
+dataset. This is historical provenance, not a supported input route.
+`prepare_hiruma_vol.py` now accepts only `.vol`, preserves its points and volume
+elements, and adds explicit air/material interface triangles. The fixture passes:
 
 ```powershell
 check-vol validation_test/sparsesolv/hiruma/meshes/mesh1_2.5T.vol `

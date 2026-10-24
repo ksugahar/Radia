@@ -9,15 +9,17 @@ Converts a 2D surface mesh (triangles/quads) into PEEC topology:
   - Nodes -> Junction nodes (for MNA)
 
 Supports:
-  - GMSH .msh files (direct import)
   - NGSolve/Netgen surface meshes
   - Manual node/face specification
 
 Usage:
-    from peec_mesh_import import surface_mesh_to_peec
+    from radia.peec_mesh_import import surface_mesh_to_peec
 
-    # From GMSH file
-    builder = surface_mesh_to_peec('conductor.msh',
+    from ngsolve import Mesh
+
+    # Check the .vol label contract before creating the solver mesh.
+    mesh = Mesh('conductor.vol')
+    builder = surface_mesh_to_peec(mesh,
                                     sigma=5.8e7,
                                     thickness=1e-3)
 
@@ -30,165 +32,7 @@ Part of Radia project
 
 import numpy as np
 
-from ._gmsh_native_fields import validate_native_msh_fields
-
-
-class GMSHCenterlineReader:
-    """Read 1D line elements from a GMSH MSH v4.2 ASCII centerline mesh.
-
-    MSH v4.2 is the repository-wide standard; any other version (v2.2
-    included) raises with a re-export message instead of misparsing.
-    """
-
-    def __init__(self, filename, unit_scale=1.0):
-        self.filename = str(filename)
-        self.unit_scale = float(unit_scale)
-        self.nodes = {}
-        self.edge_elements = []
-        self.physical_groups = {}
-
-    def read(self):
-        """Read nodes and two-node line elements from the mesh file."""
-        self.nodes = {}
-        self.edge_elements = []
-        self.physical_groups = {}
-
-        with open(self.filename, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-        format_rows = [i + 1 for i, line in enumerate(lines)
-                       if line.strip() == "$MeshFormat"]
-        if not format_rows:
-            raise ValueError(
-                f"{self.filename}: $MeshFormat section missing; "
-                "re-export the mesh as ASCII MSH v4.2")
-        self._check_format(lines, format_rows[0])
-
-        i = 0
-        while i < len(lines):
-            line = lines[i].strip()
-            if line == "$MeshFormat":
-                self._check_format(lines, i + 1)
-            elif line == "$PhysicalNames":
-                i = self._read_physical_names(lines, i + 1)
-            elif line == "$Nodes":
-                i = self._read_nodes(lines, i + 1)
-            elif line == "$Elements":
-                i = self._read_elements(lines, i + 1)
-            i += 1
-
-        return self.nodes, self.edge_elements
-
-    def _check_format(self, lines, idx):
-        if idx >= len(lines):
-            raise ValueError(f'{self.filename}: truncated $MeshFormat')
-        tokens = lines[idx].split()
-        version = tokens[0] if tokens else "?"
-        if version != "4.2":
-            raise ValueError(
-                f"{self.filename}: MSH v{version} is not supported; the "
-                f"repository standard is v4.2 -- re-export the mesh")
-        if len(tokens) != 3 or tokens[1:] != ['0', '8']:
-            raise ValueError(
-                f"{self.filename}: expected ASCII MSH 4.2 with data size 8; "
-                f"got {' '.join(tokens)!r}")
-
-    def _read_physical_names(self, lines, start_idx):
-        num_names = int(lines[start_idx].strip())
-        idx = start_idx + 1
-        for _ in range(num_names):
-            parts = lines[idx].strip().split(maxsplit=2)
-            if len(parts) >= 3:
-                group_id = int(parts[1])
-                self.physical_groups[group_id] = parts[2].strip('"')
-            idx += 1
-
-        while idx < len(lines) and lines[idx].strip() != "$EndPhysicalNames":
-            idx += 1
-        return idx
-
-    def _read_nodes(self, lines, start_idx):
-        # v4.2: numBlocks numNodes minTag maxTag, then per block
-        # (dim tag parametric numInBlock) + tag lines + coordinate lines.
-        num_blocks = int(lines[start_idx].split()[0])
-        idx = start_idx + 1
-        for _ in range(num_blocks):
-            n_in_block = int(lines[idx].split()[3])
-            idx += 1
-            tags = [int(lines[idx + k]) for k in range(n_in_block)]
-            idx += n_in_block
-            for k in range(n_in_block):
-                parts = lines[idx + k].split()
-                self.nodes[tags[k]] = [
-                    float(parts[0]) * self.unit_scale,
-                    float(parts[1]) * self.unit_scale,
-                    float(parts[2]) * self.unit_scale,
-                ]
-            idx += n_in_block
-
-        while idx < len(lines) and lines[idx].strip() != "$EndNodes":
-            idx += 1
-        return idx
-
-    def _read_elements(self, lines, start_idx):
-        # v4.2: numBlocks numElements minTag maxTag, then per block
-        # (dim tag elementType numInBlock) + "tag n1 n2 ..." lines.
-        num_blocks = int(lines[start_idx].split()[0])
-        idx = start_idx + 1
-        for _ in range(num_blocks):
-            block = lines[idx].split()
-            element_type = int(block[2])
-            n_in_block = int(block[3])
-            idx += 1
-            if element_type == 1:  # line2
-                for k in range(n_in_block):
-                    parts = lines[idx + k].split()
-                    self.edge_elements.append([int(parts[1]), int(parts[2])])
-            idx += n_in_block
-
-        while idx < len(lines) and lines[idx].strip() != "$EndElements":
-            idx += 1
-        return idx
-
-    def get_segments(self):
-        """Return centerline segments as ``[[start_xyz, end_xyz], ...]``."""
-        segments = []
-        for node1_id, node2_id in self.edge_elements:
-            segments.append([self.nodes[node1_id], self.nodes[node2_id]])
-        return segments
-
-    def get_total_length(self):
-        """Compute the total polyline length of all 1D elements."""
-        total_length = 0.0
-        for start, end in self.get_segments():
-            total_length += np.linalg.norm(np.array(end) - np.array(start))
-        return float(total_length)
-
-    def summary(self):
-        """Return a compact, JSON-friendly mesh summary."""
-        return {
-            "filename": self.filename,
-            "nodes": len(self.nodes),
-            "edge_elements": len(self.edge_elements),
-            "total_length": self.get_total_length(),
-            "physical_groups": dict(self.physical_groups),
-        }
-
-    def print_info(self):
-        """Print a short centerline mesh summary."""
-        info = self.summary()
-        print("GMSH Centerline Mesh Info:")
-        print(f"  Nodes: {info['nodes']}")
-        print(f"  Edge elements: {info['edge_elements']}")
-        print(f"  Total length: {info['total_length']:.6f} m")
-        if self.physical_groups:
-            print(f"  Physical groups: {self.physical_groups}")
-
-
-def read_gmsh_centerline(filename, unit_scale=1.0):
-    """Read a GMSH MSH v4.2 ASCII centerline mesh, return ``(nodes, edges)``."""
-    reader = GMSHCenterlineReader(filename, unit_scale=unit_scale)
-    return reader.read()
+from os import PathLike
 
 
 def surface_mesh_to_peec(mesh_source, sigma=5.8e7, thickness=1e-3,
@@ -197,7 +41,6 @@ def surface_mesh_to_peec(mesh_source, sigma=5.8e7, thickness=1e-3,
 
     Args:
         mesh_source: One of:
-            - str/Path: GMSH .msh file path
             - dict with keys 'nodes' (Nx3), 'faces' (list of index lists)
             - NGSolve Mesh object (boundary faces extracted)
         sigma: Conductivity [S/m] (default: copper 5.8e7)
@@ -210,14 +53,12 @@ def surface_mesh_to_peec(mesh_source, sigma=5.8e7, thickness=1e-3,
     Returns:
         PEECBuilder: Configured builder ready for build_topology()
     """
+    if isinstance(mesh_source, (str, PathLike)):
+        raise TypeError('Pass an already checked NGSolve/Netgen mesh object or '
+                        'explicit nodes/faces; mesh file paths are not supported')
     from radia.peec_matrices import PEECBuilder
 
-    # Parse mesh source
-    if isinstance(mesh_source, (str,)):
-        nodes, faces = _load_gmsh(mesh_source, unit_scale)
-    elif hasattr(mesh_source, '__fspath__') or hasattr(mesh_source, 'stem'):
-        nodes, faces = _load_gmsh(str(mesh_source), unit_scale)
-    elif isinstance(mesh_source, dict):
+    if isinstance(mesh_source, dict):
         nodes = np.array(mesh_source['nodes']) * unit_scale
         faces = mesh_source['faces']
     else:
@@ -285,56 +126,6 @@ def surface_mesh_to_peec(mesh_source, sigma=5.8e7, thickness=1e-3,
     return builder
 
 
-def _load_gmsh(filename, unit_scale=1.0):
-    """Load surface mesh from GMSH .msh file.
-
-    Returns:
-        nodes: (N, 3) array of vertex positions
-        faces: list of tuples (0-indexed vertex indices per face)
-    """
-    # Derived conductor surfaces use the same strict format as centerlines.
-    # Volume solver meshes remain checked .vol inputs.
-    with open(filename, encoding='utf-8') as source:
-        if source.readline().strip() != '$MeshFormat':
-            raise ValueError(f'{filename}: $MeshFormat header missing')
-        GMSHCenterlineReader(filename)._check_format([source.readline()], 0)
-    validate_native_msh_fields(filename)
-    import gmsh
-    gmsh.initialize()
-    gmsh.option.setNumber("General.Terminal", 0)
-    gmsh.open(filename)
-
-    # Get nodes
-    node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
-    coords = node_coords.reshape(-1, 3) * unit_scale
-
-    # Build tag -> 0-index mapping
-    tag_to_idx = {}
-    for i, tag in enumerate(node_tags):
-        tag_to_idx[int(tag)] = i
-
-    # Get 2D elements (triangles and quads)
-    elem_types, elem_tags, elem_node_tags = gmsh.model.mesh.getElements()
-
-    faces = []
-    for i, elem_type in enumerate(elem_types):
-        if elem_type == 2:  # Triangle (3 nodes)
-            ntags = elem_node_tags[i]
-            n_elems = len(ntags) // 3
-            for j in range(n_elems):
-                tri = ntags[j * 3:(j + 1) * 3]
-                faces.append(tuple(tag_to_idx[int(t)] for t in tri))
-        elif elem_type == 3:  # Quadrilateral (4 nodes)
-            ntags = elem_node_tags[i]
-            n_elems = len(ntags) // 4
-            for j in range(n_elems):
-                quad = ntags[j * 4:(j + 1) * 4]
-                faces.append(tuple(tag_to_idx[int(t)] for t in quad))
-
-    gmsh.finalize()
-    return coords, faces
-
-
 def _extract_ngsolve_surface(mesh, unit_scale=1.0):
     """Extract surface faces from NGSolve mesh.
 
@@ -347,11 +138,13 @@ def _extract_ngsolve_surface(mesh, unit_scale=1.0):
     nodes = np.zeros((n_verts, 3))
     for i, v in enumerate(mesh.vertices):
         pt = v.point
-        nodes[i] = [pt[0] * unit_scale, pt[1] * unit_scale, pt[2] * unit_scale]
+        nodes[i] = [pt[0] * unit_scale, pt[1] * unit_scale,
+                    (pt[2] if len(pt) > 2 else 0.0) * unit_scale]
 
     # Extract boundary faces (surface elements)
     faces = []
-    for el in mesh.Elements(mesh.dim - 1):  # Boundary elements
+    from ngsolve import BND, VOL
+    for el in mesh.Elements(BND if mesh.dim == 3 else VOL):
         face_verts = tuple(v.nr for v in el.vertices)
         faces.append(face_verts)
 
