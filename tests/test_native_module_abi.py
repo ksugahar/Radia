@@ -1,4 +1,4 @@
-"""Guards: native import identity and explicit clean-build provenance gates.
+"""Guards: native import identity, platform-correct copy suffix, and provenance gates.
 
 Assumes: source workflow inspection and Python's standard _ctypes extension;
 these contracts never compile Radia or certify numerical/native solver results.
@@ -7,6 +7,8 @@ these contracts never compile Radia or certify numerical/native solver results.
 from __future__ import annotations
 
 import _ctypes
+import re
+import pytest
 import importlib.util
 import subprocess
 import sys
@@ -71,7 +73,7 @@ def test_build_contract_syncs_and_load_checks_peec_matrices():
             'message(STATUS "peec_matrices module configured")'
         )
     ]
-    assert '"${CMAKE_SOURCE_DIR}/src/radia/peec_matrices.pyd"' in peec_section
+    assert '"${CMAKE_SOURCE_DIR}/src/radia/peec_matrices${RADIA_PYMOD_SUFFIX}"' in peec_section
     assert "ERROR: peec_matrices build failed" in build
     assert 'dst = "peec_matrices.pyd"; required = $true' in build
     assert '"radia.peec_matrices"' in build
@@ -109,3 +111,24 @@ def test_native_release_keeps_generated_context_outside_source_tree():
         "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
     }.items():
         assert job["env"][key] == value
+
+@pytest.mark.parametrize("win32,expected", [(True, ".pyd"), (False, ".so")])
+def test_native_copy_suffix_follows_the_platform(win32, expected):
+    """Resolve the actual two-branch copy expression without configuring CMake."""
+    text = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    choice = re.search(
+        r'if\(WIN32\)\s*set\(RADIA_PYMOD_SUFFIX\s+"([^"]+)"\)\s*'
+        r'else\(\)\s*set\(RADIA_PYMOD_SUFFIX\s+"([^"]+)"\)\s*endif\(\)',
+        text,
+    )
+    assert choice is not None, "Missing explicit Windows/Unix module suffix choice"
+    suffix = choice.group(1 if win32 else 2)
+    assert suffix == expected, (win32, suffix, expected)
+    section = text[
+        text.index("pybind11_add_module(peec_matrices"):
+        text.index('message(STATUS "peec_matrices module configured")')
+    ]
+    destination = re.search(r'"(\$\{CMAKE_SOURCE_DIR\}/src/radia/peec_matrices[^"]+)"', section)
+    assert destination is not None, "Missing peec module copy destination"
+    resolved = destination.group(1).replace("${RADIA_PYMOD_SUFFIX}", suffix)
+    assert resolved == "${CMAKE_SOURCE_DIR}/src/radia/peec_matrices" + expected, (win32, resolved)
