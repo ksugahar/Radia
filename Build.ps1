@@ -632,9 +632,14 @@ if /I "$BuildCubitPlugin"=="True" (
         echo ERROR: cubit_mesh_curver configuration failed
         exit /b 1
     )
-    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_curver cubit_callback_contract -j $BuildJobs
+    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_curver -j $BuildJobs
     if errorlevel 1 (
         echo ERROR: cubit_mesh_curver build failed
+        exit /b 1
+    )
+    "$CMAKE_EXE" --build . --config Release --target cubit_callback_contract -j $BuildJobs
+    if errorlevel 1 (
+        echo ERROR: cubit_callback_contract build failed
         exit /b 1
     )
     "$CTEST_EXE" --test-dir "%CUBIT_PLUGIN_BUILD%" --output-on-failure
