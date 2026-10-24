@@ -1,0 +1,93 @@
+{
+  "schema": "radia.numerical-inputs.v1",
+  "bindings": {
+    "tests/conftest.py": {
+      "sha256": [
+        "f3bcb180f0d83ac2dc5c99458715675d3a14f85d34dcf688cc89ac001d647e46"
+      ],
+      "resolves": [
+        "dynamic import needs declaration: tests/conftest.py"
+      ],
+      "dependencies": [],
+      "reason": "Variable __import__(name) probes only literal REQUIRED_MODULES=(ngsolve,netgen) and OPTIONAL_MODULES=(magpylib,cubit), upstream modules. Entire file hash seals lists and probe.",
+      "entries": {},
+      "fixture_prefixes": []
+    },
+    "src/ext/sparsesolv/tests/test_sparsesolv.py": {
+      "sha256": [
+        "0414ecb085d71c18819df3a7f886a3f190c7f656eb94e62f76d75ce6e973b08a"
+      ],
+      "resolves": [
+        "subprocess entry needs declaration: src/ext/sparsesolv/tests/test_sparsesolv.py"
+      ],
+      "dependencies": [],
+      "reason": "Sealed test executes literal inline Python and already imported radia.sparsesolv_ngsolve extension path; native sources remain mandatory build inputs. Integrated main changes only _dense_system to the public real_sparse_matrix_type helper; the bounded inline child command is unchanged.",
+      "entries": {
+        "src/ext/sparsesolv/tests/test_sparsesolv.py": [
+          "0414ecb085d71c18819df3a7f886a3f190c7f656eb94e62f76d75ce6e973b08a"
+        ]
+      },
+      "fixture_prefixes": []
+    },
+    "tests/test_ams_internal_setup_parallel.py": {
+      "sha256": [
+        "651e81c12bb92405d3415fb20de75aadd414a55955ba380610d438988a492dc1"
+      ],
+      "resolves": [
+        "subprocess entry needs declaration: tests/test_ams_internal_setup_parallel.py"
+      ],
+      "dependencies": [],
+      "reason": "Sealed test executes literal inline Python and already imported radia.sparsesolv_ngsolve extension path; native sources remain mandatory build inputs.",
+      "entries": {
+        "tests/test_ams_internal_setup_parallel.py": [
+          "651e81c12bb92405d3415fb20de75aadd414a55955ba380610d438988a492dc1"
+        ]
+      },
+      "fixture_prefixes": []
+    },
+    "validation_test/axifem/test_heat_axisym_e2e.py": {
+      "sha256": [
+        "a00701259652efbc3c20b7110d7dec1722a4d1f79036861533168d27f1b8ccb5"
+      ],
+      "resolves": [
+        "subprocess entry needs declaration: validation_test/axifem/test_heat_axisym_e2e.py"
+      ],
+      "dependencies": [
+        "src/radia/panels/calc_heat_axisym.py",
+        "validation_test/panels/fixtures/generate_heat_cylinder_axisym.py"
+      ],
+      "reason": "Sealed test runs SCRIPT and FIXTURE_DIR/gen: heat CLI plus committed cylinder generator. Outputs are tmp_path owned.",
+      "entries": {
+        "validation_test/axifem/test_heat_axisym_e2e.py": [
+          "a00701259652efbc3c20b7110d7dec1722a4d1f79036861533168d27f1b8ccb5"
+        ]
+      },
+      "fixture_prefixes": [
+        "validation_test/panels/fixtures/"
+      ]
+    },
+    "src/radia/panels/calc_accel_magnet.py": {
+      "sha256": [
+        "ba341e144808da32aff628393cbe37dbc14559ba8763da1682ca7054d2977de6"
+      ],
+      "resolves": [
+        "opaque file/code loader: src/radia/panels/calc_accel_magnet.py:importlib.util.spec_from_file_location"
+      ],
+      "dependencies": [
+        "src/radia/coil_builder.py"
+      ],
+      "reason": "Only the sealed test_accel_linear_dispatch: exact test writes a literal CoilBuilder program in tmp_path. Arbitrary production callers are not exempt; loader and test source hashes both required.",
+      "entries": {
+        "validation_test/panels/test_accel_linear_dispatch.py": [
+          "88cea0fd8fa6e9dda0a89b3eaf2bf13f43ac00210510ae51070de5a61ff783f2"
+        ]
+      },
+      "fixture_prefixes": []
+    }
+  },
+  "consumer_inputs": {
+    "tests/gmsh_post/test_native_field_handoff.py": [
+      "src/radia/panels/open_gmsh.py"
+    ]
+  }
+}

@@ -173,14 +173,25 @@ def environment_contract(root):
     if os.environ.get('RADIA_TESTS_ALLOW_PARTIAL')!='0': raise ValueError('partial validation context')
     threads={key:os.environ.get(key) for key in ('RADIA_TEST_NGSOLVE_THREADS','OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS')}
     if set(threads.values())!={'1'}: raise ValueError('unbounded or changed thread contract')
+    build_tools={}
+    for name,key in [('cmake','CMAKE_COMMAND'),('ninja','CMAKE_MAKE_PROGRAM')]:
+        matches=re.findall(r'^'+key+r':[^=]+=(.+)$',cache,re.MULTILINE)
+        if len(matches)!=1: raise ValueError('build tool identity unknown: '+name)
+        executable=Path(matches[0].strip())
+        if not executable.is_absolute() or not executable.is_file() or executable.is_symlink():
+            raise ValueError('missing/linked build tool: '+name)
+        version=subprocess.run([str(executable),'--version'],check=True,capture_output=True,
+                               text=True,encoding='utf-8',errors='strict',timeout=10).stdout.strip()
+        if not version: raise ValueError('empty build tool version: '+name)
+        build_tools[name]={'sha256':digest(executable.read_bytes()),'version':version}
     return {'python':sys.version,'platform':platform.platform(),'machine':platform.machine(),
             'processor':platform.processor(),'compiler':compiler,'windows_sdk_versions':sdk_versions,'threads':threads,
-            'compiler_options':build_options,'numerical_environment':numerical_environment(),
+            'compiler_options':build_options,'build_tools':build_tools,'numerical_environment':numerical_environment(),
             'mkl_runtime':mkl_runtime,
             'packages':sorted((d.metadata['Name'].lower(),d.version) for d in importlib.metadata.distributions())}
 
 
-def source_fingerprint(root, environment):
+def source_fingerprint(root, environment, numerical_plan=None):
     manifest=json.loads((root/'tests/test_tier_manifest.json').read_text(encoding='utf-8'))
     profiles={}
     name=PROFILE
@@ -227,6 +238,42 @@ def source_fingerprint(root, environment):
     for profile in profiles.values():
         for path in profile['paths']:
             if path not in selected: selected.append(path)
+    if numerical_plan is not None:
+        heavy = [row for row in numerical_plan['cases'] if row['profile'] == PROFILE and row['selected']]
+        if not heavy: raise ValueError('empty planned heavy validation')
+        tracked_set = set(tracked)
+        scoped = {path for row in heavy for path in row['dependencies'] if path in tracked_set}
+        # Native solver builds remain indivisible, while Python consumers/fixtures are per-case.
+        scoped.update(path for path in tracked if path.startswith(('src/core/', 'src/lib/', 'src/ext/', 'cmake/')))
+        scoped.update(path for path in ROOT_INPUTS if path in tracked_set)
+        scoped.update(path for path in ('tools/ci_numerical_plan.py', 'tools/ci_numerical_inputs.json',
+                                      'tools/ci_numerical_runtime.py') if path in tracked_set)
+        conservative = (bool(numerical_plan.get('unclassified_inputs'))
+                        or bool(numerical_plan.get('global_selection'))
+                        or bool(numerical_plan.get('global_reasons'))
+                        or any(row.get('unknowns') for row in heavy))
+        # Fallback selection is not a proved closure. Its causing input (including
+        # workflow, runtime JSON or docs) must invalidate a prior main receipt.
+        # Hash ALL tracked files and the complete environment in that case.
+        selected = sorted(tracked_set - {''}) if conservative else sorted(scoped)
+        profiles = {'selection_scope': 'full-tree' if conservative else 'proved-case-closure',
+                    'selected_paths': sorted(row['path'] for row in heavy), 'profile_contracts': profiles}
+        environment = dict(environment)
+        # Do not hash the entire venv. Retain numerical/toolchain identities and
+        # every declared solver dependency; Gmsh participates only for its consumers.
+        relevant = {'numpy','scipy','ngsolve','netgen-mesher','mkl','mkl-devel','mkl-include',
+                    'tbb','tbb-devel','intel-openmp','build123d','cadquery-ocp','h5py','pybind11','pytest','pluggy',
+                    'cmake','ninja'}
+        if any('gmsh' in row.get('components', []) for row in heavy): relevant.add('gmsh')
+        aliases = {'OCP':'cadquery-ocp','skimage':'scikit-image','sklearn':'scikit-learn',
+                   'kan':'pykan','yaml':'pyyaml','netgen':'netgen-mesher'}
+        for row in heavy:
+            for component in row.get('components', []):
+                if component.startswith('package:'):
+                    module = component.split(':', 1)[1]
+                    relevant.add(aliases.get(module, module).lower().replace('_','-'))
+        if not conservative:
+            environment['packages'] = [item for item in environment.get('packages', []) if item[0].replace('_','-') in relevant]
     rows={}
     for path in sorted(selected):
         file=root/path
@@ -311,7 +358,12 @@ class GitHub:
         return None
 
 
-def run(root, out, force=False, client=None):
+def run(root, out, force=False, client=None, numerical_plan=None):
+    planned = None
+    if numerical_plan is not None:
+        from ci_numerical_runtime import verified_plan, selected_paths
+        planned = verified_plan(root, numerical_plan)
+        selected_paths(planned, PROFILE)
     out.mkdir(parents=True,exist_ok=True)
     identity={'source_sha':git(root,'rev-parse','HEAD'),'run_id':int(os.environ.get('GITHUB_RUN_ID','0')),
               'run_attempt':int(os.environ.get('GITHUB_RUN_ATTEMPT','0'))}
@@ -325,7 +377,8 @@ def run(root, out, force=False, client=None):
     try:
         environment=environment_contract(root)
         result['mkl_runtime']=environment.get('mkl_runtime')
-        fingerprint,count=source_fingerprint(root,environment)
+        fingerprint,count=(source_fingerprint(root,environment,planned) if planned is not None
+                           else source_fingerprint(root,environment))
         result.update(fingerprint=fingerprint,source_count=count)
     except Exception as error:
         result['reuse_reason']='unknown fingerprint: '+type(error).__name__
@@ -347,6 +400,7 @@ def run(root, out, force=False, client=None):
         if evidence.is_symlink(): raise ValueError('linked output evidence')
         evidence.unlink(missing_ok=True)  # Never accept a previous attempt's XML.
         command=[sys.executable,'tools/run_test_tier.py','--profile',PROFILE,'--junitxml',str(out/'solver-heavy.xml')]
+        if numerical_plan is not None: command += ['--numerical-plan', str(numerical_plan)]
         process=subprocess.run(command,cwd=root,check=False)
         if process.returncode==0:
             try:
@@ -367,9 +421,10 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--force',action='store_true')
+    parser.add_argument('--numerical-plan',type=Path)
     args=parser.parse_args()
     root=Path(__file__).resolve().parents[1]
     token=os.environ.get('GH_TOKEN')
     repo=os.environ.get('GITHUB_REPOSITORY')
     client=GitHub(repo,token) if token and repo else None
-    sys.exit(run(root,args.output,args.force,client))
+    sys.exit(run(root,args.output,args.force,client,args.numerical_plan))

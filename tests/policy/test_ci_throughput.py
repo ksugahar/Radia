@@ -25,7 +25,7 @@ spec.loader.exec_module(impact)
 def fixture():
     current = dict(schema='radia.ci-tree.v1', lane='sparsesolv', repository='owner/repo', commit='main', tree='tree', run_id=22)
     current['test_set'] = receipt.numerical_test_set(ROOT)
-    prior = dict(current, commit='merge-ref', run_id=11, impact_required=True)
+    prior = dict(current, commit='merge-ref', run_id=11, impact_required=True, qualification_scope='full-lane')
     data = {
         'commits/main/pulls': [dict(number=7, merged_at='today', merge_commit_sha='main',
             base=dict(ref='main', repo=dict(full_name='owner/repo')),
@@ -300,3 +300,21 @@ def test_closure_follows_cli_loaders_and_non_python_fixture(tmp_path):
         target.write_text(content)
     closure = inputs.python_inputs(tmp_path)
     assert {'tests/test_entry.py', 'tests/helper.py', 'tools/child.py', 'tests/fixtures/model.custom'} <= closure
+
+
+
+def test_partial_plan_job_cannot_replace_full_main_qualification(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('GITHUB_REPOSITORY', 'owner/repo')
+    monkeypatch.setenv('GITHUB_RUN_ID', '22')
+    def must_not_reuse(*args):
+        pytest.fail('a partial PR job success is not full main evidence')
+    monkeypatch.setattr(receipt, 'reuse', must_not_reuse)
+    assert not receipt.route('sparsesolv', 'push', {'ref': 'refs/heads/main'}, lambda *args: 'a' * 40)
+    value = json.loads(Path('ci-tree-receipt.json').read_text(encoding='utf-8'))
+    assert value['mode'] == 'execute' and value['qualification_scope'] == 'case-plan-not-full-lane'
+    current, prior, _ = fixture()
+    prior['qualification_scope'] = 'case-plan-not-full-lane'
+    assert not receipt.profile_matches('sparsesolv', prior, current)
+    prior.pop('qualification_scope')
+    assert not receipt.profile_matches('sparsesolv', prior, current)

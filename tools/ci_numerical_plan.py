@@ -1,14 +1,16 @@
 """Plan numerical CI consumers from immutable Git inputs; never execute them.
 
-S1 is diagnostic only. Existing workflow execution and source receipts remain
-authoritative until the separately reviewed S2 connects this plan to runners.
+The JSON is selection data, not execution evidence. Workflow consumers must
+recompute the plan and verify source identity before running selected cases.
 """
 from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 from functools import lru_cache
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
@@ -17,6 +19,7 @@ import tomllib
 
 SCHEMA = 'radia.numerical-ci-plan.v1'
 TIER = 'tests/test_tier_manifest.json'
+DECLARATIONS = 'tools/ci_numerical_inputs.json'
 PROFILES = ('sparsesolv', 'solver-numerics', 'solver-heavy', 'native-build-contracts')
 GMSH_TESTS = (
     'validation_test/gmsh_post/test_msh42_reference.py',
@@ -28,7 +31,7 @@ GMSH_TESTS = (
 )
 NATIVE_PREFIXES = ('src/core/', 'src/lib/', 'src/ext/', 'cmake/')
 GLOBAL_INPUTS = {'CMakeLists.txt', 'Build.ps1', 'MANIFEST.in', TIER,
-                 'tools/ci_numerical_plan.py', 'tools/run_test_tier.py',
+                 'tools/ci_numerical_plan.py', 'tools/ci_numerical_runtime.py', DECLARATIONS, 'tools/run_test_tier.py',
                  'tools/ci_ams_inputs.py', 'tools/sparsesolv_ci_impact.py',
                  'tools/ci_distribution_manifest.json', 'tools/ci_distribution_contract.py',
                  'tools/native_build_provenance.ps1', 'tools/validation_source_gate.py'}
@@ -36,6 +39,8 @@ EXTERNAL = set(sys.stdlib_module_names) | {
     'numpy', 'scipy', 'ngsolve', 'netgen', 'pytest', 'gmsh', 'h5py', 'psutil',
     'matplotlib', 'sympy', 'yaml', 'pefile', 'packaging', 'setuptools', 'pybind11',
     'threadpoolctl', 'pandas', 'pydantic', 'mcp', 'fastmcp', 'sklearn', 'numba',
+    'torch', 'kan', 'build123d', 'OCP', 'cubit', 'netCDF4', 'PySide6',
+    'skimage', 'trimesh',  # Upstream optional CAD/inspection packages; not local code.
 }
 NATIVE_MODULES = {'_radia_pybind', 'sparsesolv_ngsolve', 'peec_matrices', 'axifem',
                   'cubit_mesh_curver'}
@@ -56,8 +61,9 @@ def unique_pairs(items):
 
 
 class Tree:
-    def __init__(self, root, rev):
+    def __init__(self, root, rev, declarations=None):
         self.root = root
+        self.declarations = declarations or {}
         self.sha = git(root, 'rev-parse', '--verify', '--end-of-options', rev + '^{commit}').decode('utf-8').strip()
         self.files = {}
         for row in git(root, 'ls-tree', '-r', '-z', self.sha).split(b'\0'):
@@ -67,7 +73,7 @@ class Tree:
                 self.files[name.decode('utf-8')] = (mode, kind, oid)
         self.blobs = {}
         self.parsed_nodes = 0
-        self.roots = ['src', *sorted({p.split('/src/', 1)[0] + '/src'
+        self.roots = ['src', 'src/radia', *sorted({p.split('/src/', 1)[0] + '/src'
                                      for p in self.files if p.startswith('packages/') and '/src/' in p}), '']
 
     def load_blobs(self):
@@ -145,6 +151,13 @@ class Tree:
             if isinstance(assignment, ast.Assign):
                 for target in assignment.targets:
                     if isinstance(target, ast.Name): assignments.setdefault(target.id, []).append(assignment.value)
+        aliases = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                aliases.update((item.asname or item.name.split('.')[0],
+                                item.name if item.asname else item.name.split('.')[0]) for item in node.names)
+            elif isinstance(node, ast.ImportFrom) and not node.level and node.module:
+                aliases.update((item.asname or item.name, node.module + '.' + item.name) for item in node.names)
         parent = PurePosixPath(path).parent
         for ancestor in [parent, *parent.parents]:
             initializer = str(ancestor / '__init__.py')
@@ -186,39 +199,51 @@ class Tree:
                         unknown.add('unresolved import: ' + name + ' in ' + path)
                 if name.split('.')[0] == 'gmsh': components.add('gmsh')
                 if name.split('.')[0] in {'ngsolve', 'netgen'}: components.add('solver')
+                if name.split('.')[0] in EXTERNAL - set(sys.stdlib_module_names):
+                    components.add('package:' + name.split('.')[0])
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 value = node.value
-                # Explicit CLI/file loaders, including Python scripts embedded in -c.
-                if '\n' in value and ('import ' in value or 'from ' in value):
-                    try:
-                        embedded = ast.parse(value)
-                        for imp in ast.walk(embedded):
-                            embedded_names = []
-                            if isinstance(imp, ast.Import): embedded_names = [a.name for a in imp.names]
-                            if isinstance(imp, ast.ImportFrom): embedded_names = [imp.module or '']
-                            for name in embedded_names:
-                                candidate = self.module(name, path)
-                                if candidate: pending.append(candidate)
-                                elif name.rsplit('.', 1)[-1] in NATIVE_MODULES: native.add(name.rsplit('.', 1)[-1])
-                                elif name.split('.')[0] not in EXTERNAL: unknown.add('embedded import unresolved: ' + path)
-                                if name.split('.')[0] == 'gmsh': components.add('gmsh')
-                            if isinstance(imp, ast.Call) and ast.unparse(imp.func).endswith(('exec_module', 'run_path', 'spec_from_file_location')):
-                                unknown.add('embedded dynamic loader needs declaration: ' + path)
-                    except SyntaxError: unknown.add('unparsed embedded Python: ' + path)
-                if len(value) < 240 and '\n' not in value:
+                # Only executable call sites are treated as code loaders below.
+                # Docstrings, knowledge and generated template fragments are data.
+                if len(value) < 240 and '\n' not in value and not value.endswith('.py'):
                     for base in ['', str(parent), 'src/radia/panels', 'validation_test/panels']:
                         candidate = ((base + '/') if base != '.' and base else '') + value
                         if candidate in self.files: pending.append(candidate)
             if isinstance(node, ast.Call):
                 name = ast.unparse(node.func)
+                first, *tail = name.split('.')
+                name = '.'.join([aliases.get(first, first), *tail])
+                if name in {'os.system', 'os.popen'}:
+                    unknown.add('shell entry needs declaration: ' + path)
+                if name.endswith(('.read_text', '.read_bytes')):
+                    # Joined/dynamic file paths cannot be bounded by a bare string
+                    # lookup. Preserve correctness until an exact declaration or
+                    # literal tracked path supplies that dependency.
+                    receiver = node.func.value if isinstance(node.func, ast.Attribute) else None
+                    values = assignments.get(receiver.id, []) if isinstance(receiver, ast.Name) else []
+                    value = values[0] if len(values) == 1 else receiver
+                    literals = [n for n in ast.walk(value) if isinstance(n, ast.Constant)
+                                and isinstance(n.value, str)] if value is not None else []
+                    strings = [n.value for n in sorted(literals, key=lambda n: (n.lineno, n.col_offset))]
+                    candidates = [self.literal_path(text, path) for text in strings]
+                    if strings: candidates.append(self.literal_path('/'.join(strings), path))
+                    if strings and any(candidates):
+                        pending.extend(p for p in candidates if p)
+                    elif any(text.endswith(('.md', '.rst')) for text in strings):
+                        unknown.add('file read needs declaration: ' + path)
                 if name.endswith(('import_module', 'importorskip', 'run_module', 'find_spec')) or name == '__import__':
                     if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                        candidate = self.module(node.args[0].value, path)
+                        import_name = node.args[0].value
+                        candidate = self.module(import_name, path)
+                        if import_name.startswith('.'):
+                            relative_path = str(parent / (import_name.lstrip('.').replace('.', '/') + '.py'))
+                            candidate = relative_path if relative_path in self.files else None
                         if candidate: pending.append(candidate)
                         elif node.args[0].value.rsplit('.', 1)[-1] in NATIVE_MODULES:
                             native.add(node.args[0].value.rsplit('.', 1)[-1])
                         elif node.args[0].value.split('.')[0] not in EXTERNAL:
                             unknown.add('unresolved dynamic import: ' + path)
+                        if node.args[0].value.split('.')[0] in EXTERNAL: components.add('package:' + node.args[0].value.split('.')[0])
                         if node.args[0].value.split('.')[0] == 'gmsh': components.add('gmsh')
                         if node.args[0].value.split('.')[0] in {'ngsolve', 'netgen'}: components.add('solver')
                     else: unknown.add('dynamic import needs declaration: ' + path)
@@ -235,11 +260,31 @@ class Tree:
                     # Dynamic -c programs and arbitrary executables require review.
                     script = None
                     if isinstance(expression, (ast.List, ast.Tuple)) and len(expression.elts) >= 2:
-                        for literal in ast.walk(expression.elts[1]):
-                            if isinstance(literal, ast.Constant) and isinstance(literal.value, str) and literal.value.endswith('.py'):
-                                script = self.literal_path(literal.value, path)
+                        expressions = [expression.elts[1]]; visited_names = set()
+                        while expressions:
+                            for literal in ast.walk(expressions.pop()):
+                                if isinstance(literal, ast.Name) and literal.id not in visited_names:
+                                    visited_names.add(literal.id)
+                                    expressions.extend(assignments.get(literal.id, []))
+                                if isinstance(literal, ast.Constant) and isinstance(literal.value, str) and literal.value.endswith('.py'):
+                                    candidate_script = self.literal_path(literal.value, path)
+                                    if candidate_script:
+                                        script = candidate_script; pending.append(script)
                     if script and not any(kw.arg == 'shell' for kw in node.keywords): pending.append(script)
                     else: unknown.add('subprocess entry needs declaration: ' + path)
+        binding = self.declarations.get('bindings', {}).get(path)
+        if binding:
+            if hashlib.sha256(self.read(path)).hexdigest() not in binding['sha256']:
+                unknown.add('stale dynamic declaration: ' + path)
+            else:
+                if not binding.get('entries'):
+                    unknown.difference_update(binding['resolves'])
+                for dep in binding['dependencies']:
+                    if dep not in self.files: unknown.add('declared dependency missing: ' + dep)
+                    pending.append(dep)
+                for prefix in binding.get('fixture_prefixes', []):
+                    pending.extend(p for p in self.files if p.startswith(prefix))
+        pending.extend(self.declarations.get('consumer_inputs', {}).get(path, []))
         return pending, unknown, native, components
 
     @lru_cache(maxsize=None)
@@ -253,6 +298,12 @@ class Tree:
             edges, issues, modules, uses = self.edges(path)
             pending.extend(edges); unknown.update(issues)
             native.update(modules); components.update(uses)
+        for path in seen:
+            binding = self.declarations.get('bindings', {}).get(path, {})
+            if binding.get('entries', {}).get(entry) and entry in self.files:
+                if (hashlib.sha256(self.read(path)).hexdigest() in binding['sha256']
+                        and hashlib.sha256(self.read(entry)).hexdigest() in binding['entries'][entry]):
+                    unknown.difference_update(binding['resolves'])
         return seen, unknown, native, components
 
 
@@ -288,7 +339,37 @@ def dependency_change(old, new):
 
 
 def plan(root, base, head, event):
-    before, after = Tree(root, base), Tree(root, head)
+    policy_sha = git(root, 'rev-parse', 'HEAD').decode('ascii').strip()
+    policy_tree = Tree(root, policy_sha)
+    declarations = {}
+    declaration_blob = None
+    if DECLARATIONS in policy_tree.files:
+        declaration_blob = policy_tree.files[DECLARATIONS][2]
+        declarations = json.loads(git(root, 'cat-file', 'blob', declaration_blob), object_pairs_hook=unique_pairs)
+        if set(declarations) != {'schema', 'bindings', 'consumer_inputs'} or declarations['schema'] != 'radia.numerical-inputs.v1':
+            raise ValueError('invalid numerical declaration schema')
+        def safe_declared_path(value):
+            if (not isinstance(value, str) or not value or value.startswith('/')
+                    or ':' in value or '\\' in value or '..' in PurePosixPath(value).parts):
+                raise ValueError('unsafe declared dependency')
+        for path, binding in declarations['bindings'].items():
+            if set(binding) - {'sha256', 'resolves', 'dependencies', 'fixture_prefixes', 'reason', 'entries'} or not binding.get('reason'):
+                raise ValueError('invalid dynamic declaration: ' + path)
+            if not binding.get('sha256') or any(not re.fullmatch('[0-9a-f]{64}', h) for h in binding['sha256']):
+                raise ValueError('unsealed dynamic declaration: ' + path)
+            for dep in [path, *binding['dependencies'], *binding.get('fixture_prefixes', [])]:
+                safe_declared_path(dep)
+            for entry, hashes in binding.get('entries', {}).items():
+                safe_declared_path(entry)
+                if not hashes or any(not re.fullmatch('[0-9a-f]{64}', h) for h in hashes):
+                    raise ValueError('unsealed entry scope')
+            for issue in binding['resolves']:
+                if not (issue.endswith(': ' + path) or ': ' + path + ':' in issue):
+                    raise ValueError('dynamic declaration cannot hide another source issue')
+        for consumer, paths in declarations['consumer_inputs'].items():
+            safe_declared_path(consumer)
+            for path in paths: safe_declared_path(path)
+    before, after = Tree(root, base, declarations), Tree(root, head, declarations)
     changed = changes(root, before.sha, after.sha)
     old_profiles, new_profiles = before.profiles(), after.profiles()
     reasons = []; global_change = event != 'pull_request' or not changed; gmsh_change = False
@@ -300,10 +381,15 @@ def plan(root, base, head, event):
             else: global_change = True; reasons.append('dependency/metadata: ' + path)
         elif path in GLOBAL_INPUTS or path.startswith(NATIVE_PREFIXES) or path.startswith('.github/workflows/'):
             global_change = True; reasons.append('native/build/control input: ' + path)
-    roots = {profile: sorted(set(old_profiles[profile]) | set(new_profiles[profile])) for profile in PROFILES}
-    for snapshot in [before, after]:
-        for path in GMSH_TESTS:
-            if path in snapshot.files: roots['solver-numerics'] = sorted(set(roots['solver-numerics']) | {path})
+    # Execute the current registry; use both snapshots for retained-case inputs.
+    # Explicit retirements are governed by the separate route-retention policy,
+    # not resurrected as nonexistent pytest targets by this selector.
+    roots = {profile: sorted(new_profiles[profile]) for profile in PROFILES}
+    retired = {profile: sorted(set(old_profiles[profile]) - set(new_profiles[profile]))
+               for profile in PROFILES}
+    for path in GMSH_TESTS:
+        if path in after.files and path not in retired['solver-numerics']:
+            roots['solver-numerics'] = sorted(set(roots['solver-numerics']) | {path})
     rows = []; known = set(); native_required = set()
     for profile, entries in roots.items():
         for entry in entries:
@@ -324,7 +410,7 @@ def plan(root, base, head, event):
             if selected: native_required |= native
             rows.append({'profile': profile, 'path': entry, 'selected': bool(selected),
                          'reasons': why, 'unknowns': sorted(unknown),
-                         'dependencies': sorted(dependencies), 'native_modules': sorted(native),
+                         'dependencies': sorted(dependencies), 'native_modules': sorted(native), 'components': sorted(components),
                          'dependency_blobs': {p: sorted({s.files[p][2] for s in (before, after) if p in s.files})
                                               for p in sorted(dependencies)},
                          'closure_status': 'unknown' if unknown else 'static graph; not execution proof'})
@@ -335,9 +421,16 @@ def plan(root, base, head, event):
         for row in rows:
             row['selected'] = True; row['reasons'].append('unclassified input; full fallback')
             native_required.update(row['native_modules'])
+    if native_required:
+        for row in rows:
+            if row['profile'] == 'native-build-contracts':
+                row['selected'] = True
+                row['reasons'].append('verify selected native build')
     return {'schema': SCHEMA, 'status': 'planned', 'qualification': False, 'execution_wired': False,
-            'base': before.sha, 'head': after.sha, 'event': event, 'changed_paths': sorted(changed),
-            'unclassified_inputs': unclassified, 'cases': rows,
+            'base': before.sha, 'head': after.sha, 'event': event,
+            'declaration_identity': {'commit': policy_sha, 'blob': declaration_blob}, 'changed_paths': sorted(changed),
+            'unclassified_inputs': unclassified, 'global_selection': bool(global_change),
+            'global_reasons': reasons, 'retired_case_paths': retired, 'cases': rows,
             'native_build_targets': sorted(native_required),
             'ams_paths': sorted({r['path'] for r in rows if r['selected'] and r['profile'] == 'sparsesolv'}),
             'python_test_paths': sorted({r['path'] for r in rows if r['selected'] and r['profile'] in ('solver-numerics', 'native-build-contracts')}),
@@ -345,18 +438,44 @@ def plan(root, base, head, event):
             'gmsh_reference_paths': sorted({r['path'] for r in rows if r['selected'] and r['path'] in GMSH_TESTS}),
             'graph_statistics': {label: {'parsed_modules': tree.parsed_nodes, 'blob_count': len(tree.blobs)}
                                  for label, tree in [('base', before), ('head', after)]},
-            'note': 'S1 plan only, not test success or authority to skip existing workflow gates'}
+            'note': 'Selection data only; not test success. Execution requires recomputation and exact-source verification'}
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument('--base', required=True); parser.add_argument('--head', default='HEAD')
+    parser.add_argument('--base'); parser.add_argument('--head', default='HEAD')
     parser.add_argument('--event', default='pull_request', choices=['pull_request', 'push', 'workflow_dispatch', 'release', 'schedule'])
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--github-event', action='store_true')
+    parser.add_argument('--github-output', type=Path)
     args = parser.parse_args(argv)
     try:
-        result = plan(args.repo.resolve(), args.base, args.head, args.event); code = 0
+        root = args.repo.resolve()
+        if args.github_event:
+            event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+            args.event = os.environ['GITHUB_EVENT_NAME']
+            args.head = 'HEAD'
+            if args.event == 'pull_request':
+                args.base = git(root, 'merge-base', event['pull_request']['base']['sha'], 'HEAD').decode('ascii').strip()
+            elif args.event == 'push' and event.get('before') and set(event['before']) != {'0'}:
+                args.base = event['before']
+            else:
+                args.base = 'HEAD'
+        if not args.base: raise ValueError('comparison base is required')
+        result = plan(root, args.base, args.head, args.event); code = 0
+        if args.github_output:
+            fields = {'required': any(row['selected'] for row in result['cases']),
+                      'native_required': bool(result['native_build_targets']),
+                      'ams_required': bool(result['ams_paths']),
+                      'python_required': any(row['selected'] and row['profile'] == 'solver-numerics'
+                                             for row in result['cases']),
+                      'heavy_required': bool(result['heavy_case_paths']),
+                      'gmsh_required': bool(result['gmsh_reference_paths']) or any(
+                          row['selected'] and 'gmsh' in row['components'] for row in result['cases'])}
+            if args.event != 'pull_request': fields['native_required'] = True
+            with args.github_output.open('a', encoding='utf-8') as output:
+                for key, value in fields.items(): output.write(key + '=' + str(value).lower() + '\n')
     except Exception as exc:
         result = {'schema': SCHEMA, 'status': 'blocked', 'qualification': False, 'execution_wired': False,
                   'error': type(exc).__name__ + ': ' + str(exc), 'required_action': 'do not skip gates; repair inputs or execute full existing gate'}; code = 2
