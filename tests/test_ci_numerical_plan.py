@@ -5,6 +5,7 @@ consumer chains; no solver/GPU execution. This checks the public plan contract,
 not numerical accuracy or the completeness of the real repository's closures.
 """
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -12,6 +13,23 @@ import sys
 import pytest
 
 CLI = Path(__file__).resolve().parents[1] / 'tools/ci_numerical_plan.py'
+
+
+def miniature_environment(**runner_context):
+    env = os.environ.copy()
+    for key in ('GITHUB_EVENT_NAME', 'GITHUB_EVENT_PATH'):
+        env.pop(key, None)
+    env.update(runner_context)
+    return env
+
+
+@pytest.fixture
+def foreign_runner_context(monkeypatch, tmp_path):
+    """A real outer CI event must not define a miniature repository's identity."""
+    event = tmp_path / 'outer-runner-event.json'
+    event.write_text(json.dumps({'before': 'f' * 40}), encoding='utf-8')
+    monkeypatch.setenv('GITHUB_EVENT_NAME', 'push')
+    monkeypatch.setenv('GITHUB_EVENT_PATH', str(event))
 
 
 def git(root, *args):
@@ -59,7 +77,8 @@ def change(root, path, text):
 def invoke(root, base, tmp_path, event='pull_request', expected=0):
     report = tmp_path / 'plan.json'
     process = subprocess.run([sys.executable, str(CLI), '--repo', str(root), '--base', base,
-                              '--event', event, '--out', str(report)], capture_output=True, text=True, encoding='utf-8')
+                              '--event', event, '--out', str(report)], capture_output=True, text=True,
+                             encoding='utf-8', env=miniature_environment())
     assert process.returncode == expected, (process.stdout, process.stderr, report.read_text(encoding='utf-8') if report.exists() else '')
     data = json.loads(report.read_text(encoding='utf-8'))
     assert data['qualification'] is False and data['execution_wired'] is False
@@ -244,22 +263,23 @@ def test_docstring_is_data_but_executed_text_stays_unresolved(repository, tmp_pa
 
 
 @pytest.mark.parametrize('damage', ['selection', 'checkout'])
-def test_runtime_cli_rejects_tampered_plan_or_source(repository, tmp_path, damage):
+def test_runtime_cli_rejects_tampered_plan_or_source(repository, tmp_path, damage, foreign_runner_context):
     root, base = repository
     change(root, 'src/radia/ih.py', 'def solve(): return 2\n')
     value = invoke(root, base, tmp_path)
     runtime = CLI.with_name('ci_numerical_runtime.py')
     command = [sys.executable, str(runtime), '--repo', str(root), '--plan', str(tmp_path / 'plan.json'),
                '--profile', 'solver-heavy', '--out', str(tmp_path / 'verified.json')]
-    valid = subprocess.run(command, capture_output=True, text=True, encoding='utf-8')
-    assert valid.returncode == 0, (valid.stdout, valid.stderr)
+    valid = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', env=miniature_environment())
+    assert valid.returncode == 0, (valid.stdout, valid.stderr,
+                                 (tmp_path / 'verified.json').read_text(encoding='utf-8'))
     assert json.loads((tmp_path / 'verified.json').read_text(encoding='utf-8'))['paths'] == ['validation_test/ih.py']
     if damage == 'selection':
         for row in value['cases']: row['selected'] = False
         (tmp_path / 'plan.json').write_text(json.dumps(value), encoding='utf-8')
     else:
         (root / 'src/radia/ih.py').write_text('def solve(): return 999\n', encoding='utf-8')
-    rejected = subprocess.run(command, capture_output=True, text=True, encoding='utf-8')
+    rejected = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', env=miniature_environment())
     assert rejected.returncode == 2, (rejected.stdout, rejected.stderr)
 
 
@@ -280,7 +300,7 @@ def test_workflow_uses_distinct_plan_outputs_and_verified_execution():
 
 
 
-def test_cli_execution_targets_current_registry_not_retired_files(repository, tmp_path):
+def test_cli_execution_targets_current_registry_not_retired_files(repository, tmp_path, foreign_runner_context):
     root, base = repository
     path = root / 'tests/test_tier_manifest.json'
     data = json.loads(path.read_text(encoding='utf-8'))
@@ -295,9 +315,32 @@ def test_cli_execution_targets_current_registry_not_retired_files(repository, tm
     process = subprocess.run([sys.executable, str(runtime), '--repo', str(root),
                               '--plan', str(tmp_path / 'plan.json'), '--profile', 'solver-heavy',
                               '--out', str(tmp_path / 'verified.json')],
-                             capture_output=True, text=True, encoding='utf-8')
-    assert process.returncode == 0, (process.stdout, process.stderr)
+                             capture_output=True, text=True, encoding='utf-8', env=miniature_environment())
+    assert process.returncode == 0, (process.stdout, process.stderr,
+                                   (tmp_path / 'verified.json').read_text(encoding='utf-8'))
     assert json.loads((tmp_path / 'verified.json').read_text(encoding='utf-8'))['paths'] == ['validation_test/motor.py']
+
+
+def test_runtime_cli_still_enforces_explicit_runner_event_and_base(repository, tmp_path):
+    root, base = repository
+    change(root, 'src/radia/ih.py', 'def solve(): return 2\n')
+    invoke(root, base, tmp_path, event='push')
+    event = tmp_path / 'matching-runner-event.json'
+    event.write_text(json.dumps({'before': base}), encoding='utf-8')
+    command = [sys.executable, str(CLI.with_name('ci_numerical_runtime.py')), '--repo', str(root),
+               '--plan', str(tmp_path / 'plan.json'), '--profile', 'solver-heavy',
+               '--out', str(tmp_path / 'verified.json')]
+    env = miniature_environment(GITHUB_EVENT_NAME='push', GITHUB_EVENT_PATH=str(event))
+    process = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', env=env)
+    assert process.returncode == 0, (tmp_path / 'verified.json').read_text(encoding='utf-8')
+    event.write_text(json.dumps({'before': 'f' * 40}), encoding='utf-8')
+    process = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', env=env)
+    report = json.loads((tmp_path / 'verified.json').read_text(encoding='utf-8'))
+    assert process.returncode == 2 and 'base differs' in report['error'], report
+    env['GITHUB_EVENT_NAME'] = 'pull_request'
+    process = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', env=env)
+    report = json.loads((tmp_path / 'verified.json').read_text(encoding='utf-8'))
+    assert process.returncode == 2 and 'event differs' in report['error'], report
 
 
 def test_cli_case_reads_joined_documentation_input(repository, tmp_path):
