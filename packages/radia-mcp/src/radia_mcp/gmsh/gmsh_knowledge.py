@@ -85,109 +85,57 @@ and the geometry itself.
 """
 
 GMSH_OVERVIEW = """
-# GMSH Overview
+# Gmsh 5 post-processing runtime
 
-GMSH is an open-source 3D finite element mesh generator with a built-in
-CAD engine and post-processor. Radia uses the latest qualified official Gmsh 5
-development build and MSH 4.2. Each run records its exact version and wheel hash.
+Radia uses the newest qualified official Gmsh 5 development build and MSH 4.2.
+Obtain Gmsh separately from its dedicated public index, then install Radia MCP:
 
-- **License**: GNU GPL v2+
-- **Authors**: Christophe Geuzaine, Jean-Francois Remacle
-- **Website**: https://gmsh.info/
-- **Citation**: Geuzaine & Remacle, IJNME 79(11), pp. 1309-1331, 2009
+```sh
+python -m pip install --pre -i https://gmsh.info/python-packages-dev gmsh
+python -m pip install "radia-mcp[gmsh]"
+```
 
-## Installation (Radia project)
-Download the newest official development wheel from
-`https://gmsh.info/python-packages-dev` with `pip download --pre --no-deps
--i https://gmsh.info/python-packages-dev gmsh`. Archive the wheel, index listing,
-source URL, UTC fetch time and SHA256 before installing into an isolated runtime.
-Use `gmsh>=5.0.0.dev0`; stable PyPI Gmsh 4 is unsupported. Public users can
-install with `pip install --pre --extra-index-url https://gmsh.info/python-packages-dev "radia-mcp[gmsh]"`. Record installed payload
-identity with `python -m radia_mcp.gmsh.runtime --wheel WHEEL --record FILE` and
-set `RADIA_GMSH_PROVENANCE=FILE`. Native tools fail if provenance or Gmsh 5/MSH
-4.2 is unavailable. Qualify each newer build with roundtrip and semantic tests
-before adoption. Use the environment's `gmsh` launcher or registered association.
-- `.geo` is the primary file association for Radia post-processing launch
-- `.msh` association is optional raw mesh/data inspection; do not make it the
-  user-facing post-processing contract
-- Python scripts may import `gmsh` for post-processing inspection, but Radia
-  computation scripts must not use `gmsh.model.*` for geometry or mesh creation
+Keep the downloaded official wheel. Record it and set the resulting absolute
+JSON path in the environment used to start the MCP server:
 
-## Modules
-1. **Geometry** - CAD kernel (built-in or OpenCASCADE)
-2. **Mesh** - Automatic meshing (1D/2D/3D)
-3. **Solver** - ONELAB/GetDP integration
-4. **Post-processing** - Field visualization with views
+```sh
+python -m radia_mcp.gmsh.runtime --wheel SELECTED_GMSH_WHEEL.whl --record gmsh-provenance.json
+```
+
+Set `RADIA_GMSH_PROVENANCE` to the absolute path of `gmsh-provenance.json`
+(PowerShell: `$env:RADIA_GMSH_PROVENANCE = (Resolve-Path gmsh-provenance.json).Path`).
+The record checks installed payload hashes against that wheel. Native tools
+fail before processing if it is missing; recording does not qualify semantics.
+
+Package metadata declares `gmsh>=5.0.0.dev0`. A dated version is not a permanent
+pin. Private automation archives each adopted official wheel and installs it
+with its SHA256 using `--require-hashes`; dependencies use their normal index.
+Record the exact distribution version, native version and wheel SHA256 for
+each run. A newer development build must pass the round-trip and relevant
+post-processing semantics checks before adoption. MCP tools never run pip or
+substitute a different runtime. The runtime guard requires major 5 and probes
+actual MSH 4.2 support; unsupported runtimes fail before processing.
+
+Gmsh is GPL software by Christophe Geuzaine and Jean-Francois Remacle.
+`gmsh_detect()` reports available capabilities. Inspection and CSV/statistics
+can run without native Gmsh; rendering and native plugins require it. See
+`gmsh_usage("workflow")` for the complete result-to-picture workflow.
 """
 
 GMSH_COMMAND_LINE = """
-# GMSH Command-Line Reference
+# Opening existing post-processing results
 
-## Opening Files
-```bash
-gmsh file.msh                    # Open .msh in GUI
-gmsh file.step                   # Open STEP geometry
-gmsh file.step -merge field.msh  # Overlay STEP + field data
-gmsh file.geo                    # Run .geo script
+```sh
+gmsh case.geo
+gmsh result.msh -numsubedges 4
 ```
 
-## Key Options
-```bash
--n                  # Hide all meshes and views on startup
--merge              # Merge next file (instead of opening)
--o file             # Specify output file name
--format string      # Output format (msh2, msh4, vtk, stl, bdf...)
--order int          # Set mesh element order
--bin                # Binary output
--save               # Save and exit
--save_all           # Save all elements (even without physical groups)
--v int              # Verbosity level (0-99, default 5)
--nt int             # Number of threads
--numsubedges int    # Subdivisions for high-order display
--string "cmd"       # Parse command string at startup
--setnumber name val # Set option value
--option file        # Parse option file at startup
--nopopup            # No dialog popups in scripts
-```
-
-## Mesh Generation (batch)
-```bash
-gmsh file.geo -3              # Generate 3D mesh
-gmsh file.geo -2 -o out.msh  # Generate 2D mesh, save
-gmsh file.geo -3 -order 2    # 2nd order 3D mesh
-gmsh file.geo -3 -format msh22 -save_all  # MSH v2.2 output
-```
-
-## Post-processing
-```bash
-gmsh field.msh                          # View field data
-gmsh -merge file1.msh -merge file2.msh  # Multiple data files
-gmsh display.geo                        # .geo with Merge + options
-gmsh display.geo                        # auto-loads display.geo.opt if present
-```
-
-## Windows PowerShell `-string` quoting
-When passing a Gmsh script snippet with a Windows path through PowerShell,
-prefer single quotes inside the Gmsh snippet:
-
-```powershell
-gmsh display.geo -string "Print 'frame.png'; Exit;"
-```
-
-Do not pass backslash-escaped double quotes such as `\"private-runtime-path"`
-through `gmsh.bat`; the wrapper can leave Gmsh seeing an unquoted `W:` token,
-which fails as `Unknown variable 'W'`. `Print` also needs a graphical
-OpenGL/FLTK context to create PNG/JPEG images; for unattended animation export,
-use the Python API path in the `animation` topic.
-
-## Useful Combinations
-```bash
-# Open .msh with curved elements properly displayed
-gmsh file.msh -numsubedges 4
-
-# Merge STEP geometry with field results
-gmsh coil.step -merge field.msh -numsubedges 4
-```
+Open the generated `.geo` launch artifact to retain its exact `.geo.opt`
+settings. Opening raw `.msh` uses `.msh.opt`. A plain `case.opt` is not an
+autoload companion. Use `gmsh_render` and `gmsh_export_animation` for automated
+output and recorded settings. Do not invoke Gmsh to create a solver mesh.
+Solver meshes originate in Cubit or Netgen and cross the solver boundary as
+checked `.vol` plus the versioned label contract.
 """
 
 GMSH_KEYBOARD_SHORTCUTS = """
@@ -204,9 +152,6 @@ GMSH_KEYBOARD_SHORTCUTS = """
 ## Meshing
 | Key | Action |
 |-----|--------|
-| `1` / `F1` | Mesh 1D (lines) |
-| `2` / `F2` | Mesh 2D (surfaces) |
-| `3` / `F3` | Mesh 3D (volumes) |
 
 ## Navigation
 | Key | Action |
@@ -647,130 +592,41 @@ def write_msh_opt(msh_path: str, hidden_volumes: list[int],
 """
 
 GMSH_MSH_FORMAT = """
-# GMSH .msh File Format
+# MSH 4.2 result contract
 
-## Version 4.2 (current repository standard)
+MSH 4.2 is the sole supported mesh/data container. The supported pure-Python
+inspection boundary is ASCII, with `$MeshFormat` declaring `4.2 0 8`.
+Unsupported versions, binary files and malformed sections fail explicitly.
+Use `gmsh_inspect_msh` and `gmsh_validate_msh` before native processing.
 
-v4.2 is the only supported format across the Radia repository
-(Cubit plugin output, NGSolve post-processing, all panels).
-netgen I/O is always via `.vol` (never `.msh`).
+Native model-based views use `NodeData`, `ElementData`, or `ElementNodeData`.
+Tags are size_t. Data storage is blocked: after string/real/integer tags, the
+data header is `numBlocks numEntries minTag maxTag`; a node/element block
+stores its entry count, all tags, then component values. Element-node blocks
+start with `elementType numValuesPerElement numElementsInBlock`. Embedded
+entities belong in `$Entities`/`$PartitionedEntities`; `$GhostElements` is also
+blocked. Changing a file's version header does not convert its data layout.
 
-```
-$MeshFormat
-4.2 0 8
-$EndMeshFormat
+The pure-Python reader currently accepts ordinary unpartitioned meshes and
+embedded entities. PartitionedEntities, GhostElements, Polytopes, Edges and
+Faces sections fail explicitly; describing their format does not imply reader
+support. There is no partial parse or fallback.
 
-$PhysicalNames
-numPhysicalNames
-dimension physicalTag "name"
-...
-$EndPhysicalNames
+Use the existing result exporters or Gmsh 5 view APIs; do not hand-write a
+second serializer. Validate every producer's output by opening it in Gmsh 5,
+reading back prescribed values, writing the view, and comparing it again.
+Record view name, scalar/vector/tensor component count, time index and time in
+seconds, tags, SI units, and exact runtime/wheel identity.
 
-$Entities
-numPoints numCurves numSurfaces numVolumes
-pointTag X Y Z numPhysicalTags physicalTag...
-curveTag minX minY minZ maxX maxY maxZ numPhysicalTags physicalTag... numBoundingPoints pointTag... numEmbedded entityDim entityTag...
-surfaceTag minX minY minZ maxX maxY maxZ numPhysicalTags physicalTag... numBoundingCurves curveTag... numEmbedded entityDim entityTag...
-volumeTag minX minY minZ maxX maxY maxZ numPhysicalTags physicalTag... numBoundingSurfaces surfaceTag... numEmbedded entityDim entityTag...
-$EndEntities
+Before every native field hand-off, node and element field tags greater than
+2147483647 are rejected explicitly. There is no remapping or fallback.
+Pure-Python inspection and mesh-only large tags retain their own support;
+that does not imply native field support at those tags.
 
-$Nodes
-numEntityBlocks numNodes minNodeTag maxNodeTag
-entityDim entityTag parametric numNodesInBlock
-  nodeTag
-  ...
-  x y z
-  ...
-...
-$EndNodes
-
-$Elements
-numEntityBlocks numElements minElementTag maxElementTag
-entityDim entityTag elementType numElementsInBlock
-  elementTag nodeTag...
-  ...
-...
-$EndElements
-```
-
-MSH 4.2 NodeData/ElementData records are blocked: after the string/real/integer
-tags, write `numBlocks numEntries minTag maxTag`; each block has its entry count,
-all tags first, then all component values. ElementNodeData blocks instead start
-with `elementType numValuesPerElement numElementsInBlock`. Entities and
-PartitionedEntities include embedded entity lists; GhostElements is blocked.
-Node/element tags already used size_t in 4.1. Changing only the header is invalid.
-Checked .vol plus its versioned labels is the volume solver mesh authority;
-.msh 4.2 is derived visualization/postprocessing. PEEC and streamfunction line
-or surface objects keep their discretization and use strict .msh 4.2 readers.
-
-## Element Type Codes
-
-### Linear (Order 1)
-| Code | Type | Nodes |
-|------|------|-------|
-| 1 | Line2 | 2 |
-| 2 | Tri3 | 3 |
-| 3 | Quad4 | 4 |
-| 4 | Tet4 | 4 |
-| 5 | Hex8 | 8 |
-| 6 | Prism6 | 6 |
-| 7 | Pyr5 | 5 |
-| 15 | Point1 | 1 |
-
-### Quadratic (Order 2)
-| Code | Type | Nodes |
-|------|------|-------|
-| 8 | Line3 | 3 |
-| 9 | Tri6 | 6 |
-| 10 | Quad9 | 9 |
-| 11 | Tet10 | 10 |
-| 12 | Hex27 | 27 |
-| 13 | Prism18 | 18 |
-| 14 | Pyr14 | 14 |
-| 16 | Quad8 | 8 (serendipity) |
-| 17 | Hex20 | 20 (serendipity) |
-
-### High-Order Triangles (Used by GmshPostExport)
-| Code | Type | Nodes | Order | Nodes/edge | Interior |
-|------|------|-------|-------|------------|----------|
-| 2 | Tri3 | 3 | 1 | 0 | 0 |
-| 9 | Tri6 | 6 | 2 | 1 | 0 |
-| 21 | Tri10 | 10 | 3 | 2 | 1 |
-| 23 | Tri15 | 15 | 4 | 3 | 3 |
-| 25 | Tri21 | 21 | 5 | 4 | 6 |
-
-### High-Order Tetrahedra
-| Code | Type | Nodes | Order |
-|------|------|-------|-------|
-| 4 | Tet4 | 4 | 1 |
-| 11 | Tet10 | 10 | 2 |
-| 29 | Tet20 | 20 | 3 |
-| 30 | Tet35 | 35 | 4 |
-| 31 | Tet56 | 56 | 5 |
-
-### High-Order Hexahedra
-| Code | Type | Nodes | Order |
-|------|------|-------|-------|
-| 5 | Hex8 | 8 | 1 |
-| 12 | Hex27 | 27 | 2 |
-| 92 | Hex64 | 64 | 3 |
-| 93 | Hex125 | 125 | 4 |
-
-## Node Ordering Convention (High-Order)
-1. Corner vertices (same as linear element)
-2. Internal nodes for each edge (equispaced, low-to-high vertex index)
-3. Internal nodes for each face (recursive)
-4. Volume internal nodes
-
-## Element Tags (v2.2)
-- Tag 1: physical entity tag (Physical Group)
-- Tag 2: elementary entity tag (geometry entity)
-- Optional tag 3+: partition information
-
-## Physical Groups
-- Define material regions or boundary conditions
-- By default, only elements in physical groups are saved
-- Use `Mesh.SaveAll = 1` to save all elements
+Solver inputs are checked Cubit/Netgen `.vol` meshes. MSH is exclusively
+derived visualization/post-processing, including conductor display objects.
+Display tessellation in `raster.py` is transient visualization data, never
+written as a solver mesh or fed to a solver.
 """
 
 GMSH_GEO_SCRIPTING = """
@@ -849,88 +705,6 @@ View[0].IntervalsType = 2;
 View[0].ShowScale = 1;
 ```
 
-## Basic Syntax Reference
-```
-// Variables
-lc = 0.01;
-pts[] = {1, 2, 3};
-
-// Geometry primitives
-Point(tag) = {x, y, z, meshSize};
-Line(tag) = {startPt, endPt};
-Circle(tag) = {startPt, centerPt, endPt};
-Curve Loop(tag) = {curve_list};  // signs = orientation
-Plane Surface(tag) = {loop_list};
-Surface Loop(tag) = {surface_list};
-Volume(tag) = {surfaceLoop_list};
-
-// Physical groups
-Physical Point("name", tag) = {point_list};
-Physical Curve("name", tag) = {curve_list};
-Physical Surface("name", tag) = {surface_list};
-Physical Volume("name", tag) = {volume_list};
-
-// Transformations
-Translate {dx,dy,dz} { Point{1}; }
-Rotate {{ax,ay,az}, {px,py,pz}, angle} { Volume{1}; }
-
-// Extrusion
-Extrude {dx,dy,dz} { Surface{1}; Layers{n}; Recombine; }
-
-// Transfinite (structured)
-Transfinite Curve {list} = n Using Progression p;
-Transfinite Surface {list};
-Transfinite Volume {list};
-Recombine Surface {list};
-
-// Control flow
-If (expr) ... ElseIf (expr) ... Else ... EndIf
-For i In {start:end:step} ... EndFor
-
-// Include and Merge
-Include "other.geo";
-Merge "file.msh";
-Merge "file.step";
-
-// Mesh commands
-Mesh 2;          // Generate 2D mesh
-SetOrder 2;      // Set element order
-Save "file.msh"; // Save mesh
-
-// Options
-General.Verbosity = 5;
-Mesh.NumSubEdges = 4;
-View[0].IntervalsType = 2;
-
-// Output
-Printf("format %g", value);
-```
-
-## Parsed Post-Processing Views
-```
-View "B field" {
-  // Scalar point
-  SP(x,y,z){val};
-
-  // Vector point
-  VP(x,y,z){vx,vy,vz};
-
-  // Scalar triangle (3 vertices, 3 values)
-  ST(x1,y1,z1, x2,y2,z2, x3,y3,z3){v1,v2,v3};
-
-  // Vector triangle
-  VT(x1,y1,z1, x2,y2,z2, x3,y3,z3){vx1,vy1,vz1, vx2,vy2,vz2, vx3,vy3,vz3};
-
-  // Element type prefixes: S=scalar, V=vector, T=tensor
-  // Geometry suffixes: P=point, L=line, T=tri, Q=quad,
-  //                    S=tet, H=hex, I=prism, Y=pyramid
-
-  TIME {t1, t2, ...};
-};
-```
-
-Note: Parsed views are inefficient for large datasets.
-Use .msh NodeData/ElementData instead.
 """
 
 GMSH_HIGH_ORDER = """
@@ -1009,240 +783,103 @@ reference coordinates. H1 GridFunction approach is unreliable for p>=4.
 """
 
 GMSH_RADIA_WORKFLOW = """
-# GMSH Workflow in Radia Project
+# Gmsh 5 / MSH 4.2 post-processing workflow
 
-## 0. AI-Driven Inspection, Validation, Rendering (radia-mcp tools)
+Start with an existing result file exported by Radia or cubit-mesh-export.
+Keep the original checked solver `.vol`, its label contract and result
+provenance. Gmsh does not create or import the solver mesh in this workflow.
+The calls below are MCP tools, using absolute paths for files.
 
-The server follows the matlab-mcp-core-server verb structure (the
-MathWorks official MATLAB MCP server): a small set of core verbs over a
-lazily-started persistent engine session, with domain tools around it.
-
-| matlab-mcp-core-server | mcp-server-gmsh | Notes |
-|---|---|---|
-| detect_matlab_toolboxes | `gmsh_detect` | version, build features, REAL graphics probe, session state |
-| evaluate_matlab_code | `gmsh_exec` | stateful evaluate in the persistent worker |
-| run_matlab_file | `gmsh_run_file` | gmsh.open in the session (.geo executes, .msh/.step load) |
-| run_matlab_test_file | `gmsh_verify` | one-call structured pass/fail over all applicable gates |
-| check_matlab_code | `lint_gmsh_script` | static policy lint (+ `gmsh_probe_options` for dynamic option names) |
-| (session modes new/auto/existing) | lazy auto singleton | gmsh has no external attach; crash/hang kills only the worker |
-
-Before opening anything in the GUI, an agent can verify and render GMSH
-artifacts headlessly via mcp-server-gmsh:
-
-| Tool | What it does |
-|------|--------------|
-| `gmsh_inspect_msh` | MSH v4.2 structure summary (element types/orders, views, time steps, bbox, display hints). Pure Python. |
-| `gmsh_validate_msh` | Structural consistency; `check_jacobians=True` adds the getJacobians inverted-element gate (repo policy for high-order exports) + per-type integrated volume. |
-| `gmsh_validate_geo` | Merge targets exist + no invalid GMSH 5 options. |
-| `gmsh_field_stats` | Per-view, per-step field statistics without a GUI: scalar min/max/mean/rms, vector magnitude stats + pooled component min/max, NaN/Inf counts (validate_msh also gates on finiteness). |
-| `gmsh_diff_msh` | Structure + field-statistics diff of two .msh files (before/after verification: node/element/physical/view differences, bbox drift, overall and per-step min/max/mean/rms drift). |
-| `gmsh_audit_msh_directory` | Validate every .msh under a directory (recursive), optional per-file Jacobian gate: one call answers "are the repo's mesh artifacts sound?". |
-| `gmsh_mesh_quality` | Gmsh minSICN shape-quality distribution + threshold gate; min(detJ)/max(detJ) remains a separate curvature diagnostic so affine slivers cannot pass as perfect. |
-
-CLI twin for CI/hooks (exit 0 = ok, 1 = needs attention):
-
-```bash
-python -m radia_mcp.gmsh.msh_inspect case.msh               # inspect
-python -m radia_mcp.gmsh.msh_inspect case.msh --validate --jacobians
-python -m radia_mcp.gmsh.msh_inspect case.msh --stats
-python -m radia_mcp.gmsh.msh_inspect case.geo               # deep .geo check
-python -m radia_mcp.gmsh.msh_inspect a.msh --diff b.msh
-python -m radia_mcp.gmsh.msh_inspect docs                   # directory audit
-```
-| `gmsh_render` | Headless PNG screenshot of a .msh/.geo (subprocess FLTK). High-order aware: NumSubEdges=4 and per-view AdaptVisualizationGrid=1 by default. |
-| `gmsh_export_animation` | Time-stepped views -> PNG frames + GIF (linked views, AnimationCycle=0). |
-| `gmsh_write_post_launch_artifact` | Write case.geo + case.geo.opt + case.msh.opt + display.json contract files. |
-| `gmsh_probe` | Interpolated values of any view at arbitrary points ("what is B at the gap center?"); outside points report the distance to the data. |
-| `gmsh_line_profile` | n samples along a segment + optional matplotlib PNG (the "Bz along the axis" plot in one call). |
-| `gmsh_integrate` | Plugin(Integrate) with the element dimension pinned (default 3). MEASURED: dimension=-1 sums ALL dimensions, and the plugin integrates at piecewise-LINEAR accuracy even on high-order views (O(h^2) for nonlinear integrands; exact FE integrals stay on the NGSolve side). |
-| `gmsh_math_eval` | Derived views via Plugin(MathEval): abs/components/differences (v0..v8, w0..w8 of other_view). MEASURED: expressions apply to NODAL values, the view interpolates f(node values). |
-| `gmsh_isosurface` / `gmsh_cut_plane_extract` | Extract iso surfaces / plane sections as DATA (.pos) for downstream probe/stats/render -- unlike the render-time clip which is visual only. |
-| `gmsh_harmonic_to_time` | re/im two-step view -> n-step time animation (AC phasor -> rotating-field GIF together with gmsh_export_animation). |
-| `gmsh_streamlines` | Field lines by probe-driven arc-length RK4 (both directions, field magnitude as line color, polyline coords returnable). This build's Plugin(StreamLines) only re-emits seeds -- do not use it. |
-| `gmsh_particle_trace` | Charged-particle ORBITS (relativistic Boris pusher on dp/dt = q(E + v x B)) through the probed B [T] (+ optional E [V/m]) views: species presets or charge_e/mass_amu, auto time step from the seed gyration period, termination reasons, and per-track diagnostics (gyroradius, speed_change_rel = integrator health in pure B). |
-| `gmsh_poincare` | Where those orbits PIERCE a plane: segment-wise crossing detection with linear interpolation (so the answer is not limited to integrator samples), returned as in-plane (u,v) + flight time with the axes reported. A closed orbit gives a finite point set; a drifting one fills a curve. |
-| `gmsh_flux_integral` | int B.n dA through a bounded rect or disc patch -- what "how much flux crosses this window?" means. NOT `gmsh_integrate` (which integrates a view over its OWN elements). Fails loud if any sample leaves the mesh. |
-| `gmsh_line_integral` | int H.dl circulation along a circle / polyline, with `expected_ni` for a direct Ampere-law check. Integrates in PARAMETER space against the analytic tangent. |
-| `gmsh_maxwell_force` | Force + torque on everything inside an axis-aligned box, by the Maxwell stress tensor T = (B B^T - |B|^2 I/2)/mu0. The standard accelerator/motor recipe: needs nothing about the body, only vacuum around it. |
-| `gmsh_gap_harmonics` | Space harmonics around a circle (motor air gap): endpoint-EXCLUDED sampling, local (e_r, e_theta, e_axis) projection, cos/sin coefficients + amplitude/phase per order. |
-| `gmsh_compare_fields` | Cross-mesh field comparison for solver cross-validation (FEM vs HDiv-VIM, coarse vs fine): probes BOTH files at the SAME points and reports L2/Linf of norm(B_a - B_b). `gmsh_diff_msh` is the SAME-mesh regression verb and cannot do this. |
-| `gmsh_exec` | Stateful evaluate in a PERSISTENT headless gmsh worker (matlab-mcp-core-server style): open a model once, interrogate it across calls; `result` variable + stdout come back. |
-| `gmsh_session_status` / `gmsh_session_shutdown` | Session lifecycle (lazy start on first exec; crash/hang kills only the worker and fails loudly). |
-
-Lane split: one-shot subprocess tools (inspect/validate/render) for
-stateless gating and screenshots; the persistent `gmsh_exec` session for
-interactive interrogation of a loaded model. Never call gmsh.fltk inside
-the session -- screenshots belong to `gmsh_render`.
-
-Recommended order after any exporter change: inspect -> validate (with
-Jacobians for order>=2) -> mesh_quality for curved meshes -> validate
-the .geo -> render a PNG and look at it. The 2026-08 audit found all
-four docs/gmsh_animation TET10 meshes systematically inverted (every
-Gauss point det<=0) -- a bug invisible in GUI display, caught only by
-the Jacobian gate. `gmsh_mesh_quality` extends that gate to
-non-inverted shape degradation, including affine slivers (minSICN).
-
-### EM cross-section render recipe (one call)
+## 1. Inspect the result before native access
 
 ```python
-gmsh_render(
-    "em_case.msh",
-    camera_preset="positive_y_oblique",
-    cut_plane={"enabled": True, "normal": [-1, 0, 0], "offset": 0.0,
-               "whole_elements": True, "only_volume": True},
-    options={"Mesh.ColorCarousel": 2,      # color by physical group
-             "Mesh.VolumeFaces": 1, "Mesh.VolumeEdges": 1,
-             "Mesh.SurfaceFaces": 0, "Mesh.SurfaceEdges": 0},
-)
+gmsh_detect()
+gmsh_inspect_msh(msh_path="/results/field.msh")
+gmsh_validate_msh(msh_path="/results/field.msh")
+gmsh_field_stats(msh_path="/results/field.msh")
 ```
 
-Interior cross-section at x=0 with per-material coloring -- the
-standard electromagnet/IH mesh-review view (white background and
-NumSubEdges=4 are already the tool defaults). Remember pitfall 1c:
-these explicit Mesh.* overrides matter because gmsh.open() may flip
-SurfaceFaces on its own. Hide air regions with a sibling .geo
-(`Hide { Volume{...}; }`) when they occlude the parts.
+Check the returned errors, view names, component counts, step times, bounding
+box and finite ranges. Use the actual view name in subsequent calls. A vector
+view is not three unrelated scalar views. Mesh-only validation does not
+certify a physical solution; Jacobian checks can be requested separately.
 
-## 1. Field Visualization (Primary Use)
-
-```
-NGSolve FEM solve -> GridFunction -> GmshPostExport -> .msh -> GMSH GUI
-```
-
-### Steps:
-1. Solve FEM problem in NGSolve
-2. Use `GmshPostExport` to write .msh with field data
-3. Open in GMSH with `Mesh.NumSubEdges = 4`
-
-## 2. Netgen/Cubit Mesh, GMSH Display
-
-The mesh generator owns the mesh. GMSH owns the view.
-
-```
-Netgen/Cubit -> tri/tet or hex mesh -> NGSolve/Radia validation
-             -> GMSH .msh/.pos data + .geo launch recipe -> standalone GMSH
-```
-
-For display examples, write a GMSH v4.2 `.msh` from the existing Radia/Cubit
-exporters. That is a **mesh export**, not GMSH mesh generation. Keep the script
-free of `import gmsh` and `gmsh.model.*`; write `.vol` for the solver path and
-`.msh`/`.pos`/`.geo` only for display. Historical v2.2 snippets are legacy
-references, not the preferred Radia output.
-For post-processing, `case.geo` is the standard artifact to open in GMSH; it
-should `Merge` the exported data and contain the critical display options or
-the exact `case.geo.opt` twin.
-
-### .vol and GMSH
-
-Do not plan a Radia workflow around GMSH directly opening Netgen `.vol` files,
-and do not add a GMSH-side `.vol` reader/plugin for normal Radia operation.
-Radia already owns the `.msh` output path: use `GmshPostExport.write()` for an
-NGSolve mesh with fields, `vol2msh()` for `.vol` plus field payloads, and
-combined v4.2 writers for multi-mesh post-processing. Cubit-side mesh display
-uses `export gmsh "case.msh" order N` / `cubit_mesh_export.export_Gmsh_ver4`.
-On the lab GMSH 4.15.2 package, opening existing `.vol` files fails as a syntax
-parse of a GMSH script, so `.vol` is not a portable GMSH input contract. The
-supported path is:
-
-```
-Netgen/Cubit .vol -> NGSolve/Radia reads the mesh -> existing Radia .msh exporter -> case.geo
-```
-
-Reference workflow:
-`docs/visualization/MESH_GUIDE.md`, plus `docs/visualization/_gmsh_display.geo`
-for the minimal standalone display companion.
-
-## 3. Geometry + Field Overlay
-
-```
-CoilBuilder -> .step (coil geometry)
-OCC shapes  -> .step (magnet/iron geometry)
-NGSolve     -> .msh  (field data)
--> GMSH merges all for combined visualization
-```
-
-### .geo companion:
-```
-Merge "coil.step";
-Merge "magnet.step";
-Merge "field.msh";
-Mesh.NumSubEdges = 4;
-Mesh.VolumeEdges = 0;
-```
-
-## 4. Application Integration
-
-The owning Simulink/headless application writes GMSH results into its run
-directory and records them in ``result.json``. Cubit's embedded toolbar may
-open exported mesh artifacts, but it does not own solver post-processing.
-Use ``pythonw.exe`` for an interactive no-console launch and generate the
-``.geo`` companion with explicit display settings.
-
-## 5. BEM Inductance Results
-
-Unified .msh output containing:
-- Volume B field (NodeData)
-- Surface J (NodeData)
-- Coil wireframe (1D elements)
-
-Node ID separation:
-- Volume nodes: 1..nv_vol
-- Surface nodes: nv_vol+1..end
-
-Physical groups: "air", "coil_surface", "coil_wire"
-
-## 5. GMSH .msh as Input to NGSolve
-
-Cubit exports .vol via `export netgen` -> NGSolve reads it directly.
-The .vol file is the standard interface between Cubit and NGSolve.
+## 2. Create the normal launch artifact
 
 ```python
-from ngsolve import *
-mesh = Mesh("cubit_export.vol")  # .vol is the sole interface
+gmsh_write_post_launch_artifact(
+    msh_path="/results/field.msh", output_base="/results/field",
+    title="Magnetic field", camera_preset="z_up_xz_from_positive_y")
 ```
+
+This writes `field.geo`, `field.geo.opt`, `field.msh.opt` and
+`field.display.json`. Open `field.geo` in Gmsh for interactive viewing.
+The existing MSH data are not modified. STEP overlays are display geometry;
+their coordinates and units must match the result. They are not solver input.
+
+## 3. Render a view or a cut
+
+```python
+gmsh_render(path="/results/field.geo", png_out="/results/B.png",
+            view="B", time_step=0, camera_preset="iso")
+gmsh_render(path="/results/field.msh", png_out="/results/B_cut.png",
+            view="B", time_step=0,
+            cut_plane={"enabled": True, "normal": [0, 1, 0], "offset": 0})
+```
+
+Use a shared explicit color range when comparing frames/cases. Preserve equal
+spatial axes and state any intentional displacement exaggeration. High-order
+edge subdivision and adaptive view display are enabled by the renderer;
+display refinement does not change the solver discretization. Native Gmsh
+graphics is the normal interactive path. Performance must be measured on the
+adopted build; version choice alone is not a speedup measurement.
+
+## 4. Extract values using the same view and time convention
+
+```python
+gmsh_probe(msh_path="/results/field.msh", view_name="B",
+           points=[[0, 0, 0]], step=0)
+gmsh_line_profile(msh_path="/results/field.msh", view_name="B",
+                  start=[0, 0, 0], end=[0, 0, 0.1], n=101)
+gmsh_export_csv(msh_path="/results/field.msh", view_name="B",
+                csv_out="/results/B.csv")
+```
+
+An outside probe reports `found=false`; it is not a zero field. Integrals,
+flux/force operations and line samples need their declared domain, normal,
+units and interpolation semantics. They do not replace numerical validation.
+Use `gmsh_reference("python_api_postproc")` for native view/plugin details
+and `gmsh_usage("paraview")` for filter correspondences and limitations.
+
+## 5. Export time-dependent results
+
+```python
+gmsh_export_animation(path="/results/field.geo", view="B",
+                      gif_out="/results/B.gif", delay_ms=80,
+                      link_views=True)
+```
+
+Verify real step times in the MSH data before choosing playback delay.
+Synchronize relevant views; displacement views need the displacement display
+mode and documented scale. Keep camera and color limits fixed for comparison.
+See `gmsh_usage("animation")` and `gmsh_usage("magnetic_movies")`.
+
+## 6. Save evidence and respect output types
+
+Retain input/output hashes, exact Gmsh wheel/version, tool arguments, view/time
+selection, companion files, returned warnings and actual image dimensions.
+Model-based view exports must remain MSH 4.2 and be re-inspected after write.
+List-based plugin views use their native `.pos` output; a `.msh` target is
+rejected rather than converted implicitly. There is no solver import route.
 """
 
 GMSH_ONELAB = """
-# ONELAB Distribution (public-safe curated corpus)
+# ONELAB and post-processing
 
-GMSH is distributed as part of the ONELAB suite.
-
-## Structure
-```
-public-safe curated corpus
-  00_installer/
-    gmsh.exe          (4.15.2, standalone executable)
-    getdp.exe         (FEM solver, not used by Radia)
-    onelab.py          (ONELAB Python API)
-    tutorials/         (60 .geo tutorial files, t1-t21)
-    examples/          (78 .geo examples)
-    models/            (18 physics domains, 142 .geo files)
-      ElectricMachines/  (PMSM, IM, SRM, WFSM models)
-      Magnets/           (permanent magnet models)
-      Inductor/          (inductor analysis)
-      ...
-    templates/         (GetDP problem templates)
-```
-
-## Tutorial Files (t1-t21)
-Key tutorials for Radia users:
-- t1.geo: Basic geometry and mesh
-- t2.geo: Transformations, ruled surfaces
-- t5.geo: Mesh sizes, attractors
-- t6.geo: Transfinite meshing
-- t8.geo: Post-processing, scalar/vector views
-- t10.geo: Mesh size fields
-- t13.geo: Remeshing
-- t16.geo: OCC geometry kernel
-- t20.geo: STEP/IGES import
-- t21.geo: Physical groups
-
-## Electric Machine Models
-Complete models with .geo + .pro (GetDP problem definition):
-- PMSM (8-pole, GRUCAD): pmsm.geo, pmsm.pro
-- Induction Machine (4-pole, 3kW): im.geo, im.pro
-- SRM (4-pole): srm.geo, srm.pro
-- WFSM (4-pole): wfsm.geo, wfsm.pro
+ONELAB parameterized solver/mesh-generation models are not a Radia solver
+input route. Use the result display companions and MCP post-processing tools
+on existing MSH 4.2 results. Physical parameters and solver execution remain
+with the owning Radia application, using checked Cubit/Netgen `.vol` inputs.
 """
 
 GMSH_PITFALLS = """
@@ -1298,11 +935,6 @@ for a whole .geo). Known renames: `View.ArrowScale` ->
 **Problem**: Unicode characters cause errors in Japanese Windows.
 **Fix**: Use ASCII only in GMSH scripts and output.
 
-## 5. .msh v2.2 vs v4.2 Confusion
-**Problem**: .msh v2.2 vs v4.2 confusion when viewing in GMSH.
-**Fix**: Radia, `GmshPostExport`, `vol2msh`, and `cubit-mesh-export` standardize
-on `.msh v4.2`. Treat v2.2 snippets as legacy reference material only; do not
-downgrade new Radia post-processing output to v2.2.
 
 ## 6. NodeData Field Not Displayed
 **Problem**: .msh file has NodeData section but no view appears.
@@ -1441,15 +1073,8 @@ GMSH can animate mesh displacement using $NodeData with VectorType=5
 (displacement mode). Each time step specifies a displacement vector per node.
 Combined with STEP geometry (static), this creates stator + moving body animations.
 
-Runnable artifact-inspection notebook:
-`docs/gmsh_animation/gmsh_animation.ipynb`. The notebook contains saved output.
-Checked companion data are in
-`validation_test/gmsh_animation/gmsh_animation_results.json`; the docs tree
-does not own a result sidecar. The
-historical docs-local artifact inspected there is `docs/gmsh_animation/`: MSH v4.1,
-2430 nodes, 1003 elements, 21 vector NodeData frames, final displacement 0.15 m.
-It requires regeneration and new evidence before use with strict 4.2 tools;
-the historical record must not be relabelled as a new-format measurement.
+Use newly validated MSH 4.2 animation artifacts. Saved historical notebook
+output does not qualify a current runtime or regenerate its input data.
 
 Runnable export notebook:
 `docs/gmsh_animation/gmsh_animation_export.ipynb`.  It opens the docs-local

@@ -867,7 +867,7 @@ source digest.
 An NGSolve GridFunction `.sol` contains coefficients but no mesh or finite-
 element-space definition. Keep it only as an internal restart/interchange
 artifact with its exact companion `.vol` and declared space/order. A public run
-that computes a spatial field must also write checked GMSH `.msh v4.1` output
+that computes a spatial field must also write checked GMSH `.msh v4.2` output
 inside the run directory and index it from `result.json`. Human field
 inspection uses that GMSH artifact; the solver continues to consume `.vol`.
 
@@ -1010,7 +1010,7 @@ the BEM flux density radiates through the exterior representation
 `-S(s)q + D(s)Tu`.  This is the Calderon/Johnson-Nedelec coupled CQ system
 with the retarded double-layer `K(s)`.  Keep the old single-layer row only as
 a `SingleLayerTeaching` regression contrast.  `writeVolFemBemCqGmsh3dArtifact`
-exports that acoustic-volume CQ result as Gmsh v4.1 NodeData and is useful for
+exports that acoustic-volume CQ result as Gmsh v4.2 NodeData and is useful for
 radia-acoustic artifact contracts.  For a drum, reuse the artifact contract but
 replace the interior acoustic volume FEM with structural membrane/shell FEM and
 use the BEM unknowns for exterior sound.
@@ -1199,7 +1199,7 @@ mu = CoefficientFunction([mu_d.get(mat, 4e-7*3.14) for mat in mesh.GetMaterials(
 
 `VTKOutput` is a valid NGSolve feature and is shown here as upstream API
 documentation. Radia-owned applications, validation artifacts, and examples use
-`radia.gmsh_post_export.GmshPostExport` and checked GMSH `.msh v4.1` output.
+`radia.gmsh_post_export.GmshPostExport` and checked GMSH `.msh v4.2` output.
 
 ```python
 from ngsolve import VTKOutput

@@ -32,7 +32,7 @@ def cross_kernel_summary():
         "runs": [dict(copy.deepcopy(run), run_index=1), dict(copy.deepcopy(run), run_index=2)],
         "external_rows": rows,
         "mesh_evidence": {"tet_count": 137697, "node_count": 29976, "connectivity_orders": [4], "min_scaled_jacobian": 0.1075, "cad_volume_relative_error": 0.00128},
-        "gmsh_inventory": {"status": "ok", "mesh_format": "4.1", "binary": False, "node_count": 29976, "element_family_counts": {"tet": 137697}, "connectivity_mismatches": []},
+        "gmsh_inventory": {"status": "ok", "mesh_format": "4.2", "binary": False, "node_count": 29976, "element_family_counts": {"tet": 137697}, "connectivity_mismatches": []},
     }
 
 
@@ -54,7 +54,7 @@ def test_cross_kernel_gate_accepts_bounded_multi_kernel_spread_and_tet_mesh():
     result = json.loads(build123d_drafted_housing_cross_kernel_gate(json.dumps(cross_kernel_summary())))
     assert result["status"] == "ok"
     assert result["solver_ready"] is True
-    assert result["checks"]["gmsh_v41_contains_the_complete_tet_block"] is True
+    assert result["checks"]["gmsh_v42_contains_the_complete_tet_block"] is True
 
 
 def test_cross_kernel_gate_rejects_missing_tets_and_false_positive_volume():

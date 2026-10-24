@@ -8,7 +8,7 @@ server down and the stdio transport cannot dead-lock on inherited pipes
 (temp-file redirect + ``stdin=DEVNULL``, per the lab subprocess pattern).
 
 Scope: MSH **v4.2 ASCII** only, matching the repository-wide format policy.
-Binary MSH and v2.2 are rejected loudly, never half-parsed.
+Binary MSH and every non-4.2 version are rejected loudly, never half-parsed.
 """
 
 from __future__ import annotations

@@ -18,7 +18,7 @@ ALL items are mandatory. No exceptions, no "future work".
 
 ## 1. File Format
 
-- **v4.1 ONLY** (CLAUDE.md policy: "Radia-NGSolve panels output v4.1 only")
+- **v4.2 ONLY** (CLAUDE.md policy: "Radia-NGSolve panels output v4.2 only")
 - Single .msh file (NO two-file Merge — element ID collision kills GMSH)
 - Node IDs offset between physical groups (volume 1..N, surface N+1..M)
 - Companion .geo file (Open GMSH button opens this, not the raw .msh)
@@ -79,7 +79,7 @@ View[1].ArrowSizeMin = 20;
 View[1].ArrowSizeMax = 20;
 ```
 
-**Mesh.Volumes does NOT exist** in GMSH 4.x. Never write it.
+**Mesh.Volumes does NOT exist** in Gmsh 5. Never write it.
 
 ArrowSizeMin = ArrowSizeMax = 20 is THE critical setting. Without
 it the arrows are ~3 px and invisible. This was the "kirei" knob
@@ -122,7 +122,7 @@ Same requirements except:
 
 ## 8. Invariants (Never Break These)
 
-- v4.1 format
+- v4.2 format
 - Single file (no Merge)
 - ArrowSizeMin = ArrowSizeMax = 20
 - No Mesh.Volumes in .geo/.opt

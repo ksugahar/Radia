@@ -1104,7 +1104,7 @@ async def motor_vol2d_postprocess_analysis(analysis_json: str) -> str:
     One owned worker assembles the planar H1 or axisymmetric H1Henrotte
     operator, reuses one factorization across a prescribed-current sweep, and
     returns point probes, oriented paths, material energy integrals, canonical
-    JSON/CSV, and a Gmsh 4.1 ``.msh`` with exact ``.geo/.opt`` companions.
+    JSON/CSV, and a Gmsh MSH 4.2 ``.msh`` with exact ``.geo/.opt`` companions.
     The tool never writes to a caller-selected path and cancellation cannot
     terminate a shared CAE session.
     """

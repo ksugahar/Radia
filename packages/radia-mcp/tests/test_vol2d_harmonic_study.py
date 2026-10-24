@@ -56,7 +56,7 @@ def test_harmonic_matrix_kernel_rejects_invalid_studies(
 def test_field_study_cli_materializes_owned_gmsh_bundle(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    msh = "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n"
+    msh = "$MeshFormat\n4.2 0 8\n$EndMeshFormat\n"
     exports = {
         "gmsh_msh": {"content": msh},
         "gmsh_geo": {"content": 'Merge "field.msh";\n'},

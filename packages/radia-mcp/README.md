@@ -59,7 +59,7 @@ Cubit (hex meshing)**, with Gmsh as the post-processing workhorse.
 `radia-mcp` lets an AI assistant drive a real CAE pipeline end-to-end:
 
 ```
-build123d script  →  STEP  →  Cubit hex mesh  →  .msh v4.1 / .vol  →  ngsolve / radia
+build123d script  →  STEP  →  Cubit hex mesh  →  .vol + label contract  →  ngsolve / radia  →  .msh v4.2 (post only)
         ↑                            ↓
    AI authors                   AI iterates safely
    (Builder API)                 (auto-checkpoint
@@ -201,7 +201,8 @@ pip install radia-mcp                # MCP guidance; no Radia solver or Cubit ru
 pip install radia-mcp[build123d]      # adds build123d itself
 pip install radia-mcp[build123d,cubit] # optional STEP-to-Cubit execution (Windows, Python 3.12)
 pip install radia-mcp[cadquery]       # adds CadQuery (interop with cadquery-mcp)
-pip install radia-mcp[gmsh]           # adds gmsh Python bindings for optional GMSH workflows
+python -m pip install --pre -i https://gmsh.info/python-packages-dev gmsh
+python -m pip install "radia-mcp[gmsh]"  # Gmsh 5 / MSH 4.2 post-processing
 pip install radia-mcp[youtube]        # adds youtube-transcript-api (tutorial scrape)
 pip install radia-mcp[radia]          # adds Radia core (radia-coupled servers)
 pip install radia-mcp[full]           # everything above
@@ -334,7 +335,7 @@ shown below for reference; everything else is discoverable via meta.
 | **★ meta** | `mcp-server-radia-meta` | direct | Cross-server catalog + health/golden gate — RECOMMENDED FIRST CALL |
 | **literature-index** | `mcp-server-literature-index` | direct | Full-text search across 2,339 lab literature files in the lab literature corpus (ChromaDB + semantic search) |
 | **build123d** | `mcp-server-build123d` | direct + validation catalog | `build123d_to_cubit_hex`, `lint_build123d_script`, `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, Radia/general templates, CadQuery + bd_warehouse interop |
-| **GMSH** | `mcp-server-gmsh` | direct | `lint_gmsh_script`, `gmsh_audit_summary`, `gmsh_numsubedges_remediation_plan`, `gmsh_mesh_generation_remediation_plan`, references + examples |
+| **GMSH** | `mcp-server-gmsh` | direct | `lint_gmsh_script`, `gmsh_audit_summary`, references + examples |
 | **Force** | `mcp-server-force` | direct + validation catalog | Common Motor/MagLev force layer: shared result normalization; static and peak/RMS phasor Lorentz/Maxwell force and torque; virtual work, coenergy and uniform/sampled air-gap torque; method selection, independent-method/action-reaction/lift-weight gates; and validation guidance (numerical tools require the `radia` extra). |
 | **differential-forms** | `mcp-server-differential-forms` | direct | Visual differential geometry for computational EM: intrinsic metric, curvature/holonomy, Cartan moving frames, k-forms, exterior derivative, **Hodge star, Whitney complex, de Rham, tree-cotree, FEEC**, and executable geometry/gauge gates. Distilled from Needham 2021/2026, Bossavit 1998, Whitney 1957, Kameari 2011, Arnold-Falk-Winther 2006, 新しい計算電磁気学 2003, and Codecasa 2010. |
 | **mathematica** | `mcp-server-mathematica` | direct | Wolfram Mathematica subprocess bridge: evaluate expressions, execute tracked verification scripts with JSON reports, batch named identities in one kernel, and select a course/differential-forms/paper verification workflow, plus simplify, TeX, vector calculus, units, solve, integrate, differentiate, and status helpers. Pairs with `differential-forms` for symbolic verification of d²=0, Stokes, Whitney elements, Kelvin transform, Maxwell identities. Requires `wolframscript` on PATH. |
@@ -428,7 +429,7 @@ and a licensed Coreform Cubit (not provided by `radia-mcp`):
 | Server | Bundled knowledge | Lines |
 |---|---|---|
 | build123d | Auto-generated API reference (`inspect.getmembers`, 142 classes / 65 functions) + 18 curated topics (Plane/Axis/Location cookbook, Builder ↔ Algebra rosetta, joints, assemblies, CAE workflow, …) | 1 673 |
-| GMSH | Visualization/post-processing policy, MSH v4.1 spec, high-order display guidance, lint rules, examples, and remediation planners | 2 008 |
+| GMSH | Visualization/post-processing policy, MSH v4.2 spec, high-order display guidance, lint rules, examples, and post-processing workflows | 2 008 |
 
 Plus persistent **failure log** per kind, fed into every `*_lookup` /
 `*_ask` retrieval so past mistakes are searchable next session.
@@ -521,11 +522,19 @@ cubit_ask("hex meshing tutorial")
 ### Audit GMSH visualization policy
 
 ```python
-gmsh_audit_summary("examples")                  # machine-readable policy audit
-gmsh_numsubedges_remediation_plan("examples")   # high-order display companions
-gmsh_mesh_generation_remediation_plan("examples")
-gmsh_reference("all")                           # MSH / API / display reference
+gmsh_audit_summary("docs")                  # machine-readable policy audit
+gmsh_usage("workflow")                          # MSH 4.2 result -> display/extraction/movie
+gmsh_reference("python_api_postproc")           # native view / plugin API
 ```
+
+The build123d analysis pipeline connects to Netgen and returns a checked
+`.vol` with its versioned label contract and `check-vol` report. Its MSH 4.2
+file is a derived post-processing result, never an analysis input. This path
+uses the standalone `cubit-mesh-export` checker API without running or
+licensing Cubit, and the current Radia `GmshPostExport` writer. A writer that
+does not produce valid MSH 4.2 fails explicitly. Coordinates and mesh sizes
+for analysis are supplied in meters; physical boundary conditions are not
+inferred from neutral mesh groups.
 
 ---
 

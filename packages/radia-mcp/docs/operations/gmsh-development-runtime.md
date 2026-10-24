@@ -2,9 +2,9 @@
 
 Use the newest official Gmsh **5 development** wheel. MSH output and input are
 ASCII **4.2** only. A checked `.vol` and its versioned label contract remain the
-volume solver mesh authority; `.msh` is a derived visualization or field file.
-PEEC conductor surfaces/centerlines and streamfunction wires retain their own
-discretization and use strict MSH 4.2.
+solver mesh authority; `.msh` is exclusively a derived visualization or field
+file. Conductor display surfaces/centerlines and streamfunction wires retain
+their discretization; their display artifacts use strict MSH 4.2.
 
 The `gmsh` and `shape-regeneration` extras allow `gmsh>=5.0.0.dev0`.
 PyPI may only have the stable Gmsh 4 release, so obtain the development wheel
@@ -57,8 +57,8 @@ adopt a nightly. A Windows artifact does not establish Linux qualification.
 `gmsh.write` writes the mesh, while `gmsh.view.write` writes views and can also
 write a mesh. When appending multiple model-based views to one file, set
 `PostProcessing.SaveMesh=0` after the initial mesh write. List-based `.pos`
-views remain explicit view artifacts; a plugin writing MSH 2.2 is rejected.
-Changing a 4.1 header alone does not produce 4.2: field/ghost records are
+views remain explicit view artifacts; a plugin writing an unsupported MSH format is rejected.
+Changing only the version header does not produce 4.2: field/ghost records are
 blocked, and non-point entity records include embedded entity lists.
 
 The pure Python field/structural readers support ordinary unpartitioned element

@@ -23,7 +23,7 @@ Usage:
 import errno
 import sys
 from collections import Counter
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
@@ -158,7 +158,7 @@ def _format_findings(filepath: str, findings: list[dict]) -> str:
     return '\n'.join(lines)
 
 
-def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dict:
+def _lint_directory_summary(directory: str = "docs", top_n: int = 10) -> dict:
     """Machine-readable directory lint summary for loop/audit bookkeeping."""
     d = Path(directory)
     if not d.is_absolute():
@@ -217,39 +217,12 @@ def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dic
     }
 
 
-def _relative_to_project(path: Path) -> str:
-    try:
-        return path.relative_to(PROJECT_ROOT).as_posix()
-    except ValueError:
-        return path.as_posix()
 
 
-def _numsubedges_triggers(lines: list[str]) -> list[str]:
-    triggers = []
-    if any("mesh.Curve(" in line or "Curve(" in line.split("#")[0] for line in lines):
-        triggers.append("high_order_curve")
-    if any("GmshPostExport" in line for line in lines):
-        triggers.append("gmsh_post_export")
-    return triggers
 
 
-def _directory_numsubedges_companion(directory: str) -> dict:
-    companion = str(PurePosixPath(directory) / "_gmsh_display.geo")
-    return {
-        "geo_companion": companion,
-        "geo_template": (
-            f"// Shared GMSH display companion for {directory}\n"
-            "// Use with any high-order .msh output from this directory.\n"
-            "Mesh.NumSubEdges = 4;\n"
-            "// Merge \"<result>.msh\";\n"
-        ),
-    }
 
 
-def _line_excerpt(lines: list[str], line_number: int) -> str:
-    if line_number <= 0 or line_number > len(lines):
-        return ""
-    return lines[line_number - 1].strip()
 
 
 # ============================================================
@@ -285,12 +258,12 @@ def lint_gmsh_script(filepath: str) -> str:
 
 
 @mcp.tool()
-def lint_gmsh_directory(directory: str = "examples") -> str:
+def lint_gmsh_directory(directory: str = "docs") -> str:
     """
     Lint all Python scripts in a directory for GMSH policy violations.
 
     Args:
-        directory: Directory path relative to project root (default: "examples").
+        directory: Directory path relative to project root (default: "docs").
     """
     d = Path(directory)
     if not d.is_absolute():
@@ -329,7 +302,7 @@ def lint_gmsh_directory(directory: str = "examples") -> str:
 
 
 @mcp.tool()
-def gmsh_audit_summary(directory: str = "examples", top_n: int = 10) -> dict:
+def gmsh_audit_summary(directory: str = "docs", top_n: int = 10) -> dict:
     """
     Return a machine-readable GMSH lint audit summary.
 
@@ -340,161 +313,8 @@ def gmsh_audit_summary(directory: str = "examples", top_n: int = 10) -> dict:
     return _lint_directory_summary(directory, top_n)
 
 
-@mcp.tool()
-def gmsh_numsubedges_remediation_plan(directory: str = "examples",
-                                      limit: int = 20) -> dict:
-    """
-    List scripts that need high-order GMSH display settings.
-
-    This is the actionable companion to the `numsubedges-missing` audit rule.
-    It does not edit files; it returns a bounded list of affected scripts,
-    trigger reasons, CLI hints, and a companion `.geo` template.
-    """
-    d = Path(directory)
-    if not d.is_absolute():
-        d = PROJECT_ROOT / d
-    if not d.exists():
-        return {
-            "ok": False,
-            "error": f"Directory not found: {d}",
-            "directory": str(d),
-        }
-
-    max_items = max(0, min(int(limit), 200))
-    affected = []
-    by_directory: Counter[str] = Counter()
-    total = 0
-    for py_file in sorted(d.rglob("*.py")):
-        findings = _lint_file(str(py_file))
-        if not any(f.get("rule") == "numsubedges-missing" for f in findings):
-            continue
-        total += 1
-        rel_for_group = _relative_to_project(py_file)
-        by_directory[str(PurePosixPath(rel_for_group).parent)] += 1
-        if len(affected) >= max_items:
-            continue
-        try:
-            lines = py_file.read_text(encoding="utf-8", errors="replace").splitlines()
-        except OSError:
-            lines = []
-        rel = rel_for_group
-        geo_name = f"{py_file.stem}_display.geo"
-        affected.append({
-            "script": rel,
-            "triggers": _numsubedges_triggers(lines),
-            "cli_hint": "gmsh <result>.msh -numsubedges 4",
-            "geo_companion": str(PurePosixPath(rel).with_name(geo_name)),
-            "geo_template": (
-                f"// Display companion for outputs from {rel}\n"
-                "Mesh.NumSubEdges = 4;\n"
-                "// Merge \"<result>.msh\";\n"
-            ),
-        })
-
-    return {
-        "ok": True,
-        "directory": str(d),
-        "rule": "numsubedges-missing",
-        "total_affected": total,
-        "returned": len(affected),
-        "truncated": total > len(affected),
-        "action": _RULE_REMEDIATIONS["numsubedges-missing"],
-        "directory_groups": [
-            {
-                "directory": directory,
-                "count": count,
-                "directory_companion": _directory_numsubedges_companion(directory),
-            }
-            for directory, count in sorted(
-                by_directory.items(),
-                key=lambda item: (-item[1], item[0]),
-            )
-        ],
-        "affected": affected,
-    }
 
 
-@mcp.tool()
-def gmsh_mesh_generation_remediation_plan(directory: str = "examples",
-                                          limit: int = 20) -> dict:
-    """
-    List scripts that still use GMSH as a mesh generator.
-
-    This is the actionable companion to the `gmsh-mesh-generation` audit rule.
-    It reports affected files, line snippets, directory grouping, and a
-    public-safe migration hint toward Netgen/Cubit `.vol` mesh generation plus
-    GMSH-only visualization.
-    """
-    d = Path(directory)
-    if not d.is_absolute():
-        d = PROJECT_ROOT / d
-    if not d.exists():
-        return {
-            "ok": False,
-            "error": f"Directory not found: {d}",
-            "directory": str(d),
-        }
-
-    max_items = max(0, min(int(limit), 200))
-    affected = []
-    by_directory: Counter[str] = Counter()
-    total = 0
-    total_findings = 0
-
-    for py_file in sorted(d.rglob("*.py")):
-        findings = [
-            finding
-            for finding in _lint_file(str(py_file))
-            if finding.get("rule") == "gmsh-mesh-generation"
-        ]
-        if not findings:
-            continue
-        total += 1
-        total_findings += len(findings)
-        rel = _relative_to_project(py_file)
-        by_directory[str(PurePosixPath(rel).parent)] += len(findings)
-        if len(affected) >= max_items:
-            continue
-        try:
-            lines = py_file.read_text(encoding="utf-8", errors="replace").splitlines()
-        except OSError:
-            lines = []
-        affected.append({
-            "script": rel,
-            "findings": [
-                {
-                    "line": finding.get("line", 0),
-                    "message": finding.get("message", ""),
-                    "snippet": _line_excerpt(lines, int(finding.get("line", 0))),
-                }
-                for finding in findings
-            ],
-            "migration_hint": (
-                "Replace GMSH geometry/mesh generation with Netgen OCC or "
-                "Cubit/Coreform export netgen .vol. Keep GMSH only for opening "
-                "or post-processing existing .msh/.geo visualization files."
-            ),
-            "mesh_output_hint": "Prefer Mesh('model.vol') for NGSolve inputs.",
-        })
-
-    return {
-        "ok": True,
-        "directory": str(d),
-        "rule": "gmsh-mesh-generation",
-        "total_affected": total,
-        "total_findings": total_findings,
-        "returned": len(affected),
-        "truncated": total > len(affected),
-        "action": _RULE_REMEDIATIONS["gmsh-mesh-generation"],
-        "directory_groups": [
-            {"directory": directory, "findings": count}
-            for directory, count in sorted(
-                by_directory.items(),
-                key=lambda item: (-item[1], item[0]),
-            )
-        ],
-        "affected": affected,
-    }
 
 
 @mcp.tool()
@@ -518,18 +338,11 @@ def gmsh_usage(topic: str = "all") -> str:
 @mcp.tool()
 def gmsh_reference(topic: str = "all") -> str:
     """
-    Get GMSH technical reference (options, algorithms, fields, formats).
+    Get native Gmsh post-processing API and display reference.
 
-    Topics: algorithms, formats, fields, python_api_field, python_api_postproc,
-            mesh_options, transfinite, boolean, extrusion, periodic,
-            mesh_commands, plugins, view_options, geometry_options
-
-    Lab policy (2026-04-19): gmsh は Python API 経由の軽量**ポスト処理**専用。
-    mesh 生成は Netgen/Cubit が担当。Netgen は Tcl 実装でポストが弱いため、
-    gmsh Python API 駆動でポストを埋める構成。
-    - `python_api_postproc` — gmsh.view.*, gmsh.plugin.*, I/O（**研究室の本題**）
-    - `python_api_field` — gmsh.model.mesh.field.* (reference only, 研究室では不使用)
-    - `fields` — .geo syntax (legacy 参照用)
+    Topics: python_api_postproc, postproc_recipes, plugins, view_options,
+            geometry_options. Start with gmsh_usage("workflow") for the
+    qualified Gmsh 5/MSH 4.2 result boundary. Solver meshing is Netgen/Cubit.
 
     Args:
         topic: Reference topic (default: "all").
@@ -540,12 +353,9 @@ def gmsh_reference(topic: str = "all") -> str:
 @mcp.tool()
 def gmsh_examples(topic: str = "all") -> str:
     """
-    Get GMSH tutorial and example documentation.
+    Get examples using existing MSH 4.2 post-processing results.
 
-    Includes ONELAB tutorials (t1-t21), electric machine models
-    (PMSM, IM, SRM), magnet/inductor models, and common patterns.
-
-    Topics: tutorials, machines, patterns, magnets
+    Topics: display, fields, animation. No solver mesh generation/import.
 
     Args:
         topic: Example topic (default: "all").
@@ -1215,7 +1025,7 @@ def gmsh_math_eval(msh_path: str, expressions: list,
     result interpolates f(node values) -- standard FEM post semantics
     (interp(T^2) is the mean of squared vertex values, not
     (interp T)^2). Output defaults to <stem>_math.pos next to the
-    input; feed it back to gmsh_probe / gmsh_field_stats / gmsh_render.
+    input; probe it with gmsh_probe or display it with gmsh_render.
 
     Args:
         msh_path: Input .msh with views.
@@ -1224,7 +1034,7 @@ def gmsh_math_eval(msh_path: str, expressions: list,
         view_name: Source view (default: first).
         other_view_name: Optional second view bound to w0..w8.
         result_name: Name of the generated view.
-        out_file: Output .pos/.msh path (default: <stem>_math.pos).
+        out_file: Output .pos path (default: <stem>_math.pos).
     """
     p = Path(msh_path)
     if not p.is_absolute():

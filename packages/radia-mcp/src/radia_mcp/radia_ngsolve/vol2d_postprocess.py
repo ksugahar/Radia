@@ -2,7 +2,7 @@
 
 One linear field operator and one Cholesky factor are reused for every current
 row.  Planar H1 and axisymmetric H1Henrotte fields then share a compact result
-contract for point probes, oriented paths, material integrals, and Gmsh 4.1
+contract for point probes, oriented paths, material integrals, and Gmsh MSH 4.2
 handoff.  The MCP surface returns content and hashes; it never writes to a
 caller-selected path.
 """
@@ -713,9 +713,9 @@ def postprocess_replay_gate(artifact: Mapping[str, Any]) -> dict[str, Any]:
         and _sha(expected_json) == json_entry.get("sha256")
         and canonical_sha == json_entry.get("sha256")
     )
-    checks["gmsh_v41"] = (
+    checks["gmsh_v42"] = (
         isinstance(exports.get("gmsh_msh"), Mapping)
-        and "$MeshFormat\n4.1 " in str(exports["gmsh_msh"].get("content", ""))
+        and "$MeshFormat\n4.2 " in str(exports["gmsh_msh"].get("content", ""))
     )
     basename = str(contract.get("request_contract", {}).get("export_basename", ""))
     checks["geo_merges_msh"] = (

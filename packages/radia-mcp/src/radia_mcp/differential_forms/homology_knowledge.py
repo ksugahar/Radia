@@ -207,9 +207,9 @@ NGSolve/Netgen mesh via the combinatorial Hodge Laplacian
 `L1 = G G^T + Curl^T Curl`  (nullity = b_1), and returns one curl-free,
 UNIT-circulation HCurl(order 0) generator `h_k` per loop — the discrete
 `H^1` representative, i.e. exactly a T-Omega "cut" / one-ampere-turn loop
-field.  This drops the Gmsh `computeHomology` + `.msh -> .vol` dependency
-(the Pellikka 2013 path) entirely; NGSolve/Netgen ship no homology solver,
-so this is the lab's standalone engine.
+field. The engine consumes the checked NGSolve/Netgen mesh directly;
+Gmsh is exclusively a post-processing target. NGSolve/Netgen ship no
+homology solver, so this is the lab's standalone engine.
 
 The total-scalar-potential (T-Omega) solver
 `radia.cohomology_cut.CohomologyCutSolver` consumes it:

@@ -1698,10 +1698,10 @@ animated GIF (writeSoftSphereScatterGif), headless, with NO gmsh dependency -- t
 soft-sphere pulse (softSphereScatterField), the two-spot drum roll (drumRollField),
 and the drum + sphere scatterer (drumScatterField) all use this native path. The
 gmsh route for acoustic FIELD MOVIES belongs to the radia-acoustic (Python) side,
-where GmshPostExport already writes high-order .msh v4.1 NodeData time series
+where GmshPostExport already writes high-order .msh v4.2 NodeData time series
 (scalar pressure / vector displacement) for the gmsh animation player. Division of
 labor: MATLAB teaching repo -> native MATLAB figures/GIF only; radia-acoustic ->
-gmsh via GmshPostExport (.msh v4.1). The gmsh-artifact manifest contract is already
+gmsh via GmshPostExport (.msh v4.2). The gmsh-artifact manifest contract is already
 gated on this side (acoustic_fembem_gmsh_artifact_manifest_gate), so a gmsh acoustic
 movie is produced and validated by radia-acoustic, never by the MATLAB lane.
 

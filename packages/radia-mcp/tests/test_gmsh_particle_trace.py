@@ -531,20 +531,14 @@ def forbid_gmsh_launch(monkeypatch):
 
 
 def test_list_data_out_file_must_be_pos(input_file, forbid_gmsh_launch):
-    """LENSA-03: particle_trace(out_file="x.msh") silently wrote v2.2.
-
-    MEASURED: the file began "$MeshFormat / 2.2 0 8" and this lane's own
-    field_histogram then rejected it with "MSH v2.2 is not supported
-    (ASCII v4.x only)" -- a silent breach of the v4.2-only policy.  The
-    rejection happens before gmsh is ever launched.
-    """
+    """List-data output is rejected before native access unless it is .pos."""
     result = particle_trace(input_file, [[0.0, 0.0, 0.0]],
                             [1.0, 0.0, 0.0], 1.0e3,
                             out_file=input_file.parent / "tracks.msh")
     assert result["ok"] is False
     assert "must end in '.pos'" in result["error"]
     assert "tracks.msh" in result["error"]
-    assert "v2.2" in result["error"]
+    assert "MSH 4.2" in result["error"]
 
 
 # ----------------------------------------------------------------------

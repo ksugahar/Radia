@@ -120,7 +120,7 @@ def drafted_housing_cross_kernel_gate(
         "heal_noheal_observables_are_invariant": all(len(pair) == 2 and _relative_error(pair[0]["total_volume_mm3"], pair[1]["total_volume_mm3"]) <= 1.0e-12 and _relative_error(pair[0]["total_area_mm2"], pair[1]["total_area_mm2"]) <= 1.0e-12 for pair in pairs.values()),
         "tet_mesh_is_positive_first_order": mesh_tet_count > 0 and list(mesh.get("connectivity_orders") or []) == [4] and float(mesh.get("min_scaled_jacobian", math.nan)) > 0.0,
         "tet_integrated_volume_closes_external_cad": float(mesh.get("cad_volume_relative_error", math.inf)) <= tolerances["mesh_volume"],
-        "gmsh_v41_contains_the_complete_tet_block": gmsh.get("status") == "ok" and gmsh.get("mesh_format") == "4.1" and gmsh.get("binary") is False and int(gmsh.get("node_count", -1)) == int(mesh.get("node_count", -2)) and int(gmsh_counts.get("tet", -1)) == mesh_tet_count and not gmsh.get("connectivity_mismatches"),
+        "gmsh_v42_contains_the_complete_tet_block": gmsh.get("status") == "ok" and gmsh.get("mesh_format") == "4.2" and gmsh.get("binary") is False and int(gmsh.get("node_count", -1)) == int(mesh.get("node_count", -2)) and int(gmsh_counts.get("tet", -1)) == mesh_tet_count and not gmsh.get("connectivity_mismatches"),
     }
     issues = [name for name, ok in checks.items() if not ok]
     return {
@@ -140,7 +140,7 @@ def drafted_housing_cross_kernel_gate(
         "notes": [
             "Use the native B-rep as the center of a bounded multi-kernel spread; do not nominate one STEP reader as exact truth.",
             "Draft, fillet, counterbore, and repeated through-hole combinations require mass and topology checks together.",
-            "A Gmsh v4.1 file is complete only when its element block reproduces the measured tet inventory, not merely when nodes are present.",
+            "A Gmsh v4.2 file is complete only when its element block reproduces the measured tet inventory, not merely when nodes are present.",
         ],
     }
 
@@ -175,6 +175,6 @@ def drafted_housing_source_replay_gate(summary: Mapping[str, object]) -> dict[st
         "notes": [
             "Run the unmodified tagged example with only its interactive display call stubbed for headless execution.",
             "Persist both STEP digests because equivalent replay metrics do not imply byte-identical exports.",
-            "Require .geo/.geo.opt launch companions beside the Gmsh v4.1 mesh so the artifact opens with the intended view contract.",
+            "Require .geo/.geo.opt launch companions beside the Gmsh v4.2 mesh so the artifact opens with the intended view contract.",
         ],
     }
