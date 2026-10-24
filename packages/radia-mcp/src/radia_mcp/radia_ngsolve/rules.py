@@ -5,6 +5,7 @@ Each rule function receives (filepath, lines) and returns a list of findings.
 A finding is a dict with keys: line, severity, rule, message.
 """
 
+import ast
 import re
 import os
 from typing import List, Dict
@@ -1569,6 +1570,52 @@ def check_cp932_stdout_rewrap(filepath: str, lines: List[str]) -> List[Dict]:
 
 
 # All rules in execution order
+def check_ngsolve_sparse_type_portability(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: compiler-generated sparse class names are not a portable API."""
+    try:
+        tree = ast.parse('\n'.join(lines), filename=filepath)
+    except SyntaxError:
+        return []  # The caller's syntax diagnostics own incomplete scripts.
+    aliases = {'ng': 'ngsolve', 'ngsolve': 'ngsolve'}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for item in node.names:
+                if item.name.startswith('ngsolve'):
+                    aliases[item.asname or item.name.split('.')[0]] = (
+                        item.name if item.asname else 'ngsolve')
+        elif isinstance(node, ast.ImportFrom) and node.module == 'ngsolve':
+            for item in node.names:
+                if item.name == 'la':
+                    aliases[item.asname or item.name] = 'ngsolve.la'
+
+    def qualified(node):
+        if isinstance(node, ast.Name):
+            return aliases.get(node.id, node.id)
+        if isinstance(node, ast.Attribute):
+            return qualified(node.value) + '.' + node.attr
+        return ''
+
+    forbidden = re.compile(r'^SparseMatrix(?:Symmetric)?(?:double|d)$')
+    findings = []
+    for node in ast.walk(tree):
+        bad = (isinstance(node, ast.Attribute)
+               and qualified(node.value) == 'ngsolve.la'
+               and forbidden.fullmatch(node.attr))
+        if isinstance(node, ast.ImportFrom) and node.module == 'ngsolve.la':
+            bad = any(forbidden.fullmatch(item.name) for item in node.names)
+        if bad:
+            findings.append({
+                'line': node.lineno, 'severity': 'HIGH',
+                'rule': 'ngsolve-sparse-type-portability',
+                'message': 'Compiler-generated NGSolve sparse class names differ '
+                           'across builds. Use radia.ngsolve_sparse.'
+                           'real_sparse_matrix_type(symmetric=...) to discover '
+                           'the real-double class from an assembled matrix; '
+                           'fail loudly if unavailable.',
+            })
+    return sorted(findings, key=lambda finding: finding['line'])
+
+
 ALL_RULES = [
     # Radia API-drift / example-bitrot
     check_solve_result_bad_index,
@@ -1577,6 +1624,7 @@ ALL_RULES = [
     check_magnetization_looks_tesla,
     check_cp932_stdout_rewrap,
     # NGSolve FEM rules
+    check_ngsolve_sparse_type_portability,
     check_hcurl_missing_nograds,
     check_ngsolve_precond_after_assemble,
     check_ngsolve_missing_trace_bem,

@@ -6,6 +6,7 @@ and benchmark values; keep those in internal cross-validation logs.
 """
 
 TOPICS = {
+    "convergence_provenance": "Separate iterative error, discretization error and cross-platform source identity",
     "overview": "How to close the loop from validation artifact to MCP learning",
     "dual_lane": "How one validation artifact teaches public and source-tool MCP lanes",
     "mesh_geometry_vol": "Geometry, Cubit/build123d mass properties, and Netgen .vol gates",
@@ -656,7 +657,32 @@ evidence, not as physics validation.
 """
 
 
+CONVERGENCE_PROVENANCE = r"""
+# Convergence and cross-platform provenance
+
+A loose GMRES stopping tolerance can dominate high-p discretization error and
+contaminate measured convergence rates. An accepted linear true residual is
+necessary but does not alone establish an h/p rate. At fixed mesh/order and
+unchanged formulation, reference, stencil and quadrature, tighten the iterative
+tolerance and measure sensitivity before attributing a plateau to FEM error.
+Record requested tolerance, achieved original-system true residual, field
+error and actual h for every level. Do not relax the approved convergence gate
+to fit contaminated rates or silently change a preconditioner between levels.
+
+Git blob bytes are canonical source identity on Linux and Windows-hosted CI.
+A CRLF worktree .vol or record can hash differently from its LF Git blob even
+when parsed text agrees. Preserve raw hashes; compare the intended artifact
+against its generating Git blob. When a reviewed text fixture needs canonical
+LF bytes, derive it explicitly from retained originals, record both hashes and
+the derivation, and verify labels, geometry and physical maps independently.
+Never normalize arbitrary binary data, rewrite historical result hashes, or
+call a transformed runner measured by an old result. Mark old applicability
+stale and verify historical evidence against its historical Git blob instead.
+"""
+
+
 _TOPIC_TEXT = {
+    "convergence_provenance": CONVERGENCE_PROVENANCE,
     "overview": OVERVIEW,
     "dual_lane": DUAL_LANE,
     "mesh_geometry_vol": MESH_GEOMETRY_VOL,
