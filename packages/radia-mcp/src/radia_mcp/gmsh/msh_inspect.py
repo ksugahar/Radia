@@ -314,21 +314,53 @@ def _parse_elements(body: list[str]) -> tuple[dict[str, Any], list[str]]:
     return out, errors
 
 
-def _decode_data_blocks(kind: str, lines: list[str], ncomp: int,
-                        declared: int) -> list[str]:
-    """Decode MSH 4.2 tag/value blocks into internal per-tag records."""
-    toks = _token_stream(lines)
-    records = []
-    tags_seen = set()
+class _DataTokens:
+    """Seekable token iteration without retaining an entire tag line/block."""
+    def __init__(self, stream): self.stream = stream
+    def __iter__(self): return self
+    def __next__(self):
+        char = self.stream.read(1)
+        while char and char.isspace(): char = self.stream.read(1)
+        if not char: raise StopIteration
+        parts = [char]
+        while (char := self.stream.read(1)) and not char.isspace(): parts.append(char)
+        return ''.join(parts)
+    def position(self): return self.stream.tell()
+    def seek(self, position): self.stream.seek(position)
+
+def _read_view_header(take):
+    strings = [take().strip('"') for _ in range(int(take()))]
+    reals = [float(take()) for _ in range(int(take()))]
+    integers = [int(take()) for _ in range(int(take()))]
+    return strings, reals, integers
+
+
+def _iter_data_blocks(kind, stream, reopen, ncomp, declared, *, native_limit=None):
+    """One canonical block decoder; native mode retains a bounded tag bitmap.
+
+    Tags precede values in 4.2. A second seekable reader pairs them without
+    retaining a block's tag list. Memory is O(largest input line + tag bitmap),
+    with the bitmap bounded by the existing native index domain (256 MiB).
+    """
+    toks = _DataTokens(stream)
+    count_read = 0
+    lo, hi = None, None
     try:
         blocks, count, minimum, maximum = [int(next(toks)) for _ in range(4)]
         if min(blocks, count, declared) < 0 or ncomp not in (1, 3, 9):
             raise ValueError('negative count or unsupported component count')
         if count != declared:
             raise ValueError(f'declares {declared} entries but block header declares {count}')
+        if native_limit is not None and maximum > native_limit:
+            raise ValueError(f'Gmsh native {kind} field tag {maximum} exceeds {native_limit}; no remapping or fallback is used')
+        if native_limit is None:
+            seen = set()
+        else:
+            if minimum < 0 or maximum < minimum:
+                raise ValueError('data tag range mismatch')
+            seen = bytearray((maximum - minimum + 8) // 8)
         for _ in range(blocks):
-            width = ncomp
-            nodes = None
+            width, nodes = ncomp, None
             if kind == 'ElementNodeData':
                 etype, width = int(next(toks)), int(next(toks))
                 if etype not in ELEMENT_TYPES or width != ELEMENT_TYPES[etype][1] * ncomp:
@@ -337,28 +369,113 @@ def _decode_data_blocks(kind: str, lines: list[str], ncomp: int,
             n = int(next(toks))
             if n < 0 or n > count:
                 raise ValueError('invalid data block count')
-            tags = [int(next(toks)) for _ in range(n)]
-            for tag in tags:
-                if tag <= 0 or tag in tags_seen:
-                    raise ValueError(f'non-positive or duplicate data tag {tag}')
-                tags_seen.add(tag)
-            for tag in tags:
-                values = [next(toks) for _ in range(width)]
-                # Validate lexical values even when statistics were not requested.
-                for value in values:
-                    float(value)
-                records.append(' '.join([str(tag)] + ([str(nodes)] if nodes is not None else []) + values))
-        if len(records) != count:
-            raise ValueError(f'data blocks contain {len(records)} entries; expected {count}')
-        if tags_seen and (min(tags_seen), max(tags_seen)) != (minimum, maximum):
+            tag_position = toks.position()
+            for _ in range(n):
+                tag = int(next(toks))
+                if native_limit is None:
+                    if tag <= 0 or tag in seen:
+                        raise ValueError(f'non-positive or duplicate data tag {tag}')
+                    seen.add(tag)
+                else:
+                    if tag > native_limit:
+                        raise ValueError(f'Gmsh native {kind} field tag {tag} exceeds {native_limit}; no remapping or fallback is used')
+                    if tag <= 0: raise ValueError(f'non-positive or duplicate data tag {tag}')
+                    if not minimum <= tag <= maximum: raise ValueError('data tag range mismatch')
+                    index, bit = divmod(tag - minimum, 8)
+                    if seen[index] & (1 << bit):
+                        raise ValueError(f'non-positive or duplicate data tag {tag}')
+                    seen[index] |= 1 << bit
+                lo = tag if lo is None else min(lo, tag)
+                hi = tag if hi is None else max(hi, tag)
+            with reopen() as tag_stream:
+                tags = _DataTokens(tag_stream)
+                tags.seek(tag_position)
+                for _ in range(n):
+                    tag = int(next(tags))
+                    values = [next(toks) for _ in range(width)]
+                    for value in values: float(value)
+                    count_read += 1
+                    yield tag, nodes, values
+        if count_read != count:
+            raise ValueError(f'data blocks contain {count_read} entries; expected {count}')
+        if count_read and (lo, hi) != (minimum, maximum):
             raise ValueError('data tag range mismatch')
-        if not tags_seen and (minimum, maximum) != (0, 0):
+        if not count_read and (minimum, maximum) != (0, 0):
             raise ValueError('empty data tag range must be 0 0')
-        if next(toks, None) is not None:
-            raise ValueError('trailing data tokens')
+        if next(toks, None) is not None: raise ValueError('trailing data tokens')
     except StopIteration as exc:
         raise ValueError('truncated data block') from exc
-    return records
+
+
+def _decode_data_blocks(kind: str, lines: list[str], ncomp: int, declared: int) -> list[str]:
+    """Detailed inspection collects the same decoder's records for its reports."""
+    from io import StringIO
+    text = '\n'.join(lines)
+    with StringIO(text) as stream:
+        return [' '.join([str(tag)] + ([str(nodes)] if nodes is not None else []) + values)
+                for tag, nodes, values in _iter_data_blocks(
+                    kind, stream, lambda: StringIO(text), ncomp, declared)]
+
+
+class _SectionBody:
+    def __init__(self, stream, name):
+        self.stream, self.name, self.closed = stream, name, False
+        self.line_prefix = True
+
+    def tell(self): return self.stream.tell()
+
+    def read(self, size):
+        if size != 1: raise ValueError('Section token reads must be incremental')
+        if self.closed: return ''
+        char = self.stream.read(1)
+        if not char: raise ValueError(f'${self.name} never closed ($End{self.name} missing)')
+        if char == '$' and self.line_prefix:
+            marker = '$' + self.stream.readline().strip()
+            if marker != '$End' + self.name:
+                raise ValueError(f'${self.name} not closed before {marker}')
+            self.closed = True
+            return ''
+        if char == '\n': self.line_prefix = True
+        elif not char.isspace(): self.line_prefix = False
+        return char
+    def readline(self):
+        if self.closed: return ''
+        line = self.stream.readline()
+        if not line: raise ValueError(f'${self.name} never closed ($End{self.name} missing)')
+        marker = line.strip()
+        if marker.startswith('$'):
+            if marker != '$End' + self.name:
+                raise ValueError(f'${self.name} not closed before {marker}')
+            self.closed = True
+            return ''
+        return line
+
+
+def _validate_native_fields(path):
+    """Streaming section/data eligibility, not full mesh/reference validation."""
+    def reopen(): return Path(path).open(encoding='utf-8')
+    with reopen() as source:
+        while line := source.readline():
+            marker = line.strip()
+            if marker.startswith('$End'):
+                raise ValueError(f'{marker} without an opening section')
+            if not marker.startswith('$'): continue
+            name = marker[1:]
+            body = _SectionBody(source, name)
+            if name in _DATA_SECTIONS:
+                def take():
+                    while row := body.readline():
+                        if row.strip(): return row.strip()
+                    raise StopIteration
+                try:
+                    _, _, ints = _read_view_header(take)
+                    if len(ints) < 3: raise ValueError('integer-tag block needs >=3 entries')
+                    for _ in _iter_data_blocks(name, body, reopen, ints[1], ints[2], native_limit=2**31-1):
+                        pass
+                except (StopIteration, TypeError) as exc:
+                    raise ValueError(f'${name}: truncated or malformed header') from exc
+            else:
+                while body.readline(): pass
 
 
 def _parse_data_section(kind: str, body: list[str], start_line: int,
@@ -391,12 +508,7 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
         return val
 
     try:
-        n_str = int(_take())
-        strings = [_take().strip('"') for _ in range(n_str)]
-        n_real = int(_take())
-        reals = [float(_take()) for _ in range(n_real)]
-        n_int = int(_take())
-        ints = [int(_take()) for _ in range(n_int)]
+        strings, reals, ints = _read_view_header(_take)
     except (StopIteration, ValueError):
         view["header_ok"] = False
         errors.append(f"${kind} @L{start_line}: truncated or malformed header")

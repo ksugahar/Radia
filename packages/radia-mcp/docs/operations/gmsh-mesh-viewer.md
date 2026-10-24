@@ -57,12 +57,32 @@ scopes; one output does not promise both. Unsupported dimensions, missing groups
 or an installed Radia without the MSH 4.2 exporter fail explicitly.
 
 MCP supplies the same explicit `post_output`, `checked_report`, `source_sha256`
-and `group_scope` arguments. The detached viewer delegates conversion to a
-separate worker so NGSolve and the Gmsh GUI do not share a process;
-preflight performs no writes and probes the selected interpreter's installed
-exporter in a separate process. A missing production MSH 4.2 exporter returns
-an MCP preflight error before the detached GUI is launched. The server does not wait for conversion
-or the GUI. The output is a post-processing view, never an input to a solver.
+and `group_scope` arguments. MCP awaits a separate conversion worker without
+blocking its event loop. Only successful conversion, a bound receipt and MSH
+preflight can reach GUI launch; every conversion gate failure returns to MCP.
+NGSolve and the Gmsh GUI never share a process. The `post_view` response contains
+the verified output hash, source hash, group scope, physical groups, receipt and
+staging paths. The GUI receives the checked MSH alone, not another conversion
+request. A GUI spawn failure reports the retained verified artifact. Launch
+acceptance remains distinct from rendering success. The output is a
+post-processing view, never an input to a solver.
+
+`RADIA_MESH_VIEWER_TIMEOUT_SECONDS` is an operator setting: default 300 seconds,
+finite range 30..900, excluding the human GUI lifetime. Preflight and conversion
+share one monotonic deadline and a cleanup reserve. Windows workers are started
+suspended, assigned to their explicit kill-on-close job, and resumed; timeout
+and cancellation reap the owned descendants, including a venv redirector.
+UTF-8 is explicit on outer and inner children. Native non-UTF-8 diagnostics use
+replacement decoding, never strict reader-thread decoding. Diagnostic capture
+and receipt metadata are capped at 1 MiB each; exceeding a cap fails explicitly.
+
+Native MSH eligibility streams sections and field blocks, keeping a bounded
+native-tag bitmap rather than all data tags. It preserves the header/section/
+field checks and the native field-tag maximum 2147483647; it is not the full
+mesh/reference validator. Detailed `inspect_msh` reporting still materializes
+inventories, including the current converter's inspection step. Consequently
+this change does not certify arbitrary >2 GiB inspection, VOL conversion or GUI
+rendering. A separate scale proof is required; no numerical gates are weakened.
 
 All-user installation and Windows associations require their separate reviewed
 installation decision. This launcher does not modify either.

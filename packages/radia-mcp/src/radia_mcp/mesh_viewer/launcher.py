@@ -11,8 +11,8 @@ import re
 import sys
 
 
-def validate_mesh_path(filename: str) -> Path:
-    """Reject absent/non-mesh inputs before importing a native GUI runtime."""
+def resolve_mesh_path(filename: str) -> Path:
+    """Cheap path/extension checks; no model-content scan in the MCP server."""
     supplied = Path(filename).expanduser()
     if supplied.suffix.lower() not in {".vol", ".msh"}:
         raise ValueError("Specify one existing .vol or .msh file")
@@ -22,6 +22,12 @@ def validate_mesh_path(filename: str) -> Path:
     if path.suffix.lower() == ".msh":
         if any(p.exists() for p in (Path(str(path) + ".opt"), path.with_suffix(".opt"))):
             raise ValueError("Adjacent Gmsh option scripts are unsupported")
+    return path
+
+
+def validate_mesh_path(filename: str) -> Path:
+    path = resolve_mesh_path(filename)
+    if path.suffix.lower() == '.msh':
         from radia_mcp.gmsh.runtime import require_msh42
         require_msh42(path)
     return path
@@ -138,9 +144,16 @@ def main(argv=None) -> int:
     parser.add_argument("--checked-report")
     parser.add_argument("--source-sha256")
     parser.add_argument("--group-scope", choices=['materials', 'boundaries'])
+    parser.add_argument('--expected-sha256', help='Bind a verified post-view artifact to preflight')
     args = parser.parse_args(argv)
     try:
+        from ._worker_process import transaction_deadline
+        deadline = transaction_deadline()
         path = validate_mesh_path(args.mesh)
+        if args.expected_sha256:
+            from .post_view import sha256
+            if sha256(path) != args.expected_sha256:
+                raise RuntimeError('Verified MSH hash changed before GUI launch')
         desktop = require_interactive_desktop()
         post = args.post_output is not None
         if post:
@@ -148,7 +161,7 @@ def main(argv=None) -> int:
                 raise ValueError('Post-view requires checked-report, source-sha256 and group-scope')
             from .post_view import validate_post_request, prepare_post_view
             target, _ = validate_post_request(path, args.post_output, args.checked_report,
-                                               args.source_sha256, args.group_scope)
+                                               args.source_sha256, args.group_scope, deadline=deadline)
             identity = {**runtime_identity(target), **desktop, 'post_source': str(path)}
         else:
             if any((args.checked_report, args.source_sha256, args.group_scope)):
@@ -159,7 +172,7 @@ def main(argv=None) -> int:
         else:
             if post:
                 result = prepare_post_view(path, args.post_output, args.checked_report,
-                                           args.source_sha256, args.group_scope)
+                                           args.source_sha256, args.group_scope, deadline=deadline)
                 path = validate_mesh_path(result['output'])
             open_mesh(path)
         return 0
