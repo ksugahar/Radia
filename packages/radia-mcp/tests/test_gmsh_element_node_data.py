@@ -104,3 +104,23 @@ def test_invalid_element_samples_rejected_by_all_entry_points(tmp_path, scheme, 
     assert any('sample count/type mismatch' in error for error in checked['errors']), checked
     with pytest.raises(ValueError, match='sample count/type mismatch'):
         msh.read_msh_data(path)
+
+
+@pytest.mark.parametrize('etype', [34, 999])
+@pytest.mark.parametrize('scheme', ['', 'named'])
+@pytest.mark.parametrize('entry', ['native', 'validate', 'read'])
+def test_unknown_element_type_is_rejected(tmp_path, etype, scheme, entry):
+    """Guards: all decoder entry points reject unknown types; assumes no lookup."""
+    path = tmp_path / 'unknown.msh'
+    path.write_text('$MeshFormat\n4.2 0 8\n$EndMeshFormat\n$ElementNodeData\n'
+                    + f'2\n"field"\n"{scheme}"\n1\n0\n3\n0\n1\n1\n'
+                    + f'1 1 17 17\n{etype} 2 1\n17\n1.25 -2.5\n'
+                    + '$EndElementNodeData\n', encoding='utf-8')
+    if entry == 'validate':
+        checked = msh.validate_msh(path)
+        assert not checked['ok'], checked
+        assert any('sample count/type mismatch' in error for error in checked['errors']), checked
+    else:
+        reader = msh._validate_native_fields if entry == 'native' else msh.read_msh_data
+        with pytest.raises(ValueError, match='sample count/type mismatch'):
+            reader(path)
