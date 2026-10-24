@@ -140,6 +140,12 @@ def test_demo_rejects_non_si_contract_before_native_loading(tmp_path, monkeypatc
 def test_netgen_centerlines_preserve_existing_analytic_discretizations(kind, node_count, edge_count):
     import ngsolve as ng
     path = ROOT/'validation_test/peec_integration/verification/netgen_mesh_generation'/f'circular_{kind}_centerline.vol'
+    # Binary Git storage must preserve portable LF, including boundary labels.
+    assert b'\r' not in path.read_bytes(), path
+    import subprocess
+    relative = path.relative_to(ROOT).as_posix()
+    committed = subprocess.check_output(['git', 'show', f'HEAD:{relative}'], cwd=ROOT)
+    assert b'\r' not in committed, relative
     mesh = ng.Mesh(str(path))
     points = {i: np.asarray(point.p) for i, point in enumerate(mesh.ngmesh.Points(), 1)}
     edges = [tuple(vertex.nr for vertex in element.vertices) for element in mesh.ngmesh.Elements1D()]

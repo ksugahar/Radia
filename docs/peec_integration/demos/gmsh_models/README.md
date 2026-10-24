@@ -2,8 +2,9 @@
 
 PEEC solver inputs are checked Cubit/Netgen `.vol` files with versioned label
 contracts and SI coordinates. Gmsh 5.0.0 consumes derived MSH 4.2 solely for
-post-processing. The `.msh` assets in this directory are display artifacts.
-They are never imported into PEEC or converted into `.vol`.
+post-processing. This directory contains checked `.vol` demo helpers; no
+`.msh` mesh assets remain here. Derived display output is never imported
+into PEEC or converted into `.vol`.
 
 - `demo_gmsh_surface_mesh.py` constructs the existing Netgen torus and can save
   its `.vol` using `--write-vol`. Its existing area criterion is unchanged.

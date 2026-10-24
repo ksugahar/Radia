@@ -45,6 +45,8 @@ def generate(directory=None):
         mesh.SetBCName(0, label)
         path = directory / f"circular_{name}_centerline.vol"
         mesh.Save(str(path))
+        # Netgen boundary names retain CR on Linux; native artifacts use LF.
+        path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b""))
         contract = {"schema": "radia.vol-label-contract.v1",
                     "application": "peec_centerline", "strict_labels": True,
                     "required": {"materials": [label],
