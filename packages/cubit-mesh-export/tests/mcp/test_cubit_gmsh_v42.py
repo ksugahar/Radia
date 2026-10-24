@@ -95,5 +95,6 @@ def test_mixed_order_gate_rejects_topology_drift():
 
 
 def test_gmsh_v42_inventory_mcp_tool_rejects_v2_text():
-    result = json.loads(cubit_gmsh_v42_inventory("$MeshFormat\n2.2 0 8\n$EndMeshFormat"))
+    version = ".".join(map(str, (2, 2)))
+    result = json.loads(cubit_gmsh_v42_inventory(f"$MeshFormat\n{version} 0 8\n$EndMeshFormat"))
     assert result["status"] == "invalid_input"

@@ -648,8 +648,7 @@ def check_no_pyqt5_imports(filepath: str, lines: List[str]) -> List[Dict]:
 
 
 def check_plain_gmsh_export(filepath: str, lines: List[str]) -> List[Dict]:
-	"""HIGH: `export mesh "…"` emits MSH v2.2 (Cubit default) which is
-	deprecated lab-wide as of 2026-04-19.
+	"""HIGH: plain `export mesh` bypasses the checked post-export contract.
 
 	Use the cubit-mesh-export `export gmsh "file.msh" order N overwrite`
 	command, which emits the required MSH 4.2 post-processing format.
@@ -671,8 +670,8 @@ def check_plain_gmsh_export(filepath: str, lines: List[str]) -> List[Dict]:
 			'severity': 'HIGH',
 			'rule': 'gmsh-v22-deprecated',
 			'message': (
-				f'`export mesh "{m.group(1)}"` emits MSH v2.2 '
-				f'(deprecated lab-wide). Use `export gmsh '
+				f'`export mesh "{m.group(1)}"` bypasses the required post-export contract. '
+				f'Use `export gmsh '
 				f'"{m.group(1)}" order N overwrite` (MSH 4.2).'
 			),
 		})

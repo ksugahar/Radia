@@ -94,7 +94,7 @@ def calculate_field_grid(coil_obj, grid_params):
 
 
 def export_field_to_gmsh(coil_obj, grid_params, filename):
-	"""Export the field on a Netgen air mesh as GMSH MSH v4.1 NodeData."""
+	"""Export the field on a Netgen air mesh as GMSH MSH v4.2 NodeData."""
 	from netgen.csg import CSGeometry, OrthoBrick, Pnt
 	from ngsolve import Mesh
 
