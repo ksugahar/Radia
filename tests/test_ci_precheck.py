@@ -1,4 +1,8 @@
-"""Precheck coverage must match CI and propagate real selected failures."""
+"""Guards: Precheck/CI coverage, checkout identity and selected failure propagation.
+
+Assumes: Source contracts only; installed evidence remains independently checked
+by its existing rejection tests, not replaced by checkout data at runtime.
+"""
 import importlib.util
 import json
 import os
@@ -227,8 +231,52 @@ def test_mcp_executes_the_actual_collection_protocol_and_propagates_boundary_fai
     assert rows["MCP package test boundary"][0][1] == "packages/radia-mcp/tools/check_package_test_boundary.py"
     assert "--scratch-root" in rows["MCP package test boundary"][0]
     assert env["PYTHONPATH"] == str(ROOT / "packages/radia-mcp/src")
+    integration_env = rows["MCP selected integration tests"][1]
+    assert integration_env["PYTHONPATH"].split(os.pathsep) == [
+        str(ROOT / "packages/radia-mcp/src"), str(ROOT / "packages/radia-optuna/src")]
+    assert "MCP integration source identity" in rows
+    assert rows["MCP integration source identity"][1] == integration_env
+    assert rows["MCP package test boundary"][1]["PYTHONPATH"] == env["PYTHONPATH"]
     assert "MCP collection dependencies" in rows
     assert any(step["returncode"] for step in steps)
+
+
+def test_wrong_integration_identity_stops_before_repository_tests(tmp_path, monkeypatch):
+    commands = []
+    monkeypatch.setattr(precheck, "_run", fake_run(
+        commands, selection=selection(), failing="MCP integration source identity"))
+    steps = []
+    precheck._mcp_checks({"mode": "affected", "base": "base"}, steps, tmp_path / "report.json")
+    assert "MCP integration source identity" in [row[0] for row in commands]
+    assert "MCP selected integration tests" not in [row[0] for row in commands]
+    assert any(step["returncode"] for step in steps)
+
+
+@pytest.mark.parametrize("shadow", [False, True])
+def test_real_integration_child_checks_checkout_and_evidence(tmp_path, shadow):
+    helper = precheck.integration_source
+    env = helper.source_environment(ROOT, precheck._clean_env())
+    if shadow:
+        package = tmp_path / "radia_optuna"
+        package.mkdir()
+        (package / "__init__.py").write_text('__version__ = "0.3.0"\n')
+        env["PYTHONPATH"] = str(tmp_path) + os.pathsep + env["PYTHONPATH"]
+    report = tmp_path / "identity.json"
+    result = subprocess.run(helper.identity_command(ROOT, report), env=env,
+                            capture_output=True, text=True)
+    if shadow:
+        assert result.returncode != 0, result.stdout
+        assert "Wrong integration source for radia_optuna" in result.stderr, result.stderr
+        assert not report.exists()
+    else:
+        assert result.returncode == 0, result.stderr
+        record = json.loads(report.read_text(encoding="utf-8"))
+        assert Path(record["imports"]["radia_optuna"]) == ROOT / "packages/radia-optuna/src/radia_optuna/__init__.py"
+        assert len(record["source_sha"]) == 40
+        assert len(record["evidence"]["evidence_manifest"]["sha256"]) == 64
+    workflow = (ROOT / ".github/workflows/radia-mcp-matrix.yml").read_text(encoding="utf-8")
+    assert 'runpy.run_path("packages/radia-mcp/tools/integration_source.py")' in workflow
+    assert 'source["source_environment"]' in workflow and 'source["identity_command"]' in workflow
 
 
 def test_full_executes_prior_source_steps_and_full_mcp_plan(tmp_path, monkeypatch):

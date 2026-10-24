@@ -22,6 +22,10 @@ import venv
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+_integration_spec = importlib.util.spec_from_file_location(
+    "mcp_integration_source", ROOT / "packages/radia-mcp/tools/integration_source.py")
+integration_source = importlib.util.module_from_spec(_integration_spec)
+_integration_spec.loader.exec_module(integration_source)
 LIGHT_REQUIREMENTS = ["pytest", "pyyaml", "numpy", "scipy", "setuptools>=45", "wheel"]
 # Caller settings that would change what runs or where packages land.
 _DROPPED_PREFIXES = ("PYTEST_", "PIP_", "PYTHON")
@@ -254,9 +258,14 @@ def _mcp_checks(plan, steps, output):
         _run("MCP response tests", [sys.executable, "-m", "pytest", "tests/mcp_server", "-q"],
              env, steps)
     if selection["integration_tests"]:
+        integration_env = integration_source.source_environment(ROOT, env)
+        if not _run("MCP integration source identity",
+                    integration_source.identity_command(ROOT, artifacts / "integration-source.json"),
+                    integration_env, steps):
+            return selection
         _run("MCP selected integration tests",
              [sys.executable, "-m", "pytest", "-v", "-ra",
-              "--confcutdir=tests/mcp_integration", *selection["integration_tests"]], env, steps)
+              "--confcutdir=tests/mcp_integration", *selection["integration_tests"]], integration_env, steps)
         _run("MCP package test boundary",
              [sys.executable, "packages/radia-mcp/tools/check_package_test_boundary.py",
               "--scratch-root", str(artifacts / "boundary-scratch")], env, steps)
