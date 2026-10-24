@@ -14,18 +14,20 @@ from radia_simulink.simulink import application as app
 class EchoDesignSpec:
     input_file: str = ""
     value: float = 12.5
+    mesh_format: str = "4.2 0 8"
 
     def missing_required_inputs(self) -> list[str]:
         return [] if self.input_file else ["Input file"]
 
     def build_command(self, *, python: str | None = None) -> list[str]:
+        header = f"$MeshFormat\n{self.mesh_format}\n$EndMeshFormat\n"
         code = (
             "import json,sys; "
             "p=sys.argv[sys.argv.index('--output')+1]; "
             "m=sys.argv[sys.argv.index('--msh-output')+1]; "
             f"open(p,'w',encoding='utf-8').write(json.dumps({{'metric': {self.value}}})); "
             "open(m,'w',encoding='ascii',newline='\\n').write("
-            "'$MeshFormat\\n4.1 0 8\\n$EndMeshFormat\\n')"
+            f"{header!r})"
         )
         return [
             python or sys.executable,
@@ -71,7 +73,7 @@ def test_application_runner_writes_stable_artifacts(tmp_path: Path, echo_applica
     assert gmsh_path.is_file()
     assert result["artifacts"] == {
         "gmsh_policy": "required",
-        "gmsh_format": "msh-v4.1",
+        "gmsh_format": "msh-v4.2",
         "gmsh_primary": str(gmsh_path),
         "gmsh": [str(gmsh_path)],
     }
@@ -79,6 +81,30 @@ def test_application_runner_writes_stable_artifacts(tmp_path: Path, echo_applica
     assert str(gmsh_path) in command
     on_disk = json.loads((tmp_path / "run" / "result.json").read_text(encoding="utf-8"))
     assert on_disk == payload
+
+
+@pytest.mark.parametrize("mesh_format", ["4.1 0 8", "2.2 0 8", "4.2 1 8", "4.2 0 4"])
+def test_application_runner_rejects_unsupported_mesh_format(
+    tmp_path: Path, echo_application, mesh_format: str,
+):
+    """Guards: successful spatial commands must still emit ASCII MSH 4.2.
+
+    Assumes: the echo command exercises the public runner artifact boundary;
+    mesh-format rejection is independent of field accuracy or Gmsh parsing.
+    """
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"settings": {
+        "input_file": "model.vol", "mesh_format": mesh_format,
+    }}), encoding="utf-8")
+
+    payload = app.run_application("echo", config, tmp_path / "run", timeout_s=30)
+
+    result = payload["radia_result"]
+    assert result["status"] == "failed", (mesh_format, result)
+    assert "ASCII .msh v4.2" in result["error"], result["error"]
+    assert result["artifacts"]["gmsh_format"] == "msh-v4.2"
+    saved = json.loads((tmp_path / "run" / "result.json").read_text(encoding="utf-8"))
+    assert saved == payload
 
 
 def test_application_runner_records_missing_inputs(tmp_path: Path, echo_application):
@@ -91,10 +117,10 @@ def test_application_runner_records_missing_inputs(tmp_path: Path, echo_applicat
         '{"metric": 99}\n', encoding="utf-8"
     )
     (run_dir / "echo_fields.msh").write_text(
-        "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n", encoding="ascii"
+        "$MeshFormat\n4.2 0 8\n$EndMeshFormat\n", encoding="ascii"
     )
     (run_dir / "old_auxiliary.msh").write_text(
-        "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n", encoding="ascii"
+        "$MeshFormat\n4.2 0 8\n$EndMeshFormat\n", encoding="ascii"
     )
 
     payload = app.run_application("echo", config, run_dir, timeout_s=5)

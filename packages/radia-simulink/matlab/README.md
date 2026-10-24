@@ -115,7 +115,7 @@ The tracked optimization compositions are `radia_electromagnet.slx` and
 layouts and mask contracts.
 
 When an application run computes a spatial field, the runner writes a checked
-GMSH `.msh v4.1` post-processing artifact inside the run directory and lists it
+GMSH `.msh v4.2` post-processing artifact inside the run directory and lists it
 in `result.json`. The GMSH path is runner-owned rather than a mask parameter.
 Scalar/circuit-only modes report the artifact as not applicable instead of
 inventing an empty field file.
@@ -1366,7 +1366,7 @@ winding-current phasors. It reports flux linkage, induced branch voltage,
 magnetic energy, Joule loss, residual, and the independent real-power closure.
 The current implementation deliberately rejects nonlinear or hysteretic
 harmonic permeability instead of silently using an initial slope. Every field
-study writes versioned JSON, four-part timing, Gmsh `.msh v4.1`, and `.geo/.opt`
+study writes versioned JSON, four-part timing, Gmsh `.msh v4.2`, and `.geo/.opt`
 launch companions. The production gate freezes all six supported element
 families together with separate steady-heat, DC-current-flow, and AC-current-
 flow solver artifacts. Full solver retirement remains conditional on the
