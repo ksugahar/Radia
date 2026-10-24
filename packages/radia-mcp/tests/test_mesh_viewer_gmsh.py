@@ -246,6 +246,10 @@ def test_unicode_output_uses_an_explicit_ascii_job_scratch(post_case, monkeypatc
 def test_conversion_process_is_separate_and_uses_a_bound_receipt(post_case, monkeypatch):
     source, output, receipt, digest, _ = post_case
     async def run(argv, **kwargs):
+        if '--hash-output' in argv:
+            from types import SimpleNamespace
+            import hashlib
+            return SimpleNamespace(stdout=hashlib.sha256(output.read_bytes()).hexdigest().encode('ascii'))
         assert argv[1:4] == ['-B', '-m', 'radia_mcp.mesh_viewer.post_view']
         output.write_bytes(b'verified mesh')
         Path(argv[-1]).write_text(json.dumps({'schema':'radia.mesh-post-view.v1',

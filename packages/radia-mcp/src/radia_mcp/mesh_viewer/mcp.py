@@ -9,7 +9,7 @@ import sys
 import time
 from .launcher import require_interactive_desktop, resolve_mesh_path
 from ._worker_process import run_worker, transaction_deadline
-from .post_view import prepare_post_view_async
+from .post_view import prepare_post_view_async, retained_context
 
 MODULE = 'radia_mcp.mesh_viewer'
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
@@ -35,21 +35,26 @@ async def open_mesh_viewer(filepath: str, post_output: str | None = None,
             raise ValueError('Post-view requires checked_report, source_sha256 and group_scope')
         conversion = await prepare_post_view_async(path, post_output, checked_report,
             source_sha256, group_scope, python=python, env=env, deadline=deadline)
-        path = await asyncio.to_thread(resolve_mesh_path, conversion['output'])
-    argv = [str(python), '-B', '-m', MODULE, str(path)]
-    if conversion: argv.extend(['--expected-sha256', conversion['sha256']])
-    probe = await run_worker([*argv, '--check'], env=env, deadline=deadline,
-                             phase=f'Viewer preflight {path}')
-    identity = json.loads(probe.stdout.decode('utf-8'))
-    if time.monotonic() >= deadline:
-        raise RuntimeError(f'GUI launch {path}: transaction deadline exhausted; verified artifact retained')
+    phase = 'Post-view output resolution'
     try:
+        if conversion:
+            path = await asyncio.to_thread(resolve_mesh_path, conversion['output'])
+        argv = [str(python), '-B', '-m', MODULE, str(path)]
+        if conversion: argv.extend(['--expected-sha256', conversion['sha256']])
+        phase = f'Viewer preflight {path}'
+        probe = await run_worker([*argv, '--check'], env=env, deadline=deadline, phase=phase)
+        phase = f'Viewer preflight identity {path}'
+        identity = json.loads(probe.stdout.decode('utf-8'))
+        phase = f'GUI launch {path}'
+        if time.monotonic() >= deadline:
+            raise RuntimeError('transaction deadline exhausted')
+        phase = 'GUI launch'
         child = await asyncio.to_thread(subprocess.Popen, argv, env=env,
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             close_fds=True, creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
     except Exception as error:
-        retained = f'; verified artifact retained: {conversion}' if conversion else ''
-        raise RuntimeError(f'GUI launch failed: {error}{retained}') from error
+        retained = retained_context(conversion) if conversion else ''
+        raise RuntimeError(f'{phase} failed: {error}{retained}') from error
     result = {'status': 'launched', 'pid': child.pid, 'argv': argv,
               'runtime_identity': identity, 'desktop': desktop}
     if conversion: result['post_view'] = conversion
