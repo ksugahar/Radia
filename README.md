@@ -448,7 +448,7 @@ keep field-projection error separate from Lie truncation error.
 ### Related distributions
 
 This monorepo independently releases `radia`, `radia-mcp`, `cubit-mesh-export`,
-`radia-simulink`, `radia-optuna`, and `eqnedit64`.
+`radia-simulink`, and `radia-optuna`. Eqnedit64 is maintained in its own repository.
 
 CPU execution belongs to `radia` through Python/pybind11 and NGSolve.
 GPU kernels belong to `radia-simulink`, are compiled with MATLAB mexcuda, and

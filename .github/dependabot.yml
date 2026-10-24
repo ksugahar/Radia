@@ -73,4 +73,3 @@ updates:
     ignore:
       # Pinned Optuna 5.0.0 is the sole oracle; see the Optuna policy.
       - dependency-name: "optuna"
-
