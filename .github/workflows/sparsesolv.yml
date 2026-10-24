@@ -676,9 +676,35 @@ jobs:
       - name: Install Gmsh post-processing reference separately
         if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.gmsh_required == 'true'
         shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\packages\radia-mcp\src'
         run: |
-          python -m pip install --pre -i https://gmsh.info/python-packages-dev --report "$env:RUNNER_TEMP/gmsh-install.json" gmsh
-          exit $LASTEXITCODE
+          # Resolve Gmsh alone; never mix its dedicated index with PyPI.
+          python -m pip install --force-reinstall --no-deps --pre -i https://gmsh.info/python-packages-dev --report "$env:RUNNER_TEMP/gmsh-install.json" gmsh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $gmsh = @((Get-Content -Raw "$env:RUNNER_TEMP/gmsh-install.json" | ConvertFrom-Json).install |
+            Where-Object { $_.metadata.name -eq 'gmsh' })
+          if ($gmsh.Count -ne 1) { throw 'Expected one Gmsh install identity' }
+          $url = [uri]$gmsh[0].download_info.url
+          if ($url.Scheme -ne 'https' -or $url.Host -ne 'gmsh.info') {
+            throw 'Gmsh must come from its official index'
+          }
+          $expected = $gmsh[0].download_info.archive_info.hashes.sha256
+          if ($expected -cnotmatch '^[0-9a-f]{64}$') { throw 'Missing Gmsh wheel SHA256' }
+          $archives = Join-Path $env:RUNNER_TEMP 'gmsh-wheel'
+          python -m pip download --no-index --no-deps --dest $archives $url.AbsoluteUri
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $wheels = @(Get-ChildItem -LiteralPath $archives -Filter '*.whl' -File)
+          if ($wheels.Count -ne 1) { throw 'Expected one original Gmsh wheel' }
+          $actual = (Get-FileHash -LiteralPath $wheels[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw 'Gmsh wheel hash differs from installer report' }
+          $env:RADIA_GMSH_PROVENANCE = Join-Path $env:RUNNER_TEMP 'gmsh-provenance.json'
+          # The source-owned recorder verifies both installed Python and DLL bytes.
+          python -m radia_mcp.gmsh.runtime --wheel $wheels[0].FullName --record $env:RADIA_GMSH_PROVENANCE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import json,os,pathlib; from radia_mcp.gmsh.runtime import qualify_runtime; identity=qualify_runtime(); (pathlib.Path(os.environ['RUNNER_TEMP'])/'gmsh-runtime.json').write_text(json.dumps(identity,indent=2),encoding='utf-8')"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_GMSH_PROVENANCE=$env:RADIA_GMSH_PROVENANCE" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Verify native build provenance contracts
         if: steps.native-impact.outputs.required == 'true' && steps.native-impact.outputs.native_required == 'true'
@@ -790,6 +816,8 @@ jobs:
           path: |
             ${{ runner.temp }}/numerical-plan.json
             ${{ runner.temp }}/gmsh-install.json
+            ${{ runner.temp }}/gmsh-provenance.json
+            ${{ runner.temp }}/gmsh-runtime.json
             ${{ runner.temp }}/sparsesolv-results.xml
             ${{ runner.temp }}/solver-numerics.xml
             ${{ runner.temp }}/solver-heavy-validation/verification.json
