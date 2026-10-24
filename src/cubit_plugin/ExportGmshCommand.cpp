@@ -96,7 +96,7 @@ std::vector<std::string> ExportGmshCommand::get_syntax()
   std::vector<std::string> syntax_list;
   syntax_list.push_back(
     "export gmsh <string:label='filename',help='<filename>'> "
-    "[order <value:label='order',help='<1-5>'>] "
+    "[order <value:label='order',help='<1-3>'>] "
     "[dimension <value:label='dimension',help='<2 or 3>'>] "
     "[overwrite]"
   );
@@ -107,7 +107,7 @@ std::vector<std::string> ExportGmshCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "export gmsh \"filename\" [order {1|2|3|4|5}] [dimension {2|3}] [overwrite]"
+    "export gmsh \"filename\" [order {1|2|3}] [dimension {2|3}] [overwrite]"
   );
   return help;
 }
@@ -116,7 +116,8 @@ std::vector<std::string> ExportGmshCommand::get_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "Export mesh to Gmsh MSH v4.1 format (lab-wide standard).\n"
+    "Gmsh MSH 4.2 export for post-processing and visualization only.\n"
+    "Solver meshes are checked .vol files; their contracts own labels and topology.\n"
     "Block assignment is NOT required.\n"
     "Sidesets exported as surface elements. Nodesets as comments.\n\n"
     "Writes filename.geo, filename.geo.opt, and filename.msh.opt.\n"
@@ -124,7 +125,7 @@ std::vector<std::string> ExportGmshCommand::get_help()
     "Options:\n"
     "  order 1      1st-order elements (default)\n"
     "  order 2      2nd-order (edge mid-nodes)\n"
-    "  order 3-5    Higher order (requires Netgen, wedge limited to order 2)\n"
+    "  order 3      Higher order (requires Netgen; wedge/pyramid limited to order 2)\n"
     "  dimension 3  3D mode (default)\n"
     "  dimension 2  2D mode\n"
     "  overwrite    Overwrite existing file\n"
@@ -143,7 +144,10 @@ bool ExportGmshCommand::execute(CubitCommandData &data)
 
   int order = 1;
   data.get_value("order", order);
-  if (order < 1) order = 1;
+  if (order < 1) {
+    PRINT_ERROR("GMSH export: order must be between 1 and 3.\n");
+    return false;
+  }
   // GMSH export supports order 1-3. Order 4-5 face/volume interior nodes
   // are not reliably extracted by NetgenCurver (missing faces filled with
   // linear interpolation -> negative Jacobians in GMSH). Use .vol for p>=4.
@@ -154,8 +158,8 @@ bool ExportGmshCommand::execute(CubitCommandData &data)
   }
 #ifndef HAVE_NETGEN
   if (order > 1) {
-    PRINT_WARNING("order %d requires Netgen. Falling back to order 1.\n", order);
-    order = 1;
+    PRINT_ERROR("GMSH export: order %d requires Netgen; export aborted.\n", order);
+    return false;
   }
 #endif
 
@@ -169,7 +173,7 @@ bool ExportGmshCommand::write_gmsh(const std::string &filename,
   if (!mesh.extract(order))
     return false;
 
-  bool ok = write_gmsh_v41(filename, mesh);
+  bool ok = write_gmsh_v42(filename, mesh);
 
   if (ok)
     write_gmsh_launch_companions(filename);
@@ -219,7 +223,14 @@ int ExportGmshCommand::gmsh_type(const MeshElement &elem, int order)
   else if (order == 3) {
     if (is_tet)  return 29;   // TET20
     if (is_hex)  return 99;   // HEX32 (serendipity)
-    if (is_pyr)  return 125;  // PYRAMID21 (serendipity)
+    if (is_pyr) {
+      // The reference runtime advertises type 125 but cannot construct it.
+      // Do not emit an artifact which that consumer cannot read, or silently
+      // substitute a different order/element family.
+      PRINT_ERROR("GMSH: pyramid order 3 is not qualified with the current "
+                  "Gmsh 5 consumer; export aborted.\n");
+      return 0;
+    }
     if (is_tri)  return 21;   // TRI10
     if (is_quad) return 39;   // QUAD12 (serendipity)
     if (is_line) return 26;   // LINE4
@@ -227,10 +238,11 @@ int ExportGmshCommand::gmsh_type(const MeshElement &elem, int order)
   // Order 4-5: not supported for GMSH (face/volume node extraction unreliable).
   // Use export netgen for order 4-5.
 
-  // Fallback: WEDGE order 3-5 not supported by GMSH, warn and use linear
+  // The exporter has no verified high-order wedge route. Never label a
+  // linear substitution as the requested high-order export.
   if (is_wed && order >= 3) {
-    PRINT_WARNING("GMSH: Wedge/Prism order %d not supported (GMSH limitation). "
-                  "Exporting as linear.\n", order);
+    PRINT_ERROR("GMSH: exporter does not support Wedge/Prism order %d.\n", order);
+    return 0;
   }
   if (is_tet)  return 4;
   if (is_hex)  return 5;
@@ -346,21 +358,36 @@ int ExportGmshCommand::elem_dim(const MeshElement &elem)
 }
 
 // ========================================================================
-// Gmsh v4.1 writer
+// Gmsh v4.2 writer
 //
 // Format reference: https://gmsh.info/doc/texinfo/gmsh.html#MSH-file-format
 // Sections: $MeshFormat, $PhysicalNames, $Entities, $Nodes, $Elements
 // ========================================================================
-bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
+bool ExportGmshCommand::write_gmsh_v42(const std::string &filename,
                                         const MeshData &mesh)
 {
+  const int order = mesh.order;
+  // Reject before opening/truncating the destination, including an unsupported
+  // high-order wedge; no partial artifact or linear substitution is success.
+  for (const auto &el : mesh.elements) {
+    if (gmsh_type(el, order) == 0) {
+      PRINT_ERROR("GMSH: unsupported block element type; export aborted.\n");
+      return false;
+    }
+  }
+  for (const auto &sg : mesh.sidesets) {
+    for (const auto &face : sg.faces) {
+      if (gmsh_type(face, order) == 0) {
+        PRINT_ERROR("GMSH: unsupported sideset element type; export aborted.\n");
+        return false;
+      }
+    }
+  }
   std::ofstream fid(u8_string_to_path(filename));
   if (!fid.is_open()) {
     PRINT_ERROR("Cannot open file: %s\n", filename.c_str());
     return false;
   }
-
-  int order = mesh.order;
 
   // --- Detect block dimensions and build bounding boxes ---
   struct BlockInfo {
@@ -425,7 +452,7 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
   }
 
   // ---- $MeshFormat ----
-  fid << "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n";
+  fid << "$MeshFormat\n4.2 0 8\n$EndMeshFormat\n";
 
   // ---- $PhysicalNames ----
   int nphys = (int)block_info.size() + (int)sideset_info.size()
@@ -497,18 +524,18 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
             << "1 " << e.phys_tag << "\n";
       } else {
         // curve/surface/volume entity:
-        // tag xMin yMin zMin xMax yMax zMax numPhysicalTags [phys...] numBounding [bound...]
+        // tag xMin yMin zMin xMax yMax zMax numPhysicalTags [phys...] numBounding [bound...] numEmbedded [embedded...]
         fid << e.tag << " "
             << e.xmin << " " << e.ymin << " " << e.zmin << " "
             << e.xmax << " " << e.ymax << " " << e.zmax << " "
-            << "1 " << e.phys_tag << " 0\n";
+            << "1 " << e.phys_tag << " 0 0\n";
       }
     }
   }
   fid << "$EndEntities\n";
 
   // ---- $Nodes ----
-  // v4.1: numEntityBlocks numNodes minNodeTag maxNodeTag
+  // v4.2: numEntityBlocks numNodes minNodeTag maxNodeTag
   // We put all nodes in one entity block per block/entity.
   // Simpler: one big entity block with all nodes.
   int n_total_nodes = mesh.total_node_count();
@@ -553,12 +580,10 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
   std::map<BlockKey, ElemBlock> elem_blocks;
 
   int total_elems = 0;
-  int skipped = 0;
 
   // Block elements
   for (auto &el : mesh.elements) {
     int gtype = gmsh_type(el, order);
-    if (gtype == 0) { skipped++; continue; }
     BlockKey key(el.group_id, gtype);
     auto &blk = elem_blocks[key];
     blk.dim = elem_dim(el);
@@ -572,7 +597,6 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
   for (auto &sg : mesh.sidesets) {
     for (auto &face : sg.faces) {
       int gtype = gmsh_type(face, order);
-      if (gtype == 0) continue;
       BlockKey key(sg.id, gtype);
       auto &blk = elem_blocks[key];
       blk.dim = elem_dim(face);
@@ -619,10 +643,7 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
   fid << "$EndElements\n";
   fid.close();
 
-  if (skipped > 0)
-    PRINT_WARNING("Skipped %d elements with unknown type.\n", skipped);
-
-  PRINT_INFO("Exported Gmsh v4.1 (order %d%s): %s (%d nodes, %d elements, %d blocks)\n",
+  PRINT_INFO("Exported Gmsh v4.2 (order %d%s): %s (%d nodes, %d elements, %d blocks)\n",
              mesh.order, mesh.has_netgen ? ", NetgenCurver" : "",
              filename.c_str(), n_total_nodes, total_elems, (int)elem_blocks.size());
 

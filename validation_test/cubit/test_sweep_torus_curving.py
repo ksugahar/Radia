@@ -79,6 +79,8 @@ print()
 
 def check_jacobians(msh_path):
     """Check for negative Jacobians using GMSH API."""
+    from cubit_mesh_export._gmsh_runtime import preflight_native_mesh_input
+    preflight_native_mesh_input(msh_path)
     try:
         gmsh.initialize()
         gmsh.option.setNumber("General.Verbosity", 0)

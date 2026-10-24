@@ -2,8 +2,8 @@
 Verify order=2 mesh export for 2D circle: area accuracy.
 
 Circle (r=0.05 m, A_exact = pi*r^2 = 7.854e-3 m^2).
-Exports as GMSH/Nastran/VTK order=1 and order=2, computes area
-from TRI3/TRI6 elements, compares with analytical.
+Exports Gmsh MSH4.2/Nastran/VTK post-processing artifacts at order=1 and order=2, computes area
+from TRI3/TRI6 elements, compares with analytical. Solver meshes remain checked .vol.
 
 Usage:
   python validation_test/cubit/test_ho_area_circle.py
@@ -29,7 +29,7 @@ if _plugin_dir and os.path.isdir(_plugin_dir):
     os.environ['CUBIT_PLUGIN_DIR'] = _plugin_dir
 
 import cubit
-cubit.init(['cubit', '-nojournal', '-batch',
+cubit.init(['cubit', '-nojournal', '-batch', '-nographics',
             '-commandplugindir', _plugin_dir or ''])
 
 OUT_DIR = os.path.join(_test_dir, 'ho_area_test')
@@ -90,95 +90,56 @@ def tri6_area_gauss(coords):
 
 
 def parse_gmsh_area(filename):
-    """Parse GMSH v2.2 or v4.1, compute area from TRI3 (type 2) / TRI6 (type 9)."""
+    """Parse only ASCII Gmsh MSH4.2, compute post-processing area from TRI3 (type 2) / TRI6 (type 9)."""
     with open(filename, 'r') as f:
         content = f.read()
     lines = content.split('\n')
 
-    # Detect version
-    version = '2.2'
-    for line in lines:
-        s = line.strip()
-        if s.startswith('4.1') or s.startswith('4.0'):
-            version = '4.1'
-            break
-        elif s.startswith('2.'):
-            version = '2.2'
-            break
+    if len(lines) < 3 or lines[0].strip() != '$MeshFormat' or lines[1].split() != ['4.2', '0', '8'] or lines[2].strip() != '$EndMeshFormat':
+        raise ValueError('expected ASCII Gmsh MSH4.2 with 8-byte tags')
 
     nodes = {}
     elements = []
-
-    if version.startswith('4'):
-        # v4.1 parser
-        i = 0
-        while i < len(lines):
-            if lines[i].strip() == '$Nodes':
-                i += 1
-                header = lines[i].strip().split()
-                num_blocks = int(header[0])
-                i += 1
-                for _ in range(num_blocks):
-                    bh = lines[i].strip().split()
-                    nb = int(bh[3])
-                    i += 1
-                    nids = [int(lines[i+j].strip()) for j in range(nb)]
-                    i += nb
-                    for j, nid in enumerate(nids):
-                        p = lines[i].strip().split()
-                        nodes[nid] = np.array([float(p[0]), float(p[1]), float(p[2])])
-                        i += 1
-                break
+    # MSH4.2 node/element blocks
+    i = 0
+    while i < len(lines):
+        if lines[i].strip() == '$Nodes':
             i += 1
-        i = 0
-        while i < len(lines):
-            if lines[i].strip() == '$Elements':
-                i += 1
-                header = lines[i].strip().split()
-                num_blocks = int(header[0])
-                i += 1
-                for _ in range(num_blocks):
-                    bh = lines[i].strip().split()
-                    etype = int(bh[2])
-                    ne = int(bh[3])
-                    i += 1
-                    for _ in range(ne):
-                        p = lines[i].strip().split()
-                        conn = [int(x) for x in p[1:]]
-                        if etype in (2, 9):
-                            elements.append((etype, conn))
-                        i += 1
-                break
+            header = lines[i].strip().split()
+            num_blocks = int(header[0])
             i += 1
-    else:
-        # v2.2 parser
-        section = None
-        n_count = [0]
-        e_count = [0]
-        for line in lines:
-            s = line.strip()
-            if s.startswith('$'):
-                section = s if not s.startswith('$End') else None
-                continue
-            if section == '$Nodes':
-                if n_count[0] == 0:
-                    n_count[0] = int(s)
-                else:
-                    p = s.split()
-                    if len(p) >= 4:
-                        nodes[int(p[0])] = np.array([float(p[1]), float(p[2]), float(p[3])])
-            elif section == '$Elements':
-                if e_count[0] == 0:
-                    e_count[0] = int(s)
-                else:
-                    p = s.split()
-                    if len(p) >= 4:
-                        etype = int(p[1])
-                        ntags = int(p[2])
-                        conn = [int(x) for x in p[3+ntags:]]
-                        if etype in (2, 9):
-                            elements.append((etype, conn))
-
+            for _ in range(num_blocks):
+                bh = lines[i].strip().split()
+                nb = int(bh[3])
+                i += 1
+                nids = [int(lines[i+j].strip()) for j in range(nb)]
+                i += nb
+                for j, nid in enumerate(nids):
+                    p = lines[i].strip().split()
+                    nodes[nid] = np.array([float(p[0]), float(p[1]), float(p[2])])
+                    i += 1
+            break
+        i += 1
+    i = 0
+    while i < len(lines):
+        if lines[i].strip() == '$Elements':
+            i += 1
+            header = lines[i].strip().split()
+            num_blocks = int(header[0])
+            i += 1
+            for _ in range(num_blocks):
+                bh = lines[i].strip().split()
+                etype = int(bh[2])
+                ne = int(bh[3])
+                i += 1
+                for _ in range(ne):
+                    p = lines[i].strip().split()
+                    conn = [int(x) for x in p[1:]]
+                    if etype in (2, 9):
+                        elements.append((etype, conn))
+                    i += 1
+            break
+        i += 1
     return _compute_tri_area(nodes, elements)
 
 
@@ -312,7 +273,7 @@ def main():
     n_tri, n_nodes = build_circle_mesh(mesh_size)
 
     test_cases = [
-        ("GMSH v4.1", ".msh",
+        ("GMSH MSH4.2", ".msh",
          'export gmsh "{f}" order {o} dimension 2 overwrite',
          parse_gmsh_area),
         ("Nastran", ".bdf",

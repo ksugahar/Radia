@@ -1982,7 +1982,7 @@ Radia Simulink block or Python/MCP
   DesignSpec/configuration.
 - Reusable computation belongs to `radia.*` APIs. A `calc_*.py` entry point is
   a thin configuration and artifact adapter, not a second solver copy.
-- Spatial solver results use GMSH `.msh v4.1`. VTK is retained only as a Cubit
+- Spatial solver results use GMSH `.msh v4.2`. VTK is retained only as a Cubit
   exporter capability and in NGSolve's upstream API.
 
 Common IH labels are `coil`, `workpiece`, `air`, `kelvin`, `source`, `sink`,
@@ -3827,7 +3827,7 @@ API as-is, bypassing the narrow-API cp932 bottleneck.
 ## Applied to all 6 exporters
 
 - `ExportNetgenCommand.cpp` (.vol + .vol.json)
-- `ExportGmshCommand.cpp` (.msh v4.1)
+- `ExportGmshCommand.cpp` (.msh v4.2)
 - `ExportNastranCommand.cpp` (.bdf)
 - `ExportVtkCommand.cpp` (.vtk)
 - `ExportMegCommand.cpp` (.meg — FEMEEM / MAGIC)

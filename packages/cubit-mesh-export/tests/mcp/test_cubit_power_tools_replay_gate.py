@@ -25,7 +25,7 @@ def _public_summary():
         "quality": {"scaled_jacobian": {"minimum": 0.179}},
         "exported_block_volume_ids": [1, 2, 3],
         "gmsh_export": {
-            "mesh_format": "4.1",
+            "mesh_format": "4.2",
             "binary": False,
             "hex_count": 1014,
             "other_volume_count": 0,
@@ -126,7 +126,7 @@ def test_rejects_count_quality_and_export_inconsistency():
     assert result["status"] == "needs_attention"
     assert result["checks"]["owned_counts_match_global_counts"] is False
     assert result["checks"]["quality_rejection_is_measured"] is False
-    assert result["checks"]["gmsh_ascii_v41_matches_produced_mesh"] is False
+    assert result["checks"]["gmsh_ascii_v42_matches_produced_mesh"] is False
 
 
 def test_accepts_official_cleanup_trace_and_observed_failure():

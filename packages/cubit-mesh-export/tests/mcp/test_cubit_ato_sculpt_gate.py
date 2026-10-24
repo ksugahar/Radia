@@ -26,7 +26,7 @@ def _public_summary():
                 "other_volume_count": 0,
                 "source_minimum_quality": 0.18425,
                 "gmsh": {
-                    "mesh_format": "4.1",
+                    "mesh_format": "4.2",
                     "binary": False,
                     "hex_count": 804,
                     "total_volume": 29.76884,
@@ -41,7 +41,7 @@ def _public_summary():
                 "other_volume_count": 0,
                 "source_minimum_quality": 0.233243,
                 "gmsh": {
-                    "mesh_format": "4.1",
+                    "mesh_format": "4.2",
                     "binary": False,
                     "hex_count": 22473,
                     "total_volume": 29.50527,
@@ -132,7 +132,7 @@ def test_rejects_quality_count_volume_and_solver_overclaims():
     result = cubit_levelset_sculpt_hex_validation_gate(bad)
     assert result["status"] == "needs_attention"
     assert result["checks"]["source_quality_crosses_configured_floor"] is False
-    assert result["checks"]["gmsh_ascii_v41_counts_match"] is False
+    assert result["checks"]["gmsh_ascii_v42_counts_match"] is False
     assert result["checks"]["independent_gmsh_volume_closes_to_mbg"] is False
     assert result["checks"]["mesh_ready_without_solver_ready_overclaim"] is False
 

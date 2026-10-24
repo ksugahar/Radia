@@ -1,8 +1,9 @@
 """
-Test Gmsh export via cubit.cmd('export gmsh ... ...').
+Test Gmsh MSH4.2 export for post-processing and visualization.
+Solver meshes remain checked .vol; exported .msh is never solver input.
 
 Tests:
-1. Basic format validation (v4.1)
+1. Basic format validation (MSH4.2)
 2. 1st order 3D elements (Tet, Hex, Wedge, Pyramid)
 3. 2nd order 3D elements
 4. 2D elements with normal orientation
@@ -22,7 +23,7 @@ if _cubit_path and _cubit_path not in sys.path:
 import cubit
 
 # Initialize Cubit
-cubit.init(['cubit', '-nojournal', '-batch'])
+cubit.init(['cubit', '-nojournal', '-batch', '-nographics'])
 
 # Gmsh element type codes
 GMSH_TYPES = {
@@ -51,6 +52,9 @@ def parse_gmsh_file(filename):
 	with open(filename, 'r') as f:
 		content = f.read()
 
+	if content.splitlines()[:3] != ['$MeshFormat', '4.2 0 8', '$EndMeshFormat']:
+		raise ValueError('expected ASCII Gmsh MSH4.2 with 8-byte tags')
+
 	result = {
 		'version': None,
 		'physical_names': [],
@@ -64,7 +68,7 @@ def parse_gmsh_file(filename):
 	lines = content.split('\n')
 	current_section = None
 	section_line_count = 0
-	elem_block_remaining = 0  # v4.1 $Elements: data lines left in current block
+	elem_block_remaining = 0  # MSH4.2 $Elements: data lines left in current block
 
 	for i, line in enumerate(lines):
 		line = line.strip()
@@ -134,7 +138,7 @@ def parse_gmsh_file(filename):
 
 
 def test_format_version():
-	"""Test Gmsh format version (v4.1)."""
+	"""Test Gmsh format version (MSH4.2)."""
 	print("=" * 60)
 	print("Test 1: Gmsh Format Version")
 	print("=" * 60)
@@ -155,14 +159,14 @@ def test_format_version():
 	print(f"  Version: {result['version']}")
 	print(f"  Sections: {result['sections']}")
 
-	assert result['version'] == '4.1', f"Expected version 4.1, got {result['version']}"
+	assert result['version'] == '4.2', f"Expected version 4.2, got {result['version']}"
 	assert 'MeshFormat' in result['sections'], "Missing $MeshFormat section"
 	assert 'PhysicalNames' in result['sections'], "Missing $PhysicalNames section"
 	assert 'Entities' in result['sections'], "Missing $Entities section"
 	assert 'Nodes' in result['sections'], "Missing $Nodes section"
 	assert 'Elements' in result['sections'], "Missing $Elements section"
 
-	print("  PASS: Gmsh v4.1 format validated")
+	print("  PASS: Gmsh MSH4.2 format validated")
 
 	os.remove(msh_file)
 	return True

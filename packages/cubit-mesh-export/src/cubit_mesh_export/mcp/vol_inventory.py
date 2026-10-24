@@ -4900,7 +4900,7 @@ def cubit_embedded_region_mixed_transition_gate(
 
     The gate consumes archived LIVE evidence rather than opening a local file.
     It binds topology, interface conformity, per-family quality, analytic CAD
-    closure, and an ASCII Gmsh 4.1 handoff in one decision.
+    closure, and an ASCII Gmsh 4.2 handoff in one decision.
     """
 
     if not isinstance(summary, Mapping):
@@ -4996,9 +4996,9 @@ def cubit_embedded_region_mixed_transition_gate(
         and volume_error <= float(max_volume_relative_error),
         "swept_embedded_volume_matches_path_area": isfinite(swept_error)
         and swept_error <= float(max_swept_volume_relative_error),
-        "gmsh_ascii_v41_handoff_complete": int(export.get("bytes", 0)) > 0
+        "gmsh_ascii_v42_handoff_complete": int(export.get("bytes", 0)) > 0
         and len(str(export.get("sha256", ""))) == 64
-        and str(header.get("version", "")) == "4.1"
+        and str(header.get("version", "")) == "4.2"
         and int(header.get("file_type", -1)) == 0
         and all(
             header.get(name) is True

@@ -9,7 +9,7 @@ Models:
   - 2D: square tri mesh (surface only)
 
 Combinations:
-  GMSH:    order(1-5) x dim(2D,3D) = 10 per model x 2 = 20 (v4.1 only)
+  GMSH:    order(1-3) x dim(2D,3D), MSH4.2 post-processing only
   Nastran: order(1,2) x dim(2D,3D) x nopyramid(0,1) = 8 per model x 2 = 16
   VTK:     order(1,2) x dim(2D,3D) = 4 per model x 2 = 8
 
@@ -83,7 +83,7 @@ def build_2d_model():
 # File parsers (Layer 2 validation)
 # ================================================================
 def parse_gmsh(filename):
-    """Parse GMSH v4.1 and return {nodes, elements, element_types, physical_names}."""
+    """Parse GMSH v4.2 and return {nodes, elements, element_types, physical_names}."""
     with open(filename, 'r') as f:
         lines = f.readlines()
 
@@ -91,17 +91,20 @@ def parse_gmsh(filename):
               'physical_names': [], 'version': None,
               'declared_elements': 0}
 
-    # Detect version first
-    for line in lines:
-        if line.strip().startswith('4.1') or line.strip().startswith('4.0'):
-            result['version'] = line.strip().split()[0]
-            break
+    try:
+        marker = next(i for i, line in enumerate(lines) if line.strip() == '$MeshFormat')
+        header = lines[marker + 1].split()
+    except (StopIteration, IndexError) as exc:
+        raise ValueError('missing MSH 4.2 MeshFormat header') from exc
+    if header != ['4.2', '0', '8']:
+        raise ValueError(f'expected ASCII MSH 4.2 with 8-byte data, got {header}')
+    result['version'] = '4.2'
 
-    return _parse_gmsh_v41(lines, result)
+    return _parse_gmsh_v42(lines, result)
 
 
-def _parse_gmsh_v41(lines, result):
-    """Parse GMSH v4.1 format."""
+def _parse_gmsh_v42(lines, result):
+    """Parse GMSH v4.2 format."""
     i = 0
     while i < len(lines):
         line = lines[i].strip()
@@ -349,7 +352,7 @@ def generate_test_cases():
     """Generate all format x option combinations."""
     cases = []
 
-    # --- GMSH: order(1-3) x dim(2D,3D) (v4.1 only) ---
+    # --- GMSH: order(1-3) x dim(2D,3D) (v4.2 only) ---
     # GMSH max order is 3; order 4-5 is a documented error (NetgenCurver
     # face/volume interior nodes are unreliable at p>=4 -> negative
     # Jacobians).  Use `export netgen` for order 4-5.  See CLAUDE.md
@@ -357,7 +360,7 @@ def generate_test_cases():
     for model in ['3d', '2d']:
         for order in [1, 2, 3]:
             for dim in [3, 2]:
-                vstr = '4.1'
+                vstr = '4.2'
                 name = f"gmsh_{model}_order{order}_v{vstr}_dim{dim}"
                 fname = os.path.join(OUT_DIR, f"{name}.msh")
 

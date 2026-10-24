@@ -29,7 +29,7 @@ def _public_summary():
         "expected_volume": 576.0,
         "quality": {"scaled_jacobian": {"min": 1.0}},
         "gmsh_export": {
-            "mesh_format": "4.1",
+            "mesh_format": "4.2",
             "binary": False,
             "node_count": 245,
             "hex_count": 144,

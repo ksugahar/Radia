@@ -3,7 +3,7 @@ cubit-mesh-export: Cubit plugin binaries and mesh consistency checking.
 
 The Cubit plugin (cubit_mesh_export.ccm) provides mesh export commands:
   export netgen "model.vol" order N   -- High-order curved .vol
-  export gmsh "model.msh"             -- GMSH v4.1 raw data
+  export gmsh "model.msh"             -- GMSH v4.2 raw data
                                         + model.geo launch companion
   export nastran_bdf "model.bdf"      -- Nastran mesh interchange
 

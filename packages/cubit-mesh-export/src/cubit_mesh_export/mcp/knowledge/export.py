@@ -21,7 +21,7 @@ Path A is the recommended export path. Use `export netgen "mesh.vol" order N` fo
 | Command | Format | Max Order | Notes |
 |---------|--------|-----------|-------|
 | `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | Recommended for NGSolve |
-| `export gmsh "f.msh" order N` | Gmsh v4.1 (.msh + .geo/.opt) | 1-3 | Raw data plus launch companion; open `.geo` |
+| `export gmsh "f.msh" order N` | Gmsh v4.2 (.msh + .geo/.opt) | 1-3 | Raw data plus launch companion; open `.geo` |
 | `export nastran_bdf "f.bdf" order N` | Nastran BDF (.bdf) | 1-2 | Mesh interchange; `nopyramid` for limited consumers |
 | `export vtk "f.vtk" order N` | VTK Legacy (.vtk) | 1-2 | ParaView visualization |
 | `export meg "f.meg"` | ELF/MAGIC MEG | 1 | Block names define ELF prefixes |
@@ -37,7 +37,7 @@ No fallback to HighOrderMesh (removed).
 cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
 # -> produces mesh.vol + mesh.vol.json (CAD reference values)
 
-# Gmsh v4.1 raw display data (Radia post launches the .geo companion)
+# Gmsh v4.2 raw display data (Radia post launches the .geo companion)
 cubit.cmd('export gmsh "mesh.msh" order 3 overwrite')
 # -> mesh.msh + mesh.geo + mesh.geo.opt + mesh.msh.opt
 
@@ -115,14 +115,17 @@ cubit.cmd('export netgen "coil.vol" order 2 overwrite')
 The BEM solver uses BND elements only. Volume elements are ignored.
 """
 
-EXPORT_GMSH_V2 = """
-# Gmsh v4.1 Export (order 1-3)
+EXPORT_GMSH_V42 = """
+# Gmsh MSH 4.2 post-processing support (order 1-3)
 
 ```
 export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
 ```
 
-v4.1 is the only supported GMSH format. No block assignment required.
+v4.2 is the only supported GMSH format. No block assignment required.
+Current geometric order limits: hex/tet/triangle/quad 1-3; wedge/pyramid 1-2.
+Pyramid order 3 is unqualified with the current Gmsh 5 native consumer.
+Unsupported orders fail explicitly; no lower-order substitution.
 For Radia post-processing, treat this `.msh` as raw mesh/data and open the
 generated `.geo` launch recipe. The command should attach `case.geo`,
 `case.geo.opt`, and `case.msh.opt`; a plain `case.opt` is not an Explorer
@@ -158,17 +161,17 @@ cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
 """
 
 EXPORT_GMSH_V4 = """
-# Gmsh v4.1 Format Policy
+# Gmsh v4.2 Format Policy
 
-v4.1 is the only supported GMSH format (v2.2 removed, lab-wide standard).
+v4.2 is the only supported GMSH format (v2.2 removed, lab-wide standard).
 
 ## Data Flow
 
 | Direction | Format | Purpose | Tool |
 |-----------|--------|---------|------|
 | **Input** (-> NGSolve) | **.vol** | Mesh import into NGSolve | `export netgen "mesh.vol" order N` -> `Mesh("mesh.vol")` |
-| **Output** (Cubit ->) | **.msh v4.1 + .geo/.opt** | Mesh visualization/post launch | `export gmsh "mesh.msh" order N` + `.geo` recipe |
-| **Output** (NGSolve ->) | **.msh v4.1 + .geo/.opt** | Field visualization/post launch | `GmshPostExport.write()` + `.geo` recipe |
+| **Output** (Cubit ->) | **.msh v4.2 + .geo/.opt** | Mesh visualization/post launch | `export gmsh "mesh.msh" order N` + `.geo` recipe |
+| **Output** (NGSolve ->) | **.msh v4.2 + .geo/.opt** | Field visualization/post launch | `GmshPostExport.write()` + `.geo` recipe |
 
 The ONLY input format for NGSolve is `.vol`. `.msh` is output-only (Cubit mesh export or NGSolve field visualization).
 The standard file to open for Radia post-processing is `.geo`; `.msh` association is optional raw mesh/data inspection.
@@ -177,8 +180,8 @@ The standard file to open for Radia post-processing is `.geo`; `.msh` associatio
 
 | Method | Format | High-order | Use case |
 |--------|--------|-----------|----------|
-| `write(filename)` | v4.1 | Yes (any order) | Field visualization in GMSH GUI |
-| `write_mesh(filename)` | v4.1 | Yes (any order) | Mesh only (no field data) |
+| `write(filename)` | v4.2 | Yes (any order) | Field visualization in GMSH GUI |
+| `write_mesh(filename)` | v4.2 | Yes (any order) | Mesh only (no field data) |
 
 ## When to Use Which
 
@@ -381,7 +384,7 @@ EXPORT_COMPARISON = """
 | Use Case | Recommended Format | Why |
 |----------|-------------------|-----|
 | NGSolve FEM (any order) | `export netgen "f.vol" order N` | Order 1-5 via ACIS CallbackGeometry |
-| GMSH visualization | `export gmsh "f.msh" order N` | v4.1, order 1-3 |
+| GMSH visualization | `export gmsh "f.msh" order N` | v4.2, order 1-3 |
 | Nastran mesh consumer | `export nastran_bdf "f.bdf" order N` | Order 1-2; validate each consumer independently |
 | ParaView visualization | `export vtk "f.vtk" order N` | Order 1-2 |
 | ELF/MAGIC solver | `export meg "f.meg"` | Order 1, ELF element type labels |
@@ -400,7 +403,7 @@ EXPORT_COMPARISON = """
 | 2D mode | No | Yes | Yes | Yes | Yes (twod/axi) | No |
 | Companion | .vol.json | .geo + .geo.opt launch recipe | - | - | - | d3 |
 
-## export netgen vs Gmsh for NGSolve
+## Checked .vol solver input vs Gmsh post-processing support
 
 | Aspect | export netgen | export gmsh |
 |--------|---------------------|-------------------|
@@ -426,7 +429,7 @@ EXPORT_DECISION_GUIDE = """
   ```
   Works for ANY geometry shape. No STEP files, no OCC, no SetGeomInfo.
 
-- **Alternative (order 1-3)** -> Use `export gmsh` for GMSH visualization:
+- **Post-processing support (order 1-3)** -> Use `export gmsh` for GMSH visualization:
   ```python
   cubit.cmd('export gmsh "mesh.msh" order 3 overwrite')
   # Supports order 1-3 (wedge limited to order 2). Order 4-5: error.
@@ -472,7 +475,7 @@ geometry leads to poor quality or failed meshing.
 
 ## "I want Gmsh visualization"
 
--> Use `export gmsh` for GMSH GUI viewing (v4.1, order 1-3):
+-> Use `export gmsh` for GMSH GUI viewing (v4.2, order 1-3):
   ```python
   cubit.cmd('export gmsh "mesh.msh" order 2 overwrite')
   ```
@@ -683,11 +686,14 @@ not inferred from `.vol` label names.
 """
 
 
+GMSH_POSTPROCESSING_SUPPORT = 'Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.'
+
+
 def get_export_documentation(format: str = "all") -> str:
 	"""Return export documentation by format name."""
 	topics = {
 		"overview": EXPORT_OVERVIEW,
-		"gmsh_v2": EXPORT_GMSH_V2,
+		"gmsh_v42": EXPORT_GMSH_V42,
 		"gmsh_v4": EXPORT_GMSH_V4,
 		"curved": EXPORT_CURVED,
 		"netgen": EXPORT_CURVED,  # Alias: old name redirects to export netgen
@@ -700,9 +706,9 @@ def get_export_documentation(format: str = "all") -> str:
 
 	format = format.lower().strip()
 	if format == "all":
-		return EXPORT_OVERVIEW + "\n\n" + EXPORT_COMPARISON
+		return GMSH_POSTPROCESSING_SUPPORT + "\n\n" + EXPORT_OVERVIEW + "\n\n" + EXPORT_COMPARISON
 	elif format in topics:
-		return topics[format]
+		return GMSH_POSTPROCESSING_SUPPORT + "\n\n" + topics[format]
 	else:
 		return (
 			f"Unknown format: '{format}'. "

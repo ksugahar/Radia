@@ -1,5 +1,20 @@
 # cubit-mesh-export
 
+Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+
+Mesh-only Gmsh quality APIs accept direct ASCII MSH 4.2 files only, not GEO
+programs or indirect Merge/Include inputs. Before any native initialization,
+NodeData/ElementData/ElementNodeData field tags above 2147483647 are rejected
+explicitly without remapping. Mesh-only size_t tags and pure-Python inventory
+reading have no such upper bound; field tag 2^28 remains supported.
+Independent validation can also compare explicit BDF/VTK reference meshes;
+MSH content is preflighted even under those suffixes, and GEO is rejected.
+The independent Gmsh Jacobian/volume calculations are unchanged.
+
+Order-3 pyramid export to Gmsh is refused with an explicit element/order error:
+the native Gmsh 5 consumer cannot construct that type. No lower-order or fake
+element is substituted; pyramid orders 1 and 2 are unchanged.
+
 `cubit-plugin-install` automatically registers the official Coreform
 WorkflowToolbar for each selected profile. No manual toolbar package import is
 required. Existing user toolbars and unrelated preferences are preserved;
@@ -186,7 +201,7 @@ retains its temporary work directory together with `vol-check.json` (or
 
 ```
 export netgen "model.vol" order 3 overwrite                 # NGSolve FEM (.vol)
-export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.1 raw data + .geo launch
+export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.2 raw data + .geo launch
 export nastran_bdf "model.bdf" order 2 overwrite             # Nastran BDF
 export vtk    "model.vtk" order 2 overwrite                 # VTK Legacy
 ```
@@ -200,7 +215,7 @@ physical material data in the receiving solver.
 For Radia post-processing, `.geo` is the standard launch artifact. The Gmsh
 export writes:
 
-- `model.msh`: raw GMSH v4.1 mesh/data container
+- `model.msh`: raw GMSH v4.2 mesh/data container
 - `model.geo`: normal review entry point; it merges `model.msh`
 - `model.geo.opt`: exact Gmsh sidecar auto-loaded when `model.geo` opens
 - `model.msh.opt`: raw mesh/data inspection sidecar when `model.msh` opens
@@ -542,3 +557,48 @@ evaluation hosts do not install Cubit.
 Owner-authored code is licensed under Apache-2.0 from the next releases.
 See LICENSE, NOTICE and THIRD_PARTY_NOTICES.md. Third-party code and assets
 retain their original licenses; previously published artifacts are unchanged.
+
+### Gmsh output boundary
+
+The exported MSH 4.2 file is **post-processing and visualization only**.
+It must never be loaded as a solver mesh or converted to `.vol`.
+Solver input remains a checked `.vol` produced by Cubit or Netgen; that `.vol`
+and its versioned contract remain the authority for labels and topology.
+Gmsh inspection results do not certify a solver input or replace `check-vol`.
+
+### Gmsh 5 development runtime
+
+Install Gmsh **alone** from its official development index in an isolated Python
+3.12 environment, then install the exporter and its other dependencies from PyPI:
+
+```powershell
+python -m pip install --pre -i https://gmsh.info/python-packages-dev gmsh --report gmsh-install.json
+python -m pip install "cubit-mesh-export[mesh-quality]"
+$env:CUBIT_GMSH_INSTALL_REPORT = (Resolve-Path gmsh-install.json).Path
+$gmsh = (Get-Content -Raw gmsh-install.json | ConvertFrom-Json).install | Where-Object { $_.metadata.name -eq 'gmsh' }
+python -m pip download --no-index --no-deps --dest gmsh-wheel $gmsh.download_info.url
+$env:CUBIT_GMSH_WHEEL = (Get-ChildItem gmsh-wheel/*.whl).FullName
+```
+
+The extra declares `gmsh>=5.0.0.dev0`; there is no dated or upper metadata pin.
+The quality runtime requires native major 5 and proves MSH 4.2 write/read support
+in its isolated child before invoking Gmsh. Non-4.2 mesh input is rejected.
+Retain the original wheel selected by the installer report; the runtime verifies
+its full hash and compares the actual wrapper/native payloads against its ZIP
+bytes. Neither installed RECORD nor a reconstructed wheel is the integrity oracle. Qualification
+uses a hash-verified archived official wheel, not an unrecorded index resolution.
+
+The exporter supports geometric orders 1-3 for hex/tet/triangle/quad, and 1-2
+for wedge/pyramid. Unsupported requests fail before creating a partial `.msh`;
+they never substitute a lower-order mesh. Pyramid 3 export remains unqualified:
+the current official reference runtime advertises type 125 but cannot construct
+it. This restriction is a pending adoption disposition, not a physics criterion
+change. Licensed regression execution (with admitted compute resources) is:
+
+```powershell
+python validation_test/cubit/run_gmsh42_hex_order3.py --cubit-exe <console-executable> --plugin <candidate.ccm> --install-report gmsh-install.json --wheel <retained-official.whl> --out <new-job-output>
+```
+
+The executable checks the loaded candidate DLL and uses Gmsh's positive-Jacobian
+contract to expose reversed cubic edge ordering. It does not replace release
+handler acceptance or numerical validation.

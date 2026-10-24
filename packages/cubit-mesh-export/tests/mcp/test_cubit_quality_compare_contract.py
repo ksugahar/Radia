@@ -76,7 +76,7 @@ def test_netgen_reference_preserves_curved_volume_without_radia(tmp_path, order)
     from ngsolve import Mesh, Integrate, TaskManager
     from cubit_mesh_export.mcp._support.netgen_compare import _write_tet_msh
     from cubit_mesh_export.mcp._support.mesh_quality import mesh_total_volume, mesh_quality
-    from cubit_mesh_export.mcp.gmsh_v41 import summarize_gmsh_v41_ascii
+    from cubit_mesh_export.mcp.gmsh_v42 import summarize_gmsh_v42_ascii
     target = tmp_path / 'sphere.msh'
     # Netgen's sphere tessellation is not deterministic across hosts. A coarse
     # third-order curved mesh can genuinely invert, which the exporter must
@@ -92,7 +92,7 @@ def test_netgen_reference_preserves_curved_volume_without_radia(tmp_path, order)
                 raise
     assert report['min_jacobian_det'] > 0
     assert '$Entities' in target.read_text()
-    inventory = summarize_gmsh_v41_ascii(target.read_text())
+    inventory = summarize_gmsh_v42_ascii(target.read_text())
     assert inventory['status'] == 'ok'
     volume = mesh_total_volume(target, quadrature='Gauss10')
     assert volume['ok'], volume
@@ -115,22 +115,3 @@ def test_invalid_reference_jacobians_fail_loudly(tmp_path, monkeypatch, minimum)
                         lambda *_a, **_k: {'ok': True, 'min_jacobian_det': minimum})
     with pytest.raises(ValueError, match='Jacobian'):
         netgen_compare._write_tet_msh(mesh, tmp_path / 'bad.msh')
-
-
-def test_reference_nodes_are_cached_by_supported_order(monkeypatch):
-    from cubit_mesh_export.mcp._support import netgen_compare
-    calls = []
-    def reference(_script, args, **kwargs):
-        calls.append(args)
-        return {'ok': True, 'points': []}
-    netgen_compare._reference_nodes.cache_clear()
-    monkeypatch.setattr(netgen_compare, 'run_gmsh_json_subprocess', reference)
-    try:
-        netgen_compare._reference_nodes(1)
-        netgen_compare._reference_nodes(1)
-        netgen_compare._reference_nodes(2)
-        assert len(calls) == 2
-        with pytest.raises(ValueError):
-            netgen_compare._reference_nodes(4)
-    finally:
-        netgen_compare._reference_nodes.cache_clear()

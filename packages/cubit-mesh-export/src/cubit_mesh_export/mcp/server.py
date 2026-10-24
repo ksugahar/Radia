@@ -24,6 +24,7 @@ import json
 import errno
 import math
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -46,7 +47,7 @@ from cubit_mesh_export.mcp.knowledge.license import get_license_documentation
 from cubit_mesh_export.mcp.knowledge.format_routing import get_format_routing_documentation
 from cubit_mesh_export.mcp.knowledge.coreform_webinars import get_coreform_webinar_documentation
 from cubit_mesh_export.mcp.vol_inventory import cubit_hex_geometry_refinement_gate, cubit_live_mixed_mesh_python_gate as _cubit_live_mixed_mesh_python_gate, cubit_mapped_boundary_layer_shell_gate as _cubit_mapped_boundary_layer_shell_gate, cubit_sweep_along_curve_gate as _cubit_sweep_along_curve_gate, cubit_partitioned_sweep_compatibility_gate as _cubit_partitioned_sweep_compatibility_gate, cubit_pyramid_degenerate_hex_export_gate as _cubit_pyramid_degenerate_hex_export_gate, cubit_webcut_conformal_hex_gate as _cubit_webcut_conformal_hex_gate, cubit_webcut_journal_execution_gate as _cubit_webcut_journal_execution_gate, cubit_helical_partition_mesh_gate as _cubit_helical_partition_mesh_gate, cubit_source_journal_replay_gate as _cubit_source_journal_replay_gate, cubit_boundary_layer_candidate_gate as _cubit_boundary_layer_candidate_gate, cubit_boundary_layer_journal_recovery_gate as _cubit_boundary_layer_journal_recovery_gate, cubit_embedded_region_mixed_transition_gate as _cubit_embedded_region_mixed_transition_gate, cubit_embedded_pipe_source_recovery_gate as _cubit_embedded_pipe_source_recovery_gate, cubit_mixed_order_series_inventory_gate, summarize_netgen_vol_inventory
-from cubit_mesh_export.mcp.gmsh_v41 import gmsh_v41_mixed_order_series_gate, summarize_gmsh_v41_ascii
+from cubit_mesh_export.mcp.gmsh_v42 import gmsh_v42_mixed_order_series_gate, summarize_gmsh_v42_ascii
 from cubit_mesh_export.mcp.nastran_consumer import evaluate_nastran_consumer_contract
 from cubit_mesh_export.mcp._support.lazy_call import lazy_callable
 _cubit_loft_high_order_vol_series_gate = lazy_callable(".high_order_export_gate", "cubit_loft_high_order_vol_series_gate", __package__)
@@ -617,8 +618,8 @@ def cubit_docs(topic: str = "all") -> str:
 	        "all"                    - Overview of all categories
 	        --- Export formats ---
 	        "export_overview"        - All export commands overview
-	        "gmsh_v2"               - Gmsh v4.1 format (export gmsh)
-	        "gmsh_v4"               - Gmsh v4.1 format policy
+	        "gmsh_v42"               - Gmsh v4.2 format (export gmsh)
+	        "gmsh_v4"               - Gmsh v4.2 format policy
 	        "netgen"                - Netgen .vol export (export netgen)
 	        "nastran"               - Nastran BDF (export nastran_bdf + consumer gate)
 	        "exodus"                - Exodus II (Cubit built-in)
@@ -675,6 +676,8 @@ def cubit_docs(topic: str = "all") -> str:
 	        --- Coreform public release/tutorial knowledge ---
 	        "coreform"               - Topic index for public Coreform tutorial/release knowledge
 	        "coreform_release_2026_6" - Cubit 2026.6 highlights and validation actions
+
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 	"""
 	topic = topic.lower().strip()
 
@@ -682,7 +685,7 @@ def cubit_docs(topic: str = "all") -> str:
 		return (
 			"# Cubit Documentation\n\n"
 			"Use topic prefixes to navigate:\n"
-			"- `export_*` - Export format documentation (gmsh_v2, netgen, nastran, etc.)\n"
+			"- `export_*` - Export format documentation (gmsh_v42, netgen, nastran, etc.)\n"
 			"- `scripting_*` - Python scripting guide (blocks, mesh_schemes, etc.)\n"
 			"- `api_*` - API reference (core, geometry_queries, mesh_access, etc.)\n"
 			"- `panel_*` - optional Radia solver handoff conventions\n\n"
@@ -796,14 +799,16 @@ def cubit_nastran_consumer_gate(
 
 
 @mcp.tool()
-def cubit_gmsh_v41_inventory(text: str) -> str:
-	"""Parse inline ASCII Gmsh 4.1 by entity blocks and validate connectivity."""
+def cubit_gmsh_v42_inventory(text: str) -> str:
+	"""Parse inline ASCII Gmsh 4.2 by entity blocks and validate connectivity.
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+	"""
 
 	try:
-		result = summarize_gmsh_v41_ascii(text)
+		result = summarize_gmsh_v42_ascii(text)
 	except (TypeError, ValueError) as exc:
 		result = {
-			"policy": "gmsh_v41_ascii_inventory_v1",
+			"policy": "gmsh_v42_ascii_inventory_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}
@@ -811,20 +816,22 @@ def cubit_gmsh_v41_inventory(text: str) -> str:
 
 
 @_validation.tool()
-def cubit_gmsh_v41_mixed_order_gate(
+def cubit_gmsh_v42_mixed_order_gate(
 	rows: list[dict],
 	authoritative_vol_inventory: dict | None = None,
 ) -> str:
-	"""Gate Gmsh 4.1 mixed topology/order while retaining .vol label authority."""
+	"""Gate Gmsh 4.2 mixed topology/order while retaining .vol label authority.
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+	"""
 
 	try:
-		result = gmsh_v41_mixed_order_series_gate(
+		result = gmsh_v42_mixed_order_series_gate(
 			rows,
 			authoritative_vol_inventory=authoritative_vol_inventory,
 		)
 	except (TypeError, ValueError) as exc:
 		result = {
-			"policy": "gmsh_v41_mixed_order_series_gate_v1",
+			"policy": "gmsh_v42_mixed_order_series_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}
@@ -1039,7 +1046,9 @@ def cubit_mesh_carrying_straight_sweep_gate(
 	min_scaled_jacobian: float = 0.2,
 	volume_relative_tolerance: float = 1.0e-12,
 ) -> str:
-	"""Gate a straight include_mesh sweep, topology lattice, and Gmsh export."""
+	"""Gate a straight include_mesh sweep, topology lattice, and Gmsh export.
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+	"""
 	try:
 		result = _cubit_mesh_carrying_straight_sweep_gate(
 			summary,
@@ -1109,7 +1118,9 @@ def cubit_levelset_sculpt_hex_validation_gate(
 	quality_floor: float = 0.2,
 	volume_relative_tolerance: float = 0.03,
 ) -> str:
-	"""Gate coarse/fine Sculpt all-hex quality and Gmsh volume closure."""
+	"""Gate coarse/fine Sculpt all-hex quality and Gmsh volume closure.
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+	"""
 	try:
 		result = _cubit_levelset_sculpt_hex_validation_gate(
 			summary,
@@ -1284,7 +1295,9 @@ def cubit_embedded_region_mixed_transition_gate(
 	max_volume_relative_error: float = 1.0e-5,
 	max_swept_volume_relative_error: float = 5.0e-4,
 ) -> str:
-	"""Gate hex-led tet/pyramid recovery, quality, interfaces, and Gmsh 4.1."""
+	"""Gate hex-led tet/pyramid recovery, quality, interfaces, and Gmsh 4.2.
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+	"""
 	try:
 		result = _cubit_embedded_region_mixed_transition_gate(
 			summary,
@@ -1359,7 +1372,9 @@ def cubit_helical_conductor_source_gate(summary: dict) -> str:
 
 @_validation.tool()
 def cubit_symmetric_swept_mixed_mesh_gate(summary: dict) -> str:
-	"""Gate symmetric CAD, hex/pyramid/tet topology, quality, and Gmsh closure."""
+	"""Gate symmetric CAD, hex/pyramid/tet topology, quality, and Gmsh closure.
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+	"""
 	try:
 		result = _cubit_symmetric_swept_mixed_mesh_gate(summary)
 	except (TypeError, ValueError) as exc:
@@ -1435,7 +1450,9 @@ def cubit_mixed_transition_source_gate(
 
 @_validation.tool()
 def cubit_pyramid_mixed_export_gate(summary: dict) -> str:
-	"""Gate explicit hex/pyramid/tet preservation in Gmsh and Nastran."""
+	"""Gate explicit hex/pyramid/tet preservation in Gmsh and Nastran.
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+	"""
 	try:
 		result = _cubit_pyramid_mixed_export_gate(summary)
 	except (TypeError, ValueError) as exc:
@@ -1467,7 +1484,9 @@ def cubit_structured_hex_lattice_gate(
 	min_scaled_jacobian: float = 0.2,
 	max_volume_relative_error: float = 1.0e-10,
 ) -> str:
-	"""Gate structured all-hex counts, quality, and Gmsh volume closure."""
+	"""Gate structured all-hex counts, quality, and Gmsh volume closure.
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+	"""
 	try:
 		result = _cubit_structured_hex_lattice_gate(
 			summary,
@@ -1652,6 +1671,8 @@ def netgen_workflow_guide(workflow: str = "overview") -> str:
 	        "gmsh_2nd_order"    - Alternative: Gmsh 2nd order (simplest)
 	        "troubleshooting"   - Common errors and fixes
 	        "deleted_apis"      - Migration guide from old APIs
+
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 	"""
 	return get_netgen_documentation(workflow)
 
@@ -1674,6 +1695,8 @@ def netgen_code_example(shape: str = "cylinder") -> str:
 	        "complex_named"  - Boolean geometry with export netgen
 	        "gmsh_2nd_order" - Gmsh 2nd order alternative (simplest)
 	        "poisson_sphere" - Complete FEM: Poisson equation on sphere
+
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 	"""
 	shape = shape.lower().strip()
 	if shape in EXAMPLES:
@@ -2085,7 +2108,6 @@ def generate_cubit_script(workflow: str = "tet_netgen") -> str:
 	    workflow: Script template to generate. Options:
 	        "tet_netgen"       - Tet mesh -> export netgen with ACIS curving
 	        "tet_netgen_named" - Complex geometry with export netgen
-	        "tet_gmsh"         - Tet mesh -> Netgen .vol 2nd order (simplest)
 	        "hex_netgen"       - Hex mesh -> export netgen with curving
 	"""
 	workflow = workflow.lower().strip()
@@ -2349,7 +2371,9 @@ def _cubit_path_dispatch(path: Path) -> str:
         return f'import step "{abs_path}"'
     if suffix in (".brep", ".brp"):
         return f'import acis "{abs_path}"'
-    if suffix in (".msh", ".vol", ".g", ".e", ".exo"):
+    if suffix == ".msh" or path.name.lower().endswith(".msh.gz"):
+        raise ValueError("Gmsh MSH is post-processing only; solver meshes must be checked .vol files, never converted from .msh")
+    if suffix in (".vol", ".g", ".e", ".exo"):
         return f'import mesh "{abs_path}"'
     raise ValueError(f"Unsupported extension for Cubit viewer: {suffix}")
 
@@ -2363,7 +2387,8 @@ def cubit_stage(path: str = "", extra_commands: list = None,
 
 	Supported inputs: .jou (playback), .py (play — Cubit-side Python),
 	.step/.stp (import step), .brep (import acis),
-	.msh/.vol/.g/.e/.exo (import mesh).
+	.vol/.g/.e/.exo (import mesh). Gmsh .msh is post-processing-only output,
+	never staged as an input that could be converted to solver .vol.
 
 	Args:
 	    path: file to load. Leave empty to run only `extra_commands`.
@@ -2377,10 +2402,6 @@ def cubit_stage(path: str = "", extra_commands: list = None,
 		deadline = _command_timeout(timeout_s)
 	except ValueError as exc:
 		return json.dumps(_error_payload("input", str(exc), kind="input"))
-	sess, err = _cubit_session_or_error()
-	if err is not None:
-		return err
-
 	cmds = []
 	if path:
 		p = _P(path)
@@ -2399,6 +2420,12 @@ def cubit_stage(path: str = "", extra_commands: list = None,
 	if not cmds:
 		return json.dumps({"status": "error", "stage": "input", "kind": "input",
 		                   "error": "Either `path` or `extra_commands` is required."})
+
+	if any(re.search(r"(?i)\bimport\s+(?:mesh|gmsh)\b.*\.msh\b", command) for command in cmds):
+		return json.dumps(_error_payload("input", "Gmsh .msh is post-processing only; solver meshes are checked .vol", kind="input"))
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
 
 	try:
 		r = sess.call("cmd", cmds, timeout_s=deadline)
@@ -3239,7 +3266,7 @@ def cubit_suggest_next(goal: str = "mesh") -> str:
 	elif g == "export":
 		if not any_mesh:
 			add("mesh volume all", "No mesh yet — create one before export.")
-		add('export mesh "<path>.msh" overwrite', "Gmsh .msh (preferred lab format).")
+		add('export gmsh "<path>.msh" order 2 overwrite', "Gmsh MSH 4.2 post-processing and visualization support; solver meshes are checked .vol.")
 		add('export abaqus "<path>.inp" overwrite', "Abaqus .inp for FEM.")
 		add('export genesis "<path>.g" overwrite', "Exodus .g for Sierra / Netgen pipelines.")
 		add('export step "<path>.step" overwrite', "Geometry-only STEP (for round-trip CAD).")
@@ -3714,7 +3741,7 @@ def _run_batch(step_path: str | None, commands: list[str],
 
 def _netgen_mesh_to_msh(step_path: Path, maxh: float, out_msh: Path,
                         order: int = 1) -> dict:
-	"""STEP -> Netgen curved tetrahedra -> Gmsh 4.1, without Radia."""
+	"""STEP -> Netgen curved tetrahedra -> Gmsh 4.2, without Radia."""
 	from ._support.netgen_compare import step_to_msh
 	return step_to_msh(step_path, maxh, out_msh, order)
 
@@ -3777,14 +3804,14 @@ def cubit_netgen_quality_compare(step_path: str,
 	NEUTRAL referee.
 
 	Routes (headless throughout, per the driving policy):
-	  * netgen     — STEP -> Netgen tet mesh (maxh) -> .msh v4.1
+	  * netgen     — STEP -> Netgen tet mesh (maxh) -> .msh v4.2
 	  * cubit_tet  — batch Cubit, `volume all scheme tetmesh`, size
 	  * cubit_hex  — batch Cubit, default scheme ladder (sweep/map where
 	                 possible), size
 
 	Referee: GMSH minSICN via the radia-gmsh quality engine
 	(`cubit_mesh_export.mcp._support.mesh_quality.mesh_quality`) evaluated on each
-	exported `.msh v4.1` -- ONE metric implementation for every mesher,
+	exported `.msh v4.2` -- ONE metric implementation for every mesher,
 	so numbers are directly comparable. minSICN is defined for tets AND
 	hexes, but comparing across element FAMILIES is still
 	apples-to-oranges for meshing-difficulty reasons; the honest
@@ -3838,6 +3865,8 @@ def cubit_netgen_quality_compare(step_path: str,
 	        geometry the referee's min_jacobian_ratio becomes a real
 	        curvature-distortion diagnostic (1.0 for straight elements).
 	    out_dir: where to write the .msh files (default: beside STEP).
+
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 	"""
 	p = Path(step_path)
 	if not p.is_absolute():
@@ -4570,6 +4599,8 @@ def cubit_stl_to_vol(stl_path: str,
 	    pillow_surfaces: Sculpt pillow layers at surfaces (hex only).
 	    defeature/min_vol_cells: Sculpt defeaturing stage / minimum cells
 	        per disconnected component (hex only; drops topopt debris).
+
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 	"""
 	p = Path(stl_path)
 	if not p.is_absolute():
@@ -4825,6 +4856,8 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 	(fine grids), and ``vfrac_difference`` never triggers refinement --
 	resolution control on this route is the lattice ``cells`` plus the
 	``closure_miss_diagnosis`` feedback above.
+
+	Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 	"""
 	import subprocess as sp
 
