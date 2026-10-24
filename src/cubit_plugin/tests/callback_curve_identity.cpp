@@ -4,6 +4,7 @@
 // real RefEdge/ACIS integration remains the licensed export acceptance lane.
 #include "callbackgeom.hpp"
 #include "CurveIdentity.hpp"
+#include "NetgenCurver.hpp"
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -20,12 +21,17 @@ template<class F> static void rejected(F action) {
 
 int main() {
   try {
-    cubit_mesh_export::CurveIdentity identities;
-    identities.add(31, {7, 101, 3, 4});
-    identities.add(32, {8, 202, 3, 4});
+    Mesh mesh;
+    const int first = mesh.AddEdgeDescriptor(EdgeDescriptor(31, 3, 4));
+    const int second = mesh.AddEdgeDescriptor(EdgeDescriptor(32, 3, 4));
+    auto identities = NetgenCurver::curve_identities(mesh, {{101, first}, {202, second}});
+    require(identities.lookup(31, 3, 4).curve == 101, "production mapping lost first curve");
+    require(identities.lookup(32, 3, 4).curve == 202, "production mapping lost second curve");
     rejected([&] { identities.add(31, {9, 303, 3, 4}); });
     rejected([&] { identities.lookup(-1, 3, 4); });
     rejected([&] { identities.lookup(31, 3, 5); });
+    rejected([&] { NetgenCurver::curve_identities(mesh, {{101, 0}}); });
+    rejected([&] { NetgenCurver::curve_identities(mesh, {{101, first}, {202, first}}); });
     auto surface = [](int, double x, double y, double z, double, double, bool) {
       return std::make_tuple(x, y, z, 0.0, 0.0);
     };

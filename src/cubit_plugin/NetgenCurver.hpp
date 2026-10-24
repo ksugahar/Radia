@@ -31,6 +31,7 @@ namespace netgen {
   class CallbackGeometry;
   class NetgenGeometry;
 }
+namespace cubit_mesh_export { class CurveIdentity; }
 
 // Edge key for deduplication (same as HighOrderMesh)
 struct HoEdgeKey {
@@ -98,6 +99,11 @@ public:
   // Reads linear mesh from MeshData; geometry queries via CubitInterface.
   // Returns false on failure.
   bool build(const MeshData &md, int order);
+
+  // Shared production mapping entry; also exercised without loading Cubit CAD.
+  static cubit_mesh_export::CurveIdentity curve_identities(
+      const netgen::Mesh & mesh, const std::unordered_map<int, int> & curve_descriptors);
+  std::string edge_diagnostics_json() const;
 
   // Total node count (original + high-order nodes)
   int get_num_nodes() const { return total_nodes_; }
@@ -220,6 +226,9 @@ private:
   mutable long diag_edge_calls_ = 0;
   mutable long diag_edge_rejects_ = 0;
   mutable double diag_edge_max_disp_ = 0.0;
+  mutable long diag_edge_failures_ = 0;
+  mutable std::string diag_edge_worst_;
+  std::string last_error_;
   // Reject thresholds (mm). If projection displaces the query point by more
   // than this, fall back to identity (linear interpolation will pick up the
   // edge in the final pass).

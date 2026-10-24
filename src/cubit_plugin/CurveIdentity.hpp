@@ -18,7 +18,9 @@ public:
   void add(int edge, CurveBinding binding) {
     if (edge < 1 || binding.descriptor < 1 || binding.curve < 1 ||
         binding.face1 < 1 || binding.face2 < 1)
-      throw std::invalid_argument("Invalid Netgen/Cubit curve identity");
+      throw std::invalid_argument("Invalid Netgen/Cubit curve identity: edge=" + std::to_string(edge) +
+          " descriptor=" + std::to_string(binding.descriptor) + " curve=" + std::to_string(binding.curve) +
+          " faces=" + std::to_string(binding.face1) + "," + std::to_string(binding.face2));
     if (!bindings.emplace(edge, binding).second)
       throw std::invalid_argument("Ambiguous Netgen geometric edge " + std::to_string(edge));
   }
