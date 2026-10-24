@@ -55,7 +55,7 @@ with the agent-facing guidance in `AGENTS.md` / `CLAUDE.md`.
 
 - Cubit export focuses on Coreform Cubit 2025.12 and high-order curved mesh
   quality.
-- `.geo` is the standard human-facing Gmsh post route; `.msh v4.1` remains the
+- `.geo` is the standard human-facing Gmsh post route; `.msh v4.2` remains the
   durable headless validation artifact.
 - Mesh evaluation demonstrations belong in result-bearing docs notebooks, not
   in transient GUI menu commands.

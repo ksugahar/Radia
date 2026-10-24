@@ -69,7 +69,7 @@ solver mode determines which are required.
   entry point only parses configuration, calls that API, and writes artifacts.
 - A Cubit toolbar callback must not contain electromagnetic or thermal solver
   logic.
-- Production spatial results are GMSH `.msh v4.1`; VTK remains available only
+- Production spatial results are GMSH `.msh v4.2`; VTK remains available only
   inside `cubit-mesh-export` and NGSolve's upstream API.
 
 ## Verification

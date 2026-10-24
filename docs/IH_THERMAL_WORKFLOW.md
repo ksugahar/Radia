@@ -96,7 +96,7 @@ radia-ih-assemble workpiece.vol coil.vol -o native_ih.json
 - Every solver-bound mesh must pass its versioned
   `radia.vol-label-contract.v1` contract before initialization.
 - The `cubit-mesh-export.vol-check.v1` reports, `run.log`, `result.json`, and
-  GMSH `.msh v4.1` post-processing fields stay in the run directory.
+  GMSH `.msh v4.2` post-processing fields stay in the run directory.
 
 The shape-only assembler supports fixed linear material operators. It declares
 rotation disabled when a conservative transport operator is unavailable; it

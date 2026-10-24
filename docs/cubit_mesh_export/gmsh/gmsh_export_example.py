@@ -1,12 +1,12 @@
 """
 Gmsh Export Example
 
-Demonstrates exporting Cubit mesh to Gmsh v4.1 format
+Demonstrates exporting Cubit mesh to Gmsh v4.2 format
 using the export gmsh command.
 
 Output files:
-    - cube.msh            : Gmsh v4.1 format (1st order)
-    - cube_2nd_order.msh  : Gmsh v4.1 format (2nd order)
+    - cube.msh            : Gmsh v4.2 format (1st order)
+    - cube_2nd_order.msh  : Gmsh v4.2 format (2nd order)
 """
 
 import sys
@@ -34,8 +34,8 @@ cubit.cmd("block 1 name 'solid'")
 cubit.cmd("block 2 add tri all")
 cubit.cmd("block 2 name 'boundary'")
 
-# Export to Gmsh v4.1 (default)
-print("\nExporting to Gmsh v4.1...")
+# Export to Gmsh v4.2 (default)
+print("\nExporting to Gmsh v4.2...")
 cubit.cmd('export gmsh "cube.msh" overwrite')
 print("  Created: cube.msh")
 

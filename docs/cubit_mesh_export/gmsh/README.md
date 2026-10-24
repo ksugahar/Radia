@@ -2,17 +2,15 @@
 
 Export Cubit mesh to Gmsh format (.msh).
 
-## Why GMSH v4.1
+## Why GMSH v4.2
 
-The Radia Cubit plugin emits GMSH v4.1 only. v4.1 is the modern, entity-block
-format used by current solvers:
+The Radia Cubit plugin emits GMSH v4.2 only, for post-processing with Gmsh 5:
 
 - Includes the `$Entities` section (geometry topology: points, curves,
   surfaces, volumes)
 - Groups nodes and elements by entity block, which preserves the
   geometry-to-mesh association
 - Supports explicit DIM control for 2D meshes (normal orientation)
-- Is the default format for FEniCS and other modern FEM/BEM tools
 
 **For NGSolve computation**, use `export netgen "mesh.vol"` instead of
 .msh. The .vol format supports arbitrary-order curving (1-5) and preserves
@@ -27,7 +25,7 @@ import cubit
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
-# Gmsh v4.1 export
+# Gmsh v4.2 export
 cubit.cmd('export gmsh "mesh.msh" overwrite')
 ```
 
@@ -58,7 +56,7 @@ See the [mesh guide](../../visualization/MESH_GUIDE.md) for the Netgen/NGSolve w
 
 ## DIM Parameter
 
-The v4.1 format supports dimension control:
+The v4.2 format supports dimension control:
 
 ```python
 # Auto-detect dimension (default)
@@ -75,8 +73,8 @@ cubit.cmd('export gmsh "solid.msh" dimension 3 overwrite')
 
 | File | Description |
 |------|-------------|
-| `cube.msh` | Gmsh v4.1 format (1st order) |
-| `cube_2nd_order.msh` | v4.1 with 2nd order elements (TET10, TRI6) |
+| `cube.msh` | Gmsh v4.2 format (1st order) |
+| `cube_2nd_order.msh` | v4.2 with 2nd order elements (TET10, TRI6) |
 
 ## Regenerate Samples
 

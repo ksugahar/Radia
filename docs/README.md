@@ -76,7 +76,7 @@ They are not timing competitions or release-acceptance certificates.
 Human–AI collaboration uses Cubit for CAD/mesh work and the masked Simulink
 block library for application models. AI-driven Cubit operations run headlessly;
 geometry, journals, meshes and checks provide the handoff to human work.
-Spatial application results are durable GMSH `.msh v4.1` artifacts in the run
+Spatial application results are durable GMSH `.msh v4.2` artifacts in the run
 directory; interactive WebGUI scenes support the feature explanation.
 
 ### References in Notebooks
@@ -167,7 +167,7 @@ has already passed the bibliography audit.
 ## Visualization
 
 - [MESH_GUIDE.md](visualization/MESH_GUIDE.md) - Mesh generation workflows (Cubit + Netgen)
-- [gmsh_animation/gmsh_animation.ipynb](gmsh_animation/gmsh_animation.ipynb) - Result-bearing GMSH v4.1 `$NodeData` displacement-animation artifact inspection.
+- [gmsh_animation/gmsh_animation.ipynb](gmsh_animation/gmsh_animation.ipynb) - Result-bearing GMSH v4.2 `$NodeData` displacement-animation artifact inspection.
 - [figures/lab_diagrams/README.md](figures/lab_diagrams/README.md) - Docs-owned TikZ source templates for lab flowcharts and concept diagrams.
 
 ## Electric Machines
@@ -180,7 +180,7 @@ has already passed the bibliography audit.
 - [Vol_vs_Step_Labels.md](cubit/Vol_vs_Step_Labels.md) - Mesh format routing: .vol carries labels; .step is geometry-only. Why cubit-mesh-export is the single chokepoint for labeled .vol.
 - [Cubit_Element_Order.md](cubit/Cubit_Element_Order.md) - Element order control (1st/2nd order) in Coreform Cubit
 - [export_NetgenMesh.md](cubit/export_NetgenMesh.md) - Netgen .vol export (order 1-5, recommended)
-- [export_Gmsh.md](cubit/export_Gmsh.md) - Gmsh v4.1 export (order 1-3)
+- [export_Gmsh.md](cubit/export_Gmsh.md) - Gmsh v4.2 export (order 1-3)
 - [export_vtk.md](cubit/export_vtk.md) - VTK Legacy export (order 1-2)
 - [export_Nastran.md](cubit/export_Nastran.md) - Nastran BDF export (order 1-2)
 - [export_meg.md](cubit/export_meg.md) - MEG export (Gifu Univ. FEM mesh format)
@@ -192,7 +192,7 @@ has already passed the bibliography audit.
 
 The following features were removed; their docs were deleted to prevent confusion:
 
-- **Nastran BDF input** (Radia-side `.bdf` mesh import): removed. Use Netgen `.vol` (preferred) or GMSH v4.1 as the mesh interchange format into NGSolve. Note: **Cubit-side Nastran BDF export** (`export nastran_bdf`, [export_Nastran.md](cubit/export_Nastran.md)) is unaffected and still ships. The former `export jmag_nastran` alias was retired; the wheel gate fails if that token reappears in the compiled `.ccm`.
+- **Nastran BDF input** (Radia-side `.bdf` mesh import): removed. Use checked Netgen `.vol` as the solver mesh input; Gmsh 5 / MSH 4.2 is the post-processing output. Note: **Cubit-side Nastran BDF export** (`export nastran_bdf`, [export_Nastran.md](cubit/export_Nastran.md)) is unaffected and still ships. The former `export jmag_nastran` alias was retired; the wheel gate fails if that token reappears in the compiled `.ccm`.
 - **Scattered-field Robin RHS** (`docs/FEM_SCATTERED_FIELD.md`): removed 2026-04-24; the formulation could not be made stable enough for production coupling.  The total-field formulation in `calc_fem_kelvin.py` is the shipped path.
 
 See [CHANGELOG.md](../CHANGELOG.md) for the full removal history per release.

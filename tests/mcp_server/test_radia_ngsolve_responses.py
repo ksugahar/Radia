@@ -149,7 +149,7 @@ class TestNgsolveKnowledge:
         assert "Do not call a cross-code artifact \"analytic\"" in body
         assert "radia-vol-viewer" not in body
         assert "check-vol" in body
-        assert "GMSH `.msh v4.1`" in body
+        assert "GMSH `.msh v4.2`" in body
         assert "contains coefficients but no mesh" in body
         assert "GYP-001..010" in body
         assert "struck drum" in body

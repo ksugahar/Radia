@@ -149,8 +149,10 @@ print("Vertices:", mesh.nv)
 
 ## Physical Groups (Material Regions and Boundaries)
 
-Gmsh meshes use "physical groups" to define material regions (volumes)
-and boundary conditions (surfaces). These map to NGSolve materials/boundaries.
+The checked solver `.vol` defines NGSolve material regions and boundaries.
+Gmsh 5 / MSH 4.2 physical groups label the post-processing output; they are
+not a solver-mesh import route. Preserve the solver region names in exported
+physical groups when the exporter supports the selected scope.
 
 ### Typical Physical Group Setup for Induction Heating
 

@@ -110,5 +110,5 @@ cubit.cmd('export vtk "sphere_o2.vtk" order 2 overwrite')
 
 ## See Also
 
-- [export_Gmsh.md](export_Gmsh.md) — Gmsh v4.1 export (order 1-3)
+- [export_Gmsh.md](export_Gmsh.md) — Gmsh v4.2 export (order 1-3)
 - [Function_Reference.md](Function_Reference.md) — All plugin commands

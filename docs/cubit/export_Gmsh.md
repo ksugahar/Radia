@@ -1,6 +1,6 @@
 # export_Gmsh
 
-Export mesh to Gmsh v4.1 format with high-order element support (order 1-3).
+Export mesh to Gmsh v4.2 format with high-order element support (order 1-3).
 
 ## Syntax
 
@@ -72,9 +72,9 @@ Sidesets are exported as surface elements. Nodesets as point elements.
 
 ## File Format
 
-The output uses Gmsh v4.1 format:
+The output uses Gmsh v4.2 format:
 
-1. **$MeshFormat** - Version identifier (4.1 0 8)
+1. **$MeshFormat** - Version identifier (4.2 0 8)
 2. **$PhysicalNames** - Block names with dimensions
 3. **$Entities** - Geometry topology (vertices, curves, surfaces, volumes)
 4. **$Nodes** - Node coordinates grouped by entity
