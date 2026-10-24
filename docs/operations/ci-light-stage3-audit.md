@@ -305,3 +305,13 @@ the prior job declaration reproduces the prior seal. The new audit_digest is
 `5ff1ee6e101a637220e585e2de887bf925839516c66710348d08e86d0e61f6d2`.
 Projection allocation checks belong to hosted policy contracts and do not add
 MATLAB, a GPU, a compiler or a native build to the light execution closure.
+
+
+## Historical trace provenance (2026-10-24)
+
+The trace-reuse contract now verifies the historical Git blob and marks current
+runner applicability stale; it uses standard-library Git inspection, preserves
+the historical numerical gates, and adds no solver or GPU imports. Recomputing
+with the prior executable source and unchanged declaration reproduces the old
+seal; the reviewed closure digest is `df15b00bfccb0056284d27f6a5259e8401102aa3ec5542299cca272f4c4bf4a4`.
+The shared precheck repeats F2 in its isolated lightweight environment.

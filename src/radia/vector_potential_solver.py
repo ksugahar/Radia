@@ -1710,7 +1710,7 @@ class VectorPotentialSolver:
         their own vertices, so each row is an edge-vertex pair as AMS requires.
         """
         from ngsolve import H1, HCurl, Periodic, ConvertOperator, grad
-        from ngsolve.la import SparseMatrixdouble
+        from radia.ngsolve_sparse import real_sparse_matrix_type
 
         h1 = Periodic(H1(self.mesh, order=1))
         u = h1.TrialFunction()
@@ -1738,7 +1738,7 @@ class VectorPotentialSolver:
         rows = np.concatenate([rows, prow[fill]])
         cols = np.concatenate([cols, pcol[fill]])
         vals = np.concatenate([vals, pval[fill]])
-        matrix = SparseMatrixdouble.CreateFromCOO(
+        matrix = real_sparse_matrix_type().CreateFromCOO(
             rows.tolist(), cols.tolist(), vals.tolist(), fes.ndof, h1.ndof)
         return matrix, int(h1.ndof)
 

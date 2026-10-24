@@ -18,6 +18,7 @@ import time
 
 
 def main():
+    from radia.ngsolve_sparse import real_sparse_matrix_type
     p=argparse.ArgumentParser(__doc__)
     p.add_argument('--runtime-source',type=Path,required=True)
     p.add_argument('--out',type=Path,required=True)
@@ -131,7 +132,7 @@ def main():
             ii,jj,vv=a.mat.COO();full=coo_matrix((vv,(ii,jj)),shape=(fes.ndof,fes.ndof)).tocsr()
             compact=full[mask][:,mask].tocoo()
             if n>np.iinfo(np.int32).max or compact.nnz>np.iinfo(np.int32).max:raise OverflowError('Native CSR int32 limit exceeded')
-            matrix=ng.la.SparseMatrixdouble.CreateFromCOO(compact.row.tolist(),compact.col.tolist(),compact.data.tolist(),n,n)
+            matrix=real_sparse_matrix_type().CreateFromCOO(compact.row.tolist(),compact.col.tolist(),compact.data.tolist(),n,n)
         record['operator_route']='native-ngsolve' if matrix is None else 'compact-export'
         record['mesh_and_matrix_seconds']=time.perf_counter()-started
         prepare_started=time.perf_counter()
@@ -289,9 +290,10 @@ def main():
                     from scipy.sparse import coo_matrix,diags
                     from scipy.sparse.linalg import norm as sparse_norm
                     def csr(original):
+                        from radia.ngsolve_sparse import real_sparse_matrix_type
                         rows,cols,vals=original.COO()
                         result=coo_matrix((np.asarray(vals),(np.asarray(rows),np.asarray(cols))),shape=(original.height,original.width)).tocsr()
-                        if isinstance(original,ng.la.SparseMatrixSymmetricdouble):result=result+result.T-diags(result.diagonal())
+                        if isinstance(original,real_sparse_matrix_type(symmetric=True)):result=result+result.T-diags(result.diagonal())
                         return result
                     locations={};ranges=[saddle_space.Range(i).start for i in (0,1)]
                     entities=((ng.VERTEX,mesh.vertices),(ng.EDGE,mesh.edges),(ng.FACE,mesh.faces))

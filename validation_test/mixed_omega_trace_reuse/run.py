@@ -1,3 +1,4 @@
+from radia.ngsolve_sparse import real_sparse_matrix_type
 import os
 os.environ.update(OMP_NUM_THREADS='8',OPENBLAS_NUM_THREADS='1',MKL_NUM_THREADS='1')
 import argparse,ast,hashlib,json,platform,sys,time
@@ -34,7 +35,7 @@ for maxh in (.2,.12,.09):
         matrix=result['system']['bilinear_form'].mat;fes=result['fes']
         rows,cols,values=matrix.COO()
         assembled=coo_matrix((np.asarray(values),(np.asarray(rows),np.asarray(cols))),shape=(fes.ndof,fes.ndof)).tocsr()
-        if isinstance(matrix,ng.la.SparseMatrixSymmetricdouble):
+        if isinstance(matrix,real_sparse_matrix_type(symmetric=True)):
             assembled=assembled+assembled.T-diags(assembled.diagonal())
         entries=assembled.tocoo();end=fes.Range(2).start
         primal=(entries.row<end)&(entries.col<end)
@@ -46,7 +47,7 @@ for maxh in (.2,.12,.09):
         for name,solver in (('baseline',baseline),('updated',updated)):
             cache={}
             for scale in (.9,1.1,.7):
-                mat=ng.la.SparseMatrixdouble.CreateFromCOO(entries.row,entries.col,
+                mat=real_sparse_matrix_type().CreateFromCOO(entries.row,entries.col,
                     entries.data*np.where(primal,scale,1.),*assembled.shape)
                 rhs.data=mat*exact
                 start=time.perf_counter()
