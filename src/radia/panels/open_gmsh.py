@@ -71,6 +71,19 @@ def main(argv):
             panel_log(f"open_gmsh.py: using geo companion={geo_path}")
 
     try:
+        from radia._gmsh_native_fields import validate_native_msh_fields
+        validate_native_msh_fields(input_path)
+        validate_native_msh_fields(open_path)
+        if sibling_merge_stem:
+            for suffix in ("_filaments.msh", "_wp_surface.msh", "_wp.msh", "_surface.msh"):
+                sibling = sibling_merge_stem + suffix
+                if os.path.isfile(sibling):
+                    validate_native_msh_fields(sibling)
+    except (OSError, ValueError):
+        panel_log_exception("open_gmsh.py: native field preflight rejected input")
+        return 5
+
+    try:
         import gmsh
     except ImportError:
         panel_log_exception("open_gmsh.py: gmsh import failed")
