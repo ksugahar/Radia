@@ -475,8 +475,25 @@ class _SectionBody:
         if not line: raise ValueError(f'${self.name} never closed ($End{self.name} missing)')
         marker = line.strip()
         if self.line_prefix and marker.startswith('$'):
-            if marker != '$End' + self.name:
+            expected = '$End' + self.name
+            fragment = line.lstrip()
+            while len(fragment) < len(expected) and not fragment.endswith('\n'):
+                rest = self.stream.readline(len(expected) - len(fragment))
+                if not rest:
+                    break
+                fragment += rest
+            if not fragment.startswith(expected):
                 raise ValueError(f'${self.name} not closed before {marker}')
+            tail = fragment[len(expected):]
+            while True:
+                if tail.strip():
+                    raise ValueError(f'${self.name} not closed before {marker}')
+                if fragment.endswith('\n'):
+                    break
+                fragment = self.stream.readline(size if size > 0 else 65536)
+                if not fragment:
+                    break
+                tail = fragment
             self.closed = True
             return ''
         if line.endswith('\n'):
