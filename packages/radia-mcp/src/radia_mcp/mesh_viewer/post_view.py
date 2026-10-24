@@ -19,6 +19,14 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def retained_context(data: dict, *, verified: bool = True) -> str:
+    """Bound error context to artifact identifiers, never an arbitrary receipt."""
+    fields = {key: str(data.get(key, ''))[:4096]
+              for key in ('output', 'worker_receipt', 'staging', 'sha256')}
+    label = 'verified artifact' if verified else 'unverified evidence'
+    return f'; {label} retained: ' + json.dumps(fields, ensure_ascii=False)
+
+
 def _load_exporter():
     from radia import gmsh_post_export as exporter
     if (not hasattr(exporter, 'PayloadV42')
@@ -157,14 +165,15 @@ async def prepare_post_view_async(source: Path, output: str, checked_report: str
         raise ValueError('Set RADIA_MESH_VIEWER_SCRATCH to an existing ASCII job directory outside the source directory')
     receipt_root = Path(tempfile.mkdtemp(prefix='.radia-post-receipt-', dir=scratch))
     receipt = receipt_root / 'receipt.json'
+    deadline = deadline if deadline is not None else transaction_deadline()
+    worker_env = env if env is not None else os.environ
     argv = [str(python or sys.executable), '-B', '-m', 'radia_mcp.mesh_viewer.post_view',
             str(source), str(target), checked_report, source_sha256, group_scope,
             '--receipt', str(receipt)]
-    await run_worker(argv, env=env if env is not None else os.environ,
-                     deadline=deadline if deadline is not None else transaction_deadline(),
+    await run_worker(argv, env=worker_env, deadline=deadline,
                      phase=f'VOL conversion {source}')
     if receipt.stat().st_size > 1024 * 1024:
-        raise RuntimeError('Conversion receipt exceeds 1 MiB; verified artifact retained at ' + str(target))
+        raise RuntimeError('Conversion receipt exceeds 1 MiB; unverified evidence retained at ' + str(target))
     data = json.loads(receipt.read_text(encoding='utf-8'))
     import re
     if (not target.is_file() or data.get('schema') != 'radia.mesh-post-view.v1' or data.get('output') != str(target)
@@ -173,7 +182,21 @@ async def prepare_post_view_async(source: Path, output: str, checked_report: str
             or not isinstance(data.get('staging'), str) or not data.get('physical_groups')
             or not re.fullmatch('[0-9a-f]{64}', data.get('sha256', ''))):
         raise RuntimeError('Unbound conversion receipt; no GUI launched: ' + str(receipt))
-    return {**data, 'worker_receipt': str(receipt)}
+    bound = {**data, 'worker_receipt': str(receipt)}
+    try:
+        digest = await run_worker(
+            [str(python or sys.executable), '-B', '-m', 'radia_mcp.mesh_viewer.post_view',
+             '--hash-output', str(target)], env=worker_env, deadline=deadline,
+            phase=f'Post-view receipt digest {target}')
+        actual = digest.stdout.decode('ascii').strip()
+        if not re.fullmatch('[0-9a-f]{64}', actual):
+            raise RuntimeError('Invalid digest worker response')
+        if actual != data['sha256']:
+            raise RuntimeError(f'Receipt digest mismatch: expected {data["sha256"]}, actual {actual}')
+    except Exception as error:
+        raise RuntimeError(f'Post-view receipt digest failed: {error}'
+                           + retained_context(bound, verified=False)) from error
+    return bound
 
 
 def prepare_post_view(source: Path, output: str, checked_report: str,
@@ -184,6 +207,13 @@ def prepare_post_view(source: Path, output: str, checked_report: str,
 def main() -> int:
     import argparse
     from contextlib import redirect_stdout
+    if len(sys.argv) == 3 and sys.argv[1] == '--hash-output':
+        try:
+            print(sha256(Path(sys.argv[2])))
+            return 0
+        except Exception as error:
+            print(str(error), file=sys.stderr)
+            return 1
     if sys.argv[1:] == ['--check-exporter']:
         try:
             _load_exporter()
