@@ -59,10 +59,10 @@ def build_sphere_mesh(mesh_size=0.02):
     return n_tet, n_nodes
 
 
-def parse_gmsh_v41(filename):
-    """Parse GMSH v4.1 file and return nodes dict and element connectivity.
+def parse_gmsh_v42(filename):
+    """Parse GMSH v4.2 file and return nodes dict and element connectivity.
 
-    v4.1 format (block-structured):
+    v4.2 format (block-structured):
       $Nodes
       <numEntityBlocks numNodes minTag maxTag>
       for each block:
@@ -82,6 +82,8 @@ def parse_gmsh_v41(filename):
 
     with open(filename, 'r') as f:
         lines = [ln.strip() for ln in f.readlines()]
+    from cubit_mesh_export.mcp.gmsh_v42 import summarize_gmsh_v42_ascii
+    summarize_gmsh_v42_ascii("\n".join(lines), source=str(filename))
 
     i = 0
     n = len(lines)
@@ -128,9 +130,6 @@ def parse_gmsh_v41(filename):
     return nodes, elements
 
 
-# Back-compat alias: older callers (and any user scripts that imported
-# the v2.2 parser) keep working against v4.1-only output.
-parse_gmsh_v22 = parse_gmsh_v41
 
 
 def tet4_volume(p0, p1, p2, p3):
@@ -300,13 +299,13 @@ def main():
 
         # Parse and compute volumes
         print("\nOrder 1 (TET4):")
-        nodes1, elems1 = parse_gmsh_v41(f1)
+        nodes1, elems1 = parse_gmsh_v42(f1)
         vol1 = compute_volume(nodes1, elems1)
         err1 = (vol1 - V_EXACT) / V_EXACT * 100.0
         print(f"  V = {vol1:.6e} m^3, error = {err1:+.2f}%")
 
         print("\nOrder 2 (TET10):")
-        nodes2, elems2 = parse_gmsh_v41(f2)
+        nodes2, elems2 = parse_gmsh_v42(f2)
         vol2 = compute_volume(nodes2, elems2)
         err2 = (vol2 - V_EXACT) / V_EXACT * 100.0
         print(f"  V = {vol2:.6e} m^3, error = {err2:+.2f}%")

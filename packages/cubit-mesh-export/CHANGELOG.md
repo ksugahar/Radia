@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Gmsh post-processing support
+
+- Gmsh MSH 4.2 export for post-processing and visualization only; solver meshes remain checked `.vol` files with their versioned contracts. No Gmsh-to-`.vol` route.
+- Reject native field tags above 2147483647 before native initialization; preserve mesh-only size_t tags and pure-Python reading. Mesh-only quality APIs reject GEO and indirect inputs.
+- Require the official Gmsh 5 development runtime and reject other MSH formats.
+- Use stored post-processing fixtures instead of invoking Gmsh meshing in tests.
+- Refuse order-3 pyramid export with an element/order diagnostic because the Gmsh 5 native consumer cannot construct that type; do not reduce the order or emit a substitute. Orders 1 and 2 remain supported.
+
 ## 2.2.6 - Native input validation and debug references
 
 - Embed filename-only PDB references in both native payloads.
@@ -542,7 +550,7 @@ used `CP_ACP` narrow-API pattern.
 Applied to all 6 exporters:
 
 * `ExportNetgenCommand.cpp` — `.vol` via `ng_mesh->Save()` + `.vol.json`
-* `ExportGmshCommand.cpp` — `.msh` v4.1
+* `ExportGmshCommand.cpp` — historical `.msh` export (format superseded)
 * `ExportNastranCommand.cpp` — `.bdf`
 * `ExportVtkCommand.cpp` — `.vtk`
 * `ExportMegCommand.cpp` — `.meg` (FEMEEM / MAGIC)

@@ -11,9 +11,9 @@ import os
 import subprocess
 import sys
 
-from cubit_mesh_export.mcp.gmsh_v41 import (
-    gmsh_v41_mixed_order_series_gate,
-    summarize_gmsh_v41_ascii,
+from cubit_mesh_export.mcp.gmsh_v42 import (
+    gmsh_v42_mixed_order_series_gate,
+    summarize_gmsh_v42_ascii,
 )
 from cubit_mesh_export.mcp.vol_inventory import summarize_netgen_vol_inventory
 
@@ -117,19 +117,19 @@ def main():
         with open(path, encoding="utf-8") as stream:
             mixed_rows.append({
                 "order": order,
-                "inventory": summarize_gmsh_v41_ascii(stream.read(), source=path),
+                "inventory": summarize_gmsh_v42_ascii(stream.read(), source=path),
             })
     with open(os.path.join(out_dir, "mixed_o2.vol"), encoding="utf-8") as stream:
         vol_inventory = summarize_netgen_vol_inventory(stream.read(), source="mixed_o2.vol")
-    mixed_gate = gmsh_v41_mixed_order_series_gate(
+    mixed_gate = gmsh_v42_mixed_order_series_gate(
         mixed_rows,
         authoritative_vol_inventory=vol_inventory,
     )
     if mixed_gate["success"]:
-        print(f"  OK:   Gmsh v4.1 mixed order series ({mixed_gate['status']})")
+        print(f"  OK:   Gmsh v4.2 mixed order series ({mixed_gate['status']})")
         total_passed += 1
     else:
-        print(f"  FAIL: Gmsh v4.1 mixed order series: {mixed_gate}")
+        print(f"  FAIL: Gmsh v4.2 mixed order series: {mixed_gate}")
         total_failed += 1
 
     # --- Test 2: Hex cylinder (order 2, HEX20 connectivity) ---
@@ -144,17 +144,17 @@ def main():
     total_passed += p
     total_failed += f
 
-    # Verify HEX20 from the Gmsh 4.1 element block, not with a v2 row parser.
+    # Verify HEX20 from the Gmsh 4.2 element block, not with a v2 row parser.
     msh_path = os.path.join(out_dir, "hex_cyl_o2.msh")
     if os.path.isfile(msh_path):
         with open(msh_path, encoding="utf-8") as fh:
-            inventory = summarize_gmsh_v41_ascii(fh.read(), source=msh_path)
+            inventory = summarize_gmsh_v42_ascii(fh.read(), source=msh_path)
         hex20_count = int(inventory["element_type_counts"].get("17", 0))
         if hex20_count > 0 and not inventory["connectivity_mismatches"]:
             print(f"  OK:   {hex20_count} HEX20 elements with 20-node connectivity")
             total_passed += 1
         else:
-            print(f"  FAIL: invalid HEX20 Gmsh v4.1 inventory: {inventory}")
+            print(f"  FAIL: invalid HEX20 Gmsh v4.2 inventory: {inventory}")
             total_failed += 1
 
     # --- Test 3: p-convergence (sphere, order 1-5 via export netgen) ---

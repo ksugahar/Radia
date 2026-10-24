@@ -19,45 +19,28 @@ result = {"ok": False, "ran": False}
 
 
 def _face_groups(mesh, element_type):
-    # Faces of one element type as (corner count, sorted corner keys, all
-    # face nodes).  Gmsh 5 returns faces of every size with their sizes;
-    # Gmsh 4 takes one call per corner count and raises for a count the
-    # element type does not have.  primary=True gives the corners that
-    # identify a face; primary=False adds the high-order face nodes.
+    # Gmsh 5 returns all face sizes; no Gmsh 4 compatibility path.
     groups = []
-    if hasattr(mesh, "getElementFaceNodesByType"):  # Gmsh >= 5
-        corners, csizes = mesh.getElementFaceNodes(element_type, primary=True)
-        nodes, nsizes = mesh.getElementFaceNodes(element_type, primary=False)
-        corners = np.asarray(corners, dtype=np.int64)
-        nodes = np.asarray(nodes, dtype=np.int64)
-        csizes = np.asarray(csizes, dtype=np.int64)
-        nsizes = np.asarray(nsizes, dtype=np.int64)
-        coff = np.concatenate(([0], np.cumsum(csizes)[:-1]))
-        noff = np.concatenate(([0], np.cumsum(nsizes)[:-1]))
-        for n in np.unique(csizes):
-            idx = np.nonzero(csizes == n)[0]
-            widths = np.unique(nsizes[idx])
-            if len(widths) != 1:
-                raise RuntimeError(
-                    "faces with %d corners have mixed node counts %s"
-                    % (n, widths.tolist()))
-            key = corners[coff[idx][:, None] + np.arange(n)]
-            full = nodes[noff[idx][:, None] + np.arange(widths[0])]
-            groups.append((int(n), np.sort(key, axis=1), full))
-        return groups
-    for n in (3, 4):
-        try:
-            corners = mesh.getElementFaceNodes(element_type, n, primary=True)
-        except Exception:  # Gmsh 4: no faces with n corners on this type
-            continue
-        if not len(corners):
-            continue
-        key = np.asarray(corners, dtype=np.int64).reshape(-1, n)
-        full = np.asarray(
-            mesh.getElementFaceNodes(element_type, n, primary=False),
-            dtype=np.int64).reshape(len(key), -1)
-        groups.append((n, np.sort(key, axis=1), full))
+    corners, csizes = mesh.getElementFaceNodes(element_type, primary=True)
+    nodes, nsizes = mesh.getElementFaceNodes(element_type, primary=False)
+    corners = np.asarray(corners, dtype=np.int64)
+    nodes = np.asarray(nodes, dtype=np.int64)
+    csizes = np.asarray(csizes, dtype=np.int64)
+    nsizes = np.asarray(nsizes, dtype=np.int64)
+    coff = np.concatenate(([0], np.cumsum(csizes)[:-1]))
+    noff = np.concatenate(([0], np.cumsum(nsizes)[:-1]))
+    for n in np.unique(csizes):
+        idx = np.nonzero(csizes == n)[0]
+        widths = np.unique(nsizes[idx])
+        if len(widths) != 1:
+            raise RuntimeError(
+                "faces with %d corners have mixed node counts %s"
+                % (n, widths.tolist()))
+        key = corners[coff[idx][:, None] + np.arange(n)]
+        full = nodes[noff[idx][:, None] + np.arange(widths[0])]
+        groups.append((int(n), np.sort(key, axis=1), full))
     return groups
+
 
 
 def _boundary_faces(mesh, element_types):
@@ -83,12 +66,11 @@ def _boundary_faces(mesh, element_types):
 
 
 def _face_counts(mesh):
-    # (triangles, quadrilaterals) among the faces made by createFaces().
-    if hasattr(mesh, "getFacesByType"):  # Gmsh >= 5: faces of any size
-        _tags, _nodes, sizes = mesh.getAllFaces()
-        sizes = np.asarray(sizes)
-        return int((sizes == 3).sum()), int((sizes == 4).sum())
-    return len(mesh.getAllFaces(3)[0]), len(mesh.getAllFaces(4)[0])
+    # Gmsh 5 returns faces of every size.
+    _tags, _nodes, sizes = mesh.getAllFaces()
+    sizes = np.asarray(sizes)
+    return int((sizes == 3).sum()), int((sizes == 4).sum())
+
 
 
 try:

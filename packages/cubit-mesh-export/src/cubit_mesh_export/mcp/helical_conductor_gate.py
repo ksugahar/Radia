@@ -135,9 +135,9 @@ def cubit_region_owned_mixed_mesh_gate(
         and all(count == 1 for count in interface_by_conductor.values()),
         "cad_partition_volume_is_conserved": isfinite(volume_error)
         and volume_error <= volume_limit,
-        "gmsh_ascii_v41_handoff_complete": int(export.get("bytes", 0)) > 0
+        "gmsh_ascii_v42_handoff_complete": int(export.get("bytes", 0)) > 0
         and len(str(export.get("sha256", ""))) == 64
-        and str(header.get("version", "")) == "4.1"
+        and str(header.get("version", "")) == "4.2"
         and int(header.get("file_type", -1)) == 0
         and all(
             header.get(name) is True
@@ -167,7 +167,7 @@ def cubit_region_owned_mixed_mesh_gate(
             "Judge mixed topology by region ownership, not by requiring the global hex count to exceed the air tet count.",
             "Mesh sweepable conductors first; tetmesh may then insert pyramids against their quad interfaces.",
             "A nonempty export is insufficient without per-region topology, quality, interface, and CAD-volume closure.",
-            "Parse the Gmsh 4.1 element blocks independently and require their volume-family counts to match Cubit's in-memory inventory.",
+            "Parse the Gmsh 4.2 element blocks independently and require their volume-family counts to match Cubit's in-memory inventory.",
         ],
     }
 

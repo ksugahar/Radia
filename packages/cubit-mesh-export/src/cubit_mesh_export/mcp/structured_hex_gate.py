@@ -65,8 +65,8 @@ def cubit_structured_hex_lattice_gate(
 		and float(shape.get("min", -math.inf)) > 0.0,
 		"cad_volume_matches_brick": math.isfinite(cad_volume)
 		and _relative(cad_volume, analytic_volume) <= volume_tolerance,
-		"gmsh_ascii_v41_inventory_valid": header.get("status") == "ok"
-		and header.get("mesh_format") == "4.1"
+		"gmsh_ascii_v42_inventory_valid": header.get("status") == "ok"
+		and header.get("mesh_format") == "4.2"
 		and header.get("binary") is False,
 		"gmsh_counts_match_live_inventory": int(independent.get("hex_count", -1)) == hex_count
 		and int(independent.get("node_count", -1)) == node_count

@@ -35,7 +35,7 @@ dependencies = [
 Homepage = "https://github.com/ksugahar/Radia"
 
 [project.optional-dependencies]
-mesh-quality = ["gmsh"]
+mesh-quality = ["gmsh>=5.0.0.dev0"]
 sculpt = ["netCDF4"]
 youtube = ["youtube-transcript-api"]
 

@@ -21,7 +21,7 @@ def lattice_summary() -> dict:
 			"shape": {"count": 24, "min": 0.98},
 		},
 		"geometry": {"cad_volume": 24.0},
-		"gmsh_header": {"status": "ok", "mesh_format": "4.1", "binary": False},
+		"gmsh_header": {"status": "ok", "mesh_format": "4.2", "binary": False},
 		"gmsh_independent": {
 			"hex_count": 24,
 			"node_count": 60,

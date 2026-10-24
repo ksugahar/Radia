@@ -208,9 +208,9 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         == totals["pyramid"],
         "gmsh_export_is_fresh_nonempty_digest": int(export.get("bytes", 0)) > 0
         and len(str(export.get("sha256", ""))) == 64,
-        "gmsh_is_ascii_v41_with_valid_connectivity": gmsh_inventory.get("status")
+        "gmsh_is_ascii_v42_with_valid_connectivity": gmsh_inventory.get("status")
         == "ok"
-        and str(gmsh_inventory.get("mesh_format", "")) == "4.1"
+        and str(gmsh_inventory.get("mesh_format", "")) == "4.2"
         and gmsh_inventory.get("binary") is False
         and not list(gmsh_inventory.get("connectivity_mismatches") or []),
         "gmsh_volume_families_match_live_inventory": gmsh_counts == totals
@@ -219,7 +219,7 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "independent_gmsh_volume_sum_matches_cad": reconstructed_error <= tolerance
         and reconstructed_sum_error <= tolerance
         and geometry.get("element_volume_source")
-        == "independent_gmsh_v41_coordinate_reconstruction",
+        == "independent_gmsh_v42_coordinate_reconstruction",
     }
     issues = [name for name, accepted in checks.items() if not accepted]
     return {
@@ -236,7 +236,7 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "notes": [
             "Do not require hex dominance: a valid minimal transition may contain more tetrahedra than hexes.",
             "A conformal transition is proven by quad ownership on both sides, not by family counts alone.",
-            "Reconstruct volume from Gmsh 4.1 coordinates so CAD closure is independent of Cubit's quality API.",
+            "Reconstruct volume from Gmsh 4.2 coordinates so CAD closure is independent of Cubit's quality API.",
         ],
     }
 

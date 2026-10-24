@@ -1,4 +1,6 @@
-"""Regression tests for the real-Cubit Cubit Mesh Export display contract."""
+"""Guards: six toolbar identifiers, shipped definitions and probe payloads agree.
+Assumes: offline source contracts; Cubit owns Qt and the optional live GUI probe.
+"""
 
 from __future__ import annotations
 
@@ -169,3 +171,21 @@ def test_timeout_terminates_only_owned_process(monkeypatch, tmp_path):
     result = SMOKE._run_one(Path('cubit.exe'), tmp_path, 0)
     assert not result['ok']
     assert calls == ['terminate-owned']
+
+
+def test_shipped_toolbar_identifiers_match_both_probe_consumers():
+    import ast
+    import xml.etree.ElementTree as ET
+    source = PACKAGE / "src/cubit_mesh_export/cubit_gui"
+    template = source / "cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl"
+    actions = [node.attrib["name"] for node in ET.parse(template).iter("WAction")]
+    assert actions == SMOKE.EXPECTED_ACTIONS, actions
+    probe = ast.parse((source / "toolbar_probe.py").read_text(encoding="utf-8"))
+    expected = next(ast.literal_eval(node.value) for node in probe.body
+                    if isinstance(node, ast.Assign) and any(
+                        isinstance(target, ast.Name) and target.id == "EXPECTED_ACTIONS"
+                        for target in node.targets))
+    assert actions == expected, (actions, expected)
+    description = next(node.findtext("description") for node in ET.parse(template).iter("WAction")
+                       if node.attrib["name"] == "GMSH (.msh)")
+    assert "post-processing" in description and ".vol" in description, description

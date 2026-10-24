@@ -1,5 +1,7 @@
 # `cubit_mesh_export.mcp` — Cubit mesh scripting MCP server
 
+Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
+
 The production `core` profile exposes the operating workflows directly and
 groups fine-grained scenario/identity checks behind `cubit_validation_catalog`
 and `cubit_validation_run`. The underlying Python checks remain independently
@@ -95,7 +97,7 @@ Then in a session:
 | **Checkpoint / restore** | `cubit_checkpoint`, `cubit_restore`, `cubit_list_checkpoints` |
 | **Headless batch** | `cubit_batch_try`, `cubit_mesh_auto` |
 | **Mesh race (variant exploration)** | `cubit_mesh_race`, `cubit_mesh_race_smart[_async]`, `cubit_mesh_race_review[_async]`, `cubit_mesh_race_status`, `cubit_mesh_apply_choice`, `cubit_curate_learned_recipes` |
-| **Export / .vol gates** | `cubit_check_vol` (canonical check-vol), `cubit_vol_inventory`, `cubit_gmsh_v41_inventory`, `cubit_mixed_order_series_gate`, and focused scenario gates (`*_gate`) |
+| **Export / .vol gates** | `cubit_check_vol` (canonical check-vol), `cubit_vol_inventory`, `cubit_gmsh_v42_inventory`, `cubit_mixed_order_series_gate`, and focused scenario gates (`*_gate`) |
 | **Cross-mesher quality** | `cubit_netgen_quality_compare` — one STEP through Netgen tet + Cubit tet + Cubit hex, judged by ONE gmsh minSICN referee (same metric implementation for every route; tet-vs-tet is the directly comparable pair, hex reported as the structured reference) |
 | **Diagnostics** | `cubit_mesh_diagnose`, `cubit_suggest_next`, `cubit_recent_failures`, `cubit_diagnostics_guide` |
 | **Lint** | `lint_cubit_script`, `lint_cubit_directory`, `cubit_audit_summary`, `get_lint_rules`, `generate_cubit_script` |
@@ -235,7 +237,7 @@ build123d volume-crosscheck tools with mandatory units.
 
 ## Cross-references
 
-- `mcp-server-gmsh` — mesh post/visualization (`.msh v4.1`)
+- `mcp-server-gmsh` — mesh post/visualization (`.msh v4.2`)
 - `mcp-server-build123d` — Pythonic OCCT front-end → STEP → Cubit
 - `mcp-server-fem` — FEM formulations consuming the resulting `.vol`
 - `cubit-mesh-export` (PyPI) — `check-vol` CLI + Cubit plugin binaries
@@ -251,5 +253,5 @@ build123d volume-crosscheck tools with mandatory units.
   convention audit (shared by `probe("labels")` and tests)
 - `src/cubit_mesh_export/mcp/knowledge/` — sub-modules (export,
   netgen_workflow, scripting, cpp_sdk, custom_toolbar, ...)
-- `src/cubit_mesh_export/mcp/vol_inventory.py`, `gmsh_v41.py`, `*_gate.py`
+- `src/cubit_mesh_export/mcp/vol_inventory.py`, `gmsh_v42.py`, `*_gate.py`
   — export gates
