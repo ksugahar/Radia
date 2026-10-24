@@ -5,6 +5,7 @@ import asyncio
 import ctypes as c
 from ctypes import wintypes as w
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -31,6 +32,9 @@ def test_post_receipt_precedes_only_one_msh_gui(tmp_path, monkeypatch):
     digest=post_view.sha256(source)
     receipt={}
     async def conversion(argv, **kwargs):
+        if '--hash-output' in argv:
+            events.append('digest');await asyncio.sleep(.01)
+            return NS(stdout=hashlib.sha256(output.read_bytes()).hexdigest().encode('ascii'))
         events.append('conversion');await asyncio.sleep(.01)
         output.write_bytes(b'mesh')
         receipt.update(schema='radia.mesh-post-view.v1',output=str(output),
@@ -39,7 +43,7 @@ def test_post_receipt_precedes_only_one_msh_gui(tmp_path, monkeypatch):
         Path(argv[-1]).write_text(json.dumps(receipt),encoding='utf-8')
         events.append('verified')
     async def preflight(argv, **kwargs):
-        assert events==['conversion','verified']
+        assert events==['conversion','verified','digest']
         assert '--post-output' not in argv and str(output) in argv
         assert kwargs['env']['PYTHONIOENCODING']=='utf-8' and kwargs['env']['PYTHONUTF8']=='1'
         assert argv[argv.index('--expected-sha256')+1]==post_view.sha256(output)
@@ -56,7 +60,7 @@ def test_post_receipt_precedes_only_one_msh_gui(tmp_path, monkeypatch):
         await asyncio.sleep(.001);assert not task.done()
         return await task
     result=asyncio.run(scenario())
-    assert events==['conversion','verified','preflight','GUI']
+    assert events==['conversion','verified','digest','preflight','GUI']
     assert result['status']=='launched'
     assert result['post_view']=={**receipt,'worker_receipt':result['post_view']['worker_receipt']}
     assert Path(result['post_view']['worker_receipt']).is_file()
@@ -101,6 +105,97 @@ def test_launcher_check_rejects_mismatching_expected_sha(tmp_path,monkeypatch,ca
     assert 'Verified MSH hash changed' in capsys.readouterr().err
 
 
+@pytest.fixture
+def digest_case(tmp_path,monkeypatch):
+    source=tmp_path/'input.vol';source.write_bytes(b'source')
+    folder=tmp_path/'post';folder.mkdir()
+    target=folder/'view.msh'
+    receipt={'schema':'radia.mesh-post-view.v1','output':str(target),
+        'source_sha256':hashlib.sha256(b'source').hexdigest(),'group_scope':'materials',
+        'solver_input':False,'sha256':hashlib.sha256(b'mesh').hexdigest(),
+        'staging':'retained staging','physical_groups':[[3,'iron']]}
+    locations=[]
+    async def worker(argv,**kwargs):
+        if '--hash-output' in argv:
+            return NS(stdout=hashlib.sha256(target.read_bytes()).hexdigest().encode('ascii'))
+        target.write_bytes(b'mesh');locations.append(Path(argv[-1]))
+        locations[-1].write_text(json.dumps(receipt),encoding='utf-8')
+    monkeypatch.setattr(post_view,'run_worker',worker)
+    monkeypatch.setattr(adapter,'require_interactive_desktop',lambda:{})
+    return source,target,receipt,locations,worker
+
+
+@pytest.mark.parametrize('fault',['misreport','changed output','deleted output','invalid response'])
+def test_independent_digest_failure_never_reaches_gui(digest_case,monkeypatch,fault):
+    source,target,receipt,locations,worker=digest_case
+    if fault=='misreport':receipt['sha256']='0'*64
+    async def faulty(argv,**kwargs):
+        if '--hash-output' in argv:
+            if fault=='changed output':target.write_bytes(b'changed')
+            if fault=='deleted output':target.unlink()
+            if fault=='invalid response':return NS(stdout=b'not a digest')
+        return await worker(argv,**kwargs)
+    async def forbidden(*args,**kwargs):pytest.fail('Preflight before digest accepted')
+    monkeypatch.setattr(post_view,'run_worker',faulty)
+    monkeypatch.setattr(adapter,'run_worker',forbidden)
+    monkeypatch.setattr(adapter.subprocess,'Popen',lambda *a,**k:pytest.fail('GUI before digest accepted'))
+    with pytest.raises(RuntimeError,match='Post-view receipt digest failed') as caught:
+        asyncio.run(adapter.open_mesh_viewer(str(source),str(target),'report',receipt['source_sha256'],'materials'))
+    message=str(caught.value)
+    assert 'unverified evidence retained:' in message and 'artifact retained:' not in message
+    context=json.loads(message.split('retained: ',1)[1])
+    assert context['output']==str(target) and context['worker_receipt']==str(locations[0])
+    assert context['sha256']==receipt['sha256']
+
+
+@pytest.mark.parametrize('fault',['preflight','identity','deadline','spawn'])
+def test_verified_artifact_context_survives_later_failure(digest_case,monkeypatch,fault):
+    source,target,receipt,locations,worker=digest_case
+    monkeypatch.setattr(adapter,'transaction_deadline',lambda:500)
+    monkeypatch.setattr(adapter,'time',NS(monotonic=lambda:501 if fault=='deadline' else 0))
+    async def probe(*args,**kwargs):
+        if fault=='preflight':raise RuntimeError('読み込み失敗')
+        return NS(stdout=b'invalid json' if fault=='identity' else b'{}')
+    def spawn(*args,**kwargs):
+        if fault!='spawn':pytest.fail('GUI before earlier error')
+        raise OSError('cannot spawn')
+    monkeypatch.setattr(adapter,'run_worker',probe)
+    monkeypatch.setattr(adapter.subprocess,'Popen',spawn)
+    monkeypatch.setattr(adapter.subprocess,'DETACHED_PROCESS',8,raising=False)
+    monkeypatch.setattr(adapter.subprocess,'CREATE_NEW_PROCESS_GROUP',0x200,raising=False)
+    with pytest.raises(RuntimeError) as caught:
+        asyncio.run(adapter.open_mesh_viewer(str(source),str(target),'report',receipt['source_sha256'],'materials'))
+    message=str(caught.value)
+    assert 'verified at digest time; artifact retained:' in message
+    context=json.loads(message.split('retained: ',1)[1])
+    assert context=={'output':str(target),'worker_receipt':str(locations[0]),
+                     'staging':receipt['staging'],'sha256':receipt['sha256']}
+    assert caught.value.__cause__ is not None
+    assert target.read_bytes()==b'mesh' and locations[0].is_file()
+    if fault=='preflight':assert '読み込み失敗' in message
+
+
+def test_plain_view_failure_has_no_invented_retained_receipt(tmp_path,monkeypatch):
+    folder=tmp_path/'retained';folder.mkdir()
+    source=folder/'plain.vol';source.write_bytes(b'input')
+    monkeypatch.setattr(adapter,'require_interactive_desktop',lambda:{})
+    async def fail(*args,**kwargs):raise RuntimeError('preflight failure')
+    monkeypatch.setattr(adapter,'run_worker',fail)
+    with pytest.raises(RuntimeError,match='preflight failure') as caught:
+        asyncio.run(adapter.open_mesh_viewer(str(source)))
+    assert 'artifact retained:' not in str(caught.value)
+    assert 'evidence retained:' not in str(caught.value)
+
+
+@pytest.mark.skipif(sys.platform!='win32',reason='Windows digest worker contract')
+def test_real_owned_digest_worker_reads_exact_unicode_target(tmp_path):
+    target=tmp_path/'日本語 空白 [mesh] {$}&;.msh';target.write_bytes(b'independent fixture\n')
+    result=asyncio.run(run_worker([sys.executable,'-B','-m','radia_mcp.mesh_viewer.post_view',
+        '--hash-output',str(target)],env=dict(os.environ),deadline=time.monotonic()+30,phase='digest proof'))
+    assert result.stdout.decode('ascii').strip()==hashlib.sha256(b'independent fixture\n').hexdigest()
+    assert list(tmp_path.iterdir())==[target]
+
+
 @pytest.mark.parametrize('gate',['inventory','labels','physical groups','element count','source hash','receipt binding'])
 def test_conversion_gate_failure_never_launches(tmp_path,monkeypatch,gate):
     source=tmp_path/'input.vol';source.write_bytes(b'source')
@@ -140,13 +235,54 @@ def _alive(pid):
     finally:k.CloseHandle(handle)
 
 
+@pytest.mark.skipif(sys.platform!='win32',reason='Windows digest cancellation contract')
+@pytest.mark.parametrize('mode',['timeout','cancel'])
+def test_digest_wait_cleans_tree_without_launching(digest_case,tmp_path,monkeypatch,mode):
+    source,target,receipt,locations,conversion=digest_case
+    pidfile=tmp_path/'digest-pids.json'
+    script=("import subprocess,sys,json,time,os; "
+        "from pathlib import Path; "
+        "p=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']); "
+        "ready=Path(sys.argv[1]);temporary=ready.with_suffix('.tmp'); "
+        "temporary.write_text(json.dumps([os.getpid(),p.pid]));temporary.replace(ready);time.sleep(60)")
+    async def worker(argv,**kwargs):
+        if '--hash-output' not in argv:return await conversion(argv,**kwargs)
+        return await run_worker([sys.executable,'-B','-c',script,str(pidfile)],**kwargs)
+    async def forbidden(*args,**kwargs):pytest.fail('Preflight while digest pending')
+    monkeypatch.setattr(post_view,'run_worker',worker)
+    monkeypatch.setattr(adapter,'run_worker',forbidden)
+    monkeypatch.setattr(adapter,'transaction_deadline',lambda:time.monotonic()+10)
+    sentinel=subprocess.Popen([str(Path(sys.base_prefix)/'python.exe'),'-c','import time;time.sleep(60)'],
+                              creationflags=subprocess.CREATE_NO_WINDOW)
+    async def scenario():
+        task=asyncio.create_task(adapter.open_mesh_viewer(str(source),str(target),'report',receipt['source_sha256'],'materials'))
+        ready=time.monotonic()+3
+        while not pidfile.exists():
+            if task.done():await task
+            if time.monotonic()>ready:raise RuntimeError('Digest did not reach readiness')
+            await asyncio.sleep(.01)  # MCP event-loop heartbeat remains runnable.
+        if mode=='cancel':
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):await task
+        else:
+            with pytest.raises(RuntimeError,match='timed out'):await task
+    try:
+        asyncio.run(scenario())
+        assert all(not _alive(pid) for pid in json.loads(pidfile.read_text()))
+        assert sentinel.poll() is None and target.is_file() and locations[0].is_file()
+    finally:
+        sentinel.terminate();sentinel.wait(timeout=5)
+
+
 @pytest.mark.skipif(sys.platform!='win32',reason='Windows process-tree contract')
 @pytest.mark.parametrize('mode',['timeout','cancel'])
 def test_owned_grandchild_dies_and_unrelated_sentinel_survives(tmp_path,mode):
     pidfile=tmp_path/'pids.json'
     script=("import subprocess,sys,json,time,os; "
+            "from pathlib import Path; "
             "p=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']); "
-            "open(sys.argv[1],'w').write(json.dumps([os.getpid(),p.pid]));time.sleep(60)")
+            "ready=Path(sys.argv[1]);temporary=ready.with_suffix('.tmp'); "
+            "temporary.write_text(json.dumps([os.getpid(),p.pid]));temporary.replace(ready);time.sleep(60)")
     sentinel=subprocess.Popen([str(Path(sys.base_prefix)/'python.exe'),'-c','import time;time.sleep(60)'],
                               creationflags=subprocess.CREATE_NO_WINDOW)
     async def scenario():
