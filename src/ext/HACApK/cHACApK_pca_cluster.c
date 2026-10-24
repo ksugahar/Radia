@@ -34,7 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <mkl.h>
+#include "../../core/rad_blas.h"
 
 #include "cHACApK_base.h"
 #include "cHACApK_pca_cluster.h"

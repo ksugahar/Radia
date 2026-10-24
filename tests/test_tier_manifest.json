@@ -2,7 +2,8 @@
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
     "tools/build_linux.py": [
-      "tests/test_linux_build.py"
+      "tests/test_linux_build.py",
+      "tests/test_blas_provider_contract.py"
     ],
     "tests/test_linux_build.py": [
       "tests/test_linux_build.py"
@@ -301,6 +302,9 @@
     ],
     "tests/fixtures/ih_f1_m2_p2_5_3_3.json": [
       "tests/test_ih_ams_f1_surrogate.py"
+    ],
+    "tests/test_blas_provider_contract.py": [
+      "tests/test_blas_provider_contract.py"
     ]
   },
   "profiles": {
@@ -324,7 +328,8 @@
         "tests/test_ih_energy_audit_contract.py",
         "tests/test_wheel_package_policy.py",
         "tests/axifem/test_docs_notebook_evidence.py",
-        "tests/test_license_distribution_contract.py"
+        "tests/test_license_distribution_contract.py",
+        "tests/test_blas_provider_contract.py"
       ]
     },
     "native-smoke": {

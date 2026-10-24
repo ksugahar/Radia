@@ -1,4 +1,8 @@
-"""Execute the native-build provenance helper against temporary Git repositories."""
+"""Execute the native-build provenance helper against temporary Git repositories.
+
+Guards: Clean-source certificates, binary hashes, and compiled provider receipt binding.
+Assumes: Temporary dummy binary payloads; real builds require the explicit opt-in.
+"""
 
 from __future__ import annotations
 
@@ -301,3 +305,32 @@ def test_real_build_clean_certificate_and_dirty_noncertificate():
         assert not manifest.exists()
     finally:
         sentinel.unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize("provider", ["mkl", "nvpl"])
+def test_windows_receipt_uses_compiled_provider_record(tmp_path, provider):
+    repo, binary = _repo(tmp_path)
+    with (repo / ".gitignore").open("a", encoding="utf-8") as stream:
+        stream.write("build-msvc/\n")
+    _git(repo, "add", ".gitignore")
+    _git(repo, "commit", "-m", "ignore build outputs")
+    build = repo / "build-msvc"
+    build.mkdir()
+    (build / "radia-provider.json").write_text(
+        json.dumps({"provider": provider, "integer_abi": "lp64", "architecture": "AMD64"}),
+        encoding="utf-8",
+    )
+    command = (
+        f". {_quote(SCRIPT)}; "
+        f"$start=Get-NativeBuildSourceIdentity -RepoRoot {_quote(repo)}; "
+        f"Write-NativeBuildProvenance -BinaryPath {_quote(binary)} "
+        f"-RepoRoot {_quote(repo)} -StartIdentity $start -BuildDirectory build-msvc"
+    )
+    result = _pwsh(command)
+    manifest = Path(str(binary) + ".build.json")
+    if provider == "mkl":
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        assert json.loads(manifest.read_text())["blas_provider"]["provider"] == "mkl"
+    else:
+        assert result.returncode != 0, (result.stdout, result.stderr)
+        assert not manifest.exists()

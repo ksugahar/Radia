@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <mkl.h>
+#include "../../core/rad_blas.h"
 
 #include "cHACApK_harith.h"
 

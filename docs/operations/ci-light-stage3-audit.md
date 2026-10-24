@@ -339,3 +339,16 @@ new executable-closure seal: `373305577e2d0f2d77743741f09bd2b45d1d49e416fecfccf3
 Runner labels, requirements, source-only import rejection and the active profile
 budget are unchanged. The shared precheck executes the routing mutations and
 light source checks; reciprocal review confirms the revised closure.
+## Explicit BLAS provider build contracts
+
+The NVPL source-build route adds source-only admission tests for architecture,
+provider mismatch, required development files, LP64 library hashes, and shared
+provider-header ownership/event routing. They use temporary byte fixtures and
+read the build helper without invoking its native build entry. No library is
+loaded and no compiler, numerical solve or GPU call is made. Existing Linux
+pipeline tests continue to mock toolchain and package metadata; their actual
+subprocess work is temporary Git and the PowerShell provenance helper.
+The six new provider contracts ran in 0.59 s; the combined provider/Linux
+contracts initially ran 13 tests in 4.28 s. These are source checks only.
+The executable seal is regenerated through ci_runner_routing.audit_digest;
+independent F2 review and native provider acceptance remain separate gates.

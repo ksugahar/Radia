@@ -19,7 +19,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
-#include <mkl.h>
+#include "../../core/rad_blas.h"
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -177,11 +177,11 @@ static int matvec_mkl_threads(void) {
 
 static void matvec_mkl_begin(void) {
     int nth = matvec_mkl_threads();
-    if (nth > 0) mkl_set_num_threads_local(nth);
+    if (nth > 0) radia_blas_set_num_threads_local(nth);
 }
 
 static void matvec_mkl_end(void) {
-    if (matvec_mkl_threads() > 0) mkl_set_num_threads_local(0);
+    if (matvec_mkl_threads() > 0) radia_blas_set_num_threads_local(0);
 }
 
 void HACApK_matvec_stats_reset(void) {

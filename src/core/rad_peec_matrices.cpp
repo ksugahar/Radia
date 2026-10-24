@@ -16,8 +16,7 @@
 #include "rad_parallel.h"
 
 #ifdef HAVE_LAPACK
-#include "mkl_cblas.h"
-#include "mkl_lapack.h"
+#include "rad_blas.h"
 #endif
 
 namespace radia {
@@ -1811,8 +1810,8 @@ void PEECSolver::Solve(const std::vector<std::complex<double>>& V,
 
     int ln = n, nrhs = 1, info = 0;
     std::vector<int> ipiv(n);
-    zgesv_(&ln, &nrhs, reinterpret_cast<MKL_Complex16*>(Z.data()), &ln,
-           ipiv.data(), reinterpret_cast<MKL_Complex16*>(I.data()), &ln, &info);
+    zgesv_(&ln, &nrhs, reinterpret_cast<radia_blas_complex_double*>(Z.data()), &ln,
+           ipiv.data(), reinterpret_cast<radia_blas_complex_double*>(I.data()), &ln, &info);
 #else
     // Fallback: naive Gaussian elimination with partial pivoting
     std::vector<std::complex<double>> A = Z;
@@ -1999,8 +1998,8 @@ void PEECSolver::BuildZEff(double freq,
 
     int ln_star = n_star, nrhs = n_star, info = 0;
     std::vector<int> ipiv(n_star);
-    zgesv_(&ln_star, &nrhs, reinterpret_cast<MKL_Complex16*>(Z_SS.data()), &ln_star,
-           ipiv.data(), reinterpret_cast<MKL_Complex16*>(Z_SS_inv.data()), &ln_star, &info);
+    zgesv_(&ln_star, &nrhs, reinterpret_cast<radia_blas_complex_double*>(Z_SS.data()), &ln_star,
+           ipiv.data(), reinterpret_cast<radia_blas_complex_double*>(Z_SS_inv.data()), &ln_star, &info);
     // Z_SS_inv is now Z_SS^{-1} in column-major
 
     // Transpose Z_SS_inv back to row-major
@@ -2053,7 +2052,7 @@ void PEECSolver::MNASolveMultiPort(const std::vector<std::complex<double>>& Z_ef
     // process setting when this solve returns. This also prevents TBB and
     // TaskManager from oversubscribing the host during a PEEC solve.
     SuspendTaskManager suspended_workers;
-    MKLThreadGuard mkl_threads(GetMaxThreads());
+    DenseThreadGuard mkl_threads(GetMaxThreads());
 
     int info = 0;
 
@@ -2086,8 +2085,8 @@ void PEECSolver::MNASolveMultiPort(const std::vector<std::complex<double>>& Z_ef
 
         int ln = n_loop, nrhs = n_loop, info = 0;
         std::vector<int> ipiv(n_loop);
-        zgesv_(&ln, &nrhs, reinterpret_cast<MKL_Complex16*>(Z_copy.data()), &ln,
-               ipiv.data(), reinterpret_cast<MKL_Complex16*>(Y_branch.data()), &ln, &info);
+        zgesv_(&ln, &nrhs, reinterpret_cast<radia_blas_complex_double*>(Z_copy.data()), &ln,
+               ipiv.data(), reinterpret_cast<radia_blas_complex_double*>(Y_branch.data()), &ln, &info);
 
         if (info != 0) return;  // Singular matrix
 
@@ -2182,7 +2181,7 @@ void PEECSolver::MNASolveMultiPort(const std::vector<std::complex<double>>& Z_ef
     // Step 7: LU factorize Y_reduced (factor once, reuse for each port)
     int ln_red = n_reduced;
     std::vector<int> ipiv_red(n_reduced);
-    zgetrf_(&ln_red, &ln_red, reinterpret_cast<MKL_Complex16*>(Y_reduced.data()),
+    zgetrf_(&ln_red, &ln_red, reinterpret_cast<radia_blas_complex_double*>(Y_reduced.data()),
             &ln_red, ipiv_red.data(), &info);
 
     if (info != 0) return;  // Singular matrix
@@ -2208,8 +2207,8 @@ void PEECSolver::MNASolveMultiPort(const std::vector<std::complex<double>>& Z_ef
         char trans = 'N';
         int nrhs_one = 1;
         zgetrs_(&trans, &ln_red, &nrhs_one,
-                reinterpret_cast<MKL_Complex16*>(Y_reduced.data()), &ln_red,
-                ipiv_red.data(), reinterpret_cast<MKL_Complex16*>(I_ext.data()),
+                reinterpret_cast<radia_blas_complex_double*>(Y_reduced.data()), &ln_red,
+                ipiv_red.data(), reinterpret_cast<radia_blas_complex_double*>(I_ext.data()),
                 &ln_red, &info);
 
         // Map back to full voltage vector (ground nodes = 0V)
@@ -2335,8 +2334,8 @@ void PEECSolver::ComputeBranchCurrents(double freq,
 
         int ln = n_loop, nrhs = n_loop;
         std::vector<int> ipiv(n_loop);
-        zgesv_(&ln, &nrhs, reinterpret_cast<MKL_Complex16*>(Z_copy.data()), &ln,
-               ipiv.data(), reinterpret_cast<MKL_Complex16*>(Y_branch.data()), &ln, &info);
+        zgesv_(&ln, &nrhs, reinterpret_cast<radia_blas_complex_double*>(Z_copy.data()), &ln,
+               ipiv.data(), reinterpret_cast<radia_blas_complex_double*>(Y_branch.data()), &ln, &info);
         if (info != 0) return;
 
         for (int i = 0; i < n_loop; ++i) {
@@ -2417,7 +2416,7 @@ void PEECSolver::ComputeBranchCurrents(double freq,
 
     int ln_red = n_reduced;
     std::vector<int> ipiv_red(n_reduced);
-    zgetrf_(&ln_red, &ln_red, reinterpret_cast<MKL_Complex16*>(Y_reduced.data()),
+    zgetrf_(&ln_red, &ln_red, reinterpret_cast<radia_blas_complex_double*>(Y_reduced.data()),
             &ln_red, ipiv_red.data(), &info);
     if (info != 0) return;
 
@@ -2441,8 +2440,8 @@ void PEECSolver::ComputeBranchCurrents(double freq,
     char trans = 'N';
     int nrhs_one = 1;
     zgetrs_(&trans, &ln_red, &nrhs_one,
-            reinterpret_cast<MKL_Complex16*>(Y_reduced.data()), &ln_red,
-            ipiv_red.data(), reinterpret_cast<MKL_Complex16*>(rhs.data()),
+            reinterpret_cast<radia_blas_complex_double*>(Y_reduced.data()), &ln_red,
+            ipiv_red.data(), reinterpret_cast<radia_blas_complex_double*>(rhs.data()),
             &ln_red, &info);
     if (info != 0) return;
 
