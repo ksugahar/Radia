@@ -60,16 +60,24 @@ MCP supplies the same explicit `post_output`, `checked_report`, `source_sha256`
 and `group_scope` arguments. MCP awaits a separate conversion worker without
 blocking its event loop. Only successful conversion, a bound receipt and MSH
 preflight can reach GUI launch; every conversion gate failure returns to MCP.
+After receipt binding, a separate owned digest worker reads the actual output
+and compares its SHA256 with the conversion receipt before it is accepted.
+The launcher still checks the expected hash at preflight and GUI startup.
+These checks detect mismatches; they do not guarantee the file cannot change later.
 NGSolve and the Gmsh GUI never share a process. The `post_view` response contains
 the verified output hash, source hash, group scope, physical groups, receipt and
 staging paths. The GUI receives the checked MSH alone, not another conversion
-request. A GUI spawn failure reports the retained verified artifact. Launch
+request. Post-conversion preflight, identity, deadline and GUI spawn failures
+report retained output, receipt, staging and expected hash. A failed independent
+digest check reports retained evidence as unverified and never starts the GUI. Launch
 acceptance remains distinct from rendering success. The output is a
 post-processing view, never an input to a solver.
 
 `RADIA_MESH_VIEWER_TIMEOUT_SECONDS` is an operator setting: default 300 seconds,
 finite range 30..900, excluding the human GUI lifetime. Preflight and conversion
-share one monotonic deadline and a cleanup reserve. Windows workers are started
+share one monotonic deadline and a cleanup reserve, including the additional
+digest scan. No separate hash timeout or automatic retry extends that budget.
+Windows workers are started
 suspended, assigned to their explicit kill-on-close job, and resumed; timeout
 and cancellation reap the owned descendants, including a venv redirector.
 UTF-8 is explicit on outer and inner children. Native non-UTF-8 diagnostics use
