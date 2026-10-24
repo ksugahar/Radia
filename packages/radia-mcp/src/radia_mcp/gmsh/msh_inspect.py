@@ -335,7 +335,7 @@ class _DataTokens:
 
     def _fill(self):
         self.cookie = self.stream.tell()
-        self.buffer = self.stream.readline(self._CHUNK)
+        self.buffer = self.stream.read(self._CHUNK)
         self.offset = 0
         return bool(self.buffer)
 
@@ -468,6 +468,18 @@ class _SectionBody:
         self.line_prefix = True
 
     def tell(self): return self.stream.tell()
+
+    def read(self, size):
+        """Collect bounded pieces without taking a text seek cookie per line."""
+        pieces = []
+        remaining = size
+        while remaining > 0:
+            line = self.readline(remaining)
+            if not line:
+                break
+            pieces.append(line)
+            remaining -= len(line)
+        return ''.join(pieces)
 
     def readline(self, size=-1):
         if self.closed: return ''
