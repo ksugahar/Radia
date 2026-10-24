@@ -415,6 +415,33 @@ def test_default_report_sidecars_do_not_dirty_next_precheck(tmp_path, monkeypatc
                                     "--untracked-files=all"], cwd=tmp_path, text=True) == ""
 
 
+def test_relative_report_survives_package_child_working_directory(tmp_path, monkeypatch):
+    caller = tmp_path / "caller"
+    package = tmp_path / "package"
+    caller.mkdir()
+    package.mkdir()
+    monkeypatch.chdir(caller)
+    monkeypatch.setattr(precheck, "build_source_plan", lambda *a, **k:
+                        {"mode": "affected", "base": "base", "radia": False, "mcp": True})
+    monkeypatch.setattr(precheck, "_run", fake_run([]))
+
+    def child_checks(plan, steps, report):
+        sidecar = report.with_name(report.stem + "-logs") / "mcp-not-collected.json"
+        sidecar.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run([sys.executable, "-c",
+                        "from pathlib import Path; import sys; "
+                        "Path(sys.argv[1]).write_text('{}', encoding='utf-8')",
+                        str(sidecar)], cwd=package, check=True)
+        return {}
+
+    monkeypatch.setattr(precheck, "_mcp_checks", child_checks)
+    assert precheck.main(["--report", "../result.json"]) == 0
+    assert json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))["qualified"]
+    assert (tmp_path / "result-logs/mcp-not-collected.json").read_text(encoding="utf-8") == "{}"
+    assert precheck.LOG_DIR == tmp_path / "result-logs"
+    assert not (package / "result.json").exists()
+
+
 def test_failed_partial_reports_false_not_unknown(tmp_path, monkeypatch):
     plan = precheck.build_source_plan("base", git=git_diff(["packages/cubit-mesh-export/README.md"]))
     monkeypatch.setattr(precheck, "build_source_plan", lambda *a, **k: plan)

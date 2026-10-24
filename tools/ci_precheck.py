@@ -282,6 +282,9 @@ def main(argv=None):
     parser.add_argument("--skip-repo-contracts", action="store_true",
                         help="explicit partial check; report cannot qualify the full source gate")
     args = parser.parse_args(argv)
+    # Child checks use package-specific working directories. Bind output paths
+    # to the caller's directory before handing them to any child process.
+    args.report = args.report.resolve()
     if args.full and args.skip_repo_contracts:
         parser.error("--full cannot omit repository contracts")
     global LOG_DIR
