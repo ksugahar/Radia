@@ -1160,6 +1160,30 @@ print(f"COCR converged in {solver.iterations} iterations")
 SPARSESOLV_KNOWN_ISSUES = """
 # Known Issues
 
+
+## All-boundary-vertex BDDC + AMS meshes (2026-10-23)
+
+On a mesh whose vertices are all on the boundary, BDDC + AMS at p >= 2
+can return NaN even when setup succeeds. This is an observed failure mode,
+not a proof that every such mesh fails or that an interior vertex guarantees
+success. A geometric pre-rejection guard was tried and rejected: topology
+alone must not replace numerical qualification or silently change the route.
+Record the exact mesh, spaces, polynomial order, boundary constraints,
+preconditioner composition and native/runtime identity. Check finiteness of
+preconditioner applications, solution and original-system true residual;
+stop on nonfinite values. Keep gradient-exactness checks runnable without
+the optional AMS solve backend. Do not lower p, switch solvers, or accept NaN
+as a successful optional skip.
+
+## Sparse class discovery across compiler builds (2026-10-23)
+
+NGSolve's generated real-double sparse class names differ across compiler
+builds. Do not select a name by OS, guessed suffix or a chain of aliases.
+Use radia.ngsolve_sparse.real_sparse_matrix_type(symmetric=...) which
+assembles a small real-double matrix, checks its dtype and COO-construction
+capability, and returns its actual class. Unresolved capability raises;
+this does not authorize a different solver or storage route.
+
 ## CompactAMS + COCR segfaults at first matvec (2026-05-08)
 
 **Symptom**: `gfu.vec.data = cocr * rhs_vec` (or any first apply of a
