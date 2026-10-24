@@ -84,9 +84,7 @@ namespace netgen
 
     virtual void ProjectPointEdge(int surfind, int surfind2, Point<3> & p,
                                   EdgePointGeomInfo* gi = nullptr
-#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
                                   , int edgenr = -1
-#endif
                                   ) const override;
 
     virtual bool ProjectPointGI(int surfind, Point<3> & p,
@@ -102,9 +100,7 @@ namespace netgen
                                   const EdgePointGeomInfo & ap2,
                                   Point<3> & newp,
                                   EdgePointGeomInfo & newgi
-#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
                                   , int edgenr
-#endif
                                   ) const override;
 
     virtual void PointBetween(const Point<3> & p1, const Point<3> & p2,
@@ -118,9 +114,7 @@ namespace netgen
     virtual Vec<3> GetTangent(const Point<3> & p, int surfi1,
                               int surfi2,
                               const EdgePointGeomInfo & egi
-#ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
                               , int edgenr = -1
-#endif
                               ) const override;
   };
 

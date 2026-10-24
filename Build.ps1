@@ -627,14 +627,19 @@ if /I "$BuildCubitPlugin"=="True" (
     rem build-pyd: force FULL Netgen mode; disable compact_netgen detection
     rem so cubit_mesh_curver.pyd builds against pip-installed Netgen + pybind11.
     rem .ccm/.ccl in build-ccm continue to use compact_netgen without DLL deps.
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="$DetectedCubitCmakeDir" -DNETGEN_DIR="$NetgenPackageDir" -DCOMPACT_NETGEN_OVERRIDES=NONE "$PROJECT_DIR\src\cubit_plugin"
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="$DetectedCubitCmakeDir" -DNETGEN_DIR="$NetgenPackageDir" -DCOMPACT_NETGEN_OVERRIDES=NONE -DCUBIT_CALLBACK_CONTRACT_TESTS=ON "$PROJECT_DIR\src\cubit_plugin"
     if errorlevel 1 (
         echo ERROR: cubit_mesh_curver configuration failed
         exit /b 1
     )
-    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_curver -j $BuildJobs
+    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_curver cubit_callback_contract -j $BuildJobs
     if errorlevel 1 (
         echo ERROR: cubit_mesh_curver build failed
+        exit /b 1
+    )
+    "$CTEST_EXE" --test-dir "%CUBIT_PLUGIN_BUILD%" --output-on-failure
+    if errorlevel 1 (
+        echo ERROR: native Cubit callback contract failed
         exit /b 1
     )
 
