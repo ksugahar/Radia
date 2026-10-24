@@ -1541,11 +1541,9 @@ with open(out_path, "w", encoding="utf-8") as f:
 
 # Ops whose out_file is a LIST-DATA view -- anything a gmsh plugin
 # returns, or that the worker builds with view.add + addListData.
-# MEASURED (gmsh 4.15.2, one probe per verb into a ".msh" target): every
-# op below wrote "$MeshFormat / 2.2 0 8", i.e. gmsh silently downgrades a
-# list-data export to LEGACY MSH v2.2, which this lane's own v4.2-only
-# readers then reject ("MSH v2.2 is not supported (ASCII v4.x only)") --
-# a silent violation of the repo-wide v4.2-only policy.  The three verbs
+# List-data plugin views are not model-based MSH 4.2 results. Keep their
+# native .pos representation; reject .msh targets before native plugin access.
+# The three verbs
 # NOT listed (warp, smooth, modulus_phase) rewrite the original
 # MODEL-based view in place and correctly produced v4.2, so a ".msh"
 # target is legitimate for them.
@@ -1567,8 +1565,8 @@ def _check_list_data_out(cfg: dict[str, Any]) -> dict[str, Any] | None:
     return {"ok": False, "error": (
         f"out_file for {cfg['op']} must end in '.pos', got "
         f"{Path(out_file).name!r}: this verb writes a LIST-DATA view, "
-        "which gmsh exports to a '.msh' target as legacy MSH v2.2 -- a "
-        "format the v4.2-only readers in this lane (field_stats, "
+        "which is not a model-based MSH 4.2 result. The "
+        "v4.2-only readers in this lane (field_stats, "
         "field_histogram, inspect_msh) reject.  Write '.pos' and merge "
         "it alongside the mesh in gmsh.")}
 

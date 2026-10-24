@@ -8,7 +8,7 @@ server down and the stdio transport cannot dead-lock on inherited pipes
 (temp-file redirect + ``stdin=DEVNULL``, per the lab subprocess pattern).
 
 Scope: MSH **v4.2 ASCII** only, matching the repository-wide format policy.
-Binary MSH and v2.2 are rejected loudly, never half-parsed.
+Binary MSH and every non-4.2 version are rejected loudly, never half-parsed.
 """
 
 from __future__ import annotations
@@ -1481,6 +1481,7 @@ def _beam_animation_report(name: str, sections: list[dict[str, Any]],
 
 _MESH_QUALITY_SCRIPT = r"""
 import json
+import math
 import sys
 
 msh_path, quadrature, threshold_s, worst_n_s, stats_s, out_path = sys.argv[1:7]
@@ -1609,7 +1610,7 @@ try:
                 aniso = {
                     "aspect_ratio": {
                         "min": float(ar_f.min()) if ar_f.size else None,
-                        "mean": float(ar_f.mean()) if ar_f.size else None,
+                        "mean": math.fsum(map(float, ar_f)) / int(ar_f.size) if ar_f.size else None,
                         "p95": (float(np.percentile(ar_f, 95))
                                 if ar_f.size else None),
                         "max": float(ar_f.max()) if ar_f.size else None,

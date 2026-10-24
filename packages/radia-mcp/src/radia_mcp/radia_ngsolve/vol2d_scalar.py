@@ -868,7 +868,7 @@ def scalar_replay_gate(artifact: Mapping[str, Any]) -> dict[str, Any]:
         and _sha(expected_json) == json_row.get("sha256")
         and canonical_sha == json_row.get("sha256")
     )
-    checks["gmsh_v41"] = "$MeshFormat\n4.1 " in str(exports.get("gmsh_msh", {}).get("content", ""))
+    checks["gmsh_v42"] = "$MeshFormat\n4.2 " in str(exports.get("gmsh_msh", {}).get("content", ""))
     passed = all(checks.values())
     return {
         "schema": REPLAY_SCHEMA,

@@ -50,7 +50,7 @@ CATALOG: dict[str, dict[str, Any]] = {
     "gmsh": {
         "subpackage": "radia_mcp.gmsh",
         "entry_point": "mcp-server-gmsh",
-        "description": "GMSH MSH v4.1 inspect/validate + post-display "
+        "description": "GMSH MSH v4.2 inspect/validate + post-display "
                        "launch artifacts + visualization-only policy lint",
         "primary_tools": ["gmsh_inspect_msh", "gmsh_validate_msh",
                           "gmsh_validate_geo", "gmsh_exec",

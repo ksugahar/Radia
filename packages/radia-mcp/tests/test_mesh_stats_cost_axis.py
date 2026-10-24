@@ -12,6 +12,7 @@ face, so the report must reproduce the counts an FE library would.
 from __future__ import annotations
 
 import math
+import shutil
 from pathlib import Path
 
 import pytest
@@ -22,21 +23,9 @@ from radia_mcp.gmsh.msh_inspect import mesh_quality
 
 
 def _write_unit_cube_tet_msh(path: Path) -> None:
-    """One cube split into 6 tets, written as .msh v4.1 by gmsh itself."""
-    import gmsh
-
-    gmsh.initialize(["-noconfig"])
-    try:
-        gmsh.option.setNumber("General.Terminal", 0)
-        gmsh.model.add("cube")
-        gmsh.model.occ.addBox(0, 0, 0, 1, 1, 1)
-        gmsh.model.occ.synchronize()
-        gmsh.option.setNumber("Mesh.MeshSizeMin", 1.0)
-        gmsh.option.setNumber("Mesh.MeshSizeMax", 1.0)
-        gmsh.model.mesh.generate(3)
-        gmsh.write(str(path))
-    finally:
-        gmsh.finalize()
+    """Copy the required Netgen-derived MSH 4.2 fixture; never generate with Gmsh."""
+    source = Path(__file__).parent / "fixtures" / "gmsh" / "unit_cube_tet.msh"
+    shutil.copyfile(source, path)
 
 
 @pytest.fixture(scope="module")

@@ -234,9 +234,9 @@ def test_validate_detects_invalid_component_count(tmp_path):
     assert result["checks"]["view_components_consistent"] is False
 
 
-def test_validate_rejects_v22(tmp_path):
-    v22 = "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n"
-    result = validate_msh(_write(tmp_path, v22))
+def test_validate_rejects_unknown_format(tmp_path):
+    unknown = "$MeshFormat\n4.9 0 8\n$EndMeshFormat\n"
+    result = validate_msh(_write(tmp_path, unknown))
 
     assert result["ok"] is False
     assert result["checks"]["format_is_v42"] is False
@@ -594,7 +594,7 @@ def test_elementnodedata_width_mismatch_fails(tmp_path):
 
 def test_audit_msh_directory_reports_issues(tmp_path):
     _write(tmp_path, _BASE_MSH, "good.msh")
-    _write(tmp_path, "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n", "legacy.msh")
+    _write(tmp_path, "$MeshFormat\n4.9 0 8\n$EndMeshFormat\n", "legacy.msh")
     sub = tmp_path / "sub"
     sub.mkdir()
     _write(sub, _TRI6_MSH, "curved.msh")
@@ -830,7 +830,7 @@ def test_lint_fixture_bad_script_trips_every_rule_class():
     rules = {f["rule"] for f in findings}
     assert {"pip-gmsh-import", "gmsh-mesh-generation", "meshio-removed",
             "gmsh-builder-removed", "invalid-gmsh-option",
-            "readgmsh-deprecated"} <= rules
+            "gmsh-solver-input-forbidden"} <= rules
 
 
 def test_lint_fixture_clean_script_has_no_gmsh_findings():
@@ -987,17 +987,19 @@ def test_render_png_flags_axis_equal_override(tmp_path):
 @pytest.mark.skipif(not _GMSH_AVAILABLE or
                     importlib.util.find_spec("PIL") is None,
                     reason="gmsh or Pillow not installed")
-def test_render_png_flags_blank_image(tmp_path):
+@pytest.mark.parametrize("gradient", [0, 1, 2, 3])
+def test_render_png_flags_blank_image(tmp_path, gradient):
     from radia_mcp.gmsh.render import render_png
 
     msh = _write(tmp_path, _BASE_MSH)
     out = tmp_path / "blank.png"
     # hide the view AND all mesh display: nothing gets drawn.
-    # (gmsh.open() on a view-bearing .msh flips Mesh.SurfaceFaces to 1
-    # by itself -- observed on gmsh 4.15.2 -- so it must be overridden.)
+    # Keep mesh display explicitly off after opening the post view.
+    # Empty flat, vertical, horizontal and radial backgrounds must all warn.
     result = render_png(msh, out, width=500, height=400,
                         auto_mesh_display=False,
-                        options={"View[0].Visible": 0,
+                        options={"General.BackgroundGradient": gradient,
+                                 "View[0].Visible": 0,
                                  "Mesh.SurfaceFaces": 0,
                                  "Mesh.VolumeEdges": 0,
                                  "Mesh.SurfaceEdges": 0,
@@ -1008,6 +1010,7 @@ def test_render_png_flags_blank_image(tmp_path):
     blank = result["blank_check"]
     assert blank["ran"] is True
     assert blank["looks_blank"] is True
+    assert blank["method"] == "native_background_reference"
     assert "blank" in result.get("note", "")
 
 

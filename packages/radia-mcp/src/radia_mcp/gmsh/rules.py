@@ -63,18 +63,18 @@ def check_gmsh_builder_import(filepath: str, lines: List[str]) -> List[Dict]:
     return findings
 
 
-def check_msh_version_mismatch(filepath: str, lines: List[str]) -> List[Dict]:
-    """HIGH: Warn when using ReadGmsh (deprecated, use .vol instead)."""
+def check_solver_msh_import(filepath: str, lines: List[str]) -> List[Dict]:
+    """CRITICAL: Reject Gmsh mesh imports into a solver."""
     findings = []
     for i, line in enumerate(lines, 1):
         stripped = line.split("#")[0]
         if "ReadGmsh" in stripped:
             findings.append({
                 "line": i,
-                "severity": "HIGH",
-                "rule": "readgmsh-deprecated",
+                "severity": "CRITICAL",
+                "rule": "gmsh-solver-input-forbidden",
                 "message": (
-                    "ReadGmsh() is deprecated. Use .vol files instead: "
+                    "Gmsh-to-solver input is forbidden. Use checked .vol files: "
                     "Mesh('model.vol'). Export from Cubit with "
                     "'export netgen \"model.vol\" order N'."
                 ),
@@ -201,7 +201,7 @@ def check_invalid_gmsh_option_names(filepath: str, lines: List[str]) -> List[Dic
 ALL_RULES = [
     check_gmsh_api_mesh_generation,
     check_gmsh_builder_import,
-    check_msh_version_mismatch,
+    check_solver_msh_import,
     check_numsubedges_missing,
     check_pip_gmsh_import,
     check_meshio_import,

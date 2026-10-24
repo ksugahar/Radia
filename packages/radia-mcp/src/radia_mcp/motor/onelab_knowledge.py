@@ -323,13 +323,11 @@ transient).
 | Gmsh Physical Lines | Netgen `face.edges` with `name=` for `Boundaries("name")` |
 | Anti-periodicity cut | `mesh.Identify(left, right, IdentificationType.PERIODIC)` with sign-flip |
 
-For a 2D motor the **fastest path** is:
-1. Run Gmsh in batch (`gmsh -2 M.geo -o M.msh`) on the ONELAB `.geo`.
-2. Convert .msh → .vol via NGSolve `ReadGmsh`.
-3. Re-label Physical groups with `mesh.SetMaterial(idx, "stator_iron")`
-   etc. *or* edit the .msh PhysicalNames before reading.
-
-For a 3D motor (rare in ONELAB), use Cubit or Netgen OCC directly.
+For either a 2D or 3D motor, construct the solver mesh with Netgen OCC or
+Cubit, export `.vol`, and validate its versioned material/boundary label
+contract before solver initialization. Physical groups in a display result
+are not a substitute for the solver label contract. Existing ONELAB models
+may inform the physical formulation; they are not a mesh import route.
 
 ### 2. Function space
 

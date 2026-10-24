@@ -318,29 +318,53 @@ try:
             gmsh.fltk.initialize()
             gmsh.fltk.update()
             result["adapt_reverted_views"] = _revert_empty_adaptive_views()
+            # Updating widgets does not draw the OpenGL scene. Complete the
+            # draw before capturing either image; never retry a blank frame.
+            gmsh.graphics.draw()
             gmsh.write(cfg["png_out"])
-            gmsh.fltk.finalize()
             result.update({"ok": True, "ran": True, "png": cfg["png_out"]})
-            # Self-check: an image that is one flat color (plus the tiny
-            # axes triad) means nothing was actually drawn.
+            # Compare against this renderer's background, rather than assuming
+            # one flat RGB color. Gmsh supports vertical/horizontal/radial
+            # gradients; the same camera and axes must survive the comparison.
             try:
-                from PIL import Image
-                img = Image.open(cfg["png_out"]).convert("RGB")
-                w, h = img.size
-                colors = img.getcolors(maxcolors=1 << 22)
-                if colors:
-                    background = max(count for count, _ in colors)
-                    content = 1.0 - background / float(w * h)
-                else:
-                    content = 1.0
-                result["blank_check"] = {
-                    "ran": True,
-                    "content_fraction": round(content, 5),
-                    "looks_blank": content < 0.005,
-                }
+                from pathlib import Path
+                from PIL import Image, ImageChops
             except ImportError:
                 result["blank_check"] = {
                     "ran": False, "error": "Pillow not installed"}
+            else:
+                for tag in gmsh.view.getTags():
+                    index = gmsh.view.getIndex(tag)
+                    gmsh.option.setNumber(f"View[{index}].Visible", 0)
+                current_model = gmsh.model.getCurrent()
+                for model in gmsh.model.list():
+                    gmsh.model.setCurrent(model)
+                    gmsh.model.setVisibility(gmsh.model.getEntities(), 0,
+                                             recursive=True)
+                gmsh.model.setCurrent(current_model)
+                # This subprocess exits after this PNG: no caller scene or
+                # animation state is changed. The reference stays in job scratch.
+                reference = str(Path(out_path).with_name("background.png"))
+                gmsh.fltk.update()
+                gmsh.graphics.draw()
+                gmsh.write(reference)
+                with Image.open(cfg["png_out"]) as actual, Image.open(reference) as background:
+                    img = actual.convert("RGB")
+                    backdrop = background.convert("RGB")
+                    if img.size != backdrop.size:
+                        raise ValueError("background reference dimensions differ from rendered PNG")
+                    diff = ImageChops.difference(img, backdrop)
+                    red, green, blue = diff.split()
+                    changed = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+                    w, h = img.size
+                    content = 1.0 - changed.histogram()[0] / float(w * h)
+                result["blank_check"] = {
+                    "ran": True,
+                    "method": "native_background_reference",
+                    "content_fraction": round(content, 5),
+                    "looks_blank": content < 0.005,
+                }
+            gmsh.fltk.finalize()
         else:
             frames_dir = cfg["frames_dir"]
             frames = []

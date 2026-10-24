@@ -35,7 +35,7 @@ Checks:
    in DesignSpec/configuration; no checker guesses them from region names.
 7. `command.txt`, `run.log`, `solver_result.json`, and versioned `result.json`
    survive success, timeout, invalid config, dependency failure, and solver
-   failure. A spatial solve also leaves a checked GMSH `.msh v4.1` artifact in
+   failure. A spatial solve also leaves a checked GMSH `.msh v4.2` artifact in
    the run directory and indexes it from `result.json`.
 8. The block sample matches the same headless golden band.
 9. MEX/ROM is not promoted merely because it compiles: require parity, error
@@ -71,7 +71,7 @@ The production result is a masked Simulink block in the single Radia library.
    `radia_application_sfun` block.
 6. Use `radia.simulink.application` for the initial explicit-trigger Python
    backend and standard artifacts. Spatial modes expose `--msh-output`; the
-   runner redirects it to a checked GMSH `.msh v4.1` run artifact.
+   runner redirects it to a checked GMSH `.msh v4.2` run artifact.
 7. Add Python and MATLAB tests for mask wiring, port types, model update,
    execution, timeout, missing dependency, and failure provenance.
 8. Regenerate `packages/radia-simulink/matlab/radia_simulink_library.slx` from the builder.
