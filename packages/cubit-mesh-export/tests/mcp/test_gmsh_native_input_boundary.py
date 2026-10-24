@@ -96,3 +96,28 @@ def test_indirect_or_disguised_input_is_refused_before_native_access(monkeypatch
     result, native, operation = _operation(monkeypatch, tmp_path, path)
     assert result["ok"] is False and not native and not operation, result
     assert "MSH 4.2" in result["error"], result
+
+
+@pytest.mark.parametrize("suffix,header", [(".bdf", "$ producer reference\nSOL 101\nCEND\nBEGIN BULK\n"), (".vtk", "# vtk DataFile Version 3.0\nreference\nASCII\n")])
+def test_bdf_vtk_are_explicit_independent_reference_formats_only(tmp_path, suffix, header):
+    path = tmp_path / ("reference" + suffix)
+    path.write_text(header, encoding="utf-8")
+    with pytest.raises(ValueError, match="MSH 4.2"):
+        runtime.preflight_native_mesh_input(path)
+    runtime.preflight_native_mesh_input(path, allow_bdf_vtk=True)
+
+
+@pytest.mark.parametrize("suffix", [".bdf", ".vtk"])
+def test_reference_suffix_does_not_hide_an_oversized_msh_field(tmp_path, suffix):
+    path = tmp_path / ("reference" + suffix)
+    path.write_text(_mesh(2147483648) + _field("NodeData", 2147483648), encoding="utf-8")
+    with pytest.raises(ValueError, match="field tag 2147483648 exceeds 2147483647"):
+        runtime.preflight_native_mesh_input(path, allow_bdf_vtk=True)
+
+
+@pytest.mark.parametrize("suffix", [".geo", ".bdf", ".vtk"])
+def test_reference_mode_does_not_execute_a_geo_program(tmp_path, suffix):
+    path = tmp_path / ("reference" + suffix)
+    path.write_text('Merge "mesh.msh";', encoding="utf-8")
+    with pytest.raises(ValueError, match="GEO"):
+        runtime.preflight_native_mesh_input(path, allow_bdf_vtk=True)

@@ -108,6 +108,8 @@ def build_cylinder_wedge(mesh_size=0.02):
 # ================================================================
 def gmsh_api_volume(filename):
     """Compute volume via GMSH API getJacobians."""
+    from cubit_mesh_export._gmsh_runtime import preflight_native_mesh_input
+    preflight_native_mesh_input(filename, allow_bdf_vtk=True)
     import gmsh
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)

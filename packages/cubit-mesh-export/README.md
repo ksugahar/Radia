@@ -7,6 +7,9 @@ programs or indirect Merge/Include inputs. Before any native initialization,
 NodeData/ElementData/ElementNodeData field tags above 2147483647 are rejected
 explicitly without remapping. Mesh-only size_t tags and pure-Python inventory
 reading have no such upper bound; field tag 2^28 remains supported.
+Independent validation can also compare explicit BDF/VTK reference meshes;
+MSH content is preflighted even under those suffixes, and GEO is rejected.
+The independent Gmsh Jacobian/volume calculations are unchanged.
 
 Order-3 pyramid export to Gmsh is refused with an explicit element/order error:
 the native Gmsh 5 consumer cannot construct that type. No lower-order or fake

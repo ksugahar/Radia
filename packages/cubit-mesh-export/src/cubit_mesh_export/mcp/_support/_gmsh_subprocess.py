@@ -51,14 +51,12 @@ def run_gmsh_json_subprocess(script: str, args: list[str], *,
         wrapped = f'''import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(Path(__file__).resolve().parents[3])!r})
-from cubit_mesh_export._gmsh_runtime import probe_gmsh5, validate_native_msh_fields
+from cubit_mesh_export._gmsh_runtime import probe_gmsh5, preflight_native_mesh_input
 try:
     for argument in sys.argv[1:-1]:
         candidate = Path(argument)
         if candidate.is_file():
-            if candidate.suffix.lower() != '.msh':
-                raise ValueError('Mesh-only Gmsh quality APIs require direct ASCII MSH 4.2; GEO/Merge/Include and other input formats are unsupported')
-            validate_native_msh_fields(candidate)
+            preflight_native_mesh_input(candidate)
     runtime = probe_gmsh5()
     exec(compile({script!r}, '<gmsh-operation>', 'exec'))
     output = Path(sys.argv[-1])

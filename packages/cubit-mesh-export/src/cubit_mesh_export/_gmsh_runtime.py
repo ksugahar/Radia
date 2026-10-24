@@ -108,6 +108,34 @@ def validate_native_msh_fields(path: str | Path) -> None:
             raise ValueError(f'{path}: truncated {kind} before native hand-off') from exc
 
 
+def preflight_native_mesh_input(path: str | Path, *, allow_bdf_vtk: bool = False) -> None:
+    """Guard native file ingestion; BDF/VTK are explicit reference formats only.
+
+    An MSH payload is checked even under an alternate suffix. GEO programs are
+    never accepted, including a GEO program renamed as a reference mesh file.
+    This checks input safety only, not the independent Jacobian/volume oracle.
+    """
+    path = Path(path)
+    suffix = path.suffix.lower()
+    if suffix not in ({".msh", ".bdf", ".vtk"} if allow_bdf_vtk else {".msh"}):
+        raise ValueError("Native mesh checks require direct ASCII MSH 4.2; GEO/Merge/Include and other inputs are unsupported")
+    with path.open("rb") as stream:
+        first = stream.readline().strip()
+        if suffix == ".bdf":
+            while (first.startswith(b"$") and first != b"$MeshFormat") or not first:
+                row = stream.readline()
+                if not row:
+                    break
+                first = row.strip()
+    if suffix == ".msh" or first == b"$MeshFormat":
+        validate_native_msh_fields(path)
+    elif suffix == ".vtk":
+        if not first.startswith(b"# vtk DataFile Version"):
+            raise ValueError("Expected an explicit VTK reference mesh, not a GEO program or unknown input")
+    elif first not in (b"SOL 101", b"CEND", b"BEGIN BULK"):
+        raise ValueError("Expected an explicit BDF reference mesh, not a GEO program or unknown input")
+
+
 def _wheel_identity() -> dict:
     report = os.environ.get("CUBIT_GMSH_INSTALL_REPORT")
     if not report:

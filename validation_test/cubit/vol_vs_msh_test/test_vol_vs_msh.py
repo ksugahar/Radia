@@ -49,6 +49,8 @@ def ngsolve_vol_integrate(vol_path):
 # ================================================================
 def gmsh_api_integrate(msh_path):
     """Read .msh with GMSH API, compute volume (3D) and area (2D)."""
+    from cubit_mesh_export._gmsh_runtime import preflight_native_mesh_input
+    preflight_native_mesh_input(msh_path)
     import gmsh
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
