@@ -987,17 +987,19 @@ def test_render_png_flags_axis_equal_override(tmp_path):
 @pytest.mark.skipif(not _GMSH_AVAILABLE or
                     importlib.util.find_spec("PIL") is None,
                     reason="gmsh or Pillow not installed")
-def test_render_png_flags_blank_image(tmp_path):
+@pytest.mark.parametrize("gradient", [0, 1, 2, 3])
+def test_render_png_flags_blank_image(tmp_path, gradient):
     from radia_mcp.gmsh.render import render_png
 
     msh = _write(tmp_path, _BASE_MSH)
     out = tmp_path / "blank.png"
     # hide the view AND all mesh display: nothing gets drawn.
-    # (gmsh.open() on a view-bearing .msh flips Mesh.SurfaceFaces to 1
-    # by itself -- observed on gmsh 4.15.2 -- so it must be overridden.)
+    # Keep mesh display explicitly off after opening the post view.
+    # Empty flat, vertical, horizontal and radial backgrounds must all warn.
     result = render_png(msh, out, width=500, height=400,
                         auto_mesh_display=False,
-                        options={"View[0].Visible": 0,
+                        options={"General.BackgroundGradient": gradient,
+                                 "View[0].Visible": 0,
                                  "Mesh.SurfaceFaces": 0,
                                  "Mesh.VolumeEdges": 0,
                                  "Mesh.SurfaceEdges": 0,
@@ -1008,6 +1010,7 @@ def test_render_png_flags_blank_image(tmp_path):
     blank = result["blank_check"]
     assert blank["ran"] is True
     assert blank["looks_blank"] is True
+    assert blank["method"] == "native_background_reference"
     assert "blank" in result.get("note", "")
 
 
