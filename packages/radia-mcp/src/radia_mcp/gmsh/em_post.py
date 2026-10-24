@@ -11,12 +11,12 @@ with ``gmsh.view.probe``, then reduce:
   axis-aligned box (N), with the optional torque about a point (N.m)
 * ``gap_harmonics``   -- space-harmonic spectrum on an air-gap circle
 
-Measured semantics that shape the implementation (gmsh 4.15.2):
+Gmsh 5 probe semantics checked with independent tiny fields:
 
-- ``gmsh.view.probe`` returns ``(values, distance)`` and a LIST-BASED
-  VECTOR view answers with the NEAREST value at ANY distance, so a
+- ``gmsh.view.probe`` returns ``(values, distance)``.  Both model-based
+  and list-based VECTOR views can answer outside their data, so a
   point outside the data is detected by ``distance > 0``, never by the
-  values being empty.  On this build ``values`` is a numpy array --
+  values being empty.  The checked API returns a numpy array --
   gate on ``len(values)``, never on truthiness.
 - A locus that pokes outside the mesh would silently integrate over a
   PARTIAL surface, so every verb counts ``n_outside`` and refuses to
@@ -152,7 +152,7 @@ try:
         def _probe(p):
             # None = the point is outside the data.  A list-based
             # VECTOR view hands back the nearest value at ANY distance
-            # (measured gmsh 4.15.2), so the distance IS the test;
+            # in the checked Gmsh 5 API, so distance IS the test;
             # values is a numpy array, so gate on len().
             values, distance = gmsh.view.probe(
                 tag, p[0], p[1], p[2], step=step)

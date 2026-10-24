@@ -905,14 +905,10 @@ inverted node ordering (negative det everywhere) is invisible.
 all four docs/gmsh_animation TET10 meshes were fully inverted while
 animating perfectly in the GUI.
 
-## 1c. gmsh.open() Silently Changes Mesh Display Options
-**Problem**: A script sets display options, opens a view-bearing .msh,
-and the picture shows filled surfaces that were never requested (or a
-"hide everything" recipe still draws the mesh).
-**Cause**: `gmsh.open()` on a post-processing file adjusts mesh display
-options itself -- observed on gmsh 4.15.2: opening a .msh with NodeData
-flips `Mesh.SurfaceFaces` to 1.
-**Fix**: Set display options AFTER `gmsh.open()`, and override
+## 1c. Set Mesh Display Options Explicitly
+The checked Gmsh 5 NodeData fixture leaves `Mesh.SurfaceFaces` at 0
+after opening; opening a field file does not guarantee filled faces.
+Set display options AFTER `gmsh.open()`, and override
 explicitly (`Mesh.SurfaceFaces = 0` etc.) when you need full control.
 The MCP `gmsh_render` applies its options after open; its `blank_check`
 result exposes the content fraction so an unexpectedly full/empty frame
@@ -1416,17 +1412,18 @@ GMSH_PARAVIEW_PARITY = """
 # ParaView -> gmsh correspondence (radia-mcp post verbs)
 
 Everything the lab used ParaView for maps onto the radia-mcp gmsh
-tools below.  Semantics were MEASURED on gmsh 4.15.2 and are locked by
-tests (test_gmsh_paraview_parity.py, test_gmsh_post_process.py).
+tools below.  The supported contracts have analytic tests
+(test_gmsh_paraview_parity.py, test_gmsh_post_process.py); tiny Gmsh 5
+probes additionally check native probe, plugin mutation and naming behavior.
 
 ## Filter correspondence matrix
 
-| ParaView filter | radia-mcp tool | Notes (measured semantics) |
+| ParaView filter | radia-mcp tool | Supported behavior |
 |---|---|---|
 | Calculator | gmsh_math_eval | NODAL application: result interpolates f(node values) |
 | Gradient / Curl / Divergence | gmsh_derived_field | exact derivative of the P1 interpolant, element-wise constant |
 | Eigenvalues (tensor) | gmsh_derived_field(operation="eigenvalues") | writes Min/Mid/Max as 3 views in one file |
-| Contour (isosurface) | gmsh_isosurface | recur_level > 0 = adaptive extraction on order-2 data (0.21 -> 0.008 measured) |
+| Contour (isosurface) | gmsh_isosurface | recur_level > 0 configures adaptive extraction on high-order data |
 | Slice | gmsh_cut_plane_extract | plane A x + B y + C z + D = 0 |
 | Clip (visual) | gmsh_render(cut_plane=...) | display-side clipping, data untouched |
 | Threshold | gmsh_threshold | selects on the ELEMENT MEAN of the scalar |
@@ -1435,7 +1432,7 @@ tests (test_gmsh_paraview_parity.py, test_gmsh_post_process.py).
 | Transform | gmsh_transform_view | coordinates only -- data rewrite via value_expressions |
 | Warp By Vector | gmsh_warp | Plugin(Warp) MOVES THE MODEL NODES (in place) |
 | Cell Data to Point Data | gmsh_smooth_to_nodes | node = mean of adjacent elements (10/20 -> 15) |
-| Stream Tracer | gmsh_streamlines | adaptive RK4 + CLOSED-LOOP detection + termination reasons (Plugin StreamLines is broken on this build) |
+| Stream Tracer | gmsh_streamlines | adaptive RK4 + CLOSED-LOOP detection + termination reasons |
 | Evenly Spaced Streamlines 2D | gmsh_streamlines_2d | Jobard-Lefer on ANY plane slice of 3D data (ParaView: native-2D datasets only) |
 | Particle Tracer / ParticlePath | gmsh_particle_trace | BEYOND parity: ParaView advects massless tracers along a velocity field; this integrates the relativistic LORENTZ DYNAMICS dp/dt = q(E + v x B) (Boris pusher), which ParaView has no native filter for |
 | (no ParaView filter) | gmsh_poincare | BEYOND parity: plane-piercing section of the orbits, interpolated between samples |
@@ -1453,7 +1450,7 @@ tests (test_gmsh_paraview_parity.py, test_gmsh_post_process.py).
 | Spreadsheet / Save Data | gmsh_export_csv | pure-Python on the MSH parser; nodes or element centroids |
 | Histogram | gmsh_field_histogram | value / |field| distribution + PNG |
 | Find Data (max/min location) | gmsh_view_min_max | argmin/argmax coordinates + values |
-| Integrate Variables | gmsh_integrate | P1 accuracy on high-order views; exact FE integrals live in NGSolve |
+| Integrate Variables | gmsh_integrate | dimension-selected view integrals; solver FE integrals live in NGSolve |
 | Temporal shift/harmonics | gmsh_harmonic_to_time / gmsh_modulus_phase | AC phasor -> rotating field / amplitude+phase |
 | Comparative views | gmsh_render_montage | labeled PNG grid |
 | Camera orbit / fly-around | gmsh_export_animation(orbit_axis=...) | camera sweeps, data fixed at time_step |
@@ -1527,27 +1524,26 @@ decreasing exactness -- always prefer the highest one that applies:
 
    **A beamline is the axis-equal exception.**  A beam is millimetres
    across and metres long, so a 1:1 render of a beamline is literally a
-   line (measured: a 0.85 m quadrupole track with a 12 mm aperture
-   renders as one stripe, magnet CAD included).  Write the `.msh` for
+   line at that aspect ratio.  Write the `.msh` for
    interactive 3D and PRINT an envelope plot with the transverse axis
    magnified AND the magnification stated -- see
    docs/gmsh_post/em_particle_orbits.ipynb.
 
-## EM-native reductions: the number, not the picture (all measured)
+## EM-native reductions: the number, not the picture
 
 Everything above turns a field into an IMAGE.  These five turn it into
 the NUMBER an electromagnetics engineer actually reports, each locked
 by a closed form:
 
-| Verb | Golden (MEASURED on the 6-tet Kuhn cube unless noted) |
+| Verb | Analytic reference |
 |---|---|
-| `gmsh_flux_integral` | uniform B = 2 T through a 0.4 x 0.4 rect tilted 30 deg: `\\|B\\| A cos30 = 0.27712812921102`, rel 2.4e-14; disc r = 0.2 normal z: `2 pi (0.04) = 0.2513274122871834`, rel 1.1e-15 |
-| `gmsh_line_integral` | H = (-y, x, 0), circle r = 0.3: `2 pi r^2 = 0.565486677646163`, rel 3.9e-16 on the parametric route |
-| `gmsh_maxwell_force` | uniform B = 2 T, box half 0.4: EVERY face `B^2/(2 mu0) A = 1.018592e6 N` (rel 1.0e-14) and the total EXACTLY zero -- a real cancellation of megaNewton terms. Nonzero case: `B = (a x, 0, 0)` has `div B = a`, so `F_x = a^2 c_x V / mu0`, rel 9.1e-16 |
-| `gmsh_gap_harmonics` | scalar `S = x + 2y` on r = 0.25, N = 64: `a_1 = 0.25`, `b_1 = 0.5`, leakage over every other bin 7.2e-17 |
-| `gmsh_compare_fields` | two DIFFERENT meshings of one cube: a LINEAR field agrees to 5.6e-16 (P1 is exact on both), a QUADRATIC one shows real interpolation error that falls 0.245 -> 0.0622 under refinement, ratio 3.95 vs the O(h^2) 4 |
+| `gmsh_flux_integral` | uniform B = 2 T through a 0.4 x 0.4 rect tilted 30 deg: `\\|B\\| A cos30 = 0.27712812921102`; disc r = 0.2 normal z: `2 pi (0.04) = 0.2513274122871834` |
+| `gmsh_line_integral` | H = (-y, x, 0), circle r = 0.3: `2 pi r^2 = 0.565486677646163` on the parametric route |
+| `gmsh_maxwell_force` | uniform B = 2 T, box half 0.4: each face `B^2/(2 mu0) A = 1.018592e6 N` and the analytic total is zero. Nonzero case: `B = (a x, 0, 0)` has `div B = a`, so `F_x = a^2 c_x V / mu0` |
+| `gmsh_gap_harmonics` | scalar `S = x + 2y` on r = 0.25: `a_1 = 0.25`, `b_1 = 0.5`; all other analytic coefficients vanish |
+| `gmsh_compare_fields` | A linear field is represented exactly by P1 on different meshings. Quadratic fields carry interpolation error; refinement tests check the expected second-order convergence. |
 
-Traps these verbs are built around, each MEASURED:
+Contracts these verbs enforce:
 
 1. **A partially-sampled locus is refused, not averaged.**  All of them
    return `ok: False` with `n_outside` when a sample point leaves the
@@ -1565,16 +1561,16 @@ Traps these verbs are built around, each MEASURED:
 4. **THD can legitimately be `None`.**  It is referenced to order
    n = 1, and a p-pole-pair machine sampled over a full revolution has
    its fundamental at n = p.  A THD computed against a roundoff-level
-   n = 1 (MEASURED: 2.86 for a pure DC field) is noise dressed as a
+   n = 1 is noise dressed as a
    result, so it is refused instead.
 5. **`gmsh_diff_msh` cannot compare across meshes.**  It compares
-   counts and per-view statistics: MEASURED, two meshings of one cube
+   counts and per-view statistics: two meshings of one cube can
    carrying a bit-identical field come back
    `fields_match=False, count mismatch=True`.  Correct for its
    same-mesh regression contract, useless for FEM-vs-HDiv-VIM --
    that is `gmsh_compare_fields`.
 
-## Beautiful isosurfaces: the four levers (all measured)
+## Isosurface display controls
 
 A raw Plugin(Isosurface) render looks faceted and flat.  Four levers
 turn it into the publication picture; the radia-mcp tools apply the
@@ -1583,12 +1579,9 @@ first two for you:
 1. **Adaptive extraction on high-order data**:
    ``gmsh_isosurface(recur_level=3..4)`` / ``gmsh_flux_lines(...)``
    (accepted range 0..6).
-   Plugin(Isosurface) honors RecurLevel ONLY when the source view has
-   adaptive visualization data -- the tools enable
+   The tools configure adaptive visualization data with
    ``View.AdaptVisualizationGrid`` + ``View.MaxRecursionLevel`` on
-   the source view before running the plugin (without that the
-   option is SILENTLY ignored).  Measured on a TET10 quadratic
-   field: radial error 0.21 -> 0.008, 1 -> 143 triangles at level 4.
+   the source view before running the plugin.
    Order-2 GmshPostExport output is exactly what this feeds on.
 2. **Smooth shading**: ``View.SmoothNormals = 1`` (gmsh default is
    OFF -- the main cause of the faceted look).  gmsh_render /
@@ -1597,21 +1590,11 @@ first two for you:
    (default 30 deg) keeps genuine creases sharp.
 3. **Nesting with transparency works** --
    ``color={"alpha": 0.3..0.5}`` on a stack of levels
-   (``View.LightTwoSide`` already defaults to 1).  **CORRECTION
-   (2026-08-07, measured):** an earlier note here blamed "hairline
-   T-junction cracks from per-element adaptive subdivision".  That was
-   WRONG.  Counting background pixels enclosed by the surface
-   silhouette on a curved p2 field gives **0 crack pixels at every
-   recursion level 0..3 and at alpha 1.0 and 0.35** (235 -> 18653 iso
-   elements), for single and nested shells alike.  Adaptive
-   subdivision does not crack the surface.
+   (the checked Gmsh 5 default for ``View.LightTwoSide`` is 1).
+   Inspect the actual shell before attributing visible gaps to refinement.
 4. **What DOES look like cracks: an OPEN shell.**  Where the level set
    crosses the outer domain boundary the surface is cut open, and a
    semi-transparent open shell is see-through by construction.
-   Measured on the same field: a shell closing inside the domain gives
-   0%, one crossing the box faces gives 19-29% see-through, and the
-   figure is **independent of recursion level** (261 vs 5184 elements
-   -> same 22%) -- which is what rules the subdivision explanation out.
    ``gmsh_isosurface`` now reports ``open_surface`` /
    ``touches_outer_boundary`` / ``boundary_vertices`` and a note, so the
    artefact is a stated fact
@@ -1694,11 +1677,8 @@ ohmic loss; ``current_convention="amplitude"`` default gives
 0.5|I|^2 R, ``"rms"`` gives |I|^2 R -- the choice is echoed in the
 returned summary so the reported power is never ambiguous).
 
-REVERSE CURRENTS -- ``|I|`` HIDES THEM (measured, 4 mm square bar at
-100 MHz): in the inductance-limited regime interior strands run
-BACKWARDS -- 1 reverse strand at nwinc=nhinc=3 (Re I = -0.091 A of
-1 A total), 4 at 4x4, 8 at 5x5, the high-frequency limit reproducing
-L^-1 1 exactly.  A |I| colormap paints them as ordinary positive
+REVERSE CURRENTS -- ``|I|`` HIDES THEM: in the inductance-limited
+regime interior strands can run backwards.  A |I| colormap paints them as ordinary positive
 current.  Read the reversal from the signed ``I direction`` arrows or
 from step 0 of ``I_complex`` (= Re I, with a diverging colormap);
 ``n_reverse_segments`` in the returned summary counts them.
@@ -1813,13 +1793,10 @@ without waiting for a wrapper.
   probe-able-curve property.  ``step_files`` overlays the CAD section
   outline (triangle-plane intersection) in black -- the conductor
   cross-section on the texture; same standalone-PNG limitation.
-- Plugin(CutSphere): returns an EMPTY view on this build -- not
-  exposed.  Use gmsh_cut_plane_extract / gmsh_threshold instead.
-- Plugin(Summation): absent from this build ("Unknown plugin"); a
-  bare run() call even fabricates a misleading view.  Sum two views
-  with gmsh_math_eval(other_view=..., "v0+w0").
-- Plugin(StreamLines): only re-emits seed points -- gmsh_streamlines
-  implements its own RK4 tracer instead.
+- Spherical selection is not exposed; use gmsh_cut_plane_extract /
+  gmsh_threshold for the supported selection operations.
+- Sum two views with gmsh_math_eval(other_view=..., "v0+w0").
+- gmsh_streamlines implements its own RK4 tracer.
 
 ## Measured pitfalls behind the tools
 
@@ -1830,13 +1807,12 @@ without waiting for a wrapper.
   (warp).
 - gmsh.view.combine("elements", "name") RENAMES the merged view to
   "<name>_Combine".
-- gmsh.view.probe on VECTOR list views returns the NEAREST value at
-  ANY distance (scalar views return empty outside).  Always gate
+- Checked model-based and list-based VECTOR probes return values even
+  outside their data (scalar probes return empty outside).  Always gate
   "found" on the returned distance -- gmsh_probe and the streamline
   tracer do this internally.
-- A wrong count in a $Nodes/$Elements header header does not raise in
-  gmsh: it CRASHES the process with heap corruption (0xC0000374).
-  Run gmsh_validate_msh before feeding hand-written MSH to anything.
+- Run gmsh_validate_msh before native access: inconsistent section counts
+  and references must fail at the strict format boundary.
 """
 
 
