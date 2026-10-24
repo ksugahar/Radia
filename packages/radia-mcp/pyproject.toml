@@ -28,7 +28,7 @@ maintenance = ["tomlkit>=0.13,<1"]
 # distributing this extra: the published 5.3.3 writer has no PayloadV42.
 build123d = [
     "build123d>=0.6",
-    "cubit-mesh-export>=2.2.6",
+    "cubit-mesh-export>=2.2.6; python_version == '3.12' and sys_platform == 'win32'",
     "ngsolve==6.2.2608",
     "netgen-mesher==6.2.2608",
     "radia>5.3.3",
