@@ -23,8 +23,9 @@ def retained_context(data: dict, *, verified: bool = True) -> str:
     """Bound error context to artifact identifiers, never an arbitrary receipt."""
     fields = {key: str(data.get(key, ''))[:4096]
               for key in ('output', 'worker_receipt', 'staging', 'sha256')}
-    label = 'verified artifact' if verified else 'unverified evidence'
-    return f'; {label} retained: ' + json.dumps(fields, ensure_ascii=False)
+    label = 'artifact' if verified else 'unverified evidence'
+    qualifier = '; verified at digest time' if verified else ''
+    return f'{qualifier}; {label} retained: ' + json.dumps(fields, ensure_ascii=False)
 
 
 def _load_exporter():

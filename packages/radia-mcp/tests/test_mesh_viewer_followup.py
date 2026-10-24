@@ -142,7 +142,7 @@ def test_independent_digest_failure_never_reaches_gui(digest_case,monkeypatch,fa
     with pytest.raises(RuntimeError,match='Post-view receipt digest failed') as caught:
         asyncio.run(adapter.open_mesh_viewer(str(source),str(target),'report',receipt['source_sha256'],'materials'))
     message=str(caught.value)
-    assert 'unverified evidence retained' in message and 'verified artifact retained' not in message
+    assert 'unverified evidence retained:' in message and 'artifact retained:' not in message
     context=json.loads(message.split('retained: ',1)[1])
     assert context['output']==str(target) and context['worker_receipt']==str(locations[0])
     assert context['sha256']==receipt['sha256']
@@ -166,7 +166,7 @@ def test_verified_artifact_context_survives_later_failure(digest_case,monkeypatc
     with pytest.raises(RuntimeError) as caught:
         asyncio.run(adapter.open_mesh_viewer(str(source),str(target),'report',receipt['source_sha256'],'materials'))
     message=str(caught.value)
-    assert 'verified artifact retained' in message
+    assert 'verified at digest time; artifact retained:' in message
     context=json.loads(message.split('retained: ',1)[1])
     assert context=={'output':str(target),'worker_receipt':str(locations[0]),
                      'staging':receipt['staging'],'sha256':receipt['sha256']}
@@ -176,13 +176,15 @@ def test_verified_artifact_context_survives_later_failure(digest_case,monkeypatc
 
 
 def test_plain_view_failure_has_no_invented_retained_receipt(tmp_path,monkeypatch):
-    source=tmp_path/'plain.vol';source.write_bytes(b'input')
+    folder=tmp_path/'retained';folder.mkdir()
+    source=folder/'plain.vol';source.write_bytes(b'input')
     monkeypatch.setattr(adapter,'require_interactive_desktop',lambda:{})
     async def fail(*args,**kwargs):raise RuntimeError('preflight failure')
     monkeypatch.setattr(adapter,'run_worker',fail)
     with pytest.raises(RuntimeError,match='preflight failure') as caught:
         asyncio.run(adapter.open_mesh_viewer(str(source)))
-    assert 'retained' not in str(caught.value)
+    assert 'artifact retained:' not in str(caught.value)
+    assert 'evidence retained:' not in str(caught.value)
 
 
 @pytest.mark.skipif(sys.platform!='win32',reason='Windows digest worker contract')
