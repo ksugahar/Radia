@@ -125,7 +125,10 @@ def _archived_notebooks(root: Path, records: list[dict]) -> set[str]:
             continue
         path = root / notebook["path"]
         assert path.suffix == ".ipynb" and path.resolve().is_relative_to(root.resolve())
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == notebook["sha256"], path
+        payload = path.read_bytes()
+        if notebook.get("text_eol") == "lf":
+            payload = payload.replace(b"\r\n", b"\n")  # Git text checkout conversion only.
+        assert hashlib.sha256(payload).hexdigest() == notebook["sha256"], path
         paths.add(path.relative_to(root).as_posix())
     return paths
 
