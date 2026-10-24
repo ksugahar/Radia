@@ -60,7 +60,7 @@ The single parent is `packages/radia-mcp/src/radia_mcp/bibliography/data/referen
 - A tracked production `.slx` passes read, edit, check, save, close and reopen on the exact path; never patch SLX ZIP/XML directly. Public model-authored UI text is English; mojibake, broken wiring or unresolved blocks block release.
 - Production blocks are readable, user-customizable Level-2 MATLAB S-Functions; reusable kernels remain independently callable standalone MEX functions. Native objects use checked `uint64` handles; never expose raw pointers.
 - Explicit Python CPU workflows run at initialization, update, artifact or batch boundaries, never per Simulink step or as implicit CUDA fallback. Measure cold start, warmed median, transfers and memory; do not assume MEX or pybind11 is faster.
-- Production models require typed ports, masks, sample-time semantics, dependency checks, lifecycle tests, numerical checks and durable `run.log`/`result.json`. Spatial runs emit checked Gmsh `.msh` v4.1 artifacts.
+- Production models require typed ports, masks, sample-time semantics, dependency checks, lifecycle tests, numerical checks and durable `run.log`/`result.json`. Spatial runs emit checked Gmsh `.msh` v4.2 artifacts.
 
 ## Mesh And CAD
 STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver boundary is a checked `.vol` regardless of the creation route.
@@ -75,8 +75,8 @@ STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver bo
 
 **POLICY**: CI and builds run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` serves fast contracts, `100` heavy CPU jobs, plus one GPU label. Use the on-demand GPU worker only for mexcuda GPU work.
 Deployment (2026-10-21): radia and radia-mcp deploy to the build host (editable) and the validation host (verified wheel); cubit-mesh-export deploys only to the build host, is tested independently there, and solver releases never install, uninstall, repoint or version-gate it. Retired execution targets are excluded from deployment, CI and computation.
-The build host owns preflight. Editable installs exist only there, in a dedicated development venv separate from the release runtime; the validation host consumes radia/radia-mcp wheels, never Cubit. NGSolve runs from verified wheels at the version pinned in package metadata (6.2.2608).
-NGSolve hosts start from checked exported .vol files, without Cubit; the validation host runs without Cubit and never installs or runs it.
+The build host owns preflight and the only editable installs, in a development venv separate from the release runtime; the validation host consumes radia/radia-mcp wheels, never Cubit. NGSolve runs from verified wheels at the version pinned in package metadata (6.2.2608).
+NGSolve hosts start from checked exported .vol files, without Cubit; the validation host runs without Cubit.
 MATLAB-capable runners use a MATLAB-authenticated interactive account and pass an Engine startup/calculation/shutdown check in the actual runner context; never a MATLAB runner service.
 
 CI scope begins at the independently released distribution boundary. The checked `radia_mcp.meta` catalog and each server's live `tools/list` response are the tool-discovery source of truth. Generated tool inventory snapshots are local diagnostics, not committed artifacts or CI oracles. normal pull-request and main-push CI runs a stable compact contract set, tests selected from the changed source/test paths, and only the affected server selftests. The complete package pytest suite, all-server selftests, and live-catalog audit belong to an explicit full-audit workflow.
@@ -104,7 +104,7 @@ Reliability comes from cheap independent checks on every change, not exhaustive 
 
 Roles: the build host owns CI, release artifacts, isolated numerical validation and CPU development; the validation host runs GPU development, verified-wheel validation and timing, never Cubit; the JMAG evaluation host runs no Radia work. Timings are diagnostic.
 Before remote work, probe reachability, running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs and never stop another session's jobs.
-Heavy jobs (2026-10-22): run in an isolated job venv, never the shared release runtime; use only owner-pool cores, never CI runner cores; obtain manager resource admission before start and record it in `owner.json` in the job root; record topology, affinity, NUMA node and thread settings in result JSON. Runs longer than about 30 minutes are never PR gates; one-off comparisons are not repeated.
+Heavy jobs (2026-10-24): development venv read-only, never the release runtime; a job venv only for a differing pin, admitted and deleted; use only owner-pool cores, never CI runner cores; obtain manager resource admission before start and record it in `owner.json` in the job root; record topology, affinity, NUMA node and thread settings in result JSON. Runs longer than about 30 minutes are never PR gates; one-off comparisons are not repeated.
 Compare CPU/GPU on the same host with fixed, recorded threads (16-thread baseline where supported). Measure speed, scaling, setup, transfers and total time; save hardware, memory and versions in JSON.
 Historical measurements remain valid provenance: public evidence uses neutral roles; role-to-host maps, originals and hashes stay in private storage. Never relabel to another host. Keep hosts, IPs and paths private.
 

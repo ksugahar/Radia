@@ -1,4 +1,6 @@
-"""Independent NGSolve CPU solve and strict optional CUDA dispatch contracts."""
+"""Guards: NGSolve CPU independence and strict optional CUDA dispatch/residuals.
+Assumes: NGSolve is installed; these CSR contracts need no Radia distribution.
+"""
 import importlib.util
 from pathlib import Path
 import sys
@@ -10,18 +12,33 @@ spec=importlib.util.spec_from_file_location('csr_execution',ROOT/'src/radia_simu
 csr=importlib.util.module_from_spec(spec);spec.loader.exec_module(csr)
 
 
-def test_ngsolve_cpu_solve_is_independent_of_cuda_binding(monkeypatch):
-    from radia.ngsolve_sparse import real_sparse_matrix_type
+@pytest.fixture
+def spd_system():
     ng=pytest.importorskip('ngsolve')
+    from netgen.geom2d import unit_square
+    mesh=ng.Mesh(unit_square.GenerateMesh(maxh=1))
+    space=ng.H1(mesh,order=1)
+    u,v=space.TnT()
+    form=ng.BilinearForm(space,symmetric=False)
+    form+=(ng.grad(u)*ng.grad(v)+u*v)*ng.dx
+    with ng.TaskManager():
+        form.Assemble()
+    a=form.mat
+    b=a.CreateColVector();b.FV().NumPy()[:]=np.arange(1,a.height+1,dtype=np.float64)
+    return ng,a,b
+
+
+def test_ngsolve_cpu_solve_is_independent_of_cuda_binding(monkeypatch,spd_system):
+    ng,a,b=spd_system
     # An accidental GPU import is an error even if CUDA happens to be installed.
     monkeypatch.setitem(sys.modules,'radia_simulink._csr_cuda',None)
     monkeypatch.setitem(sys.modules,'radia_simulink._cuda_runtime',None)
-    a=real_sparse_matrix_type().CreateFromCOO([0,0,1,1,1,2,2],[0,1,0,1,2,1,2],
-                                          [4.,-1.,-1.,4.,-1.,-1.,3.],3,3)
-    b=a.CreateColVector();b.FV().NumPy()[:]=[1.,2.,3.]
     with ng.TaskManager():
         x,info=csr.solve_spd(a,b,backend='cpu',tolerance=1e-12)
-    expected=np.linalg.solve(np.array([[4.,-1.,0.],[-1.,4.,-1.],[0.,-1.,3.]]),[1.,2.,3.])
+    rows,columns,values=a.COO()
+    dense=np.zeros((a.height,a.width))
+    np.add.at(dense,(np.asarray(rows),np.asarray(columns)),np.asarray(values))
+    expected=np.linalg.solve(dense,b.FV().NumPy())
     np.testing.assert_allclose(x,expected,rtol=1e-13,atol=1e-14)
     assert info['backend']=='cpu' and info['true_relative_residual']<1e-13
 
@@ -55,13 +72,10 @@ def test_gpu_missing_binding_propagates_without_cpu_fallback(monkeypatch):
 
 
 
-def test_gpu_result_cannot_hide_a_bad_original_equation_residual(monkeypatch):
-    from radia.ngsolve_sparse import real_sparse_matrix_type
+def test_gpu_result_cannot_hide_a_bad_original_equation_residual(monkeypatch,spd_system):
     import types
-    ng=pytest.importorskip('ngsolve')
-    a=real_sparse_matrix_type().CreateFromCOO([0],[0],[2.],1,1)
-    b=a.CreateColVector();b.FV().NumPy()[:]=[1.]
-    fake=types.SimpleNamespace(solve=lambda *args:(np.zeros(1),dict(backend='gpu',true_relative_residual=0.)))
+    ng,a,b=spd_system
+    fake=types.SimpleNamespace(solve=lambda *args:(np.zeros(a.height),dict(backend='gpu',true_relative_residual=0.)))
     package=types.ModuleType('radia_simulink');package.__path__=[];package._csr_cuda=fake
     monkeypatch.setitem(sys.modules,'radia_simulink',package)
     monkeypatch.setitem(sys.modules,'radia_simulink._cuda_runtime',types.SimpleNamespace(prepare_cuda_runtime=lambda:None))

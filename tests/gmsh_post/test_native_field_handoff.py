@@ -12,7 +12,7 @@ package = types.ModuleType('_native_field_source')
 package.__path__ = [str(ROOT / 'src/radia')]
 sys.modules[package.__name__] = package
 spec = importlib.util.spec_from_file_location(
-    package.__name__ + '.peec_mesh_import', ROOT / 'src/radia/peec_mesh_import.py')
+    package.__name__ + '._gmsh_native_fields', ROOT / 'src/radia/_gmsh_native_fields.py')
 reader = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(reader)
 
@@ -41,7 +41,7 @@ def test_large_field_tag_rejected_before_native_access(tmp_path, monkeypatch, ki
 
     monkeypatch.setitem(sys.modules, 'gmsh', NativeMustNotRun())
     with pytest.raises(ValueError, match='2147483665 exceeds 2147483647'):
-        reader._load_gmsh(path)
+        reader.validate_native_msh_fields(path)
     assert native_calls == []
 
 

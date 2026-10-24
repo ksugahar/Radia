@@ -431,13 +431,17 @@ Z_LL[i][i] = R[i] + jw*L[i][i] + Z_s[i]
 
 **Dual mesh workflow** (updated `demo_peec_from_dual_mesh.py`):
 
-1. Generate dual mesh in Cubit: `generate_dual_mesh_filament_panel.py`
-2. Export to GMSH v4.1 format (1D filaments + 2D panels)
-3. Load in Python: `demo_peec_from_dual_mesh.py`
-4. Build PEEC matrices with true 2D integration
+1. Create the declared conductor mesh in Cubit or Netgen, preserving its
+   filament and panel discretizations.
+2. Export an SI `.vol` and its versioned label contract; check the contract
+   before solver initialization.
+3. Load the explicit inputs:
+   `python docs/peec_integration/demos/basic_peec/demo_peec_from_dual_mesh.py --mesh conductor.vol --contract conductor.labels.json`
+4. Build PEEC matrices with the existing 2D integration. Gmsh MSH 4.2 is
+   derived display output only, never solver input.
 
 ```python
-# Loading panels from GMSH dual mesh
+# Loading explicit panel connectivity from a checked solver .vol
 for node_indices in panel_triangles:
     vertices = [coords[node_tags == idx][0].tolist() for idx in node_indices]
     builder.add_panel(vertices)
@@ -521,7 +525,7 @@ struct PEECSegment {
    void ComputeFilamentPanelM_LS();  // Filament-panel coupling
    ```
 
-2. **Update GMSH import workflow**:
+2. **Use checked solver `.vol` inputs**:
    - Generate 1D centerline mesh (filaments) -- ALREADY WORKING
    - Generate 2D surface mesh (panels) -- ALREADY WORKING
    - Link filaments to panels
@@ -544,7 +548,7 @@ struct PEECSegment {
 | `rad_peec_matrices.cpp` | Implement segment integration for L matrix | **HIGH** |
 | `rad_peec_matrices.h` | Add panel-based API | MEDIUM |
 | `demo_peec_from_1d_mesh.py` | Test new implementation | HIGH |
-| `generate_1d_coil_mesh.py` | Add surface panel generation | MEDIUM |
+| `docs/peec_integration/demos/gmsh_models/solver_vol.py` | Check labels and read explicit solver connectivity | MEDIUM |
 
 ---
 
@@ -634,7 +638,7 @@ struct PEECSegment {
 | **Triangle self-potential** | Done | Wilton analytical formula |
 | **Quad self-potential** | Done | Split into 2 triangles |
 | **Triangle-triangle mutual** | Done | Gauss quadrature (near) + centroid (far) |
-| **Mesh import** | Done | GMSH dual mesh (filaments + panels) |
+| **Mesh input** | Implemented | Checked `.vol` helper; separate line/surface input loading checked, combined 1D+2D solver case not executed |
 | **Python API** | Done | `add_panel(vertices)`, `num_panels` |
 | **Mixed meshes** | Done | Triangles + quads in same builder |
 | **P matrix integration** | Done | Auto-selects panels vs nodes |

@@ -1,7 +1,7 @@
 """
 PEEC Analysis from Dual Mesh (Filament + Panel)
 
-Loads GMSH mesh containing:
+Loads Netgen .vol mesh containing:
     - Block 1: 1D edge elements (Filaments) for Loop DOFs
     - Block 2: 2D surface elements (Panels) for Star DOFs
 
@@ -20,9 +20,9 @@ from pathlib import Path
 
 import numpy as np
 
-GMSH_MODELS = Path(__file__).resolve().parents[1] / "gmsh_models"
-sys.path.insert(0, str(GMSH_MODELS))
-from gmsh_ascii_reader import read_gmsh_ascii  # noqa: E402
+SOLVER_INPUT_TOOLS = Path(__file__).resolve().parents[1] / "gmsh_models"
+sys.path.insert(0, str(SOLVER_INPUT_TOOLS))
+from solver_vol import load_solver_mesh, vertex_data, element_groups  # noqa: E402
 
 print("=" * 70)
 print("PEEC Analysis from Dual Mesh (Filament + Panel)")
@@ -39,33 +39,20 @@ except ImportError:
     sys.exit(1)
 
 # Check mesh file
-mesh_file = GMSH_MODELS / "dual_mesh_filament_panel.msh"
+mesh_file, mesh = load_solver_mesh()
 
-if not mesh_file.exists():
-    print(f"\nERROR: Mesh file not found: {mesh_file}")
-    print("\nGenerate with:")
-    print("  cd gmsh_models")
-    print("  python generate_dual_mesh_filament_panel.py"
-          "   # drives Coreform Cubit headless")
-    sys.exit(1)
-
-print(f"\n[1] Reading dual mesh fixture: {mesh_file.name}")
-
-mesh = read_gmsh_ascii(mesh_file)
-
-node_tags = mesh.node_tags
+node_tags, coords = vertex_data(mesh)
 n_nodes = len(node_tags)
-coords = mesh.coords * 1e-3  # mm to m
 
 print(f"    Nodes: {n_nodes}")
 
 # Get elements by type
-elem_types, elem_tags, elem_node_tags = mesh.grouped_elements()
+elem_types, elem_tags, elem_node_tags = element_groups(mesh)
 
 # Extract Filament elements (1D edges, type 1)
 filament_edges = []
 for i, elem_type in enumerate(elem_types):
-    if elem_type == 1:  # Line element (2 nodes)
+    if elem_type == "line":  # Line element (2 nodes)
         node_tags_flat = elem_node_tags[i]
         n_elems = len(node_tags_flat) // 2
         for j in range(n_elems):
@@ -78,14 +65,14 @@ panel_triangles = []
 panel_quads = []
 
 for i, elem_type in enumerate(elem_types):
-    if elem_type == 2:  # Triangle (3 nodes)
+    if elem_type == "triangle":  # Triangle (3 nodes)
         node_tags_flat = elem_node_tags[i]
         n_elems = len(node_tags_flat) // 3
         for j in range(n_elems):
             nodes = [node_tags_flat[j*3 + k] for k in range(3)]
             panel_triangles.append(nodes)
 
-    elif elem_type == 3:  # Quad (4 nodes)
+    elif elem_type == "quad":  # Quad (4 nodes)
         node_tags_flat = elem_node_tags[i]
         n_elems = len(node_tags_flat) // 4
         for j in range(n_elems):
@@ -144,7 +131,7 @@ print(f"    Adding {n_panels} Panel elements (Star elements)...")
 for node_indices in panel_triangles:
     vertices = []
     for node_idx in node_indices:
-        # Find coordinate index (GMSH node tags start at 1)
+        # Find coordinate index (Netgen .vol node tags start at 1)
         coord_idx = np.where(node_tags == node_idx)[0][0]
         vertices.append(coords[coord_idx].tolist())
     builder.add_panel(vertices)

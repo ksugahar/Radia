@@ -369,7 +369,8 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert "one heavy job at a time" in normalized.lower()
     assert "running jobs and available memory" in normalized
     assert "never stop another session's jobs" in normalized
-    assert "isolated job venv, never the shared release runtime" in normalized
+    assert "development venv read-only, never the release runtime" in normalized
+    assert "a job venv only for a differing pin, admitted and deleted" in normalized
     assert "only owner-pool cores, never CI runner cores" in normalized
     assert "manager resource admission before start" in normalized
     assert "`owner.json` in the job root" in normalized
