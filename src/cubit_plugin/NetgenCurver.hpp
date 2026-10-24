@@ -229,18 +229,17 @@ private:
   mutable long diag_edge_failures_ = 0;
   mutable std::string diag_edge_worst_;
   std::string last_error_;
-  // Reject thresholds (mm). If projection displaces the query point by more
-  // than this, fall back to identity (linear interpolation will pick up the
-  // edge in the final pass).
+  // Reject thresholds in the CAD model's length units; no unit conversion.
+  // Known-edge reprojection beyond edge_reject_threshold_ fails the export.
+  // Arc interpolation with displacement greater than its chord also fails.
+  // Neither case substitutes identity or linear interpolation (user decision
+  // 2026-10-24). Surface projection rejection has its separate policy below.
   //
-  // Surface threshold is tight because wrong-side projections on thin wire
-  // cross-sections (full diameter ~6.3 mm) must be caught; raising to 5 mm
-  // blows volume up +13%.
-  //
-  // Edge/curve threshold is *also* tight on 3turnCoil: accepting chord
-  // midpoints that project more than ~1.5 mm away routinely picks up
-  // cross-curve jumps (6.3 mm = full wire cross-section). With edge
-  // threshold at 10 mm: volume +25.6%. At 1.5 mm: -0.80%.
+  // Historical 3turnCoil provenance (millimetre CAD model, former identity
+  // fallback): a surface threshold of 5 mm produced +13% volume; an edge
+  // threshold of 10 mm produced +25.6%, and 1.5 mm produced -0.80%.
+  // Wire cross-section diameter was about 6.3 mm. These historical fallback
+  // results do not certify the current fail-loud export path.
   double project_reject_threshold_ = 1.5;
   double edge_reject_threshold_ = 1.5;
 
