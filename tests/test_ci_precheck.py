@@ -87,6 +87,8 @@ def git_diff(paths):
         if args[0] == "merge-base":
             return "a" * 40
         assert "--no-renames" in args and "-z" in args
+        if "--diff-filter=D" in args:
+            return ""
         return "\0".join(paths) + ("\0" if paths else "")
     return git
 
@@ -450,3 +452,22 @@ def test_failed_partial_reports_false_not_unknown(tmp_path, monkeypatch):
     assert precheck.main(["--skip-repo-contracts", "--report", str(out)]) == 1
     result = json.loads(out.read_text())
     assert result["passed"] is False and result["status"] == "failed"
+
+
+@pytest.mark.parametrize("deleted,known,accepted", [(True,True,True),(False,True,False),(True,False,False)])
+def test_removed_owner_uses_only_proven_deleted_base_inputs(deleted, known, accepted):
+    path = "retired_distribution/input.py"
+    def git(*args):
+        if args[0] == "merge-base":
+            return "a" * 40
+        if args[0] == "show":
+            return json.dumps({"rules": [{"pattern": path, "owners": ["retired"]}] if known else []})
+        assert args[0] == "diff" and "--no-renames" in args
+        return path + "\0" if "--diff-filter=D" not in args or deleted else ""
+    if not accepted:
+        with pytest.raises(ValueError):
+            precheck.build_source_plan("base", git=git)
+    else:
+        plan = precheck.build_source_plan("base", git=git)
+        assert plan["radia"] and plan["mcp"]
+        assert plan["retired_deleted_paths"] == [path]
