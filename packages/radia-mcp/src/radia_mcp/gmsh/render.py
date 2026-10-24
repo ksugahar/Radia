@@ -318,6 +318,9 @@ try:
             gmsh.fltk.initialize()
             gmsh.fltk.update()
             result["adapt_reverted_views"] = _revert_empty_adaptive_views()
+            # Updating widgets does not draw the OpenGL scene. Complete the
+            # draw before capturing either image; never retry a blank frame.
+            gmsh.graphics.draw()
             gmsh.write(cfg["png_out"])
             result.update({"ok": True, "ran": True, "png": cfg["png_out"]})
             # Compare against this renderer's background, rather than assuming
@@ -343,6 +346,7 @@ try:
                 # animation state is changed. The reference stays in job scratch.
                 reference = str(Path(out_path).with_name("background.png"))
                 gmsh.fltk.update()
+                gmsh.graphics.draw()
                 gmsh.write(reference)
                 with Image.open(cfg["png_out"]) as actual, Image.open(reference) as background:
                     img = actual.convert("RGB")
