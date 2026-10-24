@@ -37,7 +37,8 @@ _DROPPED_NAMES = {"VIRTUAL_ENV", "CONDA_PREFIX", "RADIA_MCP_CI_SELECTION_JSON",
 def _clean_env(**extra):
     env = {key: value for key, value in os.environ.items()
            if not key.upper().startswith(_DROPPED_PREFIXES) and key.upper() not in _DROPPED_NAMES}
-    env.update(PYTHONNOUSERSITE="1", RADIA_TESTS_ALLOW_PARTIAL="0", **extra)
+    env.update(PYTHONNOUSERSITE="1", PYTHONDONTWRITEBYTECODE="1",
+               RADIA_TESTS_ALLOW_PARTIAL="0", **extra)
     return env
 
 
