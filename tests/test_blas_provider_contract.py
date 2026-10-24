@@ -1,7 +1,8 @@
 """Build-only provider admission contracts.
 
 Guards: Architecture/provider mismatch rejection, explicit LP64 library closure,
-and missing-development-file rejection before configure.
+missing-development-file rejection before configure, and keeping MKL Fortran
+LAPACK declarations out of the NGSolve-facing provider boundary.
 Assumes: Provider files are temporary fixtures; no native library is loaded.
 """
 import importlib.util
@@ -55,3 +56,17 @@ def test_shared_provider_header_selects_both_distributions():
     for lane in ("radia", "radia-simulink"):
         for event, projection in manifest["lanes"][lane]["events"].items():
             assert ownership.selected(path, projection), (lane, event, path)
+
+
+def test_mkl_boundary_does_not_export_fortran_lapack_declarations():
+    # NGSolve owns clapack.h. Loading the umbrella first causes C2116/C2733
+    # for its complex Fortran signatures; only the C interfaces are needed.
+    import re
+
+    text = (ROOT / "src/core/rad_blas.h").read_text(encoding="utf-8")
+    mkl_branch = text.split("#if defined(RADIA_BLAS_MKL)", 1)[1].split(
+        "\n#else\n", 1)[0]
+    includes = set(re.findall(r"^#include [<\"]([^>\"]+)[>\"]",
+                              mkl_branch, re.MULTILINE))
+    expected = {"mkl_cblas.h", "mkl_lapacke.h", "mkl_service.h"}
+    assert includes == expected, (includes, expected)
