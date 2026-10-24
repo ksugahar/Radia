@@ -303,7 +303,7 @@
         "tools/ci_numerical_runtime.py",
         "tools/ci_numerical_inputs.json"
       ],
-      "audit_sha256": "c1eca6343513b3311d8e9c0ec3f12265fb073b20b874b47123fb76e644e1976a",
+      "audit_sha256": "90cca6304c85e1b9d6f0b3dea6a26ee534f05b3b282e637cf50fd879ede766d0",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
