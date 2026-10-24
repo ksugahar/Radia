@@ -107,3 +107,7 @@ def test_policy_workflow_does_not_expose_rules_to_forks_or_target_events():
     assert "github.event.pull_request.head.repo.full_name == github.repository" in env
     assert "secrets.RADIA_PUBLIC_NAME_RULES_JSON" in env
     assert "|| ''" in env
+
+    contract_step = next(s for s in data["jobs"]["repository-contracts"]["steps"]
+                         if "--profile repo-contracts" in s.get("run", ""))
+    assert contract_step["env"]["RADIA_PUBLIC_NAME_RULES_JSON"] == env

@@ -176,14 +176,34 @@ def build_source_plan(since, *, full=False, git=None):
     contract = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(contract)
     data = contract.load(ROOT)
+    retired_deleted = []
+    deleted, previous = None, None
     for path in changed:
-        contract.owner_rule(data, path)  # Unknown ownership cannot become a skip.
-    control = any(path in _CONTROL_INPUTS or path.startswith(".github/workflows/")
+        try:
+            contract.owner_rule(data, path)
+        except ValueError:
+            # A removed distribution may retire its ownership rules in this
+            # same change. Only a Git-proven deletion may use checked-base
+            # ownership; added/modified unknown inputs still fail closed.
+            if deleted is None:
+                deleted = set(filter(None, git("diff", "--name-only", "-z",
+                    "--no-renames", "--diff-filter=D", base, "HEAD", "--").split("\0")))
+            if path not in deleted:
+                raise
+            try:
+                if previous is None:
+                    previous = json.loads(git("show", f"{base}:tools/ci_distribution_manifest.json"))
+                contract.owner_rule(previous, path)
+            except (ValueError, KeyError, subprocess.CalledProcessError) as error:
+                raise ValueError(f"deleted input has no checked-base ownership: {path}") from error
+            retired_deleted.append(path)
+    control = bool(retired_deleted) or any(path in _CONTROL_INPUTS or path.startswith(".github/workflows/")
                   for path in changed)
     def selected(lane):
         return control or any(contract.selected(path, data["lanes"][lane]["events"]["pull_request"])
                               for path in changed)
     return {"mode": "affected", "base": base, "changed_paths": changed,
+            "retired_deleted_paths": retired_deleted,
             "radia": not changed or selected("radia"),
             "mcp": selected("radia-mcp-matrix"),
             "ci_only_lanes": _ci_only_lanes(changed, data),
