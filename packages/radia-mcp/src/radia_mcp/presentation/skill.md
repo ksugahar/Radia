@@ -20,12 +20,12 @@
 
 一括PPTXは eqnedit64>=3.1.4 が必要です。最新版バックエンドがない場合は例外とし、
 画像や旧モジュールへ自動置換しません。対応構文とOffice検証の制限は
-`tools/eqnedit64/docs/POWERPOINT_MATH.md` を参照してください。
+[Eqnedit64 PowerPoint math](https://github.com/ksugahar/eqnedit64/blob/main/docs/POWERPOINT_MATH.md) を参照してください。
 
 
-- native版とJS版の正本はどちらもRadiaの `tools/eqnedit64` に置く。
-  JS実装は `tools/eqnedit64/web/equation-editor.js`、共通契約は
-  `tools/eqnedit64/docs/PRODUCT_PARITY.md`。研究室ホームページはJS版の
+- native版とJS版の正本は独立した `ksugahar/eqnedit64` リポジトリに置く。
+  JS実装は `ksugahar/eqnedit64` の `web/equation-editor.js`、共通契約は
+  独立リポジトリの `docs/PRODUCT_PARITY.md`。研究室ホームページはJS版の
   公開先であり、ホームページ側のコピーを独自編集しない。
 - native版とPython APIは独立した `eqnedit64` PyPIパッケージとして公開する。
   `radia-mcp.presentation` は任意の利用側であり、`eqnedit64`への依存や実装の

@@ -8,12 +8,6 @@ RELEASE_WORKFLOWS=(
 OPTUNA_RELEASE_WORKFLOW=(
     ROOT/".github"/"workflows"/"release-radia-optuna.yml"
 )
-EQNEDIT64_WORKFLOW=(
-    ROOT/".github"/"workflows"/"eqnedit64.yml"
-)
-EQNEDIT64_RELEASE_WORKFLOW=(
-    ROOT/".github"/"workflows"/"release-eqnedit64-pypi.yml"
-)
 PACKAGE_CI_CONTEXTS=(
     (
         ROOT/".github"/"workflows"/"build-test.yml",
@@ -30,7 +24,6 @@ def test_pypi_distributions_have_independent_ci_boundaries():
         "radia-mcp": ROOT/".github"/"workflows"/"radia-mcp-matrix.yml",
         "cubit-mesh-export": ROOT/".github"/"workflows"/"cubit-mesh-export.yml",
         "radia-optuna": ROOT/".github"/"workflows"/"radia-optuna.yml",
-        "Eqnedit64": ROOT/".github"/"workflows"/"eqnedit64.yml",
     }
     texts={name: path.read_text(encoding="utf-8")
            for name, path in workflows.items()}
@@ -68,7 +61,6 @@ def test_pypi_distributions_have_independent_ci_boundaries():
     assert "tags: ['radia-mcp-v*']" in texts["radia-mcp"]
     assert "tags: ['cubit-mesh-export-v*']" in texts["cubit-mesh-export"]
     assert "tags: ['radia-optuna-v*']" in texts["radia-optuna"]
-    assert "tags: ['eqnedit64-v*']" in texts["Eqnedit64"]
 
 
 def test_ci_records_exact_ref_context_before_release():
@@ -181,99 +173,10 @@ def test_optuna_manual_release_fails_loudly_when_ci_sha_has_no_tag():
     assert "exit 1" in tag_check
 
 
-def test_eqnedit64_release_requires_exact_successful_tag_ci():
-    ci=EQNEDIT64_WORKFLOW.read_text(encoding="utf-8")
-    release=EQNEDIT64_RELEASE_WORKFLOW.read_text(encoding="utf-8")
-
-    assert "Record exact Eqnedit64 CI ref context" in ci
-    assert "eqnedit64.ci-release-context.v1" in ci
-    assert "ref_type = $env:GITHUB_REF_TYPE" in ci
-    assert "sha = $env:GITHUB_SHA" in ci
-    assert "run_id = [string]$env:GITHUB_RUN_ID" in ci
-    assert "name: eqnedit64-ci-release-context" in ci
-
-    assert "workflow_run:" in release
-    assert 'workflows: ["Eqnedit64"]' in release
-    assert "github.event.workflow_run.conclusion == 'success'" in release
-    assert "github.event.workflow_run.event == 'push'" in release
-    assert "Download exact Eqnedit64 CI ref context" in release
-    assert "run-id: ${{ github.event.workflow_run.id }}" in release
-    assert "context.get(\"ref_type\") == \"tag\"" in release
-    assert r"eqnedit64-v\d+\.\d+\.\d+" in release
-    assert "ref: ${{ needs.qualify.outputs.sha }}" in release
-    # The signed executable arrives as a staging release asset, not from O:.
-    # A runner service is NETWORK SERVICE and can read neither a per-user
-    # mapped drive nor the workgroup share, so no runner could ever verify O:.
-    assert "runs-on: windows-2022" in release
-    assert "--tag eqnedit64-staging" in release
-    assert '"Eqnedit64-$version.exe"' in release
-    assert '"Eqnedit64-$version.release.json"' in release
-    assert "Run sync_to_o.ps1 before pushing the tag." in release
-    assert "$exe = Join-Path $releaseRoot 'Eqnedit64.exe'" in release
-    assert "$manifestPath = Join-Path $releaseRoot 'Eqnedit64.release.json'" in release
-    assert "eqnedit64.o-release.v1" in release
-    assert "$manifest.source_sha -cne $env:EQNEDIT64_SHA" in release
-    assert "name: eqnedit64-signed-standalone" in release
-    assert "needs: [qualify, signed-standalone]" in release
-    # Signer identity is the pinned-thumbprint helper (Authenticode Valid +
-    # approved certificate), not a CN-only check.
-    assert "assert_release_signature.ps1" in release
-    assert "Assert-EqneditReleaseSignature $exe -AllowUntrustedRoot" in release
-    assert "CN=ksugahar" in release
-    assert "id-token: write" in release
-    assert "pypa/gh-action-pypi-publish@release/v1" in release
-    assert 'gh release create "$EQNEDIT64_TAG"' in release
-    assert release.index("pypa/gh-action-pypi-publish@release/v1") < release.index(
-        'gh release create "$EQNEDIT64_TAG"')
 
 
-def test_eqnedit64_ci_is_separate_from_radia_mcp_ci():
-    ci = EQNEDIT64_WORKFLOW.read_text(encoding="utf-8")
-    radia_fast = (ROOT / ".github" / "workflows" / "radia.yml").read_text(
-        encoding="utf-8"
-    )
-    policy = (ROOT / ".github" / "workflows" / "policy-lint.yml").read_text(
-        encoding="utf-8"
-    )
-
-    # Distribution triggers stay independent. The native exporter lane may
-    # exercise its PPTX consumer as an explicit integration contract.
-    triggers = ci.split("workflow_dispatch:", 1)[0]
-    assert "packages/radia-mcp/" not in triggers
-    assert "packages/radia-mcp/tests/test_presentation_markdown_math.py" in ci
-    for path in ("packages/eqnedit64/**", "tools/eqnedit64/**"):
-        assert path in ci
-        assert path not in radia_fast
-    assert "paths-ignore:" not in policy
 
 
-def test_eqnedit64_release_order_is_handtest_review_main_o_drive_then_tag():
-    root = Path(__file__).resolve().parents[2]
-    skill = (root / ".agents/skills/release-eqnedit64/SKILL.md").read_text(
-        encoding="utf-8")
-    sync = (
-        root / ".agents/skills/release-eqnedit64/scripts/sync_to_o.ps1"
-    ).read_text(encoding="utf-8")
-
-    required = skill[skill.index("## Required order"):]
-    push_candidate = required.index(
-        "Commit and push the versioned release candidate branch.")
-    sync_handtest = required.index("sync_handtest_to_o.ps1")
-    release_review = required.index("Run one Claude Code Opus 5.5 review")
-    push_main = required.index(
-        "Merge the approved release commit to `main` and push it.")
-    sync_release = required.index("sync_to_o.ps1")
-    push_tag = required.index("Create the annotated tag")
-    assert (
-        push_candidate < sync_handtest < release_review < push_main <
-        sync_release < push_tag
-    )
-    assert "Do not merge to `main` before this gate is recorded." in required
-
-    assert "Release tag already exists; O: must be prepared before tag push" in sync
-    assert "HEAD=$headSha origin/main=$originMainSha" in sync
-    assert "eqnedit64.o-release.v1" in sync
-    assert "source_sha = $normalizedSourceSha" in sync
 
 
 def test_native_assets_use_accepted_tag_artifact_after_promotion():

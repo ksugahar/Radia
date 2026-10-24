@@ -108,7 +108,6 @@ def _light_python(directory, steps):
 POLICY_TESTS = ("tests/policy/", "tests/test_sparsesolv_ci_contract.py")
 POLICY_COMMANDS = (
     ("policy lint", ("tools/policy_lint.py",)),
-    ("public-name lint", ("tools/eqnedit64/tests/check_public_names.py",)),
     ("policy tests", ("-m", "pytest", *POLICY_TESTS, "-q")),
 )
 REPOSITORY_COMMANDS = (

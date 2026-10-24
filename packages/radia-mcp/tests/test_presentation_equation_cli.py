@@ -27,9 +27,9 @@ def test_presentation_tools_export_eqnedit64_bridge() -> None:
 def test_equation_policy_keeps_standalone_distribution_boundary() -> None:
     policy = equation_cli.presentation_equation_policy()
     assert policy["schema"] == "radia-mcp.presentation-equation-policy.v4"
-    assert policy["source_of_truth"]["native"] == "tools/eqnedit64/src"
-    assert policy["source_of_truth"]["web"].startswith("tools/eqnedit64/web/")
-    assert policy["source_of_truth"]["distribution"] == "packages/eqnedit64"
+    assert policy["source_of_truth"]["native"] == "https://github.com/ksugahar/eqnedit64/tree/main/src"
+    assert policy["source_of_truth"]["web"].startswith("https://github.com/ksugahar/eqnedit64/blob/main/web/")
+    assert policy["source_of_truth"]["distribution"] == "https://pypi.org/project/eqnedit64/"
     assert policy["publication"]["python"] == "PyPI package eqnedit64"
     assert "optional" in policy["publication"]["integration"]
     assert policy["homepage_is_source_of_truth"] is False
@@ -39,8 +39,8 @@ def test_equation_policy_keeps_standalone_distribution_boundary() -> None:
         "requires": "eqnedit64>=3.1.4", "fallback": None,
     }
     publication = policy["web_publication_contract"]
-    assert publication["mode"] == "build-time import from Radia checkout"
-    assert publication["checkout_environment_variable"] == "RADIA_REPOSITORY"
+    assert publication["mode"] == "build-time import from an exact Eqnedit64 tag"
+    assert publication["checkout_environment_variable"] == "EQNEDIT64_REPOSITORY"
     assert publication["integrity"] == "SHA-256 equality after copy"
     assert publication["homepage_source_copy"] is False
     assert publication["release_gate"].endswith("run_eqnedit64_release_qa.ps1")
@@ -166,3 +166,13 @@ def test_invalid_target_and_missing_backend_are_diagnostic(tmp_path) -> None:
     assert "target must be" in bad_target["error"]
     assert missing["ok"] is False
     assert "was not found" in missing["error"]
+
+
+def test_source_checkout_is_not_an_implicit_backend(tmp_path, monkeypatch):
+    old_tree = tmp_path / "tools" / "eqnedit64" / "dist"
+    _fake_executable(old_tree)
+    monkeypatch.delenv("EQNEDIT64_EXE", raising=False)
+    monkeypatch.setitem(sys.modules, "eqnedit64", None)
+    monkeypatch.setattr(equation_cli.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(equation_cli, "__file__", str(tmp_path / "packages/radia-mcp/src/radia_mcp/presentation/_equation_cli.py"))
+    assert list(equation_cli._candidate_executables(None)) == []

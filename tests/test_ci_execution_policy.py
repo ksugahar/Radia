@@ -72,14 +72,9 @@ def test_fast_ci_declares_bh_and_wheel_contract_dependencies():
 def test_no_workflow_selects_a_retired_runner():
     """No lane may ask for a retired or user-desktop runner, signing included.
 
-    A runner service executes as NETWORK SERVICE, which sees no per-user
-    mapped drive, and these machines form a workgroup rather than a domain, so
-    a laboratory share refuses the machine account.  The signed EqnEdit64
-    executable therefore arrives as a staging release asset and the whole lane
-    is GitHub-hosted.  Only active self-hosted labels may appear.
+    Only active self-hosted labels may appear.
     """
     workflows = ROOT / ".github" / "workflows"
-    signing_release = "release-eqnedit64-pypi.yml"
     retired_labels = ("windows-radia", "lab")
 
     for path in sorted(workflows.glob("*.yml")):
@@ -93,14 +88,10 @@ def test_no_workflow_selects_a_retired_runner():
             for label in retired_labels:
                 assert label not in normalized, f"{path.name}: {line}"
 
-    signing = (workflows / signing_release).read_text(encoding="utf-8")
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    assert "runs-on: windows-2022" in signing
-    assert "--tag eqnedit64-staging" in signing
     for policy in (agents, claude):
         assert "No workflow selects a retired or user-desktop runner." in policy
-        assert "eqnedit64-staging release" in policy
 
 
 def test_policy_lint_enforces_the_retired_examples_boundary():
@@ -125,7 +116,6 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
         "packages/radia-mcp/**",
         "packages/cubit-mesh-export/**",
         "packages/radia-optuna/**",
-        "packages/eqnedit64/**",
     ):
         assert independent_path not in fast
 

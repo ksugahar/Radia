@@ -1,8 +1,7 @@
 # TeX equation services
 
 Equation editing and conversion belong to the independent
-[`eqnedit64` package](../../packages/eqnedit64/README.md) and
-[`native/Web product`](../../tools/eqnedit64/README.md).
+[`eqnedit64` package and native/Web product](https://github.com/ksugahar/eqnedit64).
 The Radia solver no longer builds or distributes an equation module.
 
 TeX is the source format. For an existing Office session, use
@@ -17,7 +16,8 @@ it into the deck. Unsupported input raises without an image or legacy backend
 fallback. `presentation_equation_policy()` reports the implementation and
 required version. The `presentation_pptx_*` tools also edit presentation documents.
 
-Standalone product contracts and tests remain under `tools/eqnedit64`;
-the MCP adapter contracts are in
-`packages/radia-mcp/tests/test_presentation_equation_cli.py` and
-`packages/radia-mcp/tests/test_presentation_markdown_math.py`.
+Standalone product contracts and tests belong to the independent repository.
+The MCP adapter contracts remain in `../tests/test_presentation_equation_cli.py`
+and `../tests/test_presentation_markdown_math.py`. Full outer-package schema
+verification is tracked separately from the source retirement; mocked-backend
+packaging regression is not a native-backend or Office acceptance claim.

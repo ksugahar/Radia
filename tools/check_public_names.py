@@ -1,18 +1,61 @@
-"""Reject retired product spellings in tracked paths and semantic text."""
+"""Scan public source and explicit artifacts with approved external criteria."""
 import argparse
 import hashlib
 import zipfile
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
-# Definitions and negative tests are assembled from tokens, not excluded:
-# this checker, tests, and every other public semantic text remain scanned.
-FORBIDDEN = re.compile(r"eqn(?:edit|edt)32|eqn" + r"edt64|mt" + r"ef|math" + r"type|"
-                       + r"equation[ _-]*editor[ _-]*3(?:\.0)?|"
-                       + r"数式[ _-]*(?:エディタ(?:ー)?[ _-]*)?3(?:\.0)?", re.I)
+ROOT = Path(__file__).resolve().parents[1]
+APPROVED_RULES_SHA256 = "08019894d2a840682ff78b6a7015a29c14a82549b3337a638ed0f131b31fbbdc"
+FORBIDDEN = None
+
+
+class PolicyInputError(ValueError):
+    pass
+
+
+def _unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise PolicyInputError("Duplicate private-policy field")
+        result[key] = value
+    return result
+
+
+def load_rules(explicit_file=None):
+    """Require exact reviewed bytes; no embedded or missing-input fallback."""
+    filename = explicit_file or os.environ.get("RADIA_PUBLIC_NAME_RULES_FILE")
+    payload = os.environ.get("RADIA_PUBLIC_NAME_RULES_JSON")
+    if explicit_file:
+        payload = None
+    elif bool(filename) == bool(payload):
+        raise PolicyInputError("Exactly one private-policy source is required")
+    try:
+        raw = Path(filename).read_bytes() if filename else payload.encode("utf-8")
+    except (OSError, AttributeError):
+        raise PolicyInputError("Private-policy source is unavailable") from None
+    if hashlib.sha256(raw).hexdigest() != APPROVED_RULES_SHA256:
+        raise PolicyInputError("Private-policy fingerprint does not match the reviewed policy")
+    try:
+        text = raw.decode("utf-8")
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            # Workflow command escaping prevents multiline command injection.
+            masked = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            print("::add-mask::" + masked, flush=True)
+        data = json.loads(text, object_pairs_hook=_unique_object)
+        if not isinstance(data, dict) or set(data) != {"schema", "flags", "patterns"}:
+            raise PolicyInputError("Invalid private-policy fields")
+        if data["schema"] != "radia.private-public-name-rules.v1" or data["flags"] != ["IGNORECASE"]:
+            raise PolicyInputError("Unsupported private-policy schema or flags")
+        if not isinstance(data["patterns"], list) or len(data["patterns"]) != 1 or not isinstance(data["patterns"][0], str) or not data["patterns"][0]:
+            raise PolicyInputError("Invalid private-policy pattern set")
+        return re.compile(data["patterns"][0], re.IGNORECASE)
+    except (UnicodeError, json.JSONDecodeError, re.error):
+        raise PolicyInputError("Private-policy data cannot be decoded or compiled") from None
 
 
 def notebook_text(document):
@@ -51,7 +94,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", type=Path, action="append", default=[])
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--rules-file", type=Path)
     args = parser.parse_args()
+    global FORBIDDEN
+    try:
+        FORBIDDEN = load_rules(args.rules_file)
+    except PolicyInputError as error:
+        raise SystemExit("FAIL: " + str(error)) from None
     paths = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode().split("\0")
     bad = []
     semantic_count = 0
@@ -79,7 +128,7 @@ def main():
         data = path.read_bytes()
         artifacts.append({"path": str(path), "sha256": hashlib.sha256(data).hexdigest()})
         bad.extend(artifact_hits(path))
-    report = {"status": "FAIL" if bad else "PASS", "source_semantic_files": semantic_count,
+    report = {"criteria_sha256": APPROVED_RULES_SHA256, "status": "FAIL" if bad else "PASS", "source_semantic_files": semantic_count,
               "source_semantic_sha256": semantic_hash.hexdigest(),
               "source_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "source_scope": "tracked paths and UTF-8 semantic text; notebook text excludes binary image payloads",
