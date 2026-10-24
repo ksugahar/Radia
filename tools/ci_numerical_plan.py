@@ -1,7 +1,7 @@
 """Plan numerical CI consumers from immutable Git inputs; never execute them.
 
-S1 is diagnostic only. Existing workflow execution and source receipts remain
-authoritative until the separately reviewed S2 connects this plan to runners.
+The JSON is selection data, not execution evidence. Workflow consumers must
+recompute the plan and verify source identity before running selected cases.
 """
 from __future__ import annotations
 
@@ -352,10 +352,15 @@ def plan(root, base, head, event):
             else: global_change = True; reasons.append('dependency/metadata: ' + path)
         elif path in GLOBAL_INPUTS or path.startswith(NATIVE_PREFIXES) or path.startswith('.github/workflows/'):
             global_change = True; reasons.append('native/build/control input: ' + path)
-    roots = {profile: sorted(set(old_profiles[profile]) | set(new_profiles[profile])) for profile in PROFILES}
-    for snapshot in [before, after]:
-        for path in GMSH_TESTS:
-            if path in snapshot.files: roots['solver-numerics'] = sorted(set(roots['solver-numerics']) | {path})
+    # Execute the current registry; use both snapshots for retained-case inputs.
+    # Explicit retirements are governed by the separate route-retention policy,
+    # not resurrected as nonexistent pytest targets by this selector.
+    roots = {profile: sorted(new_profiles[profile]) for profile in PROFILES}
+    retired = {profile: sorted(set(old_profiles[profile]) - set(new_profiles[profile]))
+               for profile in PROFILES}
+    for path in GMSH_TESTS:
+        if path in after.files and path not in retired['solver-numerics']:
+            roots['solver-numerics'] = sorted(set(roots['solver-numerics']) | {path})
     rows = []; known = set(); native_required = set()
     for profile, entries in roots.items():
         for entry in entries:
@@ -395,7 +400,7 @@ def plan(root, base, head, event):
     return {'schema': SCHEMA, 'status': 'planned', 'qualification': False, 'execution_wired': False,
             'base': before.sha, 'head': after.sha, 'event': event,
             'declaration_identity': {'commit': policy_sha, 'blob': declaration_blob}, 'changed_paths': sorted(changed),
-            'unclassified_inputs': unclassified, 'cases': rows,
+            'unclassified_inputs': unclassified, 'retired_case_paths': retired, 'cases': rows,
             'native_build_targets': sorted(native_required),
             'ams_paths': sorted({r['path'] for r in rows if r['selected'] and r['profile'] == 'sparsesolv'}),
             'python_test_paths': sorted({r['path'] for r in rows if r['selected'] and r['profile'] in ('solver-numerics', 'native-build-contracts')}),
@@ -403,7 +408,7 @@ def plan(root, base, head, event):
             'gmsh_reference_paths': sorted({r['path'] for r in rows if r['selected'] and r['path'] in GMSH_TESTS}),
             'graph_statistics': {label: {'parsed_modules': tree.parsed_nodes, 'blob_count': len(tree.blobs)}
                                  for label, tree in [('base', before), ('head', after)]},
-            'note': 'S1 plan only, not test success or authority to skip existing workflow gates'}
+            'note': 'Selection data only; not test success. Execution requires recomputation and exact-source verification'}
 
 
 def main(argv=None):
