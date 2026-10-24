@@ -278,7 +278,7 @@ def _stage_post_multi(vol_path: Path, region_names, out_dir: Path, label: str) -
     companions = _write_gmsh_launch_companion(output)
     regions = [{"index": i, "physical_tag": physical[name], "name": name,
                 "entities": [physical[name]],
-                "n_elem": sum(materials[element.mat-1] == name for element in mesh.Elements(VOL))}
+                "n_elem": sum(element.mat == name for element in mesh.Elements(VOL))}
                for i,name in enumerate(region_names,1)]
     return {"stage": "post", "ok": True, "msh_post": str(output), **companions,
             "view_tag": 0, "post_backend": "radia_msh42_exporter",
