@@ -21,57 +21,27 @@ otherwise show up as "Open GMSH doesn't work" or "GMSH is black".
 
 ## What it checks
 
-| Check | What it catches |
-|---|---|
-| **Invalid .geo options** | `Mesh.Volumes` (does not exist in Gmsh 5) and other unknown options |
-| **Merge targets exist** | `Merge "foo.msh"` in .geo but foo.msh is missing |
-| **Duplicate element IDs** | Two-file merge where both start element numbering from 1 |
-| **NodeData node count** | NodeData declares N nodes but the $Nodes section has M != N |
-| **View index range** | `.geo` references `View[2]` but only 1 NodeData section exists |
-| **Physical group consistency** | Element tags reference physical groups not declared in $PhysicalNames |
+The `.msh` entry delegates to `radia_mcp.gmsh.msh_inspect.validate_msh`:
+strict ASCII MSH 4.2 headers, block structure, unique tags and field references.
+The `.geo` entry checks missing Merge targets, the listed invalid options and
+a view-index heuristic. These are structural checks, not rendering or solver
+validation; use the qualified Gmsh 5 runtime for native round trips/rendering.
 
 ## Run
 
+Use the development interpreter with this checkout's `packages/radia-mcp/src`
+on `PYTHONPATH`. Missing MCP dependencies fail rather than selecting a legacy
+parser.
+
 ```bash
-# Verify a specific .geo + its referenced .msh files
-python tests/panels/verify_gmsh_output.py path/to/inductance.geo
-
-# Verify a standalone .msh
-python tests/panels/verify_gmsh_output.py path/to/model.msh
-
-# Verify the samples directory (all .geo + .msh)
-python tests/panels/verify_gmsh_output.py src/radia/panels/samples/
-
-# After a BEM solve with field-air
-python tests/panels/verify_gmsh_output.py \
-    src/radia/panels/samples/inductance.geo
+python validation_test/panels/verify_gmsh_output.py path/to/result.geo
+python validation_test/panels/verify_gmsh_output.py path/to/result.msh
+python validation_test/panels/verify_gmsh_output.py path/to/run-directory
 ```
 
-Expected output:
-```
-=== inductance.geo ===
-  [OK] All Merge targets exist
-  [OK] No invalid GMSH options
-  [OK] View indices within range
-=== inductance.msh ===
-  [OK] No duplicate element IDs (14598 vol + 710 surf + 703 wire)
-  [OK] NodeData "B" node count matches (3083)
-  [OK] NodeData "J" node count matches (710)
-PASS: 6/6 checks
-```
-
-## Integration with notebook validation
-
-The `verify_gmsh_output.py` script can be called from pytest:
-
-```python
-from tests.panels.verify_gmsh_output import verify_geo, verify_msh
-
-def test_bem_output_valid(tmp_path):
-    # ... run calc_inductance subprocess ...
-    assert verify_geo(tmp_path / "inductance.geo")
-    assert verify_msh(tmp_path / "inductance.msh")
-```
+A nonzero exit means a structural check failed. The same entries may be called
+from tests via `validation_test.panels.verify_gmsh_output`; do not maintain an
+independent field-data parser in validation scripts.
 
 ## Known invalid options (Gmsh 5)
 

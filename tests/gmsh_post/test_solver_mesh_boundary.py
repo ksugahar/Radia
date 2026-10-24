@@ -144,7 +144,7 @@ def test_netgen_centerlines_preserve_existing_analytic_discretizations(kind, nod
     assert b'\r' not in path.read_bytes(), path
     import subprocess
     relative = path.relative_to(ROOT).as_posix()
-    committed = subprocess.check_output(['git', 'show', f'HEAD:{relative}'], cwd=ROOT)
+    committed = subprocess.check_output(['git', '-c', f'safe.directory={ROOT.as_posix()}', 'show', f'HEAD:{relative}'], cwd=ROOT)
     assert b'\r' not in committed, relative
     mesh = ng.Mesh(str(path))
     points = {i: np.asarray(point.p) for i, point in enumerate(mesh.ngmesh.Points(), 1)}

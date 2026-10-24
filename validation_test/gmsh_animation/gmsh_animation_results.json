@@ -256,5 +256,11 @@
     "final_displacement_m": 0.15,
     "expected_final_displacement_m": 0.15,
     "final_displacement_close": true
+  },
+  "stale": true,
+  "stale_reason": "pre-MSH4.2 historical calculation, original assets not tracked",
+  "saved_notebook": {
+    "path": "docs/gmsh_animation/gmsh_animation.ipynb",
+    "sha256": "865ab322084db506a567b5917d63b027f508f1afeab5ea8ebc968e6185b412a1"
   }
 }
