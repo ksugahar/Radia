@@ -48,6 +48,7 @@ def test_filename_is_one_literal_tcl_argument_and_window_closes_once(tmp_path,mo
     win=NS(tk=NS(call=lambda *args:calls.append(args)),
            protocol=lambda name,fn:protocol.update({name:fn}),title=lambda title:None,
            destroy=lambda:destroyed.append(True),mainloop=lambda:protocol["WM_DELETE_WINDOW"]())
+    monkeypatch.setitem(sys.modules,"gmsh",None)  # .vol must not import the optional Gmsh runtime.
     monkeypatch.setitem(sys.modules,"netgen",NS(__path__=[]))
     monkeypatch.setitem(sys.modules,"netgen.gui",NS(win=win))
     launcher.open_mesh(path)

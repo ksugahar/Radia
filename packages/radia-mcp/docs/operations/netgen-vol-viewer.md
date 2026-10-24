@@ -26,3 +26,17 @@ A real GUI proof uses a checked `.vol`, records the original file hash and label
 contract, confirms visible mesh counts and a Japanese/space/symbol filename,
 then verifies the input hash is unchanged. Keep machine/user evidence private.
 Gmsh/MSH support and all-user associations are separate follow-up work.
+
+## Declared dependency contract
+
+The viewer feature uses the existing `radia-mcp[gmsh]` extra; no separate viewer
+extra or ad-hoc Gmsh installation is introduced. Install through the declared
+requirement and official development index:
+
+```text
+pip install --pre --extra-index-url https://gmsh.info/python-packages-dev "radia-mcp[gmsh]"
+```
+
+Netgen comes from the Radia/NGSolve dependency and must be 6.2.2608. The `.vol`
+route does not import Gmsh. MSH/Gmsh support and any all-user installation still
+require their separate reviewed follow-up and explicit installation decision.
