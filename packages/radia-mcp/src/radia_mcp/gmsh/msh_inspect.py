@@ -380,12 +380,15 @@ def _read_view_header(take):
     return strings, reals, integers
 
 
-def _iter_data_blocks(kind, stream, reopen, ncomp, declared, *, native_limit=None):
+def _iter_data_blocks(kind, stream, reopen, ncomp, declared, *, native_limit=None,
+                      collect_values=True, scheme_present=False):
     """One canonical block decoder; native mode retains a bounded tag bitmap.
 
     Tags precede values in 4.2. A second seekable reader pairs them without
     retaining a block's tag list. Token buffering is bounded by fixed-size
     chunks plus the longest token; the native tag bitmap is at most 256 MiB.
+    Native eligibility discards validated values instead of retaining a
+    potentially large interpolation-sample record. Detailed readers collect it.
     """
     toks = _DataTokens(stream)
     count_read = 0
@@ -407,10 +410,16 @@ def _iter_data_blocks(kind, stream, reopen, ncomp, declared, *, native_limit=Non
         for _ in range(blocks):
             width, nodes = ncomp, None
             if kind == 'ElementNodeData':
-                etype, width = int(next(toks)), int(next(toks))
-                if etype not in ELEMENT_TYPES or width != ELEMENT_TYPES[etype][1] * ncomp:
-                    raise ValueError('ElementNodeData block width/type mismatch')
-                nodes = width // ncomp
+                # MSH 4.2: elementType, numValuesPerElement, element count.
+                # The second integer is a sample count, not a component width;
+                # interpolation schemes can also make it differ from mesh nodes.
+                # Gmsh src/post/PViewDataGModelIO_MSH.cpp:128-142,343-367;
+                # doc/texinfo/gmsh.texi:5181-5186,5334-5346 (5.0 dev).
+                etype, nodes = int(next(toks)), int(next(toks))
+                if (etype not in ELEMENT_TYPES or nodes < 1 or
+                        (not scheme_present and nodes != ELEMENT_TYPES[etype][1])):
+                    raise ValueError('ElementNodeData block sample count/type mismatch')
+                width = nodes * ncomp
             n = int(next(toks))
             if n < 0 or n > count:
                 raise ValueError('invalid data block count')
@@ -437,8 +446,12 @@ def _iter_data_blocks(kind, stream, reopen, ncomp, declared, *, native_limit=Non
                 tags.seek(tag_position)
                 for _ in range(n):
                     tag = int(next(tags))
-                    values = [next(toks) for _ in range(width)]
-                    for value in values: float(value)
+                    values = []
+                    for _ in range(width):
+                        value = next(toks)
+                        float(value)
+                        if collect_values:
+                            values.append(value)
                     count_read += 1
                     yield tag, nodes, values
         if count_read != count:
@@ -452,14 +465,16 @@ def _iter_data_blocks(kind, stream, reopen, ncomp, declared, *, native_limit=Non
         raise ValueError('truncated data block') from exc
 
 
-def _decode_data_blocks(kind: str, lines: list[str], ncomp: int, declared: int) -> list[str]:
+def _decode_data_blocks(kind: str, lines: list[str], ncomp: int, declared: int,
+                        *, scheme_present=False) -> list[str]:
     """Detailed inspection collects the same decoder's records for its reports."""
     from io import StringIO
     text = '\n'.join(lines)
     with StringIO(text) as stream:
         return [' '.join([str(tag)] + ([str(nodes)] if nodes is not None else []) + values)
                 for tag, nodes, values in _iter_data_blocks(
-                    kind, stream, lambda: StringIO(text), ncomp, declared)]
+                    kind, stream, lambda: StringIO(text), ncomp, declared,
+                    scheme_present=scheme_present)]
 
 
 class _SectionBody:
@@ -532,9 +547,11 @@ def _validate_native_fields(path):
                         if row.strip(): return row.strip()
                     raise StopIteration
                 try:
-                    _, _, ints = _read_view_header(take)
+                    strings, _, ints = _read_view_header(take)
                     if len(ints) < 3: raise ValueError('integer-tag block needs >=3 entries')
-                    for _ in _iter_data_blocks(name, body, reopen, ints[1], ints[2], native_limit=2**31-1):
+                    for _ in _iter_data_blocks(name, body, reopen, ints[1], ints[2],
+                                               native_limit=2**31-1, collect_values=False,
+                                               scheme_present=bool(len(strings) > 1 and strings[1])):
                         pass
                 except (StopIteration, TypeError) as exc:
                     raise ValueError(f'${name}: truncated or malformed header') from exc
@@ -601,7 +618,8 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
                  "n_finite_samples": 0}
 
     try:
-        data_rows = _decode_data_blocks(kind, rows[idx:], ncomp, view['declared'])
+        data_rows = _decode_data_blocks(kind, rows[idx:], ncomp, view['declared'],
+                                        scheme_present=bool(len(strings) > 1 and strings[1]))
     except (TypeError, ValueError) as exc:
         errors.append(f'${kind} @L{start_line}: {exc}')
         if stats is not None:
@@ -621,8 +639,8 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
         if stats is None:
             continue
 
-        # ElementNodeData rows carry an extra per-element node count and
-        # then one ncomp-wide sample for every element node.
+        # ElementNodeData rows carry a per-element sample count, followed by
+        # one ncomp-wide value per sample (usually a local element node).
         vals_start = 2 if kind == "ElementNodeData" else 1
         try:
             vals = [float(t) for t in toks[vals_start:]]
@@ -795,7 +813,7 @@ def read_msh_data(msh_path: str | Path,
                     "rows": {tag: [values...]}}, ...],
          "elements": {tag: {"type": int, "nodes": [tags]}}}  # opt-in
 
-    ``ElementNodeData`` rows drop the per-element node-count token and
+    ``ElementNodeData`` rows drop the per-element sample-count token and
     keep the flat value list.  Raises ``ValueError`` on non-4.2 or
     binary files and on malformed counts (fail fast -- a wrong count
     header crashes gmsh itself with heap corruption, so files must be
@@ -1004,7 +1022,8 @@ def read_msh_data(msh_path: str | Path,
                     f"{path.name}: ${name} @L{start_line} has negative "
                     f"entry count {declared}")
             try:
-                data_rows = _decode_data_blocks(name, list(row_iter), ncomp, declared)
+                data_rows = _decode_data_blocks(name, list(row_iter), ncomp, declared,
+                                                scheme_present=bool(len(strings) > 1 and strings[1]))
             except ValueError as exc:
                 raise ValueError(f'{path.name}: ${name} @L{start_line}: {exc}') from exc
             if len(data_rows) != declared:
@@ -1045,7 +1064,8 @@ def read_msh_data(msh_path: str | Path,
                         raise ValueError(
                             f"{path.name}: ${name} @L{start_line} data row "
                             f"{row_index} has negative node count")
-                    if tag in element_node_counts \
+                    if not (len(strings) > 1 and strings[1]) \
+                            and tag in element_node_counts \
                             and n_element_nodes != element_node_counts[tag]:
                         raise ValueError(
                             f"{path.name}: ${name} @L{start_line} element "
