@@ -337,10 +337,12 @@ def test_runtime_cli_still_enforces_explicit_runner_event_and_base(repository, t
     process = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', env=env)
     report = json.loads((tmp_path / 'verified.json').read_text(encoding='utf-8'))
     assert process.returncode == 2 and 'base differs' in report['error'], report
+    assert report['error'] in process.stderr, process.stderr
     env['GITHUB_EVENT_NAME'] = 'pull_request'
     process = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', env=env)
     report = json.loads((tmp_path / 'verified.json').read_text(encoding='utf-8'))
     assert process.returncode == 2 and 'event differs' in report['error'], report
+    assert report['error'] in process.stderr, process.stderr
 
 
 def test_cli_case_reads_joined_documentation_input(repository, tmp_path):
