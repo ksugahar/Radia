@@ -37,8 +37,7 @@ int HACApK_matvec_mkl_threads_get(void);
 #ifdef HAVE_LAPACK
 #include "rad_hex_far_product.h"
 #include <la.hpp>                // NGSolve sparsecholesky for the MASS RIESZ preconditioner
-#include "mkl_cblas.h"            // row-major cluster-space dense contractions
-#include "mkl_lapacke.h"          // small cluster Rayleigh--Ritz eigensolve
+#include "rad_blas.h"
 namespace {
 // Persistent exact MASS RIESZ factor.  Broken HDiv masses are element-block
 // diagonal, so small connected components use TaskManager-parallel dense
@@ -9638,7 +9637,7 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     // The solve is entered from an active NGSolve TaskManager.  Keep MKL's
     // process setting serial for BLAS calls. SparseCholesky and HACApK use
     // the existing NGSolve worker pool without a nested MKL pool.
-    radia::MKLThreadGuard solve_mkl_guard(1);
+    radia::DenseThreadGuard solve_mkl_guard(1);
 #endif
     // MASS RIESZ preconditioner (the default 'auto' path): z = M_geometry^{-1} r via the persistent exact
     // local-block/sparsecholesky factor of the immutable HDiv geometry mass.  A material-weighted Galerkin system
@@ -10073,7 +10072,7 @@ std::vector<double> RadHACApKChargeGram::ApplyMassRiesz(
         throw std::runtime_error("ApplyMassRiesz: mass COO array size mismatch");
 #ifdef HAVE_LAPACK
     ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-    radia::MKLThreadGuard solve_mkl_guard(1);
+    radia::DenseThreadGuard solve_mkl_guard(1);
     const bool constrained = m_operatorConstrained.size() == (size_t)n_face &&
         std::any_of(m_operatorConstrained.begin(), m_operatorConstrained.end(),
                     [](unsigned char value) { return value != 0; });

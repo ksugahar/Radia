@@ -1,7 +1,7 @@
 # Radia Build Guide
 
 Radia's production native build targets Windows x64 and Python 3.12.
-The Linux HPC source-build path uses Intel LLVM; see
+The Linux HPC source-build paths use x86 Intel LLVM/MKL or aarch64 GCC/NVPL; see
 [Linux HPC builds](docs/compilation/linux-hpc.md) for setup and verification status. The Windows build
 uses MSVC, the exact NGSolve/Netgen versions pinned in `pyproject.toml`, and the
 Intel MKL files installed into the selected Python environment by `mkl-devel`.
@@ -54,9 +54,9 @@ The selected Python environment's `Library` directory is the first MKL search
 location. An explicitly set `MKLROOT` is a fallback for a controlled external
 installation. There is no hard-coded oneAPI installation path.
 
-NGSolve owns its OpenBLAS dependency on Windows/Linux; resolve its version
+Linux dependency source builds must use the same selected MKL/NVPL provider as Radia; resolve each version
 from the pinned NGSolve package metadata.
-Radia's HACApK and dense native kernels use MKL; direct FE solves explicitly
+Radia's HACApK and dense native kernels use MKL on x86 or NVPL on aarch64; direct FE solves explicitly
 use NGSolve SparseCholesky, with no PARDISO fallback. These are separate native
 dependencies; Radia does not replace or bundle the user's NumPy implementation.
 

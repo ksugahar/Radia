@@ -46,10 +46,7 @@ extern radTApplication rad;
 
 #ifdef HAVE_LAPACK
 // Intel MKL headers (includes dgesv_ declaration)
-#include "mkl_cblas.h"
-#include "mkl_lapack.h"
-#include "mkl_trans.h"   // For mkl_domatcopy (matrix transpose)
-#include "mkl_service.h" // For mkl_set_num_threads, mkl_get_max_threads
+#include "rad_blas.h"
 #endif
 
 extern radTYield radYield;
@@ -1713,7 +1710,7 @@ int radTRelaxationMethNo_0::SolveBInputLinearStep(
 
 	{
 		ngcore::SuspendTaskManager stm;
-		radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
+		radia::DenseThreadGuard mkl_guard(radia::GetNumThreads());
 		dgesv_(&dof, &nrhs, J_F.data(), &dof, ipiv.data(), dM.data(), &dof, &info);
 	}
 
@@ -1752,7 +1749,7 @@ int radTRelaxationMethNo_0::SolveLU_Flat(std::vector<double>& A, std::vector<dou
 
 	{
 		ngcore::SuspendTaskManager stm;
-		radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
+		radia::DenseThreadGuard mkl_guard(radia::GetNumThreads());
 		dgesv_(&n, &nrhs, A_col.data(), &n, ipiv.data(), b.data(), &n, &info);
 	}
 
@@ -1930,7 +1927,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		{
 			// dgesv overwrites SystemMatrix with LU factors and RHS with the solution x0 = A^-1 b
 			ngcore::SuspendTaskManager stm;
-			radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
+			radia::DenseThreadGuard mkl_guard(radia::GetNumThreads());
 			dgesv_(&totalDOF, &nrhs, SystemMatrix.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
 		}
 		if(info != 0) return -1;  // Singular matrix

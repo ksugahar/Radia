@@ -42,6 +42,7 @@ def test_pipeline_stops_on_failure_and_records_artifacts(tmp_path, monkeypatch, 
     (mkl / "include/mkl.h").touch()
     (mkl / "lib/libmkl_rt.so").touch()
     monkeypatch.setenv("MKLROOT", str(mkl))
+    monkeypatch.setattr(builder.platform, "machine", lambda: "x86_64")
     monkeypatch.delenv("CC", raising=False)
     monkeypatch.delenv("CXX", raising=False)
     monkeypatch.setattr(builder, "ROOT", source)
