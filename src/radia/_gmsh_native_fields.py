@@ -6,6 +6,17 @@ import re
 
 NATIVE_FIELD_TAG_MAX = 2**31 - 1
 
+# Gmsh element codes and interpolation-node counts, checked without native API.
+# Standard families supported by the repository's MSH 4.2 post-processing path.
+_ELEMENT_NODE_COUNTS = {
+    1: 2, 2: 3, 3: 4, 4: 4, 5: 8, 6: 6, 7: 5,
+    8: 3, 9: 6, 10: 9, 11: 10, 12: 27, 13: 18, 14: 14, 15: 1,
+    16: 8, 17: 20, 18: 15, 19: 13, 20: 9, 21: 10, 22: 12,
+    23: 15, 24: 15, 25: 21, 26: 4, 27: 5, 28: 6,
+    29: 20, 30: 35, 31: 56, 36: 16, 37: 25, 38: 36,
+    92: 64, 93: 125, 94: 216, 118: 30, 119: 55, 120: 91,
+}
+
 
 def validate_native_field_tags(tags, association):
     """Reject unsupported native field indices; never renumber or substitute."""
@@ -60,8 +71,8 @@ def validate_native_msh_fields(path, _seen=None):
             strings = int(next(lines))
             if strings < 0:
                 raise ValueError('negative string tag count')
-            for _ in range(strings):
-                next(lines)
+            string_tags = [next(lines).strip().strip('"') for _ in range(strings)]
+            scheme_present = bool(len(string_tags) > 1 and string_tags[1])
             body = []
             end = kind.replace('$', '$End')
             for row in lines:
@@ -90,8 +101,11 @@ def validate_native_msh_fields(path, _seen=None):
             for _ in range(blocks):
                 width = ncomp
                 if kind == '$ElementNodeData':
-                    int(next(tokens))  # element type
-                    width = int(next(tokens))
+                    etype, samples = int(next(tokens)), int(next(tokens))
+                    if (etype not in _ELEMENT_NODE_COUNTS or samples < 1 or
+                            (not scheme_present and samples != _ELEMENT_NODE_COUNTS[etype])):
+                        raise ValueError('ElementNodeData block sample count/type mismatch')
+                    width = ncomp * samples
                 n = int(next(tokens))
                 if n < 0 or n > count - consumed or width <= 0:
                     raise ValueError('invalid field block width/count')
