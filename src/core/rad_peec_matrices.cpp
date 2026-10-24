@@ -17,6 +17,14 @@
 
 #ifdef HAVE_LAPACK
 #include "rad_blas.h"
+// Fortran declarations stay private to TUs without NGSolve la.hpp/clapack.h.
+#if defined(RADIA_BLAS_MKL)
+#include <mkl_lapack.h>
+#define RADIA_LAPACK_GETRS zgetrs_
+#elif defined(RADIA_BLAS_NVPL)
+#include <nvpl_lapack.h>
+#define RADIA_LAPACK_GETRS NVPL_LAPACK_zgetrs
+#endif
 #endif
 
 namespace radia {
@@ -2206,7 +2214,7 @@ void PEECSolver::MNASolveMultiPort(const std::vector<std::complex<double>>& Z_ef
         // Solve using pre-factored LU
         char trans = 'N';
         int nrhs_one = 1;
-        zgetrs_(&trans, &ln_red, &nrhs_one,
+        RADIA_LAPACK_GETRS(&trans, &ln_red, &nrhs_one,
                 reinterpret_cast<radia_blas_complex_double*>(Y_reduced.data()), &ln_red,
                 ipiv_red.data(), reinterpret_cast<radia_blas_complex_double*>(I_ext.data()),
                 &ln_red, &info);
@@ -2439,7 +2447,7 @@ void PEECSolver::ComputeBranchCurrents(double freq,
 
     char trans = 'N';
     int nrhs_one = 1;
-    zgetrs_(&trans, &ln_red, &nrhs_one,
+    RADIA_LAPACK_GETRS(&trans, &ln_red, &nrhs_one,
             reinterpret_cast<radia_blas_complex_double*>(Y_reduced.data()), &ln_red,
             ipiv_red.data(), reinterpret_cast<radia_blas_complex_double*>(rhs.data()),
             &ln_red, &info);

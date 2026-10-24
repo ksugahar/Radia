@@ -1,5 +1,11 @@
 // Provider-neutral LP64/complex ABI analytic checks; no Radia output oracle.
 #include "rad_blas.h"
+// Fortran declarations stay private to TUs without NGSolve la.hpp/clapack.h.
+#if defined(RADIA_BLAS_MKL)
+#include <mkl_lapack.h>
+#elif defined(RADIA_BLAS_NVPL)
+#include <nvpl_lapack.h>
+#endif
 #include <cmath>
 #include <complex>
 #include <limits>
