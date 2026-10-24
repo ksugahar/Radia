@@ -32,56 +32,6 @@
       "target": "github-hosted",
       "legacy_100": false
     },
-    "eqnedit64.yml:ci-impact": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:docs": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:web": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:build-test": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:font-boundary-diagnostic": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:font-dump-build": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:font-dump-trial": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:font-probe-build": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:font-probe-trial": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:font-prefix-trial": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
     "ltspice-data-safety.yml:ci-impact": {
       "owner": "radia-simulink",
       "target": "github-hosted",
@@ -180,26 +130,6 @@
     "radia.yml:fast-contracts": {
       "owner": "radia",
       "target": "ci-light",
-      "legacy_100": false
-    },
-    "release-eqnedit64-pypi.yml:qualify": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "release-eqnedit64-pypi.yml:signed-standalone": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "release-eqnedit64-pypi.yml:build-wheels": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "release-eqnedit64-pypi.yml:publish": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
       "legacy_100": false
     },
     "release-radia-optuna.yml:publish": {

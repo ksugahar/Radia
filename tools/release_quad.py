@@ -2077,8 +2077,6 @@ INDEPENDENT_DISTRIBUTION_WORKFLOWS = frozenset({
     ".github/workflows/release-radia-optuna.yml",
     ".github/workflows/radia-mcp-matrix.yml",
     ".github/workflows/cubit-mesh-export.yml",
-    ".github/workflows/eqnedit64.yml",
-    ".github/workflows/release-eqnedit64-pypi.yml",
 })
 
 

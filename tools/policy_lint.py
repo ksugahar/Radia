@@ -131,9 +131,6 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     '.agents/skills/deploy/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/pybind-mex-bridge/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/pyside6-health/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
-    '.agents/skills/release-eqnedit64/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
-    '.agents/skills/release-eqnedit64/scripts/assert_release_signature.ps1': 'Existing operational deployment/build instructions and scripts; phase 2.',
-    '.agents/skills/release-eqnedit64/scripts/release_eqnedit64.ps1': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/release-quad/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/simulink-app-health/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/verify-deploy/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',
@@ -252,19 +249,6 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     'tools/ci_preflight_remote.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/download_release_asset.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/editable_intent.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/eqnedit64/README.md': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/eqnedit64/build/accept_release.ps1': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/eqnedit64/build/analyze_last_operation_log.ps1': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/eqnedit64/build/enable_isolated_font_dumps.ps1': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/eqnedit64/build/test_background.ps1': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/eqnedit64/build/test_external_paste.ps1': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/eqnedit64/build/test_font_session.ps1': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/eqnedit64/docs/CANONICAL_OPERATION.md': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/eqnedit64/docs/PALETTE_INTENT.md': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/eqnedit64/src/eqnedit64_app.cpp': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/eqnedit64/tests/font_lifecycle_probe.cpp': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
-    'tools/eqnedit64/tests/read_office_wire.ps1': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
-    'tools/eqnedit64/tests/test_office_bit_parity.cjs': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tools/install_git_hooks.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/policy_lint.py': 'Privacy detector implementation and deliberate rejection fixtures.',
     'tools/release_acceptance.py': 'Existing operational build/runtime scratch routing; phase 2.',
@@ -337,7 +321,6 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     'validation_test/vim_coupled/validate_curved_hex_bdm2_cubit.py': 'Executable validation admission/scratch routing; phase 2, result metadata is sanitized.',
     'validation_test/vim_coupled/validate_magnetic_conductor_disk.py': 'Executable validation admission/scratch routing; phase 2, result metadata is sanitized.',
 }
-PUBLIC_RUNTIME_OPERATIONAL_REASONS["tools/eqnedit64/CMakeLists.txt"] = "Existing native build scratch/default routing; phase 2."
 PUBLIC_RUNTIME_OPERATIONAL_ALLOW = frozenset(PUBLIC_RUNTIME_OPERATIONAL_REASONS)
 PUBLIC_RUNTIME_IDENTITY = re.compile(
     r"(?i)\bintel11\b|\bmdx[12]\b|\bhibino\b(?!20\d\d)|100号機|"
@@ -777,6 +760,10 @@ def check_all():
                 payload_hits.extend(check_notebook_binary_integrity(path, source.read()))
     results.append(("Policy 12: notebook binary payloads decode", not payload_hits,
                     "\n".join(payload_hits[:20]) if payload_hits else "ok"))
+    names = subprocess.run([sys.executable, os.path.join(REPO, "tools/check_public_names.py")],
+                           cwd=REPO, capture_output=True, text=True, encoding="utf-8")
+    results.append(("Policy 13: public product names", names.returncode == 0,
+                    (names.stdout + names.stderr).strip() or "ok"))
     return results
 
 

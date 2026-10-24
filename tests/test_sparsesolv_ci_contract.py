@@ -561,7 +561,7 @@ def test_all_distribution_gates_are_hosted_and_preserve_full_manual_release_runs
         gate=workflow['jobs']['ci-impact']
         assert gate['runs-on']=='ubuntu-latest'
         assert gate['steps'][0]['with']['fetch-depth']=='0'
-        # The router step must run; lane-local steps (e.g. eqnedit64's prose gate) may follow it.
+        # The router step must run; lane-local steps may follow it.
         routers=[s.get('run','') for s in gate['steps'] if 'tools/sparsesolv_ci_impact.py' in s.get('run','')]
         assert len(routers)==1 and _router_lane(routers[0])==lane, (lane, routers)
         for name,job in workflow['jobs'].items():

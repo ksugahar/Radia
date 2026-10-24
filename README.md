@@ -472,11 +472,11 @@ These packages are separate from installing and using the Python CPU solver.
 
 ### Eqnedit64
 
-[Eqnedit64](tools/eqnedit64) is an independently released Windows equation
+[Eqnedit64](https://github.com/ksugahar/eqnedit64) is an independently released Windows equation
 editor with a browser edition and Python API. It connects structural input to
 UTF-8 TeX and editable Office Math or image export. See the
-[3.1.4 release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.1.4)
-and [package documentation](packages/eqnedit64/README.md).
+[3.1.7 release](https://github.com/ksugahar/eqnedit64/releases/tag/v3.1.7)
+and [package documentation](https://github.com/ksugahar/eqnedit64/tree/main/python).
 
 ### Documentation and visualization
 
@@ -540,7 +540,7 @@ Python circuit-conversion and parser modules.
 | `radia-mcp` | `python -m pip install radia-mcp` | AI-facing MCP servers and executable domain knowledge |
 | `cubit-mesh-export` (2.2.3) | `python -m pip install cubit-mesh-export` | Solver-neutral high-order Cubit export, `check-vol`, plugin, and independently owned Cubit MCP |
 | `radia-optuna` | `python -m pip install radia-optuna` | Standalone MATLAB Optuna namespace and 21-command native gateway; no Radia solver, NGSolve, or MKL runtime |
-| `eqnedit64` (3.1.4) | `python -m pip install eqnedit64` | Windows equation editor, structural Python API, native TeX/MathML/SVG/clipboard backend, and Web assets |
+| `eqnedit64` (3.1.7) | `python -m pip install eqnedit64` | Windows equation editor, structural Python API, native TeX/MathML/SVG/clipboard backend, and Web assets |
 | `radia[optuna]` | `python -m pip install "radia[optuna]"` | Radia plus pinned upstream Python `optuna==5.0.0`; MATLAB optimization requires the separate `radia-optuna` distribution |
 
 Each distribution has its own release and validation gates. Record exact
@@ -556,7 +556,7 @@ Set-Location Radia
 python -m pip install -e ".[dev]"
 python -m pip install -e packages/radia-mcp
 python -m pip install -e packages/cubit-mesh-export
-python -m pip install packages/eqnedit64
+python -m pip install eqnedit64
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build.ps1 -RadiaOnly
 ```
 
@@ -571,8 +571,6 @@ packages/radia-simulink/             CUDA MEX, MATLAB, Simulink and LTspice inte
 packages/radia-mcp/             MCP servers and executable domain knowledge
 packages/cubit-mesh-export/     Cubit exporters, plugin and check-vol
 packages/radia-optuna/          Independent MATLAB/Simulink Optuna package
-packages/eqnedit64/             Windows Eqnedit64 Python/API distribution
-tools/eqnedit64/                Native and browser equation editor source
 tests/                          Small executable samples and fast regressions
 validation_test/                Physics/application samples and validation gates
 docs/                           Feature introductions, saved results and theory

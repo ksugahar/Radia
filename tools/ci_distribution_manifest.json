@@ -5,8 +5,7 @@
     "radia-simulink",
     "radia-mcp",
     "radia-optuna",
-    "cubit-mesh-export",
-    "eqnedit64"
+    "cubit-mesh-export"
   ],
   "infrastructure_owner": "repo",
   "rule_semantics": "ordered_last_match_replaces",
@@ -84,9 +83,6 @@
           "radia-optuna": [
             "radia-optuna"
           ],
-          "eqnedit64": [
-            "eqnedit64"
-          ],
           "cubit-mesh-export": [
             "cubit-mesh-export"
           ],
@@ -108,8 +104,7 @@
           "radia-simulink",
           "radia-mcp",
           "radia-optuna",
-          "cubit-mesh-export",
-          "eqnedit64"
+          "cubit-mesh-export"
         ],
         "tooling_sections": [
           "tool.black",
@@ -482,12 +477,6 @@
       ]
     },
     {
-      "pattern": "packages/eqnedit64/**",
-      "owners": [
-        "eqnedit64"
-      ]
-    },
-    {
       "pattern": "src/cubit_plugin/**",
       "owners": [
         "cubit-mesh-export"
@@ -824,24 +813,6 @@
       ]
     },
     {
-      "pattern": "tools/eqnedit64/**",
-      "owners": [
-        "eqnedit64"
-      ]
-    },
-    {
-      "pattern": "docs/equation/**",
-      "owners": [
-        "eqnedit64"
-      ]
-    },
-    {
-      "pattern": ".agents/skills/release-eqnedit64/**",
-      "owners": [
-        "eqnedit64"
-      ]
-    },
-    {
       "pattern": "tests/policy/**",
       "owners": [
         "repo"
@@ -1034,12 +1005,6 @@
       ]
     },
     {
-      "pattern": ".github/workflows/eqnedit64.yml",
-      "owners": [
-        "eqnedit64"
-      ]
-    },
-    {
       "pattern": ".github/workflows/ltspice-data-safety.yml",
       "owners": [
         "radia-simulink"
@@ -1082,12 +1047,6 @@
       ]
     },
     {
-      "pattern": ".github/workflows/release-eqnedit64-pypi.yml",
-      "owners": [
-        "eqnedit64"
-      ]
-    },
-    {
       "pattern": ".github/workflows/release-radia-optuna.yml",
       "owners": [
         "radia-optuna"
@@ -1112,8 +1071,7 @@
         "radia-simulink",
         "radia-mcp",
         "radia-optuna",
-        "cubit-mesh-export",
-        "eqnedit64"
+        "cubit-mesh-export"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1128,8 +1086,7 @@
         "radia-simulink",
         "radia-mcp",
         "radia-optuna",
-        "cubit-mesh-export",
-        "eqnedit64"
+        "cubit-mesh-export"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1144,8 +1101,7 @@
         "radia-simulink",
         "radia-mcp",
         "radia-optuna",
-        "cubit-mesh-export",
-        "eqnedit64"
+        "cubit-mesh-export"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1160,8 +1116,7 @@
         "radia-simulink",
         "radia-mcp",
         "radia-optuna",
-        "cubit-mesh-export",
-        "eqnedit64"
+        "cubit-mesh-export"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1176,8 +1131,7 @@
         "radia-simulink",
         "radia-mcp",
         "radia-optuna",
-        "cubit-mesh-export",
-        "eqnedit64"
+        "cubit-mesh-export"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1463,7 +1417,6 @@
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
-        "eqnedit64",
         "repo"
       ],
       "reason": {
@@ -1480,7 +1433,6 @@
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
-        "eqnedit64",
         "repo"
       ],
       "reason": {
@@ -1497,7 +1449,6 @@
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
-        "eqnedit64",
         "repo"
       ],
       "reason": {
@@ -1969,6 +1920,18 @@
       "selection": "all_owners"
     },
     {
+      "pattern": "tools/check_public_names.py",
+      "owners": [
+        "repo",
+        "radia"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "The policy-lint wrapper applies this public-source guard across all distributions."
+      },
+      "selection": "all_owners"
+    },
+    {
       "pattern": "tests/test_mcp_residual_vendor_contract.py",
       "owners": [
         "radia-mcp",
@@ -2000,7 +1963,6 @@
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
-        "eqnedit64",
         "repo"
       ],
       "reason": {
@@ -2017,7 +1979,6 @@
         "radia-mcp",
         "radia-optuna",
         "cubit-mesh-export",
-        "eqnedit64",
         "repo"
       ],
       "reason": {
@@ -2199,12 +2160,6 @@
       "pattern": "packages/cubit-mesh-export/validation_records/**",
       "owners": [
         "cubit-mesh-export"
-      ]
-    },
-    {
-      "pattern": "packages/eqnedit64/validation_records/**",
-      "owners": [
-        "eqnedit64"
       ]
     },
     {
@@ -2444,151 +2399,6 @@
         "tests/test_tier_manifest.json"
       ],
       "required_paths": [
-        "CMakeLists.txt",
-        "Build.ps1",
-        "pyproject.toml",
-        "MANIFEST.in",
-        "tests/test_tier_manifest.json"
-      ]
-    },
-    "eqnedit64": {
-      "workflow": ".github/workflows/eqnedit64.yml",
-      "owners": [
-        "eqnedit64"
-      ],
-      "scope": "distribution",
-      "native": true,
-      "events": {
-        "push": {
-          "branches": [
-            "main"
-          ],
-          "tags": [
-            "eqnedit64-v*"
-          ],
-          "paths": [
-            "tools/eqnedit64/**",
-            "packages/eqnedit64/**",
-            "docs/equation/**",
-            ".agents/skills/release-eqnedit64/**",
-            ".github/workflows/eqnedit64.yml",
-            ".github/workflows/release-eqnedit64-pypi.yml",
-            "CMakeLists.txt",
-            "Build.ps1",
-            "pyproject.toml",
-            "MANIFEST.in",
-            "tests/test_tier_manifest.json",
-            "tools/sparsesolv_ci_impact.py",
-            "tools/ci_distribution_contract.py",
-            "tools/ci_distribution_manifest.json",
-            "!**/*.md",
-            "tools/eqnedit64/README.md",
-            "tools/eqnedit64/CHANGELOG.md",
-            "tools/eqnedit64/docs/GUI_SPEC.md",
-            "tools/eqnedit64/web/README.md",
-            "packages/eqnedit64/README.md",
-            "packages/eqnedit64/CHANGELOG.md",
-            "docs/equation/README.md",
-            "docs/equation/eqnedit64_handover.md",
-            ".agents/skills/release-eqnedit64/SKILL.md"
-          ]
-        },
-        "pull_request": {
-          "branches": [
-            "main"
-          ],
-          "paths": [
-            "tools/eqnedit64/**",
-            "packages/eqnedit64/**",
-            "docs/equation/**",
-            ".agents/skills/release-eqnedit64/**",
-            ".github/workflows/eqnedit64.yml",
-            ".github/workflows/release-eqnedit64-pypi.yml",
-            "CMakeLists.txt",
-            "Build.ps1",
-            "pyproject.toml",
-            "MANIFEST.in",
-            "tests/test_tier_manifest.json",
-            "tools/sparsesolv_ci_impact.py",
-            "tools/ci_distribution_contract.py",
-            "tools/ci_distribution_manifest.json",
-            "!**/*.md",
-            "tools/eqnedit64/README.md",
-            "tools/eqnedit64/CHANGELOG.md",
-            "tools/eqnedit64/docs/GUI_SPEC.md",
-            "tools/eqnedit64/web/README.md",
-            "packages/eqnedit64/README.md",
-            "packages/eqnedit64/CHANGELOG.md",
-            "docs/equation/README.md",
-            "docs/equation/eqnedit64_handover.md",
-            ".agents/skills/release-eqnedit64/SKILL.md"
-          ]
-        },
-        "workflow_dispatch": {
-          "inputs": {
-            "font_diagnostic": {
-              "description": "Run three isolated font-boundary arms, not release acceptance",
-              "type": "boolean",
-              "default": "false"
-            },
-            "font_dump": {
-              "description": "Diagnostic CFF/TrueType outline A/B, eight isolated trials; no release",
-              "type": "boolean",
-              "default": "false"
-            },
-            "font_dump_public_key": {
-              "description": "Base64 DER public encryption key; private key stays off GitHub",
-              "type": "string",
-              "default": ""
-            },
-            "font_probe": {
-              "description": "Bounded 2x2 private-font probe with three fresh-VM replicates",
-              "type": "boolean",
-              "default": "false"
-            },
-            "font_prefix": {
-              "description": "Fixed-payload deep-radical and edit-history diagnostics",
-              "type": "boolean",
-              "default": "false"
-            },
-            "font_acceptance": {
-              "description": "Full native candidate tests with named Eqnedit Math product asset; no release",
-              "type": "boolean",
-              "default": "false"
-            }
-          }
-        }
-      },
-      "selector_refs": [
-        "tools/sparsesolv_ci_impact.py:required_for_event"
-      ],
-      "markdown_inputs": [
-        "tools/eqnedit64/README.md",
-        "tools/eqnedit64/CHANGELOG.md",
-        "tools/eqnedit64/docs/GUI_SPEC.md",
-        "tools/eqnedit64/web/README.md",
-        "packages/eqnedit64/README.md",
-        "packages/eqnedit64/CHANGELOG.md",
-        "docs/equation/README.md",
-        "docs/equation/eqnedit64_handover.md",
-        ".agents/skills/release-eqnedit64/SKILL.md"
-      ],
-      "content_diff_active": [
-        "CMakeLists.txt",
-        "Build.ps1",
-        "pyproject.toml",
-        "MANIFEST.in",
-        "tests/test_tier_manifest.json"
-      ],
-      "required_paths": [
-        ".agents/skills/release-eqnedit64/SKILL.md",
-        ".agents/skills/release-eqnedit64/agents/openai.yaml",
-        ".agents/skills/release-eqnedit64/scripts/assert_release_signature.ps1",
-        ".agents/skills/release-eqnedit64/scripts/release_eqnedit64.ps1",
-        ".agents/skills/release-eqnedit64/scripts/sync_handtest_to_o.ps1",
-        ".agents/skills/release-eqnedit64/scripts/sync_to_o.ps1",
-        "docs/equation/README.md",
-        "docs/equation/eqnedit64_handover.md",
         "CMakeLists.txt",
         "Build.ps1",
         "pyproject.toml",
@@ -3453,28 +3263,6 @@
         "MANIFEST.in",
         "tests/test_tier_manifest.json"
       ]
-    },
-    "release-eqnedit64-pypi": {
-      "workflow": ".github/workflows/release-eqnedit64-pypi.yml",
-      "owners": [
-        "eqnedit64"
-      ],
-      "scope": "distribution",
-      "native": false,
-      "events": {
-        "workflow_run": {
-          "workflows": [
-            "Eqnedit64"
-          ],
-          "types": [
-            "completed"
-          ]
-        }
-      },
-      "selector_refs": [],
-      "markdown_inputs": [],
-      "content_diff_active": [],
-      "required_paths": []
     },
     "release-radia-optuna": {
       "workflow": ".github/workflows/release-radia-optuna.yml",
