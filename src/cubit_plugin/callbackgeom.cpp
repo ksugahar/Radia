@@ -41,17 +41,18 @@ void CallbackGeometry::ProjectPointEdge(int surfind, int surfind2, Point<3> & p,
                                          ) const
 {
 #ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
-  (void)edgenr;
+  const int callback_edgenr = edgenr;
   const int callback_surfind = surfind;
   const int callback_surfind2 = surfind2;
 #else
+  const int callback_edgenr = gi ? gi->edgenr : -1;
   const int callback_surfind = surfind + 1;
   const int callback_surfind2 = surfind2 + 1;
 #endif
   if (!project_func) return;
 
   if (edge_project_func && surfind >= 0 && surfind2 >= 0) {
-    auto [xp, yp, zp] = edge_project_func(callback_surfind, callback_surfind2,
+    auto [xp, yp, zp] = edge_project_func(callback_edgenr, callback_surfind, callback_surfind2,
                                            p[0], p[1], p[2]);
     p = Point<3>(xp, yp, zp);
   } else {
@@ -115,10 +116,11 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
                                          ) const
 {
 #ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
-  (void)edgenr;
+  const int callback_edgenr = edgenr;
   const int callback_surfi1 = surfi1;
   const int callback_surfi2 = surfi2;
 #else
+  const int callback_edgenr = ap1.edgenr;
   const int callback_surfi1 = surfi1 + 1;
   const int callback_surfi2 = surfi2 + 1;
 #endif
@@ -130,7 +132,7 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
   // the linear midpoint sits nearer to a different part of the curve than
   // the true arc midpoint.
   if (between_edge_func && surfi1 >= 0 && surfi2 >= 0) {
-    auto [xp, yp, zp] = between_edge_func(callback_surfi1, callback_surfi2,
+    auto [xp, yp, zp] = between_edge_func(callback_edgenr, callback_surfi1, callback_surfi2,
                                              p1[0], p1[1], p1[2],
                                              p2[0], p2[1], p2[2],
                                              secpoint);
@@ -142,7 +144,7 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
     // Linear midpoint then project (legacy path)
     newp = p1 + secpoint * (p2 - p1);
     if (edge_project_func && surfi1 >= 0 && surfi2 >= 0) {
-      auto [xp, yp, zp] = edge_project_func(callback_surfi1, callback_surfi2,
+      auto [xp, yp, zp] = edge_project_func(callback_edgenr, callback_surfi1, callback_surfi2,
                                              newp[0], newp[1], newp[2]);
       newp = Point<3>(xp, yp, zp);
     } else if (project_func && surfi1 >= 0) {
@@ -207,15 +209,16 @@ Vec<3> CallbackGeometry::GetTangent(const Point<3> & p, int surfi1,
                                      ) const
 {
 #ifdef CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API
-  (void)edgenr;
+  const int callback_edgenr = edgenr;
   const int callback_surfi1 = surfi1;
   const int callback_surfi2 = surfi2;
 #else
+  const int callback_edgenr = egi.edgenr;
   const int callback_surfi1 = surfi1 + 1;
   const int callback_surfi2 = surfi2 + 1;
 #endif
   if (tangent_func) {
-    auto [tx, ty, tz] = tangent_func(callback_surfi1, callback_surfi2, p[0], p[1], p[2]);
+    auto [tx, ty, tz] = tangent_func(callback_edgenr, callback_surfi1, callback_surfi2, p[0], p[1], p[2]);
     return Vec<3>(tx, ty, tz);
   }
   // Fallback: cross product of two surface normals

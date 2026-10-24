@@ -266,6 +266,17 @@ if(pybind11_FOUND AND HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
   install(TARGETS cubit_mesh_curver
       LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/plugins"
   )
+  option(CUBIT_CALLBACK_CONTRACT_TESTS "Build native geometry callback contracts" OFF)
+  if(CUBIT_CALLBACK_CONTRACT_TESTS)
+    enable_testing()
+    add_executable(cubit_callback_contract tests/callback_curve_identity.cpp callbackgeom.cpp)
+    target_compile_features(cubit_callback_contract PRIVATE cxx_std_17)
+    target_include_directories(cubit_callback_contract PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}" "${NETGEN_DIR}/include" "${NETGEN_DIR}/include/include")
+    target_compile_definitions(cubit_callback_contract PRIVATE CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API)
+    target_link_libraries(cubit_callback_contract PRIVATE netgen::nglib netgen::ngcore)
+    add_test(NAME cubit_callback_curve_identity COMMAND cubit_callback_contract)
+  endif()
 elseif(pybind11_FOUND AND NOT HAVE_NETGEN)
   message(STATUS "pybind11 found but Netgen missing: skipping cubit_mesh_curver")
 else()
