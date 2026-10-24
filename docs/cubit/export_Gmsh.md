@@ -137,13 +137,11 @@ Geometry topology information:
 
 This enables solvers to associate mesh elements with geometric entities.
 
-## Compatibility
+## Supported consumer
 
-The output file is compatible with:
-- Gmsh 4.x
-- NGSolve/Netgen
-- FEniCS
-- Other solvers supporting Gmsh v4 format
+Open the MSH 4.2 post-processing output with the qualified Gmsh 5 runtime.
+For NGSolve computation, export and check a Netgen `.vol` solver mesh instead.
+Compatibility with other solver importers is not certified by this exporter.
 
 ## See Also
 
