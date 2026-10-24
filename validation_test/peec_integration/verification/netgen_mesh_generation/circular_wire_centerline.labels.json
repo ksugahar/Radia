@@ -1,0 +1,19 @@
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "peec_centerline",
+  "strict_labels": true,
+  "required": {
+    "materials": [
+      "wire_centerline"
+    ],
+    "boundaries": [
+      "wire_centerline"
+    ]
+  },
+  "centerline": {
+    "units": "m",
+    "nodes": 11,
+    "segments": 10,
+    "closed": false
+  }
+}

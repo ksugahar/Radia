@@ -76,3 +76,9 @@ packages/radia-optuna/oracles/optuna_test_manifest.json text eol=lf
 # Validation records hash exact entry and evidence bytes. Preserve Git blobs
 # verbatim, including historical CRLF evidence, on every checkout platform.
 validation_records/** -text
+
+# Preserve native Netgen fixture bytes; label contracts are portable text.
+validation_test/peec_integration/verification/netgen_mesh_generation/*.vol binary
+validation_test/peec_integration/verification/netgen_mesh_generation/*.labels.json text eol=lf
+validation_test/gmsh_post/fixtures/*.msh text eol=lf
+validation_test/gmsh_post/fixtures/*.json text eol=lf
