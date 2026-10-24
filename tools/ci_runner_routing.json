@@ -2,8 +2,16 @@
   "schema": 1,
   "mode": "stage3",
   "jobs": {
-    "gpu-runner-readiness.yml:a100": {"owner": "radia-simulink", "target": "gpu-a100", "legacy_100": false},
-    "gpu-runner-readiness.yml:rtx": {"owner": "radia-simulink", "target": "gpu-rtx", "legacy_100": false},
+    "gpu-runner-readiness.yml:a100": {
+      "owner": "radia-simulink",
+      "target": "gpu-a100",
+      "legacy_100": false
+    },
+    "gpu-runner-readiness.yml:rtx": {
+      "owner": "radia-simulink",
+      "target": "gpu-rtx",
+      "legacy_100": false
+    },
     "build-test.yml:build-test": {
       "owner": "radia",
       "target": "ci-native",
@@ -290,9 +298,12 @@
         "tools/validation_source_gate.py",
         "tools/ci_ams_inputs.py",
         "tools/ci_tree_receipt.py",
-        "tools/build_linux.py"
+        "tools/build_linux.py",
+        "tools/ci_numerical_plan.py",
+        "tools/ci_numerical_runtime.py",
+        "tools/ci_numerical_inputs.json"
       ],
-      "audit_sha256": "df15b00bfccb0056284d27f6a5259e8401102aa3ec5542299cca272f4c4bf4a4",
+      "audit_sha256": "8bf6decc9fb9cc72c0e94050511a401792d4bfc3b307945e88736fc3d4a62d6c",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

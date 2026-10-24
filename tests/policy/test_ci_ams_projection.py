@@ -1,4 +1,8 @@
-"""Protect AMS execution against hidden profile, ownership and environment edits."""
+"""Guards: profile, ownership or environment edits cannot silently bypass admission.
+
+Assumes: source-contract payloads; parent distribution admission is conservative,
+while the separately verified immutable plan selects actual numerical consumers.
+"""
 import copy
 import importlib.util
 import json
@@ -142,12 +146,15 @@ def test_bad_json_cannot_exempt_a_pr(path, value):
     assert decide(blobs, data)
 
 
-def test_parent_and_internal_native_impact_use_one_pr_aware_decision():
-    workflow = yaml.load((ROOT / '.github/workflows/sparsesolv.yml').read_text(), Loader=yaml.BaseLoader)
-    for job in ('ci-impact', 'ams-regression'):
-        commands = [step['run'] for step in workflow['jobs'][job]['steps']
-                    if 'tools/sparsesolv_ci_impact.py' in step.get('run', '')]
-        assert len(commands) == 1 and '--lane sparsesolv' in commands[0]
+def test_parent_admission_and_internal_case_plan_remain_separate():
+    workflow = yaml.load((ROOT / '.github/workflows/sparsesolv.yml').read_text(encoding='utf-8'), Loader=yaml.BaseLoader)
+    parent = [step['run'] for step in workflow['jobs']['ci-impact']['steps']
+              if 'tools/sparsesolv_ci_impact.py' in step.get('run', '')]
+    assert len(parent) == 1 and '--lane sparsesolv' in parent[0]
+    internal = [step['run'] for step in workflow['jobs']['ams-regression']['steps']
+                if step.get('id') == 'native-impact']
+    assert len(internal) == 1 and 'tools/ci_numerical_plan.py --github-event' in internal[0]
+    assert '--github-output' in internal[0]
 
 
 @pytest.mark.parametrize('consumed', [TIER, OWNERS])

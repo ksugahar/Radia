@@ -114,10 +114,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--collect-only", action="store_true")
     parser.add_argument("--since", help="Add affected lightweight contracts since this commit; empty means all registered impacts")
+    parser.add_argument("--numerical-plan", type=Path, help="Recompute and verify exact-source per-case selection")
     args = parser.parse_args(argv)
 
     try:
         paths, budget = load_profile(args.profile)
+        if args.numerical_plan:
+            if args.since is not None:
+                raise ValueError('numerical plan cannot be mixed with legacy --since selection')
+            from ci_numerical_runtime import verified_plan, selected_paths
+            paths = selected_paths(verified_plan(ROOT, args.numerical_plan), args.profile)
         if args.since is not None:
             changed = None
             previous_manifest = None
