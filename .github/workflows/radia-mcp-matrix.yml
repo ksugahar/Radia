@@ -535,16 +535,20 @@ jobs:
               metadata = tomllib.loads(Path("packages/radia-mcp/pyproject.toml").read_text(encoding="utf-8"))
               dependencies = metadata["project"]["optional-dependencies"]["md2html"]
               subprocess.run([sys.executable, "-m", "pip", "install", *dependencies], check=True)
-              env = os.environ.copy()
-              env.pop("RADIA_MCP_CI_SELECTION_JSON", None)
-              env["PYTHONPATH"] = str(Path("packages/radia-mcp/src").resolve())
+              import runpy
+              source = runpy.run_path("packages/radia-mcp/tools/integration_source.py")
+              root = Path.cwd().resolve()
+              package_env = dict(os.environ, PYTHONPATH=str(root / "packages/radia-mcp/src"))
+              env = source["source_environment"](root, package_env)
+              subprocess.run(source["identity_command"](
+                  root, Path("radia-mcp-integration-source.json")), env=env, check=True)
               subprocess.run([
                   sys.executable, "-m", "pytest", "-v", "-ra",
                   "--confcutdir=tests/mcp_integration", *targets,
               ], env=env, check=True)
               subprocess.run([
                   sys.executable, "packages/radia-mcp/tools/check_package_test_boundary.py"
-              ], env=env, check=True)
+              ], env=package_env, check=True)
               raise SystemExit(0)
           print("No repository integration contracts affected")
           PY
@@ -554,7 +558,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: radia-mcp-ci-selection
-          path: radia-mcp-ci-selection.json
+          path: |
+            radia-mcp-ci-selection.json
+            radia-mcp-integration-source.json
           if-no-files-found: error
 
       - name: Build and verify radia-mcp wheel
