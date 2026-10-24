@@ -59,8 +59,8 @@
   "timing_s": {
     "coarsest_solve": 0.00114560000019992
   },
-  "status": "current",
-  "stale_reason": null,
+  "status": "stale",
+  "stale_reason": "Covered pyproject.toml platform dependency markers changed for build-selected MKL/NVPL providers. Historical source-only evidence and original hashes are retained; the current candidate is not recertified.",
   "superseded_by": null,
   "private": false,
   "milestone": "Deep-skin ESIM slab impedance convergence",
