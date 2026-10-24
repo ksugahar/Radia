@@ -361,8 +361,8 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
     # Roles, not hosts: probe commands, aliases and core ranges stay private.
-    assert "the build host owns CI, release artifacts, isolated numerical validation and CPU development" in normalized
-    assert "the validation host runs GPU development, verified-wheel validation and timing, never Cubit" in normalized
+    assert "the build host owns CI, release artifacts, isolated numerical validation and CPU/GPU development" in normalized
+    assert "the validation host runs verified-wheel validation and timing, never Cubit" in normalized
     assert "the JMAG evaluation host runs no Radia work" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
     assert "Timings are diagnostic" in normalized
