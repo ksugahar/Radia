@@ -381,7 +381,7 @@ def _read_view_header(take):
 
 
 def _iter_data_blocks(kind, stream, reopen, ncomp, declared, *, native_limit=None,
-                      collect_values=True):
+                      collect_values=True, scheme_present=False):
     """One canonical block decoder; native mode retains a bounded tag bitmap.
 
     Tags precede values in 4.2. A second seekable reader pairs them without
@@ -416,7 +416,8 @@ def _iter_data_blocks(kind, stream, reopen, ncomp, declared, *, native_limit=Non
                 # Gmsh src/post/PViewDataGModelIO_MSH.cpp:128-142,343-367;
                 # doc/texinfo/gmsh.texi:5181-5186,5334-5346 (5.0 dev).
                 etype, nodes = int(next(toks)), int(next(toks))
-                if etype not in ELEMENT_TYPES or nodes < 0:
+                if (etype not in ELEMENT_TYPES or nodes < 1 or
+                        (not scheme_present and nodes != ELEMENT_TYPES[etype][1])):
                     raise ValueError('ElementNodeData block sample count/type mismatch')
                 width = nodes * ncomp
             n = int(next(toks))
@@ -464,14 +465,16 @@ def _iter_data_blocks(kind, stream, reopen, ncomp, declared, *, native_limit=Non
         raise ValueError('truncated data block') from exc
 
 
-def _decode_data_blocks(kind: str, lines: list[str], ncomp: int, declared: int) -> list[str]:
+def _decode_data_blocks(kind: str, lines: list[str], ncomp: int, declared: int,
+                        *, scheme_present=False) -> list[str]:
     """Detailed inspection collects the same decoder's records for its reports."""
     from io import StringIO
     text = '\n'.join(lines)
     with StringIO(text) as stream:
         return [' '.join([str(tag)] + ([str(nodes)] if nodes is not None else []) + values)
                 for tag, nodes, values in _iter_data_blocks(
-                    kind, stream, lambda: StringIO(text), ncomp, declared)]
+                    kind, stream, lambda: StringIO(text), ncomp, declared,
+                    scheme_present=scheme_present)]
 
 
 class _SectionBody:
@@ -544,10 +547,11 @@ def _validate_native_fields(path):
                         if row.strip(): return row.strip()
                     raise StopIteration
                 try:
-                    _, _, ints = _read_view_header(take)
+                    strings, _, ints = _read_view_header(take)
                     if len(ints) < 3: raise ValueError('integer-tag block needs >=3 entries')
                     for _ in _iter_data_blocks(name, body, reopen, ints[1], ints[2],
-                                               native_limit=2**31-1, collect_values=False):
+                                               native_limit=2**31-1, collect_values=False,
+                                               scheme_present=bool(len(strings) > 1 and strings[1])):
                         pass
                 except (StopIteration, TypeError) as exc:
                     raise ValueError(f'${name}: truncated or malformed header') from exc
@@ -614,7 +618,8 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
                  "n_finite_samples": 0}
 
     try:
-        data_rows = _decode_data_blocks(kind, rows[idx:], ncomp, view['declared'])
+        data_rows = _decode_data_blocks(kind, rows[idx:], ncomp, view['declared'],
+                                        scheme_present=bool(len(strings) > 1 and strings[1]))
     except (TypeError, ValueError) as exc:
         errors.append(f'${kind} @L{start_line}: {exc}')
         if stats is not None:
@@ -1017,7 +1022,8 @@ def read_msh_data(msh_path: str | Path,
                     f"{path.name}: ${name} @L{start_line} has negative "
                     f"entry count {declared}")
             try:
-                data_rows = _decode_data_blocks(name, list(row_iter), ncomp, declared)
+                data_rows = _decode_data_blocks(name, list(row_iter), ncomp, declared,
+                                                scheme_present=bool(len(strings) > 1 and strings[1]))
             except ValueError as exc:
                 raise ValueError(f'{path.name}: ${name} @L{start_line}: {exc}') from exc
             if len(data_rows) != declared:
