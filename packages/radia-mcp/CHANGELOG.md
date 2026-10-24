@@ -7,6 +7,13 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Make Gmsh documentation, examples and solver-boundary lint post-processing
+  only: use Gmsh 5 / MSH 4.2 results, native view tools and checked Netgen/Cubit
+  solver meshes. Remove obsolete remediation tools and mesh-import recipes.
+- Make build123d pipeline units explicit and preserve canonical Netgen material
+  labels with magnetization encoded in millidegrees; derive MSH 4.2 post output
+  through the production Radia exporter and declare its runtime dependencies.
+
 - Add the read-only `tests_design_guide` in radia-meta: author sensitive
   historical locks with production mutation evidence, scoped coverage claims
   and execution preflight. Existing fleet and incident gates keep their roles.

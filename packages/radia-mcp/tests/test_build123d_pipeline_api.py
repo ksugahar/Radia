@@ -1,15 +1,10 @@
-# -*- coding: utf-8 -*-
-"""Lightweight checks for the promoted build123d pipeline API."""
-
-from __future__ import annotations
-
-import os
+"""Guards: Netgen .vol is the analysis boundary; MSH 4.2 is post output.
+Assumes: the stored result fixture has independently recorded provenance.
+"""
+from pathlib import Path
 import sys
 
-
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
+import pytest
 
 
 def test_build123d_pipeline_public_api_imports_without_geometry_runtime():
@@ -19,58 +14,76 @@ def test_build123d_pipeline_public_api_imports_without_geometry_runtime():
     for name in pipeline.__all__:
         assert callable(getattr(pipeline, name))
 
-def test_pipeline_gmsh41_reader_maps_volume_physical_tags(tmp_path):
+
+@pytest.mark.parametrize('entry', ['_load_checked_vol', '_stage_post', '_stage_post_multi'])
+def test_pipeline_rejects_msh_analysis_before_loading_native_dependencies(entry, tmp_path, monkeypatch):
     from radia_mcp.build123d import pipeline
 
-    msh = tmp_path / "one_tet_v41.msh"
-    msh.write_text(
-        """$MeshFormat
-4.1 0 8
-$EndMeshFormat
-$Entities
-0 0 0 1
-10 0 0 0 1 1 1 1 7 0
-$EndEntities
-$Nodes
-1 4 1 4
-3 10 0 4
-1
-2
-3
-4
-0 0 0
-1 0 0
-0 1 0
-0 0 1
-$EndNodes
-$Elements
-1 1 1 1
-3 10 4 1
-1 1 2 3 4
-$EndElements
-""",
-        encoding="utf-8",
-    )
+    monkeypatch.setitem(sys.modules, 'ngsolve', None)
+    monkeypatch.setitem(sys.modules, 'cubit_mesh_export', None)
+    args = [tmp_path / 'display.msh']
+    if entry == '_stage_post':
+        args += [tmp_path, 'display']
+    elif entry == '_stage_post_multi':
+        args += [['core'], tmp_path, 'display']
+    with pytest.raises(ValueError, match='Netgen .vol'):
+        getattr(pipeline, entry)(*args)
 
-    nodes, elements = pipeline._read_gmsh_nodes_elements(msh)
 
-    assert nodes == [
-        (1, 0.0, 0.0, 0.0),
-        (2, 1.0, 0.0, 0.0),
-        (3, 0.0, 1.0, 0.0),
-        (4, 0.0, 0.0, 1.0),
-    ]
-    assert elements == [{
-        "id": 1,
-        "type": 4,
-        "tags": [7, 10],
-        "nodes": [1, 2, 3, 4],
-    }]
+def test_pipeline_rejects_non_si_vol_before_loading_dependencies(tmp_path, monkeypatch):
+    import json
+    from radia_mcp.build123d import pipeline
 
-    post = pipeline._stage_post_multi(msh, ["core"], tmp_path, "one_tet")
-    text = (tmp_path / "one_tet_post.msh").read_text(encoding="utf-8")
+    path = tmp_path / 'solver.vol'
+    path.with_suffix('.labels.json').write_text(json.dumps({'units': 'mm'}), encoding='utf-8')
+    monkeypatch.setitem(sys.modules, 'ngsolve', None)
+    with pytest.raises(ValueError, match='SI units'):
+        pipeline._load_checked_vol(path)
 
-    assert post["n_regions"] == 1
-    assert post["regions"][0]["physical_tag"] == 7
-    assert '"core"' in text
-    assert "$ElementData" in text
+
+def test_pipeline_inspects_stored_msh_only_as_post_output():
+    from radia_mcp.build123d import pipeline
+
+    path = Path(__file__).parent / 'fixtures/gmsh/unit_cube_tet.msh'
+    result = pipeline._validate_post_output(path)
+    assert result['version'] == '4.2'
+    assert result['nodes']['count'] == 8
+    assert result['elements']['count'] == 6
+
+
+def test_pipeline_requires_current_exporter_before_creating_msh(monkeypatch):
+    from types import ModuleType
+    from radia_mcp.build123d import pipeline
+
+    package = ModuleType('radia')
+    package.__path__ = []
+    backend = ModuleType('radia.gmsh_post_export')
+
+    def forbidden(*args):
+        raise AssertionError('unsupported writer was called')
+
+    backend.GmshPostExport = forbidden
+    monkeypatch.setitem(sys.modules, 'radia', package)
+    monkeypatch.setitem(sys.modules, 'radia.gmsh_post_export', backend)
+    with pytest.raises(RuntimeError, match='current Radia MSH 4.2 exporter'):
+        pipeline._post_exporter(object())
+
+
+@pytest.mark.parametrize('entry', ['run_pipeline', 'run_pipeline_multi'])
+def test_pipeline_units_are_required_before_creating_artifacts(entry, tmp_path):
+    from radia_mcp.build123d import pipeline
+
+    destination = tmp_path / 'result'
+    with pytest.raises(TypeError, match='units'):
+        getattr(pipeline, entry)(None, destination, 'case')
+    with pytest.raises(ValueError, match="explicitly declared"):
+        getattr(pipeline, entry)(None, destination, 'case', units='unspecified')
+    assert not destination.exists()
+
+
+def test_native_solver_mesh_save_requires_explicit_si_before_dependencies(tmp_path, monkeypatch):
+    from radia_mcp.build123d import pipeline
+
+    monkeypatch.setitem(sys.modules, 'ngsolve', None)
+    with pytest.raises(ValueError, match='already use SI'):
+        pipeline._save_solver_mesh(None, tmp_path, 'case', units='mm')

@@ -245,7 +245,7 @@ PATTERNS: list[dict] = [
         "detection": "tests/test_simulink_application.py validates the "
                      "result.json spatial-artifact contract.",
         "prevention": "Let radia.simulink.application own the output path and "
-                      "require a checked GMSH .msh v4.1 artifact for spatial runs.",
+                      "require a checked GMSH .msh v4.2 artifact for spatial runs.",
         "related": ["tests/test_simulink_application.py",
                     "packages/radia-simulink/src/radia_simulink/simulink/application.py"],
     },

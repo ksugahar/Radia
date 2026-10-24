@@ -12,7 +12,7 @@ Every test here pins a defect that used to be SILENT or FATAL:
 * ``field_histogram`` used to rewrite a reversed user ``value_range``
   into ``[lo, lo + 1]`` and return all-zero counts.
 * List-data views exported into a ``.msh`` target come back as legacy
-  MSH v2.2, which this lane's own v4.2-only readers reject.
+  a representation that the MSH 4.2 readers cannot consume.
 
 Fixtures follow the house pattern: a hand-written Kuhn 6-tet cube
 [-0.5, 0.5]^3 with P1-exact NodeData, so every expected number is a
@@ -328,7 +328,7 @@ def test_streamlines_rejects_a_non_pos_out_file(tmp_path, suffix,
                          out_file=tmp_path / f"lines{suffix}")
     assert result["ok"] is False
     assert "must end in '.pos'" in result["error"]
-    assert "v2.2" in result["error"]
+    assert "MSH 4.2" in result["error"]
 
 
 @pytest.mark.parametrize(
@@ -350,7 +350,7 @@ def test_streamlines_rejects_a_non_pos_out_file(tmp_path, suffix,
 )
 def test_every_list_data_verb_rejects_a_msh_out_file(tmp_path, verb, call,
                                                      forbid_gmsh_launch):
-    """MEASURED: each of these wrote "$MeshFormat / 2.2 0 8" into .msh."""
+    """List-data views require .pos and never enter the MSH result writer."""
     msh = _write(tmp_path,
                  _CUBE + _nodedata("f", 1, [(i, [float(i)]) for i in _P]),
                  "f.msh")

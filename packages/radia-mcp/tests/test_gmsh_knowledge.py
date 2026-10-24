@@ -37,7 +37,8 @@ def test_gmsh_knowledge_records_zup_geo_opt_and_animation_export():
     assert "gmsh.fltk.initialize()" in animation
     assert 'Path("C:/temp")' in animation
     assert "PostProcessing.AnimationCycle = 0" in animation
-    assert "gmsh_animation_export.ipynb" in animation
+    assert "gmsh_export_animation" in animation
+    assert "PostProcessing.Link = 1" in animation
     assert "writes GIF/MP4 movies" in animation
 
 

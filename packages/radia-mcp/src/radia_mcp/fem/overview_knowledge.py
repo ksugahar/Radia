@@ -16,7 +16,7 @@ LAB_STACK = r"""
 | Nonlinear | Picard / Newton with Hantila polarization | radia.hantila_solver |
 | Hysteresis | `MatEnergyHysteresis` / `MatPlayHysteresis` | radia C++ |
 | BEM coupling | `ngsolve.bem` (Weggler ST) | optional |
-| Post / viz | `GmshPostExport` -> .msh v4.1 | GMSH GUI |
+| Post / viz | `GmshPostExport` -> .msh v4.2 | GMSH GUI |
 
 ## Lab CORE formulation choices
 

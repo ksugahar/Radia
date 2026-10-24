@@ -908,7 +908,7 @@ def matlab_simulink_library_contract():
                 "whose field scenes use Draw(field, mesh, name=..., ...)"
             ),
             "spatial_artifact": {
-                "format": "GMSH .msh v4.1",
+                "format": "GMSH .msh v4.2",
                 "location": "application run directory",
                 "required_when": "the selected mode computes a spatial field",
                 "result_index": "radia_result.artifacts.gmsh",
@@ -978,7 +978,7 @@ def matlab_simulink_library_contract():
             ],
             "execution": "one owned Python/NGSolve batch worker per rising trigger",
             "per_step_python": False,
-            "artifacts": ["versioned JSON", "timing breakdown", "Gmsh .msh v4.1", ".geo/.opt companions"],
+            "artifacts": ["versioned JSON", "timing breakdown", "Gmsh .msh v4.2", ".geo/.opt companions"],
             "retirement_claim": (
                 "FEMM physics are exposed through the default Simulink interface; "
                 "full retirement still requires frozen live solver artifacts for every lane"

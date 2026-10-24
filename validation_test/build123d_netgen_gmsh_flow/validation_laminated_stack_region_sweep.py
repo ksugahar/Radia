@@ -1,12 +1,12 @@
-"""Validation-class laminated stack for build123d -> Netgen -> Gmsh.
+"""Validation-class laminated stack for build123d -> checked Netgen .vol and Gmsh post output.
 
 This moderate example checks a CAE geometry contract that appears in many
 magnetic and electric teaching models:
 
 * build123d authors touching box layers as one ordered multi-region stack;
 * CAD volumes match simple analytic layer volumes;
-* the STEP -> Netgen -> Gmsh bridge preserves one named volume group per
-  layer, so solver-side material assignment can stay readable.
+* checked Netgen .vol materials preserve one name per solver layer; derived
+  MSH 4.2 groups independently check post-output coupling.
 
 Run:
 
@@ -140,7 +140,7 @@ def lamination_fill_factor(case: dict) -> float:
 def run_case(case: dict, out_dir: Path, volume_rtol: float) -> dict:
     label = case["label"]
     region_names = _region_names(case)
-    record = run_pipeline_multi(build_regions(case), out_dir=out_dir, label=label, maxh=case["maxh"])
+    record = run_pipeline_multi(build_regions(case), out_dir=out_dir, label=label, maxh=case["maxh"], units="mm")
     cad = _stage(record, "cad")
     mesh = _stage(record, "mesh")
     post = _stage(record, "post")

@@ -30,7 +30,7 @@ def _artifact() -> dict:
     rows = [{"row_index": 0, "branch_current_a": [1.0]}]
     contents = {
         "csv": "row_index,current_a:winding\n0,1\n",
-        "gmsh_msh": "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n",
+        "gmsh_msh": "$MeshFormat\n4.2 0 8\n$EndMeshFormat\n",
         "gmsh_geo": 'Merge "field_post.msh";\n',
         "gmsh_geo_opt": "General.InitialModule = 5;\n",
         "gmsh_msh_opt": "General.InitialModule = 1;\n",

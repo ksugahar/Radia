@@ -1,12 +1,12 @@
-"""Validation-class coaxial multi-region stack for build123d -> Netgen -> Gmsh.
+"""Validation-class coaxial multi-region stack for build123d -> checked Netgen .vol and Gmsh post output.
 
 This is a moderate example, not a pytest test. It checks a simple but useful
 CAE geometry contract:
 
 * build123d authors disjoint touching cylindrical regions;
 * CAD volumes match the analytic coaxial shell formulas;
-* the multi-region STEP -> Netgen -> Gmsh path preserves one volume group per
-  region so solver-side materials can be assigned by name.
+* checked Netgen .vol materials preserve one name per solver region; derived
+  MSH 4.2 groups independently check post-output coupling.
 
 Run:
 
@@ -103,7 +103,7 @@ def analytic_region_volumes(case: dict) -> dict[str, float]:
 
 def run_case(case: dict, out_dir: Path, volume_rtol: float) -> dict:
     label = case["label"]
-    record = run_pipeline_multi(build_regions(case), out_dir=out_dir, label=label, maxh=case["maxh"])
+    record = run_pipeline_multi(build_regions(case), out_dir=out_dir, label=label, maxh=case["maxh"], units="mm")
     cad = _stage(record, "cad")
     mesh = _stage(record, "mesh")
     post = _stage(record, "post")
