@@ -42,12 +42,21 @@ def test_identity_binds_the_actual_native_module(tmp_path,monkeypatch):
         launcher.runtime_identity(tmp_path/"mesh.vol")
 
 
-def test_filename_is_one_literal_tcl_argument_and_window_closes_once(tmp_path,monkeypatch):
+@pytest.mark.parametrize("close_style",["window","native-menu","child-only"])
+def test_filename_is_one_literal_tcl_argument_and_window_closes_once(tmp_path,monkeypatch,close_style):
     path=tmp_path/"日本語 空白 {} [] $ &;.vol";path.write_text("mesh3d",encoding="utf-8")
-    calls=[];protocol={};destroyed=[]
+    calls=[];protocol={};destroyed=[];bindings={}
+    def destroy():
+        destroyed.append(True)
+        if "<Destroy>" in bindings:bindings["<Destroy>"](NS(widget=win))
+    def mainloop():
+        if close_style=="window":protocol["WM_DELETE_WINDOW"]()
+        elif close_style=="native-menu":destroy()
+        elif "<Destroy>" in bindings:bindings["<Destroy>"](NS(widget=NS()))
     win=NS(tk=NS(call=lambda *args:calls.append(args)),
+           bind=lambda name,fn,add=None:bindings.update({name:fn}),
            protocol=lambda name,fn:protocol.update({name:fn}),title=lambda title:None,
-           destroy=lambda:destroyed.append(True),mainloop=lambda:protocol["WM_DELETE_WINDOW"]())
+           destroy=destroy,mainloop=mainloop)
     monkeypatch.setitem(sys.modules,"gmsh",None)  # .vol must not import the optional Gmsh runtime.
     monkeypatch.setitem(sys.modules,"netgen",NS(__path__=[]))
     monkeypatch.setitem(sys.modules,"netgen.gui",NS(win=win))
