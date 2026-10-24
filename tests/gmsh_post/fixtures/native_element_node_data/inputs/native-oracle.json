@@ -1,0 +1,63 @@
+{
+  "purpose": "Synthetic post-only core preflight fixtures; no solver input",
+  "distribution_version": "5.0.0.dev20261018",
+  "wheel_sha256": "f0d2ca61322ff778afe464e293ae3b51b1401d268b1db7ab2a75d64d6bdb1e0c",
+  "fixtures": [
+    {
+      "file": "point_vector.msh",
+      "samples_per_element": 1,
+      "element_type": 15,
+      "components": 3,
+      "tags": [
+        11,
+        23
+      ],
+      "values": [
+        [
+          20.0,
+          20.125,
+          20.25
+        ],
+        [
+          10.0,
+          10.125,
+          10.25
+        ]
+      ],
+      "sha256": "a7bd0de39fb2532daa6dd3daab359708a26d30c618ccfa8e5467104bfa9e98a7",
+      "native_sha256": "6f94b30976be34b808f86358a80ec84f692039ed2cae7f1699c468c25296b2d8"
+    },
+    {
+      "file": "line_vector.msh",
+      "samples_per_element": 2,
+      "element_type": 1,
+      "components": 3,
+      "tags": [
+        11,
+        23
+      ],
+      "values": [
+        [
+          20.0,
+          20.125,
+          20.25,
+          20.375,
+          20.5,
+          20.625
+        ],
+        [
+          10.0,
+          10.125,
+          10.25,
+          10.375,
+          10.5,
+          10.625
+        ]
+      ],
+      "sha256": "8554781fd2a789103cab5e7971f25e02b83b80a196127ac3dcf06cd125d6aae4",
+      "native_sha256": "1c71b86ac9eecc459927a8f6b085a13a496df48dd7014758d3c423ce7651dca6"
+    }
+  ],
+  "native_version": "5.0.0-git-c020e8f43",
+  "mcp_imported": false
+}

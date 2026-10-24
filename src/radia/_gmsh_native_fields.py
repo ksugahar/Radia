@@ -91,7 +91,7 @@ def validate_native_msh_fields(path, _seen=None):
                 width = ncomp
                 if kind == '$ElementNodeData':
                     int(next(tokens))  # element type
-                    width = int(next(tokens))
+                    width = ncomp * int(next(tokens))  # samples per element
                 n = int(next(tokens))
                 if n < 0 or n > count - consumed or width <= 0:
                     raise ValueError('invalid field block width/count')
