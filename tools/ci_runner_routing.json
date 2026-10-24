@@ -213,6 +213,7 @@
         "src/radia/ih_heat_boundaries.py",
         "validation_test/omega_quadrature/assess_plateau.py",
         "tools/policy_lint.py",
+        "tools/check_public_names.py",
         "tools/verify_radia_promotion.py",
         "src/radia/_residual_gate.py",
         "validation_test/surface_rom_team10/transient.py",
@@ -233,7 +234,7 @@
         "tools/ci_numerical_runtime.py",
         "tools/ci_numerical_inputs.json"
       ],
-      "audit_sha256": "6f4bee4a8b292e9f8b7450fc1dd81d3bd724202e655987c31b8216852e9da9f6",
+      "audit_sha256": "3445e307a59991008702838ba2e46280f531f235747f5e7c90d2443a02708849",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

@@ -1922,14 +1922,8 @@
     {
       "pattern": "tools/check_public_names.py",
       "owners": [
-        "repo",
-        "radia"
-      ],
-      "reason": {
-        "kind": "integration",
-        "detail": "The policy-lint wrapper applies this public-source guard across all distributions."
-      },
-      "selection": "all_owners"
+        "repo"
+      ]
     },
     {
       "pattern": "tests/test_mcp_residual_vendor_contract.py",
