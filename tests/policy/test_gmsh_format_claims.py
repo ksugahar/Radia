@@ -265,7 +265,7 @@ def test_git_prefilter_preserves_utf16_and_cli_claims(tmp_path):
     assert _claims((root / "legacy.py").read_text(encoding="utf-16"))
 
 
-def test_tracked_files_make_no_retired_msh_format_claims(record_property):
+def test_tracked_files_make_no_retired_msh_format_claims(record_testsuite_property):
     inventory = subprocess.run(
         ["git", "-c", f"safe.directory={ROOT.as_posix()}", "ls-files", "-z"],
         cwd=ROOT, capture_output=True, check=True,
@@ -274,8 +274,8 @@ def test_tracked_files_make_no_retired_msh_format_claims(record_property):
     assert tracked, "required tracked-file inventory is empty"
     candidates = _candidate_paths(ROOT)
     assert candidates.issubset(set(tracked)), "grep returned nontracked input"
-    record_property("tracked_paths", len(tracked))
-    record_property("content_candidates", len(candidates))
+    record_testsuite_property("tracked_paths", len(tracked))
+    record_testsuite_property("content_candidates", len(candidates))
     historical = []
     records = {}
     for relative in candidates:
