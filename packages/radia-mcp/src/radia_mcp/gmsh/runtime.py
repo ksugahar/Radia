@@ -55,22 +55,8 @@ def require_msh42(path, _seen=None) -> None:
     if opening != b'$MeshFormat' or header.split() != [b'4.2', b'0', b'8'] or closing != b'$EndMeshFormat':
         raise ValueError(f'{path.name}: expected ASCII MSH 4.2 (4.2 0 8), got {header!r}')
 
-    # Field tags are dense native indices in the adopted development build.
-    # Reuse the pure-Python field decoder: mesh-only size_t tags remain valid.
-    from .msh_inspect import _split_sections, _parse_data_section
-    sections, errors = _split_sections(path.read_text(encoding='utf-8').splitlines())
-    if errors:
-        raise ValueError(f'{path.name}: {"; ".join(errors)}')
-    for kind, body, line in sections:
-        if kind not in ('NodeData', 'ElementData', 'ElementNodeData'):
-            continue
-        view, errors = _parse_data_section(kind, body, line)
-        if errors:
-            raise ValueError(f'{path.name}: {"; ".join(errors)}')
-        for tag in view['tags']:
-            if tag > 2**31 - 1:
-                raise ValueError(f'{path.name}: Gmsh native {kind} field tag {tag} '
-                                 'exceeds 2147483647; no remapping or fallback is used')
+    from .msh_inspect import _validate_native_fields
+    _validate_native_fields(path)
 
 
 def _gmsh5_distribution_version() -> str:

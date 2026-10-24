@@ -1,13 +1,14 @@
 """One-way VOL post views through Radia's production exporter, never a solver input."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
+from ._worker_process import run_worker, transaction_deadline
 
 
 def sha256(path: Path) -> str:
@@ -26,26 +27,11 @@ def _load_exporter():
     return exporter
 
 
-def _worker_options() -> dict:
-    return {'stdin': subprocess.DEVNULL, 'capture_output': True, 'close_fds': True,
-            'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0),
-            'env': {**os.environ, 'PYTHONIOENCODING': 'utf-8', 'PYTHONUTF8': '1'}}
-
-
-def _worker_stderr(result) -> str:
-    # Native libraries can emit non-UTF-8 bytes despite Python's child encoding.
-    return (result.stderr or b'').decode('utf-8', errors='replace').strip()
-
-
-def _require_exporter_capability() -> None:
-    # Inspect the selected interpreter's installed Radia in a separate process:
-    # NGSolve must not be imported into the Gmsh GUI process, even for preflight.
-    result = subprocess.run(
+def _require_exporter_capability(*, deadline=None) -> None:
+    asyncio.run(run_worker(
         [sys.executable, '-B', '-m', 'radia_mcp.mesh_viewer.post_view', '--check-exporter'],
-        **_worker_options(), timeout=20)
-    if result.returncode:
-        raise RuntimeError('VOL post-view exporter preflight failed: ' + _worker_stderr(result))
-
+        env=os.environ, deadline=deadline if deadline is not None else transaction_deadline(),
+        phase='VOL post-view exporter preflight'))
 
 def _publish_mesh(staged: Path, target: Path) -> str:
     """Publish only a completed verified copy; linking never overwrites a target."""
@@ -67,7 +53,7 @@ def _publish_mesh(staged: Path, target: Path) -> str:
 
 
 def validate_post_request(source: Path, output: str, checked_report: str,
-                          source_sha256: str, group_scope: str) -> tuple[Path, dict]:
+                          source_sha256: str, group_scope: str, *, probe_exporter=True, deadline=None) -> tuple[Path, dict]:
     """Require a prior check-vol receipt plus the caller's checked-input digest."""
     if source.suffix.lower() != '.vol' or group_scope not in {'materials', 'boundaries'}:
         raise ValueError('VOL post-view requires group_scope materials or boundaries')
@@ -95,7 +81,8 @@ def validate_post_request(source: Path, output: str, checked_report: str,
     scratch = Path(os.environ.get('RADIA_MESH_VIEWER_SCRATCH', str(target.parent))).resolve()
     if not scratch.is_dir() or not str(scratch).isascii() or scratch == source.resolve().parent:
         raise ValueError('Set RADIA_MESH_VIEWER_SCRATCH to an existing ASCII job directory outside the source directory')
-    _require_exporter_capability()
+    if probe_exporter:
+        _require_exporter_capability(deadline=deadline)
     return target, report
 
 
@@ -103,7 +90,7 @@ def convert_post_view(source: Path, output: str, checked_report: str,
                       source_sha256: str, group_scope: str) -> dict:
     """Keep exporter companions in staging; copy only identical checked MSH bytes."""
     target, report = validate_post_request(source, output, checked_report,
-                                           source_sha256, group_scope)
+                                           source_sha256, group_scope, probe_exporter=False)
     exporter = _load_exporter()
     scratch = Path(os.environ.get('RADIA_MESH_VIEWER_SCRATCH', str(target.parent))).resolve()
     staging = Path(tempfile.mkdtemp(prefix='.radia-post-', dir=scratch))
@@ -151,28 +138,48 @@ def convert_post_view(source: Path, output: str, checked_report: str,
         raise ValueError('Source VOL changed during conversion')
     # Filesystem copy is not a second MSH writer.
     digest = _publish_mesh(staged, target)
-    return {'output': str(target), 'sha256': digest, 'staging': str(staging),
+    return {'schema': 'radia.mesh-post-view.v1', 'output': str(target), 'sha256': digest, 'staging': str(staging),
             'source_sha256': source_sha256.lower(), 'group_scope': group_scope,
             'physical_groups': sorted(observed_groups), 'solver_input': False}
 
 
-def prepare_post_view(source: Path, output: str, checked_report: str,
-                      source_sha256: str, group_scope: str) -> dict:
-    """Keep NGSolve/exporter imports in a worker separate from the GUI process."""
-    target, _ = validate_post_request(source, output, checked_report, source_sha256, group_scope)
+async def prepare_post_view_async(source: Path, output: str, checked_report: str,
+                                  source_sha256: str, group_scope: str, *,
+                                  python=None, env=None, deadline=None) -> dict:
+    """Await verified conversion without importing native libraries into the caller."""
+    target = Path(output).expanduser().resolve()
+    if source.suffix.lower() != '.vol' or target.suffix != '.msh' or not target.parent.is_dir():
+        raise ValueError('VOL post-view requires an existing source and new .msh output directory')
+    if target.exists() or target.parent == source.resolve().parent:
+        raise ValueError('Post output must not exist or be beside/over the source VOL')
     scratch = Path(os.environ.get('RADIA_MESH_VIEWER_SCRATCH', str(target.parent))).resolve()
-    # Reserve a private directory, not an empty JSON that could resemble success.
-    # Both receipt directories and exporter staging are retained for the caller.
+    if not scratch.is_dir() or not str(scratch).isascii() or scratch == source.resolve().parent:
+        raise ValueError('Set RADIA_MESH_VIEWER_SCRATCH to an existing ASCII job directory outside the source directory')
     receipt_root = Path(tempfile.mkdtemp(prefix='.radia-post-receipt-', dir=scratch))
     receipt = receipt_root / 'receipt.json'
-    argv = [sys.executable, '-B', '-m', 'radia_mcp.mesh_viewer.post_view',
-            str(source), output, checked_report, source_sha256, group_scope,
+    argv = [str(python or sys.executable), '-B', '-m', 'radia_mcp.mesh_viewer.post_view',
+            str(source), str(target), checked_report, source_sha256, group_scope,
             '--receipt', str(receipt)]
-    result = subprocess.run(argv, **_worker_options())
-    if result.returncode:
-        raise RuntimeError('VOL post-view worker failed: ' + _worker_stderr(result))
-    return {**json.loads(receipt.read_text(encoding='utf-8')), 'worker_receipt': str(receipt)}
+    await run_worker(argv, env=env if env is not None else os.environ,
+                     deadline=deadline if deadline is not None else transaction_deadline(),
+                     phase=f'VOL conversion {source}')
+    if receipt.stat().st_size > 1024 * 1024:
+        raise RuntimeError('Conversion receipt exceeds 1 MiB; verified artifact retained at ' + str(target))
+    data = json.loads(receipt.read_text(encoding='utf-8'))
+    import re
+    if (not target.is_file() or data.get('schema') != 'radia.mesh-post-view.v1' or data.get('output') != str(target)
+            or data.get('source_sha256') != source_sha256.lower()
+            or data.get('group_scope') != group_scope or data.get('solver_input') is not False
+            or not isinstance(data.get('staging'), str) or not data.get('physical_groups')
+            or not re.fullmatch('[0-9a-f]{64}', data.get('sha256', ''))):
+        raise RuntimeError('Unbound conversion receipt; no GUI launched: ' + str(receipt))
+    return {**data, 'worker_receipt': str(receipt)}
 
+
+def prepare_post_view(source: Path, output: str, checked_report: str,
+                      source_sha256: str, group_scope: str, *, deadline=None) -> dict:
+    return asyncio.run(prepare_post_view_async(source, output, checked_report,
+                                               source_sha256, group_scope, deadline=deadline))
 
 def main() -> int:
     import argparse

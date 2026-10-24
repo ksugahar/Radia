@@ -95,7 +95,7 @@ def post_inputs(tmp_path):
 @pytest.fixture
 def post_case(post_inputs, monkeypatch):
     source, output, receipt, digest = post_inputs
-    monkeypatch.setattr(post_view, '_require_exporter_capability', lambda: None)
+    monkeypatch.setattr(post_view, '_require_exporter_capability', lambda **kwargs: None)
     mesh = NS(dim=3, ne=6, nv=8, ngmesh=NS(GetCurveOrder=lambda: 1),
               GetMaterials=lambda: ('iron',), GetBoundaries=lambda: ('wall',),
               Elements=lambda region: range(6 if region == 'VOL' else 12))
@@ -118,7 +118,7 @@ def post_case(post_inputs, monkeypatch):
 def test_launcher_check_with_post_arguments_requires_exporter(post_inputs, monkeypatch, capsys):
     source, output, receipt, digest = post_inputs
     monkeypatch.setattr(launcher, 'require_interactive_desktop', lambda: {})
-    def unavailable():
+    def unavailable(**kwargs):
         raise RuntimeError('sentinel unsupported exporter')
     monkeypatch.setattr(post_view, '_require_exporter_capability', unavailable)
     code = launcher.main([str(source), '--check', '--post-output', str(output),
@@ -132,15 +132,13 @@ def test_launcher_check_with_post_arguments_requires_exporter(post_inputs, monke
 def test_post_preflight_rejects_missing_exporter_before_writes(post_case, monkeypatch):
     source, output, receipt, digest, writes = post_case
     monkeypatch.setattr(post_view, '_require_exporter_capability', EXPORTER_PROBE)
-    def probe(argv, **kwargs):
+    async def probe(argv, **kwargs):
         assert argv[-1] == '--check-exporter'
-        assert kwargs['timeout'] == 20 and 'shell' not in kwargs
-        return NS(returncode=1, stderr=b'Installed radia lacks the production MSH 4.2 exporter; update radia')
-    monkeypatch.setattr(post_view.subprocess, 'run', probe)
+        raise RuntimeError('Installed radia lacks the production MSH 4.2 exporter; update radia')
+    monkeypatch.setattr(post_view, 'run_worker', probe)
     with pytest.raises(RuntimeError, match='Installed radia lacks'):
         post_view.validate_post_request(source, str(output), str(receipt), digest, 'materials')
     assert not output.exists() and writes == []
-
 
 def test_exporter_check_requires_the_production_api(monkeypatch):
     monkeypatch.setitem(sys.modules, 'radia', NS(gmsh_post_export=NS()))
@@ -148,21 +146,16 @@ def test_exporter_check_requires_the_production_api(monkeypatch):
         post_view._load_exporter()
 
 
-def test_mcp_returns_preflight_error_instead_of_launch_acceptance(post_case, monkeypatch):
+def test_mcp_returns_conversion_error_instead_of_launch_acceptance(post_case, monkeypatch):
     from radia_mcp.mesh_viewer import mcp as adapter
     source, output, receipt, digest, _ = post_case
     monkeypatch.setattr(adapter, 'require_interactive_desktop', lambda: {})
-    monkeypatch.setattr(adapter.subprocess, 'CREATE_NO_WINDOW', 0, raising=False)
-    async def communicate():
-        return b'', b'Installed radia lacks the production MSH 4.2 exporter; update radia'
-    async def spawn_probe(*args, **kwargs):
-        assert '--check' in args and str(output) in args
-        return NS(returncode=1, communicate=communicate)
-    monkeypatch.setattr(adapter.asyncio, 'create_subprocess_exec', spawn_probe)
+    async def unavailable(*args, **kwargs):
+        raise RuntimeError('VOL conversion: Installed radia lacks the production MSH 4.2 exporter')
+    monkeypatch.setattr(adapter, 'prepare_post_view_async', unavailable)
     monkeypatch.setattr(adapter.subprocess, 'Popen', lambda *a, **k: pytest.fail('must not launch GUI'))
-    with pytest.raises(RuntimeError, match='Viewer preflight failed: Installed radia lacks'):
+    with pytest.raises(RuntimeError, match='Installed radia lacks'):
         asyncio.run(adapter.open_mesh_viewer(str(source), str(output), str(receipt), digest, 'materials'))
-
 
 def test_post_copy_is_identical_and_keeps_companions_in_staging(post_case):
     source, output, receipt, digest, writes = post_case
@@ -250,50 +243,45 @@ def test_unicode_output_uses_an_explicit_ascii_job_scratch(post_case, monkeypatc
     assert Path(writes[0]).read_bytes() == output.read_bytes()
 
 
-def test_conversion_process_is_separate_and_uses_a_file_receipt(post_case, monkeypatch):
+def test_conversion_process_is_separate_and_uses_a_bound_receipt(post_case, monkeypatch):
     source, output, receipt, digest, _ = post_case
-    calls = []
-    def run(argv, **kwargs):
-        calls.append((argv, kwargs))
-        Path(argv[-1]).write_text(json.dumps({'output': str(output), 'solver_input': False}))
-        return NS(returncode=0, stdout=b'native log noise', stderr=b'')
-    monkeypatch.setattr(post_view.subprocess, 'run', run)
+    async def run(argv, **kwargs):
+        assert argv[1:4] == ['-B', '-m', 'radia_mcp.mesh_viewer.post_view']
+        output.write_bytes(b'verified mesh')
+        Path(argv[-1]).write_text(json.dumps({'schema':'radia.mesh-post-view.v1',
+            'output':str(output),'sha256':post_view.sha256(output),
+            'source_sha256':digest,'group_scope':'materials','solver_input':False,
+            'staging':'test staging','physical_groups':[[3,'iron']]}))
+    monkeypatch.setattr(post_view, 'run_worker', run)
     monkeypatch.setitem(sys.modules, 'ngsolve', None)
     result = post_view.prepare_post_view(source, str(output), str(receipt), digest, 'materials')
-    assert calls[0][0][1:4] == ['-B', '-m', 'radia_mcp.mesh_viewer.post_view']
-    assert 'shell' not in calls[0][1] and calls[0][1]['stdin'] == post_view.subprocess.DEVNULL
-    assert calls[0][1]['creationflags'] == getattr(post_view.subprocess, 'CREATE_NO_WINDOW', 0)
     assert result['output'] == str(output) and Path(result['worker_receipt']).is_file()
 
 
 def test_failed_worker_does_not_leave_an_empty_json_receipt(post_case, monkeypatch):
     source, output, receipt, digest, _ = post_case
     receipts = []
-    def fail(argv, **kwargs):
-        receipts.append(Path(argv[-1]))
-        assert not receipts[-1].exists()
-        return NS(returncode=1, stderr=b'export failed', stdout=b'')
-    monkeypatch.setattr(post_view.subprocess, 'run', fail)
+    async def fail(argv, **kwargs):
+        receipts.append(Path(argv[-1])); assert not receipts[-1].exists()
+        raise RuntimeError('export failed')
+    monkeypatch.setattr(post_view, 'run_worker', fail)
     with pytest.raises(RuntimeError, match='export failed'):
         post_view.prepare_post_view(source, str(output), str(receipt), digest, 'materials')
     assert len(receipts) == 1 and not receipts[0].exists()
     assert receipts[0].parent.is_dir() and not output.exists()
 
 
+@pytest.mark.skipif(sys.platform != 'win32', reason='Windows process-tree contract')
 @pytest.mark.parametrize('route', ['probe', 'conversion'])
 def test_non_utf8_child_stderr_preserves_diagnostic(post_case, monkeypatch, route):
+    from radia_mcp.mesh_viewer._worker_process import run_worker
     source, output, receipt, digest, _ = post_case
-    def fail(argv, **kwargs):
-        assert kwargs['env']['PYTHONIOENCODING'] == 'utf-8'
-        assert kwargs['env']['PYTHONUTF8'] == '1'
-        assert kwargs['creationflags'] == getattr(post_view.subprocess, 'CREATE_NO_WINDOW', 0)
-        assert 'text' not in kwargs and 'encoding' not in kwargs
-        return NS(returncode=1, stderr='DLL load failed: 指定されたモジュール'.encode('cp932'))
-    monkeypatch.setattr(post_view.subprocess, 'run', fail)
+    raw = 'DLL load failed: 指定されたモジュール'.encode('cp932')
+    async def fail(argv, **kwargs):
+        return await run_worker([sys.executable, '-B', '-c',
+            'import sys;sys.stderr.buffer.write('+repr(raw)+');sys.exit(1)'], **kwargs)
+    monkeypatch.setattr(post_view, 'run_worker', fail)
     with pytest.raises(RuntimeError, match='DLL load failed:') as error:
-        if route == 'probe':
-            EXPORTER_PROBE()
-        else:
-            post_view.prepare_post_view(source, str(output), str(receipt), digest, 'materials')
-    assert '\ufffd' in str(error.value)
-    assert not output.exists()
+        if route == 'probe': EXPORTER_PROBE()
+        else: post_view.prepare_post_view(source,str(output),str(receipt),digest,'materials')
+    assert '\ufffd' in str(error.value) and not output.exists()
