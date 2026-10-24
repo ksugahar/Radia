@@ -315,18 +315,63 @@ def _parse_elements(body: list[str]) -> tuple[dict[str, Any], list[str]]:
 
 
 class _DataTokens:
-    """Seekable token iteration without retaining an entire tag line/block."""
-    def __init__(self, stream): self.stream = stream
+    """Bounded reads, including for a tag block written on one long line.
+
+    A cursor is a text-stream seek cookie plus a character offset within the
+    current chunk. It can be replayed by a second reader without calculating
+    byte offsets (which would be wrong for UTF-8 and translated newlines).
+    Only a token spanning chunks needs storage beyond the fixed-size buffer.
+    """
+    _CHUNK = 64 * 1024
+    _TOKEN = re.compile(r'\S+')
+
+    def __init__(self, stream):
+        self.stream = stream
+        self.buffer = ''
+        self.offset = 0
+        self.cookie = stream.tell()
+
     def __iter__(self): return self
+
+    def _fill(self):
+        self.cookie = self.stream.tell()
+        self.buffer = self.stream.readline(self._CHUNK)
+        self.offset = 0
+        return bool(self.buffer)
+
     def __next__(self):
-        char = self.stream.read(1)
-        while char and char.isspace(): char = self.stream.read(1)
-        if not char: raise StopIteration
-        parts = [char]
-        while (char := self.stream.read(1)) and not char.isspace(): parts.append(char)
+        while True:
+            match = self._TOKEN.search(self.buffer, self.offset)
+            if match is not None:
+                break
+            if not self._fill():
+                raise StopIteration
+        self.offset = match.end()
+        value = match.group()
+        if self.offset < len(self.buffer):
+            self.offset += 1  # consume the first delimiter, as on replay
+            return value
+        parts = [value]
+        while self._fill():
+            match = self._TOKEN.match(self.buffer)
+            if match is None:
+                return ''.join(parts)
+            parts.append(match.group())
+            self.offset = match.end()
+            if self.offset < len(self.buffer):
+                self.offset += 1
+                return ''.join(parts)
         return ''.join(parts)
-    def position(self): return self.stream.tell()
-    def seek(self, position): self.stream.seek(position)
+
+    def position(self): return self.cookie, self.offset
+
+    def seek(self, position):
+        cookie, offset = position
+        self.stream.seek(cookie)
+        self.stream.read(offset)
+        self.buffer = ''
+        self.offset = 0
+        self.cookie = self.stream.tell()
 
 def _read_view_header(take):
     strings = [take().strip('"') for _ in range(int(take()))]
@@ -339,8 +384,8 @@ def _iter_data_blocks(kind, stream, reopen, ncomp, declared, *, native_limit=Non
     """One canonical block decoder; native mode retains a bounded tag bitmap.
 
     Tags precede values in 4.2. A second seekable reader pairs them without
-    retaining a block's tag list. Memory is O(largest input line + tag bitmap),
-    with the bitmap bounded by the existing native index domain (256 MiB).
+    retaining a block's tag list. Token buffering is bounded by fixed-size
+    chunks plus the longest token; the native tag bitmap is at most 256 MiB.
     """
     toks = _DataTokens(stream)
     count_read = 0
@@ -424,30 +469,20 @@ class _SectionBody:
 
     def tell(self): return self.stream.tell()
 
-    def read(self, size):
-        if size != 1: raise ValueError('Section token reads must be incremental')
+    def readline(self, size=-1):
         if self.closed: return ''
-        char = self.stream.read(1)
-        if not char: raise ValueError(f'${self.name} never closed ($End{self.name} missing)')
-        if char == '$' and self.line_prefix:
-            marker = '$' + self.stream.readline().strip()
-            if marker != '$End' + self.name:
-                raise ValueError(f'${self.name} not closed before {marker}')
-            self.closed = True
-            return ''
-        if char == '\n': self.line_prefix = True
-        elif not char.isspace(): self.line_prefix = False
-        return char
-    def readline(self):
-        if self.closed: return ''
-        line = self.stream.readline()
+        line = self.stream.readline(size)
         if not line: raise ValueError(f'${self.name} never closed ($End{self.name} missing)')
         marker = line.strip()
-        if marker.startswith('$'):
+        if self.line_prefix and marker.startswith('$'):
             if marker != '$End' + self.name:
                 raise ValueError(f'${self.name} not closed before {marker}')
             self.closed = True
             return ''
+        if line.endswith('\n'):
+            self.line_prefix = True
+        elif marker:
+            self.line_prefix = False
         return line
 
 
