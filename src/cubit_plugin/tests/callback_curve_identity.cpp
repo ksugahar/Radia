@@ -22,8 +22,8 @@ template<class F> static void rejected(F action) {
 int main() {
   try {
     Mesh mesh;
-    const int first = mesh.AddEdgeDescriptor(EdgeDescriptor(31, 3, 4));
-    const int second = mesh.AddEdgeDescriptor(EdgeDescriptor(32, 3, 4));
+    const int first = mesh.AddEdgeDescriptor(EdgeDescriptor(31, 3, 4)).Nr1();
+    const int second = mesh.AddEdgeDescriptor(EdgeDescriptor(32, 3, 4)).Nr1();
     auto identities = NetgenCurver::curve_identities(mesh, {{101, first}, {202, second}});
     require(identities.lookup(31, 3, 4).curve == 101, "production mapping lost first curve");
     require(identities.lookup(32, 3, 4).curve == 202, "production mapping lost second curve");
