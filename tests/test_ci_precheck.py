@@ -471,3 +471,16 @@ def test_removed_owner_uses_only_proven_deleted_base_inputs(deleted, known, acce
         plan = precheck.build_source_plan("base", git=git)
         assert plan["radia"] and plan["mcp"]
         assert plan["retired_deleted_paths"] == [path]
+
+
+def test_renamed_retired_source_cannot_hide_an_unknown_new_target():
+    old, new = "retired_distribution/input.py", "unknown_distribution/moved.py"
+    def git(*args):
+        if args[0] == "merge-base":
+            return "a" * 40
+        if args[0] == "show":
+            return json.dumps({"rules": [{"pattern": old, "owners": ["retired"]}]})
+        assert args[0] == "diff" and "--no-renames" in args
+        return old + "\0" if "--diff-filter=D" in args else old + "\0" + new + "\0"
+    with pytest.raises(ValueError, match="unowned path: " + new):
+        precheck.build_source_plan("base", git=git)
