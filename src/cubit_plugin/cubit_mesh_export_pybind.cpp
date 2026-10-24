@@ -275,6 +275,7 @@ PYBIND11_MODULE(cubit_mesh_curver, m)
                 edge_project_func: Callable (edgenr, surfnr1, surfnr2, x,y,z)
                     -> (xp,yp,zp). edgenr is the geometric EdgeDescriptor.EdgeNr(),
                     not a surface-pair key or the descriptor table index.
+                    For this Pure API EdgeNr is the 1-based edge_elements list position.
                 order: Polynomial order for curving (>= 2).
                 surface_only: Remove volume elements (BEM workflow).
                 split_quads: Split quad faces into triangles.

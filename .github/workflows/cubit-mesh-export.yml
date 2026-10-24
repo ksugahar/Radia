@@ -210,6 +210,7 @@ jobs:
             packages\cubit-mesh-export\tests\test_smoke_command.py `
             packages\cubit-mesh-export\tests\test_runtime_contract.py `
             packages\cubit-mesh-export\tests\test_native_curver_connectivity.py `
+            packages\cubit-mesh-export\tests\test_native_curver_edge_callback.py `
             packages\cubit-mesh-export\tests\test_native_debug_paths.py `
             packages\cubit-mesh-export\tests\test_native_plugin_registry.py `
             tests\test_release_cubit_dual.py -q
