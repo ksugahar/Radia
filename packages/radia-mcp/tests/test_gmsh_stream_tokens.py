@@ -59,3 +59,10 @@ def test_closure_after_chunked_whitespace_still_required(tmp_path, monkeypatch):
     path.write_text(prefix + ' ' * 50 + '$EndOther\n', encoding='utf-8')
     with pytest.raises(ValueError, match='not closed'):
         msh._validate_native_fields(path)
+
+
+def test_one_value_may_span_multiple_chunks(monkeypatch):
+    monkeypatch.setattr(msh._DataTokens, '_CHUNK', 17)
+    value = '0' * 1000 + '1.25'
+    tokens = msh._DataTokens(io.StringIO(value + '\t2'))
+    assert list(tokens) == [value, '2']
