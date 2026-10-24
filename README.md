@@ -487,7 +487,7 @@ production workbenches. Executable samples live in `tests/` and
 `validation_test/`. Benchmarks and numerical evidence live under
 `validation_test/` with machine-readable JSON; docs notebooks need no sidecar.
 
-Field-producing application runs write checked Gmsh `.msh v4.1` artifacts.
+Field-producing application runs write checked Gmsh `.msh v4.2` artifacts.
 The Gmsh toolchain supports scalar/vector/tensor fields, sections, clipping,
 isosurfaces, LIC, streamlines, file-series statistics, shared-camera
 comparisons, and particle-track animation. Geometry is shown at physical

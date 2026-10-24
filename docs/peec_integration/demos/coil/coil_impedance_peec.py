@@ -9,7 +9,7 @@ Features demonstrated:
 - Setting conductor properties (conductivity, mu_r)
 - Frequency sweep for impedance analysis
 - Skin effect (ESIM surface impedance)
-- GMSH MSH v4.1 centerline export for visualization
+- GMSH MSH v4.2 centerline export for visualization
 
 Physical model:
 - Circular loop coil (single turn for simplicity)
@@ -20,7 +20,7 @@ Output:
 - Impedance vs frequency plot
 - Resistance and inductance extraction
 - Skin depth analysis
-- GMSH MSH v4.1 coil centerline
+- GMSH MSH v4.2 coil centerline
 
 Part of Radia PEEC integration examples.
 """
@@ -280,7 +280,7 @@ def run_coil_analysis():
 
 def export_coil_to_gmsh(coil, filename_base, num_segments=60):
     """
-    Export the coil centerline to a GMSH MSH v4.1 file.
+    Export the coil centerline to a GMSH MSH v4.2 file.
 
     Parameters:
     -----------
@@ -292,7 +292,7 @@ def export_coil_to_gmsh(coil, filename_base, num_segments=60):
         Number of segments for coil discretization
     """
     print("\n" + "="*60)
-    print("Exporting to GMSH MSH v4.1")
+    print("Exporting to GMSH MSH v4.2")
     print("="*60)
 
     # Generate coil centerline points

@@ -373,7 +373,7 @@ by the HACApK `_ChargeGramHMatrix`.
 
 ## Corner mesh and Gmsh views
 
-`hcurl_corner_gmsh_visualization.py` exports a Gmsh v4.1 mesh with nine views:
+`hcurl_corner_gmsh_visualization.py` exports a Gmsh v4.2 mesh with nine views:
 FEM and EVRS current vectors/magnitudes, current error, local EVRS rank, basis
 energy density, element size, and corner distance.  OCC re-entrant-edge
 refinement with `corner_edge_maxh=0.2` produces 85 tetrahedra and an 8574-DoF

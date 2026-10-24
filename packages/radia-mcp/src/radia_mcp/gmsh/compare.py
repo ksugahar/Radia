@@ -7,19 +7,21 @@ field.  This module answers the other question -- *do two solvers /
 discretizations agree on the field?* -- by probing both files at one
 shared point cloud and reporting the pointwise difference.
 
-Measured semantics (gmsh 4.15.2, locked by tests):
+Historical API investigations used Gmsh 4.15.2; those observations are
+not a qualification record for a later runtime.
+
+Adapter design (overlap and vector-norm behavior guarded in
+``packages/radia-mcp/tests/test_gmsh_compare_fields.py``):
 
 - Two meshes can live in ONE gmsh session as two models
   (``gmsh.model.add`` + ``gmsh.merge``); a view keeps the model it was
   merged with, so ``gmsh.view.probe`` on a view of model A is unaffected
   by model B being current.  New view tags appear only for the file
   merged last, which is how the two files' views are told apart.
-- ``gmsh.view.probe`` returns ``([], distance)`` outside the mesh, so
-  points that miss either mesh are skipped and counted rather than
-  silently contributing a zero.
-- ``gmsh.view.probe(step=N)`` with ``N >= NbTimeStep`` is a native
-  out-of-bounds read that KILLS the child process, so multi-step views
-  are rejected before the first probe.
+- Check both distance and values to reject outside probes, independent
+  of whether a particular view returns an empty or nonempty array.
+- The wrapper rejects unsupported multi-step views before probing;
+  native access is limited to the declared supported time steps.
 """
 
 from __future__ import annotations

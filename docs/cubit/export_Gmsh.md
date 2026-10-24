@@ -1,6 +1,6 @@
 # export_Gmsh
 
-Export mesh to Gmsh v4.1 format with high-order element support (order 1-3).
+Export mesh to Gmsh v4.2 format with high-order element support (order 1-3).
 
 ## Syntax
 
@@ -72,9 +72,9 @@ Sidesets are exported as surface elements. Nodesets as point elements.
 
 ## File Format
 
-The output uses Gmsh v4.1 format:
+The output uses Gmsh v4.2 format:
 
-1. **$MeshFormat** - Version identifier (4.1 0 8)
+1. **$MeshFormat** - Version identifier (4.2 0 8)
 2. **$PhysicalNames** - Block names with dimensions
 3. **$Entities** - Geometry topology (vertices, curves, surfaces, volumes)
 4. **$Nodes** - Node coordinates grouped by entity
@@ -137,13 +137,11 @@ Geometry topology information:
 
 This enables solvers to associate mesh elements with geometric entities.
 
-## Compatibility
+## Supported consumer
 
-The output file is compatible with:
-- Gmsh 4.x
-- NGSolve/Netgen
-- FEniCS
-- Other solvers supporting Gmsh v4 format
+Open the MSH 4.2 post-processing output with the qualified Gmsh 5 runtime.
+For NGSolve computation, export and check a Netgen `.vol` solver mesh instead.
+Compatibility with other solver importers is not certified by this exporter.
 
 ## See Also
 

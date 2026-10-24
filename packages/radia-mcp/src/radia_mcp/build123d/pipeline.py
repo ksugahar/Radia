@@ -23,8 +23,9 @@ __all__ = ["run_pipeline", "run_pipeline_multi", "save_record"]
 
 
 _DEPENDENCY_HELP = (
-    "Install the radia-mcp build123d extra: analysis needs "
-    "cubit-mesh-export.check and NGSolve; post output also needs a Radia "
+    "Install the radia-mcp build123d extra. The canonical "
+    "cubit-mesh-export.check checker is available only on Windows/Python 3.12; "
+    "the analysis path requires that platform and NGSolve. Post output also needs a Radia "
     "release newer than 5.3.3 exposing GmshPostExport and PayloadV42. "
     "The published 5.3.3 writer is unsupported; a current source serializer "
     "can be validated separately until the post-migration Radia release is published."

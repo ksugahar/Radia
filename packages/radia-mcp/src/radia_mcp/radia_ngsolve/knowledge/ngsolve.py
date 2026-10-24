@@ -1190,7 +1190,7 @@ stronger triangle/tet quality tooling with an independent `.vol`-side
 validation after export.
 
 ```python
-# Material properties from Gmsh physical groups
+# Material properties from the checked .vol material labels
 mu_d = {"iron": 4e-7*3.14*1000, "air": 4e-7*3.14, "coil": 4e-7*3.14}
 mu = CoefficientFunction([mu_d.get(mat, 4e-7*3.14) for mat in mesh.GetMaterials()])
 ```

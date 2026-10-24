@@ -16,80 +16,51 @@ otherwise show up as "Open GMSH doesn't work" or "GMSH is black".
 - After a BEM / FEM solve completes and you want to verify the
   output before clicking Open GMSH
 - After a field-producing Simulink application run; its run-directory
-  `<application>_fields.msh` is a required `.msh v4.1` artifact
+  `<application>_fields.msh` is a required `.msh v4.2` artifact
 - As a pre-commit check when you touched `.geo` companion writers
 
 ## What it checks
 
-| Check | What it catches |
-|---|---|
-| **Invalid .geo options** | `Mesh.Volumes` (does not exist in GMSH 4.x) and other unknown options |
-| **Merge targets exist** | `Merge "foo.msh"` in .geo but foo.msh is missing |
-| **Duplicate element IDs** | Two-file merge where both start element numbering from 1 |
-| **NodeData node count** | NodeData declares N nodes but the $Nodes section has M != N |
-| **View index range** | `.geo` references `View[2]` but only 1 NodeData section exists |
-| **Physical group consistency** | Element tags reference physical groups not declared in $PhysicalNames |
+The `.msh` entry delegates to `radia_mcp.gmsh.msh_inspect.validate_msh`:
+strict ASCII MSH 4.2 headers, block structure, unique tags and field references.
+The `.geo` entry checks missing Merge targets, the listed invalid options and
+a view-index heuristic. These are structural checks, not rendering or solver
+validation; use the qualified Gmsh 5 runtime for native round trips/rendering.
 
 ## Run
 
+Use the development interpreter with this checkout's `packages/radia-mcp/src`
+on `PYTHONPATH`. Missing MCP dependencies fail rather than selecting a legacy
+parser.
+
 ```bash
-# Verify a specific .geo + its referenced .msh files
-python tests/panels/verify_gmsh_output.py path/to/inductance.geo
-
-# Verify a standalone .msh
-python tests/panels/verify_gmsh_output.py path/to/model.msh
-
-# Verify the samples directory (all .geo + .msh)
-python tests/panels/verify_gmsh_output.py src/radia/panels/samples/
-
-# After a BEM solve with field-air
-python tests/panels/verify_gmsh_output.py \
-    src/radia/panels/samples/inductance.geo
+python validation_test/panels/verify_gmsh_output.py path/to/result.geo
+python validation_test/panels/verify_gmsh_output.py path/to/result.msh
+python validation_test/panels/verify_gmsh_output.py path/to/run-directory
 ```
 
-Expected output:
-```
-=== inductance.geo ===
-  [OK] All Merge targets exist
-  [OK] No invalid GMSH options
-  [OK] View indices within range
-=== inductance.msh ===
-  [OK] No duplicate element IDs (14598 vol + 710 surf + 703 wire)
-  [OK] NodeData "B" node count matches (3083)
-  [OK] NodeData "J" node count matches (710)
-PASS: 6/6 checks
-```
+A nonzero exit means a structural check failed. The same entries may be called
+from tests via `validation_test.panels.verify_gmsh_output`; do not maintain an
+independent field-data parser in validation scripts.
 
-## Integration with notebook validation
+## Known invalid options (Gmsh 5)
 
-The `verify_gmsh_output.py` script can be called from pytest:
-
-```python
-from tests.panels.verify_gmsh_output import verify_geo, verify_msh
-
-def test_bem_output_valid(tmp_path):
-    # ... run calc_inductance subprocess ...
-    assert verify_geo(tmp_path / "inductance.geo")
-    assert verify_msh(tmp_path / "inductance.msh")
-```
-
-## Known invalid options (GMSH 4.x)
-
-These option names do NOT exist and will crash `gmsh.merge()`:
+Reject these invalid option names before opening a launch artifact:
 
 | Invalid | Use instead |
 |---|---|
 | `Mesh.Volumes` | `Mesh.VolumeEdges` + `Mesh.VolumeFaces` |
 | `Mesh.Surfaces` | `Mesh.SurfaceEdges` + `Mesh.SurfaceFaces` |
 
-The valid mesh-visibility options in GMSH 4.15.2 are:
+Historical option/default reference from Gmsh 4.15.2 (not a Gmsh 5
+measurement). Current scripts must set intended display options explicitly:
 ```
 Mesh.VolumeEdges    (default 1)
 Mesh.VolumeFaces    (default 0)
 Mesh.SurfaceEdges   (default 1)
 Mesh.SurfaceFaces   (default 0)
 Mesh.Points         (default 0)
-Mesh.NumSubEdges    (default 1, set to 4 for curved elements)
+Mesh.NumSubEdges    (historical default 1; set explicitly for curved elements)
 ```
 
 ## Reference

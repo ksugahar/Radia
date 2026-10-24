@@ -208,7 +208,7 @@ coil = (CoilBuilder(current=1000)
 
 ### GMSH field output
 
-Radia spatial fields use the repository's checked GMSH `.msh v4.1` writer.
+Radia spatial fields use the repository's checked GMSH `.msh v4.2` writer.
 The NGSolve mesh remains the field-evaluation domain.
 
 ```python

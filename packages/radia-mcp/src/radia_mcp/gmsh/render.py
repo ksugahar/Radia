@@ -305,6 +305,7 @@ try:
                     gmsh.view.write(t, cfg["slices_pos"], append=True)
             gmsh.fltk.initialize()
             gmsh.fltk.update()
+            gmsh.graphics.draw()
             gmsh.write(cfg["png_out"])
             gmsh.fltk.finalize()
             result.update({"ok": True, "ran": True, "png": cfg["png_out"],
@@ -394,6 +395,7 @@ try:
                         axis_opt,
                         base[axis_idx] + orbit["degrees"] * k / n_frames)
                     gmsh.fltk.update()
+                    gmsh.graphics.draw()
                     frame = frames_dir + f"/frame_{k:04d}.png"
                     gmsh.write(frame)
                     frames.append(frame)
@@ -429,6 +431,7 @@ try:
                     for i in targets:
                         gmsh.option.setNumber(f"View[{i}].TimeStep", step)
                     gmsh.fltk.update()
+                    gmsh.graphics.draw()
                     frame = frames_dir + f"/frame_{step:04d}.png"
                     gmsh.write(frame)
                     frames.append(frame)
@@ -465,10 +468,8 @@ except Exception as exc:
     # Every mode sets ok=True BEFORE its last work item (GIF assembly,
     # the blank check, gmsh.finalize), so an exception raised after that
     # point used to be reported as a SUCCESS carrying an error string.
-    # MEASURED on gmsh 4.15.2 before this line existed:
-    # export_animation(num_steps=0) returned
-    # {"ok": True, "error": "IndexError: list index out of range"} and
-    # wrote no GIF.  ok is the caller's only gate -- clear it here.
+    # A late exception must never leave ok=True: callers use that flag
+    # as the success gate for the complete output, including GIF assembly.
     result["ok"] = False
     result["error"] = f"{type(exc).__name__}: {exc}"
 with open(out_path, "w", encoding="utf-8") as f:
@@ -987,10 +988,8 @@ def export_animation(path: str | Path,
         return {"ok": False,
                 "error": f"orbit_axis must be x|y|z, got {orbit_axis!r}"}
     if num_steps is not None:
-        # A non-positive count produced ZERO frames, and the empty frame
-        # list then died inside GIF assembly -- reported (MEASURED) as
-        # ok=True with "IndexError: list index out of range" and no GIF.
-        # Reject it here, where the offending value is still in hand.
+        # Reject non-positive counts before rendering: animation requires
+        # at least one frame, and invalid controls must fail explicitly.
         if isinstance(num_steps, bool) or not isinstance(num_steps, int):
             return {"ok": False,
                     "error": f"num_steps must be an integer >= 1, or None "

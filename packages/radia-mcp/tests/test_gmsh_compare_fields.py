@@ -98,7 +98,7 @@ def test_linear_field_is_p1_exact_across_different_meshings(tmp_path):
     assert r["ncomp"] == 1
     assert r["view_a"] == "S" and r["view_b"] == "S"
     assert r["n_valid"] == 500 and r["n_skipped"] == 0
-    # MEASURED (gmsh 4.15.2, seed 0, 500 pts): linf 4.441e-16, l2 7.5e-17.
+    # A linear field is represented exactly by P1, up to roundoff.
     assert r["linf"] < 1e-12
     assert r["l2"] < 1e-12
     assert r["worst_diff"] == r["linf"]
@@ -111,10 +111,9 @@ def test_quadratic_difference_shows_second_order_convergence(tmp_path):
 
     The difference between two meshings is dominated by the coarser
     mesh's interpolation error, which is O(h^2); halving h therefore
-    divides it by ~4.  MEASURED (gmsh 4.15.2, seed 0, 1000 pts):
-    linf 0.249323 (6 vs 48 tets) and 0.062491 (48 vs 384 tets), ratio
-    3.99 -- the second-order rate, which is exactly what this verb
-    exists to expose.  (The exact ceiling is 0.25: at x = 0 the P1
+    divides it by ~4. The test compares successive 6/48/384-tet meshings
+    to expose this second-order rate. (The exact ceiling is 0.25:
+    at x = 0 the P1
     interpolant of x^2 on the 6-tet cube reads the corner average.)
     """
     c1 = _write_cube(tmp_path, 1)

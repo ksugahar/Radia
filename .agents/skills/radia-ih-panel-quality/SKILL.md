@@ -24,7 +24,7 @@ Run `simulink-app-health` with IH in scope. Also use:
 The acceptance surface is the tracked IH block reopened through the official
 MathWorks model lane. Verify mask parameters, typed ports, sample-time and
 lifecycle behavior, independent Eddy/Thermal handles, `.vol` label checks,
-`result.json`, `run.log`, and GMSH `.msh v4.1` output. Run focused unit tests in
+`result.json`, `run.log`, and GMSH `.msh v4.2` output. Run focused unit tests in
 `tests/`; keep solver-heavy, long-run, MATLAB/Simulink, and multi-machine
 evidence in `validation_test/` with result JSON.
 

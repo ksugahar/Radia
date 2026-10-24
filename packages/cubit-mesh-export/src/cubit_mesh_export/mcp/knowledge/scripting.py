@@ -3209,8 +3209,8 @@ export genesis 'brick_with_hole.g'
 | `label curve on`, `display`, `graphics text size` | **DROP** — GUI state, no Python equivalent |
 | `surface N scheme pave`, `mesh surface`, `volume N scheme auto`, `mesh volume` | **DROP** — meshing is Netgen's job downstream |
 | `list volume 1` | **DROP** — introspection, use `part.volume` / `part.faces()` |
-| `block 100 volume 1`, `nodeset 100 surface ...` | Use build123d `label` + `Compound` + `run_pipeline_multi` bridge to Gmsh physical groups |
-| `export genesis '...'` | Replace with NGSolve `Mesh.Export('...msh', 'Gmsh Format')` |
+| `block 100 volume 1`, `nodeset 100 surface ...` | Use build123d labels and `run_pipeline_multi` to preserve Netgen `.vol` materials; Gmsh physical groups are post-processing only |
+| `export genesis '...'` | Save Netgen `.vol` with its versioned label contract and run `check-vol` before solver initialization |
 
 ## Minimal tet-pipeline equivalent
 
@@ -3229,7 +3229,9 @@ from build123d import export_brep
 export_brep(part, "brick.brep")
 geo = OCCGeometry("brick.brep")
 ng_mesh = geo.GenerateMesh(maxh=1.0)
-ng_mesh.Export("brick.msh", "Gmsh Format")
+ng_mesh.Save("brick.vol")
+# Before analysis: supply the versioned SI label contract and pass check-vol.
+# Optional MSH 4.2 visualization is a separate post-processing export.
 ```
 
 Note: the Cubit tutorial produces a hex-sweep mesh (via `volume 1

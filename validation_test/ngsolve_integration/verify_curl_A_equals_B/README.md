@@ -52,7 +52,7 @@ python verify_curl_A_equals_B.py
 
 ## Output Files
 
-- `verify_curl_A_B.msh` - checked GMSH `.msh v4.1` file containing A,
+- `verify_curl_A_B.msh` - checked GMSH `.msh v4.2` file containing A,
   curl(A), B, and |curl(A) - B|
 
 ## Workflow

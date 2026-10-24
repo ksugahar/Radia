@@ -83,7 +83,7 @@ Loads the coil model and calculates magnetic field distribution on a 3D grid:
 - Imports coil from coil_model.py (same model as visualize_coils.py)
 - Fixed evaluation grid sized to the 8-segment coil extent
 - Structured grid field calculation
-- Vector field export (Bx, By, Bz) in GMSH `.msh v4.1`
+- Vector field export (Bx, By, Bz) in GMSH `.msh v4.2`
 - Purpose: **Calculate field distribution for analysis**
 
 **Usage:**

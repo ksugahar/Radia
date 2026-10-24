@@ -417,12 +417,10 @@ def test_max_time_terminates_at_the_requested_flight_time(tmp_path):
 @pytestmark_gmsh
 def test_time_step_past_the_last_step_is_a_clean_error_not_a_crash(
         tmp_path):
-    """E1: gmsh.view.probe(step=N >= NbTimeStep) FAULTS the child.
+    """E1: reject an unavailable step before the first native probe.
 
-    Old behaviour (MEASURED gmsh 4.15.2): "OSError: exception: access
-    violation reading 0xFFFFFFFFFFFFFFFF" -- a native out-of-bounds read
-    with no Python traceback.  The step must be validated against
-    NbTimeStep before the first probe.
+    Validate against NbTimeStep and report the requested and valid steps
+    as a clean adapter error, rather than passing an invalid native index.
     """
     msh = _write(tmp_path, _uniform_b(), "uniform_b.msh")
     result = particle_trace(msh, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0],
