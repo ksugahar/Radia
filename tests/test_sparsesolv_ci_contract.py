@@ -1,4 +1,8 @@
-"""Keep native solver coverage connected without importing native dependencies."""
+"""Guards: numerical workflows retain native provenance and required execution paths.
+
+Assumes: source-only workflow and selector contracts; no native import or numerical
+accuracy is certified by these checks.
+"""
 
 import json
 import importlib.util
@@ -132,7 +136,7 @@ def test_native_impact_gates_expensive_steps_and_watches_itself():
         assert triggers[event]["paths"][-1] == "!**/*.md"
     steps = workflow["jobs"]["ams-regression"]["steps"]
     selector = next(s for s in steps if s.get("id") == "native-impact")
-    assert "python tools/sparsesolv_ci_impact.py" in selector["run"]
+    assert "python tools/ci_numerical_plan.py --github-event" in selector["run"]
     for step in steps:
         if step.get("name", "").startswith(("Create isolated", "Build ", "Verify source", "Upload solver")):
             assert "steps.native-impact.outputs.required == 'true'" in step["if"]

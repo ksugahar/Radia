@@ -198,3 +198,82 @@ def test_empty_profile_is_blocked(repository, tmp_path):
     data['profiles']['sparsesolv']['paths'] = []
     change(root, 'tests/test_tier_manifest.json', json.dumps(data))
     assert invoke(root, base, tmp_path, expected=2)['status'] == 'blocked'
+
+
+def sealed_declaration(root, source, dependencies=(), entries=()):
+    import hashlib
+    def sha(path):
+        return hashlib.sha256(subprocess.check_output(['git', 'show', 'HEAD:' + path], cwd=root)).hexdigest()
+    binding = dict(sha256=[sha(source)], resolves=['dynamic import needs declaration: ' + source],
+                   dependencies=list(dependencies), reason='Sealed finite generated-code fixture contract',
+                   entries={path: [sha(path)] for path in entries})
+    data = dict(schema='radia.numerical-inputs.v1', bindings={source: binding}, consumer_inputs={})
+    change(root, 'tools/ci_numerical_inputs.json', json.dumps(data))
+
+
+def test_sealed_finite_loader_can_resolve_but_source_change_cannot(repository, tmp_path):
+    root, _ = repository
+    change(root, 'tests/conftest.py', '__import__(selected_upstream_name)\n')
+    sealed_declaration(root, 'tests/conftest.py')
+    base = git(root, 'rev-parse', 'HEAD')
+    change(root, 'src/radia/panels/open_gmsh.py', 'def show(): return 2\n')
+    assert invoke(root, base, tmp_path)['ams_paths'] == []
+    change(root, 'tests/conftest.py', '__import__(different_runtime_name)\n')
+    assert invoke(root, base, tmp_path)['ams_paths']
+
+
+def test_declared_cli_dependency_is_selected_and_case_scope_is_sealed(repository, tmp_path):
+    root, _ = repository
+    change(root, 'validation_test/ih.py', '__import__(runtime_name)\n')
+    sealed_declaration(root, 'validation_test/ih.py', ['src/radia/ih.py'], ['validation_test/ih.py'])
+    base = git(root, 'rev-parse', 'HEAD')
+    change(root, 'src/radia/panels/open_gmsh.py', 'def show(): return 2\n')
+    assert 'validation_test/ih.py' not in invoke(root, base, tmp_path)['heavy_case_paths']
+    change(root, 'src/radia/ih.py', 'def solve(): return 42\n')
+    assert 'validation_test/ih.py' in invoke(root, base, tmp_path)['heavy_case_paths']
+
+
+def test_docstring_is_data_but_executed_text_stays_unresolved(repository, tmp_path):
+    root, _ = repository
+    change(root, 'src/radia/ih.py', '\"\"\"Example:\n    import omitted_example\nprose is not Python\"\"\"\ndef solve(): return 1\n')
+    base = git(root, 'rev-parse', 'HEAD')
+    change(root, 'src/radia/panels/open_gmsh.py', 'def show(): return 2\n')
+    assert invoke(root, base, tmp_path)['heavy_case_paths'] == []
+    change(root, 'src/radia/ih.py', 'exec(runtime_program)\ndef solve(): return 1\n')
+    assert 'validation_test/ih.py' in invoke(root, base, tmp_path)['heavy_case_paths']
+
+
+@pytest.mark.parametrize('damage', ['selection', 'checkout'])
+def test_runtime_cli_rejects_tampered_plan_or_source(repository, tmp_path, damage):
+    root, base = repository
+    change(root, 'src/radia/ih.py', 'def solve(): return 2\n')
+    value = invoke(root, base, tmp_path)
+    runtime = CLI.with_name('ci_numerical_runtime.py')
+    command = [sys.executable, str(runtime), '--repo', str(root), '--plan', str(tmp_path / 'plan.json'),
+               '--profile', 'solver-heavy', '--out', str(tmp_path / 'verified.json')]
+    valid = subprocess.run(command, capture_output=True, text=True, encoding='utf-8')
+    assert valid.returncode == 0, (valid.stdout, valid.stderr)
+    assert json.loads((tmp_path / 'verified.json').read_text(encoding='utf-8'))['paths'] == ['validation_test/ih.py']
+    if damage == 'selection':
+        for row in value['cases']: row['selected'] = False
+        (tmp_path / 'plan.json').write_text(json.dumps(value), encoding='utf-8')
+    else:
+        (root / 'src/radia/ih.py').write_text('def solve(): return 999\n', encoding='utf-8')
+    rejected = subprocess.run(command, capture_output=True, text=True, encoding='utf-8')
+    assert rejected.returncode == 2, (rejected.stdout, rejected.stderr)
+
+
+def test_workflow_uses_distinct_plan_outputs_and_verified_execution():
+    import yaml
+    root = CLI.parents[1]
+    workflow = yaml.safe_load((root / '.github/workflows/sparsesolv.yml').read_text(encoding='utf-8'))
+    steps = workflow['jobs']['ams-regression']['steps']
+    expected = {'Verify source provenance and run required AMS tests': 'ams_required',
+                'Run required NGSolve numerical contracts': 'python_required',
+                'Validate solver-heavy source or verify trusted prior evidence': 'heavy_required'}
+    for name, output in expected.items():
+        step = next(step for step in steps if step.get('name') == name)
+        assert output in step['if'] and '--numerical-plan' in step['run']
+    heavy = next(step for step in steps if step.get('id') == 'heavy-validation')
+    assert "-eq 'pull_request'" not in heavy['run']
+    assert 'force_validation' in heavy['run']

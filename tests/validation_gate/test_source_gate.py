@@ -1,4 +1,8 @@
-"""Trust and source-change negative contracts; no heavy validation or network."""
+"""Guards: untrusted receipts, changed numerical inputs and incorrect scope reuse fail.
+
+Assumes: source-contract fixtures and explicit synthetic environments; no numerical
+accuracy, native compilation, heavy validation or network is certified here.
+"""
 import copy
 from datetime import datetime,timezone,timedelta
 import importlib.util
@@ -407,3 +411,39 @@ def test_untracked_rejection_reports_all_paths_including_root_compiler_objects(t
     monkeypatch.setattr(gate,'git',lambda root,*args:'\0'.join(paths) if '--others' in args else 'src/solver.py')
     with pytest.raises(ValueError) as caught:gate.source_fingerprint(tmp_path,{})
     assert caught.value.paths==paths
+
+
+
+def test_planned_fingerprint_keeps_solver_fixture_native_and_environment_inputs(tmp_path, monkeypatch):
+    files = {'src/solver.py': 'solver', 'src/viewer.py': 'viewer', 'src/core/native.cpp': 'native',
+             'tests/conftest.py': 'fixtures', 'validation_test/case/test.py': 'case',
+             'validation_test/case/input.vol': 'mesh'}
+    for name, text in files.items():
+        path = tmp_path / name; path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding='utf-8')
+    (tmp_path / 'tests/test_tier_manifest.json').write_text(json.dumps({'profiles': {
+        'solver-heavy': {'paths': ['validation_test/case/test.py']}}}), encoding='utf-8')
+    monkeypatch.setattr(gate, 'git', lambda root, *args: '\0'.join(files)
+                        if args[0] == 'ls-files' and '--others' not in args else '')
+    value = {'cases': [dict(profile='solver-heavy', selected=True, path='validation_test/case/test.py',
+                           dependencies=['src/solver.py', 'validation_test/case/test.py',
+                                         'validation_test/case/input.vol', 'tests/conftest.py'],
+                           components=['solver'], unknowns=[])]}
+    env = {'packages': [('ngsolve', '6.2.2608'), ('gmsh', '5.dev1'), ('mcp', '1')],
+           'compiler': 'MSVC14.44', 'threads': 2}
+    initial = gate.source_fingerprint(tmp_path, env, value)[0]
+    (tmp_path / 'src/viewer.py').write_text('viewer changed', encoding='utf-8')
+    assert gate.source_fingerprint(tmp_path, env, value)[0] == initial
+    other = copy.deepcopy(env); other['packages'][1] = ('gmsh', '5.dev2')
+    assert gate.source_fingerprint(tmp_path, other, value)[0] == initial
+    for name in ('src/solver.py', 'src/core/native.cpp', 'validation_test/case/input.vol'):
+        (tmp_path / name).write_text(files[name] + 'changed', encoding='utf-8')
+        assert gate.source_fingerprint(tmp_path, env, value)[0] != initial
+        (tmp_path / name).write_text(files[name], encoding='utf-8')
+    other['packages'][0] = ('ngsolve', '6.2.next')
+    assert gate.source_fingerprint(tmp_path, other, value)[0] != initial
+    gmsh_case = copy.deepcopy(value); gmsh_case['cases'][0]['components'].append('gmsh')
+    assert gate.source_fingerprint(tmp_path, env, gmsh_case)[0] != gate.source_fingerprint(
+        tmp_path, dict(env, packages=[('ngsolve', '6.2.2608'), ('gmsh', '5.dev2'), ('mcp', '1')]), gmsh_case)[0]
+    with pytest.raises(ValueError, match='empty planned heavy'):
+        gate.source_fingerprint(tmp_path, env, {'cases': []})

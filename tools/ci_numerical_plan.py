@@ -10,6 +10,7 @@ import ast
 import hashlib
 from functools import lru_cache
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
@@ -30,7 +31,7 @@ GMSH_TESTS = (
 )
 NATIVE_PREFIXES = ('src/core/', 'src/lib/', 'src/ext/', 'cmake/')
 GLOBAL_INPUTS = {'CMakeLists.txt', 'Build.ps1', 'MANIFEST.in', TIER,
-                 'tools/ci_numerical_plan.py', DECLARATIONS, 'tools/run_test_tier.py',
+                 'tools/ci_numerical_plan.py', 'tools/ci_numerical_runtime.py', DECLARATIONS, 'tools/run_test_tier.py',
                  'tools/ci_ams_inputs.py', 'tools/sparsesolv_ci_impact.py',
                  'tools/ci_distribution_manifest.json', 'tools/ci_distribution_contract.py',
                  'tools/native_build_provenance.ps1', 'tools/validation_source_gate.py'}
@@ -213,6 +214,7 @@ class Tree:
                             native.add(node.args[0].value.rsplit('.', 1)[-1])
                         elif node.args[0].value.split('.')[0] not in EXTERNAL:
                             unknown.add('unresolved dynamic import: ' + path)
+                        if node.args[0].value.split('.')[0] in EXTERNAL: components.add('package:' + node.args[0].value.split('.')[0])
                         if node.args[0].value.split('.')[0] == 'gmsh': components.add('gmsh')
                         if node.args[0].value.split('.')[0] in {'ngsolve', 'netgen'}: components.add('solver')
                     else: unknown.add('dynamic import needs declaration: ' + path)
@@ -317,14 +319,27 @@ def plan(root, base, head, event):
         declarations = json.loads(git(root, 'cat-file', 'blob', declaration_blob), object_pairs_hook=unique_pairs)
         if set(declarations) != {'schema', 'bindings', 'consumer_inputs'} or declarations['schema'] != 'radia.numerical-inputs.v1':
             raise ValueError('invalid numerical declaration schema')
+        def safe_declared_path(value):
+            if (not isinstance(value, str) or not value or value.startswith('/')
+                    or ':' in value or '\\' in value or '..' in PurePosixPath(value).parts):
+                raise ValueError('unsafe declared dependency')
         for path, binding in declarations['bindings'].items():
             if set(binding) - {'sha256', 'resolves', 'dependencies', 'fixture_prefixes', 'reason', 'entries'} or not binding.get('reason'):
                 raise ValueError('invalid dynamic declaration: ' + path)
             if not binding.get('sha256') or any(not re.fullmatch('[0-9a-f]{64}', h) for h in binding['sha256']):
                 raise ValueError('unsealed dynamic declaration: ' + path)
             for dep in [path, *binding['dependencies'], *binding.get('fixture_prefixes', [])]:
-                if not dep or dep.startswith('/') or ':' in dep or '\\' in dep or '..' in PurePosixPath(dep).parts:
-                    raise ValueError('unsafe declared dependency')
+                safe_declared_path(dep)
+            for entry, hashes in binding.get('entries', {}).items():
+                safe_declared_path(entry)
+                if not hashes or any(not re.fullmatch('[0-9a-f]{64}', h) for h in hashes):
+                    raise ValueError('unsealed entry scope')
+            for issue in binding['resolves']:
+                if not (issue.endswith(': ' + path) or ': ' + path + ':' in issue):
+                    raise ValueError('dynamic declaration cannot hide another source issue')
+        for consumer, paths in declarations['consumer_inputs'].items():
+            safe_declared_path(consumer)
+            for path in paths: safe_declared_path(path)
     before, after = Tree(root, base, declarations), Tree(root, head, declarations)
     changed = changes(root, before.sha, after.sha)
     old_profiles, new_profiles = before.profiles(), after.profiles()
@@ -361,7 +376,7 @@ def plan(root, base, head, event):
             if selected: native_required |= native
             rows.append({'profile': profile, 'path': entry, 'selected': bool(selected),
                          'reasons': why, 'unknowns': sorted(unknown),
-                         'dependencies': sorted(dependencies), 'native_modules': sorted(native),
+                         'dependencies': sorted(dependencies), 'native_modules': sorted(native), 'components': sorted(components),
                          'dependency_blobs': {p: sorted({s.files[p][2] for s in (before, after) if p in s.files})
                                               for p in sorted(dependencies)},
                          'closure_status': 'unknown' if unknown else 'static graph; not execution proof'})
@@ -372,6 +387,11 @@ def plan(root, base, head, event):
         for row in rows:
             row['selected'] = True; row['reasons'].append('unclassified input; full fallback')
             native_required.update(row['native_modules'])
+    if native_required:
+        for row in rows:
+            if row['profile'] == 'native-build-contracts':
+                row['selected'] = True
+                row['reasons'].append('verify selected native build')
     return {'schema': SCHEMA, 'status': 'planned', 'qualification': False, 'execution_wired': False,
             'base': before.sha, 'head': after.sha, 'event': event,
             'declaration_identity': {'commit': policy_sha, 'blob': declaration_blob}, 'changed_paths': sorted(changed),
@@ -389,12 +409,38 @@ def plan(root, base, head, event):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument('--base', required=True); parser.add_argument('--head', default='HEAD')
+    parser.add_argument('--base'); parser.add_argument('--head', default='HEAD')
     parser.add_argument('--event', default='pull_request', choices=['pull_request', 'push', 'workflow_dispatch', 'release', 'schedule'])
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--github-event', action='store_true')
+    parser.add_argument('--github-output', type=Path)
     args = parser.parse_args(argv)
     try:
-        result = plan(args.repo.resolve(), args.base, args.head, args.event); code = 0
+        root = args.repo.resolve()
+        if args.github_event:
+            event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+            args.event = os.environ['GITHUB_EVENT_NAME']
+            args.head = 'HEAD'
+            if args.event == 'pull_request':
+                args.base = git(root, 'merge-base', event['pull_request']['base']['sha'], 'HEAD').decode('ascii').strip()
+            elif args.event == 'push' and event.get('before') and set(event['before']) != {'0'}:
+                args.base = event['before']
+            else:
+                args.base = 'HEAD'
+        if not args.base: raise ValueError('comparison base is required')
+        result = plan(root, args.base, args.head, args.event); code = 0
+        if args.github_output:
+            fields = {'required': any(row['selected'] for row in result['cases']),
+                      'native_required': bool(result['native_build_targets']),
+                      'ams_required': bool(result['ams_paths']),
+                      'python_required': any(row['selected'] and row['profile'] == 'solver-numerics'
+                                             for row in result['cases']),
+                      'heavy_required': bool(result['heavy_case_paths']),
+                      'gmsh_required': bool(result['gmsh_reference_paths']) or any(
+                          row['selected'] and 'gmsh' in row['components'] for row in result['cases'])}
+            if args.event != 'pull_request': fields['native_required'] = True
+            with args.github_output.open('a', encoding='utf-8') as output:
+                for key, value in fields.items(): output.write(key + '=' + str(value).lower() + '\n')
     except Exception as exc:
         result = {'schema': SCHEMA, 'status': 'blocked', 'qualification': False, 'execution_wired': False,
                   'error': type(exc).__name__ + ': ' + str(exc), 'required_action': 'do not skip gates; repair inputs or execute full existing gate'}; code = 2
