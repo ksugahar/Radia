@@ -64,6 +64,8 @@ Updated 2026-10-24.
 
 ### GPU And Supercomputer Execution
 
+- Development, CPU and GPU, happens on the project's build host. Flow2 and mdx
+  are execution platforms, not development hosts.
 - GPU kernels are validated against the Python CPU reference and reach users
   through two builds:
   - Python (pybind11) GPU runs on the Flow2 supercomputer, together with CPU
