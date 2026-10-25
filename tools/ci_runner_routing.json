@@ -142,11 +142,6 @@
       "target": "github-hosted",
       "legacy_100": false
     },
-    "release.yml:publication-hold": {
-      "owner": "radia",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
     "release.yml:verify-promotion": {
       "owner": "radia",
       "target": "github-hosted",
@@ -234,7 +229,7 @@
         "tools/ci_numerical_runtime.py",
         "tools/ci_numerical_inputs.json"
       ],
-      "audit_sha256": "00016ce273d8445bda48923e13b86bca5238ea8f34cfaff7f71878176fc7d408",
+      "audit_sha256": "4f6d23e1c175e3589de06ee2b110ff0e0c244179b61985c6bf0f5b4ff6dad773",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

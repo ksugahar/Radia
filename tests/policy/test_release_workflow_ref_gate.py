@@ -85,11 +85,13 @@ def test_ci_records_exact_ref_context_before_release():
 def test_pypi_release_jobs_require_the_triggering_ci_to_be_a_tag_run():
     for path in RELEASE_WORKFLOWS:
         workflow=path.read_text(encoding="utf-8")
-        assert "publication-hold:" in workflow
+        assert "publication-hold:" not in workflow
+        assert "workflow_run:" not in workflow
         assert "needs: verify-promotion" in workflow
         publish=workflow[workflow.index("  publish-pypi:"):]
         assert "github.event_name == 'workflow_dispatch'" in publish
-        assert "github.ref == 'refs/heads/main'" in publish
+        assert "github.ref_type == 'tag'" in publish
+        assert "startsWith(github.ref, 'refs/tags/v')" in publish
         assert "needs.verify-promotion.result == 'success'" in publish
         assert "artifact-ids: ${{ needs.verify-promotion.outputs.artifact_id }}" in publish
         assert "run-id: ${{ inputs.ci_run_id }}" in workflow
@@ -188,10 +190,13 @@ def test_optuna_manual_release_fails_loudly_when_ci_sha_has_no_tag():
 
 def test_native_assets_use_accepted_tag_artifact_after_promotion():
     workflow = RELEASE_WORKFLOWS[0].read_text(encoding="utf-8")
-    upload = workflow.split("  upload-binaries:", 1)[1].split("  publication-hold:", 1)[0]
-    assert "needs: verify-promotion" in upload
+    upload = workflow.split("  upload-binaries:", 1)[1].split("  verify-promotion:", 1)[0]
+    assert "needs: [verify-promotion, publish-pypi]" in upload
+    assert "needs.publish-pypi.result == 'success'" in upload
+    assert "environment: pypi" not in upload
     assert "needs.verify-promotion.result == 'success'" in upload
-    assert "run-id: ${{ inputs.ci_run_id }}" in upload
+    assert "artifact-ids: ${{ needs.verify-promotion.outputs.native_artifact_id }}" in upload
+    assert "--after-approval" in upload
     assert "head_branch" not in upload
 
 
@@ -304,12 +309,11 @@ def _cubit_candidate(tmp_path, monkeypatch):
             return "a" * 40
         if command[:2] == ["git", "ls-tree"]:
             prefixes = command[command.index("--") + 1:]
-            return b"\0".join(name.encode() for name in sorted(git_blobs) if any(name == prefix or name.startswith(prefix + "/") for prefix in prefixes)) + b"\0"
-        if command[:2] == ["git", "show"]:
-            key = command[2].split(":", 1)[1]
-            if key not in git_blobs:
-                raise subprocess.CalledProcessError(128, command)
-            return git_blobs[key]
+            return b"\0".join(b"100644 blob " + hashlib.sha1(git_blobs[name]).hexdigest().encode() + b"\t" + name.encode() for name in sorted(git_blobs) if any(name == prefix or name.startswith(prefix + "/") for prefix in prefixes)) + b"\0"
+        if command[:3] == ["git", "cat-file", "blob"]:
+            matches = [data for data in git_blobs.values() if hashlib.sha1(data).hexdigest() == command[3]]
+            assert matches, command
+            return matches[0]
         assert "ls-remote" in command, command
         return "c" * 40 + "\trefs/tags/cubit-mesh-export-v2.2.7\n" + remote["sha"] + "\trefs/tags/cubit-mesh-export-v2.2.7^{}\n"
     monkeypatch.setattr(subprocess, "check_output", git)
@@ -468,3 +472,90 @@ def test_cubit_materializes_only_job_stage_from_tagged_blobs(tmp_path, monkeypat
     assert (stage / "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_mesh_curver.pyd").read_bytes() == (source / "cubit_mesh_curver.pyd").read_bytes()
     assert export.read_text(encoding="utf-8").strip() == "CUBIT_BUILD_ROOT=" + str(stage)
     assert all(path.read_bytes() == content for path, content in existing.items())
+
+
+@pytest.mark.parametrize("member", ["cubit_mesh_export/__init__.py..", "cubit_mesh_export/untracked.py", "cubit_mesh_export/../outside.py", "surprise.pth"])
+def test_cubit_only_exact_tracked_members_are_read(tmp_path, monkeypatch, member):
+    import hashlib
+    import json
+    import zipfile
+    wheel, _, _, _ = _cubit_candidate(tmp_path, monkeypatch)
+    with zipfile.ZipFile(wheel, "a") as archive:
+        archive.writestr(member, b"injected")
+    # The immediate build receipt alone is not source authority.
+    exec(compile(_cubit_build_identity_program(), "workflow-build-identity", "exec"), {"__name__": "__main__"})
+    with pytest.raises((SystemExit, ValueError)):
+        _run_cubit_audit("before-approval", monkeypatch)
+
+
+def test_cubit_worktree_substitution_does_not_replace_tagged_blob(tmp_path, monkeypatch):
+    wheel, source, _, _ = _cubit_candidate(tmp_path, monkeypatch)
+    injected = b"# worktree injection\n"
+    (source / "__init__.py").write_bytes(injected)
+    import zipfile
+    with zipfile.ZipFile(wheel, "r") as archive:
+        members = {n: archive.read(n) for n in archive.namelist()}
+    members["cubit_mesh_export/__init__.py"] = injected
+    with zipfile.ZipFile(wheel, "w") as archive:
+        for name, data in members.items(): archive.writestr(name, data)
+    exec(compile(_cubit_build_identity_program(), "workflow-build-identity", "exec"), {"__name__": "__main__"})
+    with pytest.raises((SystemExit, ValueError)):
+        _run_cubit_audit("before-approval", monkeypatch)
+
+
+def test_cubit_source_stage_must_be_fresh_even_when_empty(tmp_path, monkeypatch):
+    _cubit_candidate(tmp_path, monkeypatch)
+    runner = tmp_path / "runner"
+    (runner / "cubit-wheel-source").mkdir(parents=True)
+    monkeypatch.setenv("RUNNER_TEMP", str(runner))
+    monkeypatch.setenv("GITHUB_ENV", str(tmp_path / "github-env"))
+    step = next(s for s in _cubit_workflow()["jobs"]["build-test"]["steps"] if s.get("name") == "Materialize exact tagged package bytes")
+    program = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    with pytest.raises(SystemExit, match="must be fresh"):
+        exec(compile(program, "workflow-stage-source", "exec"), {"__name__": "__main__"})
+
+
+def test_cubit_traversal_guard_rejects_even_an_unsafe_tree_entry(tmp_path, monkeypatch):
+    import hashlib
+    import subprocess
+    import zipfile
+    wheel, source, _, _ = _cubit_candidate(tmp_path, monkeypatch)
+    data = (source / "__init__.py").read_bytes()
+    original = subprocess.check_output
+    def hostile_tree(command, **kwargs):
+        result = original(command, **kwargs)
+        if command[:2] == ["git", "ls-tree"] and command[command.index("--") + 1:] == ["packages/cubit-mesh-export"]:
+            result += b"100644 blob " + hashlib.sha1(data).hexdigest().encode() + b"\tpackages/cubit-mesh-export/src/cubit_mesh_export/../outside.py\0"
+        return result
+    monkeypatch.setattr(subprocess, "check_output", hostile_tree)
+    with zipfile.ZipFile(wheel, "a") as archive:
+        archive.writestr("cubit_mesh_export/../outside.py", data)
+    exec(compile(_cubit_build_identity_program(), "workflow-build-identity", "exec"), {"__name__": "__main__"})
+    # A deliberately malformed tree double isolates the traversal defense from
+    # membership checking. Real Git cannot create this unsafe tree path.
+    with pytest.raises(SystemExit, match="unsafe wheel member"):
+        _run_cubit_audit("before-approval", monkeypatch)
+
+
+def test_radia_publication_graph_has_one_approval_and_no_failure_bypass():
+    import yaml
+    workflow = yaml.safe_load(RELEASE_WORKFLOWS[0].read_text(encoding="utf-8"))
+    assert set(workflow.get("on", workflow.get(True))) == {"workflow_dispatch"}
+    jobs = workflow["jobs"]
+    assert set(jobs) == {"verify-promotion", "publish-pypi", "upload-binaries"}
+    assert jobs["publish-pypi"]["environment"] == "pypi"
+    assert "environment" not in jobs["verify-promotion"] and "environment" not in jobs["upload-binaries"]
+    assert jobs["upload-binaries"]["needs"] == ["verify-promotion", "publish-pypi"]
+    for name, job in jobs.items():
+        condition = job["if"]
+        assert "github.ref_type == 'tag'" in condition
+        assert "always(" not in condition and "||" not in condition
+        assert not job.get("continue-on-error")
+        for step in job["steps"]:
+            assert not step.get("continue-on-error")
+            if step.get("uses", "").startswith("actions/checkout"):
+                assert step["with"] == {"ref": "${{ github.sha }}", "persist-credentials": False}
+        if name != "verify-promotion":
+            audit = next(i for i,s in enumerate(job["steps"]) if "--after-approval" in s.get("run", ""))
+            write = next(i for i,s in enumerate(job["steps"]) if s.get("uses", "").startswith("pypa/") or "upload_release_asset.py" in s.get("run", ""))
+            assert audit < write

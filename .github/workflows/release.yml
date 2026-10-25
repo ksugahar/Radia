@@ -1,9 +1,6 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows: ["Radia Native Release"]
-    types: [completed]
   workflow_dispatch:
     inputs:
       ci_run_id:
@@ -25,11 +22,12 @@ permissions:
 
 jobs:
   upload-binaries:
-    needs: verify-promotion
+    needs: [verify-promotion, publish-pypi]
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main' &&
-      needs.verify-promotion.result == 'success'
+      github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') &&
+      needs.verify-promotion.result == 'success' &&
+      needs.publish-pypi.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -37,35 +35,58 @@ jobs:
       actions: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: radia-pyd
+          artifact-ids: ${{ needs.verify-promotion.outputs.native_artifact_id }}
           path: pyd-files
-          run-id: ${{ inputs.ci_run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.verify-promotion.outputs.artifact_id }}
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.verify-promotion.outputs.receipt_artifact_id }}
+          path: evidence
+          merge-multiple: true
+      - name: Recheck approved tag, attempt and exact bytes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          WHEEL_SHA256: ${{ inputs.wheel_sha256 }}
+          ACCEPTANCE_COMMIT: ${{ inputs.acceptance_commit }}
+        run: |
+          python tools/verify_radia_promotion.py --repo "$GITHUB_REPOSITORY" \
+            --run-id "$CI_RUN_ID" --wheel-sha256 "$WHEEL_SHA256" \
+            --acceptance-commit "$ACCEPTANCE_COMMIT" --wheel-dir dist \
+            --context-dir ci-release-context --native-dir pyd-files \
+            --output evidence/promotion.json --after-approval
       - name: Upload native binaries to GitHub Releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           FILES=$(find pyd-files -type f \( -name '*.pyd' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' \))
-          if [ -z "$FILES" ]; then exit 0; fi
+          test -n "$FILES"
           python tools/upload_release_asset.py --repo "$GITHUB_REPOSITORY" \
             --tag binaries --create-if-missing $FILES
 
-  publication-hold:
-    if: github.event_name == 'workflow_run'
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo 'PyPI publication is held. Accept the exact tag artifact on the build and validation targets, commit evidence to main, then dispatch Release with run ID, wheel SHA-256 and acceptance commit.'
-
   verify-promotion:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       artifact_id: ${{ steps.accepted.outputs.artifact-id }}
+      native_artifact_id: ${{ steps.native.outputs.artifact-id }}
+      receipt_artifact_id: ${{ steps.receipt.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: radia-wheel
@@ -78,6 +99,12 @@ jobs:
           path: ci-release-context
           run-id: ${{ inputs.ci_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: radia-pyd
+          path: pyd-files
+          run-id: ${{ inputs.ci_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Verify exact artifact and main-reachable acceptance data
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -88,7 +115,7 @@ jobs:
           python tools/verify_radia_promotion.py --repo "$GITHUB_REPOSITORY" \
             --run-id "$CI_RUN_ID" --wheel-sha256 "$WHEEL_SHA256" \
             --acceptance-commit "$ACCEPTANCE_COMMIT" --wheel-dir dist \
-            --context-dir ci-release-context --output promotion.json
+            --context-dir ci-release-context --native-dir pyd-files --output promotion.json
       - uses: actions/upload-artifact@v4
         id: accepted
         with:
@@ -96,6 +123,13 @@ jobs:
           path: dist/*.whl
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
+        id: native
+        with:
+          name: accepted-radia-native
+          path: pyd-files/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        id: receipt
         with:
           name: radia-promotion-evidence
           path: promotion.json
@@ -103,29 +137,46 @@ jobs:
 
   publish-pypi:
     needs: verify-promotion
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.verify-promotion.result == 'success'
+    if: github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && needs.verify-promotion.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: pypi
     permissions:
+      contents: read
       actions: read
       id-token: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ needs.verify-promotion.outputs.artifact_id }}
           path: dist
           merge-multiple: true
-      - name: Recheck promoted bytes before publication
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.verify-promotion.outputs.native_artifact_id }}
+          path: pyd-files
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.verify-promotion.outputs.receipt_artifact_id }}
+          path: evidence
+          merge-multiple: true
+      - name: Recheck approved tag, attempt and exact bytes
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
           WHEEL_SHA256: ${{ inputs.wheel_sha256 }}
+          ACCEPTANCE_COMMIT: ${{ inputs.acceptance_commit }}
         run: |
-          python - <<'PY'
-          import hashlib, os, pathlib
-          wheels = list(pathlib.Path('dist').rglob('*.whl'))
-          if len(wheels) != 1 or hashlib.sha256(wheels[0].read_bytes()).hexdigest() != os.environ['WHEEL_SHA256']:
-              raise SystemExit('Promoted artifact hash mismatch')
-          PY
+          python tools/verify_radia_promotion.py --repo "$GITHUB_REPOSITORY" \
+            --run-id "$CI_RUN_ID" --wheel-sha256 "$WHEEL_SHA256" \
+            --acceptance-commit "$ACCEPTANCE_COMMIT" --wheel-dir dist \
+            --context-dir ci-release-context --native-dir pyd-files \
+            --output evidence/promotion.json --after-approval
       - name: Publish the accepted wheel without rebuilding
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
