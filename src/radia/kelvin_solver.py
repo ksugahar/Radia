@@ -97,6 +97,7 @@ def _check_mixed_omega_component_gauges(mesh, spaces, reduced_materials, interfa
     reduced, total, multiplier = spaces
     parents, pinned = {}, set()
     free = [space.FreeDofs() for space in (reduced, total)]
+    vertex_nodes = {}
 
     def root(node):
         while parents[node] != node:
@@ -109,11 +110,16 @@ def _check_mixed_omega_component_gauges(mesh, spaces, reduced_materials, interfa
             parents[root(node)] = root(nodes[0])
 
     def vertex_node(block, vertex):
+        key = block, vertex.nr
+        if key in vertex_nodes:
+            return vertex_nodes[key]
         dofs = [d for d in spaces[block].GetDofNrs(ng.NodeId(ng.VERTEX, vertex.nr))
                 if d >= 0]
         if len(dofs) != 1:
             raise ValueError("mixed Omega gauge check requires one active H1 vertex DoF")
-        return block, dofs[0]
+        node = block, dofs[0]
+        vertex_nodes[key] = node
+        return node
 
     for element in mesh.Elements(ng.VOL):
         block = 0 if element.mat in reduced_materials else 1
