@@ -21,7 +21,7 @@
 #include "rad_stream_function.h"
 #include "rad_hacapk.h"
 
-#include <mkl.h>
+#include "rad_blas.h"
 
 // HACApK ACA+ (cHACApK_acaplus) + the per-call entry-function override
 // (HACApK_set_entry_func / HACApK_clear_entry_func, defined in rad_hacapk.cpp).

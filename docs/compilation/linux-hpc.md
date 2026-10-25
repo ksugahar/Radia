@@ -1,7 +1,8 @@
 # Linux HPC source builds
 
 The Linux entry point is `tools/build_linux.py`. It builds CPU Python extensions
-with Intel LLVM (`icx`/`icpx` by default), CMake and Ninja. It never installs
+with Intel LLVM (`icx`/`icpx`) and MKL on x86_64, or explicit GCC 11.5
+and LP64 sequential NVPL on Linux aarch64. Both routes use CMake and Ninja. It never installs
 dependencies, loads environment modules, selects GCC as a fallback, submits a
 scheduler job or modifies a shared Python installation. Windows continues to use
 `Build.ps1` and Visual Studio Build Tools 2022 / MSVC 14.44.
@@ -39,8 +40,9 @@ keep those in private operations notes.
 ```bash
 python3.12 -m venv "$JOB_ROOT/venv"
 . "$JOB_ROOT/venv/bin/activate"
-python -m pip install 'ngsolve==6.2.2608' 'netgen-mesher==6.2.2608' \
-  'pybind11==3.0.2' cmake ninja numpy scipy h5py threadpoolctl pytest
+# Install reviewed, hash-locked dependency wheels built with MKL; an official
+# OpenBLAS wheel is not an interchangeable provider for this route.
+python -m pip install --no-index --require-hashes -r "$JOB_ROOT/dependencies.txt"
 # MKLROOT must point to the oneMKL installation selected for this job.
 test -f "$MKLROOT/include/mkl.h"
 test -f "$MKLROOT/lib/libmkl_rt.so"
@@ -53,7 +55,7 @@ the builder does not infer permission to consume all visible CPUs. Run long
 builds in a scheduler allocation, not on a shared login node. The toolchain and
 standard-library paths selected for the job must also be visible there.
 
-`CC`/`CXX` or `--cc`/`--cxx` select an explicit LLVM toolchain. Clang is an
+On x86, `CC`/`CXX` or `--cc`/`--cxx` select an explicit LLVM toolchain. Clang is an
 explicit alternative requiring its own platform verification; there is no
 automatic fallback. All four CPU modules (`_radia_pybind`, `peec_matrices`,
 `sparsesolv_ngsolve`, `axifem`) build by default. `--targets` limits an iteration
@@ -63,6 +65,40 @@ Use one source checkout per active build: CMake copies the resulting modules
 to `src/radia`. CMake discovers the Linux wheel's `lib/cmake` and bundled
 Netgen/pybind11 headers, links MKL and uses `.so` output names. On Windows those
 outputs remain `.pyd`. Always use the same Python for configuring and importing.
+
+## Linux aarch64 provider route (build route only)
+
+NGSolve/Netgen 6.2.2608 (with OCC), NumPy and SciPy must first be built
+against the same NVPL provider. Use LF Git archives of upstream sources and
+record all submodule identities. No official OpenBLAS wheel, MKL emulation,
+disabled OCC, compiler fallback or runtime provider switch is substituted.
+
+Set `NVPL_ROOT` to the reviewed development prefix with
+`libnvpl_blas_lp64_seq.so`, `libnvpl_lapack_lp64_seq.so` and `libnvpl_fftw.so`.
+The complete native package, including the CPU host module, is required even
+when the selected computation runs on GPU:
+
+```bash
+export OMP_NUM_THREADS=1
+export LD_LIBRARY_PATH="$NVPL_ROOT/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+python tools/build_linux.py --provider nvpl --cc /usr/bin/gcc --cxx /usr/bin/g++ \
+  --build-dir "$JOB_ROOT/build-nvpl" --jobs 2 --require-clean-source
+```
+
+The provider and architecture must agree; unknown or mismatched choices fail.
+NVPL BLAS/LAPACK is explicitly sequential even inside a multi-worker
+NGSolve TaskManager region. Requests to change its provider thread count
+are rejected. Complex LAPACK uses an explicit LP64 two-real ABI.
+The FFT adapter uses NVPL's float FFTW3 interface, with the same unnormalised
+forward/backward convention as the x86 MKL DFTI path; it does not use FFT stubs.
+The compiled provider is available from
+`radia._radia_pybind._blas_provider_identity()` and native build receipts.
+
+This source route is experimental until actual native builds and independent
+numerical checks pass on the target architecture. Provider analytic harnesses
+are `validation_test/numerics/test_provider_blas.cpp` and
+`validation_test/numerics/test_provider_fft.cpp`; passing source contracts alone
+does not validate either provider or a GPU package.
 
 ## Execution and evidence
 

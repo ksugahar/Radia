@@ -80,7 +80,7 @@ based only on these leaf-level results.
 
 Compile `aca_probe_bridge.c`, `aca_probe_unreachable.c`,
 `src/ext/HACApK/cHACApK_base.c`, and `cHACApK_lib.c` into a DLL with
-`cl /O2 /Gy /LD`, include paths `src/ext/HACApK` and `src/core`, and linker
+`cl /O2 /Gy /LD /DRADIA_BLAS_MKL=1`, include paths `src/ext/HACApK` and `src/core`, and linker
 option `/OPT:REF`. Build the baseline from source commit `b7e89ae53` and the
 candidate from the edited source; use distinct output DLL names under
 `C:/temp`. Existing shared-source printf/prototype warnings are not fixed here.

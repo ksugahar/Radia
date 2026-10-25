@@ -112,6 +112,14 @@ function Write-NativeBuildProvenance {
                 throw 'Provenance build directory must be this checkout''s build-msvc'
             }
             $manifest.build_directory = $relativeBuild
+            $providerPath = Join-Path $resolvedBuild 'radia-provider.json'
+            if (Test-Path -LiteralPath $providerPath -PathType Leaf) {
+                $provider = Get-Content -Raw -LiteralPath $providerPath | ConvertFrom-Json
+                if ($provider.provider -ne 'mkl' -or $provider.integer_abi -ne 'lp64') {
+                    throw 'Windows native receipt requires the compiled MKL LP64 provider'
+                }
+                $manifest.blas_provider = $provider
+            }
         }
         $json = $manifest | ConvertTo-Json -Depth 3
         [IO.File]::WriteAllText($temporaryPath, $json + [Environment]::NewLine,

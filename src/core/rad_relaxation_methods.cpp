@@ -45,11 +45,16 @@ extern radTApplication rad;
 #include "rad_parallel.h"
 
 #ifdef HAVE_LAPACK
-// Intel MKL headers (includes dgesv_ declaration)
-#include "mkl_cblas.h"
-#include "mkl_lapack.h"
-#include "mkl_trans.h"   // For mkl_domatcopy (matrix transpose)
-#include "mkl_service.h" // For mkl_set_num_threads, mkl_get_max_threads
+// Provider-selected LP64 BLAS/LAPACK declarations.
+#include "rad_blas.h"
+// Fortran declarations stay private to TUs without NGSolve la.hpp/clapack.h.
+#if defined(RADIA_BLAS_MKL)
+#include <mkl_lapack.h>
+#define RADIA_LAPACK_GETRS dgetrs_
+#elif defined(RADIA_BLAS_NVPL)
+#include <nvpl_lapack.h>
+#define RADIA_LAPACK_GETRS NVPL_LAPACK_dgetrs
+#endif
 #endif
 
 extern radTYield radYield;
@@ -1516,7 +1521,7 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 			int info = 0;
 			cblas_dcopy(dof, rhs.data(), 1, H_vec.data(), 1);
 			char trans = 'N';
-			dgetrs_(&trans, &n, &nrhs, LHS.data(), &n, ipiv.data(),
+			RADIA_LAPACK_GETRS(&trans, &n, &nrhs, LHS.data(), &n, ipiv.data(),
 			        H_vec.data(), &n, &info);
 			if(info != 0) break;
 		}
@@ -1713,7 +1718,7 @@ int radTRelaxationMethNo_0::SolveBInputLinearStep(
 
 	{
 		ngcore::SuspendTaskManager stm;
-		radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
+		radia::DenseThreadGuard mkl_guard(radia::GetNumThreads());
 		dgesv_(&dof, &nrhs, J_F.data(), &dof, ipiv.data(), dM.data(), &dof, &info);
 	}
 
@@ -1752,7 +1757,7 @@ int radTRelaxationMethNo_0::SolveLU_Flat(std::vector<double>& A, std::vector<dou
 
 	{
 		ngcore::SuspendTaskManager stm;
-		radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
+		radia::DenseThreadGuard mkl_guard(radia::GetNumThreads());
 		dgesv_(&n, &nrhs, A_col.data(), &n, ipiv.data(), b.data(), &n, &info);
 	}
 
@@ -1930,7 +1935,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		{
 			// dgesv overwrites SystemMatrix with LU factors and RHS with the solution x0 = A^-1 b
 			ngcore::SuspendTaskManager stm;
-			radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
+			radia::DenseThreadGuard mkl_guard(radia::GetNumThreads());
 			dgesv_(&totalDOF, &nrhs, SystemMatrix.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
 		}
 		if(info != 0) return -1;  // Singular matrix

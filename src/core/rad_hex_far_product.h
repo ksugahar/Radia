@@ -3,8 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
-#include <mkl_cblas.h>
-#include <mkl_service.h>
+#include "rad_blas.h"
 
 namespace radia_detail {
 
@@ -22,8 +21,8 @@ inline void HexFarProductBlas(
     std::vector<double> outer(static_cast<size_t>(capacity)*nt);
     // NGSolve owns worker parallelism; restore this thread's MKL setting.
     struct LocalThreads {
-        int previous = mkl_set_num_threads_local(1);
-        ~LocalThreads() { mkl_set_num_threads_local(previous); }
+        int previous = radia_blas_set_num_threads_local(1);
+        ~LocalThreads() { radia_blas_set_num_threads_local(previous); }
     } threads;
     for (int begin = 0; begin < qt; begin += tile) {
         const int count = std::min(tile, qt-begin);

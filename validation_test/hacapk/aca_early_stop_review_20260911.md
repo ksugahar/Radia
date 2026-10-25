@@ -67,7 +67,7 @@ not a change to the physical kernel. The existing binary hash is
 Run in an x64 MSVC developer environment from the repository root:
 
 ```text
-cl /nologo /O2 /Gy /I src/ext/HACApK /I src/core
+cl /nologo /O2 /Gy /DRADIA_BLAS_MKL=1 /I src/ext/HACApK /I src/core
   validation_test/hacapk/probe_aca_zero_row.c
   validation_test/hacapk/aca_probe_unreachable.c
   src/ext/HACApK/cHACApK_base.c src/ext/HACApK/cHACApK_lib.c

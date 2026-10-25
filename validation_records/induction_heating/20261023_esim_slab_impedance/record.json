@@ -59,8 +59,8 @@
   "timing_s": {
     "coarsest_solve": 0.00114560000019992
   },
-  "status": "current",
-  "stale_reason": null,
+  "status": "stale",
+  "stale_reason": "covered root pyproject dependency metadata changed (platform markers for aarch64/arm64 only; x86 resolution unchanged); this change",
   "superseded_by": null,
   "private": false,
   "milestone": "Deep-skin ESIM slab impedance convergence",

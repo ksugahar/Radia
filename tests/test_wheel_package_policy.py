@@ -98,7 +98,13 @@ def test_mkl_is_external_but_the_radia_owned_motor_abi_is_documented():
     config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     policies = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
-    assert "mkl>=2026,<2027" in config["project"]["dependencies"]
+    from packaging.requirements import Requirement
+    requirements = {r.name: r for r in map(Requirement, config["project"]["dependencies"])}
+    mkl = requirements["mkl"]
+    assert str(mkl.specifier) == "<2027,>=2026"
+    assert mkl.marker.evaluate({"platform_machine": "AMD64"})
+    assert not mkl.marker.evaluate({"platform_machine": "aarch64"})
+    assert not requirements["intel-cmplr-lib-rt"].marker.evaluate({"platform_machine": "aarch64"})
     assert "mkl>=2024.2.0" not in policies
     assert "radia_motor_rom.dll" in policies
     assert "no third-party DLLs" in policies

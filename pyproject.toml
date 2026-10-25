@@ -37,8 +37,8 @@ dependencies = [
     # Radia/HACApK intentionally uses oneMKL rather than NGSolve's OpenBLAS:
     # The dense HACApK kernels are performance-critical. MKL 2026
     # uses the mkl_rt.3.dll ABI, so keep runtime and build packages in 2026.x.
-    "mkl>=2026,<2027",
-    "intel-cmplr-lib-rt>=2026,<2027",
+    "mkl>=2026,<2027; platform_machine != 'aarch64' and platform_machine != 'arm64'",
+    "intel-cmplr-lib-rt>=2026,<2027; platform_machine != 'aarch64' and platform_machine != 'arm64'",
     # NGSolve + Netgen-mesher pinned to 6.2.2608; retains the BEM near-field quadrature correction.
     # Rebuild native extensions linked to these external libraries together:
     # NGSolve and Netgen expose C++ ABI used directly by the shipped binaries.

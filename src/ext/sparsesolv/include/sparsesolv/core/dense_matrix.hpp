@@ -14,9 +14,8 @@
 #include <cmath>
 #include <stdexcept>
 
-#ifdef SPARSESOLV_USE_MKL
-#include <mkl_cblas.h>
-#include <mkl_lapacke.h>
+#ifdef SPARSESOLV_USE_BLAS
+#include "../../../../../core/rad_blas.h"
 #endif
 
 namespace sparsesolv {
@@ -26,9 +25,9 @@ namespace detail {
     template<typename T>
     inline double dense_abs(T val) { return std::abs(val); }
 
-#ifdef SPARSESOLV_USE_MKL
+#ifdef SPARSESOLV_USE_BLAS
     // ---- GEMM wrappers (row-major) ----
-    inline void mkl_gemm(index_t m, index_t n, index_t k,
+    inline void blas_gemm(index_t m, index_t n, index_t k,
                           double alpha, const double* A, index_t lda,
                           const double* B, index_t ldb,
                           double beta, double* C, index_t ldc) {
@@ -36,7 +35,7 @@ namespace detail {
                     m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
     }
 
-    inline void mkl_gemm(index_t m, index_t n, index_t k,
+    inline void blas_gemm(index_t m, index_t n, index_t k,
                           complex_t alpha, const complex_t* A, index_t lda,
                           const complex_t* B, index_t ldb,
                           complex_t beta, complex_t* C, index_t ldc) {
@@ -45,24 +44,24 @@ namespace detail {
     }
 
     // ---- LU factorization + inverse wrappers ----
-    inline lapack_int mkl_getrf(index_t n, double* data, index_t lda,
+    inline lapack_int blas_getrf(index_t n, double* data, index_t lda,
                                  lapack_int* ipiv) {
         return LAPACKE_dgetrf(LAPACK_ROW_MAJOR, n, n, data, lda, ipiv);
     }
 
-    inline lapack_int mkl_getrf(index_t n, complex_t* data, index_t lda,
+    inline lapack_int blas_getrf(index_t n, complex_t* data, index_t lda,
                                  lapack_int* ipiv) {
         return LAPACKE_zgetrf(LAPACK_ROW_MAJOR, n, n,
                               reinterpret_cast<lapack_complex_double*>(data),
                               lda, ipiv);
     }
 
-    inline lapack_int mkl_getri(index_t n, double* data, index_t lda,
+    inline lapack_int blas_getri(index_t n, double* data, index_t lda,
                                  const lapack_int* ipiv) {
         return LAPACKE_dgetri(LAPACK_ROW_MAJOR, n, data, lda, ipiv);
     }
 
-    inline lapack_int mkl_getri(index_t n, complex_t* data, index_t lda,
+    inline lapack_int blas_getri(index_t n, complex_t* data, index_t lda,
                                  const lapack_int* ipiv) {
         return LAPACKE_zgetri(LAPACK_ROW_MAJOR, n,
                               reinterpret_cast<lapack_complex_double*>(data),
@@ -111,8 +110,8 @@ public:
     /// Matrix multiplication: C = A * B
     static DenseMatrix multiply(const DenseMatrix& A, const DenseMatrix& B) {
         DenseMatrix C(A.rows_, B.cols_);
-#ifdef SPARSESOLV_USE_MKL
-        detail::mkl_gemm(A.rows_, B.cols_, A.cols_,
+#ifdef SPARSESOLV_USE_BLAS
+        detail::blas_gemm(A.rows_, B.cols_, A.cols_,
                           Scalar(1), A.data_.data(), A.cols_,
                           B.data_.data(), B.cols_,
                           Scalar(0), C.data_.data(), C.cols_);
@@ -132,8 +131,8 @@ public:
     /// Multiply-add: C += A * B
     static void multiply_add(const DenseMatrix& A, const DenseMatrix& B,
                               DenseMatrix& C) {
-#ifdef SPARSESOLV_USE_MKL
-        detail::mkl_gemm(A.rows_, B.cols_, A.cols_,
+#ifdef SPARSESOLV_USE_BLAS
+        detail::blas_gemm(A.rows_, B.cols_, A.cols_,
                           Scalar(1), A.data_.data(), A.cols_,
                           B.data_.data(), B.cols_,
                           Scalar(1), C.data_.data(), C.cols_);
@@ -168,13 +167,13 @@ public:
         const index_t n = rows_;
         if (n == 0) return;
 
-#ifdef SPARSESOLV_USE_MKL
+#ifdef SPARSESOLV_USE_BLAS
         std::vector<lapack_int> ipiv(n);
-        lapack_int info = detail::mkl_getrf(n, data_.data(), n, ipiv.data());
+        lapack_int info = detail::blas_getrf(n, data_.data(), n, ipiv.data());
         if (info != 0)
             throw std::runtime_error("DenseMatrix::invert: dgetrf failed (info=" +
                                      std::to_string(info) + ")");
-        info = detail::mkl_getri(n, data_.data(), n, ipiv.data());
+        info = detail::blas_getri(n, data_.data(), n, ipiv.data());
         if (info != 0)
             throw std::runtime_error("DenseMatrix::invert: dgetri failed (info=" +
                                      std::to_string(info) + ")");

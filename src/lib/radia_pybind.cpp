@@ -17,6 +17,7 @@
 #include <fem.hpp>
 #include <comp.hpp>
 #include <python_ngstd.hpp>
+#include "rad_blas.h"
 #include "rad_periodic_h1.hpp" // Preserves the base space's boundary flags.
 
 // Temporarily undefine EXP if NGSolve headers left it undefined
@@ -2304,6 +2305,13 @@ py::array_t<double> PlanarMaxwellForceCircle(
 // ============================================================================
 
 PYBIND11_MODULE(_radia_pybind, m) {
+    m.def("_blas_provider_identity", []() {
+        pybind11::dict result;
+        result["provider"] = RADIA_BLAS_NAME;
+        result["integer_abi"] = "lp64";
+        result["thread_policy"] = RADIA_BLAS_THREAD_POLICY;
+        return result;
+    });
     m.def("_periodic_h1_single_interface", [](std::shared_ptr<ngcomp::FESpace> base) {
         auto result = std::make_shared<radia::FaceConsistentPeriodicH1>(base);
         result->Update();
