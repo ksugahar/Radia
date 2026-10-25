@@ -367,6 +367,52 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
     return dict(identity, acceptance_commit=commit, **roles, passed=True)
 
 
+
+def publication_identity(api, env):
+    """Bind the publishing attempt, independently of the native producer run."""
+    require(env.get("GITHUB_EVENT_NAME") == "workflow_dispatch", "Tag dispatch required")
+    ref = env.get("GITHUB_REF", "")
+    require(env.get("GITHUB_REF_TYPE") == "tag" and re.fullmatch(r"refs/tags/v\d+\.\d+\.\d+", ref), "Exact release tag ref required")
+    sha = env.get("GITHUB_SHA", "")
+    require(SHA.fullmatch(sha), "Invalid publishing source SHA")
+    require(env.get("GITHUB_REPOSITORY") == api.repo, "Publishing repository mismatch")
+    for key in ("GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"):
+        require(re.fullmatch(r"[1-9]\d*", env.get(key, "")), "Missing publishing run identity")
+    obj = api.get("git/ref/tags/" + urllib.parse.quote(ref.removeprefix("refs/tags/"), safe=""))["object"]
+    for _ in range(10):
+        if obj["type"] != "tag":
+            break
+        obj = api.get(f"git/tags/{obj['sha']}")["object"]
+    require(obj["type"] == "commit" and obj["sha"] == sha, "Publishing tag moved or deleted")
+    return {key: env[key] for key in ("GITHUB_REPOSITORY", "GITHUB_REF", "GITHUB_SHA", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT")}
+
+
+def native_bundle(wheel_dir, native_dir):
+    """Only wheel-identical native files may be written to the binaries release."""
+    wheels = list(wheel_dir.rglob("*.whl"))
+    require(len(wheels) == 1, "Exactly one accepted wheel required")
+    files = sorted(p for p in native_dir.rglob("*") if p.is_file())
+    binaries = [p for p in files if p.suffix in {".pyd", ".dll", ".so", ".dylib"}]
+    require(binaries and len({p.name for p in binaries}) == len(binaries), "Missing or duplicate native binaries")
+    result = {}
+    with zipfile.ZipFile(wheels[0]) as archive:
+        for path in binaries:
+            data = path.read_bytes()
+            require(data == archive.read("radia/" + path.name), "Native artifact differs from accepted wheel: " + path.name)
+            result[path.relative_to(native_dir).as_posix()] = hashlib.sha256(data).hexdigest()
+    return result
+
+
+def verify_publication(api, report, env, wheel_dir, native_dir, run_id, commit, expected_hash):
+    require(report.get("passed") is True, "Promotion did not pass")
+    require(report.get("publication") == publication_identity(api, env), "Publishing attempt identity changed; rerun all jobs and reapprove")
+    require(report["source_commit"] == env["GITHUB_SHA"] and env["GITHUB_REF"] == "refs/tags/v" + report["version"], "Publishing tag/source mismatch")
+    require(report["ci_run"] == run_id and report["acceptance_commit"] == commit and report["wheel_sha256"] == expected_hash, "Promotion inputs changed")
+    wheels = list(wheel_dir.rglob("*.whl"))
+    require(len(wheels) == 1 and hashlib.sha256(wheels[0].read_bytes()).hexdigest() == expected_hash, "Approved wheel changed")
+    require(report["native_bundle"] == native_bundle(wheel_dir, native_dir), "Approved native bundle changed")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo", required=True)
@@ -376,11 +422,24 @@ def main():
     p.add_argument("--wheel-dir", type=Path, required=True)
     p.add_argument("--context-dir", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--native-dir", type=Path, required=True)
+    p.add_argument("--after-approval", action="store_true")
     args = p.parse_args()
     api = GitHub(args.repo)
+    publication = publication_identity(api, os.environ)
+    if args.after_approval:
+        report = strict_json(args.output.read_bytes())
+        verify_publication(api, report, os.environ, args.wheel_dir, args.native_dir,
+                           args.run_id, args.acceptance_commit, args.wheel_sha256)
+        print("Approved publication identity and bytes verified")
+        return
     run = verify_run(api, args.run_id, args.acceptance_commit)
     report = verify_artifact(api, run, args.acceptance_commit, args.wheel_dir,
                              args.context_dir, args.wheel_sha256)
+    report["publication"] = publication
+    report["native_bundle"] = native_bundle(args.wheel_dir, args.native_dir)
+    verify_publication(api, report, os.environ, args.wheel_dir, args.native_dir,
+                       args.run_id, args.acceptance_commit, args.wheel_sha256)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report))
 

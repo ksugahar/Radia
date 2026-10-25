@@ -139,12 +139,16 @@ jobs:
           if stage.exists():
               raise SystemExit('wheel source stage must be fresh')
           stage.mkdir(parents=True)
-          paths = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', '-z', sha, '--', 'packages/cubit-mesh-export', 'src/cubit_plugin', 'tools/find_cubit.ps1']).split(b'\0')
-          for value in filter(None, paths):
-              relative = pathlib.Path(value.decode('utf-8'))
+          entries = subprocess.check_output(['git', 'ls-tree', '-r', '-z', sha, '--', 'packages/cubit-mesh-export', 'src/cubit_plugin', 'tools/find_cubit.ps1']).split(b'\0')
+          for entry in filter(None, entries):
+              header, name = entry.split(b'\t', 1)
+              mode, kind, oid = header.decode('ascii').split()
+              relative = pathlib.PurePosixPath(name.decode('utf-8'))
+              if mode not in {'100644', '100755'} or kind != 'blob' or relative.is_absolute() or '..' in relative.parts or '\\' in str(relative):
+                  raise SystemExit('unsafe tagged source entry: ' + str(relative))
               target = stage / relative
               target.parent.mkdir(parents=True, exist_ok=True)
-              target.write_bytes(subprocess.check_output(['git', 'show', sha + ':' + relative.as_posix()]))
+              target.write_bytes(subprocess.check_output(['git', 'cat-file', 'blob', oid]))
           payload = pathlib.Path('packages/cubit-mesh-export/src/cubit_mesh_export/cubit_mesh_curver.pyd')
           shutil.copyfile(payload, stage / payload)
           with pathlib.Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as stream:
@@ -445,6 +449,12 @@ jobs:
           built = json.loads(built_path.read_text(encoding='utf-8'))
           require(built['schema'] == 'cubit.built-wheel.v1' and built['source_sha'] == sha and built['wheel'] == wheel.name, 'built wheel identity differs from tag')
           require(built['sha256'] == hashlib.sha256(wheel.read_bytes()).hexdigest(), 'wheel differs from immediate post-build identity')
+          tagged_blobs = {}
+          for entry in filter(None, subprocess.check_output(['git', 'ls-tree', '-r', '-z', sha, '--', 'packages/cubit-mesh-export']).split(b'\0')):
+              header, name = entry.split(b'\t', 1)
+              mode, kind, oid = header.decode('ascii').split()
+              if mode in {'100644', '100755'} and kind == 'blob':
+                  tagged_blobs[name.decode('utf-8')] = oid
           with zipfile.ZipFile(wheel) as archive:
               require(built['members'] == {name: hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist()}, 'wheel members differ from immediate post-build identity')
               dist_info = 'cubit_mesh_export-' + expected + '.dist-info/'
@@ -463,7 +473,8 @@ jobs:
                   else:
                       raise SystemExit('unexpected non-source wheel member: ' + name)
                   require('..' not in Path(relative).parts, 'unsafe wheel member: ' + name)
-                  tagged_bytes = subprocess.check_output(['git', 'show', sha + ':' + relative])
+                  require(relative in tagged_blobs, 'wheel member absent from tagged source: ' + name)
+                  tagged_bytes = subprocess.check_output(['git', 'cat-file', 'blob', tagged_blobs[relative]])
                   require(archive.read(name) == tagged_bytes, 'wheel member differs from tagged source: ' + name)
           receipt = {'schema': 'cubit.release-audit.v1', 'repository': env['GITHUB_REPOSITORY'], 'ref': ref, 'source_sha': sha, 'run_id': env['GITHUB_RUN_ID'], 'run_attempt': env['GITHUB_RUN_ATTEMPT'], 'artifact_id': env['WHEEL_ARTIFACT_ID'], 'wheel': wheel.name, 'wheel_sha256': hashlib.sha256(wheel.read_bytes()).hexdigest(), 'native_manifest_sha256': hashlib.sha256(manifest_bytes).hexdigest(), 'built_identity_sha256': hashlib.sha256(built_path.read_bytes()).hexdigest()}
           record = Path('audit/release-audit.json')
@@ -628,6 +639,12 @@ jobs:
           built = json.loads(built_path.read_text(encoding='utf-8'))
           require(built['schema'] == 'cubit.built-wheel.v1' and built['source_sha'] == sha and built['wheel'] == wheel.name, 'built wheel identity differs from tag')
           require(built['sha256'] == hashlib.sha256(wheel.read_bytes()).hexdigest(), 'wheel differs from immediate post-build identity')
+          tagged_blobs = {}
+          for entry in filter(None, subprocess.check_output(['git', 'ls-tree', '-r', '-z', sha, '--', 'packages/cubit-mesh-export']).split(b'\0')):
+              header, name = entry.split(b'\t', 1)
+              mode, kind, oid = header.decode('ascii').split()
+              if mode in {'100644', '100755'} and kind == 'blob':
+                  tagged_blobs[name.decode('utf-8')] = oid
           with zipfile.ZipFile(wheel) as archive:
               require(built['members'] == {name: hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist()}, 'wheel members differ from immediate post-build identity')
               dist_info = 'cubit_mesh_export-' + expected + '.dist-info/'
@@ -646,7 +663,8 @@ jobs:
                   else:
                       raise SystemExit('unexpected non-source wheel member: ' + name)
                   require('..' not in Path(relative).parts, 'unsafe wheel member: ' + name)
-                  tagged_bytes = subprocess.check_output(['git', 'show', sha + ':' + relative])
+                  require(relative in tagged_blobs, 'wheel member absent from tagged source: ' + name)
+                  tagged_bytes = subprocess.check_output(['git', 'cat-file', 'blob', tagged_blobs[relative]])
                   require(archive.read(name) == tagged_bytes, 'wheel member differs from tagged source: ' + name)
           receipt = {'schema': 'cubit.release-audit.v1', 'repository': env['GITHUB_REPOSITORY'], 'ref': ref, 'source_sha': sha, 'run_id': env['GITHUB_RUN_ID'], 'run_attempt': env['GITHUB_RUN_ATTEMPT'], 'artifact_id': env['WHEEL_ARTIFACT_ID'], 'wheel': wheel.name, 'wheel_sha256': hashlib.sha256(wheel.read_bytes()).hexdigest(), 'native_manifest_sha256': hashlib.sha256(manifest_bytes).hexdigest(), 'built_identity_sha256': hashlib.sha256(built_path.read_bytes()).hexdigest()}
           record = Path('audit/release-audit.json')

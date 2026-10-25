@@ -1,4 +1,8 @@
-"""Publication gates reject incomplete, substituted and nonfinite evidence."""
+"""Guards: publication rejects unapproved tags, substituted bytes and incomplete evidence.
+
+Assumes: remote GitHub identities are mocked only in offline contracts; existing
+host acceptance records retain their independently approved numerical criteria.
+"""
 import copy
 import importlib.util
 import hashlib
@@ -275,7 +279,9 @@ def test_publication_has_no_automatic_bypass():
     assert "github.event_name == 'workflow_dispatch'" in publish
     assert "needs.verify-promotion.result == 'success'" in publish
     assert "environment: pypi" in publish
-    assert "actions/checkout" not in publish
+    assert "ref: ${{ github.sha }}" in publish
+    assert "persist-credentials: false" in publish
+    assert "--after-approval" in publish
     assert "Build" not in publish
 
 
@@ -483,3 +489,79 @@ def test_cpu_promotion_does_not_request_matlab_acceptance(monkeypatch, tmp_path)
                                  "b" * 40, wheel_dir, tmp_path,
                                  hashlib.sha256(wheel.read_bytes()).hexdigest())
     assert report["passed"]
+
+
+def _publication_attempt():
+    class API:
+        repo = "owner/repo"
+        def get(self, path):
+            assert path == "git/ref/tags/v5.3.1"
+            return {"object": {"type": "commit", "sha": "a" * 40}}
+    env = dict(GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_REF_TYPE="tag",
+               GITHUB_REF="refs/tags/v5.3.1", GITHUB_SHA="a" * 40,
+               GITHUB_REPOSITORY="owner/repo", GITHUB_RUN_ID="99", GITHUB_RUN_ATTEMPT="1")
+    return API(), env
+
+
+@pytest.mark.parametrize("key,value", [("GITHUB_EVENT_NAME", "workflow_run"),
+    ("GITHUB_REF_TYPE", "branch"), ("GITHUB_REF", "refs/heads/main"),
+    ("GITHUB_REF", "refs/tags/cubit-mesh-export-v2.2.7"),
+    ("GITHUB_SHA", "b" * 40), ("GITHUB_REPOSITORY", "fork/repo"),
+    ("GITHUB_RUN_ID", ""), ("GITHUB_RUN_ATTEMPT", "")])
+def test_actual_publication_identity_rejects_non_tag_or_missing_identity(key, value):
+    api, env = _publication_attempt()
+    env[key] = value
+    with pytest.raises(ValueError):
+        gate.publication_identity(api, env)
+
+
+@pytest.mark.parametrize("change", [None, "attempt", "wheel", "native", "source", "acceptance", "producer"])
+def test_approved_publication_rechecks_attempt_and_exact_artifacts(tmp_path, change):
+    api, env = _publication_attempt()
+    wheel_dir, native_dir = tmp_path / "dist", tmp_path / "native"
+    wheel_dir.mkdir(); native_dir.mkdir()
+    wheel = wheel_dir / "radia-5.3.1-cp312-cp312-win_amd64.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("radia/_radia_pybind.pyd", b"accepted native")
+    native = native_dir / "_radia_pybind.pyd"
+    native.write_bytes(b"accepted native")
+    expected = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    report = dict(passed=True, publication=gate.publication_identity(api, env),
+                  source_commit="a" * 40, version="5.3.1", ci_run=9,
+                  acceptance_commit="b" * 40, wheel_sha256=expected,
+                  native_bundle=gate.native_bundle(wheel_dir, native_dir))
+    if change == "attempt": env["GITHUB_RUN_ATTEMPT"] = "2"
+    if change == "wheel": wheel.write_bytes(b"substitution")
+    if change == "native": native.write_bytes(b"substitution")
+    if change == "source": report["source_commit"] = "c" * 40
+    if change == "acceptance": report["acceptance_commit"] = "c" * 40
+    if change == "producer": report["ci_run"] = 10
+    if change:
+        with pytest.raises((ValueError, zipfile.BadZipFile)):
+            gate.verify_publication(api, report, env, wheel_dir, native_dir, 9, "b" * 40, expected)
+    else:
+        gate.verify_publication(api, report, env, wheel_dir, native_dir, 9, "b" * 40, expected)
+
+
+def test_publication_cli_binds_before_and_after_approval(tmp_path, monkeypatch):
+    import sys
+    api, env = _publication_attempt()
+    for key, value in env.items(): monkeypatch.setenv(key, value)
+    monkeypatch.setattr(gate, "GitHub", lambda repo: api)
+    monkeypatch.setattr(gate, "verify_run", lambda *args: {"head_sha": "a" * 40})
+    wheel_dir, native_dir = tmp_path / "dist", tmp_path / "native"
+    wheel_dir.mkdir(); native_dir.mkdir()
+    wheel = wheel_dir / "radia-5.3.1-cp312-cp312-win_amd64.whl"
+    with zipfile.ZipFile(wheel, "w") as archive: archive.writestr("radia/_radia_pybind.pyd", b"accepted")
+    (native_dir / "_radia_pybind.pyd").write_bytes(b"accepted")
+    digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    monkeypatch.setattr(gate, "verify_artifact", lambda *args: dict(passed=True, source_commit="a" * 40, version="5.3.1", ci_run=9, acceptance_commit="b" * 40, wheel_sha256=digest))
+    args = ["gate", "--repo", api.repo, "--run-id", "9", "--acceptance-commit", "b" * 40, "--wheel-sha256", digest,
+            "--wheel-dir", str(wheel_dir), "--context-dir", str(tmp_path), "--native-dir", str(native_dir), "--output", str(tmp_path / "promotion.json")]
+    monkeypatch.setattr(sys, "argv", args)
+    gate.main()
+    monkeypatch.setattr(sys, "argv", args + ["--after-approval"])
+    gate.main()
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
+    with pytest.raises(ValueError, match="attempt identity changed"):
+        gate.main()

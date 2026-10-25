@@ -250,7 +250,6 @@ All 45 workflow jobs at the baseline are classified below. The table is a review
 | `radia.yml` | `fast-contracts` | light |
 | `release-radia-optuna.yml` | `publish` | GitHub-hosted (retain) |
 | `release.yml` | `upload-binaries` | GitHub-hosted (retain) |
-| `release.yml` | `publication-hold` | GitHub-hosted (retain) |
 | `release.yml` | `verify-promotion` | GitHub-hosted (retain) |
 | `release.yml` | `publish-pypi` | GitHub-hosted (retain) |
 | `sparsesolv.yml` | `ci-impact` | GitHub-hosted (retain) |
