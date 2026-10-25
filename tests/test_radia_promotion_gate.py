@@ -531,7 +531,11 @@ def test_approved_publication_rechecks_attempt_and_exact_artifacts(tmp_path, cha
                   acceptance_commit="b" * 40, wheel_sha256=expected,
                   native_bundle=gate.native_bundle(wheel_dir, native_dir))
     if change == "attempt": env["GITHUB_RUN_ATTEMPT"] = "2"
-    if change == "wheel": wheel.write_bytes(b"substitution")
+    if change == "wheel":
+        # Keep the ZIP and native bytes valid: only the approved whole-wheel
+        # hash, rather than BadZipFile or a native mismatch, must reject it.
+        with zipfile.ZipFile(wheel, "a") as archive:
+            archive.writestr("radia/substituted.py", b"# substituted source\n")
     if change == "native": native.write_bytes(b"substitution")
     if change == "source": report["source_commit"] = "c" * 40
     if change == "acceptance": report["acceptance_commit"] = "c" * 40
@@ -565,3 +569,26 @@ def test_publication_cli_binds_before_and_after_approval(tmp_path, monkeypatch):
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
     with pytest.raises(ValueError, match="attempt identity changed"):
         gate.main()
+
+
+@pytest.mark.parametrize("change,message", [
+    ("empty", "Missing or duplicate native"),
+    ("nonbinary", "Missing or duplicate native"),
+    ("different", "differs from accepted wheel"),
+    ("foreign", "absent from accepted wheel"),
+    ("duplicate", "Missing or duplicate native"),
+])
+def test_preapproval_native_bundle_rejects_unaccepted_bytes(tmp_path, change, message):
+    wheel_dir, native_dir = tmp_path / "dist", tmp_path / "native"
+    wheel_dir.mkdir(); native_dir.mkdir()
+    with zipfile.ZipFile(wheel_dir / "radia-5.3.1-cp312-cp312-win_amd64.whl", "w") as archive:
+        archive.writestr("radia/_radia_pybind.pyd", b"accepted native")
+    if change == "nonbinary": (native_dir / "README.txt").write_bytes(b"not a binary")
+    if change == "different": (native_dir / "_radia_pybind.pyd").write_bytes(b"substituted native")
+    if change == "foreign": (native_dir / "foreign.dll").write_bytes(b"foreign")
+    if change == "duplicate":
+        (native_dir / "sub").mkdir()
+        (native_dir / "_radia_pybind.pyd").write_bytes(b"accepted native")
+        (native_dir / "sub/_radia_pybind.pyd").write_bytes(b"accepted native")
+    with pytest.raises(ValueError, match=message):
+        gate.native_bundle(wheel_dir, native_dir)

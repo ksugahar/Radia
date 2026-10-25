@@ -559,3 +559,43 @@ def test_radia_publication_graph_has_one_approval_and_no_failure_bypass():
             audit = next(i for i,s in enumerate(job["steps"]) if "--after-approval" in s.get("run", ""))
             write = next(i for i,s in enumerate(job["steps"]) if s.get("uses", "").startswith("pypa/") or "upload_release_asset.py" in s.get("run", ""))
             assert audit < write
+
+
+def test_radia_publisher_fails_existing_and_uses_env_for_shell_inputs():
+    import re
+    import yaml
+    jobs = yaml.safe_load(RELEASE_WORKFLOWS[0].read_text(encoding="utf-8"))["jobs"]
+    publish = jobs["publish-pypi"]
+    assert publish["permissions"] == {"contents": "read", "id-token": "write"}
+    upload = next(s for s in publish["steps"] if s.get("uses", "").startswith("pypa/gh-action-pypi-publish"))
+    assert upload.get("with", {}).get("skip-existing", False) is False
+    for job in jobs.values():
+        for step in job["steps"]:
+            assert not re.search(r"\$\{\{\s*inputs(?:\.|\[)", step.get("run", "")), step.get("name", step)
+    native_upload = next(s for s in jobs["upload-binaries"]["steps"] if "upload_release_asset.py" in s.get("run", ""))["run"]
+    # This shell step must itself fail on no files, even if the upstream
+    # validator is accidentally weakened; never turn empty publication green.
+    assert 'test -n "$FILES"' in native_upload
+    assert not re.search(r"exit\s+0", native_upload)
+
+
+@pytest.mark.parametrize("mode,kind", [("120000", "blob"), ("160000", "commit"), ("100644", "commit")])
+def test_cubit_materialize_rejects_nonregular_tree_entities(tmp_path, monkeypatch, mode, kind):
+    import subprocess
+    _cubit_candidate(tmp_path, monkeypatch)
+    original = subprocess.check_output
+    def unsafe_tree(command, **kwargs):
+        result = original(command, **kwargs)
+        if command[:2] == ["git", "ls-tree"]:
+            result = result.replace(b"100644 blob ", (mode + " " + kind + " ").encode(), 1)
+        return result
+    monkeypatch.setattr(subprocess, "check_output", unsafe_tree)
+    runner = tmp_path / "runner"
+    runner.mkdir()
+    monkeypatch.setenv("RUNNER_TEMP", str(runner))
+    monkeypatch.setenv("GITHUB_ENV", str(tmp_path / "github-env"))
+    step = next(s for s in _cubit_workflow()["jobs"]["build-test"]["steps"] if s.get("name") == "Materialize exact tagged package bytes")
+    program = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    with pytest.raises(SystemExit, match="unsafe tagged source entry"):
+        exec(compile(program, "workflow-stage-source", "exec"), {"__name__": "__main__"})
+    assert not list((runner / "cubit-wheel-source").rglob("*"))

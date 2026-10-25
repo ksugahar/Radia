@@ -398,6 +398,7 @@ def native_bundle(wheel_dir, native_dir):
     with zipfile.ZipFile(wheels[0]) as archive:
         for path in binaries:
             data = path.read_bytes()
+            require("radia/" + path.name in archive.namelist(), "Native artifact absent from accepted wheel: " + path.name)
             require(data == archive.read("radia/" + path.name), "Native artifact differs from accepted wheel: " + path.name)
             result[path.relative_to(native_dir).as_posix()] = hashlib.sha256(data).hexdigest()
     return result
