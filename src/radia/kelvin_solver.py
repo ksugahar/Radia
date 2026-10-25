@@ -84,6 +84,68 @@ def _constrains_point_gauge(mesh, selector, dirichlet_bbbnd):
     return free_unconstrained - free_constrained > 0
 
 
+def _check_mixed_omega_component_gauges(mesh, spaces, reduced_materials, interface_boundary):
+    """Reject floating common constants using active vertex DoFs, not label strings.
+
+    This linear mesh/DoF connectivity check does not change the operator or
+    certify its full rank. Each potential is constant on its volume components;
+    active matching-trace constraints join the two potentials at the interface.
+    Callers retain ownership of the TaskManager region.
+    """
+    import ngsolve as ng
+
+    reduced, total, multiplier = spaces
+    parents, pinned = {}, set()
+    free = [space.FreeDofs() for space in (reduced, total)]
+    vertex_nodes = {}
+
+    def root(node):
+        while parents[node] != node:
+            parents[node] = parents[parents[node]]
+            node = parents[node]
+        return node
+
+    def join(nodes):
+        for node in nodes[1:]:
+            parents[root(node)] = root(nodes[0])
+
+    def vertex_node(block, vertex):
+        key = block, vertex.nr
+        if key in vertex_nodes:
+            return vertex_nodes[key]
+        dofs = [d for d in spaces[block].GetDofNrs(ng.NodeId(ng.VERTEX, vertex.nr))
+                if d >= 0]
+        if len(dofs) != 1:
+            raise ValueError("mixed Omega gauge check requires one active H1 vertex DoF")
+        node = block, dofs[0]
+        vertex_nodes[key] = node
+        return node
+
+    for element in mesh.Elements(ng.VOL):
+        block = 0 if element.mat in reduced_materials else 1
+        nodes = [vertex_node(block, vertex) for vertex in element.vertices]
+        for node in nodes:
+            parents.setdefault(node, node)
+            if not free[block][node[1]]:
+                pinned.add(node)
+        join(nodes)
+    multiplier_free = multiplier.FreeDofs()
+    for face in mesh.Elements(ng.BND):
+        if face.mat != interface_boundary or not any(
+                d >= 0 and multiplier_free[d] for d in multiplier.GetDofNrs(face)):
+            continue
+        for vertex in face.vertices:
+            nodes = [vertex_node(block, vertex) for block in (0, 1)]
+            if all(node in parents for node in nodes):
+                join(nodes)
+    anchored = {root(node) for node in pinned}
+    floating = {root(node) for node in parents} - anchored
+    if floating:
+        raise ValueError(
+            "mixed Omega finite-domain common constant is unconstrained: "
+            f"{len(floating)} connected component(s) lack an active point or surface gauge")
+
+
 def _assemble_and_solve(a_bf, f_lf, fes, inverse="sparsecholesky"):
     """Assemble and solve.  Caller MUST be inside `with TaskManager():`
     per CLAUDE.md "Caller Wraps, Helper Does NOT" (2026-05-27).
@@ -1756,6 +1818,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         **({"dirichlet": interface_multiplier_dirichlet_boundary}
            if interface_multiplier_dirichlet_boundary else {})))
     fes = fes_reduced * fes_total * fes_multiplier
+    if kelvin_selector is None:
+        _check_mixed_omega_component_gauges(
+            mesh, (fes_reduced, fes_total, fes_multiplier), reduced_set, interface_boundary)
     source_values = None
     if source_rhs_reduced is not None:
         source_values = np.asarray(source_rhs_reduced, dtype=float)
