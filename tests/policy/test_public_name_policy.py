@@ -111,3 +111,23 @@ def test_policy_workflow_does_not_expose_rules_to_forks_or_target_events():
     contract_step = next(s for s in data["jobs"]["repository-contracts"]["steps"]
                          if "--profile repo-contracts" in s.get("run", ""))
     assert contract_step["env"]["RADIA_PUBLIC_NAME_RULES_JSON"] == env
+
+
+@pytest.mark.parametrize("returncode,diagnostic", [(0, "PASS: checked"), (1, "sample.txt: text"), (1, "")])
+def test_parent_diagnostics_never_replay_child_mask_commands(monkeypatch, returncode, diagnostic):
+    from types import SimpleNamespace
+    spec = importlib.util.spec_from_file_location("mask_boundary_lint", ROOT / "tools/policy_lint.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    canary = "synthetic-criteria-mask"
+    child = SimpleNamespace(returncode=returncode,
+                            stdout="::add-mask::" + canary + "\n" + diagnostic, stderr="")
+    monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: child)
+    name, passed, detail = module.check_public_product_names()
+    assert name == "Policy 13: public product names"
+    assert passed is (returncode == 0)
+    assert "::add-mask::" not in detail and canary not in detail
+    if diagnostic:
+        assert detail == diagnostic
+    elif returncode:
+        assert detail == "checker failed without public diagnostics"

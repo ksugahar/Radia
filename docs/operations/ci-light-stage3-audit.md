@@ -335,7 +335,7 @@ package consumer remains separate. The publication-policy wrapper now loads
 reviewed external criteria through a generic checker, explicitly included in
 `audited_dynamic_sources`. No native build, solver or Office execution is added.
 The prior seal was reproduced from the checked base blobs before computing the
-new executable-closure seal: `3445e307a59991008702838ba2e46280f531f235747f5e7c90d2443a02708849`.
+new executable-closure seal: `373305577e2d0f2d77743741f09bd2b45d1d49e416fecfccf33f9af83a96f5e2`.
 Runner labels, requirements, source-only import rejection and the active profile
 budget are unchanged. The shared precheck executes the routing mutations and
 light source checks; reciprocal review confirms the revised closure.
