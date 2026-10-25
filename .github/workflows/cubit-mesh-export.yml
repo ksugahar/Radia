@@ -87,6 +87,9 @@ jobs:
   build-test:
     if: ${{ needs.ci-impact.outputs.required == 'true' && (true) }}
     needs: [ci-impact]
+    outputs:
+      wheel_artifact_id: ${{ steps.wheel-upload.outputs.artifact-id }}
+      audit_artifact_id: ${{ steps.audit-upload.outputs.artifact-id }}
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
@@ -279,45 +282,58 @@ jobs:
           retention-days: 30
 
       - name: Upload cubit-mesh-export wheel
+        id: wheel-upload
         uses: actions/upload-artifact@v4
         with:
           name: cubit-mesh-export-wheel
           path: packages/cubit-mesh-export/dist/*.whl
           if-no-files-found: error
 
-  publish:
-    needs: [ci-impact, build-test]
-    if: ${{ needs.ci-impact.outputs.required == 'true' && (github.ref_type == 'tag' && startsWith(github.ref_name, 'cubit-mesh-export-v')) }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Download wheel built by this tag CI
-        uses: actions/download-artifact@v4
-        with:
-          name: cubit-mesh-export-wheel
-          path: dist
-
-      - name: Verify wheel version matches the triggering tag
+      - name: Verify exact release identity before-approval
+        if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_type == 'tag' && startsWith(github.ref_name, 'cubit-mesh-export-v') }}
         shell: bash
+        env:
+          AUDIT_PHASE: before-approval
+          WHEEL_ARTIFACT_ID: ${{ steps.wheel-upload.outputs.artifact-id }}
+          GIT_TERMINAL_PROMPT: '0'
         run: |
           set -euo pipefail
-          mapfile -t wheels < <(find dist -maxdepth 1 -name 'cubit_mesh_export-*.whl')
-          if [[ "${#wheels[@]}" -ne 1 ]]; then
-            echo "::error::Expected exactly one cubit-mesh-export wheel, found ${#wheels[@]}"
-            exit 1
-          fi
-          expected="${GITHUB_REF_NAME#cubit-mesh-export-v}"
-          python3 - "${wheels[0]}" "$expected" <<'PY'
+          python - <<'PY'
+          import os, json, hashlib, subprocess, importlib.util, tomllib
+          import urllib.request, urllib.error
+          from pathlib import Path
+
+          def require(condition, message):
+              if not condition:
+                  raise SystemExit(message)
+
+          env = os.environ
+          ref = env['GITHUB_REF']
+          tag = env['GITHUB_REF_NAME']
+          sha = env['GITHUB_SHA']
+          require(env['GITHUB_EVENT_NAME'] in {'push', 'workflow_dispatch'}, 'release event must be tag push or tag dispatch')
+          require(env['GITHUB_REF_TYPE'] == 'tag' and ref == 'refs/tags/' + tag and tag.startswith('cubit-mesh-export-v'), 'publication requires exact Cubit tag ref')
+          require(len(sha) == 40 and all(c in '0123456789abcdef' for c in sha), 'invalid source SHA')
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, encoding='utf-8').strip()
+          require(head == sha, 'checkout does not match triggering tag source')
+          # Resolve annotated tags by their peeled commit; never trust a local stale tag.
+          remote = subprocess.check_output(['git', '-c', 'credential.helper=', 'ls-remote', '--exit-code', 'origin', ref, ref + '^{}'], text=True, encoding='utf-8')
+          refs = dict((name, value) for value, name in (line.split() for line in remote.splitlines()))
+          require(ref in refs and refs.get(ref + '^{}', refs[ref]) == sha, 'remote tag moved or differs from source')
+          expected = tag.removeprefix('cubit-mesh-export-v')
+          package = Path('packages/cubit-mesh-export')
+          project_version = tomllib.loads((package / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
+          require(expected == project_version, 'tag differs from source package version')
+          wheels = list(Path('dist').glob('*.whl'))
+          require(len(wheels) == 1 and wheels[0].name.startswith('cubit_mesh_export-'), 'expected exactly one Cubit wheel')
+          wheel = wheels[0]
           import email
           import pathlib
           import sys
           import zipfile
 
-          wheel = pathlib.Path(sys.argv[1])
-          expected = sys.argv[2]
+          wheel = pathlib.Path(wheel)
+          expected = expected
           with zipfile.ZipFile(wheel) as archive:
               names = archive.namelist()
               metadata_name = next(
@@ -351,10 +367,196 @@ jobs:
                       f"release wheel contains retired native token: {retired_token!r}"
                   )
           print(f"release wheel verified: {wheel.name} ({actual})")
+          with zipfile.ZipFile(wheel) as archive:
+              require(len(archive.namelist()) == len(set(archive.namelist())), 'duplicate wheel members')
+              manifest_bytes = archive.read('cubit_mesh_export/native_payloads.json')
+              manifest = json.loads(manifest_bytes)
+              source_manifest = json.loads((package / 'src/cubit_mesh_export/native_payloads.json').read_text(encoding='utf-8'))
+              require(manifest == source_manifest, 'wheel native manifest differs from tagged source')
+              require(metadata['Name'] == 'cubit-mesh-export', 'wrong wheel distribution')
+              for name in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd'):
+                  content = archive.read('cubit_mesh_export/' + name)
+                  evidence = manifest['payloads'][name]
+                  require(hashlib.sha256(content).hexdigest() == evidence['sha256'] and len(content) == evidence['size'], 'native payload hash/size differs: ' + name)
+              require(archive.read('cubit_mesh_export/cubit_mesh_export.ccm') == (package / 'src/cubit_mesh_export/cubit_mesh_export.ccm').read_bytes(), 'CCM differs from tagged source')
+          spec = importlib.util.spec_from_file_location('release_native_provenance', package / 'src/cubit_mesh_export/_native_provenance.py')
+          provenance = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(provenance)
+          digest, count = provenance.native_source_digest(Path.cwd())
+          require(manifest['source']['tree_sha256'] == digest and manifest['source']['file_count'] == count, 'native source digest differs')
+          require(bool(manifest['source']['commit']), 'native source provenance commit absent')
+          require(env['WHEEL_ARTIFACT_ID'].isdigit(), 'invalid immutable wheel artifact ID')
+          receipt = {'schema': 'cubit.release-audit.v1', 'repository': env['GITHUB_REPOSITORY'], 'ref': ref, 'source_sha': sha, 'run_id': env['GITHUB_RUN_ID'], 'run_attempt': env['GITHUB_RUN_ATTEMPT'], 'artifact_id': env['WHEEL_ARTIFACT_ID'], 'wheel': wheel.name, 'wheel_sha256': hashlib.sha256(wheel.read_bytes()).hexdigest(), 'native_manifest_sha256': hashlib.sha256(manifest_bytes).hexdigest()}
+          record = Path('audit/release-audit.json')
+          if env['AUDIT_PHASE'] == 'after-approval':
+              require(json.loads(record.read_text(encoding='utf-8')) == receipt, 'approved artifact/ref identity changed')
+          else:
+              require(env['AUDIT_PHASE'] == 'before-approval', 'unknown audit phase')
+          # Existing versions are failures, including an upload racing this check.
+          try:
+              with urllib.request.urlopen('https://pypi.org/pypi/cubit-mesh-export/' + expected + '/json', timeout=30):
+                  raise SystemExit('version already exists on PyPI')
+          except urllib.error.HTTPError as error:
+              if error.code != 404:
+                  raise
+          if env['AUDIT_PHASE'] == 'before-approval':
+              record.parent.mkdir(parents=True, exist_ok=True)
+              record.write_text(json.dumps(receipt, sort_keys=True, indent=2) + '\n', encoding='utf-8')
+          print('exact tag, source, wheel, native provenance and immutable identity verified')
           PY
+      - uses: actions/upload-artifact@v4
+        if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_type == 'tag' && startsWith(github.ref_name, 'cubit-mesh-export-v') }}
+        id: audit-upload
+        with:
+          name: cubit-release-audit
+          path: audit/release-audit.json
+          if-no-files-found: error
 
+
+  publish:
+    needs: [ci-impact, build-test]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_type == 'tag' && startsWith(github.ref_name, 'cubit-mesh-export-v') }}
+    environment: pypi
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download wheel built by this tag CI
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.build-test.outputs.wheel_artifact_id }}
+          merge-multiple: true
+          path: dist
+      - name: Download pre-approval audit
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.build-test.outputs.audit_artifact_id }}
+          merge-multiple: true
+          path: audit
+      - name: Verify exact release identity after-approval
+        shell: bash
+        env:
+          AUDIT_PHASE: after-approval
+          WHEEL_ARTIFACT_ID: ${{ needs.build-test.outputs.wheel_artifact_id }}
+          GIT_TERMINAL_PROMPT: '0'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, json, hashlib, subprocess, importlib.util, tomllib
+          import urllib.request, urllib.error
+          from pathlib import Path
+
+          def require(condition, message):
+              if not condition:
+                  raise SystemExit(message)
+
+          env = os.environ
+          ref = env['GITHUB_REF']
+          tag = env['GITHUB_REF_NAME']
+          sha = env['GITHUB_SHA']
+          require(env['GITHUB_EVENT_NAME'] in {'push', 'workflow_dispatch'}, 'release event must be tag push or tag dispatch')
+          require(env['GITHUB_REF_TYPE'] == 'tag' and ref == 'refs/tags/' + tag and tag.startswith('cubit-mesh-export-v'), 'publication requires exact Cubit tag ref')
+          require(len(sha) == 40 and all(c in '0123456789abcdef' for c in sha), 'invalid source SHA')
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, encoding='utf-8').strip()
+          require(head == sha, 'checkout does not match triggering tag source')
+          # Resolve annotated tags by their peeled commit; never trust a local stale tag.
+          remote = subprocess.check_output(['git', '-c', 'credential.helper=', 'ls-remote', '--exit-code', 'origin', ref, ref + '^{}'], text=True, encoding='utf-8')
+          refs = dict((name, value) for value, name in (line.split() for line in remote.splitlines()))
+          require(ref in refs and refs.get(ref + '^{}', refs[ref]) == sha, 'remote tag moved or differs from source')
+          expected = tag.removeprefix('cubit-mesh-export-v')
+          package = Path('packages/cubit-mesh-export')
+          project_version = tomllib.loads((package / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
+          require(expected == project_version, 'tag differs from source package version')
+          wheels = list(Path('dist').glob('*.whl'))
+          require(len(wheels) == 1 and wheels[0].name.startswith('cubit_mesh_export-'), 'expected exactly one Cubit wheel')
+          wheel = wheels[0]
+          import email
+          import pathlib
+          import sys
+          import zipfile
+
+          wheel = pathlib.Path(wheel)
+          expected = expected
+          with zipfile.ZipFile(wheel) as archive:
+              names = archive.namelist()
+              metadata_name = next(
+                  name for name in names if name.endswith(".dist-info/METADATA")
+              )
+              metadata = email.message_from_bytes(archive.read(metadata_name))
+              ccm = archive.read("cubit_mesh_export/cubit_mesh_export.ccm")
+          actual = metadata["Version"]
+          if actual != expected:
+              raise SystemExit(
+                  f"wheel/tag version mismatch: wheel={actual}, tag={expected}"
+              )
+          required = ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd",
+                      "cubit_gui/solver_ready_sample.jou",
+                      "cubit_gui/cubit_export_menu.py",
+                      "cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl",
+                      "native_payloads.json")
+          missing = [item for item in required if not any(name.endswith(item) for name in names)]
+          if missing:
+              raise SystemExit(f"release wheel lacks mandatory payloads: {missing}")
+          retired = ("radia_export_menu.py", "radia_export.svg",
+                     "radia_export_toolbar.ttb.tmpl", "ih_bem_sample.jou",
+                     "mcp/bootstrap.py")
+          leaked = [item for item in retired if any(name.endswith(item) for name in names)]
+          if leaked:
+              raise SystemExit(f"release wheel contains retired GUI payloads: {leaked}")
+          for retired_token in (b"CoilCommand", b"export jmag_nastran",
+                                b"RadiaPlugin", b"RADIA_LAUNCHER_CONFIG"):
+              if retired_token in ccm:
+                  raise SystemExit(
+                      f"release wheel contains retired native token: {retired_token!r}"
+                  )
+          print(f"release wheel verified: {wheel.name} ({actual})")
+          with zipfile.ZipFile(wheel) as archive:
+              require(len(archive.namelist()) == len(set(archive.namelist())), 'duplicate wheel members')
+              manifest_bytes = archive.read('cubit_mesh_export/native_payloads.json')
+              manifest = json.loads(manifest_bytes)
+              source_manifest = json.loads((package / 'src/cubit_mesh_export/native_payloads.json').read_text(encoding='utf-8'))
+              require(manifest == source_manifest, 'wheel native manifest differs from tagged source')
+              require(metadata['Name'] == 'cubit-mesh-export', 'wrong wheel distribution')
+              for name in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd'):
+                  content = archive.read('cubit_mesh_export/' + name)
+                  evidence = manifest['payloads'][name]
+                  require(hashlib.sha256(content).hexdigest() == evidence['sha256'] and len(content) == evidence['size'], 'native payload hash/size differs: ' + name)
+              require(archive.read('cubit_mesh_export/cubit_mesh_export.ccm') == (package / 'src/cubit_mesh_export/cubit_mesh_export.ccm').read_bytes(), 'CCM differs from tagged source')
+          spec = importlib.util.spec_from_file_location('release_native_provenance', package / 'src/cubit_mesh_export/_native_provenance.py')
+          provenance = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(provenance)
+          digest, count = provenance.native_source_digest(Path.cwd())
+          require(manifest['source']['tree_sha256'] == digest and manifest['source']['file_count'] == count, 'native source digest differs')
+          require(bool(manifest['source']['commit']), 'native source provenance commit absent')
+          require(env['WHEEL_ARTIFACT_ID'].isdigit(), 'invalid immutable wheel artifact ID')
+          receipt = {'schema': 'cubit.release-audit.v1', 'repository': env['GITHUB_REPOSITORY'], 'ref': ref, 'source_sha': sha, 'run_id': env['GITHUB_RUN_ID'], 'run_attempt': env['GITHUB_RUN_ATTEMPT'], 'artifact_id': env['WHEEL_ARTIFACT_ID'], 'wheel': wheel.name, 'wheel_sha256': hashlib.sha256(wheel.read_bytes()).hexdigest(), 'native_manifest_sha256': hashlib.sha256(manifest_bytes).hexdigest()}
+          record = Path('audit/release-audit.json')
+          if env['AUDIT_PHASE'] == 'after-approval':
+              require(json.loads(record.read_text(encoding='utf-8')) == receipt, 'approved artifact/ref identity changed')
+          else:
+              require(env['AUDIT_PHASE'] == 'before-approval', 'unknown audit phase')
+          # Existing versions are failures, including an upload racing this check.
+          try:
+              with urllib.request.urlopen('https://pypi.org/pypi/cubit-mesh-export/' + expected + '/json', timeout=30):
+                  raise SystemExit('version already exists on PyPI')
+          except urllib.error.HTTPError as error:
+              if error.code != 404:
+                  raise
+          if env['AUDIT_PHASE'] == 'before-approval':
+              record.parent.mkdir(parents=True, exist_ok=True)
+              record.write_text(json.dumps(receipt, sort_keys=True, indent=2) + '\n', encoding='utf-8')
+          print('exact tag, source, wheel, native provenance and immutable identity verified')
+          PY
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          skip-existing: true
