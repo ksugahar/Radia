@@ -122,6 +122,12 @@ def test_ordinary_build_preserves_signed_cubit_payload_bytes_and_mtimes(tmp_path
     package = project / "packages/cubit-mesh-export/src/cubit_mesh_export"
     raw = project / "src/cubit_plugin"
     package.mkdir(parents=True)
+    # Satisfy the unchanged required Radia-output checks; the ABI invocation
+    # is stubbed below, so these sentinels are never loaded as native code.
+    (project / "build-msvc").mkdir()
+    (project / "src/radia").mkdir(parents=True)
+    for name in ("_radia_pybind.cp312-win_amd64.pyd", "peec_matrices.cp312-win_amd64.pyd"):
+        (project / "build-msvc" / name).write_bytes(b"required Radia build-output sentinel")
     for directory in (raw / "build-pyd", raw / "build-ccm"):
         directory.mkdir(parents=True)
     files = [package / name for name in ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd", "native_payloads.json")]
