@@ -326,3 +326,16 @@ without solver execution, native compilation, MATLAB or GPU use. Source-only
 import rejection, runner labels, requirements and the active light budget remain
 unchanged. Recompute the executable-closure-v2 seal with `audit_digest` after
 integrating these sources; source contracts do not qualify native artifacts.
+
+
+## Independent equation-product retirement
+
+The equation product's workflows and routing entries are removed; its installed
+package consumer remains separate. The publication-policy wrapper now loads
+reviewed external criteria through a generic checker, explicitly included in
+`audited_dynamic_sources`. No native build, solver or Office execution is added.
+The prior seal was reproduced from the checked base blobs before computing the
+new executable-closure seal: `373305577e2d0f2d77743741f09bd2b45d1d49e416fecfccf33f9af83a96f5e2`.
+Runner labels, requirements, source-only import rejection and the active profile
+budget are unchanged. The shared precheck executes the routing mutations and
+light source checks; reciprocal review confirms the revised closure.

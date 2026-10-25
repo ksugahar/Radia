@@ -73,15 +73,3 @@ updates:
     ignore:
       # Pinned Optuna 5.0.0 is the sole oracle; see the Optuna policy.
       - dependency-name: "optuna"
-
-  - package-ecosystem: "pip"
-    directory: "/packages/eqnedit64"
-    schedule:
-      interval: "monthly"
-    labels:
-      - "dependencies"
-      - "python"
-      - "eqnedit64"
-    commit-message:
-      prefix: "chore(deps/eqnedit64):"
-    open-pull-requests-limit: 5

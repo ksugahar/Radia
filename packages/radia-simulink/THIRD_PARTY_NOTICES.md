@@ -57,8 +57,6 @@ and documentation tools. This inventory does not relicense dependencies.
 | cubit-mesh-export | gmsh | mesh-quality |
 | cubit-mesh-export | netCDF4 | sculpt |
 | cubit-mesh-export | youtube-transcript-api | youtube |
-| eqnedit64 | build | test |
-| eqnedit64 | pytest | test |
 | radia-mcp | mcp | runtime |
 | radia-mcp | tomlkit | maintenance |
 | radia-mcp | build123d | build123d |
