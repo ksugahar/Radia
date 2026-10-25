@@ -3312,14 +3312,6 @@
       "scope": "distribution",
       "native": false,
       "events": {
-        "workflow_run": {
-          "workflows": [
-            "Radia Native Release"
-          ],
-          "types": [
-            "completed"
-          ]
-        },
         "workflow_dispatch": {
           "inputs": {
             "ci_run_id": {
