@@ -472,11 +472,11 @@ These packages are separate from installing and using the Python CPU solver.
 
 ### Eqnedit64
 
-[Eqnedit64](https://github.com/ksugahar/eqnedit64) is an independently released Windows equation
+[Eqnedit64](https://github.com/ksugahar/EqnEdit64) is an independently released Windows equation
 editor with a browser edition and Python API. It connects structural input to
 UTF-8 TeX and editable Office Math or image export. See the
-[3.1.7 release](https://github.com/ksugahar/eqnedit64/releases/tag/v3.1.7)
-and [package documentation](https://github.com/ksugahar/eqnedit64/tree/main/python).
+[3.1.7 release](https://github.com/ksugahar/EqnEdit64/releases/tag/v3.1.7)
+and [package documentation](https://github.com/ksugahar/EqnEdit64/tree/main/python).
 
 ### Documentation and visualization
 
