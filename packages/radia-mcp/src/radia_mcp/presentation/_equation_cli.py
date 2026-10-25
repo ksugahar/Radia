@@ -1,7 +1,7 @@
 """Eqnedit64 command-line bridge and equation-product policy for presentations.
 
-The native and Web/JavaScript editions are both maintained under Radia's
-``tools/eqnedit64`` tree.  The laboratory homepage is the Web publication
+The native and Web/JavaScript editions are maintained in the independent
+``ksugahar/eqnedit64`` repository.  The laboratory homepage is the Web publication
 surface; the native executable remains the Windows rendering and clipboard
 backend for ``radia_mcp.presentation``.
 """
@@ -34,22 +34,22 @@ def presentation_equation_policy() -> dict:
     return {
         "schema": "radia-mcp.presentation-equation-policy.v4",
         "source_of_truth": {
-            "native": "tools/eqnedit64/src",
-            "web": "tools/eqnedit64/web/equation-editor.js",
-            "web_mount": "tools/eqnedit64/web/equation-editor.fragment.html",
-            "parity": "tools/eqnedit64/docs/PRODUCT_PARITY.md",
-            "distribution": "packages/eqnedit64",
+            "native": "https://github.com/ksugahar/eqnedit64/tree/main/src",
+            "web": "https://github.com/ksugahar/eqnedit64/blob/main/web/equation-editor.js",
+            "web_mount": "https://github.com/ksugahar/eqnedit64/blob/main/web/equation-editor.fragment.html",
+            "parity": "https://github.com/ksugahar/eqnedit64/blob/main/docs/PRODUCT_PARITY.md",
+            "distribution": "https://pypi.org/project/eqnedit64/",
         },
         "publication": {
             "web": "Sugahara Laboratory homepage",
             "python": "PyPI package eqnedit64",
-            "native": "matching ksugahar/Radia Eqnedit64 GitHub Release",
+            "native": "matching ksugahar/eqnedit64 GitHub Release",
             "integration": "optional radia-mcp.presentation consumer adapter",
         },
         "web_publication_contract": {
-            "mode": "build-time import from Radia checkout",
-            "repository": "https://github.com/ksugahar/Radia",
-            "checkout_environment_variable": "RADIA_REPOSITORY",
+            "mode": "build-time import from an exact Eqnedit64 tag",
+            "repository": "https://github.com/ksugahar/eqnedit64",
+            "checkout_environment_variable": "EQNEDIT64_REPOSITORY",
             "integrity": "SHA-256 equality after copy",
             "homepage_source_copy": False,
             "release_gate": "site_builder/tools/run_eqnedit64_release_qa.ps1",
@@ -104,12 +104,7 @@ def _candidate_executables(explicit: str | None) -> Iterable[Path]:
     found = shutil.which("Eqnedit64.exe") or shutil.which("Eqnedit64")
     if found:
         yield Path(found)
-    # Editable Radia checkout: find tools/eqnedit64 without depending on a
-    # drive letter or on the laboratory archive path.
-    for parent in Path(__file__).resolve().parents:
-        component = parent / "tools" / "eqnedit64"
-        yield component / "dist" / "Eqnedit64.exe"
-        yield component / "build" / "Eqnedit64.exe"
+
 
 
 def _resolve_executable(explicit: str | None) -> Path:
@@ -125,7 +120,7 @@ def _resolve_executable(explicit: str | None) -> Path:
     raise FileNotFoundError(
         "Eqnedit64.exe was not found. Pass executable=..., set "
         "EQNEDIT64_EXE, install the independent eqnedit64 PyPI package, place "
-        "it on PATH, or build tools/eqnedit64."
+        "it on PATH."
     )
 
 

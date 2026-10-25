@@ -47,7 +47,7 @@ hardware identity and concrete paths remain in the private operator record.
 
 Optuna `build-test` actually calls mexcuda: its generic name does not make it
 lightweight. Existing GitHub-hosted jobs remain GitHub-hosted, including impact
-selectors, policy, MCP minimal/selftests, Cubit native packaging, Eqnedit64
+selectors, policy, MCP minimal/selftests, Cubit native packaging,
 Windows/Web jobs and publication jobs. They do not need another local runner.
 See the complete baseline job inventory below; unknown/new jobs require a
 classification instead of inheriting the legacy generic label.
@@ -228,16 +228,6 @@ All 45 workflow jobs at the baseline are classified below. The table is a review
 | `cubit-mesh-export.yml` | `ci-impact` | GitHub-hosted (retain) |
 | `cubit-mesh-export.yml` | `build-test` | GitHub-hosted (retain) |
 | `cubit-mesh-export.yml` | `publish` | GitHub-hosted (retain) |
-| `eqnedit64.yml` | `ci-impact` | GitHub-hosted (retain) |
-| `eqnedit64.yml` | `docs` | GitHub-hosted (retain) |
-| `eqnedit64.yml` | `web` | GitHub-hosted (retain) |
-| `eqnedit64.yml` | `build-test` | GitHub-hosted (retain) |
-| `eqnedit64.yml` | `font-boundary-diagnostic` | GitHub-hosted (retain) |
-| `eqnedit64.yml` | `font-dump-build` | GitHub-hosted (retain) |
-| `eqnedit64.yml` | `font-dump-trial` | GitHub-hosted (retain) |
-| `eqnedit64.yml` | `font-probe-build` | GitHub-hosted (retain) |
-| `eqnedit64.yml` | `font-probe-trial` | GitHub-hosted (retain) |
-| `eqnedit64.yml` | `font-prefix-trial` | GitHub-hosted (retain) |
 | `ltspice-data-safety.yml` | `ci-impact` | GitHub-hosted (retain) |
 | `ltspice-data-safety.yml` | `matlab-data-contracts` | MATLAB/GPU |
 | `policy-lint.yml` | `policy-checks` | GitHub-hosted (retain) |
@@ -258,10 +248,6 @@ All 45 workflow jobs at the baseline are classified below. The table is a review
 | `radia-optuna.yml` | `installed-wheel-matlab-e2e` | MATLAB/GPU |
 | `radia.yml` | `ci-impact` | GitHub-hosted (retain) |
 | `radia.yml` | `fast-contracts` | light |
-| `release-eqnedit64-pypi.yml` | `qualify` | GitHub-hosted (retain) |
-| `release-eqnedit64-pypi.yml` | `signed-standalone` | GitHub-hosted (retain) |
-| `release-eqnedit64-pypi.yml` | `build-wheels` | GitHub-hosted (retain) |
-| `release-eqnedit64-pypi.yml` | `publish` | GitHub-hosted (retain) |
 | `release-radia-optuna.yml` | `publish` | GitHub-hosted (retain) |
 | `release.yml` | `upload-binaries` | GitHub-hosted (retain) |
 | `release.yml` | `publication-hold` | GitHub-hosted (retain) |
@@ -269,3 +255,6 @@ All 45 workflow jobs at the baseline are classified below. The table is a review
 | `release.yml` | `publish-pypi` | GitHub-hosted (retain) |
 | `sparsesolv.yml` | `ci-impact` | GitHub-hosted (retain) |
 | `sparsesolv.yml` | `ams-regression` | native |
+
+Eqnedit64 source and hosted release workflows are owned by the independent
+`ksugahar/eqnedit64` repository, outside Radia runner ownership.

@@ -23,11 +23,7 @@ and [release-dual contract](../../../packages/radia-mcp/docs/operations/mcp-runt
 - mdx1 and mdx2 are the priority CI runners and MATLAB compute hosts. CI builds
   in isolated per-run environments.
 - hibino runs long optimization and validation jobs when available.
-- No workflow selects a LAB runner. The EqnEdit64 release lane is GitHub-hosted
-  end to end: the signed executable reaches it as an asset of the
-  eqnedit64-staging release, staged by sync_to_o.ps1 alongside the O: update. A
-  runner service runs as NETWORK SERVICE and can read neither O: nor the
-  workgroup share, and a LAB runner would also inherit Radia's heavy builds.
+- No workflow selects a retired runner. Eqnedit64 publication belongs to its independent repository.
 
 ## Supported operations
 

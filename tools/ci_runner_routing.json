@@ -32,56 +32,6 @@
       "target": "github-hosted",
       "legacy_100": false
     },
-    "eqnedit64.yml:ci-impact": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:docs": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:web": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:build-test": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:font-boundary-diagnostic": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:font-dump-build": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:font-dump-trial": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:font-probe-build": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:font-probe-trial": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "eqnedit64.yml:font-prefix-trial": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
     "ltspice-data-safety.yml:ci-impact": {
       "owner": "radia-simulink",
       "target": "github-hosted",
@@ -182,26 +132,6 @@
       "target": "ci-light",
       "legacy_100": false
     },
-    "release-eqnedit64-pypi.yml:qualify": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "release-eqnedit64-pypi.yml:signed-standalone": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "release-eqnedit64-pypi.yml:build-wheels": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
-    "release-eqnedit64-pypi.yml:publish": {
-      "owner": "eqnedit64",
-      "target": "github-hosted",
-      "legacy_100": false
-    },
     "release-radia-optuna.yml:publish": {
       "owner": "radia-optuna",
       "target": "github-hosted",
@@ -283,6 +213,7 @@
         "src/radia/ih_heat_boundaries.py",
         "validation_test/omega_quadrature/assess_plateau.py",
         "tools/policy_lint.py",
+        "tools/check_public_names.py",
         "tools/verify_radia_promotion.py",
         "src/radia/_residual_gate.py",
         "validation_test/surface_rom_team10/transient.py",
@@ -303,7 +234,7 @@
         "tools/ci_numerical_runtime.py",
         "tools/ci_numerical_inputs.json"
       ],
-      "audit_sha256": "6f4bee4a8b292e9f8b7450fc1dd81d3bd724202e655987c31b8216852e9da9f6",
+      "audit_sha256": "373305577e2d0f2d77743741f09bd2b45d1d49e416fecfccf33f9af83a96f5e2",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

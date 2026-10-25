@@ -1,6 +1,6 @@
 ---
 name: build
-description: Build Radia Python or standalone MATLAB MEX artifacts from the selected checkout using current Build.ps1, without changing running editable installations. Route Eqnedit64 publication to release-eqnedit64.
+description: Build Radia Python or standalone MATLAB MEX artifacts from the selected checkout using current Build.ps1, without changing running editable installations.
 ---
 
 # Build Radia
@@ -67,6 +67,6 @@ Use Build.ps1's current propagation paths, not historical .ccl/plugin recipes.
   it must not acquire Radia/NGSolve/MKL dependencies. Use the package mexcuda recipe for GPU numerical kernels and CPU host control.
   Use bounded OpenMP for suitable parallel host work and retain serial
   state management and ordered random consumption.
-- Eqnedit64 uses the tracked release-eqnedit64 skill and current build scripts.
+- Eqnedit64 is maintained and released in its independent repository.
 - For sparsesolv inspect the current in-repository CMake integration. Do not
   use the retired standalone repository or copy DLLs into global site-packages.
