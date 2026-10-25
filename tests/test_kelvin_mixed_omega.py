@@ -117,23 +117,52 @@ def _two_region_mesh(maxh):
     return ng.Mesh(OCCGeometry(Glue([reduced, total])).GenerateMesh(maxh=maxh))
 
 
-def test_mixed_omega_symmetry_potential_boundaries_constrain_both_spaces():
+def _symmetry_potential_mesh(offsets=(0.0,)):
     from netgen.occ import Box, Glue, OCCGeometry, Pnt, X, Y
+    import ngsolve as ng
+
+    bodies = []
+    for offset in offsets:
+        reduced = Box(Pnt(offset - 1, -1, -1), Pnt(offset, 1, 1))
+        reduced.mat("reduced")
+        reduced.faces.name = "outer"
+        reduced.faces.Max(X).name = "source_total_interface"
+        reduced.faces.Max(Y).name = "norm_boundary"
+        total = Box(Pnt(offset, -1, -1), Pnt(offset + 1, 1, 1))
+        total.mat("total")
+        total.faces.name = "outer"
+        total.faces.Min(X).name = "source_total_interface"
+        total.faces.Max(Y).name = "norm_boundary"
+        bodies.extend((reduced, total))
+    return ng.Mesh(OCCGeometry(Glue(bodies)).GenerateMesh(maxh=0.7))
+
+
+def _add_symmetry_point_gauges(mesh, offsets):
+    import ngsolve as ng
+    from netgen.meshing import Element0D, PointId
+
+    first = len(mesh.GetBBBoundaries()) + 1
+    for index, offset in enumerate(offsets, first):
+        vertex = next(v for v in mesh.vertices
+                      if tuple(v.point) == (offset + 1, -1, -1))
+        mesh.ngmesh.Add(Element0D(PointId(vertex.nr + 1), index=index))
+        mesh.ngmesh.SetCD3Name(index, "GND")
+    return ng.Mesh(mesh.ngmesh)
+
+
+def test_mixed_omega_symmetry_potential_boundaries_constrain_both_spaces():
+    """Guards: both essential spaces. Assumes: a real point fixes the natural gauge."""
     import ngsolve as ng
     from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
 
-    reduced = Box(Pnt(-1, -1, -1), Pnt(0, 1, 1))
-    reduced.mat("reduced")
-    reduced.faces.name = "outer"
-    reduced.faces.Max(X).name = "source_total_interface"
-    reduced.faces.Max(Y).name = "norm_boundary"
-    total = Box(Pnt(0, -1, -1), Pnt(1, 1, 1))
-    total.mat("total")
-    total.faces.name = "outer"
-    total.faces.Min(X).name = "source_total_interface"
-    total.faces.Max(Y).name = "norm_boundary"
-    mesh = ng.Mesh(OCCGeometry(Glue([reduced, total])).GenerateMesh(maxh=0.7))
+    mesh = _add_symmetry_point_gauges(_symmetry_potential_mesh(), (0.0,))
     source = ng.CoefficientFunction((0.0, 0.0, 0.0))
+    with ng.TaskManager():
+        baseline = ng.Compress(ng.Periodic(ng.H1(
+            mesh, order=1, definedon=mesh.Materials("total"))))
+        gauged = ng.Compress(ng.Periodic(ng.H1(
+            mesh, order=1, definedon=mesh.Materials("total"), dirichlet_bbbnd="GND")))
+    assert sum(baseline.FreeDofs()) - sum(gauged.FreeDofs()) == 1
 
     with ng.TaskManager():
         natural = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
@@ -141,7 +170,7 @@ def test_mixed_omega_symmetry_potential_boundaries_constrain_both_spaces():
             mu_r_by_material={"reduced": 1.0, "total": 1.0},
             reduced_materials=("reduced",), total_materials=("total",),
             interface_boundary="source_total_interface", order=1,
-            dirichlet_bbbnd="outer")
+            dirichlet_bbbnd="GND")
         fixed = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh, source, 0.0, 1.0, (3.0, 0.0, 0.0),
             mu_r_by_material={"reduced": 1.0, "total": 1.0},
@@ -185,6 +214,29 @@ def test_mixed_omega_symmetry_potential_boundaries_constrain_both_spaces():
             - np.asarray(loaded["H_cf"](mesh(*point)))) < 1e-9
 
 
+@pytest.mark.parametrize("offsets,gauged", [((0.0,), ()), ((0.0, 4.0), (0.0,))])
+def test_mixed_omega_rejects_floating_components_before_assembly(monkeypatch, offsets, gauged):
+    """Guards: effective gauge per component. Assumes: P1 matching box traces."""
+    import ngsolve as ng
+    import radia.kelvin_solver as solver
+
+    mesh = _symmetry_potential_mesh(offsets)
+    if gauged:
+        mesh = _add_symmetry_point_gauges(mesh, gauged)
+
+    def must_not_assemble(*args, **kwargs):
+        raise AssertionError("floating components reached assembly instead of the gauge guard")
+
+    monkeypatch.setattr(solver, "BilinearForm", must_not_assemble)
+    with ng.TaskManager(), pytest.raises(ValueError, match="common constant.*1 connected"):
+        solver.solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh, ng.CF((0.0, 0.0, 0.0)), 0.0, 1.0, (3.0, 0.0, 0.0),
+            mu_r_by_material={"reduced": 1.0, "total": 1.0},
+            reduced_materials=("reduced",), total_materials=("total",),
+            interface_boundary="source_total_interface", order=1,
+            dirichlet_bbbnd="GND" if gauged else "outer")
+
+
 def test_mixed_total_reduced_omega_keeps_source_out_of_high_mu_total_region():
     """The interface jump retains a reduced source without iron cancellation."""
     import ngsolve as ng
@@ -193,7 +245,7 @@ def test_mixed_total_reduced_omega_keeps_source_out_of_high_mu_total_region():
         solve_magnetostatic_mixed_total_reduced_omega_kelvin,
     )
 
-    mesh = _two_region_mesh(maxh=0.32)
+    mesh = _add_symmetry_point_gauges(_two_region_mesh(maxh=0.32), (0.0,))
     r_x = ng.x - 2.5
     r2 = r_x * r_x + ng.y * ng.y + ng.z * ng.z
     h_gradient = ng.CoefficientFunction((
@@ -220,7 +272,7 @@ def test_mixed_total_reduced_omega_keeps_source_out_of_high_mu_total_region():
             mu_r_by_material={"reduced": 1.0, "total": 1000.0},
             reduced_materials=("reduced",), total_materials=("total",),
             interface_boundary="source_total_interface", order=2,
-            dirichlet_bbbnd="outer", phase_callback=phases.append)
+            dirichlet_bbbnd="GND", phase_callback=phases.append)
     assert source_trace["relative_tangential_residual"] < 0.03
     names = ["matrix_assembly", "source_rhs_assembly", "factorization", "backsolve"]
     assert [event["phase"] for event in phases if event["event"] == "complete"] == names
@@ -368,7 +420,7 @@ def test_mixed_omega_accepts_the_total_hodge_source_components():
         solve_magnetostatic_mixed_total_reduced_omega_kelvin,
     )
 
-    mesh = _two_region_mesh(maxh=0.55)
+    mesh = _add_symmetry_point_gauges(_two_region_mesh(maxh=0.55), (0.0,))
     source_h = ng.CoefficientFunction((-1.0, 0.0, 0.0))
     with ng.TaskManager():
         source = project_source_total_hodge(
@@ -384,7 +436,7 @@ def test_mixed_omega_accepts_the_total_hodge_source_components():
             total_materials=("total",),
             interface_boundary="source_total_interface",
             order=1,
-            dirichlet_bbbnd="outer",
+            dirichlet_bbbnd="GND",
             total_source_h=source["harmonic_field"],
             total_source_materials=("total",),
         )
@@ -399,13 +451,13 @@ def test_mixed_omega_accepts_preassembled_reduced_source_load():
     import ngsolve as ng
     from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
 
-    mesh = _two_region_mesh(maxh=0.55)
+    mesh = _add_symmetry_point_gauges(_two_region_mesh(maxh=0.55), (0.0,))
     source_h = ng.CoefficientFunction((ng.x * ng.x, ng.y, ng.z))
     trace = 0.0
     args = dict(mu_r_by_material={"reduced": 1.0, "total": 2.0},
                 reduced_materials=("reduced",), total_materials=("total",),
                 interface_boundary="source_total_interface", order=1,
-                dirichlet_bbbnd="outer", return_system=True)
+                dirichlet_bbbnd="GND", return_system=True)
     with ng.TaskManager():
         original = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh, source_h, trace, 1.0, (3.0, 0.0, 0.0), **args)
@@ -583,7 +635,7 @@ def test_mixed_omega_prescribed_reduced_normal_flux_recovers_uniform_source():
     import ngsolve as ng
     from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
 
-    mesh = _two_region_mesh(maxh=0.55)
+    mesh = _add_symmetry_point_gauges(_two_region_mesh(maxh=0.55), (0.0,))
     source_h = ng.CoefficientFunction((0., 0., 1.))
     flux = (4e-7 * np.pi) * ng.InnerProduct(source_h, ng.specialcf.normal(3))
     with ng.TaskManager():
@@ -592,7 +644,7 @@ def test_mixed_omega_prescribed_reduced_normal_flux_recovers_uniform_source():
             mu_r_by_material={"reduced": 1., "total": 1.},
             reduced_materials=("reduced",), total_materials=("total",),
             interface_boundary="source_total_interface", order=1,
-            dirichlet_bbbnd="outer", kelvin_mats=(),
+            dirichlet_bbbnd="GND", kelvin_mats=(),
             reduced_normal_flux=flux, reduced_flux_boundary="outer",
             total_normal_flux=flux, total_flux_boundary="outer")
     for point in ((-.5, .1, .1), (.5, -.1, -.1)):
@@ -729,13 +781,14 @@ def test_sparse_direct_saddle_solve_satisfies_original_system(order):
     import ngsolve as ng
     from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
     mesh, source, potential, _ = _picard_case(maxh=0.7)
+    mesh = _add_symmetry_point_gauges(mesh, (0.0,))
     with ng.TaskManager():
         result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh, source, potential, 1., (3., 0., 0.),
             mu_r_by_material={"reduced": 1., "total": 1000.},
             reduced_materials=("reduced",), total_materials=("total",),
             interface_boundary="source_total_interface", order=order,
-            dirichlet_bbbnd="outer", inverse="sparsecholesky", return_system=True)
+            dirichlet_bbbnd="GND", inverse="sparsecholesky", return_system=True)
     assert np.isfinite(result["solution"].vec.FV().NumPy()).all()
     assert result["linear_residual"]["free_dofs"]["relative"] < 1e-8
     # A manufactured full-system RHS exercises nonzero multiplier loads and
