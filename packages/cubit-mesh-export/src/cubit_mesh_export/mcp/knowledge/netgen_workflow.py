@@ -790,7 +790,8 @@ mesh = Mesh(vol_path)
 4. Uses **CallbackGeometry** with ACIS callbacks (C++ static link):
    - `project_func`: Project point onto Cubit surface (ACIS closest_point_trimmed)
    - `normal_func`: Surface normal at a point (ACIS normal_at)
-   - `edge_project_func`: Project point onto Cubit curve (ACIS curve.closest_point_trimmed)
+   - `edge_project_func(edgenr, surfnr1, surfnr2, x, y, z)`: project onto the
+     exact Cubit curve identified by Netgen's geometric EdgeNr (ACIS curve.closest_point_trimmed)
 5. Calls `BuildCurvedElements(order)`:
    - Surface nodes: projected via `PointBetween` (surface callback)
    - Edge nodes (on curves between surfaces): projected via `PointBetweenEdge` (curve callback)
@@ -801,11 +802,12 @@ mesh = Mesh(vol_path)
 
 - **1D segments are required**: Without them, `BuildCurvedElements` does not set
   `use_edge[edgenr]=1` and edge curving is skipped entirely.
-- **surfnr1/surfnr2 must be 0-based** FD indices (not -1). BuildCurvedElements passes
-  these directly to `PointBetweenEdge` as surfi1/surfi2.
-- **CallbackGeometry receives 0-based surfnr**: The `PointBetweenEdge` implementation
-  must check `surfi >= 0` (not `> 0`) and convert to 1-based before calling
-  `edge_project_func` (which uses 1-based Cubit surface/curve indices).
+- **surfnr1/surfnr2 are 1-based FaceDescriptor indices** in the current Netgen API.
+  The geometric `EdgeDescriptor.EdgeNr()` is passed separately to projection,
+  interpolation and tangent callbacks; it is not the descriptor table index.
+- **Curve identity is mandatory**: two split smooth surfaces can share multiple
+  distinct curves. Resolve the geometric edge to its actual Cubit curve, reject
+  unknown/ambiguous identities, and use the RefEdge tangent on smooth seams.
 - **Without edge snapping**: Sphere (1 surface, no edges) works perfectly, but
   cylinder (3 surfaces, 2 edges) area does not p-converge (stuck at -0.4%).
 - **With edge snapping**: Both sphere and cylinder converge to 1e-6% at p=5.

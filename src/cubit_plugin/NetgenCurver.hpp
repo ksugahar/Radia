@@ -31,6 +31,7 @@ namespace netgen {
   class CallbackGeometry;
   class NetgenGeometry;
 }
+namespace cubit_mesh_export { class CurveIdentity; }
 
 // Edge key for deduplication (same as HighOrderMesh)
 struct HoEdgeKey {
@@ -98,6 +99,11 @@ public:
   // Reads linear mesh from MeshData; geometry queries via CubitInterface.
   // Returns false on failure.
   bool build(const MeshData &md, int order);
+
+  // Shared production mapping entry; also exercised without loading Cubit CAD.
+  static cubit_mesh_export::CurveIdentity curve_identities(
+      const netgen::Mesh & mesh, const std::unordered_map<int, int> & curve_descriptors);
+  std::string edge_diagnostics_json() const;
 
   // Total node count (original + high-order nodes)
   int get_num_nodes() const { return total_nodes_; }
@@ -220,18 +226,20 @@ private:
   mutable long diag_edge_calls_ = 0;
   mutable long diag_edge_rejects_ = 0;
   mutable double diag_edge_max_disp_ = 0.0;
-  // Reject thresholds (mm). If projection displaces the query point by more
-  // than this, fall back to identity (linear interpolation will pick up the
-  // edge in the final pass).
+  mutable long diag_edge_failures_ = 0;
+  mutable std::string diag_edge_worst_;
+  std::string last_error_;
+  // Reject thresholds in the CAD model's length units; no unit conversion.
+  // Known-edge reprojection beyond edge_reject_threshold_ fails the export.
+  // Arc interpolation with displacement greater than its chord also fails.
+  // Neither case substitutes identity or linear interpolation (user decision
+  // 2026-10-24). Surface projection rejection has its separate policy below.
   //
-  // Surface threshold is tight because wrong-side projections on thin wire
-  // cross-sections (full diameter ~6.3 mm) must be caught; raising to 5 mm
-  // blows volume up +13%.
-  //
-  // Edge/curve threshold is *also* tight on 3turnCoil: accepting chord
-  // midpoints that project more than ~1.5 mm away routinely picks up
-  // cross-curve jumps (6.3 mm = full wire cross-section). With edge
-  // threshold at 10 mm: volume +25.6%. At 1.5 mm: -0.80%.
+  // Historical 3turnCoil provenance (millimetre CAD model, former identity
+  // fallback): a surface threshold of 5 mm produced +13% volume; an edge
+  // threshold of 10 mm produced +25.6%, and 1.5 mm produced -0.80%.
+  // Wire cross-section diameter was about 6.3 mm. These historical fallback
+  // results do not certify the current fail-loud export path.
   double project_reject_threshold_ = 1.5;
   double edge_reject_threshold_ = 1.5;
 

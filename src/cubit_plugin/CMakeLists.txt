@@ -266,6 +266,30 @@ if(pybind11_FOUND AND HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
   install(TARGETS cubit_mesh_curver
       LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/plugins"
   )
+  option(CUBIT_CALLBACK_CONTRACT_TESTS "Build native geometry callback contracts" OFF)
+  if(CUBIT_CALLBACK_CONTRACT_TESTS)
+    enable_testing()
+    add_executable(cubit_callback_contract tests/callback_curve_identity.cpp callbackgeom.cpp NetgenCurver.cpp)
+    target_compile_features(cubit_callback_contract PRIVATE cxx_std_17)
+    target_include_directories(cubit_callback_contract PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}" "${NETGEN_DIR}/include" "${NETGEN_DIR}/include/include")
+    target_compile_definitions(cubit_callback_contract PRIVATE HAVE_NETGEN CUBIT_MESH_EXPORT_MAPPING_CONTRACT_ONLY)
+    target_link_libraries(cubit_callback_contract PRIVATE netgen::nglib netgen::ngcore)
+    add_test(NAME cubit_callback_curve_identity COMMAND cubit_callback_contract)
+    # Native executables do not run netgen.__init__'s OCC/delvewheel preload.
+    # Discover the exact installed package DLL locations, without importing CAD.
+    execute_process(COMMAND "${Python3_EXECUTABLE}" -c
+      "import importlib.metadata as m, pathlib, sys; roots={str(pathlib.Path(f.locate()).resolve().parent) for f in m.files('netgen-occt') if f.name.lower().endswith('.dll')}; roots.add(sys.base_prefix); print(';'.join(sorted(roots)))"
+      OUTPUT_VARIABLE CALLBACK_RUNTIME_DIRS OUTPUT_STRIP_TRAILING_WHITESPACE
+      RESULT_VARIABLE CALLBACK_RUNTIME_STATUS)
+    if(NOT CALLBACK_RUNTIME_STATUS EQUAL 0)
+      message(FATAL_ERROR "Cannot discover Netgen/OCC contract runtime DLL directories")
+    endif()
+    set(CALLBACK_RUNTIME_PATH "${NETGEN_DIR};${NETGEN_DIR}/../netgen_mesher.libs;${CALLBACK_RUNTIME_DIRS};$ENV{PATH}")
+    string(REPLACE ";" "\\;" CALLBACK_RUNTIME_PATH "${CALLBACK_RUNTIME_PATH}")
+    set_tests_properties(cubit_callback_curve_identity PROPERTIES
+      ENVIRONMENT "PATH=${CALLBACK_RUNTIME_PATH}" TIMEOUT 120)
+  endif()
 elseif(pybind11_FOUND AND NOT HAVE_NETGEN)
   message(STATUS "pybind11 found but Netgen missing: skipping cubit_mesh_curver")
 else()

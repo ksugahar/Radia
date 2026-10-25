@@ -1,11 +1,32 @@
 #include "NetgenCurver.hpp"
-#include "MeshData.hpp"
 
 #ifdef HAVE_NETGEN
 
 // Include Netgen BEFORE Cubit to manage namespace conflicts
 // Netgen defines: netgen::QUAD, netgen::HEX, netgen::PYRAMID, netgen::Surface
 #include <meshing/meshing.hpp>
+#include "CurveIdentity.hpp"
+
+cubit_mesh_export::CurveIdentity NetgenCurver::curve_identities(
+    const netgen::Mesh & mesh, const std::unordered_map<int, int> & curve_descriptors)
+{
+  cubit_mesh_export::CurveIdentity bindings;
+  for (const auto & entry : curve_descriptors) {
+    const int descriptor = entry.second;
+    if (descriptor < 1 || descriptor > mesh.EdgeDescriptors().Size())
+      throw std::invalid_argument("Cubit curve " + std::to_string(entry.first) +
+          " has invalid Netgen descriptor " + std::to_string(descriptor));
+    const auto & ed = mesh.GetEdgeDescriptor(descriptor);
+    bindings.add(ed.EdgeNr(), {descriptor, entry.first, ed.SurfNr(0), ed.SurfNr(1)});
+  }
+  return bindings;
+}
+
+// Compile the SAME production mapping into the license-free contract binary.
+// CAD-dependent export code is not linked or replaced with a test imitation.
+#ifndef CUBIT_MESH_EXPORT_MAPPING_CONTRACT_ONLY
+
+#include "MeshData.hpp"
 #include "callbackgeom.hpp"
 #include "NetgenGeometricRefit.hpp"
 
@@ -32,6 +53,8 @@ static void map_volume(ng::CurvedElements & ce, ng::ElementIndex ei,
 // cubit_geom headers for ACIS projection
 #include "RefFace.hpp"
 #include "RefEdge.hpp"
+#include "Body.hpp"
+#include "DLIList.hpp"
 #include "Surface.hpp"
 #include "Curve.hpp"
 #include "CubitVector.hpp"
@@ -40,6 +63,7 @@ static void map_volume(ng::CurvedElements & ce, ng::ElementIndex ei,
 //   CubitCoreModel::instance()->cgmapp()->factory()->get_ref_{face,edge,volume}()
 // so the 6 lookup sites below stay one-liners.
 #include "CubitRefAccessor.hpp"
+#include "CurveIdentity.hpp"
 
 // Use explicit namespace prefixes to disambiguate
 // Cubit ElementType enums: ::TETRA4, ::TETRA, ::HEX8, ::HEX, etc.
@@ -52,12 +76,16 @@ static void map_volume(ng::CurvedElements & ce, ng::ElementIndex ei,
 #include <limits>
 #include <map>
 #include <set>
+#include <stdexcept>
+#include <sstream>
+#include <cstdio>
 
 NetgenCurver::NetgenCurver() {}
 NetgenCurver::~NetgenCurver() {}
 
-bool NetgenCurver::build(const MeshData &md, int order)
+bool NetgenCurver::build(const MeshData &md, int order) try
 {
+  last_error_.clear();
   if (order < 2) return false;
   order_ = order;
 
@@ -72,6 +100,7 @@ bool NetgenCurver::build(const MeshData &md, int order)
              order, (int)cubit_nid_to_ng_pi_.size(),
              total_nodes_ - (int)cubit_nid_to_ng_pi_.size(), total_nodes_);
 
+  if (!diag_edge_worst_.empty()) PRINT_INFO("%s", diag_edge_worst_.c_str());
   // Diagnostic report: projection reject stats
   PRINT_INFO("NetgenCurver: projection stats — "
              "project=%ld calls, %ld rejects (>%g), max_disp=%g (surf %d) [model length units]\n",
@@ -140,6 +169,35 @@ bool NetgenCurver::build(const MeshData &md, int order)
   }
   return true;
 }
+catch (const std::exception & e) {
+  last_error_ = e.what();
+  PRINT_ERROR("NetgenCurver: %s\n", e.what());
+  if (!diag_edge_worst_.empty()) PRINT_ERROR("%s", diag_edge_worst_.c_str());
+  PRINT_ERROR("NetgenCurver export diagnostics: %s\n", edge_diagnostics_json().c_str());
+  return false;
+}
+catch (...) {
+  last_error_ = "unknown native curving exception";
+  PRINT_ERROR("NetgenCurver: %s\n", last_error_.c_str());
+  return false;
+}
+
+std::string NetgenCurver::edge_diagnostics_json() const
+{
+  std::string escaped;
+  for (unsigned char c : last_error_) {
+    if (c == '"' || c == '\\') escaped += '\\';
+    if (c < 32) { escaped += ' '; continue; }
+    escaped += static_cast<char>(c);
+  }
+  std::ostringstream out;
+  out << "{\"edge_calls\":" << diag_edge_calls_
+      << ",\"edge_rejects\":" << diag_edge_rejects_
+      << ",\"edge_failures\":" << diag_edge_failures_
+      << ",\"error\":\"" << escaped << "\"}";
+  return out.str();
+}
+
 
 // ============================================================
 // Phase 1: Convert linear mesh (from MeshData) to netgen::Mesh
@@ -696,7 +754,11 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
         ng_mesh_->AddSegment(nseg);
         exported_segments++;
       }
-      if (exported_segments > 0 && exported_segments == (int)edge_ids.size())
+      if (exported_segments != static_cast<int>(edge_ids.size()))
+        throw std::invalid_argument("Cubit curve " + std::to_string(cid) +
+            " exported only " + std::to_string(exported_segments) + "/" +
+            std::to_string(edge_ids.size()) + " segments");
+      if (exported_segments > 0)
         cubit_curve_to_ng_edge_[cid] = edge_descriptor_index;
       edgenr++;
     }
@@ -795,6 +857,8 @@ bool NetgenCurver::attach_callback_geometry()
   diag_edge_calls_ = 0;
   diag_edge_rejects_ = 0;
   diag_edge_max_disp_ = 0.0;
+  diag_edge_failures_ = 0;
+  diag_edge_worst_.clear();
   for (int i = 0; i < 4; i++) {
     diag_path_calls_[i] = 0;
     diag_path_max_disp_[i] = 0.0;
@@ -1074,56 +1138,65 @@ bool NetgenCurver::attach_callback_geometry()
     return {n.x(), n.y(), n.z()};
   };
 
-  // Edge (curve) projection callback: (surfnr1, surfnr2, x,y,z) -> (xp,yp,zp)
-  // surfnr1/surfnr2 are 1-based FD indices. Find the Cubit curve at their intersection.
-  // Build surfpair -> RefEdge map
-  std::unordered_map<int64_t, int> surfpair_to_curve;  // (fd1<<32|fd2) -> cubit_curve_id
-  {
-    std::vector<int> curve_ids = CubitInterface::parse_cubit_list("curve", "all");
-    for (int cid : curve_ids) {
-      std::vector<int> parent_surfs = CubitInterface::parse_cubit_list(
-          "surface", "in curve " + std::to_string(cid));
-      if (parent_surfs.size() < 2) continue;
-      for (size_t i = 0; i < parent_surfs.size(); i++) {
-        for (size_t j = i+1; j < parent_surfs.size(); j++) {
-          int s1 = parent_surfs[i], s2 = parent_surfs[j];
-          auto it1 = cubit_sid_to_ng_fd_.find(s1);
-          auto it2 = cubit_sid_to_ng_fd_.find(s2);
-          if (it1 == cubit_sid_to_ng_fd_.end() || it2 == cubit_sid_to_ng_fd_.end()) continue;
-          int f1 = it1->second, f2 = it2->second;
-          surfpair_to_curve[((int64_t)f1 << 32) | f2] = cid;
-          surfpair_to_curve[((int64_t)f2 << 32) | f1] = cid;
-        }
-      }
-    }
-  }
+  // Netgen passes EdgeDescriptor::EdgeNr(), NOT the descriptor table index.
+  // Two distinct curves may bound the same pair of split smooth surfaces.
+  auto edge_bindings = curve_identities(*ng_mesh_, cubit_curve_to_ng_edge_);
+  auto curve_for_edge = [edge_bindings](int edge, int face1, int face2) -> RefEdge* {
+    const auto & b = edge_bindings.lookup(edge, face1, face2);
+    RefEdge* re = cubit_mesh_export::cubit_get_ref_edge(b.curve);
+    if (!re || !re->get_curve_ptr())
+      throw std::invalid_argument("Missing Cubit curve " + std::to_string(b.curve) +
+                                  " for Netgen geometric edge " + std::to_string(edge));
+    return re;
+  };
 
-  auto edge_project = [this, surfpair_to_curve](int surfnr1, int surfnr2,
+  auto edge_project = [this, curve_for_edge, edge_bindings](int edgenr, int surfnr1, int surfnr2,
                                                    double x, double y, double z)
     -> std::tuple<double,double,double>
   {
     diag_edge_calls_++;
-    int64_t key = ((int64_t)surfnr1 << 32) | surfnr2;
-    auto it = surfpair_to_curve.find(key);
-    if (it != surfpair_to_curve.end()) {
-      RefEdge* re = cubit_mesh_export::cubit_get_ref_edge(it->second);
-      if (re) {
-        CubitVector loc(x, y, z);
-        CubitVector closest;
-        re->get_curve_ptr()->closest_point_trimmed(loc, closest);
-        double dx = closest.x() - x;
-        double dy = closest.y() - y;
-        double dz = closest.z() - z;
-        double disp = std::sqrt(dx*dx + dy*dy + dz*dz);
-        if (disp > diag_edge_max_disp_) diag_edge_max_disp_ = disp;
-        if (disp > edge_reject_threshold_) {
-          diag_edge_rejects_++;
-          return {x, y, z};  // reject spike: fall back to identity
-        }
-        return {closest.x(), closest.y(), closest.z()};
-      }
+    RefEdge* re = curve_for_edge(edgenr, surfnr1, surfnr2);
+    CubitVector loc(x, y, z);
+    CubitVector closest;
+    if (re->get_curve_ptr()->closest_point_trimmed(loc, closest) != CUBIT_SUCCESS) {
+      ++diag_edge_failures_;
+      throw std::runtime_error("closest_point_trimmed failed for Cubit curve " +
+          std::to_string(re->id()) + " edge " + std::to_string(edgenr));
     }
-    return {x, y, z};  // no projection if curve not found
+    double dx = closest.x() - x;
+    double dy = closest.y() - y;
+    double dz = closest.z() - z;
+    double disp = std::sqrt(dx*dx + dy*dy + dz*dz);
+    if (!std::isfinite(disp)) {
+      ++diag_edge_failures_;
+      throw std::invalid_argument("Non-finite projection for Netgen geometric edge " + std::to_string(edgenr));
+    }
+    if (disp > diag_edge_max_disp_) {
+      diag_edge_max_disp_ = disp;
+      const auto & b = edge_bindings.lookup(edgenr, surfnr1, surfnr2);
+      std::string bodies;
+      DLIList<Body*> parents;
+      re->bodies(parents);
+      for (int i = 0; i < parents.size(); ++i) {
+        Body* body = parents.get_and_step();
+        if (body) bodies += (bodies.empty() ? "" : ",") + std::to_string(body->id());
+      }
+      char worst[2048];
+      std::snprintf(worst, sizeof(worst), "NetgenCurver: worst edge projection edgenr=%d descriptor=%d curve=%d "
+                 "surfaces=%d,%d bodies=[%s] in=(%.17g,%.17g,%.17g) "
+                 "out=(%.17g,%.17g,%.17g) displacement=%.17g [model length units]\n",
+                 edgenr, b.descriptor, b.curve,
+                 ng_fd_to_cubit_sid_.at(surfnr1), ng_fd_to_cubit_sid_.at(surfnr2), bodies.c_str(),
+                 x, y, z, closest.x(), closest.y(), closest.z(), disp);
+      diag_edge_worst_ = worst;
+    }
+    if (disp > edge_reject_threshold_) {
+      diag_edge_rejects_++;
+      ++diag_edge_failures_;
+      throw std::runtime_error("Curve projection displacement exceeds unchanged limit for Cubit curve " +
+          std::to_string(re->id()) + " edge " + std::to_string(edgenr));
+    }
+    return {closest.x(), closest.y(), closest.z()};
   };
 
   // Segment-bounded interpolation on the shared curve.
@@ -1131,27 +1204,23 @@ bool NetgenCurver::attach_callback_geometry()
   // fundamental period, so an edge crossing the seam can otherwise look like
   // the almost-complete curve. Work on the nearest unwrapped branch and use a
   // signed, endpoint-relative arc length for the fallback.
-  auto between_edge = [this, surfpair_to_curve](int surfnr1, int surfnr2,
+  auto between_edge = [this, curve_for_edge, edge_bindings](int edgenr, int surfnr1, int surfnr2,
                                                    double x1, double y1, double z1,
                                                    double x2, double y2, double z2,
                                                    double secpoint)
     -> std::tuple<double,double,double>
   {
-    auto linear_mid = [&]() -> std::tuple<double,double,double> {
-      return {x1 + secpoint * (x2 - x1),
-              y1 + secpoint * (y2 - y1),
-              z1 + secpoint * (z2 - z1)};
+    auto fail_curve = [&](const char* reason) -> std::tuple<double,double,double> {
+      ++diag_edge_failures_;
+      const auto & b = edge_bindings.lookup(edgenr, surfnr1, surfnr2);
+      throw std::runtime_error(std::string(reason) + " for Cubit curve " +
+          std::to_string(b.curve) + " edge " + std::to_string(edgenr));
     };
 
-    int64_t key = ((int64_t)surfnr1 << 32) | surfnr2;
-    auto it = surfpair_to_curve.find(key);
-    if (it == surfpair_to_curve.end()) return linear_mid();
-
-    RefEdge* re = cubit_mesh_export::cubit_get_ref_edge(it->second);
-    if (!re) return linear_mid();
+    RefEdge* re = curve_for_edge(edgenr, surfnr1, surfnr2);
 
     double crv_length = re->measure();
-    if (crv_length <= 0.0) return linear_mid();
+    if (!std::isfinite(crv_length) || crv_length <= 0.0) return fail_curve("Invalid curve length");
 
     CubitVector cv1(x1, y1, z1), cv2(x2, y2, z2);
     double u1 = re->u_from_position(cv1);
@@ -1176,7 +1245,8 @@ bool NetgenCurver::attach_callback_geometry()
     double lmz = z1 + secpoint * (z2 - z1);
     CubitVector loc(lmx, lmy, lmz);
     CubitVector cp;
-    re->get_curve_ptr()->closest_point_trimmed(loc, cp);
+    if (re->get_curve_ptr()->closest_point_trimmed(loc, cp) != CUBIT_SUCCESS)
+      return fail_curve("closest_point_trimmed interpolation failed");
     double u_cp = re->u_from_position(cp);
     const double u_expected = u1 + secpoint * (u2_local - u1);
     double u_cp_local = periodic ? unwrap_near(u_expected, u_cp) : u_cp;
@@ -1216,16 +1286,30 @@ bool NetgenCurver::attach_callback_geometry()
       st = re->point_from_arc_length(
           u1, secpoint * segment_length, out);
     }
-    if (st != CUBIT_SUCCESS) return linear_mid();
+    if (st != CUBIT_SUCCESS) return fail_curve("Arc interpolation failed");
 
     // Sanity: the arc-midpoint should not lie farther from the linear
     // midpoint than the segment's chord length.
     double dd = std::sqrt((out.x()-lmx)*(out.x()-lmx) +
                           (out.y()-lmy)*(out.y()-lmy) +
                           (out.z()-lmz)*(out.z()-lmz));
-    if (dd > chord) return linear_mid();
+    if (!std::isfinite(dd) || dd > chord) return fail_curve("Arc interpolation exceeds unchanged chord limit");
 
     return {out.x(), out.y(), out.z()};
+  };
+
+  auto tangent = [this, curve_for_edge](int edgenr, int face1, int face2,
+                                  double x, double y, double z)
+      -> std::tuple<double,double,double> {
+    RefEdge* re = curve_for_edge(edgenr, face1, face2);
+    CubitVector t;
+    re->tangent(CubitVector(x, y, z), t);
+    const double length = std::sqrt(t.x()*t.x() + t.y()*t.y() + t.z()*t.z());
+    if (!std::isfinite(length) || !(length > 0.0)) {
+      ++diag_edge_failures_;
+      throw std::invalid_argument("Invalid tangent for Netgen geometric edge " + std::to_string(edgenr));
+    }
+    return {t.x()/length, t.y()/length, t.z()/length};
   };
 
   // between_edge: hybrid chord-perpendicular (primary) + arc-length
@@ -1234,7 +1318,7 @@ bool NetgenCurver::attach_callback_geometry()
   // projections, which is what its uniform-t LSQ curving expects on
   // per-segment curving.
   auto geom = std::make_shared<ng::CallbackGeometry>(
-      project, normal, num_surfaces, nullptr, edge_project, between_edge);
+      project, normal, num_surfaces, tangent, edge_project, between_edge);
   ng_mesh_->SetGeometry(geom);
 
   return true;
@@ -2321,6 +2405,8 @@ int NetgenCurver::gmsh_element_type(int base_nn, int elem_type, int order)
   }
   return 0;
 }
+
+#endif // !CUBIT_MESH_EXPORT_MAPPING_CONTRACT_ONLY
 
 #else  // !HAVE_NETGEN
 

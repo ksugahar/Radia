@@ -10,14 +10,18 @@
 #include <map>
 #include <set>
 #include <sstream>
+#include <memory>
+#include <exception>
 
 // ================================================================
 // extract() — main entry point
 // ================================================================
-bool MeshData::extract(int req_order)
+bool MeshData::extract(int req_order) try
 {
-  MeshExportInterface *iface =
-    dynamic_cast<MeshExportInterface*>(CubitInterface::get_interface("MeshExport"));
+  CubitBaseInterface* raw = CubitInterface::get_interface("MeshExport");
+  const auto release = [](CubitBaseInterface* p) { CubitInterface::release_interface(p); };
+  std::unique_ptr<CubitBaseInterface, decltype(release)> interface_owner(raw, release);
+  MeshExportInterface *iface = dynamic_cast<MeshExportInterface*>(raw);
   if (!iface) {
     PRINT_ERROR("Unable to get MeshExport interface.\n");
     return false;
@@ -28,7 +32,6 @@ bool MeshData::extract(int req_order)
 
   if (iface->get_num_nodes() == 0) {
     PRINT_WARNING("No mesh nodes found. Nothing to export.\n");
-    CubitInterface::release_interface(iface);
     return false;
   }
 
@@ -38,7 +41,6 @@ bool MeshData::extract(int req_order)
   extract_nodes(iface);
   extract_elements(iface);
   if (!check_block_coverage()) {
-    CubitInterface::release_interface(iface);
     return false;
   }
   extract_sidesets(iface);
@@ -48,6 +50,7 @@ bool MeshData::extract(int req_order)
   if (order >= 2) {
 #ifdef HAVE_NETGEN
     auto nc = std::make_shared<NetgenCurver>();
+    netgen_curver_ = nc; // retain failure diagnostics without retaining the interface
     PRINT_INFO("build_high_order: trying NetgenCurver (order %d)...\n", order);
     if (nc->build(*this, order)) {
       PRINT_INFO("build_high_order: NetgenCurver succeeded (%d nodes).\n",
@@ -58,19 +61,24 @@ bool MeshData::extract(int req_order)
     } else {
       PRINT_ERROR("NetgenCurver failed for order %d. "
                   "No fallback — check mesh and geometry.\n", order);
-      CubitInterface::release_interface(iface);
       return false;
 #else
     {
       PRINT_ERROR("Order %d requires Netgen support (not built).\n", order);
-      CubitInterface::release_interface(iface);
       return false;
 #endif
     }
   }
 
-  CubitInterface::release_interface(iface);
   return true;
+}
+catch (const std::exception & e) {
+  PRINT_ERROR("Mesh extraction failed: %s\n", e.what());
+  return false;
+}
+catch (...) {
+  PRINT_ERROR("Mesh extraction failed: unknown exception\n");
+  return false;
 }
 
 // ================================================================

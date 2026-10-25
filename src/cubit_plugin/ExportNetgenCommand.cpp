@@ -450,6 +450,12 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   int build_order = (order >= 2) ? order : 2;
   if (!md.extract(build_order)) {
     PRINT_ERROR("Mesh extraction failed.\n");
+    auto failed = md.get_netgen_curver();
+    if (failed) {
+      std::ofstream failure(u8_string_to_path(filename + ".json"));
+      if (failure) failure << "{\"export_passed\":false,\"curving\":"
+                           << failed->edge_diagnostics_json() << "}\n";
+    }
     return false;
   }
 
@@ -1092,6 +1098,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     if (jf.is_open()) {
       jf << std::setprecision(16);
       jf << "{\n";
+      jf << "  \"export_passed\": true,\n";
+      jf << "  \"curving\": " << nc->edge_diagnostics_json() << ",\n";
 
       // Materials (per-block volume)
       // MeshExportInterface may return a default block (all elements) whose ID

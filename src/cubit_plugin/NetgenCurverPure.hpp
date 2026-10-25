@@ -30,7 +30,7 @@ using ProjectFunc = std::function<std::tuple<double,double,double,double,double>
 using NormalFunc = std::function<std::tuple<double,double,double>
                                 (int surfnr, double x, double y, double z)>;
 using EdgeProjectFunc = std::function<std::tuple<double,double,double>
-                                      (int surfnr1, int surfnr2,
+                                      (int edgenr, int surfnr1, int surfnr2,
                                        double x, double y, double z)>;
 
 // Per-surface data passed from Python
