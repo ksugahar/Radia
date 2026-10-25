@@ -1,3 +1,8 @@
+"""Guards: release jobs cannot publish unapproved or substituted artifacts.
+
+Assumes: GitHub enforces the configured environment approval; remote tag and
+PyPI availability are independent services, replaced only in offline contracts.
+"""
 from pathlib import Path
 
 
@@ -121,7 +126,7 @@ def test_cubit_mesh_export_publishes_only_from_its_successful_tag_ci():
     assert "github.ref_type == 'tag'" in workflow
     assert "startsWith(github.ref_name, 'cubit-mesh-export-v')" in workflow
     assert "Download wheel built by this tag CI" in workflow
-    assert "${GITHUB_REF_NAME#cubit-mesh-export-v}" in workflow
+    assert "expected = tag.removeprefix('cubit-mesh-export-v')" in workflow
     assert "cubit_mesh_export.ccm" in workflow
     assert "cubit_mesh_curver.pyd" in workflow
     assert "pypa/gh-action-pypi-publish@release/v1" in workflow
@@ -186,3 +191,155 @@ def test_native_assets_use_accepted_tag_artifact_after_promotion():
     assert "needs.verify-promotion.result == 'success'" in upload
     assert "run-id: ${{ inputs.ci_run_id }}" in upload
     assert "head_branch" not in upload
+
+
+def _cubit_workflow():
+    import yaml
+    return yaml.safe_load((ROOT / ".github/workflows/cubit-mesh-export.yml").read_text(encoding="utf-8"))
+
+
+def _cubit_audit_program(phase):
+    jobs = _cubit_workflow()["jobs"]
+    job = jobs["build-test" if phase == "before-approval" else "publish"]
+    step = next(s for s in job["steps"] if s.get("name") == "Verify exact release identity " + phase)
+    return step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+
+
+def test_cubit_approval_separates_audit_from_publication():
+    jobs = _cubit_workflow()["jobs"]
+    audit, publish = jobs["build-test"], jobs["publish"]
+    assert "environment" not in audit
+    assert "id-token" not in audit.get("permissions", {})
+    assert publish["environment"] == "pypi"
+    assert publish["needs"] == ["ci-impact", "build-test"]
+    before = next(step for step in audit["steps"] if step.get("name") == "Verify exact release identity before-approval")
+    for job in (before, publish):
+        assert "github.ref_type == 'tag'" in job["if"]
+        assert "github.event_name == 'push'" in job["if"]
+        assert "github.event_name == 'workflow_dispatch'" in job["if"]
+        assert "cubit-mesh-export-v" in job["if"]
+    downloads = [s for s in publish["steps"] if s.get("uses", "").startswith("actions/download-artifact")]
+    assert all("artifact-ids" in s["with"] for s in downloads)
+    steps = publish["steps"]
+    assert steps[-1]["uses"].startswith("pypa/gh-action-pypi-publish")
+    assert "skip-existing" not in steps[-1].get("with", {})
+    assert _cubit_audit_program("before-approval") == _cubit_audit_program("after-approval")
+    assert jobs["build-test"]["outputs"]["wheel_artifact_id"] == "${{ steps.wheel-upload.outputs.artifact-id }}"
+
+
+def _cubit_candidate(tmp_path, monkeypatch):
+    import hashlib
+    import importlib.util
+    import json
+    import shutil
+    import subprocess
+    import urllib.error
+    import urllib.request
+    import zipfile
+
+    monkeypatch.chdir(tmp_path)
+    package = tmp_path / "packages/cubit-mesh-export"
+    source = package / "src/cubit_mesh_export"
+    source.mkdir(parents=True)
+    provenance_path = source / "_native_provenance.py"
+    shutil.copyfile(ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/_native_provenance.py", provenance_path)
+    spec = importlib.util.spec_from_file_location("fixture_provenance", provenance_path)
+    provenance = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(provenance)
+    native = tmp_path / "src/cubit_plugin"
+    native.mkdir(parents=True)
+    (native / "fixture.cpp").write_text("// release identity fixture\n", encoding="utf-8")
+    digest, count = provenance.native_source_digest(tmp_path)
+    payloads = {"cubit_mesh_export.ccm": b"MZ signed CCM", "cubit_mesh_curver.pyd": b"MZ signed PYD"}
+    manifest = {"schema": provenance.SCHEMA, "source": {"commit": "b" * 40, "tree_sha256": digest, "file_count": count, "hash_format": provenance.HASH_FORMAT}, "payloads": {name: {"size": len(data), "sha256": hashlib.sha256(data).hexdigest()} for name, data in payloads.items()}}
+    manifest_data = json.dumps(manifest).encode()
+    (source / "native_payloads.json").write_bytes(manifest_data)
+    (source / "cubit_mesh_export.ccm").write_bytes(payloads["cubit_mesh_export.ccm"])
+    (package / "pyproject.toml").write_text('[project]\nversion="2.2.7"\n', encoding="utf-8")
+    wheel = tmp_path / "dist/cubit_mesh_export-2.2.7-cp312-cp312-win_amd64.whl"
+    wheel.parent.mkdir()
+    with zipfile.ZipFile(wheel, "w") as z:
+        for name, data in payloads.items():
+            z.writestr("cubit_mesh_export/" + name, data)
+        z.writestr("cubit_mesh_export/native_payloads.json", manifest_data)
+        z.writestr("cubit_mesh_export-2.2.7.dist-info/METADATA", "Name: cubit-mesh-export\nVersion: 2.2.7\n")
+        for name in ("solver_ready_sample.jou", "cubit_export_menu.py", "cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl"):
+            z.writestr("cubit_mesh_export/cubit_gui/" + name, b"fixture")
+    values = {"GITHUB_EVENT_NAME": "push", "GITHUB_REF_TYPE": "tag", "GITHUB_REF": "refs/tags/cubit-mesh-export-v2.2.7", "GITHUB_REF_NAME": "cubit-mesh-export-v2.2.7", "GITHUB_SHA": "a" * 40, "GITHUB_REPOSITORY": "fixture/repo", "GITHUB_RUN_ID": "12", "GITHUB_RUN_ATTEMPT": "1", "WHEEL_ARTIFACT_ID": "123"}
+    for key, value in values.items():
+        monkeypatch.setenv(key, value)
+    remote = {"sha": "a" * 40}
+    def git(command, **kwargs):
+        if command == ["git", "rev-parse", "HEAD"]:
+            return "a" * 40
+        assert "ls-remote" in command, command
+        return "c" * 40 + "\trefs/tags/cubit-mesh-export-v2.2.7\n" + remote["sha"] + "\trefs/tags/cubit-mesh-export-v2.2.7^{}\n"
+    monkeypatch.setattr(subprocess, "check_output", git)
+    def absent(url, **kwargs):
+        assert url == "https://pypi.org/pypi/cubit-mesh-export/2.2.7/json"
+        raise urllib.error.HTTPError(url, 404, "not found", {}, None)
+    monkeypatch.setattr(urllib.request, "urlopen", absent)
+    return wheel, source, native, remote
+
+
+def _run_cubit_audit(phase, monkeypatch):
+    monkeypatch.setenv("AUDIT_PHASE", phase)
+    exec(compile(_cubit_audit_program(phase), "workflow-cubit-audit", "exec"), {"__name__": "__main__"})
+
+
+def test_cubit_actual_audit_accepts_exact_candidate_before_and_after_approval(tmp_path, monkeypatch):
+    import json
+    _cubit_candidate(tmp_path, monkeypatch)
+    _run_cubit_audit("before-approval", monkeypatch)
+    _run_cubit_audit("after-approval", monkeypatch)
+    receipt = json.loads((tmp_path / "audit/release-audit.json").read_text())
+    assert receipt["artifact_id"] == "123"
+    assert receipt["source_sha"] == "a" * 40
+
+
+import pytest
+
+
+@pytest.mark.parametrize("change, message", [
+    ("main", "exact Cubit tag ref"),
+    ("event", "release event"),
+    ("checkout", "checkout does not match"),
+    ("remote", "remote tag moved"),
+    ("version", "source package version"),
+    ("native", "native source digest differs"),
+    ("ccm", "CCM differs"),
+    ("artifact", "artifact/ref identity changed"),
+    ("wheel", "artifact/ref identity changed"),
+    ("existing", "already exists"),
+])
+def test_cubit_actual_audit_rejects_substitution_and_existing_version(tmp_path, monkeypatch, change, message):
+    import json
+    import subprocess
+    import urllib.request
+    import contextlib
+    wheel, source, native, remote = _cubit_candidate(tmp_path, monkeypatch)
+    _run_cubit_audit("before-approval", monkeypatch)
+    if change == "main":
+        monkeypatch.setenv("GITHUB_REF_TYPE", "branch")
+    elif change == "event":
+        monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_run")
+    elif change == "checkout":
+        original = subprocess.check_output
+        monkeypatch.setattr(subprocess, "check_output", lambda cmd, **kw: "d" * 40 if cmd == ["git", "rev-parse", "HEAD"] else original(cmd, **kw))
+    elif change == "remote":
+        remote["sha"] = "d" * 40
+    elif change == "version":
+        (source.parents[1] / "pyproject.toml").write_text('[project]\nversion="2.2.8"\n', encoding="utf-8")
+    elif change == "native":
+        (native / "fixture.cpp").write_text("// altered\n", encoding="utf-8")
+    elif change == "ccm":
+        (source / "cubit_mesh_export.ccm").write_bytes(b"altered")
+    elif change == "artifact":
+        monkeypatch.setenv("WHEEL_ARTIFACT_ID", "456")
+    elif change == "wheel":
+        # Valid ZIP with identical entries but different whole-file bytes.
+        wheel.write_bytes(wheel.read_bytes() + b"substitution")
+    elif change == "existing":
+        monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **kw: contextlib.nullcontext())
+    with pytest.raises(SystemExit, match=message):
+        _run_cubit_audit("after-approval", monkeypatch)
