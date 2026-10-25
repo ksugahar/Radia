@@ -500,22 +500,16 @@ def test_install_panels_preserves_cp932_startup_with_backup(monkeypatch, tmp_pat
     assert b"\r\n## BEGIN cubit-mesh-export toolbar" in updated
 
 
-def test_native_build_is_worktree_relative_and_propagates_both_payloads():
-    build_script = (
-        PROJECT_ROOT / "src" / "cubit_plugin" / "cubit_build.ps1"
-    ).read_text(encoding="utf-8")
-    setup_script = (
-        PROJECT_ROOT / "packages" / "cubit-mesh-export" / "setup.py"
-    ).read_text(encoding="utf-8")
-
-    assert r"S:\Radia\01_GitHub" not in build_script
-    assert "$src = $PSScriptRoot" in build_script
-    assert "packages\\cubit-mesh-export\\src\\cubit_mesh_export" in build_script
-    for payload in ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd"):
+def test_native_build_is_worktree_relative_and_does_not_promote_payloads():
+    build_script = (PROJECT_ROOT / "packages/cubit-mesh-export/tools/build_native.ps1").read_text(encoding="utf-8")
+    setup_script = (PROJECT_ROOT / "packages/cubit-mesh-export/setup.py").read_text(encoding="utf-8")
+    assert '$src = Join-Path $repoRoot "src\\cubit_plugin"' in build_script
+    for payload in ("cubit_mesh_export.ccm", "cubit_mesh_curver.cp312-win_amd64.pyd"):
         assert payload in build_script
-    assert "_native_provenance.py" in build_script
-    assert "record" in build_script
+    assert "Copy-Item" not in build_script
+    assert "_native_provenance.py" not in build_script
     assert "verify_manifest(repo_root, pkg_dir)" in setup_script
+    assert "Raw builds cannot produce a distributable wheel" in setup_script
     assert "st_mtime" not in setup_script
     assert 'cmdclass={"build_py": CleanPackageBuild}' in setup_script
 

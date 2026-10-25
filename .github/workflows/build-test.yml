@@ -40,12 +40,6 @@ jobs:
 
     env:
       RADIA_VALIDATION_HOST_ROLE: cpu_validation
-      # Was hardcoded 'Cubit 2025.3\bin' until 2026-05-25. Build.ps1 and
-      # cubit_plugin scripts now auto-discover the available installation
-      # via tools/find_cubit.ps1, so this env var is informational. Set
-      # CUBIT_INSTALL_DIR to pin a specific install on the self-hosted
-      # runner if needed.
-      CUBIT_PATH: ''
       # Heavy validation tests are an explicit manual gate. Release-tag CI
       # does not spend hours revalidating numerical evidence by default.
       RUN_SLOW_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.full_slow == true }}

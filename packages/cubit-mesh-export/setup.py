@@ -87,7 +87,7 @@ def _check_binary_provenance():
             sys.stderr.write(f"  - {error}\n")
         sys.stderr.write(
             "\n  Rebuild BEFORE packaging:\n"
-            "    pwsh -File src/cubit_plugin/cubit_build.ps1 -Rebuild\n"
+            "    Signed payloads are supplied only by the reviewed release procedure.\n    Raw builds cannot produce a distributable wheel.\n"
             "  This rebuilds and SHA-verifies both mandatory payloads.\n"
             "  Then re-run `pip wheel` / `pip install`.\n"
             "\n  To override (not recommended):\n"

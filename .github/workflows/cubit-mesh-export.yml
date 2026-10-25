@@ -18,8 +18,6 @@ on:
       - 'tools/audit_pyside6_only.py'
       - 'validation_test/cubit_mesh_export/**'
       - '.github/workflows/cubit-mesh-export.yml'
-      - 'CMakeLists.txt'
-      - 'Build.ps1'
       - 'pyproject.toml'
       - 'MANIFEST.in'
       - 'tests/test_tier_manifest.json'
@@ -46,8 +44,6 @@ on:
       - 'tools/audit_pyside6_only.py'
       - 'validation_test/cubit_mesh_export/**'
       - '.github/workflows/cubit-mesh-export.yml'
-      - 'CMakeLists.txt'
-      - 'Build.ps1'
       - 'pyproject.toml'
       - 'MANIFEST.in'
       - 'tests/test_tier_manifest.json'
@@ -83,6 +79,57 @@ jobs:
       - name: Route distribution impact
         id: route
         run: python tools/sparsesolv_ci_impact.py --lane cubit-mesh-export
+
+  native-100:
+    needs: [ci-impact]
+    if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: [self-hosted, Windows, X64, "100"]
+    timeout-minutes: 45
+    concurrency:
+      group: cme-native-100
+      cancel-in-progress: false
+    env:
+      OMP_NUM_THREADS: '4'
+      NGS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare isolated native dependencies
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "cme-native-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          & python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $python = Join-Path $venv 'Scripts/python.exe'
+          $pins = @(& python -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x for x in d['project']['dependencies'] if x.startswith(('ngsolve==','netgen-mesher=='))],sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $pins.Count -ne 2) { throw 'Expected two exact native dependency pins' }
+          & $python -m pip install @pins pybind11==3.1.0 ninja
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "CME_NATIVE_VENV=$venv" >> $env:GITHUB_ENV
+          (Join-Path $venv 'Scripts') >> $env:GITHUB_PATH
+      - name: Clean raw Cubit build and real callback CTest
+        shell: pwsh
+        run: |
+          $started = [DateTime]::UtcNow
+          $clock = [Diagnostics.Stopwatch]::StartNew()
+          $log = Join-Path $env:RUNNER_TEMP 'cme-native-build.log'
+          & pwsh -NoProfile -File packages/cubit-mesh-export/tools/build_native.ps1 -Rebuild -BuildJobs 4 *>&1 | Tee-Object -FilePath $log
+          $rc = $LASTEXITCODE
+          $clock.Stop()
+          @{source=$env:GITHUB_SHA; started=$started.ToString('o'); seconds=$clock.Elapsed.TotalSeconds; exit_code=$rc; exceeds_pr_budget=($clock.Elapsed.TotalSeconds -gt 1800)} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'cme-native-timing.json') -Encoding utf8
+          if ($clock.Elapsed.TotalSeconds -gt 1800) { Write-Warning 'Native qualification exceeded 30 minutes; manager must move it to main/tag/dispatch admission before retaining it as a PR gate.' }
+          exit $rc
+      - name: Preserve raw qualification diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cme-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/cme-native-build.log
+            ${{ runner.temp }}/cme-native-timing.json
+            src/cubit_plugin/build-pyd/Testing/Temporary/LastTest.log
+          if-no-files-found: error
 
   build-test:
     if: ${{ needs.ci-impact.outputs.required == 'true' && (true) }}
@@ -506,7 +553,7 @@ jobs:
   # Recovery: rerun ALL jobs and obtain approval again. Re-running publish
   # alone changes run_attempt and must fail the immutable audit comparison.
   publish:
-    needs: [ci-impact, build-test]
+    needs: [ci-impact, build-test, native-100]
     if: ${{ needs.ci-impact.outputs.required == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_type == 'tag' && startsWith(github.ref_name, 'cubit-mesh-export-v') }}
     environment: pypi
     runs-on: ubuntu-latest

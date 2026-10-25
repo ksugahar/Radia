@@ -126,7 +126,7 @@ def test_cubit_mesh_export_publishes_only_from_its_successful_tag_ci():
     assert "workflow_run:" not in workflow
     assert "release-cubit-mesh-export.yml" not in workflow
     assert "cubit-mesh-export-ci-release-context" not in workflow
-    assert "needs: [ci-impact, build-test]" in workflow
+    assert "needs: [ci-impact, build-test, native-100]" in workflow
     assert "github.ref_type == 'tag'" in workflow
     assert "startsWith(github.ref_name, 'cubit-mesh-export-v')" in workflow
     assert "Download wheel built by this tag CI" in workflow
@@ -233,7 +233,7 @@ def test_cubit_approval_separates_audit_from_publication():
     assert before["env"]["WHEEL_DIR"] == "packages/cubit-mesh-export/dist"
     after = next(step for step in publish["steps"] if step.get("name") == "Verify exact release identity after-approval")
     assert after["env"]["WHEEL_DIR"] == "dist"
-    assert publish["needs"] == ["ci-impact", "build-test"]
+    assert publish["needs"] == ["ci-impact", "build-test", "native-100"]
     for job in (before, publish):
         assert "github.ref_type == 'tag'" in job["if"]
         assert "github.event_name == 'push'" in job["if"]

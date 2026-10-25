@@ -168,7 +168,7 @@ Rebuild and propagate both mandatory native payloads from the current
 worktree with:
 
 ```powershell
-pwsh -File src/cubit_plugin/cubit_build.ps1 -Rebuild
+pwsh -File packages/cubit-mesh-export/tools/build_native.ps1 -Rebuild -BuildJobs 4
 ```
 
 The command fails unless both artifacts are produced and their copied
@@ -602,3 +602,8 @@ python validation_test/cubit/run_gmsh42_hex_order3.py --cubit-exe <console-execu
 The executable checks the loaded candidate DLL and uses Gmsh's positive-Jacobian
 contract to expose reversed cubic edge ordering. It does not replace release
 handler acceptance or numerical validation.
+
+Raw native builds run CTest and leave outputs in the build directories. Signed payloads
+are supplied only by the reviewed release procedure; raw builds cannot produce a
+distributable wheel. The frozen `src/cubit_plugin/cubit_build.ps1` is not a supported
+build entry; its integration awaits the next approved native provenance re-record.

@@ -1,4 +1,6 @@
-"""Exercise Cubit's compiler selector without an installed compiler or build."""
+"""Guards: package builder selects only VS2022 and rejects a mismatched compiler cache.
+Assumes: extracted production selector functions; no native compiler is invoked.
+"""
 import json
 from pathlib import Path
 import shutil
@@ -21,7 +23,7 @@ def test_cubit_selector_requires_vs2022(version, exit_code, toolset_exists, acce
         installationVersion=version, installationPath='synthetic-vs-install')]
     # Extract only the production function with the PowerShell parser, so no
     # dependency discovery, environment mutation, cleanup or native build runs.
-    source = str(ROOT / 'src/cubit_plugin/cubit_build.ps1').replace("'", "''")
+    source = str(ROOT / 'packages/cubit-mesh-export/tools/build_native.ps1').replace("'", "''")
     payload = json.dumps(instances).replace("'", "''")
     script = f"""
 $ErrorActionPreference='Stop'
@@ -63,7 +65,7 @@ def test_cubit_rejects_stale_compiler_cache(tmp_path, matching):
     cached = compiler if matching else tmp_path / 'other' / 'cl.exe'
     (tmp_path / 'CMakeCache.txt').write_text(
         f'CMAKE_CXX_COMPILER:FILEPATH={cached}\nCMAKE_C_COMPILER:FILEPATH={cached}\n')
-    source = str(ROOT / 'src/cubit_plugin/cubit_build.ps1').replace("'", "''")
+    source = str(ROOT / 'packages/cubit-mesh-export/tools/build_native.ps1').replace("'", "''")
     script = f"""
 $tokens=$null;$errors=$null
 $ast=[System.Management.Automation.Language.Parser]::ParseFile('{source}',[ref]$tokens,[ref]$errors)

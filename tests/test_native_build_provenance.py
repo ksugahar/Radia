@@ -360,3 +360,29 @@ def test_receipt_rejects_missing_provider_and_removes_stale_receipt(tmp_path, di
     assert result.returncode != 0, (result.stdout, result.stderr)
     assert not manifest.exists()
     assert not list(repo.glob("*.build.json.tmp-*"))
+
+
+def test_tracked_ccm_dirty_is_not_exempt_from_native_provenance(tmp_path):
+    import importlib.util
+    repo, _ = _repo(tmp_path)
+    ccm = repo / 'packages/cubit-mesh-export/src/cubit_mesh_export/cubit_mesh_export.ccm'
+    ccm.parent.mkdir(parents=True)
+    ccm.write_bytes(b'signed fixture')
+    _git(repo, 'add', '-f', str(ccm.relative_to(repo)))
+    _git(repo, 'commit', '-m', 'tracked payload')
+    spec = importlib.util.spec_from_file_location('linux_build_ccm_contract', ROOT / 'tools/build_linux.py')
+    linux = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(linux)
+    assert linux.source_identity(repo)['source_dirty'] is False
+    ccm.write_bytes(b'dirty payload')
+    assert linux.source_identity(repo)['source_dirty'] is True
+    # Execute the real strict gate without dependency discovery or native work.
+    command = (f". {_quote(SCRIPT)}; $RequireNativeProvenance=$true; "
+               f"$NativeBuildSourceIdentity=Get-NativeBuildSourceIdentity -RepoRoot {_quote(repo)}; "
+               f"$ast=[System.Management.Automation.Language.Parser]::ParseFile({_quote(BUILD_SCRIPT)},[ref]$null,[ref]$null); "
+               "$gate=$ast.Find({param($n) $n -is [System.Management.Automation.Language.IfStatementAst] "
+               "-and $n.Extent.Text.StartsWith('if ($RequireNativeProvenance -and $NativeBuildSourceIdentity.source_dirty)')},$true); "
+               "if (-not $gate) { throw 'Missing strict source gate' }; "
+               "& ([scriptblock]::Create($gate.Extent.Text))")
+    result = _pwsh(command)
+    assert result.returncode != 0 and 'source checkout is dirty' in result.stderr, result.stdout + result.stderr

@@ -181,6 +181,11 @@
       "owner": "radia-simulink",
       "target": "github-hosted",
       "legacy_100": false
+    },
+    "cubit-mesh-export.yml:native-100": {
+      "owner": "cubit-mesh-export",
+      "target": "ci-native",
+      "legacy_100": true
     }
   },
   "light": {

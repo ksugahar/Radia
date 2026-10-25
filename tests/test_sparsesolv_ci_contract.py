@@ -466,7 +466,7 @@ def test_code_like_root_formatting_is_never_exempt(path):
     """PowerShell whitespace can change meaning, so even comment-only edits select all owners."""
     before=(ROOT/'Build.ps1').read_text(encoding='utf-8')
     after=before+'\n# comment only\n'
-    assert IMPACT.root_owners('Build.ps1',before,after,IMPACT.manifest())[0] == set(IMPACT.CONTRACT.DISTRIBUTIONS)
+    assert IMPACT.root_owners('Build.ps1',before,after,IMPACT.manifest())[0] == set(IMPACT.CONTRACT.owner_rule(IMPACT.manifest(),'Build.ps1')['owners'])
 
 
 @pytest.mark.parametrize('path,before,after', [
@@ -477,7 +477,7 @@ def test_code_like_root_formatting_is_never_exempt(path):
     ('tests/test_tier_manifest.json','{}','{"unknown":true}'),
 ])
 def test_unattributed_root_edits_select_all_file_owners(path,before,after):
-    assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == set(IMPACT.CONTRACT.DISTRIBUTIONS)
+    assert IMPACT.root_owners(path,before,after,IMPACT.manifest())[0] == set(IMPACT.CONTRACT.owner_rule(IMPACT.manifest(),path)['owners'])
 
 
 @pytest.mark.parametrize('path,broken', [
@@ -488,7 +488,7 @@ def test_unattributed_root_edits_select_all_file_owners(path,before,after):
 def test_unparsable_deleted_or_unavailable_roots_fail_closed(path,broken):
     before=(ROOT/path).read_text(encoding='utf-8');data=IMPACT.manifest()
     for old,new in [(before,broken),(before,None),(None,before)]:
-        assert IMPACT.root_owners(path,old,new,data)[0] == set(IMPACT.CONTRACT.DISTRIBUTIONS)
+        assert IMPACT.root_owners(path,old,new,data)[0] == set(IMPACT.CONTRACT.owner_rule(data,path)['owners'])
 
 
 def test_rename_status_preserves_both_ownership_boundaries():

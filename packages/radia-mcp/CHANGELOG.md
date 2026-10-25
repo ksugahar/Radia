@@ -268,7 +268,8 @@ crystallized as its own package.
   updates and the validation host/100/worker-a/worker-b solver acceptance pool; remove a dated live
   bibliography-runtime handoff from the active operating contract.
 - Remove the retired solver-QUAD Cubit phase-0 build helper; the exporter-owned
-  `src/cubit_plugin/cubit_build.ps1` remains the single native build route, and
+  `packages/cubit-mesh-export/tools/build_native.ps1` is the raw-build/CTest entry;
+  signed payloads require reviewed release promotion, and
   remove the residual Cubit release-dual forwarding command from solver QUAD.
 - Refresh registry metadata, tool descriptions, and historical incident
   prevention guidance; remove the superseded shared-library design note.

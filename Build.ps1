@@ -27,7 +27,7 @@
 #   -Verbose    Show detailed build output
 #
 # Requirements:
-#   - Visual Studio Build Tools (any version with VC.Tools.x86.x64) — auto-detected via vswhere
+#   - Visual Studio Build Tools (any version with VC.Tools.x86.x64) - auto-detected via vswhere
 #   - MATLAB with Parallel Computing Toolbox and a supported mexcuda compiler
 #   - Intel MKL from `python -m pip install mkl-devel`
 #   - NGSolve (pip install or source build)
@@ -243,26 +243,6 @@ if (-not (Test-Path "$Pybind11CMakeDir\pybind11Config.cmake")) {
     exit 1
 }
 
-# ---- Cubit install discovery ------------------------------------------------
-
-# Picks the highest-version 'Coreform Cubit *' under Program Files or
-# honors $env:CUBIT_INSTALL_DIR. Cubit absence does not block Radia core.
-. "$PROJECT_DIR\tools\find_cubit.ps1"
-if ($CubitInstallDir) {
-    Write-Host "Cubit: $CubitVersion at $CubitInstallDir"
-} else {
-    Write-Host "Cubit: NOT FOUND -- Cubit-plugin .pyd build will be skipped" -ForegroundColor Yellow
-}
-
-$DetectedCubitCmakeDir = if ($CubitInstallDir) {
-    Join-Path $CubitInstallDir "cmake"
-} else {
-    ""
-}
-$BuildCubitPlugin = [bool]($CubitInstallDir -and
-    (Test-Path (Join-Path $CubitInstallDir "cmake\CubitConfig.cmake")))
-Write-Host "Cubit native targets enabled: $BuildCubitPlugin" -ForegroundColor Gray
-
 # Intel MKL 2026 (required for BLAS/LAPACK and HACApK). The selected
 # Python environment is authoritative; MKLROOT is an explicit fallback only.
 
@@ -407,12 +387,6 @@ Write-Host ""
 
 if ($Rebuild) {
     $BuildDirsToClean = @($BUILD_DIR)
-    if ($BuildCubitPlugin -and -not ($RadiaOnly -or $AxiFemOnly)) {
-        $BuildDirsToClean += @(
-            "$PROJECT_DIR\src\cubit_plugin\build-pyd",
-            "$PROJECT_DIR\src\cubit_plugin\build-ccm"
-        )
-    }
     $ProjectRoot = [System.IO.Path]::GetFullPath($PROJECT_DIR).TrimEnd('\') + '\'
     foreach ($BuildDirToClean in $BuildDirsToClean) {
         $ResolvedBuildDir = [System.IO.Path]::GetFullPath($BuildDirToClean)
@@ -603,81 +577,6 @@ if errorlevel 1 (
 )
 
 echo.
-echo ========================================
-echo   Building cubit_mesh_curver (Cubit plugin .pyd)
-echo ========================================
-set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"
-set "CUBIT_PLUGIN_BUILD=$PROJECT_DIR\src\cubit_plugin\build-pyd"
-rem CUBIT_DIR is auto-discovered via tools/find_cubit.ps1 (highest-version
-rem 'Coreform Cubit *' under C:\Program Files). Override with env var
-rem CUBIT_INSTALL_DIR (the helper appends \cmake automatically). The
-rem outer PowerShell wrapper passes $CubitCmakeDir into the batch via
-rem this set; if discovery failed the wrapper exited before us.
-set "CUBIT_DIR=$DetectedCubitCmakeDir"
-set "NETGEN_DIR=$NetgenPackageDir"
-rem Compact Netgen sources are in-repo (src/cubit_plugin/compact_netgen/netgen_src/).
-rem No external NETGEN_SRC_DIR needed.
-
-rem The PowerShell discovery result and paths are embedded as fixed batch
-rem literals. Do not rediscover Cubit from batch state; vcvars may also change
-rem delayed-expansion state, so this block intentionally contains no !VAR! use.
-if /I "$BuildCubitPlugin"=="True" (
-    if not exist "%CUBIT_PLUGIN_BUILD%" mkdir "%CUBIT_PLUGIN_BUILD%"
-    cd /d "%CUBIT_PLUGIN_BUILD%"
-    rem build-pyd: force FULL Netgen mode; disable compact_netgen detection
-    rem so cubit_mesh_curver.pyd builds against pip-installed Netgen + pybind11.
-    rem .ccm/.ccl in build-ccm continue to use compact_netgen without DLL deps.
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="$DetectedCubitCmakeDir" -DNETGEN_DIR="$NetgenPackageDir" -DCOMPACT_NETGEN_OVERRIDES=NONE -DCUBIT_CALLBACK_CONTRACT_TESTS=ON "$PROJECT_DIR\src\cubit_plugin"
-    if errorlevel 1 (
-        echo ERROR: cubit_mesh_curver configuration failed
-        exit /b 1
-    )
-    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_curver -j $BuildJobs
-    if errorlevel 1 (
-        echo ERROR: cubit_mesh_curver build failed
-        exit /b 1
-    )
-    "$CMAKE_EXE" --build . --config Release --target cubit_callback_contract -j $BuildJobs
-    if errorlevel 1 (
-        echo ERROR: cubit_callback_contract build failed
-        exit /b 1
-    )
-    "$CTEST_EXE" --test-dir "%CUBIT_PLUGIN_BUILD%" --output-on-failure
-    if errorlevel 1 (
-        echo ERROR: native Cubit callback contract failed
-        exit /b 1
-    )
-
-    rem ========================================
-    rem   Building cubit_mesh_export.ccm; APREPRO commands without Qt deps
-    rem ========================================
-    rem radia 4.80.0 removed the Qt5 RadiaComp.cpp .ccl GUI component;
-    rem all GUI work is now in src/radia/panels/radia_export_menu.py using
-    rem PySide6.  The .ccm has no Qt dependency and builds unconditionally
-    rem when the Cubit SDK is present.
-    echo.
-    echo ========================================
-    echo   Building cubit_mesh_export.ccm - APREPRO commands
-    echo ========================================
-    if not exist "$PROJECT_DIR\src\cubit_plugin\build-ccm" mkdir "$PROJECT_DIR\src\cubit_plugin\build-ccm"
-    cd /d "$PROJECT_DIR\src\cubit_plugin\build-ccm"
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="$DetectedCubitCmakeDir" -DNETGEN_DIR="$NetgenPackageDir" "$PROJECT_DIR\src\cubit_plugin"
-    if errorlevel 1 (
-        echo ERROR: cubit_mesh_export_ccm configuration failed
-        exit /b 1
-    )
-    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_export_ccm -j $BuildJobs
-    if errorlevel 1 (
-        echo ERROR: cubit_mesh_export_ccm build failed
-        exit /b 1
-    )
-
-    cd /d "$BUILD_DIR"
-) else (
-    echo SKIP: Cubit SDK not found at $DetectedCubitCmakeDir
-)
-
-echo.
 echo Build completed.
 exit /b 0
 "@
@@ -704,10 +603,6 @@ try {
         }
     }
     $RequiredNativeArtifacts = @()
-    if ($BuildCubitPlugin -and -not ($RadiaOnly -or $AxiFemOnly)) {
-        $RequiredNativeArtifacts += "$PROJECT_DIR\src\cubit_plugin\build-pyd\cubit_mesh_curver.cp312-win_amd64.pyd"
-        $RequiredNativeArtifacts += "$PROJECT_DIR\src\cubit_plugin\build-ccm\cubit_mesh_export.ccm"
-    }
     $BuildResult = Get-NativeBuildResult -ExitCode $BuildResult -LogText $BuildLogText -RequiredArtifacts $RequiredNativeArtifacts
 
     if ($BuildResult -ne 0) { throw "Build failed with exit code $BuildResult" }
@@ -735,10 +630,7 @@ try {
         )
     }
 
-    # Raw Cubit native outputs remain in src/cubit_plugin/build-*.
-    # Signed package payloads and their manifest are promoted only through
-    # the reviewed release process; an ordinary build never copies or
-    # touches them.
+    # Signed distribution payloads are never build outputs here.
 
     foreach ($mod in $modules) {
         $srcPath = "$BUILD_DIR\$($mod.src)"

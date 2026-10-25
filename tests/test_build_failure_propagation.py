@@ -16,7 +16,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = (
     "sparsesolv_ngsolve", "axifem",
-    "cubit_mesh_curver", "cubit_mesh_export_ccm", "cubit_callback_contract",
 )
 
 
@@ -35,18 +34,21 @@ def test_native_build_guard_propagates_failure(tmp_path, target, exit_code):
     _exercise_guard(tmp_path, guard, exit_code)
 
 
+@pytest.mark.parametrize("target", ["cubit_mesh_curver", "cubit_callback_contract", "cubit_mesh_export_ccm", "ctest"])
 @pytest.mark.parametrize("exit_code", [0, 7])
-def test_native_ctest_guard_propagates_failure(tmp_path, exit_code):
-    source = (ROOT / "Build.ps1").read_text(encoding="utf-8-sig")
-    match = re.search(
-        r'"\$CTEST_EXE" --test-dir "%CUBIT_PLUGIN_BUILD%" --output-on-failure\n'
-        r'(?P<guard>\s*if errorlevel 1 \([^)]*\))', source,
-    )
-    assert match, "missing immediate CTest failure guard"
-    guard = match.group("guard")
-    assert "ERROR: native Cubit callback contract failed" in guard
-    assert "exit /b 1" in guard
-    _exercise_guard(tmp_path, guard, exit_code)
+def test_package_native_guards_propagate_failure(tmp_path, target, exit_code):
+    script = ROOT / "packages/cubit-mesh-export/tools/build_native.ps1"
+    source = script.read_text(encoding="utf-8")
+    command = '& $ctest --test-dir' if target == 'ctest' else f'--target {target} -j $BuildJobs'
+    line = next(i for i, text in enumerate(source.splitlines()) if command in text)
+    guard = source.splitlines()[line + 1]
+    assert re.fullmatch(r'\s*if \(\$LASTEXITCODE -ne 0\) \{ throw "[^"]+" \}', guard), guard
+    harness = tmp_path / 'package-guard.ps1'
+    harness.write_text(f'$global:LASTEXITCODE={exit_code}\n{guard}\n"CONTINUED"\n', encoding='utf-8')
+    result = subprocess.run(['pwsh', '-NoProfile', '-File', str(harness)],
+                            capture_output=True, encoding='utf-8', errors='replace', timeout=20)
+    assert (result.returncode == 0) is (exit_code == 0), result.stderr
+    assert ('CONTINUED' in result.stdout) is (exit_code == 0)
 
 
 def _exercise_guard(tmp_path, guard, exit_code):
@@ -65,40 +67,18 @@ def _exercise_guard(tmp_path, guard, exit_code):
     assert ("CONTINUED" in result.stdout) == (exit_code == 0)
 
 
-def test_plugin_configuration_failure_cannot_use_stale_build_tree():
-    source = (ROOT / "Build.ps1").read_text(encoding="utf-8-sig")
-    commands = re.findall(
-        r'"\$CMAKE_EXE" -G Ninja [^\n]*"\$PROJECT_DIR\\src\\cubit_plugin"\n'
-        r'(?P<guard>\s*if errorlevel 1 \([^)]*\))', source,
-    )
-    assert len(commands) == 2
-    assert all("configuration failed" in guard and "exit /b 1" in guard
-               for guard in commands)
-
-
-def test_optional_cubit_build_does_not_reuse_stale_runner_environment():
-    source = (ROOT / "Build.ps1").read_text(encoding="utf-8-sig")
-    plugin_block = source[source.index('set "CUBIT_DIR='):source.index(
-        'echo Build completed.', source.index('set "CUBIT_DIR='))]
-    assert '$DetectedCubitCmakeDir = if ($CubitInstallDir)' in source
-    assert '$BuildCubitPlugin = [bool]($CubitInstallDir -and' in source
-    assert ('Test-Path (Join-Path $CubitInstallDir '
-            '"cmake\\CubitConfig.cmake")') in source
-    assert 'set "CUBIT_DIR=$DetectedCubitCmakeDir"' in plugin_block
-    assert 'set "CUBIT_DIR=$CubitCmakeDir"' not in plugin_block
-    assert 'if /I "$BuildCubitPlugin"=="True" (' in plugin_block
-    assert 'if defined CUBIT_DIR' not in plugin_block
-    assert plugin_block.count('-DCubit_DIR="$DetectedCubitCmakeDir"') == 2
-    assert '-DCubit_DIR="$CubitCmakeDir"' not in plugin_block
-    assert '!CUBIT_DIR!' not in plugin_block
-    assert '%CUBIT_DIR%' not in plugin_block
-    guarded_block = plugin_block[
-        plugin_block.index('if /I "$BuildCubitPlugin"=="True" ('):
-        plugin_block.index(') else (')
-    ]
-    for line in guarded_block.splitlines():
-        if re.match(r"\s*(?:echo|rem)\b", line, flags=re.IGNORECASE):
-            assert not re.search(r"(?<!\^)[()]", line), line
+def test_root_cpu_and_package_native_ownership():
+    root = (ROOT / "Build.ps1").read_text(encoding="ascii")
+    assert "BuildCubitPlugin" not in root and "src\\cubit_plugin" not in root
+    for target in ("sparsesolv_ngsolve", "axifem", "peec_matrices", "_radia_pybind"):
+        assert target in root, target
+    package = (ROOT / "packages/cubit-mesh-export/tools/build_native.ps1").read_text(encoding="utf-8")
+    assert "-DCUBIT_CALLBACK_CONTRACT_TESTS=ON" in package
+    configs = package.split('& $cmake -G Ninja')[1:]
+    assert len(configs) == 2
+    for config in configs:
+        assert re.search(r'if \(\$LASTEXITCODE -ne 0\) \{ throw "cmake configure', config)
+    assert "record" not in package and "Copy-Item" not in package
 
 
 @pytest.mark.parametrize("radia_only,axi_only,sdk", [
@@ -108,14 +88,11 @@ def test_optional_cubit_build_does_not_reuse_stale_runner_environment():
 def test_rebuild_cleans_only_selected_build_directories(tmp_path, radia_only, axi_only, sdk):
     result = _execute_build_scope(tmp_path, "cleanup", radia_only, axi_only, sdk)
     expected = [str((tmp_path / "project/build-msvc").resolve())]
-    if sdk and not (radia_only or axi_only):
-        expected += [str((tmp_path / "project/src/cubit_plugin" / name).resolve())
-                     for name in ("build-pyd", "build-ccm")]
     assert result["removed"] == expected, (result, expected)
 
 
-@pytest.mark.parametrize("radia_only", [False, True])
-def test_ordinary_build_preserves_signed_cubit_payload_bytes_and_mtimes(tmp_path, radia_only):
+def test_ordinary_build_preserves_signed_cubit_payload_bytes_and_mtimes(tmp_path):
+    radia_only = False
     import os
     import shutil
     project = tmp_path / "project"
@@ -213,3 +190,60 @@ Write-Output ('BUILD_SCOPE_RESULT=' + ($record | ConvertTo-Json -Compress))
              if s.startswith("BUILD_SCOPE_RESULT=")]
     assert len(lines) == 1, result.stdout
     return json.loads(lines[0])
+
+
+def test_builders_write_only_to_declared_roots():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('build_write_policy', ROOT / 'tests/build_write_policy.py')
+    policy = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(policy)
+    for relative in ('Build.ps1', 'packages/cubit-mesh-export/tools/build_native.ps1'):
+        rows = policy.audit(ROOT / relative)
+        assert rows, relative
+
+
+def test_cme_native_workflow_and_cli_scope(tmp_path):
+    import json
+    import os
+    import yaml
+    workflow = yaml.safe_load((ROOT / '.github/workflows/cubit-mesh-export.yml').read_text(encoding='utf-8'))
+    jobs = workflow['jobs']
+    native = jobs['native-100']
+    assert native['runs-on'] == ['self-hosted', 'Windows', 'X64', '100']
+    assert native['timeout-minutes'] == 45
+    assert native['concurrency'] == {'group': 'cme-native-100', 'cancel-in-progress': False}
+    run = '\n'.join(s.get('run','') for s in native['steps'])
+    assert 'build_native.ps1 -Rebuild -BuildJobs 4' in run
+    assert 'exceeds_pr_budget' in run
+    assert 'native-100' in jobs['publish']['needs']
+    # Real CLI and real temporary Git history; no live checkout mutation.
+    import shutil
+    repo = tmp_path / 'repo'
+    (repo / 'tools').mkdir(parents=True)
+    for name in ('sparsesolv_ci_impact.py','ci_distribution_contract.py','ci_distribution_manifest.json'):
+        shutil.copyfile(ROOT/'tools'/name,repo/'tools'/name)
+    def git(*args):
+        return subprocess.check_output(['git','-C',str(repo),*args],encoding='utf-8',errors='replace').strip()
+    git('init','-q')
+    git('config','user.name','Contract')
+    git('config','user.email','contract@example.invalid')
+    git('add','.')
+    git('commit','-qm','initial')
+    for path, required in [('Build.ps1',False),('CMakeLists.txt',False),
+                           ('packages/cubit-mesh-export/tools/build_native.ps1',True),
+                           ('src/cubit_plugin/NetgenCurver.cpp',True)]:
+        before = git('rev-parse','HEAD')
+        file = repo/path
+        file.parent.mkdir(parents=True,exist_ok=True)
+        file.write_bytes(b'# selector input fixture\n')
+        git('add','--',path)
+        git('commit','-qm','input')
+        out = tmp_path / 'out.txt'
+        out.write_bytes(b'')
+        event.write_text(json.dumps({'before':before,'ref':'refs/heads/main'}),encoding='utf-8')
+        env = os.environ.copy()
+        env.update(GITHUB_EVENT_NAME='push',GITHUB_EVENT_PATH=str(event),GITHUB_OUTPUT=str(out))
+        result = subprocess.run([sys.executable, str(repo/'tools/sparsesolv_ci_impact.py'), '--lane', 'cubit-mesh-export'],
+                                cwd=repo,env=env,capture_output=True,encoding='utf-8',errors='replace',timeout=30)
+        assert result.returncode == 0, result.stderr
+        assert f'required={str(required).lower()}' in out.read_text(encoding='utf-8'), (path,result.stdout)

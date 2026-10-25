@@ -93,7 +93,7 @@ def test_self_hosted_ci_keeps_the_ngsolve_abi_in_a_run_local_environment():
 
 
 def test_build_scripts_resolve_netgen_from_the_active_python_environment():
-    for relative in ("Build.ps1", "src/cubit_plugin/cubit_build.ps1"):
+    for relative in ("Build.ps1", "packages/cubit-mesh-export/tools/build_native.ps1"):
         script = (ROOT / relative).read_text(encoding="utf-8")
         assert "Get-Command python -ErrorAction" in script, relative
         assert "import netgen" in script, relative
@@ -106,7 +106,7 @@ def test_build_scripts_resolve_netgen_from_the_active_python_environment():
         ), relative
 
     build_script = (ROOT / "Build.ps1").read_text(encoding="utf-8")
-    assert build_script.count("-DPython3_EXECUTABLE=") >= 3
+    assert build_script.count("-DPython3_EXECUTABLE=") >= 1
 
     cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
     assert "pybind11.get_cmake_dir()" in cmake

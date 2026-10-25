@@ -649,14 +649,12 @@ PATTERNS: list[dict] = [
                       "in the binaries release.",
         "detection": "ci-verify RED; runner _diag Worker log 'Failed to "
                      "download cubit_mesh_curver.pyd after 6 attempts'.",
-        "prevention": "When relocating OR renaming a bundled binary, "
-                      "grep ALL .github/workflows/*.yml (build-test + "
-                      "release-*) for the old path/name and fix: fetch "
-                      "dest, wheel-build source, pre-push hook upload "
-                      "list, binaries-release asset name.  The runner has "
-                      "the Cubit SDK so Build.ps1 supplies the .pyd "
-                      "locally -- make the binaries fetch a FALLBACK "
-                      "(skip-if-present), not mandatory.",
+        "prevention": "Current builds leave raw native outputs in build directories. "
+                      "Cubit native qualification uses the package raw builder and CTest, "
+                      "not root Build.ps1. Distribution CI consumes manifest-pinned signed "
+                      "payloads supplied only by reviewed release promotion; no automatic "
+                      "package copy or skip-if-present download fallback. Audit all workflow "
+                      "fetch destinations and asset names when changing payload layout.",
         "related": [".github/workflows/build-test.yml",
                     ],
     },

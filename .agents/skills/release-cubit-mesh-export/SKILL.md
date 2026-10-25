@@ -13,7 +13,10 @@ validation target has no Cubit and is forbidden. Resolve machines and paths priv
 |---|---|---|
 | Build | `100` | editable |
 
-Build reviewed source with the current Cubit build script. Verify native
+Build reviewed raw source with `packages/cubit-mesh-export/tools/build_native.ps1`
+(`-Rebuild -BuildJobs 4`), including its callback CTest. This does not promote payloads.
+Signed payloads are supplied only by the reviewed release procedure; raw builds
+cannot produce a distributable wheel. Verify native
 provenance and VC runtime imports against the supported Cubit runtime, curver
 import and curving, all six export formats, check-vol and unchanged-case parity.
 Run the owning package tests and `tests/test_release_cubit_dual.py`. Missing

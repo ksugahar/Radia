@@ -227,6 +227,7 @@ All 45 workflow jobs at the baseline are classified below. The table is a review
 | `build-test.yml` | `build-test` | native |
 | `cubit-mesh-export.yml` | `ci-impact` | GitHub-hosted (retain) |
 | `cubit-mesh-export.yml` | `build-test` | GitHub-hosted (retain) |
+| `cubit-mesh-export.yml` | `native-100` | native (raw builder + callback CTest, no promotion) |
 | `cubit-mesh-export.yml` | `publish` | GitHub-hosted (retain) |
 | `ltspice-data-safety.yml` | `ci-impact` | GitHub-hosted (retain) |
 | `ltspice-data-safety.yml` | `matlab-data-contracts` | MATLAB/GPU |
@@ -257,3 +258,12 @@ All 45 workflow jobs at the baseline are classified below. The table is a review
 
 EqnEdit64 source and hosted release workflows are owned by the independent
 `ksugahar/EqnEdit64` repository, outside Radia runner ownership.
+
+## Cubit distribution native builder
+The cme-owned `native-100` job uses `[self-hosted, Windows, X64, "100"]`,
+serial concurrency `cme-native-100`, clean `-Rebuild -BuildJobs 4`, and a 45 minute
+cap. Publish depends on this job as well as hosted package checks. The first
+run records elapsed time; if it exceeds 30 minutes the manager must move native
+admission to main push/tag/dispatch only, rather than keep it as a PR gate.
+Root Radia Native Release no longer provides Cubit callback qualification.
+Signed payload promotion is not a build operation.

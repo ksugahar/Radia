@@ -1070,8 +1070,7 @@
         "radia",
         "radia-simulink",
         "radia-mcp",
-        "radia-optuna",
-        "cubit-mesh-export"
+        "radia-optuna"
       ],
       "reason": {
         "kind": "shared_build",
@@ -1085,8 +1084,7 @@
         "radia",
         "radia-simulink",
         "radia-mcp",
-        "radia-optuna",
-        "cubit-mesh-export"
+        "radia-optuna"
       ],
       "reason": {
         "kind": "shared_build",
@@ -2341,8 +2339,6 @@
             "tools/audit_pyside6_only.py",
             "validation_test/cubit_mesh_export/**",
             ".github/workflows/cubit-mesh-export.yml",
-            "CMakeLists.txt",
-            "Build.ps1",
             "pyproject.toml",
             "MANIFEST.in",
             "tests/test_tier_manifest.json",
@@ -2373,8 +2369,6 @@
             "tools/audit_pyside6_only.py",
             "validation_test/cubit_mesh_export/**",
             ".github/workflows/cubit-mesh-export.yml",
-            "CMakeLists.txt",
-            "Build.ps1",
             "pyproject.toml",
             "MANIFEST.in",
             "tests/test_tier_manifest.json",
@@ -2398,15 +2392,11 @@
         "packages/cubit-mesh-export/src/cubit_mesh_export/mcp/_support/OWNERSHIP.md"
       ],
       "content_diff_active": [
-        "CMakeLists.txt",
-        "Build.ps1",
         "pyproject.toml",
         "MANIFEST.in",
         "tests/test_tier_manifest.json"
       ],
       "required_paths": [
-        "CMakeLists.txt",
-        "Build.ps1",
         "pyproject.toml",
         "MANIFEST.in",
         "tests/test_tier_manifest.json"
