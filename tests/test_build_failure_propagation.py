@@ -162,14 +162,14 @@ param([string]$BuildScript,[string]$Project,[string]$Action,[int]$Radia,[int]$Ax
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $tokens=$null; $errors=$null
-$ast=[Management.Automation.Language.Parser]::ParseFile($BuildScript,[ref]$tokens,[ref]$errors)
+$ast=[System.Management.Automation.Language.Parser]::ParseFile($BuildScript,[ref]$tokens,[ref]$errors)
 if ($errors.Count) { throw "Build.ps1 parse errors: $errors" }
 $PROJECT_DIR=$Project; $BUILD_DIR=Join-Path $Project 'build-msvc'
 $RadiaOnly=[bool]$Radia; $AxiFemOnly=[bool]$Axi; $BuildCubitPlugin=[bool]$Sdk; $Rebuild=$true
 $removed=[Collections.Generic.List[string]]::new()
 if ($Action -eq 'cleanup') {
     $nodes=@($ast.FindAll({param($n)
-        $n -is [Management.Automation.Language.IfStatementAst] -and
+        $n -is [System.Management.Automation.Language.IfStatementAst] -and
         $n.Extent.Text -match '^if\s*\(\$Rebuild\)'
     },$true))
     if ($nodes.Count -ne 1) { throw "Expected one cleanup block, got $($nodes.Count)" }
@@ -180,7 +180,7 @@ if ($Action -eq 'cleanup') {
     }
 } elseif ($Action -eq 'payload') {
     $nodes=@($ast.FindAll({param($n)
-        $n -is [Management.Automation.Language.IfStatementAst] -and
+        $n -is [System.Management.Automation.Language.IfStatementAst] -and
         $n.Extent.Text -match '^if\s*\(-not\s+\$AxiFemOnly\)' -and
         $n.Extent.Text.Contains('$modules = @(') -and
         $n.Extent.Text.Contains('check_native_module_abi.py')
