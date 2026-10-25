@@ -228,7 +228,7 @@ def test_mixed_omega_rejects_floating_components_before_assembly(monkeypatch, of
         raise AssertionError("floating components reached assembly instead of the gauge guard")
 
     monkeypatch.setattr(solver, "BilinearForm", must_not_assemble)
-    with ng.TaskManager(), pytest.raises(ValueError, match="common constant.*1 connected"):
+    with ng.TaskManager(), pytest.raises(ValueError, match="common constant.*: 1 connected"):
         solver.solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh, ng.CF((0.0, 0.0, 0.0)), 0.0, 1.0, (3.0, 0.0, 0.0),
             mu_r_by_material={"reduced": 1.0, "total": 1.0},
