@@ -14,8 +14,7 @@ unset(RADIA_BUILD_OPTUNA_MEX_ONLY CACHE)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# FFTW is replaced by Intel MKL DFTI (direct integration in fftw.h)
-# No FFTW library linking required - MKL DFTI provides FFT functionality
+# FFT adapters are selected by the build provider: x86 MKL DFTI or aarch64 NVPL FFT.
 
 # Parallelization: NGSolve TaskManager (replaces OpenMP)
 # NGSolve is a hard prerequisite for this fork.
@@ -157,7 +156,7 @@ set(CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/core")
 set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/lib")
 set(EXT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/ext")
 set(PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/radia")
-# FFTW directory removed - using MKL DFTI via fftw.h compatibility layer
+# FFT adapters live in src/ext/genmath and follow the explicit provider selection.
 
 # File name suffix of the extension modules copied into src/radia after the build
 if(WIN32)
@@ -183,9 +182,9 @@ endif()
 string(TOUPPER "${RADIA_BLAS_PROVIDER}" _RADIA_PROVIDER_DEFINE)
 add_compile_definitions(RADIA_BLAS_${_RADIA_PROVIDER_DEFINE}=1)
 include_directories("${CORE_DIR}")
-# BLAS/LAPACK: preserve the x86 oneMKL selection.
-# from the selected Python environment. An
-# explicitly supplied MKLROOT is retained only as a fallback.
+# BLAS/LAPACK: preserve x86 oneMKL from the selected Python environment;
+# an explicit MKLROOT may select a controlled external x86 installation.
+# Linux aarch64 requires the separate NVPL development prefix.
 
 if(WIN32)
 	# Intel MKL (required). Prefer the pip mkl-devel layout belonging to the

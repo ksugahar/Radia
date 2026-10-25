@@ -54,6 +54,10 @@ The selected Python environment's `Library` directory is the first MKL search
 location. An explicitly set `MKLROOT` is a fallback for a controlled external
 installation. There is no hard-coded oneAPI installation path.
 
+On Windows, the official NGSolve wheel owns its OpenBLAS dependency; Radia's
+dense kernels independently use MKL. Radia does not replace that wheel dependency.
+This Windows arrangement does not define the Linux source-build provider policy.
+
 Linux dependency source builds must use the same selected MKL/NVPL provider as Radia; resolve each version
 from the pinned NGSolve package metadata.
 Radia's HACApK and dense native kernels use MKL on x86 or NVPL on aarch64; direct FE solves explicitly

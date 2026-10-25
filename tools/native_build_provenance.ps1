@@ -66,7 +66,7 @@ function Write-NativeBuildProvenance {
         [Parameter(Mandatory)][string]$BinaryPath,
         [Parameter(Mandatory)][string]$RepoRoot,
         [Parameter(Mandatory)]$StartIdentity,
-        [string]$BuildDirectory
+        [string]$BuildDirectory = 'build-msvc'
     )
 
     Set-StrictMode -Version Latest
@@ -105,6 +105,9 @@ function Write-NativeBuildProvenance {
                 -Algorithm SHA256).Hash.ToLowerInvariant()
             generated_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
         }
+        if ([string]::IsNullOrWhiteSpace($BuildDirectory)) {
+            throw 'Native provenance requires an explicit compiled provider build directory'
+        }
         if ($BuildDirectory) {
             $resolvedBuild = [IO.Path]::GetFullPath((Join-Path $RepoRoot $BuildDirectory))
             $relativeBuild = [IO.Path]::GetRelativePath([IO.Path]::GetFullPath($RepoRoot), $resolvedBuild).Replace('\', '/')
@@ -113,6 +116,9 @@ function Write-NativeBuildProvenance {
             }
             $manifest.build_directory = $relativeBuild
             $providerPath = Join-Path $resolvedBuild 'radia-provider.json'
+            if (-not (Test-Path -LiteralPath $providerPath -PathType Leaf)) {
+                throw 'Native provenance requires radia-provider.json from the selected build'
+            }
             if (Test-Path -LiteralPath $providerPath -PathType Leaf) {
                 $provider = Get-Content -Raw -LiteralPath $providerPath | ConvertFrom-Json
                 if ($provider.provider -ne 'mkl' -or $provider.integer_abi -ne 'lp64') {

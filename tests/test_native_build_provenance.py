@@ -32,9 +32,15 @@ def _repo(tmp_path: Path) -> tuple[Path, Path]:
     _git(repo, "config", "user.email", "test@example.invalid")
     _git(repo, "config", "user.name", "Provenance Test")
     (repo / "source.txt").write_text("v1\n", encoding="utf-8")
-    (repo / ".gitignore").write_text("*.pyd\n*.pyd.build.json\n", encoding="utf-8")
+    (repo / ".gitignore").write_text("*.pyd\n*.pyd.build.json\nbuild-msvc/\n", encoding="utf-8")
     _git(repo, "add", "source.txt", ".gitignore")
     _git(repo, "commit", "-m", "initial")
+    build = repo / "build-msvc"
+    build.mkdir()
+    (build / "radia-provider.json").write_text(
+        json.dumps({"provider": "mkl", "integer_abi": "lp64", "architecture": "AMD64"}),
+        encoding="utf-8",
+    )
     binary = repo / "native.pyd"
     binary.write_bytes(b"native")
     return repo, binary
@@ -136,7 +142,7 @@ def test_manifest_is_emitted_only_when_start_and_end_identity_match(tmp_path):
 @pytest.mark.parametrize('directory', ['build-msvc', 'outside'])
 def test_optional_build_directory_is_explicit_and_checkout_bound(tmp_path,directory):
     repo,binary=_repo(tmp_path)
-    (repo/directory).mkdir()
+    (repo/directory).mkdir(exist_ok=True)
     path=Path(str(binary)+'.build.json')
     command=(f"$ErrorActionPreference='Stop'; . {_quote(SCRIPT)}; "
              f"$start=Get-NativeBuildSourceIdentity -RepoRoot {_quote(repo)}; "
@@ -315,7 +321,7 @@ def test_windows_receipt_uses_compiled_provider_record(tmp_path, provider):
     _git(repo, "add", ".gitignore")
     _git(repo, "commit", "-m", "ignore build outputs")
     build = repo / "build-msvc"
-    build.mkdir()
+    build.mkdir(exist_ok=True)
     (build / "radia-provider.json").write_text(
         json.dumps({"provider": provider, "integer_abi": "lp64", "architecture": "AMD64"}),
         encoding="utf-8",
@@ -334,3 +340,23 @@ def test_windows_receipt_uses_compiled_provider_record(tmp_path, provider):
     else:
         assert result.returncode != 0, (result.stdout, result.stderr)
         assert not manifest.exists()
+
+
+@pytest.mark.parametrize("directory", [None, "build-msvc", ""])
+def test_receipt_rejects_missing_provider_and_removes_stale_receipt(tmp_path, directory):
+    repo, binary = _repo(tmp_path)
+    (repo / "build-msvc" / "radia-provider.json").unlink()
+    manifest = Path(str(binary) + ".build.json")
+    manifest.write_text('{"stale": true}', encoding="utf-8")
+    option = "" if directory is None else " -BuildDirectory '" + directory + "'"
+    command = (
+        "$ErrorActionPreference='Stop'; "
+        f". {_quote(SCRIPT)}; "
+        f"$start=Get-NativeBuildSourceIdentity -RepoRoot {_quote(repo)}; "
+        f"Write-NativeBuildProvenance -BinaryPath {_quote(binary)} "
+        f"-RepoRoot {_quote(repo)} -StartIdentity $start{option}"
+    )
+    result = _pwsh(command)
+    assert result.returncode != 0, (result.stdout, result.stderr)
+    assert not manifest.exists()
+    assert not list(repo.glob("*.build.json.tmp-*"))
