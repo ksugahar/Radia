@@ -26,7 +26,7 @@ def main():
             exe=a.out/(mode+'.exe');batch=a.out/(mode+'.cmd')
             inputs=' '.join('"'+str(s)+'"' for s in sources)
             define='/DRAD_HACAPK_BATCH_ENTRIES /DRAD_HACAPK_FRAME_ADMISSION' if mode=='frame' else '/DRAD_HACAPK_BATCH_ENTRIES /DRAD_HACAPK_DENSE_LEAF_SINK' if mode=='deferred' else '/DRAD_HACAPK_BATCH_ENTRIES' if mode=='batch' else ''
-            batch.write_text('@echo off\ncall "'+str(vs/'VC/Auxiliary/Build/vcvars64.bat')+'" >nul\n'+f'cl /nologo /TC /MD /O2 /Gy {define} /I"{root/"src/ext/HACApK"}" /I"{root/"src/core"}" /I"{a.mkl_root/"include"}" {inputs} /Fo:"{a.out}/" /Fe:"{exe}" /link /OPT:REF /LIBPATH:"{a.mkl_root/"lib"}" mkl_rt.lib\n',encoding='utf-8')
+            batch.write_text('@echo off\ncall "'+str(vs/'VC/Auxiliary/Build/vcvars64.bat')+'" >nul\n'+f'cl /nologo /TC /MD /O2 /Gy /DRADIA_BLAS_MKL=1 {define} /I"{root/"src/ext/HACApK"}" /I"{root/"src/core"}" /I"{a.mkl_root/"include"}" {inputs} /Fo:"{a.out}/" /Fe:"{exe}" /link /OPT:REF /LIBPATH:"{a.mkl_root/"lib"}" mkl_rt.lib\n',encoding='utf-8')
             built=subprocess.run(['cmd','/c',str(batch)],cwd=a.out,env=env,capture_output=True)
             (a.out/(mode+'-build.log')).write_bytes(built.stdout+built.stderr);built.check_returncode()
             run=subprocess.run([str(exe)],cwd=a.out,env=env,capture_output=True)

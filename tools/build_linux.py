@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build CPU Python extensions on Linux with an explicit Intel LLVM toolchain.
+"""Build CPU Python extensions on Linux with an explicit architecture-matched BLAS/toolchain.
 
 Run with the isolated job environment's Python. Dependency pins come from
 pyproject.toml; this entry point neither installs packages nor loads modules.
@@ -77,14 +77,40 @@ def write_provenance(binary, identity):
     return True
 
 
+def provider_configuration(machine, requested=None):
+    architecture = machine.lower()
+    expected = {"x86_64": "mkl", "amd64": "mkl", "aarch64": "nvpl", "arm64": "nvpl"}.get(architecture)
+    if expected is None:
+        raise RuntimeError(f"Unsupported Linux architecture: {machine}")
+    if requested is not None and requested != expected:
+        raise RuntimeError(f"Provider mismatch: {machine} requires {expected}, got {requested}")
+    variable = "MKLROOT" if expected == "mkl" else "NVPL_ROOT"
+    if not os.environ.get(variable):
+        raise RuntimeError(f"Set {variable} for the explicit {expected} provider")
+    root = Path(os.environ[variable])
+    headers = ["mkl.h"] if expected == "mkl" else ["nvpl_blas_cblas.h", "nvpl_lapacke.h", "nvpl_fftw/fftw3.h"]
+    names = ["mkl_rt"] if expected == "mkl" else ["nvpl_lapack_lp64_seq", "nvpl_blas_lp64_seq", "nvpl_fftw"]
+    for header in headers:
+        if not (root / "include" / header).is_file():
+            raise RuntimeError(f"Missing {expected} header: {header}")
+    libraries = [root / "lib" / f"lib{name}.so" for name in names]
+    if not all(path.is_file() for path in libraries):
+        raise RuntimeError(f"Missing explicit {expected} LP64 provider libraries")
+    return {"name": expected, "integer_abi": "lp64",
+            "thread_policy": "lp64-sequential" if expected == "nvpl" else "mkl-caller-controlled",
+            "libraries": {str(path.resolve()): hashlib.sha256(path.read_bytes()).hexdigest()
+                          for path in libraries}}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build-dir", type=Path, required=True,
                         help="job-owned build directory, separate from other toolchains")
     parser.add_argument("--jobs", type=int, default=1,
                         help="admitted parallel build jobs (default: 1)")
-    parser.add_argument("--cc", default=os.environ.get("CC", "icx"))
-    parser.add_argument("--cxx", default=os.environ.get("CXX", "icpx"))
+    parser.add_argument("--cc", default=os.environ.get("CC"))
+    parser.add_argument("--cxx", default=os.environ.get("CXX"))
+    parser.add_argument("--provider", choices=("mkl", "nvpl"), help="must match the target architecture")
     parser.add_argument("--targets", nargs="+", choices=TARGETS, default=list(TARGETS))
     parser.add_argument("--require-clean-source", action="store_true",
                         help="reject dirty source before configuring an acceptance build")
@@ -115,23 +141,26 @@ def main(argv=None):
         if args.require_clean_source and start["source_dirty"]:
             raise RuntimeError("Clean source is required for this build")
         report["versions"] = check_versions()
-        cc, cxx, cmake = tool(args.cc), tool(args.cxx), tool("cmake")
+        provider = provider_configuration(platform.machine(), args.provider)
+        report["provider"] = provider
+        default_cc, default_cxx = ("gcc", "g++") if provider["name"] == "nvpl" else ("icx", "icpx")
+        cc, cxx, cmake = tool(args.cc or default_cc), tool(args.cxx or default_cxx), tool("cmake")
         tool("ninja")
         compiler_version = run([cxx, "--version"], capture_output=True, text=True).stdout
         c_version = run([cc, "--version"], capture_output=True, text=True).stdout
-        if not all(re.search(r"Intel|clang", version, flags=re.I)
-                   for version in (c_version, compiler_version)):
-            raise RuntimeError("Select Intel LLVM icx/icpx or Clang explicitly; GCC is not this build entry point's toolchain")
-        report["compiler"] = {"cc": cc, "cxx": cxx, "version": compiler_version,
-                              "c_version": c_version}
-        mkl = Path(os.environ.get("MKLROOT", ""))
-        if not os.environ.get("MKLROOT") or not (mkl / "include/mkl.h").is_file() or not (mkl / "lib/libmkl_rt.so").is_file():
-            raise RuntimeError("Set MKLROOT to oneMKL containing include/mkl.h and lib/libmkl_rt.so")
+        if provider["name"] == "nvpl":
+            if not all(re.search(r"(?:gcc|g\+\+|GCC).*11\.5", version) for version in (c_version, compiler_version)):
+                raise RuntimeError("Linux aarch64/NVPL requires explicit GCC 11.5; no compiler fallback")
+        elif not all(re.search(r"Intel|clang", version, flags=re.I)
+                     for version in (c_version, compiler_version)):
+            raise RuntimeError("x86 Linux requires Intel LLVM or explicit Clang; no GCC fallback")
+        report["compiler"] = {"cc": cc, "cxx": cxx, "version": compiler_version, "c_version": c_version}
         for target in args.targets:
             Path(str(ROOT / "src/radia" / f"{target}.so") + ".build.json").unlink(missing_ok=True)
         run([cmake, "-S", ROOT, "-B", build, "-G", "Ninja",
              "-DCMAKE_BUILD_TYPE=Release", f"-DCMAKE_C_COMPILER={cc}",
-             f"-DCMAKE_CXX_COMPILER={cxx}", f"-DPython3_EXECUTABLE={sys.executable}"])
+             f"-DCMAKE_CXX_COMPILER={cxx}", f"-DPython3_EXECUTABLE={sys.executable}",
+             f"-DRADIA_BLAS_PROVIDER={provider['name']}"])
         run([cmake, "--build", build, "--target", *args.targets, "--parallel", args.jobs])
         # Import from this checkout, never an unrelated installed Radia.
         env = dict(os.environ, PYTHONPATH=str(ROOT / "src"), PYTHONNOUSERSITE="1")
@@ -148,7 +177,7 @@ def main(argv=None):
             raise RuntimeError("Source identity changed during native build; provenance was not issued")
         for target in args.targets:
             artifact = ROOT / "src/radia" / f"{target}.so"
-            report["artifacts"][target]["provenance_issued"] = write_provenance(artifact, start)
+            report["artifacts"][target]["provenance_issued"] = write_provenance(artifact, dict(start, blas_provider=provider))
         if start["source_dirty"]:
             print("Dirty source checkout: native acceptance manifests were not issued")
         report["passed"] = True

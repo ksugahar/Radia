@@ -29,7 +29,7 @@
 #include <algorithm>
 
 #ifdef HAVE_LAPACK
-#include "mkl_cblas.h"
+#include "rad_blas.h"
 #endif
 
 namespace radia {

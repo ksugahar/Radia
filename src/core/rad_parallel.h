@@ -24,7 +24,7 @@
 #include <cstdlib>
 
 #ifdef HAVE_LAPACK
-#include "mkl_service.h"           // mkl_set_num_threads, mkl_get_max_threads
+#include "rad_blas.h"
 #endif
 
 namespace radia {
@@ -40,21 +40,6 @@ using ngcore::TaskManager;
 using ngcore::SuspendTaskManager;
 using ngcore::IntRange;
 using ngcore::TaskInfo;
-
-#ifdef HAVE_LAPACK
-// RAII guard: temporarily sets MKL threads for LAPACK calls (dgesv_ etc.),
-// restoring the original value on scope exit.
-// NGSolve sets mkl_set_num_threads(1) globally; this guard re-enables
-// multi-threaded MKL for computationally intensive LAPACK operations.
-class MKLThreadGuard {
-    int saved_;
-public:
-    explicit MKLThreadGuard(int n) : saved_(mkl_get_max_threads()) { mkl_set_num_threads(n); }
-    ~MKLThreadGuard() { mkl_set_num_threads(saved_); }
-    MKLThreadGuard(const MKLThreadGuard&) = delete;
-    MKLThreadGuard& operator=(const MKLThreadGuard&) = delete;
-};
-#endif
 
 // Convenience wrappers.  RADIA_NUM_THREADS is intentionally read on demand so
 // benchmark drivers can set it before calling rad.Solve without rebuilding or

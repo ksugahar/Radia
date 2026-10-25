@@ -167,7 +167,24 @@ else()
 endif()
 
 
-# BLAS/LAPACK: Intel MKL 2026 from the selected Python environment. An
+# Provider choice is resolved at build time, never by runtime probing.
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _RADIA_ARCH)
+if((WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND _RADIA_ARCH MATCHES "^(amd64|x86_64)$")
+    set(_RADIA_REQUIRED_PROVIDER "mkl")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND _RADIA_ARCH MATCHES "^(aarch64|arm64)$")
+    set(_RADIA_REQUIRED_PROVIDER "nvpl")
+else()
+    message(FATAL_ERROR "Unsupported Radia provider architecture: ${CMAKE_SYSTEM_NAME}/${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+set(RADIA_BLAS_PROVIDER "${_RADIA_REQUIRED_PROVIDER}" CACHE STRING "Explicit LP64 provider (mkl or nvpl)")
+if(NOT RADIA_BLAS_PROVIDER STREQUAL _RADIA_REQUIRED_PROVIDER)
+    message(FATAL_ERROR "Provider mismatch: ${RADIA_BLAS_PROVIDER}; this architecture requires ${_RADIA_REQUIRED_PROVIDER}")
+endif()
+string(TOUPPER "${RADIA_BLAS_PROVIDER}" _RADIA_PROVIDER_DEFINE)
+add_compile_definitions(RADIA_BLAS_${_RADIA_PROVIDER_DEFINE}=1)
+include_directories("${CORE_DIR}")
+# BLAS/LAPACK: preserve the x86 oneMKL selection.
+# from the selected Python environment. An
 # explicitly supplied MKLROOT is retained only as a fallback.
 
 if(WIN32)
@@ -245,6 +262,25 @@ if(WIN32)
 	else()
 		message(FATAL_ERROR "Intel MKL not found. Install pip package mkl-devel>=2026,<2027.")
 	endif()
+elseif(RADIA_BLAS_PROVIDER STREQUAL "nvpl")
+    if(NOT DEFINED ENV{NVPL_ROOT})
+        message(FATAL_ERROR "Linux aarch64 requires explicit NVPL_ROOT (25.11, LP64 sequential)")
+    endif()
+    file(TO_CMAKE_PATH "$ENV{NVPL_ROOT}" NVPL_DIR)
+    set(BLAS_INCLUDE_DIR "${NVPL_DIR}/include")
+    foreach(_header nvpl_blas_cblas.h nvpl_lapacke.h nvpl_fftw/fftw3.h)
+        if(NOT EXISTS "${BLAS_INCLUDE_DIR}/${_header}")
+            message(FATAL_ERROR "Missing NVPL development header: ${_header}")
+        endif()
+    endforeach()
+    set(BLAS_LIB)
+    foreach(_lib nvpl_lapack_lp64_seq nvpl_blas_lp64_seq nvpl_fftw)
+        set(_file "${NVPL_DIR}/lib/lib${_lib}.so")
+        if(NOT EXISTS "${_file}")
+            message(FATAL_ERROR "Missing NVPL provider library: ${_file}")
+        endif()
+        list(APPEND BLAS_LIB "${_file}")
+    endforeach()
 else()
 	# Linux: oneMKL from MKLROOT (e.g. an oneAPI environment module), single
 	# dynamic runtime libmkl_rt.  The threading layer is selected at run time
@@ -263,6 +299,9 @@ else()
 	set(BLAS_INCLUDE_DIR ${MKL_INCLUDE_DIR})
 	set(USE_MKL_FOUND TRUE)
 endif()
+set(RADIA_BLAS_FOUND TRUE)
+file(WRITE "${CMAKE_BINARY_DIR}/radia-provider.json"
+    "{\"provider\":\"${RADIA_BLAS_PROVIDER}\",\"integer_abi\":\"lp64\",\"architecture\":\"${CMAKE_SYSTEM_PROCESSOR}\"}\n")
 
 # Radia core sources (organized by API functionality)
 set(RADIA_CORE_SOURCES
@@ -559,7 +598,7 @@ target_compile_definitions(peec_matrices PRIVATE
 )
 
 # Intel MKL for BLAS operations (if available)
-if(USE_MKL_FOUND)
+if(RADIA_BLAS_FOUND)
 	target_link_libraries(peec_matrices PRIVATE ${BLAS_LIB})
 	target_include_directories(peec_matrices PRIVATE ${BLAS_INCLUDE_DIR})
 	target_compile_definitions(peec_matrices PRIVATE HAVE_LAPACK)
@@ -673,7 +712,7 @@ target_compile_definitions(_radia_pybind PRIVATE
 )
 
 # Intel MKL for _radia_pybind
-if(USE_MKL_FOUND)
+if(RADIA_BLAS_FOUND)
 	target_link_libraries(_radia_pybind PRIVATE ${BLAS_LIB})
 	target_include_directories(_radia_pybind PRIVATE ${BLAS_INCLUDE_DIR})
 	target_compile_definitions(_radia_pybind PRIVATE HAVE_LAPACK)
@@ -780,7 +819,7 @@ target_include_directories(sparsesolv_ngsolve BEFORE PRIVATE ${NGSOLVE_BUNDLED_I
 
 target_compile_definitions(sparsesolv_ngsolve PRIVATE
 	SPARSESOLV_USE_NGSOLVE_TASKMANAGER
-	SPARSESOLV_USE_MKL
+	SPARSESOLV_USE_BLAS
 	_CRT_SECURE_NO_WARNINGS
 	$<$<CONFIG:Debug>:_DEBUG>
 	$<$<CONFIG:Release>:NDEBUG>
@@ -795,12 +834,12 @@ if(MSVC)
 		/wd4244
 		/wd4267
 	)
-else()
+elseif(_RADIA_ARCH MATCHES "^(amd64|x86_64)$")
 	target_compile_options(sparsesolv_ngsolve PRIVATE -mavx2 -mfma)
 endif()
 
 # Intel MKL for BLAS/LAPACK (sparsesolv uses dense ops in AMG coarse solve)
-if(USE_MKL_FOUND)
+if(RADIA_BLAS_FOUND)
 	target_link_libraries(sparsesolv_ngsolve PRIVATE ${BLAS_LIB})
 	target_include_directories(sparsesolv_ngsolve PRIVATE ${BLAS_INCLUDE_DIR})
 endif()

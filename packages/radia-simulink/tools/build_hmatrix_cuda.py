@@ -76,7 +76,7 @@ def main():
             include=(f'/I"{args.mkl_root/"include"}" /DRAD_HACAPK_DENSE_LEAF_SINK /DRAD_HACAPK_FRAME_ADMISSION') if full else ''
             if full and name.startswith('cHACApK_'):
                 include += f' /DRAD_HACAPK_C_MEMORY /I"{logical_root/"packages/radia-simulink/native"}" /FI"hmatrix_c_memory.h"'
-            batch.write_text('@echo off\ncall "'+str(discover_vs()/'VC/Auxiliary/Build/vcvars64.bat')+'" >nul\n'+f'cl /nologo /c /TC /MD /O2 /Gy /DRAD_HACAPK_BATCH_ENTRIES /DRAD_HACAPK_BATCH_SIZE={args.entry_batch_size} {include} /I"{logical_root/"src/core"}" /I"{logical_root/"src/ext/HACApK"}" "{logical_root/source.relative_to(root)}" /Fo:"{obj}"\n',encoding='utf-8')
+            batch.write_text('@echo off\ncall "'+str(discover_vs()/'VC/Auxiliary/Build/vcvars64.bat')+'" >nul\n'+f'cl /nologo /c /TC /MD /O2 /Gy /DRADIA_BLAS_MKL=1 /DRAD_HACAPK_BATCH_ENTRIES /DRAD_HACAPK_BATCH_SIZE={args.entry_batch_size} {include} /I"{logical_root/"src/core"}" /I"{logical_root/"src/ext/HACApK"}" "{logical_root/source.relative_to(root)}" /Fo:"{obj}"\n',encoding='utf-8')
             compiled=subprocess.run(['cmd','/c',str(batch)],capture_output=True,cwd=root)
             (out/(name+'-compile.log')).write_bytes(compiled.stdout+compiled.stderr);compiled.check_returncode()
         if args.fault_injection:
