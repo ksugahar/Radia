@@ -16,7 +16,7 @@
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Test
 #
 # Options:
-#   -Rebuild    Clean build directory before building
+#   -Rebuild    Clean only the selected build directories
 #   -RadiaOnly  Build and copy only _radia_pybind.pyd
 #   -CudaMexOnly  Stage the CUDA-only NGSolve assembled-operator bridge
 #   -AmsCudaOnly  Stage the experimental AMS CUDA gateway and snapshot adapter
