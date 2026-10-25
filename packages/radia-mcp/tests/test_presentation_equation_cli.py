@@ -27,8 +27,8 @@ def test_presentation_tools_export_eqnedit64_bridge() -> None:
 def test_equation_policy_keeps_standalone_distribution_boundary() -> None:
     policy = equation_cli.presentation_equation_policy()
     assert policy["schema"] == "radia-mcp.presentation-equation-policy.v4"
-    assert policy["source_of_truth"]["native"] == "https://github.com/ksugahar/eqnedit64/tree/main/src"
-    assert policy["source_of_truth"]["web"].startswith("https://github.com/ksugahar/eqnedit64/blob/main/web/")
+    assert policy["source_of_truth"]["native"] == "https://github.com/ksugahar/EqnEdit64/tree/main/src"
+    assert policy["source_of_truth"]["web"].startswith("https://github.com/ksugahar/EqnEdit64/blob/main/web/")
     assert policy["source_of_truth"]["distribution"] == "https://pypi.org/project/eqnedit64/"
     assert policy["publication"]["python"] == "PyPI package eqnedit64"
     assert "optional" in policy["publication"]["integration"]

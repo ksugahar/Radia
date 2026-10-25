@@ -1,7 +1,7 @@
 # TeX equation services
 
 Equation editing and conversion belong to the independent
-[`eqnedit64` package and native/Web product](https://github.com/ksugahar/eqnedit64).
+[`eqnedit64` package and native/Web product](https://github.com/ksugahar/EqnEdit64).
 The Radia solver no longer builds or distributes an equation module.
 
 TeX is the source format. For an existing Office session, use
