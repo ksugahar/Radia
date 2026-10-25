@@ -1,4 +1,8 @@
-"""Keep the 100-host CI split and remote pre-push contract explicit."""
+"""Guards: CI host routing, native release and pre-push boundaries remain explicit.
+
+Assumes: publication is dispatched on an approved release tag, independently of
+native build completion; runner capabilities are declared in workflow sources.
+"""
 
 import importlib.util
 import re
@@ -53,7 +57,10 @@ def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
     assert "pip install pybind11" not in optuna_self_hosted
     assert "Build Optuna CUDA kernels with mexcuda" in optuna_self_hosted
     assert optuna.count("'.github/workflows/radia-optuna.yml'") == 2
-    assert 'workflows: ["Radia Native Release"]' in release
+    release_document = yaml.safe_load(release)
+    assert set(release_document.get('on', release_document.get(True))) == {'workflow_dispatch'}
+    assert "github.ref_type == 'tag'" in release_document['jobs']['verify-promotion']['if']
+    assert 'tools/verify_radia_promotion.py' in release
 
 
 def test_fast_ci_declares_bh_and_wheel_contract_dependencies():
