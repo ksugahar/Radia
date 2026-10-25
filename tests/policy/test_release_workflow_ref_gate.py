@@ -268,13 +268,16 @@ def _cubit_candidate(tmp_path, monkeypatch):
     spec.loader.exec_module(provenance)
     native = tmp_path / "src/cubit_plugin"
     native.mkdir(parents=True)
-    (native / "fixture.cpp").write_text("// release identity fixture\n", encoding="utf-8")
+    (native / "fixture.cpp").write_bytes(b"// release identity fixture\n")
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools/find_cubit.ps1").write_bytes(b"# source identity fixture\n")
     digest, count = provenance.native_source_digest(tmp_path)
     payloads = {"cubit_mesh_export.ccm": b"MZ signed CCM", "cubit_mesh_curver.pyd": b"MZ signed PYD"}
     manifest = {"schema": provenance.SCHEMA, "source": {"commit": "b" * 40, "tree_sha256": digest, "file_count": count, "hash_format": provenance.HASH_FORMAT}, "payloads": {name: {"size": len(data), "sha256": hashlib.sha256(data).hexdigest()} for name, data in payloads.items()}}
     manifest_data = json.dumps(manifest).encode()
     (source / "native_payloads.json").write_bytes(manifest_data)
     (source / "cubit_mesh_export.ccm").write_bytes(payloads["cubit_mesh_export.ccm"])
+    (source / "cubit_mesh_curver.pyd").write_bytes(payloads["cubit_mesh_curver.pyd"])
     (package / "pyproject.toml").write_text('[project]\nversion="2.2.7"\n', encoding="utf-8")
     wheel = package / "dist/cubit_mesh_export-2.2.7-cp312-cp312-win_amd64.whl"
     wheel.parent.mkdir()
@@ -295,10 +298,13 @@ def _cubit_candidate(tmp_path, monkeypatch):
     for key, value in values.items():
         monkeypatch.setenv(key, value)
     remote = {"sha": "a" * 40}
-    git_blobs = {p.relative_to(tmp_path).as_posix(): p.read_bytes() for p in source.rglob("*") if p.is_file()}
+    git_blobs = {p.relative_to(tmp_path).as_posix(): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file() and "dist" not in p.parts and p.suffix != ".pyd"}
     def git(command, **kwargs):
         if command == ["git", "rev-parse", "HEAD"]:
             return "a" * 40
+        if command[:2] == ["git", "ls-tree"]:
+            prefixes = command[command.index("--") + 1:]
+            return b"\0".join(name.encode() for name in sorted(git_blobs) if any(name == prefix or name.startswith(prefix + "/") for prefix in prefixes)) + b"\0"
         if command[:2] == ["git", "show"]:
             key = command[2].split(":", 1)[1]
             if key not in git_blobs:
@@ -437,3 +443,28 @@ def test_cubit_real_build_layout_does_not_require_a_repository_root_dist(tmp_pat
     _run_cubit_audit("before-approval", monkeypatch)
     _run_cubit_audit("after-approval", monkeypatch)
     assert (tmp_path / "dist").is_dir()
+
+
+def test_cubit_materializes_only_job_stage_from_tagged_blobs(tmp_path, monkeypatch):
+    _cubit_candidate(tmp_path, monkeypatch)
+    source = tmp_path / "packages/cubit-mesh-export/src/cubit_mesh_export"
+    init = source / "__init__.py"
+    tagged = init.read_bytes()
+    # Model Windows checkout conversion; materialization must not rewrite it.
+    init.write_bytes(tagged.replace(b"\n", b"\r\n"))
+    existing = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    runner = tmp_path / "runner-temp"
+    runner.mkdir()
+    monkeypatch.setenv("RUNNER_TEMP", str(runner))
+    export = tmp_path / "github-env"
+    monkeypatch.setenv("GITHUB_ENV", str(export))
+    step = next(s for s in _cubit_workflow()["jobs"]["build-test"]["steps"] if s.get("name") == "Materialize exact tagged package bytes")
+    program = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    exec(compile(program, "workflow-stage-source", "exec"), {"__name__": "__main__"})
+    stage = runner / "cubit-wheel-source"
+    assert (stage / "packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py").read_bytes() == tagged
+    assert (stage / "src/cubit_plugin/fixture.cpp").read_bytes() == b"// release identity fixture\n"
+    assert (stage / "tools/find_cubit.ps1").read_bytes() == b"# source identity fixture\n"
+    assert (stage / "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_mesh_curver.pyd").read_bytes() == (source / "cubit_mesh_curver.pyd").read_bytes()
+    assert export.read_text(encoding="utf-8").strip() == "CUBIT_BUILD_ROOT=" + str(stage)
+    assert all(path.read_bytes() == content for path, content in existing.items())

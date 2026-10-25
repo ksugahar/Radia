@@ -133,12 +133,22 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import os, pathlib, subprocess
+          import os, pathlib, subprocess, shutil
           sha = os.environ['GITHUB_SHA']
-          paths = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', '-z', sha, '--', 'packages/cubit-mesh-export']).split(b'\0')
+          stage = pathlib.Path(os.environ['RUNNER_TEMP']) / 'cubit-wheel-source'
+          if stage.exists():
+              raise SystemExit('wheel source stage must be fresh')
+          stage.mkdir(parents=True)
+          paths = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', '-z', sha, '--', 'packages/cubit-mesh-export', 'src/cubit_plugin', 'tools/find_cubit.ps1']).split(b'\0')
           for value in filter(None, paths):
-              path = pathlib.Path(value.decode('utf-8'))
-              path.write_bytes(subprocess.check_output(['git', 'show', sha + ':' + path.as_posix()]))
+              relative = pathlib.Path(value.decode('utf-8'))
+              target = stage / relative
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_bytes(subprocess.check_output(['git', 'show', sha + ':' + relative.as_posix()]))
+          payload = pathlib.Path('packages/cubit-mesh-export/src/cubit_mesh_export/cubit_mesh_curver.pyd')
+          shutil.copyfile(payload, stage / payload)
+          with pathlib.Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as stream:
+              stream.write('CUBIT_BUILD_ROOT=' + str(stage) + '\n')
           PY
 
       - name: Build and verify cubit-mesh-export wheel
@@ -146,7 +156,9 @@ jobs:
         run: |
           python -m pip install build wheel
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m build --wheel packages\cubit-mesh-export
+          $stagedPackage = Join-Path $env:CUBIT_BUILD_ROOT 'packages\cubit-mesh-export'
+          $wheelDir = Join-Path $env:GITHUB_WORKSPACE 'packages\cubit-mesh-export\dist'
+          python -m build --wheel --outdir $wheelDir $stagedPackage
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $wheel = Get-ChildItem packages\cubit-mesh-export\dist\*.whl |
             Select-Object -First 1
