@@ -21,7 +21,7 @@ ng = pytest.importorskip("ngsolve")
 SOURCE_BONUS_INTORDER = 8
 
 
-def _mesh(maxh):
+def _mesh(maxh, *, point_gauge=False):
     from netgen.occ import Box, Glue, OCCGeometry, Pnt, X
 
     reduced = Box(Pnt(-1, -1, -1), Pnt(0, 1, 1))
@@ -32,7 +32,15 @@ def _mesh(maxh):
     total.mat("total")
     total.faces.name = "total_outer"
     total.faces.Min(X).name = "source_total_interface"
-    return ng.Mesh(OCCGeometry(Glue([reduced, total])).GenerateMesh(maxh=maxh))
+    mesh = ng.Mesh(OCCGeometry(Glue([reduced, total])).GenerateMesh(maxh=maxh))
+    if point_gauge:
+        from netgen.meshing import Element0D, PointId
+        vertex = next(v for v in mesh.vertices if tuple(v.point) == (1, -1, -1))
+        index = len(mesh.GetBBBoundaries()) + 1
+        mesh.ngmesh.Add(Element0D(PointId(vertex.nr + 1), index=index))
+        mesh.ngmesh.SetCD3Name(index, "GND")
+        mesh = ng.Mesh(mesh.ngmesh)
+    return mesh
 
 
 def _divergence_free_source():
@@ -55,7 +63,8 @@ def test_mixed_point_gauge_does_not_absorb_source_flux():
     from radia.kelvin_solver import (
         project_source_total_hodge, solve_magnetostatic_mixed_total_reduced_omega_kelvin)
     mesh = _mesh(0.7)
-    candidates = [v.nr for v in mesh.vertices if v.point[0] < -0.99]
+    # The finite mixed route puts its point gauge in the total-potential space.
+    candidates = [v.nr for v in mesh.vertices if v.point[0] > 0.99]
     first = len(mesh.GetBBBoundaries()) + 1
     for index, vertex in enumerate((min(candidates), max(candidates)), first):
         mesh.ngmesh.Add(Element0D(PointId(vertex+1), index=index))
@@ -116,13 +125,13 @@ def test_surface_flux_load_matches_the_volume_load(order):
     from radia.kelvin_solver import (
         project_source_total_hodge, solve_magnetostatic_mixed_total_reduced_omega_kelvin)
 
-    mesh = _mesh(0.4)
+    mesh = _mesh(0.4, point_gauge=True)
     source = _divergence_free_source()
     common = dict(mu_r_by_material={"reduced": 1.0, "total": 50.0},
                   reduced_materials=("reduced",), total_materials=("total",),
                   interface_boundary="source_total_interface", order=order,
                   bonus_intorder=SOURCE_BONUS_INTORDER,
-                  dirichlet_bbbnd="outer", return_system=True,
+                  dirichlet_bbbnd="GND", return_system=True,
                   total_source_materials=("total",))
     with ng.TaskManager():
         volume_hodge = project_source_total_hodge(
@@ -357,14 +366,14 @@ def test_surface_flux_needs_its_gate_and_its_permeability():
     from radia.kelvin_solver import (
         MU_0, project_source_total_hodge, solve_magnetostatic_mixed_total_reduced_omega_kelvin)
 
-    mesh = _mesh(0.6)
+    mesh = _mesh(0.6, point_gauge=True)
     source = _divergence_free_source()
     with pytest.raises(ValueError, match="tangential_tolerance"):
         project_source_total_hodge(mesh, source, ("total",), source_load="surface_flux")
     with pytest.raises(ValueError, match="source_load"):
         project_source_total_hodge(mesh, source, ("total",), source_load="nodal")
     common = dict(reduced_materials=("reduced",), total_materials=("total",),
-                  interface_boundary="source_total_interface", order=1, dirichlet_bbbnd="outer")
+                  interface_boundary="source_total_interface", order=1, dirichlet_bbbnd="GND")
     with ng.TaskManager(), pytest.raises(ValueError, match="assembled permeability"):
         solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh, source, 0.0, 1.0, (3.0, 0.0, 0.0),

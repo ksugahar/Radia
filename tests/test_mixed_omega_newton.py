@@ -163,9 +163,16 @@ def test_hybrid_linear_total_material_keeps_its_permeability(order):
     air.faces.name = iron.faces.name = pole.faces.name = 'outer'
     air.faces.Max(X).name = iron.faces.Min(X).name = 'source_total_interface'
     mesh = ng.Mesh(OCCGeometry(Glue([air, iron, pole])).GenerateMesh(maxh=1))
+    from netgen.meshing import Element0D
+    material = mesh.GetMaterials().index('pole') + 1
+    vertex = next(e.vertices[0] for e in mesh.ngmesh.Elements3D() if e.index == material)
+    gauge = len(mesh.GetBBBoundaries()) + 1
+    mesh.ngmesh.Add(Element0D(vertex, index=gauge))
+    mesh.ngmesh.SetCD3Name(gauge, 'GND')
+    mesh = ng.Mesh(mesh.ngmesh)
     options = dict(bh_table=[(0, 0), (1, 100*MU_0), (2, 150*MU_0)], nonlinear_materials=('total',),
                    reduced_materials=('reduced',), total_materials=('total', 'pole'),
-                   interface_boundary='source_total_interface', dirichlet_bbbnd='outer',
+                   interface_boundary='source_total_interface', dirichlet_bbbnd='GND',
                    kelvin_mats=(), order=order, tolerance=1e-6)
     zero = ng.CF((0., 0., 0.))
     with ng.TaskManager():
