@@ -29,7 +29,7 @@ Do not switch only Radia to LLVM `libc++` while linking a `libstdc++` NGSolve
 wheel. Inspect the actual dynamic dependencies rather than assuming a compiler
 name proves runtime independence.
 
-## Environment setup
+## x86 environment setup (dependency recipe not yet published)
 
 Use a fresh isolated job venv and an isolated checkout. Do not reuse a Windows
 build directory, an existing CMake cache from another compiler, or another
@@ -37,12 +37,18 @@ job's environment. Load the site's Intel LLVM and oneMKL modules before running
 these commands. Module names and filesystem paths are site-owned settings;
 keep those in private operations notes.
 
+The repository does not currently provide a hash-locked x86 MKL dependency
+build recipe or lock file. Preparing and reviewing that dependency environment
+is a prerequisite; the commands below start after it exists. They are not an
+end-to-end bootstrap procedure. NGSolve/Netgen, NumPy and SciPy must use the
+reviewed MKL provider for this Linux route.
+
 ```bash
 python3.12 -m venv "$JOB_ROOT/venv"
 . "$JOB_ROOT/venv/bin/activate"
-# Install reviewed, hash-locked dependency wheels built with MKL; an official
-# OpenBLAS wheel is not an interchangeable provider for this route.
-python -m pip install --no-index --require-hashes -r "$JOB_ROOT/dependencies.txt"
+# STOP here until the reviewed MKL dependency environment has been prepared.
+# No dependency lock file is shipped by this repository.
+# An official OpenBLAS wheel is not an interchangeable Linux provider.
 # MKLROOT must point to the oneMKL installation selected for this job.
 test -f "$MKLROOT/include/mkl.h"
 test -f "$MKLROOT/lib/libmkl_rt.so"
@@ -93,6 +99,10 @@ The FFT adapter uses NVPL's float FFTW3 interface, with the same unnormalised
 forward/backward convention as the x86 MKL DFTI path; it does not use FFT stubs.
 The compiled provider is available from
 `radia._radia_pybind._blas_provider_identity()` and native build receipts.
+Its `integer_abi` value describes the **compile-time** LP64 boundary; it does
+not interrogate the active interface of the MKL single dynamic library.
+In particular, `MKL_INTERFACE_LAYER` can change that runtime interface. Do not
+interpret the compiled identity alone as proof of runtime LP64 selection.
 
 This source route is experimental until actual native builds and independent
 numerical checks pass on the target architecture. Provider analytic harnesses
