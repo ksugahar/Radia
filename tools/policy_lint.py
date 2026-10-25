@@ -615,6 +615,18 @@ def check_public_runtime_privacy():
     hits.extend(check_bare_mdx_growth())
     return hits
 
+
+def check_public_product_names():
+    """Keep child workflow commands out of parent diagnostic text."""
+    names = subprocess.run([sys.executable, os.path.join(REPO, "tools/check_public_names.py")],
+                           cwd=REPO, capture_output=True, text=True, encoding="utf-8")
+    detail = "\n".join(line for line in (names.stdout + names.stderr).splitlines()
+                       if not line.startswith("::add-mask::")).strip()
+    if not detail:
+        detail = "ok" if names.returncode == 0 else "checker failed without public diagnostics"
+    return "Policy 13: public product names", names.returncode == 0, detail
+
+
 def check_all():
     """Return list of (policy_name, ok, detail) for all 8 policies."""
     results = []
@@ -760,10 +772,7 @@ def check_all():
                 payload_hits.extend(check_notebook_binary_integrity(path, source.read()))
     results.append(("Policy 12: notebook binary payloads decode", not payload_hits,
                     "\n".join(payload_hits[:20]) if payload_hits else "ok"))
-    names = subprocess.run([sys.executable, os.path.join(REPO, "tools/check_public_names.py")],
-                           cwd=REPO, capture_output=True, text=True, encoding="utf-8")
-    results.append(("Policy 13: public product names", names.returncode == 0,
-                    (names.stdout + names.stderr).strip() or "ok"))
+    results.append(check_public_product_names())
     return results
 
 
