@@ -6,7 +6,7 @@ Radia is AI-native, AI-operable electromagnetic CAE through MCP. Users set analy
 Scope: (1) complete and validate HDiv-MMM topology optimization; (2) improve repository and `radia-mcp` quality, validation, build, CI, packaging and release operation.
 Do not add unrelated features. No backward compatibility: keep only the latest design; delete legacy paths, aliases, flags, shims and old releases; repository health comes first.
 ## Repository Boundaries
-The monorepo independently releases `radia`, `radia-simulink`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64` (moving to its own repository). Scope commits and CI to the owner; each PyPI distribution owns its CI lane in `tools/ci_distribution_manifest.json`, and shared files trigger multiple lanes only for real shared ABI, build or integration changes.
+The monorepo independently releases `radia`, `radia-simulink`, `cubit-mesh-export`, `radia-mcp` and `radia-optuna`; EqnEdit64 lives in its own repository. Scope commits and CI to the owner; each PyPI distribution owns its CI lane in `tools/ci_distribution_manifest.json`, and shared files trigger multiple lanes only for real shared ABI, build or integration changes.
 `radia`: Python/pybind11 CPU and GPU, Windows and Linux; its code and tests never import `radia_simulink`. `packages/radia-simulink`: all MATLAB/Simulink/LTspice source, build and distribution, depending on `radia` one-way (the retired `radia-gpu` name is not published). `radia-mcp`: cross-package knowledge/tools, optional GPU backend. `radia-optuna` stays independent. `radia` releases exclude mexcuda, MATLAB, LTspice and Simulink artifacts and their CI gates; shared and CPU numerical gates remain mandatory.
 
 - `src/`, `packages/`: production; integrations belong to their package owner.
@@ -86,7 +86,7 @@ normal CI optimizes for fast, high-signal feedback and does not automatically re
 `docs/**/*.ipynb` introduces features through saved calculation records. Saved output is sufficient; an adjacent JSON and a runtime gate are not required. A docs-only contract lane parses changed notebooks. Public examples include saved parameterized WebGUI geometry/mesh and primary-field scenes.
 
 Pre-push runs only impact-scoped build-target preflight. Release workflows, never developer hooks, publish immutable artifacts.
-No workflow selects a retired or user-desktop runner. The EqnEdit64 release lane is GitHub-hosted end to end: signed executables arrive as assets of the eqnedit64-staging release, never from a mapped drive or workgroup share.
+No workflow selects a retired or user-desktop runner.
 
 ### Tests For AI-Authored Code
 
