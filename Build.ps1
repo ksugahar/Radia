@@ -1,4 +1,4 @@
-﻿#==============================================================================
+#==============================================================================
 # Build.ps1 - Radia CPU pybind11 / GPU mexcuda build entry points
 #
 # Builds _radia_pybind.pyd and auxiliary modules using MSVC compiler
@@ -407,7 +407,7 @@ Write-Host ""
 
 if ($Rebuild) {
     $BuildDirsToClean = @($BUILD_DIR)
-    if (-not $AxiFemOnly) {
+    if ($BuildCubitPlugin -and -not ($RadiaOnly -or $AxiFemOnly)) {
         $BuildDirsToClean += @(
             "$PROJECT_DIR\src\cubit_plugin\build-pyd",
             "$PROJECT_DIR\src\cubit_plugin\build-ccm"
@@ -713,7 +713,7 @@ try {
     if ($BuildResult -ne 0) { throw "Build failed with exit code $BuildResult" }
 
     # For -AxiFemOnly, axifem.pyd is already placed in src/radia/ by the
-    # CMake POST_BUILD copy, so skip the full module/cubit copy section below.
+    # CMake POST_BUILD copy, so skip the module copy section below.
     if (-not $AxiFemOnly) {
     # ========================================================================
     # Copy .pyd files to src/radia/
@@ -735,68 +735,10 @@ try {
         )
     }
 
-    # Cubit plugin files (built in src/cubit_plugin/build-*): shipped ONLY by
-    # the cubit-mesh-export package (Tier-2, 2026-06-01).  radia NO LONGER
-    # bundles cubit_mesh_export.ccm/.pyd -- cme is the sole shipper AND deployer
-    # (its cubit-plugin-install), so radia and cubit-mesh-export release fully
-    # independently.  Safe because radia's setup_cubit.py delegates plugin
-    # install to cme, and register_toolbar.py freshness-checks the DEPLOYED
-    # plugin, not a radia-bundled copy.  Build output is copied DIRECTLY to
-    # the cme package (no src/radia/ hop).
-    # Freshness check: copy when src newer than dst (or dst missing).
-    $cmeDir = "$PROJECT_DIR\packages\cubit-mesh-export\src\cubit_mesh_export"
-    $cubitFiles = @(
-        @{ src = "$PROJECT_DIR\src\cubit_plugin\build-pyd\cubit_mesh_curver.cp312-win_amd64.pyd";
-           dst = "$cmeDir\cubit_mesh_curver.pyd" },
-        @{ src = "$PROJECT_DIR\src\cubit_plugin\build-ccm\cubit_mesh_export.ccm";
-           dst = "$cmeDir\cubit_mesh_export.ccm" }
-    )
-    if (-not $RadiaOnly) {
-        foreach ($cf in $cubitFiles) {
-            $name = Split-Path $cf.dst -Leaf
-            if (Test-Path $cf.src) {
-                $srcInfo = Get-Item $cf.src
-                $needCopy = $true
-                if (Test-Path $cf.dst) {
-                    $dstInfo = Get-Item $cf.dst
-                    if ($srcInfo.Length -eq $dstInfo.Length -and $srcInfo.LastWriteTime -le $dstInfo.LastWriteTime) {
-                        Write-Host "  cubit-mesh-export/${name}: up-to-date ($([math]::Round($srcInfo.Length / 1KB, 1)) KB)" -ForegroundColor Cyan
-                        $needCopy = $false
-                    }
-                }
-                if ($needCopy) {
-                    Copy-Item $cf.src $cf.dst -Force
-                    Write-Host "  cubit-mesh-export/${name}: $([math]::Round($srcInfo.Length / 1KB, 1)) KB (UPDATED)" -ForegroundColor Green
-                }
-            } else {
-                Write-Host "  ${name}: skipped (not built)" -ForegroundColor Yellow
-            }
-        }
-
-        # === Freshness-check sync: touch bundled binaries to the newest source mtime ===
-        # cubit-mesh-export's pyproject.toml runs a freshness gate in
-        # `get_requires_for_build_wheel` that compares mtime of every file
-        # in src/cubit_plugin/ vs every bundled binary.  Ninja's incremental
-        # build only rebuilds targets whose transitive source changed, so
-        # editing a .cpp that only feeds the .ccm leaves the .pyd (or vice-
-        # versa) untouched, which the freshness gate then FALSE-alarms on.
-        # Fix: force-touch every bundled binary mtime so it >= newest source.
-        # (As of radia 4.80.0 the .ccl is gone -- only .ccm + .pyd remain.)
-        $pluginSrcFiles = Get-ChildItem "$PROJECT_DIR\src\cubit_plugin" `
-            -Include "*.cpp","*.hpp","*.h","*.c" -File -Recurse `
-            -ErrorAction SilentlyContinue
-        if ($pluginSrcFiles) {
-            $newest = ($pluginSrcFiles | Measure-Object -Property LastWriteTime -Maximum).Maximum
-            # Bump by 1 s so freshness check sees ">= newest source".
-            $touchTime = $newest.AddSeconds(1)
-            foreach ($cf in $cubitFiles) {
-                if (Test-Path $cf.dst) {
-                    (Get-Item -LiteralPath $cf.dst).LastWriteTime = $touchTime
-                }
-            }
-            Write-Host "  cubit-mesh-export plugin binaries: mtime synced to newest source ($touchTime)" -ForegroundColor Cyan
-        }
-    }
+    # Raw Cubit native outputs remain in src/cubit_plugin/build-*.
+    # Signed package payloads and their manifest are promoted only through
+    # the reviewed release process; an ordinary build never copies or
+    # touches them.
 
     foreach ($mod in $modules) {
         $srcPath = "$BUILD_DIR\$($mod.src)"
@@ -850,7 +792,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Native module ABI check failed"
     }
-    }  # end: if (-not $AxiFemOnly) -- full module/cubit copy section
+    }  # end: if (-not $AxiFemOnly) -- module copy section
 
     # ====================================================================
     # Optional: install rebuilt .pyd(s) into the importable site-packages
