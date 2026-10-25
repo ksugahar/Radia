@@ -23,7 +23,7 @@ and [release-dual contract](../../../packages/radia-mcp/docs/operations/mcp-runt
 - mdx1 and mdx2 are the priority CI runners and MATLAB compute hosts. CI builds
   in isolated per-run environments.
 - hibino runs long optimization and validation jobs when available.
-- No workflow selects a retired runner. Eqnedit64 publication belongs to its independent repository.
+- No workflow selects a retired runner. EqnEdit64 publication belongs to its independent repository.
 
 ## Supported operations
 

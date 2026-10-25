@@ -922,4 +922,4 @@ add_custom_command(TARGET axifem POST_BUILD
 
 message(STATUS "axifem module configured (Henrotte axisymmetric FE)")
 
-# Equation editing and document output belong to the independent Eqnedit64 product.
+# Equation editing and document output belong to the independent EqnEdit64 product.
