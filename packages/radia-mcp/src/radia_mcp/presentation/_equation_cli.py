@@ -1,7 +1,7 @@
 """Eqnedit64 command-line bridge and equation-product policy for presentations.
 
 The native and Web/JavaScript editions are maintained in the independent
-``ksugahar/eqnedit64`` repository.  The laboratory homepage is the Web publication
+``ksugahar/EqnEdit64`` repository.  The laboratory homepage is the Web publication
 surface; the native executable remains the Windows rendering and clipboard
 backend for ``radia_mcp.presentation``.
 """
@@ -34,21 +34,21 @@ def presentation_equation_policy() -> dict:
     return {
         "schema": "radia-mcp.presentation-equation-policy.v4",
         "source_of_truth": {
-            "native": "https://github.com/ksugahar/eqnedit64/tree/main/src",
-            "web": "https://github.com/ksugahar/eqnedit64/blob/main/web/equation-editor.js",
-            "web_mount": "https://github.com/ksugahar/eqnedit64/blob/main/web/equation-editor.fragment.html",
-            "parity": "https://github.com/ksugahar/eqnedit64/blob/main/docs/PRODUCT_PARITY.md",
+            "native": "https://github.com/ksugahar/EqnEdit64/tree/main/src",
+            "web": "https://github.com/ksugahar/EqnEdit64/blob/main/web/equation-editor.js",
+            "web_mount": "https://github.com/ksugahar/EqnEdit64/blob/main/web/equation-editor.fragment.html",
+            "parity": "https://github.com/ksugahar/EqnEdit64/blob/main/docs/PRODUCT_PARITY.md",
             "distribution": "https://pypi.org/project/eqnedit64/",
         },
         "publication": {
             "web": "Sugahara Laboratory homepage",
             "python": "PyPI package eqnedit64",
-            "native": "matching ksugahar/eqnedit64 GitHub Release",
+            "native": "matching ksugahar/EqnEdit64 GitHub Release",
             "integration": "optional radia-mcp.presentation consumer adapter",
         },
         "web_publication_contract": {
             "mode": "build-time import from an exact Eqnedit64 tag",
-            "repository": "https://github.com/ksugahar/eqnedit64",
+            "repository": "https://github.com/ksugahar/EqnEdit64",
             "checkout_environment_variable": "EQNEDIT64_REPOSITORY",
             "integrity": "SHA-256 equality after copy",
             "homepage_source_copy": False,

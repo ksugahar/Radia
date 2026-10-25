@@ -257,4 +257,4 @@ All 45 workflow jobs at the baseline are classified below. The table is a review
 | `sparsesolv.yml` | `ams-regression` | native |
 
 EqnEdit64 source and hosted release workflows are owned by the independent
-`ksugahar/eqnedit64` repository, outside Radia runner ownership.
+`ksugahar/EqnEdit64` repository, outside Radia runner ownership.
