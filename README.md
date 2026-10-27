@@ -142,6 +142,33 @@ The current production wheel targets **Windows x64**, **Python 3.12**, and
 python -m pip install --upgrade radia
 ```
 
+### SI units and the original Radia
+
+This project's Radia API uses **SI units throughout the NGSolve coupling**:
+coordinates and dimensions in **m**, magnetic flux density B in **T**, magnetic
+field H and magnetization M in **A/m**, vector potential A in **T·m**, current
+in **A**, and current density in **A/m²**. NGSolve evaluates the same physical
+coordinates; `RadiaField` requires metre coordinates and rejects other unit
+settings. No extra length or μ₀ multiplier belongs between its A/B fields and
+NGSolve's differential operators: **B = curl(A)** uses the SI fields directly.
+Finite-element projection still introduces discretization error.
+
+The [original ESRF Radia reference](https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html)
+uses **mm** for geometry and **T** for its default magnetization input. Those
+numeric inputs must be converted before reuse here: **10 mm = 0.01 m**, and
+an original tesla-valued magnetic polarization of **1.2 T** corresponds to
+**M = 1.2/μ₀ A/m**. A B value already in tesla stays in tesla. Do not divide a
+magnetization already expressed in A/m by μ₀ again. Convert source data once
+at import; passing unchanged mm coordinates or tesla-valued magnetization
+would change the physical model.
+
+This explicit contract removes unit ambiguity at the Radia–NGSolve boundary,
+including the length factors in derivatives, areas and volumes. See the
+[SI API contract](docs/api/API_REFERENCE.md#units) and the
+[existing NGSolve integration notebook](docs/ngsolve_integration/integration_basics.ipynb)
+for the implementation explanation and saved calculations. This is the current
+API design, with no automatic original-Radia unit mode.
+
 Evaluate an analytical open-boundary magnetic field in SI units:
 
 ```python
