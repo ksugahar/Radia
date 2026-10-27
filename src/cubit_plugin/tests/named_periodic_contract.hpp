@@ -3,6 +3,7 @@
 // Assumes: small, independently specified translational surface fixture.
 #include "NamedPeriodicIdentification.hpp"
 #include <memory>
+#include <iostream>
 
 inline void named_periodic_contract_test()
 {
@@ -66,9 +67,32 @@ inline void named_periodic_contract_test()
   if (extra_incidence->GetIdentifications().GetMaxNr() != 0)
     throw std::runtime_error("Rejected patch map mutated identification metadata");
   auto mesh = fixture();
+  std::cerr << "named periodic diagnostic: GetNFD=" << mesh->GetNFD() << '\n';
+  for (int fd = 1; fd <= mesh->GetNFD(); ++fd) {
+    const auto &descriptor = mesh->GetFaceDescriptor(periodic_face_index(fd));
+#ifdef COMPACT_NETGEN
+    const auto &descriptor_label = descriptor.BCName();
+#else
+    const auto &descriptor_label = descriptor.GetBCName();
+#endif
+    std::cerr << "named periodic diagnostic: FD=" << fd
+              << " BC=" << descriptor.BCProperty()
+              << " descriptor_label=" << descriptor_label
+              << " bc_integer_lookup=" << mesh->GetBCName(descriptor.BCProperty() - 1)
+              << '\n';
+  }
   auto result = apply_named_periodic_identification(*mesh, contract);
+  std::cerr << "named periodic diagnostic: pair_count=" << result.point_pairs.size() << '\n';
+  for (const auto &entry : result.descriptor_to_boundary)
+    std::cerr << "named periodic diagnostic: returned FD=" << entry.first
+              << " BC=" << entry.second << '\n';
+  for (const auto &pair : result.point_pairs)
+    std::cerr << "named periodic diagnostic: pair=" << pair.first
+              << "->" << pair.second << '\n';
   if (result.point_pairs.size() != 6 || result.descriptor_to_boundary.at(1) != 4)
-    throw std::runtime_error("Periodic group or FD/BC mapping differs");
+    throw std::runtime_error("Periodic group or FD/BC mapping differs: actual pair_count=" +
+        std::to_string(result.point_pairs.size()) + ", expected=6; actual FD1 BC=" +
+        std::to_string(result.descriptor_to_boundary.at(1)) + ", expected=4");
   for (int i = 0; i < 6; ++i)
     if (result.point_pairs[i] != std::make_pair(i + 1, i + 7))
       throw std::runtime_error("Periodic endpoint direction/indices differ");
