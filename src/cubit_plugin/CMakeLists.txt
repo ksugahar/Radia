@@ -164,7 +164,7 @@ if(HAVE_NETGEN)
   list(APPEND CCM_SOURCES
     callbackgeom.cpp callbackgeom.hpp
     NetgenGeometricRefit.cpp NetgenGeometricRefit.hpp
-    ExportNetgenCommand.cpp ExportNetgenCommand.hpp NamedPeriodicIdentification.hpp
+    ExportNetgenCommand.cpp ExportNetgenCommand.hpp NamedPeriodicIdentification.hpp NamedPeriodicMeshAdapter.hpp
   )
   if(USE_COMPACT_NETGEN)
     list(APPEND CCM_SOURCES ${COMPACT_NETGEN_SOURCES})
@@ -269,7 +269,12 @@ if(pybind11_FOUND AND HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
   option(CUBIT_CALLBACK_CONTRACT_TESTS "Build native geometry callback contracts" OFF)
   if(CUBIT_CALLBACK_CONTRACT_TESTS)
     enable_testing()
+    add_library(cubit_named_periodic_header_compile OBJECT tests/named_periodic_header_compile.cpp)
+    target_compile_features(cubit_named_periodic_header_compile PRIVATE cxx_std_17)
+    target_include_directories(cubit_named_periodic_header_compile PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}" "${NETGEN_DIR}/include" "${NETGEN_DIR}/include/include")
     add_executable(cubit_callback_contract tests/callback_curve_identity.cpp callbackgeom.cpp NetgenCurver.cpp)
+    add_dependencies(cubit_callback_contract cubit_named_periodic_header_compile)
     target_compile_features(cubit_callback_contract PRIVATE cxx_std_17)
     target_include_directories(cubit_callback_contract PRIVATE
       "${CMAKE_CURRENT_SOURCE_DIR}" "${NETGEN_DIR}/include" "${NETGEN_DIR}/include/include")

@@ -22,13 +22,13 @@ inline void named_periodic_contract_test()
     for (int bc : {4, 2, 1, 3}) {
       FaceDescriptor descriptor;
       descriptor.SetBCProperty(bc);
-      const int fd = mesh->AddFaceDescriptor(descriptor);
+      const auto fd = mesh->AddFaceDescriptor(descriptor);
       const int base = index < 2 ? 1 + 2 * index : 7 + 2 * (index - 2);
       for (auto points : {std::array<int,3>{base, base+2, base+1},
                           std::array<int,3>{base+1, base+2, base+3}}) {
         Element2d triangle(TRIG);
         triangle.SetIndex(fd);
-        for (int j = 0; j < 3; ++j) triangle[j] = points[j];
+        for (int j = 0; j < 3; ++j) triangle[j] = periodic_point_index(points[j]);
         mesh->AddSurfaceElement(triangle);
       }
       ++index;
@@ -45,18 +45,20 @@ inline void named_periodic_contract_test()
   auto missing = fixture();
   auto partial = contract; partial.boundary_pairs.pop_back();
   must_reject([&]{apply_named_periodic_identification(*missing, partial);});
-  auto unmatched = fixture(); unmatched->Point(PointIndex(7))(0) = -1;
+  auto unmatched = fixture(); unmatched->Point(periodic_point_index(7))(0) = -1;
   must_reject([&]{apply_named_periodic_identification(*unmatched, contract);});
-  auto ambiguous = fixture(); ambiguous->Point(PointIndex(8))(2) = 0;
+  auto ambiguous = fixture(); ambiguous->Point(periodic_point_index(8))(2) = 0;
   must_reject([&]{apply_named_periodic_identification(*ambiguous, contract);});
-  auto duplicate = fixture(); duplicate->Point(PointIndex(2))(2) = 0;
+  auto duplicate = fixture(); duplicate->Point(periodic_point_index(2))(2) = 0;
   must_reject([&]{apply_named_periodic_identification(*duplicate, contract);});
-  auto occupied = fixture(); occupied->GetIdentifications().Add(PointIndex(1),PointIndex(7),4);
+  auto occupied = fixture(); occupied->GetIdentifications().Add(periodic_point_index(1),periodic_point_index(7),4);
   must_reject([&]{apply_named_periodic_identification(*occupied, contract);});
   auto extra_incidence = fixture();
   Element2d extra_triangle(TRIG);
-  extra_triangle.SetIndex(4); // FD4 is slave BC3, distinct from its FD index.
-  extra_triangle[0] = 8; extra_triangle[1] = 9; extra_triangle[2] = 10;
+  extra_triangle.SetIndex(periodic_face_index(4)); // FD4 is slave BC3.
+  extra_triangle[0] = periodic_point_index(8);
+  extra_triangle[1] = periodic_point_index(9);
+  extra_triangle[2] = periodic_point_index(10);
   extra_incidence->AddSurfaceElement(extra_triangle);
   // Global point bijection and every forward master-incidence test still pass,
   // but slave BC3 has point8 without a counterpart in master BC2.

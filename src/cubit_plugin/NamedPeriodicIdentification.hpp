@@ -1,7 +1,7 @@
 #ifndef CUBIT_NAMED_PERIODIC_IDENTIFICATION_HPP
 #define CUBIT_NAMED_PERIODIC_IDENTIFICATION_HPP
 
-#include <meshing.hpp>
+#include "NamedPeriodicMeshAdapter.hpp"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -93,7 +93,7 @@ inline NamedPeriodicResult apply_named_periodic_identification(
   std::map<int, std::set<int>> boundary_points;
   std::map<int, std::set<int>> master_incidence;
   for (int fd = 1; fd <= mesh.GetNFD(); ++fd) {
-    const int bc = mesh.GetFaceDescriptor(fd).BCProperty();
+    const int bc = mesh.GetFaceDescriptor(periodic_face_index(fd)).BCProperty();
     if (bc < 1) throw std::runtime_error("Invalid boundary-condition property");
     result.descriptor_to_boundary[fd] = bc;
     const auto &label = mesh.GetBCName(bc - 1);
@@ -101,9 +101,10 @@ inline NamedPeriodicResult apply_named_periodic_identification(
         (label == contract.slave_label && !slave_boundaries.count(bc)))
       throw std::runtime_error("Periodic patch map omits a labeled boundary");
   }
-  for (int sei = 1; sei <= mesh.GetNSE(); ++sei) {
-    const auto &surface = mesh.SurfaceElement(sei);
-    const auto descriptor = result.descriptor_to_boundary.find(surface.GetIndex());
+  // The container supplies native ElIndex values internally; no integer-to-
+  // ElIndex construction or raw zero-/one-based reinterpretation occurs here.
+  for (const auto &surface : mesh.SurfaceElements()) {
+    const auto descriptor = result.descriptor_to_boundary.find(periodic_face_number(surface.GetIndex()));
     if (descriptor == result.descriptor_to_boundary.end())
       throw std::runtime_error("Surface element references an unknown descriptor");
     const int bc = descriptor->second;
@@ -113,10 +114,10 @@ inline NamedPeriodicResult apply_named_periodic_identification(
     if (label != (master ? contract.master_label : contract.slave_label))
       throw std::runtime_error("Periodic BC label mismatch at BC " + std::to_string(bc));
     for (int j = 0; j < surface.GetNP(); ++j) {
-      const int pi = surface[j];
+      const int pi = periodic_point_number(surface[j]);
       if (pi < 1 || pi > mesh.GetNP())
         throw std::runtime_error("Periodic surface point index out of range");
-      const auto &point = mesh.Point(netgen::PointIndex(pi));
+      const auto &point = mesh.Point(periodic_point_index(pi));
       for (int axis = 0; axis < 3; ++axis)
         if (!std::isfinite(point(axis)))
           throw std::runtime_error("Nonfinite periodic point coordinate");
@@ -140,14 +141,14 @@ inline NamedPeriodicResult apply_named_periodic_identification(
 
   std::set<int> assigned_slaves;
   for (int master : masters) {
-    const auto &mp = mesh.Point(netgen::PointIndex(master));
+    const auto &mp = mesh.Point(periodic_point_index(master));
     std::vector<std::pair<int, double>> candidates;
     for (int slave : slaves) {
       bool incident = true;
       for (int bc : master_incidence.at(master))
         if (!boundary_points.at(master_to_slave.at(bc)).count(slave)) incident = false;
       if (!incident) continue;
-      const auto &sp = mesh.Point(netgen::PointIndex(slave));
+      const auto &sp = mesh.Point(periodic_point_index(slave));
       const double distance = std::hypot(
           sp(0) - (mp(0) + contract.translation[0]),
           sp(1) - (mp(1) + contract.translation[1]),
@@ -177,7 +178,7 @@ inline NamedPeriodicResult apply_named_periodic_identification(
   // Validation precedes all mutations. Only identification metadata changes.
   const std::string geometry_before = periodic_geometry_serialization(mesh);
   for (const auto &pair : result.point_pairs)
-    ident.Add(netgen::PointIndex(pair.first), netgen::PointIndex(pair.second), 1);
+    ident.Add(periodic_point_index(pair.first), periodic_point_index(pair.second), 1);
   ident.SetType(1, netgen::Identifications::PERIODIC);
   ident.SetName(1, contract.name);
   if (ident.GetMaxNr() != 1 || ident.GetName(1) != "kt" ||
