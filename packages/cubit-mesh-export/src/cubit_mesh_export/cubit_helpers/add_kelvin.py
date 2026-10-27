@@ -974,9 +974,9 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
     # curve` aligns one boundary curve and propagates -- for 1/8
     # reduction (3 boundary curves on the curved cap) the interior
     # nodes drift by up to ~15mm from a pure translation.  The C++
-    # Kelvin pair finder then can't 1:1 match those vertices and
-    # skips identification, leaving NGSolve's add_periodic_kelvin
-    # to recover at solve time.
+    # explicit native periodic matcher must reject non-bijective translated
+    # interfaces. A consumer must not repair missing identifications; supply
+    # the explicit periodic export contract and verify the persisted group.
     #
     # Strategy: per-TRIANGLE matching (NOT per-vertex).  For each src
     # surface triangle, find the dst triangle whose centroid is

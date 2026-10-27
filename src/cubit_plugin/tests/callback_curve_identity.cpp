@@ -5,6 +5,7 @@
 #include "callbackgeom.hpp"
 #include "CurveIdentity.hpp"
 #include "NetgenCurver.hpp"
+#include "named_periodic_contract.hpp"
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -21,6 +22,7 @@ template<class F> static void rejected(F action) {
 
 int main() {
   try {
+    named_periodic_contract_test();
     Mesh mesh;
     const int first = mesh.AddEdgeDescriptor(EdgeDescriptor(31, 3, 4)).Nr1();
     const int second = mesh.AddEdgeDescriptor(EdgeDescriptor(32, 3, 4)).Nr1();
