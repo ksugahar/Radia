@@ -53,6 +53,16 @@ inline void named_periodic_contract_test()
   must_reject([&]{apply_named_periodic_identification(*duplicate, contract);});
   auto occupied = fixture(); occupied->GetIdentifications().Add(PointIndex(1),PointIndex(7),4);
   must_reject([&]{apply_named_periodic_identification(*occupied, contract);});
+  auto extra_incidence = fixture();
+  Element2d extra_triangle(TRIG);
+  extra_triangle.SetIndex(4); // FD4 is slave BC3, distinct from its FD index.
+  extra_triangle[0] = 8; extra_triangle[1] = 9; extra_triangle[2] = 10;
+  extra_incidence->AddSurfaceElement(extra_triangle);
+  // Global point bijection and every forward master-incidence test still pass,
+  // but slave BC3 has point8 without a counterpart in master BC2.
+  must_reject([&]{apply_named_periodic_identification(*extra_incidence, contract);});
+  if (extra_incidence->GetIdentifications().GetMaxNr() != 0)
+    throw std::runtime_error("Rejected patch map mutated identification metadata");
   auto mesh = fixture();
   auto result = apply_named_periodic_identification(*mesh, contract);
   if (result.point_pairs.size() != 6 || result.descriptor_to_boundary.at(1) != 4)

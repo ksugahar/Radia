@@ -7,12 +7,32 @@ from pathlib import Path
 import sys
 
 
+def identification_tuple(row):
+    if len(row) != 3:
+        raise AssertionError("Expected two PointIds and one identification number")
+    return tuple(int(p.nr) if hasattr(p, "nr") else int(p) for p in row[:2]) + (int(row[2]),)
+
+
+def verify_pointid_conversion():
+    class PointIdLike:
+        def __init__(self, nr):
+            self.nr = nr
+
+        def __int__(self):
+            raise AssertionError("PointId must be read through nr")
+
+    expected = (1, 7, 1)
+    actual = identification_tuple((PointIdLike(1), PointIdLike(7), 1))
+    if actual != expected or identification_tuple(expected) != expected:
+        raise AssertionError(f"actual={actual}, expected={expected}")
+
+
 def verify(path):
     from ngsolve import Mesh
     from netgen.meshing import IdentificationType
 
     mesh = Mesh(str(path))
-    actual = {tuple(map(int, row)) for row in mesh.ngmesh.GetIdentifications()}
+    actual = {identification_tuple(row) for row in mesh.ngmesh.GetIdentifications()}
     expected = {(i, i + 6, 1) for i in range(1, 7)}
     if mesh.ngmesh.GetNrIdentifications() != 1 or actual != expected:
         raise AssertionError(f"actual group/pairs={actual}, expected={expected}")
@@ -25,4 +45,5 @@ def verify(path):
 
 
 if __name__ == "__main__":
+    verify_pointid_conversion()
     verify(Path(sys.argv[1]))

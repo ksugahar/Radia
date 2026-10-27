@@ -165,6 +165,14 @@ inline NamedPeriodicResult apply_named_periodic_identification(
   }
   if (assigned_slaves != slaves)
     throw std::runtime_error("Incomplete periodic slave coverage");
+  const std::map<int, int> mapping(result.point_pairs.begin(), result.point_pairs.end());
+  for (const auto &patch : master_to_slave) {
+    std::set<int> image;
+    for (int master : boundary_points.at(patch.first)) image.insert(mapping.at(master));
+    if (image != boundary_points.at(patch.second))
+      throw std::runtime_error("Incomplete periodic patch coverage at master BC " +
+                               std::to_string(patch.first));
+  }
 
   // Validation precedes all mutations. Only identification metadata changes.
   const std::string geometry_before = periodic_geometry_serialization(mesh);
