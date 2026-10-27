@@ -77,11 +77,7 @@ inline void named_periodic_contract_test()
   std::cerr << "named periodic diagnostic: GetNFD=" << mesh->GetNFD() << '\n';
   for (int fd = 1; fd <= mesh->GetNFD(); ++fd) {
     const auto &descriptor = mesh->GetFaceDescriptor(periodic_face_index(fd));
-#ifdef COMPACT_NETGEN
-    const auto &descriptor_label = descriptor.BCName();
-#else
     const auto &descriptor_label = descriptor.GetBCName();
-#endif
     std::cerr << "named periodic diagnostic: FD=" << fd
               << " BC=" << descriptor.BCProperty()
               << " descriptor_label=" << descriptor_label
