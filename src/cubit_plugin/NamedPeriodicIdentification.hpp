@@ -96,7 +96,7 @@ inline NamedPeriodicResult apply_named_periodic_identification(
     const int bc = mesh.GetFaceDescriptor(periodic_face_index(fd)).BCProperty();
     if (bc < 1) throw std::runtime_error("Invalid boundary-condition property");
     result.descriptor_to_boundary[fd] = bc;
-    const auto &label = mesh.GetBCName(bc - 1);
+    const auto &label = periodic_boundary_label(mesh, bc);
     if ((label == contract.master_label && !master_to_slave.count(bc)) ||
         (label == contract.slave_label && !slave_boundaries.count(bc)))
       throw std::runtime_error("Periodic patch map omits a labeled boundary");
@@ -110,7 +110,7 @@ inline NamedPeriodicResult apply_named_periodic_identification(
     const int bc = descriptor->second;
     const bool master = master_to_slave.count(bc) != 0;
     if (!master && !slave_boundaries.count(bc)) continue;
-    const auto &label = mesh.GetBCName(bc - 1);
+    const auto &label = periodic_boundary_label(mesh, bc);
     if (label != (master ? contract.master_label : contract.slave_label))
       throw std::runtime_error("Periodic BC label mismatch at BC " + std::to_string(bc));
     for (int j = 0; j < surface.GetNP(); ++j) {

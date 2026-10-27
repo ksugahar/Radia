@@ -16,14 +16,14 @@ inline void named_periodic_contract_test()
       for (int y = 0; y < 3; ++y)
         for (int z = 0; z < 2; ++z)
           mesh->AddPoint(Point<3>(side == 0 ? 2.0 : 0.0, y, z));
-    mesh->SetNBCNames(4);
-    for (int bc : {4, 2}) mesh->SetBCName(bc - 1, "source_patch");
-    for (int bc : {1, 3}) mesh->SetBCName(bc - 1, "target_patch");
     int index = 0;
     for (int bc : {4, 2, 1, 3}) {
       FaceDescriptor descriptor;
       descriptor.SetBCProperty(bc);
+      descriptor.SetBCName(bc == 4 || bc == 2 ? "source_patch" : "target_patch");
       const auto fd = mesh->AddFaceDescriptor(descriptor);
+      if (periodic_face_number(fd) != index + 1)
+        throw std::runtime_error("Fixture descriptor numbering differs from explicit insertion order");
       const int base = index < 2 ? 1 + 2 * index : 7 + 2 * (index - 2);
       for (auto points : {std::array<int,3>{base, base+2, base+1},
                           std::array<int,3>{base+1, base+2, base+3}}) {
@@ -34,6 +34,13 @@ inline void named_periodic_contract_test()
       }
       ++index;
     }
+#ifdef COMPACT_NETGEN
+    mesh->SetNBCNames(4);
+    for (int bc : {4, 2}) mesh->SetBCName(bc - 1, "source_patch");
+    for (int bc : {1, 3}) mesh->SetBCName(bc - 1, "target_patch");
+#endif
+    if (mesh->GetNFD() != 4)
+      throw std::runtime_error("Fixture must contain exactly four explicitly added descriptors");
     return mesh;
   };
   const NamedPeriodicContract contract{"kt", "source_patch", "target_patch", "m",
@@ -78,7 +85,7 @@ inline void named_periodic_contract_test()
     std::cerr << "named periodic diagnostic: FD=" << fd
               << " BC=" << descriptor.BCProperty()
               << " descriptor_label=" << descriptor_label
-              << " bc_integer_lookup=" << mesh->GetBCName(descriptor.BCProperty() - 1)
+              << " bc_property_label=" << periodic_boundary_label(*mesh, descriptor.BCProperty())
               << '\n';
   }
   auto result = apply_named_periodic_identification(*mesh, contract);

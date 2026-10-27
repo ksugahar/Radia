@@ -3,6 +3,7 @@
 
 #include <meshing.hpp>
 #include <stdexcept>
+#include <string>
 
 namespace cubit_mesh_export {
 
@@ -42,6 +43,31 @@ inline netgen::FaceRegionIndex periodic_face_index(int number)
 }
 inline int periodic_face_number(netgen::FaceRegionIndex index) { return index.Nr1(); }
 #endif
+
+// Resolve a boundary-condition property, never reinterpret it as a face index.
+// Compact Netgen owns a separate BC-name table; full Netgen stores names on
+// face descriptors. Multiple descriptors for one BC must agree on the name.
+inline std::string periodic_boundary_label(const netgen::Mesh &mesh, int bc)
+{
+  if (bc < 1) throw std::runtime_error("Invalid boundary-condition property");
+#ifdef COMPACT_NETGEN
+  return mesh.GetBCName(bc - 1);
+#else
+  bool found = false;
+  std::string label;
+  for (int fd = 1; fd <= mesh.GetNFD(); ++fd) {
+    const auto &descriptor = mesh.GetFaceDescriptor(periodic_face_index(fd));
+    if (descriptor.BCProperty() != bc) continue;
+    const auto &name = descriptor.GetBCName();
+    if (found && label != name)
+      throw std::runtime_error("Conflicting descriptor labels for BC " + std::to_string(bc));
+    label = name;
+    found = true;
+  }
+  if (!found) throw std::runtime_error("Missing descriptor for BC " + std::to_string(bc));
+  return label;
+#endif
+}
 
 } // namespace cubit_mesh_export
 #endif
