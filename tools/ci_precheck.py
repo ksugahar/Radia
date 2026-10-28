@@ -273,7 +273,7 @@ def _mcp_checks(plan, steps, output):
          "packages/radia-mcp/tools/check_ngsolve_architecture.py", "--base", plan["base"]], env, steps)
     _run("MCP selected package tests",
          [sys.executable, "-m", "pytest", "-v", "-r", "aR",
-          "-m", "not xval and not slow", "tests"], package_env, steps, cwd=package)
+          "-m", "not slow", "tests"], package_env, steps, cwd=package)
     if selection["run_mcp_response_tests"]:
         _run("MCP response tests", [sys.executable, "-m", "pytest", "tests/mcp_server", "-q"],
              env, steps)
