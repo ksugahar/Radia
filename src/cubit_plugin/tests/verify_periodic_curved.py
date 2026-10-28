@@ -5,7 +5,21 @@ points, making these exact arithmetic checks independent of CAD tolerances.
 Full Netgen reads the file; no Curve, Save, Identify or coefficient repair.
 """
 from pathlib import Path
+from fractions import Fraction
 import sys
+
+
+# Independent evaluation of the declared fixture's polynomial seed (canonical
+# master edges 12,13,14,23,24,34; only edge14 is inactive; face123 and face234).
+# These dyadic coordinates include nonzero even/odd modes and face bubbles;
+# translation equality alone would also accept incorrectly flattened output.
+MASTER_COORDINATES = {
+    1: (("0", "1/4", "1/2"), ("1/2", "3/4", "3/4")),
+    2: (("-13/8192", "1011/4096", "4057/8192"),
+        ("2035/4096", "1523/2048", "3033/4096")),
+    3: (("-13/16384", "2035/8192", "8153/16384"),
+        ("4083/8192", "3059/4096", "6105/8192")),
+}
 
 
 def verify(root):
@@ -30,13 +44,14 @@ def verify(root):
         elements = list(mesh.Elements(ng.VOL))
         if len(elements) != 2:
             raise AssertionError(f"actual tets={len(elements)}, expected=2")
-        for point in samples:
+        for index, point in enumerate(samples):
             ip = next(iter(ng.IntegrationRule(points=[point], weights=[1.0])))
             a = tuple(xyz(mesh.GetTrafo(elements[0])(ip)))
             b = tuple(xyz(mesh.GetTrafo(elements[1])(ip)))
-            expected_b = (a[0] + 3.0, a[1], a[2])
-            if b != expected_b:
-                raise AssertionError(f"q{order} point={point}: actual={b}, expected={expected_b}")
+            expected_a = tuple(float(Fraction(v)) for v in MASTER_COORDINATES[order][index])
+            expected_b = (expected_a[0] + 3.0, expected_a[1], expected_a[2])
+            if a != expected_a or b != expected_b:
+                raise AssertionError(f"q{order}{suffix} point={point}: actual={(a,b)}, expected={(expected_a,expected_b)}")
 
 
 if __name__ == "__main__":
