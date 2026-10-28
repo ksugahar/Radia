@@ -79,26 +79,36 @@ public:
   int PeriodicEdgeOrder (int edge) const { return edgeorder[edge]; }
   int PeriodicFaceOrder (int face) const { return faceorder[face]; }
   bool PeriodicRational () const { return rational; }
+  static void ValidatePeriodicLayout (const NgArray<int> & orders,
+      const NgArray<int> & indices, const NgArray<Vec<3>> & coefficients,
+      int maximum_order, bool triangular_faces)
+  {
+    if (maximum_order < 1 || maximum_order > 3 ||
+        indices.Size() != orders.Size()+1 || indices[0] != 0)
+      throw std::runtime_error("Invalid periodic coefficient layout dimensions");
+    for (size_t i = 0; i < orders.Size(); ++i) {
+      const int degree = orders[i];
+      if (degree < 1 || degree > maximum_order)
+        throw std::runtime_error("Unsupported periodic entity coefficient order");
+      const int expected = triangular_faces ? (degree-1)*(degree-2)/2 : degree-1;
+      if (indices[i] < 0 || indices[i+1] < indices[i] ||
+          size_t(indices[i+1]) > coefficients.Size() || indices[i+1]-indices[i] != expected)
+        throw std::runtime_error("Periodic entity coefficient span/order mismatch");
+    }
+    // Compression can retain a finite unused tail. Do not require its removal.
+    for (size_t i = 0; i < coefficients.Size(); ++i)
+      for (int axis = 0; axis < 3; ++axis)
+        if (!std::isfinite(coefficients[i](axis)))
+          throw std::runtime_error("Nonfinite periodic coefficient storage");
+  }
   void ValidatePeriodicStorage (size_t edges, size_t faces) const
   {
     if (rational || order < 1 || order > 3 ||
         edgeorder.Size() != edges || faceorder.Size() != faces ||
         edgecoeffsindex.Size() != edges+1 || facecoeffsindex.Size() != faces+1)
       throw std::runtime_error("Unsupported periodic curved coefficient storage");
-    auto check = [](const auto &indices, const auto &coefficients) {
-      if (indices[0] != 0)
-        throw std::runtime_error("Invalid periodic coefficient origin");
-      for (size_t i = 1; i < indices.Size(); ++i)
-        if (indices[i] < indices[i-1] || size_t(indices[i]) > coefficients.Size())
-          throw std::runtime_error("Invalid periodic coefficient prefix bounds");
-      // Compression retains unused buffer tails; only active prefix spans are
-      // consumed, and no buffer is resized or renumbered by synchronization.
-      for (size_t i = 0; i < coefficients.Size(); ++i)
-        for (int axis = 0; axis < 3; ++axis)
-          if (!std::isfinite(coefficients[i](axis)))
-            throw std::runtime_error("Nonfinite periodic coefficient storage");
-    };
-    check(edgecoeffsindex, edgecoeffs); check(facecoeffsindex, facecoeffs);
+    ValidatePeriodicLayout(edgeorder, edgecoeffsindex, edgecoeffs, order, false);
+    ValidatePeriodicLayout(faceorder, facecoeffsindex, facecoeffs, order, true);
   }
 
 

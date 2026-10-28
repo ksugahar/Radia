@@ -188,6 +188,17 @@ inline void named_periodic_contract_test()
       });});
   if (std::filesystem::exists(blocked_bundle.final) || bytes(blocked_bundle.sidecar) != "preserve other record")
     throw std::runtime_error("Exclusive sidecar failure published VOL or overwrote another record");
+  const auto changed_bundle = stage_named_periodic_vol(*mesh, "named-periodic-bundle-changed.vol");
+  const auto owned_record = write_named_periodic_sidecar(changed_bundle.sidecar,
+      [](std::ostream &record){record << "owned record";});
+  auto foreign_identity = owned_record; foreign_identity.identity[2] ^= 1;
+  must_reject([&]{publish_named_periodic_bundle(changed_bundle, foreign_identity);});
+  if (std::filesystem::exists(changed_bundle.final) || bytes(changed_bundle.sidecar) != "owned record")
+    throw std::runtime_error("Foreign record identity published VOL or modified record");
+  { std::ofstream changed(changed_bundle.sidecar); changed << "different record"; }
+  must_reject([&]{publish_named_periodic_bundle(changed_bundle, owned_record);});
+  if (std::filesystem::exists(changed_bundle.final) || bytes(changed_bundle.sidecar) != "different record")
+    throw std::runtime_error("Changed record published VOL or was overwritten");
   const auto guidance = named_periodic_retry_guidance(paths);
   for (const auto &path : {paths.final, paths.temporary, paths.sidecar})
     if (guidance.find(path.u8string()) == std::string::npos)
