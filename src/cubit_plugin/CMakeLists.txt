@@ -232,6 +232,28 @@ endif()
 # pybind11 module: cubit_mesh_curver (.pyd) — Cubit-free
 # --------------------------------------------------------
 find_package(Python3 COMPONENTS Interpreter Development)
+# Both compact-writer and full-Netgen contracts load the same installed reader.
+# Discover package paths without executing netgen.__init__ or native CAD code.
+function(cubit_contract_runtime_path output)
+  execute_process(COMMAND "${Python3_EXECUTABLE}" -c
+    "import importlib.metadata as m, importlib.util as u, pathlib, sys; spec=u.find_spec('netgen'); assert spec and spec.origin; ng=pathlib.Path(spec.origin).resolve().parent; roots={str(pathlib.Path(f.locate()).resolve().parent) for f in m.files('netgen-occt') if f.name.lower().endswith('.dll')}; roots.add(sys.base_prefix); print(';'.join([str(ng),str(ng.parent/'netgen_mesher.libs')]+sorted(roots)))"
+    OUTPUT_VARIABLE runtime_dirs OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE runtime_status)
+  if(NOT runtime_status EQUAL 0 OR NOT runtime_dirs)
+    message(FATAL_ERROR "Cannot discover Netgen/OCC contract runtime DLL directories")
+  endif()
+  if(NETGEN_DIR)
+    list(GET runtime_dirs 0 discovered_netgen)
+    get_filename_component(discovered_netgen "${discovered_netgen}" REALPATH)
+    get_filename_component(configured_netgen "${NETGEN_DIR}" REALPATH)
+    if(NOT discovered_netgen STREQUAL configured_netgen)
+      message(FATAL_ERROR "Configured Netgen and Python reader package paths differ")
+    endif()
+  endif()
+  set(runtime_path "${runtime_dirs};$ENV{PATH}")
+  string(REPLACE ";" "\\;" runtime_path "${runtime_path}")
+  set(${output} "${runtime_path}" PARENT_SCOPE)
+endfunction()
 option(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS "Build compact periodic curved geometry contracts" OFF)
 if(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS)
   if(NOT USE_COMPACT_NETGEN)
@@ -252,11 +274,14 @@ if(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS)
   endif()
   add_test(NAME cubit_periodic_curved_coefficients COMMAND cubit_periodic_curved_contract)
   set_tests_properties(cubit_periodic_curved_coefficients PROPERTIES
-    FIXTURES_SETUP periodic_curved_fixture TIMEOUT 120)
+    FIXTURES_SETUP periodic_curved_fixture TIMEOUT 120 FAIL_REGULAR_EXPRESSION "[Ii]llegal face")
   add_test(NAME cubit_periodic_curved_independent_load COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_periodic_curved.py" "${CMAKE_CURRENT_BINARY_DIR}")
   set_tests_properties(cubit_periodic_curved_independent_load PROPERTIES
     FIXTURES_REQUIRED periodic_curved_fixture TIMEOUT 120)
+  cubit_contract_runtime_path(COMPACT_READER_RUNTIME_PATH)
+  set_tests_properties(cubit_periodic_curved_independent_load PROPERTIES
+    ENVIRONMENT "PATH=${COMPACT_READER_RUNTIME_PATH};PYTHONUNBUFFERED=1;PYTHONDONTWRITEBYTECODE=1")
 endif()
 execute_process(
   COMMAND ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('purelib'))"
@@ -314,15 +339,7 @@ if(pybind11_FOUND AND HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
     set_tests_properties(cubit_named_periodic_vol_load PROPERTIES FIXTURES_REQUIRED named_periodic_fixture)
     # Native executables do not run netgen.__init__'s OCC/delvewheel preload.
     # Discover the exact installed package DLL locations, without importing CAD.
-    execute_process(COMMAND "${Python3_EXECUTABLE}" -c
-      "import importlib.metadata as m, pathlib, sys; roots={str(pathlib.Path(f.locate()).resolve().parent) for f in m.files('netgen-occt') if f.name.lower().endswith('.dll')}; roots.add(sys.base_prefix); print(';'.join(sorted(roots)))"
-      OUTPUT_VARIABLE CALLBACK_RUNTIME_DIRS OUTPUT_STRIP_TRAILING_WHITESPACE
-      RESULT_VARIABLE CALLBACK_RUNTIME_STATUS)
-    if(NOT CALLBACK_RUNTIME_STATUS EQUAL 0)
-      message(FATAL_ERROR "Cannot discover Netgen/OCC contract runtime DLL directories")
-    endif()
-    set(CALLBACK_RUNTIME_PATH "${NETGEN_DIR};${NETGEN_DIR}/../netgen_mesher.libs;${CALLBACK_RUNTIME_DIRS};$ENV{PATH}")
-    string(REPLACE ";" "\\;" CALLBACK_RUNTIME_PATH "${CALLBACK_RUNTIME_PATH}")
+    cubit_contract_runtime_path(CALLBACK_RUNTIME_PATH)
     set_tests_properties(cubit_callback_curve_identity cubit_named_periodic_vol_load PROPERTIES
       ENVIRONMENT "PATH=${CALLBACK_RUNTIME_PATH}" TIMEOUT 120)
   endif()
