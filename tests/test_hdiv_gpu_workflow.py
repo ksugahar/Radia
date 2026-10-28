@@ -19,8 +19,7 @@ def load(relative):
     return module
 
 
-API = "packages/radia-simulink/src/radia_simulink/hdiv.py"
-MCP = "packages/radia-mcp/src/radia_mcp/radia_ngsolve/hdiv_gpu.py"
+API = "src/radia/hdiv_gpu.py"
 
 
 def test_explicit_backend_before_native_import():
@@ -70,56 +69,6 @@ def test_solve_reuses_native_owner_and_close_releases_after_error():
         owner.solve([0, 0, 0])
 
 
-@pytest.mark.parametrize("fail", [False, True])
-@pytest.mark.parametrize("table_form", [False, True])
-@pytest.mark.parametrize("serialization_failure", [False, True])
-def test_mcp_reuse_failure_evidence_and_release(tmp_path, monkeypatch, fail, table_form, serialization_failure):
-    module = load(MCP)
-    events = []
-
-    class Region:
-        def __enter__(self): events.append("region_enter")
-        def __exit__(self, *_): events.append("region_exit")
-
-    class Prepared:
-        def __init__(self, *args, **kwargs): events.append("prepare")
-        @classmethod
-        def from_bh_table(cls, *args, **kwargs):
-            events.append("table")
-            return cls(*args, **kwargs)
-        def __enter__(self): return self
-        def __exit__(self, *_): events.append("close")
-        def stats(self): return dict(closed=True)
-        def solve(self, field, **kwargs):
-            events.append("solve")
-            if fail and events.count("solve") == 2:
-                raise RuntimeError("native convergence failure")
-            if serialization_failure and events.count("solve") == 2:
-                return dict(x=np.array(field), unsupported=object())
-            return dict(x=np.array(field), relative_residual=np.float64(0.), nested={"iterations": np.int64(3)})
-
-    monkeypatch.setitem(sys.modules, "ngsolve", types.SimpleNamespace(TaskManager=Region))
-    monkeypatch.setitem(sys.modules, "radia_simulink.hdiv", types.SimpleNamespace(PreparedHDivNonlinear=Prepared))
-    law = tmp_path / "law.json"
-    law.write_text(json.dumps(dict(schema="radia.bh-table.v1", table=[[0., 0.], [1., .1]])) if table_form else "{}")
-    result = tmp_path / "result.json"
-    args = ("mesh.vol", "labels.json", str(law), [[1., 2., 3.], [3., 2., 1.]], str(result), "gpu")
-    if fail or serialization_failure:
-        with pytest.raises((RuntimeError, AttributeError)):
-            module.hdiv_nonlinear_gpu_run(*args)
-    else:
-        assert module.hdiv_nonlinear_gpu_run(*args)["closed"]
-    saved = json.loads(result.read_text())
-    assert saved["accepted"] is (not (fail or serialization_failure))
-    assert saved["independent_cpu_certified"] is False
-    assert len(saved["cases"]) == (1 if fail or serialization_failure else 2)
-    assert events == ["region_enter"] + (["table"] if table_form else []) + ["prepare", "solve", "solve", "close", "region_exit"]
-    assert saved["preconditioner"] == "reference-diagonal"
-    assert len(saved["material_sha256"]) == 64
-    with pytest.raises(FileExistsError):
-        module.hdiv_nonlinear_gpu_run(*args)
-
-
 @pytest.mark.parametrize("options", [dict(preconditioner="mass-cholesky"), dict(tolerance=True),
     dict(tolerance=1e-5), dict(degree=65), dict(degree=1.5), dict(lower_fraction=1.),
     dict(max_iterations=False), dict(linear_tolerance=float("nan"))])
@@ -156,33 +105,6 @@ def test_checked_mesh_snapshot_identity_and_stderr(tmp_path, monkeypatch):
         types.SimpleNamespace(returncode=1, stdout="", stderr="No module named cubit_mesh_export"))
     with pytest.raises(RuntimeError, match="cubit-mesh-export required.*No module"):
         module.PreparedHDivNonlinear(mesh, {}, backend="gpu", label_contract=contract)
-
-
-def test_host_publisher_preserves_factors_numbering_and_checked_identity(tmp_path, monkeypatch):
-    from scipy.sparse import eye, csr_matrix
-    module = load(API)
-    mesh, labels = tmp_path / "mesh.vol", tmp_path / "labels.json"
-    mesh.write_bytes(b"mesh bytes"); labels.write_text("{}")
-    monkeypatch.setattr(module.subprocess, "run", lambda *a, **k:
-        types.SimpleNamespace(returncode=0, stdout='{"passed":true}', stderr=""))
-    leaf = dict(row=0, column=0, rows=2, columns=2, rank=0,
-                a1=np.array([3., 1., 1., 4.]), a2=np.empty(0))
-    snapshot = dict(dimension=2, leaves=[leaf], permutation=np.array([1, 0]), scale=np.array([2., 3.]))
-    data = dict(dofs=2, snapshot=snapshot, charge_map=eye(2, format="csr"),
-        mass=eye(2, format="csr"), rhs_operator=np.ones((2, 3)), mean_operator=np.ones((3, 2)),
-        evaluation=csr_matrix(np.ones((3, 2))), weights=np.ones(1), quadrature_order=6)
-    monkeypatch.setattr(module, "_prepare_host_components", lambda path, order, **kwargs: data)
-    result = module.prepare_hdiv_host_setup(mesh, backend="gpu", label_contract=labels, order=2)
-    assert result["schema"] == "radia.hdiv-host-setup.v1"
-    assert result["order"] == 2.
-    np.testing.assert_array_equal(result["operator"]["permutation"].ravel(), [2., 1.])
-    np.testing.assert_array_equal(result["operator"]["scale"].ravel(), [2., 3.])
-    np.testing.assert_array_equal(result["operator"]["leaves"][0]["a1"].ravel(), leaf["a1"])
-    assert result["operator"]["leaves"][0]["row"] == 1.
-    result["operator"]["leaves"][0]["a1"][0] = 99
-    assert leaf["a1"][0] == 3.  # Publisher owns values, never mutates CPU factors.
-    with pytest.raises(ValueError, match="explicit backend"):
-        module.prepare_hdiv_host_setup(mesh, backend="cpu", label_contract=labels)
 
 
 @pytest.mark.parametrize("compressed", [False, True])

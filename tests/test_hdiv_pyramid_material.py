@@ -16,7 +16,7 @@ from scipy.sparse.linalg import norm as sparse_norm
 
 
 ng = pytest.importorskip("ngsolve")
-gpu = pytest.importorskip("radia_simulink._hdiv_cuda", reason="Optional isolated native GPU binding")
+gpu = pytest.importorskip("radia._hdiv_cuda", reason="Optional isolated native GPU binding")
 from test_hdiv_connected_meshes import connected_mesh
 from validation_test.hmatrix_cuda.hdiv_hdf5 import write_hdiv_h5
 

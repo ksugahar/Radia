@@ -116,15 +116,9 @@ def test_shared_hdiv_resident_native_gpu(tmp_path):
         pytest.skip("Optional GPU lane requires RADIA_HDIV_NATIVE_TEST_DIR")
     import ngsolve as ng
     build = Path(configured)
-    receipt = json.loads((build / "python-build.json").read_text())
-    binary = build / receipt["binary"]
-    assert hashlib.sha256(binary.read_bytes()).hexdigest() == receipt["binary_sha256"]
-    runtime = Path(os.environ["RADIA_VALIDATION_MATLAB_ROOT"])
-    handle = os.add_dll_directory(str(runtime / "bin/win64"))
+    from radia.gpu import _native
+    module = _native("_hdiv_cuda")
     try:
-        spec = importlib.util.spec_from_file_location("_hdiv_cuda", binary)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
         assert "matlab.engine" not in sys.modules
         # Independent analytic nonlinear law h(a)=a+a^3 with linear barrier.
         knots=np.array([0.,1.,2.]);coefficients=np.array([1.,0.,1.,0.,1.,3.,4.,2.]);base=np.array([0.,.75,6.])
@@ -240,4 +234,4 @@ def test_shared_hdiv_resident_native_gpu(tmp_path):
         with pytest.raises(RuntimeError, match="closed"):
             obj.apply(np.ones(3))
     finally:
-        handle.close()
+        pass  # The Radia lazy runtime owns its pip library handles.

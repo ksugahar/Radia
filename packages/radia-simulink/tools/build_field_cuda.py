@@ -31,7 +31,7 @@ def main():
                core/'rad_hdiv_field_evaluator.h', core/'rad_hdiv_vim.h', core/'rad_field_cloud_kernel.h',
                core/'rad_field_sources.h', core/'rad_field_source_kernel.inc', core/'rad_hdiv_field_math.inc',
                core/'rad_hdiv_field_kernel_api.inc',
-               package/'native/radia_cuda_field.cu', package/'native/radia_field_exact.cuh', Path(__file__).with_name('matlab_cuda_toolchain.py'),Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__), root/'Build.ps1']
+               package/'native/radia_cuda_field.cu', root/'src/core/gpu/hdiv/radia_field_exact.cuh', Path(__file__).with_name('matlab_cuda_toolchain.py'),Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__), root/'Build.ps1']
     sources.append(root/'packages/radia-simulink/native/mex_error_boundary.hpp')
     sources.append(Path(__file__).with_name('check_mex_error_boundaries.py'))
     hashes = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}

@@ -5,7 +5,7 @@
 #include "gpu/mxGPUArray.h"
 #include <cuda_runtime.h>
 #include "rad_hdiv_field_evaluator.h"
-#include "radia_field_exact.cuh"
+#include "../../../src/core/gpu/hdiv/radia_field_exact.cuh"
 #include <algorithm>
 #include <cstdint>
 #include <chrono>

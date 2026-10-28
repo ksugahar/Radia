@@ -1,7 +1,7 @@
 /* Host container unwind contract; not an independent numerical oracle. */
-#include "hmatrix_host_fault.hpp"
-#include "hdiv_inverse_bh.hpp"
-#include "hdiv_resident_python_api.hpp"
+#include "../../src/core/gpu/hdiv/hmatrix_host_fault.hpp"
+#include "../../src/core/gpu/hdiv/hdiv_inverse_bh.hpp"
+#include "../../src/core/gpu/hdiv/hdiv_resident_python_api.hpp"
 #include <cassert>
 #include <cmath>
 #include "rad_charge_quadrature.h"

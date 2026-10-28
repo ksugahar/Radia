@@ -1,7 +1,7 @@
 // Native assembly boundary: resident geometry, bounded ACA row/column batches.
 // Include after hmatrix_resident.cuh; this is not an alternative ACA algorithm.
 #pragma once
-#include "hmatrix_resident.cuh"
+#include "../../../src/core/gpu/hdiv/hmatrix_resident.cuh"
 #include "cHACApK_batch_size.h"
 #include <mutex>
 namespace radia_hmatrix_cuda {
