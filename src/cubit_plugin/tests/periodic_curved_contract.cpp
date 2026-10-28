@@ -26,33 +26,69 @@ static std::unique_ptr<Mesh> fixture(int order, const std::array<int,4> &mapped 
     for (int j = 0; j < 4; ++j) tet[j] = PointIndex(nodes[j]);
     mesh->AddVolumeElement(tet);
   }
+  const std::array<std::array<int,3>,8> exterior{{{1,2,3},{2,4,3},
+    {mapped[0],mapped[1],mapped[2]},{mapped[1],mapped[3],mapped[2]},
+    {1,2,4},{1,3,4},{mapped[0],mapped[1],mapped[3]},
+    {mapped[0],mapped[2],mapped[3]}}};
+  std::set<std::array<int,3>> seeded_faces;
+  for (int i = 0; i < 4; ++i) {
+    auto key = exterior[i]; std::sort(key.begin(),key.end()); seeded_faces.insert(key);
+  }
   int index = 0;
-  for (int bc : {4,2,1,3}) {
+  for (int bc : {4,2,1,3,5,5,5,5}) {
     FaceDescriptor descriptor; descriptor.SetBCProperty(bc);
-    descriptor.SetBCName(index < 2 ? "source" : "target");
+    descriptor.SetSurfNr(index);
+    descriptor.SetDomainIn(1); descriptor.SetDomainOut(0);
+    descriptor.SetBCName(index < 2 ? "source" : index < 4 ? "target" : "other_boundary");
     const auto fd = mesh->AddFaceDescriptor(descriptor);
-    const std::array<std::array<int,3>,4> nodes{{{1,2,3},{2,4,3},
-      {mapped[0],mapped[1],mapped[2]},{mapped[1],mapped[3],mapped[2]}}};
+    auto nodes = exterior[index];
+    const std::array<int,4> tet_nodes = nodes[0] <= 4 ? std::array<int,4>{1,2,3,4} : mapped;
+    int opposite = 0;
+    for (int point : tet_nodes)
+      if (std::find(nodes.begin(),nodes.end(),point) == nodes.end()) opposite = point;
+    if (!opposite) throw std::runtime_error("Fixture boundary has no unique opposite vertex");
+    const auto &a = mesh->Point(PointIndex(nodes[0]));
+    const auto &b = mesh->Point(PointIndex(nodes[1]));
+    const auto &c = mesh->Point(PointIndex(nodes[2]));
+    const auto &inside = mesh->Point(PointIndex(opposite));
+    std::array<double,3> ab, ac, inward;
+    for (int axis = 0; axis < 3; ++axis) {
+      ab[axis]=b(axis)-a(axis); ac[axis]=c(axis)-a(axis); inward[axis]=inside(axis)-a(axis);
+    }
+    const double side = (ab[1]*ac[2]-ab[2]*ac[1])*inward[0] +
+      (ab[2]*ac[0]-ab[0]*ac[2])*inward[1] + (ab[0]*ac[1]-ab[1]*ac[0])*inward[2];
+    if (side == 0) throw std::runtime_error("Degenerate fixture boundary face");
+    if (side > 0) std::swap(nodes[1],nodes[2]); // outward from domain 1
     Element2d triangle(TRIG); triangle.SetIndex(fd);
-    for (int j = 0; j < 3; ++j) triangle[j] = PointIndex(nodes[index][j]);
+    for (int j = 0; j < 3; ++j) triangle[j] = PointIndex(nodes[j]);
     mesh->AddSurfaceElement(triangle); ++index;
   }
-  mesh->SetNBCNames(4);
+  mesh->SetNBCNames(5);
   for (int bc : {4,2}) mesh->SetBCName(bc-1,"source");
   for (int bc : {1,3}) mesh->SetBCName(bc-1,"target");
+  mesh->SetBCName(4,"other_boundary");
   mesh->GetTopology().Update();
   if (order > 1) {
     auto &curved = mesh->GetCurvedElements();
     curved.BuildCurvedElements(nullptr,order,false);
     curved.SetIsHighOrder(true);
-    for (int e = 0; e < int(mesh->GetTopology().GetNEdges()); ++e)
+    auto inactive_target_edge = std::array<int,2>{mapped[0],mapped[3]};
+    std::sort(inactive_target_edge.begin(),inactive_target_edge.end());
+    for (int e = 0; e < int(mesh->GetTopology().GetNEdges()); ++e) {
+      const auto v = mesh->GetTopology().GetEdgeVertices(e);
+      const std::array<int,2> key{int(v[0]),int(v[1])};
+      const bool active = key != std::array<int,2>{1,4} && key != inactive_target_edge;
       for (int mode = 0; mode < curved.NumEdgeCoefficients(e); ++mode)
         for (int axis = 0; axis < 3; ++axis)
-          curved.EdgeCoefficients(e)[mode](axis) = (e+1)*(mode+1)*(axis+1)/1024.0;
-    for (int f = 0; f < int(mesh->GetTopology().GetNFaces()); ++f)
+          curved.EdgeCoefficients(e)[mode](axis) = active ? (e+1)*(mode+1)*(axis+1)/1024.0 : 0;
+    }
+    for (int f = 0; f < int(mesh->GetTopology().GetNFaces()); ++f) {
+      const auto v = mesh->GetTopology().GetFaceVertices(f);
+      std::array<int,3> key{int(v[0]),int(v[1]),int(v[2])}; std::sort(key.begin(),key.end());
       for (int mode = 0; mode < curved.NumFaceCoefficients(f); ++mode)
         for (int axis = 0; axis < 3; ++axis)
-          curved.FaceCoefficients(f)[mode](axis) = (f+1)*(axis+1)/2048.0;
+          curved.FaceCoefficients(f)[mode](axis) = seeded_faces.count(key) ? (f+1)*(axis+1)/2048.0 : 0;
+    }
   }
   return mesh;
 }
@@ -128,12 +164,21 @@ int main()
       if (order > 1) {
         std::map<std::array<int,2>,int> edge_ids;
         std::map<std::array<int,3>,int> face_ids;
+        auto unpaired_edge = std::array<int,2>{mapped[0],mapped[3]};
+        std::sort(unpaired_edge.begin(),unpaired_edge.end());
+        auto target_a = std::array<int,3>{mapped[0],mapped[1],mapped[2]};
+        auto target_b = std::array<int,3>{mapped[1],mapped[2],mapped[3]};
+        std::sort(target_a.begin(),target_a.end()); std::sort(target_b.begin(),target_b.end());
+        const std::set<std::array<int,3>> nonzero_faces{{1,2,3},{2,3,4},target_a,target_b};
         for (int e = 0; e < int(top.GetNEdges()); ++e) {
           auto v = top.GetEdgeVertices(e);
-          edge_ids[{int(v[0]),int(v[1])}] = e;
+          const std::array<int,2> key{int(v[0]),int(v[1])};
+          edge_ids[key] = e;
           for (int mode = 0; mode < curved.NumEdgeCoefficients(e); ++mode) {
             auto &expected = expected_coefficients[{0,e,mode}];
-            for (int axis = 0; axis < 3; ++axis) expected[axis] = (e+1)*(mode+1)*(axis+1)/1024.0;
+            for (int axis = 0; axis < 3; ++axis)
+              expected[axis] = key == std::array<int,2>{1,4} || key == unpaired_edge ?
+                0 : (e+1)*(mode+1)*(axis+1)/1024.0;
           }
         }
         for (int f = 0; f < int(top.GetNFaces()); ++f) {
@@ -142,7 +187,8 @@ int main()
           std::sort(key.begin(),key.end()); face_ids[key] = f;
           for (int mode = 0; mode < curved.NumFaceCoefficients(f); ++mode) {
             auto &expected = expected_coefficients[{1,f,mode}];
-            for (int axis = 0; axis < 3; ++axis) expected[axis] = (f+1)*(axis+1)/2048.0;
+            for (int axis = 0; axis < 3; ++axis)
+              expected[axis] = nonzero_faces.count(key) ? (f+1)*(axis+1)/2048.0 : 0;
           }
         }
         for (const auto &entry : edge_ids) {
