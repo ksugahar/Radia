@@ -66,6 +66,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gpu = [
+    "nvidia-cuda-runtime-cu12==12.8.57; sys_platform == 'linux' or sys_platform == 'win32'",
+    "nvidia-cublas-cu12==12.8.3.14; sys_platform == 'linux' or sys_platform == 'win32'",
+    "nvidia-cusolver-cu12==11.7.2.55; sys_platform == 'linux' or sys_platform == 'win32'",
+    "nvidia-cusparse-cu12==12.5.7.53; sys_platform == 'linux' or sys_platform == 'win32'",
+    "nvidia-nvjitlink-cu12==12.8.61; sys_platform == 'linux' or sys_platform == 'win32'",
+]
 optuna = ["optuna==5.0.0"]
 cubit = [
     "cubit-mesh-export",
@@ -145,7 +152,7 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 # _radia_pybind.pyd / peec_matrices.pyd /
 # sparsesolv_ngsolve.pyd).
 radia = [
-    "*.pyd", "*.dll", "*.so", "*.dylib", "*.pyi", "*.png", "*.ico",
+    "*.pyd", "*.dll", "*.so", "*.dylib", "*.pyd.build.json", "*.so.build.json", "*.pyi", "*.png", "*.ico",
     "resources/*.png", "resources/*.ico",
     "panels/samples/*.jou",
     "panels/samples/*.vol",

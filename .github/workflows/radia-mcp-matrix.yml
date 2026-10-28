@@ -413,7 +413,7 @@ jobs:
           targets = ["tests"]
           command = [
               sys.executable, "-m", "pytest", "-v", "-r", "aR",
-              "-m", "not xval and not slow", *targets,
+              "-m", "not slow", *targets,
           ]
           raise SystemExit(
               subprocess.run(command, cwd=package_root, env=env).returncode

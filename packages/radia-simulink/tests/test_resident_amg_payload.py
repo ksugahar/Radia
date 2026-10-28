@@ -26,7 +26,7 @@ def selected(tmp_path):
     name = '_resident_amg' + sysconfig.get_config_var('EXT_SUFFIX')
     (build / name).write_bytes(b'not-a-native-library')
     sources = {}
-    paths = ['packages/radia-simulink/native/resident_amg_' + suffix
+    paths = ['src/core/gpu/resident_amg_' + suffix
              for suffix in ('cuda.cu', 'python.cpp', 'host.hpp')]
     paths += ['packages/radia-simulink/tools/' + name for name in (
         'build_resident_amg_python.py', 'build_cuda_mex.py',

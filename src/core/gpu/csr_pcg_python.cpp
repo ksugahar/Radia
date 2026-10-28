@@ -1,3 +1,6 @@
+#ifndef RADIA_CSR_PYTHON_MODULE
+#define RADIA_CSR_PYTHON_MODULE _gpu_csr
+#endif
 #include "csr_pcg_host.hpp"
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -43,7 +46,7 @@ static py::array_t<double> amg_smooth(Array<int> row,Array<int> col,Array<double
      radia_csr::amg_smooth_gpu_host(int(n),int(nnz),rp.data(),ci.data(),av.data(),b.data(),weights.data(),sweeps,output);}
     return result;
 }
-PYBIND11_MODULE(_csr_cuda,m){
+PYBIND11_MODULE(RADIA_CSR_PYTHON_MODULE,m){
     m.doc()="Explicit CSR CUDA solve; no MATLAB ABI or import-time CUDA calls";
     m.def("_amg_l1_smooth",&amg_smooth,py::arg("row_pointers").noconvert(),py::arg("columns").noconvert(),
           py::arg("values").noconvert(),py::arg("rhs").noconvert(),py::arg("l1_weights").noconvert(),py::arg("sweeps"),

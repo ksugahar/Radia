@@ -28,9 +28,9 @@ def main():
         build(package, args.out.resolve(), admission)
         return
     sources = [package / 'native/radia_cuda_csr_pcg.cu', package / 'native/radia_cuda_ic.cu']
-    source_inputs = sources + [package/'native/csr_pcg_host.hpp',package/'native/csr_pcg_cuda.cuh']
+    source_inputs = sources + [root/'src/core/gpu/csr_pcg_host.hpp',root/'src/core/gpu/csr_pcg_cuda.cuh']
     if args.python_bindings:
-        source_inputs += [package/'native/ams_amg_kernels.cuh',package/'native/csr_pcg_python.cpp',package/'native/csr_pcg_python_cuda.cu',Path(__file__).with_name('build_csr_python.py'),Path(__file__).with_name('native_source_paths.py')]
+        source_inputs += [root/'src/core/gpu/ams_amg_kernels.cuh',root/'src/core/gpu/csr_pcg_python.cpp',root/'src/core/gpu/csr_pcg_python_cuda.cu',Path(__file__).with_name('build_csr_python.py'),Path(__file__).with_name('native_source_paths.py')]
     source_inputs += [package/'native/mex_error_boundary.hpp',Path(__file__).with_name('check_mex_error_boundaries.py'),Path(__file__).with_name('matlab_cuda_toolchain.py'),Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__),root/'Build.ps1']
     source_commit=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
     source_hashes={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in source_inputs}
