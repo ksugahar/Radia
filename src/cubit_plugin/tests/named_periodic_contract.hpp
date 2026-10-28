@@ -99,5 +99,47 @@ inline void named_periodic_contract_test()
   for (int i = 0; i < 6; ++i)
     if (result.point_pairs[i] != std::make_pair(i + 1, i + 7))
       throw std::runtime_error("Periodic endpoint direction/indices differ");
-  mesh->Save(std::filesystem::path("named-periodic-contract.vol"));
+  const std::filesystem::path output("named-periodic-contract.vol");
+  const auto paths = named_periodic_output_paths(output);
+  save_named_periodic_vol(*mesh, output);
+  if (!std::filesystem::is_regular_file(output) || std::filesystem::exists(paths.temporary))
+    throw std::runtime_error("Native periodic save did not publish the exact final path");
+  auto bytes = [](const std::filesystem::path &path) {
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream) throw std::runtime_error("Cannot read save-contract artifact");
+    return std::string(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+  };
+  const auto published = bytes(output);
+  if (published.empty()) throw std::runtime_error("Empty published periodic VOL");
+  must_reject([&]{save_named_periodic_vol(*mesh, output);});
+  if (bytes(output) != published)
+    throw std::runtime_error("Existing periodic output was modified");
+  const std::filesystem::path stale("named-periodic-stale.vol");
+  const auto stale_paths = named_periodic_output_paths(stale);
+  { std::ofstream sentinel(stale_paths.temporary); sentinel << "preserve temporary"; }
+  const auto sentinel = bytes(stale_paths.temporary);
+  must_reject([&]{save_named_periodic_vol(*mesh, stale);});
+  if (bytes(stale_paths.temporary) != sentinel || std::filesystem::exists(stale))
+    throw std::runtime_error("Existing periodic temporary was changed or published");
+  const std::filesystem::path blocked("named-periodic-sidecar.vol");
+  const auto blocked_paths = named_periodic_output_paths(blocked);
+  { std::ofstream sidecar(blocked_paths.sidecar); sidecar << "preserve sidecar"; }
+  const auto existing_sidecar = bytes(blocked_paths.sidecar);
+  must_reject([&]{save_named_periodic_vol(*mesh, blocked);});
+  if (bytes(blocked_paths.sidecar) != existing_sidecar || std::filesystem::exists(blocked))
+    throw std::runtime_error("Existing periodic sidecar was changed or published");
+  must_reject([&]{save_named_periodic_vol(*mesh, "unsupported-periodic-output.partial");});
+  const std::filesystem::path missing_parent("named-periodic-no-parent/output.vol");
+  if (std::filesystem::exists(missing_parent.parent_path()))
+    throw std::runtime_error("Save-error fixture parent must be absent");
+  must_reject([&]{save_named_periodic_vol(*mesh, missing_parent);});
+  if (std::filesystem::exists(missing_parent))
+    throw std::runtime_error("Failed periodic writer published an output");
+  const auto rename_error = named_periodic_output_paths("named-periodic-rename-error.vol");
+  if (std::filesystem::exists(rename_error.temporary) || std::filesystem::exists(rename_error.final))
+    throw std::runtime_error("Rename-error fixture paths must be absent");
+  must_reject([&]{publish_named_periodic_output(rename_error);});
+  if (std::filesystem::exists(rename_error.final))
+    throw std::runtime_error("Failed native rename published an output");
+  std::cerr << "named periodic save contract: native Save/rename passed; existing final/temp/sidecar preserved\n";
 }

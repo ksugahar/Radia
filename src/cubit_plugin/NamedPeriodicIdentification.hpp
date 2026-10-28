@@ -5,6 +5,9 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <set>
 #include <sstream>
@@ -187,6 +190,60 @@ inline NamedPeriodicResult apply_named_periodic_identification(
   if (periodic_geometry_serialization(mesh) != geometry_before)
     throw std::runtime_error("Periodic insertion changed serialized geometry");
   return result;
+}
+
+struct NamedPeriodicOutputPaths {
+  std::filesystem::path final, temporary, sidecar;
+};
+
+inline NamedPeriodicOutputPaths named_periodic_output_paths(const std::filesystem::path &filename)
+{
+  if (filename.extension() != ".vol")
+    throw std::runtime_error("Named periodic output requires an explicit .vol suffix");
+  auto temporary = filename; temporary += ".partial.vol";
+  auto sidecar = filename; sidecar += ".json";
+  return {filename, temporary, sidecar};
+}
+
+inline void require_fresh_named_periodic_output(const NamedPeriodicOutputPaths &paths)
+{
+  for (const auto &path : {paths.final, paths.temporary, paths.sidecar})
+    if (std::filesystem::symlink_status(path).type() != std::filesystem::file_type::not_found)
+      throw std::runtime_error("Named periodic output already exists: " + path.u8string());
+}
+
+inline void publish_named_periodic_output(const NamedPeriodicOutputPaths &paths)
+{
+  // Re-check the publication targets after writing; do not replace an output
+  // belonging to an earlier single-owner request.
+  for (const auto &path : {paths.final, paths.sidecar})
+    if (std::filesystem::symlink_status(path).type() != std::filesystem::file_type::not_found)
+      throw std::runtime_error("Named periodic publication target already exists: " + path.u8string());
+  std::filesystem::rename(paths.temporary, paths.final);
+}
+
+// Single-owner output: preserve the native .vol text writer and its newline
+// convention. Unknown suffixes cause Mesh::Save(path) to append .vol.gz.
+inline void save_named_periodic_vol(const netgen::Mesh &mesh, const std::filesystem::path &filename)
+{
+  const auto paths = named_periodic_output_paths(filename);
+  require_fresh_named_periodic_output(paths);
+  std::ostringstream expected;
+  mesh.Save(expected);
+  if (!expected) throw std::runtime_error("Named periodic serialization failed");
+  mesh.Save(paths.temporary);
+  if (!std::filesystem::is_regular_file(paths.temporary))
+    throw std::runtime_error("Native writer did not create the exact periodic temporary path");
+  // Text input reverses the platform newline translation of the native text
+  // writer, without changing the on-disk bytes. A short/silent write must fail.
+  std::ifstream input(paths.temporary);
+  input.exceptions(std::ios::badbit);
+  if (!input) throw std::runtime_error("Cannot read periodic temporary output");
+  const std::string actual((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+  input.close();
+  if (actual != expected.str())
+    throw std::runtime_error("Native periodic temporary serialization is incomplete or differs");
+  publish_named_periodic_output(paths);
 }
 
 } // namespace cubit_mesh_export

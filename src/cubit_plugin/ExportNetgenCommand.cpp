@@ -448,10 +448,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   }
   if (has_periodic) {
     try {
-      if (std::filesystem::exists(u8_string_to_path(filename)) ||
-          std::filesystem::exists(u8_string_to_path(filename + ".json")) ||
-          std::filesystem::exists(u8_string_to_path(filename + ".partial")))
-        throw std::runtime_error("Named periodic export requires a fresh output path");
+      cubit_mesh_export::require_fresh_named_periodic_output(
+          cubit_mesh_export::named_periodic_output_paths(u8_string_to_path(filename)));
       std::istringstream patches(periodic_patch_text);
       std::string patch;
       while (std::getline(patches, patch, ',')) {
@@ -993,9 +991,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // throw "No mapping for the Unicode character").
   if (has_periodic) {
     try {
-      ng_mesh->Save(u8_string_to_path(filename + ".partial"));
-      std::filesystem::rename(u8_string_to_path(filename + ".partial"),
-                              u8_string_to_path(filename));
+      cubit_mesh_export::save_named_periodic_vol(*ng_mesh, u8_string_to_path(filename));
     } catch (const std::exception &error) {
       PRINT_ERROR("Named periodic save failed: %s\n", error.what());
       std::ofstream failure(u8_string_to_path(filename + ".json"));
