@@ -129,10 +129,6 @@ class build_py(_build_py):
         resident = os.environ.get('RADIA_RESIDENT_AMG_BUILD')
         if resident:
             expected.update(payload_module_resident().stage(ROOT, package, commit, resident))
-        hdiv_python_runtime=os.environ.get('RADIA_HDIV_PYTHON_RUNTIME')
-        if hdiv_python_runtime:
-            if not hmatrix:raise RuntimeError('HDiv Python payload requires selected HDiv build directories')
-            expected.update(payload_module().stage_python(ROOT,package,commit,hmatrix,hdiv_python_runtime))
         fmm = os.environ.get('RADIA_FMM_BUILD')
         if fmm:
             expected.update(payload_module().stage_fmm(ROOT, package, commit, fmm))
@@ -193,7 +189,7 @@ class build_py(_build_py):
                    for p in package.rglob("*") if p.is_file() and p.name != "manifest.json"}
         metadata = tomllib.loads((PACKAGE / "pyproject.toml").read_text())
         runtime_common, runtime_interfaces = payload_module().runtime_contract(
-            bool(python_binding or hdiv_python_runtime or resident))
+            bool(python_binding or resident))
         manifest = dict(schema="radia.gpu.distribution.v1", version=metadata["project"]["version"],
                         source_commit=commit, files=payload,
                         capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "Experimental reusable CUDA FP64 IC(0)-PCG", "Reusable affine linear HCurl matrix and AMS hierarchy", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"] + (["Explicit CSR CPU MEX and direct Python CUDA adapter (qualification required)"] if python_binding else []) + (["Bounded affine/P2 HDiv orders 1/2"] if hmatrix else []) + (["Resident GPU AMG Python adapter"] if resident else []) + (["Experimental Laplace FMM and flat P1 boundary maps"] if fmm else []),
@@ -207,14 +203,12 @@ class bdist_wheel(_bdist_wheel):
         super().finalize_options()
         receipt_path=ROOT/'build-cuda-mex/build.json'
         if ((receipt_path.is_file() and json.loads(receipt_path.read_text()).get('python_binding'))
-                or os.environ.get('RADIA_HDIV_PYTHON_RUNTIME')
                 or os.environ.get('RADIA_RESIDENT_AMG_BUILD')):
             self.root_is_pure=False
 
     def get_tag(self):
         receipt_path=ROOT/'build-cuda-mex/build.json'
-        python_selected = bool(os.environ.get('RADIA_HDIV_PYTHON_RUNTIME') or
-            os.environ.get('RADIA_RESIDENT_AMG_BUILD') or
+        python_selected = bool(os.environ.get('RADIA_RESIDENT_AMG_BUILD') or
             (receipt_path.is_file() and json.loads(receipt_path.read_text()).get('python_binding')))
         return payload_module().wheel_tag(python_selected, sys.platform, sys.version_info)
 

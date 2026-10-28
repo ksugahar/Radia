@@ -7,7 +7,7 @@ import re
 def project_header_inputs(files, root):
     """Hash quoted project includes transitively; external headers belong to F4."""
     result=list(dict.fromkeys(files));seen=set(result)
-    search=[root/'packages/radia-simulink/native',root/'src/core',root/'src/ext/HACApK']
+    search=[root/'packages/radia-simulink/native',root/'src/core/gpu/hdiv',root/'src/core',root/'src/ext/HACApK']
     for path in result:
         if path.suffix not in ('.h','.hpp','.cuh','.cu','.c','.cpp'):
             continue
@@ -25,24 +25,21 @@ def main():
     require_boundaries()
     from vs2022_toolchain import discover_vs, compiler_bin
     from matlab_cuda_toolchain import configure_engine, require_build_admission
-    parser=argparse.ArgumentParser();parser.add_argument('--require-clean-source',action='store_true');parser.add_argument('--mkl-root',type=Path);parser.add_argument('--build-admission',type=Path);parser.add_argument('--build-admission-sha256');parser.add_argument('--entry-batch-size',type=int,choices=[256,1024],default=256);parser.add_argument('--fault-injection',action='store_true');parser.add_argument('--python-bindings',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--require-clean-source',action='store_true');parser.add_argument('--mkl-root',type=Path);parser.add_argument('--build-admission',type=Path);parser.add_argument('--build-admission-sha256');parser.add_argument('--entry-batch-size',type=int,choices=[256,1024],default=256);parser.add_argument('--fault-injection',action='store_true');args=parser.parse_args()
     if args.fault_injection and not args.mkl_root:parser.error('Fault injection requires the full serial C build')
     root=Path(__file__).resolve().parents[3]
     admission=require_build_admission(root,'hmatrix',args.build_admission,args.build_admission_sha256)
     dirty=bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip())
     if args.require_clean_source and dirty:raise RuntimeError('Clean source required')
-    files=[root/'packages/radia-simulink/native/radia_cuda_hmatrix.cu',root/'packages/radia-simulink/native/hmatrix_resident.cuh',root/'packages/radia-simulink/native/hmatrix_hacapk_pack.cuh',root/'packages/radia-simulink/native/hmatrix_entry_oracle.cuh',root/'packages/radia-simulink/native/hmatrix_aca_callback.cuh',root/'packages/radia-simulink/native/hmatrix_leaf_bounds.h',root/'src/ext/HACApK/cHACApK_calc_entry_ij.h',root/'src/ext/HACApK/cHACApK_base.h',root/'packages/radia-simulink/native/analytic_matrix_build.cuh',root/'packages/radia-simulink/native/radia_field_exact.cuh',root/'src/core/rad_charge_quadrature.h',root/'src/core/rad_hdiv_vim.h',root/'src/core/rad_field_cloud_kernel.h',root/'src/core/rad_hdiv_field_math.inc',root/'src/core/rad_hdiv_field_kernel_api.inc',root/'src/core/rad_field_source_kernel.inc',Path(__file__).with_name('matlab_cuda_toolchain.py'),Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__),root/'Build.ps1']
+    files=[root/'packages/radia-simulink/native/radia_cuda_hmatrix.cu',root/'src/core/gpu/hdiv/hmatrix_resident.cuh',root/'packages/radia-simulink/native/hmatrix_hacapk_pack.cuh',root/'packages/radia-simulink/native/hmatrix_entry_oracle.cuh',root/'packages/radia-simulink/native/hmatrix_aca_callback.cuh',root/'packages/radia-simulink/native/hmatrix_leaf_bounds.h',root/'src/ext/HACApK/cHACApK_calc_entry_ij.h',root/'src/ext/HACApK/cHACApK_base.h',root/'src/core/gpu/hdiv/analytic_matrix_build.cuh',root/'src/core/gpu/hdiv/radia_field_exact.cuh',root/'src/core/rad_charge_quadrature.h',root/'src/core/rad_hdiv_vim.h',root/'src/core/rad_field_cloud_kernel.h',root/'src/core/rad_hdiv_field_math.inc',root/'src/core/rad_hdiv_field_kernel_api.inc',root/'src/core/rad_field_source_kernel.inc',Path(__file__).with_name('matlab_cuda_toolchain.py'),Path(__file__).with_name('vs2022_toolchain.py'),Path(__file__),root/'Build.ps1']
     files += [root/'src/ext/HACApK/cHACApK_base.c',root/'src/ext/HACApK/cHACApK_aca.inc',root/'packages/radia-simulink/native/hmatrix_aca_host.c',root/'src/ext/HACApK/cHACApK_lib.c',root/'src/core/rad_hacapk_parallel.h'] + sorted((root/'src/ext/HACApK').glob('*.h'))
-    files += [root/'packages/radia-simulink/native/hmatrix_curved_entry_cache.cuh',root/'packages/radia-simulink/native/hmatrix_curved_entry_oracle.cuh',root/'packages/radia-simulink/native/hdiv_assembly_profile.cuh',root/'packages/radia-simulink/native/hdiv_curved_moments.cuh',root/'packages/radia-simulink/native/hmatrix_material_solver.cuh',root/'packages/radia-simulink/native/hdiv_curved_gram.cuh']
+    files += [root/'packages/radia-simulink/native/hmatrix_curved_entry_cache.cuh',root/'packages/radia-simulink/native/hmatrix_curved_entry_oracle.cuh',root/'src/core/gpu/hdiv/hdiv_assembly_profile.cuh',root/'src/core/gpu/hdiv/hdiv_curved_moments.cuh',root/'src/core/gpu/hdiv/hmatrix_material_solver.cuh',root/'src/core/gpu/hdiv/hdiv_curved_gram.cuh']
     if args.mkl_root:
         files += [root/'packages/radia-simulink/native/hmatrix_full_assembly.cuh',root/'packages/radia-simulink/native/hmatrix_serial_host.c',root/'packages/radia-simulink/native/hmatrix_c_memory.c',root/'packages/radia-simulink/native/hmatrix_c_memory.h',root/'src/ext/HACApK/cHACApK_cpp_impl.c',root/'src/ext/HACApK/cHACApK_pca_cluster.c']
-    files += [root/'packages/radia-simulink/native/hmatrix_host_fault.hpp',root/'packages/radia-simulink/native/hmatrix_leaf_coverage.hpp']
+    files += [root/'src/core/gpu/hdiv/hmatrix_host_fault.hpp',root/'src/core/gpu/hdiv/hmatrix_leaf_coverage.hpp']
     files.append(Path(__file__).with_name('check_mex_error_boundaries.py'))
     if args.fault_injection:
         files += [root/'validation_test/hmatrix_cuda/check_c_memory_transaction.c',root/'validation_test/hmatrix_cuda/check_host_fault_allocator.cpp']
-    if args.python_bindings:
-        files += [root/'packages/radia-simulink/native'/name for name in ('hdiv_resident_python_api.hpp','hdiv_resident_python.cpp','hdiv_resident_python_cuda.cu','hdiv_material_python.cpp','hdiv_material_staging.hpp')]
-        files += [Path(__file__).with_name('build_csr_python.py')]
     files += [Path(__file__).with_name('native_source_paths.py')]
     files=project_header_inputs(files,root)
     hashes={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
@@ -102,12 +99,6 @@ def main():
         (out/'toolchain.json').write_text(json.dumps(toolchain_receipt, indent=2)+'\n', encoding='utf-8')
         if not config.is_file():raise RuntimeError('Supported MATLAB CUDA configuration missing')
         eng.mexcuda('-v','-R2018a','-f',str(config),'NVCCFLAGS=-std=c++17 --fmad=false --resource-usage -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80','-DRAD_HACAPK_BATCH_SIZE='+str(args.entry_batch_size),'-I'+str(root/'src/ext/HACApK'),'-I'+str(root/'src/core'),'-outdir',str(out),str(files[0]),*objects,*extra,'-lcublas','-lcusolver','LINKFLAGS=$LINKFLAGS /OPT:REF',nargout=0)
-        if args.python_bindings:
-            from build_csr_python import build_python_binding
-            record['python_binding']=build_python_binding(eng,root/'packages/radia-simulink',out,config,
-                'NVCCFLAGS=-std=c++17 --fmad=false -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80',toolchain_receipt,component='hdiv',fault_injection=args.fault_injection)
-        if hashes!={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in files}:raise RuntimeError('Source changed during build')
-        if subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()!=record['source_commit']:raise RuntimeError('Commit changed during build')
         record.update(accepted=True,matlab=eng.version(),binary_sha256=hashlib.sha256((out/'radia_cuda_hmatrix.mexw64').read_bytes()).hexdigest(),cuda_targets=['sm_75','sm_80','compute_80 PTX'],taskmanager_started=False,python_runtime_required=False)
     except BaseException as error:record['error']=f'{type(error).__name__}: {error}';raise
     finally:

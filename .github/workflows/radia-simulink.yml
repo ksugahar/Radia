@@ -110,6 +110,21 @@ on:
       - 'validation_test/fmm_cuda/**/*.cpp'
       - 'validation_test/fmm_cuda/**/*.js'
       - 'validation_test/fmm_cuda/**/*.json'
+      - 'src/core/gpu/hdiv/analytic_matrix_build.cuh'
+      - 'src/core/gpu/hdiv/hdiv_assembly_profile.cuh'
+      - 'src/core/gpu/hdiv/hdiv_curved_gram.cuh'
+      - 'src/core/gpu/hdiv/hdiv_curved_moments.cuh'
+      - 'src/core/gpu/hdiv/hdiv_inverse_bh.hpp'
+      - 'src/core/gpu/hdiv/hdiv_material_staging.hpp'
+      - 'src/core/gpu/hdiv/hdiv_resident_python_api.hpp'
+      - 'src/core/gpu/hdiv/hmatrix_bh_material.cuh'
+      - 'src/core/gpu/hdiv/hmatrix_host_fault.hpp'
+      - 'src/core/gpu/hdiv/hmatrix_inverse_bh.cuh'
+      - 'src/core/gpu/hdiv/hmatrix_leaf_coverage.hpp'
+      - 'src/core/gpu/hdiv/hmatrix_material_solver.cuh'
+      - 'src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh'
+      - 'src/core/gpu/hdiv/hmatrix_resident.cuh'
+      - 'src/core/gpu/hdiv/radia_field_exact.cuh'
   push:
     branches: [main]
     paths:
@@ -219,6 +234,21 @@ on:
       - 'validation_test/fmm_cuda/**/*.cpp'
       - 'validation_test/fmm_cuda/**/*.js'
       - 'validation_test/fmm_cuda/**/*.json'
+      - 'src/core/gpu/hdiv/analytic_matrix_build.cuh'
+      - 'src/core/gpu/hdiv/hdiv_assembly_profile.cuh'
+      - 'src/core/gpu/hdiv/hdiv_curved_gram.cuh'
+      - 'src/core/gpu/hdiv/hdiv_curved_moments.cuh'
+      - 'src/core/gpu/hdiv/hdiv_inverse_bh.hpp'
+      - 'src/core/gpu/hdiv/hdiv_material_staging.hpp'
+      - 'src/core/gpu/hdiv/hdiv_resident_python_api.hpp'
+      - 'src/core/gpu/hdiv/hmatrix_bh_material.cuh'
+      - 'src/core/gpu/hdiv/hmatrix_host_fault.hpp'
+      - 'src/core/gpu/hdiv/hmatrix_inverse_bh.cuh'
+      - 'src/core/gpu/hdiv/hmatrix_leaf_coverage.hpp'
+      - 'src/core/gpu/hdiv/hmatrix_material_solver.cuh'
+      - 'src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh'
+      - 'src/core/gpu/hdiv/hmatrix_resident.cuh'
+      - 'src/core/gpu/hdiv/radia_field_exact.cuh'
   workflow_dispatch:
 
 permissions:

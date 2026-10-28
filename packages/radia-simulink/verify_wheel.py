@@ -105,11 +105,11 @@ def verify_python_binding(path, names, archive, manifest):
                             'redistribution_reference_sha256'))):
                 raise ValueError('Resident AMG runtime or provenance qualification missing')
             continue
-        native_tag=re.fullmatch(r'_(csr|hdiv)_cuda\.(cp\d+)-win_amd64\.pyd',filename)
+        native_tag=re.fullmatch(r'_(csr)_cuda\.(cp\d+)-win_amd64\.pyd',filename)
         if not tag or not native_tag or tag[1]!=tag[2] or tag[1]!=native_tag[2] or native_tag[1] in seen:
             raise ValueError('Python CUDA binding wheel ABI mismatch')
         component=native_tag[1];seen.add(component)
-        receipt_name='python-build.json' if component=='csr' else 'hdiv-python-build.json'
+        receipt_name='python-build.json'
         if 'radia_simulink/'+receipt_name not in names:raise ValueError('Python CUDA native receipt required')
         binding=json.loads(archive.read('radia_simulink/'+receipt_name))
         if (binding.get('schema')!='radia.'+component+'-python-build.v1'
@@ -118,12 +118,6 @@ def verify_python_binding(path, names, archive, manifest):
                 or binding.get('binary')!=filename
                 or binding.get('binary_sha256')!=manifest['files'].get(filename)):
             raise ValueError('Python CUDA binding wheel ABI or hash mismatch')
-        if component=='hdiv' and (binding.get('fault_injection') is not False
-                or binding.get('device_fault_injection') is not False
-                or binding.get('runtime_import_checked') is not True
-                or binding.get('redistribution_accepted') is not True
-                or not re.fullmatch(r'[0-9a-f]{64}',binding.get('redistribution_reference_sha256',''))):
-            raise ValueError('HDiv Python runtime or redistribution evidence missing')
     if not python_binaries and '-py3-none-' not in path.name:
         raise ValueError('Native ABI wheel is missing its Python binding')
 
