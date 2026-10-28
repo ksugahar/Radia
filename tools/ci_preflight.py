@@ -250,7 +250,7 @@ def gate_radia_mcp_matrix():
         pytest_targets = ["tests/"]
         rc, out = _sh([sys.executable, "-m", "pytest", *pytest_targets, "-q",
                        "-p", "no:cacheprovider", "--no-header",
-                       "-m", "not xval and not slow"],
+                       "-m", "not slow"],
                       cwd=MCP, env=test_env, timeout=300)
     except subprocess.TimeoutExpired as exc:
         partial = (exc.stdout or exc.stderr or "")
