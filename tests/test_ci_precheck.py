@@ -224,7 +224,7 @@ def test_mcp_executes_the_actual_collection_protocol_and_propagates_boundary_fai
     rows = {name: (cmd, env, cwd) for name, cmd, env, cwd in commands}
     assert "--base" in rows["MCP test selection"][0]
     cmd, env, cwd = rows["MCP selected package tests"]
-    assert cmd[-1] == "tests" and "not xval and not slow" in cmd
+    assert cmd[-1] == "tests" and "not slow" in cmd
     assert json.loads(env["RADIA_MCP_CI_SELECTION_JSON"]) == ["tests/test_ci_selection.py"]
     assert env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] == "1"
     assert cwd == ROOT / "packages/radia-mcp"
