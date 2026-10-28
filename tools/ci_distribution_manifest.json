@@ -213,132 +213,6 @@
   },
   "rules": [
     {
-      "pattern": "tools/build_python_gpu.py",
-      "owners": [
-        "radia"
-      ]
-    },
-    {
-      "pattern": "src/core/gpu/ams_amg_kernels.cuh",
-      "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "src/core/gpu/csr_pcg_cuda.cuh",
-      "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "src/core/gpu/csr_pcg_host.hpp",
-      "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "src/core/gpu/csr_pcg_python.cpp",
-      "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "src/core/gpu/csr_pcg_python_cuda.cu",
-      "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "src/core/gpu/resident_amg_cuda.cu",
-      "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "src/core/gpu/resident_amg_host.hpp",
-      "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "src/core/gpu/resident_amg_python.cpp",
-      "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "src/core/gpu/ams_core.cuh",
-      "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "Single AMS/AMG algebra and typed device-view boundary used by Radia Python and MEX."
-      },
-      "selection": "all_owners"
-    },
-    {
-      "pattern": "src/core/gpu/snapshot.hpp",
-      "owners": [
-        "radia",
-        "radia-simulink"
-      ],
-      "reason": {
-        "kind": "shared_abi",
-        "detail": "Single AMS/AMG algebra and typed device-view boundary used by Radia Python and MEX."
-      },
-      "selection": "all_owners"
-    },
-    {
       "pattern": "memory/**",
       "owners": [
         "repo"
@@ -2384,6 +2258,132 @@
       "reason": {
         "kind": "shared_abi",
         "detail": "LP64 provider boundary compiled by CPU Radia and the serial C HACApK closure of build_hmatrix_cuda.py."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tools/build_python_gpu.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "src/core/gpu/ams_amg_kernels.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/csr_pcg_cuda.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/csr_pcg_host.hpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/csr_pcg_python.cpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/csr_pcg_python_cuda.cu",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/resident_amg_cuda.cu",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/resident_amg_host.hpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/resident_amg_python.cpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single shared CSR and resident AMG kernels consumed by Python and MEX adapters."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/ams_core.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single AMS/AMG algebra and typed device-view boundary used by Radia Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/snapshot.hpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single AMS/AMG algebra and typed device-view boundary used by Radia Python and MEX."
       },
       "selection": "all_owners"
     }
