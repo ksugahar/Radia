@@ -42,7 +42,7 @@ struct NonlinearState {
     OwnedArray owner;Input input;CSR mass;int n,e,device;
     const int *dofs,*slots,*free;const double *curls,*volume,*rhs;double nu0,gamma;
     Buffer residual,raw,tangent,massx,energy;Blas blas;unsigned evaluations=0;
-    explicit NonlinearState(const mxArray* source):owner(source),mass(field(owner.value,"mass"),input),
+    explicit NonlinearState(const mxArray* source):owner(source),mass(device_node(field(owner.value,"mass"),input),input.validation),
         n(mass.n),e(integer(field(owner.value,"elements"))),residual(n),raw(mass.nz),tangent(mass.nz),massx(n),energy(e){
         if(word(field(owner.value,"schema"))!="radia.ams-nonlinear-tet6.v1"||mass.m!=n||e<1||e>INT_MAX/36)
             throw std::runtime_error("unsupported nonlinear FE schema or dimensions");

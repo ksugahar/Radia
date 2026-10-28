@@ -8,6 +8,9 @@ on:
     branches: [main]
     paths:
       - "src/radia/**"
+      - "tools/build_python_gpu.py"
+      - "tests/test_radia_gpu_contract.py"
+      - "tests/test_gpu_sparse_entry.py"
       - "src/core/**"
       - "src/lib/**"
       - "src/ext/HACApK/**"
@@ -111,6 +114,9 @@ on:
     branches: [main]
     paths:
       - "src/radia/**"
+      - "tools/build_python_gpu.py"
+      - "tests/test_radia_gpu_contract.py"
+      - "tests/test_gpu_sparse_entry.py"
       - "src/core/**"
       - "src/lib/**"
       - "src/ext/HACApK/**"

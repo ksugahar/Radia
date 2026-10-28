@@ -24,6 +24,7 @@
 #include "sparsesolv/preconditioners/compact_ams.hpp"
 #include "sparsesolv/preconditioners/complex_compact_ams.hpp"
 #include "sparsesolv/ngsolve/ams_wirebasket.hpp"
+#include "sparsesolv/ngsolve/ams_accelerator_snapshot.hpp"
 
 
 namespace py = pybind11;
@@ -1011,11 +1012,23 @@ inline void ExportHypreBasedAMS(py::module& m) {
 
   // Type registration for CompactAMG (needed for correct virtual dispatch in Python)
   py::class_<CompactAMG, shared_ptr<CompactAMG>, BaseMatrix>
-      (m, "CompactAMGPreconditionerImpl");
+      (m, "CompactAMGPreconditionerImpl")
+      .def("_accelerator_snapshot", [](const CompactAMG& amg) {
+          auto levels = AcceleratorAMG(amg);
+          if (py::len(levels) == 0)
+              throw std::runtime_error("AMG hierarchy has not been set up");
+          py::dict result;
+          result["schema"] = "radia.amg-accelerator.v1";
+          result["levels"] = levels;
+          result["A"] = levels[0].cast<py::dict>()["A"];
+          return result;
+      }, "Owned algebraic snapshot for Radia's optional CUDA execution.");
 
   // Type registrations for HypreBasedAMS / ComplexHypreBasedAMS (enables Update() from Python)
   py::class_<HypreBasedAMS, shared_ptr<HypreBasedAMS>, BaseMatrix>
       (m, "HypreBasedAMSPreconditionerImpl")
+      .def("_accelerator_snapshot", &AcceleratorAMS,
+           "Owned real FP64 hierarchy snapshot; does not execute CUDA.")
       .def_property_readonly("beta_zero", &HypreBasedAMS::GetBetaZero)
       .def_property_readonly("reuse_hierarchy", &HypreBasedAMS::GetReuseHierarchy)
       .def_property_readonly("mixed_precision", &HypreBasedAMS::GetMixedPrecision)

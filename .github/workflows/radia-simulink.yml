@@ -5,6 +5,16 @@ on:
     branches: [main]
     paths:
       - 'packages/radia-simulink/**'
+      - 'src/core/gpu/ams_amg_kernels.cuh'
+      - 'src/core/gpu/csr_pcg_cuda.cuh'
+      - 'src/core/gpu/csr_pcg_host.hpp'
+      - 'src/core/gpu/csr_pcg_python.cpp'
+      - 'src/core/gpu/csr_pcg_python_cuda.cu'
+      - 'src/core/gpu/resident_amg_cuda.cu'
+      - 'src/core/gpu/resident_amg_host.hpp'
+      - 'src/core/gpu/resident_amg_python.cpp'
+      - 'src/core/gpu/ams_core.cuh'
+      - 'src/core/gpu/snapshot.hpp'
       - 'packages/radia-mcp/src/radia_mcp/ltspice/**'
       - 'packages/radia-mcp/src/radia_mcp/common/__init__.py'
       - 'packages/radia-mcp/src/radia_mcp/common/lazy_call.py'
@@ -104,6 +114,16 @@ on:
     branches: [main]
     paths:
       - 'packages/radia-simulink/**'
+      - 'src/core/gpu/ams_amg_kernels.cuh'
+      - 'src/core/gpu/csr_pcg_cuda.cuh'
+      - 'src/core/gpu/csr_pcg_host.hpp'
+      - 'src/core/gpu/csr_pcg_python.cpp'
+      - 'src/core/gpu/csr_pcg_python_cuda.cu'
+      - 'src/core/gpu/resident_amg_cuda.cu'
+      - 'src/core/gpu/resident_amg_host.hpp'
+      - 'src/core/gpu/resident_amg_python.cpp'
+      - 'src/core/gpu/ams_core.cuh'
+      - 'src/core/gpu/snapshot.hpp'
       - 'packages/radia-mcp/src/radia_mcp/ltspice/**'
       - 'packages/radia-mcp/src/radia_mcp/common/__init__.py'
       - 'packages/radia-mcp/src/radia_mcp/common/lazy_call.py'

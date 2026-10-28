@@ -20,7 +20,7 @@ def stage_binding_sources(package, out, include):
     if any(value['original_sha256'] != hashes[name]
            for name, value in logical_headers.items()):
         raise RuntimeError('Resident AMG dependency header snapshot changed')
-    native = package / 'native'
+    native = package.parents[1] / 'src/core/gpu'
     logical_native = out / 'logical-native'
     native_paths = stage_logical_sources(
         [native/'resident_amg_python.cpp', native/'resident_amg_host.hpp'],
@@ -41,7 +41,7 @@ def build(package,out,admission):
     from matlab_cuda_toolchain import configure_engine
     from vs2022_toolchain import discover_vs,compiler_bin
     out.mkdir(parents=True,exist_ok=True)
-    native=package/'native'
+    native=package.parents[1]/'src/core/gpu'
     repo=package.parents[1]
     commit=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip()
     def require_clean():
@@ -60,7 +60,7 @@ def build(package,out,admission):
         root=Path(engine.matlabroot());include=Path(netgen.__file__).parent/'include'
         if not (include/'pybind11/pybind11.h').is_file():raise RuntimeError('NGSolve-matched pybind headers missing')
         headers, host_source, header_provenance = stage_binding_sources(package, out, include)
-        command=[str(compiler/'cl.exe'),'/nologo','/LD','/EHsc','/MD','/O2','/fp:precise','/std:c++20','/utf-8',f'/I{headers.relative_to(out)}',f'/I{sysconfig.get_path("include")}',f'/Fo{out/"resident_amg_python.obj"}',str(host_source.relative_to(out)),str(obj),'/link',f'/OUT:{binary}',f'/IMPLIB:{out/"resident_amg.lib"}',str(Path(sys.base_prefix)/'libs'/f'python{sys.version_info.major}{sys.version_info.minor}.lib')]+[str(root/f'sys/cuda/win64/cuda/lib/x64/{name}.lib') for name in ['cudart','cublas']]
+        command=[str(compiler/'cl.exe'),'/nologo','/LD','/EHsc','/MD','/O2','/fp:precise','/std:c++20','/utf-8','/DRADIA_AMG_PYTHON_MODULE=_resident_amg',f'/I{headers.relative_to(out)}',f'/I{sysconfig.get_path("include")}',f'/Fo{out/"resident_amg_python.obj"}',str(host_source.relative_to(out)),str(obj),'/link',f'/OUT:{binary}',f'/IMPLIB:{out/"resident_amg.lib"}',str(Path(sys.base_prefix)/'libs'/f'python{sys.version_info.major}{sys.version_info.minor}.lib')]+[str(root/f'sys/cuda/win64/cuda/lib/x64/{name}.lib') for name in ['cudart','cublas']]
         batch=out/'compile-resident-amg.cmd';batch.write_text('@echo off\ncall "'+str(vs/'VC/Auxiliary/Build/vcvars64.bat')+'" >nul\nif errorlevel 1 exit /b 1\n'+subprocess.list2cmdline(command)+'\nexit /b %errorlevel%\n')
         with (out/'resident-amg-host-build.log').open('w') as log:subprocess.run(['cmd','/c',str(batch)],stdout=log,stderr=subprocess.STDOUT,check=True,cwd=out)
         sources=[native/f'resident_amg_{suffix}' for suffix in ['cuda.cu','python.cpp','host.hpp']]

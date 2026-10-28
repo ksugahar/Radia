@@ -147,7 +147,7 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
     # RADIA_MCP_CI_SELECTION_JSON still restricts the collected test items.
     # The package's workflow-execution test checks exact file/node selection.
     assert 'targets = ["tests"]' in mcp
-    assert '"-m", "not xval and not slow", *targets,' in mcp
+    assert '"-m", "not slow", *targets,' in mcp
     assert '"--confcutdir=tests/mcp_integration", *targets' in mcp
     assert 'metadata["project"]["optional-dependencies"]["md2html"]' in mcp
     assert 'check_package_test_boundary.py' in mcp

@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "csr_pcg_cuda.cuh"
+#include "../../../src/core/gpu/csr_pcg_cuda.cuh"
 namespace {
 struct Inputs {
     std::vector<const mxGPUArray*> arrays;

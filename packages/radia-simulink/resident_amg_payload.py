@@ -24,9 +24,9 @@ def stage(repo, package, commit, build):
                 'matlab_engine_user_dependency'))):
         raise RuntimeError('Exact clean non-diagnostic resident AMG build required')
     required_sources = {
-        'packages/radia-simulink/native/resident_amg_cuda.cu',
-        'packages/radia-simulink/native/resident_amg_python.cpp',
-        'packages/radia-simulink/native/resident_amg_host.hpp',
+        'src/core/gpu/resident_amg_cuda.cu',
+        'src/core/gpu/resident_amg_python.cpp',
+        'src/core/gpu/resident_amg_host.hpp',
         'packages/radia-simulink/tools/build_resident_amg_python.py',
         'packages/radia-simulink/tools/build_cuda_mex.py',
         'packages/radia-simulink/tools/build_csr_python.py',
