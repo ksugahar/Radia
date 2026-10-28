@@ -57,7 +57,7 @@ bool amsResidentCommand(const std::string& command,int nlhs,mxArray** out,int nr
     }
     if(command!="solve")return false;
     if(nrhs!=7||nlhs!=2)throw std::runtime_error("[x,info]=radia_cuda_ams('solve',handle,operator,b,tol,maxiter,use_graph)");
-    auto& c=amsContext(args[1]);auto allocationsBefore=nativeBufferAllocations;double tol=scalar(args[4]);int limit=integer(args[5]);
+    auto& c=amsContext(args[1]);auto allocationsBefore=nativeBufferAllocations.load(std::memory_order_relaxed);double tol=scalar(args[4]);int limit=integer(args[5]);
     if(!(tol>0&&tol<=1e-6)||limit<1||limit==INT_MAX||!mxIsLogicalScalar(args[6]))throw std::runtime_error("invalid resident solver options");
     ck(cudaMemset(c.validation.p,0,sizeof(int)));Input input(c.validation.p);CSR op(device_node(args[2],input),input.validation);int n=c.hierarchy->ams.a.n;
     if(op.n!=n||op.m!=n)throw std::runtime_error("resident operator dimension mismatch");
@@ -71,7 +71,7 @@ bool amsResidentCommand(const std::string& command,int nlhs,mxArray** out,int nr
     double values[]={double(stats.iterations),stats.residual,double(c.work.bytes()),1.,double(c.solves),double(c.rebuilds)};
     for(int k=0;k<6;++k)mxSetField(out[1],0,names[k],mxCreateDoubleScalar(values[k]));
     mxSetField(out[1],0,names[6],mxCreateLogicalScalar(useGraph));
-    mxSetField(out[1],0,names[7],mxCreateDoubleScalar(double(nativeBufferAllocations-allocationsBefore)));
+    mxSetField(out[1],0,names[7],mxCreateDoubleScalar(double(nativeBufferAllocations.load(std::memory_order_relaxed)-allocationsBefore)));
     mxSetField(out[1],0,names[8],mxCreateDoubleScalar(double(c.hierarchy->ams.coarseCacheBytes())));
     mxSetField(out[1],0,names[9],mxCreateDoubleScalar(1));return true;
 }
