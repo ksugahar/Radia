@@ -1024,6 +1024,27 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
           jf << "{\"fd\":" << mapping.first << ",\"bc\":" << mapping.second
              << ",\"cubit_surface\":" << orig_surf_ids.at(mapping.first - 1) << "}";
         }
+        jf << "],\"curved_transfers\":[";
+        bool first_transfer = true;
+        for (const auto &transfer : periodic_result.curved_transfers) {
+          if (!first_transfer) jf << ",";
+          first_transfer = false;
+          jf << "{\"entity\":\"" << (transfer.face ? "face" : "edge")
+             << "\",\"master_topology_index\":" << transfer.master
+             << ",\"slave_topology_index\":" << transfer.slave
+             << ",\"mode\":" << transfer.mode << ",\"sign\":" << transfer.sign
+             << ",\"original\":[";
+          for (int axis = 0; axis < 3; ++axis) {
+            if (axis) jf << ",";
+            jf << transfer.original[axis];
+          }
+          jf << "],\"expected\":[";
+          for (int axis = 0; axis < 3; ++axis) {
+            if (axis) jf << ",";
+            jf << transfer.expected[axis];
+          }
+          jf << "]}";
+        }
         jf << "]},\n";
       }
       jf << "  \"curving\": " << nc->edge_diagnostics_json() << ",\n";

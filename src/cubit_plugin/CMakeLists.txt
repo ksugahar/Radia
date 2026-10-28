@@ -232,6 +232,32 @@ endif()
 # pybind11 module: cubit_mesh_curver (.pyd) — Cubit-free
 # --------------------------------------------------------
 find_package(Python3 COMPONENTS Interpreter Development)
+option(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS "Build compact periodic curved geometry contracts" OFF)
+if(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS)
+  if(NOT USE_COMPACT_NETGEN)
+    message(FATAL_ERROR "Curved coefficient contract requires the compact build variant")
+  endif()
+  enable_testing()
+  add_executable(cubit_periodic_curved_contract
+    tests/periodic_curved_contract.cpp ${COMPACT_NETGEN_SOURCES})
+  target_compile_features(cubit_periodic_curved_contract PRIVATE cxx_std_17)
+  target_include_directories(cubit_periodic_curved_contract PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}" ${COMPACT_NETGEN_INCLUDES})
+  target_compile_definitions(cubit_periodic_curved_contract PRIVATE ${COMPACT_NETGEN_DEFS})
+  if(MSVC)
+    target_compile_options(cubit_periodic_curved_contract PRIVATE /bigobj)
+  endif()
+  if(OpenMP_CXX_FOUND)
+    target_link_libraries(cubit_periodic_curved_contract PRIVATE OpenMP::OpenMP_CXX)
+  endif()
+  add_test(NAME cubit_periodic_curved_coefficients COMMAND cubit_periodic_curved_contract)
+  set_tests_properties(cubit_periodic_curved_coefficients PROPERTIES
+    FIXTURES_SETUP periodic_curved_fixture TIMEOUT 120)
+  add_test(NAME cubit_periodic_curved_independent_load COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_periodic_curved.py" "${CMAKE_CURRENT_BINARY_DIR}")
+  set_tests_properties(cubit_periodic_curved_independent_load PROPERTIES
+    FIXTURES_REQUIRED periodic_curved_fixture TIMEOUT 120)
+endif()
 execute_process(
   COMMAND ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('purelib'))"
   OUTPUT_VARIABLE PYTHON_SITE_PACKAGES OUTPUT_STRIP_TRAILING_WHITESPACE
