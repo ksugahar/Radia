@@ -227,15 +227,23 @@
         "tools/build_linux.py",
         "tools/ci_numerical_plan.py",
         "tools/ci_numerical_runtime.py",
-        "tools/ci_numerical_inputs.json"
+        "tools/ci_numerical_inputs.json",
+        "src/radia/gpu.py",
+        "src/radia/_cuda_runtime.py",
+        "src/radia/_cuda_runtime_windows.py",
+        "tools/build_python_gpu.py"
       ],
-      "audit_sha256": "421899a81cab4a0d68c8a04ab8f43abb599b1926225e21b5752afe916a361c5c",
+      "audit_sha256": "f3d0fb1eaf08e48ba8a9f99f98380d192c882020034bad014a52a0bbfd4af4de",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
         ],
         "src/radia/ih_heat_transient.py": [
           "ngsolve"
+        ],
+        "tools/build_python_gpu.py": [
+          "ngsolve",
+          "netgen"
         ]
       }
     }

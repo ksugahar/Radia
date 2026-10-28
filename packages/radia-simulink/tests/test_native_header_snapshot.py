@@ -39,7 +39,8 @@ def test_resident_binding_stages_immutable_sdk_and_project_diagnostics(tmp_path,
     header = sdk/'pybind11/detail/common.h'; header.parent.mkdir(parents=True)
     body = b'#pragma once\nstatic const char* diagnostic_file = __FILE__;\n'
     header.write_bytes(body)
-    package = tmp_path/'private-checkout'; native = package/'native'; native.mkdir(parents=True)
+    package = tmp_path/'private-checkout/packages/radia-simulink'; package.mkdir(parents=True)
+    native = package.parents[1]/'src/core/gpu'; native.mkdir(parents=True)
     project = {'resident_amg_python.cpp': b'\xef\xbb\xbf#include "resident_amg_host.hpp"\n',
                'resident_amg_host.hpp': b'#pragma once\nstatic_assert(sizeof(int)>=2);\n'}
     for name, data in project.items(): (native/name).write_bytes(data)
