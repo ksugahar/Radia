@@ -154,10 +154,18 @@ def verify(root):
             ip = next(iter(ng.IntegrationRule(points=[point], weights=[1.0])))
             phase("after-reference-point", case=case, sample=index)
             phase("before-map", case=case, sample=index, side="master", element=int(elements[0].nr))
-            a = tuple(xyz(mesh.GetTrafo(elements[0])(ip)))
+            master_trafo = mesh.GetTrafo(elements[0])
+            master_mip = master_trafo(ip)
+            a = tuple(xyz(master_mip))
+            del master_mip
+            del master_trafo
             phase("after-map", case=case, sample=index, side="master", xyz=a)
             phase("before-map", case=case, sample=index, side="slave", element=int(elements[1].nr))
-            b = tuple(xyz(mesh.GetTrafo(elements[1])(ip)))
+            slave_trafo = mesh.GetTrafo(elements[1])
+            slave_mip = slave_trafo(ip)
+            b = tuple(xyz(slave_mip))
+            del slave_mip
+            del slave_trafo
             phase("after-map", case=case, sample=index, side="slave", xyz=b)
             expected_a = tuple(float(Fraction(v)) for v in MASTER_COORDINATES[order][index])
             expected_b = (expected_a[0] + 3.0, expected_a[1], expected_a[2])
