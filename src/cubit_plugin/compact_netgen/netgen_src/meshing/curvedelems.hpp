@@ -14,6 +14,8 @@
 
 #include "meshtype.hpp"
 #include "meshclass.hpp"
+#include <cmath>
+#include <stdexcept>
 
 namespace netgen
 {
@@ -73,6 +75,31 @@ public:
   { return facecoeffsindex[facenr+1] - facecoeffsindex[facenr]; }
   Vec<3> * FaceCoefficients (int facenr)
   { return &facecoeffs[facecoeffsindex[facenr]]; }
+
+  int PeriodicEdgeOrder (int edge) const { return edgeorder[edge]; }
+  int PeriodicFaceOrder (int face) const { return faceorder[face]; }
+  bool PeriodicRational () const { return rational; }
+  void ValidatePeriodicStorage (size_t edges, size_t faces) const
+  {
+    if (rational || order < 1 || order > 3 ||
+        edgeorder.Size() != edges || faceorder.Size() != faces ||
+        edgecoeffsindex.Size() != edges+1 || facecoeffsindex.Size() != faces+1)
+      throw std::runtime_error("Unsupported periodic curved coefficient storage");
+    auto check = [](const auto &indices, const auto &coefficients) {
+      if (indices[0] != 0)
+        throw std::runtime_error("Invalid periodic coefficient origin");
+      for (size_t i = 1; i < indices.Size(); ++i)
+        if (indices[i] < indices[i-1] || size_t(indices[i]) > coefficients.Size())
+          throw std::runtime_error("Invalid periodic coefficient prefix bounds");
+      // Compression retains unused buffer tails; only active prefix spans are
+      // consumed, and no buffer is resized or renumbered by synchronization.
+      for (size_t i = 0; i < coefficients.Size(); ++i)
+        for (int axis = 0; axis < 3; ++axis)
+          if (!std::isfinite(coefficients[i](axis)))
+            throw std::runtime_error("Nonfinite periodic coefficient storage");
+    };
+    check(edgecoeffsindex, edgecoeffs); check(facecoeffsindex, facecoeffs);
+  }
 
 
   void CalcSegmentTransformation (double xi, SegmentIndex segnr,

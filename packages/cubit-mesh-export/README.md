@@ -28,8 +28,23 @@ new fresh output path. The exporter does not delete paths whose ownership may
 have changed. Existing files are never treated as a successful retry or repaired
 silently.
 
+Before inserting identifications, the exporter requires complete triangular
+face correspondence in both directions and synchronizes slave curved
+displacement coefficients from their master entities. Polynomial q1, q2 and q3
+tetrahedra with linear connectivity are supported. Reversed canonical edge
+orientation negates the q3 odd mode; even edge modes and the symmetric q3
+triangular face bubble copy unchanged. Translation acts on the existing corners,
+not on displacement coefficients. Vertices, connectivity and BCs are unchanged.
+Shared patch edges have one consistent owner. Unsupported representations or
+unequal paired coefficient orders reject before mutation; no repair flag or
+independent refit is applied after synchronization. The sidecar records global
+zero-based edge/face indices, zero-based modes, signs and coefficient transfers.
+Exact paired coefficient equality is checked before publication, without a new
+geometric tolerance. Mesh quality and field acceptance remain separate gates.
+
 The exporter persists point triples with group `1`, type `PERIODIC`, name `kt`,
-and checks exact geometry serialization before/after metadata insertion.
+and checks exact geometry serialization before/after metadata insertion into
+the intentionally synchronized geometry.
 Consumers verify the saved group without adding or repairing identifications.
 Without an explicit periodic request, ordinary mesh export does not infer a
 periodic contract. Curved geometry and field accuracy are separate checks.

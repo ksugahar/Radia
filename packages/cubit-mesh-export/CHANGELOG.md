@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Derive named-periodic slave polynomial q2/q3 curved displacement coefficients
+  from the master with explicit edge orientation, complete triangle coverage
+  and exact paired-coefficient checks before publication. No node motion or
+  post-synchronization refit; unsupported geometry rejects explicitly.
+
 - Add explicit all-or-error native named periodic export with complete patch
   matching and persisted `kt` group metadata. Remove heuristic periodic matching
   and consumer-repair guidance; geometry serialization unchanged by ID insertion.
