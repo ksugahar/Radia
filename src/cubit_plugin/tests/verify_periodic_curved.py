@@ -17,11 +17,12 @@ def verify(root):
     # The first reference point is on vertices 1/2/3; the second is on
     # vertices 2/3/4. Both exercise their shared edge and q3 face bubbles.
     samples = [(0.25, 0.25, 0.5), (0.0, 0.25, 0.25)]
-    for order in (1, 2, 3):
-        mesh = ng.Mesh(str(root / f"periodic-curved-q{order}.vol"))
+    for suffix, mapping in (("", (8, 7, 6, 5)), ("-mixed", (5, 7, 6, 8))):
+      for order in (1, 2, 3):
+        mesh = ng.Mesh(str(root / f"periodic-curved-q{order}{suffix}.vol"))
         actual = {(int(a.nr), int(b.nr), int(nr))
                   for a, b, nr in mesh.ngmesh.GetIdentifications()}
-        expected = {(1, 8, 1), (2, 7, 1), (3, 6, 1), (4, 5, 1)}
+        expected = {(i + 1, mapping[i], 1) for i in range(4)}
         if actual != expected or mesh.ngmesh.GetNrIdentifications() != 1:
             raise AssertionError(f"actual IDs={actual}, expected={expected}")
         if mesh.ngmesh.GetIdentificationType(1) != IdentificationType.PERIODIC:

@@ -11,6 +11,7 @@
 #include <windows.h>
 #else
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 #include "NamedPeriodicMeshAdapter.hpp"
@@ -18,6 +19,7 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cerrno>
 #include <system_error>
 #include <filesystem>
@@ -263,14 +265,21 @@ inline void publish_named_periodic_output(const NamedPeriodicOutputPaths &paths)
 
 // Serialize the complete record before exclusively creating the sidecar. Never
 // truncate a pre-existing file; flush/close failures are export failures too.
+struct WrittenPeriodicSidecar {
+  std::filesystem::path path;
+  std::string bytes;
+  std::array<std::uint64_t, 3> identity{};
+};
+
 template <typename Writer>
-inline void write_named_periodic_sidecar(const std::filesystem::path &path, Writer writer)
+inline WrittenPeriodicSidecar write_named_periodic_sidecar(const std::filesystem::path &path, Writer writer)
 {
   std::ostringstream record;
   writer(record);
   if (!record) throw std::runtime_error("Periodic sidecar serialization failed");
   const std::string bytes = record.str();
   if (bytes.empty()) throw std::runtime_error("Empty periodic sidecar record");
+  WrittenPeriodicSidecar receipt{path, bytes, {}};
 #ifdef _WIN32
   HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
                             CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -293,6 +302,12 @@ inline void write_named_periodic_sidecar(const std::filesystem::path &path, Writ
     error = GetLastError();
     if (error == ERROR_SUCCESS) error = ERROR_WRITE_FAULT;
   }
+  BY_HANDLE_FILE_INFORMATION identity{};
+  if (error == ERROR_SUCCESS && !GetFileInformationByHandle(file, &identity)) {
+    error = GetLastError();
+    if (error == ERROR_SUCCESS) error = ERROR_READ_FAULT;
+  }
+  receipt.identity = {identity.dwVolumeSerialNumber, identity.nFileIndexHigh, identity.nFileIndexLow};
   if (!CloseHandle(file) && error == ERROR_SUCCESS) {
     error = GetLastError();
     if (error == ERROR_SUCCESS) error = ERROR_WRITE_FAULT;
@@ -312,9 +327,68 @@ inline void write_named_periodic_sidecar(const std::filesystem::path &path, Writ
     offset += static_cast<std::size_t>(written);
   }
   if (!error && ::fsync(file) != 0) error = errno;
+  struct stat identity{};
+  if (!error && ::fstat(file, &identity) != 0) error = errno;
+  receipt.identity = {std::uint64_t(identity.st_dev), std::uint64_t(identity.st_ino), 0};
   if (::close(file) != 0 && !error) error = errno;
   if (error) throw std::system_error(error, std::generic_category(), "Periodic sidecar write/flush/close failed");
 #endif
+  return receipt;
+}
+
+// Bundle finalization accepts only the exact exclusive record from this run.
+// Keep a read handle open across publication; on Windows its sharing mode
+// prevents another process from modifying/removing/replacing that record.
+inline void publish_named_periodic_bundle(const NamedPeriodicOutputPaths &paths,
+                                          const WrittenPeriodicSidecar &receipt)
+{
+  if (receipt.path != paths.sidecar || receipt.bytes.empty())
+    throw std::runtime_error("Periodic bundle record ownership mismatch");
+  std::string actual;
+#ifdef _WIN32
+  HANDLE file = CreateFileW(paths.sidecar.c_str(), GENERIC_READ, FILE_SHARE_READ,
+      nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+  if (file == INVALID_HANDLE_VALUE)
+    throw std::system_error(static_cast<int>(GetLastError()), std::system_category(), "Cannot verify owned periodic record");
+  struct Close { HANDLE file; ~Close() { CloseHandle(file); } } close{file};
+  BY_HANDLE_FILE_INFORMATION info{};
+  if (!GetFileInformationByHandle(file, &info) || (info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)) ||
+      receipt.identity != std::array<std::uint64_t,3>{info.dwVolumeSerialNumber, info.nFileIndexHigh, info.nFileIndexLow})
+    throw std::runtime_error("Periodic bundle record identity changed");
+  char buffer[4096]; DWORD count = 0;
+  do {
+    if (!ReadFile(file, buffer, sizeof(buffer), &count, nullptr))
+      throw std::runtime_error("Cannot read owned periodic record");
+    actual.append(buffer, count);
+    if (actual.size() > receipt.bytes.size())
+      throw std::runtime_error("Periodic bundle record content changed");
+  } while (count);
+#else
+  const int file = ::open(paths.sidecar.c_str(), O_RDONLY | O_NOFOLLOW);
+  if (file < 0) throw std::system_error(errno, std::generic_category(), "Cannot verify owned periodic record");
+  struct Close { int file; ~Close() { ::close(file); } } close{file};
+  struct stat info{};
+  if (::fstat(file, &info) != 0 || !S_ISREG(info.st_mode) ||
+      receipt.identity != std::array<std::uint64_t,3>{std::uint64_t(info.st_dev), std::uint64_t(info.st_ino), 0})
+    throw std::runtime_error("Periodic bundle record identity changed");
+  char buffer[4096];
+  for (;;) {
+    const auto count = ::read(file, buffer, sizeof(buffer));
+    if (count < 0 && errno == EINTR) continue;
+    if (count < 0) throw std::runtime_error("Cannot read owned periodic record");
+    if (!count) break;
+    actual.append(buffer, count);
+    if (actual.size() > receipt.bytes.size())
+      throw std::runtime_error("Periodic bundle record content changed");
+  }
+  struct stat current{};
+  if (::lstat(paths.sidecar.c_str(), &current) != 0 ||
+      current.st_dev != info.st_dev || current.st_ino != info.st_ino)
+    throw std::runtime_error("Periodic bundle record path changed");
+#endif
+  if (actual != receipt.bytes)
+    throw std::runtime_error("Periodic bundle record content changed");
+  move_named_periodic_no_replace(paths.temporary, paths.final);
 }
 
 // Single-owner output: preserve the native .vol text writer and its newline
@@ -354,8 +428,8 @@ inline void save_named_periodic_bundle(const netgen::Mesh &mesh,
     const std::filesystem::path &filename, Writer writer)
 {
   const auto paths = stage_named_periodic_vol(mesh, filename);
-  write_named_periodic_sidecar(paths.sidecar, writer);
-  publish_named_periodic_output(paths);
+  const auto record = write_named_periodic_sidecar(paths.sidecar, writer);
+  publish_named_periodic_bundle(paths, record);
 }
 
 } // namespace cubit_mesh_export
