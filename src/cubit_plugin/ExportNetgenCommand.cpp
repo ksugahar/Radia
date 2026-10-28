@@ -6,9 +6,11 @@
 #include <chrono>
 #include <cmath>
 #include <iomanip>
+#include <filesystem>
 
 #ifdef HAVE_NETGEN
 #include "NetgenCurver.hpp"
+#include "NamedPeriodicIdentification.hpp"
 #include <meshing.hpp>
 #endif
 
@@ -180,6 +182,15 @@ std::vector<std::string> ExportNetgenCommand::get_syntax()
     "export netgen <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1-5>'>] "
     "[overwrite] "
+    "[periodic_name <string:label='periodic_name'>] "
+    "[periodic_master <string:label='periodic_master'>] "
+    "[periodic_slave <string:label='periodic_slave'>] "
+    "[periodic_unit <string:label='periodic_unit'>] "
+    "[periodic_patches <string:label='periodic_patches'>] "
+    "[periodic_tx <value:label='periodic_tx'>] "
+    "[periodic_ty <value:label='periodic_ty'>] "
+    "[periodic_tz <value:label='periodic_tz'>] "
+    "[periodic_match <value:label='periodic_match'>] "
     "[add_kelvin] "
     "[kelvin_air <string:label='kelvin_air',help='<block name, default \"air\">'>] "
     "[kelvin_block <string:label='kelvin_block',help='<block name, default \"kelvin\">'>] "
@@ -214,6 +225,11 @@ std::vector<std::string> ExportNetgenCommand::get_help()
     "Uses C++ NetgenCurver (no Python subprocess, no .cub5 needed).\n"
     "Produces .vol file + companion .json with CAD reference values.\n"
     "Order 1-5 supported (default: 2). Requires Netgen.\n"
+    "Named periodic metadata requires all fields explicitly: periodic_name kt,\n"
+    "  periodic_master/slave <BC label>, periodic_unit m,\n"
+    "  periodic_patches <masterBC:slaveBC,...>, periodic_tx/ty/tz <translation>,\n"
+    "  periodic_match <positive geometric distance>. Fresh output required.\n"
+    "No inferred pairs or consumer repair; q3 geometry is preserved.\n"
     "\n"
     "Kelvin open-boundary (optional, .vol only):\n"
     "  add_kelvin                   Auto-create the exterior Kelvin sphere\n"
@@ -411,6 +427,51 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     return false;
   }
 
+  cubit_mesh_export::NamedPeriodicContract periodic;
+  std::string periodic_patch_text;
+  const bool periodic_fields[] = {
+      data.get_string("periodic_name", periodic.name),
+      data.get_string("periodic_master", periodic.master_label),
+      data.get_string("periodic_slave", periodic.slave_label),
+      data.get_string("periodic_unit", periodic.coordinate_unit),
+      data.get_string("periodic_patches", periodic_patch_text),
+      data.get_value("periodic_tx", periodic.translation[0]),
+      data.get_value("periodic_ty", periodic.translation[1]),
+      data.get_value("periodic_tz", periodic.translation[2]),
+      data.get_value("periodic_match", periodic.matching_distance)};
+  int periodic_present = 0;
+  for (bool present : periodic_fields) periodic_present += present ? 1 : 0;
+  const bool has_periodic = periodic_present != 0;
+  if (has_periodic && periodic_present != 9) {
+    PRINT_ERROR("Named periodic export requires all nine explicit periodic fields.\n");
+    return false;
+  }
+  if (has_periodic) {
+    try {
+      cubit_mesh_export::require_fresh_named_periodic_output(
+          cubit_mesh_export::named_periodic_output_paths(u8_string_to_path(filename)));
+      std::istringstream patches(periodic_patch_text);
+      std::string patch;
+      while (std::getline(patches, patch, ',')) {
+        const auto colon = patch.find(':');
+        if (colon == std::string::npos || colon == 0 || colon + 1 == patch.size() ||
+            patch.find(':', colon + 1) != std::string::npos)
+          throw std::runtime_error("Expected BC patch list master:slave,...");
+        for (size_t j = 0; j < patch.size(); ++j)
+          if (j != colon && (patch[j] < '0' || patch[j] > '9'))
+            throw std::runtime_error("BC patch IDs must contain digits only");
+        periodic.boundary_pairs.emplace_back(std::stoi(patch.substr(0, colon)),
+                                             std::stoi(patch.substr(colon + 1)));
+      }
+      if (periodic_patch_text.empty() || periodic_patch_text.back() == ',')
+        throw std::runtime_error("Empty BC patch entry");
+    } catch (const std::exception &error) {
+      PRINT_ERROR("Named periodic contract rejected: %s\n", error.what());
+      return false;
+    }
+  }
+  cubit_mesh_export::NamedPeriodicResult periodic_result;
+
   // ---- Auto-Kelvin (optional) ----------------------------------
   // `add_kelvin` is a bare keyword flag (matches `overwrite` /
   // `nopyramid` in the other export commands).  find_keyword is the
@@ -451,11 +512,13 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   if (!md.extract(build_order)) {
     PRINT_ERROR("Mesh extraction failed.\n");
     auto failed = md.get_netgen_curver();
-    if (failed) {
+    if (failed && !has_periodic) {
       std::ofstream failure(u8_string_to_path(filename + ".json"));
       if (failure) failure << "{\"export_passed\":false,\"curving\":"
                            << failed->edge_diagnostics_json() << "}\n";
     }
+    if (has_periodic && failed)
+      PRINT_ERROR("Named periodic curving failed: %s\n", failed->edge_diagnostics_json().c_str());
     return false;
   }
 
@@ -905,169 +968,14 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     }
   }
 
-  // ---- Kelvin periodic identification ----
-  // Kelvin = two identical spheres, offset in space.
-  // kelvin_int / kelvin_ext labels come from sidesets (set in .py) or
-  // auto-detect (concentric shell only).
-  // Identification = TRANSLATION: offset = mean(outer) - mean(inner).
-  // With copy mesh, inner and outer have 1:1 vertex correspondence.
-  //
-  // Algorithm: translation-based nearest-neighbor vertex matching.
-  //   1. Collect inner/outer vertex positions from bc names
-  //   2. Offset = mean(outer) - mean(inner)
-  //   3. For each inner vertex, find nearest unused outer vertex at (inner + offset)
-  //   4. Write identification pairs via ident.Add()
-  //
-  // IMPORTANT (2026-04-25): match ONLY face descriptors with the exact
-  // bcnames kelvin_int / kelvin_ext -- not a substring test.  In
-  // reduction mode the sym_*_* cut faces border the Kelvin domain
-  // too; matching them as "kelvin" candidates would corrupt the
-  // pair set.
-  {
-    std::set<int> fd_inner_set, fd_outer_set;
-    for (int fi = 1; fi <= ng_mesh->GetNFD(); fi++) {
-      std::string bc = ng_mesh->GetBCName(fi - 1);
-      if (bc == "kelvin_int") fd_inner_set.insert(fi);
-      else if (bc == "kelvin_ext") fd_outer_set.insert(fi);
-    }
-
-    if (!fd_inner_set.empty() && !fd_outer_set.empty()) {
-      std::map<int, netgen::Point<3>> inner_pts, outer_pts;
-
-      for (int sei = 1; sei <= ng_mesh->GetNSE(); sei++) {
-        const auto &sel = ng_mesh->SurfaceElement(sei);
-        int fd = sel.GetIndex();
-        bool is_inner = fd_inner_set.count(fd) > 0;
-        bool is_outer = fd_outer_set.count(fd) > 0;
-        if (!is_inner && !is_outer) continue;
-
-        auto &target = is_inner ? inner_pts : outer_pts;
-        for (int j = 0; j < sel.GetNP(); j++) {
-          int pi = sel[j];
-          if (target.find(pi) == target.end())
-            target[pi] = ng_mesh->Point(netgen::PointIndex(pi));
-        }
-      }
-
-      if (!inner_pts.empty() && !outer_pts.empty()) {
-        // Translation offset = mean(outer) - mean(inner)
-        double mix = 0, miy = 0, miz = 0;
-        for (auto &p : inner_pts) {
-          mix += p.second(0); miy += p.second(1); miz += p.second(2);
-        }
-        double ni = (double)inner_pts.size();
-        mix /= ni; miy /= ni; miz /= ni;
-
-        double mox = 0, moy = 0, moz = 0;
-        for (auto &p : outer_pts) {
-          mox += p.second(0); moy += p.second(1); moz += p.second(2);
-        }
-        double no = (double)outer_pts.size();
-        mox /= no; moy /= no; moz /= no;
-
-        double tx = mox - mix, ty = moy - miy, tz = moz - miz;
-
-        // Pairing tolerance: was hard-coded at 1e-2 m which is too
-        // tight for accelerator-scale models (R~0.4 m, mesh edge
-        // ~20 mm).  Scale to 5% of the largest mesh edge length so
-        // copy-mesh imperfections at corner vertices still match.
-        // Cap at 5% of |offset| to avoid pairing wrong vertices for
-        // models with very fine meshes near the curved cap boundary.
-        double offset_len = sqrt(tx*tx + ty*ty + tz*tz);
-        // Estimate inner-side characteristic mesh edge length from
-        // the bounding-box span of the inner vertex set.
-        double ix_lo = 1e30, ix_hi = -1e30, iy_lo = 1e30, iy_hi = -1e30,
-               iz_lo = 1e30, iz_hi = -1e30;
-        for (auto &ip : inner_pts) {
-          double x = ip.second(0), y = ip.second(1), z = ip.second(2);
-          if (x < ix_lo) ix_lo = x;  if (x > ix_hi) ix_hi = x;
-          if (y < iy_lo) iy_lo = y;  if (y > iy_hi) iy_hi = y;
-          if (z < iz_lo) iz_lo = z;  if (z > iz_hi) iz_hi = z;
-        }
-        double inner_diag = sqrt((ix_hi-ix_lo)*(ix_hi-ix_lo) +
-                                 (iy_hi-iy_lo)*(iy_hi-iy_lo) +
-                                 (iz_hi-iz_lo)*(iz_hi-iz_lo));
-        // Heuristic edge length: diagonal / sqrt(N_pts) for a 2D
-        // surface mesh of N points.  (std::min/max wrapped in parens
-        // to dodge the Windows.h min/max macros.)
-        size_t n_pts = inner_pts.size();
-        if (n_pts < 4) n_pts = 4;
-        double mesh_edge = inner_diag / sqrt((double)n_pts);
-        double cap_offset = 0.05 * offset_len;
-        double cap_edge   = 0.5  * mesh_edge;
-        double tol_upper  = (cap_offset < cap_edge) ? cap_offset : cap_edge;
-        double match_tol  = (1e-3 > tol_upper) ? 1e-3 : tol_upper;
-
-        PRINT_INFO("Kelvin periodic: %zu inner, %zu outer verts, "
-                   "offset=(%.4f,%.4f,%.4f), match_tol=%.3e\n",
-                   inner_pts.size(), outer_pts.size(), tx, ty, tz,
-                   match_tol);
-
-        // Match: for each inner vertex, find nearest unused outer at (inner + offset)
-        std::vector<std::pair<int, netgen::Point<3>>> outer_vec(
-            outer_pts.begin(), outer_pts.end());
-        std::map<int, int> vertex_pair;
-        std::set<int> used_outer;
-        double max_dist = 0;
-        int n_bad = 0;
-
-        for (auto &ip : inner_pts) {
-          double px = ip.second(0) + tx;
-          double py = ip.second(1) + ty;
-          double pz = ip.second(2) + tz;
-
-          int best_ov = -1;
-          double best_d2 = 1e30;
-          for (auto &op : outer_vec) {
-            if (used_outer.count(op.first)) continue;
-            double dx = op.second(0) - px;
-            double dy = op.second(1) - py;
-            double dz = op.second(2) - pz;
-            double d2 = dx*dx + dy*dy + dz*dz;
-            if (d2 < best_d2) { best_d2 = d2; best_ov = op.first; }
-          }
-
-          double dist = sqrt(best_d2);
-          if (dist < match_tol && best_ov > 0) {
-            vertex_pair[ip.first] = best_ov;
-            used_outer.insert(best_ov);
-            if (dist > max_dist) max_dist = dist;
-          } else {
-            n_bad++;
-          }
-        }
-
-        // All-or-nothing policy: only write identification pairs if
-        // every inner vertex matched.  A partial identification leaves
-        // 4-out-of-N vertices "almost paired" -- NGSolve's Mesh()
-        // wrapper rejects such .vol files with NgException("Ask for
-        // unused hash-value") because it expects either a complete
-        // 1:1 pairing or none at all.  When there are unmatched
-        // vertices (typically corner / edge vertices where copy-mesh
-        // can leave sub-pixel mismatches at large geometry scale),
-        // we skip the C++ side entirely and rely on NGSolve's
-        // `add_periodic_kelvin` (in calc_common.py) to set up the
-        // identification at solve time using bcname-driven matching.
-        if (n_bad == 0) {
-          auto &ident = ng_mesh->GetIdentifications();
-          for (auto &p : vertex_pair) {
-            ident.Add(netgen::PointIndex(p.first),
-                      netgen::PointIndex(p.second),
-                      "kelvin",
-                      netgen::Identifications::PERIODIC);
-          }
-        } else {
-          PRINT_WARNING("Kelvin periodic: %d vertex pair(s) unmatched "
-                        "(max_dist=%.2e, tol=%.2e); skipping C++ "
-                        "identification entirely.  NGSolve's "
-                        "add_periodic_kelvin will build identification "
-                        "at solve time.\n",
-                        n_bad, max_dist, match_tol);
-        }
-
-        PRINT_INFO("Kelvin periodic: %d/%zu pairs (max_dist=%.2e, %d unmatched)\n",
-                   (int)vertex_pair.size(), inner_pts.size(), max_dist, n_bad);
-      }
+  // Explicit metadata only, after curving and final descriptor/BC labeling.
+  // No centroid/tolerance inference and no solver-side repair fallback.
+  if (has_periodic) {
+    try {
+      periodic_result = cubit_mesh_export::apply_named_periodic_identification(*ng_mesh, periodic);
+    } catch (const std::exception &error) {
+      PRINT_ERROR("Named periodic export rejected: %s\n", error.what());
+      return false;
     }
   }
 
@@ -1081,24 +989,43 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // Pass as std::filesystem::path built from UTF-8 so Unicode / Japanese
   // directories work on Windows (cp932 narrow API path would otherwise
   // throw "No mapping for the Unicode character").
-  ng_mesh->Save(u8_string_to_path(filename));
+  if (has_periodic) {
+    try {
+      cubit_mesh_export::save_named_periodic_vol(*ng_mesh, u8_string_to_path(filename));
+    } catch (const std::exception &error) {
+      PRINT_ERROR("Named periodic save failed: %s\n", error.what());
+      PRINT_ERROR("%s\n", cubit_mesh_export::named_periodic_retry_guidance(
+          cubit_mesh_export::named_periodic_output_paths(u8_string_to_path(filename))).c_str());
+      return false;
+    }
+  } else {
+    ng_mesh->Save(u8_string_to_path(filename));
+  }
 
   int ne = ng_mesh->GetNE();
   int np = ng_mesh->GetNP();
 
-  PRINT_INFO("Exported Netgen Vol (order %d): %s (%d nodes, %d elements)\n",
-             order, filename.c_str(), np, ne);
 
-  // --- Write companion JSON with CAD reference values ---
-  {
-    std::string json_path = filename + ".json";
-    // ofstream on MSVC accepts const wchar_t* / std::filesystem::path for
-    // Unicode filenames.  Build via u8_string_to_path so UTF-8 path survives.
-    std::ofstream jf(u8_string_to_path(json_path));
-    if (jf.is_open()) {
+  // The named export is incomplete without its companion mapping record.
+  auto write_companion = [&](std::ostream &jf) {
       jf << std::setprecision(16);
       jf << "{\n";
       jf << "  \"export_passed\": true,\n";
+      if (has_periodic) {
+        jf << "  \"periodic_identification\": {\"name\":\"kt\",\"nr\":1,\"type\":"
+           << static_cast<int>(netgen::Identifications::PERIODIC) << ","
+           << "\"pair_count\":" << periodic_result.point_pairs.size()
+           << ",\"max_distance\":" << std::setprecision(17) << periodic_result.maximum_distance
+           << ",\"descriptor_mapping\":[";
+        bool first_mapping = true;
+        for (const auto &mapping : periodic_result.descriptor_to_boundary) {
+          if (!first_mapping) jf << ",";
+          first_mapping = false;
+          jf << "{\"fd\":" << mapping.first << ",\"bc\":" << mapping.second
+             << ",\"cubit_surface\":" << orig_surf_ids.at(mapping.first - 1) << "}";
+        }
+        jf << "]},\n";
+      }
       jf << "  \"curving\": " << nc->edge_diagnostics_json() << ",\n";
 
       // Materials (per-block volume)
@@ -1218,9 +1145,24 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       jf << "  \"order\": " << order << ",\n";
       jf << "  \"export_time_s\": " << std::fixed << std::setprecision(3) << t_sec << "\n";
       jf << "}\n";
-      jf.close();
+  };
+  if (has_periodic) {
+    try {
+      cubit_mesh_export::write_named_periodic_sidecar(
+          u8_string_to_path(filename + ".json"), write_companion);
+    } catch (const std::exception &error) {
+      PRINT_ERROR("Named periodic sidecar failed: %s\n", error.what());
+      PRINT_ERROR("%s\n", cubit_mesh_export::named_periodic_retry_guidance(
+          cubit_mesh_export::named_periodic_output_paths(u8_string_to_path(filename))).c_str());
+      return false;
     }
+  } else {
+    std::ofstream jf(u8_string_to_path(filename + ".json"));
+    if (jf.is_open()) { write_companion(jf); jf.close(); }
   }
+
+  PRINT_INFO("Exported Netgen Vol (order %d): %s (%d nodes, %d elements)\n",
+             order, filename.c_str(), np, ne);
 
   return true;
 #endif
