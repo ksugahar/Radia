@@ -32,7 +32,7 @@ def build_python_binding(engine, package, out, config, targets, toolchain, compo
     import netgen
     from vs2022_toolchain import discover_vs, compiler_bin
     root=Path(engine.matlabroot()).resolve()
-    native=package/'native'
+    native=package.parents[1]/'src/core/gpu' if component=='csr' else package/'native'
     if component not in ('csr','hdiv'):
         raise ValueError('Unsupported native Python component')
     stem='csr_pcg_python' if component=='csr' else 'hdiv_resident_python'
@@ -77,6 +77,8 @@ def build_python_binding(engine, package, out, config, targets, toolchain, compo
              f'/Fo{host_obj}',relative(native/(stem+'.cpp')),str(obj),'/link',f'/OUT:{binary}',
              f'/IMPLIB:{out / (stem+".lib")}',str(python_lib),
              str(root/'sys/cuda/win64/cuda/lib/x64/cudart.lib')]
+    if component=='csr':
+        command.insert(command.index('/link'),'/DRADIA_CSR_PYTHON_MODULE=_csr_cuda')
     if fault_injection:
         for define in ('RADIA_HDIV_PYTHON_FAULT_INJECTION','RADIA_HMATRIX_FAULT_INJECTION'):
             command.insert(command.index('/link'),'/D'+define)

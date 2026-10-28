@@ -1,3 +1,6 @@
+#ifndef RADIA_AMG_PYTHON_MODULE
+#define RADIA_AMG_PYTHON_MODULE _gpu_resident_amg
+#endif
 // SPDX-License-Identifier: Apache-2.0
 #include "resident_amg_host.hpp"
 #include <algorithm>
@@ -121,7 +124,7 @@ struct Resident {
     return py::make_tuple(x, info);
   }
 };
-PYBIND11_MODULE(_resident_amg, m) {
+PYBIND11_MODULE(RADIA_AMG_PYTHON_MODULE, m) {
   py::class_<Resident>(m, "Resident")
       .def(py::init<py::list, py::array_t<double, py::array::c_style>>())
       .def("solve", &Resident::solve, py::arg("rhs").noconvert(),

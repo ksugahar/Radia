@@ -164,21 +164,30 @@ def test_shared_ams_closure_and_native_consumers_are_real():
         if source.suffix not in (".cu", ".cuh", ".h", ".hpp", ".cpp", ".c"):
             continue
         for include in re.findall(r'^\s*#\s*include\s*"([^"]+)"', source.read_text(encoding="utf-8"), re.M):
-            if (ROOT / "src/core" / include).is_file():
-                seeds.add("src/core/" + include)
+            target = (source.parent / include).resolve()
+            if not target.is_file():
+                target = (ROOT / "src/core" / include).resolve()
+            if target.is_file() and target.is_relative_to((ROOT / "src/core").resolve()):
+                seeds.add(target.relative_to(ROOT).as_posix())
     hmatrix_build = (ROOT / "packages/radia-simulink/tools/build_hmatrix_cuda.py").read_text(encoding="utf-8")
     # Every GPU build script that names or compiles a src/core file seeds the closure.
     for script in sorted((ROOT / "packages/radia-simulink/tools").glob("build_*_cuda.py")):
         text = script.read_text(encoding="utf-8")
         seeds.update("src/core/" + name for name in
-                     re.findall(r"src/core/([A-Za-z0-9_.]+)", text))
+                     re.findall(r"src/core/([A-Za-z0-9_./]+)", text)
+                     if (ROOT / "src/core" / name).is_file())
         # Serial C objects are real inputs too: their relative quote includes
         # can enter src/core even when the CUDA TU does not name that header.
         seeds.update(re.findall(r"src/ext/HACApK/[A-Za-z0-9_.]+\.c", text))
+    gpu_spec = importlib.util.spec_from_file_location("gpu_build_inputs", ROOT / "tools/build_python_gpu.py")
+    gpu_builder = importlib.util.module_from_spec(gpu_spec)
+    gpu_spec.loader.exec_module(gpu_builder)
+    gpu_sources = {"src/core/gpu/" + name for name in gpu_builder.SHARED_SOURCES}
+    seeds.update(gpu_sources)
     core = {path for path in CONTRACT.include_closure(ROOT, sorted(seeds), "src/core")
             if path.startswith("src/core/")}
     assert {p for p in shared if p.startswith("src/core/")} == core | {"src/core/radia_mex_sparse_symmetry.h"}
-    assert len(core) == 15
+    assert len(core - gpu_sources) == 15
     # The radia-simulink lane must start on every file its native build reads.
     lane = MANIFEST["lanes"]["radia-simulink"]["events"]
     for event in ("push", "pull_request"):

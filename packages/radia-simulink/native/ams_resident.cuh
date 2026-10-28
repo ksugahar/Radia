@@ -1,41 +1,5 @@
 /* SPDX-License-Identifier: MPL-2.0 */
 // Included inside the gateway namespace, after validated CSR/AMS definitions.
-struct ResidentWork {
-    Buffer r,p,z,ap,x,scalars;Blas blas;
-    explicit ResidentWork(int n):r(n),p(n),z(n),ap(n),x(n),scalars(3){}
-    size_t bytes()const{return (r.count+p.count+z.count+ap.count+x.count+3)*sizeof(double);}
-};
-struct SolveStats {int iterations=0;double residual=0;};
-SolveStats residentPCG(AMS& ams,const CSR& op,const double* b,ResidentWork& w,
-    double tol,int maxiter,AMSGraph* graph) {
-    int n=ams.a.n;w.x.zero();auto& r=w.r;auto& p=w.p;auto& z=w.z;auto& ap=w.ap;
-    auto& scalars=w.scalars;auto& blas=w.blas;SolveStats stats;
-    ck(cudaMemcpyAsync(r.p,b,n*sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));
-    double bnorm=blas.norm(n,b);
-    if(!std::isfinite(bnorm)||bnorm<0)throw std::runtime_error("invalid RHS norm");
-    if(bnorm==0)return stats;
-    auto precondition=[&](){if(graph)graph->apply();else ams.apply(r.p,z.p);};
-    precondition();ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));
-    blas.dot(n,r.p,z.p,scalars.p);stats.residual=1;
-    for(stats.iterations=1;stats.iterations<=maxiter;++stats.iterations){
-        op.mult(p.p,ap.p);blas.dot(n,p.p,ap.p,scalars.p+1);
-        pcg_update_device<<<(n+T-1)/T,T>>>(n,scalars.p,p.p,ap.p,w.x.p,r.p);
-        stats.residual=blas.norm(n,r.p)/bnorm;
-        if(!std::isfinite(stats.residual))throw std::runtime_error("nonfinite residual");
-        if(stats.residual<=tol){op.res(w.x.p,b,r.p);stats.residual=blas.norm(n,r.p)/bnorm;
-            if(stats.residual<=tol)break;
-            precondition();ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));
-            blas.dot(n,r.p,z.p,scalars.p);continue;
-        }
-        precondition();blas.dot(n,r.p,z.p,scalars.p+2);
-        combine<<<(n+T-1)/T,T>>>(n,z.p,scalars.p,p.p);
-        ck(cudaMemcpyAsync(scalars.p,scalars.p+2,sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));
-    }
-    op.res(w.x.p,b,r.p);stats.residual=blas.norm(n,r.p)/bnorm;
-    if(!std::isfinite(stats.residual)||stats.residual>tol||stats.iterations>maxiter)
-        throw std::runtime_error("AMS PCG failed its FP64 true residual gate");
-    return stats;
-}
 struct OwnedArray {
     mxArray* value=nullptr;
     explicit OwnedArray(const mxArray* source){value=mxDuplicateArray(source);
@@ -45,7 +9,7 @@ struct OwnedArray {
 };
 struct ResidentHierarchy {
     OwnedArray owner;Input input;AMS ams;
-    explicit ResidentHierarchy(const mxArray* source):owner(source),ams(owner.value,input){input.validation.check();}
+    explicit ResidentHierarchy(const mxArray* source):owner(source),ams(device_node(owner.value,input),input.validation){input.validation.check();}
 };
 struct ResidentAMS {
     std::unique_ptr<ResidentHierarchy> hierarchy;
@@ -95,7 +59,7 @@ bool amsResidentCommand(const std::string& command,int nlhs,mxArray** out,int nr
     if(nrhs!=7||nlhs!=2)throw std::runtime_error("[x,info]=radia_cuda_ams('solve',handle,operator,b,tol,maxiter,use_graph)");
     auto& c=amsContext(args[1]);auto allocationsBefore=nativeBufferAllocations;double tol=scalar(args[4]);int limit=integer(args[5]);
     if(!(tol>0&&tol<=1e-6)||limit<1||limit==INT_MAX||!mxIsLogicalScalar(args[6]))throw std::runtime_error("invalid resident solver options");
-    ck(cudaMemset(c.validation.p,0,sizeof(int)));Input input(c.validation.p);CSR op(args[2],input);int n=c.hierarchy->ams.a.n;
+    ck(cudaMemset(c.validation.p,0,sizeof(int)));Input input(c.validation.p);CSR op(device_node(args[2],input),input.validation);int n=c.hierarchy->ams.a.n;
     if(op.n!=n||op.m!=n)throw std::runtime_error("resident operator dimension mismatch");
     const double* b;finite_vec(input,args[3],n,b);verify_mask<<<(n+T-1)/T,T>>>(n,c.hierarchy->ams.free,b,input.validation.p);input.validation.check();
     bool useGraph=mxIsLogicalScalarTrue(args[6]);

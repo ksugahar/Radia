@@ -33,7 +33,8 @@ def main(args):
     os.environ['PATH']=os.environ['NVCC_CCBIN']+os.pathsep+os.environ['PATH']
     source=package/'native/ams_snapshot_module.cpp'
     sources=[source,package/'native/ams_cpu_reference.cpp',package/'native/ams_resident.cuh',package/'native/ams_nonlinear.cuh',package/'native/radia_cuda_ams.cu',package/'native/ams_matlab_setup.cpp',
-             package/'native/ams_amg_kernels.cuh',package/'native/ams_setup_gpu.hpp',package/'native/ams_setup_gpu.cuh',
+             root/'src/core/gpu/ams_amg_kernels.cuh',root/'src/core/gpu/ams_core.cuh',
+             root/'src/core/gpu/snapshot.hpp',package/'native/ams_setup_gpu.hpp',package/'native/ams_setup_gpu.cuh',
              package/'native/ams_fem_host.hpp',package/'native/ams_fem_host.cpp',package/'native/ams_fem.cuh',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp',
