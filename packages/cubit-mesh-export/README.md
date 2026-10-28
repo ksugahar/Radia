@@ -18,7 +18,10 @@ choice or partial success is permitted. Existing identification groups reject
 the request. A named periodic export requires a fresh output path.
 A successful named export requires both the `.vol` and its complete `.vol.json`
 mapping record; a sidecar open, serialization, write, flush or close failure fails
-the export. Publication never replaces an existing target.
+the export. The native VOL is staged and verified, then the record is completed,
+then the final VOL is published without replacing an existing target. A failed
+record cannot leave a published final VOL. A later publication failure may leave
+an orphan record; a record alone is never proof of a complete export.
 
 A failed export is unqualified even if a file exists. It may leave the requested
 `<name>.vol`, `<name>.vol.partial.vol` and/or `<name>.vol.json`. The original error

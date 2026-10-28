@@ -989,16 +989,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // Pass as std::filesystem::path built from UTF-8 so Unicode / Japanese
   // directories work on Windows (cp932 narrow API path would otherwise
   // throw "No mapping for the Unicode character").
-  if (has_periodic) {
-    try {
-      cubit_mesh_export::save_named_periodic_vol(*ng_mesh, u8_string_to_path(filename));
-    } catch (const std::exception &error) {
-      PRINT_ERROR("Named periodic save failed: %s\n", error.what());
-      PRINT_ERROR("%s\n", cubit_mesh_export::named_periodic_retry_guidance(
-          cubit_mesh_export::named_periodic_output_paths(u8_string_to_path(filename))).c_str());
-      return false;
-    }
-  } else {
+  if (!has_periodic) {
     ng_mesh->Save(u8_string_to_path(filename));
   }
 
@@ -1169,10 +1160,10 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   };
   if (has_periodic) {
     try {
-      cubit_mesh_export::write_named_periodic_sidecar(
-          u8_string_to_path(filename + ".json"), write_companion);
+      cubit_mesh_export::save_named_periodic_bundle(
+          *ng_mesh, u8_string_to_path(filename), write_companion);
     } catch (const std::exception &error) {
-      PRINT_ERROR("Named periodic sidecar failed: %s\n", error.what());
+      PRINT_ERROR("Named periodic bundle publication failed: %s\n", error.what());
       PRINT_ERROR("%s\n", cubit_mesh_export::named_periodic_retry_guidance(
           cubit_mesh_export::named_periodic_output_paths(u8_string_to_path(filename))).c_str());
       return false;

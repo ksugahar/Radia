@@ -5,6 +5,9 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #else
 #include <fcntl.h>
@@ -316,7 +319,8 @@ inline void write_named_periodic_sidecar(const std::filesystem::path &path, Writ
 
 // Single-owner output: preserve the native .vol text writer and its newline
 // convention. Unknown suffixes cause Mesh::Save(path) to append .vol.gz.
-inline void save_named_periodic_vol(const netgen::Mesh &mesh, const std::filesystem::path &filename)
+inline NamedPeriodicOutputPaths stage_named_periodic_vol(
+    const netgen::Mesh &mesh, const std::filesystem::path &filename)
 {
   const auto paths = named_periodic_output_paths(filename);
   require_fresh_named_periodic_output(paths);
@@ -335,6 +339,22 @@ inline void save_named_periodic_vol(const netgen::Mesh &mesh, const std::filesys
   input.close();
   if (actual != expected.str())
     throw std::runtime_error("Native periodic temporary serialization is incomplete or differs");
+  return paths;
+}
+
+inline void save_named_periodic_vol(const netgen::Mesh &mesh, const std::filesystem::path &filename)
+{
+  publish_named_periodic_output(stage_named_periodic_vol(mesh, filename));
+}
+
+// The final VOL is the publication marker. A failed mandatory record must
+// never leave that marker visible. Owned partials remain explicit diagnostics.
+template <class Writer>
+inline void save_named_periodic_bundle(const netgen::Mesh &mesh,
+    const std::filesystem::path &filename, Writer writer)
+{
+  const auto paths = stage_named_periodic_vol(mesh, filename);
+  write_named_periodic_sidecar(paths.sidecar, writer);
   publish_named_periodic_output(paths);
 }
 
