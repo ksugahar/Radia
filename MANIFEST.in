@@ -69,5 +69,3 @@ prune dist
 prune .git
 prune .vscode
 prune .idea
-
-recursive-include src/core/gpu *.hpp *.cuh *.cpp *.cu

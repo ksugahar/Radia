@@ -86,13 +86,17 @@ def test_resident_handle_closes_once_and_never_falls_back(monkeypatch):
     class Native:
         def solve(self, *args):
             calls.append(("solve", args))
-            return "native result"
+            return args[0].copy(), {"backend": "gpu"}
         def close(self):
             calls.append(("close",))
     owner = Native()
     monkeypatch.setattr(gpu, "_native", lambda _: SimpleNamespace(Resident=lambda *_: owner))
-    with gpu.ResidentAMG([], None, backend="gpu") as context:
-        assert context.solve("rhs", max_iterations=100) == "native result"
+    import numpy as np
+    levels = [{"a": {"n": 1, "m": 1, "row": np.array([0, 1], dtype=np.int32),
+                       "col": np.array([0], dtype=np.int32), "val": np.array([1.])}}]
+    with gpu.ResidentAMG(levels, None, backend="gpu") as context:
+        x, info = context.solve(np.array([2.]), max_iterations=100)
+        assert x.tolist() == [2.] and info["residual_checked"]
         with pytest.raises(ValueError, match="tolerance"):
             context.solve("rhs", tolerance=float("nan"))
     context.close()
@@ -201,3 +205,40 @@ def test_public_build_receipt_excludes_private_admission_and_commands(tmp_path, 
         assert record["private_receipt_sha256"] == builder.sha(private)
         assert "do-not-publish" in private.read_text()
     assert "do-not-publish" in (out / "admission-private.json").read_text()
+
+
+@pytest.mark.parametrize("result", [
+    ([2.], {"backend": "cpu"}),
+    ([99.], {"backend": "gpu", "true_relative_residual": 0.}),
+])
+def test_resident_amg_rejects_backend_and_false_native_residual(monkeypatch, result):
+    import numpy as np
+    gpu = load("gpu")
+    class Native:
+        def solve(self, *args):
+            return np.array(result[0]), result[1]
+        def close(self):
+            pass
+    monkeypatch.setattr(gpu, "_native", lambda _: SimpleNamespace(Resident=lambda *_: Native()))
+    values = np.array([1.])
+    levels = [{"a": {"n": 1, "m": 1, "row": np.array([0, 1], dtype=np.int32),
+                      "col": np.array([0], dtype=np.int32), "val": values}}]
+    with gpu.ResidentAMG(levels, None, backend="gpu") as context:
+        values[:] = 2. / 99.  # Caller mutation must not change the reference equation.
+        with pytest.raises(RuntimeError, match="backend|residual"):
+            context.solve(np.array([2.]))
+
+
+def test_native_core_receipt_missing_raises_import_error(tmp_path, monkeypatch):
+    import sys
+    import sysconfig
+    gpu = load("gpu")
+    monkeypatch.setattr(gpu, "__file__", str(tmp_path / "gpu.py"))
+    binary = tmp_path / ("_gpu_csr" + sysconfig.get_config_var("EXT_SUFFIX"))
+    binary.write_bytes(b"fixture")
+    Path(str(binary) + ".build.json").write_text("{}")
+    core = SimpleNamespace(__file__=str(tmp_path / "_radia_pybind.pyd"))
+    monkeypatch.setitem(sys.modules, "radia", SimpleNamespace(_radia_pybind=core))
+    monkeypatch.setitem(sys.modules, "radia._radia_pybind", core)
+    with pytest.raises(ImportError, match="CPU artifact build provenance"):
+        gpu._native("_gpu_csr")

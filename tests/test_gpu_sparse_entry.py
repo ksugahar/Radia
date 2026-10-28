@@ -168,3 +168,12 @@ def test_bad_controls_fail_before_runtime(gpu, monkeypatch, tolerance, limit):
     with pytest.raises(ValueError):
         gpu.solve_spd(Matrix(), Vector([1., 2.]), backend="gpu",
                       tolerance=tolerance, max_iterations=limit)
+
+
+def test_vectorized_csr_residual_empty_rows_and_duplicate_entries(gpu):
+    system = dict(rowptr=np.array([0, 2, 2, 3], dtype=np.int32),
+                  columns=np.array([0, 0, 2], dtype=np.int32), values=np.array([1., 2., 4.]))
+    x = np.array([2., 9., 3.])
+    rhs = np.array([6., 0., 12.])
+    assert gpu._residual(system, x, rhs) == 0.
+    assert gpu._residual(system, x, np.zeros(3)) == pytest.approx(np.linalg.norm(rhs))

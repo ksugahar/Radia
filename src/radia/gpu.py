@@ -34,8 +34,12 @@ def _csr(matrix):
     import numpy as np
     if getattr(matrix, "is_complex", False) or matrix.height != matrix.width:
         raise ValueError("a real square matrix is required")
-    n = matrix.height
-    values, columns, offsets = (np.asarray(v) for v in matrix.CSR())
+    return _csr_arrays(matrix.height, *matrix.CSR())
+
+
+def _csr_arrays(n, values, columns, offsets):
+    import numpy as np
+    values, columns, offsets = (np.asarray(v) for v in (values, columns, offsets))
     limit = np.iinfo(np.int32).max
     if not 0 < n <= limit or values.size > limit:
         raise OverflowError("CSR dimensions exceed native int32 capacity")
@@ -57,10 +61,8 @@ def _csr(matrix):
 def _residual(system, x, rhs):
     import numpy as np
     offsets, columns, values = (system[k] for k in ("rowptr", "columns", "values"))
-    residual = np.empty(rhs.size, dtype=np.float64)
-    for i in range(rhs.size):
-        start, end = offsets[i:i + 2]
-        residual[i] = values[start:end] @ x[columns[start:end]] - rhs[i]
+    rows = np.repeat(np.arange(rhs.size), np.diff(offsets))
+    residual = np.bincount(rows, weights=values * x[columns], minlength=rhs.size) - rhs
     scale = np.linalg.norm(rhs)
     return float(np.linalg.norm(residual) / scale) if scale else float(np.linalg.norm(residual))
 
@@ -107,7 +109,10 @@ def _native(name):
         raise ImportError(f"Missing Radia GPU artifact or build provenance: {name}")
     receipt = json.loads(receipt_path.read_text())
     import radia._radia_pybind as core
-    core_receipt = json.loads(Path(str(Path(core.__file__)) + ".build.json").read_text())
+    core_receipt_path = Path(str(Path(core.__file__)) + ".build.json")
+    if not core_receipt_path.is_file():
+        raise ImportError("Missing Radia CPU artifact build provenance: _radia_pybind")
+    core_receipt = json.loads(core_receipt_path.read_text())
     for record, path in [(receipt, binary), (core_receipt, Path(core.__file__))]:
         if (record.get("schema") != "radia.native-build-provenance.v1"
                 or not re.fullmatch(r"[0-9a-f]{40}", record.get("source_commit", ""))
@@ -158,10 +163,10 @@ def solve_spd(matrix, rhs, *, backend, tolerance=1e-10, max_iterations=10000,
         result = preconditioner.solve(b, tolerance=tolerance, max_iterations=max_iterations)
     else:
         import numpy as np
-        diagonal = np.empty(b.size, dtype=np.float64)
-        for i in range(b.size):
-            start, end = system["rowptr"][i:i + 2]
-            diagonal[i] = system["values"][start:end][system["columns"][start:end] == i].sum()
+        rows = np.repeat(np.arange(b.size), np.diff(system["rowptr"]))
+        on_diagonal = rows == system["columns"]
+        diagonal = np.bincount(rows[on_diagonal],
+                               weights=system["values"][on_diagonal], minlength=b.size)
         if not np.isfinite(diagonal).all() or (diagonal <= 0).any():
             raise ValueError("GPU Jacobi-PCG requires a finite positive diagonal")
         native = _native("_gpu_csr")
@@ -245,27 +250,36 @@ class ResidentAMG:
     """Own a checked native GPU hierarchy; construction stays with the caller.
 
     No CPU solve or hierarchy construction is substituted for GPU execution.
-    The original-system residual and lifecycle contracts are owned by the
-    shared native implementation.
+    Results are independently checked against an owned level-0 CSR on the host.
+    The shared native implementation owns the GPU hierarchy and lifecycle.
     """
 
     def __init__(self, levels, coarse_inverse, *, backend):
         if backend != "gpu":
             raise ValueError('ResidentAMG requires explicit backend="gpu"')
+        self._owner = None
+        levels = list(levels)
+        if not levels:
+            raise ValueError("ResidentAMG requires a nonempty hierarchy")
+        first = levels[0]["a"]
+        if first["n"] != first["m"]:
+            raise ValueError("a real square matrix is required")
+        self._system = _csr_arrays(first["n"], first["val"], first["col"], first["row"])
+        levels[0] = dict(levels[0], a=dict(n=first["n"], m=first["m"],
+                         row=self._system["rowptr"], col=self._system["columns"],
+                         val=self._system["values"]))
+        for value in self._system.values():
+            if hasattr(value, "flags"):
+                value.flags.writeable = False
         self._owner = _native("_gpu_resident_amg").Resident(levels, coarse_inverse)
 
     def solve(self, rhs, *, tolerance=1e-12, max_iterations=10000):
-        import math
-        from numbers import Integral, Real
-        if (isinstance(tolerance, bool) or not isinstance(tolerance, Real)
-                or not math.isfinite(tolerance) or not 0 < tolerance <= 1e-6):
-            raise ValueError("AMG tolerance must be finite in (0, 1e-6]")
-        if (isinstance(max_iterations, bool) or not isinstance(max_iterations, Integral)
-                or not 1 <= max_iterations <= 100000):
-            raise ValueError("AMG iteration limit must be an integer in [1, 100000]")
+        tolerance, max_iterations = _controls(tolerance, max_iterations)
         if self._owner is None:
             raise RuntimeError("Resident AMG owner is closed")
-        return self._owner.solve(rhs, float(tolerance), int(max_iterations))
+        b = _vector(rhs, self._system["rows"])
+        result = self._owner.solve(b, tolerance, max_iterations)
+        return _checked_result(self._system, b, result, "gpu", tolerance)
 
     def close(self):
         owner = getattr(self, "_owner", None)
