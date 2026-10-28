@@ -5,9 +5,17 @@
 #include "callbackgeom.hpp"
 #include "CurveIdentity.hpp"
 #include "NetgenCurver.hpp"
+#include "named_periodic_contract.hpp"
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <map>
+#include <set>
+#include <sstream>
+#include <string>
 
 using namespace netgen;
 static void require(bool condition, const char* message) {
@@ -19,8 +27,110 @@ template<class F> static void rejected(F action) {
   require(failed, "invalid identity did not fail loudly");
 }
 
-int main() {
+// Explicit qualification mode only: no input generation, Curve, refit or defaults.
+static int q3_input_contract(int argc, char **argv) {
+  const std::set<std::string> required{
+      "--q3-input", "--q3-output-dir", "--name", "--master", "--slave", "--unit",
+      "--tx", "--ty", "--tz", "--matching-distance", "--patches"};
+  std::map<std::string, std::string> args;
+  require(argc == 1 + 2 * static_cast<int>(required.size()), "All q3 input options are required");
+  for (int i = 1; i < argc; i += 2) {
+    require(required.count(argv[i]) != 0, "Unknown q3 input option");
+    require(*argv[i+1] != '\0' && args.emplace(argv[i], argv[i+1]).second,
+            "Empty or duplicate q3 input option");
+  }
+  auto number = [](const std::string &text) {
+    size_t used = 0;
+    double value = std::stod(text, &used);
+    require(used == text.size() && std::isfinite(value), "Invalid explicit floating-point value");
+    return value;
+  };
+  auto integer = [](const std::string &text) {
+    require(!text.empty() && text.find_first_not_of("0123456789") == std::string::npos,
+            "Invalid explicit boundary number");
+    size_t used = 0;
+    int value = std::stoi(text, &used);
+    require(used == text.size() && value > 0, "Invalid explicit boundary number");
+    return value;
+  };
+  cubit_mesh_export::NamedPeriodicContract contract;
+  contract.name = args.at("--name");
+  contract.master_label = args.at("--master");
+  contract.slave_label = args.at("--slave");
+  contract.coordinate_unit = args.at("--unit");
+  contract.translation = {number(args.at("--tx")), number(args.at("--ty")), number(args.at("--tz"))};
+  contract.matching_distance = number(args.at("--matching-distance"));
+  const auto &patches = args.at("--patches");
+  size_t start = 0;
+  while (start < patches.size()) {
+    const auto end = patches.find(',', start);
+    const auto row = patches.substr(start, end == std::string::npos ? end : end - start);
+    const auto colon = row.find(':');
+    require(colon != std::string::npos && row.find(':', colon + 1) == std::string::npos,
+            "Expected explicit masterBC:slaveBC patch map");
+    contract.boundary_pairs.emplace_back(integer(row.substr(0, colon)), integer(row.substr(colon + 1)));
+    if (end == std::string::npos) break;
+    start = end + 1;
+    require(start < patches.size(), "Trailing empty patch map entry");
+  }
+  const std::filesystem::path input(args.at("--q3-input")), output(args.at("--q3-output-dir"));
+  require(input.is_absolute() && output.is_absolute(), "Qualification paths must be absolute");
+  require(std::filesystem::is_regular_file(input), "q3 input must be an existing file");
+  require(!std::filesystem::exists(output), "Qualification output directory must be fresh");
+  require(std::filesystem::is_directory(output.parent_path()), "Output parent must exist");
+  Mesh mesh;
+  mesh.Load(input);
+  require(mesh.GetNE() > 0 && mesh.GetCurvedElements().GetOrder() == 3 &&
+          mesh.GetCurvedElements().IsHighOrder(), "Existing curved q3 volume mesh required; no Curve is allowed");
+  auto serialize = [&] { std::ostringstream stream; mesh.Save(stream); return stream.str(); };
+  const auto before = serialize();
+  const auto geometry_before = cubit_mesh_export::periodic_geometry_serialization(mesh);
+  require(std::filesystem::create_directory(output), "Cannot create fresh output directory");
+  auto write = [&](const char *name, const std::string &data) {
+    std::ofstream stream(output / name, std::ios::binary | std::ios::out);
+    require(static_cast<bool>(stream), "Cannot open qualification output");
+    stream.write(data.data(), static_cast<std::streamsize>(data.size()));
+    stream.close();
+    require(static_cast<bool>(stream), "Cannot write qualification output");
+  };
+  write("before.vol", before);
+  write("before.geometry", geometry_before);
+  const auto result = cubit_mesh_export::apply_named_periodic_identification(mesh, contract);
+  const auto after = serialize();
+  const auto geometry_after = cubit_mesh_export::periodic_geometry_serialization(mesh);
+  write("after.vol", after);
+  write("after.geometry", geometry_after);
+  require(geometry_before == geometry_after, "q3 input geometry serialization changed");
+  std::ostringstream table;
+  table << "fd\tbc\tlabel\n";
+  for (const auto &entry : result.descriptor_to_boundary) {
+    const auto label = cubit_mesh_export::periodic_boundary_label(mesh, entry.second);
+    require(label.find_first_of("\t\r\n") == std::string::npos, "Unsupported control character in label");
+    table << entry.first << '\t' << entry.second << '\t' << label << '\n';
+  }
+  write("fd-bc-labels.tsv", table.str());
+  std::ostringstream report;
+  report << std::setprecision(17)
+         << "{\"status\":\"passed\",\"curve_order\":3,\"geometry_serialization_equal\":true,"
+         << "\"point_count\":" << mesh.GetNP() << ",\"volume_element_count\":" << mesh.GetNE()
+         << ",\"pair_count\":" << result.point_pairs.size()
+         << ",\"maximum_distance\":" << result.maximum_distance << ",\"pairs\":[";
+  bool first = true;
+  for (const auto &pair : result.point_pairs) {
+    if (!first) report << ',';
+    report << '[' << pair.first << ',' << pair.second << ",1]";
+    first = false;
+  }
+  report << "]}\n";
+  write("result.json", report.str());
+  std::cout << report.str();
+  return 0;
+}
+
+int main(int argc, char **argv) {
   try {
+    if (argc != 1) return q3_input_contract(argc, argv);
+    named_periodic_contract_test();
     Mesh mesh;
     const int first = mesh.AddEdgeDescriptor(EdgeDescriptor(31, 3, 4)).Nr1();
     const int second = mesh.AddEdgeDescriptor(EdgeDescriptor(32, 3, 4)).Nr1();

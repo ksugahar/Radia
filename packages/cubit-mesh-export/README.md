@@ -1,5 +1,39 @@
 # cubit-mesh-export
 
+## Explicit named periodic export
+
+`export netgen` can write one named `kt` periodic identification directly into
+the `.vol`. All nine fields are required together: `periodic_name` (`kt`),
+`periodic_master` and `periodic_slave` (exact boundary labels), `periodic_unit`
+(`m`), `periodic_patches` (`masterBC:slaveBC,...`), `periodic_tx`, `periodic_ty`,
+`periodic_tz`, and `periodic_match` (positive finite geometric search distance).
+Zero translation components must still be supplied. Coordinates must already
+be in the declared unit; this option never rescales a model.
+
+Patch numbers are BC properties, not FaceDescriptor indices or CAD surface IDs.
+The sidecar records the mapping. Shared patch-seam points are deduplicated and
+must satisfy every incident patch correspondence. All points must match
+uniquely and bijectively; no centroid inference, default distance, nearest-only
+choice or partial success is permitted. Existing identification groups reject
+the request. A named periodic export requires a fresh output path.
+A successful named export requires both the `.vol` and its complete `.vol.json`
+mapping record; a sidecar open, serialization, write, flush or close failure fails
+the export. Publication never replaces an existing target.
+
+A failed export is unqualified even if a file exists. It may leave the requested
+`<name>.vol`, `<name>.vol.partial.vol` and/or `<name>.vol.json`. The original error
+and exact paths are reported. Inspect that error first; before a new attempt,
+the owner must verify and remove only that owner's failed outputs, or choose a
+new fresh output path. The exporter does not delete paths whose ownership may
+have changed. Existing files are never treated as a successful retry or repaired
+silently.
+
+The exporter persists point triples with group `1`, type `PERIODIC`, name `kt`,
+and checks exact geometry serialization before/after metadata insertion.
+Consumers verify the saved group without adding or repairing identifications.
+Without an explicit periodic request, ordinary mesh export does not infer a
+periodic contract. Curved geometry and field accuracy are separate checks.
+
 Gmsh MSH 4.2 export is post-processing support for visualization only; solver meshes and label/topology authority remain checked .vol files and their contracts. No .msh-to-.vol or solver-mesh import route is provided.
 
 Mesh-only Gmsh quality APIs accept direct ASCII MSH 4.2 files only, not GEO
