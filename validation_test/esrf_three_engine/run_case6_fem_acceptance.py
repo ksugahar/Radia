@@ -22,7 +22,7 @@ from run_coil_yoke_three_engine import (_comparison_gate, _is_converged_result,
                                       _load_shared_engines, _pairwise, _require_mesh_contract,
                                       _sha256, _validated_field)
 from radia.esrf_examples import get_esrf_bh_table
-from radia.kelvin_identify_ngsolve import detect_kelvin_offset, has_kelvin_identification
+from radia.kelvin_identify_ngsolve import detect_kelvin_offset, _verify_kelvin_structure
 
 
 def main():
@@ -55,8 +55,7 @@ def main():
     ng.SetNumThreads(args.threads)
     with ng.TaskManager():
         mesh = ng.Mesh(str(args.fem_mesh))
-    if not has_kelvin_identification(mesh):
-        raise RuntimeError('Missing Kelvin identification')
+    _verify_kelvin_structure(mesh, group=1)
     centre = tuple(map(float, detect_kelvin_offset(mesh)))
     case = get_case(6)
     points, field_points = observation_volume_quadrature(6, half_width_m=hdiv['observation_half_width_m'])

@@ -22,7 +22,7 @@ will trip the test:
 
   - ExportNetgenCommand.cpp  (CD3 propagation / nodeset -> BBBND)
   - add_kelvin_cubit.py      (air + kelvin periodic pair)
-  - add_periodic_kelvin      (graceful skip on Cubit-written ident)
+  - persisted Kelvin IDs    (read-only verification, missing IDs fail)
   - coil_from_step.to_coil_builder  (tuple unpack + planar coil extract)
   - calc_accel_magnet._load_coil_script  (STEP dispatch)
   - calc_accel_magnet solve_accel  (BND+BBBND union, Dirichlet GND)
@@ -287,7 +287,7 @@ def test_em_eighth_coil_py_NI_2000():
         - ExportNetgenCommand all-or-nothing identification policy
           (when copy-mesh leaves a few unmatched corner vertices for
           large geometry scales, skip C++ identification entirely;
-          NGSolve's add_periodic_kelvin recovers at solve time, and
+          the consumer rejects missing producer-persisted IDs, and
           the kelvin_far Dirichlet anchors the field)
 
     NOT a physics-accuracy comparison -- coil is full racetrack, not

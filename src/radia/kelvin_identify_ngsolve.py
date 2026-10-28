@@ -1,117 +1,25 @@
-"""Post-hoc Kelvin Periodic identification on an existing NGSolve mesh.
+"""Read-only verification of producer-owned Kelvin periodic point contracts.
 
-This module provides a **public API** for adding the Kelvin point-pair
-identification on a NGSolve mesh that already has `kelvin_int` and
-`kelvin_ext` boundary labels but no `Identifications` section yet.
-
-Why this exists
----------------
-There are three upstream paths that produce a Kelvin-ready `.vol`:
-
-1. **Cubit C++ exporter** (`ExportNetgenCommand.cpp`): writes point-pair
-   identifications during `export netgen` if every kelvin_int
-   vertex matches a kelvin_ext vertex within tolerance after the rigid
-   Kelvin translation.  All-or-nothing: a single unmatched vertex
-   skips the C++ identification entirely.
-
-2. **NGSolve OCC** + `Identify(IdentificationType.PERIODIC)`: must be
-   called AFTER `Glue` and BEFORE `Mesh()`.  Bakes both point pairs
-   and segment / surface-element pairs into the mesh.
-
-3. **This module** (`add_kelvin_identification`): works on an
-   ALREADY-LOADED `ngsolve.Mesh` -- no Cubit, no OCC, no re-export.
-   Useful when:
-     - the Cubit exporter skipped due to a single tolerance miss
-       (typical 1/8-octant geometry, copy-mesh sub-pixel imprecision)
-     - you received a `.vol` from elsewhere without identifications
-     - you want to compare a "with-Kelvin" and a "without-Kelvin" run
-       on the same mesh without re-running Cubit
-     - you're scripting from a Jupyter notebook with NGSolve only
-       (no Cubit license available)
-
-Method
-------
-Walks `mesh.Elements(BND)`, collects vertex indices on `kelvin_int`
-(boundary name) and `kelvin_ext`, builds 1-based netgen `PointIndex`
-arrays, translates the interior set by the Kelvin offset (auto-detected
-as `mean(kelvin_ext) - mean(kelvin_int)` if not provided), then solves
-a Hungarian-algorithm assignment (`scipy.optimize.linear_sum_assignment`)
-to find the optimal vertex pairing.  Falls back to a greedy nearest-
-neighbour if scipy is unavailable.
-
-Each surviving pair is registered via
-``ngmesh.AddPointIdentification(p1, p2, identnr=1,
-type=IdentificationType.PERIODIC)``.
-
-NGSolve's `Periodic(H1(mesh, ...))` FES then deduces high-order edge /
-face DOF coupling from the point pairs + mesh topology automatically;
-verified 2026-04-25 on em_elf_quarter at p=2 (slaved=6085 DOFs,
-boundary `Set(1)`-integral ratio kelvin_int/kelvin_ext = 1.0).
-
-Relation to `calc_common.py`
-----------------------------
-This is the public, importable version of the helpers in
-`radia.panels.calc_common`:
-- `add_periodic_kelvin` (panel-internal, calls
-  `_add_kelvin_point_idents_manual` after skip-if-existing check)
-- `_add_kelvin_point_idents_manual` (the matching algorithm)
-- `detect_kelvin_offset` (offset auto-detection)
-
-This module re-exports them as `add_kelvin_identification(...)` and
-`detect_kelvin_offset(...)` with cleaner names + a richer return dict.
-The panel internals continue to use the `calc_common` versions for
-backward compatibility (those are now thin shims calling here).
-
-Public API
-----------
-- ``add_kelvin_identification(mesh, kelvin_offset=None, ...) -> dict``
-- ``detect_kelvin_offset(mesh) -> tuple[float, float, float]``
-- ``has_kelvin_identification(mesh) -> bool``
-
-Example
--------
->>> from ngsolve import Mesh
->>> from radia.kelvin_identify_ngsolve import add_kelvin_identification
->>>
->>> mesh = Mesh("ih_fem_kelvin_demo.vol")  # has kelvin_int/kelvin_ext but
->>>                                         # NO Identifications section
->>> info = add_kelvin_identification(mesh)
->>> print(f"Added {info['n_pairs']} Kelvin pairs, max_dist={info['max_dist']:.2e}")
->>> # Now mesh.GetIdentifications() returns the new pairs and you can
->>> # build a Periodic FES on top.
+Mesh-only verification proves native structure, not a persisted identification
+name. Use load_verified_kelvin_mesh for named proof at an immutable file boundary.
+No matching, tolerance, identification repair or mesh serialization is performed.
 """
 from __future__ import annotations
 
-import math
-from typing import Optional, Tuple
+import hashlib
+from pathlib import Path
+from typing import Tuple
 
 import numpy as np
 
-
-__all__ = [
-    "add_kelvin_identification",
-    "detect_kelvin_offset",
-    "has_kelvin_identification",
-]
-
+__all__ = ["verify_kelvin_identification", "load_verified_kelvin_mesh", "detect_kelvin_offset"]
 
 def detect_kelvin_offset(mesh) -> Tuple[float, float, float]:
-    """Detect Kelvin translation offset from kelvin_int / kelvin_ext BND.
+    """Observe mean boundary-coordinate displacement; never match or repair IDs.
 
-    The offset is the rigid translation mapping interior Kelvin sphere
-    centre onto exterior Kelvin sphere centre.  Cubit's `copy mesh
-    surface ... source vertex ... target vertex` and OCC's
-    `Identify(IdentificationType.PERIODIC)` both produce 1:1 vertex
-    correspondence; therefore
-    ``mean(kelvin_ext) - mean(kelvin_int)`` is exact regardless of
-    partial-octant geometry.
-
-    Args:
-        mesh: ngsolve.Mesh
-
-    Returns:
-        (x, y, z) offset.  Returns (0, 0, 0) if either boundary is
-        missing from the mesh (i.e. nothing to detect).
+    The returned value is not evidence of complete correspondence, geometry
+    accuracy or an accepted translation residual. Missing labels return zero for
+    non-Kelvin callers. Producer-contract verification is a separate operation.
     """
     from ngsolve import BND
 
@@ -138,258 +46,193 @@ def detect_kelvin_offset(mesh) -> Tuple[float, float, float]:
             float(ext_mean[2] - int_mean[2]))
 
 
-def _boundary_vertex_ids(mesh, boundary: str) -> set[int]:
-    """Return 1-based Netgen point IDs carried by one named boundary."""
-    boundaries = mesh.GetBoundaries()
-    vertices: set[int] = set()
-    for element in mesh.Elements(__import__("ngsolve").BND):
-        if boundaries[element.index] == boundary:
-            vertices.update(int(vertex.nr) + 1 for vertex in element.vertices)
-    return vertices
+def _point_nr(value):
+    """Pinned Netgen PointId numbers are one-based (not NGSolve VertexId)."""
+    nr = value.nr
+    if type(nr) is not int or nr < 1:
+        raise ValueError(f"Invalid one-based PointId: {nr!r}")
+    return nr
 
 
-def _identified_point_pairs(pairs) -> list[tuple[int, int]]:
-    """Return the 1-based point numbers of Netgen identification entries.
-
-    Netgen 6.2.2606 yields ``(point_a, point_b)`` and 6.2.2607 appends the
-    identification number.  Any other shape is a format change, so it raises
-    rather than reading as "no identification".
-    """
-    out: list[tuple[int, int]] = []
-    for entry in pairs:
-        if len(entry) not in (2, 3):
-            raise ValueError(
-                f"unexpected Netgen identification entry of length {len(entry)}: {entry!r}")
-        # PointId exposes its number as ``nr``; it has no ``__int__``.
-        out.append((int(entry[0].nr), int(entry[1].nr)))
-    return out
+def _native_rows(ngmesh):
+    rows = []
+    for row in ngmesh.GetIdentifications():
+        if len(row) != 3:
+            raise ValueError(f"Expected pinned identification triple, actual={row!r}")
+        group = row[2]
+        if type(group) is not int or group < 1:
+            raise ValueError(f"Invalid identification group: {group!r}")
+        rows.append((_point_nr(row[0]), _point_nr(row[1]), group))
+    if len(rows) != len(set(rows)):
+        raise ValueError("Duplicate native identification triple")
+    return rows
 
 
-def has_kelvin_identification(
-        mesh, inner_bnd: str = "kelvin_int", outer_bnd: str = "kelvin_ext") -> bool:
-    """Return whether the Kelvin boundaries, rather than any boundary, match.
+def _boundary_points(mesh, master, slave):
+    if not master or not slave or master == slave:
+        raise ValueError("Distinct explicit master/slave boundary labels required")
+    ngmesh = mesh.ngmesh
+    descriptors = list(ngmesh.FaceDescriptors())
+    labels = list(mesh.GetBoundaries())
+    bc_labels = {}
+    fd_table = []
+    points = {master: set(), slave: set()}
+    for index, descriptor in enumerate(descriptors, 1):
+        bc = descriptor.bc
+        if type(bc) is not int or not 1 <= bc <= len(labels):
+            raise ValueError(f"FD {index}: invalid BC property {bc!r}")
+        label = labels[bc - 1]
+        if label != descriptor.bcname:
+            raise ValueError(f"FD {index}/BC {bc}: inconsistent boundary label")
+        bc_labels.setdefault(label, set()).add(bc)
+        fd_table.append({"fd": index, "bc": bc, "label": label})
+    for label in points:
+        # A named boundary may intentionally span several BC patches. Union
+        # those exact labels; reject distinct case-fold aliases, not split CAD.
+        aliases = {actual for actual in bc_labels if actual.casefold() == label.casefold()}
+        if not bc_labels.get(label) or aliases != {label}:
+            raise ValueError(f"Missing or ambiguous boundary label {label!r}")
+    for element in ngmesh.Elements2D():
+        fd = element.index
+        if not 1 <= fd <= len(fd_table):
+            raise ValueError(f"Unknown surface FD {fd}")
+        label = fd_table[fd - 1]["label"]
+        if label in points:
+            points[label].update(_point_nr(v) for v in element.vertices)
+    if not points[master] or not points[slave] or points[master] & points[slave]:
+        raise ValueError("Empty or overlapping master/slave point sets")
+    return points[master], points[slave], fd_table
 
-    A rotational FFAG sector and a Kelvin exterior may both use NGSolve
-    ``PERIODIC`` point pairs.  Treating a non-empty global identification list
-    as Kelvin evidence makes a sector-only mesh look Kelvin-ready, then causes
-    the reduced-potential solvers to apply an invalid exterior constraint.  A
-    valid Kelvin identification must therefore pair every ``kelvin_int``
-    boundary vertex with a ``kelvin_ext`` boundary vertex.
 
-    Errors propagate: an earlier catch-all turned the 6.2.2607 change of the
-    identification tuple into a silent "not identified".
-    """
-    inner = _boundary_vertex_ids(mesh, inner_bnd)
-    outer = _boundary_vertex_ids(mesh, outer_bnd)
-    if not inner or not outer:
-        return False
-    matched_inner: set[int] = set()
-    matched_outer: set[int] = set()
-    for first, second in _identified_point_pairs(mesh.ngmesh.GetIdentifications()):
-        if first in inner and second in outer:
-            matched_inner.add(first)
-            matched_outer.add(second)
-        elif second in inner and first in outer:
-            matched_inner.add(second)
-            matched_outer.add(first)
-    return matched_inner == inner and matched_outer == outer
+def verify_kelvin_identification(mesh, *, master, slave, group=1):
+    """Require directed complete native periodic coverage without modifying mesh.
 
-
-def add_kelvin_identification(
-    mesh,
-    kelvin_offset: Optional[Tuple[float, float, float]] = None,
-    *,
-    inner_bnd: str = "kelvin_int",
-    outer_bnd: str = "kelvin_ext",
-    idnr: int | None = None,
-    point_tolerance: Optional[float] = None,
-    skip_if_existing: bool = True,
-) -> dict:
-    """Add Kelvin Periodic point-pair identification to an existing mesh.
-
-    Walks the BND surface elements, collects vertices on `inner_bnd`
-    and `outer_bnd`, translates the inner set by `kelvin_offset` (auto-
-    detected if None), pairs them via Hungarian assignment
-    (`scipy.optimize.linear_sum_assignment`), and registers each pair
-    with ``ngmesh.AddPointIdentification(p1, p2, identnr,
-    type=IdentificationType.PERIODIC)``.
-
-    NGSolve's `Periodic(H1(mesh, ...))` then derives high-order DOF
-    coupling from the point pairs + mesh topology automatically; no
-    explicit segment / surface-element identification is added by this
-    helper (verified 2026-04-25 on em_elf_quarter at p=2, slaved=6085).
-
-    Args:
-        mesh: ngsolve.Mesh with `inner_bnd` and `outer_bnd` boundary
-            labels (and matching 1:1 vertex count on the two sides).
-        kelvin_offset: (x, y, z) rigid translation from interior to
-            exterior Kelvin sphere.  Pass None to auto-detect via
-            ``detect_kelvin_offset(mesh)`` (recommended).
-        inner_bnd: boundary name for the interior Kelvin sphere
-            (typically the air sphere outer surface).
-        outer_bnd: boundary name for the exterior Kelvin shell.
-        idnr: identification number for ``AddPointIdentification``.  It
-            defaults to 1 for a mesh without other periodic constraints.  A
-            mesh that already has non-Kelvin identifications (for example an
-            FFAG azimuthal sector) must pass a distinct, explicit number.
-        point_tolerance: max distance for vertex-pair acceptance [m].
-            Default = max(5% of |kelvin_offset|, 1 mm).  Pairs farther
-            than this are dropped (counted as `n_unmatched`).
-        skip_if_existing: if True, return early only when the Kelvin boundary
-            pairs already exist.  Unrelated rotational or mirror pairs do not
-            suppress the Kelvin operation.
-
-    Returns:
-        dict with keys:
-            ``n_pairs``: number of identification pairs registered
-            ``n_unmatched``: vertices that exceeded `point_tolerance`
-            ``kelvin_offset``: offset used (auto-detected or provided)
-            ``max_dist``: largest residual distance after translation [m]
-            ``point_tolerance``: tolerance used [m]
-            ``was_pre_existing``: True if `skip_if_existing` returned early
-
-    Raises:
-        ValueError: if neither inner_bnd nor outer_bnd is in
-            mesh.GetBoundaries() (i.e. the mesh has no Kelvin labels).
-            This is a configuration error -- you cannot add Kelvin
-            identification to a mesh without Kelvin labels.
-
-    Notes:
-        - This function does NOT verify that the kelvin shell mesh is
-          a 1:1 image of the air outer surface.  If the two surfaces
-          have different vertex counts the Hungarian pairing will leave
-          unmatched vertices (counted in `n_unmatched`); the FES will
-          still be correct over the matched subset but the open-
-          boundary truncation will be partial.  Check
-          ``info["n_unmatched"] == 0`` to confirm full coverage.
-        - The `idnr` argument matters only if you plan to add multiple
-          independent identification sets to the same mesh (rare).
-          Default `1` is conventional.
+    The name cannot be read through the pinned Netgen Python API. This function
+    therefore never claims persisted-name proof, including for OCC input meshes.
+    Other groups may exist; only the explicitly selected group is verified here.
+    Case-specific sole-group, pair-oracle and curved-map checks remain separate.
     """
     from netgen.meshing import IdentificationType
 
-    # --- Validate boundaries -------------------------------------------------
-    boundaries = mesh.GetBoundaries()
-    have_inner = inner_bnd in boundaries
-    have_outer = outer_bnd in boundaries
-    if not (have_inner and have_outer):
-        missing = [n for n, ok in [(inner_bnd, have_inner),
-                                   (outer_bnd, have_outer)] if not ok]
-        raise ValueError(
-            f"Mesh does not have the required Kelvin boundary labels "
-            f"(missing: {missing}; available: {sorted(set(boundaries))}). "
-            f"Cannot add Kelvin identification to a mesh without "
-            f"kelvin_int / kelvin_ext labels.  Either rebuild the mesh "
-            f"with add_kelvin_cubit / OCC Identify, or pass the correct "
-            f"inner_bnd / outer_bnd names.")
-
-    # --- Skip-if-existing pre-flight ----------------------------------------
-    kelvin_already_identified = has_kelvin_identification(
-        mesh, inner_bnd=inner_bnd, outer_bnd=outer_bnd)
-    if skip_if_existing and kelvin_already_identified:
-        return {
-            "n_pairs": 0,
-            "n_unmatched": 0,
-            "kelvin_offset": kelvin_offset or (0.0, 0.0, 0.0),
-            "max_dist": 0.0,
-            "point_tolerance": 0.0,
-            "was_pre_existing": True,
-        }
-    existing_pairs = tuple(mesh.ngmesh.GetIdentifications())
-    if idnr is None:
-        if existing_pairs and not kelvin_already_identified:
-            raise ValueError(
-                "mesh already has non-Kelvin point identifications; pass an "
-                "explicit distinct idnr when adding the Kelvin constraint")
-        idnr = 1
-    idnr = int(idnr)
-    if idnr < 1:
-        raise ValueError("Kelvin idnr must be a positive integer")
-
-    # --- Auto-detect kelvin_offset if not provided --------------------------
-    if kelvin_offset is None:
-        kelvin_offset = detect_kelvin_offset(mesh)
-        if kelvin_offset == (0.0, 0.0, 0.0):
-            raise ValueError(
-                "detect_kelvin_offset(mesh) returned (0, 0, 0).  Either "
-                "the kelvin_int / kelvin_ext boundaries have no surface "
-                "elements, or the two spheres are at the same centre "
-                "(degenerate Kelvin geometry).  Pass kelvin_offset "
-                "explicitly to bypass auto-detection.")
-
-    # --- Tolerance default ---------------------------------------------------
-    if point_tolerance is None:
-        off_len = math.sqrt(sum(c * c for c in kelvin_offset))
-        point_tolerance = max(0.05 * off_len, 1e-3)
-
-    # --- Collect vertex PointIndex sets on each side ------------------------
-    inner_pids = _boundary_vertex_ids(mesh, inner_bnd)
-    outer_pids = _boundary_vertex_ids(mesh, outer_bnd)
-
-    if not inner_pids or not outer_pids:
-        return {
-            "n_pairs": 0,
-            "n_unmatched": 0,
-            "kelvin_offset": tuple(kelvin_offset),
-            "max_dist": 0.0,
-            "point_tolerance": point_tolerance,
-            "was_pre_existing": False,
-        }
-
-    inner_pids_l = sorted(inner_pids)
-    outer_pids_l = sorted(outer_pids)
-    inner_pos = np.array([mesh.vertices[p - 1].point for p in inner_pids_l])
-    outer_pos = np.array([mesh.vertices[p - 1].point for p in outer_pids_l])
-    offset_v = np.array(kelvin_offset, dtype=float)
-
-    # --- Translate + pair (Hungarian, greedy fallback) ----------------------
-    inner_pos_t = inner_pos + offset_v
-    try:
-        from scipy.optimize import linear_sum_assignment
-        cost = np.sqrt(np.sum(
-            (inner_pos_t[:, None, :] - outer_pos[None, :, :]) ** 2, axis=2))
-        row_ind, col_ind = linear_sum_assignment(cost)
-        pairs: list = []
-        max_dist = 0.0
-        n_unmatched = 0
-        for i, j in zip(row_ind, col_ind):
-            d = float(cost[i, j])
-            if d <= point_tolerance:
-                pairs.append((inner_pids_l[i], outer_pids_l[j]))
-                max_dist = max(max_dist, d)
-            else:
-                n_unmatched += 1
-    except ImportError:
-        used: set = set()
-        pairs = []
-        max_dist = 0.0
-        n_unmatched = 0
-        for i, ipt in enumerate(inner_pos_t):
-            d2_all = np.sum((outer_pos - ipt) ** 2, axis=1)
-            if used:
-                d2_all = d2_all.copy()
-                for j in used:
-                    d2_all[j] = float("inf")
-            j_best = int(np.argmin(d2_all))
-            d_best = float(np.sqrt(d2_all[j_best]))
-            if d_best <= point_tolerance:
-                pairs.append((inner_pids_l[i], outer_pids_l[j_best]))
-                used.add(j_best)
-                max_dist = max(max_dist, d_best)
-            else:
-                n_unmatched += 1
-
-    # --- Register identifications -------------------------------------------
+    if type(group) is not int or group < 1:
+        raise ValueError("Positive explicit identification group required")
     ngmesh = mesh.ngmesh
-    for p1, p2 in pairs:
-        ngmesh.AddPointIdentification(p1, p2, identnr=idnr,
-                                      type=IdentificationType.PERIODIC)
+    if ngmesh.GetNrIdentifications() < group:
+        raise ValueError(f"Missing persisted group {group}")
+    if ngmesh.GetIdentificationType(group) != IdentificationType.PERIODIC:
+        raise ValueError(f"Group {group}: expected PERIODIC")
+    master_points, slave_points, table = _boundary_points(mesh, master, slave)
+    rows = _native_rows(ngmesh)
+    selected = [(a, b) for a, b, nr in rows if nr == group]
+    masters = [a for a, b in selected]
+    slaves = [b for a, b in selected]
+    if any(a == b for a, b in selected):
+        raise ValueError("Self identification is unsupported")
+    if len(masters) != len(set(masters)) or len(slaves) != len(set(slaves)):
+        raise ValueError("Identification is not a directed bijection")
+    if set(masters) != master_points or set(slaves) != slave_points:
+        raise ValueError(
+            f"Incomplete/foreign/reversed periodic coverage: actual master/slave "
+            f"{len(set(masters))}/{len(set(slaves))}, expected "
+            f"{len(master_points)}/{len(slave_points)}; "
+            f"missing={sorted(master_points-set(masters))[:8]}/"
+            f"{sorted(slave_points-set(slaves))[:8]}, "
+            f"foreign={sorted(set(masters)-master_points)[:8]}/"
+            f"{sorted(set(slaves)-slave_points)[:8]}")
+    return {"verified": True, "group": group, "type": "PERIODIC", "n_pairs": len(selected),
+            "master": master, "slave": slave, "master_points": len(master_points),
+            "slave_points": len(slave_points), "fd_bc_table": table,
+            "point_index_convention": "Netgen PointId.nr one-based",
+            "name_status": "NOT_VERIFIABLE_FROM_THIS_API", "mesh_modified": False}
 
-    return {
-        "n_pairs": len(pairs),
-        "n_unmatched": n_unmatched,
-        "kelvin_offset": tuple(float(c) for c in kelvin_offset),
-        "max_dist": float(max_dist),
-        "point_tolerance": float(point_tolerance),
-        "was_pre_existing": False,
-    }
+
+def _verify_kelvin_structure(mesh, *, boundaries=("kelvin_int", "kelvin_ext"), group=1):
+    """Internal in-memory/OCC check: observe native direction, not provenance.
+
+    Neither orientation is presumed by an arbitrary in-memory mesh. Require one
+    consistent complete directed relation, report its actual orientation, and
+    leave expected producer orientation/name proof to the strict file loader.
+    """
+    first, second = boundaries
+    left, right, _ = _boundary_points(mesh, first, second)
+    selected = [(a, b) for a, b, nr in _native_rows(mesh.ngmesh) if nr == group]
+    starts, ends = {a for a, b in selected}, {b for a, b in selected}
+    if starts == left and ends == right:
+        master, slave = first, second
+    elif starts == right and ends == left:
+        master, slave = second, first
+    else:
+        raise ValueError("Incomplete/foreign/inconsistently directed native Kelvin structure")
+    evidence = verify_kelvin_identification(mesh, master=master, slave=slave, group=group)
+    evidence["direction_status"] = "OBSERVED_NATIVE_NOT_PRODUCER_ORIENTATION_PROOF"
+    return evidence
+
+
+def _persisted_sections(raw):
+    lines = raw.decode("utf-8", errors="strict").splitlines()
+    sections = {}
+    keys = {"identifications", "identificationtypes", "identificationnames"}
+    i = 0
+    while i < len(lines):
+        key = lines[i]
+        i += 1
+        if key not in keys:
+            continue
+        if key in sections or i >= len(lines) or not lines[i].strip().isdigit():
+            raise ValueError("Duplicate/malformed periodic section")
+        count = int(lines[i]); i += 1
+        nrows = count if key == "identifications" else 1
+        if count < 1 or i + nrows > len(lines):
+            raise ValueError("Empty/truncated periodic section")
+        block = [line.split() for line in lines[i:i+nrows]]; i += nrows
+        if key == "identifications":
+            if any(len(row) != 3 or any(not x.isdigit() or int(x)<1 for x in row) for row in block):
+                raise ValueError("Malformed persisted identification triple")
+            value = [tuple(map(int, row)) for row in block]
+            if len(value) != len(set(value)):
+                raise ValueError("Duplicate persisted identification triple")
+        else:
+            if len(block[0]) != count:
+                raise ValueError("Malformed persisted type/name count")
+            value = block[0]
+        sections[key] = value
+    if set(sections) != keys:
+        raise ValueError("Missing persisted identification/name/type section")
+    return sections
+
+
+def load_verified_kelvin_mesh(path, master, slave, group, name):
+    """Load exactly one immutable .vol and prove its named producer contract.
+
+    Returns (loaded_mesh, evidence). The evidence is never accepted as proof for
+    some unrelated in-memory mesh. No Save, Curve or identification repair occurs.
+    """
+    from ngsolve import Mesh
+
+    if type(group) is not int or group < 1 or not name or len(name.split()) != 1:
+        raise ValueError("Positive group and explicit single-token name required")
+    path = Path(path).resolve(strict=True)
+    if path.suffix != ".vol":
+        raise ValueError("Named periodic verification requires an uncompressed .vol")
+    raw = path.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    sections = _persisted_sections(raw)
+    names, types = sections["identificationnames"], sections["identificationtypes"]
+    if len(names) != len(types) or group > len(names) or names[group-1] != name or types[group-1] != "2":
+        raise ValueError(f"Expected persisted PERIODIC group {group} name {name!r}")
+    if names.count(name) != 1:
+        raise ValueError("Ambiguous persisted identification name")
+    rows = sections["identifications"]
+    if any(nr > len(names) for a, b, nr in rows):
+        raise ValueError("Persisted row refers to unknown group")
+    mesh = Mesh(str(path))
+    if path.read_bytes() != raw:
+        raise ValueError("Input changed while loading named periodic mesh")
+    evidence = verify_kelvin_identification(mesh, master=master, slave=slave, group=group)
+    if sorted(_native_rows(mesh.ngmesh)) != sorted(rows) or mesh.ngmesh.GetNrIdentifications() != len(names):
+        raise ValueError("Native periodic rows differ from persisted file")
+    if path.read_bytes() != raw:
+        raise ValueError("Input changed during periodic verification")
+    evidence.update(path=str(path), input_sha256=digest, name=name,
+                    name_status="VERIFIED_PERSISTED_FILE_AND_NATIVE_ROWS", input_unchanged=True)
+    return mesh, evidence

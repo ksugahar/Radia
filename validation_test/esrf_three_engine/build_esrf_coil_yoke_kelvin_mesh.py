@@ -383,7 +383,7 @@ def validate_fem_mesh(path: Path) -> dict[str, object]:
     """Reject any FEM mesh that lacks the required Kelvin topology."""
     import ngsolve as ng
 
-    from radia.kelvin_identify_ngsolve import has_kelvin_identification
+    from radia.kelvin_identify_ngsolve import _verify_kelvin_structure
 
     with ng.TaskManager():
         mesh = ng.Mesh(str(path))
@@ -400,8 +400,7 @@ def validate_fem_mesh(path: Path) -> dict[str, object]:
         )
     if contract["required_bbboundary"] not in set(map(str, mesh.GetBBBoundaries())):
         raise RuntimeError("coil-yoke FEM mesh has no Kelvin GND BBND")
-    if not has_kelvin_identification(mesh):
-        raise RuntimeError("coil-yoke FEM mesh has no Kelvin identification")
+    _verify_kelvin_structure(mesh, group=1)
     return {
         "path": str(path),
         "elements": int(mesh.ne),

@@ -16,7 +16,7 @@ from radia.ffag_topopt import (  # noqa: E402
     build_ffag_cyclic_density_map,
     identify_ffag_cyclic_sector_vertices,
 )
-from radia.kelvin_identify_ngsolve import has_kelvin_identification  # noqa: E402
+from radia.kelvin_identify_ngsolve import verify_kelvin_identification  # noqa: E402
 from radia.vim._solve import _hdiv_space_with_image_constraints  # noqa: E402
 from radia.vim._vim import (  # noqa: E402
     _broken_hex_face_charge_basis,
@@ -144,7 +144,8 @@ def test_ffag_cyclic_vertex_identification_and_density_transpose_map():
 
 
 def test_cyclic_rotation_pairs_do_not_claim_kelvin_readiness():
-    assert has_kelvin_identification(_connected_sector_mesh()) is False
+    with pytest.raises(ValueError, match="boundary label"):
+        verify_kelvin_identification(_connected_sector_mesh(), master="kelvin_ext", slave="kelvin_int")
 
 
 @pytest.mark.parametrize("roundtrip", [False, True])
@@ -154,9 +155,11 @@ def test_identification_predicate_honors_explicit_boundary_names(tmp_path, round
         path = tmp_path / "cyclic.vol"
         mesh.ngmesh.Save(str(path))
         mesh = ng.Mesh(str(path))
-    assert has_kelvin_identification(mesh) is False
-    assert has_kelvin_identification(
-        mesh, inner_bnd="periodic_min", outer_bnd="periodic_max") is True
+    with pytest.raises(ValueError, match="boundary label"):
+        verify_kelvin_identification(mesh, master="kelvin_ext", slave="kelvin_int")
+    info = verify_kelvin_identification(mesh, master="periodic_min", slave="periodic_max")
+    assert info["verified"] is True
+    assert info["name_status"] == "NOT_VERIFIABLE_FROM_THIS_API"
 
 
 def test_ffag_cyclic_identification_requires_explicit_number_after_kelvin_or_other_pairs():

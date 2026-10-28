@@ -45,7 +45,7 @@ if _this_dir not in sys.path:
 
 from calc_common import (
     setup_paths, progress, calc_main,
-    detect_kelvin_offset, add_periodic_kelvin, apply_fe_inverse,
+    detect_kelvin_offset, apply_fe_inverse,
 )
 
 
@@ -96,7 +96,9 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
         return {"error": f".vol not found: {vol_path}"}
 
     _log(f"loading {vol_path}")
-    mesh = Mesh(vol_path)
+    from radia.kelvin_identify_ngsolve import load_verified_kelvin_mesh
+    mesh, periodic_evidence = load_verified_kelvin_mesh(
+        vol_path, "kelvin_ext", "kelvin_int", 1, "kt")
     materials = mesh.GetMaterials()
     boundaries = mesh.GetBoundaries()
     _log(f"materials={list(materials)}, BNDs={sorted(set(boundaries))}")
@@ -112,8 +114,7 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
 
     offset = detect_kelvin_offset(mesh)
     _log(f"kelvin_offset = {offset}")
-    if add_periodic_kelvin(mesh, offset):
-        mesh = ngsolve.Mesh(mesh.ngmesh)
+    _log(f"verified persisted kt: {periodic_evidence['n_pairs']} pairs")
 
     if fes_order >= 2:
         # Loading applied the stored curving; Mesh.Curve on a loaded mesh is

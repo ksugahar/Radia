@@ -1801,12 +1801,10 @@ class ScalarPotentialSolver:
             boundary = '.*' if dirichlet == 'default' else dirichlet
             return H1(self.mesh, order=self.order, dirichlet=boundary)
 
-        from radia.kelvin_identify_ngsolve import has_kelvin_identification
-        if not has_kelvin_identification(self.mesh):
-            raise RuntimeError(
-                "Kelvin H1 requires kelvin_int/kelvin_ext point "
-                "identifications in the .vol mesh"
-            )
+        from radia.kelvin_identify_ngsolve import _verify_kelvin_structure
+        # In-memory/OCC structural proof only; no persisted-name claim.
+        _verify_kelvin_structure(self.mesh, group=1)
+
         from radia.kelvin_geometry import require_kelvin_scalar_ground
         require_kelvin_scalar_ground(self.mesh, self._kelvin_region)
         kwargs = {"order": self.order, "dirichlet_bbbnd": "GND"}

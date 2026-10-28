@@ -86,7 +86,7 @@ from radia.esrf_examples import (
     build_esrf_fixed_magnetization_source,
     get_esrf_bh_table,
 )
-from radia.kelvin_identify_ngsolve import detect_kelvin_offset, has_kelvin_identification
+from radia.kelvin_identify_ngsolve import detect_kelvin_offset, _verify_kelvin_structure
 from radia.static_electromagnet import (
     StaticElectromagnetMixedDomain,
     solve_static_electromagnet_mixed_total_reduced_omega,
@@ -556,8 +556,7 @@ def main(argv: list[str] | None = None) -> int:
     iron_mesh = ng.Mesh(str(iron_vol))
     source_mesh = ng.Mesh(str(source_vol))
     fem_mesh = ng.Mesh(str(fem_mesh_path))
-    if not has_kelvin_identification(fem_mesh):
-        raise RuntimeError("FEM mesh has no Kelvin periodic identification")
+    _verify_kelvin_structure(fem_mesh, group=1)
     kelvin_offset = tuple(float(value) for value in detect_kelvin_offset(fem_mesh))
     source = build_esrf_fixed_magnetization_source(
         source_mesh,

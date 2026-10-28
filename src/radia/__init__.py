@@ -162,18 +162,16 @@ except ImportError:
     # Analysis requires numpy
     ANALYSIS_AVAILABLE = False
 
-# Post-hoc Kelvin Periodic identification on an NGSolve mesh (no Cubit /
-# OCC needed).  See `radia.kelvin_identify_ngsolve` for full docs.
+# Read-only producer-owned Kelvin periodic contract checks.
 try:
     from .kelvin_identify_ngsolve import (
-        add_kelvin_identification,
+        verify_kelvin_identification,
+        load_verified_kelvin_mesh,
         detect_kelvin_offset,
-        has_kelvin_identification,
     )
     KELVIN_IDENTIFY_AVAILABLE = True
 except ImportError:
-    # Requires ngsolve + scipy (greedy fallback) -- both should be
-    # present in any Radia install, so this is just defensive.
+    # NumPy is required by the observation-only offset helper.
     KELVIN_IDENTIFY_AVAILABLE = False
 
 

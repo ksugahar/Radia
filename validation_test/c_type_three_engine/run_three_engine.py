@@ -47,7 +47,7 @@ from radia import _radia_pybind as radia_native
 from radia.coil_builder import CoilBuilder
 from radia.kelvin_identify_ngsolve import (
     detect_kelvin_offset,
-    has_kelvin_identification,
+    _verify_kelvin_structure,
 )
 from radia.electromagnet_validation import (
     require_static_electromagnet_three_engine_contract,
@@ -653,8 +653,7 @@ def main() -> None:
     points = observation_points()
     iron_mesh = ng.Mesh(str(iron_vol))
     kelvin_mesh = ng.Mesh(str(kelvin_vol))
-    if not has_kelvin_identification(kelvin_mesh):
-        raise RuntimeError("kelvin_domain.vol has no periodic point identification")
+    _verify_kelvin_structure(kelvin_mesh, group=1)
     offset = np.asarray(detect_kelvin_offset(kelvin_mesh), dtype=float)
     physical_center = np.asarray(
         mesh_report["kelvin_physical_center_m"], dtype=float)

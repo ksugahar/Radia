@@ -87,7 +87,7 @@ def test_three_engine_runner_has_shared_physics_contract():
     assert "median_plane_one_sided_tangential_relative_rms" in runner
     assert "not a reflection-symmetry error" in runner
     assert 'kelvin_vol = mesh_dir / "kelvin_domain.vol"' in runner
-    assert "has_kelvin_identification" in runner
+    assert "_verify_kelvin_structure" in runner
     assert '"--hdiv-gram-eps"' in runner
     assert 'default=1.0e-14' in runner
     assert '"--source-trace-tolerance"' in runner

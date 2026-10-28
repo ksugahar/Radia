@@ -10,6 +10,7 @@ Provides:
 """
 
 from radia._residual_gate import RELATIVE_LIMIT
+from radia.kelvin_identify_ngsolve import detect_kelvin_offset
 import io
 import json
 import math
@@ -428,63 +429,6 @@ def build_occ_ih_mesh_hole(R_coil=0.030, a_coil=0.003, gap_deg=5,
     return mesh, info
 
 
-def _add_kelvin_point_idents_manual(mesh, kelvin_offset, idnr=1,
-                                     point_tolerance=None):
-    """Compatibility shim -- delegates to `kelvin_identify_ngsolve`.
-
-    The full implementation lives in
-    `radia.kelvin_identify_ngsolve.add_kelvin_identification`.  This
-    function is preserved only because it appears as a private
-    helper name in older docstrings / code review threads.  New code
-    should use the public API.
-    """
-    from radia.kelvin_identify_ngsolve import add_kelvin_identification
-    info = add_kelvin_identification(
-        mesh, kelvin_offset=kelvin_offset, idnr=idnr,
-        point_tolerance=point_tolerance, skip_if_existing=False)
-    return info["n_pairs"]
-
-
-def add_periodic_kelvin(mesh, kelvin_offset):
-    """Ensure Kelvin Periodic identification exists on the mesh.
-
-    Thin compatibility shim around the public
-    `radia.kelvin_identify_ngsolve.add_kelvin_identification`.  Kept here
-    so existing panel code (`calc_fem_kelvin.py`, `calc_accel_magnet.py`,
-    ...) continues to work without import changes.  New callers should
-    prefer the public API:
-
-        from radia import add_kelvin_identification
-        info = add_kelvin_identification(mesh)   # auto-detects offset
-
-    Behaviour matches the pre-2026-05-13 implementation:
-      - returns True iff some identification ended up on the mesh
-      - skips silently when kelvin_int / kelvin_ext labels are missing
-      - skips silently when ngmesh already has identifications
-      - delegates the actual point-pair matching + AddPointIdentification
-        calls to the public module
-    """
-    from radia.kelvin_identify_ngsolve import (
-        add_kelvin_identification, has_kelvin_identification,
-    )
-
-    boundaries = mesh.GetBoundaries()
-    if "kelvin_int" not in boundaries or "kelvin_ext" not in boundaries:
-        return False
-
-    if has_kelvin_identification(mesh):
-        return True
-
-    info = add_kelvin_identification(
-        mesh, kelvin_offset=kelvin_offset, skip_if_existing=False)
-    if info["n_pairs"] > 0:
-        print(f"[add_periodic_kelvin/manual] {info['n_pairs']} point pairs "
-              f"(max_dist={info['max_dist']:.2e}, "
-              f"unmatched={info['n_unmatched']}, "
-              f"tol={info['point_tolerance']:.2e})")
-    return info["n_pairs"] > 0
-
-
 def detect_outer_boundary(mesh):
     """Detect the outer boundary of the air domain (largest BND area).
 
@@ -582,20 +526,6 @@ def estimate_kelvin_maxh(mesh, outer_bnd_name):
         lengths.append(float(np.linalg.norm(p1 - p0)))
 
     return float(np.median(lengths)) * 1.5
-
-
-def detect_kelvin_offset(mesh):
-    """Compatibility shim -- delegates to `kelvin_identify_ngsolve`.
-
-    The full implementation lives in
-    `radia.kelvin_identify_ngsolve.detect_kelvin_offset`.  Kept here for
-    backward compatibility with existing panel callers
-    (`calc_fem_kelvin.py`, `calc_fem_coilmesh.py`, `calc_kelvin_benchmark.py`,
-    `calc_accel_magnet.py`).  New code should `from radia import
-    detect_kelvin_offset` directly.
-    """
-    from radia.kelvin_identify_ngsolve import detect_kelvin_offset as _impl
-    return _impl(mesh)
 
 
 # ============================================================

@@ -37,7 +37,7 @@ from radia.electromagnet_validation import (
     require_static_electromagnet_three_engine_contract,
 )
 from radia.esrf_examples import get_esrf_bh_table
-from radia.kelvin_identify_ngsolve import detect_kelvin_offset, has_kelvin_identification
+from radia.kelvin_identify_ngsolve import detect_kelvin_offset, _verify_kelvin_structure
 
 from esrf_coil_yoke import (
     average_observation_field,
@@ -487,8 +487,7 @@ def main(argv: list[str] | None = None) -> int:
         iron_mesh = ng.Mesh(str(iron_mesh_path))
     with ng.TaskManager():
         fem_mesh = ng.Mesh(str(fem_mesh_path))
-    if not has_kelvin_identification(fem_mesh):
-        raise RuntimeError("FEM mesh has no Kelvin point identification")
+    _verify_kelvin_structure(fem_mesh, group=1)
     points, field_points = observation_volume_quadrature(
         case.number, half_width_m=options.observation_half_width
     )

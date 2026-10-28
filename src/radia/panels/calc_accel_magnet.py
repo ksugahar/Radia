@@ -65,7 +65,7 @@ if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
 from calc_common import (MU_0, NU_0, setup_paths,
-                          add_periodic_kelvin, detect_kelvin_offset,
+                          detect_kelvin_offset,
                           get_bh_curve, progress, calc_main,
                           EMMaterial, add_material_args, apply_fe_inverse)
 from radia.em_design import FEM_SOLVERS
@@ -357,9 +357,11 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
     if not vol_file or not os.path.exists(vol_file):
         return {"error": f".vol file required: {vol_file}"}
 
-    mesh = Mesh(vol_file)
+    from radia.kelvin_identify_ngsolve import load_verified_kelvin_mesh
+    mesh, periodic_evidence = load_verified_kelvin_mesh(
+        vol_file, "kelvin_ext", "kelvin_int", 1, "kt")
 
-    # Kelvin: detect offset, estimate radius, add periodic identification
+    # Kelvin: observe offset/radius after read-only persisted-ID verification
     a_kelvin = 0.060
     kelvin_center = detect_kelvin_offset(mesh)
     try:
@@ -374,10 +376,8 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
             a_kelvin = float(np.max(np.linalg.norm(coords, axis=1)))
     except Exception:
         pass
-    kelvin_periodic = add_periodic_kelvin(mesh, kelvin_center)
-    if kelvin_periodic:
-        mesh = ngsolve.Mesh(mesh.ngmesh)
-        _log(f"PERIODIC:added (a={a_kelvin:.4f}, offset={kelvin_center})")
+    kelvin_periodic = periodic_evidence["verified"]
+    _log(f"PERIODIC:verified persisted kt ({periodic_evidence['n_pairs']} pairs)")
 
     # The Kelvin transformation needs a curved Kelvin sphere: the
     # (R/rho')^2 reluctivity scaling assumes a smooth sphere, and a

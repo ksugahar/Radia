@@ -1665,12 +1665,10 @@ class VectorPotentialSolver:
             return HCurl(
                 self.mesh, order=self.order, dirichlet=boundary, nograds=True)
 
-        from radia.kelvin_identify_ngsolve import has_kelvin_identification
-        if not has_kelvin_identification(self.mesh):
-            raise RuntimeError(
-                "Kelvin HCurl requires kelvin_int/kelvin_ext point "
-                "identifications in the .vol mesh"
-            )
+        from radia.kelvin_identify_ngsolve import _verify_kelvin_structure
+        # In-memory/OCC structural proof only; no persisted-name claim.
+        _verify_kelvin_structure(self.mesh, group=1)
+
         kwargs = {"order": self.order, "nograds": True}
         if dirichlet not in ('default', 'GND'):
             kwargs["dirichlet"] = dirichlet

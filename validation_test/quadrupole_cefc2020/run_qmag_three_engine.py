@@ -36,7 +36,7 @@ import radia as rad  # noqa: E402
 
 import qmag_case as Q  # noqa: E402
 from run_qmag_hdiv import _load_engines, parse_case  # noqa: E402
-from radia.kelvin_identify_ngsolve import detect_kelvin_offset, has_kelvin_identification  # noqa: E402
+from radia.kelvin_identify_ngsolve import detect_kelvin_offset, _verify_kelvin_structure  # noqa: E402
 from radia.vim import mesh_conformity_report  # noqa: E402
 
 SCHEMA = "radia.qmag-cefc2020-three-engine.v1"
@@ -131,8 +131,7 @@ def main(argv=None) -> int:
     fem_report = json.loads(report_path.read_text(encoding="utf-8"))
     with ng.TaskManager():
         fem_mesh = ng.Mesh(str(fem_path))
-    if not has_kelvin_identification(fem_mesh):
-        raise RuntimeError("FEM mesh has no Kelvin point identification")
+    _verify_kelvin_structure(fem_mesh, group=1)
     kelvin_center = tuple(float(v) for v in detect_kelvin_offset(fem_mesh))
     kelvin_radius = float(fem_report["parameters"]["kelvin_radius_m"])
     points = Q.observation_points()
