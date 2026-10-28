@@ -75,15 +75,21 @@ def _boundary_points(mesh, master, slave):
     descriptors = list(ngmesh.FaceDescriptors())
     labels = list(mesh.GetBoundaries())
     bc_labels = {}
+    names_by_bc = {}
     fd_table = []
     points = {master: set(), slave: set()}
     for index, descriptor in enumerate(descriptors, 1):
         bc = descriptor.bc
-        if type(bc) is not int or not 1 <= bc <= len(labels):
+        if type(bc) is not int or bc < 1:
             raise ValueError(f"FD {index}: invalid BC property {bc!r}")
-        label = labels[bc - 1]
-        if label != descriptor.bcname:
+        # The descriptor owns its label; GetBoundaries must not be indexed by
+        # FD or BC under an assumed equality of those separate namespaces.
+        label = descriptor.bcname
+        if not isinstance(label, str) or not label or label not in labels:
             raise ValueError(f"FD {index}/BC {bc}: inconsistent boundary label")
+        names_by_bc.setdefault(bc, set()).add(label)
+        if len(names_by_bc[bc]) != 1:
+            raise ValueError(f"BC {bc}: conflicting descriptor labels")
         bc_labels.setdefault(label, set()).add(bc)
         fd_table.append({"fd": index, "bc": bc, "label": label})
     for label in points:

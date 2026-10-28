@@ -73,7 +73,7 @@ def test_invalid_structure_rejected(synthetic, case):
     elif case == "alias":
         ng.descriptors.append(SimpleNamespace(bc=3, bcname="MASTER"))
         synthetic.GetBoundaries = lambda: ("slave", "master", "MASTER")
-    elif case == "fd_label": ng.descriptors[0].bcname = "slave"
+    elif case == "fd_label": ng.descriptors[0].bcname = "unknown"
     with pytest.raises(ValueError): _verify(synthetic)
 
 
@@ -136,3 +136,9 @@ def test_exact_label_union_across_split_bc_patches(synthetic):
     info = _verify(synthetic)
     assert info["master_points"] == 3
     assert info["n_pairs"] == 3
+
+
+def test_boundary_names_are_not_assumed_indexed_by_bc_or_fd(synthetic):
+    synthetic.GetBoundaries = lambda: ("master", "slave")
+    info = _verify(synthetic)
+    assert info["fd_bc_table"][0] == {"fd": 1, "bc": 2, "label": "master"}
