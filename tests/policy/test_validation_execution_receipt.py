@@ -317,6 +317,29 @@ def test_publish_deadline_stops_before_another_attempt(tmp_path, monkeypatch):
     assert path.with_name(path.name + '.pending').exists()
 
 
+def test_slow_retry_encoding_cannot_start_replace_after_deadline(tmp_path, monkeypatch):
+    record, path, clock = _publish_probe(tmp_path, monkeypatch)
+    before = path.read_bytes()
+    calls = []
+    error = _windows_publish_error(5)
+    dump = receipt.json.dump
+    def slow_retry(data, stream, **kwargs):
+        dump(data, stream, **kwargs)
+        if calls:
+            clock['now'] += 1.0
+    def blocked(*args):
+        calls.append(clock['now'])
+        raise error
+    monkeypatch.setattr(receipt.json, 'dump', slow_retry)
+    monkeypatch.setattr(receipt.os, 'replace', blocked)
+    with pytest.raises(OSError) as raised:
+        record.write()
+    assert raised.value is error
+    assert calls == [0.0], f'replace started after retry deadline: {calls}'
+    assert path.read_bytes() == before
+    assert path.with_name(path.name + '.pending').exists()
+
+
 @pytest.mark.parametrize('windows,code', [(True, 2), (True, None), (False, 5)])
 def test_unrelated_publish_errors_raise_immediately(tmp_path, monkeypatch, windows, code):
     record, path, clock = _publish_probe(tmp_path, monkeypatch, windows=windows)
