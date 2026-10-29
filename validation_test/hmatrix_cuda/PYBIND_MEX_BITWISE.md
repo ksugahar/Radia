@@ -26,7 +26,8 @@ Hash the canonical zero-based SI input dataset before frontend conversion.
 
 Each frontend must independently emit HDF5 with a UTF-8 `receipt_json` attribute:
 `frontend` (`pybind11` or `mexcuda`), `source_sha`, `input_sha256`, `cuda_compiler`,
-`architecture`, `device_uuid`, `deterministic_flags` (array), `case`, `output_names`
+`architecture`, `device_uuid`, `deterministic_flags` (array containing exactly the
+four canonical controls above, once each; extra flags/aliases/overrides rejected), `case`, `output_names`
 (array), plus command/artifact provenance. Outputs are nonempty FP64 datasets in
 `/outputs`, same SI units and canonical ordering. The comparator checks receipt
 agreement and exact shape/dtype/bytes, including signed zero; no tolerance.

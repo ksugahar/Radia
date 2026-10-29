@@ -93,3 +93,24 @@ def test_hdiv_frontend_parity_is_pending_with_an_executable_comparator():
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         assert callable(module.compare)
+
+
+def test_bitwise_comparator_rejects_conflicting_compiler_overrides():
+    """Guards: matching receipts cannot hide contradictory compiler controls.
+
+    Assumes: this is source-only validation, not actual compiler/GPU qualification.
+    """
+    import pytest
+    spec = importlib.util.spec_from_file_location(
+        "bitwise_parity_flags", ROOT / "validation_test/hmatrix_cuda/check_pybind_mex_bitwise.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    flags = ["--fmad=false", "--ftz=false", "--prec-div=true", "--prec-sqrt=true"]
+    module.validate_deterministic_flags(flags)
+    module.validate_deterministic_flags(list(reversed(flags)))
+    for override in ("--fmad=true", "--ftz=true", "--prec-div=false",
+                     "--prec-sqrt=false", "--use_fast_math", "-fmad=true", flags[0]):
+        with pytest.raises(ValueError, match="overrides forbidden"):
+            module.validate_deterministic_flags(flags + [override])
+    with pytest.raises(ValueError):
+        module.validate_deterministic_flags(flags[:-1])

@@ -6,6 +6,16 @@ import json
 from pathlib import Path
 
 
+def validate_deterministic_flags(flags) -> None:
+    required = {"--fmad=false", "--ftz=false", "--prec-div=true", "--prec-sqrt=true"}
+    # This field contains only the four canonical controls, not the full command.
+    # Reject duplicates and extra aliases/overrides rather than guessing precedence.
+    if not isinstance(flags, list) or any(not isinstance(flag, str) for flag in flags):
+        raise ValueError("Deterministic flags must be a list of canonical controls")
+    if len(flags) != len(required) or set(flags) != required:
+        raise ValueError("Exact deterministic compiler controls required; overrides forbidden")
+
+
 def compare(python_path: Path, mex_path: Path) -> dict:
     import h5py
 
@@ -19,9 +29,7 @@ def compare(python_path: Path, mex_path: Path) -> dict:
         for key in keys:
             if not a.get(key) or a[key] != b.get(key):
                 raise ValueError(f"Missing or unequal receipt field: {key}")
-        required = {"--fmad=false", "--ftz=false", "--prec-div=true", "--prec-sqrt=true"}
-        if not required.issubset(a["deterministic_flags"]) or "--use_fast_math" in a["deterministic_flags"]:
-            raise ValueError("Deterministic compiler settings required")
+        validate_deterministic_flags(a["deterministic_flags"])
         if a["case"] == "normalized-leaf-resident-boundary":
             expected = {"apply"}
         elif a["case"] == "explicit-ng-host-hdiv-bh":
