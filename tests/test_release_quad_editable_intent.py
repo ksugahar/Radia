@@ -18,12 +18,12 @@ intent = release_quad.editable_intent
 
 
 @pytest.fixture(autouse=True)
-@pytest.fixture(autouse=True)
 def explicit_validation_runtime(monkeypatch):
     monkeypatch.setenv("RADIA_RELEASE_SSH_VALIDATION", "validation")
     monkeypatch.setenv("RADIA_RELEASE_PYTHON_VALIDATION", "C:/Runtime/python.exe")
 
 
+@pytest.fixture(autouse=True)
 def isolated_record(tmp_path, monkeypatch):
     """Never read the machine's record or the release overrides from the environment."""
     path = tmp_path / "editable-intent.json"
