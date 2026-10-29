@@ -163,6 +163,8 @@ class Receipt:
             with temporary.open('w' if attempt else 'x', encoding='utf-8') as stream:
                 json.dump(self.data, stream, sort_keys=True, indent=2, allow_nan=False)
                 stream.write('\n')
+            if attempt and time.monotonic() >= deadline:
+                raise publish_error
             try:
                 os.replace(temporary, self.path)
                 return
