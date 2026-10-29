@@ -1,5 +1,20 @@
 # Changelog
 
+## 5.4.0 - Unreleased
+
+- Add experimental Python GPU HDiv-MMM preparation and nonlinear solver entries
+  through `radia.hdiv_gpu`, with shared native kernels owned by Radia.
+  The independently released Simulink package consumes these kernels through
+  thin adapters; Radia does not depend on that package.
+- Available component evidence covers two small linear and analytic-cubic
+  cases on a prior development build. It does not certify this release wheel,
+  full HDiv-MMM topology optimization, GPU architecture portability, performance,
+  or actual pybind11/MEX bitwise parity. These remain unqualified pending their
+  respective validation gates. Existing numerical acceptance criteria are unchanged.
+- Retry transient Windows receipt-publication failures within a bounded interval,
+  recording retry counts and preserving fail-loud behavior. Solver jobs and tests
+  are never retried by this mechanism.
+
 ## 5.3.3 - 2026-10-22
 
 - Update the CPU solver runtime to Netgen/NGSolve 6.2.2608. The P1 linear and
