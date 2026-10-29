@@ -21,6 +21,12 @@ _GIT = shutil.which("git")
 assert _GIT is not None, "Git is required by the release-quad contract tests"
 
 
+@pytest.fixture(autouse=True)
+def explicit_validation_runtime(monkeypatch):
+    monkeypatch.setenv("RADIA_RELEASE_SSH_VALIDATION", "validation")
+    monkeypatch.setenv("RADIA_RELEASE_PYTHON_VALIDATION", "C:/Runtime/python.exe")
+
+
 def _git(repo, *args):
     return subprocess.run(
         [_GIT, "-C", str(repo), *args],
@@ -109,7 +115,7 @@ def test_phase8_routes_explicit_hosts_independently_of_controller(monkeypatch, c
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
     monkeypatch.setattr(release_quad.platform, "node", lambda: controller)
     monkeypatch.setattr(release_quad, "_editable_repo_100", lambda: "release-source")
-    monkeypatch.setattr(release_quad, "_deploy_pypi", lambda host, label: calls.append(host) or 0)
+    monkeypatch.setattr(release_quad, "_deploy_pypi", lambda host, label, **kw: calls.append(host) or 0)
     monkeypatch.setattr(release_quad, "_deploy_editable_remote", lambda host, *args: calls.append((host, "development")) or 0)
     assert release_quad.cmd_phase8(Namespace(target=targets)) == 0
     expected = ["validation", release_quad.SSH_100, (release_quad.SSH_100, "development")]
@@ -154,9 +160,9 @@ def test_deployment_plan_uses_lab_wheel_and_100_development_editable(monkeypatch
 def test_lab_deploy_routes_wheel_to_lab_and_propagates_failure(monkeypatch, rc):
     calls = []
     monkeypatch.setattr(release_quad, "_deploy_pypi",
-                        lambda host, label: calls.append((host, label)) or rc)
+                        lambda host, label, **kw: calls.append((host, label, kw)) or rc)
     assert release_quad._deploy_validation() == rc
-    assert calls == [("validation", "validation")]
+    assert calls == [("validation", "validation", {"python_path": "C:/Runtime/python.exe"})]
 
 @pytest.mark.parametrize("drift", [0, 1])
 def test_remote_deploy_changes_only_radia(monkeypatch, drift):
@@ -260,7 +266,7 @@ def test_done_pip_check_checks_all_declared_runtimes_over_ssh(monkeypatch, failu
     assert [call[:2] for call in calls] == [
         ["ssh", "validation"], ["ssh", release_quad.SSH_100], ["ssh", release_quad.SSH_100]]
     remote = [base64.b64decode(call[-1]).decode("utf-16le") for call in calls]
-    assert remote == ["python -m pip check", f"& '{release_quad.DEV_PYTHON_100}' -m pip check", "python -m pip check"]
+    assert remote == [release_quad._runtime_guard_powershell("C:/Runtime/python.exe") + "& 'C:/Runtime/python.exe' -m pip check", f"& '{release_quad.DEV_PYTHON_100}' -m pip check", "python -m pip check"]
 
 
 def test_100_editable_tooling_uses_the_dedicated_development_venv(monkeypatch):
@@ -901,8 +907,8 @@ def test_wheel_verifiers_use_remote_record_gate(monkeypatch, verifier, host, lab
     assert calls[0][:2] == ["ssh", host]
     script = base64.b64decode(calls[0][-1]).decode("utf-16le")
     # The release runtime is the machine-default interpreter, not a venv.
-    assert script.startswith('python -c "import base64')
-    payload = script.split("b64decode('", 1)[1].split("'", 1)[0]
+    assert ("& 'C:/Runtime/python.exe' -c" in script) if verifier == '_verify_validation_wheel' else script.startswith('python -c')
+    payload = script.rsplit("b64decode('", 1)[1].split("'", 1)[0]
     code = base64.b64decode(payload).decode()
     assert "d.files" in code and "actual == f.hash.value" in code
     assert "Shadowed Radia import" in code and f"{label} must use a wheel" in code
@@ -959,3 +965,60 @@ def test_cpu_release_excludes_a100_nightly(monkeypatch, status, conclusion):
         excluded_workflows=release_quad.INDEPENDENT_DISTRIBUTION_WORKFLOWS,
         timeout_sec=0, poll_sec=0)
     assert ok, message
+
+
+@pytest.mark.parametrize("missing", ["RADIA_RELEASE_SSH_VALIDATION", "RADIA_RELEASE_PYTHON_VALIDATION"])
+def test_validation_config_fails_before_any_phase8_action(monkeypatch, missing):
+    """Guards: no fallback or partial deployment. Assumes: remote actions are observed mocks."""
+    from argparse import Namespace
+    monkeypatch.delenv(missing)
+    monkeypatch.setattr(release_quad, "run", lambda *a, **kw: pytest.fail("No remote action"))
+    monkeypatch.setattr(release_quad, "cmd_preflight", lambda *a: pytest.fail("No preflight before config"))
+    with pytest.raises(ValueError, match=missing):
+        release_quad.cmd_phase8(Namespace(target="100,validation"))
+
+
+@pytest.mark.parametrize("name,value", [
+    ("RADIA_RELEASE_SSH_VALIDATION", "-oProxyCommand=bad"),
+    ("RADIA_RELEASE_SSH_VALIDATION", "target extra"),
+    ("RADIA_RELEASE_PYTHON_VALIDATION", "python"),
+    ("RADIA_RELEASE_PYTHON_VALIDATION", "C:relative/python.exe"),
+    ("RADIA_RELEASE_PYTHON_VALIDATION", "C:/WindowsApps/python.exe"),
+    ("RADIA_RELEASE_PYTHON_VALIDATION", 'C:/x/python.exe";bad'),
+])
+def test_validation_rejects_ambiguous_runtime_configuration(monkeypatch,name,value):
+    """Guards: explicit executable/alias only. Assumes: Windows target semantics."""
+    monkeypatch.setenv(name,value)
+    with pytest.raises(ValueError,match=name):release_quad._solver_target("validation")
+
+
+def test_all_validation_consumers_resolve_same_explicit_runtime(monkeypatch):
+    """Guards: deploy/check/pip/phase9 share configuration. Assumes: no SSH executed."""
+    import ntpath
+    host="consumer-test";python="C:/Program Files/Owner's Python/python.exe"
+    monkeypatch.setenv("RADIA_RELEASE_SSH_VALIDATION",host)
+    monkeypatch.setenv("RADIA_RELEASE_PYTHON_VALIDATION",python)
+    assert release_quad._solver_target("validation")==("validation",host,python)
+    calls=[]
+    monkeypatch.setattr(release_quad,"_deploy_pypi",lambda h,l,**kw:calls.append((h,kw)) or 0)
+    assert release_quad._deploy_validation()==0
+    assert calls==[(host,{"python_path":python})]
+    commands=[]
+    monkeypatch.setattr(release_quad,"_radia_version",lambda:"5.4.0")
+    monkeypatch.setattr(release_quad,"run",lambda cmd,**kw:commands.append(cmd) or subprocess.CompletedProcess(cmd,0))
+    assert release_quad._verify_validation_wheel()==0
+    assert release_quad._verify_final_pip_checks()==0
+    assert commands[0][1]==host and commands[1][1]==host
+    literal="'C:/Program Files/Owner''s Python/python.exe'"
+    for cmd in commands[:2]:
+        script=base64.b64decode(cmd[-1]).decode("utf-16le")
+        assert "Test-Path -LiteralPath "+literal in script,script
+        assert "& "+literal+" -c" in script,script
+        assert "Selected Python is missing" in script,script
+        token=script.split("b64decode('",1)[1].split("'",1)[0]
+        code=base64.b64decode(token).decode()
+        assert "Selected Python identity mismatch" in code
+        namespace={"__name__":"runtime_identity_probe"}
+        # Independent oracle: production probe rejects an executable different from selection.
+        with pytest.raises(AssertionError,match="Selected Python identity mismatch"):
+            exec(code,namespace)
