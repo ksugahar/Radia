@@ -1,6 +1,6 @@
 # Changelog
 
-## 5.4.0 - Unreleased
+## 5.4.0 - 2026-10-30
 
 - Add experimental Python GPU HDiv-MMM preparation and nonlinear solver entries
   through `radia.hdiv_gpu`, with shared native kernels owned by Radia.
