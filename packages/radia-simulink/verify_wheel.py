@@ -134,7 +134,7 @@ def verify(path: Path) -> dict:
             if parsed.is_absolute() or ".." in parsed.parts or "\\" in name:
                 raise ValueError("Unsafe archive member")
             if (name.casefold().endswith((".dll", ".exe")) or "radia_mex.mexw64" in name
-                    or (name.casefold().endswith(".pyd") and not re.fullmatch(r"radia_simulink/_(?:(?:csr|hdiv)_cuda|resident_amg)\.cp\d+-win_amd64\.pyd",name))):
+                    or (name.casefold().endswith(".pyd") and not re.fullmatch(r"radia_simulink/_(?:csr_cuda|resident_amg)\.cp\d+-win_amd64\.pyd",name))):
                 raise ValueError("CPU solver or external executable in GPU wheel")
             if not (name.startswith("radia_simulink/") or re.match(r"radia_simulink-[^/]+\.dist-info/",name)):
                 raise ValueError("Foreign package in GPU wheel")
