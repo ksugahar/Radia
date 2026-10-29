@@ -283,12 +283,9 @@ if(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS)
   set_tests_properties(cubit_periodic_curved_independent_load PROPERTIES
     ENVIRONMENT "PATH=${COMPACT_READER_RUNTIME_PATH};PYTHONUNBUFFERED=1;PYTHONDONTWRITEBYTECODE=1")
 endif()
-execute_process(
-  COMMAND ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('purelib'))"
-  OUTPUT_VARIABLE PYTHON_SITE_PACKAGES OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-set(pybind11_DIR "${PYTHON_SITE_PACKAGES}/pybind11/share/cmake/pybind11")
-find_package(pybind11 QUIET)
+# Honor the caller's explicit config directory; Python purelib may differ from
+# the importable dependency location in an isolated environment.
+find_package(pybind11 CONFIG REQUIRED)
 
 if(pybind11_FOUND AND HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
   message(STATUS "pybind11 + Netgen found: building cubit_mesh_curver (Cubit-free)")
