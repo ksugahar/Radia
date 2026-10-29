@@ -18,6 +18,12 @@ intent = release_quad.editable_intent
 
 
 @pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True)
+def explicit_validation_runtime(monkeypatch):
+    monkeypatch.setenv("RADIA_RELEASE_SSH_VALIDATION", "validation")
+    monkeypatch.setenv("RADIA_RELEASE_PYTHON_VALIDATION", "C:/Runtime/python.exe")
+
+
 def isolated_record(tmp_path, monkeypatch):
     """Never read the machine's record or the release overrides from the environment."""
     path = tmp_path / "editable-intent.json"
@@ -149,7 +155,7 @@ def test_lab_deploy_uses_wheel_route_and_propagates_failure(monkeypatch, rc):
     monkeypatch.setattr(release_quad, "_deploy_pypi",
                         lambda host, label, **kw: calls.append((host, label, kw)) or rc)
     assert release_quad._deploy_validation() == rc
-    assert calls == [("validation", "validation", {})]
+    assert calls == [("validation", "validation", {"python_path": "C:/Runtime/python.exe"})]
 
 
 
