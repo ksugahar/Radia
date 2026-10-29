@@ -73,3 +73,23 @@ def test_shared_radia_gpu_source_is_allowed_but_arbitrary_sources_are_rejected(t
     feature["matlab"] = "src/radia/not_gpu.cpp"
     manifest_path.write_text(json.dumps(manifest))
     assert any("matlab is not GPU-owned" in error for error in MODULE.audit(tmp_path)["errors"])
+
+
+def test_hdiv_frontend_parity_is_pending_with_an_executable_comparator():
+    """Guards: ownership moves cannot silently claim same-kernel MEX parity.
+
+    Assumes: source contracts do not execute either GPU frontend.
+    """
+    import json
+    manifest = json.loads((ROOT / "packages/radia-simulink/matlab/python_api_parity_manifest.json").read_text())
+    for feature in manifest["gpu_features"]:
+        if feature["id"] not in {"normalized-leaf-resident-boundary", "explicit-ng-host-hdiv-bh"}:
+            continue
+        contract = feature["same_kernel_bitwise_parity"]
+        assert contract["status"] == "PENDING", contract
+        assert contract["case"] == feature["id"]
+        assert (ROOT / contract["protocol"]).is_file()
+        spec = importlib.util.spec_from_file_location("bitwise_parity", ROOT / contract["test_reference"])
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        assert callable(module.compare)

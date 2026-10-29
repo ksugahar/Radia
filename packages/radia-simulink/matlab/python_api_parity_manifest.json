@@ -118,7 +118,19 @@
       "matlab": "packages/radia-simulink/matlab/+radia/+gpu/HMatrixOperator.m",
       "validation": "tests/matlab/test_hmatrix_normalized_leaves.m",
       "cpu_reference": "Explicit normalized matrix action with nontrivial scale, permutation and low-rank off-diagonal leaf",
-      "cpu_fallback": false
+      "cpu_fallback": false,
+      "same_kernel_bitwise_parity": {
+        "status": "PENDING",
+        "python_entry": "radia.hdiv_gpu.PreparedHDivNonlinear",
+        "mex_entry": "radia_cuda_hmatrix",
+        "test_reference": "validation_test/hmatrix_cuda/check_pybind_mex_bitwise.py",
+        "protocol": "validation_test/hmatrix_cuda/PYBIND_MEX_BITWISE.md",
+        "case": "normalized-leaf-resident-boundary",
+        "input_contract": "Identical FP64 leaf factors, ordering, scale, charge map and vectors; identical material/solver controls where applicable; same input SHA256.",
+        "compiler_contract": "Same source SHA, CUDA compiler version, device architecture and device UUID; --fmad=false --ftz=false --prec-div=true --prec-sqrt=true; no fast math; record full compile commands.",
+        "acceptance": "Exact dtype, shape and bytes for each declared output; no tolerance or CPU/GPU-oracle substitution.",
+        "execution": "Requires separately admitted Windows GPU run with rebuilt pybind11 and mexcuda artifacts; not executed by source contracts or Flow2 Linux smoke."
+      }
     },
     {
       "id": "explicit-ng-host-hdiv-bh",
@@ -127,7 +139,19 @@
       "matlab": "packages/radia-simulink/matlab/+radia/+gpu/PreparedHDivNonlinear.m",
       "validation": "validation_test/hmatrix_cuda/results/hdiv_host_setup_workflow.json",
       "cpu_reference": "Independent CPU compensated demag action and production inverse BH with original-equation residual; all 300 measured solutions certified",
-      "cpu_fallback": false
+      "cpu_fallback": false,
+      "same_kernel_bitwise_parity": {
+        "status": "PENDING",
+        "python_entry": "radia.hdiv_gpu.PreparedHDivNonlinear",
+        "mex_entry": "radia_cuda_hmatrix",
+        "test_reference": "validation_test/hmatrix_cuda/check_pybind_mex_bitwise.py",
+        "protocol": "validation_test/hmatrix_cuda/PYBIND_MEX_BITWISE.md",
+        "case": "explicit-ng-host-hdiv-bh",
+        "input_contract": "Identical FP64 leaf factors, ordering, scale, charge map and vectors; identical material/solver controls where applicable; same input SHA256.",
+        "compiler_contract": "Same source SHA, CUDA compiler version, device architecture and device UUID; --fmad=false --ftz=false --prec-div=true --prec-sqrt=true; no fast math; record full compile commands.",
+        "acceptance": "Exact dtype, shape and bytes for each declared output; no tolerance or CPU/GPU-oracle substitution.",
+        "execution": "Requires separately admitted Windows GPU run with rebuilt pybind11 and mexcuda artifacts; not executed by source contracts or Flow2 Linux smoke."
+      }
     }
   ],
   "legacy_matlab_sources": "Historical sources remain under their integration owner but are not claims of supported CPU MEX or included wholesale in the GPU wheel."
