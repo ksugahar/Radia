@@ -215,35 +215,57 @@ def test_native_payload_uses_platform_library_root():
                    for node in distribution.body)
 
 
-@pytest.mark.parametrize('mutation', ['none', 'abi', 'runtime', 'redistribution', 'source', 'diagnostic', 'device-diagnostic', 'device-mode-missing'])
-def test_csr_and_hdiv_wheel_share_abi_and_require_hdiv_qualification(tmp_path, mutation):
+@pytest.mark.parametrize('mutation', ['none', 'abi', 'wheel-abi', 'hash', 'source', 'engine', 'receipt-missing'])
+def test_csr_wheel_requires_matching_abi_and_build_receipt(tmp_path, mutation):
+    """Guards: CSR adapter identity. Assumes: synthetic packaging bytes, no runtime qualification."""
     import zipfile
-    spec=importlib.util.spec_from_file_location('wheel_dual_native_contract', ROOT/'verify_wheel.py')
+    spec=importlib.util.spec_from_file_location('wheel_csr_contract', ROOT/'verify_wheel.py')
     module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-    wheel=tmp_path/'radia_simulink-0.1.5-cp312-cp312-win_amd64.whl'
-    manifest=dict(source_commit='a'*40, files={})
+    wheel_abi='cp313' if mutation=='wheel-abi' else 'cp312'
+    wheel=tmp_path/f'radia_simulink-0.1.5-cp312-{wheel_abi}-win_amd64.whl'
+    abi='cp313' if mutation=='abi' else 'cp312'
+    name=f'_csr_cuda.{abi}-win_amd64.pyd'
+    payload=b'packaging-only synthetic csr'
+    digest=hashlib.sha256(payload).hexdigest()
+    manifest=dict(source_commit='a'*40, files={name:digest})
+    receipt=dict(schema='radia.csr-python-build.v1', source_commit='a'*40,
+                 binary=name, binary_sha256=digest, matlab_engine_user_dependency=False)
+    if mutation=='hash': receipt['binary_sha256']='b'*64
+    if mutation=='source': receipt['source_commit']='c'*40
+    if mutation=='engine': receipt['matlab_engine_user_dependency']=True
     with zipfile.ZipFile(wheel, 'w') as archive:
-        for component in ('csr', 'hdiv'):
-            abi='cp313' if component=='hdiv' and mutation=='abi' else 'cp312'
-            name=f'_{component}_cuda.{abi}-win_amd64.pyd'
-            payload=b'packaging-only synthetic '+component.encode()
-            digest=hashlib.sha256(payload).hexdigest(); manifest['files'][name]=digest
-            receipt=dict(schema=f'radia.{component}-python-build.v1', source_commit='a'*40,
-                         binary=name, binary_sha256=digest, matlab_engine_user_dependency=False)
-            if component=='hdiv':
-                receipt.update(fault_injection=mutation=='diagnostic',device_fault_injection=mutation=='device-diagnostic',runtime_import_checked=mutation!='runtime',
-                               redistribution_accepted=mutation!='redistribution',
-                               redistribution_reference_sha256='b'*64)
-                if mutation=='source': receipt['source_commit']='c'*40
-                if mutation=='device-mode-missing': receipt.pop('device_fault_injection')
-            archive.writestr('radia_simulink/'+name, payload)
-            record='python-build.json' if component=='csr' else 'hdiv-python-build.json'
-            archive.writestr('radia_simulink/'+record, json.dumps(receipt))
+        archive.writestr('radia_simulink/'+name,payload)
+        if mutation!='receipt-missing':
+            archive.writestr('radia_simulink/python-build.json',json.dumps(receipt))
     with zipfile.ZipFile(wheel) as archive:
         if mutation=='none': module.verify_python_binding(wheel,archive.namelist(),archive,manifest)
         else:
             with pytest.raises(ValueError):
                 module.verify_python_binding(wheel,archive.namelist(),archive,manifest)
+
+
+@pytest.mark.parametrize('companion', ['none', 'csr'])
+def test_simulink_wheel_rejects_radia_owned_hdiv_python_binding(tmp_path, companion):
+    """Guards: one-way package ownership. Assumes: synthetic native bytes, not solver evidence."""
+    import zipfile
+    spec=importlib.util.spec_from_file_location('wheel_hdiv_boundary', ROOT/'verify_wheel.py')
+    module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    wheel=tmp_path/'radia_simulink-0.1.5-cp312-cp312-win_amd64.whl'
+    manifest=dict(source_commit='a'*40,files={})
+    with zipfile.ZipFile(wheel,'w') as archive:
+        for component in (('csr','hdiv') if companion=='csr' else ('hdiv',)):
+            name=f'_{component}_cuda.cp312-win_amd64.pyd';payload=b'synthetic packaging bytes'
+            digest=hashlib.sha256(payload).hexdigest();manifest['files'][name]=digest
+            receipt=dict(schema=f'radia.{component}-python-build.v1',source_commit='a'*40,
+                         binary=name,binary_sha256=digest,matlab_engine_user_dependency=False)
+            archive.writestr('radia_simulink/'+name,payload)
+            record='python-build.json' if component=='csr' else 'hdiv-python-build.json'
+            archive.writestr('radia_simulink/'+record,json.dumps(receipt))
+    with zipfile.ZipFile(wheel) as archive:
+        with pytest.raises(ValueError,match='Python CUDA binding wheel ABI mismatch'):
+            module.verify_python_binding(wheel,archive.namelist(),archive,manifest)
+    with pytest.raises(ValueError,match='CPU solver or external executable'):
+        module.verify(wheel)
 
 
 @pytest.mark.parametrize('binary,receipt', [(True, False), (False, True)])
