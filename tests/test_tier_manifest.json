@@ -376,7 +376,8 @@
     ],
     "src/radia/hdiv_gpu.py": [
       "tests/test_hdiv_gpu_workflow.py",
-      "tests/test_hdiv_gpu_build_contract.py"
+      "tests/test_hdiv_gpu_build_contract.py",
+      "tests/test_hdiv_gpu_mesh_integration.py"
     ],
     "src/core/gpu/hdiv/": [
       "tests/test_hdiv_gpu_build_contract.py"
@@ -386,6 +387,9 @@
     ],
     "tests/test_hdiv_gpu_build_contract.py": [
       "tests/test_hdiv_gpu_build_contract.py"
+    ],
+    "tests/test_hdiv_gpu_mesh_integration.py": [
+      "tests/test_hdiv_gpu_mesh_integration.py"
     ]
   },
   "profiles": {
@@ -550,7 +554,8 @@
         "validation_test/induction_heating/test_ngsbem_loop_star_topology_validation.py",
         "tests/feec/test_hdiv_prolate_regression_lock.py",
         "tests/test_esim_finite_slab_regression.py",
-        "tests/test_ih_ams_f1_surrogate.py"
+        "tests/test_ih_ams_f1_surrogate.py",
+        "tests/test_hdiv_gpu_mesh_integration.py"
       ]
     },
     "sparsesolv": {

@@ -360,8 +360,10 @@ build contract loads `tools/build_python_gpu.py` but replaces command execution,
 SDK metadata and compiler inputs with temporary fixtures. It never calls the
 builder CLI or a compiler. The workflow contract loads `radia/hdiv_gpu.py`,
 replaces native construction with test doubles, and exercises lifecycle,
-explicit backend rejection and immutable mesh snapshots. Its real label-checker
-subprocess parses a tiny VOL fixture in Python; it never launches Cubit.
+explicit backend rejection and immutable mesh snapshots. The real label-checker integration cases live separately in
+`solver-numerics`: package initialization loads Netgen even though the checker
+does not launch Cubit. The light workflow contract mocks the subprocess; it does
+not execute the checker or import Netgen.
 NGSolve and Radia VIM imports in the workflow are deferred into FE/material
 methods that these contracts do not enter. The source-only native-import guard,
 capability routing, denied requirements and elapsed-time budget remain intact.
