@@ -150,8 +150,38 @@ int main()
     CurvedElements::ValidatePeriodicLayout(orders,indices,coefficients,3,true);
     indices[3]=6;
     reject_unchanged(layout_guard,[&]{CurvedElements::ValidatePeriodicLayout(orders,indices,coefficients,3,true);});
-    for (const auto &mapped : {std::array<int,4>{8,7,6,5},std::array<int,4>{5,7,6,8}}) {
-    const bool mixed = mapped[0] == 5;
+    // Frozen oracle: odd bubble l_i*l_j*(l_i-l_j) at (3/4,1/4)
+    // is +3/32, and exchanging its endpoints gives -3/32. The signs
+    // below were tabulated for edges12,13,23,24,34, independently of
+    // the producer's target-index comparison. First face covers all6 S3 cases.
+    struct PermutationCase {
+      std::array<int,4> mapped;
+      std::array<int,5> odd_signs;
+      const char *suffix;
+    };
+    const std::array<PermutationCase,6> cases{{
+      {{8,7,6,5}, {-1,-1,-1,-1,-1}, ""},
+      {{5,7,6,8}, { 1, 1,-1, 1, 1}, "-mixed"},
+      {{5,6,7,8}, { 1, 1, 1, 1, 1}, "-perm123"},
+      {{6,5,7,8}, {-1, 1, 1, 1, 1}, "-perm213"},
+      {{6,7,5,8}, { 1,-1,-1, 1, 1}, "-perm231"},
+      {{7,5,6,8}, {-1,-1, 1, 1, 1}, "-perm312"}
+    }};
+    for (const auto &entity : {std::string("edge [17,23]"),std::string("face [17,23,29]")}) {
+      const std::map<int,int> missing;
+      try {
+        periodic_curved_lookup(missing,17,entity);
+        throw std::runtime_error("Missing topology lookup unexpectedly succeeded");
+      } catch (const std::runtime_error &error) {
+        if (std::string(error.what()) != "Missing periodic " + entity) throw;
+      }
+    }
+    for (const auto &permutation : cases) {
+    const auto &mapped = permutation.mapped;
+    const std::map<std::array<int,2>,int> odd_signs{
+      {{1,2},permutation.odd_signs[0]}, {{1,3},permutation.odd_signs[1]},
+      {{2,3},permutation.odd_signs[2]}, {{2,4},permutation.odd_signs[3]},
+      {{3,4},permutation.odd_signs[4]}};
     for (int order : {1,2,3}) {
       auto mesh = fixture(order,mapped);
       const auto before = periodic_geometry_serialization(*mesh);
@@ -195,7 +225,7 @@ int main()
           const auto &v = entry.first;
           if (v[1] > 4 || v == std::array<int,2>{1,4}) continue;
           std::array<int,2> image{mapped[v[0]-1],mapped[v[1]-1]};
-          const int sign = image[0] < image[1] ? 1 : -1;
+          const int sign = odd_signs.at(v);
           std::sort(image.begin(),image.end());
           const int target = edge_ids.at(image);
           for (int mode = 0; mode < order-1; ++mode) {
@@ -232,7 +262,7 @@ int main()
         int expected_sign = 1;
         if (!row.face && row.mode == 1) {
           const auto vertices = top.GetEdgeVertices(row.master);
-          expected_sign = mapped[int(vertices[0])-1] < mapped[int(vertices[1])-1] ? 1 : -1;
+          expected_sign = odd_signs.at({int(vertices[0]),int(vertices[1])});
           negative += expected_sign < 0;
         }
         if (row.sign != expected_sign) throw std::runtime_error("Wrong independently derived mode sign");
@@ -243,9 +273,9 @@ int main()
       }
       const int expected = order == 1 ? 0 : order == 2 ? 5 : 12;
       if (int(result.curved_transfers.size()) != expected ||
-          (order == 3 && (odd != 5 || faces != 2 || negative != (mixed ? 1 : 5))))
+          (order == 3 && (odd != 5 || faces != 2 || negative != int(std::count(permutation.odd_signs.begin(),permutation.odd_signs.end(),-1)))))
         throw std::runtime_error("Expected deduplicated shared-edge transfers for declared order");
-      std::ofstream saved("periodic-curved-q"+std::to_string(order)+(mixed ? "-mixed" : "")+".vol",std::ios::binary);
+      std::ofstream saved("periodic-curved-q"+std::to_string(order)+permutation.suffix+".vol",std::ios::binary);
       mesh->Save(saved); saved.close();
       if (!saved) throw std::runtime_error("Fixture VOL write failed");
       std::cerr << "q" << order << " transfers=" << result.curved_transfers.size() << '\n';

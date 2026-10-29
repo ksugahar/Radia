@@ -38,7 +38,10 @@ tetrahedra with linear connectivity are supported. Reversed canonical edge
 orientation negates the q3 odd mode; even edge modes and the symmetric q3
 triangular face bubble copy unchanged. Translation acts on the existing corners,
 not on displacement coefficients. Vertices, connectivity and BCs are unchanged.
-Shared patch edges have one consistent owner. Unsupported representations or
+Shared patch edges have one consistent owner. An edge or face that is both
+source and destination of coefficient transfers is rejected, including corners
+where two periodic directions would form a chained or cyclic mapping. Such
+multi-direction seam ownership is not supported; rejection occurs before writes. Unsupported representations or
 unequal paired coefficient orders reject before mutation; no repair flag or
 independent refit is applied after synchronization. The sidecar records global
 zero-based edge/face indices, zero-based modes, signs and coefficient transfers.
