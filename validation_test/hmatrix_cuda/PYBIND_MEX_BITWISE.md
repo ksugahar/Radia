@@ -2,7 +2,7 @@
 
 Status: **PENDING**, including both record producers and the admitted Windows GPU
 run. The comparison reader below exists; it is not a completed execution harness.
-Linux Flow2 smoke, CPU oracle agreement and source-only tests do not satisfy this
+Linux GPU smoke, CPU oracle agreement and source-only tests do not satisfy this
 gate. No change to CPU/GPU numerical tolerances is proposed.
 
 Build pybind11 and mexcuda from the same exact commit for the same Windows GPU,
