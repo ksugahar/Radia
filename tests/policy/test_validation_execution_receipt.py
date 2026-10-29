@@ -236,3 +236,101 @@ def test_consumer_verifies_finished_identity_and_plan(tmp_path):
         paths[2].write_text(json.dumps(changed))
         with pytest.raises(ValueError):
             receipt.verify_receipt(paths[2], paths[1])
+
+
+def _publish_probe(tmp_path, monkeypatch, *, windows=True, oversleep=False):
+    """Use real checkpoint files and an independent, controllable I/O clock."""
+    from types import SimpleNamespace
+    paths = repo(tmp_path)
+    record = receipt.Receipt(paths[1], paths[0], paths[2], paths[3])
+    clock = dict(now=0.0, sleeps=[])
+    def sleep(seconds):
+        clock['sleeps'].append(seconds)
+        clock['now'] += 1.0 if oversleep else seconds
+    monkeypatch.setattr(receipt, '_WINDOWS', windows)
+    monkeypatch.setattr(receipt, 'time', SimpleNamespace(
+        monotonic=lambda: clock['now'], sleep=sleep))
+    record.started = 0.0
+    return record, paths[2], clock
+
+
+def _windows_publish_error(code):
+    error = OSError('injected atomic publication failure')
+    error.winerror = code
+    return error
+
+
+@pytest.mark.parametrize('code', [5, 32])
+def test_transient_windows_publish_records_actual_retries(tmp_path, monkeypatch, code):
+    record, path, clock = _publish_probe(tmp_path, monkeypatch)
+    previous = record.data['write_retries']
+    replace = receipt.os.replace
+    calls = []
+    def transient(source, target):
+        calls.append(clock['now'])
+        if len(calls) <= 2:
+            raise _windows_publish_error(code)
+        return replace(source, target)
+    monkeypatch.setattr(receipt.os, 'replace', transient)
+    record.write()
+    data = json.loads(path.read_text())
+    assert len(calls) == 3, f'actual replacement attempts={calls}, expected 3'
+    assert data['write_retries'] == previous + 2, (data['write_retries'], previous + 2)
+    assert record.data['write_retries'] == data['write_retries']
+    assert not path.with_name(path.name + '.pending').exists()
+
+
+def test_permanent_windows_publish_keeps_checkpoint_and_pending(tmp_path, monkeypatch):
+    record, path, clock = _publish_probe(tmp_path, monkeypatch)
+    before = path.read_bytes()
+    previous = record.data['write_retries']
+    calls = []
+    error = _windows_publish_error(5)
+    def permanent(*args):
+        calls.append(clock['now'])
+        raise error
+    monkeypatch.setattr(receipt.os, 'replace', permanent)
+    with pytest.raises(OSError) as raised:
+        record.write()
+    assert raised.value is error
+    assert len(calls) == 10, f'actual replacement attempts={calls}, expected 10'
+    assert clock['now'] <= 1.0, (clock['now'], 'at most 1 second')
+    assert path.read_bytes() == before, 'failed publication changed prior checkpoint'
+    pending = json.loads(path.with_name(path.name + '.pending').read_text())
+    assert pending['write_retries'] == previous + 9, (pending['write_retries'], previous + 9)
+
+
+def test_publish_deadline_stops_before_another_attempt(tmp_path, monkeypatch):
+    record, path, clock = _publish_probe(tmp_path, monkeypatch, oversleep=True)
+    calls = []
+    previous = record.data['write_retries']
+    error = _windows_publish_error(32)
+    def blocked(*args):
+        calls.append(clock['now'])
+        raise error
+    monkeypatch.setattr(receipt.os, 'replace', blocked)
+    with pytest.raises(OSError) as raised:
+        record.write()
+    assert raised.value is error
+    assert calls == [0.0], f'actual attempts={calls}, expected only initial attempt'
+    assert record.data['write_retries'] == previous
+    assert path.with_name(path.name + '.pending').exists()
+
+
+@pytest.mark.parametrize('windows,code', [(True, 2), (True, None), (False, 5)])
+def test_unrelated_publish_errors_raise_immediately(tmp_path, monkeypatch, windows, code):
+    record, path, clock = _publish_probe(tmp_path, monkeypatch, windows=windows)
+    calls = []
+    previous = record.data['write_retries']
+    error = _windows_publish_error(code)
+    def invalid(*args):
+        calls.append(clock['now'])
+        raise error
+    monkeypatch.setattr(receipt.os, 'replace', invalid)
+    with pytest.raises(OSError) as raised:
+        record.write()
+    assert raised.value is error
+    assert calls == [0.0], f'actual attempts={calls}, expected one immediate failure'
+    assert clock['sleeps'] == [], f'non-retryable failure slept: {clock["sleeps"]}'
+    assert record.data['write_retries'] == previous
+    assert path.with_name(path.name + '.pending').exists()
