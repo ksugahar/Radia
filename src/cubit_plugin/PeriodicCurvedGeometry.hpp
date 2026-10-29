@@ -7,9 +7,29 @@
 #include <cmath>
 #include <map>
 #include <set>
+#include <string>
 #include <vector>
 
 namespace cubit_mesh_export {
+
+// Missing topology reports its identity instead of an opaque map::at failure.
+template <class Key, class Value>
+inline const Value &periodic_curved_lookup(const std::map<Key, Value> &entries,
+    const Key &key, const std::string &entity)
+{
+  const auto found = entries.find(key);
+  if (found == entries.end()) throw std::runtime_error("Missing periodic " + entity);
+  return found->second;
+}
+
+template <std::size_t N>
+inline std::string periodic_curved_entity(const char *kind, const std::array<int, N> &key)
+{
+  std::string text = std::string(kind) + " [";
+  for (std::size_t i = 0; i < N; ++i)
+    text += (i ? "," : "") + std::to_string(key[i]);
+  return text + "]";
+}
 
 struct PeriodicTrianglePair {
   std::array<int, 3> master, slave; // slave entries follow the master mapping
@@ -39,15 +59,15 @@ inline std::vector<PeriodicTrianglePair> periodic_triangle_plan(
   std::vector<PeriodicTrianglePair> result;
   for (const auto &patch : bc_pairs) {
     std::set<Triangle> covered;
-    for (const auto &master : patches.at(patch.first)) {
+    for (const auto &master : periodic_curved_lookup(patches, patch.first, "BC patch " + std::to_string(patch.first))) {
       Triangle mapped;
-      for (int j = 0; j < 3; ++j) mapped[j] = points.at(master[j]);
+      for (int j = 0; j < 3; ++j) mapped[j] = periodic_curved_lookup(points, master[j], "point " + std::to_string(master[j]));
       auto key = mapped; std::sort(key.begin(), key.end());
-      if (!patches.at(patch.second).count(key) || !covered.insert(key).second)
+      if (!periodic_curved_lookup(patches, patch.second, "BC patch " + std::to_string(patch.second)).count(key) || !covered.insert(key).second)
         throw std::runtime_error("Periodic triangle correspondence is incomplete or ambiguous");
       result.push_back({master, mapped});
     }
-    if (covered != patches.at(patch.second))
+    if (covered != periodic_curved_lookup(patches, patch.second, "BC patch " + std::to_string(patch.second)))
       throw std::runtime_error("Incomplete reverse periodic triangle coverage");
   }
   return result;
@@ -110,13 +130,13 @@ inline std::vector<PeriodicCurvedTransfer> synchronize_periodic_curvature(
   };
   for (const auto &pair : triangles) {
     Face slave = pair.slave; std::sort(slave.begin(), slave.end());
-    own(face_owners, faces.at(slave), faces.at(pair.master), 1);
+    own(face_owners, periodic_curved_lookup(faces, slave, periodic_curved_entity("face", slave)), periodic_curved_lookup(faces, pair.master, periodic_curved_entity("face", pair.master)), 1);
     for (int a = 0; a < 3; ++a) for (int b = a + 1; b < 3; ++b) {
       Edge master{pair.master[a], pair.master[b]};
       Edge target{pair.slave[a], pair.slave[b]};
       const int sign = target[0] < target[1] ? 1 : -1;
       std::sort(target.begin(), target.end());
-      own(edge_owners, edges.at(target), edges.at(master), sign);
+      own(edge_owners, periodic_curved_lookup(edges, target, periodic_curved_entity("edge", target)), periodic_curved_lookup(edges, master, periodic_curved_entity("edge", master)), sign);
     }
   }
   std::vector<PeriodicCurvedTransfer> plan;

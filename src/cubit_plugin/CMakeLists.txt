@@ -283,11 +283,11 @@ if(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS)
   set_tests_properties(cubit_periodic_curved_independent_load PROPERTIES
     ENVIRONMENT "PATH=${COMPACT_READER_RUNTIME_PATH};PYTHONUNBUFFERED=1;PYTHONDONTWRITEBYTECODE=1")
 endif()
-# Honor the caller's explicit config directory; Python purelib may differ from
-# the importable dependency location in an isolated environment.
-find_package(pybind11 CONFIG REQUIRED)
-
-if(pybind11_FOUND AND HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
+# The Python curver target requires full Netgen; CCM-only builds do not need pybind11.
+if(HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
+  # Honor the caller's explicit config directory; Python purelib may differ from
+  # the importable dependency location in an isolated environment.
+  find_package(pybind11 CONFIG REQUIRED)
   message(STATUS "pybind11 + Netgen found: building cubit_mesh_curver (Cubit-free)")
 
   pybind11_add_module(cubit_mesh_curver
@@ -340,10 +340,8 @@ if(pybind11_FOUND AND HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
     set_tests_properties(cubit_callback_curve_identity cubit_named_periodic_vol_load PROPERTIES
       ENVIRONMENT "PATH=${CALLBACK_RUNTIME_PATH}" TIMEOUT 120)
   endif()
-elseif(pybind11_FOUND AND NOT HAVE_NETGEN)
-  message(STATUS "pybind11 found but Netgen missing: skipping cubit_mesh_curver")
 else()
-  message(STATUS "pybind11 not found: skipping cubit_mesh_curver Python module")
+  message(STATUS "Full Netgen not selected: skipping cubit_mesh_curver Python module")
 endif()
 
 # --------------------------------------------------------
