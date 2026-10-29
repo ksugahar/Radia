@@ -11,6 +11,9 @@ Public API: `radia.kelvin_identify_ngsolve` (also re-exported at
 `radia.has_kelvin_identification`).
 """
 
+from .kelvin import KELVIN_CURVED_GEOMETRY
+
+
 OVERVIEW = """
 # Post-hoc Kelvin Identification (launcher-free)
 
@@ -42,10 +45,10 @@ info = add_kelvin_identification(mesh)   # auto-detects offset + pairs vertices
 print(f"Added {info['n_pairs']} pairs, max_dist={info['max_dist']:.2e} m")
 ```
 
-After this call, `mesh.GetIdentifications()` is populated and
-`Periodic(H1(mesh, ...))` correctly slaves DOFs across the two
-Kelvin surfaces (verified by `Set(1)|kelvin_int -> kelvin_ext`
-boundary-integral ratio = 1.0).
+After this call, inspect the actual pairs and require complete coverage before
+building a periodic space. A linear spherical H1 constant-integral check is not
+proof of high-order physical-map agreement, HCurl traces or saved curvature.
+The example is an in-memory vertex-pairing workflow, not a curved archive repair.
 
 ## Critical pre-condition: 1:1 vertex correspondence
 
@@ -213,17 +216,19 @@ pairs that do NOT slave DOFs in `Periodic` FES.
 of the internal storage; calling `.clear()` on it has no effect on
 the mesh.  If you need to re-pair vertices on a mesh that already
 has identifications, use `skip_if_existing=False` -- but be aware
-this APPENDS new pairs without removing the existing ones (a small
-inefficiency; the FES result is still correct because identifications
-are stored as sets of equivalence classes).
+this APPENDS pairs without removing the existing ones. Do not assume that
+conflicting or differently directed groups remain correct. Check the existing
+name/type/group/direction and refuse an ambiguous mapping; appending is not repair.
 
 ## 3. C++ Cubit-export path is preferred when available
 
 When `export netgen` succeeds in writing identifications during
 the .vol export (typical 1/2 / 1/4 octant geometry), use those.  This
-post-hoc helper is the FALLBACK for cases where the C++ all-or-nothing
-matching skipped due to a single tolerance miss -- it accepts the same
-mesh but tolerates a few unmatched vertices.
+post-hoc helper is only an in-memory vertex-pairing aid for a separately
+qualified route. Nonzero unmatched vertices are incomplete coverage and must
+not be accepted for a solve. A diagnostic helper returning does not qualify
+its result. Prefer a producer's complete named periodic contract where supported;
+never repair a Cubit high-order archive via unqualified full-Netgen Load/Save.
 
 ## 4. Tolerance default
 
@@ -255,12 +260,14 @@ def get_post_hoc_documentation(topic: str = "all") -> str:
         "snippet": SNIPPET,
         "caveats": CAVEATS,
     }
+    if topic == "curved_geometry":
+        return KELVIN_CURVED_GEOMETRY
     if topic == "all":
-        return "\n\n".join(sections.values())
+        return KELVIN_CURVED_GEOMETRY + "\n\n" + "\n\n".join(sections.values())
     if topic not in sections:
         return (f"Unknown topic '{topic}'. Available: "
-                f"{sorted(sections.keys())} (or 'all').")
-    return sections[topic]
+                f"{sorted([*sections, 'curved_geometry'])} (or 'all').")
+    return KELVIN_CURVED_GEOMETRY + "\n\n" + sections[topic]
 
 
-TOPICS = sorted(["overview", "api", "workflow", "snippet", "caveats", "all"])
+TOPICS = sorted(["overview", "api", "workflow", "snippet", "caveats", "curved_geometry", "all"])
