@@ -2608,6 +2608,12 @@
       "owners": [
         "radia"
       ]
+    },
+    {
+      "pattern": "tests/test_hdiv_gpu_mesh_integration.py",
+      "owners": [
+        "radia"
+      ]
     }
   ],
   "shared_include_closures": [

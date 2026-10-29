@@ -108,23 +108,3 @@ def test_checked_mesh_snapshot_identity_and_stderr(tmp_path, monkeypatch):
         types.SimpleNamespace(returncode=1, stdout="", stderr="No module named cubit_mesh_export"))
     with pytest.raises(RuntimeError, match="cubit-mesh-export required.*No module"):
         module.PreparedHDivNonlinear(mesh, {}, backend="gpu", label_contract=contract)
-
-
-@pytest.mark.parametrize("compressed", [False, True])
-def test_real_label_checker_is_filename_neutral_and_preserves_compression(tmp_path,monkeypatch,compressed):
-    import gzip,hashlib,os
-    module=load(API)
-    contents=(ROOT/"tests/fixtures/hdiv/hex_pair.vol").read_bytes()
-    if compressed:contents=gzip.compress(contents,mtime=0)
-    path=tmp_path/("caller-name.vol.gz" if compressed else "caller-name.vol");path.write_bytes(contents)
-    contract=tmp_path/"caller-labels.json"
-    contract.write_text(json.dumps(dict(schema="radia.vol-label-contract.v1",
-        required=dict(materials=["body"],boundaries=["exterior"]),
-        allowed=dict(materials=["body"],boundaries=["exterior"]))))
-    monkeypatch.setenv("PYTHONPATH",str(ROOT/"packages/cubit-mesh-export/src")+os.pathsep+os.environ.get("PYTHONPATH",""))
-    def initialize(self,snapshot,law,order):
-        assert snapshot.name == ("mesh.vol.gz" if compressed else "mesh.vol")
-        assert snapshot.read_bytes() == contents
-        assert self.mesh_sha256 == hashlib.sha256(contents).hexdigest()
-    monkeypatch.setattr(module.PreparedHDivNonlinear,"_initialize",initialize)
-    module.PreparedHDivNonlinear(path,{},backend="gpu",label_contract=contract)

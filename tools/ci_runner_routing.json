@@ -234,7 +234,7 @@
         "tools/build_python_gpu.py",
         "src/radia/hdiv_gpu.py"
       ],
-      "audit_sha256": "a855443be2533639158d052f5e239337430441397863673e55f47d108c9c7c02",
+      "audit_sha256": "362f414540424a9a3437c9f9d720afeeab88e19e6e7dab13a9f1e301d9d0049e",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
