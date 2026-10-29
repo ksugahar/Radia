@@ -40,3 +40,36 @@ def test_audit_rejects_reintroduced_cpu_mex_and_missing_gpu_source(tmp_path):
     assert not result["ok"]
     assert any("CPU MEX" in error for error in result["errors"])
     assert any("escaping source" in error for error in result["errors"])
+
+
+def test_shared_radia_gpu_source_is_allowed_but_arbitrary_sources_are_rejected(tmp_path):
+    """Guards: source relocation preserves GPU ownership and the MATLAB boundary.
+
+    Assumes: path ownership does not establish numerical parity.
+    """
+    import json
+    manifest_path = tmp_path / "packages/radia-simulink/matlab/python_api_parity_manifest.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest = json.loads((ROOT / manifest_path.relative_to(tmp_path)).read_text())
+    feature = dict(manifest["gpu_features"][-1])
+    manifest["gpu_features"] = [feature]
+    (tmp_path / "src/radia").mkdir(parents=True)
+    (tmp_path / "src/radia/demo.py").write_text("pass")
+    for field in ("matlab", "validation"):
+        target = tmp_path / feature[field]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("independent path fixture")
+    for source, allowed in (("src/core/gpu/hdiv/shared.cuh", True),
+                            ("src/radia/not_gpu.cpp", False),
+                            ("packages/radia-simulink/not_native.cpp", False)):
+        target = tmp_path / source
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("independent source fixture")
+        feature["source"] = source
+        manifest_path.write_text(json.dumps(manifest))
+        result = MODULE.audit(tmp_path)
+        assert result["ok"] is allowed, (source, result["errors"])
+    feature["source"] = "src/core/gpu/hdiv/shared.cuh"
+    feature["matlab"] = "src/radia/not_gpu.cpp"
+    manifest_path.write_text(json.dumps(manifest))
+    assert any("matlab is not GPU-owned" in error for error in MODULE.audit(tmp_path)["errors"])

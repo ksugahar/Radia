@@ -2595,11 +2595,12 @@
       "pattern": "src/radia/hdiv_gpu.py",
       "owners": [
         "radia",
+        "radia-simulink",
         "radia-mcp"
       ],
       "reason": {
         "kind": "integration",
-        "detail": "Radia HDiv Python domain entry consumed by the thin MCP workflow."
+        "detail": "Radia HDiv Python domain entry consumed by thin MATLAB host publication and MCP workflow."
       },
       "selection": "all_owners"
     },
@@ -3278,7 +3279,8 @@
             "src/core/gpu/hdiv/hmatrix_material_solver.cuh",
             "src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh",
             "src/core/gpu/hdiv/hmatrix_resident.cuh",
-            "src/core/gpu/hdiv/radia_field_exact.cuh"
+            "src/core/gpu/hdiv/radia_field_exact.cuh",
+            "src/radia/hdiv_gpu.py"
           ]
         },
         "push": {
@@ -3406,7 +3408,8 @@
             "src/core/gpu/hdiv/hmatrix_material_solver.cuh",
             "src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh",
             "src/core/gpu/hdiv/hmatrix_resident.cuh",
-            "src/core/gpu/hdiv/radia_field_exact.cuh"
+            "src/core/gpu/hdiv/radia_field_exact.cuh",
+            "src/radia/hdiv_gpu.py"
           ]
         },
         "workflow_dispatch": {}
@@ -4053,7 +4056,9 @@
             "tests/analytical_formulas/__init__.py",
             "validation_test/panels/__init__.py",
             "tools/regression_lock.py",
-            "!**/*.md"
+            "!**/*.md",
+            "src/radia/hdiv_gpu.py",
+            "tests/test_hdiv_gpu_mesh_integration.py"
           ]
         },
         "push": {
@@ -4349,7 +4354,9 @@
             "tests/analytical_formulas/__init__.py",
             "validation_test/panels/__init__.py",
             "tools/regression_lock.py",
-            "!**/*.md"
+            "!**/*.md",
+            "src/radia/hdiv_gpu.py",
+            "tests/test_hdiv_gpu_mesh_integration.py"
           ]
         },
         "schedule": [

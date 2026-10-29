@@ -125,6 +125,7 @@ on:
       - 'src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh'
       - 'src/core/gpu/hdiv/hmatrix_resident.cuh'
       - 'src/core/gpu/hdiv/radia_field_exact.cuh'
+      - 'src/radia/hdiv_gpu.py'
   push:
     branches: [main]
     paths:
@@ -249,6 +250,7 @@ on:
       - 'src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh'
       - 'src/core/gpu/hdiv/hmatrix_resident.cuh'
       - 'src/core/gpu/hdiv/radia_field_exact.cuh'
+      - 'src/radia/hdiv_gpu.py'
   workflow_dispatch:
 
 permissions:

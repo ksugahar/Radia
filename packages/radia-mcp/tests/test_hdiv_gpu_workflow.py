@@ -4,8 +4,8 @@ import importlib.util
 import json,sys,types
 import numpy as np
 import pytest
-ROOT=Path(__file__).resolve().parents[3]
-MCP="packages/radia-mcp/src/radia_mcp/radia_ngsolve/hdiv_gpu.py"
+ROOT=Path(__file__).resolve().parents[1]
+MCP="src/radia_mcp/radia_ngsolve/hdiv_gpu.py"
 def load(relative):
     spec=importlib.util.spec_from_file_location("mcp_hdiv_workflow_test",ROOT/relative)
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
