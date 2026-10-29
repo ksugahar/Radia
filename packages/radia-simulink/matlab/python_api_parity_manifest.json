@@ -123,7 +123,7 @@
     {
       "id": "explicit-ng-host-hdiv-bh",
       "scope": "Experimental explicit NGSolve/Radia CPU host assembly and shared GPU BH frozen-tangent Newton, selected affine hex orders1/2 physically certified. No CPU solve prerequisite, Engine or required file exchange. No mixed/pyramid or CUDA geometry assembly claim.",
-      "source": "packages/radia-simulink/native/hmatrix_nonlinear_material.cuh",
+      "source": "src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh",
       "matlab": "packages/radia-simulink/matlab/+radia/+gpu/PreparedHDivNonlinear.m",
       "validation": "validation_test/hmatrix_cuda/results/hdiv_host_setup_workflow.json",
       "cpu_reference": "Independent CPU compensated demag action and production inverse BH with original-equation residual; all 300 measured solutions certified",
