@@ -292,9 +292,9 @@ on:
       - 'tests/analytical_formulas/__init__.py'
       - 'validation_test/panels/__init__.py'
       - 'tools/regression_lock.py'
-      - '!**/*.md'
       - 'src/radia/hdiv_gpu.py'
       - 'tests/test_hdiv_gpu_mesh_integration.py'
+      - '!**/*.md'
   push:
     branches: [main]
     paths:
@@ -586,9 +586,9 @@ on:
       - 'tests/analytical_formulas/__init__.py'
       - 'validation_test/panels/__init__.py'
       - 'tools/regression_lock.py'
-      - '!**/*.md'
       - 'src/radia/hdiv_gpu.py'
       - 'tests/test_hdiv_gpu_mesh_integration.py'
+      - '!**/*.md'
   schedule:
     - cron: '17 16 * * *'
   workflow_dispatch:
