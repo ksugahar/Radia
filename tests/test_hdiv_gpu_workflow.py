@@ -1,4 +1,7 @@
-"""Workflow dispatch/lifetime contracts; native physics has separate validation."""
+"""Guards: explicit backend, owned snapshots and workflow lifetime.
+
+Assumes: mocked native owners do not establish numerical GPU validation.
+"""
 import importlib.util
 import json
 from pathlib import Path

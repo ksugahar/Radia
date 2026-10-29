@@ -231,9 +231,10 @@
         "src/radia/gpu.py",
         "src/radia/_cuda_runtime.py",
         "src/radia/_cuda_runtime_windows.py",
-        "tools/build_python_gpu.py"
+        "tools/build_python_gpu.py",
+        "src/radia/hdiv_gpu.py"
       ],
-      "audit_sha256": "371f999a1f319546ff55f40ba459c7e6f360eaa48cbcd64cb682062954a7e1e9",
+      "audit_sha256": "a855443be2533639158d052f5e239337430441397863673e55f47d108c9c7c02",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
@@ -244,6 +245,9 @@
         "tools/build_python_gpu.py": [
           "ngsolve",
           "netgen"
+        ],
+        "src/radia/hdiv_gpu.py": [
+          "ngsolve"
         ]
       }
     }

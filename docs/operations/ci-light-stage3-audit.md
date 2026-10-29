@@ -352,3 +352,19 @@ The six new provider contracts ran in 0.59 s; the combined provider/Linux
 contracts initially ran 13 tests in 4.28 s. These are source checks only.
 The executable seal is regenerated through ci_runner_routing.audit_digest;
 independent F2 review and native provider acceptance remain separate gates.
+
+## HDiv Python ownership build preparation
+
+The HDiv ownership change adds two impact-selected source contracts. The
+build contract loads `tools/build_python_gpu.py` but replaces command execution,
+SDK metadata and compiler inputs with temporary fixtures. It never calls the
+builder CLI or a compiler. The workflow contract loads `radia/hdiv_gpu.py`,
+replaces native construction with test doubles, and exercises lifecycle,
+explicit backend rejection and immutable mesh snapshots. Its real label-checker
+subprocess parses a tiny VOL fixture in Python; it never launches Cubit.
+NGSolve and Radia VIM imports in the workflow are deferred into FE/material
+methods that these contracts do not enter. The source-only native-import guard,
+capability routing, denied requirements and elapsed-time budget remain intact.
+The repeated F2 check executes the worst-case fast tier and the routing mutation
+suite; native compilation, numerical GPU execution and performance are separate
+unverified gates.
