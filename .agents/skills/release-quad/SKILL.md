@@ -34,3 +34,5 @@ mandatory adopted numerical cases. Preserve user-owned acceptance criteria and
 experimental/unqualified labels. Require evidence for all four cases before
 claiming wrapper completion. MCP, Cubit and Simulink release independently;
 their artifacts and unrelated gates are not folded into the Radia wrapper.
+
+MCP discovery uses the live catalog; do not restore a tracked generated `docs/TOOLS.md` gate.

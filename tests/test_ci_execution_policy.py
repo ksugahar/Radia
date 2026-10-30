@@ -317,13 +317,14 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     normalized = " ".join(policy.split())
     assert "with the `100` runner label" in normalized
     # Hosts appear by role only; the role-to-host map is private configuration.
-    assert "radia and radia-mcp deploy to the build host (editable) and the validation host (verified wheel)" in normalized
-    assert "cubit-mesh-export deploys only to the build host" in normalized
-    assert "the validation host consumes radia/radia-mcp wheels, never Cubit" in normalized
+    assert "radia uses bound editable sources on build and validation roles" in normalized
+    assert "isolated exact-wheel QA" in normalized
+    assert "radia-mcp stays build-editable/validation-wheel" in normalized
+    assert "cubit-mesh-export is build-only" in normalized
     assert "Use the on-demand GPU worker only for mexcuda GPU work" in normalized
-    assert "Retired execution targets are excluded from deployment, CI and computation" in normalized
-    assert "the validation host runs without Cubit" in normalized
-    assert "NGSolve hosts start from checked exported .vol files, without Cubit" in normalized
+    assert "retired targets stay excluded" in normalized
+    assert "validation has no Cubit/cme" in normalized
+    assert "NGSolve starts from checked exported .vol files" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
     assert "each server's live `tools/list` response are the tool-discovery source of truth" in normalized
     assert "Generated tool inventory snapshots are local diagnostics" in normalized
@@ -358,19 +359,24 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
     # Roles, not hosts: probe commands, aliases and core ranges stay private.
-    assert "the build host owns CI, release artifacts, isolated numerical validation and CPU/GPU development" in normalized
-    assert "the validation host runs verified-wheel validation and timing, never Cubit" in normalized
-    assert "the JMAG evaluation host runs no Radia work" in normalized
+    assert "Build owns CI, artifacts, validation and CPU/GPU development" in normalized
+    assert "Validation uses editable Radia, separate wheel QA and timing without Cubit/cme" in normalized
+    assert "JMAG evaluation runs no Radia" in normalized
     assert "Compare CPU/GPU on the same host" in normalized
     assert "Timings are diagnostic" in normalized
     assert "one heavy job at a time" in normalized.lower()
     assert "running jobs and available memory" in normalized
     assert "never stop another session's jobs" in normalized
-    assert "development venv read-only, never the release runtime" in normalized
-    assert "a job venv only for a differing pin, admitted and deleted" in normalized
-    assert "only owner-pool cores, never CI runner cores" in normalized
-    assert "manager resource admission before start" in normalized
-    assert "`owner.json` in the job root" in normalized
+    assert "8 physical cores/job and 6 concurrent host-wide jobs need no per-job permission" in normalized
+    assert "Count existing jobs" in normalized
+    assert "No fixed owner pool" in normalized
+    assert "without oversubscribing CI/others" in normalized
+    assert "Outside-frame jobs need admission" in normalized
+    assert "GPU, remote, environment, deployment and publication work retain task-specific authorization" in normalized
+    assert "Use an isolated venv; preserve other/shared runtimes" in normalized
+    assert "BelowNormal, owned no-breakaway containment and absolute deadlines" in normalized
+    assert "Memory caps need specific justification" in normalized
+    assert "`owner.json` records owner/source/runtime/start/deadline/job count/resources" in normalized
     assert "never PR gates" in normalized
     assert "Measure speed" in normalized
     assert "remain valid provenance" in normalized
