@@ -320,7 +320,8 @@
     ],
     "tools/build_python_gpu.py": [
       "tests/test_radia_gpu_contract.py",
-      "tests/test_hdiv_gpu_build_contract.py"
+      "tests/test_hdiv_gpu_build_contract.py",
+      "tests/test_python_gpu_distribution.py"
     ],
     "src/core/gpu/ams_amg_kernels.cuh": [
       "tests/test_radia_gpu_contract.py",
@@ -389,6 +390,19 @@
       "tests/test_hdiv_gpu_build_contract.py"
     ],
     "tests/test_hdiv_gpu_mesh_integration.py": [
+      "tests/test_hdiv_gpu_mesh_integration.py"
+    ],
+    "tools/python_gpu_payload.py": [
+      "tests/test_python_gpu_distribution.py"
+    ],
+    "tools/verify_cpu_wheel.py": [
+      "tests/test_python_gpu_distribution.py",
+      "tests/test_wheel_package_policy.py"
+    ],
+    "tests/test_python_gpu_distribution.py": [
+      "tests/test_python_gpu_distribution.py"
+    ],
+    "tools/prepare_hdiv_mesh_receipt.py": [
       "tests/test_hdiv_gpu_mesh_integration.py"
     ]
   },

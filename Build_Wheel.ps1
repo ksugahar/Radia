@@ -21,7 +21,8 @@
 
 param(
     [switch]$DryRun,       # Build and verify only, skip upload
-    [switch]$SkipBuild     # Skip build, use existing wheel in dist/
+    [switch]$SkipBuild,    # Skip build, use existing wheel in dist/
+    [switch]$RequirePythonGpu # Formal solver release includes all Python GPU modules
 )
 
 Set-StrictMode -Version Latest
@@ -202,9 +203,11 @@ if (-not $SkipBuild) {
 # ----------------------------------------------------------------------------
 Write-Host "[5/6] Verifying wheel..." -ForegroundColor Cyan
 
-python "$PSScriptRoot/tools/verify_cpu_wheel.py" $NewWheelPath
+ $verifyArgs = @("$PSScriptRoot/tools/verify_cpu_wheel.py", $NewWheelPath)
+if ($RequirePythonGpu) { $verifyArgs += "--require-python-gpu" }
+python @verifyArgs
 if ($LASTEXITCODE -ne 0) {
-    throw "CPU distribution boundary failed; MATLAB/CUDA/Simulink/LTspice belong to radia-gpu."
+    throw "Radia wheel verification failed; MATLAB/MEX/Simulink/LTspice integrations belong to radia-simulink."
 }
 
 # twine check

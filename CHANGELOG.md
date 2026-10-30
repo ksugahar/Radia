@@ -1,5 +1,20 @@
 # Changelog
 
+## 5.4.1 - 2026-10-30
+
+- Build and package the Radia-owned Python CUDA bindings for explicit Windows
+  sm_75 and sm_80 targets in the formal native release wheel. Reject missing or
+  mismatched GPU payloads and build provenance before promotion. CUDA runtime
+  libraries remain exact-version pip dependencies rather than bundled DLLs.
+- Accept HDiv meshes through an externally approved check-vol receipt binding
+  exact input/report bytes, installed checker identity and options. Validation
+  precedes workflow-owned FE/GPU initialization; consumers need no checker
+  installation. The producer's output requires independent artifact approval.
+- HDiv GPU remains experimental pending exact-wheel numerical and runtime
+  acceptance on each target. Compilation and package inventory do not certify
+  full topology optimization, portability beyond the compiled architectures,
+  performance or actual pybind11/MEX bitwise parity. Numerical criteria are unchanged.
+
 ## 5.4.0 - 2026-10-30
 
 - Add experimental Python GPU HDiv-MMM preparation and nonlinear solver entries

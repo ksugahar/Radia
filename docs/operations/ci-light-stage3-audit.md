@@ -370,3 +370,51 @@ capability routing, denied requirements and elapsed-time budget remain intact.
 The repeated F2 check executes the worst-case fast tier and the routing mutation
 suite; native compilation, numerical GPU execution and performance are separate
 unverified gates.
+
+## Python GPU distribution and portable checked-mesh receipts
+
+The previous executable-closure seal was reproduced from the merged base
+before inspecting this extension. The explicit dynamic closure now includes
+the Python GPU payload verifier/stager and the build-role receipt producer.
+The payload contracts use synthetic non-executable binary bytes and replace
+compiler execution, SDK metadata and native construction. The producer imports
+only standard-library modules; its real checker subprocess is not entered by
+the light tier. Receipt workflow tests mock FE/native entry and package metadata.
+No compiler, checker, NGSolve, GPU or MATLAB operation is added to fast-contracts.
+
+The base fast tier executed 200 tests successfully in 8.18 seconds
+(tier elapsed 9.42 seconds). All 45 routing mutation tests passed in 111.95
+seconds. The first attempt used an incomplete test environment lacking
+setuptools and wheel, yielding eight failures; the corrected run used the
+existing complete isolated test environment without source or oracle changes.
+The denied-import set, source-only guard, runner labels, requirements and active
+profile budget are unchanged. The resulting executable closure seal is
+`f276d0f3d1651c0ab1d9f9c9ba094e3173e924f31aaf409e3d49114dc4d57c77`.
+
+Separately, a real installed checker produced plain and compressed input
+receipts. A fresh consumer environment without that checker accepted both
+and rejected 18 content/provenance/options/report mutations. This CPU transport
+check does not certify GPU runtime, numerical results or the eventual wheel.
+
+The subsequent Windows compile check exposed SDK macro re-evaluation of
+backslash-containing CMake values. The builder now renders each CMake path
+argument with forward slashes while preserving separate subprocess argv.
+The corresponding source contract uses mocked SDK files and command execution;
+it guards compiler, SDK, Python, object, output and CUDA-library path values.
+Its closure has no additional paths or denied-import exemptions. Reproducing
+the preceding seal and inspecting these two changed executable files yields
+`26a991e809caa0a0f96a00d9cd8035648c7517835a00beef93711a5699a52e39`.
+Fresh exact-source fast/routing checks and native compilation are recorded
+separately; the previous partial native build does not qualify this revision.
+
+The base-profile run above is not the all-impact worst case. The latter must
+invoke `tools/run_test_tier.py --profile fast-contracts --since ""`; omitting
+`--since` selects only the base profile. The first such all-impact execution
+ran 639 tests and exposed one stale Windows path assertion in a mocked Linux
+SDK contract. The assertion now compares the same canonical forward-slash
+CMake representation as the builder, without changing SDK identity, compiler,
+libraries, numerical criteria, denied imports or the profile budget. Fresh
+source-bound execution reports distinguish these runs and the unchanged-code
+compile evidence from any later exact-release native artifacts.
+The final test-path-only closure seal is
+`6a4402eac907a661e0222fbd8e8c15b046319def31fb1576162c58fc8da31bac`.

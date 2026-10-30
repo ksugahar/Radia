@@ -547,12 +547,48 @@ jobs:
       # ----------------------------------------------------------------
       # Build wheel (DryRun: build + verify only, no upload)
       # ----------------------------------------------------------------
+      - name: Build and stage Radia Python GPU payload
+        shell: pwsh
+        run: |
+          # This tag/manual native-release dispatch authorizes only this exact
+          # checkout's compile. It is not a runtime/GPU numerical verdict.
+          $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not $vs) { throw 'VS2022 build tools are required' }
+          $toolset = (Get-Content (Join-Path $vs 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
+          if ($toolset -notmatch '^14[.]44[.]') { throw 'Default MSVC 14.44 is required' }
+          $cl = Join-Path $vs "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/cl.exe"
+          $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+          $matlab = Join-Path $env:ProgramFiles 'MATLAB/R2026a'
+          $cuda = Join-Path $matlab 'sys/cuda/win64/cuda'
+          foreach ($file in @($ciPython, $cl, $vcvars, (Join-Path $cuda 'bin/nvcc.exe'))) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Required build input missing: $file" }
+          }
+          & $ciPython -m pip install ninja
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $approval = Join-Path $env:RADIA_CI_OUTPUT_DIR 'python-gpu-build-admission.private.json'
+          @{ source_sha=$env:GITHUB_SHA; owner="native-release-$env:GITHUB_RUN_ID"; gpu_build_approved=$true;
+             scope='compile-only sm75+sm80; no GPU execution'; started_utc=[DateTimeOffset]::UtcNow.ToString('o') } |
+            ConvertTo-Json | Set-Content -LiteralPath $approval -Encoding utf8
+          $approvalHash = (Get-FileHash -LiteralPath $approval -Algorithm SHA256).Hash.ToLowerInvariant()
+          $gpuOutput = Join-Path $env:RUNNER_TEMP "radia-python-gpu-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $bat = Join-Path $env:RADIA_CI_OUTPUT_DIR 'build-python-gpu.private.cmd'
+          @('@echo off', "call `"$vcvars`" > nul", 'if errorlevel 1 exit /b %errorlevel%',
+            "`"$ciPython`" tools/build_python_gpu.py --cuda-root `"$cuda`" --matlab-root `"$matlab`" --host-compiler `"$cl`" --architectures 75 80 --output `"$gpuOutput`" --admission `"$approval`" --admission-sha256 $approvalHash",
+            'exit /b %errorlevel%') | Set-Content -LiteralPath $bat -Encoding utf8
+          & cmd.exe /d /c "`"$bat`""
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $ciPython tools/python_gpu_payload.py --output $gpuOutput --package src/radia --source-commit $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Build wheel
         if: success()
         shell: pwsh
         working-directory: ${{ github.workspace }}
         run: |
-          & "${{ github.workspace }}\Build_Wheel.ps1" -DryRun
+          & "${{ github.workspace }}\Build_Wheel.ps1" -DryRun -RequirePythonGpu
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Wheel build failed"
             exit $LASTEXITCODE

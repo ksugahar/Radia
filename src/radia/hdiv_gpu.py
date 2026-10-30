@@ -7,11 +7,13 @@ from __future__ import annotations
 
 __all__ = ["PreparedHDivNonlinear", "prepare_hdiv_host_setup"]
 
+import base64
+from importlib import metadata
+from pathlib import PureWindowsPath
+import re
 import hashlib
 import json
 from pathlib import Path
-import subprocess
-import sys
 import threading
 import tempfile
 import math
@@ -28,28 +30,39 @@ class PreparedHDivNonlinear:
     """
 
     @classmethod
-    def from_bh_table(cls, mesh_path, bh_table, *, backend, label_contract, order=1):
+    def from_bh_table(cls, mesh_path, bh_table, *, backend, label_contract, mesh_check_receipt,
+                      mesh_check_receipt_sha256, mesh_check_provenance, order=1):
         """Use the existing Radia CPU polynomial construction, without a CPU solve.
 
         Rows are [H in A/m, B in tesla]; one uniform soft-iron law is supported.
         """
         if backend != "gpu":
             raise ValueError("This workflow requires explicit backend='gpu'")
-        import numpy as np
-        from radia.vim._nonlinear import _validate_bh_table, _bh_inverse_payload
-        table = np.asarray(bh_table, dtype=np.float64)
-        _validate_bh_table(table, context="shared HDiv GPU")
-        if table.shape[0] > 4096:
-            raise ValueError("BH table exceeds the shared material budget")
-        law = _bh_inverse_payload(table[:, 0], table[:, 1])
-        return cls(mesh_path, law, backend=backend, label_contract=label_contract, order=order)
+        if isinstance(order, bool) or order not in (1, 2):
+            raise ValueError("HDiv order must be 1 or 2")
+        with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
+                                    mesh_check_receipt_sha256, mesh_check_provenance) as (snapshot, mesh_hash, contract_hash):
+            import numpy as np
+            from radia.vim._nonlinear import _validate_bh_table, _bh_inverse_payload
+            table = np.asarray(bh_table, dtype=np.float64)
+            _validate_bh_table(table, context="shared HDiv GPU")
+            if table.shape[0] > 4096:
+                raise ValueError("BH table exceeds the shared material budget")
+            law = _bh_inverse_payload(table[:, 0], table[:, 1])
+            prepared = cls.__new__(cls)
+            prepared.mesh_sha256 = mesh_hash
+            prepared.label_contract_sha256 = contract_hash
+            prepared._initialize(snapshot, law, order)
+            return prepared
 
-    def __init__(self, mesh_path, law, *, backend, label_contract, order=1):
+    def __init__(self, mesh_path, law, *, backend, label_contract, mesh_check_receipt,
+                 mesh_check_receipt_sha256, mesh_check_provenance, order=1):
         if backend != "gpu":
             raise ValueError("This workflow requires explicit backend='gpu'; CPU uses radia.vim")
         if isinstance(order, bool) or order not in (1, 2):
             raise ValueError("HDiv order must be 1 or 2")
-        with _checked_mesh_snapshot(mesh_path, label_contract) as (snapshot, mesh_hash, contract_hash):
+        with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
+                                    mesh_check_receipt_sha256, mesh_check_provenance) as (snapshot, mesh_hash, contract_hash):
             self.mesh_sha256 = mesh_hash
             self.label_contract_sha256 = contract_hash
             self._initialize(snapshot, law, order)
@@ -141,27 +154,111 @@ class PreparedHDivNonlinear:
         self.close()
 
 
+def _strict_json(data):
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError("Duplicate checked-mesh JSON key: " + key)
+            result[key] = value
+        return result
+    def constant(value):
+        raise ValueError("Nonfinite checked-mesh JSON: " + value)
+    return json.loads(data, object_pairs_hook=pairs, parse_constant=constant)
+
+
+def _verify_mesh_receipt(mesh_bytes, contract_bytes, receipt_bytes, expected_sha256, provenance):
+    """Check pinned producer evidence, not repeat geometry analysis or authenticate consent.
+
+    The caller obtains both pins from an independently approved artifact manifest.
+    Package bootstrap may have loaded CPU libraries already. This gate precedes
+    workflow-owned FE/native/GPU entry, not the import of the parent package.
+    """
+    if (not isinstance(expected_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256)
+            or hashlib.sha256(receipt_bytes).hexdigest() != expected_sha256):
+        raise ValueError("Checked-mesh external receipt SHA256 mismatch")
+    value = _strict_json(receipt_bytes)
+    if value.get("schema") != "radia.checked-vol-receipt.v1":
+        raise ValueError("Unsupported checked-mesh receipt schema")
+    if not isinstance(provenance, dict) or set(provenance) != {"checker", "argv", "ngsolve_version"}:
+        raise ValueError("Externally approved checker provenance is required")
+    for key in provenance:
+        if value.get(key) != provenance[key]:
+            raise ValueError("Checked-mesh approved provenance mismatch: " + key)
+    checker = value["checker"]
+    if (not isinstance(checker, dict) or set(checker) != {"distribution", "version", "record_sha256"}
+            or checker["distribution"] != "cubit-mesh-export"
+            or not isinstance(checker["version"], str) or checker["version"].lower() in ("", "unknown")
+            or not re.fullmatch(r"[0-9a-f]{64}", checker["record_sha256"])):
+        raise ValueError("Checked-mesh distribution identity is incomplete")
+    argv = value["argv"]
+    if (not isinstance(argv, list) or len(argv) != 9 or not all(isinstance(x, str) for x in argv)
+            or argv[1:3] != ["-m", "cubit_mesh_export.check"]
+            or argv[4:6] != ["--strict-labels", "--contract"] or argv[7:] != ["--format", "json"]
+            or PureWindowsPath(argv[3]).name not in ("mesh.vol", "mesh.vol.gz")
+            or PureWindowsPath(argv[6]).name != "labels.json"
+            or PureWindowsPath(argv[3]).parent != PureWindowsPath(argv[6]).parent):
+        raise ValueError("Checked-mesh canonical argv/default options mismatch")
+    if value.get("returncode") != 0 or type(value.get("returncode")) is not int:
+        raise ValueError("Checked-mesh checker execution failed")
+    for key, data in (("mesh_sha256", mesh_bytes), ("contract_sha256", contract_bytes)):
+        if value.get(key) != hashlib.sha256(data).hexdigest():
+            raise ValueError("Checked-mesh content mismatch: " + key)
+    try:
+        raw_report = base64.b64decode(value["report_base64"], validate=True)
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("Checked-mesh raw report is invalid") from error
+    if value.get("report_sha256") != hashlib.sha256(raw_report).hexdigest():
+        raise ValueError("Checked-mesh raw report SHA256 mismatch")
+    report = _strict_json(raw_report)
+    if (report.get("schema") != "cubit-mesh-export.vol-check.v1" or report.get("passed") is not True
+            or report.get("warnings") != [] or report.get("vol_file") != argv[3]):
+        raise ValueError("Checked-mesh authoritative report did not pass")
+    cad = report.get("cad_reference", {})
+    if cad.get("available") is not False or cad.get("auto_discovered") is not False or report.get("json_file") is not None:
+        raise ValueError("Checked-mesh receipt must not use unbound sibling CAD")
+    for name in ("labels", "quality"):
+        part = report.get(name)
+        if not isinstance(part, dict) or part.get("passed") is not True or part.get("warnings") != []:
+            raise ValueError("Checked-mesh authoritative component failed: " + name)
+    labels = report["labels"]
+    if labels.get("schema") != "radia.vol-label-contract.v1" or labels.get("strict_labels") is not True:
+        raise ValueError("Checked-mesh strict label contract was not executed")
+    contract = _strict_json(contract_bytes)
+    if contract.get("schema") != "radia.vol-label-contract.v1":
+        raise ValueError("Unsupported mesh label contract schema")
+    # This compares the declared label sets; only the producer analyzes geometry.
+    for category in ("required", "allowed"):
+        for kind, names in contract.get(category, {}).items():
+            expected = names.split(",") if isinstance(names, str) else names
+            if not isinstance(expected, list) or {str(x).strip() for x in expected} != set(labels.get(category, {}).get(kind, [])):
+                raise ValueError("Checked-mesh semantic contract mismatch: " + category + "/" + kind)
+    ownership = report.get("boundary_domain_ownership")
+    if not isinstance(ownership, dict) or ownership.get("issues") != []:
+        raise ValueError("Checked-mesh boundary/domain ownership did not pass")
+    runtime_ngsolve = metadata.version("ngsolve")  # Metadata only, no FE/native import.
+    if (value["ngsolve_version"] != runtime_ngsolve
+            or report.get("versions", {}).get("ngsolve") != runtime_ngsolve
+            or report.get("versions", {}).get("cubit_mesh_export") != checker["version"]):
+        raise ValueError("Checked-mesh checker/runtime ABI mismatch")
+    return value
+
+
 @contextmanager
-def _checked_mesh_snapshot(mesh_path, label_contract):
+def _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
+                           mesh_check_receipt_sha256, mesh_check_provenance):
     path = Path(mesh_path).resolve(strict=True)
     contract = Path(label_contract).resolve(strict=True)
     mesh_bytes, contract_bytes = path.read_bytes(), contract.read_bytes()
+    suffix = ".vol.gz" if path.name.lower().endswith(".vol.gz") else ".vol"
+    if not path.name.lower().endswith((".vol", ".vol.gz")):
+        raise ValueError("HDiv mesh input must be .vol or .vol.gz")
+    receipt_bytes = Path(mesh_check_receipt).read_bytes()
+    _verify_mesh_receipt(mesh_bytes, contract_bytes, receipt_bytes,
+                         mesh_check_receipt_sha256, mesh_check_provenance)
     with tempfile.TemporaryDirectory(prefix="radia-hdiv-mesh-") as directory:
-        suffix = ".vol.gz" if path.name.lower().endswith(".vol.gz") else ".vol"
-        if not path.name.lower().endswith((".vol", ".vol.gz")):
-            raise ValueError("HDiv mesh input must be .vol or .vol.gz")
         snapshot = Path(directory) / ("mesh" + suffix)
-        checked_contract = Path(directory) / "labels.json"
-        snapshot.write_bytes(mesh_bytes)
-        checked_contract.write_bytes(contract_bytes)
-        checked = subprocess.run([sys.executable, "-m", "cubit_mesh_export.check",
-            str(snapshot), "--strict-labels", "--contract", str(checked_contract), "--format", "json"],
-            capture_output=True, text=True)
-        if checked.returncode:
-            raise RuntimeError("cubit-mesh-export required for check-vol; mesh validation failed: "
-                               + checked.stderr.strip() + "\n" + checked.stdout.strip())
-        if not json.loads(checked.stdout).get("passed"):
-            raise ValueError("Mesh check did not pass: " + checked.stdout)
+        snapshot.write_bytes(mesh_bytes)  # Never re-read mutable caller files after verification.
         yield snapshot, hashlib.sha256(mesh_bytes).hexdigest(), hashlib.sha256(contract_bytes).hexdigest()
 
 
@@ -219,7 +316,8 @@ def _prepare_host_components(path, order, *, maximum_dofs=16384):
                 weights=np.asarray(payload["weights"]), quadrature_order=payload["integration_order"])
 
 
-def prepare_hdiv_host_setup(mesh_path, *, backend, label_contract, order=1, maximum_dofs=16384):
+def prepare_hdiv_host_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
+                            mesh_check_receipt_sha256, mesh_check_provenance, order=1, maximum_dofs=16384):
     """Return owned zero-based FE/charge/material arrays; no resident GPU solve.
 
     NGSolve assembly stays under the caller's TaskManager. Consumers publish
@@ -231,6 +329,7 @@ def prepare_hdiv_host_setup(mesh_path, *, backend, label_contract, order=1, maxi
         raise ValueError("HDiv order must be 1 or 2")
     if isinstance(maximum_dofs, bool) or not isinstance(maximum_dofs, int) or not 0 < maximum_dofs <= 16384:
         raise ValueError("Unsupported bounded host setup dimension")
-    with _checked_mesh_snapshot(mesh_path, label_contract) as (path, mesh_hash, contract_hash):
+    with _checked_mesh_snapshot(mesh_path, label_contract, mesh_check_receipt,
+                                mesh_check_receipt_sha256, mesh_check_provenance) as (path, mesh_hash, contract_hash):
         data = _prepare_host_components(path, order, maximum_dofs=maximum_dofs)
     return dict(data, mesh_sha256=mesh_hash, label_contract_sha256=contract_hash, order=order)

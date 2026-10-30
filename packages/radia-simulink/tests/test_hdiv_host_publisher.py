@@ -20,12 +20,12 @@ def test_host_publisher_preserves_factors_numbering_and_checked_identity(tmp_pat
     data = dict(dofs=2, snapshot=snapshot, charge_map=eye(2, format="csr"),
         mass=eye(2, format="csr"), rhs_operator=np.ones((2, 3)), mean_operator=np.ones((3, 2)),
         evaluation=csr_matrix(np.ones((3, 2))), weights=np.ones(1), quadrature_order=6)
-    def prepare(path, *, backend, label_contract, order, maximum_dofs):
+    def prepare(path, *, backend, label_contract, mesh_check_receipt, mesh_check_receipt_sha256, mesh_check_provenance, order, maximum_dofs):
         if backend != "gpu":raise ValueError("explicit backend")
         assert maximum_dofs == 4096
         return dict(data, mesh_sha256="mesh-hash", label_contract_sha256="contract-hash")
     monkeypatch.setitem(sys.modules, "radia.hdiv_gpu", types.SimpleNamespace(prepare_hdiv_host_setup=prepare))
-    result = module.prepare_hdiv_host_setup(mesh, backend="gpu", label_contract=labels, order=2)
+    result = module.prepare_hdiv_host_setup(mesh, backend="gpu", label_contract=labels, mesh_check_receipt="receipt.json", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={}, order=2)
     assert result["schema"] == "radia.hdiv-host-setup.v1"
     assert result["order"] == 2.
     np.testing.assert_array_equal(result["operator"]["permutation"].ravel(), [2., 1.])
@@ -35,4 +35,4 @@ def test_host_publisher_preserves_factors_numbering_and_checked_identity(tmp_pat
     result["operator"]["leaves"][0]["a1"][0] = 99
     assert leaf["a1"][0] == 3.  # Publisher owns values, never mutates CPU factors.
     with pytest.raises(ValueError, match="explicit backend"):
-        module.prepare_hdiv_host_setup(mesh, backend="cpu", label_contract=labels)
+        module.prepare_hdiv_host_setup(mesh, backend="cpu", label_contract=labels, mesh_check_receipt="receipt.json", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
