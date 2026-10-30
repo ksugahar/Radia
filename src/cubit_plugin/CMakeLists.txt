@@ -157,6 +157,9 @@ set(CCM_SOURCES
     ExportFemeemCommand.hpp
     ExportMegCommand.cpp
     ExportMegCommand.hpp
+    ExportModelCaptureCommand.cpp
+    ExportModelCaptureCommand.hpp
+    ModelCaptureRecord.hpp
 )
 
 # Netgen-dependent sources: callbackgeom + ExportNetgenCommand
@@ -254,6 +257,18 @@ function(cubit_contract_runtime_path output)
   string(REPLACE ";" "\\;" runtime_path "${runtime_path}")
   set(${output} "${runtime_path}" PARENT_SCOPE)
 endfunction()
+option(CUBIT_MODEL_CAPTURE_CONTRACT_TESTS "Build neutral CAD source-record contracts" OFF)
+if(CUBIT_MODEL_CAPTURE_CONTRACT_TESTS)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  enable_testing()
+  add_executable(cubit_model_capture_contract tests/model_capture_contract.cpp)
+  target_compile_features(cubit_model_capture_contract PRIVATE cxx_std_17)
+  target_include_directories(cubit_model_capture_contract PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+  add_test(NAME cubit_model_capture_record COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_model_capture_record.py"
+    "$<TARGET_FILE:cubit_model_capture_contract>")
+  set_tests_properties(cubit_model_capture_record PROPERTIES TIMEOUT 40)
+endif()
 option(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS "Build compact periodic curved geometry contracts" OFF)
 if(CUBIT_PERIODIC_CURVED_CONTRACT_TESTS)
   if(NOT USE_COMPACT_NETGEN)
