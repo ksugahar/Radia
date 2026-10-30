@@ -24,8 +24,13 @@ def verify_payload(binary_name, data, record, source_commit, architectures=WINDO
             or record.get("ptx_architectures") != []
             or any(record.get(k) is not False for k in DIAGNOSTIC_FLAGS)):
         raise ValueError("Python GPU artifact source/hash/architecture/build-mode mismatch: " + binary_name)
-    if not record.get("source_hashes") or not record.get("pybind_header_hashes"):
-        raise ValueError("Python GPU source/header closure is missing: " + binary_name)
+    for field in ("source_hashes", "pybind_header_hashes"):
+        values = record.get(field)
+        if (not isinstance(values, dict) or not values
+                or any(not isinstance(k, str) or not isinstance(v, str)
+                       or not re.fullmatch(r"[0-9a-f]{64}", v)
+                       or Path(k).is_absolute() or ".." in Path(k).parts for k, v in values.items())):
+            raise ValueError("Python GPU source/header closure is missing or malformed: " + binary_name)
     return record
 
 

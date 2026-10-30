@@ -111,3 +111,11 @@ def test_builder_compiles_both_windows_architectures_without_ptx(tmp_path, monke
     assert "-gencode=arch=compute_80,code=sm_80" in cuda, cuda
     assert not any("code=compute_" in arg for arg in cuda), cuda
     assert "/MD" in cuda, cuda
+
+
+@pytest.mark.parametrize("architectures", [["75"], ["80"], ["75", "75"], ["80", "75"], ["75", "80", "90"]])
+def test_windows_release_rejects_incomplete_or_implicit_architectures(tmp_path, monkeypatch, architectures):
+    builder = load("build_python_gpu")
+    monkeypatch.setattr(builder, "capture", lambda cmd: "Cuda compilation tools, release 12.8, V12.8")
+    with pytest.raises(RuntimeError, match="Explicit architectures"):
+        builder.check_toolchain(tmp_path, tmp_path / "cl", architectures, True)
