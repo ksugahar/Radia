@@ -373,8 +373,10 @@ Key points:
 - **Webcut is required**: ACIS spheres have 0 curves; copy mesh needs curve/vertex
 - **Volume copy nomesh**: ensures identical topology between interior/exterior
 - **Node positions match exactly** (max dist ~1e-17) after copy mesh
-- NGSolve `IdentifyPeriodicBoundaries("kelvin", "kelvin_int", Trafo(...), point_tolerance=1e-3)`
-  then `Mesh(ngmesh)` re-wrap + `Periodic(HCurl)` constrains matching DOFs
+- Request named `kt` metadata through the native exporter's explicit periodic
+  contract (master/slave BC patches, translation, unit and matching distance).
+  Verify the saved group/type/name and complete point pairs after loading;
+  never call a consumer-side identification or repair routine.
 
 Source: public-safe curated corpus (verified 2026-03-29)
 
