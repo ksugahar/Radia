@@ -3,10 +3,13 @@ from __future__ import annotations
 import base64
 import hashlib
 import importlib.util
+import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
+import venv
 from pathlib import Path
 
 import pytest
@@ -739,13 +742,125 @@ def test_installer_program_checks_before_pip_and_changes_only_bound_radia(monkey
     monkeypatch.setattr(release_quad.subprocess,'_contract_event',seen.append,raising=False)
     monkeypatch.setattr(release_quad,'EDITABLE_RELEASE_VERIFY',"import subprocess,sys; subprocess._contract_event('native-pre' if 'preinstall' in sys.argv else 'native-post')")
     monkeypatch.setattr(release_quad,'SOLVER_INSTALL_GUARD',"seen.append('lock')")
-    monkeypatch.setattr(release_quad.subprocess,'run',lambda cmd,**kw:seen.append(cmd))
+    def observe(cmd, **kwargs):
+        assert kwargs.get('check') is True
+        if cmd[1:3] == ['-I', '-c']:
+            seen.append(('fresh', cmd[0]))
+            old_argv = sys.argv
+            try:
+                exec(cmd[3], {'seen': seen})
+            finally:
+                sys.argv = old_argv
+        else:
+            seen.append(cmd)
+    monkeypatch.setattr(release_quad.subprocess,'run',observe)
     scope={'seen':seen};exec(release_quad._editable_install_program(target),scope)
     assert seen[:3]==['identity','native-pre','lock']
     assert seen[3][:5]==[target['python'],'-I','-m','pip','install']
     assert seen[3][-2:]==['-e',target['source']+'[gpu]']
-    assert seen[4:6]==['identity','native-post']
+    assert seen[4:7]==[('fresh',target['python']),'identity','native-post']
     assert seen[-1]==[target['python'],'-I','-m','pip','check']
+
+
+def _tiny_editable_repo(root, marker):
+    """Real dependency-free PEP 660 package; no native or numerical claims."""
+    root.mkdir()
+    package = root / 'src' / 'radia'
+    package.mkdir(parents=True)
+    (package / '__init__.py').write_text(f'MARKER = {marker!r}\n', encoding='utf-8')
+    (root / 'marker.txt').write_text(marker, encoding='utf-8')
+    (root / 'pyproject.toml').write_text(
+        '[build-system]\nrequires=[]\nbuild-backend="fixture_backend"\nbackend-path=["."]\n'
+        '[project]\nname="radia"\nversion="0.0.0"\n', encoding='utf-8')
+    (root / 'fixture_backend.py').write_text('''
+from pathlib import Path
+import base64,csv,hashlib,io,zipfile
+def get_requires_for_build_editable(config_settings=None):
+    return []
+def build_editable(wheel_directory, config_settings=None, metadata_directory=None):
+    name='radia-0.0.0-py3-none-any.whl'
+    files={'radia_fixture.pth': (str(Path(__file__).parent/'src')+'\\n').encode(),
+           'radia-0.0.0.dist-info/METADATA': b'Metadata-Version: 2.1\\nName: radia\\nVersion: 0.0.0\\nProvides-Extra: gpu\\n',
+           'radia-0.0.0.dist-info/WHEEL': b'Wheel-Version: 1.0\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n'}
+    rows=[]
+    for path,data in files.items():
+        digest=base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b'=').decode()
+        rows.append((path,'sha256='+digest,str(len(data))))
+    rows.append(('radia-0.0.0.dist-info/RECORD','',''))
+    stream=io.StringIO(newline='');csv.writer(stream,lineterminator='\\n').writerows(rows)
+    files['radia-0.0.0.dist-info/RECORD']=stream.getvalue().encode()
+    with zipfile.ZipFile(Path(wheel_directory)/name,'w') as archive:
+        for path,data in files.items():archive.writestr(path,data)
+    return name
+''', encoding='utf-8')
+    _git(root, 'init')
+    _git(root, 'config', 'user.email', 'fixture@example.invalid')
+    _git(root, 'config', 'user.name', 'Editable Fixture')
+    _git(root, 'add', '.')
+    _git(root, 'commit', '-m', 'editable fixture')
+    return _git(root, 'rev-parse', 'HEAD')
+
+
+@pytest.mark.parametrize('relocation,reject', [(False, False), (True, False), (False, True)],
+                         ids=['first-install', 'source-relocation', 'postcheck-failure'])
+def test_real_editable_install_verifies_in_fresh_target_process(tmp_path, monkeypatch, relocation, reject):
+    """Guards: new .pth and stale cached imports cannot defeat post-pip checks.
+
+    Assumes: real pip/venv/PEP660, tiny pure-Python package; native verifier is
+    a fixture oracle, so this certifies process routing, not Radia binaries.
+    """
+    runtime = tmp_path / 'runtime'
+    venv.EnvBuilder(with_pip=True).create(runtime)
+    python = runtime / ('Scripts/python.exe' if sys.platform == 'win32' else 'bin/python')
+    old_source = tmp_path / 'old source'
+    if relocation:
+        _tiny_editable_repo(old_source, 'old')
+        subprocess.run([str(python), '-I', '-m', 'pip', 'install', '--no-cache-dir',
+                        '--only-binary=:all:', '--no-index', '-e', str(old_source)],
+                       check=True, capture_output=True, text=True, timeout=90)
+    source = tmp_path / 'new source'
+    commit = _tiny_editable_repo(source, 'new')
+    events = tmp_path / 'events.json'
+    # Preinstall actually observes an absent registration or caches the old
+    # package. Postinstall independently inspects the new import and PEP660 URL.
+    verifier = '''import importlib.util,importlib.metadata as md,json,os,pathlib,sys
+repo=pathlib.Path(sys.argv[1]).resolve()
+events=pathlib.Path(EVENT_PATH)
+if 'preinstall' in sys.argv:
+    row={'pre_pid':os.getpid(),'had_old':HAD_OLD}
+    if HAD_OLD:
+        import radia
+        assert radia.MARKER=='old',radia.__file__
+        row['old_origin']=radia.__file__
+    else:
+        assert importlib.util.find_spec('radia') is None
+    events.write_text(json.dumps(row))
+else:
+    import radia
+    row=json.loads(events.read_text())
+    assert pathlib.Path(radia.__file__).resolve()==repo/'src/radia/__init__.py',radia.__file__
+    assert radia.MARKER=='new',radia.MARKER
+    assert os.getpid()!=row['pre_pid'],'postinstall reused parent interpreter'
+    assert sys.flags.isolated==1
+    registration=json.loads(md.distribution('radia').read_text('direct_url.json'))
+    assert registration['dir_info']['editable'] is True
+    row.update(post_pid=os.getpid(),origin=radia.__file__,registration=registration)
+    events.write_text(json.dumps(row))
+    if REJECT_POST: raise SystemExit(37)
+'''.replace('EVENT_PATH', repr(str(events))).replace('HAD_OLD', repr(relocation)).replace('REJECT_POST', repr(reject))
+    monkeypatch.setattr(release_quad, 'EDITABLE_RELEASE_VERIFY', verifier)
+    target = dict(python=str(python), source=str(source), commit=commit,
+                  binding={'hostname': platform.node()})
+    program = release_quad._editable_install_program(target)
+    env = dict(os.environ, PIP_NO_INDEX='1', PIP_DISABLE_PIP_VERSION_CHECK='1')
+    result = subprocess.run([str(python), '-I', '-c', program], cwd=tmp_path,
+                            env=env, capture_output=True, text=True, timeout=180)
+    assert (result.returncode != 0) == reject, result.stdout + result.stderr
+    observed = json.loads(events.read_text())
+    assert observed['post_pid'] != observed['pre_pid'], observed
+    assert Path(observed['origin']).resolve() == source / 'src/radia/__init__.py'
+    if reject:
+        assert 'exit status 37' in result.stderr, result.stderr
 
 
 @pytest.mark.parametrize('failure',[None,0,1,2,3])

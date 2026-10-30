@@ -1345,11 +1345,16 @@ def _deploy_editable_role(role, reason=None):
 
 
 def _editable_install_program(target):
-    """All target checks precede pip; all payload checks precede intent writes."""
+    """Check before pip, then verify new editable registration at fresh startup."""
     pins = _solver_dependency_pins()
     args = ["native-check", target["source"], target["commit"], pins["ngsolve"], pins["netgen-mesher"]]
     install = [target["python"], "-I", "-m", "pip", "install", "--no-cache-dir", "--only-binary=:all:", "-e", target["source"] + "[gpu]"]
     check = [target["python"], "-I", "-m", "pip", "check"]
+    # This process predates pip's new .pth registration and may have imported
+    # the previous source. Only a fresh target interpreter may certify it.
+    postinstall = ("import sys\nsys.argv=" + repr(args) + "\n" +
+                   _target_check_code(target) + "\n" + EDITABLE_RELEASE_VERIFY)
+    verify = [target["python"], "-I", "-c", postinstall]
     return ("import subprocess,sys\n" +
             "target_check=" + repr(_target_check_code(target)) + "\n" +
             "native_check=" + repr(EDITABLE_RELEASE_VERIFY) + "\n" +
@@ -1362,7 +1367,7 @@ def _editable_install_program(target):
             "exec(target_check)\nverify_native(True)\n" +
             "exec(" + repr(SOLVER_INSTALL_GUARD) + ")\n" +
             "subprocess.run(" + repr(install) + ",check=True)\n" +
-            "exec(target_check)\nverify_native(False)\n" +
+            "subprocess.run(" + repr(verify) + ",check=True)\n" +
             "subprocess.run(" + repr(check) + ",check=True)\n")
 
 
