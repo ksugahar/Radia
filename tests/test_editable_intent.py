@@ -1,4 +1,7 @@
-"""Recorded editable intent: record, verify, repoint, rollback (tools/editable_intent.py)."""
+"""Guards: recorded intent, explicit target identity and forward-only source changes.
+
+Assumes: disposable records and synthetic package/source identities.
+"""
 from __future__ import annotations
 
 import base64
@@ -24,39 +27,32 @@ def intent_file(tmp_path, monkeypatch):
     return path
 
 
-@pytest.mark.parametrize(
-    "args",
-    [
-        ["repoint", "--package", "radia", "--source", "{source}", "--reason", "policy test"],
-        ["repoint", "--record-current", "--package", "radia", "--reason", "policy test"],
-        ["repoint", "--rollback", "--package", "radia"],
-    ],
-)
-def test_cli_refuses_mutation_from_lab(intent_file, monkeypatch, tmp_path, capsys, args):
-    monkeypatch.setattr(ei.platform, "node", lambda: "LAB")
-    source = tmp_path / "source"
-    source.mkdir()
-    argv = [part.format(source=source) for part in args]
-    assert ei.main(argv) == ei.EXIT_PRECONDITION
-    assert "only on 100号機" in capsys.readouterr().out
+@pytest.mark.parametrize('args',[
+    ['repoint','--package','radia','--source','{source}','--reason','policy test'],
+    ['repoint','--record-current','--package','radia','--reason','policy test'],
+    ['repoint','--rollback','--package','radia'],
+])
+def test_cli_refuses_unbound_mutation(intent_file, tmp_path, capsys, args):
+    """Guards: no unbound mutation. Assumes: explicit private bindings are required."""
+    source=tmp_path/'source';source.mkdir()
+    assert ei.main([part.format(source=source) for part in args])==ei.EXIT_PRECONDITION
+    assert 'refus' in capsys.readouterr().out.lower()
+    assert not intent_file.exists()
+    assert not ei.log_file_path(intent_file).exists()
+
+
+def test_refused_record_report_is_renderable(intent_file, capsys):
+    assert ei.main(['--json','repoint','--record-current','--reason','release'])==ei.EXIT_PRECONDITION
+    report=json.loads(capsys.readouterr().out)
+    assert 'REFUSED' in ei.format_action(report)
+    assert report['record_file']==str(intent_file)
     assert not intent_file.exists()
 
 
-def test_refused_record_report_is_renderable(intent_file, monkeypatch, capsys):
-    monkeypatch.setattr(ei.platform, "node", lambda: "LAB")
-    assert ei.main(["--json", "repoint", "--record-current", "--reason", "release"]) == ei.EXIT_PRECONDITION
-    report = json.loads(capsys.readouterr().out)
-    assert "REFUSED" in ei.format_action(report)
-    assert report["record_file"] == str(intent_file)
-    assert not intent_file.exists()
-
-
-def test_current_build_host_can_record_intent(intent_file, monkeypatch, capsys):
-    monkeypatch.setattr(ei.platform, "node", lambda: "T7920")
-    monkeypatch.setattr(ei, "record_current", lambda *args, **kwargs: {
-        "schema": ei.SCHEMA, "record_file": str(intent_file), "results": [], "exit_code": 0})
-    assert ei.main(["--json", "repoint", "--record-current", "--reason", "release"]) == 0
-    assert json.loads(capsys.readouterr().out)["exit_code"] == 0
+def test_bound_build_host_can_record_intent(intent_file, fake, sources, capsys):
+    binding=_binding_for([('radia-mcp',sources[0])])
+    assert ei.main(['--json','--target-binding',json.dumps(binding),'repoint','--record-current','--package','radia-mcp','--reason','release'])==0
+    assert json.loads(capsys.readouterr().out)['exit_code']==0
 
 
 @pytest.fixture
@@ -66,7 +62,19 @@ def sources(tmp_path):
     for tree in (old, new):
         tree.mkdir(parents=True)
         (tree / "pyproject.toml").write_text("[project]\nname='radia-mcp'\n", encoding="utf-8")
+        subprocess.run(['git','-C',str(tree),'init'],check=True,capture_output=True)
+        subprocess.run(['git','-C',str(tree),'add','pyproject.toml'],check=True,capture_output=True)
+        subprocess.run(['git','-C',str(tree),'-c','user.name=Radia Test','-c','user.email=radia-test@example.invalid','commit','-m','fixture'],check=True,capture_output=True)
     return str(old), str(new)
+
+
+def _binding_for(targets, role='build'):
+    return dict(schema=ei.BINDING_SCHEMA,role=role,hostname=ei.platform.node(),python=sys.executable,
+                sources={package:dict(source=source or '',commit=ei.describe_source(source)['commit'] if source else '0'*40) for package,source in targets})
+
+
+def _current_binding(packages):
+    return _binding_for([(package,ei.observe_registration(package)['source']) for package in packages])
 
 
 class FakeInterpreter:
@@ -188,7 +196,7 @@ def test_verify_reports_not_installed_and_not_editable(intent_file, monkeypatch)
 def test_repoint_records_previous_before_pip_and_intent_after_verification(intent_file, fake, sources):
     old, new = sources
     report = ei.repoint([("radia-mcp", new)], "try the reviewed tree",
-                        runner=fake.runner(move_to=new))
+                        runner=fake.runner(move_to=new), binding=_binding_for([("radia-mcp", new)]))
 
     assert report["exit_code"] == 0
     assert report["results"][0]["status"] == "repointed"
@@ -208,12 +216,12 @@ def test_repoint_records_previous_before_pip_and_intent_after_verification(inten
 
 def test_repoint_blocked_pip_leaves_the_record_untouched(intent_file, fake, sources):
     old, new = sources
-    report = ei.repoint([("radia-mcp", new)], "try", runner=fake.runner(returncode=1))
+    report = ei.repoint([("radia-mcp", new)], "try", runner=fake.runner(returncode=1), binding=_binding_for([("radia-mcp", new)]))
 
     assert report["exit_code"] == ei.EXIT_ACTION == 3
     result = report["results"][0]
     assert result["status"] == "blocked"
-    assert "rollback" in result["hint"]
+    assert "fix forward" in result["hint"].lower()
     assert "uninstall" not in result["hint"]
     assert ei.recorded_entry(ei.load_intent(intent_file), "radia-mcp") is None
     assert _log_events(intent_file) == ["repoint-pre", "repoint-blocked"]
@@ -222,7 +230,7 @@ def test_repoint_blocked_pip_leaves_the_record_untouched(intent_file, fake, sour
 
 def test_repoint_verification_failure_leaves_the_record_untouched(intent_file, fake, sources):
     _old, new = sources
-    report = ei.repoint([("radia-mcp", new)], "try", runner=fake.runner(returncode=0))
+    report = ei.repoint([("radia-mcp", new)], "try", runner=fake.runner(returncode=0), binding=_binding_for([("radia-mcp", new)]))
 
     assert report["exit_code"] == ei.EXIT_VERIFY == 4
     assert report["results"][0]["status"] == "verify_failed"
@@ -234,23 +242,22 @@ def test_repoint_stops_at_the_first_failed_package(intent_file, fake, sources, t
     _old, new = sources
     missing = str(tmp_path / "does-not-exist")
     report = ei.repoint([("radia-mcp", missing), ("radia", new)], "try",
-                        runner=fake.runner(move_to=new))
+                        runner=fake.runner(move_to=new), binding=_binding_for([("radia-mcp", missing), ("radia", new)]))
     assert report["exit_code"] == ei.EXIT_PRECONDITION
     assert [r["status"] for r in report["results"]] == ["refused"]
     assert fake.pip_calls == []
 
 
-def test_rollback_reinstalls_the_previous_recorded_pointer(intent_file, fake, sources):
-    old, new = sources
-    assert ei.repoint([("radia-mcp", new)], "try", runner=fake.runner(move_to=new))["exit_code"] == 0
-
-    report = ei.rollback(["radia-mcp"], "undo", runner=fake.runner(move_to=old))
-    assert report["exit_code"] == 0
-    assert fake.pip_calls[-1][-1] == old
-    entry = ei.recorded_entry(ei.load_intent(intent_file), "radia-mcp")
-    assert entry["source"] == old
-    assert entry["recorded_via"] == "rollback"
-    assert entry["previous"]["source"] == new
+def test_rollback_refuses_and_preserves_recorded_history(intent_file, fake, sources):
+    """Guards: forward-only mutation. Assumes: previous intent remains provenance."""
+    old,new=sources
+    assert ei.repoint([('radia-mcp',new)],'try',runner=fake.runner(move_to=new), binding=_binding_for([('radia-mcp',new)]))['exit_code']==0
+    before=intent_file.read_bytes();events=_log_events(intent_file);calls=list(fake.pip_calls)
+    report=ei.rollback(['radia-mcp'],'undo',runner=fake.runner(move_to=old))
+    assert report['exit_code']==ei.EXIT_PRECONDITION
+    assert intent_file.read_bytes()==before
+    assert _log_events(intent_file)==events
+    assert fake.pip_calls==calls
 
 
 def test_rollback_without_a_previous_pointer_is_refused(intent_file, fake):
@@ -261,7 +268,7 @@ def test_rollback_without_a_previous_pointer_is_refused(intent_file, fake):
 
 
 def test_record_current_adopts_only_an_editable_installation(intent_file, fake, sources, monkeypatch):
-    report = ei.record_current(["radia-mcp"], "adopt the pointer codex verified")
+    report = ei.record_current(["radia-mcp"], "adopt the pointer codex verified", binding=_current_binding(["radia-mcp"]))
     assert report["exit_code"] == 0
     entry = ei.recorded_entry(ei.load_intent(intent_file), "radia-mcp")
     assert entry["source"] == sources[0]
@@ -269,7 +276,7 @@ def test_record_current_adopts_only_an_editable_installation(intent_file, fake, 
     assert _log_events(intent_file) == ["record-current"]
 
     fake.editable = False
-    refused = ei.record_current(["radia-mcp"], "adopt")
+    refused = ei.record_current(["radia-mcp"], "adopt", binding=_current_binding(["radia-mcp"]))
     assert refused["exit_code"] == ei.EXIT_PRECONDITION
     assert refused["results"][0]["status"] == "refused"
 
@@ -282,14 +289,14 @@ def test_require_pushed_refuses_a_commit_no_remote_ref_contains(intent_file, fak
     monkeypatch.setattr(ei, "pushed_refs", lambda source, commit: [])
 
     report = ei.repoint([("radia-mcp", new)], "handoff", require_pushed=True,
-                        runner=fake.runner(move_to=new))
+                        runner=fake.runner(move_to=new), binding=_binding_for([("radia-mcp", new)]))
     assert report["exit_code"] == ei.EXIT_PRECONDITION
     assert "--require-pushed" in report["results"][0]["detail"]
     assert fake.pip_calls == []
 
     monkeypatch.setattr(ei, "pushed_refs", lambda source, commit: ["origin/main"])
     report = ei.repoint([("radia-mcp", new)], "handoff", require_pushed=True,
-                        runner=fake.runner(move_to=new))
+                        runner=fake.runner(move_to=new), binding=_binding_for([("radia-mcp", new)]))
     assert report["exit_code"] == 0
     assert report["results"][0]["entry"]["pushed_refs"] == ["origin/main"]
 
@@ -300,7 +307,7 @@ def test_dry_run_installs_and_records_nothing(intent_file, fake, sources):
     def must_not_run(command, **kwargs):
         raise AssertionError("dry run must not call pip")
 
-    report = ei.repoint([("radia-mcp", new)], "plan", dry_run=True, runner=must_not_run)
+    report = ei.repoint([("radia-mcp", new)], "plan", dry_run=True, runner=must_not_run, binding=_binding_for([("radia-mcp", new)]))
     assert report["exit_code"] == 0
     assert report["results"][0]["status"] == "planned"
     assert report["results"][0]["command"][-2:] == ["-e", new]
@@ -366,3 +373,36 @@ def test_tool_source_never_uninstalls_or_stops_processes():
     source = _TOOL.read_text(encoding="utf-8")
     for forbidden in ("pip uninstall", "uninstall -y", "Stop-Process", "taskkill", "os.kill"):
         assert forbidden not in source
+
+
+@pytest.mark.parametrize('role',['build','validation'])
+@pytest.mark.parametrize('property',['missing','hostname','python','source','commit'])
+def test_binding_failure_precedes_pip_and_record(intent_file,fake,sources,role,property):
+    """Guards: role-bound refusal before mutation. Assumes: real Git fixture source."""
+    import copy
+    source=sources[0];binding=_binding_for([('radia',source)],role)
+    if property=='missing':binding=None
+    elif property=='hostname':binding['hostname']='wrong-host.invalid'
+    elif property=='python':binding['python']=str(Path(sys.executable).with_name('foreign-python.exe'))
+    elif property=='source':binding['sources']['radia']['source']=sources[1]
+    elif property=='commit':binding['sources']['radia']['commit']='f'*40
+    elif property=='extra_package':binding['sources']['radia-mcp']=copy.deepcopy(binding['sources']['radia'])
+    # Build bindings can name other products, but each actual target must have exactly one declaration.
+    if property=='extra_package' and role=='build':
+        binding['sources']['radia']['commit']='0'*40
+    report=ei.repoint([('radia',source)],'bound operation',binding=binding,runner=fake.runner())
+    assert report['exit_code']==ei.EXIT_PRECONDITION,(role,property,report)
+    assert fake.pip_calls==[]
+    assert not intent_file.exists()
+    assert not ei.log_file_path(intent_file).exists()
+
+
+@pytest.mark.parametrize('role',['build','validation'])
+def test_bound_radia_record_preserves_other_package_intent(intent_file,fake,sources,role):
+    """Guards: independent package intent. Assumes: Radia-only normal operation."""
+    data=ei.load_intent();entry={'source':'untouched-other-package','reason':'another owner'}
+    ei.set_entry(data,'radia-mcp',entry);ei.save_intent(data)
+    report=ei.record_current(['radia'],'verified Radia',binding=_binding_for([('radia',sources[0])],role))
+    assert report['exit_code']==0,report
+    assert ei.recorded_entry(ei.load_intent(),'radia-mcp')==entry
+    assert ei.recorded_entry(ei.load_intent(),'radia')['source']==sources[0]

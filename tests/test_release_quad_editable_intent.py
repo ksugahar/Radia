@@ -1,246 +1,138 @@
-"""release_quad follows the recorded editable intent: verify, done, repoint, Phase 8."""
-from __future__ import annotations
+"""Guards: explicit role bindings and Radia-only forward editable operations.
 
+Assumes: remote transport and installers are observed mocks; binding validation
+and intent persistence have independent executable tests in test_editable_intent.
+"""
+from __future__ import annotations
 import importlib.util
 import inspect
-import subprocess
+import json
 from pathlib import Path
 from types import SimpleNamespace
-
 import pytest
 
-_TOOL = Path(__file__).resolve().parents[1] / "tools" / "release_quad.py"
-_SPEC = importlib.util.spec_from_file_location("radia_release_quad_intent", _TOOL)
-assert _SPEC is not None and _SPEC.loader is not None
-release_quad = importlib.util.module_from_spec(_SPEC)
+_TOOL=Path(__file__).resolve().parents[1]/'tools/release_quad.py'
+_SPEC=importlib.util.spec_from_file_location('radia_release_quad_intent',_TOOL)
+release_quad=importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(release_quad)
-intent = release_quad.editable_intent
-
-
-@pytest.fixture(autouse=True)
-def explicit_validation_runtime(monkeypatch):
-    monkeypatch.setenv("RADIA_RELEASE_SSH_VALIDATION", "validation")
-    monkeypatch.setenv("RADIA_RELEASE_PYTHON_VALIDATION", "C:/Runtime/python.exe")
-
+intent=release_quad.editable_intent
 
 @pytest.fixture(autouse=True)
-def isolated_record(tmp_path, monkeypatch):
-    """Never read the machine's record or the release overrides from the environment."""
-    path = tmp_path / "editable-intent.json"
-    monkeypatch.setenv(intent.INTENT_FILE_ENV, str(path))
-    monkeypatch.delenv(release_quad.EDITABLE_REPO_100_ENV, raising=False)
-    return path
+def explicit_roles(monkeypatch,tmp_path):
+    monkeypatch.setenv(intent.INTENT_FILE_ENV,str(tmp_path/'intent.json'))
+    for role in ('100','VALIDATION'):
+        host='build-test' if role=='100' else 'validation-test'
+        values={'SSH':host,'HOSTNAME':host,'PYTHON':f'C:/Runtime/{host}/python.exe',
+                'QA_PYTHON':f'C:/QA/{host}/Scripts/python.exe',
+                'EDITABLE_REPO':f'C:/Sources/{host}','EDITABLE_COMMIT':'a'*40,
+                'EDITABLE_PATH_ALIASES':'[]'}
+        for key,value in values.items():monkeypatch.setenv(f'RADIA_RELEASE_{key}_{role}',value)
 
 
-def _record(path, package, source):
-    data = intent.load_intent(path)
-    intent.set_entry(data, package, {"source": source, "commit": None, "tracked_clean": None,
-                                     "recorded_at": "2026-09-12T00:00:00Z", "recorded_by": "test",
-                                     "recorded_via": "test", "reason": "fixture",
-                                     "pushed_refs": None, "previous": None})
-    intent.save_intent(data, path)
+def response(counts,rc=0):
+    return rc,dict(schema=intent.SCHEMA,rows=[],counts=counts,record_file='test.json',interpreter='C:/Synthetic/python.exe',exit_code=rc),''
 
 
-def test_remote_verify_ships_the_intent_tool_as_the_script():
-    assert release_quad.REMOTE_EDITABLE_VERIFY == (
-        _TOOL.with_name("editable_intent.py").read_text(encoding="utf-8"))
-    assert release_quad._PATH_ALIASES[-1][0] in release_quad.REMOTE_EDITABLE_VERIFY
+def test_remote_verifier_is_the_shipped_tool_without_private_default_aliases():
+    assert release_quad.REMOTE_EDITABLE_VERIFY==_TOOL.with_name('editable_intent.py').read_text(encoding='utf-8')
+    assert release_quad._PATH_ALIASES==()
 
 
+def test_verify_editable_visits_both_normal_roles(monkeypatch):
+    calls=[]
+    monkeypatch.setattr(release_quad,'_verify_role_editable',lambda role:calls.append(role) or 0)
+    assert release_quad.cmd_verify_editable(None)==0
+    assert set(calls)=={'100','validation'} and len(calls)==2
 
 
+@pytest.mark.parametrize('role',['100','validation'])
+def test_normal_verification_limits_the_remote_cli_to_radia(monkeypatch,role):
+    calls=[]
+    monkeypatch.setattr(release_quad,'_verify_live_editable',lambda target:0)
+    monkeypatch.setattr(release_quad,'_remote_editable_intent',lambda target,argv:calls.append((target,argv)) or response(dict(match=1,drift=0,unverified=0)))
+    assert release_quad._verify_role_editable(role)==0
+    target,argv=calls[0]
+    assert target['role']==role
+    assert argv==['verify','--package','radia','--expect','radia='+target['source']]
 
 
+@pytest.mark.parametrize('counts,rc,expected',[(dict(match=1,drift=0,unverified=0),0,0),(dict(match=0,drift=1,unverified=0),1,1),(dict(match=0,drift=0,unverified=1),1,1),(dict(match=1,drift=0,unverified=0),1,1)])
+def test_remote_drift_unverified_or_failed_exit_are_not_success(monkeypatch,counts,rc,expected):
+    monkeypatch.setattr(release_quad,'_verify_live_editable',lambda target:0)
+    monkeypatch.setattr(release_quad,'_remote_editable_intent',lambda *args:response(counts,rc))
+    report={}
+    assert release_quad._verify_role_editable('validation',report)==expected
+    assert report['drift']==counts['drift'] and report['unverified']==counts['unverified']
 
 
-def test_verify_editable_checks_lab_wheel_and_100_editable(monkeypatch):
-    calls = []
-    monkeypatch.setattr(release_quad, "_verify_validation_wheel", lambda: calls.append("lab-wheel") or 0)
-    monkeypatch.setattr(release_quad, "_verify_100_editable", lambda: calls.append("100-editable") or 0)
-    assert release_quad.cmd_verify_editable(None) == 0
-    assert calls == ["lab-wheel", "100-editable"]
-
-def _remote_ok(counts):
-    return (0, {"schema": intent.SCHEMA, "host": "100", "interpreter": "python",
-                "record_file": "C:/ProgramData/Radia/editable-intent.json", "rows": [],
-                "counts": counts, "exit_code": 0}, "")
+def test_failed_live_check_stops_before_intent_transport(monkeypatch):
+    monkeypatch.setattr(release_quad,'_verify_live_editable',lambda target:4)
+    monkeypatch.setattr(release_quad,'_remote_editable_intent',lambda *args:pytest.fail('No transport after failed payload check'))
+    assert release_quad._verify_role_editable('100')==1
 
 
-def test_remote_verify_passes_explicit_expectations_only_with_the_release_override(monkeypatch):
-    seen = []
-    monkeypatch.setattr(release_quad, "_remote_editable_intent",
-                        lambda host, argv, **kw: seen.append((host, list(argv))) or
-                        _remote_ok({"match": 3, "drift": 0, "unverified": 0}))
-    assert release_quad._verify_100_editable() == 0
-    assert seen[-1] == (release_quad.SSH_100, ["--json", "verify"])
-
-    monkeypatch.setenv(release_quad.EDITABLE_REPO_100_ENV, r"W:\00_CAE\Radia\release-quad\x")
-    assert release_quad._verify_100_editable() == 0
-    _host, argv = seen[-1]
-    assert argv[:2] == ["--json", "verify"]
-    assert "--expect" in argv
-    assert r"radia=W:\00_CAE\Radia\release-quad\x" in argv
-    # The coupled release was retired on 2026-09-16: the solver release-quad
-    # states an expectation for radia alone and neither repoints nor
-    # version-gates the independently released packages.
-    assert not any(arg.startswith(("radia-mcp=", "cubit-mesh-export="))
-                   for arg in argv)
+@pytest.mark.parametrize('role',['100','validation'])
+def test_record_current_binds_one_role_and_one_package(monkeypatch,role):
+    seen=[]
+    monkeypatch.setattr(release_quad,'_remote_editable_intent',lambda target,argv:seen.append((target,argv)) or (0,{'results':[],'record_file':'r','exit_code':0},''))
+    assert release_quad._record_release_intent_remote(role,'reviewed update')==0
+    target,argv=seen[0]
+    assert target['role']==role
+    assert argv[:4]==['repoint','--record-current','--package','radia']
+    assert '--source' not in argv and '--rollback' not in argv
 
 
-@pytest.mark.parametrize("explicit", [False, True])
-def test_solver_remote_verify_does_not_expand_to_other_recorded_products(monkeypatch, explicit):
-    """Exercise the remote CLI parser: --expect alone does not limit packages."""
-    source = "W:/release/radia"
-    monkeypatch.setenv(release_quad.EDITABLE_REPO_100_ENV, source)
-    selected = []
-    result = _remote_ok({"match": 1, "drift": 0, "unverified": 0})[1]
-
-    def verify(packages, expectations, **kwargs):
-        selected.extend(packages)
-        assert expectations == {"radia": source}
-        return result
-
-    def remote(host, argv):
-        assert intent.main(argv) == 0
-        return 0, result, ""
-
-    monkeypatch.setattr(intent, "verify", verify)
-    monkeypatch.setattr(release_quad, "_remote_editable_intent", remote)
-    assert release_quad._verify_100_editable([("radia", source)] if explicit else None) == 0
-    assert selected == ["radia"]
+def args_for(role='validation',**updates):
+    values=dict(host=role,package=['radia'],source=[f'C:/Sources/{"build-test" if role=="100" else "validation-test"}'],reason='reviewed update',record_current=False,rollback=False,dry_run=False)
+    return SimpleNamespace(**(values|updates))
 
 
-def test_remote_verify_counts_unverified_and_drift(monkeypatch):
-    report = {}
-    monkeypatch.setattr(release_quad, "_remote_editable_intent",
-                        lambda host, argv, **kw: _remote_ok({"match": 2, "drift": 0, "unverified": 1}))
-    assert release_quad._verify_100_editable(None, report) == 1
-    assert report["unverified"] == 1 and report["drift"] == 0
-
-    monkeypatch.setattr(release_quad, "_remote_editable_intent",
-                        lambda host, argv, **kw: (1, None, "ssh: connect failed"))
-    assert release_quad._verify_100_editable(None, report) == 1
-    assert report["drift"] == 1
+@pytest.mark.parametrize('role',['100','validation'])
+def test_repoint_dry_run_exposes_bound_plan_without_any_action(monkeypatch,capsys,role):
+    monkeypatch.setattr(release_quad,'run',lambda *a,**k:pytest.fail('dry-run network action'))
+    assert release_quad.cmd_repoint(args_for(role,dry_run=True))==0
+    plan=json.loads(capsys.readouterr().out)
+    assert plan['role']==role and plan['mode']=='editable'
+    assert plan['binding']['role']==('build' if role=='100' else 'validation')
+    assert plan['install'][-1]==args_for(role).source[0]+'[gpu]'
 
 
-@pytest.mark.parametrize("record", [False, True])
-@pytest.mark.parametrize("source_rc", [0, 4])
-def test_done_default_source_is_controller_and_ignores_legacy_lab_intent(
-        isolated_record, monkeypatch, record, source_rc):
-    # Legacy validation editable records no longer select or gate the runtime source.
-    if record:
-        _record(isolated_record, "radia", "S:/Radia/old-lab-editable/")
-    assert release_quad._done_release_source(SimpleNamespace()) == str(release_quad.REPO)
-    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
-    seen = []
-    monkeypatch.setattr(release_quad, "_verify_local_release_source",
-                        lambda repo, sha: seen.append((repo, sha)) or source_rc)
-    stop = AssertionError("stop after the source gate")
-    def later_gate(*_args):
-        raise stop
-    monkeypatch.setattr(release_quad, "_verify_head_release_tag", later_gate)
-    args = SimpleNamespace(simulink_package=None, release_source=None)
-    if source_rc:
-        assert release_quad.cmd_done(args) == source_rc
-    else:
-        with pytest.raises(AssertionError) as raised:
-            release_quad.cmd_done(args)
-        assert raised.value is stop
-    assert seen == [(str(release_quad.REPO), "a" * 40)]
-
-@pytest.mark.parametrize("rc", [0, 2, 3])
-def test_lab_deploy_uses_wheel_route_and_propagates_failure(monkeypatch, rc):
-    calls = []
-    monkeypatch.setattr(release_quad, "_deploy_pypi",
-                        lambda host, label, **kw: calls.append((host, label, kw)) or rc)
-    assert release_quad._deploy_validation() == rc
-    assert calls == [("validation", "validation", {"python_path": "C:/Runtime/python.exe"})]
+@pytest.mark.parametrize('updates',[{'source':[]},{'source':['C:/Wrong']},{'reason':''},{'record_current':True},{'rollback':True},{'package':['radia-mcp']},{'host':'retired-test'}])
+def test_repoint_refuses_incomplete_wrong_source_and_foreign_package_requests(monkeypatch,updates):
+    monkeypatch.setattr(release_quad,'_deploy_editable_role',lambda *a:pytest.fail('Invalid plan mutated runtime'))
+    monkeypatch.setattr(release_quad,'_remote_editable_intent',lambda *a:pytest.fail('Invalid plan recorded intent'))
+    assert release_quad.cmd_repoint(args_for(**updates))==2
 
 
-
-def test_remote_record_helper_uses_record_current_with_the_host_tool(monkeypatch):
-    seen = {}
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "c" * 40)
-    monkeypatch.setattr(release_quad, "_remote_editable_intent",
-                        lambda host, argv, **kw: seen.update(host=host, argv=list(argv)) or
-                        (0, {"results": [], "record_file": "r", "exit_code": 0}, ""))
-    assert release_quad._record_release_intent_remote("100", "build", r"W:\x") == 0
-    assert seen["host"] == "100"
-    assert seen["argv"][:3] == ["--json", "repoint", "--record-current"]
-    assert seen["argv"].count("--package") == 1
-    assert seen["argv"][-2:] == ["--package", "radia"]
-    assert "--source" not in seen["argv"]
+@pytest.mark.parametrize('role',['100','validation'])
+def test_repoint_routes_only_selected_normal_role(monkeypatch,role):
+    seen=[]
+    monkeypatch.setattr(release_quad,'_deploy_editable_role',lambda actual,reason:seen.append((actual,reason)) or 3)
+    assert release_quad.cmd_repoint(args_for(role))==3
+    assert seen==[(role,'reviewed update')]
 
 
-def test_repoint_on_100_forwards_host_namespace_arguments(monkeypatch):
-    seen = {}
-    monkeypatch.setattr(release_quad, "_remote_editable_intent",
-                        lambda host, argv, **kw: seen.update(host=host, argv=list(argv)) or
-                        (0, {"results": [], "record_file": "r", "exit_code": 0, "dry_run": True}, ""))
-    args = SimpleNamespace(host="100", package=["radia-mcp"],
-                           source=[r"W:\00_CAE\Radia\release-quad\x\packages\radia-mcp"],
-                           reason="try the reviewed tree", via=None, record_current=False,
-                           rollback=False, dry_run=True, require_pushed=False)
-    assert release_quad.cmd_repoint(args) == 0
-    assert seen["host"] == release_quad.SSH_100
-    argv = seen["argv"]
-    assert argv[:2] == ["--json", "repoint"]
-    assert r"W:\00_CAE\Radia\release-quad\x\packages\radia-mcp" in argv
-    assert "--dry-run" in argv and "--reason" in argv and "try the reviewed tree" in argv
-    assert "--record-current" not in argv and "--rollback" not in argv
+@pytest.mark.parametrize('live_rc',[0,4])
+def test_record_current_checks_payload_before_recording(monkeypatch,live_rc):
+    seen=[]
+    monkeypatch.setattr(release_quad,'_verify_live_editable',lambda target:seen.append('live') or live_rc)
+    monkeypatch.setattr(release_quad,'_record_release_intent_remote',lambda *a:seen.append('record') or 0)
+    monkeypatch.setattr(release_quad,'_verify_role_editable',lambda *a:seen.append('verify') or 0)
+    assert release_quad.cmd_repoint(args_for(record_current=True,source=[]))==(4 if live_rc else 0)
+    assert seen==(['live'] if live_rc else ['live','record','verify'])
 
 
-def test_repoint_on_lab_is_refused_before_action(monkeypatch, capsys):
-    actions = []
-    monkeypatch.setattr(intent, "main", lambda argv: actions.append(argv) or 0)
-    monkeypatch.setattr(release_quad, "_remote_editable_intent",
-                        lambda *args, **kwargs: actions.append(args))
-    args = SimpleNamespace(host="validation", package=["radia"], source=["S:/old"],
-                           reason="test", via=None, record_current=False,
-                           rollback=False, dry_run=False, require_pushed=False)
-    assert release_quad.cmd_repoint(args) == 2
-    assert actions == []
-    assert "only on 100号機" in capsys.readouterr().out
-
-def test_repoint_refuses_incomplete_requests():
-    base = {"host": "validation", "via": None, "record_current": False, "rollback": False,
-            "dry_run": False, "require_pushed": False}
-    assert release_quad.cmd_repoint(SimpleNamespace(package=["radia"], source=[], reason="r", **base)) == 2
-    assert release_quad.cmd_repoint(SimpleNamespace(package=["radia"], source=["x"], reason="", **base)) == 2
-    adopt = {**base, "record_current": True}
-    assert release_quad.cmd_repoint(SimpleNamespace(package=[], source=["x"], reason="r", **adopt)) == 2
-    both = {**base, "record_current": True, "rollback": True}
-    assert release_quad.cmd_repoint(SimpleNamespace(package=[], source=[], reason="r", **both)) == 2
-    other = {**base, "host": "hibino"}
-    assert release_quad.cmd_repoint(SimpleNamespace(package=["radia"], source=["x"], reason="r", **other)) == 2
+def test_done_source_never_uses_an_intent_entry(tmp_path):
+    record=intent.load_intent()
+    intent.set_entry(record,'radia',{'source':'C:/Unrelated','commit':'b'*40})
+    intent.save_intent(record)
+    assert release_quad._done_release_source(SimpleNamespace())==str(release_quad.REPO)
+    selected=tmp_path/'explicit-release'
+    assert release_quad._done_release_source(SimpleNamespace(release_source=str(selected)))==str(selected.resolve())
 
 
-def test_restore_editable_is_removed_and_names_no_target(capsys):
-    assert not hasattr(release_quad, "_restore_lab_canonical_editable")
-    assert not hasattr(release_quad, "_restore_100_canonical_editable")
-    assert release_quad.cmd_restore_editable(None) == 2
-    out = capsys.readouterr().out
-    assert "repoint" in out
-    for forbidden in ("01_GitHub", "uninstall -y", "Stop-Process"):
-        assert forbidden not in out
-
-
-def test_repoint_paths_never_uninstall_or_stop_processes():
-    sources = [inspect.getsource(getattr(release_quad, name)) for name in (
-        "cmd_repoint", "cmd_restore_editable", "cmd_verify_editable",
-        "_record_release_intent_remote",
-        "_verify_remote_editable", "_remote_editable_intent",
-    )]
-    sources.append(release_quad.REMOTE_EDITABLE_VERIFY)
-    for text in sources:
-        for forbidden in ("pip uninstall", "uninstall -y", "Stop-Process", "taskkill",
-                          "_kill_mcp_local", "_kill_cubit_local"):
-            assert forbidden not in text
-
-
-def test_cli_registers_repoint_and_keeps_restore_as_a_refusal():
-    text = _TOOL.read_text(encoding="utf-8")
-    assert '"repoint":          cmd_repoint,' in text
-    assert 'sub.add_parser(\n        "repoint",' in text
-    assert "removed: no default development source" in text
+def test_repoint_never_stops_foreign_processes_or_uninstalls_packages():
+    for name in ('cmd_repoint','cmd_restore_editable','cmd_verify_editable','_record_release_intent_remote','_verify_role_editable','_remote_editable_intent','_editable_install_program'):
+        source=inspect.getsource(getattr(release_quad,name))
+        for forbidden in ('pip uninstall','uninstall -y','Stop-Process','taskkill'):
+            assert forbidden not in source,(name,forbidden)
