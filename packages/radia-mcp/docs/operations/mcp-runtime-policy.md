@@ -136,7 +136,7 @@ separately, with host/client and observation time. When not checked, say so.
 
 ## Release completion
 
-For radia-mcp release-dual, completion requires passing the package release
+For the independent radia-mcp release, completion requires passing the package release
 checks, verified publication, a verified wheel/fresh import on validation host
 and a verified editable update/fresh import on 100, and validation host client reconnection with live source and harmless-tool checks.
 The validation host check must cover affected servers/contracts, not an unrelated tool.
@@ -151,7 +151,7 @@ This distinction does not weaken wheel, dependency, or numerical acceptance.
 
 ## Scope
 
-radia-mcp is independently versioned and distributed. Its release-dual targets
+radia-mcp is independently versioned and distributed. Its deployment targets
 are the NGSolve compute validation role (verified wheel) and build role (editable).
 Cubit deploys only to the build role and is forbidden on the compute role.
 Do not deploy radia-mcp to compute-host, worker-a or worker-b, or run the full Radia QUAD

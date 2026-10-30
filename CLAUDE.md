@@ -74,9 +74,9 @@ STEP is the portable CAD standard (SAT for Cubit's ACIS workflow); the solver bo
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
 **POLICY**: CI and builds run on the build host with the `100` runner label, isolated from user runtimes; `ci-light` serves fast contracts, `100` heavy CPU jobs, plus one GPU label. Use the on-demand GPU worker only for mexcuda GPU work.
-Deployment (2026-10-21): radia and radia-mcp deploy to the build host (editable) and the validation host (verified wheel); cubit-mesh-export deploys only to the build host, is tested independently there, and solver releases never install, uninstall, repoint or version-gate it. Retired execution targets are excluded from deployment, CI and computation.
-The build host owns preflight and the only editable installs, in a development venv separate from the release runtime; the validation host consumes radia/radia-mcp wheels, never Cubit. NGSolve runs from verified wheels at the version pinned in package metadata (6.2.2608).
-NGSolve hosts start from checked exported .vol files, without Cubit; the validation host runs without Cubit.
+Deployment: radia uses bound editable sources on build and validation roles, with isolated exact-wheel QA. radia-mcp stays build-editable/validation-wheel; cubit-mesh-export is build-only. Solver releases never change/version-gate those packages; retired targets stay excluded.
+Build owns preflight/native builds; consumers use verified same-source artifacts. NGSolve uses the metadata pin (6.2.2608).
+NGSolve starts from checked exported .vol files; validation has no Cubit/cme.
 MATLAB-capable runners use a MATLAB-authenticated interactive account and pass an Engine startup/calculation/shutdown check in the actual runner context; never a MATLAB runner service.
 
 CI scope begins at the independently released distribution boundary. The checked `radia_mcp.meta` catalog and each server's live `tools/list` response are the tool-discovery source of truth. Generated tool inventory snapshots are local diagnostics, not committed artifacts or CI oracles. normal pull-request and main-push CI runs a stable compact contract set, tests selected from the changed source/test paths, and only the affected server selftests. The complete package pytest suite, all-server selftests, and live-catalog audit belong to an explicit full-audit workflow.
@@ -102,9 +102,10 @@ Reliability comes from cheap independent checks on every change, not exhaustive 
 
 ### Compute Host Routing
 
-Roles: the build host owns CI, release artifacts, isolated numerical validation and CPU/GPU development; the validation host runs verified-wheel validation and timing, never Cubit; the JMAG evaluation host runs no Radia work. Timings are diagnostic.
+Build owns CI, artifacts, validation and CPU/GPU development. Validation uses editable Radia, separate wheel QA and timing without Cubit/cme. CPU/GB200 compute is build-only unless authorized. JMAG evaluation runs no Radia. Timings are diagnostic.
 Before remote work, probe reachability, running jobs and available memory. Use an idle host and one heavy job at a time; preserve active timing jobs and never stop another session's jobs.
-Heavy jobs (2026-10-24): development venv read-only, never the release runtime; a job venv only for a differing pin, admitted and deleted; use only owner-pool cores, never CI runner cores; obtain manager resource admission before start and record it in `owner.json` in the job root; record topology, affinity, NUMA node and thread settings in result JSON. Runs longer than about 30 minutes are never PR gates; one-off comparisons are not repeated.
+CPU jobs (2026-10-30): with free capacity, up to 8 physical cores/job and 6 concurrent host-wide jobs need no per-job permission. Count existing jobs; check free memory/cores and set affinity/thread limits without oversubscribing CI/others. No fixed owner pool. Never stop, repin or overwrite others' jobs/runtimes. Outside-frame jobs need admission; GPU, remote, environment, deployment and publication work retain task-specific authorization.
+Use an isolated venv; preserve other/shared runtimes, BelowNormal, owned no-breakaway containment and absolute deadlines. Memory caps need specific justification. `owner.json` records owner/source/runtime/start/deadline/job count/resources; result JSON records actual topology/affinity/NUMA/threads/memory. Runs over about 30 minutes are never PR gates; never repeat one-off comparisons.
 Compare CPU/GPU on the same host with fixed, recorded threads (16-thread baseline where supported). Measure speed, scaling, setup, transfers and total time; save hardware, memory and versions in JSON.
 Historical measurements remain valid provenance: public evidence uses neutral roles; role-to-host maps, originals and hashes stay in private storage. Never relabel to another host. Keep hosts, IPs and paths private.
 
@@ -119,7 +120,7 @@ Historical measurements remain valid provenance: public evidence uses neutral ro
 - Build ownership (2026-10-06): the build host builds solver candidates and release artifacts from an isolated reviewed checkout using current `Build.ps1`/CMake; remove superseded recipes. Other compute hosts consume the same hash-verified artifacts; never replace another session's runtime.
 - Dependency versions live in package metadata and CI; do not duplicate pins here. Retire old builds/fallbacks/toolchains after consumer/unique-work checks; no rollback reserves. History is provenance, not runtime.
 - Install MKL from its supported package dependency; do not bundle MKL or an Intel-specific NumPy build. `radia_motor_rom.dll` is Radia-owned. Release wheels contain no third-party DLLs except dependencies explicitly permitted by packaging policy.
-- Use `tools/release_quad.py` and the `release-quad` skill. Publish only when CI, exact package hashes, native/MEX/SLX checks and required machine gates pass for the same commit on the build host; on-demand validation-host timing is separate. Verify fresh imports and live sources after deployment. Before tagging, dispatch `Radia Native Release` on the exact release SHA; `ci-verify` requires its successful native check.
+- Use `release-quad` / `tools/release_quad.py` for build- and validation-role editable deployment plus CPU/GPU compute builds; host bindings/skills stay private. Keep exact-wheel/scientific gates separate. Publish only after owning-distribution CI, artifact hashes, native and required machine gates pass at the release source. Verify fresh imports after deployment. Before tagging dispatch `Radia Native Release` at that SHA; `ci-verify` requires success.
 
 ## Optuna
 `radia-optuna` uses GPU numerical kernels compiled with MATLAB mexcuda. Keep management, sequential RNG and work without a speed requirement on CPU. Choose GPU work by measured transfer-inclusive cost; no implicit fallback for declared GPU operations.
