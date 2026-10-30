@@ -1,4 +1,4 @@
-"""Independent release receipts must not waive bytes, targets or GUI gates."""
+"""Guards: release receipts/target/gates. Assumes: isolated synthetic artifacts."""
 import importlib.util
 from pathlib import Path
 import sys
@@ -25,6 +25,36 @@ def test_worker_compiles_and_targets_only_dual():
     head, forced = dual.WORKER.split("if cfg.get('force_close_cubit')", 1)
     assert 'taskkill' not in head
     assert "result['force_closed_cubit']" in forced
+
+
+def test_done_reports_only_the_build_target(tmp_path, monkeypatch, capsys):
+    import json
+    from types import SimpleNamespace
+    root = tmp_path / 'source'
+    metadata = root / 'packages/cubit-mesh-export/pyproject.toml'
+    metadata.parent.mkdir(parents=True)
+    metadata.write_text('[project]\ndependencies=["netgen-mesher==6.2.2608","ngsolve==6.2.2608"]\n')
+    evidence = tmp_path / 'evidence'
+    (evidence / '100').mkdir(parents=True)
+    contract = dict(version='2.2.8', source_sha='a'*40, wheel_sha256='b'*64)
+    receipt = dict(contract, schema=dual.SCHEMA, target='100', tier='editable',
+        profile_scope=['--all-users'], passed=True, unrelated_packages_unchanged=True,
+        smoke_test=True, toolbar_smoke=True, mcp_selftest=True, mcp_cli_selftest=True)
+    (evidence/'100/deploy.json').write_text(json.dumps(receipt))
+    monkeypatch.setattr(dual, 'wheel_contract', lambda path: dict(contract))
+    monkeypatch.setattr(dual, 'verify_published', lambda name, record: None)
+    def process(argv, **kwargs):
+        output = contract['source_sha']+'\n' if argv[0]=='git' else 'CUBIT_DUAL_RESULT={"passed":true}\n'
+        return SimpleNamespace(returncode=0,stdout=output,stderr='')
+    monkeypatch.setattr(dual.subprocess, 'run', process)
+    args = SimpleNamespace(action='done',run_from='100',source_root_100=str(root),
+        evidence_100=str(evidence),wheel=tmp_path/'synthetic.whl',source_sha=contract['source_sha'])
+    assert dual.run(args)==0
+    report=json.loads((evidence/'done.json').read_text())
+    assert report['targets']==['100'] and report['passed'] is True, report
+    output=capsys.readouterr().out
+    assert 'PASS cubit-mesh-export:' in output, output
+    assert 'PASS release-dual:' not in output, output
 
 
 def test_force_and_run_from_are_explicit_options():
