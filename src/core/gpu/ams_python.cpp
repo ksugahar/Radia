@@ -5,6 +5,7 @@
 #include <mutex>
 #include <memory>
 namespace py = pybind11;
+namespace radia_gpu_ams_python {
 using radia_sparse::Node;
 
 Node snapshot(py::handle value, int depth=0) {
@@ -82,7 +83,9 @@ struct Resident {
         return py::make_tuple(output,info);
     }
 };
+}  // namespace radia_gpu_ams_python
 PYBIND11_MODULE(_gpu_ams,m){
+    using Resident = radia_gpu_ams_python::Resident;
     m.doc()="Radia-owned FP64 AMG/AMS cycles; no MATLAB or NGSolve ABI";
     py::class_<Resident>(m,"Resident")
         .def(py::init<py::dict>())

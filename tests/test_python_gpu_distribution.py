@@ -150,3 +150,21 @@ def test_hdiv_host_cmake_values_do_not_reinterpret_windows_path_escapes(tmp_path
     values = dict(arg[2:].split("=",1) for arg in commands[0] if isinstance(arg,str) and arg.startswith("-D"))
     for key,path in expected.items():
         assert values[key] == path.as_posix() and "\\" not in values[key], (key,values[key],path)
+
+
+@pytest.mark.parametrize("failure", ["same-type", "missing", "wrong-public-name"])
+def test_coexistence_rejects_colliding_or_missing_public_types(failure):
+    """Guards: coexistence cannot accept an aliased Resident type.
+
+    Assumes: these are refusal fixtures; only actual native imports certify coexistence.
+    """
+    checker = load("check_python_gpu_coexistence")
+    amg = type("Resident", (), {})
+    ams = type("Resident", (), {})
+    if failure == "same-type": ams = amg
+    if failure == "missing": ams = None
+    if failure == "wrong-public-name": ams = type("WrongName", (), {})
+    modules = {"_gpu_resident_amg": SimpleNamespace(Resident=amg),
+               "_gpu_ams": SimpleNamespace(Resident=ams)}
+    with pytest.raises(RuntimeError, match="distinct Resident types"):
+        checker.resident_types(modules)
