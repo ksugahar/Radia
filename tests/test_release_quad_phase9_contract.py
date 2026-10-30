@@ -14,6 +14,12 @@ quad = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(quad)
 
 
+@pytest.fixture(autouse=True)
+def explicit_validation_runtime(monkeypatch):
+    monkeypatch.setenv("RADIA_RELEASE_SSH_VALIDATION", "validation")
+    monkeypatch.setenv("RADIA_RELEASE_PYTHON_VALIDATION", "C:/Runtime/python.exe")
+
+
 def probe():
     values = {
         "VER radia": "4.95.91",
@@ -48,7 +54,7 @@ def test_phase9_probes_wheel_hosts_as_wheels_and_100_as_editable(monkeypatch):
         return probe()
     monkeypatch.setattr(quad, "_probe", record)
     assert quad.cmd_phase9(None) == 0
-    assert seen["validation"] == (["ssh", "validation", "python", "-"], quad.CROSS_MACHINE_PROBE)
+    assert seen["validation"] == (["ssh", "validation", "'C:/Runtime/python.exe'", "-"], quad.CROSS_MACHINE_PROBE)
     assert seen["build"] == (["ssh", "100", quad.DEV_PYTHON_100_PS, "-"],
                                quad.CROSS_MACHINE_PROBE_100_EDITABLE)
     # 100号機's release runtime is a wheel and is compared on its own.

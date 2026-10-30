@@ -164,7 +164,7 @@ OPTUNA_SUCCESS_MARKER = "RADIA_OPTUNA_WHEEL_SIMULINK_OK"
 OPTUNA_TARGETS = {"100": ("build", SSH_100, "python")}
 OPTUNA_WHEEL_RUNNER = REPO / "packages/radia-optuna/tests/run_installed_wheel_simulink.ps1"
 _KNOWN_SOLVER_TARGETS = {
-    "validation": ("validation", "validation", "python"),
+    "validation": ("validation", None, None),
     "100": ("build", SSH_100, "python"),
 }
 # The promotion gate imports the same tuple, so the machines that produce
@@ -189,6 +189,47 @@ assert tuple(SOLVER_TARGETS) == RELEASE_ACCEPTANCE_HOSTS, (
 # The promotion gate checks each stored row label against the same table.
 assert {key: row[0] for key, row in SOLVER_TARGETS.items()} == RELEASE_ACCEPTANCE_HOST_LABELS, (
     "Simulink target labels and the release acceptance host labels have drifted")
+
+
+VALIDATION_SSH_ENV = "RADIA_RELEASE_SSH_VALIDATION"
+VALIDATION_PYTHON_ENV = "RADIA_RELEASE_PYTHON_VALIDATION"
+
+
+def _solver_target(role):
+    """Resolve private production routing lazily; validation has no PATH fallback.
+
+    The selected absolute Python may be standard Python or an owned runtime venv.
+    Reading configuration never provisions or changes that runtime.
+    """
+    label, host, python = SOLVER_TARGETS[role]
+    if role != "validation":
+        return label, host, python
+    host = os.environ.get(VALIDATION_SSH_ENV, "")
+    python = os.environ.get(VALIDATION_PYTHON_ENV, "")
+    if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", host):
+        raise ValueError(VALIDATION_SSH_ENV + " must name one configured SSH alias")
+    from pathlib import PureWindowsPath
+    path = PureWindowsPath(python)
+    if (not python or not path.is_absolute() or path.name.lower() != "python.exe"
+            or any(ord(c) < 32 or c == '"' for c in python)
+            or "windowsapps" in [part.lower() for part in path.parts]):
+        raise ValueError(VALIDATION_PYTHON_ENV + " must name an absolute non-WindowsApps python.exe")
+    return label, host, python
+
+
+def _powershell_literal(value):
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _runtime_guard_powershell(python_path):
+    """Refuse missing/redirected runtimes before install or verification."""
+    literal = _powershell_literal(python_path)
+    code = ("import ntpath,sys; assert ntpath.normcase(ntpath.abspath(sys.executable)) == "
+            + "ntpath.normcase(ntpath.abspath(" + repr(python_path) + ")), 'Selected Python identity mismatch'")
+    token = base64.b64encode(code.encode('utf-8')).decode('ascii')
+    return (f"if (-not (Test-Path -LiteralPath {literal} -PathType Leaf)) {{ throw 'Selected Python is missing' }}\n"
+            f"& {literal} -c \"import base64; exec(base64.b64decode('{token}'))\"\n"
+            "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n")
 
 
 SIMULINK_TARGETS = {"100": SOLVER_TARGETS["100"]}
@@ -1093,8 +1134,10 @@ def _verify_final_pip_checks() -> int:
     """Require clean shared Python dependency graphs after coordinated deploys."""
     failed = False
     # 100号機 has two runtimes: the development venv and the release default.
+    _label, validation_host, validation_python = _solver_target("validation")
     for host, remote_script in (
-        ("validation", "python -m pip check"),
+        (validation_host, _runtime_guard_powershell(validation_python) +
+         f"& {_powershell_literal(validation_python)} -m pip check"),
         (SSH_100, f"& {DEV_PYTHON_100_PS} -m pip check"),
         (SSH_100, "python -m pip check"),
     ):
@@ -1113,7 +1156,8 @@ def _verify_final_pip_checks() -> int:
 
 def _verify_validation_wheel():
     """Verify validation's installed solver wheel and every hashed RECORD payload."""
-    return _verify_wheel_runtime("validation", "validation")
+    label, host, python = _solver_target("validation")
+    return _verify_wheel_runtime(host, label, python_path=python)
 
 
 def _verify_100_release_wheel():
@@ -1151,11 +1195,13 @@ print('LABEL_PLACEHOLDER wheel verified:', version, checked)
 """.replace("VERSION_PLACEHOLDER", repr(version)).replace("LABEL_PLACEHOLDER", label)
 
 
-def _verify_wheel_runtime(ssh_host, label):
+def _verify_wheel_runtime(ssh_host, label, *, python_path=None):
     """Verify the default Python on ``ssh_host`` holds the exact release wheel."""
     code = _wheel_runtime_probe_code(_radia_version(), label)
     encoded_code = base64.b64encode(code.encode('utf-8')).decode('ascii')
-    script = f'python -c "import base64; exec(base64.b64decode(\'{encoded_code}\'))"; exit $LASTEXITCODE'
+    invocation = '& ' + _powershell_literal(python_path) if python_path else 'python'
+    guard = _runtime_guard_powershell(python_path) if python_path else ''
+    script = guard + f'{invocation} -c "import base64; exec(base64.b64decode(\'{encoded_code}\'))"; exit $LASTEXITCODE'
     encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
     result = run(['ssh', ssh_host, 'pwsh', '-NoProfile', '-EncodedCommand', encoded], check=False)
     if result.returncode != 0:
@@ -1166,7 +1212,8 @@ def _verify_wheel_runtime(ssh_host, label):
 
 def _deploy_validation():
     """Deploy the published solver wheel to validation; never recreate an editable."""
-    return _deploy_pypi("validation", "validation")
+    label, host, python = _solver_target("validation")
+    return _deploy_pypi(host, label, python_path=python)
 
 
 # Remote editable-deploy refusals, all before any install.  The guards write to
@@ -1250,7 +1297,7 @@ def _check_pypi_propagation(versions):
     return 0
 
 
-def _deploy_pypi(ssh_host, label, *, python_cmd="python"):
+def _deploy_pypi(ssh_host, label, *, python_cmd="python", python_path=None):
     """Install only the exact Radia solver version on a compute consumer."""
     step(f"Phase 8 ({label}): Radia solver PyPI install over SSH")
     v = _read_repo_versions({"radia", "radia.__version__"})
@@ -1263,9 +1310,12 @@ def _deploy_pypi(ssh_host, label, *, python_cmd="python"):
     ngsolve_version = pins["ngsolve"]
     netgen_version = pins["netgen-mesher"]
 
+    runtime_guard = _runtime_guard_powershell(python_path) if python_path else ""
+    if python_path:
+        python_cmd = "& " + _powershell_literal(python_path)
     ps_block = f"""
 $ErrorActionPreference = 'Stop'
-{_solver_install_guard_powershell(python_cmd)}
+{runtime_guard}{_solver_install_guard_powershell(python_cmd)}
 {python_cmd} -c "import importlib.metadata as m, ngsolve; assert ngsolve.__version__ == '{ngsolve_version}'; assert m.version('netgen-mesher') == '{netgen_version}'"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 {python_cmd} -m pip install "{_solver_hdf5_requirement()}"
@@ -1313,6 +1363,8 @@ def cmd_phase8(args):
     if any(t not in (*SOLVER_TARGETS, "all") for t in targets):
         fail("unsupported solver target")
         return 2
+    if any(t in ("validation", "all") for t in targets):
+        _solver_target("validation")  # Resolve before any selected runtime is changed.
     rc = cmd_preflight(args)
     if rc != 0:
         return rc
@@ -1442,7 +1494,10 @@ def _run_script_with_file_output(command, source, timeout):
                             str(source_path), f"{host}:{remote}"],
                            stdin=subprocess.DEVNULL, timeout=60, check=True)
             quoted_args = " ".join("'" + arg.replace("'", "''") + "'" for arg in arguments)
-            script = (f"try {{ & {python} -X utf8 '{remote}' {quoted_args}; "
+            runtime_guard = ""
+            if python.startswith("'") and python.endswith("'"):
+                runtime_guard = _runtime_guard_powershell(python[1:-1].replace("''", "'"))
+            script = (f"try {{ {runtime_guard}& {python} -X utf8 '{remote}' {quoted_args}; "
                       "$result = $LASTEXITCODE } finally { "
                       f"Remove-Item -LiteralPath '{remote}' -Force }}; exit $result")
             encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
@@ -1537,7 +1592,10 @@ def cmd_phase9(args):
     # validation wheel check reads it), so it takes the installed-wheel probe; only
     # 100号機 keeps an editable release checkout.
     targets = []
-    for host, (label, ssh_host, python) in SOLVER_TARGETS.items():
+    resolved = [(role, _solver_target(role)) for role in SOLVER_TARGETS]
+    for host, (label, ssh_host, python) in resolved:
+        if host == "validation":
+            python = _powershell_literal(python)
         targets.append((label + " release" if host == "100" else label,
                         ["ssh", ssh_host, python, "-"], CROSS_MACHINE_PROBE))
         if host == "100":
