@@ -1,6 +1,6 @@
 ---
 name: ci-monitor
-description: Watch one or more GitHub Actions CI runs to completion, then on failure auto-fetch the failing job's log tail so the AI agent can diagnose without manually clicking through `gh run view`. Use this skill (a) immediately after `git push` of a release tag (the release-quad flow's Phase 7), (b) after pushing a fix-forward commit on main, (c) any time you want to know when N CI runs finish AND get the failing-step output in one go. Default: poll every 30s, emit a state-change line per run, exit when all runs are completed (success or failure), then for each failure, fetch the last ~80 lines of the failed step's log via `gh run view --log-failed`. CI run IDs can be passed explicitly or auto-discovered from the most recent N runs of the current repo.
+description: Watch one or more GitHub Actions CI runs to completion, then on failure auto-fetch the failing job's log tail so the AI agent can diagnose without manually clicking through `gh run view`. Use this skill (a) immediately after `git push` of a release tag (the owning distribution's publication step), (b) after pushing a fix-forward commit on main, (c) any time you want to know when N CI runs finish AND get the failing-step output in one go. Default: poll every 30s, emit a state-change line per run, exit when all runs are completed (success or failure), then for each failure, fetch the last ~80 lines of the failed step's log via `gh run view --log-failed`. CI run IDs can be passed explicitly or auto-discovered from the most recent N runs of the current repo.
 ---
 
 # ci-monitor
@@ -17,9 +17,9 @@ Single skill, two phases:
 
 ## When to use
 
-- **Right after `git push` of a release** (Phase 7 of `release-quad`):
-  three CI runs trigger (main + tag1 + tag2), and we need to know
-  which finish, which fail, and why before proceeding to deploy.
+- **Right after an authorized release push**: discover the actual affected
+  workflows and monitor their exact source; do not assume a fixed count of
+  tags or equate build completion with deployment/scientific acceptance.
 - **After a fix-forward commit** on a still-open release: confirm
   the fix actually fixed the CI, not just compiled locally.
 - **When the user says "is CI green yet?"** for any push.

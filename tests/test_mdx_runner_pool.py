@@ -1,4 +1,7 @@
-"""Release acceptance is LAB/100; compute refresh is optional and CI routing is independent."""
+"""Guards: retired routes have no actions and probes stay solver-only.
+
+Assumes: synthetic imports and no remote commands.
+"""
 import importlib.util
 import importlib.metadata
 import base64
@@ -22,7 +25,7 @@ def load_tool(name):
 @pytest.mark.parametrize("target", ["md" + "x", "mdx1", "mdx2", "hibino", "unknown"])
 def test_retired_compute_deployment_never_contacts_hosts(monkeypatch, target):
     tool = load_tool("release_quad")
-    monkeypatch.setattr(tool, "_deploy_pypi", lambda *_a, **_k: pytest.fail("retired route deployed"))
+    monkeypatch.setattr(tool, "_deploy_editable_role", lambda *_a, **_k: pytest.fail("retired route deployed"))
     monkeypatch.setattr(tool, "run", lambda *_a, **_k: pytest.fail("retired route ran a command"))
     assert tool._deploy_mdx(target) == 2
     assert tool.cmd_phase8e(None) == 2
@@ -51,11 +54,11 @@ def test_compute_probe_is_solver_only_and_keeps_row_contract(monkeypatch, capsys
     assert set(rows) == set(tool._PHASE9_FIELDS)
     assert all(value != 'N/A' for value in rows.values())
     assert compute_rows[0].endswith('= 1.0')
-    assert 'cubit_mesh_export' not in tool.CROSS_MACHINE_PROBE_100_EDITABLE
-    assert 'radia-mcp' not in tool.CROSS_MACHINE_PROBE_100_EDITABLE
+    assert 'cubit_mesh_export' not in tool.CROSS_MACHINE_PROBE
+    assert 'radia-mcp' not in tool.CROSS_MACHINE_PROBE
 
 
 def test_retired_mdx2_refresh_is_refused(monkeypatch):
     tool = load_tool("release_quad")
-    monkeypatch.setattr(tool, "_deploy_pypi", lambda *_a, **_k: pytest.fail("retired host deployed"))
+    monkeypatch.setattr(tool, "_deploy_editable_role", lambda *_a, **_k: pytest.fail("retired host deployed"))
     assert tool._deploy_mdx("mdx2") == 2

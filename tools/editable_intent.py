@@ -1,4 +1,4 @@
-"""Recorded editable-source intent for the 100号機 development tier.
+"""Recorded editable-source intent for explicitly bound operating runtimes.
 
 The record answers one question per (host, interpreter, package): which
 source tree is *meant* to be installed editable right now. Verification
@@ -10,9 +10,9 @@ way to change the intent is an explicit ``repoint`` with a reason.
 Layout of the record file (``RADIA_EDITABLE_INTENT_FILE`` or
 ``%ProgramData%\\Radia\\editable-intent.json``)::
 
-    {"schema": "radia.editable-intent.v1", "host": "INTEL11",
+    {"schema": "radia.editable-intent.v1", "host": "configured-host",
      "interpreters": {"c:/program files/python312/python.exe": {"packages": {
-         "radia-mcp": {"source": "W:/00_CAE/Radia/01_GitHub/packages/radia-mcp",
+         "radia-mcp": {"source": "C:/Workspace/Radia/packages/radia-mcp",
                        "commit": "<40 hex>", "tracked_clean": true,
                        "recorded_at": "...Z", "recorded_by": "user@host",
                        "recorded_via": "repoint", "reason": "...",
@@ -24,7 +24,7 @@ the record, so the previous pointer is never lost.
 ``repoint`` performs ``pip install -e <source>`` for the named packages only.
 It records the previous pointer before pip runs, verifies registration and
 import afterwards, and leaves the record untouched when either step fails so
-``repoint --rollback`` can reinstall the previous source. It never stops
+the failed action can be diagnosed and fixed forward. It never stops
 processes and never uninstalls: a locked entry point is reported as a blocked
 update for the operator to resolve at a quiet boundary.
 
@@ -39,6 +39,7 @@ import getpass
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -60,13 +61,9 @@ IMPORT_MODULES = {
     "mcp-server-document": "mcp_server_document",
 }
 
-# Both UNC spellings of the lab NAS, LAB's S: drive and 100号機's W: drive
-# all name the same Radia tree.
-_PATH_ALIASES = (
-    ("//192.168.11.100/work/00_cae/radia/", "s:/radia/"),
-    ("//192.168.121.100/work/00_cae/radia/", "s:/radia/"),
-    ("w:/00_cae/radia/", "s:/radia/"),
-)
+# Existing record namespaces can be preserved through explicit private aliases.
+# No machine/network map is inferred or shipped in this module.
+_PATH_ALIASES = ()
 
 EXIT_OK = 0
 EXIT_DRIFT = 1
@@ -74,7 +71,57 @@ EXIT_PRECONDITION = 2
 EXIT_ACTION = 3
 EXIT_VERIFY = 4
 EXIT_UNVERIFIED = 5
-EDITABLE_DEVELOPMENT_HOST = "t7920"
+BINDING_SCHEMA = "radia.editable-target.v1"
+
+
+def validate_target_binding(binding, targets, executable=None):
+    """Bind a mutating action to a privately selected role, host and source.
+
+    This is an identity check, not an authorization token. The caller supplies
+    its intended target; this function never derives permission from the live
+    hostname and never changes records or runs pip.
+    """
+    if not isinstance(binding, dict) or set(binding) != {"schema", "role", "hostname", "python", "sources"}:
+        raise ValueError("Explicit editable target binding is required")
+    if binding["schema"] != BINDING_SCHEMA or binding["role"] not in ("build", "validation"):
+        raise ValueError("Unsupported editable target role/schema")
+    hostname = binding["hostname"]
+    if not isinstance(hostname, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", hostname):
+        raise ValueError("Expected hostname must be explicit")
+    if platform.node().casefold() != hostname.casefold():
+        raise ValueError(f"Editable target hostname mismatch: actual={platform.node()!r} expected={hostname!r}")
+    python = binding["python"]
+    if (not isinstance(python, str) or not Path(python).is_absolute()
+            or "windowsapps" in [part.casefold() for part in Path(python).parts]
+            or os.path.normcase(os.path.realpath(python)) != os.path.normcase(os.path.realpath(executable or sys.executable))):
+        raise ValueError("Editable target interpreter mismatch or non-absolute Python")
+    sources = binding["sources"]
+    if not isinstance(sources, dict) or not sources:
+        raise ValueError("Editable source bindings are required")
+    if binding["role"] == "validation" and set(sources) != {"radia"}:
+        raise ValueError("Validation editable deployment is scoped to radia only")
+    if not targets or len({package for package, _ in targets}) != len(targets):
+        raise ValueError("Select each editable package exactly once")
+    for package, source in targets:
+        expected = sources.get(package)
+        if not isinstance(expected, dict) or set(expected) != {"source", "commit"}:
+            raise ValueError("Missing source/commit binding for " + package)
+        pinned = expected["source"]
+        if (not isinstance(pinned, str) or not Path(pinned).is_absolute() or not Path(source).is_absolute()
+                or os.path.normcase(os.path.realpath(source)) != os.path.normcase(os.path.realpath(pinned))):
+            raise ValueError("Editable target source mismatch for " + package)
+        if not isinstance(expected["commit"], str) or not re.fullmatch(r"[0-9a-f]{40}", expected["commit"]):
+            raise ValueError("Editable source commit must be pinned for " + package)
+        observed = describe_source(source)
+        if observed["commit"] != expected["commit"]:
+            raise ValueError("Editable source commit mismatch for " + package)
+
+
+def _binding_refusal(error):
+    return {"schema": SCHEMA, "record_file": str(intent_file_path()),
+            "exit_code": EXIT_PRECONDITION,
+            "results": [{"status": "refused", "detail": str(error)}],
+            "note": "No pip command was run and no intent or log was changed."}
 
 
 # ------------------------------------------------------------------
@@ -475,8 +522,12 @@ def pip_install_editable(source: str, executable: str | None = None,
 def repoint(targets: list[tuple[str, str]], reason: str, *, via: str = "repoint",
             dry_run: bool = False, require_pushed: bool = False,
             executable: str | None = None, runner=subprocess.run,
-            data: dict | None = None, path: Path | None = None) -> dict:
+            data: dict | None = None, path: Path | None = None, binding=None) -> dict:
     """Point each (package, source) at its new editable source, recording both ends."""
+    try:
+        validate_target_binding(binding, targets, executable)
+    except ValueError as error:
+        return _binding_refusal(error)
     path = path or intent_file_path()
     data = data if data is not None else load_intent(path)
     results = []
@@ -507,8 +558,7 @@ def repoint(targets: list[tuple[str, str]], reason: str, *, via: str = "repoint"
                             "previous": previous,
                             "hint": ("pip did not complete; the record was not changed. A locked "
                                      "entry point means an affected server is still running: stop "
-                                     "only that client at a quiet boundary and retry, or run "
-                                     "`repoint --rollback --package " + package + "`.")})
+                                     "only that client at a quiet boundary and fix forward.")})
             exit_code = EXIT_ACTION
             break
         row = evaluate(package, source, executable)
@@ -519,8 +569,7 @@ def repoint(targets: list[tuple[str, str]], reason: str, *, via: str = "repoint"
                             "row": row, "previous": previous,
                             "hint": ("pip reported success but the interpreter does not resolve "
                                      "the new source; the record was not changed. Inspect the "
-                                     ".pth files listed above, then retry or "
-                                     "`repoint --rollback --package " + package + "`.")})
+                                     ".pth files listed above and fix forward.")})
             exit_code = EXIT_VERIFY
             break
         set_entry(data, package, entry, executable)
@@ -538,8 +587,13 @@ def repoint(targets: list[tuple[str, str]], reason: str, *, via: str = "repoint"
 
 def record_current(packages: list[str], reason: str, *, via: str = "record-current",
                    require_pushed: bool = False, executable: str | None = None,
-                   data: dict | None = None, path: Path | None = None) -> dict:
+                   data: dict | None = None, path: Path | None = None, binding=None) -> dict:
     """Adopt the currently installed editable pointers as the recorded intent."""
+    try:
+        targets = [(package, observe_registration(package).get("source") or "") for package in packages]
+        validate_target_binding(binding, targets, executable)
+    except ValueError as error:
+        return _binding_refusal(error)
     path = path or intent_file_path()
     data = data if data is not None else load_intent(path)
     results = []
@@ -569,25 +623,8 @@ def record_current(packages: list[str], reason: str, *, via: str = "record-curre
 
 def rollback(packages: list[str], reason: str, *, executable: str | None = None,
              runner=subprocess.run, data: dict | None = None, path: Path | None = None) -> dict:
-    """Reinstall each package from the ``previous`` pointer kept in its record."""
-    path = path or intent_file_path()
-    data = data if data is not None else load_intent(path)
-    targets = []
-    refused = []
-    for package in packages:
-        entry = recorded_entry(data, package, executable)
-        previous = (entry or {}).get("previous") or {}
-        source = previous.get("source")
-        if not source:
-            refused.append({"package": package, "status": "refused",
-                            "detail": "no previous editable pointer recorded for this package"})
-            continue
-        targets.append((package, source))
-    if refused:
-        return {"schema": SCHEMA, "record_file": str(path), "results": refused,
-                "exit_code": EXIT_PRECONDITION}
-    return repoint(targets, reason, via="rollback", executable=executable, runner=runner,
-                   data=data, path=path)
+    """Historical pointer records are provenance, never an active rollback route."""
+    return _binding_refusal("Editable updates are forward-only; rollback is not supported")
 
 
 def format_action(report: dict) -> str:
@@ -632,6 +669,9 @@ def build_parser() -> argparse.ArgumentParser:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--json", action="store_true", help="print the JSON report only")
     parser.add_argument("--argv-b64", help=argparse.SUPPRESS)
+    parser.add_argument("--path-aliases", default=os.environ.get("RADIA_EDITABLE_PATH_ALIASES", "[]"),
+                        help="private JSON prefix-pairs preserving an existing intent namespace")
+    parser.add_argument("--target-binding", help="private role/hostname/Python/source/commit JSON")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     show = sub.add_parser("show", help="print the recorded intent for this interpreter")
@@ -653,7 +693,7 @@ def build_parser() -> argparse.ArgumentParser:
     rep.add_argument("--record-current", action="store_true",
                      help="adopt the currently installed pointers as intent; no pip")
     rep.add_argument("--rollback", action="store_true",
-                     help="reinstall from the previous pointer kept in the record")
+                     help="unsupported: editable updates are forward-only")
     rep.add_argument("--dry-run", action="store_true", help="plan only")
     rep.add_argument("--require-pushed", action="store_true",
                      help="refuse a source commit that no remote branch or tag contains "
@@ -681,6 +721,12 @@ def _cmd_show(args) -> int:
 
 
 def _cmd_verify(args) -> int:
+    if args.binding is not None:
+        try:
+            validate_target_binding(args.binding, [(p, s["source"]) for p, s in args.binding["sources"].items()])
+        except (KeyError, TypeError, ValueError) as error:
+            report = _binding_refusal(error)
+            return _emit(args, report, format_action(report))
     data = load_intent()
     packages = list(args.package) or sorted(set(DEFAULT_PACKAGES) | set(recorded_packages(data)),
                                             key=lambda p: (p not in DEFAULT_PACKAGES, p))
@@ -692,44 +738,24 @@ def _cmd_repoint(args) -> int:
     if args.record_current and args.rollback:
         raise SystemExit("--record-current and --rollback are exclusive")
     if args.rollback:
-        packages = list(args.package) or list(DEFAULT_PACKAGES)
-        if platform.node().split(".", 1)[0].casefold() != EDITABLE_DEVELOPMENT_HOST:
-            return _emit(args, _host_policy_refusal("rollback"),
-                         "Editable rollback is allowed only on 100号機 (T7920).")
-        report = rollback(packages, args.reason or "rollback to the previous recorded pointer")
+        report = _binding_refusal("Editable updates are forward-only; rollback is not supported")
         return _emit(args, report, format_action(report))
     if args.record_current:
         if args.source:
             raise SystemExit("--record-current adopts installed pointers; do not pass --source")
         if not args.reason:
             raise SystemExit("--reason is required so the record says why this pointer is intended")
-        packages = list(args.package) or list(DEFAULT_PACKAGES)
-        if platform.node().split(".", 1)[0].casefold() != EDITABLE_DEVELOPMENT_HOST:
-            return _emit(args, _host_policy_refusal("record-current"),
-                         "Editable intent recording is allowed only on 100号機 (T7920).")
-        report = record_current(packages, args.reason, require_pushed=args.require_pushed)
+        binding = args.binding
+        packages = list(args.package) or list(binding.get("sources", {}) if isinstance(binding, dict) else {})
+        report = record_current(packages, args.reason, require_pushed=args.require_pushed, binding=binding)
         return _emit(args, report, format_action(report))
     if not args.package or len(args.package) != len(args.source):
         raise SystemExit("repoint needs matching --package/--source pairs")
     if not args.reason:
         raise SystemExit("--reason is required so the record says why this pointer moves")
-    if platform.node().split(".", 1)[0].casefold() != EDITABLE_DEVELOPMENT_HOST:
-        return _emit(args, _host_policy_refusal("repoint"),
-                     "Editable repoint is allowed only on 100号機 (T7920).")
     report = repoint(list(zip(args.package, args.source)), args.reason, via=args.via,
-                     dry_run=args.dry_run, require_pushed=args.require_pushed)
+                     dry_run=args.dry_run, require_pushed=args.require_pushed, binding=args.binding)
     return _emit(args, report, format_action(report))
-
-
-def _host_policy_refusal(action: str) -> dict:
-    return {
-        "schema": SCHEMA,
-        "record_file": str(intent_file_path()),
-        "exit_code": EXIT_PRECONDITION,
-        "results": [{"status": "refused", "action": action,
-                     "detail": "editable installs and intent writes are restricted to 100号機 (T7920)"}],
-        "note": "No pip command was run and no intent record was changed.",
-    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -738,7 +764,21 @@ def main(argv: list[str] | None = None) -> int:
         argv = json.loads(base64.b64decode(argv[1]).decode("utf-8"))
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    try:
+        args.binding = json.loads(args.target_binding or "null")
+    except (TypeError, ValueError) as error:
+        parser.error("Invalid target binding JSON: " + str(error))
+    aliases = json.loads(args.path_aliases)
+    if not isinstance(aliases, list) or any(not isinstance(pair, list) or len(pair) != 2
+            or not all(isinstance(value, str) and value for value in pair) for pair in aliases):
+        parser.error("--path-aliases must be JSON pairs of nonempty prefixes")
+    global _PATH_ALIASES
+    previous = _PATH_ALIASES
+    _PATH_ALIASES = tuple((a.replace("\\", "/").lower(), b.replace("\\", "/").lower()) for a, b in aliases)
+    try:
+        return args.func(args)
+    finally:
+        _PATH_ALIASES = previous
 
 
 if __name__ == "__main__":

@@ -21,10 +21,17 @@ _GIT = shutil.which("git")
 assert _GIT is not None, "Git is required by the release-quad contract tests"
 
 
+
+
 @pytest.fixture(autouse=True)
-def explicit_validation_runtime(monkeypatch):
-    monkeypatch.setenv("RADIA_RELEASE_SSH_VALIDATION", "validation")
-    monkeypatch.setenv("RADIA_RELEASE_PYTHON_VALIDATION", "C:/Runtime/python.exe")
+def explicit_role_bindings(monkeypatch):
+    for role in ("100", "VALIDATION"):
+        host="build-test" if role=="100" else "validation-test"
+        for key,value in {"SSH":host,"HOSTNAME":host,"PYTHON":f"C:/Runtime/{host}/python.exe",
+                          "QA_PYTHON":f"C:/QA/{host}/Scripts/python.exe",
+                          "EDITABLE_REPO":f"C:/Sources/{host}","EDITABLE_COMMIT":"a"*40,
+                          "EDITABLE_PATH_ALIASES":"[]"}.items():
+            monkeypatch.setenv(f"RADIA_RELEASE_{key}_{role}",value)
 
 
 def _git(repo, *args):
@@ -106,221 +113,34 @@ def test_release_head_uses_version_tag_commit(monkeypatch):
     assert calls == [(('rev-list', '-n', '1', 'v5.1.0'), {'check': False})]
 
 
-@pytest.mark.parametrize("controller", ["build-machine", "validation-machine"])
-@pytest.mark.parametrize("targets", ["validation,100", "all"])
-def test_phase8_routes_explicit_hosts_independently_of_controller(monkeypatch, controller, targets):
-    from argparse import Namespace
-
-    calls = []
-    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
-    monkeypatch.setattr(release_quad.platform, "node", lambda: controller)
-    monkeypatch.setattr(release_quad, "_editable_repo_100", lambda: "release-source")
-    monkeypatch.setattr(release_quad, "_deploy_pypi", lambda host, label, **kw: calls.append(host) or 0)
-    monkeypatch.setattr(release_quad, "_deploy_editable_remote", lambda host, *args: calls.append((host, "development")) or 0)
-    assert release_quad.cmd_phase8(Namespace(target=targets)) == 0
-    expected = ["validation", release_quad.SSH_100, (release_quad.SSH_100, "development")]
-    assert calls == expected
 
 
-def test_default_editable_root_is_the_100_release_checkout(monkeypatch):
-    monkeypatch.delenv(release_quad.EDITABLE_REPO_100_ENV, raising=False)
-    monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.1.0")
-    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
-    assert release_quad._editable_repo_100() == (
-        r"W:\00_CAE\Radia\release-quad\v5.1.0-ccccccccc")
 
 def test_editable_runtime_gate_requires_exact_native_manifest():
     gate = release_quad.EDITABLE_RELEASE_VERIFY
     assert "release_native_payloads.json" in gate
     assert 'radia.release-native-payloads.v1' in gate
-    assert '{"_radia_pybind.pyd", "axifem.pyd", "sparsesolv_ngsolve.pyd"}' in gate
+    assert '"peec_matrices.pyd"' in gate and '"radia_motor_rom.dll"' in gate
     assert "native payload set differs" in gate
     # The retired native extension name is spelled in two pieces in the gate.
     assert 'name == "c" + "ln_core.pyd"' in gate
     assert '"locked-old" in lowered' in gate
 
 
-def test_deployment_plan_uses_lab_wheel_and_100_development_editable(monkeypatch, capsys):
-    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
-    monkeypatch.setattr(release_quad, "run", lambda *a, **k: pytest.fail("not a dry run"))
-    monkeypatch.setattr(release_quad, "_pip_show", lambda *a: pytest.fail("runtime inference"))
-    assert release_quad.cmd_deployment_plan(None) == 0
-    plans = __import__("json").loads(capsys.readouterr().out)
-    assert [plan["solver_runtime"] for plan in plans] == [
-        "verified-wheel", "release-wheel+development-editable"]
-    assert "development_source" not in plans[0]
-    assert plans[1]["development_source"] == release_quad._editable_repo_100()
-    assert all(plan["solver_action"] == "verify-and-install" for plan in plans)
-    assert all(plan["independent_packages"] == "unchanged" for plan in plans)
-    assert all(not plan["verified"] for plan in plans)
-    assert all("mcp" not in key and "cubit" not in key
-               for plan in plans for key in plan)
-
-@pytest.mark.parametrize("rc", [0, 2, 4])
-def test_lab_deploy_routes_wheel_to_lab_and_propagates_failure(monkeypatch, rc):
-    calls = []
-    monkeypatch.setattr(release_quad, "_deploy_pypi",
-                        lambda host, label, **kw: calls.append((host, label, kw)) or rc)
-    assert release_quad._deploy_validation() == rc
-    assert calls == [("validation", "validation", {"python_path": "C:/Runtime/python.exe"})]
-
-@pytest.mark.parametrize("drift", [0, 1])
-def test_remote_deploy_changes_only_radia(monkeypatch, drift):
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "b" * 40)
-    calls = []
-
-    def verify(host, label, packages):
-        assert host == "100" and packages == [("radia", "W:/release")]
-        calls.append("verify")
-        return drift
-
-    monkeypatch.setattr(release_quad, "_verify_remote_editable", verify)
-    def run(command, **_kwargs):
-        calls.append(command)
-        return subprocess.CompletedProcess(command, 0)
-    monkeypatch.setattr(release_quad, "run", run)
-    monkeypatch.setattr(
-        release_quad, "_record_release_intent_remote",
-        lambda host, label, repo: calls.append(("record", host, repo)) or 0)
-
-    venv = release_quad.DEV_PYTHON_100
-    assert release_quad._deploy_editable_remote(
-        "100", "100", "W:/release", venv) == (4 if drift else 0)
-    script = base64.b64decode(calls[0][-1]).decode("utf-16le")
-    assert "pip install --no-deps" in script
-    assert "pip uninstall" not in script
-    assert "radia-mcp" not in script
-    assert "cubit-mesh-export" not in script
-    assert "Stop-Process" not in script
-    assert "status --porcelain --untracked-files=no" in script
-    assert "ngsolve.__version__" in script
-    # Every interpreter call is the dedicated development venv, never PATH's python.
-    assert f'& "{venv}" "-c"' in script
-    assert f"& '{venv}' -m pip install --no-deps" in script
-    assert script.index(f"Test-Path -LiteralPath '{venv}'") < script.index("pip install")
-    assert '"python"' not in script and "\npython " not in script
-    assert "netgen-mesher" in script
-    assert script.index("rev-parse HEAD") < script.index("pip install")
-    assert script.index("ngsolve.__version__") < script.index("pip install")
-    if drift:
-        assert calls[-1] == "verify"
-        assert not any(isinstance(c, tuple) for c in calls)
-    else:
-        assert calls[-2] == "verify"
-        assert calls[-1] == ("record", "100", "W:/release")
-
-
-def test_done_checks_lab_wheel_and_100_editable_only(monkeypatch, tmp_path):
-    from argparse import Namespace
-    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
-    calls = []
-    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
-    monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _args: 0)
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "c" * 40)
-    monkeypatch.setattr(release_quad, "_verify_local_release_source",
-                        lambda root, sha: calls.append((root, sha)) or 0)
-    monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: calls.append("tag") or 0)
-    monkeypatch.setattr(release_quad, "_verify_validation_wheel", lambda: calls.append("lab-wheel") or 0)
-    monkeypatch.setattr(release_quad, "_verify_100_release_wheel",
-                        lambda: calls.append("100-release") or 0)
-    monkeypatch.setattr(release_quad, "_verify_100_editable",
-                        lambda: calls.append("100-editable") or 0)
-    monkeypatch.setattr(release_quad, "cmd_phase9", lambda _args: 4)
-    assert release_quad.cmd_done(Namespace(simulink_package=None)) == 4
-    assert calls == [(str(release_quad.REPO), "c" * 40), "tag", "lab-wheel",
-                     "100-release", "100-editable"]
-
-def test_cpu_release_does_not_require_matlab_candidate(monkeypatch, tmp_path):
-    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
-    from argparse import Namespace
-
-    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _a: 0)
-    monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda *_a: 0)
-    monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _a: 0)
-    monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: 0)
-    monkeypatch.setattr(release_quad, "_verify_validation_wheel", lambda: 0)
-    monkeypatch.setattr(release_quad, "_verify_100_release_wheel", lambda: 0)
-    monkeypatch.setattr(release_quad, "_verify_100_editable", lambda: 0)
-    monkeypatch.setattr(release_quad, "cmd_phase9", lambda _a: 0)
-    monkeypatch.setattr(release_quad, "_run_retired_standalone_pyside_guard", lambda: 0)
-    monkeypatch.setattr(release_quad, "_check_main_synced", lambda **_k: 0)
-    monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.1.0")
-
-    monkeypatch.setattr(release_quad, "_verify_final_pip_checks", lambda: 0)
-    assert release_quad.cmd_done(Namespace(simulink_package=None)) == 0
-    assert release_quad.cmd_done(Namespace(simulink_package="retired.zip")) == 4
 
 
 
-@pytest.mark.parametrize("failure", [None, 0, 1, 2])
-def test_done_pip_check_checks_all_declared_runtimes_over_ssh(monkeypatch, failure):
-    calls = []
-
-    def fake_run(command, **_kwargs):
-        rc = int(len(calls) == failure)
-        calls.append(command)
-        return subprocess.CompletedProcess(command, rc)
-
-    monkeypatch.setattr(release_quad, "run", fake_run)
-    assert release_quad._verify_final_pip_checks() == (0 if failure is None else 4)
-    assert [call[:2] for call in calls] == [
-        ["ssh", "validation"], ["ssh", release_quad.SSH_100], ["ssh", release_quad.SSH_100]]
-    remote = [base64.b64decode(call[-1]).decode("utf-16le") for call in calls]
-    assert remote == [release_quad._runtime_guard_powershell("C:/Runtime/python.exe") + "& 'C:/Runtime/python.exe' -m pip check", f"& '{release_quad.DEV_PYTHON_100}' -m pip check", "python -m pip check"]
 
 
-def test_100_editable_tooling_uses_the_dedicated_development_venv(monkeypatch):
-    # 100号機's editable is a maintainer/student venv, separate from its release
-    # runtime; the machine-wide python is never the editable target.
-    assert release_quad.DEV_PYTHON_100 == (
-        r"W:\00_CAE\Radia\environments\development\Scripts\python.exe")
-    commands = []
-
-    def run(command, source, timeout):
-        commands.append(command)
-        return subprocess.CompletedProcess(command, 0, "{}", "")
-
-    monkeypatch.setattr(release_quad, "_run_script_with_file_output", run)
-    release_quad._remote_editable_intent("100", ["--json", "verify"])
-    release_quad._remote_editable_intent("mdx1", ["--json", "verify"])
-    assert commands[0][:3] == ["ssh", "100", release_quad.DEV_PYTHON_100_PS]
-    assert commands[1][:3] == ["ssh", "mdx1", "python"]
 
 
-@pytest.mark.parametrize("wheel_rc", [0, 2, 3])
-def test_100_deploy_updates_release_wheel_then_development_editable(monkeypatch, wheel_rc):
-    # The machine-default Python is the student-facing release runtime (wheel);
-    # the development venv holds the editable. A failed wheel stops both.
-    called = []
-    monkeypatch.setattr(release_quad, "_deploy_pypi",
-                        lambda host, label, **kw: called.append(("wheel", host, label, kw)) or wheel_rc)
-    monkeypatch.setattr(release_quad, "_deploy_editable_remote",
-                        lambda *args: called.append(("editable", *args)) or 0)
-    monkeypatch.setattr(release_quad, "_editable_repo_100", lambda: "W:/release")
-    assert release_quad._deploy_100() == wheel_rc
-    assert called[0] == ("wheel", "100", "build release runtime", {})
-    if wheel_rc:
-        assert len(called) == 1
-    else:
-        assert called[1] == ("editable", "100", "build", "W:/release",
-                             release_quad.DEV_PYTHON_100)
 
 
-@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell 7 to execute the guard")
-def test_missing_development_venv_exits_43_before_any_install(monkeypatch, tmp_path):
-    # Execute the real PowerShell branch with a guaranteed-absent interpreter.
-    absent = str(tmp_path / "absent venv" / "Scripts" / "python.exe")
-    captured = {}
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
-    monkeypatch.setattr(release_quad, "run", lambda command, **_kw: captured.setdefault(
-        "command", command) and subprocess.CompletedProcess(command, 1))
-    assert release_quad._deploy_editable_remote("100", "100", str(tmp_path), absent) == 3
-    result = subprocess.run(
-        ["pwsh", "-NoProfile", "-NonInteractive", "-EncodedCommand", captured["command"][-1]],
-        capture_output=True, text=True, timeout=60)
-    assert result.returncode == release_quad.DEV_VENV_MISSING_EXIT == 43
-    assert "Development venv interpreter is missing" in result.stderr
-    assert "rev-parse" not in result.stdout + result.stderr
+
+
+
+
+
 
 
 
@@ -356,15 +176,6 @@ def test_remote_default_aliases_match_local_normalization_contract():
         assert alias in release_quad.REMOTE_EDITABLE_VERIFY
 
 
-def test_editable_probe_resolves_git_inside_the_target_process():
-    probe = release_quad.CROSS_MACHINE_PROBE_100_EDITABLE
-
-    assert 'git_exe = shutil.which("git")' in probe
-    assert "[git_exe," in probe
-    assert '"-c", "safe.directory=" + root' in probe
-    assert "if result.returncode != 0:" in probe
-    assert "git show failed for {relpath}" in probe
-    assert "GIT_EXE" not in probe
 
 
 def test_simulink_candidate_accepts_its_exact_tag_when_controller_is_newer(
@@ -538,28 +349,6 @@ def test_done_rejects_a_bad_source_or_controller(tmp_path, monkeypatch, case, re
         Namespace(simulink_package=None, release_source=str(source))) == 4
 
 
-@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell 7 to execute the guard")
-@pytest.mark.parametrize("case,code", [("wrong-sha", 41), ("dirty", 42)])
-def test_editable_deploy_source_refusals_exit_with_their_codes(
-        tmp_path, monkeypatch, case, code, release_template):
-    import sys
-    controller, release = _release_repo(tmp_path, release_template)
-    expected = release if case == "dirty" else "0" * 40
-    _git(controller, "checkout", "-q", "--detach", release)
-    if case == "dirty":
-        (controller / "tool.py").write_text("parallel WIP\n", encoding="ascii")
-    captured = {}
-    monkeypatch.setattr(release_quad, "_release_head", lambda: expected)
-    monkeypatch.setattr(release_quad, "run", lambda command, **_kw: captured.setdefault(
-        "command", command) and subprocess.CompletedProcess(command, 1))
-    assert release_quad._deploy_editable_remote(
-        "100", "100", str(controller), sys.executable) == 3
-    result = subprocess.run(
-        ["pwsh", "-NoProfile", "-NonInteractive", "-EncodedCommand", captured["command"][-1]],
-        capture_output=True, text=True, timeout=60)
-    assert result.returncode == code
-    assert ("SHA mismatch" if code == 41 else "tracked changes") in result.stderr
-    assert "pip install" not in result.stdout
 
 
 def test_release_tag_gate_requires_declared_version_at_exact_head(monkeypatch):
@@ -577,98 +366,13 @@ def test_release_tag_gate_requires_declared_version_at_exact_head(monkeypatch):
     assert release_quad._verify_head_release_tag() == 4
 
 
-def test_lab_wheel_deploy_stops_before_ssh_when_unpublished(monkeypatch):
-    monkeypatch.setattr(release_quad, "_read_repo_versions", lambda *_: {"radia": "5.2.0"})
-    monkeypatch.setattr(release_quad, "_check_pypi_propagation", lambda *_: 2)
-    monkeypatch.setattr(release_quad, "run", lambda *_a, **_k: pytest.fail("No SSH before wheel availability"))
-    assert release_quad._deploy_validation() == 2
 
 
-def test_lab_wheel_deploy_has_guard_no_editable_and_pip_check(monkeypatch):
-    calls = []
-    monkeypatch.setattr(release_quad, "_read_repo_versions", lambda *_: {"radia": "5.1.0"})
-    monkeypatch.setattr(release_quad, "_check_pypi_propagation", lambda *_: 0)
-    monkeypatch.setattr(release_quad, "run", lambda command, **kw: calls.append(command) or subprocess.CompletedProcess(command, 0))
-    assert release_quad._deploy_validation() == 0
-    assert calls[0][:2] == ["ssh", "validation"]
-    script = base64.b64decode(calls[0][-1]).decode("utf-16le")
-    assert script.index("base64") < script.index("pip install")
-    assert "--only-binary=:all:" in script
-    assert "--no-deps" in script
-    assert " -e " not in script
-    assert "direct_url.json" in script and "editable" in script
-    assert "pip check" in script
-    assert "radia-mcp" not in script and "cubit-mesh-export" not in script
 
 
-def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
-    expected_sha = "a" * 40
-    captured = {}
-    monkeypatch.setattr(release_quad, "_release_head", lambda: expected_sha)
-
-    def capture_run(command, **_kwargs):
-        captured["command"] = command
-        return subprocess.CompletedProcess(command, 0)
-
-    monkeypatch.setattr(release_quad, "run", capture_run)
-    monkeypatch.setattr(release_quad, "_verify_remote_editable", lambda *_a: 0)
-    monkeypatch.setattr(release_quad, "_record_release_intent_remote", lambda *_a: 0)
-
-    assert release_quad._deploy_editable_remote(
-        "release-host", "release host", r"W:\Radia\release-source",
-        release_quad.DEV_PYTHON_100
-    ) == 0
-    script = base64.b64decode(captured["command"][-1]).decode("utf-16le")
-    assert expected_sha in script
-    assert 'safe.directory=W:/Radia/release-source' in script
-    assert "status --porcelain --untracked-files=no" in script
-    assert "ngsolve.__version__" in script
-    assert "netgen-mesher" in script
-    assert script.index("rev-parse HEAD") < script.index("pip install --no-deps")
-    assert script.index("ngsolve.__version__") < script.index("pip install --no-deps")
-    assert "pip uninstall" not in script
-    assert "radia-mcp" not in script
-    assert "cubit-mesh-export" not in script
 
 
-def test_done_keeps_lab_wheel_and_100_editable_checks_after_all_gates(monkeypatch):
-    calls = []
-    monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _args: calls.append("shadows") or 0)
-    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
-    monkeypatch.setattr(release_quad, "_verify_local_release_source",
-                        lambda _repo, _sha: calls.append("source") or 0)
-    monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: calls.append("tag") or 0)
-    monkeypatch.setattr(release_quad, "_verify_validation_wheel", lambda *_args: calls.append("validation") or 0)
-    monkeypatch.setattr(release_quad, "_verify_100_release_wheel",
-                        lambda *_args: calls.append("100-release") or 0)
-    monkeypatch.setattr(release_quad, "_verify_100_editable", lambda *_args: calls.append("100") or 0)
-    monkeypatch.setattr(release_quad, "cmd_phase9", lambda _args: calls.append("phase9") or 0)
-    monkeypatch.setattr(release_quad, "_run_retired_standalone_pyside_guard",
-                        lambda: calls.append("guard") or 0)
-    monkeypatch.setattr(release_quad, "_check_main_synced", lambda **_kwargs: calls.append("main") or 0)
-    monkeypatch.setattr(release_quad, "_verify_simulink_candidate_state",
-                        lambda package: calls.append(("simulink", package)) or 0)
-    monkeypatch.setattr(release_quad, "_verify_final_pip_checks", lambda: calls.append("pip-check") or 0)
-    args = type("Args", (), {"simulink_package": None})()
-    assert release_quad.cmd_done(args) == 0
-    assert calls == ["preflight", "source", "tag", "validation", "100-release", "100",
-                     "phase9", "guard", "main", "pip-check"]
 
-def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch):
-    calls = []
-    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
-    monkeypatch.setattr(release_quad, "_verify_local_release_source",
-                        lambda _root, _sha: calls.append("source") or 4)
-    def unexpected_machine_check(*_args, **_kwargs):
-        raise AssertionError("machine checks must not run from a stale source")
-    monkeypatch.setattr(release_quad, "_verify_validation_wheel", unexpected_machine_check)
-    monkeypatch.setattr(release_quad, "_verify_100_release_wheel", unexpected_machine_check)
-    monkeypatch.setattr(release_quad, "_verify_100_editable", unexpected_machine_check)
-    args = type("Args", (), {"simulink_package": None})()
-    assert release_quad.cmd_done(args) == 4
-    assert calls == ["preflight", "source"]
 
 def test_ci_check_runs_use_latest_attempt_for_each_name(monkeypatch):
     runs = {
@@ -891,28 +595,9 @@ def test_explicit_editable_root_does_not_resolve_controller_version_tag(monkeypa
     monkeypatch.setenv(env, "C:/release-quad/v5.1.0-ccccccccc/")
     monkeypatch.setattr(release_quad, "_release_commit",
                         lambda: pytest.fail("explicit root must not resolve a controller tag"))
-    assert getattr(release_quad, "_editable_repo_" + host)() == "C:/release-quad/v5.1.0-ccccccccc"
+    assert getattr(release_quad, "_editable_repo_" + host)() == "C:/release-quad/v5.1.0-ccccccccc/"
 
 
-@pytest.mark.parametrize("verifier,host,label", [
-    ("_verify_validation_wheel", "validation", "validation"),
-    ("_verify_100_release_wheel", "100", "build release runtime"),
-])
-@pytest.mark.parametrize("rc,expected", [(0, 0), (1, 4)])
-def test_wheel_verifiers_use_remote_record_gate(monkeypatch, verifier, host, label, rc, expected):
-    calls = []
-    monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.1.0")
-    monkeypatch.setattr(release_quad, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, rc))
-    assert getattr(release_quad, verifier)() == expected
-    assert calls[0][:2] == ["ssh", host]
-    script = base64.b64decode(calls[0][-1]).decode("utf-16le")
-    # The release runtime is the machine-default interpreter, not a venv.
-    assert ("& 'C:/Runtime/python.exe' -c" in script) if verifier == '_verify_validation_wheel' else script.startswith('python -c')
-    payload = script.rsplit("b64decode('", 1)[1].split("'", 1)[0]
-    code = base64.b64decode(payload).decode()
-    assert "d.files" in code and "actual == f.hash.value" in code
-    assert "Shadowed Radia import" in code and f"{label} must use a wheel" in code
-    assert "'5.1.0'" in code
 
 
 @pytest.mark.parametrize(
@@ -992,33 +677,174 @@ def test_validation_rejects_ambiguous_runtime_configuration(monkeypatch,name,val
     with pytest.raises(ValueError,match=name):release_quad._solver_target("validation")
 
 
-def test_all_validation_consumers_resolve_same_explicit_runtime(monkeypatch):
-    """Guards: deploy/check/pip/phase9 share configuration. Assumes: no SSH executed."""
-    import ntpath
-    host="consumer-test";python="C:/Program Files/Owner's Python/python.exe"
-    monkeypatch.setenv("RADIA_RELEASE_SSH_VALIDATION",host)
-    monkeypatch.setenv("RADIA_RELEASE_PYTHON_VALIDATION",python)
-    assert release_quad._solver_target("validation")==("validation",host,python)
+
+@pytest.mark.parametrize('role',['100','validation'])
+def test_explicit_source_is_required_without_historic_defaults(monkeypatch,role):
+    """Guards: no implicit source choice. Assumes: synthetic private bindings."""
+    setting='RADIA_RELEASE_EDITABLE_REPO_'+role.upper()
+    monkeypatch.delenv(setting)
+    with pytest.raises(ValueError,match=setting):release_quad._editable_target(role)
+
+
+def test_deployment_plan_names_normal_editable_and_separate_qa(monkeypatch,capsys):
+    """Guards: dry planning never installs. Assumes: no actual host lookup."""
+    import json
+    monkeypatch.setattr(release_quad,'run',lambda *a,**k:pytest.fail('planning mutated a host'))
+    assert release_quad.cmd_deployment_plan(None)==0
+    plans=json.loads(capsys.readouterr().out)
+    assert {p['host'] for p in plans}=={'100','validation'}
+    for plan in plans:
+        bound=release_quad._editable_target(plan['host'])
+        assert plan['solver_runtime']=='editable' and plan['python']==bound['python']
+        assert plan['source']==bound['source'] and plan['source_commit']=='a'*40
+        assert plan['isolated_wheel_qa_required'] is True
+
+
+@pytest.mark.parametrize('targets',['validation,100','all'])
+def test_phase8_checks_all_bindings_before_first_mutation(monkeypatch,targets):
+    """Guards: a later invalid target cannot leave partial installs. Assumes: mocked actions."""
+    from argparse import Namespace
+    seen=[]
+    monkeypatch.setattr(release_quad,'_release_head',lambda:'a'*40)
+    monkeypatch.setattr(release_quad,'cmd_preflight',lambda a:seen.append('preflight') or 0)
+    monkeypatch.setattr(release_quad,'_deploy_validation',lambda:seen.append('validation') or 0)
+    monkeypatch.setattr(release_quad,'_deploy_100',lambda:seen.append('100') or 0)
+    assert release_quad.cmd_phase8(Namespace(target=targets))==0
+    assert seen==['preflight','validation','100']
+    seen.clear();monkeypatch.setenv('RADIA_RELEASE_EDITABLE_COMMIT_100','b'*40)
+    with pytest.raises(ValueError,match='release tag'):release_quad.cmd_phase8(Namespace(target=targets))
+    assert seen==[]
+
+
+@pytest.mark.parametrize('role',['100','validation'])
+@pytest.mark.parametrize('installer_rc',[0,3])
+def test_role_deployment_checks_identity_and_installer_before_intent(monkeypatch,role,installer_rc):
+    """Guards: install failure never records success. Assumes: observed remote transport."""
     calls=[]
-    monkeypatch.setattr(release_quad,"_deploy_pypi",lambda h,l,**kw:calls.append((h,kw)) or 0)
-    assert release_quad._deploy_validation()==0
-    assert calls==[(host,{"python_path":python})]
-    commands=[]
-    monkeypatch.setattr(release_quad,"_radia_version",lambda:"5.4.0")
-    monkeypatch.setattr(release_quad,"run",lambda cmd,**kw:commands.append(cmd) or subprocess.CompletedProcess(cmd,0))
-    assert release_quad._verify_validation_wheel()==0
-    assert release_quad._verify_final_pip_checks()==0
-    assert commands[0][1]==host and commands[1][1]==host
-    literal="'C:/Program Files/Owner''s Python/python.exe'"
-    for cmd in commands[:2]:
-        script=base64.b64decode(cmd[-1]).decode("utf-16le")
-        assert "Test-Path -LiteralPath "+literal in script,script
-        assert "& "+literal+" -c" in script,script
-        assert "Selected Python is missing" in script,script
-        token=script.split("b64decode('",1)[1].split("'",1)[0]
-        code=base64.b64decode(token).decode()
-        assert "Selected Python identity mismatch" in code
-        namespace={"__name__":"runtime_identity_probe"}
-        # Independent oracle: production probe rejects an executable different from selection.
-        with pytest.raises(AssertionError,match="Selected Python identity mismatch"):
-            exec(code,namespace)
+    monkeypatch.setattr(release_quad,'_check_remote_target',lambda target:calls.append(('target',target['role'])) or 0)
+    monkeypatch.setattr(release_quad,'run',lambda cmd,**kw:calls.append(('install',cmd)) or subprocess.CompletedProcess(cmd,installer_rc))
+    monkeypatch.setattr(release_quad,'_record_release_intent_remote',lambda actual,reason:calls.append(('record',actual)) or 0)
+    monkeypatch.setattr(release_quad,'_verify_role_editable',lambda actual:calls.append(('verify',actual)) or 0)
+    assert release_quad._deploy_editable_role(role)==(3 if installer_rc else 0)
+    assert calls[0]==('target',role)
+    assert calls[1][1][:2]==['ssh',release_quad._editable_target(role)['ssh']]
+    assert [c[0] for c in calls]==(['target','install'] if installer_rc else ['target','install','record','verify'])
+
+
+@pytest.mark.parametrize('role',['100','validation'])
+def test_installer_program_checks_before_pip_and_changes_only_bound_radia(monkeypatch,role):
+    """Guards: identity/native checks precede a single editable install. Assumes: Python control flow is executed with observed subprocesses."""
+    target=release_quad._editable_target(role);seen=[]
+    monkeypatch.setattr(release_quad,'_target_check_code',lambda t:"seen.append('identity')")
+    monkeypatch.setattr(release_quad.subprocess,'_contract_event',seen.append,raising=False)
+    monkeypatch.setattr(release_quad,'EDITABLE_RELEASE_VERIFY',"import subprocess,sys; subprocess._contract_event('native-pre' if 'preinstall' in sys.argv else 'native-post')")
+    monkeypatch.setattr(release_quad,'SOLVER_INSTALL_GUARD',"seen.append('lock')")
+    monkeypatch.setattr(release_quad.subprocess,'run',lambda cmd,**kw:seen.append(cmd))
+    scope={'seen':seen};exec(release_quad._editable_install_program(target),scope)
+    assert seen[:3]==['identity','native-pre','lock']
+    assert seen[3][:5]==[target['python'],'-I','-m','pip','install']
+    assert seen[3][-2:]==['-e',target['source']+'[gpu]']
+    assert seen[4:6]==['identity','native-post']
+    assert seen[-1]==[target['python'],'-I','-m','pip','check']
+
+
+@pytest.mark.parametrize('failure',[None,0,1,2,3])
+def test_final_pip_checks_cover_four_explicit_interpreters_and_fail_fast(monkeypatch,failure):
+    """Guards: all normal and QA dependencies checked. Assumes: exit codes are synthetic."""
+    calls=[]
+    def run(cmd,**kw):
+        rc=int(len(calls)==failure);calls.append(cmd)
+        return subprocess.CompletedProcess(cmd,rc)
+    monkeypatch.setattr(release_quad,'run',run)
+    assert release_quad._verify_final_pip_checks()==(0 if failure is None else 4)
+    expected=[]
+    for role in release_quad.SOLVER_TARGETS:
+        target=release_quad._editable_target(role);expected.append((target['ssh'],target['python']))
+    expected += [(host,python) for _,host,python in (release_quad._solver_qa_target(role) for role in release_quad.SOLVER_TARGETS)]
+    assert len(calls)==(4 if failure is None else failure+1)
+    for cmd,(host,python) in zip(calls,expected):
+        assert cmd[:2]==['ssh',host]
+        script=base64.b64decode(cmd[-1]).decode('utf-16le')
+        assert release_quad._runtime_guard_powershell(python) in script
+        assert '& '+release_quad._powershell_literal(python)+' -I -m pip check' in script
+        assert 'exit $LASTEXITCODE' in script
+
+
+@pytest.mark.parametrize('role',['100','validation'])
+@pytest.mark.parametrize('rc',[0,1])
+def test_isolated_qa_verifier_propagates_payload_check_exit(monkeypatch,role,rc):
+    """Guards: QA is selected separately and failures propagate. Assumes: no SSH executed."""
+    calls=[]
+    monkeypatch.setattr(release_quad,'_check_remote_target',lambda target,**kw:calls.append(('identity',target,kw)) or 0)
+    monkeypatch.setattr(release_quad,'_verify_wheel_runtime',lambda host,label,**kw:calls.append(('wheel',host,label,kw)) or rc)
+    assert release_quad._verify_qa_wheel(role)==rc
+    label,host,python=release_quad._solver_qa_target(role)
+    assert calls[0][2]==dict(python=python,source=False,qa=True)
+    assert calls[1]==('wheel',host,label+' QA',dict(python_path=python,isolated=True))
+
+
+def test_done_requires_both_normal_and_both_qa_views_before_phase9(monkeypatch):
+    """Guards: no missing role/QA completion. Assumes: earlier gates are observed mocks."""
+    from argparse import Namespace
+    calls=[]
+    monkeypatch.setattr(release_quad,'cmd_preflight',lambda a:0)
+    monkeypatch.setattr(release_quad,'_release_head',lambda:'a'*40)
+    monkeypatch.setattr(release_quad,'_verify_local_release_source',lambda *a:0)
+    monkeypatch.setattr(release_quad,'_verify_head_release_tag',lambda:0)
+    monkeypatch.setattr(release_quad,'_verify_role_editable',lambda role:calls.append(('normal',role)) or 0)
+    monkeypatch.setattr(release_quad,'_verify_qa_wheel',lambda role:calls.append(('qa',role)) or 0)
+    monkeypatch.setattr(release_quad,'cmd_phase9',lambda a:4)
+    assert release_quad.cmd_done(Namespace(simulink_package=None))==4
+    assert set(calls)=={('normal','100'),('normal','validation'),('qa','100'),('qa','validation')} and len(calls)==4
+
+
+@pytest.mark.parametrize('defect',['hostname','python','commit','dirty'])
+def test_real_target_identity_guard_rejects_before_installer(tmp_path,release_template,defect):
+    """Guards: target identity and tracked source are real preconditions. Assumes: disposable local Git source and current Python emulate a target."""
+    import platform
+    repo,sha=_release_repo(tmp_path,release_template)
+    _git(repo,'checkout','-q','--detach',sha)
+    target={'binding':{'hostname':platform.node()},'python':sys.executable,'source':str(repo),'commit':sha}
+    ok=subprocess.run([sys.executable,'-I','-c',release_quad._target_check_code(target)],capture_output=True,text=True,timeout=30)
+    assert ok.returncode==0,ok.stderr
+    expected={'hostname':'Selected hostname mismatch','python':'Selected Python mismatch','commit':'Selected source commit mismatch','dirty':'Selected source has tracked changes'}[defect]
+    if defect=='hostname':target['binding']['hostname']='wrong-host-for-test'
+    elif defect=='python':target['python']=str(tmp_path/'missing-python.exe')
+    elif defect=='commit':target['commit']='0'*40
+    else:(repo/'tool.py').write_text('dirty\n',encoding='utf-8')
+    bad=subprocess.run([sys.executable,'-I','-c',release_quad._target_check_code(target)],capture_output=True,text=True,timeout=30)
+    assert bad.returncode!=0 and expected in bad.stderr,(bad.returncode,bad.stdout,bad.stderr)
+
+@pytest.mark.parametrize('defect',[None,'missing-peec','missing-motor','wrong-source','dirty','wrong-schema','wrong-binary-hash'])
+def test_editable_native_gate_checks_complete_cpu_payload_and_source_receipts(tmp_path,defect):
+    """Guards: hash-only manifests cannot conceal missing/stale CPU binaries.
+
+    Assumes: synthetic payload bytes; the independently tested GPU verifier is
+    replaced with an empty module list to isolate the CPU provenance contract.
+    """
+    import json
+    repo=tmp_path/'source';package=repo/'src/radia';package.mkdir(parents=True)
+    tools=repo/'tools';tools.mkdir()
+    (tools/'python_gpu_payload.py').write_text('MODULES=()\n',encoding='utf-8')
+    sha='a'*40
+    names=['_radia_pybind.pyd','axifem.pyd','peec_matrices.pyd','sparsesolv_ngsolve.pyd','radia_motor_rom.dll']
+    hashes={}
+    for name in names:
+        payload=(name+' synthetic bytes').encode();(package/name).write_bytes(payload)
+        hashes[name]=hashlib.sha256(payload).hexdigest()
+        if name.endswith('.pyd'):
+            receipt=dict(schema='radia.native-build-provenance.v1',source_commit=sha,source_dirty=False,binary_name=name,binary_sha256=hashes[name],binary_bytes=len(payload))
+            if name=='_radia_pybind.pyd':
+                if defect=='wrong-source':receipt['source_commit']='b'*40
+                elif defect=='dirty':receipt['source_dirty']=True
+                elif defect=='wrong-schema':receipt['schema']='other'
+                elif defect=='wrong-binary-hash':receipt['binary_sha256']='0'*64
+            (package/(name+'.build.json')).write_text(json.dumps(receipt),encoding='utf-8')
+    if defect in ('missing-peec','missing-motor'):
+        name='peec_matrices.pyd' if defect=='missing-peec' else 'radia_motor_rom.dll'
+        (package/name).unlink();hashes.pop(name)
+    (package/'release_native_payloads.json').write_text(json.dumps(dict(schema='radia.release-native-payloads.v1',source_commit=sha,files=hashes)),encoding='utf-8')
+    result=subprocess.run([sys.executable,'-I','-c',release_quad.EDITABLE_RELEASE_VERIFY,str(repo),sha,'test-ng','test-netgen','preinstall'],capture_output=True,text=True,timeout=30)
+    assert (result.returncode==0)==(defect is None),(defect,result.returncode,result.stdout,result.stderr)
+    if defect is not None:
+        assert ('omits required' if defect.startswith('missing-') else 'native source provenance differs') in result.stderr

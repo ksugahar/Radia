@@ -104,16 +104,18 @@ def test_preflight_checks_only_solver_version_pair(monkeypatch, matched):
     assert bool(checked_main) == matched
 
 
-def test_compute_host_install_resolves_and_checks_native_dependencies():
-    source = TOOL.read_text(encoding="utf-8")
-    start = source.index("def _deploy_pypi(")
-    end = source.index("\ndef _deploy_100", start)
-    deploy = source[start:end]
-    assert '--no-deps --only-binary=:all: "radia==' in deploy
-    assert "_solver_dependency_pins()" in deploy
-    assert "ngsolve_version = pins[\"ngsolve\"]" in deploy
-    assert "netgen_version = pins[\"netgen-mesher\"]" in deploy
-    assert deploy.count("-m pip check") == 1
+def test_compute_host_installer_passes_metadata_pins_to_native_checks(monkeypatch):
+    """Guards: dependency identity precedes installation. Assumes: synthetic pins, no remote action."""
+    import ast
+    monkeypatch.setattr(module, "_solver_dependency_pins",
+                        lambda: {"ngsolve": "sentinel-ng", "netgen-mesher": "sentinel-netgen"})
+    tree = ast.parse(module._editable_install_program(
+        {"source": "C:/Sources/test", "commit": "a" * 40,
+         "python": "C:/Runtime/python.exe", "binding": {"hostname": "test"}}))
+    args = next(ast.literal_eval(node.value) for node in tree.body
+                if isinstance(node, ast.Assign) and node.targets[0].id == "native_args")
+    assert args == ["native-check", "C:/Sources/test", "a" * 40,
+                    "sentinel-ng", "sentinel-netgen"]
 
 
 def test_solver_dependency_versions_come_from_exact_metadata_pins():
