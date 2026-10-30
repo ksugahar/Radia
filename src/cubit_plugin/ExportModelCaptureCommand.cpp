@@ -54,6 +54,7 @@ CapturedCurve capture_curve(int id)
     bool rational=false,reversed=false;DLIList<CubitVector> controls;DLIList<double> weights,knots;
     if(edge->get_curve_ptr()->get_spline_params(rational,c.spline_degree,controls,weights,knots,reversed)!=CUBIT_SUCCESS)
       throw std::runtime_error("Cannot read source spline degree for curve "+std::to_string(id));
+    require_polynomial_capture_spline(rational,id);
   }
   return c;
 }

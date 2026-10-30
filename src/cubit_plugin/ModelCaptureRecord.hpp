@@ -14,6 +14,11 @@
 
 namespace cubit_mesh_export {
 using CapturePoint = std::array<double, 3>;
+inline void require_polynomial_capture_spline(bool rational, int curve_id)
+{
+  if (rational)
+    throw std::runtime_error("Rational spline capture is unsupported for curve " + std::to_string(curve_id));
+}
 struct CapturedVertex { int id; CapturePoint position; };
 struct CapturedCurve {
   int id; std::string type; double length; int spline_degree = 0;

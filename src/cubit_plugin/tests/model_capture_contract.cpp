@@ -11,6 +11,8 @@ template<class F> void rejects(F fn,const char *name)
 int main() try
 {
   ModelCaptureRecord record;
+  require_polynomial_capture_spline(false,31);
+  rejects([&]{require_polynomial_capture_spline(true,31);},"rational spline");
   CapturedVolume v;v.id=7;v.name="Body";v.measure=4.1887902047863905;
   v.surfaces.push_back({11,"sphere surface",{0,0,1},{}});
   v.whole_sphere=true;v.center={1,2,3};v.radius=1;
