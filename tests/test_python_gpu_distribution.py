@@ -7,6 +7,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 import zipfile
 
 import pytest
@@ -119,3 +120,33 @@ def test_windows_release_rejects_incomplete_or_implicit_architectures(tmp_path, 
     monkeypatch.setattr(builder, "capture", lambda cmd: "Cuda compilation tools, release 12.8, V12.8")
     with pytest.raises(RuntimeError, match="Explicit architectures"):
         builder.check_toolchain(tmp_path, tmp_path / "cl", architectures, True)
+
+
+def test_hdiv_host_cmake_values_do_not_reinterpret_windows_path_escapes(tmp_path, monkeypatch):
+    builder = load("build_python_gpu")
+    compiler = tmp_path / "compiler with spaces" / "cl.exe"
+    sdk = tmp_path / "installed SDK"
+    sdk.mkdir()
+    configs = {"ngsolve": sdk / "NGSolveConfig.cmake", "netgen-mesher": sdk / "NetgenConfig.cmake"}
+    for path in configs.values():path.write_text("# fixture")
+    monkeypatch.setattr(builder, "installed_config", lambda package, filename: configs[package])
+    monkeypatch.setattr(builder.platform, "system", lambda: "Windows")
+    import shutil
+    monkeypatch.setattr(shutil, "which", lambda name: str(tmp_path / "cmake.exe"))
+    out = tmp_path / "build with spaces"; out.mkdir()
+    binary = out / "_hdiv_cuda.pyd"
+    commands = []
+    def execute(argv, output, label, saved):
+        commands.append(argv)
+        if label == "_hdiv_cuda-host":binary.write_bytes(b"not executable")
+    monkeypatch.setattr(builder, "execute", execute)
+    cuda = tmp_path / "cuda toolkit"
+    builder.build_hdiv_host(SimpleNamespace(host_compiler=compiler), binary,
+                            out / "hdiv.obj", sdk, cuda, out, [])
+    expected = {"CMAKE_CXX_COMPILER": compiler, "NGSolve_DIR": sdk, "Netgen_DIR": sdk,
+                "Python3_EXECUTABLE": Path(sys.executable), "RADIA_PYBIND_INCLUDE": sdk,
+                "RADIA_CUDA_OBJECT": out / "hdiv.obj", "RADIA_OUTPUT": out,
+                **{"RADIA_"+name.upper():cuda / "lib/x64" / (name+".lib") for name in ("cudart","cublas","cusolver")}}
+    values = dict(arg[2:].split("=",1) for arg in commands[0] if isinstance(arg,str) and arg.startswith("-D"))
+    for key,path in expected.items():
+        assert values[key] == path.as_posix() and "\\" not in values[key], (key,values[key],path)

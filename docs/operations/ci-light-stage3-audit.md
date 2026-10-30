@@ -395,3 +395,14 @@ Separately, a real installed checker produced plain and compressed input
 receipts. A fresh consumer environment without that checker accepted both
 and rejected 18 content/provenance/options/report mutations. This CPU transport
 check does not certify GPU runtime, numerical results or the eventual wheel.
+
+The subsequent Windows compile check exposed SDK macro re-evaluation of
+backslash-containing CMake values. The builder now renders each CMake path
+argument with forward slashes while preserving separate subprocess argv.
+The corresponding source contract uses mocked SDK files and command execution;
+it guards compiler, SDK, Python, object, output and CUDA-library path values.
+Its closure has no additional paths or denied-import exemptions. Reproducing
+the preceding seal and inspecting these two changed executable files yields
+`26a991e809caa0a0f96a00d9cd8035648c7517835a00beef93711a5699a52e39`.
+Fresh exact-source fast/routing checks and native compilation are recorded
+separately; the previous partial native build does not qualify this revision.

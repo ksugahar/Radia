@@ -143,13 +143,17 @@ def build_hdiv_host(args, binary, cuda_object, include, cuda, out, commands):
     netgen = installed_config("netgen-mesher", "NetgenConfig.cmake")
     libs = cuda_libraries(cuda, platform.system() == "Windows")
     build = out / "hdiv-host"
-    configure = [cmake, "-S", HDIV, "-B", build, "-G", "Ninja",
-                 "-DCMAKE_CXX_COMPILER=" + str(args.host_compiler), "-DCMAKE_BUILD_TYPE=Release",
-                 "-DNGSolve_DIR=" + str(ng.parent), "-DNetgen_DIR=" + str(netgen.parent),
-                 "-DPython3_EXECUTABLE=" + sys.executable, "-DRADIA_PYBIND_INCLUDE=" + str(include),
-                 "-DRADIA_CUDA_OBJECT=" + str(cuda_object), "-DRADIA_PYTHON_SUFFIX=" + sysconfig.get_config_var("EXT_SUFFIX"),
-                 "-DRADIA_OUTPUT=" + str(out)]
-    configure += ["-DRADIA_" + key.upper() + "=" + path for key, path in libs.items()]
+    # Imported SDK macros may evaluate these values as CMake source again.
+    # Backslashes in Windows paths then become escapes (for example, \h).
+    # Keep subprocess argv separate and render CMake paths with forward slashes.
+    cmake_path = lambda value: Path(value).as_posix()
+    configure = [cmake, "-S", cmake_path(HDIV), "-B", cmake_path(build), "-G", "Ninja",
+                 "-DCMAKE_CXX_COMPILER=" + cmake_path(args.host_compiler), "-DCMAKE_BUILD_TYPE=Release",
+                 "-DNGSolve_DIR=" + cmake_path(ng.parent), "-DNetgen_DIR=" + cmake_path(netgen.parent),
+                 "-DPython3_EXECUTABLE=" + cmake_path(sys.executable), "-DRADIA_PYBIND_INCLUDE=" + cmake_path(include),
+                 "-DRADIA_CUDA_OBJECT=" + cmake_path(cuda_object), "-DRADIA_PYTHON_SUFFIX=" + sysconfig.get_config_var("EXT_SUFFIX"),
+                 "-DRADIA_OUTPUT=" + cmake_path(out)]
+    configure += ["-DRADIA_" + key.upper() + "=" + cmake_path(path) for key, path in libs.items()]
     execute(configure, out, "_hdiv_cuda-host-configure", commands)
     execute([cmake, "--build", build, "--parallel", "2"], out, "_hdiv_cuda-host", commands)
     if not binary.is_file():
