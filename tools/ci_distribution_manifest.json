@@ -2386,6 +2386,235 @@
         "detail": "Single AMS/AMG algebra and typed device-view boundary used by Radia Python and MEX."
       },
       "selection": "all_owners"
+    },
+    {
+      "pattern": "tests/test_native_hdiv_resident.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/analytic_matrix_build.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_assembly_profile.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_curved_gram.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_curved_moments.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_inverse_bh.hpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_material_staging.hpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hdiv_resident_python_api.hpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hmatrix_bh_material.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hmatrix_host_fault.hpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hmatrix_inverse_bh.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hmatrix_leaf_coverage.hpp",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hmatrix_material_solver.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/hmatrix_resident.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/radia_field_exact.cuh",
+      "owners": [
+        "radia",
+        "radia-simulink"
+      ],
+      "reason": {
+        "kind": "shared_abi",
+        "detail": "Single Radia-owned HDiv numerical/material implementation consumed by Python and MEX."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/*.cpp",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/*.cu",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "src/core/gpu/hdiv/CMakeLists.txt",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "src/radia/hdiv_gpu.py",
+      "owners": [
+        "radia",
+        "radia-simulink",
+        "radia-mcp"
+      ],
+      "reason": {
+        "kind": "integration",
+        "detail": "Radia HDiv Python domain entry consumed by thin MATLAB host publication and MCP workflow."
+      },
+      "selection": "all_owners"
+    },
+    {
+      "pattern": "tests/test_hdiv_gpu_workflow.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
+      "pattern": "tests/test_hdiv_gpu_mesh_integration.py",
+      "owners": [
+        "radia"
+      ]
     }
   ],
   "shared_include_closures": [
@@ -3035,7 +3264,23 @@
             "validation_test/fmm_cuda/**/*.c",
             "validation_test/fmm_cuda/**/*.cpp",
             "validation_test/fmm_cuda/**/*.js",
-            "validation_test/fmm_cuda/**/*.json"
+            "validation_test/fmm_cuda/**/*.json",
+            "src/core/gpu/hdiv/analytic_matrix_build.cuh",
+            "src/core/gpu/hdiv/hdiv_assembly_profile.cuh",
+            "src/core/gpu/hdiv/hdiv_curved_gram.cuh",
+            "src/core/gpu/hdiv/hdiv_curved_moments.cuh",
+            "src/core/gpu/hdiv/hdiv_inverse_bh.hpp",
+            "src/core/gpu/hdiv/hdiv_material_staging.hpp",
+            "src/core/gpu/hdiv/hdiv_resident_python_api.hpp",
+            "src/core/gpu/hdiv/hmatrix_bh_material.cuh",
+            "src/core/gpu/hdiv/hmatrix_host_fault.hpp",
+            "src/core/gpu/hdiv/hmatrix_inverse_bh.cuh",
+            "src/core/gpu/hdiv/hmatrix_leaf_coverage.hpp",
+            "src/core/gpu/hdiv/hmatrix_material_solver.cuh",
+            "src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh",
+            "src/core/gpu/hdiv/hmatrix_resident.cuh",
+            "src/core/gpu/hdiv/radia_field_exact.cuh",
+            "src/radia/hdiv_gpu.py"
           ]
         },
         "push": {
@@ -3148,7 +3393,23 @@
             "validation_test/fmm_cuda/**/*.c",
             "validation_test/fmm_cuda/**/*.cpp",
             "validation_test/fmm_cuda/**/*.js",
-            "validation_test/fmm_cuda/**/*.json"
+            "validation_test/fmm_cuda/**/*.json",
+            "src/core/gpu/hdiv/analytic_matrix_build.cuh",
+            "src/core/gpu/hdiv/hdiv_assembly_profile.cuh",
+            "src/core/gpu/hdiv/hdiv_curved_gram.cuh",
+            "src/core/gpu/hdiv/hdiv_curved_moments.cuh",
+            "src/core/gpu/hdiv/hdiv_inverse_bh.hpp",
+            "src/core/gpu/hdiv/hdiv_material_staging.hpp",
+            "src/core/gpu/hdiv/hdiv_resident_python_api.hpp",
+            "src/core/gpu/hdiv/hmatrix_bh_material.cuh",
+            "src/core/gpu/hdiv/hmatrix_host_fault.hpp",
+            "src/core/gpu/hdiv/hmatrix_inverse_bh.cuh",
+            "src/core/gpu/hdiv/hmatrix_leaf_coverage.hpp",
+            "src/core/gpu/hdiv/hmatrix_material_solver.cuh",
+            "src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh",
+            "src/core/gpu/hdiv/hmatrix_resident.cuh",
+            "src/core/gpu/hdiv/radia_field_exact.cuh",
+            "src/radia/hdiv_gpu.py"
           ]
         },
         "workflow_dispatch": {}
@@ -3260,7 +3521,8 @@
             "tests/test_tier_manifest.json",
             "tools/sparsesolv_ci_impact.py",
             "tools/ci_distribution_contract.py",
-            "tools/ci_distribution_manifest.json"
+            "tools/ci_distribution_manifest.json",
+            "src/radia/hdiv_gpu.py"
           ]
         },
         "pull_request": {
@@ -3304,7 +3566,8 @@
             "tests/test_tier_manifest.json",
             "tools/sparsesolv_ci_impact.py",
             "tools/ci_distribution_contract.py",
-            "tools/ci_distribution_manifest.json"
+            "tools/ci_distribution_manifest.json",
+            "src/radia/hdiv_gpu.py"
           ]
         },
         "workflow_dispatch": {}
@@ -3793,6 +4056,8 @@
             "tests/analytical_formulas/__init__.py",
             "validation_test/panels/__init__.py",
             "tools/regression_lock.py",
+            "src/radia/hdiv_gpu.py",
+            "tests/test_hdiv_gpu_mesh_integration.py",
             "!**/*.md"
           ]
         },
@@ -4089,6 +4354,8 @@
             "tests/analytical_formulas/__init__.py",
             "validation_test/panels/__init__.py",
             "tools/regression_lock.py",
+            "src/radia/hdiv_gpu.py",
+            "tests/test_hdiv_gpu_mesh_integration.py",
             "!**/*.md"
           ]
         },

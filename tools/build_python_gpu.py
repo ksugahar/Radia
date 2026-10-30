@@ -21,6 +21,7 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "src/core/gpu"
+HDIV = CORE / "hdiv"
 SHARED_SOURCES = ("csr_pcg_host.hpp", "csr_pcg_cuda.cuh", "csr_pcg_python.cpp",
            "csr_pcg_python_cuda.cu", "ams_amg_kernels.cuh", "resident_amg_host.hpp",
            "resident_amg_cuda.cu", "resident_amg_python.cpp", "snapshot.hpp",
@@ -28,7 +29,8 @@ SHARED_SOURCES = ("csr_pcg_host.hpp", "csr_pcg_cuda.cuh", "csr_pcg_python.cpp",
 SOURCES = SHARED_SOURCES + ("ams_python.cpp", "ams_python_cuda.cu")
 COMPONENTS = (("_gpu_csr", "csr_pcg_python.cpp", "csr_pcg_python_cuda.cu"),
               ("_gpu_resident_amg", "resident_amg_python.cpp", "resident_amg_cuda.cu"),
-              ("_gpu_ams", "ams_python.cpp", "ams_python_cuda.cu"))
+              ("_gpu_ams", "ams_python.cpp", "ams_python_cuda.cu"),
+              ("_hdiv_cuda", "hdiv/hdiv_resident_python.cpp", "hdiv/hdiv_resident_python_cuda.cu"))
 
 
 def sha(path):
@@ -79,10 +81,15 @@ def headers():
         expected = next(r.split("==", 1)[1] for r in requirements if r.startswith(package + "=="))
         if metadata.version(package) != expected:
             raise RuntimeError(f"{package} must match project metadata: {expected}")
-    include = Path(netgen.__file__).resolve().parent / "include"
-    if not (include / "pybind11/pybind11.h").is_file():
-        raise RuntimeError("Installed Netgen pybind development headers missing")
-    return include
+    candidates = {Path(netgen.__file__).resolve().parent / "include"}
+    dist = metadata.distribution("netgen-mesher")
+    for item in dist.files or ():
+        if str(item).replace("\\", "/").endswith("/pybind11/pybind11.h"):
+            candidates.add(Path(dist.locate_file(item)).resolve().parents[1])
+    found = {p.resolve() for p in candidates if (p / "pybind11/pybind11.h").is_file()}
+    if len(found) != 1:
+        raise RuntimeError("Missing or ambiguous installed Netgen pybind development headers")
+    return found.pop()
 
 
 def admission(path, digest, commit):
@@ -102,6 +109,53 @@ def execute(command, out, label, commands):
         subprocess.run(list(map(str, command)), cwd=out, stdout=log, stderr=subprocess.STDOUT, check=True)
 
 
+def installed_config(package, filename):
+    """Resolve exact installed SDK metadata, never a site-global build prefix."""
+    dist = metadata.distribution(package)
+    matches = {Path(dist.locate_file(f)).resolve() for f in dist.files or ()
+               if Path(str(f)).name == filename and Path(dist.locate_file(f)).is_file()}
+    if len(matches) != 1:
+        raise RuntimeError(f"Missing or ambiguous {package} CMake package: {filename}")
+    return matches.pop()
+
+
+def cuda_libraries(cuda, windows):
+    if windows:
+        return {name: str(cuda / "lib/x64" / (name + ".lib"))
+                for name in ("cudart", "cublas", "cusolver")}
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("radia_build_runtime", ROOT / "src/radia/_cuda_runtime.py")
+    runtime = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runtime)
+    libraries = runtime._library_paths(runtime._pins())
+    return {key: libraries[name]["path"] for key, name in
+            [("cudart", "libcudart.so.12"), ("cublas", "libcublas.so.12"), ("cusolver", "libcusolver.so.11")]}
+
+
+def build_hdiv_host(args, binary, cuda_object, include, cuda, out, commands):
+    """NGSolve owns host compile definitions/includes/link ABI; nvcc stays separate."""
+    import shutil
+    cmake = shutil.which("cmake")
+    if not cmake:
+        raise RuntimeError("CMake is required for NGSolve-owned HDiv host staging")
+    ng = installed_config("ngsolve", "NGSolveConfig.cmake")
+    netgen = installed_config("netgen-mesher", "NetgenConfig.cmake")
+    libs = cuda_libraries(cuda, platform.system() == "Windows")
+    build = out / "hdiv-host"
+    configure = [cmake, "-S", HDIV, "-B", build, "-G", "Ninja",
+                 "-DCMAKE_CXX_COMPILER=" + str(args.host_compiler), "-DCMAKE_BUILD_TYPE=Release",
+                 "-DNGSolve_DIR=" + str(ng.parent), "-DNetgen_DIR=" + str(netgen.parent),
+                 "-DPython3_EXECUTABLE=" + sys.executable, "-DRADIA_PYBIND_INCLUDE=" + str(include),
+                 "-DRADIA_CUDA_OBJECT=" + str(cuda_object), "-DRADIA_PYTHON_SUFFIX=" + sysconfig.get_config_var("EXT_SUFFIX"),
+                 "-DRADIA_OUTPUT=" + str(out)]
+    configure += ["-DRADIA_" + key.upper() + "=" + path for key, path in libs.items()]
+    execute(configure, out, "_hdiv_cuda-host-configure", commands)
+    execute([cmake, "--build", build, "--parallel", "2"], out, "_hdiv_cuda-host", commands)
+    if not binary.is_file():
+        raise RuntimeError("HDiv host build did not produce the exact Python ABI artifact")
+    (out / "hdiv-sdk-private.json").write_text(json.dumps({str(p): sha(p) for p in (ng, netgen)}, indent=2) + "\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cuda-root", type=Path, required=True)
@@ -111,6 +165,8 @@ def main():
     parser.add_argument("--admission", type=Path, required=True)
     parser.add_argument("--admission-sha256", required=True)
     parser.add_argument("--matlab-root", type=Path)
+    parser.add_argument("--components", nargs="+", choices=[row[0] for row in COMPONENTS],
+                        default=[row[0] for row in COMPONENTS], help="Explicit subset to rebuild from this exact commit")
     args = parser.parse_args()
     commit = identity()
     record = admission(args.admission, args.admission_sha256, commit)
@@ -127,19 +183,27 @@ def main():
         raise RuntimeError("Build output must be outside the source checkout")
     out.mkdir(parents=True, exist_ok=False)
     source_hashes = {str((CORE / name).relative_to(ROOT)).replace("\\", "/"): sha(CORE / name) for name in SOURCES}
+    # HDiv sources have one owner and are also consumed by the MEX gateways.
+    source_hashes.update({p.relative_to(ROOT).as_posix(): sha(p) for p in HDIV.iterdir() if p.is_file()})
     source_hashes["tools/build_python_gpu.py"] = sha(__file__)
     header_hashes = {p.relative_to(include).as_posix(): sha(p) for p in (include / "pybind11").rglob("*") if p.is_file()}
     commands = []
     for module, cpp, cu in COMPONENTS:
+        if module not in args.components:
+            continue
         binary = out / (module + sysconfig.get_config_var("EXT_SUFFIX"))
         obj = out / (module + (".obj" if windows else ".o"))
         cuda_command = [nvcc, "-c", "-std=c++17", "-O2", "-ccbin", args.host_compiler,
                         "-gencode=arch=compute_" + args.architecture + ",code=sm_" + args.architecture,
                         "-I" + str(CORE), "-o", obj, CORE / cu]
+        if module == "_hdiv_cuda":
+            cuda_command += ["--fmad=false", "-I" + str(ROOT / "src/core")]
         if not windows:
             cuda_command += ["-Xcompiler", "-fPIC"]
         execute(cuda_command, out, module + "-cuda", commands)
-        if windows:
+        if module == "_hdiv_cuda":
+            build_hdiv_host(args, binary, obj, include, cuda, out, commands)
+        elif windows:
             command = [args.host_compiler, "/nologo", "/LD", "/EHsc", "/MD", "/O2", "/fp:precise", "/std:c++20", "/utf-8",
                        "/I" + str(include), "/I" + sysconfig.get_path("include"),
                        "/Fo" + str(out / (module + "-host.obj")), CORE / cpp, obj,
@@ -160,13 +224,15 @@ def main():
                        libraries["libcudart.so.12"]["path"]]
             if module in ("_gpu_resident_amg", "_gpu_ams"):
                 command += [libraries["libcublas.so.12"]["path"]]
-        execute(command, out, module + "-host", commands)
+        if module != "_hdiv_cuda":
+            execute(command, out, module + "-host", commands)
         if identity() != commit or any(sha(ROOT / name) != digest for name, digest in source_hashes.items()):
             raise RuntimeError("Source changed during build")
         private_receipt = Path(str(binary) + ".private-build.json")
         private_receipt.write_text(json.dumps(dict(source_commit=commit, binary_sha256=sha(binary),
             admission=record, commands=commands[:], source_root=str(ROOT), cuda_root=str(cuda),
-            host_compiler_path=str(args.host_compiler), pybind_include=str(include)), indent=2) + "\n", encoding="utf-8")
+            host_compiler_path=str(args.host_compiler), pybind_include=str(include),
+            ngsolve_sdk_sha256=sha(out / "hdiv-sdk-private.json") if module == "_hdiv_cuda" else None), indent=2) + "\n", encoding="utf-8")
         receipt = dict(schema="radia.native-build-provenance.v1", source_commit=commit, source_dirty=False,
                        binary_name=binary.name, binary_sha256=sha(binary), source_hashes=source_hashes,
                        pybind_header_hashes=header_hashes, python=sys.version, platform=platform.platform(),

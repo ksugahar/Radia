@@ -60,6 +60,7 @@ on:
       - 'tools/sparsesolv_ci_impact.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
+      - 'src/radia/hdiv_gpu.py'
   pull_request:
     branches: [main]
     paths:
@@ -100,6 +101,7 @@ on:
       - 'tools/sparsesolv_ci_impact.py'
       - 'tools/ci_distribution_contract.py'
       - 'tools/ci_distribution_manifest.json'
+      - 'src/radia/hdiv_gpu.py'
   workflow_dispatch:
 
 concurrency:

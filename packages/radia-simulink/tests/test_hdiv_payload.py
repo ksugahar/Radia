@@ -10,24 +10,6 @@ payload = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(payload)
 
 
-def test_hdiv_only_python_wheel_uses_the_cpython_abi(tmp_path, monkeypatch):
-    import ast
-    import os
-    import types
-    source = Path(__file__).parents[1] / 'setup.py'
-    tree = ast.parse(source.read_text())
-    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'bdist_wheel')
-    namespace = dict(_bdist_wheel=object, ROOT=tmp_path, json=json, os=os,
-                     sys=types.SimpleNamespace(platform='win32', version_info=(3,12)),
-                     payload_module=lambda:payload)
-    exec(compile(ast.Module(body=[cls],type_ignores=[]),str(source),'exec'),namespace)
-    monkeypatch.setenv('RADIA_HDIV_PYTHON_RUNTIME',str(tmp_path/'runtime.json'))
-    instance = namespace['bdist_wheel']()
-    assert instance.get_tag() == ('cp312','cp312','win_amd64')
-    monkeypatch.delenv('RADIA_HDIV_PYTHON_RUNTIME')
-    assert instance.get_tag() == ('py3','none','win_amd64')
-
-
 def test_runtime_requirements_are_interface_specific():
     common, interfaces = payload.runtime_contract(True)
     assert common == ['Windows x64']
@@ -119,39 +101,9 @@ def test_exact_hdiv_artifact_staging(tmp_path, fault):
             assert (target / 'matlab' / binary).read_bytes() == (folder / binary).read_bytes()
 
 
-@pytest.mark.parametrize('fault',[None,'commit','diagnostic','python-diagnostic','python-mode-missing','device-diagnostic','device-mode-missing','binary','abi','source','runtime','runtime-abi','redistribution','engine','numerics','nan','boolean'])
-def test_hdiv_python_requires_exact_abi_runtime_and_redistribution(tmp_path,monkeypatch,fault):
-    import sysconfig
-    monkeypatch.setattr(sysconfig,'get_config_var',lambda key:'.cp312-win_amd64.pyd')
-    root=tmp_path/'source';root.mkdir();(root/'native.cu').write_bytes(b'public test source')
-    folder=tmp_path/'build';folder.mkdir();name='_hdiv_cuda.cp312-win_amd64.pyd'
-    native=folder/name;native.write_bytes(b'packaging-only synthetic native file');digest=hashlib.sha256(native.read_bytes()).hexdigest()
-    binding=dict(fault_injection=False,device_fault_injection=False,schema='radia.hdiv-python-build.v1',binary=name,binary_sha256=digest,extension_suffix='.cp312-win_amd64.pyd',ngsolve_version='6.2.2608',pybind11_version='3.1.0',pybind_header_sha256='1'*64,matlab_engine_user_dependency=False)
-    build=dict(accepted=True,source_dirty=False,source_commit='a'*40,fault_injection=False,python_binding=binding,source_sha256={'native.cu':hashlib.sha256((root/'native.cu').read_bytes()).hexdigest()})
-    runtime=dict(schema='radia.hdiv-python-runtime.v1',accepted=True,source_commit='a'*40,binary_sha256=digest,ngsolve_version='6.2.2608',runtime_import_checked=True,matlab_engine_user_dependency=False,redistribution_accepted=True,redistribution_reference='synthetic fixture only; not a licensing decision',runtime_identity_sha256='2'*64,cases=[dict(backend='gpu',coefficient_error=1e-13,independent_original_residual=1e-14)])
-    if fault=='commit':build['source_commit']='b'*40
-    if fault=='diagnostic':build['fault_injection']=True
-    if fault=='python-diagnostic':binding['fault_injection']=True
-    if fault=='python-mode-missing':binding.pop('fault_injection')
-    if fault=='device-diagnostic':binding['device_fault_injection']=True
-    if fault=='device-mode-missing':binding.pop('device_fault_injection')
-    if fault=='binary':native.write_bytes(b'changed')
-    if fault=='abi':binding['extension_suffix']='.cp311-win_amd64.pyd'
-    if fault=='source':(root/'native.cu').write_bytes(b'changed')
-    if fault=='runtime':runtime['accepted']=False
-    if fault=='runtime-abi':runtime['ngsolve_version']='stale'
-    if fault=='redistribution':runtime['redistribution_accepted']=False
-    if fault=='engine':runtime['matlab_engine_user_dependency']=True
-    if fault=='numerics':runtime['cases'][0]['coefficient_error']=1e-4
-    if fault=='nan':runtime['cases'][0]['coefficient_error']=float('nan')
-    if fault=='boolean':runtime['cases'][0]['coefficient_error']=False
-    (folder/'build.json').write_text(json.dumps(build));proof=tmp_path/'runtime.json';proof.write_text(json.dumps(runtime));package=tmp_path/'package'
-    if fault:
-        with pytest.raises(RuntimeError):payload.stage_python(root,package,'a'*40,folder,proof)
-        assert not (package/name).exists()
-    else:
-        assert payload.stage_python(root,package,'a'*40,folder,proof)=={name,'hdiv-python-build.json'}
-        receipt=json.loads((package/'hdiv-python-build.json').read_text())
-        assert receipt['runtime_import_checked'] and receipt['redistribution_accepted']
-        assert 'redistribution_reference' not in receipt
-        assert len(receipt['redistribution_reference_sha256'])==64
+def test_hdiv_python_payload_is_owned_by_radia():
+    """Guards: MEX wheels cannot stage the moved Radia Python domain binding.
+
+    Assumes: Radia owns public Python GPU provenance and runtime checks.
+    """
+    assert not hasattr(payload, "stage_python")

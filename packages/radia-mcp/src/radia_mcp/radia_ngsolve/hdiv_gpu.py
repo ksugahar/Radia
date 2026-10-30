@@ -68,7 +68,7 @@ def hdiv_nonlinear_gpu_run(vol_path: str, label_contract: str, law_path: str,
     save()
     try:
         import ngsolve as ng
-        from radia_simulink.hdiv import PreparedHDivNonlinear
+        from radia.hdiv_gpu import PreparedHDivNonlinear
         with ng.TaskManager():
             factory = PreparedHDivNonlinear
             material = law
