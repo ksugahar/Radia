@@ -232,9 +232,11 @@
         "src/radia/_cuda_runtime.py",
         "src/radia/_cuda_runtime_windows.py",
         "tools/build_python_gpu.py",
-        "src/radia/hdiv_gpu.py"
+        "src/radia/hdiv_gpu.py",
+        "tools/python_gpu_payload.py",
+        "tools/prepare_hdiv_mesh_receipt.py"
       ],
-      "audit_sha256": "362f414540424a9a3437c9f9d720afeeab88e19e6e7dab13a9f1e301d9d0049e",
+      "audit_sha256": "f276d0f3d1651c0ab1d9f9c9ba094e3173e924f31aaf409e3d49114dc4d57c77",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"
