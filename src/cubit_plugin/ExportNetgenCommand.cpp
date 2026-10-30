@@ -989,16 +989,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // Pass as std::filesystem::path built from UTF-8 so Unicode / Japanese
   // directories work on Windows (cp932 narrow API path would otherwise
   // throw "No mapping for the Unicode character").
-  if (has_periodic) {
-    try {
-      cubit_mesh_export::save_named_periodic_vol(*ng_mesh, u8_string_to_path(filename));
-    } catch (const std::exception &error) {
-      PRINT_ERROR("Named periodic save failed: %s\n", error.what());
-      PRINT_ERROR("%s\n", cubit_mesh_export::named_periodic_retry_guidance(
-          cubit_mesh_export::named_periodic_output_paths(u8_string_to_path(filename))).c_str());
-      return false;
-    }
-  } else {
+  if (!has_periodic) {
     ng_mesh->Save(u8_string_to_path(filename));
   }
 
@@ -1023,6 +1014,27 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
           first_mapping = false;
           jf << "{\"fd\":" << mapping.first << ",\"bc\":" << mapping.second
              << ",\"cubit_surface\":" << orig_surf_ids.at(mapping.first - 1) << "}";
+        }
+        jf << "],\"curved_transfers\":[";
+        bool first_transfer = true;
+        for (const auto &transfer : periodic_result.curved_transfers) {
+          if (!first_transfer) jf << ",";
+          first_transfer = false;
+          jf << "{\"entity\":\"" << (transfer.face ? "face" : "edge")
+             << "\",\"master_topology_index\":" << transfer.master
+             << ",\"slave_topology_index\":" << transfer.slave
+             << ",\"mode\":" << transfer.mode << ",\"sign\":" << transfer.sign
+             << ",\"original\":[";
+          for (int axis = 0; axis < 3; ++axis) {
+            if (axis) jf << ",";
+            jf << transfer.original[axis];
+          }
+          jf << "],\"expected\":[";
+          for (int axis = 0; axis < 3; ++axis) {
+            if (axis) jf << ",";
+            jf << transfer.expected[axis];
+          }
+          jf << "]}";
         }
         jf << "]},\n";
       }
@@ -1148,10 +1160,10 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   };
   if (has_periodic) {
     try {
-      cubit_mesh_export::write_named_periodic_sidecar(
-          u8_string_to_path(filename + ".json"), write_companion);
+      cubit_mesh_export::save_named_periodic_bundle(
+          *ng_mesh, u8_string_to_path(filename), write_companion);
     } catch (const std::exception &error) {
-      PRINT_ERROR("Named periodic sidecar failed: %s\n", error.what());
+      PRINT_ERROR("Named periodic bundle publication failed: %s\n", error.what());
       PRINT_ERROR("%s\n", cubit_mesh_export::named_periodic_retry_guidance(
           cubit_mesh_export::named_periodic_output_paths(u8_string_to_path(filename))).c_str());
       return false;
