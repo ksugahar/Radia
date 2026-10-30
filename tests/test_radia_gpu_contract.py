@@ -111,7 +111,7 @@ def test_build_entry_rejects_unreviewed_toolchain_and_admission(tmp_path, monkey
     spec.loader.exec_module(builder)
     monkeypatch.setattr(builder, "capture", lambda _: "Cuda compilation tools, release 13.3, V13.3.0")
     with pytest.raises(RuntimeError, match="12.8"):
-        builder.check_toolchain(tmp_path, tmp_path / "g++", "100", False)
+        builder.check_toolchain(tmp_path, tmp_path / "g++", ["100"], False)
     record = tmp_path / "admission.json"
     record.write_text('{"source_sha":"wrong", "owner":"CodexFlow2", "gpu_build_approved":true}')
     with pytest.raises(RuntimeError, match="exact source"):
@@ -191,7 +191,7 @@ def test_public_build_receipt_excludes_private_admission_and_commands(tmp_path, 
     monkeypatch.setattr(builder, "execute", compile_fixture)
     monkeypatch.setattr(sys, "argv", ["build_python_gpu.py", "--cuda-root", str(matlab / "sys/cuda/win64/cuda"),
                         "--matlab-root", str(matlab), "--host-compiler", str(tmp_path / "cl.exe"),
-                        "--architecture", "75", "--output", str(out), "--admission", str(admission),
+                        "--architectures", "75", "80", "--output", str(out), "--admission", str(admission),
                         "--admission-sha256", builder.sha(admission), "--components",
                         "_gpu_csr", "_gpu_resident_amg", "_gpu_ams"])
     builder.main()
