@@ -40,11 +40,11 @@ def test_hdiv_host_build_uses_installed_ngsolve_and_exact_pip_cuda(tmp_path, mon
     b.build_hdiv_host(types.SimpleNamespace(host_compiler=Path("/explicit/g++")), binary,
                       out / "cuda.o", tmp_path / "headers", tmp_path / "toolkit", out, commands)
     configure, compile_host = commands
-    assert "-DCMAKE_CXX_COMPILER=" + str(Path("/explicit/g++")) in configure
-    assert "-DPython3_EXECUTABLE=" + sys.executable in configure
-    assert "-DNGSolve_DIR=" + str(configs["ngsolve"].parent) in configure
-    assert "-DNetgen_DIR=" + str(configs["netgen-mesher"].parent) in configure
-    assert all("-DRADIA_" + name.upper() + "=" + str(tmp_path / "pip" / (name + ".so")) in configure for name in ("cudart", "cublas", "cusolver"))
+    assert "-DCMAKE_CXX_COMPILER=" + Path("/explicit/g++").as_posix() in configure
+    assert "-DPython3_EXECUTABLE=" + Path(sys.executable).as_posix() in configure
+    assert "-DNGSolve_DIR=" + configs["ngsolve"].parent.as_posix() in configure
+    assert "-DNetgen_DIR=" + configs["netgen-mesher"].parent.as_posix() in configure
+    assert all("-DRADIA_" + name.upper() + "=" + (tmp_path / "pip" / (name + ".so")).as_posix() in configure for name in ("cudart", "cublas", "cusolver"))
     assert compile_host[-2:] == ["--parallel", "2"]
     assert not any("matlab" in word.lower() or "radia-simulink" in word for command in commands for word in command)
     assert set(json.loads((out / "hdiv-sdk-private.json").read_text())) == {str(p) for p in configs.values()}

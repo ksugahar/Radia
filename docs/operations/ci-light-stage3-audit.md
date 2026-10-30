@@ -382,7 +382,7 @@ only standard-library modules; its real checker subprocess is not entered by
 the light tier. Receipt workflow tests mock FE/native entry and package metadata.
 No compiler, checker, NGSolve, GPU or MATLAB operation is added to fast-contracts.
 
-The worst-case fast tier executed 200 tests successfully in 8.18 seconds
+The base fast tier executed 200 tests successfully in 8.18 seconds
 (tier elapsed 9.42 seconds). All 45 routing mutation tests passed in 111.95
 seconds. The first attempt used an incomplete test environment lacking
 setuptools and wheel, yielding eight failures; the corrected run used the
@@ -406,3 +406,15 @@ the preceding seal and inspecting these two changed executable files yields
 `26a991e809caa0a0f96a00d9cd8035648c7517835a00beef93711a5699a52e39`.
 Fresh exact-source fast/routing checks and native compilation are recorded
 separately; the previous partial native build does not qualify this revision.
+
+The base-profile run above is not the all-impact worst case. The latter must
+invoke `tools/run_test_tier.py --profile fast-contracts --since ""`; omitting
+`--since` selects only the base profile. The first such all-impact execution
+ran 639 tests and exposed one stale Windows path assertion in a mocked Linux
+SDK contract. The assertion now compares the same canonical forward-slash
+CMake representation as the builder, without changing SDK identity, compiler,
+libraries, numerical criteria, denied imports or the profile budget. Fresh
+source-bound execution reports distinguish these runs and the unchanged-code
+compile evidence from any later exact-release native artifacts.
+The final test-path-only closure seal is
+`6a4402eac907a661e0222fbd8e8c15b046319def31fb1576162c58fc8da31bac`.
