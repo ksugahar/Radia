@@ -1,5 +1,12 @@
 # cubit-mesh-export
 
+## Neutral CAD capture
+
+`export model_capture "model.json" units mm` records CAD topology and explicit
+block/sideset identity for separate construction adapters, without meshing.
+Read [the model-capture contract](docs/model_capture.md) for supported source
+records, mandatory units, approximation limits and external physical mappings.
+
 ## Explicit named periodic export
 
 `export netgen` can write one named `kt` periodic identification directly into

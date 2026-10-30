@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 2.2.8
+
+- Add neutral CAD model capture with explicit millimetre units, source topology,
+  named one-volume blocks and CAD-face sidesets. Sampled curves are recorded as
+  observations; no material or physical boundary condition is inferred.
 
 - Derive named-periodic slave polynomial q2/q3 curved displacement coefficients
   from the master with explicit edge orientation, complete triangle coverage
