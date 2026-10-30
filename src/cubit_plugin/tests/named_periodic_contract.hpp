@@ -166,6 +166,39 @@ inline void named_periodic_contract_test()
   if (std::filesystem::exists(failed_record))
     throw std::runtime_error("Failed sidecar serialization published a mapping record");
   must_reject([&]{write_named_periodic_sidecar("named-periodic-no-parent/mapping.json", [](std::ostream &record){record << "mapping";});});
+  const auto bundle = named_periodic_output_paths("named-periodic-bundle.vol");
+  save_named_periodic_bundle(*mesh, bundle.final, [&](std::ostream &record) {
+    if (std::filesystem::exists(bundle.final) || !std::filesystem::is_regular_file(bundle.temporary))
+      throw std::runtime_error("Final VOL must not publish before its mandatory record");
+    record << "{\"export_passed\":true}";
+  });
+  if (!std::filesystem::is_regular_file(bundle.final) ||
+      bytes(bundle.sidecar) != "{\"export_passed\":true}" || std::filesystem::exists(bundle.temporary))
+    throw std::runtime_error("Complete named bundle did not publish after its record");
+  const auto failed_bundle = named_periodic_output_paths("named-periodic-bundle-failed.vol");
+  must_reject([&]{save_named_periodic_bundle(*mesh, failed_bundle.final,
+      [](std::ostream &record){record.setstate(std::ios::badbit);});});
+  if (std::filesystem::exists(failed_bundle.final) || std::filesystem::exists(failed_bundle.sidecar))
+    throw std::runtime_error("Failed mandatory record left a published VOL or success record");
+  const auto blocked_bundle = named_periodic_output_paths("named-periodic-bundle-blocked.vol");
+  must_reject([&]{save_named_periodic_bundle(*mesh, blocked_bundle.final,
+      [&](std::ostream &record) {
+        std::ofstream concurrent(blocked_bundle.sidecar); concurrent << "preserve other record";
+        record << "mapping";
+      });});
+  if (std::filesystem::exists(blocked_bundle.final) || bytes(blocked_bundle.sidecar) != "preserve other record")
+    throw std::runtime_error("Exclusive sidecar failure published VOL or overwrote another record");
+  const auto changed_bundle = stage_named_periodic_vol(*mesh, "named-periodic-bundle-changed.vol");
+  const auto owned_record = write_named_periodic_sidecar(changed_bundle.sidecar,
+      [](std::ostream &record){record << "owned record";});
+  auto foreign_identity = owned_record; foreign_identity.identity[2] ^= 1;
+  must_reject([&]{publish_named_periodic_bundle(changed_bundle, foreign_identity);});
+  if (std::filesystem::exists(changed_bundle.final) || bytes(changed_bundle.sidecar) != "owned record")
+    throw std::runtime_error("Foreign record identity published VOL or modified record");
+  { std::ofstream changed(changed_bundle.sidecar); changed << "different record"; }
+  must_reject([&]{publish_named_periodic_bundle(changed_bundle, owned_record);});
+  if (std::filesystem::exists(changed_bundle.final) || bytes(changed_bundle.sidecar) != "different record")
+    throw std::runtime_error("Changed record published VOL or was overwritten");
   const auto guidance = named_periodic_retry_guidance(paths);
   for (const auto &path : {paths.final, paths.temporary, paths.sidecar})
     if (guidance.find(path.u8string()) == std::string::npos)
