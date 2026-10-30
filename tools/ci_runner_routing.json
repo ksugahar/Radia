@@ -234,9 +234,10 @@
         "tools/build_python_gpu.py",
         "src/radia/hdiv_gpu.py",
         "tools/python_gpu_payload.py",
-        "tools/prepare_hdiv_mesh_receipt.py"
+        "tools/prepare_hdiv_mesh_receipt.py",
+        "tools/check_python_gpu_coexistence.py"
       ],
-      "audit_sha256": "6a4402eac907a661e0222fbd8e8c15b046319def31fb1576162c58fc8da31bac",
+      "audit_sha256": "5273bcc5ac5cfbe0cf0f498f8f3143ea370ffa260edc6e7c9acca596f19a68f4",
       "deferred_or_mocked_imports": {
         "validation_test/surface_rom_team10/transient.py": [
           "ngsolve"

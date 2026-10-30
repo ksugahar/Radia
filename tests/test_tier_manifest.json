@@ -395,6 +395,9 @@
     "tools/python_gpu_payload.py": [
       "tests/test_python_gpu_distribution.py"
     ],
+    "tools/check_python_gpu_coexistence.py": [
+      "tests/test_python_gpu_distribution.py"
+    ],
     "tools/verify_cpu_wheel.py": [
       "tests/test_python_gpu_distribution.py",
       "tests/test_wheel_package_policy.py"

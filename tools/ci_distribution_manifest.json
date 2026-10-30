@@ -2268,6 +2268,12 @@
       ]
     },
     {
+      "pattern": "tools/check_python_gpu_coexistence.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
       "pattern": "src/core/gpu/ams_amg_kernels.cuh",
       "owners": [
         "radia",
