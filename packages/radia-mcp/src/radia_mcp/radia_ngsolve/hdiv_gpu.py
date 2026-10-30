@@ -10,7 +10,8 @@ from pathlib import Path
 
 def hdiv_nonlinear_gpu_run(vol_path: str, label_contract: str, law_path: str,
                            applied_fields: list[list[float]], result_path: str,
-                           backend: str, order: int = 1,
+                           backend: str, mesh_check_receipt: str, mesh_check_receipt_sha256: str,
+                           mesh_check_provenance: dict, order: int = 1,
                            preconditioner: str = "reference-diagonal",
                            tolerance: float = 5e-14, linear_tolerance: float = 5e-14) -> dict:
     """Reuse one prepared shared GPU owner for up to eight uniform H cases.
@@ -78,7 +79,9 @@ def hdiv_nonlinear_gpu_run(vol_path: str, label_contract: str, law_path: str,
             elif "schema" in law:
                 raise ValueError("Unsupported explicit BH material schema")
             with factory(vol_path, material, backend=backend,
-                    label_contract=label_contract, order=order) as prepared:
+                    label_contract=label_contract, mesh_check_receipt=mesh_check_receipt,
+                    mesh_check_receipt_sha256=mesh_check_receipt_sha256,
+                    mesh_check_provenance=mesh_check_provenance, order=order) as prepared:
                 for field in applied_fields:
                     result = prepared.solve(field, preconditioner=preconditioner,
                                             tolerance=tolerance, linear_tolerance=linear_tolerance)

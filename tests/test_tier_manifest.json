@@ -401,6 +401,9 @@
     ],
     "tests/test_python_gpu_distribution.py": [
       "tests/test_python_gpu_distribution.py"
+    ],
+    "tools/prepare_hdiv_mesh_receipt.py": [
+      "tests/test_hdiv_gpu_mesh_integration.py"
     ]
   },
   "profiles": {

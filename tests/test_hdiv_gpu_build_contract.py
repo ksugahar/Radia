@@ -69,9 +69,9 @@ def test_python_entry_is_lazy_and_not_a_simulink_dependency():
     assert callable(module.PreparedHDivNonlinear)
     assert callable(module.prepare_hdiv_host_setup)
     with pytest.raises(ValueError, match="explicit backend"):
-        module.PreparedHDivNonlinear("unused.vol", {}, backend="cpu", label_contract="unused.json")
+        module.PreparedHDivNonlinear("unused.vol", {}, backend="cpu", label_contract="unused.json", mesh_check_receipt="unused.receipt", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
     with pytest.raises(ValueError, match="explicit backend"):
-        module.prepare_hdiv_host_setup("unused.vol", backend="cpu", label_contract="unused.json")
+        module.prepare_hdiv_host_setup("unused.vol", backend="cpu", label_contract="unused.json", mesh_check_receipt="unused.receipt", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
 
 
 def test_cuda_translation_unit_does_not_pull_fe_or_mex_headers():
