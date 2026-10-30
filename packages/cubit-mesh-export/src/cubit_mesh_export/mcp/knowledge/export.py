@@ -29,6 +29,16 @@ readiness claim.
 
 ## Supported Formats
 
+CAD source capture is separate from these mesh formats:
+`export model_capture "model.json" units mm` records source topology, named
+one-volume blocks, CAD-face sidesets and33 samples per supported curve.
+Millimetres are an explicit author declaration, not inferred or converted.
+No mesh or solver runs. A separate construction adapter validates its supported
+geometry, records approximation and source-to-target correspondence, and takes
+explicit physical mappings bound to the capture SHA256. Material/BC values are
+never inferred from labels. Unsupported geometry must fail before mutation;
+this is not a general exact CAD translator. Existing files are never replaced.
+
 | Command | Format | Max Order | Notes |
 |---------|--------|-----------|-------|
 | `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | Recommended for NGSolve |

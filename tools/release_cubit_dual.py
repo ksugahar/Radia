@@ -325,7 +325,7 @@ def run(args):
                 raise RuntimeError(result.get('error', 'worker failed'))
     if args.action == 'done':
         (output / 'done.json').write_text(json.dumps(dict(contract, passed=True, targets=list(TARGETS)), indent=2))
-        print('PASS release-dual: exact published exporter wheel, build editable and GUI/export/MCP gates; Radia/radia-mcp unchanged')
+        print('PASS cubit-mesh-export: exact published wheel and build-target editable GUI/export/MCP gates; Radia/radia-mcp unchanged')
     return 0
 
 
