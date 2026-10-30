@@ -106,6 +106,7 @@ def test_ordered_matching_preserves_actions_markdown_reinclusion():
 # Foreign files the radia-mcp-matrix lane really reads, with the reader that
 # proves it (pattern -> (reader, text the reader contains)).
 MCP_LANE_READS = {
+    "src/radia/hdiv_gpu.py": ("packages/radia-mcp/src/radia_mcp/radia_ngsolve/hdiv_gpu.py", "from radia.hdiv_gpu import PreparedHDivNonlinear"),
     "AGENTS.md": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "AGENTS.md"),
     "CLAUDE.md": ("packages/radia-mcp/src/radia_mcp/matlab/optuna_oracle.py", "CLAUDE.md"),
     "README.md": ("tests/mcp_integration/test_matlab_source_contract.py", "README.md"),
@@ -187,7 +188,7 @@ def test_shared_ams_closure_and_native_consumers_are_real():
     core = {path for path in CONTRACT.include_closure(ROOT, sorted(seeds), "src/core")
             if path.startswith("src/core/")}
     assert {p for p in shared if p.startswith("src/core/")} == core | {"src/core/radia_mex_sparse_symmetry.h"}
-    assert len(core - gpu_sources) == 15
+    assert len(core - gpu_sources) == 30
     # The radia-simulink lane must start on every file its native build reads.
     lane = MANIFEST["lanes"]["radia-simulink"]["events"]
     for event in ("push", "pull_request"):

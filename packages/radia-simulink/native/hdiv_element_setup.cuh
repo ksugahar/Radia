@@ -1,7 +1,7 @@
 // NGSolve-owned high-order basis staging. Not a charge map or material solver.
 #pragma once
 #include "hdiv_rt0_host.cuh"
-#include "hdiv_material_staging.hpp"
+#include "../../../src/core/gpu/hdiv/hdiv_material_staging.hpp"
 #include <l2hofespace.hpp>
 #include <scalarfe.hpp>
 #include <calcinverse.hpp>

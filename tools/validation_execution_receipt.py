@@ -18,6 +18,8 @@ import time
 
 import pytest
 
+_WINDOWS = os.name == 'nt'
+
 
 def sha256(path):
     digest = hashlib.sha256()
@@ -125,7 +127,8 @@ class Receipt:
                          plan_sha256=sha256(plan_path), identity=self.plan,
                          collected=[], phases={}, phase_durations_s={}, collection_reports=[],
                          unexpected=[], duplicate_collected=[], numerical_outputs=[],
-                         workspace_changed=False, state='initializing', status='incomplete')
+                         workspace_changed=False, state='initializing', status='incomplete',
+                         write_retries=0)
         self.write()
 
     def write(self):
@@ -143,10 +146,34 @@ class Receipt:
         self.data['missing_execution'] = sorted(expected - executed)
         temporary = self.path.with_name(self.path.name + '.pending')
         unlinked(temporary)
-        with temporary.open('x', encoding='utf-8') as stream:
-            json.dump(self.data, stream, sort_keys=True, indent=2, allow_nan=False)
-            stream.write('\n')
-        os.replace(temporary, self.path)
+        deadline = time.monotonic() + 1.0
+        for attempt in range(10):
+            # A retry republishes this checkpoint, never a pytest case or job.
+            # Re-encode before publication so a committed receipt records the
+            # cumulative number of additional publication attempts accurately.
+            if attempt:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise publish_error
+                time.sleep(min(0.05, remaining))
+                if time.monotonic() >= deadline:
+                    raise publish_error
+                self.data['write_retries'] += 1
+            unlinked(temporary)
+            with temporary.open('w' if attempt else 'x', encoding='utf-8') as stream:
+                json.dump(self.data, stream, sort_keys=True, indent=2, allow_nan=False)
+                stream.write('\n')
+            if attempt and time.monotonic() >= deadline:
+                raise publish_error
+            try:
+                os.replace(temporary, self.path)
+                return
+            except OSError as error:
+                if (not _WINDOWS or getattr(error, 'winerror', None) not in {5, 32}
+                        or attempt == 9 or time.monotonic() >= deadline):
+                    # Keep both the prior checkpoint and pending evidence.
+                    raise
+                publish_error = error
 
     def collection(self, nodeids, items=None):
         if items is not None:

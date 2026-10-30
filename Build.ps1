@@ -44,7 +44,6 @@ param(
     [switch]$HMatrixCudaOnly,    # isolated resident HACApK leaf application
     [string]$HMatrixMklRoot,     # explicit isolated MKL for complete C HACApK assembly
     [switch]$HMatrixFaultInjection, # isolated diagnostic hooks, never a release default
-    [switch]$HDivPythonBindings,  # MEX-free shared resident operator component
     [string]$GpuBuildAdmission,  # private reviewed HDiv GPU worker/task/source admission
     [string]$GpuBuildAdmissionSha256,
     [switch]$ProjectionCudaOnly, # experimental NGSolve target replay bridge
@@ -64,7 +63,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 if ($CsrPythonBindings -and -not $CudaMexOnly) { throw '-CsrPythonBindings requires -CudaMexOnly' }
-if ($HDivPythonBindings -and -not $HMatrixCudaOnly) { throw '-HDivPythonBindings requires -HMatrixCudaOnly' }
 if ($ResidentAmgPython -and -not $CudaMexOnly) { throw "Resident AMG Python requires -CudaMexOnly" }
 if ($ProjectionLifecycleDiagnostic -and -not $ProjectionCudaOnly) { throw 'Projection lifecycle diagnostic requires the isolated Projection target' }
 if ([bool]$GpuBuildAdmission -ne [bool]$GpuBuildAdmissionSha256) { throw 'GPU build admission and hash must be supplied together' }
@@ -93,7 +91,6 @@ if ($HMatrixCudaOnly) {
     $hMatrixBuildArgs = @()
     if ($HMatrixMklRoot) { $hMatrixBuildArgs += @('--mkl-root', $HMatrixMklRoot) }
     if ($HMatrixFaultInjection) { $hMatrixBuildArgs += '--fault-injection' }
-    if ($HDivPythonBindings) { $hMatrixBuildArgs += '--python-bindings' }
     if ($RequireNativeProvenance) { $hMatrixBuildArgs += '--require-clean-source' }
     if ($GpuBuildAdmission) { $hMatrixBuildArgs += @('--build-admission', $GpuBuildAdmission, '--build-admission-sha256', $GpuBuildAdmissionSha256) }
     & python (Join-Path $PSScriptRoot 'packages/radia-simulink/tools/build_hmatrix_cuda.py') @hMatrixBuildArgs

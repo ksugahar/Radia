@@ -1,4 +1,4 @@
-#include "../../packages/radia-simulink/native/hmatrix_leaf_coverage.hpp"
+#include "../../src/core/gpu/hdiv/hmatrix_leaf_coverage.hpp"
 #include <cassert>
 #include <vector>
 struct Block { std::size_t row,column,rows,columns; };

@@ -42,7 +42,9 @@ def audit(repo_root: Path) -> dict:
             resolved = (repo_root / relative).resolve()
             if not relative or not resolved.is_relative_to(repo_root) or not resolved.is_file():
                 errors.append(f"{feature['id']}: missing or escaping {field}: {relative}")
-            elif field != "validation" and not relative.startswith("packages/radia-simulink/"):
+            elif field == "source" and not relative.startswith(("packages/radia-simulink/native/", "src/core/gpu/")):
+                errors.append(f"{feature['id']}: {field} is not GPU-owned")
+            elif field == "matlab" and not relative.startswith("packages/radia-simulink/matlab/"):
                 errors.append(f"{feature['id']}: {field} is not GPU-owned")
     for entry in manifest.get("binary_extensions", []):
         if entry.get("classification") != "cpu-python-only" or entry.get("matlab"):

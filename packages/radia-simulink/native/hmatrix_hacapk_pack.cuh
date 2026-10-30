@@ -1,6 +1,6 @@
 // Direct in-process HACApK packing: never exposes pointers to MATLAB.
 #pragma once
-#include "hmatrix_resident.cuh"
+#include "../../../src/core/gpu/hdiv/hmatrix_resident.cuh"
 extern "C" {
 #include "cHACApK_base.h"
 }

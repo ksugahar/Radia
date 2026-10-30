@@ -4,8 +4,8 @@
 #include "hmatrix_entry_oracle.cuh"
 #include "hmatrix_curved_entry_oracle.cuh"
 #include "hmatrix_aca_callback.cuh"
-#include "hmatrix_material_solver.cuh"
-#include "hmatrix_nonlinear_material.cuh"
+#include "../../../src/core/gpu/hdiv/hmatrix_material_solver.cuh"
+#include "../../../src/core/gpu/hdiv/hmatrix_nonlinear_material.cuh"
 #ifdef RADIA_HMATRIX_FULL_HOST
 #include "hmatrix_full_assembly.cuh"
 #endif

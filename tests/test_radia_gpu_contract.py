@@ -192,10 +192,11 @@ def test_public_build_receipt_excludes_private_admission_and_commands(tmp_path, 
     monkeypatch.setattr(sys, "argv", ["build_python_gpu.py", "--cuda-root", str(matlab / "sys/cuda/win64/cuda"),
                         "--matlab-root", str(matlab), "--host-compiler", str(tmp_path / "cl.exe"),
                         "--architecture", "75", "--output", str(out), "--admission", str(admission),
-                        "--admission-sha256", builder.sha(admission)])
+                        "--admission-sha256", builder.sha(admission), "--components",
+                        "_gpu_csr", "_gpu_resident_amg", "_gpu_ams"])
     builder.main()
     receipts = list(out.glob("*.build.json"))
-    assert len(receipts) == len(builder.COMPONENTS) == 3
+    assert len(receipts) == 3
     for receipt in receipts:
         record = json.loads(receipt.read_text())
         assert "admission" not in record and "commands" not in record
