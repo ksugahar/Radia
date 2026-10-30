@@ -1,0 +1,17 @@
+{
+  "execution_role": "build",
+  "source_commit": "7216e7b649b30b357073300067a27f2b9eaddb1f",
+  "wheel_sha256": "3937f52b452f9176c6852f386cfb36364de387056e5363af034ef5d55ed98130",
+  "gpu_feature_status": "experimental; declared small affine cases only, no topology-optimization/scale/performance qualification",
+  "public_bh_cases": 4,
+  "cubic_cases": 8,
+  "coefficient_error_max": 8.193781401358164e-13,
+  "mean_error_max": 1.7473507245678145e-14,
+  "nonlinear_original_residual_max": 2.3751963282693236e-13,
+  "cubic_coefficient_error_max": 2.219181102320015e-13,
+  "cubic_original_residual_max": 1.3556953952679955e-15,
+  "esim_passed": true,
+  "f1_passed": true,
+  "f1_solves": 12,
+  "scientific_limits_unchanged": true
+}
