@@ -1,6 +1,6 @@
 ---
 name: cubit-toolbar-acceptance
-description: Accept cubit-mesh-export toolbar releases using APREPRO/Python execution, the same GUI-handler dispatch path, native identity and validated artifacts on the editable and wheel hosts. Mouse-driven end-to-end GUI tests are optional diagnostics.
+description: Accept cubit-mesh-export toolbar releases using APREPRO/Python execution, the same GUI-handler dispatch path, native identity and validated artifacts on the sole build target, with distinct exact-wheel and editable evidence. Mouse-driven end-to-end GUI tests are optional diagnostics.
 ---
 
 # Cubit toolbar acceptance
@@ -9,17 +9,19 @@ This repository file is the canonical contract for Codex and Claude. Local skill
 
 ## Acceptance policy (human decision, 2026-10-16)
 
-On **editable development host and wheel acceptance host**, successful APREPRO/Python backend execution plus verification that the GUI actions invoke that same tested path is sufficient. Mouse clicks add no mandatory acceptance gate when they invoke the same handler with equivalent options. Do not require six mouse-driven exports, Cancel testing, repeated dialog opening, screenshots, restart dispatch of every button, or a dedicated GUI account merely to close a release.
+On **the sole build target**, keeping exact-wheel qualification and normal editable identity/registration as explicit records, successful APREPRO/Python backend execution plus verification that the GUI actions invoke that same tested path is sufficient. Mouse clicks add no mandatory acceptance gate when they invoke the same handler with equivalent options. Do not require six mouse-driven exports, Cancel testing, repeated dialog opening, screenshots, restart dispatch of every button, or a dedicated GUI account merely to close a release.
 
 This supersedes this skill's previous mandatory real-desktop six-button policy. Historical blocked GUI attempts remain historical evidence; do not rewrite them as successful clicks. A capture/RDP/mouse-automation limitation alone does not block acceptance under this policy. Actual registration, dispatch, native identity or export failures still block their affected checks. Do not call backend-only success GUI dispatch evidence.
 
-Codex implements and validates. Return results to the Codex repository-management hub; only that hub communicates with Claude management, which reviews and owns GitHub/release closure. Creating or changing this skill does not itself complete the tests.
+Codex task owners implement and self-validate, and submit exact-source evidence to Codex repository management. Codex repository management owns GitHub execution, release and deployment; Claude provides reciprocal independent review. Creating or changing this skill does not itself complete the tests.
+
+Human scope update (2026-10-30): the build target is the only Cubit deployment/qualification target. Do not require a retired host, another machine/account, or mandatory mouse automation. Prior two-host attempts remain historical evidence. The versioned v2 test seams and six production handler/backend/artifact gates below remain required.
 
 ## Required evidence
 
-1. Establish the selected release version, source/tag SHA, published wheel SHA-256, deployment receipt, interpreter/import paths, Cubit version and per-host runtime identity. Verify the actual loaded plugin path/hash against native_payloads.json (.ccm may be deployed as plugins/cubit_mesh_export.dll), and the matching pyd hash. Disk-file equality alone does not prove the loaded path. Preserve the declared editable / wheel identity for each host.
+1. Establish the selected release version, source/tag SHA, published wheel SHA-256, deployment receipt, interpreter/import paths, Cubit version and selected runtime identity. Verify the actual loaded plugin path/hash against native_payloads.json (.ccm may be deployed as plugins/cubit_mesh_export.dll), and the matching pyd hash. Disk-file equality alone does not prove the loaded path. Preserve the declared editable / wheel identity for each runtime record.
 2. Verify all six installed toolbar script registrations resolve to the intended package's GUI handlers. Exercise the same handler/command-building path programmatically with explicit options and record the resulting APREPRO/Python invocation. A headless test may control dialog inputs through a test seam, but it must execute the production handler and command builder; replacing the handler with a fake or inspecting its source alone is insufficient. Record whether this is programmatic GUI-handler dispatch or an observed GUI invocation; never claim mouse operation that did not occur. Existing automated dispatch tests may be reused when they match the release and runtime contract.
-3. Execute the resulting backend commands through licensed Cubit APREPRO/Python on both hosts using independently authored small geometry and explicit settings. Match dispatch command/options to the real execution and validate fresh output artifacts. Reuse already passing release evidence for the same bytes and contracts rather than repeat work. Missing format coverage stays unverified.
+3. Execute the resulting backend commands through licensed Cubit APREPRO/Python on the sole build target using independently authored small geometry and explicit settings. Match dispatch command/options to the real execution and validate fresh output artifacts. Reuse already passing release evidence for the same bytes and contracts rather than repeat work. Missing format coverage stays unverified.
 4. Confirm installed startup/menu/toolbar registration using deployment verification and existing startup/display evidence. A separate restart/visibility probe is appropriate when registration changed or evidence is missing; it is not an automatic demand for six mouse clicks. Preserve supported batch/nographics-only behavior for MCP execution.
 
 | Action | Backend/output contract |
@@ -50,7 +52,7 @@ Use schema `cubit-mesh-export.toolbar-acceptance.v2` and `acceptance_policy: apr
 - generated and executed command/options, output paths/sizes/SHA-256 and diagnostics;
 - optional `mouse_dispatch_pass`, `cancel_pass`, `restart_dispatch_pass` (true/false/null; untested values must be null, with mouse_scope or outside_acceptance_scope recording the policy scope separately).
 
-Host PASS requires release/native identity, correct registration and all six required dispatch/backend/artifact checks. Overall PASS requires both hosts. Example: `editable host PASS; wheel host backend/dispatch null; overall incomplete` reflects missing required execution, while `mouse_capture blocked; required checks PASS on both; overall PASS under v2` is valid. Never infer unmeasured checks from green CI or a menu screenshot. Numerical validation gates remain unchanged.
+Host PASS requires release/native identity, correct registration and all six required dispatch/backend/artifact checks. Overall PASS requires exact-wheel qualification and normal editable identity/registration on the sole build target. Same-byte/options/native execution evidence may be reused explicitly; it does not replace the distinct import/source and registration records. Example: `editable identity PASS; wheel qualification null; overall incomplete` reflects missing required execution, while `mouse_capture blocked; required checks PASS on the sole build target; overall PASS under v2` is valid. Never infer unmeasured checks from green CI or a menu screenshot. Numerical validation gates remain unchanged.
 
 Recover result JSON, artifacts, commands and hashes to private durable release evidence. Preserve failed diagnostics. Remove only verified task-owned scratch within authorized scope, preserving deployed releases, evidence and other sessions' WIP. Report remaining session/process cleanup separately; acceptance-policy changes do not authorize force-killing a process.
 
@@ -64,7 +66,7 @@ The assigned executor checks exact resolved paths, active/queued consumers, uniq
 
 Record a cleanup receipt with executor, timestamp/timezone, exact targets, recovery manifest hash, prechecks, deleted/absent outcomes and retained owner/reason/trigger. If approval review rejects deletion, record the rejection and zero/partial execution accurately; do not retry through another shell, API or agent to bypass it. Management resolves the applicable restriction before further action. Changing executor is not itself resolution.
 
-The management closure record references both host acceptance results, Claude's actual confirmation and the cleanup receipt, and verifies the final inventory after any review edits. A queued packet is not a confirmation. A cleanup blocker remains a separate open item even if numerical/handler acceptance passes; name retained paths and their owner instead of claiming full completion.
+The management closure record references the separate wheel/editable acceptance records, Claude's actual independent review and the cleanup receipt, and verifies the final inventory after any review edits. A queued packet is not a confirmation. A cleanup blocker remains a separate open item even if numerical/handler acceptance passes; name retained paths and their owner instead of claiming full completion.
 
 ## Optional real-desktop diagnostics
 
@@ -72,4 +74,4 @@ Use mouse/UI testing only for a reported GUI-specific problem or explicitly requ
 
 ## Handoff
 
-Return both host verdicts, required six-action coverage, exact evidence/hashes, unresolved findings and cleanup status to Codex management. Ask management to reconcile the selected release evidence against v2 and close only genuinely satisfied remaining gates; do not automatically label an old blocked test PASS.
+Return the sole-target wheel/editable verdicts, required six-action coverage, exact evidence/hashes, unresolved findings and cleanup status to Codex management. Ask management to reconcile the selected release evidence against v2 and close only genuinely satisfied remaining gates; do not automatically label an old blocked test PASS.

@@ -20,6 +20,8 @@ cubit-plugin-install deploys plugin binaries to Cubit.
 # fails even though the exact pinned Netgen wheel is installed.
 import netgen as _netgen  # noqa: F401
 
-__version__ = "2.2.7"
+# Native CAD capture: export model_capture "model.json" units mm.
+# Consumer construction/physics adapters remain separate from this package.
+__version__ = "2.2.8"
 
 __all__ = ["__version__"]
