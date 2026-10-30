@@ -15,10 +15,12 @@ are never replaced. A failed write can leave an explicitly reported partial
 file; retain it for diagnosis and choose a reviewed fresh output for a new run.
 
 The `cubit.model-capture.v1` JSON contains source volume/face/curve/vertex IDs,
-curve endpoint incidence and33 parameter-fraction samples, exact queried sphere
+curve endpoint incidence and 33 parameter-fraction samples, exact queried sphere
 parameters for a one-face whole sphere, block identity and CAD sideset coverage.
 Its `labels` object uses `cubit.source-face-labels.v1`. Source IDs are not target
 application IDs. Shared surface uses remain visible across source volumes.
+Rational splines are explicitly rejected; sampled rational geometry is never
+declared to be a polynomial spline.
 
 This is source capture, not arbitrary exact CAD translation. The receiving
 adapter must validate its supported constructions, preserve source-to-output
