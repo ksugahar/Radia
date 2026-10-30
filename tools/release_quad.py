@@ -16,9 +16,7 @@ Usage:
         Never change radia-mcp or cubit-mesh-export.
 
     python tools/release_quad.py phase8e
-        Upgrade mdx1 from PyPI. Refuses to run if pip index versions
-        radia doesn't match the local repo (i.e. PyPI hasn't propagated yet).
-        Other independently released packages are not inspected or changed.
+        Reject the retired compute refresh route without contacting a host.
 
     python tools/release_quad.py phase9
         Cross-machine consistency probe. Final gate.
@@ -34,9 +32,8 @@ Usage:
     python tools/release_quad.py all
         phase8 -> phase9 with all preconditions enforced.
 
-        RADIA_RELEASE_EDITABLE_REPO_100 names the 100-machine view of one
-        clean release worktree for the development venv; the editable deploy
-        fails before install unless it is tracked-clean at the release SHA.
+        Both normal roles require explicit host, Python, source and release
+        commit bindings; isolated QA interpreters are configured separately.
 
     python tools/release_quad.py done [--release-source <path>]
         Require the CPU solver release gate. The release source is the controller (which must then
@@ -47,12 +44,10 @@ Usage:
     python tools/release_quad.py verify-editable
         Read-only: verify both bound normal editable installations.
 
-    python tools/release_quad.py repoint --package <name> --source <path> --reason "..."
-        On 100号機 only, move an editable pointer explicitly: record the
-        previous pointer, pip install -e the new source, verify registration
-        and a fresh-process import, then record the new intent. --record-current
-        adopts the installed pointer; --rollback reinstalls the previous
-        pointer. No process is stopped and nothing is uninstalled.
+    python tools/release_quad.py repoint --host <role> --package radia --source <path> --reason "..."
+        Explicitly update one bound normal Radia source and verify it before
+        recording intent. --record-current adopts an already verified pointer.
+        Updates are forward-only; no process is stopped or package uninstalled.
 
     python tools/release_quad.py restore-editable
         Removed. The development tier has no default target; use repoint
@@ -1279,14 +1274,15 @@ print('LABEL_PLACEHOLDER wheel verified:', version, checked)
 """.replace("VERSION_PLACEHOLDER", repr(version)).replace("LABEL_PLACEHOLDER", label)
 
 
-def _verify_wheel_runtime(ssh_host, label, *, python_path=None, isolated=False):
-    """Verify the default Python on ``ssh_host`` holds the exact release wheel."""
+def _verify_wheel_runtime(ssh_host, label, *, python_path, isolated=True):
+    """Verify the explicitly selected QA Python; never select a PATH runtime."""
+    _absolute_windows_path(python_path, "QA Python", python=True)
     code = _wheel_runtime_probe_code(_radia_version(), label)
     if isolated:
         code = "import sys\nif sys.prefix == sys.base_prefix: raise SystemExit('QA runtime must be isolated')\n" + code
     encoded_code = base64.b64encode(code.encode('utf-8')).decode('ascii')
-    invocation = '& ' + _powershell_literal(python_path) if python_path else 'python'
-    guard = _runtime_guard_powershell(python_path) if python_path else ''
+    invocation = '& ' + _powershell_literal(python_path)
+    guard = _runtime_guard_powershell(python_path)
     script = guard + f'{invocation} -c "import base64; exec(base64.b64decode(\'{encoded_code}\'))"; exit $LASTEXITCODE'
     encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
     result = run(['ssh', ssh_host, 'pwsh', '-NoProfile', '-EncodedCommand', encoded], check=False)
@@ -2180,7 +2176,7 @@ def cmd_done(args):
         return rc
 
     print("")
-    ok("DEFINITION OF DONE met. Release is consistent across validation / 100号機. "
+    ok("Windows role checks passed. The four-case wrapper still requires its CPU/GPU compute-build receipts. "
        "both normal operating roles use their bound editable source, isolated QA runtimes hold the verified wheel, "
        "and the retired standalone PySide panel surface is absent. "
        "The recorded editable intent names this release source; move it later "
