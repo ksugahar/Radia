@@ -16,6 +16,17 @@ EXPORT_OVERVIEW = """
 
 Path A is the recommended export path. Use `export netgen "mesh.vol" order N` for all workflows.
 
+Named periodic export is opt-in and requires all `periodic_*` fields: name
+`kt`, exact master/slave boundary labels, coordinate unit `m`, BC patch-pair
+list, translation x/y/z and positive finite matching distance. BC numbers are
+not FaceDescriptor or CAD surface IDs. Every point must match uniquely across
+all incident patches; ambiguity or incomplete coverage fails the export.
+The native writer saves group 1 / PERIODIC / kt directly and preserves curved
+geometry. Consumers verify the file; they never add or repair identifications.
+No centroid translation or default distance is inferred. Named periodic exports
+require a fresh path; ordinary export without this request makes no periodic
+readiness claim.
+
 ## Supported Formats
 
 | Command | Format | Max Order | Notes |
