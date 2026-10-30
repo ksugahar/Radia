@@ -1,6 +1,7 @@
 """Thin MATLAB publisher of the Radia-owned HDiv host setup."""
 
-def prepare_hdiv_host_setup(mesh_path, *, backend, label_contract, order=1):
+def prepare_hdiv_host_setup(mesh_path, *, backend, label_contract, mesh_check_receipt,
+                            mesh_check_receipt_sha256, mesh_check_provenance, order=1):
     """Prepare owned numeric FE data for explicit MATLAB shared-GPU initialization.
 
     Caller-owned NGSolve TaskManager; no CPU solve, Engine or resident GPU
@@ -9,8 +10,9 @@ def prepare_hdiv_host_setup(mesh_path, *, backend, label_contract, order=1):
     Unsupported charge geometry still raises in the existing Radia builder.
     """
     from radia.hdiv_gpu import prepare_hdiv_host_setup as prepare
-    data = prepare(mesh_path, backend=backend, label_contract=label_contract,
-                   order=order, maximum_dofs=4096)
+    data = prepare(mesh_path, backend=backend, label_contract=label_contract, mesh_check_receipt=mesh_check_receipt,
+                   mesh_check_receipt_sha256=mesh_check_receipt_sha256,
+                   mesh_check_provenance=mesh_check_provenance, order=order, maximum_dofs=4096)
     mesh_hash = data["mesh_sha256"]
     contract_hash = data["label_contract_sha256"]
     import numpy as np

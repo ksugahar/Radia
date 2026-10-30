@@ -45,9 +45,22 @@ installation is replaced. A build receipt is not evidence of GPU execution.
 
 ## Before a later basic GPU smoke
 
-Supply a checked `.vol` and its label contract. The existing pure-Python
-`cubit_mesh_export.check` checker must be available in that job for strict label
-checking; it does not launch Cubit. No checker bypass is introduced here.
+Supply a checked `.vol`, its label contract, a checked-mesh receipt, its externally
+approved SHA256 and the approved provenance manifest. On the build role,
+`tools/prepare_hdiv_mesh_receipt.py` executes the installed
+`cubit_mesh_export.check` with strict labels and default quality checks. It binds
+the installed checker's version and RECORD hash, exact argv, NGSolve version,
+mesh and contract bytes, and the exact emitted report bytes. Its proposed
+provenance file requires independent approval before consumption.
+
+The consumer requires no checker installation and has no live-check fallback.
+It verifies the approved receipt and snapshots the mesh and contract before any
+workflow-owned NGSolve import, FE staging, GPU native import or construction,
+CUDA context creation, or mesh-dependent operation. Later operations reuse the
+identical snapshotted bytes. Importing the parent `radia` package may already
+initialize CPU libraries; this is not a pre-import validation guarantee.
+Unbound sibling CAD, changed options, failed checks, warnings, or mismatched
+artifact/provenance/runtime identities fail before workflow initialization.
 NGSolve owns FE preparation under the caller's `TaskManager`. Select
 `backend="gpu"` explicitly; unsupported state or CUDA failures raise without a
 CPU fallback. Reuse the existing small component input, independent CPU oracle

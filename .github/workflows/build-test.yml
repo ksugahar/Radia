@@ -555,7 +555,8 @@ jobs:
           $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
           $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
           $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if ($LASTEXITCODE -ne 0 -or -not $vs) { throw 'VS2022 build tools are required' }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not $vs) { throw 'VS2022 build tools are required' }
           $toolset = (Get-Content (Join-Path $vs 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
           if ($toolset -notmatch '^14[.]44[.]') { throw 'Default MSVC 14.44 is required' }
           $cl = Join-Path $vs "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/cl.exe"
