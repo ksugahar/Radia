@@ -2268,6 +2268,12 @@
       ]
     },
     {
+      "pattern": "tools/check_python_gpu_coexistence.py",
+      "owners": [
+        "radia"
+      ]
+    },
+    {
       "pattern": "src/core/gpu/ams_amg_kernels.cuh",
       "owners": [
         "radia",
@@ -2880,6 +2886,7 @@
           "paths": [
             "src/radia/**",
             "tools/build_python_gpu.py",
+            "tools/check_python_gpu_coexistence.py",
             "tests/test_radia_gpu_contract.py",
             "tests/test_gpu_sparse_entry.py",
             "src/core/**",
@@ -2990,6 +2997,7 @@
           "paths": [
             "src/radia/**",
             "tools/build_python_gpu.py",
+            "tools/check_python_gpu_coexistence.py",
             "tests/test_radia_gpu_contract.py",
             "tests/test_gpu_sparse_entry.py",
             "src/core/**",

@@ -551,7 +551,8 @@ jobs:
         shell: pwsh
         run: |
           # This tag/manual native-release dispatch authorizes only this exact
-          # checkout's compile. It is not a runtime/GPU numerical verdict.
+          # checkout's compile and import-only coexistence. No resident objects or
+          # numerical solves are requested; exact-wheel acceptance is separate.
           $ciPython = Join-Path $env:RADIA_CI_VENV 'Scripts/python.exe'
           $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
           $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
@@ -582,6 +583,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $ciPython tools/python_gpu_payload.py --output $gpuOutput --package src/radia --source-commit $env:GITHUB_SHA
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # Source metadata comes from the same checkout, without installing
+          # Radia into a persistent runtime. setup.py declares prebuilt payloads.
+          & $ciPython setup.py egg_info
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $gpuPins = @(& $ciPython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*d['project']['optional-dependencies']['gpu'], sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $gpuPins.Count -eq 0) { throw 'Expected exact GPU runtime metadata pins' }
+          & $ciPython -m pip install --only-binary=:all: @gpuPins
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $ciPython tools/check_python_gpu_coexistence.py --source-commit $env:GITHUB_SHA --report (Join-Path $env:RADIA_CI_OUTPUT_DIR 'python-gpu-coexistence.json')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Python GPU coexistence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-gpu-coexistence
+          path: ${{ env.RADIA_CI_OUTPUT_DIR }}/python-gpu-coexistence*.json
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Build wheel
         if: success()
