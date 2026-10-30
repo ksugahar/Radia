@@ -11,6 +11,7 @@
 #include <pybind11/stl.h>
 #include <stdexcept>
 namespace py = pybind11;
+namespace radia_gpu_resident_amg_python {
 template <class T> std::vector<T> array(py::handle o) {
   auto a = py::array_t<T, py::array::c_style>::ensure(o);
   if (!a || a.ndim() != 1)
@@ -124,7 +125,9 @@ struct Resident {
     return py::make_tuple(x, info);
   }
 };
+}  // namespace radia_gpu_resident_amg_python
 PYBIND11_MODULE(RADIA_AMG_PYTHON_MODULE, m) {
+  using Resident = radia_gpu_resident_amg_python::Resident;
   py::class_<Resident>(m, "Resident")
       .def(py::init<py::list, py::array_t<double, py::array::c_style>>())
       .def("solve", &Resident::solve, py::arg("rhs").noconvert(),

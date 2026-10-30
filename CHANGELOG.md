@@ -1,5 +1,20 @@
 # Changelog
 
+## 5.4.2 - 2026-10-30
+
+- Give the Python AMS and resident AMG implementations distinct internal C++
+  type identities while preserving their Python `Resident` APIs. The 5.4.1
+  native wheel could not import these two modules together because their
+  private types collided in pybind11's shared registry.
+- Gate native packaging on importing all four Python CUDA modules together in
+  forward and reverse order, with matching CPU/GPU source provenance and exact
+  runtime dependencies. This checks module coexistence without constructing
+  resident objects or requesting a solve.
+- GPU features remain experimental pending exact-wheel runtime and numerical
+  acceptance. Import coexistence does not certify GPU results, performance,
+  architecture portability or full HDiv-MMM topology optimization. Numerical
+  algorithms and solver controls are unchanged.
+
 ## 5.4.1 - 2026-10-30
 
 - Build and package the Radia-owned Python CUDA bindings for explicit Windows
