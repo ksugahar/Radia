@@ -46,9 +46,9 @@ def test_mcp_reuse_failure_evidence_and_release(tmp_path, monkeypatch, fail, tab
     args = ("mesh.vol", "labels.json", str(law), [[1., 2., 3.], [3., 2., 1.]], str(result), "gpu")
     if fail or serialization_failure:
         with pytest.raises((RuntimeError, AttributeError)):
-            module.hdiv_nonlinear_gpu_run(*args)
+            module.hdiv_nonlinear_gpu_run(*args, mesh_check_receipt="receipt.json", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
     else:
-        assert module.hdiv_nonlinear_gpu_run(*args)["closed"]
+        assert module.hdiv_nonlinear_gpu_run(*args, mesh_check_receipt="receipt.json", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})["closed"]
     saved = json.loads(result.read_text())
     assert saved["accepted"] is (not (fail or serialization_failure))
     assert saved["independent_cpu_certified"] is False
@@ -57,4 +57,4 @@ def test_mcp_reuse_failure_evidence_and_release(tmp_path, monkeypatch, fail, tab
     assert saved["preconditioner"] == "reference-diagonal"
     assert len(saved["material_sha256"]) == 64
     with pytest.raises(FileExistsError):
-        module.hdiv_nonlinear_gpu_run(*args)
+        module.hdiv_nonlinear_gpu_run(*args, mesh_check_receipt="receipt.json", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})

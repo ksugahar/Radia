@@ -29,7 +29,7 @@ def test_explicit_backend_before_native_import():
     module = load(API)
     for backend in (None, "cpu", "auto"):
         with pytest.raises(ValueError, match="explicit backend"):
-            module.PreparedHDivNonlinear("missing.vol", {}, backend=backend, label_contract="missing.json")
+            module.PreparedHDivNonlinear("missing.vol", {}, backend=backend, label_contract="missing.json", mesh_check_receipt="missing.receipt", mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
 
 
 def test_solve_reuses_native_owner_and_close_releases_after_error():
@@ -82,29 +82,23 @@ def test_invalid_solve_options_before_native_work(options):
         owner.solve([0., 0., 0.], **options)
 
 
-def test_checked_mesh_snapshot_identity_and_stderr(tmp_path, monkeypatch):
+def test_snapshot_uses_exact_checked_bytes_after_caller_mutation(tmp_path, monkeypatch):
     import hashlib
     module = load(API)
-    mesh = tmp_path / "mesh.vol"
-    mesh.write_bytes(b"original mesh")
-    contract = tmp_path / "labels.json"
-    contract.write_text("{}")
-    snapshots = []
-    def check(command, **kwargs):
-        snapshot = Path(command[3])
-        snapshots.append(snapshot)
-        assert snapshot.read_bytes() == b"original mesh"
+    mesh = tmp_path / "mesh.vol"; mesh.write_bytes(b"original mesh")
+    contract = tmp_path / "labels.json"; contract.write_text("{}")
+    receipt = tmp_path / "receipt.json"; receipt.write_text("{}")
+    def verify(mesh_bytes, contract_bytes, receipt_bytes, *pins):
+        assert mesh_bytes == b"original mesh"
         mesh.write_bytes(b"changed original")
-        return types.SimpleNamespace(returncode=0, stdout='{"passed":true}', stderr="")
+        contract.write_text("changed contract")
+    monkeypatch.setattr(module, "_verify_mesh_receipt", verify)
+    snapshots = []
     def initialize(self, path, law, order):
-        assert path == snapshots[-1]
+        snapshots.append(path)
         assert path.read_bytes() == b"original mesh"
         assert self.mesh_sha256 == hashlib.sha256(b"original mesh").hexdigest()
-    monkeypatch.setattr(module.subprocess, "run", check)
     monkeypatch.setattr(module.PreparedHDivNonlinear, "_initialize", initialize)
-    module.PreparedHDivNonlinear(mesh, {}, backend="gpu", label_contract=contract)
+    module.PreparedHDivNonlinear(mesh, {}, backend="gpu", label_contract=contract,
+        mesh_check_receipt=receipt, mesh_check_receipt_sha256="a"*64, mesh_check_provenance={})
     assert not snapshots[0].exists()
-    monkeypatch.setattr(module.subprocess, "run", lambda *a, **k:
-        types.SimpleNamespace(returncode=1, stdout="", stderr="No module named cubit_mesh_export"))
-    with pytest.raises(RuntimeError, match="cubit-mesh-export required.*No module"):
-        module.PreparedHDivNonlinear(mesh, {}, backend="gpu", label_contract=contract)
