@@ -50,15 +50,16 @@ def identity():
     return commit
 
 
-def check_toolchain(cuda_root, host, architecture, windows):
+def check_toolchain(cuda_root, host, architectures, windows):
     nvcc = cuda_root / ("bin/nvcc.exe" if windows else "bin/nvcc")
     version = capture([nvcc, "--version"])
     if not re.search(r"release 12\.8,", version):
         raise RuntimeError("CUDA toolkit must be 12.8; no compiler override or fallback")
-    if architecture not in ({"75"} if windows else {"100"}):
-        raise RuntimeError("This acceptance build requires Windows sm_75 or Linux sm_100")
+    expected = ["75", "80"] if windows else ["100"]
+    if list(architectures) != expected:
+        raise RuntimeError("Explicit architectures must be Windows sm_75+sm_80 or Linux sm_100")
     if windows:
-        compiler = subprocess.run([str(host)], capture_output=True, text=True)
+        compiler = subprocess.run([str(host)], capture_output=True, text=True, encoding="utf-8", errors="replace")
         host_version = compiler.stdout + compiler.stderr
         if not re.search(r"19\.44\.", host_version):
             raise RuntimeError("MSVC 14.44 compiler environment is required")
@@ -66,7 +67,7 @@ def check_toolchain(cuda_root, host, architecture, windows):
         host_version = capture([host, "--version"])
         if not re.search(r"(?:g\+\+|gcc|GCC).*11\.5", host_version):
             raise RuntimeError("Explicit reviewed GCC 11.5 host compiler required")
-    for key in ("NVCC_PREPEND_FLAGS", "NVCC_APPEND_FLAGS", "NVCC_CCBIN"):
+    for key in ("NVCC_PREPEND_FLAGS", "NVCC_APPEND_FLAGS", "NVCC_CCBIN", "CL", "_CL_", "CFLAGS", "CXXFLAGS", "CPPFLAGS", "CUDAFLAGS"):
         if os.environ.get(key):
             raise RuntimeError(f"Unreviewed compiler environment: {key}")
     return nvcc, version, host_version
@@ -160,7 +161,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cuda-root", type=Path, required=True)
     parser.add_argument("--host-compiler", type=Path, required=True)
-    parser.add_argument("--architecture", required=True)
+    parser.add_argument("--architectures", nargs="+", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--admission", type=Path, required=True)
     parser.add_argument("--admission-sha256", required=True)
@@ -176,7 +177,7 @@ def main():
     cuda = args.cuda_root.resolve()
     if windows and (args.matlab_root is None or cuda != (args.matlab_root.resolve() / "sys/cuda/win64/cuda")):
         raise RuntimeError("Windows must use the explicitly named MATLAB-bundled CUDA")
-    nvcc, nvcc_version, host_version = check_toolchain(cuda, args.host_compiler, args.architecture, windows)
+    nvcc, nvcc_version, host_version = check_toolchain(cuda, args.host_compiler, args.architectures, windows)
     include = headers()
     out = args.output.resolve()
     if out == ROOT or ROOT in out.parents:
@@ -194,8 +195,10 @@ def main():
         binary = out / (module + sysconfig.get_config_var("EXT_SUFFIX"))
         obj = out / (module + (".obj" if windows else ".o"))
         cuda_command = [nvcc, "-c", "-std=c++17", "-O2", "-ccbin", args.host_compiler,
-                        "-gencode=arch=compute_" + args.architecture + ",code=sm_" + args.architecture,
                         "-I" + str(CORE), "-o", obj, CORE / cu]
+        cuda_command += ["-gencode=arch=compute_" + arch + ",code=sm_" + arch for arch in args.architectures]
+        if windows:
+            cuda_command += ["-Xcompiler", "/MD"]
         if module == "_hdiv_cuda":
             cuda_command += ["--fmad=false", "-I" + str(ROOT / "src/core")]
         if not windows:
@@ -236,7 +239,8 @@ def main():
         receipt = dict(schema="radia.native-build-provenance.v1", source_commit=commit, source_dirty=False,
                        binary_name=binary.name, binary_sha256=sha(binary), source_hashes=source_hashes,
                        pybind_header_hashes=header_hashes, python=sys.version, platform=platform.platform(),
-                       nvcc=nvcc_version, host_compiler=host_version, architecture=args.architecture,
+                       nvcc=nvcc_version, host_compiler=host_version, architectures=args.architectures, ptx_architectures=[],
+                       fault_injection=False, device_fault_injection=False, lifecycle_diagnostic=False,
                        private_receipt_sha256=sha(private_receipt), runtime_import_checked=False,
                        generated_at_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
         Path(str(binary) + ".build.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")

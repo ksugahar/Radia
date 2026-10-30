@@ -25,7 +25,7 @@ admission JSON names the exact `source_sha`, nonempty `owner`, and
 
 ```sh
 python tools/build_python_gpu.py --components _hdiv_cuda \
-  --cuda-root "$CUDA_ROOT" --host-compiler "$HOST_CXX" --architecture 100 \
+  --cuda-root "$CUDA_ROOT" --host-compiler "$HOST_CXX" --architectures 100 \
   --output "$JOB_ROOT/hdiv-gpu" --admission "$ADMISSION" \
   --admission-sha256 "$ADMISSION_SHA256"
 ```
@@ -56,3 +56,12 @@ whole-package HDiv-MMM, topology optimization and performance remain separate
 unverified steps for this source revision.
 
 See the [targeted API ownership audit](../api_inventory/API_SURFACE_2026-10-29_HDIV_GPU.md).
+
+
+The formal Windows release compiles all four Radia Python GPU modules for both
+sm_75 and sm_80, using `--architectures 75 80` with the canonical builder.
+No speculative PTX target is included. The native release workflow stages only
+same-source binaries and public build receipts, and requires the complete GPU
+inventory when verifying the wheel. `radia[gpu]` installs the pinned pip runtime;
+it does not create native modules that were omitted from a wheel. Build receipts
+and architecture inventories are not numerical or runtime acceptance results.
