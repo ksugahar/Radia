@@ -1,22 +1,16 @@
 ---
 name: publish-panel
-description: Publish Radia's Simulink application library after verifying its five application blocks and tracked MATLAB-only samples. Use simulink-app-health before deploy/release-quad; Cubit's toolbar remains a separate deployment surface.
+description: Verify and publish the independently released Radia Simulink application library through its package-owned gates.
 ---
 
-# Publish Application Blocks
+# Publish application blocks
 
-1. Run `simulink-app-health`.
-2. Regenerate and inspect `packages/radia-gpu/matlab/radia_simulink_library.slx`.
-3. Confirm EM, PCB, Motor, and Stream Function use the tested application
-   runner. Confirm IH contains the native Eddy/Thermal MEX S-Functions.
-4. Load, update, and simulate `packages/radia-gpu/matlab/radia_ih.slx`; confirm its direct
-   Thermal-to-Eddy feedback and native-only backend. Treat the first package as
-   a preassembled-operator preview until native `.vol` assembly lands.
-5. Build the versioned archive and run `release_quad simulink-candidate` for all
-   four machines. `release_quad done --simulink-package <zip>` must pass before
-   GitHub publication.
-6. Run the remaining release/deploy gates with `release-quad` when requested.
-7. Verify Cubit's toolbar separately.
+Run `simulink-app-health` on the tracked library and MATLAB-only samples under
+`packages/radia-simulink`. Preserve the five production application contracts,
+native MEX lifecycle and required numerical/parity checks. Use the supported
+MATLAB tooling for model edits, save/reopen and diagnostics.
 
-Do not add PySide6 to normal Radia Python. IH is the explicit native-MEX
-exception and must pass its application-specific production gates.
+Build and verify the package-owned distribution before publication. Simulink is
+independent of Radia's four-case release wrapper; Radia wrapper completion does
+not certify MATLAB/MEX/SLX artifacts. Cubit's toolbar remains separately owned.
+Never add Qt dependencies to normal Radia Python.

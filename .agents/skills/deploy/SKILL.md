@@ -1,48 +1,24 @@
 ---
 name: deploy
-description: Current Radia deployment entry point. Use release-quad for releases, verify-deploy for editable source identity, and cubit-plugin-install for the Cubit plugin.
+description: Route Radia deployment to its owning release workflow and verify the selected live runtime.
 ---
 
 # Deploy
 
-Use this skill for deployment triage that does not yet require a new release.
-For a release candidate, use the owning release skill: `release-quad` for the
-numerical Radia solver/Simulink package, the [package release checks](../../../packages/radia-mcp/CONTRIBUTING.md)
-and [release-dual contract](../../../packages/radia-mcp/docs/operations/mcp-runtime-policy.md#release-completion) for radia-mcp, and
-`release-cubit-mesh-export` for the exporter and Cubit MCP.
+For Radia, use `release-quad` and its four dedicated cases: build-role editable,
+validation-role editable, CPU compute build and GB200 GPU compute build. Follow
+[editable operation and isolated QA](../../../docs/operations/editable-deployment.md).
+Host-specific skill names and runtime mappings are private configuration.
 
-## Machine roles
+Use `verify-deploy` to confirm fresh imports, intended source and native artifact
+identity. Keep normal editable operation separate from isolated exact-wheel
+acceptance. Resolve explicit host/interpreter/source bindings before mutation;
+preserve existing environments, other packages and active jobs.
 
-- 100号機 (INTEL11) is the development host and the only editable-install host.
-  Its editable Radia install belongs in the dedicated development venv.
-- LAB is the test host and uses fixed, verified wheels; do not use an editable
-  install there.
-- MCP servers and Cubit distributions are deployed to and run on LAB and 100号機
-  only. mdx1, mdx2 and hibino are compute/CI hosts, not MCP or Cubit deployment
-  targets.
-- mdx1 and mdx2 are the priority CI runners and MATLAB compute hosts. CI builds
-  in isolated per-run environments.
-- hibino runs long optimization and validation jobs when available.
-- No workflow selects a retired runner. EqnEdit64 publication belongs to its independent repository.
+MCP follows its [independent runtime policy](../../../packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
+Cubit follows `release-cubit-mesh-export` on its licensed build role only.
+Simulink follows `simulink-app-health` and its package-owned release gates.
+A Radia release does not install or certify these independent packages.
 
-## Supported operations
-
-1. Confirm the intended runtime with `verify-deploy`: editable source on 100号機
-   or a verified wheel on LAB. A running MCP server may need code reload or one
-   client reconnect after source changes.
-2. Install and verify the independently packaged Cubit backend and embedded
-   toolbar with `cubit-plugin-install` and `cubit-smoke-test`.
-3. Build native extensions on the machine that will validate them, using the
-   selected Python environment and pip `mkl-devel`.
-4. Publish only through the owning release lane. `release-quad done` decides
-   the numerical solver/Simulink release; it does not publish or deploy
-   radia-mcp or cubit-mesh-export.
-
-## Forbidden legacy routes
-
-- Do not copy `.pyd`, `.dll`, or `.mex*` files directly between machines.
-- Do not restore binary-download scripts or pre-push artifact uploads.
-- Do not install PySide or Qt into normal Radia Python. Cubit's private PySide
-  runtime remains valid for the Cubit toolbar.
-- Do not use retired `.ccl`, Cubit 2025.3, notebook workbench, or standalone
-  desktop-panel recipes.
+Use the reviewed owning controller. Do not bypass failed target checks, rebuild
+native artifacts on a consumer, or silently substitute a CPU/GPU backend.
