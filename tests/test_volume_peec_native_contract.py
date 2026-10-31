@@ -1,4 +1,4 @@
-"""Guards: explicit volume API, unsupported-model rejection and operator consistency.
+"""Guards: explicit volume API, unsupported-model rejection, bounded dense indices and operator consistency.
 
 Assumes: required current-source native PEEC module, SI Cartesian bars, CPU.
 No analytic accuracy, adopted baseline, fin validity or GPU claim is made.
@@ -34,3 +34,16 @@ def test_unsupported_volume_geometry_raises_instead_of_filament_fallback(directi
                         cross_section_type=section)
     with pytest.raises(ValueError,match='Cartesian'):
         builder.inductance_entry(0,0)
+
+
+
+def test_dense_volume_index_budget_fails_before_matrix_allocation():
+    # Public fail-loud capacity contract: no large matrix or field is evaluated.
+    import math
+    count=math.isqrt(np.iinfo(np.int32).max)+1
+    builder=peec_matrices.PEECBuilder(volume_order=8)
+    center=np.zeros(3);direction=np.array([1.,0.,0.])
+    for _ in range(count):
+        builder.add_segment(center,direction,.001,.001,.001)
+    with pytest.raises(ValueError,match='Dense PEEC exceeds signed 32-bit index budget'):
+        builder.build(include_star=False)
